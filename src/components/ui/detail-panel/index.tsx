@@ -106,7 +106,7 @@ function DetailField({ label, value, className, certifyRequired }: DetailFieldPr
         {label}
         {certifyRequired && <CertificationFieldTag />}
       </span>
-      <span className="body-medium font-medium text-[var(--color-text-primary)]">
+      <span className="body-medium font-medium text-[var(--color-text-primary)] break-words">
         {displayValue}
       </span>
     </div>

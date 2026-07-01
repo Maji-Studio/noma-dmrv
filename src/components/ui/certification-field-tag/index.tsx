@@ -47,7 +47,12 @@ export function CertificationFieldTag({
   return (
     <span
       className={cn(
-        "body-caption border px-4 py-1",
+        // `relative` gives the absolutely-positioned `.sr-only` child below a
+        // positioned containing block. Without it, the sr-only span resolves its
+        // static position against <html>; inside a wide, horizontally-scrolled
+        // table its border-box lands far to the right and inflates the document
+        // scroll width, producing page-level horizontal scroll on mobile.
+        "relative body-caption border px-4 py-1",
         STATUS_STYLES[status],
         className,
       )}
