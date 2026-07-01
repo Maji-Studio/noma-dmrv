@@ -17,8 +17,7 @@
  *   - `reactor_frequency_hz` (optional) Hz — leave blank if not measured
  *
  * Pure over its inputs — no I/O, no ambient time, no DB. The importer clips
- * readings to the production-run window; readings therefore never fall
- * outside a run, and a run is itself bounded by its credit batch.
+ * readings to the production-run window, so readings never fall outside a run.
  */
 
 const EMPTY_SENSOR_VALUE = "---";
@@ -61,6 +60,13 @@ export interface ParseReadingsCsvResult {
   /** Rows skipped for a missing/unparseable timestamp. */
   skippedRows: number;
   /**
+   * In-window rows kept despite a blank or non-numeric required channel
+   * (`temperature_c` or `pressure_bar`). Sensor dropouts (`---`) are legitimate
+   * but the Isometric telemetry aggregator drops those values, so the count is
+   * surfaced instead of hiding behind `inWindowRows`.
+   */
+  invalidRequiredRows: number;
+  /**
    * The span the import should replace, derived from the kept readings
    * (min timestamp .. max timestamp + 1ms), clamped to the run window.
    * `null` when nothing landed in-window (import is then a no-op).
@@ -91,11 +97,18 @@ export function parseReadingsCsv(
   let parsedRows = 0;
   let skippedRows = 0;
   let droppedRows = 0;
+  let invalidRequiredRows = 0;
 
   for (const rawRow of rows) {
     const row = padRow(rawRow, headers.length);
     const timeCell = row[columns.timestamp]?.trim() ?? "";
-    if (!timeCell) continue; // fully-blank trailing rows are not "skips"
+    if (!timeCell) {
+      // A fully-blank line (e.g. a trailing newline) is ignored, but a row with
+      // a blank timestamp and other populated cells is a real malformed row and
+      // must be reported, not silently dropped.
+      if (row.some((cell) => cell.trim() !== "")) skippedRows += 1;
+      continue;
+    }
 
     const timestamp = parseUtcTimestamp(timeCell);
     if (!timestamp) {
@@ -109,10 +122,20 @@ export function parseReadingsCsv(
       continue;
     }
 
+    const temperatureC = parseNumericCell(row[columns.temperature]);
+    const pressureBar = parseNumericCell(row[columns.pressure]);
+    // `temperature_c`/`pressure_bar` are canonically required, but the raw PLC
+    // export writes momentary sensor dropouts as `---`/blank. Keep the row (a
+    // per-channel null is what the aggregator expects) but count it so the
+    // import summary does not overstate usable telemetry.
+    if (temperatureC === null || pressureBar === null) {
+      invalidRequiredRows += 1;
+    }
+
     readings.push({
       timestamp,
-      temperatureC: parseNumericCell(row[columns.temperature]),
-      pressureBar: parseNumericCell(row[columns.pressure]),
+      temperatureC,
+      pressureBar,
       dryerFrequencyHz:
         columns.dryerFrequency == null
           ? null
@@ -132,6 +155,7 @@ export function parseReadingsCsv(
     inWindowRows: readings.length,
     droppedRows,
     skippedRows,
+    invalidRequiredRows,
     replacementWindow: buildReplacementWindow(readings),
     readings,
   };
@@ -249,8 +273,12 @@ export function parseUtcTimestamp(value: string): Date | null {
     // of UTC, so subtract the offset to get the UTC instant.
     const sign = zone[0] === "-" ? -1 : 1;
     const digits = zone.slice(1).replace(":", "");
-    const offsetMinutes =
-      sign * (Number(digits.slice(0, 2)) * 60 + Number(digits.slice(2, 4)));
+    const offsetHours = Number(digits.slice(0, 2));
+    const offsetMinutesPart = Number(digits.slice(2, 4));
+    // The regex only guarantees two digits per field, so reject an out-of-range
+    // offset (e.g. `+99:99`) rather than producing the wrong instant.
+    if (offsetHours > 23 || offsetMinutesPart > 59) return null;
+    const offsetMinutes = sign * (offsetHours * 60 + offsetMinutesPart);
     utcMillis -= offsetMinutes * MS_PER_MINUTE;
   }
 

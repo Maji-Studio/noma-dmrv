@@ -146,7 +146,7 @@ and no filename convention:
 
 Parsing lives in `src/lib/production-readings/readings-csv.ts`. Rows are clipped
 to the production run's `start_time`/`end_time` window (a run may span multiple
-days but is itself bounded by its credit batch); out-of-window and
+days; the run↔credit-batch bound is tracked separately); out-of-window and
 unparseable-timestamp rows are reported in the import summary. An import replaces
 existing readings only within the span it covers (min…max of the accepted rows),
 so importing separate files for different periods is additive. XLSX files may

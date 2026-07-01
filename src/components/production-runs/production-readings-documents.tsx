@@ -59,8 +59,12 @@ export function ProductionReadingsDocuments({
         const result = await importReadings.mutateAsync(documentId);
         const skippedSuffix =
           result.skippedRows > 0 ? `, ${result.skippedRows} skipped` : "";
+        const invalidSuffix =
+          result.invalidRequiredRows > 0
+            ? `, ${result.invalidRequiredRows} missing temperature/pressure`
+            : "";
         toast.success(
-          `Imported ${result.insertedRows} readings (${result.droppedRows} outside run window${skippedSuffix})`,
+          `Imported ${result.insertedRows} readings (${result.droppedRows} outside run window${skippedSuffix}${invalidSuffix})`,
         );
       } catch (err) {
         setUploadError(

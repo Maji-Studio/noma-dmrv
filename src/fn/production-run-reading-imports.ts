@@ -20,6 +20,7 @@ export interface ProductionRunReadingsImportResult {
   inWindowRows: number;
   droppedRows: number;
   skippedRows: number;
+  invalidRequiredRows: number;
 }
 
 export async function importProductionRunReadingsFromDocumentFn(
@@ -40,14 +41,23 @@ export async function importProductionRunReadingsFromDocumentFn(
       runWindowEnd: context.runWindowEnd,
     });
 
-    const insertedRows = parsed.replacementWindow
-      ? await replaceProductionRunReadingsInWindow(userId, {
-          productionRunId: context.productionRunId,
-          windowStart: parsed.replacementWindow.start,
-          windowEnd: parsed.replacementWindow.end,
-          readings: parsed.readings,
-        })
-      : 0;
+    if (!parsed.replacementWindow) {
+      // Nothing landed inside the run window. Fail loudly instead of returning
+      // a green "Imported 0 readings" toast, so a wrong or out-of-window file
+      // is obvious and existing readings are known to be untouched.
+      throw new SafeError(
+        parsed.parsedRows > 0
+          ? `None of the ${parsed.parsedRows} timestamped row(s) fall within this run's time window. Check the file covers the run period, or adjust the run's start and end times.`
+          : "No timestamped readings were found in this file. Check it is a canonical readings CSV with a timestamp_utc column and one row per reading.",
+      );
+    }
+
+    const insertedRows = await replaceProductionRunReadingsInWindow(userId, {
+      productionRunId: context.productionRunId,
+      windowStart: parsed.replacementWindow.start,
+      windowEnd: parsed.replacementWindow.end,
+      readings: parsed.readings,
+    });
 
     return {
       productionRunId: context.productionRunId,
@@ -56,6 +66,7 @@ export async function importProductionRunReadingsFromDocumentFn(
       inWindowRows: parsed.inWindowRows,
       droppedRows: parsed.droppedRows,
       skippedRows: parsed.skippedRows,
+      invalidRequiredRows: parsed.invalidRequiredRows,
     };
   });
 }

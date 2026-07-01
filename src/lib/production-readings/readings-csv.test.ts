@@ -116,6 +116,46 @@ describe("parseReadingsCsv", () => {
     ]);
   });
 
+  it("counts a blank-timestamp row with populated cells as skipped, not silent", () => {
+    const csv = [
+      "timestamp_utc,temperature_c,pressure_bar",
+      "2026-04-02T06:00:00Z,500,0.02", // valid, in window
+      ",500,0.12", // blank timestamp but real data -> skipped, not dropped
+      ",,", // fully blank -> ignored
+      "", // trailing newline -> ignored
+    ].join("\n");
+
+    const result = parseReadingsCsv({
+      csvText: csv,
+      runWindowStart: DAY_START,
+      runWindowEnd: TWO_DAYS_END,
+    });
+
+    expect(result.inWindowRows).toBe(1);
+    expect(result.skippedRows).toBe(1);
+    expect(result.parsedRows).toBe(1);
+  });
+
+  it("counts in-window rows missing a required temperature/pressure value", () => {
+    const csv = [
+      "timestamp_utc,temperature_c,pressure_bar",
+      "2026-04-02T06:00:00Z,500,0.02", // both required present
+      "2026-04-02T07:00:00Z,---,0.03", // temperature dropout
+      "2026-04-02T08:00:00Z,510,", // pressure blank
+    ].join("\n");
+
+    const result = parseReadingsCsv({
+      csvText: csv,
+      runWindowStart: DAY_START,
+      runWindowEnd: TWO_DAYS_END,
+    });
+
+    // Rows are kept (per-channel null is what the aggregator expects) but the
+    // two with a missing required channel are surfaced.
+    expect(result.inWindowRows).toBe(3);
+    expect(result.invalidRequiredRows).toBe(2);
+  });
+
   it("returns a no-op replacement window when nothing lands in-window", () => {
     const csv = [
       "timestamp_utc,temperature_c,pressure_bar",
@@ -225,5 +265,16 @@ describe("parseUtcTimestamp", () => {
     expect(parseUtcTimestamp("2026-13-02T00:00:00Z")).toBeNull();
     expect(parseUtcTimestamp("2026-02-30T00:00:00Z")).toBeNull();
     expect(parseUtcTimestamp("2026-04-02T25:00:00Z")).toBeNull();
+  });
+
+  it("rejects an out-of-range numeric offset but honours boundary offsets", () => {
+    // A well-formed-looking but impossible offset must not silently produce the
+    // wrong instant.
+    expect(parseUtcTimestamp("2026-04-02T12:00:00+99:99")).toBeNull();
+    expect(parseUtcTimestamp("2026-04-02T12:00:00-24:00")).toBeNull();
+    // Maximum valid offset still normalizes.
+    expect(parseUtcTimestamp("2026-04-02T12:00:00-23:59")).toEqual(
+      new Date("2026-04-03T11:59:00.000Z"),
+    );
   });
 });
