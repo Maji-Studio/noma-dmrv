@@ -1,7 +1,7 @@
 /**
  * Production Run Readings Validation Schemas
  *
- * Readings are sourced exclusively from reactor-day CSV imports — there is no
+ * Readings are sourced exclusively from readings CSV imports — there is no
  * manual create/edit path. The only mutation surface is "delete all", which
  * clears a run's readings so a corrected CSV can be re-imported.
  */

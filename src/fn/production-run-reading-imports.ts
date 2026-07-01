@@ -2,44 +2,16 @@
 
 import { getStorageProvider } from "@/lib/storage";
 import { SafeError } from "@/lib/errors";
+import { parseReadingsCsv } from "@/lib/production-readings/readings-csv";
 import {
-  getReactorDayCsvReplacementWindow,
-  inspectReactorDayCsv,
-  parseReactorDayCsv,
-  type ReactorDayCsvMapping,
-} from "@/lib/production-readings/reactor-day-csv";
-import {
-  buildStoredReactorDayCsvMapping,
   getProductionRunReadingsImportContext,
   replaceProductionRunReadingsInWindow,
-  saveReactorDayCsvMapping,
 } from "@/data-access/production-run-reading-imports";
-import {
-  importProductionRunReadingsSchema,
-  previewProductionRunReadingsImportSchema,
-} from "@/schemas/production-run-reading-imports";
+import { importProductionRunReadingsSchema } from "@/schemas/production-run-reading-imports";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
 
-const CSV_MIME_TYPES = new Set([
-  "text/csv",
-  "application/vnd.ms-excel",
-]);
-
-export interface ProductionRunReadingsImportPreview {
-  documentId: string;
-  fileName: string;
-  runCode: string;
-  runDate: string;
-  runReactorCode: string;
-  fileReactorCode: string;
-  fileDate: string;
-  headers: string[];
-  headerSignature: string;
-  requiresMapping: boolean;
-  suggestedMapping: ReactorDayCsvMapping;
-  warnings: string[];
-}
+const CSV_MIME_TYPES = new Set(["text/csv", "application/vnd.ms-excel"]);
 
 export interface ProductionRunReadingsImportResult {
   productionRunId: string;
@@ -48,99 +20,42 @@ export interface ProductionRunReadingsImportResult {
   inWindowRows: number;
   droppedRows: number;
   skippedRows: number;
-  fileReactorCode: string;
-  fileDate: string;
-  warnings: string[];
-}
-
-export async function previewProductionRunReadingsImportFn(
-  input: unknown,
-): Promise<ActionResult<ProductionRunReadingsImportPreview>> {
-  return withAction(async (userId) => {
-    const { documentId } = previewProductionRunReadingsImportSchema.parse(input);
-    const context = await getProductionRunReadingsImportContext(
-      userId,
-      documentId,
-    );
-    assertCsvDocument(context.fileName, context.mimeType);
-    const csvText = await readManagedDocumentText(context.storageKey);
-    const inspection = inspectReactorDayCsv({
-      fileName: context.fileName,
-      csvText,
-      runReactorCode: context.reactorCode,
-      storedMapping: context.storedMapping,
-    });
-    assertCsvOverlapsRunWindow({
-      fileDate: inspection.fileDate,
-      timezone: context.facilityTimezone,
-      runWindowStart: context.runWindowStart,
-      runWindowEnd: context.runWindowEnd,
-    });
-
-    return {
-      documentId,
-      fileName: context.fileName,
-      runCode: context.runCode,
-      runDate: context.runDate,
-      runReactorCode: context.reactorCode,
-      ...inspection,
-    };
-  });
+  invalidRequiredRows: number;
 }
 
 export async function importProductionRunReadingsFromDocumentFn(
   input: unknown,
 ): Promise<ActionResult<ProductionRunReadingsImportResult>> {
   return withAction(async (userId) => {
-    const { documentId, mapping } =
-      importProductionRunReadingsSchema.parse(input);
+    const { documentId } = importProductionRunReadingsSchema.parse(input);
     const context = await getProductionRunReadingsImportContext(
       userId,
       documentId,
     );
     assertCsvDocument(context.fileName, context.mimeType);
+
     const csvText = await readManagedDocumentText(context.storageKey);
-    const inspection = inspectReactorDayCsv({
-      fileName: context.fileName,
+    const parsed = parseReadingsForImport({
       csvText,
-      runReactorCode: context.reactorCode,
-      storedMapping: context.storedMapping,
-    });
-
-    const selectedMapping = mapping ?? context.storedMapping;
-    if (!selectedMapping) {
-      throw new SafeError("Channel alignment is required before import.");
-    }
-    if (inspection.requiresMapping && !mapping) {
-      throw new SafeError(
-        "CSV header changed. Confirm channel alignment before import.",
-      );
-    }
-
-    const parsed = parseCsvForImport({
-      fileName: context.fileName,
-      csvText,
-      timezone: context.facilityTimezone,
       runWindowStart: context.runWindowStart,
       runWindowEnd: context.runWindowEnd,
-      mapping: selectedMapping,
     });
 
-    if (mapping || inspection.requiresMapping) {
-      await saveReactorDayCsvMapping(
-        userId,
-        context.reactorId,
-        buildStoredReactorDayCsvMapping(
-          inspection.headerSignature,
-          selectedMapping,
-        ),
+    if (!parsed.replacementWindow) {
+      // Nothing landed inside the run window. Fail loudly instead of returning
+      // a green "Imported 0 readings" toast, so a wrong or out-of-window file
+      // is obvious and existing readings are known to be untouched.
+      throw new SafeError(
+        parsed.parsedRows > 0
+          ? `None of the ${parsed.parsedRows} timestamped row(s) fall within this run's time window. Check the file covers the run period, or adjust the run's start and end times.`
+          : "No timestamped readings were found in this file. Check it is a canonical readings CSV with a timestamp_utc column and one row per reading.",
       );
     }
 
     const insertedRows = await replaceProductionRunReadingsInWindow(userId, {
       productionRunId: context.productionRunId,
-      windowStart: parsed.replacementWindowStart,
-      windowEnd: parsed.replacementWindowEnd,
+      windowStart: parsed.replacementWindow.start,
+      windowEnd: parsed.replacementWindow.end,
       readings: parsed.readings,
     });
 
@@ -151,33 +66,14 @@ export async function importProductionRunReadingsFromDocumentFn(
       inWindowRows: parsed.inWindowRows,
       droppedRows: parsed.droppedRows,
       skippedRows: parsed.skippedRows,
-      fileReactorCode: parsed.fileReactorCode,
-      fileDate: parsed.fileDate,
-      warnings: inspection.warnings,
+      invalidRequiredRows: parsed.invalidRequiredRows,
     };
   });
 }
 
-function assertCsvOverlapsRunWindow(args: {
-  fileDate: string;
-  timezone: string;
-  runWindowStart: Date;
-  runWindowEnd: Date;
-}): void {
+function parseReadingsForImport(args: Parameters<typeof parseReadingsCsv>[0]) {
   try {
-    getReactorDayCsvReplacementWindow(args);
-  } catch (error) {
-    throw new SafeError(
-      error instanceof Error
-        ? error.message
-        : "CSV file date is outside the selected production run window.",
-    );
-  }
-}
-
-function parseCsvForImport(args: Parameters<typeof parseReactorDayCsv>[0]) {
-  try {
-    return parseReactorDayCsv(args);
+    return parseReadingsCsv(args);
   } catch (error) {
     throw new SafeError(
       error instanceof Error ? error.message : "Failed to parse readings CSV.",
@@ -202,5 +98,5 @@ function assertCsvDocument(fileName: string, mimeType: string | null): void {
   const normalizedMime = mimeType?.split(";")[0]?.trim().toLowerCase();
   if (normalizedMime && CSV_MIME_TYPES.has(normalizedMime)) return;
 
-  throw new SafeError("Only CSV reactor-day files can be imported as readings.");
+  throw new SafeError("Only CSV files can be imported as readings.");
 }

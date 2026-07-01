@@ -1,7 +1,7 @@
 /**
  * Production Run Readings Data Access Layer
  *
- * Readings are imported from reactor-day CSVs (see
+ * Readings are imported from readings CSVs (see
  * `production-run-reading-imports.ts`). This module exposes read access plus a
  * bulk "delete all" used to clear a run before re-importing a corrected CSV.
  */
@@ -23,6 +23,8 @@ export interface ProductionRunReadingWithRelations {
   temperatureC: number | null;
   pressureBar: number | null;
   gasFlowRate: number | null;
+  dryerFrequencyHz: number | null;
+  reactorFrequencyHz: number | null;
   createdAt: Date;
   productionRunCode: string | null;
   facilityId: string;
@@ -39,6 +41,8 @@ const readingSelect = {
   temperatureC: productionRunReadings.temperatureC,
   pressureBar: productionRunReadings.pressureBar,
   gasFlowRate: productionRunReadings.gasFlowRate,
+  dryerFrequencyHz: productionRunReadings.dryerFrequencyHz,
+  reactorFrequencyHz: productionRunReadings.reactorFrequencyHz,
   createdAt: productionRunReadings.createdAt,
   productionRunCode: productionRuns.code,
   facilityId: productionRuns.facilityId,
@@ -87,7 +91,7 @@ export async function getProductionRunReadingsList(
 /**
  * Delete every reading for a production run. Returns the number of rows
  * removed so callers can confirm the reset. Used to clear stale/incorrect
- * telemetry before re-importing a reactor-day CSV.
+ * telemetry before re-importing a readings CSV.
  */
 export async function deleteAllProductionRunReadings(
   userId: string,
