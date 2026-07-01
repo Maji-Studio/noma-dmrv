@@ -3,7 +3,7 @@
 /**
  * Production Run Readings Server Actions
  *
- * Readings are imported from reactor-day CSVs; the only mutation here is a
+ * Readings are imported from readings CSVs; the only mutation here is a
  * bulk "delete all" used to clear a run before re-importing.
  */
 
