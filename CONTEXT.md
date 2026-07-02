@@ -332,6 +332,27 @@ the stored distance governs — so later corrections to the stored
 distance keep propagating.
 _Avoid_: treating the override as the primary distance value.
 
+### Geography & transport
+
+**Transport distance**:
+The road distance (km) of a **transport leg**, fed to Isometric's
+distance-based transport equation. A distance computed from coordinates
+by the map's routing service is an **estimate** — modeled from a road
+graph, not the hauled distance on a bill of lading or weigh ticket. It
+is a *suggested default*, always operator-editable, and in the same
+measured-vs-derived family as an **emission estimate**. Document-backed
+distances (bill of lading, weigh ticket) are the authoritative form.
+_Avoid_: treating a routed distance as a measurement.
+
+**Distance source**:
+The provenance of a stored distance — `map_estimate` (routed via the
+map's routing service), `manual` (hand-entered), or `document`
+(bill-of-lading / weigh-ticket backed). Lives wherever a distance can be
+written (supplier, customer location, transport leg) and is inherited by
+a derived leg from its supplier/customer default. Orthogonal to a leg's
+`isDerived` flag. Without a configured routing key there is no
+`map_estimate` path — distance entry stays manual.
+
 ### Operational oversight
 
 **Attention item**:
