@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { Warning } from "@phosphor-icons/react";
+import { WarningIcon } from "@phosphor-icons/react";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { FormField, FormTextarea } from "@/components/forms";
 
@@ -31,7 +31,7 @@ export function WetMassWarning({
   return (
     <div className="border border-[var(--color-signal-amber)] bg-[var(--color-signal-amber)]/5 p-16 space-y-12">
       <div className="flex items-start gap-12">
-        <Warning size={20} weight="fill" className="text-[var(--color-signal-amber)] mt-1 shrink-0" />
+        <WarningIcon size={20} weight="fill" className="text-[var(--color-signal-amber)] mt-1 shrink-0" />
         <div className="space-y-4">
           <p className="body-medium font-medium text-[var(--color-text-primary)]">
             Allocated wet mass exceeds total delivery

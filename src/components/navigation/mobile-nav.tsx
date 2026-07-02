@@ -14,7 +14,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Dialog } from "@base-ui/react/dialog";
-import { List, X } from "@phosphor-icons/react";
+import { ListIcon, XIcon } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-media-query";
 import { SidebarContent } from "./sidebar-content";
@@ -64,7 +64,7 @@ export function MobileNav() {
           className="flex items-center justify-center size-44 -mr-10 text-[var(--color-white-75)] hover:text-white transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clr-purple)]"
           aria-label="Open navigation menu"
         >
-          <List size={22} weight="bold" />
+          <ListIcon size={22} weight="bold" />
         </Dialog.Trigger>
       </header>
 
@@ -99,7 +99,7 @@ export function MobileNav() {
             aria-label="Close navigation menu"
             className="absolute top-6 right-6 z-10 flex items-center justify-center size-44 text-[var(--color-white-50)] hover:text-white transition-colors duration-150 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--clr-purple)]"
           >
-            <X size={20} weight="bold" />
+            <XIcon size={20} weight="bold" />
           </Dialog.Close>
           <SidebarContent onNavigate={() => setIsOpen(false)} />
         </Dialog.Popup>

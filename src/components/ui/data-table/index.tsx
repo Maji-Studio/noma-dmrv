@@ -16,7 +16,7 @@ import {
   type Table as TanStackTable,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { CaretUp, CaretDown, MagnifyingGlass, CaretLeft, CaretRight, Check } from "@phosphor-icons/react/dist/ssr";
+import { CaretUpIcon, CaretDownIcon, MagnifyingGlassIcon, CaretLeftIcon, CaretRightIcon, CheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Button } from "@/components/ui/button";
@@ -431,12 +431,12 @@ function DataTableRoot<TData, TValue>({
                             : flexRender(header.column.columnDef.header, header.getContext())}
                           {isSortable && (
                             <span className="inline-flex flex-col leading-none text-[var(--color-text-tertiary)]">
-                              <CaretUp
+                              <CaretUpIcon
                                 size={10}
                                 weight={sortDir === "asc" ? "fill" : "regular"}
                                 className={sortDir === "asc" ? "text-[var(--color-interaction)]" : ""}
                               />
-                              <CaretDown
+                              <CaretDownIcon
                                 size={10}
                                 weight={sortDir === "desc" ? "fill" : "regular"}
                                 className={sortDir === "desc" ? "text-[var(--color-interaction)]" : ""}
@@ -638,7 +638,7 @@ function DataTableSearch({ placeholder = "Search...", className }: DataTableSear
 
   return (
     <div className={cn("relative w-full sm:max-w-[320px] sm:flex-1", className)}>
-      <MagnifyingGlass
+      <MagnifyingGlassIcon
         size={18}
         className="absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none"
       />
@@ -700,7 +700,7 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
                     column.getIsVisible() && "bg-[var(--color-interaction)] border-[var(--color-interaction)]"
                   )}
                 >
-                  {column.getIsVisible() && <Check size={12} weight="bold" className="text-white" />}
+                  {column.getIsVisible() && <CheckIcon size={12} weight="bold" className="text-white" />}
                 </span>
                 <input
                   type="checkbox"
@@ -792,8 +792,8 @@ function DataTablePagination({
             className={PAGINATION_NAV_BUTTON_CLASS}
             aria-label="Go to first page"
           >
-            <CaretLeft size={14} weight="bold" className="pointer-events-none" />
-            <CaretLeft size={14} weight="bold" className="-ml-8 pointer-events-none" />
+            <CaretLeftIcon size={14} weight="bold" className="pointer-events-none" />
+            <CaretLeftIcon size={14} weight="bold" className="-ml-8 pointer-events-none" />
           </Button>
           <Button
             variant="noOutline"
@@ -803,7 +803,7 @@ function DataTablePagination({
             className={PAGINATION_NAV_BUTTON_CLASS}
             aria-label="Go to previous page"
           >
-            <CaretLeft size={14} weight="bold" className="pointer-events-none" />
+            <CaretLeftIcon size={14} weight="bold" className="pointer-events-none" />
           </Button>
           <Button
             variant="noOutline"
@@ -813,7 +813,7 @@ function DataTablePagination({
             className={PAGINATION_NAV_BUTTON_CLASS}
             aria-label="Go to next page"
           >
-            <CaretRight size={14} weight="bold" className="pointer-events-none" />
+            <CaretRightIcon size={14} weight="bold" className="pointer-events-none" />
           </Button>
           <Button
             variant="noOutline"
@@ -823,8 +823,8 @@ function DataTablePagination({
             className={PAGINATION_NAV_BUTTON_CLASS}
             aria-label="Go to last page"
           >
-            <CaretRight size={14} weight="bold" className="pointer-events-none" />
-            <CaretRight size={14} weight="bold" className="-ml-8 pointer-events-none" />
+            <CaretRightIcon size={14} weight="bold" className="pointer-events-none" />
+            <CaretRightIcon size={14} weight="bold" className="-ml-8 pointer-events-none" />
           </Button>
         </div>
       </div>
@@ -865,7 +865,7 @@ function DataTableCheckbox({
           (checked || indeterminate) && "bg-[var(--color-interaction)] border-[var(--color-interaction)]"
         )}
       >
-        {checked && <Check size={14} weight="bold" className="text-white" />}
+        {checked && <CheckIcon size={14} weight="bold" className="text-white" />}
         {!checked && indeterminate && (
           <span className="h-2 w-10 bg-white" />
         )}

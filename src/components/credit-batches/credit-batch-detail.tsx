@@ -14,11 +14,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  CaretRight,
-  Leaf,
-  Scales,
-  ShieldCheck,
-  Stack,
+  CaretRightIcon,
+  LeafIcon,
+  ScalesIcon,
+  ShieldCheckIcon,
+  StackIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { formatSafeDate, formatTonnes } from "@/lib/format-utils";
 import { ServerError } from "@/components/forms";
@@ -63,7 +63,7 @@ function Breadcrumb({ code }: { code: string | null }) {
       >
         Credit Batches
       </Link>
-      <CaretRight size={12} aria-hidden />
+      <CaretRightIcon size={12} aria-hidden />
       <span className="text-[var(--color-text-secondary)]">{code ?? "…"}</span>
     </nav>
   );
@@ -194,13 +194,13 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
           title="CO₂e stored"
           value={stored.value}
           description={stored.description}
-          icon={<Leaf size={24} />}
+          icon={<LeafIcon size={24} />}
         />
         <StatCard
           title="Credit weight"
           value={formatTonnes(creditBatch.weightTons)}
           description="Registry issuance"
-          icon={<Scales size={24} />}
+          icon={<ScalesIcon size={24} />}
         />
         <StatCard
           title="Buffer pool"
@@ -210,13 +210,13 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
               : "—"
           }
           description="Risk-based (2–20%)"
-          icon={<ShieldCheck size={24} />}
+          icon={<ShieldCheckIcon size={24} />}
         />
         <StatCard
           title="Production runs"
           value={creditBatch.productionRunCount}
           description="Cohort membership"
-          icon={<Stack size={24} />}
+          icon={<StackIcon size={24} />}
         />
       </div>
 

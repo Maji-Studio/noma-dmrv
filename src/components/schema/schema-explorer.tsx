@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
-import { Database, MagnifyingGlass, ArrowRight, ArrowUpRight, ArrowDownLeft } from "@phosphor-icons/react/dist/ssr";
+import { DatabaseIcon, MagnifyingGlassIcon, ArrowRightIcon, ArrowUpRightIcon, ArrowDownLeftIcon } from "@phosphor-icons/react/dist/ssr";
 import { buttonVariants } from "@/components/ui/button";
 import type { SchemaArea, SchemaTableInfo } from "@/lib/schema/catalog";
 
@@ -84,7 +84,7 @@ export function SchemaExplorer({ tables, relationshipCount }: SchemaExplorerProp
       <main className="container-max py-32 md:py-48 flex flex-col gap-24">
         <header className="flex flex-col gap-16">
           <div className="flex items-center gap-[10px]">
-            <Database size={18} weight="bold" className="text-[var(--clr-purple)]" />
+            <DatabaseIcon size={18} weight="bold" className="text-[var(--clr-purple)]" />
             <p className="title-chapter-title text-[var(--clr-purple)]">Schema Explorer</p>
           </div>
           <h1 className="title-heading-2">Database Schema</h1>
@@ -101,7 +101,7 @@ export function SchemaExplorer({ tables, relationshipCount }: SchemaExplorerProp
             <label className="flex flex-col gap-[6px]">
               <span className="body-caption text-[var(--color-text-tertiary)]">Search</span>
               <div className="relative">
-                <MagnifyingGlass
+                <MagnifyingGlassIcon
                   size={18}
                   className="absolute left-[12px] top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none"
                 />
@@ -141,14 +141,14 @@ export function SchemaExplorer({ tables, relationshipCount }: SchemaExplorerProp
             </label>
             <Link href="/schema/links" className={buttonVariants({ size: "small" })}>
               All FK Links
-              <ArrowRight size={16} weight="bold" />
+              <ArrowRightIcon size={16} weight="bold" />
             </Link>
           </div>
         </section>
 
         {groupedTables.length === 0 ? (
           <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-24 flex flex-col items-center gap-[12px] py-[64px]">
-            <Database size={32} className="text-[var(--color-text-tertiary)]" />
+            <DatabaseIcon size={32} className="text-[var(--color-text-tertiary)]" />
             <p className="body-medium text-[var(--color-text-secondary)]">
               No matching tables. Try a broader query or clear filters.
             </p>
@@ -197,10 +197,10 @@ function TableCard({ table, accent }: { table: SchemaTableInfo; accent: string }
         <div className="flex items-center gap-[6px]">
           <Pill label={`${table.columns.length} cols`} />
           {table.outboundRelationships.length > 0 && (
-            <Pill label={`${table.outboundRelationships.length}`} icon={<ArrowUpRight size={12} />} />
+            <Pill label={`${table.outboundRelationships.length}`} icon={<ArrowUpRightIcon size={12} />} />
           )}
           {table.inboundRelationships.length > 0 && (
-            <Pill label={`${table.inboundRelationships.length}`} icon={<ArrowDownLeft size={12} />} />
+            <Pill label={`${table.inboundRelationships.length}`} icon={<ArrowDownLeftIcon size={12} />} />
           )}
         </div>
       </div>

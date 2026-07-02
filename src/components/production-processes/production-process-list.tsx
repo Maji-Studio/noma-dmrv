@@ -13,7 +13,7 @@
 
 import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { FlowArrow, CheckCircle, LockOpen } from "@phosphor-icons/react";
+import { FlowArrowIcon, CheckCircleIcon, LockOpenIcon } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { StatCard } from "@/components/ui/stat-card";
@@ -67,7 +67,7 @@ function createColumns(
         if (p.samplingMethod === "method_b") {
           return (
             <span className="inline-flex items-center gap-4 body-small text-[var(--st-ok)]">
-              <CheckCircle size={14} weight="fill" /> Baseline cleared
+              <CheckCircleIcon size={14} weight="fill" /> Baseline cleared
             </span>
           );
         }
@@ -140,7 +140,7 @@ function createColumns(
               }
               onClick={() => onUnlock(p)}
             >
-              <LockOpen size={14} weight="bold" />
+              <LockOpenIcon size={14} weight="bold" />
               Unlock
             </Button>
           </div>
@@ -208,21 +208,21 @@ export function ProductionProcessList() {
         <StatCard
           title="Production Processes"
           value={totalProcesses}
-          icon={<FlowArrow size={24} weight="bold" />}
+          icon={<FlowArrowIcon size={24} weight="bold" />}
           description="Active (facility, feedstock) campaigns"
           isLoading={isLoading}
         />
         <StatCard
           title="Method-B Eligible"
           value={eligibleToUnlock}
-          icon={<LockOpen size={24} weight="bold" />}
+          icon={<LockOpenIcon size={24} weight="bold" />}
           description={`Cleared the ≥${METHOD_B_MINIMUM_METHOD_A_SAMPLES}-sample baseline; can unlock Method B`}
           isLoading={isLoading}
         />
         <StatCard
           title="Method B Active"
           value={methodBActive}
-          icon={<CheckCircle size={24} weight="bold" />}
+          icon={<CheckCircleIcon size={24} weight="bold" />}
           description={`Processes sampling ≥1 per ${METHOD_B_SAMPLING_CADENCE_BATCHES} batches`}
           isLoading={isLoading}
         />
@@ -239,7 +239,7 @@ export function ProductionProcessList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<FlowArrow size={48} />}
+            icon={<FlowArrowIcon size={48} />}
             title={facilityId ? "No production processes yet" : "Select a facility"}
             description={
               facilityId

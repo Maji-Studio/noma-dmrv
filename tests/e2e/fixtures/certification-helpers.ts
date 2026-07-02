@@ -474,10 +474,6 @@ const SAMPLE_H_TO_CORG_RATIO = 0.4;
 const TRANSPORT_LEG_DISTANCE_KM = 50;
 const TRANSPORT_LEG_LOAD_MASS_KG = 100;
 const TRANSPORT_LEG_EMISSION_FACTOR = 0.1;
-const READY_TRUCK_ARRIVAL_KG = 12_500;
-const READY_TRUCK_DEPARTURE_KG = 12_100;
-const READY_DELIVERY_TRUCK_ARRIVAL_KG = 9_100;
-const READY_DELIVERY_TRUCK_DEPARTURE_KG = 9_000;
 const READY_APPLICATION_EVIDENCE_URL = "https://example.com/e2e-geotagged-application.jpg";
 const READY_APPLICATION_EVIDENCE_ROLES = [
   "stockpile",
@@ -502,12 +498,6 @@ export async function seedUngroupedReadyBatchWithChain(
   testRunId: string,
 ): Promise<SeededReadyBatch> {
   const { db, pool } = createDbConnection();
-  let originalFeedstockMasses:
-    | {
-        truckMassOnArrivalKg: number | null;
-        truckMassOnDepartureKg: number | null;
-      }
-    | undefined;
   const id = {
     productionRun: crypto.randomUUID(),
     productionRunFeedstock: crypto.randomUUID(),
@@ -548,14 +538,6 @@ export async function seedUngroupedReadyBatchWithChain(
   });
 
   try {
-    [originalFeedstockMasses] = await db
-      .select({
-        truckMassOnArrivalKg: schema.feedstocks.truckMassOnArrivalKg,
-        truckMassOnDepartureKg: schema.feedstocks.truckMassOnDepartureKg,
-      })
-      .from(schema.feedstocks)
-      .where(eq(schema.feedstocks.id, refs.feedstockId));
-
     await db.transaction(async (tx) => {
       await tx.insert(schema.productionRuns).values({
         id: id.productionRun,
@@ -587,13 +569,6 @@ export async function seedUngroupedReadyBatchWithChain(
         pressureBar: 0,
         gasFlowRate: 0,
       });
-      await tx
-        .update(schema.feedstocks)
-        .set({
-          truckMassOnArrivalKg: READY_TRUCK_ARRIVAL_KG,
-          truckMassOnDepartureKg: READY_TRUCK_DEPARTURE_KG,
-        })
-        .where(eq(schema.feedstocks.id, refs.feedstockId));
       await tx.insert(schema.productionRunFeedstocks).values({
         id: id.productionRunFeedstock,
         productionRunId: id.productionRun,
@@ -644,8 +619,6 @@ export async function seedUngroupedReadyBatchWithChain(
         deliveredWetMassKg: 105,
         massDryKg: 100,
         moistureContentPercent: 5,
-        truckMassOnArrivalKg: READY_DELIVERY_TRUCK_ARRIVAL_KG,
-        truckMassOnDepartureKg: READY_DELIVERY_TRUCK_DEPARTURE_KG,
         status: "delivered",
         vehicleId: refs.vehicleId,
       });
@@ -772,15 +745,6 @@ export async function seedUngroupedReadyBatchWithChain(
             .where(
               eq(schema.productionRunFeedstocks.id, id.productionRunFeedstock),
             );
-          await tx
-            .update(schema.feedstocks)
-            .set({
-              truckMassOnArrivalKg:
-                originalFeedstockMasses?.truckMassOnArrivalKg ?? null,
-              truckMassOnDepartureKg:
-                originalFeedstockMasses?.truckMassOnDepartureKg ?? null,
-            })
-            .where(eq(schema.feedstocks.id, refs.feedstockId));
           await tx
             .delete(schema.productionRuns)
             .where(eq(schema.productionRuns.id, id.productionRun));

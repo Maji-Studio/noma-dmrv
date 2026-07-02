@@ -9,7 +9,7 @@ import { formatLocalDate } from "@/lib/date-utils";
 
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Calendar, Storefront, Package } from "@phosphor-icons/react/dist/ssr";
+import { CalendarIcon, StorefrontIcon, PackageIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormEntitySelect, FormActions, FormSection, FormSpine } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import {
@@ -170,7 +170,7 @@ export function OrderForm({
       {/* Order Information */}
       <FormSection
         title="Order Information"
-        icon={<Calendar size={14} weight="bold" />}
+        icon={<CalendarIcon size={14} weight="bold" />}
         fields={["orderDate"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
@@ -195,7 +195,7 @@ export function OrderForm({
       {/* Customer Section */}
       <FormSection
         title="Customer Details"
-        icon={<Storefront size={14} weight="bold" />}
+        icon={<StorefrontIcon size={14} weight="bold" />}
         fields={["customerId", "customerLocationId"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
@@ -246,7 +246,7 @@ export function OrderForm({
       {/* Product Section */}
       <FormSection
         title="Product Details"
-        icon={<Package size={14} weight="bold" />}
+        icon={<PackageIcon size={14} weight="bold" />}
         fields={["biocharProductId", "packaging", "quantityKg", "value", "currency"]}
       >
         <FormEntitySelect

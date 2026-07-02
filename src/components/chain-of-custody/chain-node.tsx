@@ -2,7 +2,7 @@
 
 import { type ElementType } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { ArrowUpRight, TreeStructure } from "@phosphor-icons/react/dist/ssr";
+import { ArrowUpRightIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
 import type { LineageDetailRow } from "./use-chain-graph";
 import { STATUS_COLORS, STATUS_COLOR_FALLBACK } from "./chain-constants";
 
@@ -104,7 +104,7 @@ export function ChainNode({ data }: NodeProps) {
           {/* Hover affordance — open the record / trace the rollback. */}
           {interactive ? (
             drillable ? (
-              <TreeStructure
+              <TreeStructureIcon
                 size={12}
                 weight="bold"
                 className="opacity-0 transition-opacity duration-150 group-hover:opacity-100"
@@ -112,7 +112,7 @@ export function ChainNode({ data }: NodeProps) {
                 aria-hidden
               />
             ) : (
-              <ArrowUpRight
+              <ArrowUpRightIcon
                 size={12}
                 weight="bold"
                 className="opacity-0 transition-opacity duration-150 group-hover:opacity-100"

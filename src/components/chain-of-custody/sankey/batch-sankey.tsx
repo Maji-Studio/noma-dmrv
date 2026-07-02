@@ -25,7 +25,7 @@ import {
   type NodeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
-import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import type {
   CreditBatchSankeyData,
   SankeyColumn,
@@ -460,7 +460,7 @@ function SankeyTooltip({
           data-testid="sankey-tooltip-details"
         >
           See details
-          <ArrowRight size={12} weight="bold" />
+          <ArrowRightIcon size={12} weight="bold" />
         </Link>
       ) : null}
     </div>

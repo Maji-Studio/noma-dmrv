@@ -8,7 +8,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Trash, MapPin } from "@phosphor-icons/react";
+import { PlusIcon, TrashIcon, MapPinIcon } from "@phosphor-icons/react";
 import { FormField, FormInput, FormTextarea, FormActions } from "@/components/forms";
 import { customerFormSchema, type CustomerFormData } from "@/schemas/customers";
 import type { Customer } from "@/db/schema/parties";
@@ -265,7 +265,7 @@ function CreateModeLocationsSection({
           onClick={() => setShowForm(true)}
           className="text-[var(--color-interaction)]"
         >
-          <Plus size={14} weight="bold" />
+          <PlusIcon size={14} weight="bold" />
           Add Location
         </Button>
       </div>
@@ -291,7 +291,7 @@ function CreateModeLocationsSection({
                 className="flex items-center justify-between gap-12 px-12 py-8 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)]"
               >
                 <div className="flex items-center gap-10 min-w-0">
-                  <MapPin size={16} className="shrink-0 text-[var(--color-text-tertiary)]" />
+                  <MapPinIcon size={16} className="shrink-0 text-[var(--color-text-tertiary)]" />
                   <div className="min-w-0">
                     <p className="body-small font-medium truncate">{loc.name}</p>
                     {locationSummary ? (
@@ -312,7 +312,7 @@ function CreateModeLocationsSection({
                   className="shrink-0"
                   aria-label={`Remove ${loc.name}`}
                 >
-                  <Trash size={16} />
+                  <TrashIcon size={16} />
                 </Button>
               </div>
             );
@@ -630,7 +630,7 @@ function LocationsSection({ customerId }: { customerId: string }) {
           onClick={() => setShowAddDialog(true)}
           className="text-[var(--color-interaction)]"
         >
-          <Plus size={14} weight="bold" />
+          <PlusIcon size={14} weight="bold" />
           Add Location
         </Button>
       </div>
@@ -653,7 +653,7 @@ function LocationsSection({ customerId }: { customerId: string }) {
               className="flex items-center justify-between gap-12 px-12 py-8 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)]"
             >
               <div className="flex items-center gap-10 min-w-0">
-                <MapPin size={16} className="shrink-0 text-[var(--color-text-tertiary)]" />
+                <MapPinIcon size={16} className="shrink-0 text-[var(--color-text-tertiary)]" />
                 <div className="min-w-0">
                   <p className="body-small font-medium truncate">{loc.name}</p>
                   <p className="text-[var(--text-xs)] text-[var(--color-text-tertiary)] truncate">
@@ -671,7 +671,7 @@ function LocationsSection({ customerId }: { customerId: string }) {
                 className="shrink-0"
                 aria-label={`Delete ${loc.name}`}
               >
-                <Trash size={16} />
+                <TrashIcon size={16} />
               </Button>
             </div>
           ))}

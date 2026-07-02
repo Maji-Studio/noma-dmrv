@@ -49,8 +49,6 @@ export interface FeedstockWithRelations {
   vehicleId: string | null;
   gpsLatitude: number | null;
   gpsLongitude: number | null;
-  truckMassOnArrivalKg: number | null;
-  truckMassOnDepartureKg: number | null;
   deliveryGroupId: string | null;
   overrideJustification: string | null;
   // Material fields
@@ -101,8 +99,6 @@ export interface CreateFeedstockInput {
   vehicleId?: string | null;
   gpsLatitude?: number | null;
   gpsLongitude?: number | null;
-  truckMassOnArrivalKg?: number | null;
-  truckMassOnDepartureKg?: number | null;
   feedstockTypeId: string;
   totalWetMassKg: number;
   moisturePercent: number;
@@ -130,8 +126,6 @@ const feedstockSelectFields = {
   vehicleId: feedstocks.vehicleId,
   gpsLatitude: feedstocks.gpsLatitude,
   gpsLongitude: feedstocks.gpsLongitude,
-  truckMassOnArrivalKg: feedstocks.truckMassOnArrivalKg,
-  truckMassOnDepartureKg: feedstocks.truckMassOnDepartureKg,
   deliveryGroupId: feedstocks.deliveryGroupId,
   overrideJustification: feedstocks.overrideJustification,
   feedstockTypeId: feedstocks.feedstockTypeId,
@@ -270,31 +264,6 @@ export async function getFeedstockById(
   return item;
 }
 
-export async function getFeedstocksByIds(
-  userId: string,
-  feedstockIds: string[],
-): Promise<
-  {
-    id: string;
-    code: string;
-    truckMassOnArrivalKg: number | null;
-    truckMassOnDepartureKg: number | null;
-  }[]
-> {
-  requireAuth(userId);
-  if (feedstockIds.length === 0) return [];
-
-  return db
-    .select({
-      id: feedstocks.id,
-      code: feedstocks.code,
-      truckMassOnArrivalKg: feedstocks.truckMassOnArrivalKg,
-      truckMassOnDepartureKg: feedstocks.truckMassOnDepartureKg,
-    })
-    .from(feedstocks)
-    .where(inArray(feedstocks.id, feedstockIds));
-}
-
 export async function getFeedstockStats(
   userId: string,
   facilityId?: string
@@ -408,8 +377,6 @@ export async function createFeedstock(
           vehicleId: data.vehicleId ?? null,
           gpsLatitude: data.gpsLatitude ?? null,
           gpsLongitude: data.gpsLongitude ?? null,
-          truckMassOnArrivalKg: data.truckMassOnArrivalKg ?? null,
-          truckMassOnDepartureKg: data.truckMassOnDepartureKg ?? null,
           deliveryGroupId,
           overrideJustification: data.overrideJustification || null,
           // Material fields
@@ -466,8 +433,6 @@ export async function updateFeedstock(
     vehicleId?: string | null;
     gpsLatitude?: number | null;
     gpsLongitude?: number | null;
-    truckMassOnArrivalKg?: number | null;
-    truckMassOnDepartureKg?: number | null;
     feedstockTypeId?: string;
     massDryKg?: number;
     massWetKg?: number | null;

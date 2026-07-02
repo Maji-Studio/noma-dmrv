@@ -7,7 +7,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Users, Plus, MapTrifold } from "@phosphor-icons/react";
+import { UsersIcon, PlusIcon, MapTrifoldIcon } from "@phosphor-icons/react";
 import type { Customer } from "@/db/schema";
 import {
   useCreateCustomer,
@@ -222,7 +222,7 @@ export function CustomerList() {
         subtitle="Biochar buyers and their application locations"
         actions={
           <Button variant="primary" onClick={openCreate}>
-            <Plus size={20} weight="bold" />
+            <PlusIcon size={20} weight="bold" />
             New Customer
           </Button>
         }
@@ -233,14 +233,14 @@ export function CustomerList() {
         <StatCard
           title="Total Customers"
           value={totalCustomers}
-          icon={<Users size={24} weight="bold" />}
+          icon={<UsersIcon size={24} weight="bold" />}
           description="Biochar application customers"
           isLoading={isLoading}
         />
         <StatCard
           title="Total Locations"
           value={totalLocations}
-          icon={<MapTrifold size={24} weight="bold" />}
+          icon={<MapTrifoldIcon size={24} weight="bold" />}
           description="Application field locations"
           isLoading={isLoading}
         />
@@ -259,12 +259,12 @@ export function CustomerList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<Users size={48} />}
+            icon={<UsersIcon size={48} />}
             title="No customers yet"
             description="Create your first customer to get started."
             action={
               <Button variant="primary" onClick={openCreate}>
-                <Plus size={20} weight="bold" />
+                <PlusIcon size={20} weight="bold" />
                 Create Customer
               </Button>
             }

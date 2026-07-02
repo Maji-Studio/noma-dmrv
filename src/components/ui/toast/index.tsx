@@ -13,7 +13,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { X, CheckCircle, XCircle, Warning, Info } from "@phosphor-icons/react/dist/ssr";
+import { XIcon, CheckCircleIcon, XCircleIcon, WarningIcon, InfoIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -173,11 +173,11 @@ const variantStyles: Record<
   },
 };
 
-const variantIcons: Record<ToastVariant, typeof CheckCircle> = {
-  success: CheckCircle,
-  error: XCircle,
-  warning: Warning,
-  info: Info,
+const variantIcons: Record<ToastVariant, typeof CheckCircleIcon> = {
+  success: CheckCircleIcon,
+  error: XCircleIcon,
+  warning: WarningIcon,
+  info: InfoIcon,
 };
 
 function ToastItem({ toast, onDismiss }: ToastItemProps) {
@@ -205,7 +205,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
           className="h-28 w-28 shrink-0 text-[var(--color-text-tertiary)] hover:bg-[var(--color-surface-light)] hover:text-[var(--color-text-primary)]"
           aria-label="Dismiss notification"
         >
-          <X size={14} weight="bold" />
+          <XIcon size={14} weight="bold" />
         </Button>
       </div>
     </div>

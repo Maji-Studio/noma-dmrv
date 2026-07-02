@@ -1,20 +1,14 @@
 import { z } from "zod";
 
-export const reactorDayCsvMappingSchema = z.object({
-  temperature: z.string().min(1, "Select a temperature column"),
-  pressure: z.string().min(1, "Select a pressure column"),
-  gasFlow: z.string().min(1).nullable().optional(),
-});
-
-export const previewProductionRunReadingsImportSchema = z.object({
-  documentId: z.string().uuid("Invalid document ID"),
-});
-
+/**
+ * Import readings from an uploaded canonical CSV (issue #207). Columns are
+ * matched by header (see `@/lib/production-readings/readings-csv`), so no
+ * client-supplied column mapping is needed.
+ */
 export const importProductionRunReadingsSchema = z.object({
-  documentId: z.string().uuid("Invalid document ID"),
-  mapping: reactorDayCsvMappingSchema.optional(),
+  documentId: z.uuid("Invalid document ID"),
 });
 
-export type ReactorDayCsvMappingInput = z.infer<
-  typeof reactorDayCsvMappingSchema
+export type ImportProductionRunReadingsInput = z.infer<
+  typeof importProductionRunReadingsSchema
 >;

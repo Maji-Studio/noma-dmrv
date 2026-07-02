@@ -1,14 +1,14 @@
 /**
  * ProductionRunReadingTable component
  * Read-only table of imported production run readings. Telemetry is sourced
- * from reactor-day CSV imports — there is no manual add/edit. The only
+ * from readings CSV imports — there is no manual add/edit. The only
  * mutation is "Delete All", which clears the run so a corrected CSV can be
  * re-uploaded and imported.
  */
 "use client";
 
 import { useState } from "react";
-import { Trash } from "@phosphor-icons/react";
+import { TrashIcon } from "@phosphor-icons/react";
 import {
   useProductionRunReadings,
   useDeleteAllProductionRunReadings,
@@ -93,7 +93,7 @@ export function ProductionRunReadingTable({
             size="small"
             onClick={() => setConfirmingDeleteAll(true)}
           >
-            <Trash size={16} />
+            <TrashIcon size={16} />
             Delete All
           </Button>
         )}
@@ -104,7 +104,7 @@ export function ProductionRunReadingTable({
 
       {/* Table */}
       {isLoading ? (
-        <TableSkeleton columns={4} rows={3} />
+        <TableSkeleton columns={5} rows={3} />
       ) : !readings?.length ? (
         <p className="body-small text-[var(--color-text-tertiary)] py-16">
           {readOnly
@@ -122,7 +122,8 @@ export function ProductionRunReadingTable({
                 <th className="py-8 pr-12 font-medium">Time</th>
                 <th className="py-8 pr-12 font-medium">Temp (&deg;C)</th>
                 <th className="py-8 pr-12 font-medium">Pressure (bar)</th>
-                <th className="py-8 font-medium">Gas Flow</th>
+                <th className="py-8 pr-12 font-medium">Dryer (Hz)</th>
+                <th className="py-8 font-medium">Reactor (Hz)</th>
               </tr>
             </thead>
             <tbody>
@@ -136,7 +137,8 @@ export function ProductionRunReadingTable({
                   </td>
                   <td className="py-8 pr-12">{formatNum(r.temperatureC, 1)}</td>
                   <td className="py-8 pr-12">{formatNum(r.pressureBar, 2)}</td>
-                  <td className="py-8">{formatNum(r.gasFlowRate, 3)}</td>
+                  <td className="py-8 pr-12">{formatNum(r.dryerFrequencyHz, 1)}</td>
+                  <td className="py-8">{formatNum(r.reactorFrequencyHz, 1)}</td>
                 </tr>
               ))}
             </tbody>

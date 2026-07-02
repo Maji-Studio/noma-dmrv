@@ -8,12 +8,12 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { formatSafeDate, getPaginationLabel } from "@/lib/format-utils";
 import {
-  Certificate,
-  CurrencyCircleDollar,
-  Leaf,
-  MagnifyingGlass,
-  Plus,
-  X,
+  CertificateIcon,
+  CurrencyCircleDollarIcon,
+  LeafIcon,
+  MagnifyingGlassIcon,
+  PlusIcon,
+  XIcon,
 } from "@phosphor-icons/react";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import {
@@ -360,7 +360,7 @@ export function CreditBatchList() {
         subtitle="Carbon credit batches for verification and registry"
         actions={
           <Button variant="primary" onClick={openCreate}>
-            <Plus size={20} weight="bold" />
+            <PlusIcon size={20} weight="bold" />
             New Credit Batch
           </Button>
         }
@@ -371,21 +371,21 @@ export function CreditBatchList() {
         <StatCard
           title="Total Batches"
           value={totalBatches}
-          icon={<Certificate size={24} weight="bold" />}
+          icon={<CertificateIcon size={24} weight="bold" />}
           description="Carbon credit batches"
           isLoading={isLoading}
         />
         <StatCard
           title="CO₂e stored"
           value={hasPendingCo2e ? "Pending" : `${totalCo2e.toFixed(2)} t`}
-          icon={<Leaf size={24} weight="bold" />}
+          icon={<LeafIcon size={24} weight="bold" />}
           description="Current page carbon stored"
           isLoading={isLoading || previewsLoading}
         />
         <StatCard
           title="Total Value"
           value={totalValue.toLocaleString()}
-          icon={<CurrencyCircleDollar size={24} weight="bold" />}
+          icon={<CurrencyCircleDollarIcon size={24} weight="bold" />}
           description="Combined batch value"
           isLoading={isLoading}
         />
@@ -396,7 +396,7 @@ export function CreditBatchList() {
         <div className="flex flex-col gap-16 xl:flex-row xl:items-end xl:justify-between">
           <div className="grid flex-1 gap-12 md:grid-cols-[minmax(0,1fr)_200px]">
             <div className="relative">
-              <MagnifyingGlass
+              <MagnifyingGlassIcon
                 size={18}
                 className="pointer-events-none absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)]"
               />
@@ -447,7 +447,7 @@ export function CreditBatchList() {
 
             {hasActiveFilters && (
               <Button variant="noOutline" size="small" onClick={clearFilters}>
-                <X size={16} weight="bold" />
+                <XIcon size={16} weight="bold" />
                 Clear
               </Button>
             )}
@@ -459,7 +459,7 @@ export function CreditBatchList() {
       {paginatedItems.length === 0 ? (
         <EmptyState
           padding="lg"
-          icon={<Certificate size={48} />}
+          icon={<CertificateIcon size={48} />}
           title={
             hasActiveFilters
               ? "No credit batches found"
@@ -473,7 +473,7 @@ export function CreditBatchList() {
           action={
             !hasActiveFilters ? (
               <Button variant="primary" onClick={openCreate}>
-                <Plus size={18} weight="bold" />
+                <PlusIcon size={18} weight="bold" />
                 New Credit Batch
               </Button>
             ) : undefined

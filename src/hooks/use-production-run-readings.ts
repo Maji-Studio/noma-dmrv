@@ -1,7 +1,7 @@
 /**
  * Production Run Readings React Query Hooks
  *
- * Readings are imported from reactor-day CSVs. Client-side mutations are
+ * Readings are imported from readings CSVs. Client-side mutations are
  * limited to clearing all readings for a run ("delete all").
  */
 

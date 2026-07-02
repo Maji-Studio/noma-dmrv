@@ -59,6 +59,21 @@ guard. Pure starter-template residue; the app is facility-scoped.
 
 ## Architecture
 
+### Validate production-run window ⊆ credit-batch period (`production/run-window`, opened 2026-07-01)
+
+- **Deferred from the readings-CSV work (issue #207).** A production run may
+  span multiple days, but its `start_time`/`end_time` window should not extend
+  beyond the duration of its credit batch (the protocol production batch — see
+  ADR 0016). No such cross-entity check exists today; runs are only loosely
+  linked to batches, and `start_time`/`end_time` both default to `now()`.
+- **Why it matters:** the readings importer already clips telemetry to the run
+  window, so readings can't escape a run — but nothing stops a run's own window
+  from exceeding its batch period, which would let telemetry land outside the
+  batch it certifies.
+- **To resolve:** decide where the run↔batch link is authoritative, then add
+  the bound to the production-run create/update flow (`src/schemas/production-runs.ts`
+  + `src/fn/production-runs.ts`). Touches the run form; keep it out of the CSV PR.
+
 ### White-label dashboards per Organization (`tenancy/white-label`, opened 2026-06-11)
 
 - **Decision deferred (2026-06-11 multi-tenancy grilling):** at launch each
@@ -1159,6 +1174,13 @@ should fail-closed). Clicking SUBMIT on a Removal raised this SafeError:
     1.2 removals may stay; new crediting periods may require 1.3). Authoritative:
     https://registry.isometric.com/protocol/biochar/1.3 . Full audit:
     `.tmp_pdf/isometric-ghg-integration-audit.html`.
+- **Re-confirmation:** the `.claude/workflows/isometric-gap-check.js` run
+  independently re-detected the same four drifts from a cold start and flagged
+  no drift on biomass-feedstock or transportation — nothing has shifted; this
+  stays the live re-pin decision (full run summary:
+  `docs/archive/2026-06-22-isometric-gap-check-run.md`). That workflow is the
+  standing re-audit mechanism — re-run it on any version bump to regenerate the
+  three-corner (authority vs. docs vs. code) gap list before re-pinning.
 
 ### Certify-removal redesign — submit-context builder N+1 on selection/submit hot paths (`certification/submit-context-n+1`, opened 2026-06-05)
 

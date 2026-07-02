@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { File, Trash, ArrowSquareOut } from "@phosphor-icons/react";
+import { FileIcon, TrashIcon, ArrowSquareOutIcon } from "@phosphor-icons/react";
 import { ServerError } from "@/components/forms";
 import { FormField } from "@/components/forms/form-field";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
@@ -93,7 +93,7 @@ export function TransportLegDocuments({ legId }: TransportLegDocumentsProps) {
               key={doc.id}
               className="flex items-center gap-8 border border-[var(--color-border-tertiary)] px-12 py-8"
             >
-              <File
+              <FileIcon
                 size={16}
                 weight="bold"
                 className="shrink-0 text-[var(--color-text-tertiary)]"
@@ -114,7 +114,7 @@ export function TransportLegDocuments({ legId }: TransportLegDocumentsProps) {
                 className="shrink-0 p-4 text-[var(--color-text-tertiary)] hover:text-[var(--color-interaction)] transition-colors duration-300"
                 aria-label={`Open ${doc.fileName}`}
               >
-                <ArrowSquareOut size={16} weight="bold" />
+                <ArrowSquareOutIcon size={16} weight="bold" />
               </a>
               <Button
                 variant="destructive"
@@ -124,7 +124,7 @@ export function TransportLegDocuments({ legId }: TransportLegDocumentsProps) {
                 className="shrink-0"
                 aria-label={`Delete ${doc.fileName}`}
               >
-                <Trash size={16} weight="bold" />
+                <TrashIcon size={16} weight="bold" />
               </Button>
             </li>
           ))}

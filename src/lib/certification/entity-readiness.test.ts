@@ -186,43 +186,6 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness).toEqual({ state: "ready", gaps: [] });
   });
 
-  it("requires feedstock truck weighing only when transport context asks for it", () => {
-    const readiness = deriveEntityCertifyReadiness("feedstock", {
-      status: "complete",
-      massWetKg: 1500,
-      requiresTruckWeighing: true,
-      truckMassOnArrivalKg: null,
-      truckMassOnDepartureKg: 12_500,
-    });
-
-    expect(readiness.state).toBe("incomplete");
-    expect(readiness.gaps).toMatchObject([
-      {
-        kind: "field",
-        key: "truckWeighing",
-        fields: ["truckMassOnArrivalKg", "truckMassOnDepartureKg"],
-      },
-    ]);
-  });
-
-  it("requires delivery truck weighing only when transport context asks for it", () => {
-    const readiness = deriveEntityCertifyReadiness("delivery", {
-      deliveredWetMassKg: 1500,
-      requiresTruckWeighing: true,
-      truckMassOnArrivalKg: 8_000,
-      truckMassOnDepartureKg: null,
-    });
-
-    expect(readiness.state).toBe("incomplete");
-    expect(readiness.gaps).toMatchObject([
-      {
-        kind: "field",
-        key: "truckWeighing",
-        fields: ["truckMassOnArrivalKg", "truckMassOnDepartureKg"],
-      },
-    ]);
-  });
-
   it("reports a feedstock missing wet mass via the entity column", () => {
     const readiness = deriveEntityCertifyReadiness("feedstock", {
       status: "complete",
@@ -256,13 +219,6 @@ describe("isCertifyFormField", () => {
   it("ignores fields outside the registry", () => {
     expect(isCertifyFormField("delivery", "distanceKmOverride")).toBe(false);
   });
-
-  it("badges truck weighing fields for delivery and feedstock forms", () => {
-    expect(isCertifyFormField("delivery", "truckMassOnArrivalKg")).toBe(true);
-    expect(isCertifyFormField("delivery", "truckMassOnDepartureKg")).toBe(true);
-    expect(isCertifyFormField("feedstock", "truckMassOnArrivalKg")).toBe(true);
-    expect(isCertifyFormField("feedstock", "truckMassOnDepartureKg")).toBe(true);
-  });
 });
 
 describe("isCertifyEntityField", () => {
@@ -270,7 +226,6 @@ describe("isCertifyEntityField", () => {
     expect(isCertifyEntityField("feedstock", "massWetKg")).toBe(true);
     expect(isCertifyEntityField("feedstock", "totalWetMassKg")).toBe(true);
     expect(isCertifyEntityField("delivery", "deliveredWetMassKg")).toBe(true);
-    expect(isCertifyEntityField("delivery", "truckMassOnArrivalKg")).toBe(true);
   });
 
   it("ignores non-certification detail fields", () => {

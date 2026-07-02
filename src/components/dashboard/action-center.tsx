@@ -13,7 +13,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, CheckCircle } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRightIcon, CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type {
   DashboardAttentionItem,
@@ -139,7 +139,7 @@ export function ActionCenter({
           </div>
           {attention.length === 0 ? (
             <div className="flex items-center gap-10 px-20 pb-16 pt-4">
-              <CheckCircle
+              <CheckCircleIcon
                 size={18}
                 weight="bold"
                 className="text-[var(--st-ok)]"
@@ -173,7 +173,7 @@ export function ActionCenter({
                       </span>
                     </span>
                     {severityBadge(item)}
-                    <ArrowRight
+                    <ArrowRightIcon
                       size={14}
                       weight="bold"
                       className="text-[var(--color-text-tertiary)] transition-transform duration-150 group-hover:translate-x-[3px]"
@@ -231,7 +231,7 @@ export function ActionCenter({
                     >
                       {row.count}
                     </span>
-                    <ArrowRight
+                    <ArrowRightIcon
                       size={14}
                       weight="bold"
                       className="text-[var(--color-text-tertiary)] transition-transform duration-150 group-hover:translate-x-[3px]"
@@ -252,7 +252,7 @@ export function ActionCenter({
           className="group inline-flex items-center gap-8 label-micro text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
         >
           Open certification removals
-          <ArrowRight
+          <ArrowRightIcon
             size={13}
             weight="bold"
             className="transition-transform duration-150 group-hover:translate-x-[3px]"
