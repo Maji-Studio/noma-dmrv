@@ -195,15 +195,19 @@ async function main(): Promise<void> {
     console.log(`  template monitored tuples: ${tuples.length}`);
 
     for (const t of tuples) {
-      const mapping = lookupInputMapping(t.group, t.blueprint, t.input);
-      if (mapping) continue;
+      // Scope-conflict check runs BEFORE accepting a mapping — a tuple
+      // present in both PERIOD_INPUT_TUPLES and INPUT_MAPPING must fail
+      // (mirrors the guard ordering in transformers/datapoint.ts, ADR 0018).
       const periodTuple = lookupPeriodInputTuple(t.group, t.blueprint, t.input);
       if (periodTuple) {
         console.error(
           `  ✗ scope-conflict: template declares ${t.group}/${t.blueprint}/${t.input} as REMOVAL-scope, but it belongs to PROJECT (category="${periodTuple.category}"). Remove from template (ADR 0018).`,
         );
         failed += 1;
-      } else {
+        continue;
+      }
+      const mapping = lookupInputMapping(t.group, t.blueprint, t.input);
+      if (!mapping) {
         console.error(
           `  ✗ missing INPUT_MAPPING entry: ${t.group}/${t.blueprint}/${t.input}`,
         );
