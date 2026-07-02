@@ -13,6 +13,29 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-07-02 (ADR 0018 — project-emissions journal removed)
+
+Executes the approved removal plan
+([`docs/archive/plans/2026-06-17-remove-project-emissions-journal.md`](../archive/plans/2026-06-17-remove-project-emissions-journal.md));
+decision recorded in [ADR 0018](../adr/0018-isometric-owns-project-emissions.md),
+which supersedes the journal half of ADR 0005.
+
+- **Deleted:** the "Period emissions (LCA-derived)" journal section + registry
+  drift panel on `/certification/settings`, the `certifier_project_emissions`
+  table + `project_emission_category` pgEnum (migration `0065`, destructive —
+  no prod data), the project-emissions schemas/data-access/fn/hooks, the
+  `CATEGORY_TO_BLUEPRINT` matcher, and the drift half of
+  `scripts/isometric-coverage-check.ts` (its `expectedCategories` fixture field
+  included).
+- **Kept:** the scope-conflict guard (`PERIOD_INPUT_TUPLES` + `SafeError` in
+  `transformers/datapoint.ts`, now self-contained string literals) and the
+  template-coverage half of the coverage check (still in
+  `isometric-health.yml`; `--source=db` now reads `certifier_projects` only).
+- **Operational expectation:** the operator authors PROJECT-scope Components in
+  the Isometric UI and attaches the source LCA PDF to each Component's
+  **Sources** field — the registry is the sole system-of-record for period
+  emissions (matters most for `pyrolyzer_direct`).
+
 ## 2026-06-20 (ADR 0017 Track 2 — Method-B unlock backend + operator UI)
 
 Track 2 activates the Method-B unlock end-to-end (ADR 0017; implementation record

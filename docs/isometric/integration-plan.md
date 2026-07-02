@@ -44,13 +44,16 @@ requirements can be pulled programmatically.
   (`{ project_id, end_on }`); Isometric links Removals server-side by
   date range; reconciliation writes the FK onto local
   `certifierRemovals.ghgStatementId`.
-- **[ADR 0005 — Period emissions as Project Components](../adr/0005-period-emissions-as-project-components.md)**.
+- **[ADR 0005 — Period emissions as Project Components](../adr/0005-period-emissions-as-project-components.md)**
+  (journal half superseded by
+  [ADR 0018](../adr/0018-isometric-owns-project-emissions.md)).
   LCA-derived per-period emissions (staff travel, pyrolyzer gas, lab
   electricity, sampling consumables, miscellaneous mass) live as
   `PROJECT`-scope Components in Isometric, amortized server-side via
-  `ProjectComponentAmortizationStrategy`. noma is the **LCA journal**
-  (`/admin/emission-estimates` rows + drift panel), not the publisher;
-  the operator posts Project Components directly in the Isometric UI.
+  `ProjectComponentAmortizationStrategy`. The operator authors Project
+  Components directly in the Isometric UI with the LCA PDF attached to
+  each Component's Sources field; noma keeps **no** local copy (the
+  former LCA journal + drift panel were removed per ADR 0018).
 - **[ADR 0007 — Certification workspace consolidation](../adr/0007-certification-workspace-consolidation.md)**.
   Certification is a first-class workspace. The credit-batch surfaces show
   readiness and membership context; creation/submission lives in the
@@ -68,7 +71,7 @@ requirements can be pulled programmatically.
 | **3.5** — Sources upload | ✅ | Mirrors noma documents to Isometric Sources via server-side proxy (POST `/sources` → fetch from noma storage → PUT to signed URL → INSERT `certifier_document_uploads`). Source IDs ride into every monitored Datapoint's `source_ids` and are part of the semantic hash (mirror/unmirror supersedes the Removal version). Reconciliation covers the orphan paths: `GET /sources?supplier_reference_id=…` → either `POST /sources/{id}/signed_upload_url` 200 (re-PUT) or 409 (already uploaded, insert local row only). SSRF host allowlist, advisory locks around POST+INSERT, transaction + double-check around unlink, sync-event coverage on every outbound failure. **Known compromise (v1):** removal-wide source attribution — every Datapoint receives the same `source_ids`. Per-input refinement deferred to Phase 5 (tracked `isometric/sources-per-input-attribution`). 50 MB cap per source; streaming larger files tracked `isometric/sources-stream-large-files`. |
 | **3.6** — Tailored sandbox template | ✅ | `noma-mvp` Removal Template walkthrough + bootstrap script for fixed constants. Polymorphic transport-leg CRUD on delivery/sample/feedstock. |
 | **3.7** — Real energy data | ✅ | Per-facility genset yield replaces energy zero stubs; ADR 0015 collapses energy to the active template's combined measurement point. `/admin/emission-estimates` + `/energy` summary route. |
-| **3.7-period** — Period emissions | ✅ | Period-level inputs (staff travel, pyrolyzer gas, lab electricity, sampling consumables, miscellaneous) live as `PROJECT`-scope Components in Isometric (ADR 0005). noma extends `/admin/emission-estimates` with an LCA-journal section + read-only drift panel on `/certification/`; **noma does not POST** Project Components. The seven `zeroStub: true` families are deleted from INPUT_MAPPING; the scope-conflict `SafeError` from `lookupPeriodInputTuple` fires before the generic missing-entry error. `MAPPING_REVISION = sha256(canonicalJson(INPUT_MAPPING))` rides on every `submitRemoval` payload + sync event. Coverage check + OpenAPI regen gate land in `isometric-health.yml`. |
+| **3.7-period** — Period emissions | ✅ (journal removed) | Period-level inputs (staff travel, pyrolyzer gas, lab electricity, sampling consumables, miscellaneous) live as `PROJECT`-scope Components in Isometric (ADR 0005); the operator authors them in the Isometric UI with the LCA PDF on each Component's Sources field. noma keeps **no** local copy — the LCA-journal section + drift panel shipped under Posture B were removed per ADR 0018. The seven `zeroStub: true` families stay deleted from INPUT_MAPPING; the scope-conflict `SafeError` from `lookupPeriodInputTuple` fires before the generic missing-entry error. `MAPPING_REVISION = sha256(canonicalJson(INPUT_MAPPING))` rides on every `submitRemoval` payload + sync event. Template-coverage check + OpenAPI regen gate live in `isometric-health.yml`. |
 | **4** — GHG statement lifecycle | ❎ Superseded | Original two-phase `submitCreditBatch` removed by ADR 0003; lifecycle utilities retained and re-used by Phase 4.5. |
 | **4.5** — Multi-removal GHG Statements | ✅ | Provider-neutral `/certification/` route group (hub + Removals + GHG Statements). Period-first stepper. Membership reconciliation never steals. Unlink/repoint guard widened. |
 | **5** — Time-series + bulk | 🟢 Slice A shipped (2026-05-29 scoped → built), B + C deferred | **Slice A** — `DataUploadSubmission` of `biochar_pyrolysis_reactor_facility_time_series` (Parquet bulk upload of **60-second clock-aligned** aggregations of `production_run_readings`, one file per facility per Removal-window — hard cap surfaced by sandbox smoke 2026-05-29 with `AggregationPeriodDurationInvalidError: ... exceeds maximum allowed of 60 seconds`). New `certifier_sensors` table maps `(reactor × measurement_property) → externalSensorId + sensorReference`. New `certifier_projects.externalFacilityId` column (operator-pasted from Certify UI; no `POST /facilities` exists). Manual "Submit Telemetry" button on the Removal page; status badge surfaces the latest `GET /data-upload-submissions/{id}` poll. Idempotency uses journaled-step IDs in `payloadSnapshot` (no supplier-reference reconciliation path — see [ADR 0006](../adr/0006-data-upload-submission-idempotency.md)). Parquet writer locked to **`hyparquet-writer`** (validated end-to-end against sandbox 2026-05-29; explicit `SchemaElement[]` with `logical_type: { type: 'TIMESTAMP', isAdjustedToUTC: true, unit: 'NANOS' }` for the four timestamp columns; INT64 bigint values written directly without Date conversion). **Slice B** (`POST /biochar_applications`) and **Slice C** (`MonitoringSubmission`) tracked under `docs/open-questions.md`. Webhook receiver still pending Isometric publishing a contract. |
@@ -103,16 +106,16 @@ registry data:
    indefinitely, or land the facility-membership model and gate every
    removal/ghg-statement accessor on the resolved facility). Same
    posture applies to `certifier-ghg-statements.ts`.
-4. **Period-emission Project Components present in Isometric AND noma.**
+4. **Period-emission Project Components present in Isometric.**
    Replaces the original "no zero-stub template" gate now that ADR 0005
    moves period inputs out of `INPUT_MAPPING` entirely. For every
-   category referenced by any Removal Template a facility uses,
-   confirm: (a) `/admin/emission-estimates` carries a row for the
-   current LCA window with a real magnitude, (b)
-   `getProject().components` returns a matching `PROJECT`-scope
-   Component. The nightly coverage check (Operational health below)
-   asserts both. The scope-conflict `SafeError` from ADR 0005 prevents
-   any zero-stub regression at submit time.
+   category referenced by any Removal Template a facility uses, confirm
+   in the Isometric UI that `getProject().components` carries a matching
+   `PROJECT`-scope Component with the source LCA PDF attached to its
+   Sources field (ADR 0018 — Isometric is the sole system-of-record;
+   noma keeps no journal copy to cross-check). The scope-conflict
+   `SafeError` from ADR 0005/0018 prevents any zero-stub regression at
+   submit time; the nightly coverage check asserts template coverage.
 
 ## Architecture (file layout)
 
@@ -150,7 +153,6 @@ src/fn/certification/                  # withAction-wrapped server actions
   ├─ submit-removal.ts                 # Phase 3 (ADR 0003)
   ├─ removal-grouping.ts               # ADR 0003 (assignCreditBatchToRemoval)
   ├─ ghg-statements.ts                 # Phase 4.5 (ADR 0004)
-  ├─ project-emissions.ts              # ADR 0005 journal/drift actions
   ├─ sources-transfer.ts               # evidence mirroring
   ├─ submit-telemetry.ts               # ADR 0006 telemetry upload
   ├─ shared.ts
@@ -253,6 +255,7 @@ ISOMETRIC_ENVIRONMENT:   z.enum(['sandbox', 'production']).optional()
 | 0035 | `deterministic_product_bin_formulation` | inventory | data fix | Deterministic product-bin formulation backfill. |
 | 0036 | `cultured_rattler` | readiness / performance | index + constraint | Reading and transport-leg indexes; nullable Isometric-only batch certifier constraint. |
 | 0037 | `sour_lethal_legion` | schema slim-down | destructive cleanup | Dropped unused protocol-stub tables, removed `certifier_sources`, and removed legacy starter `projects` / `items` tables. |
+| 0065 | `lovely_drax` | ADR 0018 | **destructive** | `DROP TABLE certifier_project_emissions CASCADE` + `DROP TYPE project_emission_category` — the LCA journal is deleted; Isometric owns project emissions. |
 
 ## Operational health
 
@@ -288,15 +291,14 @@ Asserts, for every facility's `defaultRemovalTemplateId`:
 
 - Every `(group, blueprint, input)` tuple referenced by the live template
   is **either** present in `INPUT_MAPPING` (with matching `quantity_kind`
-  + `compatible_unit`) **or** in the new `PERIOD_INPUT_TUPLES` sentinel
-  set (in which case the template is wrong by construction per ADR 0005).
-- Every `getProject().components` component-of-scope-`PROJECT` has a
-  matching `/admin/emission-estimates` row (the Posture B drift panel,
-  run headless).
+  + `compatible_unit`) **or** in the `PERIOD_INPUT_TUPLES` sentinel set
+  (in which case the template is wrong by construction per ADR 0005/0018).
+
+(The former second assertion — reconciling `PROJECT`-scope Components
+against noma's LCA-journal rows — was removed with the journal, ADR 0018.)
 
 Runs as a step in `isometric-health.yml` and as a standalone `pnpm`
-script. Live API only — no committed fixture. Fail-loud (CI red) on any
-miss, naming the exact tuple or component id.
+script. Fail-loud (CI red) on any miss, naming the exact tuple.
 
 ### B2 — Generated types staleness
 
@@ -339,7 +341,6 @@ exist before adding a parallel surface:
     `defaultRemovalTemplateId`, emission-estimate columns).
   - `certifierSensors` (reactor measurement-property to external sensor
     mapping).
-  - `certifierProjectEmissions` (period-emission journal rows for ADR 0005).
   - `certifierDocumentUploads`, `certifierSyncEvents`.
   - `certificationSubmissions` — has everything for safe idempotency:
     `submissionType`, `localEntityType/Id`, `externalId`, `version`,

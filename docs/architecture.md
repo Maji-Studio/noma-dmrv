@@ -201,7 +201,6 @@ lib/isometric/              # Pure HTTP client + transformers + utils
                             #   (no DB, no auth, no ActionResult)
        ↓
 db/schema/certification.ts  # certifier_projects, certifier_sensors,
-                            #   certifier_project_emissions,
                             #   certifier_ghg_statements, certifier_removals,
                             #   certification_submissions,
                             #   certifier_document_uploads,
