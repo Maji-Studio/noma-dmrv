@@ -9,7 +9,7 @@
  * `?step=` / `?area=` convention elsewhere):
  *
  *   connection  · Registry connection — Isometric  (everyone reads; admins manage)
- *   emissions   · Emission / LCA config            (admin only — ADR 0005, import-only)
+ *   emissions   · Emission estimates               (admin only — ADR 0001/0015)
  *   environment · Environment & health             (admin only — read-only, no secrets)
  *
  * Provider-neutral shell (Decision #1): a future registry slots in beside the
@@ -31,14 +31,12 @@ import {
 import { parseAsStringEnum, useQueryState } from "nuqs";
 import type { ElementType, ReactNode } from "react";
 import { EmissionEstimatesForm } from "@/components/admin/emission-estimates-form";
-import { PeriodEmissionsSection } from "@/components/admin/period-emissions-section";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { CertificationHealthPanel } from "./certification-health-panel";
 import { EnvBanner } from "./env-banner";
 import { FacilityCertifierSection } from "./facility-certifier-section";
-import { ProjectEmissionsDriftPanel } from "./project-emissions-drift-panel";
 
 const TAB_KEYS = ["connection", "emissions", "environment"] as const;
 type TabKey = (typeof TAB_KEYS)[number];
@@ -235,7 +233,7 @@ export function CertificationSettings() {
             </div>
           )}
 
-          {/* Emission / LCA config — admin only (ADR 0005, import-only).
+          {/* Emission estimates — admin only (ADR 0001/0015).
               EmissionEstimatesForm seeds its RHF defaultValues from `mapping`
               at mount, so it must not mount until the summary has loaded —
               otherwise saved genset-yield values render blank. */}
@@ -248,7 +246,7 @@ export function CertificationSettings() {
               <SettingsSection
                 icon={GaugeIcon}
                 title="Emission estimates"
-                caption="Genset yield and the per-period LCA journal. Feeds combined energy datapoints on submission."
+                caption="Genset yield and soil temperature. Feeds combined energy datapoints on submission."
               >
                 {summaryLoading ? (
                   <p className="body-medium text-[var(--color-text-tertiary)]">
@@ -266,14 +264,6 @@ export function CertificationSettings() {
                     mapping={summary.mapping ?? null}
                   />
                 )}
-                {/* What's drifted vs. the registry (read-only) sits directly
-                    above the journal where the operator records the matching
-                    rows — the Overview only shows the one-line summary. */}
-                <ProjectEmissionsDriftPanel />
-                <PeriodEmissionsSection
-                  key={`period-emissions-${facilityId}`}
-                  facilityId={facilityId}
-                />
               </SettingsSection>
             </div>
           )}

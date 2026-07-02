@@ -46,17 +46,13 @@ canonical scope:
 - `sampling-required-for-mrv/mass_based_ci_emissions/mass` → category `sampling_consumables`
 - `sampling-required-for-mrv/grid_electricity_use/electricity_use` → category `lab_electricity`
 
-The operator publishes the matching Project Component in the Isometric
-UI from a row in `/admin/emission-estimates` (LCA journal); the
-read-only drift panel on `/certification/` reconciles. The nightly
-`pnpm isometric:coverage-check` step in `isometric-health.yml` reads
-`tests/fixtures/isometric-coverage.json` and asserts:
-
-1. Every monitored tuple in the live template is in `INPUT_MAPPING` and
-   not in `PERIOD_INPUT_TUPLES`.
-2. Every `expectedCategories` entry has a matching PROJECT-scope
-   Component (within ±0.5% magnitude tolerance).
-3. Every PROJECT-scope Component has a matching expected entry.
+The operator authors the matching Project Component directly in the
+Isometric UI, attaching the source LCA PDF to the Component's Sources
+field (ADR 0018 — noma keeps no journal copy and runs no drift
+reconciliation). The nightly `pnpm isometric:coverage-check` step in
+`isometric-health.yml` reads `tests/fixtures/isometric-coverage.json`
+and asserts that every monitored tuple in the live template is in
+`INPUT_MAPPING` and not in `PERIOD_INPUT_TUPLES`.
 
 **Refresh the fixture** whenever a new sandbox project ships, a
 template gains a component, or an LCA window rolls — add or update the
@@ -267,7 +263,7 @@ Three follow-ups gate any non-sandbox use of this template:
    close across jurisdictions but a national source is preferred),
    HGV freight factor (depends on local vehicle fleet mix). Same edit
    path as above.
-3. **Resolve all zero-stubbed monitored inputs** — see
-   `docs/open-questions.md` → `isometric/phase-3.7-period-inputs`. No
-   template carrying a zero stub may be promoted to a production
-   project.
+3. **Resolve all zero-stubbed monitored inputs** — period inputs belong
+   to PROJECT-scope Components authored in the Isometric UI (ADR 0005 /
+   ADR 0018); remove them from the Removal Template. No template
+   carrying a zero stub may be promoted to a production project.
