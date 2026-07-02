@@ -381,17 +381,23 @@ phase('Bootstrap')
 const bootstrap = await agent(bootstrapPrompt(), { label: 'bootstrap', phase: 'Bootstrap', schema: BOOTSTRAP_SCHEMA })
 
 let targets = (bootstrap && bootstrap.targets) || []
-if (MODULE_FILTER) targets = targets.filter((t) => MODULE_FILTER.includes(t.slug))
+// A module-scoped rerun must narrow drift reporting too, or partial runs
+// surface drift rows for modules the run never checked.
+let driftFindings = (bootstrap && bootstrap.driftFindings) || []
+if (MODULE_FILTER) {
+  targets = targets.filter((t) => MODULE_FILTER.includes(t.slug))
+  driftFindings = driftFindings.filter((d) => MODULE_FILTER.includes(d.slug))
+}
 if (!targets.length) {
   return {
     report: '# Isometric Requirements Gap-Check\n\nBootstrap returned no targets (could not read versions.json or the module filter excluded everything). Nothing to check.',
-    driftFindings: (bootstrap && bootstrap.driftFindings) || [],
+    driftFindings,
     confirmedCount: 0,
     modules: [],
   }
 }
 
-log(`Checking ${targets.length} pinned protocol(s)/module(s); ${((bootstrap && bootstrap.driftFindings) || []).length} version drift(s) found at bootstrap.`)
+log(`Checking ${targets.length} pinned protocol(s)/module(s); ${driftFindings.length} version drift(s) found at bootstrap.`)
 
 // Fully pipelined: authority → coverage → adversarial verify, per module, no barriers.
 const perModule = await pipeline(
@@ -463,13 +469,13 @@ log(`Coverage complete: ${allConfirmed.length} confirmed gap(s) across ${liveMod
 
 phase('Synthesis')
 const report = await agent(
-  synthesisPrompt((bootstrap && bootstrap.driftFindings) || [], allConfirmed, moduleStats),
+  synthesisPrompt(driftFindings, allConfirmed, moduleStats),
   { label: 'synthesis', phase: 'Synthesis' },
 )
 
 return {
   report,
-  driftFindings: (bootstrap && bootstrap.driftFindings) || [],
+  driftFindings,
   confirmedCount: allConfirmed.length,
   modules: moduleStats,
   liveTemplateChecked: !!LIVE_TEMPLATE,
