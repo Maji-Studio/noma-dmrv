@@ -1,13 +1,14 @@
 /**
- * CreditBatchHealthStrip — the batch's submission gate. Same `useBatchHealth`
- * classifier as the New-Removal wizard's gate (the two can never disagree).
+ * CreditBatchHealthStrip — the batch's certification checklist (the submission
+ * gate, in plain clothes). Same `useBatchHealth` classifier as the New-Removal
+ * wizard's gate (the two can never disagree).
  *
- * The gate only DETAILS the checks that still need work: each open check is an
- * action row stating the gap (problem-phrased headline + the missing items)
- * with a single button that lands where the gap is actually resolved. Cleared
- * and not-yet-evaluable checks collapse into one compact summary line, so the
- * full four-check picture stays visible without four equal-weight boxes. A
- * `skipped` transport check is a facility-setup concern — it links to
+ * The checklist only DETAILS the checks that still need work: each open check
+ * is an action row stating the gap (problem-phrased headline + the missing
+ * items) with a single button that lands where the gap is actually resolved.
+ * Cleared and not-yet-evaluable checks collapse into one compact summary line,
+ * so the full four-check picture stays visible without four equal-weight
+ * boxes. A `skipped` transport check is a facility-setup concern — it links to
  * certification settings and never counts as a batch issue.
  */
 "use client";
@@ -197,9 +198,10 @@ function GateBody({
           />
           <p className="body-small text-[var(--color-text-secondary)]">
             <span className="font-medium text-[var(--color-text-primary)]">
-              All checks cleared.
+              All checks passed.
             </span>{" "}
-            This batch is complete enough to enter a removal package.
+            This batch has everything it needs to be submitted for
+            certification.
           </p>
         </div>
         <ClearedSummary met={met} skipped={skipped} facilityId={facilityId} />
@@ -242,12 +244,12 @@ export function CreditBatchHealthStrip({
       <div className="flex flex-col gap-12 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex max-w-[680px] flex-col gap-4">
           <h2 className="title-heading-3 text-[var(--color-text-primary)]">
-            Submission gate
+            Certification checklist
           </h2>
           <p className="body-small text-[var(--color-text-secondary)]">
             {hasOpenIssues
-              ? "Resolve the open checks below before this batch can enter a removal package."
-              : "Four checks decide whether this batch can enter a removal package."}
+              ? "Fix the items below before this batch can be submitted for certification."
+              : "Everything this batch needs before it can be submitted for certification."}
           </p>
         </div>
         {health && <GateStatus health={health} />}

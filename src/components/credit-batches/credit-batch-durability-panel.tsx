@@ -1,11 +1,12 @@
 /**
- * CreditBatchDurabilityPanel — the credit-batch detail's durability section
+ * CreditBatchDurabilityPanel — the credit-batch detail's "Lab samples" section
  * (Phase 5b). The credit batch IS the protocol production batch and the sampling
  * unit (ADR 0016), so this rolls up every lab Sample that characterises the batch
  * (across its member runs/days), shows the batch-level mean ± std-dev that the
  * measurement-sample submission actually sends, and states the readiness inline:
  * the §3 Table 2 eligibility verdict, the §8.3.1 ≥3 count, and the distribution
- * across distinct runs/days.
+ * across distinct runs/days. User-facing copy stays plain — protocol § references
+ * live in the header InfoHint, not the body.
  *
  * Figures come from `buildDurabilityBatchSummaries` — the SAME aggregation the
  * submit pipeline feeds — so this panel reconciles exactly to what's submitted.
@@ -37,17 +38,20 @@ function Section({ children }: { children: React.ReactNode }) {
     >
       <div className="flex flex-col gap-4">
         <h2 className="title-heading-3 flex items-center gap-6 text-[var(--color-text-primary)]">
-          Durability samples
+          Lab samples
           <InfoHint>
-            Lab samples that characterise this credit batch (the protocol
-            production batch). The batch-level mean ± standard deviation below is
-            what the 200-year sequestration measurement-sample submission sends.
+            Samples from this batch&apos;s production runs are pooled into one
+            batch-level figure (mean ± standard deviation) — that is what the
+            registry receives for the 200-year durability claim. Protocol rules
+            (module §8.3.1, §3 Table 2): at least 3 independent samples across
+            distinct runs/days, eligible when the pooled mean H/C_org &lt;{" "}
+            {DURABILITY_ELIGIBILITY_CEILINGS.hToC} and O/C_org &lt;{" "}
+            {DURABILITY_ELIGIBILITY_CEILINGS.oToC}.
           </InfoHint>
         </h2>
         <p className="body-small text-[var(--color-text-secondary)]">
-          ≥3 independent samples across distinct runs/days, eligible on the pooled
-          mean (H/C_org &lt; {DURABILITY_ELIGIBILITY_CEILINGS.hToC}, O/C_org &lt;{" "}
-          {DURABILITY_ELIGIBILITY_CEILINGS.oToC}) — module §3 Table 2, §8.3.1.
+          Lab chemistry from this batch&apos;s production runs. The registry
+          needs at least three samples, taken on different runs or days.
         </p>
       </div>
       {children}
@@ -195,36 +199,21 @@ export function CreditBatchDurabilityPanel({
         <EmptyState
           padding="md"
           icon={<FlaskIcon size={40} weight="duotone" />}
-          title="No durability samples yet"
-          description="Lab samples entered against this batch's production runs roll up here. The protocol needs ≥3 independent samples across distinct runs/days (§8.3.1) before this batch can submit a 200-year removal."
+          title="No lab samples yet"
+          description="Lab samples recorded on this batch's production runs show up here. At least three samples, taken on different runs or days, are needed before this batch can be certified."
         />
       </Section>
     );
   }
 
-  const { eligibility } = summary;
-
   return (
     <Section>
       <DurabilityReadinessSignals summary={summary} />
 
-      {/* Eligibility means vs the protocol ceilings (the verdict's working). */}
-      <p className="body-caption text-[var(--color-text-secondary)]">
-        Pooled mean H/C_org{" "}
-        <span className="font-medium text-[var(--color-text-primary)]">
-          {num(eligibility.hToCorgMean, 3)}
-        </span>{" "}
-        (&lt; {DURABILITY_ELIGIBILITY_CEILINGS.hToC}) · O/C_org{" "}
-        <span className="font-medium text-[var(--color-text-primary)]">
-          {num(eligibility.oToCorgMean, 3)}
-        </span>{" "}
-        (&lt; {DURABILITY_ELIGIBILITY_CEILINGS.oToC}). Judged on{" "}
-        {summary.usableReplicateCount} replicate
-        {summary.usableReplicateCount === 1 ? "" : "s"} with complete paired
-        chemistry.
-      </p>
-
-      {/* The batch-level figures the measurement-sample submission sends. */}
+      {/* The batch-level figures the measurement-sample submission sends.
+          The pooled eligibility means are NOT repeated as prose here — the
+          H/C_org stat below and the eligibility chip above already carry them,
+          and the ceilings live in the header's InfoHint. */}
       <div className="flex flex-col gap-8">
         <span className="label-micro text-[var(--color-text-tertiary)]">
           Submitted to registry (mean ± s.d.)
