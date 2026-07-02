@@ -105,7 +105,7 @@ export async function getSampleByIdFn(
  * Get sample statistics
  */
 export async function getSampleStatsFn(
-  productionRunId?: string,
+  creditBatchId?: string,
   facilityId?: string,
 ): Promise<ActionResult<SampleStats>> {
   try {
@@ -114,15 +114,15 @@ export async function getSampleStatsFn(
       return { success: false, error: "Unauthorized" };
     }
 
-    const validatedProductionRunId = productionRunId
-      ? z.string().uuid().parse(productionRunId)
+    const validatedCreditBatchId = creditBatchId
+      ? z.string().uuid().parse(creditBatchId)
       : undefined;
     const validatedFacilityId = facilityId
       ? z.string().uuid().parse(facilityId)
       : undefined;
     const stats = await getSampleStatsData(
       user.id,
-      validatedProductionRunId,
+      validatedCreditBatchId,
       validatedFacilityId,
     );
     return { success: true, data: stats };
@@ -215,7 +215,6 @@ export async function createSampleFn(
         const validated = createSampleSchema.parse({ ...data, sampleCode });
         return createSample(user.id, {
           sampleCode,
-          productionRunId: validated.productionRunId,
           creditBatchId: validated.creditBatchId,
           samplingTime:
             validated.samplingTime instanceof Date
@@ -308,7 +307,6 @@ export async function updateSampleFn(
 
     const sample = await updateSample(user.id, validated.sampleId, {
       sampleCode: validated.sampleCode,
-      productionRunId: validated.productionRunId,
       creditBatchId: validated.creditBatchId,
       samplingTime: validated.samplingTime
         ? validated.samplingTime instanceof Date

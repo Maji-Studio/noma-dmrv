@@ -7,6 +7,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   biocharProducts,
+  creditBatches,
   customerLocations,
   deliveries,
   facilities,
@@ -62,14 +63,23 @@ async function resolveEntityFacility(
     return { facilityId: row.facilityId };
   }
 
-  // sample: samples → production_runs → facilities
+  // sample: samples → credit_batches → facility (issue #309); legacy
+  // run-linked rows fall back to samples → production_runs → facility.
   const [row] = await db
-    .select({ facilityId: productionRuns.facilityId })
+    .select({
+      batchFacilityId: creditBatches.facilityId,
+      runFacilityId: productionRuns.facilityId,
+    })
     .from(samples)
-    .innerJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
+    .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
+    .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
     .where(eq(samples.id, entityId));
   if (!row) throw new SafeError(`${ENTITY_LABEL[entityType]} not found`);
-  return { facilityId: row.facilityId };
+  const facilityId = row.batchFacilityId ?? row.runFacilityId;
+  if (!facilityId) {
+    throw new SafeError(`${ENTITY_LABEL[entityType]} has no facility`);
+  }
+  return { facilityId };
 }
 
 // ============================================

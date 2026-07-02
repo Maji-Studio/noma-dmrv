@@ -1,6 +1,16 @@
 # The credit batch is the protocol production batch; a production process scopes Method A/B sampling
 
-Status: accepted (2026-06-19)
+Status: accepted (2026-06-19); amended 2026-07-02 (issue #309)
+
+> **Amendment (2026-07-02, issue #309):** the lab-sample entry point moved from the
+> production run to the **credit batch itself**. The batch's biochar is commingled across
+> its member runs, so no single run is attributable to a grab — `createSample` now requires
+> `creditBatchId` and no longer accepts a run; `samples.production_run_id` survives as
+> legacy provenance only (nullable, never written). The sample also **inherits the batch's
+> declared durability tier** instead of carrying its own selection. This strengthens, not
+> changes, this ADR's grain decision: the "both links stay populated / derive the batch from
+> the run" mechanics below describe the pre-amendment write path and now apply only to the
+> batch-side back-fill of legacy run-linked rows.
 
 > **Refines ADR 0014** (credit batch as production cohort) — it does **not** supersede it.
 > ADR 0014's run-membership (`credit_batch_production_runs`, `unique(productionRunId)`),

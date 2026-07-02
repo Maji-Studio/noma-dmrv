@@ -24,28 +24,23 @@ import {
   updateSampleFn,
   deleteSampleFn,
 } from "@/fn/samples";
-import { productionRunKeys } from "@/hooks/use-production-runs";
 import { certificationKeys } from "@/hooks/use-certification";
 import type { QueryClient } from "@tanstack/react-query";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
 
 // A sample's chemistry feeds the credit-batch durability roll-up (ADR 0016), so
-// every create/update/delete must refresh the two readiness surfaces that read
-// it: the credit-batch detail panel (keyed on the batch) and the lab-sample
-// form's derived-batch preview (keyed on the run). Both links can be null.
+// every create/update/delete must refresh the batch-keyed readiness surfaces
+// that read it: the credit-batch detail panel and the lab-sample form's batch
+// progress preview (both share the batch-durability-summary key). The link can
+// be null on legacy rows.
 function invalidateDurabilitySummaries(
   queryClient: QueryClient,
-  links: { creditBatchId?: string | null; productionRunId?: string | null },
+  links: { creditBatchId?: string | null },
 ) {
   if (links.creditBatchId) {
     queryClient.invalidateQueries({
       queryKey: certificationKeys.batchDurabilitySummary(links.creditBatchId),
-    });
-  }
-  if (links.productionRunId) {
-    queryClient.invalidateQueries({
-      queryKey: certificationKeys.runDurabilitySummary(links.productionRunId),
     });
   }
 }
@@ -61,8 +56,8 @@ export const sampleKeys = {
     [...sampleKeys.lists(), filters] as const,
   details: () => [...sampleKeys.all, "detail"] as const,
   detail: (id: string) => [...sampleKeys.details(), id] as const,
-  stats: (productionRunId?: string, facilityId?: string) =>
-    [...sampleKeys.all, "stats", productionRunId, facilityId] as const,
+  stats: (creditBatchId?: string, facilityId?: string) =>
+    [...sampleKeys.all, "stats", creditBatchId, facilityId] as const,
   codeCheck: (code: string, excludeId?: string) =>
     [...sampleKeys.all, "codeCheck", code, excludeId] as const,
   nextCode: () => [...sampleKeys.all, "nextCode"] as const,
@@ -115,14 +110,14 @@ export function useSample(sampleId: string, enabled = true) {
  * Hook to fetch sample statistics
  */
 export function useSampleStats(
-  productionRunId?: string,
+  creditBatchId?: string,
   enabled = true,
   facilityId?: string,
 ) {
   return useQuery({
-    queryKey: sampleKeys.stats(productionRunId, facilityId),
+    queryKey: sampleKeys.stats(creditBatchId, facilityId),
     queryFn: async () => {
-      const result = await getSampleStatsFn(productionRunId, facilityId);
+      const result = await getSampleStatsFn(creditBatchId, facilityId);
       if (!result.success) {
         throw new Error(result.error);
       }
@@ -206,18 +201,10 @@ export function useCreateSample(
       });
       // Invalidate next code
       queryClient.invalidateQueries({ queryKey: sampleKeys.nextCode() });
-      // Invalidate production run detail (sample count may have changed).
-      // productionRunId is nullable since ADR 0016 (provenance, not primary).
-      if (data.productionRunId) {
-        queryClient.invalidateQueries({
-          queryKey: productionRunKeys.detail(data.productionRunId),
-        });
-      }
 
       // Refresh the durability readiness surfaces this sample rolls up to.
       invalidateDurabilitySummaries(queryClient, {
         creditBatchId: data.creditBatchId,
-        productionRunId: data.productionRunId,
       });
 
       // Pre-populate the detail cache with the new sample
@@ -330,18 +317,16 @@ export function useUpdateSample(
       });
 
       // Refresh the durability readiness surfaces this sample rolls up to —
-      // the run/batch it left (from the pre-mutation snapshot) AND the one it now
+      // the batch it left (from the pre-mutation snapshot) AND the one it now
       // belongs to, so a moved sample doesn't leave the old side stale.
       const previousSample = (
         context as { previousSample?: SampleWithRelations } | undefined
       )?.previousSample;
       invalidateDurabilitySummaries(queryClient, {
         creditBatchId: previousSample?.creditBatchId,
-        productionRunId: previousSample?.productionRunId,
       });
       invalidateDurabilitySummaries(queryClient, {
         creditBatchId: data.creditBatchId,
-        productionRunId: data.productionRunId,
       });
 
       await callbacks?.onSuccess?.(data, variables);
@@ -427,8 +412,6 @@ export function useDeleteSample(
       const previousLinks = {
         creditBatchId:
           previousSample?.creditBatchId ?? listMatch?.creditBatchId ?? null,
-        productionRunId:
-          previousSample?.productionRunId ?? listMatch?.productionRunId ?? null,
       };
 
       // Optimistically remove sample from all list caches
@@ -457,14 +440,9 @@ export function useDeleteSample(
       );
       const previousLinks = (
         context as {
-          previousLinks?: {
-            creditBatchId?: string | null;
-            productionRunId?: string | null;
-          };
+          previousLinks?: { creditBatchId?: string | null };
         } | undefined
       )?.previousLinks;
-      const productionRunId =
-        sample?.productionRunId ?? previousLinks?.productionRunId;
 
       // Remove specific sample from cache
       queryClient.removeQueries({
@@ -476,16 +454,9 @@ export function useDeleteSample(
       queryClient.invalidateQueries({
         predicate: (q) => q.queryKey[0] === "samples" && q.queryKey[1] === "stats",
       });
-      // Invalidate production run data
-      if (productionRunId) {
-        queryClient.invalidateQueries({
-          queryKey: productionRunKeys.detail(productionRunId),
-        });
-      }
       // Refresh the durability readiness surfaces this sample fed.
       invalidateDurabilitySummaries(queryClient, {
         creditBatchId: sample?.creditBatchId ?? previousLinks?.creditBatchId,
-        productionRunId,
       });
 
       await callbacks?.onSuccess?.(undefined, sampleId);
