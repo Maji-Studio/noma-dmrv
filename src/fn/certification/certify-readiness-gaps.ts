@@ -1,5 +1,6 @@
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import type { TransportCategory } from "./certify-context-core";
 import type { TransportLegsByCategory } from "./shared";
 
@@ -8,17 +9,17 @@ import type { TransportLegsByCategory } from "./shared";
 // build the compact gap labels the Review / pre-flight surfaces show; the raw
 // entity rows stay server-side.
 
-type DurabilityOption = "200_year" | "1000_year";
-
 /**
- * Compact per-entity readiness-gap labels for the removal's production runs, their
- * samples (durability option picked per run), and the required transport legs.
+ * Compact per-entity readiness-gap labels for the removal's production runs,
+ * the member batches' pooled lab samples (issue #309: samples anchor on the
+ * credit batch, whose declared durability tier they inherit), and the required
+ * transport legs.
  */
 export function buildEntityReadinessGaps(
   runs: ProductionRunWithSamples[],
+  batchesWithSamples: CreditBatchWithSamples[],
   transportLegs: TransportLegsByCategory,
   requiredTransportCategories: readonly TransportCategory[],
-  runIdsRequiring1000YearDurability: ReadonlySet<string>,
 ): string[] {
   const gaps: string[] = [];
   const addEntityGaps = (
@@ -36,16 +37,15 @@ export function buildEntityReadinessGaps(
       `Production run ${run.code}`,
       deriveEntityCertifyReadiness("productionRun", run).gaps,
     );
-    for (const sample of run.samples) {
-      const durabilityOption: DurabilityOption =
-        runIdsRequiring1000YearDurability.has(run.id)
-          ? "1000_year"
-          : "200_year";
+  }
+
+  for (const batch of batchesWithSamples) {
+    for (const sample of batch.samples) {
       addEntityGaps(
         `Sample ${sample.sampleCode}`,
         deriveEntityCertifyReadiness("sample", {
           ...sample,
-          durabilityOption,
+          durabilityOption: batch.durabilityOption,
         }).gaps,
       );
     }

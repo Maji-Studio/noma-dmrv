@@ -311,6 +311,7 @@ function makeBatchesWithSamples(
       productionProcessId: null,
       samplingMethod: "method_a",
       declaredHToCorgRatio: null,
+      durabilityOption: "200_year" as const,
       runs: runs.map((r) => ({
         id: r.id,
         code: r.code,

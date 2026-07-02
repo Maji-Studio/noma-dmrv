@@ -43,14 +43,13 @@ import {
   getProductionRunIdsByBatchId,
 } from "./credit-batch-production-runs";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
-import { getProductionRunsWithSamples } from "./production-runs";
-import { buildMassAccounting } from "@/lib/certification/mass-accounting";
+import { getCreditBatchesWithSamples } from "./credit-batch-samples";
 import {
   SOIL_STORAGE_MODULE_VERSION,
   computeApplicationCo2eStored,
 } from "@/lib/calculations/biochar-removal";
 import { formatUtcDate } from "@/lib/date-utils";
-import { aggregateProductionRuns } from "@/lib/isometric/utils/aggregation";
+import { weightedBatchChemistry } from "@/lib/isometric/utils/durability-aggregation";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
@@ -236,7 +235,7 @@ async function assertRemovalAllowsCreditBatchMutation(
 
 async function buildCo2eStoredPreview(
   userId: string,
-  batch: Pick<CreditBatch, "facilityId" | "durabilityOption">,
+  batch: Pick<CreditBatch, "id" | "facilityId" | "durabilityOption">,
   applicationIds: string[]
 ): Promise<CreditBatchCo2eStoredPreview> {
   const provider = await getFacilityCertifier(userId, batch.facilityId);
@@ -286,26 +285,19 @@ async function buildCo2eStoredPreview(
     Promise.all(applicationIds.map((id) => getChainOfCustodyData(userId, id))),
   ]);
 
-  const runIds = unique(
-    lineages
-      .map((lineage) => lineage.productionRun?.id)
-      .filter((id): id is string => Boolean(id))
-  );
-  const runs = await getProductionRunsWithSamples(userId, runIds);
   const appById = new Map(applicationRows.map((app) => [app.id, app]));
   const warnings: string[] = lineages.flatMap((lineage) =>
     lineage.warnings.map((warning) => `${lineage.application.code}: ${warning}`)
   );
 
-  let weightedOrganicCarbonPercent: number | null = null;
-  let weightedHToCorgRatio: number | null = null;
-  if (runs.length > 0) {
-    const { attributionByRunId } = buildMassAccounting(lineages, runs);
-    const aggregate = aggregateProductionRuns(runs, attributionByRunId);
-    weightedOrganicCarbonPercent = aggregate.weightedOrganicCarbonPercent;
-    weightedHToCorgRatio = aggregate.weightedHToCorgRatio;
-    warnings.push(...aggregate.warnings);
-  }
+  // Chemistry at the CREDIT-BATCH grain (issue #309): the batch's POOLED
+  // replicate means — the same figures the durability data plane submits —
+  // instead of run-weighted means, which don't see batch-anchored samples.
+  const batchesWithSamples = await getCreditBatchesWithSamples(userId, [
+    batch.id,
+  ]);
+  const { weightedOrganicCarbonPercent, weightedHToCorgRatio } =
+    weightedBatchChemistry(batchesWithSamples);
 
   const applicationResults = applicationIds.map((applicationId) => {
     const app = appById.get(applicationId);

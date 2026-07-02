@@ -675,25 +675,29 @@ async function loadGpsGapCounts(facilityId: string) {
   };
 }
 
-async function loadRunsWithoutSamplesCount(facilityId: string): Promise<number> {
+// Samples anchor on the credit batch (issue #309), so the "missing lab
+// evidence" nudge is judged at the batch grain — a batch with zero pooled
+// samples has no chemistry behind its carbon figures.
+async function loadBatchesWithoutSamplesCount(
+  facilityId: string,
+): Promise<number> {
   const sampleCounts = db
     .select({
-      productionRunId: samples.productionRunId,
+      creditBatchId: samples.creditBatchId,
       sampleCount: sql<number>`count(*)::int`.as("sample_count"),
     })
     .from(samples)
-    .groupBy(samples.productionRunId)
+    .groupBy(samples.creditBatchId)
     .as("sample_counts");
 
   const [row] = await db
     .select({ count: count() })
-    .from(productionRuns)
-    .leftJoin(sampleCounts, eq(sampleCounts.productionRunId, productionRuns.id))
+    .from(creditBatches)
+    .leftJoin(sampleCounts, eq(sampleCounts.creditBatchId, creditBatches.id))
     .where(
       and(
-        eq(productionRuns.facilityId, facilityId),
-        isNull(productionRuns.archivedAt),
-        eq(productionRuns.status, "complete"),
+        eq(creditBatches.facilityId, facilityId),
+        isNull(creditBatches.archivedAt),
         sql`coalesce(${sampleCounts.sampleCount}, 0) = 0`,
       ),
     );
@@ -747,8 +751,10 @@ async function loadTransportGapTotals(facilityId: string) {
       )
       .where(eq(biocharProducts.facilityId, facilityId))
       .groupBy(biocharProducts.facilityId),
+    // Sample legs scope via the credit batch's facility (issue #309); legacy
+    // run-linked rows fall back to the run's facility.
     db
-      .select(transportGapSelect(productionRuns.facilityId))
+      .select(transportGapSelect(creditBatches.facilityId))
       .from(transportLegs)
       .innerJoin(
         samples,
@@ -757,9 +763,15 @@ async function loadTransportGapTotals(facilityId: string) {
           eq(transportLegs.entityId, samples.id),
         ),
       )
-      .innerJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
-      .where(eq(productionRuns.facilityId, facilityId))
-      .groupBy(productionRuns.facilityId),
+      .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
+      .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
+      .where(
+        or(
+          eq(creditBatches.facilityId, facilityId),
+          eq(productionRuns.facilityId, facilityId),
+        ),
+      )
+      .groupBy(creditBatches.facilityId),
   ]);
 
   const all = [...feedstockRows, ...biocharRows, ...sampleRows];
@@ -775,7 +787,7 @@ async function loadTransportGapTotals(facilityId: string) {
 function buildEvidence(args: {
   facilityId: string;
   gpsGaps: Awaited<ReturnType<typeof loadGpsGapCounts>>;
-  runsWithoutSamples: number;
+  batchesWithoutSamples: number;
   transportGaps: Awaited<ReturnType<typeof loadTransportGapTotals>>;
 }): DashboardEvidenceRow[] {
   const { facilityId, gpsGaps, transportGaps } = args;
@@ -799,10 +811,10 @@ function buildEvidence(args: {
       href: facilityHref("/applications", facilityId),
     },
     {
-      key: "runs-samples",
-      label: "Runs without samples",
-      count: args.runsWithoutSamples,
-      href: facilityHref("/production-runs", facilityId),
+      key: "batches-samples",
+      label: "Credit batches without samples",
+      count: args.batchesWithoutSamples,
+      href: facilityHref("/credit-batches", facilityId),
     },
     {
       key: "transport-endpoints",
@@ -842,7 +854,7 @@ export async function getDashboardOperations(
     statementRows,
     submissionProgress,
     gpsGaps,
-    runsWithoutSamples,
+    batchesWithoutSamples,
     transportGaps,
     mapTrace,
   ] = await Promise.all([
@@ -853,7 +865,7 @@ export async function getDashboardOperations(
     loadStatementRows(facilityId),
     loadSubmissionProgressCounts(facilityId),
     loadGpsGapCounts(facilityId),
-    loadRunsWithoutSamplesCount(facilityId),
+    loadBatchesWithoutSamplesCount(facilityId),
     loadTransportGapTotals(facilityId),
     loadMapTrace(userId, facilityId),
   ]);
@@ -871,7 +883,7 @@ export async function getDashboardOperations(
     evidence: buildEvidence({
       facilityId,
       gpsGaps,
-      runsWithoutSamples,
+      batchesWithoutSamples,
       transportGaps,
     }),
     mapPoints: mapTrace.points,

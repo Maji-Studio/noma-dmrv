@@ -479,21 +479,6 @@ export async function loadFacilityCertifierFacts(
   };
 }
 
-function collect1000YearDurabilityRunIds(
-  scope: RemovalScope,
-  lineageByApplicationId: ReadonlyMap<string, ChainOfCustodyData>,
-): Set<string> {
-  const runIds = new Set<string>();
-  for (const batch of scope.memberBatches) {
-    if (batch.durabilityOption !== "1000_year") continue;
-    for (const applicationId of batch.applicationIds) {
-      const runId = lineageByApplicationId.get(applicationId)?.productionRun?.id;
-      if (runId) runIds.add(runId);
-    }
-  }
-  return runIds;
-}
-
 function productionReadinessGapFromLineages(
   lineages: ChainOfCustodyData[],
 ): ProductionReadinessGap | null {
@@ -615,9 +600,6 @@ export async function buildRemovalContext(
   const lineages = await Promise.all(
     applicationIds.map((id) => getChainOfCustodyData(userId, id)),
   );
-  const lineageByApplicationId = new Map(
-    lineages.map((lineage, index) => [applicationIds[index], lineage]),
-  );
   const runIds = Array.from(
     new Set(
       lineages
@@ -631,32 +613,14 @@ export async function buildRemovalContext(
       : [];
   const productionReadinessGap = productionReadinessGapFromLineages(lineages);
 
-  const entityIds = collectTransportEntityIds(lineages, runs);
-  const transportLegs = await loadTransportLegsByCategory(userId, entityIds);
-  const transportCoverage = buildCoverage(transportLegs, entityIds);
-  const runIdsRequiring1000YearDurability =
-    collect1000YearDurabilityRunIds(scope, lineageByApplicationId);
-  const entityReadinessGaps = [
-    ...buildEntityReadinessGaps(
-      runs,
-      transportLegs,
-      facilityFacts.requiredTransportCategories,
-      runIdsRequiring1000YearDurability,
-    ),
-    ...(await buildApplicationEvidenceGaps(userId, lineages)),
-  ];
-  // One mass-accounting walk: the per-run attribution the submit pipeline
-  // scopes by AND the Review-flow summary, so the two can never diverge.
-  const { attributionByRunId, runSummary } = buildMassAccounting(
-    lineages,
-    runs,
-  );
-
   // Credit-batch-grained durability data plane (ADR 0016): pool each member
   // batch's lab Samples, scope runs to the removal's applied set, and run the D3
-  // gates. `durabilityGateBlockers` is the same fail-closed list the submit
-  // pipeline blocks on; the §8.3.1 distribution warning is advisory, so it joins
-  // the non-blocking submission warnings.
+  // gates. Loaded BEFORE the transport walk — samples anchor on the batch
+  // (issue #309), so the sample transport legs and per-sample readiness gaps
+  // hang off these pooled samples, not off the runs. `durabilityGateBlockers`
+  // is the same fail-closed list the submit pipeline blocks on; the §8.3.1
+  // distribution warning is advisory, so it joins the non-blocking submission
+  // warnings.
   const {
     batchesWithSamples,
     blockers: durabilityBatchBlockers,
@@ -665,6 +629,25 @@ export async function buildRemovalContext(
     userId,
     scope.memberBatches.map((b) => b.id),
     new Set(runIds),
+  );
+
+  const entityIds = collectTransportEntityIds(lineages, batchesWithSamples);
+  const transportLegs = await loadTransportLegsByCategory(userId, entityIds);
+  const transportCoverage = buildCoverage(transportLegs, entityIds);
+  const entityReadinessGaps = [
+    ...buildEntityReadinessGaps(
+      runs,
+      batchesWithSamples,
+      transportLegs,
+      facilityFacts.requiredTransportCategories,
+    ),
+    ...(await buildApplicationEvidenceGaps(userId, lineages)),
+  ];
+  // One mass-accounting walk: the per-run attribution the submit pipeline
+  // scopes by AND the Review-flow summary, so the two can never diverge.
+  const { attributionByRunId, runSummary } = buildMassAccounting(
+    lineages,
+    runs,
   );
 
   // Facility reference soil temperature (Phase 2, ADR 0013): the authoritative

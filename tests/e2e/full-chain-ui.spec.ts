@@ -4,7 +4,8 @@
  * Single test that creates all 8 core entities through the browser UI
  * in one authenticated session, proving the entire traceability chain works:
  *
- * Facility → Reactor → Production Run → Sample → Order → Delivery → Application → Credit Batch
+ * Facility → Reactor → Production Run → Order → Delivery → Application → Credit Batch → Sample
+ * (Samples anchor on a credit batch — issue #309 — so the batch precedes them.)
  *
  * Uses seeded prerequisite data (supplier, feedstock type, customer, etc.)
  * from the auth fixtures.
@@ -267,6 +268,11 @@ test.describe("Full Chain UI Smoke Test", () => {
           }
 
           if (creditBatchIds.length) {
+            // Samples anchor on the credit batch (issue #309) with a NO ACTION
+            // FK — delete them before their batches.
+            await tx
+              .delete(schema.samples)
+              .where(inArray(schema.samples.creditBatchId, creditBatchIds));
             await tx
               .delete(schema.creditBatchProductionRuns)
               .where(inArray(schema.creditBatchProductionRuns.creditBatchId, creditBatchIds));
@@ -478,30 +484,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       ).toBeVisible({ timeout: 10000 });
     });
 
-    // ─── 4. SAMPLE ─────────────────────────────────────────
-    await test.step("Create Sample", async () => {
-      await page.goto("/samples");
-      await page.waitForLoadState("networkidle");
-
-      await page.click('button:has-text("New Sample")');
-      await waitForSideSheet(page);
-
-      // Select first available production run
-      await selectFirstEntity(page, "Production Run");
-
-      // Fill carbon data
-      await page.fill('input[name="totalCarbonPercent"]', "75");
-      await page.fill('input[name="organicCarbonPercent"]', "70");
-
-      await page.locator('[role="dialog"]').locator('button:has-text("Create Sample")').click();
-      await waitForSideSheetClose(page);
-
-      await expect(
-        page.locator("table tbody tr, [role='row']").first()
-      ).toBeVisible({ timeout: 10000 });
-    });
-
-    // ─── 5. ORDER ──────────────────────────────────────────
+    // ─── 4. ORDER ──────────────────────────────────────────
     await test.step("Create Order", async () => {
       await page.goto(`/orders?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
@@ -544,7 +527,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       ).toBeVisible({ timeout: 8000 });
     });
 
-    // ─── 6. DELIVERY ───────────────────────────────────────
+    // ─── 5. DELIVERY ───────────────────────────────────────
     await test.step("Create Delivery", async () => {
       await page.goto(`/deliveries?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
@@ -568,7 +551,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       ).toBeVisible({ timeout: 10000 });
     });
 
-    // ─── 7. APPLICATION ────────────────────────────────────
+    // ─── 6. APPLICATION ────────────────────────────────────
     await test.step("Create Application", async () => {
       await page.goto(`/applications?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
@@ -600,7 +583,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       ).toBeVisible({ timeout: 10000 });
     });
 
-    // ─── 8. CREDIT BATCH ───────────────────────────────────
+    // ─── 7. CREDIT BATCH ───────────────────────────────────
     await test.step("Create Credit Batch", async () => {
       await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
@@ -617,6 +600,31 @@ test.describe("Full Chain UI Smoke Test", () => {
       await waitForSideSheetClose(page);
 
       await expect(page.locator("article").first()).toBeVisible({ timeout: 10000 });
+    });
+
+    // ─── 8. SAMPLE ─────────────────────────────────────────
+    // Samples anchor on a credit batch (issue #309), so the batch must exist
+    // first — the sample is the last link in the chain.
+    await test.step("Create Sample", async () => {
+      await page.goto(`/samples?facility=${seededData.facility.id}`);
+      await page.waitForLoadState("networkidle");
+
+      await page.click('button:has-text("New Sample")');
+      await waitForSideSheet(page);
+
+      // Select the credit batch created above
+      await selectFirstEntity(page, "Credit Batch");
+
+      // Fill carbon data
+      await page.fill('input[name="totalCarbonPercent"]', "75");
+      await page.fill('input[name="organicCarbonPercent"]', "70");
+
+      await page.locator('[role="dialog"]').locator('button:has-text("Create Sample")').click();
+      await waitForSideSheetClose(page);
+
+      await expect(
+        page.locator("table tbody tr, [role='row']").first()
+      ).toBeVisible({ timeout: 10000 });
     });
     } finally {
       // Clean up chain-created entities regardless of test outcome

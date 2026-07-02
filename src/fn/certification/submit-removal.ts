@@ -33,6 +33,7 @@ import {
   buildCreateDatapointRequest,
   MAPPING_REVISION,
 } from "@/lib/isometric/transformers/datapoint";
+import { weightedBatchChemistry } from "@/lib/isometric/utils/durability-aggregation";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import { isSequestrationBlueprintKey } from "@/lib/isometric/transformers/measurement-sample";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
@@ -429,7 +430,13 @@ export async function submitRemoval(
   // Aggregate every member batch's runs into ONE Removal, applied-scoped:
   // `attributionByRunId` weights each run by the share of its biochar that
   // actually reached an application in this removal (linear mass allocation).
-  const baseAgg = aggregateProductionRuns(ctx.runs, ctx.attributionByRunId);
+  // Chemistry scalars are overlaid at the CREDIT-BATCH grain — samples anchor
+  // on the batch (issue #309), so the run-grain weighted means no longer see
+  // them; `weightedBatchChemistry` pools each batch's replicates instead.
+  const baseAgg = {
+    ...aggregateProductionRuns(ctx.runs, ctx.attributionByRunId),
+    ...weightedBatchChemistry(ctx.batchesWithSamples, ctx.attributionByRunId),
+  };
   if (baseAgg.warnings.length > 0) {
     throw new SafeError(
       `Removal submission blocked:\n${baseAgg.warnings.join("\n")}`,

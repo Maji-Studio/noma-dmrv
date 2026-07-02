@@ -359,6 +359,7 @@ function makeContext(
         productionProcessId: null,
         samplingMethod: "method_a",
         declaredHToCorgRatio: null,
+        durabilityOption: "200_year" as const,
         runs: [{ id: PRODUCTION_RUN_ID, code: "PR-BD-1", biocharDryMassKg: biocharMassKg }],
         samples: makeRun(biocharMassKg).samples,
       },

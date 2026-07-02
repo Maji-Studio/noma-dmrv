@@ -18,7 +18,10 @@
  *
  * Numbering follows render order of the *actually-rendered* sections, so a
  * conditionally-mounted section simply joins or leaves the rail and the numbers
- * stay contiguous — no ghost/locked steps.
+ * stay contiguous — no ghost/locked steps. Sections are discovered through
+ * Fragments and through a native `<form>` element, so a form's field sections
+ * and trailing field-less steps that must live OUTSIDE the form (editors that
+ * nest their own `<form>`s) share one continuous rail.
  *
  * Forms prop-drill RHF (`control`) rather than using `FormProvider`, so the
  * control object is passed to `<FormSpine control={control}>` explicitly.
@@ -216,47 +219,63 @@ export function FormSpine({ control, children, className }: FormSpineProps) {
     [looseControl],
   );
 
-  const flattenChildren = (nodes: React.ReactNode): React.ReactNode[] =>
-    React.Children.toArray(nodes).flatMap((child) => {
-      if (
-        React.isValidElement(child) &&
-        child.type === React.Fragment
-      ) {
-        return flattenChildren(
-          (child.props as { children?: React.ReactNode }).children
-        );
-      }
-      return [child];
-    });
-
-  // Count the spine sections that will actually render (falsy/hidden children
-  // are skipped by React.Children), then inject contiguous index/first/last.
-  const childArray = flattenChildren(children);
   const isSection = (c: React.ReactNode): c is React.ReactElement =>
     React.isValidElement(c) &&
     Boolean((c.type as { [SPINE_SECTION_TAG]?: boolean })?.[SPINE_SECTION_TAG]);
 
-  // Positions (in the child list) of the sections that will actually render —
-  // a section's spine index is its rank among these, so numbering stays
-  // contiguous when a conditional section drops out. No mutable counter, so the
-  // React Compiler stays happy.
-  const sectionPositions = childArray.flatMap((c, idx) =>
-    isSection(c) ? [idx] : [],
-  );
-  const total = sectionPositions.length;
-  const mapped = childArray.map((child, idx) => {
-    if (!isSection(child)) return child;
-    const index = sectionPositions.indexOf(idx);
-    const meta: SpineMeta = {
-      index,
-      first: index === 0,
-      last: index === total - 1,
-      total,
-    };
-    return React.cloneElement(child as React.ReactElement<{ __spine?: SpineMeta }>, {
-      __spine: meta,
+  // Sections are found through Fragments AND through a native `<form>` element.
+  // The form traversal lets trailing field-less steps (evidence, transport-leg
+  // editors) sit OUTSIDE the `<form>` — required when they nest their own forms,
+  // which HTML forbids inside another form — while still joining the rail with
+  // contiguous numbering.
+  const isTraversable = (c: React.ReactNode): c is React.ReactElement =>
+    React.isValidElement(c) && (c.type === React.Fragment || c.type === "form");
+
+  const childrenOf = (c: React.ReactElement): React.ReactNode =>
+    (c.props as { children?: React.ReactNode }).children;
+
+  // Count the spine sections that will actually render (falsy/hidden children
+  // are skipped by React.Children), then inject contiguous index/first/last.
+  const countSections = (nodes: React.ReactNode): number =>
+    React.Children.toArray(nodes).reduce<number>((acc, child) => {
+      if (isSection(child)) return acc + 1;
+      if (isTraversable(child)) return acc + countSections(childrenOf(child));
+      return acc;
+    }, 0);
+  const total = countSections(children);
+
+  // Depth-first map threading a section cursor: a section's spine index is its
+  // rank in document order, so numbering stays contiguous when a conditional
+  // section drops out. The cursor is local to this render — deterministic.
+  const mapWithMeta = (
+    nodes: React.ReactNode,
+    start: number,
+  ): [React.ReactNode[], number] => {
+    let cursor = start;
+    const mapped = React.Children.toArray(nodes).map((child) => {
+      if (isSection(child)) {
+        const meta: SpineMeta = {
+          index: cursor,
+          first: cursor === 0,
+          last: cursor === total - 1,
+          total,
+        };
+        cursor += 1;
+        return React.cloneElement(
+          child as React.ReactElement<{ __spine?: SpineMeta }>,
+          { __spine: meta },
+        );
+      }
+      if (isTraversable(child)) {
+        const [sub, next] = mapWithMeta(childrenOf(child), cursor);
+        cursor = next;
+        return React.cloneElement(child, undefined, ...sub);
+      }
+      return child;
     });
-  });
+    return [mapped, cursor];
+  };
+  const [mapped] = mapWithMeta(children, 0);
 
   return (
     <SpineContext.Provider value={value}>

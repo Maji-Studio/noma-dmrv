@@ -18,7 +18,7 @@ Guidance for Claude Code. **These instructions OVERRIDE default behavior — fol
 
 **noma-dmrv** is a biochar carbon-credit MRV (Monitoring, Reporting, Verification) system on a Next.js 16 App Router stack: Better Auth, PostgreSQL + Drizzle ORM (60+ tables across 19 schema files), 16 core biochar-entity CRUD workflows, a Chain-of-Custody DAG, plus energy/emissions accounting and an **Isometric Certify** registry integration.
 
-Traceability chain: Facility → Reactor → Feedstock Delivery → Feedstock → Production Run → Sample → Biochar Product → Order → Delivery → Application → Credit Batch.
+Traceability chain: Facility → Reactor → Feedstock Delivery → Feedstock → Production Run → Biochar Product → Order → Delivery → Application → Credit Batch → Sample (lab samples anchor on the credit batch — issue #309).
 
 Domain language lives in **`CONTEXT.md`** (repo root) — a pure glossary of canonical terms (Removal, Credit batch, Roll-up, Evidence method, …) with no implementation detail. Its definitions override casual usage; consult it before naming things or writing requirements/docs, and keep it free of implementation notes when updating it.
 

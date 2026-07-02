@@ -1,39 +1,40 @@
 /**
- * SampleBatchProgress — the lab-sample form's derived-batch preview (Phase 5a).
+ * SampleBatchProgress — the lab-sample form's batch sampling-progress preview.
  *
- * A Sample is entered against ONE production run for provenance, but it
- * characterises the CREDIT BATCH that run belongs to (ADR 0016). So from the
- * chosen run this panel derives that credit batch and shows live progress toward
- * the protocol's ≥3 distributed-sample minimum (§8.3.1): the existing replicate
- * count, the runs/days they span (the distribution evidence), and the eligibility
- * verdict — the same `DurabilityReadinessSignals` the credit-batch detail uses.
- *
- * The no-batch state is surfaced honestly: a run not yet grouped into a credit
- * batch still accepts samples (they save against the run), but the batch-level
- * ≥3 characterisation only begins once the run joins a batch — we never silently
- * pick one.
+ * A Sample characterises ONE credit batch (the protocol production batch —
+ * ADR 0016, anchored directly since issue #309: the batch's biochar is
+ * commingled across runs, so the form selects the batch, never a run). From the
+ * chosen batch this panel shows live progress toward the protocol's ≥3
+ * distributed-sample minimum (§8.3.1): the existing replicate count, the
+ * runs/days they span (the distribution evidence), and the eligibility verdict
+ * — the same `DurabilityReadinessSignals` the credit-batch detail uses.
  */
 "use client";
 
 import Link from "next/link";
-import { ArrowSquareOutIcon, FlaskIcon, InfoIcon } from "@phosphor-icons/react/dist/ssr";
-import { useRunDurabilitySummary } from "@/hooks/use-certification";
+import { ArrowSquareOutIcon, FlaskIcon } from "@phosphor-icons/react/dist/ssr";
+import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 import type { DurabilityBatchSummary } from "@/lib/certification/durability-batch-summary";
 import { DurabilityReadinessSignals } from "@/components/certification/durability-readiness";
 
 interface SampleBatchProgressProps {
-  /** The form's currently-selected production run (provenance anchor). */
-  productionRunId: string | undefined;
+  /** The form's currently-selected credit batch. */
+  creditBatchId: string | undefined;
 }
 
-/** Distinct (run code, day) labels among the batch's pooled samples. */
+/**
+ * Distinct (run code, day) labels among the batch's pooled samples. Run
+ * provenance only exists on legacy pre-re-grain rows — batch-anchored samples
+ * label by sampling day alone.
+ */
 function distinctProvenanceLabels(summary: DurabilityBatchSummary): string[] {
   const seen = new Map<string, string>();
   for (const r of summary.replicates) {
-    const run = r.productionRunCode ?? "Unassigned run";
     const day = r.samplingDay ?? "date unknown";
     const key = `${r.productionRunId ?? "?"}::${r.samplingDay ?? "?"}`;
-    if (!seen.has(key)) seen.set(key, `${run} · ${day}`);
+    if (!seen.has(key)) {
+      seen.set(key, r.productionRunCode ? `${r.productionRunCode} · ${day}` : day);
+    }
   }
   return Array.from(seen.values());
 }
@@ -50,12 +51,15 @@ function Panel({ children }: { children: React.ReactNode }) {
 }
 
 export function SampleBatchProgress({
-  productionRunId,
+  creditBatchId,
 }: SampleBatchProgressProps) {
-  const { data, isLoading, error } = useRunDurabilitySummary(productionRunId);
+  const { data: summary, isLoading, error } = useBatchDurabilitySummary(
+    creditBatchId ?? "",
+    !!creditBatchId,
+  );
 
-  // No run chosen yet — nothing to derive.
-  if (!productionRunId) return null;
+  // No batch chosen yet — nothing to preview.
+  if (!creditBatchId) return null;
 
   if (isLoading) {
     return (
@@ -64,43 +68,22 @@ export function SampleBatchProgress({
           className="body-caption text-[var(--color-text-tertiary)]"
           aria-busy="true"
         >
-          Resolving the credit batch this sample characterises…
+          Loading this credit batch&apos;s sampling progress…
         </span>
       </Panel>
     );
   }
 
-  if (error) {
+  if (error || !summary) {
     return (
       <Panel>
         <span className="body-caption text-[var(--st-wait)]">
-          Couldn&apos;t resolve this run&apos;s credit batch.
+          Couldn&apos;t load this credit batch&apos;s sampling progress.
         </span>
       </Panel>
     );
   }
 
-  // Run not yet committed to a credit batch — say so honestly.
-  if (!data?.creditBatch) {
-    return (
-      <Panel>
-        <div className="flex items-start gap-8">
-          <InfoIcon
-            size={16}
-            className="mt-1 shrink-0 text-[var(--color-text-tertiary)]"
-            aria-hidden
-          />
-          <p className="body-caption text-[var(--color-text-secondary)]">
-            This run isn&apos;t grouped into a credit batch yet. The sample still
-            saves against the run — the batch-level ≥3-sample characterisation
-            (§8.3.1) begins once the run joins a credit batch.
-          </p>
-        </div>
-      </Panel>
-    );
-  }
-
-  const summary = data.creditBatch;
   const remaining = Math.max(
     0,
     summary.minimumReplicates - summary.usableReplicateCount,

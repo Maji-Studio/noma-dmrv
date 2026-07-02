@@ -435,8 +435,22 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         preprocessingFuelLiters: 0,
         dieselGensetLiters: 0,
         electricityKwh: 0,
-        samples: [{ id: "s-1" } as never, { id: "s-2" } as never],
+        samples: [],
         readingsCount: 1,
+      } as never,
+    ]);
+    // Samples anchor on the credit batch (issue #309) — the transport walk
+    // reads them from the batch pool, not from the runs.
+    mockedGetBatchesWithSamples.mockResolvedValue([
+      {
+        creditBatchId: CREDIT_BATCH_ID,
+        creditBatchCode: "CB-1",
+        productionProcessId: null,
+        samplingMethod: "method_a",
+        declaredHToCorgRatio: null,
+        durabilityOption: "200_year",
+        runs: [{ id: "pr-1", code: "PR-1", biocharDryMassKg: 35 }],
+        samples: [{ id: "s-1" } as never, { id: "s-2" } as never],
       } as never,
     ]);
 
@@ -693,6 +707,20 @@ describe("requiredTransportCategories", () => {
         dieselGensetLiters: 0,
         electricityKwh: 0,
         readingsCount: 1,
+        samples: [],
+      } as never,
+    ]);
+    // Samples anchor on the credit batch (issue #309); the sample inherits the
+    // batch's declared 1000-year tier for its readiness derivation.
+    mockedGetBatchesWithSamples.mockResolvedValue([
+      {
+        creditBatchId: CREDIT_BATCH_ID,
+        creditBatchCode: "CB-1",
+        productionProcessId: null,
+        samplingMethod: "method_a",
+        declaredHToCorgRatio: null,
+        durabilityOption: "1000_year",
+        runs: [{ id: "pr-1", code: "PR-1", biocharDryMassKg: 35 }],
         samples: [
           {
             id: "s-1",
@@ -702,7 +730,7 @@ describe("requiredTransportCategories", () => {
             randomReflectanceR0Percent: null,
             reactiveCarbonPercent: null,
             residualCarbonPercent: null,
-          },
+          } as never,
         ],
       } as never,
     ]);

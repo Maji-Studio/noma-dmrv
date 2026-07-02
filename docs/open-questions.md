@@ -59,6 +59,20 @@ guard. Pure starter-template residue; the app is facility-scoped.
 
 ## Architecture
 
+### Auto-fill sample chemistry from an uploaded lab report (`samples/coa-autofill`, opened 2026-07-02)
+
+- **Deferred from issue #309** (samples re-anchored on credit batches — built).
+  The issue also asked: "it would be very nice if the user can upload the lab
+  results and all the entries are automatically updated" — i.e. parse an
+  uploaded COA/lab-report PDF and pre-fill the sample form's chemistry fields.
+- **Why it matters:** the sample form has ~30 numeric fields transcribed by
+  hand from the lab certificate; transcription errors feed directly into
+  certified carbon figures.
+- **To resolve:** decide extraction approach (LLM extraction vs. per-lab
+  templates), confidence/review UX (never silently overwrite operator entries),
+  and where parsing runs (server action + storage provider). The upload slot
+  already exists (`lab_report` document on the sample's Evidence step).
+
 ### Validate production-run window ⊆ credit-batch period (`production/run-window`, opened 2026-07-01)
 
 - **Deferred from the readings-CSV work (issue #207).** A production run may

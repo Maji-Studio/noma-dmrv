@@ -3,41 +3,50 @@
  * Reusable sample form with React Hook Form integration
  *
  * Flat labeled sections (the production-run form grammar — mono section
- * labels + hairline dividers, no accordions). Progressive disclosure only
- * where the data demands it: the 1000-year sections appear with the
- * durability option, nutrient fields with the claim checkbox.
+ * labels + hairline dividers, no accordions). A sample anchors on ONE credit
+ * batch (issue #309); the batch's declared durability tier is inherited, never
+ * selected here — progressive disclosure only where the data demands it: the
+ * 1000-year sections appear when the batch is 1000-year, nutrient fields with
+ * the claim checkbox.
  *
- * Form sections:
- * 1. Sample Info - production run, samplingTime, lab details
+ * Spine steps (Evidence & Transport sit OUTSIDE the `<form>` element — they
+ * nest their own forms — but FormSpine numbers them on the same rail):
+ * 1. Sample Info - credit batch, samplingTime, lab details
  * 2. Carbon Analysis - totalCarbonPercent, organicCarbonPercent, inorganicCarbonPercent
  * 3. Elemental - H, N, O, S percentages
  * 4. Proximate - ash, volatile matter, moisture
  * 5. Physical - bulkDensity, pH, surfaceArea, saltContent
- * 6. Stability - durability option, H:C ratio, O:C ratio
- * 7+8. (conditional, 1000-year) R₀ reflectance · TGA non-reactive carbon
- * 9. Nutrient Claims (conditional) - P, K, Mg, Ca, Fe
+ * 6. Stability - H:C ratio, O:C ratio (durability tier shown, from the batch)
+ * (+2 conditional, 1000-year batches) R₀ reflectance · TGA non-reactive carbon
+ * 7. Nutrient Claims (conditional) - P, K, Mg, Ca, Fe
+ * 8. Evidence & Documents
+ * 9. Transport (lab shipment legs)
  */
 "use client";
 
 import { numericValue, integerValue } from "@/lib/form-utils";
 import { formatLocalDateTime } from "@/lib/date-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 
 import { useEffect, useId } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FlaskIcon, FireIcon, AtomIcon, ScalesIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon, LeafIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, makeCertFieldStatus } from "@/components/forms";
-import { FormSelect } from "@/components/forms/form-select";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import {
   sampleFormSchema,
   calculateHToCOrgRatio,
+  formatDurabilityOption,
   type SampleFormData,
 } from "@/schemas/samples";
 import { SampleEligibilityAdvisory } from "./sample-eligibility-advisory";
 import { SampleBatchProgress } from "./sample-batch-progress";
-import { SampleEvidenceSection } from "./sample-evidence-section";
+import {
+  SampleEvidenceSection,
+  SampleTransportSection,
+} from "./sample-trailing-sections";
 import type { SampleWithRelations } from "@/data-access/samples";
 
 // ============================================
@@ -45,11 +54,6 @@ import type { SampleWithRelations } from "@/data-access/samples";
 // ============================================
 
 const NO_FACILITY_SENTINEL = "__none__";
-
-const durabilityOptions = [
-  { value: "200_year", label: "200-Year Durability" },
-  { value: "1000_year", label: "1000-Year Durability" },
-] as const;
 
 const isSampleCertifyField = (field: string) =>
   isCertifyFormField("sample", field);
@@ -61,8 +65,8 @@ const isSampleCertifyField = (field: string) =>
 interface SampleFormProps {
   /** Existing sample data for editing (undefined for create mode) */
   sample?: SampleWithRelations;
-  /** Pre-selected production run ID */
-  productionRunId?: string;
+  /** Pre-selected credit batch ID (e.g. from a batch detail deep link) */
+  creditBatchId?: string;
   /** Form submission handler */
   onSubmit: (data: SampleFormData) => Promise<void> | void;
   /** Cancel button handler */
@@ -71,29 +75,22 @@ interface SampleFormProps {
   isSubmitting?: boolean;
   /** Custom label for the submit button */
   submitLabel?: string;
-  /**
-   * Extension content (e.g. transport-legs editor) rendered between the form
-   * fields and the CTA row — outside the `<form>` element, so it may contain
-   * its own forms. Nothing ever renders after the CTA.
-   */
-  children?: React.ReactNode;
 }
 
 export function SampleForm({
   sample,
-  productionRunId: preselectedProductionRunId,
+  creditBatchId: preselectedCreditBatchId,
   onSubmit,
   onCancel,
   isSubmitting = false,
   submitLabel,
-  children,
 }: SampleFormProps) {
   const formId = useId();
   const isEditMode = !!sample;
   const { facilityId: contextFacilityId } = useFacilityContext();
 
   const defaultValues = {
-      productionRunId: preselectedProductionRunId || sample?.productionRunId || "",
+      creditBatchId: preselectedCreditBatchId || sample?.creditBatchId || "",
       samplingTime: sample?.samplingTime
         ? formatLocalDateTime(new Date(sample.samplingTime))
         : formatLocalDateTime(new Date()),
@@ -154,11 +151,27 @@ export function SampleForm({
   const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
   // Watch fields for calculated values and conditional rendering
-  const watchedProductionRunId = watch("productionRunId");
+  const watchedCreditBatchId = watch("creditBatchId");
   const watchedDurabilityOption = watch("durabilityOption");
   const watchedHydrogenPercent = watch("totalHydrogenPercent");
   const watchedOrganicCarbonPercent = watch("organicCarbonPercent");
   const watchedNutrientClaimEnabled = watch("nutrientClaimEnabled");
+
+  // The durability tier is NOT selected on the sample — it's the credit batch's
+  // declared tier (issue #309). Sync it into form state from the batch summary
+  // (the same query the progress panel below reads) so the conditional
+  // 1000-year sections and their validation follow the chosen batch.
+  const { data: batchSummary } = useBatchDurabilitySummary(
+    watchedCreditBatchId || "",
+    !!watchedCreditBatchId,
+  );
+  const batchDurabilityOption = batchSummary?.durabilityOption;
+  useEffect(() => {
+    if (batchDurabilityOption) {
+      setValue("durabilityOption", batchDurabilityOption);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batchDurabilityOption]);
 
   // Clear 1000-year fields when switching to 200-year
   useEffect(() => {
@@ -205,31 +218,33 @@ export function SampleForm({
 
   return (
     <div className="space-y-20">
-      <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
+      {/* The spine wraps the <form> AND the trailing field-less steps (Evidence,
+          Transport) that must live outside it — one continuous numbered rail. */}
       <FormSpine control={control}>
+      <form id={formId} onSubmit={handleFormSubmit}>
         {/* ── Sample Information ── */}
         <FormSection
           title="Sample Information"
           icon={<FlaskIcon size={14} weight="bold" />}
-          fields={["productionRunId", "samplingTime", "analysisDate", "labName", "labAccreditation", "weightGrams", "volumeMl"]}
+          fields={["creditBatchId", "samplingTime", "analysisDate", "labName", "labAccreditation", "weightGrams", "volumeMl"]}
         >
               <FormField
-                id="productionRunId"
-                label="Production Run"
-                error={errors.productionRunId?.message}
+                id="creditBatchId"
+                label="Credit Batch"
+                error={errors.creditBatchId?.message}
                 required
               >
                 <Controller
-                  name="productionRunId"
+                  name="creditBatchId"
                   control={control}
                   render={({ field }) => (
                     <EntitySelect
-                      entityType="productionRun"
+                      entityType="creditBatch"
                       value={field.value}
                       onChange={field.onChange}
-                      placeholder={contextFacilityId ? "Select a production run..." : "Select a facility first"}
-                      disabled={isSubmitting || !!preselectedProductionRunId || !contextFacilityId}
-                      error={!!errors.productionRunId}
+                      placeholder={contextFacilityId ? "Select a credit batch..." : "Select a facility first"}
+                      disabled={isSubmitting || !!preselectedCreditBatchId || !contextFacilityId}
+                      error={!!errors.creditBatchId}
                       filterBy={{ facilityId: contextFacilityId ?? NO_FACILITY_SENTINEL }}
                       autoSelectSingle
                     />
@@ -237,8 +252,8 @@ export function SampleForm({
                 />
               </FormField>
 
-              {/* Derived credit batch + live ≥3 sampling progress (ADR 0016) */}
-              <SampleBatchProgress productionRunId={watchedProductionRunId} />
+              {/* Live ≥3 sampling progress for the chosen batch (ADR 0016) */}
+              <SampleBatchProgress creditBatchId={watchedCreditBatchId} />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
@@ -645,21 +660,15 @@ export function SampleForm({
         <FormSection
           title="Stability Ratios"
           icon={<CalculatorIcon size={14} weight="bold" />}
-          fields={["durabilityOption", "hToCOrgRatio", "oToCOrgRatio"]}
+          fields={["hToCOrgRatio", "oToCOrgRatio"]}
         >
-              <FormField
-                id="durabilityOption"
-                label="Durability Option"
-                error={errors.durabilityOption?.message}
-              >
-                <FormSelect
-                  id="durabilityOption"
-                  disabled={isSubmitting}
-                  error={!!errors.durabilityOption}
-                  options={durabilityOptions}
-                  {...register("durabilityOption")}
-                />
-              </FormField>
+              {/* The durability tier is the credit batch's declared choice —
+                  shown here (it decides which analyses follow), never edited. */}
+              <p className="body-caption text-[var(--color-text-secondary)]">
+                {watchedCreditBatchId
+                  ? `${formatDurabilityOption(watchedDurabilityOption)} durability — inherited from the selected credit batch.`
+                  : "The durability tier is inherited from the selected credit batch."}
+              </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
@@ -956,12 +965,13 @@ export function SampleForm({
               )}
         </FormSection>
 
-        <SampleEvidenceSection sample={sample} isEditMode={isEditMode} />
-      </FormSpine>
       </form>
 
-      {/* Extension content (e.g. transport legs) — always before the CTA */}
-      {children}
+      {/* ── Trailing field-less steps — outside the <form> (their editors nest
+             their own forms), numbered by the spine as the final two steps. ── */}
+      <SampleEvidenceSection sample={sample} isEditMode={isEditMode} />
+      <SampleTransportSection sample={sample} isEditMode={isEditMode} />
+      </FormSpine>
 
       <FormActions
         formId={formId}
