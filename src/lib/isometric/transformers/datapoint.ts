@@ -211,8 +211,9 @@ export function lookupInputMapping(
 // and sourced entirely in the Isometric UI (ADR 0018 — noma keeps no copy);
 // a Removal Template that declares any of them as REMOVAL-scope is
 // wrong by construction. `buildCreateDatapointRequest` consults this set
-// before the generic missing-entry error so the resulting `SafeError`
-// names the canonical scope rather than just "missing mapping".
+// before the INPUT_MAPPING lookup, so a conflicting mapping entry can never
+// bypass the guard and the resulting `SafeError` names the canonical scope
+// rather than just "missing mapping".
 //
 // Keys mirror the deleted INPUT_MAPPING entries exactly. The category
 // strings are self-contained literals — this table is the guard's only
@@ -312,44 +313,44 @@ export function buildCreateDatapointRequest(
   } = args;
   const inputKey = rtcInput.input_key;
 
+  // ADR 0005 §3 / ADR 0018 — scope-conflict check fires BEFORE the
+  // INPUT_MAPPING lookup, not just before the missing-entry error: the
+  // fail-closed guard must hold even if a future merge re-adds a period
+  // tuple to INPUT_MAPPING. PROJECT-scope tuples always win.
+  const periodTuple = lookupPeriodInputTuple(
+    groupKey,
+    componentBlueprintKey,
+    inputKey,
+  );
+  if (periodTuple) {
+    // Sandbox-only escape hatch. The real fix is removing this input from
+    // the Removal Template (ADR 0005); until the LCA value exists we let
+    // sandbox submit a 0-magnitude stub so the pipeline can be exercised.
+    // NOTE: 0 is an *over-claim* for these positive emissions — it is NOT a
+    // neutral placeholder — which is exactly why production fails closed.
+    if (allowPeriodInputStub) {
+      return {
+        description:
+          `Sandbox 0-stub for project-scope period input ` +
+          `"${groupKey}/${componentBlueprintKey}/${inputKey}" ` +
+          `(category="${periodTuple.category}") — pending real LCA value. ` +
+          `See ADR 0018 + docs/open-questions.md. Production fails closed.`,
+        display_name: blueprintInput.input_key,
+        project_id: projectId,
+        quantity: { magnitude: 0, unit: blueprintInput.compatible_unit },
+        source_ids: sourceIds ?? [],
+        supplier_reference_id: supplierRefId,
+        type: "REPORTED",
+      };
+    }
+    throw new SafeError(
+      `This input belongs to a Project-scope Component (PROJECT scope, category="${periodTuple.category}"). ` +
+        `Remove "${groupKey}/${componentBlueprintKey}/${inputKey}" from the Removal Template; publish this emission as a Project Component in the Isometric UI, with the source LCA PDF attached to its Sources field (ADR 0018).`,
+    );
+  }
+
   const mapping = lookupInputMapping(groupKey, componentBlueprintKey, inputKey);
   if (!mapping) {
-    // ADR 0005 §3 / ADR 0018 — scope-conflict check fires BEFORE the
-    // generic missing-entry error. If a template declares a period-input
-    // tuple as REMOVAL-scope, the error names the canonical scope
-    // (PROJECT) and tells the operator where the value belongs rather
-    // than leaving them with a generic "missing mapping" message.
-    const periodTuple = lookupPeriodInputTuple(
-      groupKey,
-      componentBlueprintKey,
-      inputKey,
-    );
-    if (periodTuple) {
-      // Sandbox-only escape hatch. The real fix is removing this input from
-      // the Removal Template (ADR 0005); until the LCA value exists we let
-      // sandbox submit a 0-magnitude stub so the pipeline can be exercised.
-      // NOTE: 0 is an *over-claim* for these positive emissions — it is NOT a
-      // neutral placeholder — which is exactly why production fails closed.
-      if (allowPeriodInputStub) {
-        return {
-          description:
-            `Sandbox 0-stub for project-scope period input ` +
-            `"${groupKey}/${componentBlueprintKey}/${inputKey}" ` +
-            `(category="${periodTuple.category}") — pending real LCA value. ` +
-            `See ADR 0018 + docs/open-questions.md. Production fails closed.`,
-          display_name: blueprintInput.input_key,
-          project_id: projectId,
-          quantity: { magnitude: 0, unit: blueprintInput.compatible_unit },
-          source_ids: sourceIds ?? [],
-          supplier_reference_id: supplierRefId,
-          type: "REPORTED",
-        };
-      }
-      throw new SafeError(
-        `This input belongs to a Project-scope Component (PROJECT scope, category="${periodTuple.category}"). ` +
-          `Remove "${groupKey}/${componentBlueprintKey}/${inputKey}" from the Removal Template; publish this emission as a Project Component in the Isometric UI, with the source LCA PDF attached to its Sources field (ADR 0018).`,
-      );
-    }
     throw new SafeError(
       `No INPUT_MAPPING entry for group="${groupKey}" blueprint="${componentBlueprintKey}" input="${inputKey}" — update transformers/datapoint.ts before submitting.`,
     );
