@@ -407,6 +407,12 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
         .where(eq(schema.creditBatches.facilityId, data.facility.id));
       if (facilityBatches.length > 0) {
         const batchIds = facilityBatches.map((b) => b.id);
+        // Samples anchor on the credit batch (issue #309) with a NO ACTION FK —
+        // delete them before their batches. (The by-run sample sweep further
+        // down only catches legacy run-linked rows.)
+        await tx
+          .delete(schema.samples)
+          .where(inArray(schema.samples.creditBatchId, batchIds));
         // Certifier sync events and submissions reference credit batches by
         // uuid (no FK constraint), but stale rows would accumulate across
         // test runs. Sweep them first so the spec is idempotent.

@@ -1,5 +1,5 @@
 import { eq, inArray } from "drizzle-orm";
-import { db, type DbTransaction } from "@/db";
+import { db } from "@/db";
 import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { productionRuns, samples } from "@/db/schema/production";
@@ -25,6 +25,8 @@ export interface CreditBatchWithSamples extends CreditBatchDurabilityInput {
   samplingMethod: SamplingMethod;
   /** Operator-declared `credit_batches.h_to_c_org_ratio` (advisory; reconciled). */
   declaredHToCorgRatio: number | null;
+  /** The batch's declared durability tier — its samples inherit it (issue #309). */
+  durabilityOption: "200_year" | "1000_year";
 }
 
 /**
@@ -49,6 +51,7 @@ export async function getCreditBatchesWithSamples(
       code: creditBatches.code,
       productionProcessId: creditBatches.productionProcessId,
       declaredHToCorgRatio: creditBatches.hToCorgRatio,
+      durabilityOption: creditBatches.durabilityOption,
     })
     .from(creditBatches)
     .where(inArray(creditBatches.id, ids));
@@ -127,67 +130,10 @@ export async function getCreditBatchesWithSamples(
       ? samplingMethodByProcess.get(batch.productionProcessId) ?? "method_a"
       : "method_a",
     declaredHToCorgRatio: batch.declaredHToCorgRatio,
+    durabilityOption: batch.durabilityOption,
     runs: runsByBatch.get(batch.id) ?? [],
     samples: samplesByBatch.get(batch.id) ?? [],
   }));
-}
-
-/** The credit batch a production run is committed to. */
-export interface RunCreditBatchRef {
-  creditBatchId: string;
-  creditBatchCode: string;
-}
-
-/**
- * Resolve the credit batch a production run belongs to (via
- * `credit_batch_production_runs`). The join's per-run unique constraint means a
- * run is committed to AT MOST ONE batch, so this returns a single ref or null
- * (an uncommitted run). Powers the lab-sample form's derived-batch preview —
- * from the run the operator anchors a sample to, surface the credit batch the
- * sample characterises and its sampling progress (ADR 0016).
- */
-export async function getCreditBatchIdForRun(
-  userId: string,
-  productionRunId: string,
-): Promise<RunCreditBatchRef | null> {
-  requireAuth(userId);
-  if (!productionRunId) return null;
-
-  const [row] = await db
-    .select({
-      creditBatchId: creditBatches.id,
-      creditBatchCode: creditBatches.code,
-    })
-    .from(creditBatchProductionRuns)
-    .innerJoin(
-      creditBatches,
-      eq(creditBatchProductionRuns.creditBatchId, creditBatches.id),
-    )
-    .where(eq(creditBatchProductionRuns.productionRunId, productionRunId))
-    .limit(1);
-
-  return row ?? null;
-}
-
-/**
- * Resolve the credit batch id a production run is committed to, within a given
- * executor (an open transaction or the base db). Reads only the membership join
- * — the per-run unique constraint guarantees ≤1. Used by the sample write path to
- * DERIVE `samples.creditBatchId` from the run so ADR 0016's "both links stay
- * populated" invariant holds for form-created samples (the form never sets the
- * batch directly). Returns null for an uncommitted run.
- */
-export async function resolveRunCreditBatchId(
-  executor: DbTransaction | typeof db,
-  productionRunId: string | null | undefined,
-): Promise<string | null> {
-  if (!productionRunId) return null;
-  const [row] = await executor
-    .select({ creditBatchId: creditBatchProductionRuns.creditBatchId })
-    .from(creditBatchProductionRuns)
-    .where(eq(creditBatchProductionRuns.productionRunId, productionRunId))
-    .limit(1);
-  return row?.creditBatchId ?? null;
 }
 
 /** A lab Sample id paired with the credit batch it characterises. */

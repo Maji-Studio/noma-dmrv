@@ -28,6 +28,7 @@ function batch(
     productionProcessId: "pp_1",
     samplingMethod: "method_a",
     declaredHToCorgRatio: null,
+    durabilityOption: "200_year",
     ...overrides,
   };
 }

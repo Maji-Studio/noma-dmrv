@@ -16,23 +16,19 @@ import {
   useUpdateSample,
   useSampleStats,
 } from "@/hooks/use-samples";
-import { useProductionRuns } from "@/hooks/use-production-runs";
+import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
-import {
-  TransportLegsEditor,
-  TransportLegsSummary,
-} from "@/components/transport-legs";
+import { TransportLegsSummary } from "@/components/transport-legs";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatSafeDate } from "@/lib/format-utils";
 import { SampleForm } from "./sample-form";
 import {
   formatDurabilityOption,
@@ -88,12 +84,12 @@ function createColumns(
       cell: ({ row }) => new Date(row.original.samplingTime).toLocaleString(),
     },
     {
-      id: "productionRun",
-      header: "Production Run",
-      accessorFn: (row) => row.productionRunCode ?? "",
+      id: "creditBatch",
+      header: "Credit Batch",
+      accessorFn: (row) => row.creditBatchCode ?? "",
       cell: ({ row }) => (
         <span className="text-[var(--clr-dark-purple)]">
-          {row.original.productionRunCode ?? "\u2014"}
+          {row.original.creditBatchCode ?? "\u2014"}
         </span>
       ),
     },
@@ -165,7 +161,7 @@ export function SampleList() {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [productionRunFilter, setProductionRunFilter] = useState<string>("");
+  const [creditBatchFilter, setCreditBatchFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
@@ -176,25 +172,24 @@ export function SampleList() {
 
   const filters: Partial<SampleFilterData> = useMemo(() => ({
     search: searchQuery || undefined,
-    productionRunId: productionRunFilter || undefined,
+    creditBatchId: creditBatchFilter || undefined,
     facilityId: contextFacilityId || undefined,
     page: currentPage,
     pageSize,
     sortBy: "samplingTime",
     sortOrder: "desc",
-  }), [searchQuery, productionRunFilter, contextFacilityId, currentPage, pageSize]);
+  }), [searchQuery, creditBatchFilter, contextFacilityId, currentPage, pageSize]);
 
   const { data: samplesData, isLoading, error: fetchError } = useSamples(filters, {
     enabled: !!contextFacilityId,
   });
   const { data: statsData, isLoading: statsLoading } = useSampleStats(
-    productionRunFilter || undefined,
+    creditBatchFilter || undefined,
     !!contextFacilityId,
     contextFacilityId || undefined,
   );
-  const { data: productionRunsData } = useProductionRuns(
-    contextFacilityId ? { pageSize: 100, facilityId: contextFacilityId } : { pageSize: 100 },
-    { enabled: !!contextFacilityId },
+  const { data: creditBatchesData } = useCreditBatches(
+    contextFacilityId || undefined,
   );
   const focusedSample = useSample(focusedSampleId ?? "", !!focusedSampleId);
 
@@ -311,8 +306,8 @@ export function SampleList() {
     }
   };
 
-  const clearFilters = () => { setSearchQuery(""); setProductionRunFilter(""); setCurrentPage(1); };
-  const hasActiveFilters = searchQuery || productionRunFilter;
+  const clearFilters = () => { setSearchQuery(""); setCreditBatchFilter(""); setCurrentPage(1); };
+  const hasActiveFilters = searchQuery || creditBatchFilter;
 
   const editingEntity =
     displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
@@ -327,7 +322,7 @@ export function SampleList() {
   const viewingEntity =
     displaySideSheet?.mode === "view" ? displaySideSheet.entity : null;
   const viewSubtitle = viewingEntity
-    ? [viewingEntity.productionRunCode, viewingEntity.facilityName].filter(Boolean).join(" \u2014 ") || undefined
+    ? [viewingEntity.creditBatchCode, viewingEntity.facilityName].filter(Boolean).join(" \u2014 ") || undefined
     : undefined;
 
   return (
@@ -402,15 +397,15 @@ export function SampleList() {
           </div>
           <div className="flex items-center gap-8">
             <select
-              value={productionRunFilter}
-              onChange={(e) => { setProductionRunFilter(e.target.value); setCurrentPage(1); }}
+              value={creditBatchFilter}
+              onChange={(e) => { setCreditBatchFilter(e.target.value); setCurrentPage(1); }}
               className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer"
-              aria-label="Filter by production run"
+              aria-label="Filter by credit batch"
             >
-              <option value="">All Production Runs</option>
-              {productionRunsData?.items?.map((run) => (
-                <option key={run.id} value={run.id}>
-                  {[run.facilityName, formatSafeDate(run.date)].filter(Boolean).join(" - ")}
+              <option value="">All Credit Batches</option>
+              {creditBatchesData?.map((batch) => (
+                <option key={batch.id} value={batch.id}>
+                  {batch.code}
                 </option>
               ))}
             </select>
@@ -449,7 +444,7 @@ export function SampleList() {
             fields: [
               { label: "Sample Code", value: displaySideSheet.entity.sampleCode },
               { label: "Sampling Time", value: new Date(displaySideSheet.entity.samplingTime).toLocaleString() },
-              { label: "Production Run", value: displaySideSheet.entity.productionRunCode },
+              { label: "Credit Batch", value: displaySideSheet.entity.creditBatchCode },
               { label: "Facility", value: displaySideSheet.entity.facilityName },
               {
                 label: "Certification",
@@ -516,14 +511,7 @@ export function SampleList() {
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}
           submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Sample"}
-        >
-          {displaySideSheet?.mode === "edit" && displaySideSheet.entity ? (
-            <TransportLegsEditor
-              entityType="sample"
-              entityId={displaySideSheet.entity.id}
-            />
-          ) : null}
-        </SampleForm>
+        />
       </EntitySideSheet>
     </div>
   );

@@ -28,14 +28,10 @@ export {
 // New-Removal wizard selection gate (classifier shared via batch-health.ts).
 export { loadBatchHealth } from "./batch-health";
 // Per-credit-batch durability sampling roll-up + readiness (ADR 0016) for the
-// lab-sample form's derived-batch preview and the credit-batch detail's
+// lab-sample form's batch progress preview and the credit-batch detail's
 // durability section. Shares `buildDurabilityBatchSummaries` with the submit
 // aggregation, so the surfaces and what's submitted can't disagree.
-export {
-  loadCreditBatchDurabilitySummary,
-  loadRunDurabilitySummary,
-  type RunDurabilitySummary,
-} from "./durability-batch-summary";
+export { loadCreditBatchDurabilitySummary } from "./durability-batch-summary";
 // Server-owned per-removal readiness for the Removals hub (reuses the submit
 // pipeline's context; classifier shared with table hint + wizard submit step).
 export {

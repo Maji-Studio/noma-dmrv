@@ -6,7 +6,8 @@
  * samples distributed across both runs/days, must roll up to:
  *   - the credit-batch detail's durability panel (sample table + readiness
  *     chips + the submitted mean ± s.d.), and
- *   - the lab-sample form's derived-batch progress preview.
+ *   - the lab-sample form's batch progress preview (the sample anchors on the
+ *     credit batch directly — issue #309).
  *
  * Pure UI + DB (no Isometric) — runs in PR CI, NOT @live. The live
  * measurement-samples POST is gated (`DURABILITY_MEASUREMENT_SAMPLES_LIVE`), so
@@ -55,7 +56,7 @@ test.describe("200-year durability readiness", () => {
     ).toBeVisible();
   });
 
-  test("lab-sample form previews the derived credit batch's sampling progress", async ({
+  test("lab-sample form previews the selected credit batch's sampling progress", async ({
     adminPage,
     seededData,
   }) => {
@@ -71,8 +72,8 @@ test.describe("200-year durability readiness", () => {
     await adminPage.getByRole("button", { name: "New Sample" }).click();
     await waitForSideSheet(adminPage);
 
-    // Selecting one of the batch's runs derives the credit batch it characterises.
-    await selectEntity(adminPage, "Production Run", batch.runIds[0]);
+    // Samples anchor on the credit batch directly (issue #309).
+    await selectEntity(adminPage, "Credit Batch", batch.creditBatchId);
 
     const progress = adminPage.getByTestId("sample-batch-progress");
     await expect(progress).toContainText(

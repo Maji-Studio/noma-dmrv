@@ -92,18 +92,21 @@ protocol production batch), analysed by an ISO 17025 lab — a record
 carrying *both* the sampling event (code, time, mass) *and* the lab
 chemistry (organic carbon, hydrogen, H/C_org, ash, …). A sampled credit
 batch carries **≥3 Samples**; their mean and standard deviation
-characterise that batch's biochar. Each Sample is **drawn from one
-production run** (its provenance and natural point of entry); its credit
-batch is **derived** from that run's membership, and the ≥3 must be
-**independent samples distributed across the batch's runs/days**
-(protocol §8.3.1) — never aliquots of a single grab. The lab's
-certificate of analysis is attached as a `lab_report` **document**, not
-a separate record. Distinct from the in-process spot-checks logged
-against a **production run** (the ~2-hourly field measurements) — those
-are internal-only and never submitted. _Avoid_: characterising at the
-production-run grain (the run is provenance only — characterisation and
-the ≥3 count are per credit batch); treating the certificate as its own
-record; conflating with reactor **readings** (telemetry).
+characterise that batch's biochar. Each Sample belongs to **exactly one
+credit batch**, recorded against it directly — the batch's biochar is
+**commingled across its production runs**, so no single run is
+attributable (a run link survives only on legacy rows as provenance).
+The Sample inherits the batch's declared **durability tier** (200- vs
+1000-year), and the ≥3 must be **independent samples distributed across
+the batch** (distinct sampling points/days — protocol §8.3.1), never
+aliquots of a single grab. The lab's certificate of analysis is attached
+as a `lab_report` **document**, not a separate record. Distinct from the
+in-process spot-checks logged against a **production run** (the
+~2-hourly field measurements) — those are internal-only and never
+submitted. _Avoid_: anchoring or characterising at the production-run
+grain (characterisation, the ≥3 count, and the record itself are per
+credit batch); treating the certificate as its own record; conflating
+with reactor **readings** (telemetry).
 
 **Replicate**:
 The role a **Sample** plays within its **credit batch**'s set — each
