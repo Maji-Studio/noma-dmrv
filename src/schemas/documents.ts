@@ -94,7 +94,7 @@ export const requestUploadSchema = z
     fileName: z.string().min(1).max(255),
     contentType: z.string().min(1).max(255),
     sizeBytes: z.number().int().nonnegative(),
-    capturedAt: z.string().datetime().optional(),
+    capturedAt: z.iso.datetime().optional(),
     gpsLatitude: z.number().min(-90).max(90).optional(),
     gpsLongitude: z.number().min(-180).max(180).optional(),
     description: z.string().max(2000).optional(),

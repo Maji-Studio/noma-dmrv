@@ -158,6 +158,20 @@ HTML inputs send `""` for empty fields, but Zod `.optional()` expects `undefined
 description: z.string().max(1000).optional().or(z.literal(""))
 ```
 
+### String Formats — use top-level `z.iso.*` / `z.email()` (Zod 4)
+
+This project is on **Zod 4**, where the string-format methods are top-level helpers, not chained off `z.string()`. The chained forms (`z.string().datetime()`, `.email()`, `.url()`, `.uuid()`, `.ip()`) are **deprecated** — they still compile but surface a "declaration was marked as deprecated" TS diagnostic.
+
+| Deprecated (Zod 3 style) | Use instead (Zod 4) |
+|---|---|
+| `z.string().datetime()` | `z.iso.datetime()` |
+| `z.string().date()` | `z.iso.date()` |
+| `z.string().email()` | `z.email()` |
+| `z.string().url()` | `z.url()` |
+| `z.string().uuid()` | `z.uuid()` |
+
+`z.iso.datetime()` validates an ISO 8601 / RFC 3339 timestamp (UTC `Z` only by default — exactly what `Date.prototype.toISOString()` emits). Pass `{ offset: true }` to also accept numeric offsets, `{ local: true }` for no offset. Prefer validating timestamp **format** at parse time over a downstream `Number.isNaN(new Date(x).getTime())` guard.
+
 ## Component Utilities
 
 ### FormError

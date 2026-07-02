@@ -169,8 +169,8 @@ const fixedSnapshotInputSchema = z.object({
 // SNAPSHOT's datapoint magnitudes, so deriving dates from a since-changed run
 // set would stamp a window that the datapoints no longer back.
 const reportingWindowSnapshotSchema = z.object({
-  startedOn: z.string().min(1),
-  completedOn: z.string().min(1),
+  startedOn: z.iso.datetime(),
+  completedOn: z.iso.datetime(),
 });
 
 export interface SubmitRemovalArgs {
