@@ -22,6 +22,18 @@ diesel against. Production runs are the membership primitive for a
 **Removal** through their derived application lineage — a run is *not*
 1:1 with a Removal.
 
+**Production run status**:
+The run's lifecycle: *draft* → *running* → a terminal outcome.
+*Complete* — the batch finished and its core quantities (feedstock
+consumed, biochar output) are recorded. *Failed* — the run physically
+happened and consumed feedstock but did not produce usable biochar;
+its material stays in the mass balance (conversion loss, dump-back)
+but never joins a credit batch. *Cancelled* — the record was created
+in error; the event never happened and counts nowhere. Failed marks a
+real event with a bad outcome; cancelled marks a record that should
+not exist.
+_Avoid_: void (old name for cancelled), aborted.
+
 **Genset energy**:
 Electricity produced by an on-site diesel generator. Operators measure
 the diesel consumed in **litres**; genset energy in kWh is derived from
