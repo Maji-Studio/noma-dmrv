@@ -22,6 +22,18 @@ diesel against. Production runs are the membership primitive for a
 **Removal** through their derived application lineage — a run is *not*
 1:1 with a Removal.
 
+**Production run status**:
+The run's lifecycle: *draft* → *running* → a terminal outcome.
+*Complete* — the batch finished and its core quantities (feedstock
+consumed, biochar output) are recorded. *Failed* — the run physically
+happened and consumed feedstock but did not produce usable biochar;
+its material stays in the mass balance (conversion loss, dump-back)
+but never joins a credit batch. *Cancelled* — the record was created
+in error; the event never happened and counts nowhere. Failed marks a
+real event with a bad outcome; cancelled marks a record that should
+not exist.
+_Avoid_: void (old name for cancelled), aborted.
+
 **Genset energy**:
 Electricity produced by an on-site diesel generator. Operators measure
 the diesel consumed in **litres**; genset energy in kWh is derived from
@@ -334,6 +346,27 @@ routing differs from the destination's stored distance. Absence means
 the stored distance governs — so later corrections to the stored
 distance keep propagating.
 _Avoid_: treating the override as the primary distance value.
+
+### Geography & transport
+
+**Transport distance**:
+The road distance (km) of a **transport leg**, fed to Isometric's
+distance-based transport equation. A distance computed from coordinates
+by the map's routing service is an **estimate** — modeled from a road
+graph, not the hauled distance on a bill of lading or weigh ticket. It
+is a *suggested default*, always operator-editable, and in the same
+measured-vs-derived family as an **emission estimate**. Document-backed
+distances (bill of lading, weigh ticket) are the authoritative form.
+_Avoid_: treating a routed distance as a measurement.
+
+**Distance source**:
+The provenance of a stored distance — `map_estimate` (routed via the
+map's routing service), `manual` (hand-entered), or `document`
+(bill-of-lading / weigh-ticket backed). Lives wherever a distance can be
+written (supplier, customer location, transport leg) and is inherited by
+a derived leg from its supplier/customer default. Orthogonal to a leg's
+`isDerived` flag. Without a configured routing key there is no
+`map_estimate` path — distance entry stays manual.
 
 ### Operational oversight
 
