@@ -40,7 +40,7 @@ test.describe("200-year durability readiness", () => {
 
     // The three readiness signals: ≥3 met, distributed across runs/days, eligible.
     const signals = panel.getByTestId("durability-readiness-signals");
-    await expect(signals).toContainText("3 of 3 replicates");
+    await expect(signals).toContainText("3 of 3 usable samples");
     await expect(signals).toContainText("distinct runs/days");
     await expect(signals).toContainText("Eligible");
 
@@ -80,7 +80,7 @@ test.describe("200-year durability readiness", () => {
     );
     await expect(
       progress.getByTestId("durability-readiness-signals"),
-    ).toContainText("3 of 3 replicates");
+    ).toContainText("3 of 3 usable samples");
     await expect(progress).toContainText("Eligible");
   });
 });
