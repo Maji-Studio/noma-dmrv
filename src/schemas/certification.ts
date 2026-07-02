@@ -13,9 +13,7 @@ import {
 const SUMMARY_OF_CHANGES_MAX_LENGTH = 2000;
 
 // Rejects shapes that pass the YYYY-MM-DD regex but aren't real calendar
-// dates (e.g. 2026-02-31, 2023-02-29). Same Date.UTC round-trip used in
-// `src/schemas/project-emissions.ts` so the two surfaces validate dates
-// identically — diverging would surprise an operator who hits one of them.
+// dates (e.g. 2026-02-31, 2023-02-29) via a Date.UTC round-trip.
 function isValidCalendarDate(s: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
   const [y, m, d] = s.split("-").map(Number) as [number, number, number];

@@ -214,6 +214,32 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
     }
   });
 
+  it("wins over a conflicting INPUT_MAPPING entry (guard ordering)", () => {
+    // Regression (PR #324 review): the PROJECT-scope guard must run BEFORE
+    // the INPUT_MAPPING lookup. Before the fix, re-adding a period tuple to
+    // INPUT_MAPPING bypassed the guard and emitted a real Removal datapoint.
+    const tuple = PERIOD_INPUT_TUPLE_CANON[0]; // staff-travel/distance_based_ci_emissions/distance
+    expect(INPUT_MAPPING[tuple.group]).toBeUndefined();
+    INPUT_MAPPING[tuple.group] = {
+      [tuple.blueprint]: {
+        [tuple.input]: {
+          source: "totalBiocharDryMassKg",
+          unit: STUB_COMPATIBLE_UNIT,
+          datapointType: "REPORTED",
+          expectedQuantityKind: "mass",
+        },
+      },
+    };
+    try {
+      expect(callWith(tuple)).toThrowError(SafeError);
+      expect(callWith(tuple)).toThrowError(/PROJECT/);
+      const dp = callWith(tuple, { allowPeriodInputStub: true })();
+      expect(dp.quantity.magnitude).toBe(0);
+    } finally {
+      delete INPUT_MAPPING[tuple.group];
+    }
+  });
+
   it("emits a 0-magnitude REPORTED stub when allowPeriodInputStub is set (sandbox)", () => {
     // ADR 0005 sandbox escape hatch: the same tuples that fail closed by
     // default emit a 0 datapoint (in the blueprint's compatible_unit) when the

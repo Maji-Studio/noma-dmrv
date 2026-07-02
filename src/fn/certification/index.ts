@@ -96,18 +96,3 @@ export {
   type SubmitTelemetryArgs,
   type SubmitTelemetryResult,
 } from "./submit-telemetry";
-// LCA-journal CRUD for per-period emission rows. ADR 0005 / Posture B —
-// no outbound POST; the operator publishes Project Components in the
-// Isometric UI and the drift panel reconciles.
-export {
-  createProjectEmission,
-  editProjectEmission,
-  loadProjectEmissionById,
-  loadProjectEmissionsForFacility,
-  loadProjectEmissionDrift,
-  removeProjectEmission,
-  type ProjectEmissionDriftRow,
-  type ProjectEmissionDriftState,
-  type MatchStatus,
-  type OrphanComponent,
-} from "./project-emissions";

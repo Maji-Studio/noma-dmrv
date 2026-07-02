@@ -55,7 +55,7 @@ Source of truth: `src/db/schema/*.ts`, exported through `src/db/schema/index.ts`
 | Application | `application.ts` | Soil applications and soil temperature measurements. |
 | Credits | `credits.ts` | Credit batches and credit-batch/application joins. |
 | Documentation | `documentation.ts` | Evidence documents and storage metadata. |
-| Certification | `certification.ts` | Certifier linkage, removals, GHG statements, submissions, document uploads, sync events, sensors, project-emission journal rows. |
+| Certification | `certification.ts` | Certifier linkage, removals, GHG statements, submissions, document uploads, sync events, sensors. |
 | Compliance | `compliance.ts` | Stockpile events and power-procurement evidence. |
 | Geo | `geo.ts` | Server-side route geometry cache for map/chain-of-custody views. |
 | Shared enums | `common.ts` | Domain enums used by the schema files above. |
@@ -122,7 +122,7 @@ Facilities are never hard-deleted. `archiveFacility` (`src/data-access/facilitie
 - **Facility cascade is the only writer of `archived_at`.** A child row is archived iff its facility is archived. The cascade stamps only rows where `archived_at IS NULL` so a future per-entity archive can't be clobbered; restore clears indiscriminately (safe under the current single-writer rule).
 - **Every list / picker / options / stats query filters `isNull(table.archivedAt)`.** Detail-by-id reads do **not** filter — existing references to archived rows must still hydrate. When adding a new read query to a stamped table, seed the conditions array with the `isNull` filter.
 - **Grandchildren have no own column** (samples, readings, applications, transport legs, …) — they hide transitively through their archived parent (applications filter via `deliveries.archived_at` in joins).
-- **Certifier mirror tables are deliberately unstamped** (`certifier_projects`, `certifier_project_emissions`, `certifier_ghg_statements`, `certifier_removals`) — they mirror registry state, and all their reads are facility-scoped, so they hide transitively. Archiving a facility with registry submissions is allowed with a warning (`getFacilityArchiveImpact.hasRegistrySubmissions`), never blocked.
+- **Certifier mirror tables are deliberately unstamped** (`certifier_projects`, `certifier_ghg_statements`, `certifier_removals`) — they mirror registry state, and all their reads are facility-scoped, so they hide transitively. Archiving a facility with registry submissions is allowed with a warning (`getFacilityArchiveImpact.hasRegistrySubmissions`), never blocked.
 - **Writes reject archived parents**: child creates/moves check the facility with `isNull(facilities.archivedAt)` and fail with "Facility not found or archived".
 - **Codes stay reserved** while archived (uniqueness checks ignore archive state) so restore can't collide.
 
@@ -174,7 +174,6 @@ When a migration is destructive, document the rationale in the related feature d
 |---|---|
 | `certifier_projects` | Maps a local facility to an external certifier project/template and holds facility-level emission-estimate config. |
 | `certifier_sensors` | Maps reactor measurement properties to external sensor IDs for telemetry uploads. |
-| `certifier_project_emissions` | Facility reporting-period LCA journal rows used to reconcile Isometric Project Components. |
 | `certifier_ghg_statements` | Period-anchored GHG Statement artifacts. |
 | `certifier_removals` | Local Removal submission units; one Removal can group multiple credit batches. |
 | `certification_submissions` | Versioned lock and idempotency ledger for outbound submissions. |

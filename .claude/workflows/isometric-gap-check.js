@@ -48,7 +48,7 @@ Our implementation — read these to judge whether a requirement is BUILT / GATE
 - src/lib/isometric/transformers/ghg-entry.ts, measurement-sample.ts, data-upload.ts
 - src/lib/isometric/utils/aggregation.ts        (production-run → AggregatedProductionData)
 - src/lib/isometric/utils/durability-aggregation.ts
-- src/db/schema/certification.ts                (certifierProjects, certifierRemovals, certifierGhgStatements, certifierProjectEmissions, certifierDocumentUploads, certifierSensors)
+- src/db/schema/certification.ts                (certifierProjects, certifierRemovals, certifierGhgStatements, certifierDocumentUploads, certifierSensors)
 - src/db/schema/credits.ts                      (creditBatches: samplingMethod, productionProcessId)
 - src/db/schema/production.ts                   (productionRuns.energyConsumption JSONB, productionRunReadings)
 - src/db/schema/production-processes.ts, products.ts, feedstock.ts
@@ -328,7 +328,7 @@ Produce a report with:
 2. ## Version drift — table: module | pinned | latest certified | note.
 3. ## Gaps by module — for each module a subsection; within it, findings sorted P0 → P1 → advisory. Each finding: gap class (badge), the requirement statement, the authority URL, our file:line refs, and a concrete recommended action. Distinguish "must build" vs "must document the exclusion" vs "decision pending".
 4. ## Known-gap validation oracle — confirm these FOUR user-flagged gaps each appear somewhere in the findings above:
-   (a) pyrolyzer CO direct emission, (b) pyrolyzer CH4 direct emission (note grain vs ADR 0016 credit-batch=production-batch), (c) staff-travel period emission (ADR 0005 Project-scope Component / certifierProjectEmissions), (d) sampling activities <1% materiality (P0-13).
+   (a) pyrolyzer CO direct emission, (b) pyrolyzer CH4 direct emission (note grain vs ADR 0016 credit-batch=production-batch), (c) staff-travel period emission (PROJECT-scope Component authored in the Isometric UI — ADR 0018; noma keeps no journal copy), (d) sampling activities <1% materiality (P0-13).
    For any of the four NOT present in the findings, emit a line: "⚠️ BLIND SPOT — known gap '<name>' was not independently detected; the check missed it." (This is a self-test of the workflow.)
 5. ## Coverage summary table — module | atoms checked | candidates | confirmed gaps.
 6. A trailing note if the live-template cross-check was skipped, and how to enable it (paste \`pnpm tsx scripts/isometric-smoke.ts inspect-template <prj>\` output as args.liveTemplateInspection).

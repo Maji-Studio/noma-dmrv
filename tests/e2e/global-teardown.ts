@@ -515,18 +515,6 @@ export default async function globalTeardown() {
         )
       `);
 
-      // ─── Certifier project emissions (FK to facilities) ───
-      await client.query(`
-        DELETE FROM certifier_project_emissions
-        WHERE facility_id IN (
-          SELECT id FROM facilities
-          WHERE code LIKE 'E2E-%'
-             OR name LIKE 'UI %'
-             OR name LIKE 'Chain %'
-             OR name LIKE 'Duplicate Test %'
-        )
-      `);
-
       // ─── Stockpile events (FK to facilities) ───
       await client.query(`
         DELETE FROM stockpile_events
