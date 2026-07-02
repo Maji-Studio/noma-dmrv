@@ -272,7 +272,10 @@ export function CreditBatchForm({
   const selectedProductionRunIds = Array.isArray(watchedProductionRunIds)
     ? watchedProductionRunIds
     : [];
-  const { data: productionRunOptions = [] } = useCreditBatchProductionRunOptions({
+  const {
+    data: productionRunOptions = [],
+    isFetched: productionRunOptionsFetched,
+  } = useCreditBatchProductionRunOptions({
     facilityId: effectiveFacilityId || undefined,
     startDate: hasBothDates ? startDateStr : undefined,
     endDate: hasBothDates ? endDateStr : undefined,
@@ -289,6 +292,12 @@ export function CreditBatchForm({
   const selectableProductionRunIdsKey = selectableProductionRunIds.join(",");
 
   useEffect(() => {
+    // Don't prune against an options list that hasn't loaded yet — on edit
+    // mount it would wipe the batch's member-run defaults before the query
+    // resolves, forcing the user to re-select the whole cohort.
+    if (!productionRunOptionsFetched) {
+      return;
+    }
     const selectedIds = selectedProductionRunIdsKey
       ? selectedProductionRunIdsKey.split(",")
       : [];
@@ -302,6 +311,7 @@ export function CreditBatchForm({
       setValue("productionRunIds", nextSelected, { shouldValidate: true });
     }
   }, [
+    productionRunOptionsFetched,
     selectableProductionRunIdsKey,
     selectedProductionRunIdsKey,
     setValue,
