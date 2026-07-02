@@ -169,7 +169,9 @@ export function ProductionReadingsDocuments({
         <FormFileUpload
           id={`production-run-${productionRunId}-readings-upload`}
           accept={READINGS_ACCEPT}
-          multiple
+          // One file per selection: every upload triggers a replace-import, and
+          // concurrent imports with overlapping windows resolve nondeterministically.
+          multiple={false}
           maxSizeMb={READINGS_MAX_MB}
           disabled={importReadings.isPending}
           entityType={ENTITY_TYPE}
