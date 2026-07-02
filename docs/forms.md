@@ -310,7 +310,7 @@ const { control } = useForm<MyFormData>({ resolver, defaultValues });
 
 #### CERT chip status
 
-`FormField` / `TruckWeighingSection` accept `certifyStatus` (and the section's
+`FormField` accepts `certifyStatus` (and the section's
 `certifyRequired` controls whether the chip shows at all). The chip reflects the
 record's **saved** state, frozen — it does not flip while the user types:
 

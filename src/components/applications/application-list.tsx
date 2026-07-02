@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { MapPin, Plus, Leaf, X } from "@phosphor-icons/react";
+import { MapPinIcon, PlusIcon, LeafIcon, XIcon } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -319,7 +319,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         actions={
           contextFacilityId ? (
             <Button variant="primary" onClick={openCreate}>
-              <Plus size={18} weight="bold" />
+              <PlusIcon size={18} weight="bold" />
               New Application
             </Button>
           ) : undefined
@@ -331,14 +331,14 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         <StatCard
           title="Total Applications"
           value={totalApplications}
-          icon={<MapPin size={24} weight="bold" />}
+          icon={<MapPinIcon size={24} weight="bold" />}
           description="Field applications"
           isLoading={isLoading}
         />
         <StatCard
           title="Biochar Applied"
           value={formatApplicationKgFromTons(totalBiochar)}
-          icon={<Leaf size={24} weight="bold" />}
+          icon={<LeafIcon size={24} weight="bold" />}
           description="Total biochar applied"
           isLoading={isLoading}
         />
@@ -357,7 +357,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<MapPin size={48} />}
+            icon={<MapPinIcon size={48} />}
             title={
               !contextFacilityId
                 ? "Select a facility"
@@ -375,7 +375,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             action={
               contextFacilityId && !hasActiveFilters ? (
                 <Button variant="primary" onClick={openCreate}>
-                  <Plus size={18} weight="bold" />
+                  <PlusIcon size={18} weight="bold" />
                   New Application
                 </Button>
               ) : undefined
@@ -409,7 +409,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           </select>
           {hasActiveFilters && (
             <Button variant="noOutline" size="small" onClick={clearFilters}>
-              <X size={16} weight="bold" />
+              <XIcon size={16} weight="bold" />
               Clear
             </Button>
           )}

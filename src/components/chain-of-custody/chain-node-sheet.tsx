@@ -9,7 +9,7 @@
  */
 
 import { type ElementType, useState } from "react";
-import { ArrowUpRight, TreeStructure } from "@phosphor-icons/react/dist/ssr";
+import { ArrowUpRightIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { DetailField, DetailRow, DetailSection } from "@/components/ui/detail-panel";
@@ -117,7 +117,7 @@ export function ChainNodeSheet({
                   onTrace();
                 }}
               >
-                <TreeStructure size={14} weight="bold" />
+                <TreeStructureIcon size={14} weight="bold" />
                 Trace rollback
               </Button>
             ) : null}
@@ -130,7 +130,7 @@ export function ChainNodeSheet({
                   onViewRecord();
                 }}
               >
-                <ArrowUpRight size={14} weight="bold" />
+                <ArrowUpRightIcon size={14} weight="bold" />
                 View full record
               </Button>
             ) : null}

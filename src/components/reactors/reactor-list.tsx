@@ -8,7 +8,7 @@
 import { useState } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Lightning, Flask, Plus } from "@phosphor-icons/react";
+import { LightningIcon, FlaskIcon, PlusIcon } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -223,7 +223,7 @@ export function ReactorList() {
         subtitle="Pyrolysis equipment and facility capacity"
         actions={
           <Button variant="primary" onClick={openCreate}>
-            <Plus size={18} weight="bold" />
+            <PlusIcon size={18} weight="bold" />
             New Reactor
           </Button>
         }
@@ -234,14 +234,14 @@ export function ReactorList() {
         <StatCard
           title="Total Reactors"
           value={totalReactors}
-          icon={<Lightning size={24} weight="bold" />}
+          icon={<LightningIcon size={24} weight="bold" />}
           description="Pyrolysis equipment units"
           isLoading={isLoading}
         />
         <StatCard
           title="Total Throughput"
           value={`${totalThroughputTph.toLocaleString()} tph`}
-          icon={<Flask size={24} weight="bold" />}
+          icon={<FlaskIcon size={24} weight="bold" />}
           description="Combined nominal throughput on this page"
           isLoading={isLoading}
         />
@@ -261,7 +261,7 @@ export function ReactorList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<Lightning size={48} />}
+            icon={<LightningIcon size={48} />}
             title={contextFacilityId ? "No reactors yet" : "Select a facility"}
             description={
               contextFacilityId
@@ -271,7 +271,7 @@ export function ReactorList() {
             action={
               contextFacilityId ? (
                 <Button variant="primary" onClick={openCreate}>
-                  <Plus size={18} weight="bold" />
+                  <PlusIcon size={18} weight="bold" />
                   New Reactor
                 </Button>
               ) : undefined

@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { ShieldWarning, TestTube } from "@phosphor-icons/react";
+import { ShieldWarningIcon, TestTubeIcon } from "@phosphor-icons/react";
 
 interface EnvBannerProps {
   isProduction: boolean;
@@ -36,7 +36,7 @@ export function EnvBanner({
           isInline ? "px-12 py-8" : "px-16 py-12",
         ].join(" ")}
       >
-        <ShieldWarning
+        <ShieldWarningIcon
           size={isInline ? 16 : 20}
           weight="fill"
           className="shrink-0 text-[var(--clr-red)]"
@@ -66,7 +66,7 @@ export function EnvBanner({
         isInline ? "px-12 py-8" : "px-16 py-12",
       ].join(" ")}
     >
-      <TestTube
+      <TestTubeIcon
         size={isInline ? 16 : 20}
         weight="fill"
         className="shrink-0 text-[var(--color-signal-orange)]"

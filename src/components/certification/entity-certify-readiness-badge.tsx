@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle, Warning } from "@phosphor-icons/react";
+import { CheckCircleIcon, WarningIcon } from "@phosphor-icons/react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { EntityCertifyReadiness } from "@/lib/certification/entity-readiness";
@@ -28,13 +28,13 @@ export function EntityCertifyReadinessBadge({
   const pill = ready ? (
     <StatusBadge
       status="ready"
-      icon={<CheckCircle size={14} weight="fill" />}
+      icon={<CheckCircleIcon size={14} weight="fill" />}
     />
   ) : (
     <StatusBadge
       status="pending"
       label={`Incomplete (${gapCount})`}
-      icon={<Warning size={14} weight="fill" />}
+      icon={<WarningIcon size={14} weight="fill" />}
     />
   );
 

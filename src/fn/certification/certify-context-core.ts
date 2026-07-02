@@ -67,10 +67,7 @@ import {
   type TransportLegsByCategory,
 } from "./shared";
 import { buildApplicationEvidenceGaps } from "./application-evidence-readiness";
-import {
-  buildEntityReadinessGaps,
-  buildTransportSourceReadinessGaps,
-} from "./certify-readiness-gaps";
+import { buildEntityReadinessGaps } from "./certify-readiness-gaps";
 import { loadDurabilityBatchData } from "./durability-readiness";
 import { buildSubmissionWarnings } from "./submission-warnings";
 import {
@@ -646,12 +643,6 @@ export async function buildRemovalContext(
       facilityFacts.requiredTransportCategories,
       runIdsRequiring1000YearDurability,
     ),
-    ...(await buildTransportSourceReadinessGaps(
-      userId,
-      lineages,
-      entityIds,
-      facilityFacts.requiredTransportCategories,
-    )),
     ...(await buildApplicationEvidenceGaps(userId, lineages)),
   ];
   // One mass-accounting walk: the per-run attribution the submit pipeline

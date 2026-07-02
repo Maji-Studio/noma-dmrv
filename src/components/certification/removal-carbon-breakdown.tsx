@@ -8,7 +8,7 @@
  */
 "use client";
 
-import { Info, Thermometer, Warning } from "@phosphor-icons/react/dist/ssr";
+import { InfoIcon, ThermometerIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useRemovalBreakdown } from "@/hooks/use-certification";
 import type { ConservativeSoilTemperature } from "@/lib/isometric/utils/durability-aggregation";
@@ -38,7 +38,7 @@ function SoilTemperatureNote({ soil }: { soil: ConservativeSoilTemperature }) {
     <div className="flex flex-col gap-8 border border-[var(--color-border-primary)] p-12">
       <div className="flex items-center justify-between gap-12">
         <span className="flex items-center gap-6 body-small text-[var(--color-text-primary)]">
-          <Thermometer
+          <ThermometerIcon
             size={16}
             weight="bold"
             aria-hidden
@@ -56,7 +56,7 @@ function SoilTemperatureNote({ soil }: { soil: ConservativeSoilTemperature }) {
         </span>
       </div>
       <p className="flex items-start gap-6 body-caption text-[var(--color-text-tertiary)]">
-        <Info size={13} weight="fill" aria-hidden className="mt-2 shrink-0" />
+        <InfoIcon size={13} weight="fill" aria-hidden className="mt-2 shrink-0" />
         <span>{soil.method}</span>
       </p>
       {soil.warnings.map((warning) => (
@@ -64,7 +64,7 @@ function SoilTemperatureNote({ soil }: { soil: ConservativeSoilTemperature }) {
           key={warning}
           className="flex items-start gap-6 body-caption text-[var(--color-text-secondary)]"
         >
-          <Warning
+          <WarningIcon
             size={13}
             weight="fill"
             aria-hidden

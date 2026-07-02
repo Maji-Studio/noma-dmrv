@@ -7,7 +7,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Users, Plus } from "@phosphor-icons/react";
+import { UsersIcon, PlusIcon } from "@phosphor-icons/react";
 import type { Supplier } from "@/db/schema";
 import {
   useCreateSupplierWithLocations,
@@ -206,7 +206,7 @@ export function SupplierList() {
         subtitle="Biomass suppliers and their source sites"
         actions={
           <Button variant="primary" onClick={openCreate}>
-            <Plus size={20} weight="bold" />
+            <PlusIcon size={20} weight="bold" />
             New Supplier
           </Button>
         }
@@ -217,7 +217,7 @@ export function SupplierList() {
         <StatCard
           title="Total Suppliers"
           value={totalSuppliers}
-          icon={<Users size={24} weight="bold" />}
+          icon={<UsersIcon size={24} weight="bold" />}
           description="Biomass feedstock providers"
           isLoading={isLoading}
         />
@@ -236,12 +236,12 @@ export function SupplierList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<Users size={48} />}
+            icon={<UsersIcon size={48} />}
             title="No suppliers yet"
             description="Create your first supplier to get started tracking biomass feedstock providers."
             action={
               <Button variant="primary" onClick={openCreate}>
-                <Plus size={20} weight="bold" />
+                <PlusIcon size={20} weight="bold" />
                 Create Supplier
               </Button>
             }

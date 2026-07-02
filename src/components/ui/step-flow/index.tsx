@@ -16,7 +16,7 @@
 "use client";
 
 import * as React from "react";
-import { Check } from "@phosphor-icons/react/dist/ssr";
+import { CheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 
 export interface StepFlowStep {
@@ -67,7 +67,7 @@ function StepIndex({ state, n }: { state: StepState; n: number }) {
           "border-[var(--color-border-secondary)] text-[var(--color-text-tertiary)]",
       )}
     >
-      {state === "done" ? <Check size={14} weight="bold" /> : n}
+      {state === "done" ? <CheckIcon size={14} weight="bold" /> : n}
     </span>
   );
 }

@@ -11,7 +11,7 @@
 
 import { Fragment } from "react";
 import Link from "next/link";
-import { ArrowRight, Flame, Leaf, Plant, Stack } from "@phosphor-icons/react/dist/ssr";
+import { ArrowRightIcon, FlameIcon, LeafIcon, PlantIcon, StackIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Icon } from "@phosphor-icons/react";
 import type {
   CreditBatchSankeyData,
@@ -26,10 +26,10 @@ interface StageMeta {
 
 /** Per-stage icon, accent (rose→orange→red→purple ramp), and list route. */
 const STAGE: Record<SankeyColumnKey, StageMeta> = {
-  feedstock: { icon: Leaf, accent: "var(--clr-rose)", href: "/feedstocks" },
-  productionRuns: { icon: Flame, accent: "var(--clr-orange)", href: "/production-runs" },
-  biocharLots: { icon: Stack, accent: "var(--clr-red)", href: "/biochar-products" },
-  applied: { icon: Plant, accent: "var(--clr-purple)", href: "/applications" },
+  feedstock: { icon: LeafIcon, accent: "var(--clr-rose)", href: "/feedstocks" },
+  productionRuns: { icon: FlameIcon, accent: "var(--clr-orange)", href: "/production-runs" },
+  biocharLots: { icon: StackIcon, accent: "var(--clr-red)", href: "/biochar-products" },
+  applied: { icon: PlantIcon, accent: "var(--clr-purple)", href: "/applications" },
 };
 
 function formatMassT(massKg: number): string {
@@ -121,7 +121,7 @@ export function TraceabilityFlow({ flow, facilityId }: TraceabilityFlowProps) {
                       strokeWidth="1.5"
                     />
                   </svg>
-                  <ArrowRight
+                  <ArrowRightIcon
                     size={13}
                     weight="bold"
                     className="shrink-0 text-[var(--clr-dark-purple-40)]"

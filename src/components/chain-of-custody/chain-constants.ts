@@ -1,12 +1,12 @@
 import type { ElementType } from "react";
 import {
-  Cube,
-  Factory,
-  Flask,
-  Leaf,
-  MapPin,
-  ShoppingCart,
-  Truck,
+  CubeIcon,
+  FactoryIcon,
+  FlaskIcon,
+  LeafIcon,
+  MapPinIcon,
+  ShoppingCartIcon,
+  TruckIcon,
 } from "@phosphor-icons/react/dist/ssr";
 
 export const NODE_WIDTH = 260;
@@ -76,43 +76,43 @@ export interface LineageNodeStyle {
 export const LINEAGE_NODE_STYLES: Record<LineageNodeKind, LineageNodeStyle> = {
   application: {
     label: "Application",
-    icon: MapPin,
+    icon: MapPinIcon,
     accent: "var(--acc-dist)",
     accentInk: "var(--acc-dist-ink)",
   },
   delivery: {
     label: "Delivery",
-    icon: Truck,
+    icon: TruckIcon,
     accent: "var(--acc-dist)",
     accentInk: "var(--acc-dist-ink)",
   },
   order: {
     label: "Order",
-    icon: ShoppingCart,
+    icon: ShoppingCartIcon,
     accent: "var(--acc-dist)",
     accentInk: "var(--acc-dist-ink)",
   },
   biocharProduct: {
     label: "Biochar Product",
-    icon: Cube,
+    icon: CubeIcon,
     accent: "var(--acc-prod)",
     accentInk: "var(--acc-prod-ink)",
   },
   productionRun: {
     label: "Production Run",
-    icon: Factory,
+    icon: FactoryIcon,
     accent: "var(--acc-prod)",
     accentInk: "var(--acc-prod-ink)",
   },
   reactor: {
     label: "Reactor",
-    icon: Flask,
+    icon: FlaskIcon,
     accent: "var(--acc-infra)",
     accentInk: "var(--acc-infra-ink)",
   },
   feedstock: {
     label: "Feedstock",
-    icon: Leaf,
+    icon: LeafIcon,
     accent: "var(--acc-prod)",
     accentInk: "var(--acc-prod-ink)",
   },

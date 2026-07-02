@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { File, Eye, EyeSlash, Trash, ArrowSquareOut } from "@phosphor-icons/react/dist/ssr";
+import { FileIcon, EyeIcon, EyeSlashIcon, TrashIcon, ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -105,7 +105,7 @@ export function SampleDocumentsPanel({ sampleId }: SampleDocumentsPanelProps) {
               key={doc.id}
               className="flex items-center gap-8 border border-[var(--color-border-tertiary)] px-12 py-8"
             >
-              <File
+              <FileIcon
                 size={16}
                 weight="bold"
                 className="shrink-0 text-[var(--color-text-tertiary)]"
@@ -125,7 +125,7 @@ export function SampleDocumentsPanel({ sampleId }: SampleDocumentsPanelProps) {
                 className="shrink-0 p-4 text-[var(--color-text-tertiary)] hover:text-[var(--color-interaction)] transition-colors duration-300"
                 aria-label={`Open ${doc.fileName}`}
               >
-                <ArrowSquareOut size={16} weight="bold" />
+                <ArrowSquareOutIcon size={16} weight="bold" />
               </a>
               <Button
                 variant="noOutline"
@@ -150,9 +150,9 @@ export function SampleDocumentsPanel({ sampleId }: SampleDocumentsPanelProps) {
                 }
               >
                 {doc.visibility === "private" ? (
-                  <EyeSlash size={16} weight="bold" />
+                  <EyeSlashIcon size={16} weight="bold" />
                 ) : (
-                  <Eye size={16} weight="bold" />
+                  <EyeIcon size={16} weight="bold" />
                 )}
               </Button>
               <Button
@@ -163,7 +163,7 @@ export function SampleDocumentsPanel({ sampleId }: SampleDocumentsPanelProps) {
                 className="shrink-0"
                 aria-label={`Delete ${doc.fileName}`}
               >
-                <Trash size={16} weight="bold" />
+                <TrashIcon size={16} weight="bold" />
               </Button>
             </li>
           ))}

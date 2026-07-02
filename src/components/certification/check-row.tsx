@@ -10,14 +10,14 @@
 
 import type { ElementType, ReactNode } from "react";
 import Link from "next/link";
-import { CheckCircle, Circle, Warning } from "@phosphor-icons/react/dist/ssr";
+import { CheckCircleIcon, CircleIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 
 export type CheckStatus = "met" | "unmet" | "skipped";
 
 const STATUS_ICON: Record<CheckStatus, ElementType> = {
-  met: CheckCircle,
-  unmet: Warning,
-  skipped: Circle,
+  met: CheckCircleIcon,
+  unmet: WarningIcon,
+  skipped: CircleIcon,
 };
 
 const STATUS_COLOR: Record<CheckStatus, string> = {

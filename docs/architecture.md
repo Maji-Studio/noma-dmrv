@@ -280,20 +280,20 @@ Facility-scoped operations dashboard at `/dashboard`.
 
 ## Production Run Readings Import
 
-Production-run telemetry is document-backed and can be entered manually or
-imported from reactor-day CSV files.
+Production-run telemetry is document-backed and imported from a canonical CSV.
 
 - **Upload**: `ProductionReadingsDocuments` stores files as
   `documents.entity_type='production_run'` and `document_type='sensor_data'`
   through the normal presigned storage flow.
-- **Preview/import**: `src/fn/production-run-reading-imports.ts` reads the
-  uploaded object, validates CSV format, extracts reactor/date from the
-  filename, checks overlap with the selected run window in the facility
-  timezone, and asks the operator to confirm column mapping when needed.
-- **Persistence**: confirmed imports replace readings only inside the
-  file-day/run-window overlap and write rows to `production_run_readings`.
-  Accepted header mappings are stored on the reactor specifications under
-  `reactorDayCsvMapping`.
+- **Import**: `src/fn/production-run-reading-imports.ts` reads the uploaded
+  object and parses it with `src/lib/production-readings/readings-csv.ts`.
+  Columns are matched by header (`timestamp_utc`, `temperature_c`,
+  `pressure_bar`, optional `dryer_frequency_hz`/`reactor_frequency_hz`); every
+  row carries a full UTC timestamp, so a file may span multiple days. There is
+  no filename convention or column-mapping step.
+- **Persistence**: imports clip rows to the run's `start_time`/`end_time`
+  window and replace existing readings only within the span they cover, writing
+  rows to `production_run_readings`.
 - **Performance note**: readings can become high-cardinality. The current UI
   caps table height, but server-side pagination/virtualization remains tracked
   in `docs/open-questions.md`.

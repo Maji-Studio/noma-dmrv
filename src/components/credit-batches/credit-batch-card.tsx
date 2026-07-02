@@ -2,11 +2,11 @@
 
 import { formatSafeDate } from "@/lib/format-utils";
 import {
-  Certificate,
-  CheckCircle,
-  PencilSimple,
-  Trash,
-  Warning,
+  CertificateIcon,
+  CheckCircleIcon,
+  PencilSimpleIcon,
+  TrashIcon,
+  WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button, StatusBadge } from "@/components/ui";
 import {
@@ -37,14 +37,14 @@ function CertReadinessTag({ health }: { health: CreditBatchHealthSummary }) {
   if (health.state === "ready") {
     return (
       <span className="inline-flex items-center gap-4 body-caption text-[var(--color-signal-green)]">
-        <CheckCircle size={14} weight="fill" aria-hidden />
+        <CheckCircleIcon size={14} weight="fill" aria-hidden />
         Ready to certify
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-4 body-caption text-[var(--color-signal-orange)]">
-      <Warning size={14} weight="fill" aria-hidden />
+      <WarningIcon size={14} weight="fill" aria-hidden />
       {health.issueCount} cert {health.issueCount === 1 ? "gap" : "gaps"}
     </span>
   );
@@ -70,7 +70,7 @@ export function CreditBatchCard({
         {/* Header: code badge + lifecycle status / cert readiness */}
         <div className="flex items-start justify-between gap-12">
           <span className="inline-flex items-center gap-6 border border-[var(--clr-dark-purple-20)] bg-[var(--clr-dark-purple-10)] px-10 py-4 text-[11px] uppercase tracking-[0.12em] text-[var(--clr-dark-purple)]">
-            <Certificate size={12} weight="bold" />
+            <CertificateIcon size={12} weight="bold" />
             {creditBatch.code}
           </span>
           <div className="flex flex-col items-end gap-6">
@@ -175,7 +175,7 @@ export function CreditBatchCard({
             variant="default"
             onClick={() => onEdit(creditBatch)}
           >
-            <PencilSimple size={16} />
+            <PencilSimpleIcon size={16} />
             Edit
           </Button>
           <Button
@@ -185,7 +185,7 @@ export function CreditBatchCard({
             onClick={() => onDelete(creditBatch.id)}
             aria-label={`Delete credit batch ${creditBatch.code}`}
           >
-            <Trash size={16} />
+            <TrashIcon size={16} />
           </Button>
         </div>
       </div>

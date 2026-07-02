@@ -22,11 +22,11 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import {
-  ArrowDown,
-  Leaf,
-  SealCheck,
-  SlidersHorizontal,
-  Warning,
+  ArrowDownIcon,
+  LeafIcon,
+  SealCheckIcon,
+  SlidersHorizontalIcon,
+  WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { InfoHint } from "@/components/ui/tooltip";
@@ -202,9 +202,9 @@ function Eyebrow({ source }: { source: "registry" | "estimate" }) {
         )}
       >
         {verified ? (
-          <SealCheck size={MICRO_ICON_SIZE} weight="fill" aria-hidden />
+          <SealCheckIcon size={MICRO_ICON_SIZE} weight="fill" aria-hidden />
         ) : (
-          <SlidersHorizontal size={MICRO_ICON_SIZE} weight="bold" aria-hidden />
+          <SlidersHorizontalIcon size={MICRO_ICON_SIZE} weight="bold" aria-hidden />
         )}
         {verified ? "Registry-verified" : "Estimate"}
       </span>
@@ -410,7 +410,7 @@ function CarbonBreakdownBody({
       </div>
       {sequestrationKg != null && (
         <p className="flex items-start gap-6 body-caption text-[var(--color-text-tertiary)]">
-          <Warning
+          <WarningIcon
             size={MICRO_ICON_SIZE}
             weight="fill"
             aria-hidden
@@ -437,7 +437,7 @@ function CarbonBreakdownBody({
 function MissingInputs({ inputs }: { inputs: string[] }) {
   return (
     <p className="flex items-start gap-6 body-caption text-[var(--color-text-tertiary)]">
-      <ArrowDown
+      <ArrowDownIcon
         size={MICRO_ICON_SIZE}
         weight="bold"
         aria-hidden
@@ -464,7 +464,7 @@ function Footnotes({
   if (isEstimate) {
     return (
       <p className="flex items-start gap-6 body-caption text-[var(--color-text-tertiary)]">
-        <Leaf size={MICRO_ICON_SIZE} weight="fill" aria-hidden className="mt-2 shrink-0" />
+        <LeafIcon size={MICRO_ICON_SIZE} weight="fill" aria-hidden className="mt-2 shrink-0" />
         <span>{estimateFootnote}</span>
       </p>
     );
@@ -482,7 +482,7 @@ function Footnotes({
   if (parts.length === 0) return null;
   return (
     <p className="flex items-start gap-6 body-caption text-[var(--color-text-tertiary)]">
-      <SealCheck
+      <SealCheckIcon
         size={MICRO_ICON_SIZE}
         weight="fill"
         aria-hidden

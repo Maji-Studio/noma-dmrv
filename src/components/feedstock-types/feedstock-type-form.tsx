@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type KeyboardEvent } from "react";
-import { Database, SealCheck, WarningCircle } from "@phosphor-icons/react";
+import { DatabaseIcon, SealCheckIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { cn } from "@/lib/utils";
@@ -37,13 +37,13 @@ const SECTIONS = [
     key: "general",
     label: "General",
     description: "Create the local type used by bins, deliveries, and production runs.",
-    icon: Database,
+    icon: DatabaseIcon,
   },
   {
     key: "isometric",
     label: "Isometric",
     description: "Choose a certified registry feedstock to prefill the local type.",
-    icon: SealCheck,
+    icon: SealCheckIcon,
   },
 ] as const;
 
@@ -180,7 +180,7 @@ export function FeedstockTypeForm({
     : "Create Feedstock Type";
   const selectedIsometricSummary = selectedIsometricFeedstock && (
     <div className="flex gap-10 border border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] px-12 py-10">
-      <SealCheck
+      <SealCheckIcon
         aria-hidden
         className="mt-1 size-18 shrink-0 text-[var(--st-ok)]"
         weight="bold"
@@ -259,7 +259,7 @@ export function FeedstockTypeForm({
 
       {showSourceSelector && activeSection === "general" && !selectedIsometricFeedstock && (
         <div className="flex gap-10 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-12 py-10">
-          <WarningCircle
+          <WarningCircleIcon
             aria-hidden
             className="mt-1 size-18 shrink-0 text-[var(--st-wait)]"
             weight="bold"

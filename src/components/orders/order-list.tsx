@@ -6,7 +6,7 @@
 
 import { useState, useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Package, MagnifyingGlass, Plus, X, Truck } from "@phosphor-icons/react";
+import { PackageIcon, MagnifyingGlassIcon, PlusIcon, XIcon, TruckIcon } from "@phosphor-icons/react";
 import type { Order } from "@/db/schema";
 import { useCreateOrder, useDeleteOrder, useOrders, useUpdateOrder } from "@/hooks/use-orders";
 import { useCustomers } from "@/hooks/use-customers";
@@ -264,14 +264,14 @@ export function OrderList() {
         title="Orders"
         subtitle="Customer orders for biochar products"
         actions={
-          <Button variant="primary" onClick={openCreate}><Plus size={20} weight="bold" />New Order</Button>
+          <Button variant="primary" onClick={openCreate}><PlusIcon size={20} weight="bold" />New Order</Button>
         }
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
-        <StatCard title="Total Orders" value={totalOrders} icon={<Package size={24} weight="bold" />} description="All orders" isLoading={isLoading} />
-        <StatCard title="Total Deliveries" value={totalDeliveries} icon={<Truck size={24} weight="bold" />} description="Deliveries on this page" isLoading={isLoading} />
-        <StatCard title="Total Quantity" value={`${totalQuantityKg.toLocaleString()} kg`} icon={<Package size={24} weight="bold" />} description="Quantity on this page" isLoading={isLoading} />
+        <StatCard title="Total Orders" value={totalOrders} icon={<PackageIcon size={24} weight="bold" />} description="All orders" isLoading={isLoading} />
+        <StatCard title="Total Deliveries" value={totalDeliveries} icon={<TruckIcon size={24} weight="bold" />} description="Deliveries on this page" isLoading={isLoading} />
+        <StatCard title="Total Quantity" value={`${totalQuantityKg.toLocaleString()} kg`} icon={<PackageIcon size={24} weight="bold" />} description="Quantity on this page" isLoading={isLoading} />
       </div>
 
       <DataTable
@@ -293,16 +293,16 @@ export function OrderList() {
         emptyMessage={
           <EmptyState
             padding="md"
-            icon={<Package size={48} />}
+            icon={<PackageIcon size={48} />}
             title={hasActiveFilters ? "No orders found" : "No orders yet"}
             description={hasActiveFilters ? "Try adjusting your search or filters." : "Create your first order to get started."}
-            action={!hasActiveFilters ? <Button variant="primary" onClick={openCreate}><Plus size={20} weight="bold" />Create Order</Button> : undefined}
+            action={!hasActiveFilters ? <Button variant="primary" onClick={openCreate}><PlusIcon size={20} weight="bold" />Create Order</Button> : undefined}
           />
         }
       >
         <DataTable.Toolbar>
           <div className="relative max-w-[320px] flex-1">
-            <MagnifyingGlass size={18} className="absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none" />
+            <MagnifyingGlassIcon size={18} className="absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none" />
             <input type="text" placeholder="Search orders..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} className="w-full h-40 pl-36 pr-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]" aria-label="Search table" />
           </div>
           <div className="flex items-center gap-8">
@@ -328,7 +328,7 @@ export function OrderList() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-            {hasActiveFilters && <Button variant="noOutline" size="small" onClick={clearFilters}><X size={16} weight="bold" />Clear</Button>}
+            {hasActiveFilters && <Button variant="noOutline" size="small" onClick={clearFilters}><XIcon size={16} weight="bold" />Clear</Button>}
           </div>
         </DataTable.Toolbar>
         <DataTable.Pagination />

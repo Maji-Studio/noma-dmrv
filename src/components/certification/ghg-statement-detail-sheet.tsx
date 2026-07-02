@@ -18,7 +18,7 @@
 
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { ArrowsClockwise } from "@phosphor-icons/react/dist/ssr";
+import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, Modal } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
@@ -256,7 +256,7 @@ function DetailState({
               onClick={handleRefresh}
               busy={refreshMutation.isPending}
             >
-              {!refreshMutation.isPending && <ArrowsClockwise size={ICON_SIZE} />}
+              {!refreshMutation.isPending && <ArrowsClockwiseIcon size={ICON_SIZE} />}
               Refresh status
             </Button>
           )}

@@ -8,12 +8,12 @@
  */
 
 import {
-  ArrowUpRight,
-  CaretDown,
-  CaretRight,
-  Factory,
-  Truck,
-  X,
+  ArrowUpRightIcon,
+  CaretDownIcon,
+  CaretRightIcon,
+  FactoryIcon,
+  TruckIcon,
+  XIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import type {
@@ -173,7 +173,7 @@ function AreaDropdownRow({
             onClick={(event) => event.stopPropagation()}
             className="shrink-0 p-[3px] text-[var(--clr-dark-purple-40)] transition-colors hover:text-[var(--clr-dark-purple)]"
           >
-            <ArrowUpRight size={13} weight="bold" aria-hidden="true" />
+            <ArrowUpRightIcon size={13} weight="bold" aria-hidden="true" />
           </Link>
         ) : null}
       </span>
@@ -269,7 +269,7 @@ function AreaCard({
             <span className="font-mono text-[10px] font-medium text-[var(--clr-dark-purple-60)]">
               {narrowed ? `${shown.length}/${legs.length}` : legs.length}
             </span>
-            <CaretDown
+            <CaretDownIcon
               size={11}
               weight="bold"
               className="text-[var(--clr-dark-purple-30)] transition-transform duration-150 group-data-[popup-open]:rotate-180"
@@ -356,12 +356,12 @@ function TransportLegPill({ side, legs, focusLegIds }: TransportLegPillProps) {
         )}
       >
         <span className="flex items-center gap-[5px] whitespace-nowrap font-mono text-[10px] font-medium tracking-[0.02em] text-[var(--clr-dark-purple)]">
-          <Truck size={12} className="shrink-0" style={{ color: accent }} aria-hidden="true" />
+          <TruckIcon size={12} className="shrink-0" style={{ color: accent }} aria-hidden="true" />
           {label}
         </span>
         <span className="flex items-center gap-[2px]" style={{ color: accent }} aria-hidden="true">
           <span className="h-px w-12" style={{ background: accent }} />
-          <CaretRight size={11} weight="bold" />
+          <CaretRightIcon size={11} weight="bold" />
         </span>
       </div>
     </Tooltip>
@@ -412,7 +412,7 @@ function FacilityHub({
           style={{ background: "var(--acc-infra)" }}
           aria-hidden="true"
         >
-          <Factory
+          <FactoryIcon
             size={15}
             weight="fill"
             className="text-[var(--color-background-white)]"
@@ -434,7 +434,7 @@ function FacilityHub({
       </span>
       {focusActive ? (
         <span className="flex items-center gap-[3px] border border-[var(--acc-dist-ink)] px-[7px] py-[2px] font-mono text-[8px] font-medium uppercase tracking-[0.1em] text-[var(--acc-dist-ink)]">
-          <X size={8} weight="bold" aria-hidden="true" /> Clear
+          <XIcon size={8} weight="bold" aria-hidden="true" /> Clear
         </span>
       ) : null}
     </button>
