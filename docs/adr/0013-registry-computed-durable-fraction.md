@@ -1,6 +1,20 @@
 # noma submits raw durability inputs; the registry computes the durable fraction
 
-Status: accepted (2026-06-18)
+Status: accepted (2026-06-18); amended 2026-07-03 (issue #142)
+
+> **Amendment (2026-07-03, issue #142):** the "Scope is 200-year" deferral below is
+> partly lifted — `computeFDurable1000` (Eq.4–6, bounded `min(0.95, max(0, …))`) now
+> exists in `src/lib/calculations/biochar-removal.ts` as a **local preview engine**,
+> the same role `computeFDurable200` plays for the 200-year path, wired into
+> `buildCo2eStoredPreview` off the batch's stored petrography/TGA columns
+> (`meanRandomReflectancePercent`, `stdRandomReflectance`,
+> `meanNonReactiveCarbonPercent`, `stdNonReactiveCarbonPercent`). This does **not**
+> change the decision below: the registry still computes the authoritative
+> `F_durable` server-side, and no 1000-year submission path exists yet — Eq.6's
+> R₀-term normalization is internally inconsistent in the module text, and the
+> chosen normalization is a local judgment call pending Isometric confirmation
+> (tracked in `docs/open-questions.md`, "Eq.6 R₀-term semantics"). Preview only;
+> no migration, UI, or Certify-mapping changes shipped with this amendment.
 
 A biochar removal's 200-year durable fraction `F_durable,200` (Eq.3 of the
 `biochar-storage-soil-environments` 1.2 module) is a function of the molar **H/C_org
