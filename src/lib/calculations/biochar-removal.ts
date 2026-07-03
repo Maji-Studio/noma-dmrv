@@ -17,6 +17,9 @@
  *   Eq.3  §5.1.1.3.1 F_durable,200 = min(0.95, 1 − [c + (a + b·ln(T_soil))·H/C_org])
  *                    Table 4: a = −0.383, b = 0.350, c = −0.048
  *                    T_soil floored at 7 °C, rounded to 1 dp; F_durable capped at 0.95.
+ *   Eq.6  §5.1.1.3.2 F_durable,1000 = min(0.95, max(0, (R̄₀ − s_R₀)(C̄_non-reactive − s_C_non-reactive)))
+ *                    ⚠️ term semantics are ambiguous in the module — see the
+ *                    normalization note on computeFDurable1000 below.
  *
  * All material properties are reported on a DRY BASIS (Module §3.3).
  *
@@ -42,6 +45,13 @@ export const F_DURABLE_200_COEFFICIENTS = { a: -0.383, b: 0.35, c: -0.048 } as c
 
 /** Conservative cap on the durable fraction (§5.1.1.3.1). */
 export const F_DURABLE_MAX = 0.95;
+
+/**
+ * Cap on the 1000-year durable fraction (Eq.6, §5.1.1.3.2). The module applies
+ * the SAME 0.95 ceiling to both durability options — alias it so a future
+ * divergence is a deliberate one-line change here, not a silent drift.
+ */
+export const F_DURABLE_1000_CAP = F_DURABLE_MAX;
 
 /**
  * Conservative minimum soil temperature (§5.1.1.3.1). Sites subject to periodic
@@ -161,6 +171,77 @@ export function computeFDurable200(input: FDurable200Input): FDurable200Result {
   return { fDurable, effectiveSoilTemperatureC, temperatureFloored, durabilityCapped };
 }
 
+// ── Eq.6 — 1000-year durable fraction ────────────────────────────────────────
+
+export interface FDurable1000Input {
+  /** Mean random reflectance R̄₀ (%, petrography) — `creditBatches.meanRandomReflectancePercent`. */
+  meanRandomReflectancePercent: number;
+  /** Sample std-dev of R₀ (percentage points, n−1) — `creditBatches.stdRandomReflectance`. */
+  stdRandomReflectance: number;
+  /** Mean non-reactive (residual) carbon C̄ (%, TGA) — `creditBatches.meanNonReactiveCarbonPercent`. */
+  meanNonReactiveCarbonPercent: number;
+  /** Sample std-dev of non-reactive carbon (percentage points, n−1) — `creditBatches.stdNonReactiveCarbonPercent`. */
+  stdNonReactiveCarbonPercent: number;
+}
+
+export interface FDurable1000Result {
+  fDurable: number;
+  /** True when the raw Eq.6 product exceeded the 0.95 ceiling and was capped. */
+  durabilityCapped: boolean;
+}
+
+/**
+ * Compute F_durable,1000 (Eq.6, §5.1.1.3.2).
+ *
+ * ─── ⚠️ LOUD WARNING — Eq.6 NORMALIZATION IS A DOCUMENTED INTERPRETATION ─────
+ * The certified module states Eq.6 verbatim as
+ *
+ *   F_durable,1000 = min(0.95, max(0, (R̄₀ − s_R₀)(C̄_non-reactive − s_C_non-reactive)))
+ *
+ * but Table 3 lists BOTH factors in percent, which makes the literal product
+ * dimensionally incoherent with the 0.95 cap:
+ *   - percent-as-number:  (2.8 − 0.3)(68 − 2)           = 165    → cap ALWAYS bites;
+ *   - both as fractions:  (0.028 − 0.003)(0.68 − 0.02) ≈ 0.0165 → absurdly low.
+ * The protocol NARRATIVE ("credited for the percentage of their biochar which
+ * passes the 2% R₀ benchmark") instead implies the first multiplicand is the
+ * histogram FRACTION of R₀ measurements ≥ 2% — contradicting the formal
+ * glossary (R̄₀ = "mean of all R₀ measurements"). A genuine internal protocol
+ * inconsistency; unresolved with Isometric as of 2026-07-03.
+ *
+ * CHOSEN INTERPRETATION (local preview only — the registry computes the
+ * authoritative F_durable at submission):
+ *   - R₀ term: Eq.6 applied literally to the stored columns — mean minus
+ *     std-dev, both in percent, mirroring `meanRandomReflectancePercent`;
+ *   - carbon term: normalized percent → fraction (÷ PERCENT_DENOMINATOR) so
+ *     the 0.95 cap is meaningful rather than always saturated.
+ * The mandatory min/max bounds guarantee output ∈ [0, 0.95] under ANY reading.
+ * Do NOT drive a LIVE 1000-year submission off this preview before Isometric
+ * confirms the R₀-term semantics — see docs/open-questions.md (2026-07-03).
+ * Authoritative module:
+ * https://registry.isometric.com/module/biochar-storage-soil-environments/1.2?tag=1.2.0
+ * ──────────────────────────────────────────────────────────────────────────────
+ */
+export function computeFDurable1000(input: FDurable1000Input): FDurable1000Result {
+  // Clamp each factor at 0 BEFORE multiplying: if both terms are negative the
+  // signs would cancel and a spurious positive product would slip past the
+  // mandatory max(0, …) floor (the input schemas only enforce per-field min(0)).
+  const reflectanceTerm = Math.max(
+    0,
+    input.meanRandomReflectancePercent - input.stdRandomReflectance,
+  );
+  const nonReactiveCarbonFraction = Math.max(
+    0,
+    (input.meanNonReactiveCarbonPercent - input.stdNonReactiveCarbonPercent) /
+      PERCENT_DENOMINATOR,
+  );
+
+  const floored = reflectanceTerm * nonReactiveCarbonFraction;
+  const durabilityCapped = floored > F_DURABLE_1000_CAP;
+  const fDurable = Math.min(F_DURABLE_1000_CAP, floored);
+
+  return { fDurable, durabilityCapped };
+}
+
 // ── Eq.1 — CO₂e stored ───────────────────────────────────────────────────────
 
 export interface Co2eStoredInput {
@@ -181,17 +262,27 @@ export function computeCo2eStoredTonnes(input: Co2eStoredInput): number {
 // ── Top-level: per-application CO₂e stored ───────────────────────────────────
 
 export interface ApplicationCo2eStoredInput {
+  /**
+   * Durability crediting option (`creditBatches.durabilityOption`).
+   * "1000_year" routes through Eq.6; anything else takes the 200-year path.
+   */
+  durabilityOption?: "200_year" | "1000_year" | null;
   /** Dry mass of biochar applied (tonnes) — e.g. `applications.biocharAppliedDryTons`. */
   dryMassTonnes?: number | null;
-  /** Average annual soil temperature (°C) — `applications.soilTemperatureC`. */
+  /** Average annual soil temperature (°C) — `applications.soilTemperatureC`. 200-year only. */
   soilTemperatureC?: number | null;
-  /** Molar H/C_org — the sample-weighted `weightedHToCorgRatio`. */
+  /** Molar H/C_org — the sample-weighted `weightedHToCorgRatio`. 200-year only. */
   hToCorgRatio?: number | null;
   /** Organic carbon (%) — the sample-weighted `weightedOrganicCarbonPercent`. */
   organicCarbonPercent?: number | null;
   /** Optional Total/Inorganic carbon (%) for Eq.2 derivation + drift reconciliation. */
   totalCarbonPercent?: number | null;
   inorganicCarbonPercent?: number | null;
+  /** 1000-year (Eq.6) inputs — the credit batch's stored petrography/TGA columns. */
+  meanRandomReflectancePercent?: number | null;
+  stdRandomReflectance?: number | null;
+  meanNonReactiveCarbonPercent?: number | null;
+  stdNonReactiveCarbonPercent?: number | null;
 }
 
 export interface ApplicationCo2eStoredResult {
@@ -211,15 +302,20 @@ export interface ApplicationCo2eStoredResult {
 }
 
 /**
- * Compose Eq.2 → Eq.3 → Eq.1 for a single application. Returns a structured,
- * auditable result. When any required input is absent the value is null and the
- * gap is reported in `missingInputs` (mirrors `resolveDeliveryDryMass`). Feed
- * `organicCarbonPercent` / `hToCorgRatio` from the SAME sample-weighted
- * aggregation used for Certify submission so the preview can't drift from it.
+ * Compose Eq.2 → durability (Eq.3 or Eq.6, per `durabilityOption`) → Eq.1 for a
+ * single application. Returns a structured, auditable result. When any required
+ * input is absent the value is null and the gap is reported in `missingInputs`
+ * (mirrors `resolveDeliveryDryMass`). Feed `organicCarbonPercent` /
+ * `hToCorgRatio` from the SAME sample-weighted aggregation used for Certify
+ * submission so the preview can't drift from it.
  */
 export function computeApplicationCo2eStored(
   input: ApplicationCo2eStoredInput,
 ): ApplicationCo2eStoredResult {
+  if (input.durabilityOption === "1000_year") {
+    return computeApplicationCo2eStored1000(input);
+  }
+
   const missingInputs: string[] = [];
   const warnings: string[] = [];
 
@@ -266,6 +362,83 @@ export function computeApplicationCo2eStored(
     organicCarbonPercent: carbon.value,
     effectiveSoilTemperatureC: durability.effectiveSoilTemperatureC,
     temperatureFloored: durability.temperatureFloored,
+    durabilityCapped: durability.durabilityCapped,
+    moduleVersion: SOIL_STORAGE_MODULE_VERSION,
+    missingInputs,
+    warnings,
+  };
+}
+
+/**
+ * 1000-year variant: Eq.2 → Eq.6 → Eq.1. Requires the four petrography/TGA
+ * batch inputs instead of soil temperature + H/C_org; the temperature-related
+ * result fields are inert (`null` / `false`) since Eq.6 has no T_soil term.
+ * See the ⚠️ normalization warning on `computeFDurable1000`.
+ */
+function computeApplicationCo2eStored1000(
+  input: ApplicationCo2eStoredInput,
+): ApplicationCo2eStoredResult {
+  const missingInputs: string[] = [];
+  const warnings: string[] = [];
+
+  const carbon = resolveOrganicCarbonPercent(input);
+  warnings.push(...carbon.warnings);
+  if (carbon.value == null) missingInputs.push("organicCarbonPercent");
+
+  if (!isUsableNumber(input.dryMassTonnes)) missingInputs.push("dryMassTonnes");
+  if (!isUsableNumber(input.meanRandomReflectancePercent)) {
+    missingInputs.push("meanRandomReflectancePercent");
+  }
+  if (!isUsableNumber(input.stdRandomReflectance)) {
+    missingInputs.push("stdRandomReflectance");
+  }
+  if (!isUsableNumber(input.meanNonReactiveCarbonPercent)) {
+    missingInputs.push("meanNonReactiveCarbonPercent");
+  }
+  if (!isUsableNumber(input.stdNonReactiveCarbonPercent)) {
+    missingInputs.push("stdNonReactiveCarbonPercent");
+  }
+
+  if (
+    carbon.value == null ||
+    !isUsableNumber(input.dryMassTonnes) ||
+    !isUsableNumber(input.meanRandomReflectancePercent) ||
+    !isUsableNumber(input.stdRandomReflectance) ||
+    !isUsableNumber(input.meanNonReactiveCarbonPercent) ||
+    !isUsableNumber(input.stdNonReactiveCarbonPercent)
+  ) {
+    return {
+      co2eStoredTonnes: null,
+      fDurable: null,
+      organicCarbonPercent: carbon.value,
+      effectiveSoilTemperatureC: null,
+      temperatureFloored: false,
+      durabilityCapped: false,
+      moduleVersion: SOIL_STORAGE_MODULE_VERSION,
+      missingInputs,
+      warnings,
+    };
+  }
+
+  const durability = computeFDurable1000({
+    meanRandomReflectancePercent: input.meanRandomReflectancePercent,
+    stdRandomReflectance: input.stdRandomReflectance,
+    meanNonReactiveCarbonPercent: input.meanNonReactiveCarbonPercent,
+    stdNonReactiveCarbonPercent: input.stdNonReactiveCarbonPercent,
+  });
+
+  const co2eStoredTonnes = computeCo2eStoredTonnes({
+    organicCarbonPercent: carbon.value,
+    dryMassTonnes: input.dryMassTonnes,
+    fDurable: durability.fDurable,
+  });
+
+  return {
+    co2eStoredTonnes,
+    fDurable: durability.fDurable,
+    organicCarbonPercent: carbon.value,
+    effectiveSoilTemperatureC: null,
+    temperatureFloored: false,
     durabilityCapped: durability.durabilityCapped,
     moduleVersion: SOIL_STORAGE_MODULE_VERSION,
     missingInputs,

@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   CO2_C_MOLAR_RATIO,
+  F_DURABLE_1000_CAP,
   F_DURABLE_MAX,
   SOIL_STORAGE_MODULE_VERSION,
   SOIL_TEMPERATURE_FLOOR_C,
   computeApplicationCo2eStored,
   computeCo2eStoredTonnes,
+  computeFDurable1000,
   computeFDurable200,
   resolveOrganicCarbonPercent,
 } from "./biochar-removal";
@@ -29,6 +31,11 @@ describe("drift locks against the certified v1.2 module", () => {
 
   it("is pinned to the storage module patch version recorded in versions.json", () => {
     expect(SOIL_STORAGE_MODULE_VERSION).toBe("1.2.0");
+  });
+
+  it("caps the 1000-year durable fraction at the SAME 0.95 ceiling as the 200-year path", () => {
+    expect(F_DURABLE_1000_CAP).toBe(F_DURABLE_MAX);
+    expect(F_DURABLE_1000_CAP).toBe(0.95);
   });
 });
 
@@ -107,5 +114,95 @@ describe("computeApplicationCo2eStored (Eq.2 → Eq.3 → Eq.1)", () => {
     const r = computeApplicationCo2eStored({ ...AP_101, hToCorgRatio: null });
     expect(r.co2eStoredTonnes).toBeNull();
     expect(r.missingInputs).toContain("hToCorgRatio");
+  });
+});
+
+// REPRESENTATIVE inputs only — NOT validated against real petrography/TGA lab
+// data (no facility runs either assay yet), and the Eq.6 R₀-term semantics are
+// unconfirmed with Isometric (see docs/open-questions.md, 2026-07-03 entry).
+// These lock OUR documented normalization, not protocol ground truth.
+const BATCH_1000 = {
+  meanRandomReflectancePercent: 1.6, // R̄₀ (%)
+  stdRandomReflectance: 0.4, // s_R₀ (percentage points)
+  meanNonReactiveCarbonPercent: 62, // C̄_non-reactive (%)
+  stdNonReactiveCarbonPercent: 4, // s_C_non-reactive (percentage points)
+};
+
+describe("computeFDurable1000 (Eq.6)", () => {
+  it("matches the documented normalization on a representative example", () => {
+    // (1.6 − 0.4) × (62 − 4)/100 = 1.2 × 0.58 = 0.696
+    const r = computeFDurable1000(BATCH_1000);
+    expect(r.fDurable).toBeCloseTo(0.696, 5);
+    expect(r.durabilityCapped).toBe(false);
+  });
+
+  it("floors at 0 when the R₀ std-dev exceeds the mean (mandatory max(0, …))", () => {
+    const r = computeFDurable1000({
+      ...BATCH_1000,
+      meanRandomReflectancePercent: 0.2,
+      stdRandomReflectance: 0.5,
+    });
+    expect(r.fDurable).toBe(0);
+    expect(r.durabilityCapped).toBe(false);
+  });
+
+  it("floors at 0 when BOTH terms are negative (sign cancellation must not bypass the floor)", () => {
+    // (0.2 − 0.5) × (3 − 10)/100 = (−0.3) × (−0.07) = +0.021 without per-factor clamping
+    const r = computeFDurable1000({
+      meanRandomReflectancePercent: 0.2,
+      stdRandomReflectance: 0.5,
+      meanNonReactiveCarbonPercent: 3,
+      stdNonReactiveCarbonPercent: 10,
+    });
+    expect(r.fDurable).toBe(0);
+    expect(r.durabilityCapped).toBe(false);
+  });
+
+  it("caps at 0.95 for Table-3-magnitude reflectance values (mandatory min(0.95, …))", () => {
+    // (2.8 − 0.3) × (68 − 2)/100 = 2.5 × 0.66 = 1.65 → capped
+    const r = computeFDurable1000({
+      meanRandomReflectancePercent: 2.8,
+      stdRandomReflectance: 0.3,
+      meanNonReactiveCarbonPercent: 68,
+      stdNonReactiveCarbonPercent: 2,
+    });
+    expect(r.fDurable).toBe(F_DURABLE_1000_CAP);
+    expect(r.durabilityCapped).toBe(true);
+  });
+});
+
+describe("computeApplicationCo2eStored — 1000-year path (Eq.2 → Eq.6 → Eq.1)", () => {
+  const APP_1000 = {
+    durabilityOption: "1000_year" as const,
+    dryMassTonnes: 1.79,
+    organicCarbonPercent: 78.3,
+    ...BATCH_1000,
+  };
+
+  it("routes through Eq.6 without requiring soil temperature or H/C_org", () => {
+    const r = computeApplicationCo2eStored(APP_1000);
+    expect(r.fDurable).toBeCloseTo(0.696, 5);
+    expect(r.co2eStoredTonnes).toBeCloseTo(
+      0.783 * 1.79 * 0.696 * CO2_C_MOLAR_RATIO,
+      5,
+    );
+    expect(r.missingInputs).toHaveLength(0);
+    expect(r.moduleVersion).toBe(SOIL_STORAGE_MODULE_VERSION);
+    // Eq.6 has no T_soil term — the temperature fields are inert.
+    expect(r.effectiveSoilTemperatureC).toBeNull();
+    expect(r.temperatureFloored).toBe(false);
+  });
+
+  it("returns null with a precise gap list when a petrography/TGA input is absent", () => {
+    const r = computeApplicationCo2eStored({
+      ...APP_1000,
+      stdRandomReflectance: null,
+    });
+    expect(r.co2eStoredTonnes).toBeNull();
+    expect(r.fDurable).toBeNull();
+    expect(r.missingInputs).toContain("stdRandomReflectance");
+    // 200-year-only inputs must NOT be demanded on the 1000-year path.
+    expect(r.missingInputs).not.toContain("soilTemperatureC");
+    expect(r.missingInputs).not.toContain("hToCorgRatio");
   });
 });
