@@ -8,7 +8,7 @@
 
 import { and, asc, avg, count, desc, eq, gte, ilike, lte, or, sql, SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import {
   creditBatches,
   samples,
@@ -447,6 +447,49 @@ export async function getSampleStats(
 // Sample Create Operations
 // ============================================
 
+// The credit batch's declared tier — NOT the client-synced `durabilityOption`
+// mirror kept in form state — is the source of truth for the 1000-year
+// evidence invariant (issue #309): a stale form, a failed batch-summary query,
+// or a direct server-action call could otherwise persist a 1000-year sample
+// missing its mandatory R₀/TGA fields (PR #336 second-pass review). Also
+// subsumes the batch-existence check for both write paths. Reads through the
+// caller's transaction so the tier can't be promoted to 1000-year between the
+// check and the sample write.
+async function requireBatchTierEvidence(
+  tx: DbTransaction,
+  creditBatchId: string,
+  values: {
+    randomReflectanceR0Percent: number | null;
+    reactiveCarbonPercent: number | null;
+    residualCarbonPercent: number | null;
+  },
+): Promise<void> {
+  const [creditBatch] = await tx
+    .select({ durabilityOption: creditBatches.durabilityOption })
+    .from(creditBatches)
+    .where(eq(creditBatches.id, creditBatchId));
+
+  if (!creditBatch) {
+    throw new SafeError("Credit batch not found");
+  }
+  if (creditBatch.durabilityOption !== "1000_year") {
+    return;
+  }
+  if (values.randomReflectanceR0Percent == null) {
+    throw new SafeError(
+      "R₀ reflectance is required for a sample on a 1000-year credit batch",
+    );
+  }
+  if (
+    values.reactiveCarbonPercent == null &&
+    values.residualCarbonPercent == null
+  ) {
+    throw new SafeError(
+      "TGA non-reactive carbon data is required for a sample on a 1000-year credit batch",
+    );
+  }
+}
+
 /**
  * Create a new sample
  */
@@ -506,16 +549,6 @@ export async function createSample(
     throw new SafeError("A sample with this code already exists");
   }
 
-  // Verify the credit batch exists
-  const [creditBatch] = await db
-    .select({ id: creditBatches.id })
-    .from(creditBatches)
-    .where(eq(creditBatches.id, data.creditBatchId));
-
-  if (!creditBatch) {
-    throw new SafeError("Credit batch not found");
-  }
-
   // Create sample
   const sample = await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
@@ -523,6 +556,15 @@ export async function createSample(
       { entityType: "creditBatch", entityId: data.creditBatchId },
       "create",
     );
+
+    // Verify the batch exists and enforce its declared tier's evidence
+    // requirements (tier read from the batch, never from the client) —
+    // inside the transaction so the write sees the same tier as the check.
+    await requireBatchTierEvidence(tx, data.creditBatchId, {
+      randomReflectanceR0Percent: data.randomReflectanceR0Percent ?? null,
+      reactiveCarbonPercent: data.reactiveCarbonPercent ?? null,
+      residualCarbonPercent: data.residualCarbonPercent ?? null,
+    });
 
     const [created] = await tx
       .insert(samples)
@@ -719,6 +761,31 @@ export async function updateSample(
         { entityType: "creditBatch", entityId: data.creditBatchId },
         "update",
       );
+    }
+
+    // Enforce the 1000-year evidence invariant against the EFFECTIVE
+    // post-update state (update merged over the existing row) and the
+    // effective batch — covers nulling out R₀/TGA in place as well as moving
+    // the sample onto a 1000-year batch. Runs inside the transaction so the
+    // write sees the same tier as the check. Legacy batchless rows skip
+    // (their tier is inferred from R₀ presence on read).
+    const effectiveCreditBatchId =
+      data.creditBatchId ?? existing.creditBatchId;
+    if (effectiveCreditBatchId) {
+      await requireBatchTierEvidence(tx, effectiveCreditBatchId, {
+        randomReflectanceR0Percent:
+          data.randomReflectanceR0Percent !== undefined
+            ? data.randomReflectanceR0Percent
+            : existing.randomReflectanceR0Percent,
+        reactiveCarbonPercent:
+          data.reactiveCarbonPercent !== undefined
+            ? data.reactiveCarbonPercent
+            : existing.reactiveCarbonPercent,
+        residualCarbonPercent:
+          data.residualCarbonPercent !== undefined
+            ? data.residualCarbonPercent
+            : existing.residualCarbonPercent,
+      });
     }
 
     await tx.update(samples).set(updateData).where(eq(samples.id, sampleId));
