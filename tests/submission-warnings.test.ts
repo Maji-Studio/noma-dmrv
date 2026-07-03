@@ -2,17 +2,24 @@
  * buildSubmissionWarnings — the non-blocking advisory for recorded diesel
  * (genset or startup/preprocessing) the active removal template cannot carry.
  * Issue #319: diesel submits as one combined litres datapoint through the
- * `pyrolysis / fuel_usage_by_volume` component, so the advisory fires when a
- * template declares no such component in the pyrolysis group while any run
- * recorded diesel (mitigates silent under-reporting on template drift).
+ * monitored `pyrolysis / fuel_usage_by_volume / volume_of_fuel` input, so the
+ * advisory fires when a template lacks that monitored input in the pyrolysis
+ * group while any run recorded diesel (mitigates silent under-reporting on
+ * template drift — including a component whose volume input is fixed/prebound,
+ * which resolveTemplateInputs would never feed from the runs).
  */
 import { describe, expect, it } from "vitest";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
 import { buildSubmissionWarnings } from "@/fn/certification/submission-warnings";
 
+interface ComponentSpec {
+  blueprintKey: string;
+  inputs?: Array<{ inputKey: string; type: "fixed" | "monitored" }>;
+}
+
 function template(
-  groups: Array<{ key: string; blueprintKeys: string[] }>,
+  groups: Array<{ key: string; components: ComponentSpec[] }>,
 ): IsometricGhgEntryTemplate {
   return {
     id: "rvt_TEST",
@@ -22,11 +29,16 @@ function template(
       id: `grp-${gi}`,
       key: group.key,
       display_name: group.key,
-      components: group.blueprintKeys.map((blueprintKey, ci) => ({
+      components: group.components.map((component, ci) => ({
         id: `rtc-${gi}-${ci}`,
-        blueprint_key: blueprintKey,
-        display_name: blueprintKey,
-        inputs: [],
+        blueprint_key: component.blueprintKey,
+        display_name: component.blueprintKey,
+        inputs: (component.inputs ?? []).map((input) => ({
+          input_key: input.inputKey,
+          display_name: input.inputKey,
+          type: input.type,
+          datapoint_id: input.type === "fixed" ? "dtp_FIXED" : null,
+        })),
       })),
     })),
   } as unknown as IsometricGhgEntryTemplate;
@@ -48,12 +60,21 @@ function run(
 }
 
 const TEMPLATE_WITHOUT_FUEL_COMPONENT = template([
-  { key: "pyrolysis", blueprintKeys: ["grid_electricity_use"] },
+  { key: "pyrolysis", components: [{ blueprintKey: "grid_electricity_use" }] },
 ]);
 const TEMPLATE_WITH_FUEL_COMPONENT = template([
   {
     key: "pyrolysis",
-    blueprintKeys: ["grid_electricity_use", "fuel_usage_by_volume"],
+    components: [
+      { blueprintKey: "grid_electricity_use" },
+      {
+        blueprintKey: "fuel_usage_by_volume",
+        inputs: [
+          { inputKey: "volume_of_fuel", type: "monitored" },
+          { inputKey: "emission_factor", type: "fixed" },
+        ],
+      },
+    ],
   },
 ]);
 
@@ -89,8 +110,57 @@ describe("buildSubmissionWarnings", () => {
     // in another group would not receive the combined litres — still warn.
     const warnings = buildSubmissionWarnings({
       defaultTemplate: template([
-        { key: "pyrolysis", blueprintKeys: ["grid_electricity_use"] },
-        { key: "biomass-feedstock-sourcing", blueprintKeys: ["fuel_usage_by_volume"] },
+        {
+          key: "pyrolysis",
+          components: [{ blueprintKey: "grid_electricity_use" }],
+        },
+        {
+          key: "biomass-feedstock-sourcing",
+          components: [
+            {
+              blueprintKey: "fuel_usage_by_volume",
+              inputs: [{ inputKey: "volume_of_fuel", type: "monitored" }],
+            },
+          ],
+        },
+      ]),
+      runs: [run({ dieselGensetLiters: 25 })],
+    });
+    expect(warnings).toHaveLength(1);
+  });
+
+  it("warns when the component's volume_of_fuel input is fixed (prebound — run diesel never submitted)", () => {
+    // resolveTemplateInputs treats fixed inputs as prebound datapoints, so the
+    // run-derived litres are replaced by the constant — the advisory must fire.
+    const warnings = buildSubmissionWarnings({
+      defaultTemplate: template([
+        {
+          key: "pyrolysis",
+          components: [
+            {
+              blueprintKey: "fuel_usage_by_volume",
+              inputs: [{ inputKey: "volume_of_fuel", type: "fixed" }],
+            },
+          ],
+        },
+      ]),
+      runs: [run({ dieselGensetLiters: 25 })],
+    });
+    expect(warnings).toHaveLength(1);
+  });
+
+  it("warns when the component declares no volume_of_fuel input at all", () => {
+    const warnings = buildSubmissionWarnings({
+      defaultTemplate: template([
+        {
+          key: "pyrolysis",
+          components: [
+            {
+              blueprintKey: "fuel_usage_by_volume",
+              inputs: [{ inputKey: "emission_factor", type: "fixed" }],
+            },
+          ],
+        },
       ]),
       runs: [run({ dieselGensetLiters: 25 })],
     });
