@@ -7,6 +7,8 @@
 import { z } from "zod";
 import {
   emptyToNull,
+  MASS_INPUT_MAX_KG,
+  MASS_MAX_KG_MESSAGE,
   optionalPercent,
   PG_INTEGER_MAX,
   requiredDateOnly,
