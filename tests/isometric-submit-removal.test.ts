@@ -856,6 +856,34 @@ describe("submitRemoval — reporting window anchored to application date (issue
     }
   });
 
+  it("allows an application dated the same UTC day as a mid-day production start (date-granular guard)", async () => {
+    const ctx = makeContext();
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+      ...ctx,
+      // Run starts mid-day; the form-entered application date is UTC midnight
+      // of the SAME day. A millisecond comparison would wrongly block this
+      // (issue #320 caveat 4) — the guard must compare at date granularity.
+      runs: [{ ...ctx.runs[0], startTime: new Date("2026-01-01T06:00:00Z") }],
+      lineages: [
+        makeLineage({
+          applicationDate: new Date("2026-01-01T00:00:00Z"),
+        }),
+      ],
+    });
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dp") as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      fakeExternalIds("rmv") as never,
+    );
+
+    await submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID });
+
+    const removalBody = vi.mocked(isometric.createGhgEntry).mock.calls[0][0];
+    expect(removalBody.started_on).toBe("2026-01-01");
+    expect(removalBody.completed_on).toBe("2026-01-01");
+  });
+
   it("fails closed before any POST when the latest application predates production start", async () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
       ...makeContext(),

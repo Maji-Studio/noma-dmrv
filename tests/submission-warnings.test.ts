@@ -82,6 +82,17 @@ describe("buildSubmissionWarnings — month straddle (issue #320)", () => {
     expect(warnings[0]).toContain("§8.6.2");
   });
 
+  it("warns across a year boundary (December production, January application)", () => {
+    const warnings = buildSubmissionWarnings({
+      defaultTemplate: makeTemplate(),
+      runs: [makeRun({ startTime: new Date("2025-12-20T00:00:00Z") })],
+      lineages: [makeLineage(new Date("2026-01-03T00:00:00Z"))],
+    });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("2025-12");
+    expect(warnings[0]).toContain("2026-01");
+  });
+
   it("anchors the straddle check on the EARLIEST run start and the LATEST application", () => {
     // Runs start Jan + Feb; applications Feb + Feb → straddle (Jan vs Feb),
     // even though the later run and both applications share February.

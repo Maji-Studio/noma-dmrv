@@ -49,6 +49,7 @@ import {
 } from "./durability-measurement-sample-snapshot";
 import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
 import {
+  assertReportingWindowNotInverted,
   readRemovalReportingWindow,
   resolveLatestApplicationTime,
 } from "./removal-reporting-window";
@@ -464,24 +465,14 @@ export async function submitRemoval(
   const agg = enrichWithFacilityConfig(transportAgg, emissionConfig);
 
   // §8.6.2 (issue #320): the removal's reporting window ends at the latest
-  // biochar application, not production end. Guard the inversion BEFORE the
-  // POST — the local stamp's `startedOn <= completedOn` DB check runs inside a
-  // best-effort write (swallowed below), so a back-dated application must fail
-  // loudly here instead of silently posting an inverted window to Isometric.
+  // biochar application, not production end. The inversion guard fails loudly
+  // BEFORE any registry POST (see removal-reporting-window.ts for why).
   const latestApplicationTime = resolveLatestApplicationTime(ctx.lineages);
-  if (latestApplicationTime.getTime() < agg.earliestStartTime.getTime()) {
-    const latestLineage = ctx.lineages.find(
-      (l) =>
-        l.application.applicationDate.getTime() ===
-        latestApplicationTime.getTime(),
-    );
-    throw new SafeError(
-      `Application ${latestLineage?.application.code ?? "(unknown)"} is dated ` +
-        `${formatUtcDate(latestApplicationTime)}, before the earliest production ` +
-        `start ${formatUtcDate(agg.earliestStartTime)} — correct the application ` +
-        "date before submitting.",
-    );
-  }
+  assertReportingWindowNotInverted({
+    lineages: ctx.lineages,
+    latestApplicationTime,
+    earliestStartTime: agg.earliestStartTime,
+  });
 
   // Non-blocking: surface (don't block on) submission advisories — e.g.
   // recorded startup/plant diesel the active template has no `fuel_usage_by_volume`
