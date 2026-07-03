@@ -203,6 +203,36 @@ guard. Pure starter-template residue; the app is facility-scoped.
 
 ## Isometric Certify integration
 
+### Eq.6 R₀-term semantics — 1000-year F_durable normalization (`certification/fdurable-1000-r0-semantics`, opened 2026-07-03)
+
+- **From issue #142** (1000-year CO₂e-stored preview path, built). The storage
+  module ("Biochar Storage in Soil Environments" v1.2, Eq.6 §5.1.1.3.2) is
+  internally inconsistent about the units/semantics of the first Eq.6 factor:
+  - The **formal glossary** defines R̄₀ as the "mean of all R₀ measurements"
+    and Table 3 lists both R₀ and C_non-reactive in **percent** — but the
+    literal product of two percent-magnitude terms is dimensionally incoherent
+    with the 0.95 cap (percent-as-number always saturates the cap at ~165;
+    both-as-fractions yields an absurd ~0.0165).
+  - The **narrative** ("credited for the percentage of their biochar which
+    passes the 2% R₀ benchmark") instead implies the first multiplicand is the
+    histogram **fraction of R₀ measurements ≥ 2%** (a 0–1 value), contradicting
+    the glossary's mean-reflectance reading.
+- **Local choice (preview only):** `computeFDurable1000`
+  (`src/lib/calculations/biochar-removal.ts`) applies Eq.6 literally to the
+  stored batch columns — R₀ term as mean-minus-std-dev in percent, carbon term
+  normalized percent → fraction (÷100) so the 0.95 cap is meaningful — with the
+  mandatory `min(0.95, max(0, …))` bounds guaranteeing output ∈ [0, 0.95] under
+  any reading. The interpretation is documented loudly at the function.
+- **Why it matters:** the local figure is a preview (the registry computes the
+  authoritative F_durable at submission), but a wrong interpretation would show
+  operators a misleading crediting estimate. **Needs Isometric confirmation
+  before any LIVE 1000-year submission is driven off this preview.**
+- **To resolve:** ask Isometric which reading is intended (mean R₀ vs. the
+  ≥ 2% histogram fraction, and the exact unit treatment), then align
+  `computeFDurable1000` + its tests and record the decision in
+  `docs/isometric/changes.md`. Authoritative module:
+  <https://registry.isometric.com/module/biochar-storage-soil-environments/1.2?tag=1.2.0>
+
 ### Credit-batch lab-sampling — Method-B Track 2 unlock followups (`certification/method-b-unlock-track-2`)
 
 - **ADR 0017 Track 2 shipped** (PR #301): explicit Method-B unlock

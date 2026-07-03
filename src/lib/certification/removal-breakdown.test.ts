@@ -65,14 +65,16 @@ describe("computeRemovalBreakdown — estimate mode (no registry)", () => {
     const result = computeRemovalBreakdown(
       input({
         sequestrationTonnesByBatch: [0.64, null],
-        missingInputs: ["1000YearDurabilityEngine"],
+        // A real per-application gap key from an incomplete preview (e.g. a
+        // 1000-year batch missing its petrography input — issue #142).
+        missingInputs: ["meanRandomReflectancePercent"],
       }),
     );
     expect(result.sequestrationComplete).toBe(false);
     expect(result.sequestrationKg).toBeNull();
     expect(result.localNetBeforeDiscountKg).toBeNull();
     expect(result.netRemovedKg).toBeNull();
-    expect(result.missingInputs).toEqual(["1000YearDurabilityEngine"]);
+    expect(result.missingInputs).toEqual(["meanRandomReflectancePercent"]);
   });
 
   it("treats unrecorded emissions as zero but flags it", () => {

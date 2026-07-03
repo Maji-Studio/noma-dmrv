@@ -35,7 +35,11 @@ const CARBON_INPUT_LABELS: Record<string, string> = {
   dryMassTonnes: "Applied biochar dry mass",
   soilTemperatureC: "Soil temperature",
   hToCorgRatio: "H:Corg ratio",
-  "1000YearDurabilityEngine": "1000-year durability preview not yet supported",
+  // 1000-year (Eq.6) petrography/TGA gaps — issue #142.
+  meanRandomReflectancePercent: "Mean random reflectance (R₀)",
+  stdRandomReflectance: "Std dev of R₀",
+  meanNonReactiveCarbonPercent: "Mean non-reactive carbon",
+  stdNonReactiveCarbonPercent: "Std dev of non-reactive carbon",
 };
 
 function carbonMissingInputs(

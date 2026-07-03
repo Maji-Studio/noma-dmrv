@@ -235,7 +235,16 @@ async function assertRemovalAllowsCreditBatchMutation(
 
 async function buildCo2eStoredPreview(
   userId: string,
-  batch: Pick<CreditBatch, "id" | "facilityId" | "durabilityOption">,
+  batch: Pick<
+    CreditBatch,
+    | "id"
+    | "facilityId"
+    | "durabilityOption"
+    | "meanRandomReflectancePercent"
+    | "stdRandomReflectance"
+    | "meanNonReactiveCarbonPercent"
+    | "stdNonReactiveCarbonPercent"
+  >,
   applicationIds: string[]
 ): Promise<CreditBatchCo2eStoredPreview> {
   const provider = await getFacilityCertifier(userId, batch.facilityId);
@@ -258,17 +267,6 @@ async function buildCo2eStoredPreview(
       applicationResults: [],
       missingInputs: ["applicationIds"],
       warnings: [],
-    };
-  }
-
-  if (batch.durabilityOption === "1000_year") {
-    return {
-      provider,
-      co2eStoredTonnes: null,
-      moduleVersion: null,
-      applicationResults: [],
-      missingInputs: ["1000YearDurabilityEngine"],
-      warnings: ["1000-year CO2e stored preview is deferred to issue #142."],
     };
   }
 
@@ -299,13 +297,23 @@ async function buildCo2eStoredPreview(
   const { weightedOrganicCarbonPercent, weightedHToCorgRatio } =
     weightedBatchChemistry(batchesWithSamples);
 
+  // The engine branches on durabilityOption: "1000_year" consumes the batch's
+  // stored petrography/TGA columns (Eq.6, issue #142); the default 200-year
+  // path uses per-application soil temperature + pooled H/C_org (Eq.3). An
+  // unpopulated 1000-year batch degrades to the same missingInputs /
+  // co2eStoredTonnes: null gap contract as 200-year gaps.
   const applicationResults = applicationIds.map((applicationId) => {
     const app = appById.get(applicationId);
     const result = computeApplicationCo2eStored({
+      durabilityOption: batch.durabilityOption,
       dryMassTonnes: app?.biocharAppliedDryTons ?? null,
       soilTemperatureC: app?.soilTemperatureC ?? null,
       hToCorgRatio: weightedHToCorgRatio,
       organicCarbonPercent: weightedOrganicCarbonPercent,
+      meanRandomReflectancePercent: batch.meanRandomReflectancePercent,
+      stdRandomReflectance: batch.stdRandomReflectance,
+      meanNonReactiveCarbonPercent: batch.meanNonReactiveCarbonPercent,
+      stdNonReactiveCarbonPercent: batch.stdNonReactiveCarbonPercent,
     });
 
     return {
