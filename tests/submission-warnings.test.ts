@@ -65,7 +65,7 @@ describe("buildSubmissionWarnings", () => {
     });
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toMatch(/fuel-usage-by-volume/);
-    expect(warnings[0]).toMatch(/not submitted/);
+    expect(warnings[0]).toMatch(/cannot include these fuel emissions/);
   });
 
   it("warns when startup/preprocessing diesel is recorded without the component", () => {

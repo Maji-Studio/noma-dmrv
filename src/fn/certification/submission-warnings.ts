@@ -12,7 +12,7 @@ const PYROLYSIS_GROUP_KEY = "pyrolysis";
 const FUEL_USAGE_BY_VOLUME_BLUEPRINT = "fuel_usage_by_volume";
 
 const DIESEL_UNMAPPED_WARNING =
-  "Diesel fuel (genset and/or startup/preprocessing) is recorded, but the active removal template declares no pyrolysis fuel-usage-by-volume component to carry it — these fuel emissions are not submitted (issue #319).";
+  "Diesel fuel (genset and/or startup/preprocessing) is recorded, but the active removal template declares no pyrolysis fuel-usage-by-volume component to carry it — removal submissions cannot include these fuel emissions (issue #319).";
 
 function templateDeclaresFuelUsageComponent(
   template: IsometricGhgEntryTemplate,
