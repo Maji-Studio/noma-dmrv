@@ -22,6 +22,7 @@ import type {
   CreateApplicationData,
   UpdateApplicationData,
 } from "@/schemas/applications";
+import type { DeliveryStatus } from "@/schemas/deliveries";
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
@@ -37,6 +38,7 @@ const IMMUTABLE_CREDIT_BATCH_STATUSES = new Set<string>(["verified", "issued"]);
 export interface ApplicationDeliveryOptionData {
   id: string;
   code: string;
+  status: DeliveryStatus;
   deliveryDate: Date;
   orderCode: string | null;
   formulationName: string | null;
@@ -107,6 +109,47 @@ async function getDeliveryCapacityAndApplied(
     capacityKg: delivery.deliveredWetMassKg,
     alreadyAppliedTons: Number(total ?? 0),
   };
+}
+
+/**
+ * Custody-ordering guard (issue #284): applications may only be recorded
+ * against deliveries already marked delivered, and never dated before the
+ * delivery. `deliveryDate` is the delivered date by convention — there is no
+ * separate delivered-at column.
+ */
+async function assertDeliveryAcceptsApplication(
+  deliveryId: string,
+  applicationDate: Date,
+  txOrDb: DbTransaction | typeof db = db,
+): Promise<void> {
+  const [delivery] = await txOrDb
+    .select({
+      code: deliveries.code,
+      status: deliveries.status,
+      deliveryDate: deliveries.deliveryDate,
+    })
+    .from(deliveries)
+    .where(eq(deliveries.id, deliveryId));
+
+  if (!delivery) {
+    throw new SafeError("Delivery not found");
+  }
+
+  if (delivery.status !== "delivered") {
+    throw new SafeError(
+      `Delivery ${delivery.code} has not been delivered yet — mark it as delivered before recording an application against it`,
+    );
+  }
+
+  // Compare at day granularity — application dates arrive at midnight while
+  // delivery dates may carry a time component.
+  const deliveryDayStart = new Date(delivery.deliveryDate);
+  deliveryDayStart.setHours(0, 0, 0, 0);
+  if (applicationDate < deliveryDayStart) {
+    throw new SafeError(
+      `Application date cannot be before the delivery date of ${delivery.code}`,
+    );
+  }
 }
 
 async function getLinkedCreditBatches(
@@ -341,6 +384,7 @@ export async function getApplicationDeliveryOptions(
       .select({
         id: deliveries.id,
         code: deliveries.code,
+        status: deliveries.status,
         deliveryDate: deliveries.deliveryDate,
         orderCode: orders.code,
         formulationName: formulations.name,
@@ -485,6 +529,10 @@ export async function createApplication(
       "create",
     );
 
+    // Before the capacity check — upcoming deliveries carry no delivered
+    // mass, which would otherwise surface as a confusing capacity error.
+    await assertDeliveryAcceptsApplication(data.deliveryId, data.applicationDate, tx);
+
     const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(data.deliveryId, undefined, tx);
     const check = checkDeliveryCapacity({ capacityKg, alreadyAppliedTons, requestedTons: data.biocharAppliedTons });
     if (!check.ok) throw new SafeError(check.errorMessage!);
@@ -563,6 +611,14 @@ export async function updateApplication(
         tx,
         { entityType: "delivery", entityId: data.deliveryId },
         "update",
+      );
+    }
+
+    if (data.deliveryId !== undefined || data.applicationDate !== undefined) {
+      await assertDeliveryAcceptsApplication(
+        effectiveDeliveryId,
+        data.applicationDate ?? existingApplication.applicationDate,
+        tx,
       );
     }
 

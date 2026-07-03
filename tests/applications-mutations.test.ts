@@ -93,6 +93,7 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
           code: `DL-AM-${runId}-A`,
           facilityId: facility.id,
           orderId: order.id,
+          status: "delivered",
           deliveryDate: new Date("2025-07-05"),
           deliveredWetMassKg: 5_000,
           moistureContentPercent: 20,
@@ -101,6 +102,7 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
           code: `DL-AM-${runId}-B`,
           facilityId: facility.id,
           orderId: order.id,
+          status: "delivered",
           deliveryDate: new Date("2025-07-06"),
           deliveredWetMassKg: 3_000,
           moistureContentPercent: 10,
@@ -119,6 +121,27 @@ async function createMutationFixture(runId: string): Promise<ApplicationMutation
       applicationIds: [],
     };
   });
+}
+
+/** Delivery left at the schema default status ('upcoming') for guard tests. */
+async function insertUpcomingDelivery(
+  fixture: ApplicationMutationFixture,
+  runId: string,
+): Promise<string> {
+  const [delivery] = await db
+    .insert(deliveries)
+    .values({
+      code: `DL-AM-${runId}-UPCOMING`,
+      facilityId: fixture.facilityId,
+      orderId: fixture.orderId,
+      deliveryDate: new Date("2025-07-07"),
+      deliveredWetMassKg: 4_000,
+      moistureContentPercent: 15,
+    })
+    .returning({ id: deliveries.id });
+
+  fixture.deliveryIds.push(delivery.id);
+  return delivery.id;
 }
 
 async function cleanupMutationFixture(fixture: ApplicationMutationFixture): Promise<void> {
@@ -277,6 +300,77 @@ describe("application mutations", () => {
         .where(eq(applications.code, code));
 
       expect(application).toBeUndefined();
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
+  it("rejects create against a delivery not yet marked delivered", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+    const code = `AP-AM-${runId}-UPCOMING`;
+
+    try {
+      const upcomingDeliveryId = await insertUpcomingDelivery(fixture, runId);
+
+      await expect(
+        createApplication(TEST_USER_ID, {
+          code,
+          deliveryId: upcomingDeliveryId,
+          applicationDate: new Date("2025-07-08"),
+          biocharAppliedTons: 2,
+        }),
+      ).rejects.toThrow("has not been delivered yet");
+
+      const [application] = await db
+        .select({ id: applications.id })
+        .from(applications)
+        .where(eq(applications.code, code));
+
+      expect(application).toBeUndefined();
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
+  it("rejects create when the application date precedes the delivery date", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+
+    try {
+      await expect(
+        createApplication(TEST_USER_ID, {
+          code: `AP-AM-${runId}-EARLY`,
+          deliveryId: fixture.deliveryIds[0],
+          applicationDate: new Date("2025-07-04"),
+          biocharAppliedTons: 2,
+        }),
+      ).rejects.toThrow("cannot be before the delivery date");
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
+  it("rejects update re-pointing an application to an undelivered delivery", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+
+    try {
+      const application = await createApplication(TEST_USER_ID, {
+        code: `AP-AM-${runId}-REPOINT`,
+        deliveryId: fixture.deliveryIds[0],
+        applicationDate: new Date("2025-07-08"),
+        biocharAppliedTons: 2,
+      });
+      fixture.applicationIds.push(application.id);
+
+      const upcomingDeliveryId = await insertUpcomingDelivery(fixture, runId);
+
+      await expect(
+        updateApplication(TEST_USER_ID, application.id, {
+          deliveryId: upcomingDeliveryId,
+        }),
+      ).rejects.toThrow("has not been delivered yet");
     } finally {
       await cleanupMutationFixture(fixture);
     }
