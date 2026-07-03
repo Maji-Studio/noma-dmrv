@@ -14,12 +14,12 @@
  *   - output never bagged into a lot exits between runs and lots;
  *   - in-storage / undelivered lot mass exits before "Applied".
  *
- * The terminal node is the batch's applied mass; net tCO₂e stays a label slot
- * in the payload but is always null locally — the registry owns project
- * emissions/counterfactual (ADR 0018, issue #285), so no local net can be
- * computed honestly. Mirrors `buildMassAccounting`'s walk (lineages + deduped runs) but
- * keeps full run masses — the exits, not attribution fractions, account for
- * mass that never reached this batch's applications.
+ * The terminal node is the batch's applied mass. No net-tCO₂e figure is
+ * carried at all — the registry owns project emissions/counterfactual
+ * (ADR 0018, issue #285), so no honest local net exists. Mirrors
+ * `buildMassAccounting`'s walk (lineages + deduped runs) but keeps full run
+ * masses — the exits, not attribution fractions, account for mass that never
+ * reached this batch's applications.
  *
  * Pure and dependency-light (same contract as
  * `@/lib/certification/mass-accounting`): takes the already-resolved lineage
@@ -65,12 +65,6 @@ export interface CreditBatchSankeyData {
   columns: SankeyColumn[];
   /** Non-zero labeled exits, in flow order. */
   exits: SankeyExit[];
-  /**
-   * Label only, never a ribbon. Always null: project emissions and
-   * counterfactual are registry-owned (ADR 0018, issue #285), so no honest
-   * local net exists. Kept in the payload so components render "—" uniformly.
-   */
-  netCo2eRemovalTons: number | null;
   /** Mass-balance inconsistencies (negative residuals clamped to zero). */
   warnings: string[];
 }
@@ -277,7 +271,6 @@ export function buildBatchSankey(
       },
     ],
     exits,
-    netCo2eRemovalTons: null,
     warnings,
   };
 }
@@ -397,7 +390,6 @@ export function buildStageFlow(totals: StageFlowTotals): CreditBatchSankeyData {
       },
     ],
     exits,
-    netCo2eRemovalTons: null,
     warnings,
   };
 }

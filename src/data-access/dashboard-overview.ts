@@ -310,7 +310,9 @@ export async function getDashboardOverview(
 
   // Derived CO₂e stored per batch (issue #285): the same preview figure the
   // credit-batch detail page shows — the stored column no longer exists.
-  // Bounded: the query above is facility- and period-scoped (monthly cohorts).
+  // The "all" period fetches every batch in the facility (fetchStart null),
+  // so the helper's internal PREVIEW_FANOUT_CONCURRENCY chunking is what
+  // keeps the per-batch chain-of-custody walks from bursting the pool.
   const batchPreviews = await getCo2eStoredPreviews(
     userId,
     batchRows.map((row) => row.id),

@@ -180,11 +180,6 @@ describe("buildBatchSankey", () => {
     expect(result.warnings).toHaveLength(4);
   });
 
-  it("always reports a null net tCO2e label (registry-owned figures, ADR 0018)", () => {
-    expect(buildBatchSankey([]).netCo2eRemovalTons).toBeNull();
-    expect(buildBatchSankey([lineage()]).netCo2eRemovalTons).toBeNull();
-  });
-
   it("handles lineages that stop at product level (no production run)", () => {
     const result = buildBatchSankey([
       lineage({

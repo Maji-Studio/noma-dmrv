@@ -79,6 +79,5 @@ describe("buildStageFlow", () => {
     });
     expect(flow.exits).toEqual([]);
     expect(flow.warnings).toEqual([]);
-    expect(flow.netCo2eRemovalTons).toBeNull();
   });
 });

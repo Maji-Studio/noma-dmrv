@@ -917,10 +917,16 @@ export async function loadSelectableBatchesForFacility(
     const ungroupedIds = ungrouped.map((row) => row.id);
     // Derived per-batch figures (issue #285): applied weight from member
     // applications, stored CO₂e from the same preview the batch page shows.
-    const [co2ePreviews, applicationRollups] = await Promise.all([
-      getCo2eStoredPreviews(userId, ungroupedIds),
-      getApplicationRollupsByBatchIds(userId, ungroupedIds),
-    ]);
+    // Compute the rollups ONCE and hand them to the preview builder — it would
+    // otherwise re-walk the same run membership internally. The preview's own
+    // per-batch fan-out is bounded inside getCo2eStoredPreviews.
+    const applicationRollups = await getApplicationRollupsByBatchIds(
+      userId,
+      ungroupedIds,
+    );
+    const co2ePreviews = await getCo2eStoredPreviews(userId, ungroupedIds, {
+      applicationRollups,
+    });
     // Bounded chunks (order-preserving) rather than one unbounded Promise.all
     // over every ungrouped batch — see FANOUT_CONCURRENCY.
     const batches: SelectableBatch[] = [];
