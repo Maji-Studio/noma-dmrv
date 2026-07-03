@@ -19,10 +19,9 @@ import { biocharStorageInventory } from "@/db/schema/storage-inventory";
 
 // 8 significant digits — float4 (~7 digits) rounds this to 33333.332.
 const MASS_KG_8_SIG_DIGITS = 33333.333;
-// Classic binary-float artifact: 0.1 + 0.2 = 0.30000000000000004 in JS;
-// numeric(10,4) must store it as exactly 0.3.
-const PPM_FLOAT_ARTIFACT = 0.1 + 0.2;
-const PPM_EXACT = 0.3;
+// 9 significant digits at scale 4 — float4 (~7 digits) rounds this to
+// 12345.679; numeric(10,4) must return it exactly.
+const PPM_9_SIG_DIGITS = 12345.6789;
 // 9 significant digits — exact at numeric(14,6), unrepresentable in float4.
 const TONNES_9_SIG_DIGITS = 123.456789;
 
@@ -87,7 +86,7 @@ describe("numeric precision round-trips (issue #280)", () => {
     });
   });
 
-  it("rounds samples.arsenic_mg_kg to an exact scale-4 decimal, not a float artifact", async () => {
+  it("stores samples.arsenic_mg_kg exactly at scale 4", async () => {
     const runId = crypto.randomUUID().slice(0, 8).toUpperCase();
 
     await withRollback(async (tx) => {
@@ -98,7 +97,7 @@ describe("numeric precision round-trips (issue #280)", () => {
           samplingTime: new Date(),
           totalCarbonPercent: 80,
           organicCarbonPercent: 75,
-          arsenicMgKg: PPM_FLOAT_ARTIFACT,
+          arsenicMgKg: PPM_9_SIG_DIGITS,
         })
         .returning({ id: samples.id });
 
@@ -108,7 +107,7 @@ describe("numeric precision round-trips (issue #280)", () => {
         .where(eq(samples.id, inserted.id));
 
       expect(typeof row.arsenicMgKg).toBe("number");
-      expect(row.arsenicMgKg).toBe(PPM_EXACT);
+      expect(row.arsenicMgKg).toBe(PPM_9_SIG_DIGITS);
     });
   });
 
