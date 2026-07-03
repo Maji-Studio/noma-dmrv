@@ -447,6 +447,46 @@ export async function getSampleStats(
 // Sample Create Operations
 // ============================================
 
+// The credit batch's declared tier — NOT the client-synced `durabilityOption`
+// mirror kept in form state — is the source of truth for the 1000-year
+// evidence invariant (issue #309): a stale form, a failed batch-summary query,
+// or a direct server-action call could otherwise persist a 1000-year sample
+// missing its mandatory R₀/TGA fields (PR #336 second-pass review). Also
+// subsumes the batch-existence check for both write paths.
+async function requireBatchTierEvidence(
+  creditBatchId: string,
+  values: {
+    randomReflectanceR0Percent: number | null;
+    reactiveCarbonPercent: number | null;
+    residualCarbonPercent: number | null;
+  },
+): Promise<void> {
+  const [creditBatch] = await db
+    .select({ durabilityOption: creditBatches.durabilityOption })
+    .from(creditBatches)
+    .where(eq(creditBatches.id, creditBatchId));
+
+  if (!creditBatch) {
+    throw new SafeError("Credit batch not found");
+  }
+  if (creditBatch.durabilityOption !== "1000_year") {
+    return;
+  }
+  if (values.randomReflectanceR0Percent == null) {
+    throw new SafeError(
+      "R₀ reflectance is required for a sample on a 1000-year credit batch",
+    );
+  }
+  if (
+    values.reactiveCarbonPercent == null &&
+    values.residualCarbonPercent == null
+  ) {
+    throw new SafeError(
+      "TGA non-reactive carbon data is required for a sample on a 1000-year credit batch",
+    );
+  }
+}
+
 /**
  * Create a new sample
  */
@@ -506,15 +546,13 @@ export async function createSample(
     throw new SafeError("A sample with this code already exists");
   }
 
-  // Verify the credit batch exists
-  const [creditBatch] = await db
-    .select({ id: creditBatches.id })
-    .from(creditBatches)
-    .where(eq(creditBatches.id, data.creditBatchId));
-
-  if (!creditBatch) {
-    throw new SafeError("Credit batch not found");
-  }
+  // Verify the batch exists and enforce its declared tier's evidence
+  // requirements (tier read from the batch, never from the client).
+  await requireBatchTierEvidence(data.creditBatchId, {
+    randomReflectanceR0Percent: data.randomReflectanceR0Percent ?? null,
+    reactiveCarbonPercent: data.reactiveCarbonPercent ?? null,
+    residualCarbonPercent: data.residualCarbonPercent ?? null,
+  });
 
   // Create sample
   const sample = await db.transaction(async (tx) => {
@@ -646,6 +684,29 @@ export async function updateSample(
     if (duplicate) {
       throw new SafeError("A sample with this code already exists");
     }
+  }
+
+  // Enforce the 1000-year evidence invariant against the EFFECTIVE post-update
+  // state (update merged over the existing row) and the effective batch —
+  // covers nulling out R₀/TGA in place as well as moving the sample onto a
+  // 1000-year batch. Legacy batchless rows skip (their tier is inferred from
+  // R₀ presence on read).
+  const effectiveCreditBatchId = data.creditBatchId ?? existing.creditBatchId;
+  if (effectiveCreditBatchId) {
+    await requireBatchTierEvidence(effectiveCreditBatchId, {
+      randomReflectanceR0Percent:
+        data.randomReflectanceR0Percent !== undefined
+          ? data.randomReflectanceR0Percent
+          : existing.randomReflectanceR0Percent,
+      reactiveCarbonPercent:
+        data.reactiveCarbonPercent !== undefined
+          ? data.reactiveCarbonPercent
+          : existing.reactiveCarbonPercent,
+      residualCarbonPercent:
+        data.residualCarbonPercent !== undefined
+          ? data.residualCarbonPercent
+          : existing.residualCarbonPercent,
+    });
   }
 
   // Build update data
