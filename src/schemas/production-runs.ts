@@ -84,7 +84,7 @@ export const productionRunFormSchema = z.object({
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 
   // Feedstock Input (bin-based: system auto-allocates to M:M from bin contents)
-  feedstockWetMassKg: z.preprocess(toNumberOrNull, z.number().positive("Wet mass must be a positive number").nullable()).optional(),
+  feedstockWetMassKg: z.preprocess(toNumberOrNull, z.number().positive("Wet mass must be a positive number").max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).nullable()).optional(),
   feedstockMoisturePercent: optionalPercent,
 
   // Processing Parameters (Isometric Protocol Section 9)
@@ -98,7 +98,7 @@ export const productionRunFormSchema = z.object({
   electricityKwh: z.preprocess(toNumberOrNull, z.number().min(0, "Electricity must be non-negative").nullable()).optional(),
 
   // Biochar Output
-  biocharOutputKg: z.preprocess(toNumberOrNull, z.number().positive("Biochar output must be positive").nullable()).optional(),
+  biocharOutputKg: z.preprocess(toNumberOrNull, z.number().positive("Biochar output must be positive").max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).nullable()).optional(),
   biocharMoisturePercent: optionalPercent,
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
@@ -152,7 +152,7 @@ export const updateProductionRunSchema = z.object({
     }),
   ]).optional(),
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  feedstockWetMassKg: z.number().positive().optional().nullable(),
+  feedstockWetMassKg: z.number().positive().max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).optional().nullable(),
   feedstockMoisturePercent: z.number().min(0).max(100).optional().nullable(),
   feedingRateKgHr: z.number().positive().optional().nullable(),
   residenceTimeMinutes: z.number().int().positive().max(PG_INTEGER_MAX, "Residence time is too large").optional().nullable(),
@@ -160,7 +160,7 @@ export const updateProductionRunSchema = z.object({
   dieselGensetLiters: z.number().min(0).optional().nullable(),
   preprocessingFuelLiters: z.number().min(0).optional().nullable(),
   electricityKwh: z.number().min(0).optional().nullable(),
-  biocharOutputKg: z.number().positive().optional().nullable(),
+  biocharOutputKg: z.number().positive().max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).optional().nullable(),
   biocharMoisturePercent: z.number().min(0).max(100).optional().nullable(),
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
