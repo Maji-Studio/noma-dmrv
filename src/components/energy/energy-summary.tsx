@@ -6,6 +6,14 @@
  * one combined diesel datapoint in litres, submitted by volume with the
  * emission factor bound on the Isometric template; no litres→kWh conversion,
  * no per-stage split).
+ *
+ * The preview is capability-agnostic by design: it renders off the DB-only
+ * `loadFacilityCertifierSummary` (which deliberately never hits the Isometric
+ * API) and cannot know whether the active removal template declares the
+ * monitored `pyrolysis / fuel_usage_by_volume / volume_of_fuel` input that
+ * carries the diesel litres. The copy below caveats this instead of asserting
+ * the figures as submitted — when the template can't carry the diesel, submit
+ * omits it and readiness surfaces the buildSubmissionWarnings advisory.
  */
 "use client";
 
@@ -133,7 +141,10 @@ export function EnergySummary() {
           Energy submits as a single combined measurement point — one grid
           electricity datapoint (kWh) and one diesel fuel datapoint (genset +
           startup litres, submitted by volume). The diesel emission factor is
-          bound on the Isometric template. There is no per-stage split.
+          bound on the Isometric template. There is no per-stage split. Each
+          value is submitted only if the active removal template declares the
+          matching component — if it cannot carry the diesel litres, they are
+          omitted and submission readiness shows an advisory.
         </p>
         {mappingLoading && (
           <p className="body-medium text-[var(--color-text-secondary)]">
@@ -162,7 +173,7 @@ export function EnergySummary() {
               <thead>
                 <tr className="bg-[var(--panel-head-bg)] [border-bottom:var(--panel-head-border)]">
                   <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-left">Source</th>
-                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-right">Submitted value</th>
+                  <th className="label-micro text-[var(--color-text-secondary)] py-10 px-12 text-right">Preview value</th>
                 </tr>
               </thead>
               <tbody>
@@ -176,7 +187,9 @@ export function EnergySummary() {
                   <td className="body-medium py-8 px-12">
                     Diesel fuel (genset + startup)
                     <span className="block label-micro text-[var(--color-text-tertiary)]">
-                      Submitted by volume; emission factor bound on the Isometric template
+                      Submitted by volume when the active template carries a
+                      pyrolysis fuel-usage component; emission factor bound on
+                      the Isometric template
                     </span>
                   </td>
                   <td className="body-medium py-8 px-12 text-right whitespace-nowrap tabular-nums">
