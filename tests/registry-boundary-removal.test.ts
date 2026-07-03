@@ -369,6 +369,18 @@ function makeContext(
       },
     ],
     attributionByRunId: new Map([[PRODUCTION_RUN_ID, 1]]),
+    // §8.6.2 claim state (issue #349): unclaimed — the boundary tests exercise
+    // ledger/registry recovery, not the claim gate (isometric-submit-removal
+    // covers it). The real claim UPDATE inside markSubmissionSubmitted takes
+    // its ids from `memberBatches` (random UUIDs with no credit_batches row),
+    // so it matches zero rows — harmless by design.
+    memberBatchClaims: [
+      {
+        creditBatchId: "cb-bd-1",
+        code: "CB-BD-001",
+        claimedByRemovalId: null,
+      },
+    ],
     transportLegs: { feedstock: [], biochar: [], sample: [] },
     facilityReferenceSoilTemperature: {
       declaredSoilTemperatureC: 24.2,

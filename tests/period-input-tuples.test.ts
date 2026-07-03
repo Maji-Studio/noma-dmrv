@@ -227,6 +227,7 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
           unit: STUB_COMPATIBLE_UNIT,
           datapointType: "REPORTED",
           expectedQuantityKind: "mass",
+          bucket: "stored",
         },
       },
     };

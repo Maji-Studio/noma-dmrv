@@ -370,6 +370,7 @@ function durabilityBlockersFor(
 
 function makeContext(
   biocharMassKg = ORIGINAL_BIOCHAR_MASS_KG,
+  overrides: Partial<certifyContext.RemovalSubmissionContext> = {},
 ): certifyContext.RemovalSubmissionContext {
   const latest = storedLatest();
   const runs = [makeRun(biocharMassKg)];
@@ -424,6 +425,14 @@ function makeContext(
     runs,
     batchesWithSamples,
     attributionByRunId: new Map([[PRODUCTION_RUN_ID, 1]]),
+    // §8.6.2 production-bucket claim state (issue #349) — default: unclaimed.
+    memberBatchClaims: [
+      {
+        creditBatchId: CREDIT_BATCH_ID,
+        code: "CB-TEST-001",
+        claimedByRemovalId: null,
+      },
+    ],
     transportLegs: { feedstock: [], biochar: [], sample: [] },
     facilityReferenceSoilTemperature: {
       declaredSoilTemperatureC: 24.2,
@@ -434,6 +443,7 @@ function makeContext(
         "Facility reference soil temperature (annual average; 7 °C floor) — Test dataset (annual mean)",
       warnings: [],
     },
+    ...overrides,
   };
 }
 
@@ -969,5 +979,115 @@ describe("submitRemoval — durability measurement-samples gate (Phase 3, staged
     // Gated before any aggregation/claim — nothing posted, no ledger row.
     expect(createDatapointFake).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue #349 / ADR 0020 — §8.6.2 production-emissions front-loading. A credit
+// batch's production-bucket emissions submit exactly once: the first successful
+// submit stamps the claiming removal onto the batch; a DIFFERENT removal fails
+// closed before any POST; the SAME removal resubmits/supersedes freely.
+// ---------------------------------------------------------------------------
+
+describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349)", () => {
+  it("fails closed before any POST when a member batch is claimed by a different removal", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(ORIGINAL_BIOCHAR_MASS_KG, {
+        memberBatchClaims: [
+          {
+            creditBatchId: CREDIT_BATCH_ID,
+            code: "CB-TEST-001",
+            claimedByRemovalId: "rem-other",
+          },
+        ],
+      }),
+    );
+    const createDatapointFake = vi.fn(fakeExternalIds("dp"));
+    const createGhgEntryFake = vi.fn(fakeExternalIds("rmv"));
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      createDatapointFake as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      createGhgEntryFake as never,
+    );
+
+    await expect(
+      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+    ).rejects.toThrow(/already claimed/);
+    // Failed closed — nothing was posted and no ledger row was claimed.
+    expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(createGhgEntryFake).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
+  });
+
+  it("records the claim on the member batches when the ledger flips to submitted", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dp") as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      fakeExternalIds("rmv") as never,
+    );
+
+    await submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID });
+
+    expect(ledger.markSubmissionSubmitted).toHaveBeenCalledWith(
+      USER_ID,
+      storedRows[0].id,
+      expect.objectContaining({
+        productionEmissionsClaim: {
+          removalId: REMOVAL_ID,
+          creditBatchIds: [CREDIT_BATCH_ID],
+        },
+      }),
+    );
+  });
+
+  it("keeps claiming on a supersede re-submit by the same removal", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(ORIGINAL_BIOCHAR_MASS_KG),
+    );
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dp") as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      fakeExternalIds("rmv") as never,
+    );
+
+    await submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID });
+
+    // Second submit: the batch is now claimed by THIS removal (the first
+    // submit stamped it) and the source mass changed → v=2 supersede. The
+    // self-claim must not block, and the claim arg rides again (idempotent
+    // guarded UPDATE on the data-access side).
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(CHANGED_BIOCHAR_MASS_KG, {
+        memberBatchClaims: [
+          {
+            creditBatchId: CREDIT_BATCH_ID,
+            code: "CB-TEST-001",
+            claimedByRemovalId: REMOVAL_ID,
+          },
+        ],
+      }),
+    );
+
+    const second = await submitRemoval({
+      userId: USER_ID,
+      removalId: REMOVAL_ID,
+    });
+
+    expect(second.version).toBe(2);
+    const lastCall = vi
+      .mocked(ledger.markSubmissionSubmitted)
+      .mock.calls.at(-1);
+    expect(lastCall?.[2]).toMatchObject({
+      productionEmissionsClaim: {
+        removalId: REMOVAL_ID,
+        creditBatchIds: [CREDIT_BATCH_ID],
+      },
+    });
   });
 });
