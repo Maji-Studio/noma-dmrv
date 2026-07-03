@@ -10,6 +10,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { relations, sql, type InferSelectModel } from 'drizzle-orm';
 import { biocharProductStatus } from './common';
+import { fraction, massKg, percent } from './numeric-families';
 import { facilities, storageLocations } from './facilities';
 import { feedstockTypes } from './feedstock';
 import { productionRuns } from './production';
@@ -24,7 +25,7 @@ export const formulations = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     code: text('code').notNull().unique(), // e.g., "BCF-01"
     name: text('name').notNull(), // e.g., "Raw Biochar", "BCF-01 - Organic"
-    biocharRatio: real('biochar_ratio'), // Ratio in [0, 1] — primary compliance field (§9.4.2 <50% rule)
+    biocharRatio: fraction('biochar_ratio'), // Ratio in [0, 1] — primary compliance field (§9.4.2 <50% rule)
     description: text('description'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -51,7 +52,7 @@ export const formulationIngredients = pgTable(
     feedstockTypeId: uuid('feedstock_type_id')
       .notNull()
       .references(() => feedstockTypes.id),
-    ratio: real('ratio'), // Ratio in [0, 1]
+    ratio: fraction('ratio'), // Ratio in [0, 1]
     description: text('description'),
     sortOrder: integer('sort_order').default(0).notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
@@ -86,10 +87,10 @@ export const biocharProducts = pgTable('biochar_products', {
   composition: jsonb('composition').notNull().default(sql`'{}'::jsonb`),
 
   // --- Measurements ---
-  massKg: real('mass_kg'),
-  moistureContentPercent: real('moisture_content_percent'),
+  massKg: massKg('mass_kg'),
+  moistureContentPercent: percent('moisture_content_percent'),
   densityKgM3: real('density_kg_m3'),
-  waterAddedKg: real('water_added_kg'),
+  waterAddedKg: massKg('water_added_kg'),
 
   // --- Location ---
   storageLocationId: uuid('storage_location_id').references(

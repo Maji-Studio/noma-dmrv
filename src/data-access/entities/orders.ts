@@ -57,7 +57,8 @@ function toEntityOption(r: {
   biocharProductCode: string | null;
   totalDeliveredKg: number;
 }): EntityOption {
-  const remainingKg = Math.max(0, r.quantityKg - r.totalDeliveredKg);
+  // Raw SQL aggregates over numeric columns arrive as strings — coerce at the boundary.
+  const remainingKg = Math.max(0, r.quantityKg - Number(r.totalDeliveredKg));
   return {
     id: r.id,
     code: r.code,

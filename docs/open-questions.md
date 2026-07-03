@@ -57,6 +57,24 @@ Also removed the same day (not Isometric-related): the legacy Next.js-starter
 `[projectId]` route tree, data-access, fn, hooks, components, and `requireProjectMember`
 guard. Pure starter-template residue; the app is facility-scoped.
 
+### Lab-characterization chemistry in `samples` kept `real` in the numeric conversion (`schema/samples-chemistry-precision`, opened 2026-07-03)
+
+- **Decision (PR #342, issue #280):** the real→numeric conversion moved
+  `h_to_c_org_ratio` and the heavy-metal/contaminant panel to exact `numeric`,
+  but `total_carbon_percent` / `inorganic_carbon_percent` /
+  `organic_carbon_percent` / `random_reflectance_r0_percent` intentionally stay
+  `real` (`src/db/schema/production.ts`) — even though `organic_carbon_percent`
+  feeds CO₂e-stored math directly. Rationale: float4 relative error (~1e-7) is
+  far below lab assay precision, so no credit-bearing digit is at risk.
+- **To resolve:** revisit whether issue #280's registry-reproducibility
+  rationale (round-trip exactly what the operator entered) extends to these
+  lab-characterization columns too; if yes, migrate them to the `percent`
+  family in `src/db/schema/numeric-families.ts`.
+- **Related note:** the `ppm` family caps at 999,999.9999 — marginally below
+  the 1,000,000 ppm physical maximum of a pure substance. Irrelevant for
+  hand-entered assay values; matters only if a lab/CSV import path ever writes
+  gas-composition or contaminant ppm columns (none exists today).
+
 ## Architecture
 
 ### Auto-fill sample chemistry from an uploaded lab report (`samples/coa-autofill`, opened 2026-07-02)
