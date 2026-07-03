@@ -223,6 +223,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       application: {
         id: "app-1",
         code: "APP-1",
+        // Same UTC month as the run start — no straddle advisory (issue #320).
+        applicationDate: new Date("2026-01-20T00:00:00Z"),
         biocharAppliedDryTons: 1,
       } as never,
       delivery: { id: "del-1" } as never,
@@ -242,6 +244,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
+        startTime: new Date("2026-01-05T00:00:00Z"),
         biocharDryMassKg: 1000,
         samples: [],
         readingsCount: 1,
@@ -278,6 +282,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       application: {
         id: "app-1",
         code: "APP-1",
+        // Same UTC month as the run start — no straddle advisory (issue #320).
+        applicationDate: new Date("2026-01-20T00:00:00Z"),
         biocharAppliedDryTons: 1,
       } as never,
       delivery: { id: "del-1" } as never,
@@ -297,6 +303,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
+        startTime: new Date("2026-01-05T00:00:00Z"),
         biocharDryMassKg: 1000,
         samples: [],
         readingsCount: 0,
@@ -413,7 +421,9 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
 
     mockedGetLineage.mockResolvedValue({
       facility: { id: FACILITY_ID, code: "F", name: "F" },
-      application: {} as never,
+      application: {
+        applicationDate: new Date("2026-01-20T00:00:00Z"),
+      } as never,
       delivery: {} as never,
       order: null,
       biocharProduct: { id: "bp-1" } as never,
@@ -427,6 +437,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
+        startTime: new Date("2026-01-05T00:00:00Z"),
         feedstockWetMassKg: 100,
         feedstockMoisturePercent: 10,
         biocharOutputKg: 40,
@@ -616,7 +628,10 @@ describe("requiredTransportCategories", () => {
     ]);
     mockedGetLineage.mockResolvedValue({
       facility: { id: FACILITY_ID, code: "F", name: "F" },
-      application: { biocharAppliedDryTons: 0.1 } as never,
+      application: {
+        biocharAppliedDryTons: 0.1,
+        applicationDate: new Date("2026-01-20T00:00:00Z"),
+      } as never,
       delivery: {} as never,
       order: null,
       biocharProduct: { id: "bp-1" } as never,
@@ -630,6 +645,8 @@ describe("requiredTransportCategories", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
+        startTime: new Date("2026-01-05T00:00:00Z"),
         feedstockWetMassKg: 100,
         feedstockMoisturePercent: 10,
         biocharOutputKg: 40,
@@ -683,7 +700,10 @@ describe("requiredTransportCategories", () => {
     mockedListBlueprints.mockResolvedValue([]);
     mockedGetLineage.mockResolvedValue({
       facility: { id: FACILITY_ID, code: "F", name: "F" },
-      application: { biocharAppliedDryTons: 0.1 } as never,
+      application: {
+        biocharAppliedDryTons: 0.1,
+        applicationDate: new Date("2026-01-20T00:00:00Z"),
+      } as never,
       delivery: {} as never,
       order: null,
       biocharProduct: null,
@@ -697,6 +717,8 @@ describe("requiredTransportCategories", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
+        startTime: new Date("2026-01-05T00:00:00Z"),
         feedstockWetMassKg: 100,
         feedstockMoisturePercent: 10,
         biocharOutputKg: 40,
