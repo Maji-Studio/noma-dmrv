@@ -9,6 +9,7 @@ import {
 } from "@/data-access/certification-submissions";
 import { env } from "@/config/env";
 import { updateRemovalDates } from "@/data-access/certifier-removals";
+import { appliedBiocharFraction } from "@/lib/certification/mass-accounting";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { logger, type Logger } from "@/lib/log";
@@ -46,6 +47,10 @@ import {
   readRemovalDurabilityMeasurementSamples,
 } from "./durability-measurement-sample-snapshot";
 import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
+import {
+  assertNoForeignProductionClaims,
+  assertNoForeignProductionClaimsFresh,
+} from "./production-claim-gate";
 import {
   assertReportingWindowNotInverted,
   readRemovalReportingWindow,
@@ -353,22 +358,11 @@ export async function submitRemoval(
     throw new SafeError("This removal has no credit batches.");
   }
 
-  // §8.6.2 front-loading (issue #349, ADR 0020): a credit batch's
-  // production-bucket emissions submit exactly once. Unclaimed batches and
-  // batches claimed by THIS removal (resubmit/supersede) proceed; a batch
-  // claimed by a DIFFERENT removal fails closed — the delivery-only
-  // follow-up entry is gated behind issue #353. Runs BEFORE aggregation,
-  // the evidence ledgers, and every registry POST.
-  const foreignClaims = ctx.memberBatchClaims.filter(
-    (b) => b.claimedByRemovalId != null && b.claimedByRemovalId !== removalId,
-  );
-  if (foreignClaims.length > 0) {
-    throw new SafeError(
-      `Production emissions for ${foreignClaims.map((b) => b.code).join(", ")} ` +
-        "were already claimed by another removal (§8.6.2 front-loading). " +
-        "A delivery-only follow-up entry is not yet supported (issue #353).",
-    );
-  }
+  // §8.6.2 front-loading pre-flight (issue #349, ADR 0020): fail closed on a
+  // foreign production-bucket claim BEFORE aggregation, the evidence ledgers,
+  // and every registry POST. Re-asserted from a fresh read after the draft
+  // claim below — see production-claim-gate.ts for the TOCTOU rationale.
+  assertNoForeignProductionClaims(ctx.memberBatchClaims, removalId);
 
   const lineageWarnings: string[] = [];
   for (const lineage of ctx.lineages) {
@@ -436,17 +430,13 @@ export async function submitRemoval(
   }
 
   // DELIVERY bucket (§8.6.2): biochar transport scales with the applied share.
-  // Removal-wide fraction — the biochar legs are already lineage-scoped to this
-  // removal's applications; uniform scaling across legs is a documented
-  // approximation (per-delivery scoping needs the application→batch junction,
-  // deferred with issue #353). Zero/absent output falls back to full (1),
-  // mirroring buildMassAccounting's per-run fallback.
-  const appliedBiocharFraction =
-    ctx.runSummary.totalBiocharOutputKg > 0
-      ? ctx.runSummary.appliedDryKg / ctx.runSummary.totalBiocharOutputKg
-      : 1;
+  // Removal-wide fraction via the shared `appliedBiocharFraction` definition —
+  // the evidence-ledger PDF reconciles against the same one. The biochar legs
+  // are already lineage-scoped to this removal's applications; uniform scaling
+  // across legs is a documented approximation (per-delivery scoping needs the
+  // application→batch junction, deferred with issue #353).
   const transportAgg = enrichWithTransportLegs(baseAgg, ctx.transportLegs, {
-    appliedBiocharFraction,
+    appliedBiocharFraction: appliedBiocharFraction(ctx.runSummary),
   });
   // Pooling legs across member batches raises the chance of a mixed
   // method/factor — Isometric Transportation v1.1 §5 requires per-leg
@@ -724,6 +714,12 @@ export async function submitRemoval(
         version: claimed.version,
       };
     case "claimed": {
+      // §8.6.2 fresh-read re-assert (issue #349, ADR 0020): the blocking
+      // draft row now exists, so membership is frozen and no new foreign
+      // claim can appear — a foreign claim stamped between context load and
+      // this point is caught HERE, before any registry POST, instead of
+      // being silently no-opped by the guarded claim UPDATE after the POSTs.
+      await assertNoForeignProductionClaimsFresh(userId, removalId);
       if (claimed.reason === "rejected-hash-changed") {
         log.warn(
           { submissionId: claimed.row.id },

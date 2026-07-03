@@ -551,6 +551,17 @@ beforeEach(() => {
   vi.mocked(removalsDA.updateRemovalDates).mockResolvedValue(
     undefined as never,
   );
+  // §8.6.2 fresh-read re-assert (production-claim-gate): after the draft
+  // claim, submitRemoval re-reads the member batches' claim columns through
+  // getCreditBatchesByRemovalId. Default: unclaimed, matching makeContext;
+  // the TOCTOU test overrides this per-test.
+  vi.mocked(removalsDA.getCreditBatchesByRemovalId).mockResolvedValue([
+    {
+      id: CREDIT_BATCH_ID,
+      code: "CB-TEST-001",
+      productionEmissionsClaimedByRemovalId: null,
+    },
+  ] as never);
 
   vi.mocked(isometric.reconcileDatapoint).mockResolvedValue({ found: false });
   vi.mocked(isometric.reconcileRemoval).mockResolvedValue({ found: false });
@@ -1060,7 +1071,8 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
 
     // Second submit: the batch is now claimed by THIS removal (the first
     // submit stamped it) and the source mass changed → v=2 supersede. The
-    // self-claim must not block, and the claim arg rides again (idempotent
+    // self-claim must not block — in the pre-flight gate NOR the post-claim
+    // fresh-read re-assert — and the claim arg rides again (idempotent
     // guarded UPDATE on the data-access side).
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
       makeContext(CHANGED_BIOCHAR_MASS_KG, {
@@ -1073,6 +1085,13 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
         ],
       }),
     );
+    vi.mocked(removalsDA.getCreditBatchesByRemovalId).mockResolvedValue([
+      {
+        id: CREDIT_BATCH_ID,
+        code: "CB-TEST-001",
+        productionEmissionsClaimedByRemovalId: REMOVAL_ID,
+      },
+    ] as never);
 
     const second = await submitRemoval({
       userId: USER_ID,
@@ -1089,5 +1108,41 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
         creditBatchIds: [CREDIT_BATCH_ID],
       },
     });
+  });
+
+  it("re-asserts from a fresh read after the draft claim: a mid-flight foreign claim blocks before any POST", async () => {
+    // TOCTOU window: the pre-flight context still says unclaimed…
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    // …but by the time the draft row is claimed, the DB says a DIFFERENT
+    // removal stamped the batch (regroup + foreign submit in the window).
+    vi.mocked(removalsDA.getCreditBatchesByRemovalId).mockResolvedValue([
+      {
+        id: CREDIT_BATCH_ID,
+        code: "CB-TEST-001",
+        productionEmissionsClaimedByRemovalId: "rem-other",
+      },
+    ] as never);
+    const createDatapointFake = vi.fn(fakeExternalIds("dp"));
+    const createGhgEntryFake = vi.fn(fakeExternalIds("rmv"));
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      createDatapointFake as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      createGhgEntryFake as never,
+    );
+
+    await expect(
+      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+    ).rejects.toThrow(/already claimed/);
+    // Blocked AFTER the draft claim (the locked draft row exists, safe —
+    // pre-flight re-fires on retry once the lock TTL passes) but BEFORE any
+    // registry POST or ledger flip.
+    expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(createGhgEntryFake).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(1);
+    expect(storedRows[0].status).toBe("draft");
+    expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
   });
 });
