@@ -45,8 +45,8 @@ export type CurrencyCode = (typeof currencyCodes)[number];
  * 1. Overview — code, facilityId, startDate, endDate, status
  * 2. Production cohort — productionRunIds (membership via credit_batch_production_runs)
  * 3. Durability — durabilityOption toggle (200-year vs 1000-year) with conditional fields
- * 4. GHG Accounting — CO2e stored/emissions/counterfactual, buffer pool %
- * 5. Verification — registry, weight, value, currency
+ * 4. GHG Accounting — buffer pool % (CO2e figures are derived/registry-owned)
+ * 5. Verification — registry, value, currency (applied weight is derived)
  */
 export const creditBatchFormSchema = z
   .object({
@@ -105,21 +105,8 @@ export const creditBatchFormSchema = z
       .nullable(),
 
     // === Section 4: GHG Accounting ===
-    totalCo2eStoredTons: z
-      .number()
-      .min(0, "CO2e stored must be positive")
-      .optional()
-      .nullable(),
-    totalCo2eEmissionsTons: z
-      .number()
-      .min(0, "CO₂e emissions must be positive")
-      .optional()
-      .nullable(),
-    totalCo2eCounterfactualTons: z
-      .number()
-      .min(0, "CO₂e counterfactual must be positive")
-      .optional()
-      .nullable(),
+    // CO2e stored/emissions/counterfactual are derived or registry-owned
+    // (issue #285, ADR 0018) — no longer form inputs.
     bufferPoolPercent: z
       .number()
       .min(2, "Buffer pool must be at least 2%")
@@ -133,11 +120,6 @@ export const creditBatchFormSchema = z
       .max(100, "Registry must be less than 100 characters")
       .optional()
       .or(z.literal("")),
-    weightTons: z
-      .number()
-      .min(0, "Weight must be positive")
-      .optional()
-      .nullable(),
     value: z
       .number()
       .min(0, "Value must be positive")
@@ -203,12 +185,8 @@ export const updateCreditBatchSchema = z.object({
   meanNonReactiveCarbonPercent: z.number().min(0).max(100).optional().nullable(),
   stdNonReactiveCarbonPercent: z.number().min(0).optional().nullable(),
   fDurableCalculated: z.number().min(0).max(0.95).optional().nullable(),
-  totalCo2eStoredTons: z.number().min(0).optional().nullable(),
-  totalCo2eEmissionsTons: z.number().min(0).optional().nullable(),
-  totalCo2eCounterfactualTons: z.number().min(0).optional().nullable(),
   bufferPoolPercent: z.number().min(2).max(20).optional().nullable(),
   registry: z.string().max(100).optional().nullable(),
-  weightTons: z.number().min(0).optional().nullable(),
   value: z.number().min(0).optional().nullable(),
   currency: z.enum(currencyCodes).optional(),
   siteManagementNotes: z.string().max(2000).optional().nullable(),
