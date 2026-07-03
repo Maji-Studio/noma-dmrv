@@ -59,6 +59,8 @@ let runReB: string;
 let runReC: string;
 let runUpdate: string;
 let runMoveB: string;
+let runTier1000: string;
+let runTierFrom: string;
 
 const baseBatchData = {
   startDate: new Date("2025-06-01"),
@@ -162,7 +164,17 @@ beforeAll(async () => {
   const runRows = await db
     .insert(productionRuns)
     .values(
-      ["derive", "backfill", "reA", "reB", "reC", "update", "moveB"].map((tag, i) => ({
+      [
+        "derive",
+        "backfill",
+        "reA",
+        "reB",
+        "reC",
+        "update",
+        "moveB",
+        "tier1000",
+        "tierFrom",
+      ].map((tag, i) => ({
         code: `PR-SL-${tag}-${runId}`,
         facilityId,
         reactorId: reactor.id,
@@ -173,8 +185,17 @@ beforeAll(async () => {
       })),
     )
     .returning({ id: productionRuns.id });
-  [runDerive, runBackfill, runReA, runReB, runReC, runUpdate, runMoveB] =
-    runRows.map((r) => r.id);
+  [
+    runDerive,
+    runBackfill,
+    runReA,
+    runReB,
+    runReC,
+    runUpdate,
+    runMoveB,
+    runTier1000,
+    runTierFrom,
+  ] = runRows.map((r) => r.id);
   createdIds.productionRuns.push(...runRows.map((r) => r.id));
 
   // Every run needs a single-feedstock link for createCreditBatch's derivation.
@@ -298,6 +319,116 @@ describe("Sample side — anchor directly on the credit batch (issue #309)", () 
 
     await updateSample(TEST_USER_ID, sampleId, { creditBatchId: batchB.id });
     expect(await batchIdOfSample(sampleId)).toBe(batchB.id);
+  });
+});
+
+describe("Server-side 1000-year evidence guard — batch tier is source of truth (PR #336)", () => {
+  let tier1000BatchId: string;
+  let fromBatchId: string;
+
+  beforeAll(async () => {
+    const suffix = Date.now().toString(36);
+    const tier1000Batch = await createCreditBatch(TEST_USER_ID, {
+      ...baseBatchData,
+      durabilityOption: "1000_year" as const,
+      code: `CB-SL-T1000-${suffix}`,
+      facilityId,
+      productionRunIds: [runTier1000],
+    });
+    tier1000BatchId = tier1000Batch.id;
+    createdIds.creditBatches.push(tier1000Batch.id);
+
+    const fromBatch = await createCreditBatch(TEST_USER_ID, {
+      ...baseBatchData,
+      code: `CB-SL-TFROM-${suffix}`,
+      facilityId,
+      productionRunIds: [runTierFrom],
+    });
+    fromBatchId = fromBatch.id;
+    createdIds.creditBatches.push(fromBatch.id);
+  });
+
+  /** A replicate carrying the full 1000-year evidence set. */
+  function completeEvidence() {
+    return {
+      samplingTime: new Date("2025-06-15T10:00:00Z"),
+      totalCarbonPercent: 80,
+      organicCarbonPercent: 78,
+      randomReflectanceR0Percent: 2.1,
+      residualCarbonPercent: 65,
+    };
+  }
+
+  it("createSample rejects a 1000-year batch sample missing R₀ — regardless of the client-sent tier", async () => {
+    await expect(
+      createSample(TEST_USER_ID, {
+        sampleCode: `S-SL-NO-R0-${Date.now()}`,
+        creditBatchId: tier1000BatchId,
+        samplingTime: new Date("2025-06-15T10:00:00Z"),
+        totalCarbonPercent: 80,
+        organicCarbonPercent: 78,
+      }),
+    ).rejects.toThrow(/R₀ reflectance is required/);
+  });
+
+  it("createSample rejects a 1000-year batch sample with R₀ but no TGA data", async () => {
+    await expect(
+      createSample(TEST_USER_ID, {
+        sampleCode: `S-SL-NO-TGA-${Date.now()}`,
+        creditBatchId: tier1000BatchId,
+        samplingTime: new Date("2025-06-15T10:00:00Z"),
+        totalCarbonPercent: 80,
+        organicCarbonPercent: 78,
+        randomReflectanceR0Percent: 2.1,
+      }),
+    ).rejects.toThrow(/TGA non-reactive carbon data is required/);
+  });
+
+  it("createSample accepts a 1000-year batch sample carrying R₀ + TGA evidence", async () => {
+    const sample = await createSample(TEST_USER_ID, {
+      sampleCode: `S-SL-T1000-OK-${Date.now()}`,
+      creditBatchId: tier1000BatchId,
+      ...completeEvidence(),
+    });
+    createdIds.samples.push(sample.id);
+    expect(await batchIdOfSample(sample.id)).toBe(tier1000BatchId);
+  });
+
+  it("updateSample rejects moving an evidence-less sample onto a 1000-year batch", async () => {
+    const sampleId = await makeSample(fromBatchId, `S-SL-TMOVE-${Date.now()}`);
+    await expect(
+      updateSample(TEST_USER_ID, sampleId, { creditBatchId: tier1000BatchId }),
+    ).rejects.toThrow(/R₀ reflectance is required/);
+    expect(await batchIdOfSample(sampleId)).toBe(fromBatchId);
+  });
+
+  it("updateSample rejects nulling out R₀ in place on a 1000-year batch sample", async () => {
+    const sample = await createSample(TEST_USER_ID, {
+      sampleCode: `S-SL-TNULL-${Date.now()}`,
+      creditBatchId: tier1000BatchId,
+      ...completeEvidence(),
+    });
+    createdIds.samples.push(sample.id);
+
+    await expect(
+      updateSample(TEST_USER_ID, sample.id, {
+        randomReflectanceR0Percent: null,
+      }),
+    ).rejects.toThrow(/R₀ reflectance is required/);
+  });
+
+  it("updateSample still allows unrelated edits on a compliant 1000-year batch sample", async () => {
+    const sample = await createSample(TEST_USER_ID, {
+      sampleCode: `S-SL-TEDIT-${Date.now()}`,
+      creditBatchId: tier1000BatchId,
+      ...completeEvidence(),
+    });
+    createdIds.samples.push(sample.id);
+
+    const updated = await updateSample(TEST_USER_ID, sample.id, {
+      labName: "Tier Lab",
+    });
+    expect(updated.labName).toBe("Tier Lab");
   });
 });
 

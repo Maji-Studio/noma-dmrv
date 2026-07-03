@@ -50,26 +50,38 @@ export function resolveLatestApplicationTime(
 // Guards the window inversion BEFORE any registry POST — the local stamp's
 // `startedOn <= completedOn` DB check runs inside a best-effort write the
 // submit path swallows, so a back-dated application must fail loudly instead
-// of silently posting an inverted window to Isometric. Scans EVERY lineage,
-// not just the latest application: in a mixed removal a later valid
-// application would otherwise mask a backdated one (biochar cannot be applied
-// before its production started), which contradicts the fail-closed rule.
-// Compares at DATE granularity (what gets POSTed and stamped): form-entered
-// application dates are UTC midnight, so a millisecond comparison would
-// wrongly block a same-UTC-day application against a mid-day run start
-// (issue #320 caveat 4).
+// of silently posting an inverted window to Isometric. Compares each lineage
+// against ITS OWN production run's start, not the removal-wide earliest:
+// biochar cannot be applied before the run that produced it started, and in a
+// mixed removal an earlier sibling run would otherwise mask a lineage whose
+// application predates its own run (PR #336 second-pass review). Fails closed
+// on a lineage whose run start cannot be resolved. Compares at DATE
+// granularity (what gets POSTed and stamped): form-entered application dates
+// are UTC midnight, so a millisecond comparison would wrongly block a
+// same-UTC-day application against a mid-day run start (issue #320 caveat 4).
 export function assertReportingWindowNotInverted(args: {
-  lineages: { application: { applicationDate: Date; code: string } }[];
-  earliestStartTime: Date;
+  lineages: {
+    application: { applicationDate: Date; code: string };
+    productionRun: { id: string; code: string } | null;
+  }[];
+  runStartTimeByRunId: ReadonlyMap<string, Date>;
 }): void {
-  const { lineages, earliestStartTime } = args;
-  const earliestStartDate = formatUtcDate(earliestStartTime);
+  const { lineages, runStartTimeByRunId } = args;
   for (const lineage of lineages) {
+    const run = lineage.productionRun;
+    const runStartTime = run ? runStartTimeByRunId.get(run.id) : undefined;
+    if (!run || !runStartTime) {
+      throw new SafeError(
+        `Application ${lineage.application.code} has no resolvable production ` +
+          "run start — cannot validate the removal's reporting window.",
+      );
+    }
     const applicationDate = formatUtcDate(lineage.application.applicationDate);
-    if (applicationDate < earliestStartDate) {
+    const runStartDate = formatUtcDate(runStartTime);
+    if (applicationDate < runStartDate) {
       throw new SafeError(
         `Application ${lineage.application.code} is dated ${applicationDate}, ` +
-          `before the earliest production start ${earliestStartDate} — ` +
+          `before its production run ${run.code} started ${runStartDate} — ` +
           "correct the application date before submitting.",
       );
     }

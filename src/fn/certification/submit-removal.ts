@@ -436,7 +436,9 @@ export async function submitRemoval(
   const latestApplicationTime = resolveLatestApplicationTime(ctx.lineages);
   assertReportingWindowNotInverted({
     lineages: ctx.lineages,
-    earliestStartTime: agg.earliestStartTime,
+    runStartTimeByRunId: new Map(
+      ctx.runs.map((run) => [run.id, run.startTime]),
+    ),
   });
 
   // Non-blocking: surface (don't block on) submission advisories — e.g.
