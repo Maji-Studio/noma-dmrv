@@ -1,16 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildBatchSankey,
-  type SankeyBatchFacts,
-  type SankeyLineage,
-} from "./sankey";
-
-const NO_BATCH_FACTS: SankeyBatchFacts = {
-  ineligibleFeedstockMassKg: null,
-  totalCo2eStoredTons: null,
-  totalCo2eEmissionsTons: null,
-  totalCo2eCounterfactualTons: null,
-};
+import { buildBatchSankey, type SankeyLineage } from "./sankey";
 
 function lineage(overrides: Partial<SankeyLineage> = {}): SankeyLineage {
   return {
@@ -21,17 +10,25 @@ function lineage(overrides: Partial<SankeyLineage> = {}): SankeyLineage {
       biocharDryMassKg: 3_000,
     },
     biocharProduct: { id: "lot-1", massKg: 3_000 },
-    feedstocks: [{ id: "fs-1", massUsedKg: 10_000 }],
+    feedstocks: [
+      { id: "fs-1", massUsedKg: 10_000, eligibilityStatus: "eligible" },
+    ],
     ...overrides,
   };
 }
 
 describe("buildBatchSankey", () => {
   it("builds the four columns with labeled exits for a single lineage", () => {
-    const result = buildBatchSankey(
-      [lineage()],
-      { ...NO_BATCH_FACTS, ineligibleFeedstockMassKg: 1_000 },
-    );
+    // The ineligible exit derives from the lineage's own feedstock
+    // eligibility flags (issue #285) — no batch-level fact is passed in.
+    const result = buildBatchSankey([
+      lineage({
+        feedstocks: [
+          { id: "fs-1", massUsedKg: 9_000, eligibilityStatus: "eligible" },
+          { id: "fs-2", massUsedKg: 1_000, eligibilityStatus: "ineligible" },
+        ],
+      }),
+    ]);
 
     expect(result.columns.map((c) => c.key)).toEqual([
       "feedstock",
@@ -75,15 +72,18 @@ describe("buildBatchSankey", () => {
         biocharDryMassKg: 3_000,
       },
       biocharProduct: { id: "lot-1", massKg: 3_000 },
-      feedstocks: [{ id: "fs-1", massUsedKg: 10_000 }],
-    };
-    const result = buildBatchSankey(
-      [
-        lineage({ ...shared, application: { id: "app-1", biocharAppliedDryTons: 1 } }),
-        lineage({ ...shared, application: { id: "app-2", biocharAppliedDryTons: 1.5 } }),
+      feedstocks: [
+        {
+          id: "fs-1",
+          massUsedKg: 10_000,
+          eligibilityStatus: "eligible" as const,
+        },
       ],
-      NO_BATCH_FACTS,
-    );
+    };
+    const result = buildBatchSankey([
+      lineage({ ...shared, application: { id: "app-1", biocharAppliedDryTons: 1 } }),
+      lineage({ ...shared, application: { id: "app-2", biocharAppliedDryTons: 1.5 } }),
+    ]);
 
     // The shared run/lot/feedstock counts once; applications still sum.
     expect(result.columns[0]).toMatchObject({ massKg: 10_000, count: 1 });
@@ -92,32 +92,60 @@ describe("buildBatchSankey", () => {
     expect(result.columns[3]).toMatchObject({ massKg: 2_500, count: 2 });
   });
 
-  it("falls back to allocation records when a run has no recorded input mass", () => {
-    const result = buildBatchSankey(
-      [
-        lineage({
-          productionRun: {
-            id: "run-1",
-            feedstockMassDryKg: null,
-            biocharDryMassKg: 2_000,
-          },
-          feedstocks: [
-            { id: "fs-1", massUsedKg: 4_000 },
-            { id: "fs-2", massUsedKg: 3_000 },
-          ],
-        }),
+  it("dedupes the ineligible-feedstock exit for a run shared across applications", () => {
+    const shared = {
+      productionRun: {
+        id: "run-1",
+        feedstockMassDryKg: 10_000,
+        biocharDryMassKg: 3_000,
+      },
+      biocharProduct: { id: "lot-1", massKg: 3_000 },
+      feedstocks: [
+        {
+          id: "fs-1",
+          massUsedKg: 8_000,
+          eligibilityStatus: "eligible" as const,
+        },
+        {
+          id: "fs-2",
+          massUsedKg: 2_000,
+          eligibilityStatus: "ineligible" as const,
+        },
       ],
-      NO_BATCH_FACTS,
+    };
+    const result = buildBatchSankey([
+      lineage({ ...shared, application: { id: "app-1", biocharAppliedDryTons: 1 } }),
+      lineage({ ...shared, application: { id: "app-2", biocharAppliedDryTons: 1 } }),
+    ]);
+
+    // The shared run's ineligible allocation counts once, not per application.
+    expect(result.exits).toContainEqual(
+      expect.objectContaining({ key: "ineligible_feedstock", massKg: 2_000 }),
     );
+  });
+
+  it("falls back to allocation records when a run has no recorded input mass", () => {
+    const result = buildBatchSankey([
+      lineage({
+        productionRun: {
+          id: "run-1",
+          feedstockMassDryKg: null,
+          biocharDryMassKg: 2_000,
+        },
+        feedstocks: [
+          { id: "fs-1", massUsedKg: 4_000, eligibilityStatus: "eligible" },
+          { id: "fs-2", massUsedKg: 3_000, eligibilityStatus: null },
+        ],
+      }),
+    ]);
 
     expect(result.columns[0]).toMatchObject({ massKg: 7_000, count: 2 });
   });
 
   it("emits an unallocated-output exit when run output never reaches a lot", () => {
-    const result = buildBatchSankey(
-      [lineage({ biocharProduct: { id: "lot-1", massKg: 2_200 } })],
-      NO_BATCH_FACTS,
-    );
+    const result = buildBatchSankey([
+      lineage({ biocharProduct: { id: "lot-1", massKg: 2_200 } }),
+    ]);
 
     expect(result.exits).toContainEqual(
       expect.objectContaining({ key: "unallocated_output", massKg: 800 }),
@@ -125,20 +153,21 @@ describe("buildBatchSankey", () => {
   });
 
   it("clamps inconsistent residuals to zero and warns instead of hiding them", () => {
-    const result = buildBatchSankey(
-      [
-        lineage({
-          application: { id: "app-1", biocharAppliedDryTons: 5 }, // > lot mass
-          productionRun: {
-            id: "run-1",
-            feedstockMassDryKg: 1_000,
-            biocharDryMassKg: 3_000, // > input
-          },
-          biocharProduct: { id: "lot-1", massKg: 4_000 }, // > run output
-        }),
-      ],
-      { ...NO_BATCH_FACTS, ineligibleFeedstockMassKg: 2_000 }, // > input
-    );
+    const result = buildBatchSankey([
+      lineage({
+        application: { id: "app-1", biocharAppliedDryTons: 5 }, // > lot mass
+        productionRun: {
+          id: "run-1",
+          feedstockMassDryKg: 1_000,
+          biocharDryMassKg: 3_000, // > input
+        },
+        biocharProduct: { id: "lot-1", massKg: 4_000 }, // > run output
+        feedstocks: [
+          // Ineligible allocation exceeds the run's recorded input mass.
+          { id: "fs-1", massUsedKg: 2_000, eligibilityStatus: "ineligible" },
+        ],
+      }),
+    ]);
 
     expect(result.exits).toContainEqual(
       expect.objectContaining({ key: "ineligible_feedstock", massKg: 1_000 }),
@@ -151,28 +180,18 @@ describe("buildBatchSankey", () => {
     expect(result.warnings).toHaveLength(4);
   });
 
-  it("derives the net tCO2e label only when stored tons are recorded", () => {
-    expect(buildBatchSankey([], NO_BATCH_FACTS).netCo2eRemovalTons).toBeNull();
-    expect(
-      buildBatchSankey([], {
-        ...NO_BATCH_FACTS,
-        totalCo2eStoredTons: 10,
-        totalCo2eEmissionsTons: 2,
-        totalCo2eCounterfactualTons: 0.5,
-      }).netCo2eRemovalTons,
-    ).toBe(7.5);
+  it("always reports a null net tCO2e label (registry-owned figures, ADR 0018)", () => {
+    expect(buildBatchSankey([]).netCo2eRemovalTons).toBeNull();
+    expect(buildBatchSankey([lineage()]).netCo2eRemovalTons).toBeNull();
   });
 
   it("handles lineages that stop at product level (no production run)", () => {
-    const result = buildBatchSankey(
-      [
-        lineage({
-          productionRun: null,
-          feedstocks: [],
-        }),
-      ],
-      NO_BATCH_FACTS,
-    );
+    const result = buildBatchSankey([
+      lineage({
+        productionRun: null,
+        feedstocks: [],
+      }),
+    ]);
 
     expect(result.columns[0]).toMatchObject({ massKg: 0, count: 0 });
     expect(result.columns[1]).toMatchObject({ massKg: 0, count: 0 });

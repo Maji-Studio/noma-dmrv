@@ -82,6 +82,7 @@ const EXTERNAL_PROJECT_ID = "prj_test";
 const APPLICATION_FOR_PR_1 = {
   applicationId: "app-1",
   productionRunId: "pr-1",
+  biocharAppliedTons: 1,
 };
 
 function mapping(
