@@ -7,6 +7,7 @@
  */
 
 import { z } from "zod";
+import { PG_INTEGER_MAX } from "./helpers";
 
 // ============================================
 // Constants
@@ -123,8 +124,12 @@ export const sampleFormSchema = z
     // R₀ reflectance (required for 1000-year)
     randomReflectanceR0Percent: optionalNumber,
     r0MeasurementCount: z.union([
-      z.number().int().min(0),
-      z.string().transform((val) => (val === "" ? null : parseInt(val, 10))),
+      z.number().int().min(0).max(PG_INTEGER_MAX, "Measurement count is too large"),
+      z.string()
+        .transform((val) => (val === "" ? null : parseInt(val, 10)))
+        .pipe(
+          z.number().int().min(0).max(PG_INTEGER_MAX, "Measurement count is too large").nullable(),
+        ),
       z.null(),
     ]).optional().nullable(),
     r0AnalysisDate: z.union([
@@ -254,7 +259,7 @@ export const updateSampleSchema = z.object({
   oToCOrgRatio: z.number().optional().nullable(),
   durabilityOption: z.enum(["200_year", "1000_year"]).optional(),
   randomReflectanceR0Percent: z.number().optional().nullable(),
-  r0MeasurementCount: z.number().int().optional().nullable(),
+  r0MeasurementCount: z.number().int().min(0).max(PG_INTEGER_MAX, "Measurement count is too large").optional().nullable(),
   r0AnalysisDate: z.union([z.date(), z.string(), z.null()]).optional().nullable(),
   r0HistogramFileUrl: z.string().max(2000).optional().nullable(),
   reactiveCarbonPercent: z.number().optional().nullable(),

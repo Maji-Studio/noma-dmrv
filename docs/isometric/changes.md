@@ -58,6 +58,36 @@ Decision recorded as an amendment to
 - **Out of scope** — wood/kg-metered fuels (`fuel_usage_by_mass`, #319b);
   dropping `certifier_projects.genset_energy_yield_kwh_per_litre`.
 
+## 2026-07-03 (issue #320 — removal period end anchored to biochar application date)
+
+Biochar protocol v1.3 §8.6.2: the Reporting Period "ends upon application of
+biochar from that batch at the storage site" — a batch produced in Q1 but
+applied in Q2 belongs to the Q2 GHG Statement.
+
+- **`completed_on` = MAX(`applications.application_date`) across the removal's
+  lineages** (`resolveLatestApplicationTime` in
+  `fn/certification/removal-reporting-window.ts`); `buildCreateGhgEntryRequest` now takes
+  an explicit `reportingWindow` instead of the production aggregation. Fails
+  closed on an empty lineage list — no fallback to production end anywhere.
+- **`measured_at` (durability measurement samples) and the sensor-telemetry
+  window keep production-run semantics** — `agg.latestEndTime` still feeds
+  them; only the GHG-entry dates, the semantic hash, and the local
+  `certifier_removals.startedOn/completedOn` stamp moved.
+- **Hash-covered ⇒ supersede:** the new `completedOn` is part of the semantic
+  payload hash, so resubmitting an already-submitted removal creates a new
+  version that supersedes the production-end-dated one (intended one-time
+  correction wave). Pre-#320 locked drafts resume with their snapshot's
+  production-end window by design.
+- **Inversion guard:** an application dated before the earliest production
+  start blocks the submit with an actionable SafeError (before any POST), so
+  the DB `startedOn <= completedOn` check can never be tripped by the
+  best-effort local stamp.
+- **Straddle advisory (non-blocking):** `buildSubmissionWarnings` warns when
+  the UTC month of the earliest run start differs from the latest application
+  month — §8.6.2 attributes operations emissions to the period they occur in.
+- The live behaviour flip stays gated behind the issue's two sandbox confirms
+  (statement-membership inequality + `reporting_period_start_at` derivation).
+
 ## 2026-07-02 (ADR 0018 — project-emissions journal removed)
 
 Executes the approved removal plan

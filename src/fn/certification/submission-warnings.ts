@@ -36,19 +36,63 @@ function templateCarriesRunDiesel(
   );
 }
 
-// Non-blocking submission advisories surfaced at readiness AND logged at submit.
-// Currently the only one: recorded diesel (genset or startup/preprocessing) with
-// no monitored pyrolysis `fuel_usage_by_volume / volume_of_fuel` input to carry
-// it (issue #319). Run-level presence is the right signal — attribution only
-// scales the figure down, so "any run recorded diesel" captures "the operator
-// entered a value that won't submit".
+// UTC year-month key ("YYYY-MM") — the reporting window is compared at month
+// grain because a noma Removal defaults to a one-RP-month batch (ADR 0016).
+function utcMonth(date: Date): string {
+  return date.toISOString().slice(0, 7);
+}
+
+// §8.6.2 anchors the removal's period end to the latest biochar application
+// (issue #320), so a batch produced in one month but applied in a later one
+// stretches the window across months — operations emissions "must be
+// attributed to the Reporting Period in which they occur", so surface the
+// straddle as an advisory (non-blocking; splitting is the operator's call).
+function buildStraddleWarning(args: {
+  runs: ProductionRunWithSamples[];
+  lineages: { application: { applicationDate: Date } }[];
+}): string[] {
+  const { runs, lineages } = args;
+  if (runs.length === 0 || lineages.length === 0) return [];
+  const earliestStart = runs.reduce(
+    (earliest, run) => (run.startTime < earliest ? run.startTime : earliest),
+    runs[0].startTime,
+  );
+  const latestApplication = lineages.reduce(
+    (latest, lineage) =>
+      lineage.application.applicationDate > latest
+        ? lineage.application.applicationDate
+        : latest,
+    lineages[0].application.applicationDate,
+  );
+  const startMonth = utcMonth(earliestStart);
+  const applicationMonth = utcMonth(latestApplication);
+  if (startMonth === applicationMonth) return [];
+  return [
+    `Reporting window spans multiple months (production started ${startMonth}, ` +
+      `latest application ${applicationMonth}); §8.6.2 attributes operations ` +
+      "emissions to the period they occur in — consider splitting the removal.",
+  ];
+}
+
+// Non-blocking submission advisories surfaced at readiness AND logged at submit:
+//   1. Recorded diesel (genset or startup/preprocessing) with no monitored
+//      pyrolysis `fuel_usage_by_volume / volume_of_fuel` input to carry it
+//      (issue #319). Run-level presence is the right signal — attribution
+//      only scales the figure down, so "any run recorded diesel" captures
+//      "the operator entered a value that won't submit".
+//   2. A reporting window straddling a month boundary (issue #320) —
+//      independent of the template, since it is a property of the lineage
+//      dates alone.
 export function buildSubmissionWarnings(args: {
   defaultTemplate: IsometricGhgEntryTemplate | null;
   runs: ProductionRunWithSamples[];
+  lineages: { application: { applicationDate: Date } }[];
 }): string[] {
-  const { defaultTemplate, runs } = args;
-  if (!defaultTemplate) return [];
-  if (templateCarriesRunDiesel(defaultTemplate)) return [];
+  const { defaultTemplate, runs, lineages } = args;
+  const warnings = buildStraddleWarning({ runs, lineages });
+  if (!defaultTemplate || templateCarriesRunDiesel(defaultTemplate)) {
+    return warnings;
+  }
   const hasDiesel = runs.some(
     (run) =>
       (run.dieselOperationLiters ?? 0) +
@@ -56,5 +100,5 @@ export function buildSubmissionWarnings(args: {
         (run.dieselGensetLiters ?? 0) >
       0,
   );
-  return hasDiesel ? [DIESEL_UNMAPPED_WARNING] : [];
+  return hasDiesel ? [DIESEL_UNMAPPED_WARNING, ...warnings] : warnings;
 }

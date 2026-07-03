@@ -340,6 +340,10 @@ function makeContext(
         application: {
           id: "app-bd-1",
           code: "APP-BD-001",
+          // §8.6.2 (issue #320): submitRemoval derives the window end from
+          // this; keep it at the run end so the boundary tests' window is
+          // unchanged.
+          applicationDate: new Date("2026-01-31T23:59:59Z"),
           biocharAppliedDryTons: biocharMassKg / 1000,
         } as never,
         delivery: { id: "del-bd-1" } as never,

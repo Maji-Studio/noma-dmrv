@@ -20,6 +20,18 @@ import {
   updateApplicationSchema,
   deleteApplicationSchema,
 } from "@/schemas/applications";
+import { toLoggedActionError } from "./action-errors";
+
+function applicationActionError(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): string {
+  return toLoggedActionError(error, fallbackMessage, {
+    message: "application action failed",
+    context: { op },
+  });
+}
 
 const getApplicationsOptionsSchema = z.object({
   page: z.number().int().min(1).optional(),
@@ -43,10 +55,13 @@ export async function getApplicationsFn(
     const result = await getApplicationsData(user.id, validatedOptions);
     return { success: true, data: result };
   } catch (error) {
-    console.error("Failed to get applications:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to get applications",
+      error: applicationActionError(
+        error,
+        "Failed to get applications",
+        "application:list",
+      ),
     };
   }
 }
@@ -68,7 +83,11 @@ export async function getApplicationDeliveryOptionsFn(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load application deliveries",
+      error: applicationActionError(
+        error,
+        "Failed to load application deliveries",
+        "application:delivery-options",
+      ),
     };
   }
 }
@@ -92,10 +111,13 @@ export async function getApplicationByIdFn(
 
     return { success: true, data: application };
   } catch (error) {
-    console.error("Failed to get application:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to get application",
+      error: applicationActionError(
+        error,
+        "Failed to get application",
+        "application:get",
+      ),
     };
   }
 }
@@ -124,7 +146,6 @@ export async function createApplicationFn(
 
     return { success: true, data: application };
   } catch (error) {
-    console.error("Failed to create application:", error);
     if (error instanceof z.ZodError) {
       return {
         success: false,
@@ -133,7 +154,11 @@ export async function createApplicationFn(
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to create application",
+      error: applicationActionError(
+        error,
+        "Failed to create application",
+        "application:create",
+      ),
     };
   }
 }
@@ -173,7 +198,6 @@ export async function updateApplicationFn(
     const application = await updateApplicationData(user.id, applicationId, updateData);
     return { success: true, data: application };
   } catch (error) {
-    console.error("Failed to update application:", error);
     if (error instanceof z.ZodError) {
       return {
         success: false,
@@ -182,7 +206,11 @@ export async function updateApplicationFn(
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to update application",
+      error: applicationActionError(
+        error,
+        "Failed to update application",
+        "application:update",
+      ),
     };
   }
 }
@@ -210,7 +238,6 @@ export async function deleteApplicationFn(
     await deleteApplicationData(user.id, validated.applicationId);
     return { success: true, data: undefined };
   } catch (error) {
-    console.error("Failed to delete application:", error);
     if (error instanceof z.ZodError) {
       return {
         success: false,
@@ -219,7 +246,11 @@ export async function deleteApplicationFn(
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to delete application",
+      error: applicationActionError(
+        error,
+        "Failed to delete application",
+        "application:delete",
+      ),
     };
   }
 }

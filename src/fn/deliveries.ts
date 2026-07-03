@@ -110,7 +110,11 @@ export async function getDeliveriesFn(
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load deliveries",
+      error: deliveryActionError(
+        error,
+        "Failed to load deliveries",
+        "delivery:list",
+      ),
     };
   }
 }
@@ -132,7 +136,11 @@ export async function getDeliveryByIdFn(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load delivery",
+      error: deliveryActionError(
+        error,
+        "Failed to load delivery",
+        "delivery:get",
+      ),
     };
   }
 }
@@ -154,8 +162,11 @@ export async function getDeliveryWithRelationsFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load delivery details",
+      error: deliveryActionError(
+        error,
+        "Failed to load delivery details",
+        "delivery:detail",
+      ),
     };
   }
 }
@@ -177,8 +188,11 @@ export async function getDeliveryStatsFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load delivery stats",
+      error: deliveryActionError(
+        error,
+        "Failed to load delivery stats",
+        "delivery:stats",
+      ),
     };
   }
 }
@@ -210,10 +224,11 @@ export async function getDeliveriesForSelectFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to load deliveries for select",
+      error: deliveryActionError(
+        error,
+        "Failed to load deliveries for select",
+        "delivery:select-options",
+      ),
     };
   }
 }
@@ -240,8 +255,11 @@ export async function checkDeliveryCodeFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to check delivery code",
+      error: deliveryActionError(
+        error,
+        "Failed to check delivery code",
+        "delivery:check-code",
+      ),
     };
   }
 }

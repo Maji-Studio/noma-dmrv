@@ -56,6 +56,14 @@ const baseAgg: AggregatedProductionData = {
   warnings: [],
 };
 
+// The §8.6.2 reporting window `buildCreateGhgEntryRequest` consumes (issue
+// #320): starts with production, ends at the latest biochar application. The
+// orchestrator derives it; the transformer just formats it.
+const baseReportingWindow = {
+  startedOn: new Date("2026-01-01T00:00:00Z"),
+  completedOn: new Date("2026-01-31T23:59:59Z"),
+};
+
 function blueprintInput(
   overrides: Partial<ComponentBlueprintInput>,
 ): ComponentBlueprintInput {
@@ -446,7 +454,7 @@ describe("buildCreateGhgEntryRequest", () => {
       template: tmpl,
       blueprintsByKey: blueprints,
       datapointIdsByRtcInput: datapointIds,
-      agg: baseAgg,
+      reportingWindow: baseReportingWindow,
       projectId: PROJECT_ID,
       supplierRefId: SUPPLIER_REF,
     });
@@ -485,7 +493,7 @@ describe("buildCreateGhgEntryRequest", () => {
       template: tmpl,
       blueprintsByKey: blueprints,
       datapointIdsByRtcInput: datapointIds,
-      agg: baseAgg,
+      reportingWindow: baseReportingWindow,
       projectId: PROJECT_ID,
       supplierRefId: SUPPLIER_REF,
     });
@@ -518,7 +526,7 @@ describe("buildCreateGhgEntryRequest", () => {
       template: tmpl,
       blueprintsByKey: blueprints,
       datapointIdsByRtcInput: datapointIds,
-      agg: baseAgg,
+      reportingWindow: baseReportingWindow,
       projectId: PROJECT_ID,
       supplierRefId: SUPPLIER_REF,
     });
@@ -537,7 +545,7 @@ describe("buildCreateGhgEntryRequest", () => {
         template: tmpl,
         blueprintsByKey: new Map(),
         datapointIdsByRtcInput: new Map(),
-        agg: baseAgg,
+        reportingWindow: baseReportingWindow,
         projectId: PROJECT_ID,
         supplierRefId: SUPPLIER_REF,
       }),
@@ -559,7 +567,7 @@ describe("buildCreateGhgEntryRequest", () => {
         template: tmpl,
         blueprintsByKey: blueprints,
         datapointIdsByRtcInput: new Map(),
-        agg: baseAgg,
+        reportingWindow: baseReportingWindow,
         projectId: PROJECT_ID,
         supplierRefId: SUPPLIER_REF,
       }),
@@ -577,7 +585,7 @@ describe("buildCreateGhgEntryRequest", () => {
         template: tmpl,
         blueprintsByKey: blueprints,
         datapointIdsByRtcInput: new Map(),
-        agg: baseAgg,
+        reportingWindow: baseReportingWindow,
         projectId: PROJECT_ID,
         supplierRefId: SUPPLIER_REF,
       }),
@@ -592,10 +600,9 @@ describe("buildCreateGhgEntryRequest", () => {
       template: tmpl,
       blueprintsByKey: new Map([["mass_blueprint", blueprintMass]]),
       datapointIdsByRtcInput: new Map([["rtc_A::mass", "dtp_1"]]),
-      agg: {
-        ...baseAgg,
-        earliestStartTime: new Date("2026-03-15T08:30:45Z"),
-        latestEndTime: new Date("2026-04-02T17:00:00Z"),
+      reportingWindow: {
+        startedOn: new Date("2026-03-15T08:30:45Z"),
+        completedOn: new Date("2026-04-02T17:00:00Z"),
       },
       projectId: PROJECT_ID,
       supplierRefId: SUPPLIER_REF,

@@ -27,6 +27,18 @@ import {
   formulationFilterSchema,
 } from "@/schemas/formulations";
 import type { ActionResult } from "@/types/actions";
+import { toLoggedActionError } from "./action-errors";
+
+function formulationActionError(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): string {
+  return toLoggedActionError(error, fallbackMessage, {
+    message: "formulation action failed",
+    context: { op },
+  });
+}
 
 // ============================================
 // Formulation List/Query Operations
@@ -59,8 +71,11 @@ export async function getFormulationsFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load formulations",
+      error: formulationActionError(
+        error,
+        "Failed to load formulations",
+        "formulation:list",
+      ),
     };
   }
 }
@@ -82,7 +97,11 @@ export async function getFormulationByIdFn(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load formulation",
+      error: formulationActionError(
+        error,
+        "Failed to load formulation",
+        "formulation:get",
+      ),
     };
   }
 }
@@ -104,8 +123,11 @@ export async function getFormulationOptionsFn(): Promise<
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load formulation options",
+      error: formulationActionError(
+        error,
+        "Failed to load formulation options",
+        "formulation:options",
+      ),
     };
   }
 }
@@ -132,10 +154,11 @@ export async function checkFormulationCodeFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to check formulation code",
+      error: formulationActionError(
+        error,
+        "Failed to check formulation code",
+        "formulation:check-code",
+      ),
     };
   }
 }
@@ -186,8 +209,11 @@ export async function createFormulationFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to create formulation",
+      error: formulationActionError(
+        error,
+        "Failed to create formulation",
+        "formulation:create",
+      ),
     };
   }
 }
@@ -231,8 +257,11 @@ export async function updateFormulationFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to update formulation",
+      error: formulationActionError(
+        error,
+        "Failed to update formulation",
+        "formulation:update",
+      ),
     };
   }
 }
@@ -266,8 +295,11 @@ export async function deleteFormulationFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to delete formulation",
+      error: formulationActionError(
+        error,
+        "Failed to delete formulation",
+        "formulation:delete",
+      ),
     };
   }
 }
