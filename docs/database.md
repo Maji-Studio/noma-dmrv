@@ -163,6 +163,8 @@ Recent notable migrations:
 | `0047_unify-formulation-feedstock-types` | Migrates formulation ingredients to blend-usage feedstock types. |
 | `0048_application-evidence-method` | Adds application evidence method and backfills boundary references. |
 | `0049_backfill_facility_timezone` | Backfills and enforces non-null facility timezone with `UTC` default. |
+| `0066_silent_swarm` | Converts 44 credit-bearing columns across 12 tables (masses, CO2e, contaminant ppm, ratios, percents) from `real` to exact `numeric(p,s)` families, so verifier-facing figures can't drift from float rounding (issue #280). Telemetry and lab-characterization columns stay `real`. |
+| `0067_long_mephistopheles` | Drops the six stored `credit_batches` aggregate columns (applied weight, CO2e stored/emissions/counterfactual, feedstock mass, ineligible feedstock mass) and their CHECK constraints — replaced by read-time derivation (ADR 0019). |
 
 When a migration is destructive, document the rationale in the related feature doc or `docs/open-questions.md` if the dropped surface may return later.
 

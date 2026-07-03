@@ -53,6 +53,21 @@ Never log:
 - password/token values
 - API keys/secrets
 
+## Server-Action Error Handling
+
+Raw Drizzle/Postgres error text (SQL plus bound parameter values) must never
+reach the client — bound values are arbitrary user-entered data (names,
+addresses, …) and can themselves be PII. `fn/` catch blocks route unexpected
+errors through `toLoggedActionError` (`src/fn/action-errors.ts`): the real
+error is logged server-side via the structured logger, and the client only
+ever receives a `SafeError` or Zod validation message, or a generic fallback
+otherwise. `sanitizeErrorMessage` (`src/lib/log`) additionally redacts
+everything from a query's `params:` marker onward before logging, so bound
+values never land in server logs either — only the parameterized SQL shape
+is kept for debuggability. Numeric Zod fields are capped at `PG_INTEGER_MAX`
+(`src/schemas/helpers`) so integer overflow can't itself trigger a raw DB
+error.
+
 ## Operational Defaults
 
 - Better Auth rate limits are enabled with stricter rules for auth-sensitive endpoints.

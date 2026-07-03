@@ -11,8 +11,8 @@ result, and submits it to the Isometric carbon registry for verification.
 **Process stage**:
 One of the three phases of the biochar workflow — *pre-processing*
 (biomass preparation), *pyrolysis*, and *post-processing* (biochar
-processing). Operators do not meter energy separately per stage; the
-per-stage split is an estimate.
+processing). Operators do not meter energy separately per stage — all
+energy is recorded once per production run, with no per-stage split.
 _Avoid_: phase, step.
 
 **Production run**:
@@ -40,24 +40,22 @@ the diesel consumed in **litres**; genset energy in kWh is derived from
 litres via a per-facility conversion yield.
 _Avoid_: generator power, backup power.
 
-**Reactor-day file**:
-The telemetry export unit the PLC logger produces — one CSV per
-reactor per calendar day, minute-interval rows keyed by time-of-day
-only, with the reactor code and date carried in the filename. A
-production run's readings are the slice of one or more reactor-day
-files inside the run's window.
-_Avoid_: sensor dump, log file.
-
-**Channel mapping**:
-The per-reactor declaration of which **reactor-day file** column feeds
-each protocol-relevant reading — temperature, pressure, gas flow. Set
-once per reactor, re-confirmed only when a file's header drifts from
-it; an import never proceeds on a guessed mapping.
-_Avoid_: column config, CSV schema.
+**Readings file**:
+The telemetry export operators upload per reactor — a CSV with a
+canonical **UTC** timestamp on every row (required: timestamp,
+temperature, pressure; optional: dryer/reactor frequency), matched
+directly by header name, so one file can span multiple days. A
+production run's readings are the slice of one or more readings files
+inside the run's window. Replaces the older reactor-day format
+(filename-encoded date, local time-of-day rows, and a per-reactor
+**channel mapping** step declaring which column fed which reading) —
+the canonical header does that job now, so no per-reactor mapping is
+declared or stored.
+_Avoid_: sensor dump, log file, reactor-day file, channel mapping.
 
 **Emission estimate**:
-A per-facility configured value (genset yield, stage-split percentages,
-default soil temperature) used to derive submission data noma does not
+A per-facility configured value (genset yield, default soil
+temperature) used to derive submission data noma does not
 measure directly. Distinct from a measured value.
 
 ### Materials & formulation
