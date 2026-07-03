@@ -316,13 +316,14 @@ export async function getStorageLocations(params: {
       r.type,
       r.heldFeedstockTypeName ?? r.feedstockTypeName,
       r.heldFeedstockTypeUsage,
-      r.totalStoredKg,
-      r.pendingStoredKg,
-      r.totalConsumedKg,
-      r.totalProducedKg,
-      r.totalAllocatedKg,
-      r.totalProductKg,
-      r.biocharEquivalentKg,
+      // Raw SQL aggregates over numeric columns arrive as strings — coerce at the boundary.
+      Number(r.totalStoredKg),
+      Number(r.pendingStoredKg),
+      Number(r.totalConsumedKg),
+      Number(r.totalProducedKg),
+      Number(r.totalAllocatedKg),
+      Number(r.totalProductKg),
+      Number(r.biocharEquivalentKg),
       r.formulationName
     ),
   }));
@@ -388,13 +389,14 @@ export async function getStorageLocationById(
       result.type,
       result.heldFeedstockTypeName ?? result.feedstockTypeName,
       result.heldFeedstockTypeUsage,
-      result.totalStoredKg,
-      result.pendingStoredKg,
-      result.totalConsumedKg,
-      result.totalProducedKg,
-      result.totalAllocatedKg,
-      result.totalProductKg,
-      result.biocharEquivalentKg,
+      // Raw SQL aggregates over numeric columns arrive as strings — coerce at the boundary.
+      Number(result.totalStoredKg),
+      Number(result.pendingStoredKg),
+      Number(result.totalConsumedKg),
+      Number(result.totalProducedKg),
+      Number(result.totalAllocatedKg),
+      Number(result.totalProductKg),
+      Number(result.biocharEquivalentKg),
       result.formulationName
     ),
   };
