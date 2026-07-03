@@ -146,6 +146,18 @@ describe("computeFDurable1000 (Eq.6)", () => {
     expect(r.durabilityCapped).toBe(false);
   });
 
+  it("floors at 0 when BOTH terms are negative (sign cancellation must not bypass the floor)", () => {
+    // (0.2 − 0.5) × (3 − 10)/100 = (−0.3) × (−0.07) = +0.021 without per-factor clamping
+    const r = computeFDurable1000({
+      meanRandomReflectancePercent: 0.2,
+      stdRandomReflectance: 0.5,
+      meanNonReactiveCarbonPercent: 3,
+      stdNonReactiveCarbonPercent: 10,
+    });
+    expect(r.fDurable).toBe(0);
+    expect(r.durabilityCapped).toBe(false);
+  });
+
   it("caps at 0.95 for Table-3-magnitude reflectance values (mandatory min(0.95, …))", () => {
     // (2.8 − 0.3) × (68 − 2)/100 = 2.5 × 0.66 = 1.65 → capped
     const r = computeFDurable1000({

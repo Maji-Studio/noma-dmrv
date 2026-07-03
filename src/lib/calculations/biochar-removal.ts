@@ -222,14 +222,20 @@ export interface FDurable1000Result {
  * ──────────────────────────────────────────────────────────────────────────────
  */
 export function computeFDurable1000(input: FDurable1000Input): FDurable1000Result {
-  const reflectanceTerm =
-    input.meanRandomReflectancePercent - input.stdRandomReflectance;
-  const nonReactiveCarbonFraction =
+  // Clamp each factor at 0 BEFORE multiplying: if both terms are negative the
+  // signs would cancel and a spurious positive product would slip past the
+  // mandatory max(0, …) floor (the input schemas only enforce per-field min(0)).
+  const reflectanceTerm = Math.max(
+    0,
+    input.meanRandomReflectancePercent - input.stdRandomReflectance,
+  );
+  const nonReactiveCarbonFraction = Math.max(
+    0,
     (input.meanNonReactiveCarbonPercent - input.stdNonReactiveCarbonPercent) /
-    PERCENT_DENOMINATOR;
+      PERCENT_DENOMINATOR,
+  );
 
-  const raw = reflectanceTerm * nonReactiveCarbonFraction;
-  const floored = Math.max(0, raw);
+  const floored = reflectanceTerm * nonReactiveCarbonFraction;
   const durabilityCapped = floored > F_DURABLE_1000_CAP;
   const fDurable = Math.min(F_DURABLE_1000_CAP, floored);
 
