@@ -325,6 +325,19 @@ export function ApplicationForm({
   const availableKg = deliveryCapacityKg !== null ? deliveryCapacityKg - alreadyApplied + currentApplicationKg : null;
 
   const handleFormSubmit = handleSubmit(async (data) => {
+    // Custody ordering (issue #284): the server rejects this too — but a
+    // legacy application can still reference an undelivered delivery (the
+    // option is disabled yet survives edit-mode defaults), so surface a
+    // field error instead of a generic server error.
+    if (selectedDelivery && selectedDelivery.status !== "delivered") {
+      setError("deliveryId", {
+        type: "manual",
+        message:
+          "This delivery has not been delivered yet — mark it as delivered before recording an application",
+      });
+      return;
+    }
+
     // Custody ordering (issue #284): the server rejects this too — surface a
     // field error here instead of a generic server error. Day-string compare
     // keeps both sides on local-date granularity.
