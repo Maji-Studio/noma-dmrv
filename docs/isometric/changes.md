@@ -21,7 +21,7 @@ applied in Q2 belongs to the Q2 GHG Statement.
 
 - **`completed_on` = MAX(`applications.application_date`) across the removal's
   lineages** (`resolveLatestApplicationTime` in
-  `fn/certification/submit-removal.ts`); `buildCreateGhgEntryRequest` now takes
+  `fn/certification/removal-reporting-window.ts`); `buildCreateGhgEntryRequest` now takes
   an explicit `reportingWindow` instead of the production aggregation. Fails
   closed on an empty lineage list — no fallback to production end anywhere.
 - **`measured_at` (durability measurement samples) and the sensor-telemetry
