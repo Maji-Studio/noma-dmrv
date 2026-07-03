@@ -1,7 +1,6 @@
 import {
   markSubmissionSubmitted,
   type CertificationSubmissionRow,
-  type CertifierProjectRow,
 } from "@/data-access/certification";
 import {
   claimSubmissionDraft,
@@ -19,13 +18,12 @@ import {
   buildRemovalSupplierRef,
   createDatapoint,
   createGhgEntry,
-  enrichWithFacilityConfig,
   enrichWithTransportLegs,
   payloadHash,
   reconcileDatapoint,
   reconcileRemoval,
+  type AggregatedProductionData,
   type CreateDatapointRequest,
-  type FacilityEmissionConfig,
   type IsometricComponentBlueprint,
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
@@ -73,37 +71,6 @@ const REMOVAL_CLAIM_BLOCKED_MESSAGES: Record<ClaimBlockedReason, string> = {
   "state-changed":
     "Submission state changed while preparing the removal. Reload and retry.",
 };
-// Reads the genset energy yield off the facility's certifier_projects row.
-// Throws if unset — it must be configured in the admin area (Emission
-// estimates) before a submission can convert genset litres to kWh (ADR 0015
-// dropped the per-stage split, so the yield is the only required config).
-// Facility-level config, shared across the removal.
-export function resolveFacilityEmissionConfig(
-  mapping: CertifierProjectRow,
-): FacilityEmissionConfig {
-  const { gensetEnergyYieldKwhPerLitre } = mapping;
-  if (gensetEnergyYieldKwhPerLitre == null) {
-    throw new SafeError(
-      "Set this facility's genset yield in the admin area (Emission estimates) before submitting.",
-    );
-  }
-
-  // Defence-in-depth: the admin form validates this through
-  // facilityEmissionConfigSchema, but a direct DB edit or seed insert could
-  // bypass it. A bad value here would silently corrupt a registry submission,
-  // so re-check the bound before building the payload.
-  if (
-    !Number.isFinite(gensetEnergyYieldKwhPerLitre) ||
-    gensetEnergyYieldKwhPerLitre <= 0
-  ) {
-    throw new SafeError(
-      "This facility's genset energy yield must be a positive number. Correct it in the admin area (Emission estimates).",
-    );
-  }
-
-  return { gensetEnergyYieldKwhPerLitre };
-}
-
 interface ResolvedMonitoredInput {
   removalTemplateComponentId: string;
   componentBlueprintKey: string;
@@ -199,7 +166,7 @@ interface ResolvedTemplateInputs {
 function resolveTemplateInputs(args: {
   template: IsometricGhgEntryTemplate;
   blueprintsByKey: Map<string, IsometricComponentBlueprint>;
-  agg: ReturnType<typeof enrichWithFacilityConfig>;
+  agg: AggregatedProductionData;
   externalProjectId: string;
   // Removal-wide Isometric Source IDs (Phase 3.5). Threaded into every
   // monitored Datapoint's `source_ids` so the audit trail attaches evidence
@@ -415,7 +382,6 @@ export async function submitRemoval(
     );
   }
 
-  const emissionConfig = resolveFacilityEmissionConfig(ctx.mapping);
   const blueprintsByKey = new Map(
     ctx.blueprintsForTemplate.map((bp) => [bp.key, bp]),
   );
@@ -467,11 +433,11 @@ export async function submitRemoval(
     );
   }
 
-  const agg = enrichWithFacilityConfig(transportAgg, emissionConfig);
+  const agg = transportAgg;
 
   // Non-blocking: surface (don't block on) submission advisories — e.g.
-  // recorded startup/plant diesel the active template has no `fuel_usage_by_volume`
-  // component to carry (ADR 0015). The value is simply not submitted; the
+  // recorded diesel the active template has no `fuel_usage_by_volume`
+  // component to carry (issue #319). The value is simply not submitted; the
   // operator already sees the same warning at readiness.
   if (ctx.submissionWarnings.length > 0) {
     log.warn(

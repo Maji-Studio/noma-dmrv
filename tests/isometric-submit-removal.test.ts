@@ -237,8 +237,10 @@ function makeMapping(): CertifierProjectRow {
     defaultRemovalTemplateId: TEMPLATE_ID,
     webhookSecret: null,
     metadata: null,
-    // Emission-estimate config — the genset yield is required by
-    // `resolveFacilityEmissionConfig` (ADR 0015 dropped the per-stage splits).
+    // Vestigial emission-estimate config: issue #319 removed the litres→kWh
+    // genset conversion (diesel submits by volume, EF template-side), so the
+    // submission path no longer reads this column. Kept in the fixture because
+    // it still exists on CertifierProjectRow.
     gensetEnergyYieldKwhPerLitre: 3.375,
     defaultSoilTemperatureC: 24.2,
     defaultSoilTemperatureSource: "Test dataset (annual mean)",

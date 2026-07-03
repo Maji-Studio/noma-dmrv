@@ -1,30 +1,38 @@
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
 
-// Blueprint key for the volume-based fuel-usage component that carries
-// startup/plant diesel + preprocessing fuel. The live operator template
-// (ADR 0015) declares none, so a recorded startup-diesel value has nothing to
-// carry it and is not submitted.
+// Group + blueprint key for the volume-based fuel-usage component that carries
+// the combined diesel litres (genset + startup/preprocessing — issue #319,
+// energy-use-accounting v1.3 Eq 7). The mapping lives under the `pyrolysis`
+// group in INPUT_MAPPING, so only a component declared there can carry the
+// value; a `fuel_usage_by_volume` in another REMOVAL-scope group would not be
+// served (`biochar-storage`'s is a PROJECT-scope tuple and never carries run
+// diesel).
+const PYROLYSIS_GROUP_KEY = "pyrolysis";
 const FUEL_USAGE_BY_VOLUME_BLUEPRINT = "fuel_usage_by_volume";
 
-const STARTUP_DIESEL_UNMAPPED_WARNING =
-  "Startup/plant diesel and preprocessing fuel are recorded, but the active removal template declares no fuel-usage component to carry them — these emissions are not submitted (ADR 0015).";
+const DIESEL_UNMAPPED_WARNING =
+  "Diesel fuel (genset and/or startup/preprocessing) is recorded, but the active removal template declares no pyrolysis fuel-usage-by-volume component to carry it — these fuel emissions are not submitted (issue #319).";
 
 function templateDeclaresFuelUsageComponent(
   template: IsometricGhgEntryTemplate,
 ): boolean {
-  return template.groups.some((group) =>
-    group.components.some(
-      (component) => component.blueprint_key === FUEL_USAGE_BY_VOLUME_BLUEPRINT,
-    ),
+  return template.groups.some(
+    (group) =>
+      group.key === PYROLYSIS_GROUP_KEY &&
+      group.components.some(
+        (component) =>
+          component.blueprint_key === FUEL_USAGE_BY_VOLUME_BLUEPRINT,
+      ),
   );
 }
 
 // Non-blocking submission advisories surfaced at readiness AND logged at submit.
-// Currently the only one: a recorded startup/plant-diesel value with no template
-// component to carry it (ADR 0015). Run-level presence is the right signal —
-// attribution only scales the figure down, so "any run recorded startup or
-// preprocessing fuel" captures "the operator entered a value that won't submit".
+// Currently the only one: recorded diesel (genset or startup/preprocessing) with
+// no pyrolysis `fuel_usage_by_volume` component to carry it (issue #319). Run-
+// level presence is the right signal — attribution only scales the figure down,
+// so "any run recorded diesel" captures "the operator entered a value that won't
+// submit".
 export function buildSubmissionWarnings(args: {
   defaultTemplate: IsometricGhgEntryTemplate | null;
   runs: ProductionRunWithSamples[];
@@ -32,9 +40,12 @@ export function buildSubmissionWarnings(args: {
   const { defaultTemplate, runs } = args;
   if (!defaultTemplate) return [];
   if (templateDeclaresFuelUsageComponent(defaultTemplate)) return [];
-  const hasStartupDiesel = runs.some(
+  const hasDiesel = runs.some(
     (run) =>
-      (run.dieselOperationLiters ?? 0) + (run.preprocessingFuelLiters ?? 0) > 0,
+      (run.dieselOperationLiters ?? 0) +
+        (run.preprocessingFuelLiters ?? 0) +
+        (run.dieselGensetLiters ?? 0) >
+      0,
   );
-  return hasStartupDiesel ? [STARTUP_DIESEL_UNMAPPED_WARNING] : [];
+  return hasDiesel ? [DIESEL_UNMAPPED_WARNING] : [];
 }

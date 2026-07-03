@@ -2,9 +2,10 @@
  * EnergySummary
  * Read-only facility rollup of electricity + diesel across production runs,
  * plus a preview of the combined energy datapoints submitted to Isometric
- * (ADR 0015 — one grid-electricity + one genset measurement point, no per-stage
- * split). Startup/plant diesel is shown separately because submission depends
- * on the active template's fuel-usage capability.
+ * (ADR 0015 amended by issue #319 — one grid-electricity datapoint in kWh and
+ * one combined diesel datapoint in litres, submitted by volume with the
+ * emission factor bound on the Isometric template; no litres→kWh conversion,
+ * no per-stage split).
  */
 "use client";
 
@@ -38,8 +39,7 @@ export function EnergySummary() {
   const runCount = totals?.runCount ?? 0;
 
   const config = certifierSummary?.mapping ?? null;
-  const yieldKwhPerL = config?.gensetEnergyYieldKwhPerLitre ?? null;
-  const gensetKwh = yieldKwhPerL != null ? gensetLitres * yieldKwhPerL : null;
+  const totalDieselLitres = gensetLitres + startupLitres;
 
   if (!facilityId) {
     return (
@@ -131,8 +131,9 @@ export function EnergySummary() {
         <h2 className="title-heading-3">Submission preview</h2>
         <p className="body-small text-[var(--color-text-secondary)]">
           Energy submits as a single combined measurement point — one grid
-          electricity datapoint and one diesel-genset datapoint (genset litres ×
-          the facility&apos;s yield). There is no per-stage split.
+          electricity datapoint (kWh) and one diesel fuel datapoint (genset +
+          startup litres, submitted by volume). The diesel emission factor is
+          bound on the Isometric template. There is no per-stage split.
         </p>
         {mappingLoading && (
           <p className="body-medium text-[var(--color-text-secondary)]">
@@ -154,13 +155,7 @@ export function EnergySummary() {
             Settings to preview submission data.
           </p>
         )}
-        {config && yieldKwhPerL == null && (
-          <p className="body-medium text-[var(--color-text-secondary)]">
-            Set the genset yield in Admin → Emission estimates to convert genset
-            diesel to the submitted kWh figure.
-          </p>
-        )}
-        {config && yieldKwhPerL != null && gensetKwh != null && totals && (
+        {config && totals && (
           // Panel recipe (Phase 2.5): tables never sit flush on the warm field.
           <div className="overflow-x-auto bg-[var(--panel-bg)] [border:var(--panel-border)] [box-shadow:var(--panel-shadow)]">
             <table className="w-full border-collapse">
@@ -177,26 +172,15 @@ export function EnergySummary() {
                     {fmt(electricityKwh)} kWh
                   </td>
                 </tr>
-                <tr className="[border-bottom:var(--row-divider)]">
+                <tr className="last:[border-bottom:none]">
                   <td className="body-medium py-8 px-12">
-                    Diesel genset
+                    Diesel fuel (genset + startup)
                     <span className="block label-micro text-[var(--color-text-tertiary)]">
-                      {fmt(gensetLitres)} L × {yieldKwhPerL} kWh/L
+                      Submitted by volume; emission factor bound on the Isometric template
                     </span>
                   </td>
                   <td className="body-medium py-8 px-12 text-right whitespace-nowrap tabular-nums">
-                    {fmt(gensetKwh)} kWh
-                  </td>
-                </tr>
-                <tr className="last:[border-bottom:none]">
-                  <td className="body-medium py-8 px-12">
-                    Startup / plant diesel
-                    <span className="block label-micro text-[var(--color-signal-orange)]">
-                      Submitted only when the active template includes a fuel-usage component
-                    </span>
-                  </td>
-                  <td className="body-medium py-8 px-12 text-right whitespace-nowrap tabular-nums text-[var(--color-text-tertiary)]">
-                    {fmt(startupLitres)} L
+                    {fmt(totalDieselLitres)} L
                   </td>
                 </tr>
               </tbody>
