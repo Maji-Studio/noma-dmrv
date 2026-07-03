@@ -911,6 +911,43 @@ describe("submitRemoval — reporting window anchored to application date (issue
     expect(createGhgEntryFake).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
   });
+
+  it("rejects a backdated application even when a later valid application carries the max date", async () => {
+    // Mixed removal: the LATEST application (April) is after the earliest
+    // production start (2026-01-01), so a max-date-only guard would pass —
+    // the guard must scan every lineage and name the December offender.
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+      ...makeContext(),
+      lineages: [
+        makeLineage({
+          applicationId: "app-backdated",
+          code: "APP-TEST-001",
+          applicationDate: new Date("2025-12-15T00:00:00Z"),
+        }),
+        makeLineage({
+          applicationId: "app-valid",
+          code: "APP-TEST-002",
+          applicationDate: new Date("2026-04-05T00:00:00Z"),
+        }),
+      ],
+    });
+    const createDatapointFake = vi.fn(fakeExternalIds("dp"));
+    const createGhgEntryFake = vi.fn(fakeExternalIds("rmv"));
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      createDatapointFake as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      createGhgEntryFake as never,
+    );
+
+    await expect(
+      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+    ).rejects.toThrow(/APP-TEST-001.*2025-12-15/);
+    // Fails closed before any registry POST or ledger claim.
+    expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(createGhgEntryFake).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
+  });
 });
 
 describe("submitRemoval — durability measurement-samples gate (Phase 3, staged)", () => {

@@ -470,7 +470,6 @@ export async function submitRemoval(
   const latestApplicationTime = resolveLatestApplicationTime(ctx.lineages);
   assertReportingWindowNotInverted({
     lineages: ctx.lineages,
-    latestApplicationTime,
     earliestStartTime: agg.earliestStartTime,
   });
 

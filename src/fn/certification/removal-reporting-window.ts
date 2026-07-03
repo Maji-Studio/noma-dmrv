@@ -50,30 +50,30 @@ export function resolveLatestApplicationTime(
 // Guards the window inversion BEFORE any registry POST — the local stamp's
 // `startedOn <= completedOn` DB check runs inside a best-effort write the
 // submit path swallows, so a back-dated application must fail loudly instead
-// of silently posting an inverted window to Isometric. Compares at DATE
-// granularity (what gets POSTed and stamped): form-entered application dates
-// are UTC midnight, so a millisecond comparison would wrongly block a
-// same-UTC-day application against a mid-day run start (issue #320 caveat 4).
+// of silently posting an inverted window to Isometric. Scans EVERY lineage,
+// not just the latest application: in a mixed removal a later valid
+// application would otherwise mask a backdated one (biochar cannot be applied
+// before its production started), which contradicts the fail-closed rule.
+// Compares at DATE granularity (what gets POSTed and stamped): form-entered
+// application dates are UTC midnight, so a millisecond comparison would
+// wrongly block a same-UTC-day application against a mid-day run start
+// (issue #320 caveat 4).
 export function assertReportingWindowNotInverted(args: {
   lineages: { application: { applicationDate: Date; code: string } }[];
-  latestApplicationTime: Date;
   earliestStartTime: Date;
 }): void {
-  const { lineages, latestApplicationTime, earliestStartTime } = args;
-  if (formatUtcDate(latestApplicationTime) >= formatUtcDate(earliestStartTime)) {
-    return;
+  const { lineages, earliestStartTime } = args;
+  const earliestStartDate = formatUtcDate(earliestStartTime);
+  for (const lineage of lineages) {
+    const applicationDate = formatUtcDate(lineage.application.applicationDate);
+    if (applicationDate < earliestStartDate) {
+      throw new SafeError(
+        `Application ${lineage.application.code} is dated ${applicationDate}, ` +
+          `before the earliest production start ${earliestStartDate} — ` +
+          "correct the application date before submitting.",
+      );
+    }
   }
-  const latestLineage = lineages.find(
-    (l) =>
-      l.application.applicationDate.getTime() ===
-      latestApplicationTime.getTime(),
-  );
-  throw new SafeError(
-    `Application ${latestLineage?.application.code ?? "(unknown)"} is dated ` +
-      `${formatUtcDate(latestApplicationTime)}, before the earliest production ` +
-      `start ${formatUtcDate(earliestStartTime)} — correct the application ` +
-      "date before submitting.",
-  );
 }
 
 // Reads the reporting window the original attempt locked into the snapshot, for
