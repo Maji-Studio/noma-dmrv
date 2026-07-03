@@ -200,60 +200,6 @@ async function getLinkedCreditBatches(
   return rows;
 }
 
-async function refreshCreditBatchSummaries(
-  tx: DbTransaction,
-  creditBatchId: string,
-): Promise<void> {
-  const linkedApplications = await tx
-    .select({
-      biocharAppliedTons: applications.biocharAppliedTons,
-      co2eStoredTonnes: applications.co2eStoredTonnes,
-    })
-    .from(applications)
-    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-    .leftJoin(orders, eq(deliveries.orderId, orders.id))
-    .innerJoin(
-      biocharProducts,
-      sql`${biocharProducts.id} = coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
-    )
-    .innerJoin(
-      creditBatchProductionRuns,
-      eq(
-        creditBatchProductionRuns.productionRunId,
-        biocharProducts.linkedProductionRunId,
-      ),
-    )
-    .where(eq(creditBatchProductionRuns.creditBatchId, creditBatchId));
-
-  const weightTons = linkedApplications.reduce(
-    (total, application) => total + Number(application.biocharAppliedTons),
-    0,
-  );
-  const hasUnknownStoredTotal = linkedApplications.some(
-    (application) => application.co2eStoredTonnes == null,
-  );
-  const totalCo2eStoredTons = hasUnknownStoredTotal
-    ? null
-    : linkedApplications.reduce(
-        (total, application) =>
-          total + Number(application.co2eStoredTonnes ?? 0),
-        0,
-      );
-
-  await tx
-    .update(creditBatches)
-    .set({
-      weightTons,
-      totalCo2eStoredTons,
-      // These batch-level values are no longer trustworthy once membership changes.
-      totalCo2eEmissionsTons: null,
-      totalCo2eCounterfactualTons: null,
-      fDurableCalculated: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(creditBatches.id, creditBatchId));
-}
-
 async function resolveApplicationDryMassTons(
   input: {
     deliveryId: string;
@@ -725,12 +671,8 @@ export async function deleteApplication(userId: string, id: string): Promise<voi
       .where(eq(soilTemperatureMeasurements.applicationId, id));
 
     await tx.delete(applications).where(eq(applications.id, id));
-
-    for (const creditBatchId of new Set(
-      linkedCreditBatches.map((batch) => batch.creditBatchId),
-    )) {
-      await refreshCreditBatchSummaries(tx, creditBatchId);
-    }
+    // Batch aggregates (applied weight, CO2e stored) are derived on read
+    // (issue #285) — no write-back sync is needed after removing a member.
   });
 }
 

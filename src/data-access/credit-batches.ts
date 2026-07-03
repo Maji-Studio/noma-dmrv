@@ -38,9 +38,10 @@ import {
 import { gcRemovalIfOrphaned } from "./certifier-removals";
 import { getChainOfCustodyData } from "./chain-of-custody";
 import {
-  getApplicationIdsByBatchFromRuns,
+  getApplicationRollupsByBatchFromRuns,
   getApplicationsForRuns,
   getProductionRunIdsByBatchId,
+  summarizeApplicationsForBatches,
 } from "./credit-batch-production-runs";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
 import { getCreditBatchesWithSamples } from "./credit-batch-samples";
@@ -67,6 +68,8 @@ export interface CreditBatchWithRelations extends CreditBatch {
   applicationIds: string[];
   productionRunCount: number;
   productionRunIds: string[];
+  /** Derived Σ member applications' biocharAppliedTons (issue #285). */
+  appliedWeightTons: number;
   co2eStoredPreview: CreditBatchCo2eStoredPreview | null;
   previewAvailable: boolean;
 }
@@ -375,14 +378,15 @@ export async function getCreditBatches(
   }
 
   const productionRunIdsByBatch = await getProductionRunIdsByBatchId(batchIds);
-  const applicationsByBatch = await getApplicationIdsByBatchFromRuns(
+  const rollupsByBatch = await getApplicationRollupsByBatchFromRuns(
     userId,
     productionRunIdsByBatch,
   );
 
   return batches.map((b) => {
     const productionRunIds = productionRunIdsByBatch[b.creditBatch.id] ?? [];
-    const applicationIds = applicationsByBatch[b.creditBatch.id] ?? [];
+    const rollup = rollupsByBatch[b.creditBatch.id];
+    const applicationIds = rollup?.applicationIds ?? [];
     return {
       ...b.creditBatch,
       facility: b.facilityName ? { name: b.facilityName } : null,
@@ -390,6 +394,7 @@ export async function getCreditBatches(
       applicationIds,
       productionRunCount: productionRunIds.length,
       productionRunIds,
+      appliedWeightTons: rollup?.appliedWeightTons ?? 0,
       co2eStoredPreview: null,
       previewAvailable: false,
     };
@@ -413,14 +418,14 @@ export async function getCo2eStoredPreviews(
   if (allowedIds.length === 0) return {};
 
   const productionRunIdsByBatch = await getProductionRunIdsByBatchId(allowedIds);
-  const applicationsByBatch = await getApplicationIdsByBatchFromRuns(
+  const rollupsByBatch = await getApplicationRollupsByBatchFromRuns(
     userId,
     productionRunIdsByBatch,
   );
 
   const previews = await Promise.all(
     batches.map(async (batch) => {
-      const applicationIds = applicationsByBatch[batch.id] ?? [];
+      const applicationIds = rollupsByBatch[batch.id]?.applicationIds ?? [];
       return [
         batch.id,
         await buildCo2eStoredPreview(userId, batch, applicationIds),
@@ -464,11 +469,12 @@ export async function getCreditBatchById(
 
   const productionRunIdsByBatch = await getProductionRunIdsByBatchId([id]);
   const productionRunIds = productionRunIdsByBatch[id] ?? [];
-  const applicationsByBatch = await getApplicationIdsByBatchFromRuns(
+  const rollupsByBatch = await getApplicationRollupsByBatchFromRuns(
     userId,
     productionRunIdsByBatch,
   );
-  const applicationIds = applicationsByBatch[id] ?? [];
+  const rollup = rollupsByBatch[id];
+  const applicationIds = rollup?.applicationIds ?? [];
 
   const result = {
     ...batch.creditBatch,
@@ -477,6 +483,7 @@ export async function getCreditBatchById(
     applicationIds,
     productionRunCount: productionRunIds.length,
     productionRunIds,
+    appliedWeightTons: rollup?.appliedWeightTons ?? 0,
     co2eStoredPreview: null,
     previewAvailable: false,
   };
@@ -567,13 +574,8 @@ export async function createCreditBatch(
         stdNonReactiveCarbonPercent:
           batchData.stdNonReactiveCarbonPercent ?? null,
         fDurableCalculated: batchData.fDurableCalculated ?? null,
-        totalCo2eStoredTons: batchData.totalCo2eStoredTons ?? null,
-        totalCo2eEmissionsTons: batchData.totalCo2eEmissionsTons ?? null,
-        totalCo2eCounterfactualTons:
-          batchData.totalCo2eCounterfactualTons ?? null,
         bufferPoolPercent: batchData.bufferPoolPercent ?? null,
         registry: batchData.registry || null,
-        weightTons: batchData.weightTons ?? null,
         value: batchData.value ?? null,
         currency: batchData.currency,
         siteManagementNotes: batchData.siteManagementNotes || null,
@@ -605,14 +607,14 @@ export async function createCreditBatch(
     .from(facilities)
     .where(eq(facilities.id, creditBatch.facilityId));
   const memberProductionRunIds = productionRunIds ?? [];
-  const applicationIds =
+  const rollup =
     memberProductionRunIds.length > 0
-      ? unique(
-          (await getApplicationsForRuns(userId, memberProductionRunIds)).map(
-            (row) => row.applicationId,
-          ),
-        )
-      : [];
+      ? summarizeApplicationsForBatches(
+          await getApplicationsForRuns(userId, memberProductionRunIds),
+          { [creditBatch.id]: memberProductionRunIds },
+        )[creditBatch.id]
+      : undefined;
+  const applicationIds = rollup?.applicationIds ?? [];
 
   return {
     ...creditBatch,
@@ -621,6 +623,7 @@ export async function createCreditBatch(
     applicationIds,
     productionRunCount: memberProductionRunIds.length,
     productionRunIds: memberProductionRunIds,
+    appliedWeightTons: rollup?.appliedWeightTons ?? 0,
     co2eStoredPreview: await buildCo2eStoredPreview(
       userId,
       creditBatch,
@@ -670,19 +673,10 @@ export async function updateCreditBatch(
       updateFields.stdNonReactiveCarbonPercent;
   if (updateFields.fDurableCalculated !== undefined)
     updateData.fDurableCalculated = updateFields.fDurableCalculated;
-  if (updateFields.totalCo2eStoredTons !== undefined)
-    updateData.totalCo2eStoredTons = updateFields.totalCo2eStoredTons;
-  if (updateFields.totalCo2eEmissionsTons !== undefined)
-    updateData.totalCo2eEmissionsTons = updateFields.totalCo2eEmissionsTons;
-  if (updateFields.totalCo2eCounterfactualTons !== undefined)
-    updateData.totalCo2eCounterfactualTons =
-      updateFields.totalCo2eCounterfactualTons;
   if (updateFields.bufferPoolPercent !== undefined)
     updateData.bufferPoolPercent = updateFields.bufferPoolPercent;
   if (updateFields.registry !== undefined)
     updateData.registry = updateFields.registry || null;
-  if (updateFields.weightTons !== undefined)
-    updateData.weightTons = updateFields.weightTons;
   if (updateFields.value !== undefined) updateData.value = updateFields.value;
   if (updateFields.currency !== undefined)
     updateData.currency = updateFields.currency;

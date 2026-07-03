@@ -140,12 +140,11 @@ export async function loadGhgStatementBreakdown(
       sequestrationTonnesByBatch: batches.map(
         (batch) => previews[batch.id]?.co2eStoredTonnes ?? null,
       ),
-      emissionsTonnesByBatch: batches.map(
-        (batch) => batch.totalCo2eEmissionsTons,
-      ),
-      counterfactualTonnesByBatch: batches.map(
-        (batch) => batch.totalCo2eCounterfactualTons,
-      ),
+      // Project emissions and counterfactual are registry-owned (ADR 0018) —
+      // there is no local copy (issue #285). All-null renders "not recorded";
+      // the registry entries above supply the authoritative net when readable.
+      emissionsTonnesByBatch: batches.map(() => null),
+      counterfactualTonnesByBatch: batches.map(() => null),
       missingInputs: unique(
         batches.flatMap((batch) => previews[batch.id]?.missingInputs ?? []),
       ),
