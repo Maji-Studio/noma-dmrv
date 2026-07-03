@@ -147,10 +147,12 @@ async function assertDeliveryAcceptsApplication(
     );
   }
 
-  // Compare at day granularity — application dates arrive at midnight while
-  // delivery dates may carry a time component.
+  // Compare at day granularity — application dates arrive as UTC midnight
+  // (z.coerce.date on a date-only string) while delivery dates may carry a
+  // time component, so truncate in UTC to keep both on the same basis
+  // regardless of server timezone.
   const deliveryDayStart = new Date(delivery.deliveryDate);
-  deliveryDayStart.setHours(0, 0, 0, 0);
+  deliveryDayStart.setUTCHours(0, 0, 0, 0);
   if (applicationDate < deliveryDayStart) {
     throw new SafeError(
       `Application date cannot be before the delivery date of ${delivery.code}`,
