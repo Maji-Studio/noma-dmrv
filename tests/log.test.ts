@@ -6,7 +6,7 @@
  * filtering is fixed at import time from env and not exercised here.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { logger } from "@/lib/log";
+import { logger, sanitizeErrorMessage } from "@/lib/log";
 
 function lastLogRecord(spy: ReturnType<typeof vi.spyOn>): Record<string, unknown> {
   const call = spy.mock.calls.at(-1);
@@ -77,5 +77,37 @@ describe("logger", () => {
     expect(rec.op).toBe("removal:submit");
     expect(rec.submissionAttemptId).toBe("att_1");
     expect(rec.extra).toBe(1);
+  });
+});
+
+describe("sanitizeErrorMessage", () => {
+  it("redacts the params section of a DrizzleQueryError message (newline form)", () => {
+    // Real drizzle-orm format: `Failed query: <sql>\nparams: <values>`.
+    const out = sanitizeErrorMessage(
+      new Error(
+        'Failed query: update "suppliers" set "contact_name" = $1\nparams: ["Fake Name","+15550100000"]',
+      ),
+    );
+    expect(out).toContain('update "suppliers"');
+    expect(out).toContain("params: [REDACTED]");
+    expect(out).not.toContain("Fake Name");
+    expect(out).not.toContain("+15550100000");
+  });
+
+  it("redacts the inline `-- params:` form some drivers emit", () => {
+    const out = sanitizeErrorMessage(
+      'insert into "customers" values ($1) -- params: ["12 Fake Street"]',
+    );
+    expect(out).toContain('insert into "customers"');
+    expect(out).toContain("params: [REDACTED]");
+    expect(out).not.toContain("Fake Street");
+  });
+
+  it("scrubs email-shaped text and truncates long messages", () => {
+    const out = sanitizeErrorMessage(
+      `notify fake@example.com about: ${"x".repeat(300)}`,
+    );
+    expect(out).not.toContain("fake@example.com");
+    expect(out.length).toBeLessThanOrEqual(201); // 200 chars + ellipsis
   });
 });

@@ -8,6 +8,7 @@ import { z } from "zod";
 import {
   emptyToNull,
   optionalPercent,
+  PG_INTEGER_MAX,
   requiredDateOnly,
   toIntOrNull,
   toNumberOrNull,
@@ -88,7 +89,7 @@ export const productionRunFormSchema = z.object({
 
   // Processing Parameters (Isometric Protocol Section 9)
   feedingRateKgHr: z.preprocess(toNumberOrNull, z.number().positive("Feeding rate must be positive").nullable()).optional(),
-  residenceTimeMinutes: z.preprocess(toIntOrNull, z.number().int().positive("Residence time must be a positive integer").nullable()).optional(),
+  residenceTimeMinutes: z.preprocess(toIntOrNull, z.number().int().positive("Residence time must be a positive integer").max(PG_INTEGER_MAX, "Residence time is too large").nullable()).optional(),
 
   // Energy Inputs (Isometric: Energy Use Accounting Module, Eq.6)
   dieselOperationLiters: z.preprocess(toNumberOrNull, z.number().min(0, "Diesel operation must be non-negative").nullable()).optional(),
@@ -154,7 +155,7 @@ export const updateProductionRunSchema = z.object({
   feedstockWetMassKg: z.number().positive().optional().nullable(),
   feedstockMoisturePercent: z.number().min(0).max(100).optional().nullable(),
   feedingRateKgHr: z.number().positive().optional().nullable(),
-  residenceTimeMinutes: z.number().int().positive().optional().nullable(),
+  residenceTimeMinutes: z.number().int().positive().max(PG_INTEGER_MAX, "Residence time is too large").optional().nullable(),
   dieselOperationLiters: z.number().min(0).optional().nullable(),
   dieselGensetLiters: z.number().min(0).optional().nullable(),
   preprocessingFuelLiters: z.number().min(0).optional().nullable(),
