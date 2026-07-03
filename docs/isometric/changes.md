@@ -13,6 +13,51 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-07-03 (issue #319 — diesel submits as fuel_usage_by_volume, litres × template EF)
+
+Fixes protocol-noncompliant fuel accounting (energy-use-accounting v1.3 Eq 7:
+fuel emissions = fuel quantity × a well-to-wheel fuel EF). Genset diesel was
+converted litres → kWh via the facility genset yield and submitted through
+`pyrolysis/energy_based_ci_emissions/energy` — modeling fuel as electricity CI.
+Decision recorded as an amendment to
+[ADR 0015](../adr/0015-energy-single-combined-measurement-point.md).
+
+- **Mapping** — `src/lib/isometric/transformers/datapoint.ts`: under
+  `pyrolysis`, `energy_based_ci_emissions` is deleted and
+  `fuel_usage_by_volume/volume_of_fuel` added (unit `l`, quantity kind
+  `volume`, source `totalDieselLitres`). The
+  `biomass-feedstock-sourcing`/`-processing` `fuel_usage_by_volume` entries
+  are deleted (their startup diesel now rides in the combined figure — keeping
+  them would double-count). `MAPPING_REVISION` re-hashes, so resubmits
+  supersede prior Removal versions (intended).
+- **Aggregation** — `src/lib/isometric/utils/aggregation.ts`:
+  `AggregatedProductionData.totalDieselLitres` = `totalStartupDieselLitres` +
+  `totalGensetDieselLitres` (both attribution-scaled; split fields kept for
+  local reporting). `totalGensetKwh`, `FacilityEmissionConfig`, and
+  `enrichWithFacilityConfig` are deleted; `submit-removal.ts` drops
+  `resolveFacilityEmissionConfig` — the genset yield no longer gates or
+  affects submission. The volumetric diesel EF is a **fixed input pre-bound on
+  the Isometric template**; noma never stores or submits it (an unbound EF
+  fails closed via the existing `unboundFixedInputs` SafeError).
+- **Registry/UI** — `certify-field-registry.ts` maps `dieselGensetLiters` and
+  `startupDieselFuelUsage` to the shared pyrolysis volume tuple;
+  `facilityEmissionConfig` descriptors emptied (admin genset-yield field loses
+  its certify badge; the column/form stay as a vestigial local estimate —
+  dropping them is a follow-up migration). `/energy` submission preview shows
+  one combined "Diesel fuel (genset + startup)" litres row; the litres×yield
+  copy and yield-missing prompt are gone.
+- **Warnings** — `submission-warnings.ts` advisory now covers genset diesel
+  too and checks specifically for a `fuel_usage_by_volume` component in the
+  `pyrolysis` group (mitigates silent under-reporting if a future template
+  drops the component).
+- **Deploy sequencing** — the live/sandbox template must be re-authored to
+  declare `pyrolysis/fuel_usage_by_volume` with the diesel EF bound as a fixed
+  input. Code-before-template and template-before-code both fail closed
+  (missing-mapping / quantity-kind SafeErrors). Live flip gated on the sandbox
+  confirm per the issue's acceptance criteria.
+- **Out of scope** — wood/kg-metered fuels (`fuel_usage_by_mass`, #319b);
+  dropping `certifier_projects.genset_energy_yield_kwh_per_litre`.
+
 ## 2026-07-02 (ADR 0018 — project-emissions journal removed)
 
 Executes the approved removal plan

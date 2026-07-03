@@ -1,6 +1,7 @@
 # Energy submits as a single combined measurement point
 
 Status: accepted (2026-06-19) — supersedes the stage-split portion of ADR 0001.
+Amended 2026-07-03 (issue #319) — see the amendment note at the end.
 
 ## Context
 
@@ -58,3 +59,27 @@ changes submitted emissions.
 
 All Isometric protocol references are non-authoritative summaries; verify against
 registry.isometric.com before encoding credit-claim logic.
+
+## Amendment — 2026-07-03 (issue #319)
+
+The genset half of the Decision is superseded. Energy-use-accounting module v1.3
+Eq 7 accounts fuels combusted for heat, steam, startup energy, or eligible mobile
+sources as FUEL emissions — fuel quantity × a full life-cycle (well-to-wheel)
+fuel EF. Converting diesel litres to kWh and applying an energy-based CI modeled
+fuel as electricity and was protocol-noncompliant.
+
+The single combined measurement point stands, but the `pyrolysis` group now
+carries:
+
+- `grid_electricity_use/electricity_use` — total grid electricity kWh (unchanged).
+- `fuel_usage_by_volume/volume_of_fuel` — combined diesel litres
+  (genset + startup/preprocessing). The volumetric diesel EF is a fixed input
+  pre-bound in the Isometric template; noma never submits or stores it.
+
+`energy_based_ci_emissions` is dropped from the mapping. The facility genset
+yield (`gensetEnergyYieldKwhPerLitre`) is no longer emissions-affecting — the
+column and admin form remain as a vestigial local estimate with no certify
+badge; removal is a follow-up migration. Startup/plant diesel is no longer
+advisory-only: it submits inside the combined litres figure, and the readiness
+advisory now fires only when the active template declares no pyrolysis
+`fuel_usage_by_volume` component while any diesel is recorded.
