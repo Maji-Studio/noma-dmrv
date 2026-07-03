@@ -7,7 +7,7 @@
 import { z } from "zod";
 import { deliveryDryMassSchema } from "./isometric";
 import { optionalDistanceSource } from "./distance-source";
-import { emptyToNull } from "./helpers";
+import { emptyToNull, MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE } from "./helpers";
 
 // ============================================
 // Constants and Enums
@@ -25,6 +25,13 @@ export type DeliveryStatus = (typeof deliveryStatuses)[number];
 // ============================================
 
 const optionalNumber = z.number().finite().optional().nullable();
+// Mass (kg) inputs additionally carry the shared mass cap.
+const optionalMassKg = z
+  .number()
+  .finite()
+  .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE)
+  .optional()
+  .nullable();
 const optionalNote = z.string().max(500, "Note must be less than 500 characters").optional().nullable().or(z.literal(""));
 
 function validateDistanceOverride(
@@ -57,8 +64,8 @@ const deliveryFormBaseSchema = z.object({
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(deliveryStatuses).default("upcoming"),
-  deliveredWetMassKg: optionalNumber,
-  massDryKg: optionalNumber,
+  deliveredWetMassKg: optionalMassKg,
+  massDryKg: optionalMassKg,
   moistureContentPercent: optionalNumber,
   // Per-delivery road-distance override (km) + reason for the distribution leg.
   distanceKmOverride: optionalNumber,
@@ -133,8 +140,8 @@ export const createDeliverySchema = z.object({
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(deliveryStatuses).default("upcoming"),
-  deliveredWetMassKg: optionalNumber,
-  massDryKg: optionalNumber,
+  deliveredWetMassKg: optionalMassKg,
+  massDryKg: optionalMassKg,
   moistureContentPercent: optionalNumber,
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
@@ -182,8 +189,8 @@ export const updateDeliverySchema = z.object({
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(deliveryStatuses).optional(),
-  deliveredWetMassKg: optionalNumber,
-  massDryKg: optionalNumber,
+  deliveredWetMassKg: optionalMassKg,
+  massDryKg: optionalMassKg,
   moistureContentPercent: optionalNumber,
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,

@@ -6,6 +6,8 @@
 import { z } from "zod";
 import {
   emptyToNull,
+  MASS_INPUT_MAX_KG,
+  MASS_MAX_KG_MESSAGE,
   optionalPositiveNumber,
   requiredNumber,
   toNumberOrNull,
@@ -18,8 +20,11 @@ import {
 export const MOISTURE_MIN = 0;
 export const MOISTURE_MAX = 100;
 
+// Only used for mass (kg) inputs — carries the shared mass cap.
 const requiredNonNegativeNumber = (message: string) =>
-  requiredNumber().pipe(z.number().min(0, message));
+  requiredNumber().pipe(
+    z.number().min(0, message).max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE)
+  );
 
 const requiredPercent = requiredNumber().pipe(
   z
@@ -54,12 +59,15 @@ const ingredientBinBaseSchema = z.object({
   feedstockTypeName: z.string(),
   feedstockTypeCategory: z.string(),
   ratio: z.number().min(0).max(1).optional().nullable(),
-  massKg: z.number().min(0).optional().nullable(),
+  massKg: z.number().min(0).max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).optional().nullable(),
 });
 
 const ingredientBinFormSchema = ingredientBinBaseSchema.extend({
   storageLocationId: emptyToNull.or(z.string().uuid()).optional().nullable(),
-  massKg: z.preprocess(toNumberOrNull, z.number().min(0).optional().nullable()),
+  massKg: z.preprocess(
+    toNumberOrNull,
+    z.number().min(0).max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).optional().nullable()
+  ),
 });
 
 const ingredientBinUpdateSchema = ingredientBinBaseSchema.extend({
@@ -134,10 +142,10 @@ export const updateBiocharProductSchema = z.object({
   status: z.enum(biocharProductStatusValues).optional(),
   linkedProductionRunId: z.string().uuid("Invalid production run").optional(),
   storageLocationId: z.string().uuid("Invalid storage location").optional(),
-  massKg: z.number().min(0).optional(),
+  massKg: z.number().min(0).max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).optional(),
   moistureContentPercent: z.number().min(MOISTURE_MIN).max(MOISTURE_MAX).optional(),
   densityKgM3: z.number().min(0).optional().nullable(),
-  waterAddedKg: z.number().min(0).optional(),
+  waterAddedKg: z.number().min(0).max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).optional(),
   ingredientBins: z.array(ingredientBinUpdateSchema).optional(),
 });
 

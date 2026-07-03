@@ -8,6 +8,8 @@ import { optionalDistanceSource } from "./distance-source";
 import {
   latitudeSchema,
   longitudeSchema,
+  MASS_INPUT_MAX_KG,
+  MASS_MAX_KG_MESSAGE,
   optionalPositiveNumber,
   toNumberOrUndefined,
 } from "./helpers";
@@ -90,7 +92,8 @@ const baseTransportLegShape = {
             ? "Load mass is required"
             : "Load mass must be a number",
       })
-      .positive("Load mass must be greater than 0"),
+      .positive("Load mass must be greater than 0")
+      .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE),
   ),
 
   // Method — distance_based only.
