@@ -15,7 +15,11 @@ import {
   type FormulationIngredient,
 } from "@/db/schema";
 import { biocharProducts } from "@/db/schema/products";
-import type { FormulationFilterData } from "@/schemas/formulations";
+import {
+  RATIO_SUM_EXCEEDED_MESSAGE,
+  exceedsFormulationRatioSum,
+  type FormulationFilterData,
+} from "@/schemas/formulations";
 
 // ============================================
 // Types
@@ -71,6 +75,21 @@ async function assertBlendFeedstockTypes(ingredients?: IngredientInput[]) {
 
   if (rows.some((row) => row.usage !== "blend")) {
     throw new SafeError("Formulation lines must use blend-usage feedstock types");
+  }
+}
+
+/**
+ * Hard-block a formulation whose biochar + ingredient ratios over-allocate the
+ * solid blend (> 100%). Enforced here in addition to the Zod refine because
+ * ingredients are child rows the update layer can reconcile against existing
+ * state (issue #282).
+ */
+function assertRatioSumWithinBounds(
+  biocharRatio: number | null | undefined,
+  ingredients: ReadonlyArray<{ ratio?: number | null }> | null | undefined,
+) {
+  if (exceedsFormulationRatioSum(biocharRatio, ingredients)) {
+    throw new SafeError(RATIO_SUM_EXCEEDED_MESSAGE);
   }
 }
 
@@ -217,6 +236,7 @@ export async function createFormulation(
   }
 
   await assertBlendFeedstockTypes(data.ingredients);
+  assertRatioSumWithinBounds(data.biocharRatio, data.ingredients);
 
   return db.transaction(async (tx) => {
     const [formulation] = await tx
@@ -299,6 +319,20 @@ export async function updateFormulation(
   }
 
   await assertBlendFeedstockTypes(data.ingredients);
+
+  // Guard the effective post-update blend: a partial payload may change only
+  // the biochar ratio or only the ingredients, so reconcile each side against
+  // what is already stored before checking the sum.
+  const effectiveBiocharRatio =
+    data.biocharRatio !== undefined ? data.biocharRatio : existing.biocharRatio;
+  const effectiveIngredients =
+    data.ingredients !== undefined
+      ? data.ingredients
+      : await db
+          .select({ ratio: formulationIngredients.ratio })
+          .from(formulationIngredients)
+          .where(eq(formulationIngredients.formulationId, formulationId));
+  assertRatioSumWithinBounds(effectiveBiocharRatio, effectiveIngredients);
 
   // Separate ingredients from formulation fields
   const { ingredients: ingredientData, ...formulationFields } = data;
