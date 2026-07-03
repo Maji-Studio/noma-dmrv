@@ -124,17 +124,18 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
 
-  // Pyrolysis energy — single combined measurement point (ADR 0015). The
-  // operator re-authored the template so all energy enters here as two
-  // scalars: grid electricity (`grid_electricity_use`) and diesel genset
-  // (`energy_based_ci_emissions`). noma submits the run-combined totals with
-  // NO per-stage split — feedstock-processing and biochar-processing cannot be
-  // metered separately, so there is nothing to apportion. `totalElectricityKwh`
-  // is the combined grid figure; `totalGensetKwh` is genset litres × the
-  // facility's genset yield (computed in `enrichWithFacilityConfig`). The
-  // former per-stage `metered_energy_based_ci_emissions` electricity entry and
-  // the `biochar-processing` / `biomass-feedstock-processing` energy entries
-  // are gone (those components no longer exist in the template).
+  // Pyrolysis energy — single combined measurement point (ADR 0015, amended
+  // 2026-07-03 by issue #319). All energy enters here as two scalars: grid
+  // electricity (`grid_electricity_use`, kWh) and combined diesel
+  // (`fuel_usage_by_volume`, litres). noma submits the run-combined totals
+  // with NO per-stage split — feedstock-processing and biochar-processing
+  // cannot be metered separately, so there is nothing to apportion.
+  // `totalElectricityKwh` is the combined grid figure; `totalDieselLitres` is
+  // genset + startup/preprocessing diesel litres. The volumetric diesel EF is
+  // a fixed input pre-bound on the Isometric template (energy-use-accounting
+  // v1.3 Eq 7) — noma never converts litres to kWh and never submits the EF.
+  // The former `energy_based_ci_emissions` genset entry modeled fuel as
+  // electricity CI and is gone (protocol-noncompliant; issue #319).
   pyrolysis: {
     grid_electricity_use: {
       electricity_use: {
@@ -144,12 +145,12 @@ export const INPUT_MAPPING: InputMappingTable = {
         expectedQuantityKind: "energy",
       },
     },
-    energy_based_ci_emissions: {
-      energy: {
-        source: "totalGensetKwh",
-        unit: "kWh",
+    fuel_usage_by_volume: {
+      volume_of_fuel: {
+        source: "totalDieselLitres",
+        unit: "l",
         datapointType: "REPORTED",
-        expectedQuantityKind: "energy",
+        expectedQuantityKind: "volume",
       },
     },
   },
@@ -164,38 +165,12 @@ export const INPUT_MAPPING: InputMappingTable = {
   // a Removal Template that declares any of them as REMOVAL-scope trips
   // the scope-conflict SafeError in buildCreateDatapointRequest.
 
-  // Startup / plant diesel — volume-based. `totalStartupDieselLitres`
-  // excludes genset diesel (that flows through the energy-based genset
-  // components above), so diesel is never double-counted.
-  "biomass-feedstock-sourcing": {
-    fuel_usage_by_volume: {
-      volume_of_fuel: {
-        source: "totalStartupDieselLitres",
-        unit: "l",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "volume",
-      },
-    },
-  },
-  // Startup/plant diesel also maps here when a template carries the volume
-  // component. The live operator template (ADR 0015) declares no
-  // `fuel_usage_by_volume` component in this group, so the value is not
-  // submitted; a non-blocking warning fires instead (see
-  // `buildSubmissionWarnings` in certify-context-core.ts). The mapping stays
-  // for templates that DO carry the component (e.g. the protocol default).
-  "biomass-feedstock-processing": {
-    fuel_usage_by_volume: {
-      volume_of_fuel: {
-        source: "totalStartupDieselLitres",
-        unit: "l",
-        datapointType: "REPORTED",
-        expectedQuantityKind: "volume",
-      },
-    },
-  },
-
-  // (The previous `miscellaneous` zero-stub family moved to PROJECT scope
-  // per ADR 0005.)
+  // (The former `biomass-feedstock-sourcing` / `biomass-feedstock-processing`
+  // `fuel_usage_by_volume` entries carried startup/plant diesel separately.
+  // Issue #319 folded that diesel into the combined `pyrolysis /
+  // fuel_usage_by_volume` datapoint above — keeping them would double-count.
+  // The previous `miscellaneous` zero-stub family moved to PROJECT scope per
+  // ADR 0005.)
 };
 
 export function lookupInputMapping(

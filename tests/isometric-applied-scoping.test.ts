@@ -38,6 +38,8 @@ describe("aggregateProductionRuns — applied-biochar scoping", () => {
     expect(agg.totalFeedstockDryMassKg).toBe(4000);
     expect(agg.totalStartupDieselLitres).toBe(100);
     expect(agg.totalGensetDieselLitres).toBe(50);
+    // Combined diesel (issue #319) = startup + genset litres.
+    expect(agg.totalDieselLitres).toBe(150);
     expect(agg.totalElectricityKwh).toBe(200);
   });
 
@@ -51,6 +53,8 @@ describe("aggregateProductionRuns — applied-biochar scoping", () => {
     expect(agg.totalFeedstockDryMassKg).toBeCloseTo(2400);
     expect(agg.totalStartupDieselLitres).toBeCloseTo(60);
     expect(agg.totalGensetDieselLitres).toBeCloseTo(30);
+    // Combined diesel scales with its attribution-scaled parts.
+    expect(agg.totalDieselLitres).toBeCloseTo(90);
     expect(agg.totalElectricityKwh).toBeCloseTo(120);
   });
 

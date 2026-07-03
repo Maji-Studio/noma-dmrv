@@ -36,14 +36,14 @@ export const certifierProjects = pgTable(
     defaultRemovalTemplateId: text('default_removal_template_id'),
     // --- Phase 3.7 emission-estimate config (per facility) ---
     // Diesel-genset electrical yield: kWh produced per litre of genset
-    // diesel. Converts noma's litre measurement to the kWh the Certify
-    // `energy_based_ci_emissions` components expect. Seed 3.375 (LCA
-    // diesel CI 2.7 kgCO2e/L ÷ genset CI 0.8 kgCO2e/kWh).
+    // diesel. VESTIGIAL since issue #319: diesel submits as litres via
+    // `fuel_usage_by_volume` (EF bound on the Isometric template), so this
+    // yield no longer feeds any submission datapoint. Kept only because
+    // dropping the column is a migration (follow-up ticket).
     gensetEnergyYieldKwhPerLitre: real('genset_energy_yield_kwh_per_litre'),
     // ADR 0015 removed the three `stage_split_*_pct` columns: energy now
     // submits as one combined measurement point, so there is no per-stage
-    // breakdown to apportion. The genset yield above is retained because it is
-    // emissions-affecting (litres → kWh).
+    // breakdown to apportion.
     // Operator-declared facility-level REFERENCE soil temperature (°C) — the
     // authoritative annual-average value submitted to the registry as the
     // `biochar_soil` measurement for every 200-year removal (ADR 0013, soil
