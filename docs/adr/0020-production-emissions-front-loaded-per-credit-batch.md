@@ -55,15 +55,24 @@ start → latest application).
    boolean) because the predicate is identity — "claimed by ME vs ANOTHER" —
    which enables the guarded UPDATE, answers the audit question directly,
    and stays forward-compatible with issue #353's earliest-entry semantics.
-3. **Foreign claim fails closed.** `submitRemoval` asserts, before any
-   registry POST, that no member batch is claimed by a *different* removal.
-   The correct follow-up — a delivery-only entry that suppresses the
-   production bucket — is deferred behind issue #353; until then the
-   condition is a loud error, never silent suppression.
+3. **Foreign claim fails closed — twice, both before any registry POST.**
+   `submitRemoval` asserts that no member batch is claimed by a *different*
+   removal: once pre-flight against the loaded context, and once from a
+   fresh database read immediately after the submission draft is claimed
+   (the blocking draft row freezes membership, so a foreign claim stamped
+   between context load and draft claim is caught before it could be
+   silently no-opped by the guarded UPDATE after the POSTs). The correct
+   follow-up — a delivery-only entry that suppresses the production
+   bucket — is deferred behind issue #353; until then the condition is a
+   loud error, never silent suppression.
 4. **Uniform delivery fraction.** Biochar transport scales by one
-   removal-wide fraction (`appliedDryKg / totalBiocharOutputKg`). The legs
-   are already lineage-scoped to the removal's applications; scaling each
-   leg by the same fraction is an honest, documented approximation.
+   removal-wide fraction (`appliedDryKg / totalBiocharOutputKg`, the shared
+   `appliedBiocharFraction` definition). The legs are already
+   lineage-scoped to the removal's applications; scaling each leg by the
+   same fraction is an honest, documented approximation. The transport
+   evidence-ledger PDF derives its biochar subtotal from the same fraction
+   and renders the "leg sum × applied share" arithmetic explicitly, so the
+   Source-mirrored ledger always reconciles to the submitted scalar.
    Per-delivery scoping needs the application→batch junction and is
    deferred alongside #353.
 5. **`bucket` lives on `INPUT_MAPPING`, not the blueprint.** A deliberate
