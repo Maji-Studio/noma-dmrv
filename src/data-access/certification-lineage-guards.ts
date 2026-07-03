@@ -20,6 +20,7 @@ import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
 
 export type CertifiedLineageEntityType =
+  | "creditBatch"
   | "productionRun"
   | "sample"
   | "application"
@@ -36,6 +37,7 @@ export interface CertifiedLineageTarget {
 const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
 
 const ENTITY_LABELS: Record<CertifiedLineageEntityType, string> = {
+  creditBatch: "credit batch",
   productionRun: "production run",
   sample: "sample",
   application: "application",
@@ -56,6 +58,8 @@ const ghgStatementSubmission = alias(
 
 function targetCondition(target: CertifiedLineageTarget): SQL {
   switch (target.entityType) {
+    case "creditBatch":
+      return eq(creditBatches.id, target.entityId);
     case "productionRun":
       return eq(productionRuns.id, target.entityId);
     case "sample":
@@ -95,7 +99,15 @@ function lineageQuery(tx: DbTransaction, target: CertifiedLineageTarget) {
       eq(productionRunFeedstocks.productionRunId, productionRuns.id),
     )
     .leftJoin(feedstocks, eq(feedstocks.id, productionRunFeedstocks.feedstockId))
-    .leftJoin(samples, eq(samples.productionRunId, productionRuns.id))
+    // A Sample anchors on the credit batch (issue #309); the run link is legacy
+    // provenance only, kept as a fallback so pre-re-grain rows stay guarded.
+    .leftJoin(
+      samples,
+      or(
+        eq(samples.creditBatchId, creditBatches.id),
+        eq(samples.productionRunId, productionRuns.id),
+      )!,
+    )
     .leftJoin(
       biocharProducts,
       eq(biocharProducts.linkedProductionRunId, productionRuns.id),

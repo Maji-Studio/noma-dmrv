@@ -1,12 +1,14 @@
 /**
  * Samples Data Access Layer
  * CRUD operations for lab samples with auth guards, pagination, and filtering
- * Linked to production runs per Isometric Protocol Section 8.3
+ * A Sample anchors on ONE credit batch (the protocol production batch) per
+ * Isometric Protocol Section 8.3 / issue #309; the production-run column is
+ * legacy provenance only (pre-re-grain rows) and is no longer written.
  */
 
 import { and, asc, avg, count, desc, eq, gte, ilike, lte, or, sql, SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import {
   creditBatches,
   samples,
@@ -15,7 +17,6 @@ import {
 } from "@/db/schema";
 import type { SampleFilterData } from "@/schemas/samples";
 import { deleteTransportLegsForEntity } from "./transport-legs";
-import { resolveRunCreditBatchId } from "./credit-batch-samples";
 
 // ============================================
 // Types
@@ -24,9 +25,11 @@ import { resolveRunCreditBatchId } from "./credit-batch-samples";
 export interface SampleWithRelations {
   id: string;
   sampleCode: string;
-  // Provenance — which run the replicate was drawn from (nullable since ADR 0016).
+  // Legacy provenance — pre-re-grain rows only; never written for new samples
+  // (issue #309: the batch's runs are commingled, so no run is attributable).
   productionRunId: string | null;
   // The credit batch (protocol production batch) this replicate characterises.
+  // Required for new samples; nullable in the type for legacy rows.
   creditBatchId: string | null;
   samplingTime: Date;
   weightGrams: number | null;
@@ -86,7 +89,7 @@ export interface SampleWithRelations {
   updatedAt: Date;
 
   // Relations
-  productionRunCode: string | null;
+  creditBatchCode: string | null;
   facilityCode: string | null;
   facilityName: string | null;
 }
@@ -124,7 +127,7 @@ const batchFacilities = alias(facilities, "sample_batch_facilities");
 
 /**
  * Get all samples with pagination and filtering
- * Supports search, production run filter, durability option, date range, sorting, and pagination
+ * Supports search, credit batch filter, durability option, date range, sorting, and pagination
  */
 export async function getSamples(
   userId: string,
@@ -134,7 +137,7 @@ export async function getSamples(
 
   const {
     search,
-    productionRunId,
+    creditBatchId,
     facilityId,
     // durabilityOption not yet supported in DB filtering
     startDate,
@@ -153,8 +156,8 @@ export async function getSamples(
     conditions.push(ilike(samples.sampleCode, searchPattern));
   }
 
-  if (productionRunId) {
-    conditions.push(eq(samples.productionRunId, productionRunId));
+  if (creditBatchId) {
+    conditions.push(eq(samples.creditBatchId, creditBatchId));
   }
 
   if (facilityId) {
@@ -244,9 +247,10 @@ export async function getSamples(
       ironPercent: samples.ironPercent,
       createdAt: samples.createdAt,
       updatedAt: samples.updatedAt,
-      productionRunCode: productionRuns.code,
-      facilityCode: sql<string | null>`coalesce(${runFacilities.code}, ${batchFacilities.code})`,
-      facilityName: sql<string | null>`coalesce(${runFacilities.name}, ${batchFacilities.name})`,
+      creditBatchCode: creditBatches.code,
+      batchDurabilityOption: creditBatches.durabilityOption,
+      facilityCode: sql<string | null>`coalesce(${batchFacilities.code}, ${runFacilities.code})`,
+      facilityName: sql<string | null>`coalesce(${batchFacilities.name}, ${runFacilities.name})`,
     })
     .from(samples)
     .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
@@ -259,19 +263,27 @@ export async function getSamples(
     .offset(offset);
 
   // Map results with computed fields
-  const items: SampleWithRelations[] = sampleList.map((sample) => ({
-    ...sample,
-    volatileMatterPercent: null, // Not in current DB schema
-    surfaceAreaM2PerG: null, // Not in current DB schema
-    durabilityOption: sample.randomReflectanceR0Percent != null ? "1000_year" as const : "200_year" as const,
-    nutrientClaimEnabled: !!(
-      sample.phosphorusPercent ||
-      sample.potassiumPercent ||
-      sample.magnesiumPercent ||
-      sample.calciumPercent ||
-      sample.ironPercent
-    ),
-  }));
+  const items: SampleWithRelations[] = sampleList.map(
+    ({ batchDurabilityOption, ...sample }) => ({
+      ...sample,
+      volatileMatterPercent: null, // Not in current DB schema
+      surfaceAreaM2PerG: null, // Not in current DB schema
+      // The durability tier lives on the credit batch (issue #309); infer from
+      // R₀ presence only for legacy batchless rows.
+      durabilityOption:
+        batchDurabilityOption ??
+        (sample.randomReflectanceR0Percent != null
+          ? ("1000_year" as const)
+          : ("200_year" as const)),
+      nutrientClaimEnabled: !!(
+        sample.phosphorusPercent ||
+        sample.potassiumPercent ||
+        sample.magnesiumPercent ||
+        sample.calciumPercent ||
+        sample.ironPercent
+      ),
+    }),
+  );
 
   return {
     items,
@@ -333,9 +345,10 @@ export async function getSampleById(
       ironPercent: samples.ironPercent,
       createdAt: samples.createdAt,
       updatedAt: samples.updatedAt,
-      productionRunCode: productionRuns.code,
-      facilityCode: sql<string | null>`coalesce(${runFacilities.code}, ${batchFacilities.code})`,
-      facilityName: sql<string | null>`coalesce(${runFacilities.name}, ${batchFacilities.name})`,
+      creditBatchCode: creditBatches.code,
+      batchDurabilityOption: creditBatches.durabilityOption,
+      facilityCode: sql<string | null>`coalesce(${batchFacilities.code}, ${runFacilities.code})`,
+      facilityName: sql<string | null>`coalesce(${batchFacilities.name}, ${runFacilities.name})`,
     })
     .from(samples)
     .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
@@ -348,17 +361,20 @@ export async function getSampleById(
     throw new SafeError("Sample not found");
   }
 
+  const { batchDurabilityOption, ...rest } = sample;
   return {
-    ...sample,
+    ...rest,
     volatileMatterPercent: null,
     surfaceAreaM2PerG: null,
-    durabilityOption: sample.randomReflectanceR0Percent != null ? "1000_year" : "200_year",
+    durabilityOption:
+      batchDurabilityOption ??
+      (rest.randomReflectanceR0Percent != null ? "1000_year" : "200_year"),
     nutrientClaimEnabled: !!(
-      sample.phosphorusPercent ||
-      sample.potassiumPercent ||
-      sample.magnesiumPercent ||
-      sample.calciumPercent ||
-      sample.ironPercent
+      rest.phosphorusPercent ||
+      rest.potassiumPercent ||
+      rest.magnesiumPercent ||
+      rest.calciumPercent ||
+      rest.ironPercent
     ),
   };
 }
@@ -369,14 +385,14 @@ export async function getSampleById(
  */
 export async function getSampleStats(
   userId: string,
-  productionRunId?: string,
+  creditBatchId?: string,
   facilityId?: string,
 ): Promise<SampleStats> {
   requireAuth(userId);
 
   const conditions: SQL[] = [];
-  if (productionRunId) {
-    conditions.push(eq(samples.productionRunId, productionRunId));
+  if (creditBatchId) {
+    conditions.push(eq(samples.creditBatchId, creditBatchId));
   }
   if (facilityId) {
     conditions.push(
@@ -400,17 +416,18 @@ export async function getSampleStats(
     .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
     .where(whereClause);
 
-  // Count 1000-year samples (those with R₀ reflectance data)
+  // Count 1000-year samples — the tier is the credit batch's declared choice
+  // (issue #309); legacy batchless rows fall back to R₀-reflectance presence.
+  const is1000Year = sql`(
+    ${creditBatches.durabilityOption} = '1000_year'
+    or (${creditBatches.id} is null and ${samples.randomReflectanceR0Percent} is not null)
+  )`;
   const [samples1000Year] = await db
     .select({ count: count() })
     .from(samples)
     .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
     .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
-    .where(
-      whereClause
-        ? and(whereClause, sql`${samples.randomReflectanceR0Percent} IS NOT NULL`)
-        : sql`${samples.randomReflectanceR0Percent} IS NOT NULL`
-    );
+    .where(whereClause ? and(whereClause, is1000Year) : is1000Year);
 
   const total = Number(stats.totalSamples);
   const samples1000 = Number(samples1000Year.count);
@@ -430,6 +447,49 @@ export async function getSampleStats(
 // Sample Create Operations
 // ============================================
 
+// The credit batch's declared tier — NOT the client-synced `durabilityOption`
+// mirror kept in form state — is the source of truth for the 1000-year
+// evidence invariant (issue #309): a stale form, a failed batch-summary query,
+// or a direct server-action call could otherwise persist a 1000-year sample
+// missing its mandatory R₀/TGA fields (PR #336 second-pass review). Also
+// subsumes the batch-existence check for both write paths. Reads through the
+// caller's transaction so the tier can't be promoted to 1000-year between the
+// check and the sample write.
+async function requireBatchTierEvidence(
+  tx: DbTransaction,
+  creditBatchId: string,
+  values: {
+    randomReflectanceR0Percent: number | null;
+    reactiveCarbonPercent: number | null;
+    residualCarbonPercent: number | null;
+  },
+): Promise<void> {
+  const [creditBatch] = await tx
+    .select({ durabilityOption: creditBatches.durabilityOption })
+    .from(creditBatches)
+    .where(eq(creditBatches.id, creditBatchId));
+
+  if (!creditBatch) {
+    throw new SafeError("Credit batch not found");
+  }
+  if (creditBatch.durabilityOption !== "1000_year") {
+    return;
+  }
+  if (values.randomReflectanceR0Percent == null) {
+    throw new SafeError(
+      "R₀ reflectance is required for a sample on a 1000-year credit batch",
+    );
+  }
+  if (
+    values.reactiveCarbonPercent == null &&
+    values.residualCarbonPercent == null
+  ) {
+    throw new SafeError(
+      "TGA non-reactive carbon data is required for a sample on a 1000-year credit batch",
+    );
+  }
+}
+
 /**
  * Create a new sample
  */
@@ -437,10 +497,11 @@ export async function createSample(
   userId: string,
   data: {
     sampleCode: string;
-    productionRunId: string;
-    // The credit batch (protocol production batch) this replicate characterises
-    // (ADR 0016). Optional — may be associated after the batch is formed.
-    creditBatchId?: string | null;
+    // The credit batch (protocol production batch) this replicate
+    // characterises — required (issue #309): every sample belongs to exactly
+    // one batch, and the batch's biochar is commingled across its runs so no
+    // production run is attributable.
+    creditBatchId: string;
     samplingTime: Date;
     labName?: string | null;
     labAccreditation?: string | null;
@@ -488,42 +549,28 @@ export async function createSample(
     throw new SafeError("A sample with this code already exists");
   }
 
-  // Verify production run exists
-  const [productionRun] = await db
-    .select({ id: productionRuns.id })
-    .from(productionRuns)
-    .where(eq(productionRuns.id, data.productionRunId));
-
-  if (!productionRun) {
-    throw new SafeError("Production run not found");
-  }
-
   // Create sample
   const sample = await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
       tx,
-      { entityType: "productionRun", entityId: data.productionRunId },
+      { entityType: "creditBatch", entityId: data.creditBatchId },
       "create",
     );
 
-    // Derive the credit batch from the run's membership when not set explicitly
-    // (the lab-sample form never sets it) — ADR 0016: a Sample characterises the
-    // credit batch its run belongs to, with both links populated. Null when the
-    // run isn't yet in a batch (the form surfaces that; back-filled when it joins).
-    // Honor an explicit creditBatchId (including null) — only derive from the
-    // run's membership when the field is omitted, matching updateSample's
-    // explicit/undefined contract (the lab-sample form omits it; ADR 0016).
-    const creditBatchId =
-      data.creditBatchId !== undefined
-        ? data.creditBatchId
-        : await resolveRunCreditBatchId(tx, data.productionRunId);
+    // Verify the batch exists and enforce its declared tier's evidence
+    // requirements (tier read from the batch, never from the client) —
+    // inside the transaction so the write sees the same tier as the check.
+    await requireBatchTierEvidence(tx, data.creditBatchId, {
+      randomReflectanceR0Percent: data.randomReflectanceR0Percent ?? null,
+      reactiveCarbonPercent: data.reactiveCarbonPercent ?? null,
+      residualCarbonPercent: data.residualCarbonPercent ?? null,
+    });
 
     const [created] = await tx
       .insert(samples)
       .values({
         sampleCode: data.sampleCode,
-        productionRunId: data.productionRunId,
-        creditBatchId,
+        creditBatchId: data.creditBatchId,
         samplingTime: data.samplingTime,
         labName: data.labName ?? null,
         labAccreditation: data.labAccreditation ?? null,
@@ -583,8 +630,7 @@ export async function updateSample(
   sampleId: string,
   data: {
     sampleCode?: string;
-    productionRunId?: string;
-    creditBatchId?: string | null;
+    creditBatchId?: string;
     samplingTime?: Date;
     labName?: string | null;
     labAccreditation?: string | null;
@@ -650,7 +696,6 @@ export async function updateSample(
   };
 
   if (data.sampleCode !== undefined) updateData.sampleCode = data.sampleCode;
-  if (data.productionRunId !== undefined) updateData.productionRunId = data.productionRunId;
   if (data.creditBatchId !== undefined) updateData.creditBatchId = data.creditBatchId;
   if (data.samplingTime !== undefined) updateData.samplingTime = data.samplingTime;
   if (data.labName !== undefined) updateData.labName = data.labName;
@@ -705,25 +750,42 @@ export async function updateSample(
       "update",
     );
 
+    // Moving a sample onto a batch that's already part of a submitted artifact
+    // would silently change certified chemistry — guard the TARGET batch too.
     if (
-      data.productionRunId !== undefined &&
-      data.productionRunId !== existing.productionRunId
+      data.creditBatchId !== undefined &&
+      data.creditBatchId !== existing.creditBatchId
     ) {
       await assertCanMutateCertifiedLineage(
         tx,
-        { entityType: "productionRun", entityId: data.productionRunId },
+        { entityType: "creditBatch", entityId: data.creditBatchId },
         "update",
       );
     }
 
-    // When the run changes and the batch wasn't set explicitly, re-derive the
-    // credit batch from the new run so the link tracks its run's membership
-    // (ADR 0016). An explicit creditBatchId in the payload is honoured as-is.
-    if (data.productionRunId !== undefined && data.creditBatchId === undefined) {
-      updateData.creditBatchId = await resolveRunCreditBatchId(
-        tx,
-        data.productionRunId,
-      );
+    // Enforce the 1000-year evidence invariant against the EFFECTIVE
+    // post-update state (update merged over the existing row) and the
+    // effective batch — covers nulling out R₀/TGA in place as well as moving
+    // the sample onto a 1000-year batch. Runs inside the transaction so the
+    // write sees the same tier as the check. Legacy batchless rows skip
+    // (their tier is inferred from R₀ presence on read).
+    const effectiveCreditBatchId =
+      data.creditBatchId ?? existing.creditBatchId;
+    if (effectiveCreditBatchId) {
+      await requireBatchTierEvidence(tx, effectiveCreditBatchId, {
+        randomReflectanceR0Percent:
+          data.randomReflectanceR0Percent !== undefined
+            ? data.randomReflectanceR0Percent
+            : existing.randomReflectanceR0Percent,
+        reactiveCarbonPercent:
+          data.reactiveCarbonPercent !== undefined
+            ? data.reactiveCarbonPercent
+            : existing.reactiveCarbonPercent,
+        residualCarbonPercent:
+          data.residualCarbonPercent !== undefined
+            ? data.residualCarbonPercent
+            : existing.residualCarbonPercent,
+      });
     }
 
     await tx.update(samples).set(updateData).where(eq(samples.id, sampleId));
@@ -829,13 +891,13 @@ export async function generateNextSampleCode(userId: string): Promise<string> {
  */
 export async function getSampleOptions(
   userId: string,
-  productionRunId?: string
+  creditBatchId?: string
 ): Promise<Array<{ id: string; sampleCode: string; samplingTime: Date }>> {
   requireAuth(userId);
 
   const conditions: SQL[] = [];
-  if (productionRunId) {
-    conditions.push(eq(samples.productionRunId, productionRunId));
+  if (creditBatchId) {
+    conditions.push(eq(samples.creditBatchId, creditBatchId));
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

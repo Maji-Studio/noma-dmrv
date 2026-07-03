@@ -80,10 +80,10 @@ function ReadyCard({
         {formatSafeDate(batch.startDate)} — {formatSafeDate(batch.endDate)}
       </span>
       <div className="grid grid-cols-3 gap-8">
-        <Metric label="Weight" value={formatTonnes(batch.weightTons)} />
+        <Metric label="Weight" value={formatTonnes(batch.appliedWeightTons)} />
         <Metric
           label="CO₂e stored"
-          value={formatTonnes(batch.totalCo2eStoredTons)}
+          value={formatTonnes(batch.co2eStoredTonnes)}
         />
         <Metric
           label="Durability"

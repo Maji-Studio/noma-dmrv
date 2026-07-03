@@ -15,12 +15,10 @@ import { sql } from 'drizzle-orm';
 import {
   certificationSubmissionStatus,
   certifierProvider,
-  projectEmissionCategory,
   syncStatus,
 } from './common';
 import { facilities, reactors } from './facilities';
 import { documents } from './documentation';
-import { users } from './auth';
 
 // Provider-level project registration for a facility.
 export const certifierProjects = pgTable(
@@ -38,14 +36,14 @@ export const certifierProjects = pgTable(
     defaultRemovalTemplateId: text('default_removal_template_id'),
     // --- Phase 3.7 emission-estimate config (per facility) ---
     // Diesel-genset electrical yield: kWh produced per litre of genset
-    // diesel. Converts noma's litre measurement to the kWh the Certify
-    // `energy_based_ci_emissions` components expect. Seed 3.375 (LCA
-    // diesel CI 2.7 kgCO2e/L ÷ genset CI 0.8 kgCO2e/kWh).
+    // diesel. VESTIGIAL since issue #319: diesel submits as litres via
+    // `fuel_usage_by_volume` (EF bound on the Isometric template), so this
+    // yield no longer feeds any submission datapoint. Kept only because
+    // dropping the column is a migration (follow-up ticket).
     gensetEnergyYieldKwhPerLitre: real('genset_energy_yield_kwh_per_litre'),
     // ADR 0015 removed the three `stage_split_*_pct` columns: energy now
     // submits as one combined measurement point, so there is no per-stage
-    // breakdown to apportion. The genset yield above is retained because it is
-    // emissions-affecting (litres → kWh).
+    // breakdown to apportion.
     // Operator-declared facility-level REFERENCE soil temperature (°C) — the
     // authoritative annual-average value submitted to the registry as the
     // `biochar_soil` measurement for every 200-year removal (ADR 0013, soil
@@ -143,82 +141,9 @@ export const certifierSensors = pgTable(
   ]
 );
 
-// Per-facility, per-LCA-window, per-category LCA-derived emission magnitudes
-// (ADR 0005). Each row corresponds to one expected `PROJECT`-scope Component
-// in the facility's Isometric project; noma does NOT POST these — the
-// operator publishes Project Components directly in the Isometric UI, and
-// the read-only drift panel on /certification/ reconciles by comparing each
-// row to `GET /components?project_id=…&scope=PROJECT` via
-// `matchEmissionToComponent` in
-// src/lib/isometric/utils/project-emission-match.ts.
-//
-// The `allocationStrategyRecommendation` is informational copy the admin
-// pastes into the Isometric UI when authoring the Project Component
-// (default `CUSTOM_TIME_PERIOD` with target_date = lcaWindowEndOn — see
-// ADR 0005 §2). Per-category overrides are an admin edit on each row.
-export const certifierProjectEmissions = pgTable(
-  'certifier_project_emissions',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    facilityId: uuid('facility_id')
-      .notNull()
-      .references(() => facilities.id),
-    provider: certifierProvider('provider').notNull().default('isometric'),
-    category: projectEmissionCategory('category').notNull(),
-    // Inclusive LCA-measurement window. `lcaWindowEndOn` becomes the
-    // recommended Certify `target_date` for CUSTOM_TIME_PERIOD allocation.
-    lcaWindowStartOn: date('lca_window_start_on').notNull(),
-    lcaWindowEndOn: date('lca_window_end_on').notNull(),
-    // Transcribed LCA magnitude. Unit string must match the Certify
-    // blueprint's `compatible_unit` for this category (see
-    // CATEGORY_TO_BLUEPRINT). The drift panel matches with ±0.5% tolerance
-    // on this magnitude.
-    magnitude: real('magnitude').notNull(),
-    unit: text('unit').notNull(),
-    allocationStrategyRecommendation: text('allocation_strategy_recommendation')
-      .notNull()
-      .default('CUSTOM_TIME_PERIOD'),
-    // FK to the LCA PDF (or other evidence) in the documents table. Nullable
-    // because a row may be entered before its source document upload
-    // completes; the admin form prompts for the upload but does not block
-    // save. ON DELETE SET NULL so deleting the document does not block the
-    // delete and does not leave a dangling FK — the transcription row
-    // outlives the source document, which matches the audit posture (the
-    // magnitudes are still valid even if the supporting PDF is removed).
-    sourceDocumentId: uuid('source_document_id').references(
-      () => documents.id,
-      { onDelete: 'set null' }
-    ),
-    notes: text('notes'),
-    // Audit trail — who transcribed the LCA value and when.
-    recordedBy: text('recorded_by')
-      .notNull()
-      .references(() => users.id),
-    recordedAt: timestamp('recorded_at').defaultNow().notNull(),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
-  },
-  (table) => [
-    // One row per (provider, facility, LCA-window-end, category). Two rows
-    // for the same period+category would represent transcription drift —
-    // edit the existing row rather than minting a duplicate. Provider is
-    // included for parity with every other certifier uniqueness constraint.
-    unique('certifier_project_emissions_facility_period_category_unique').on(
-      table.provider,
-      table.facilityId,
-      table.lcaWindowEndOn,
-      table.category
-    ),
-    // Indexes the facility FK — drives the admin list view and the drift
-    // panel per-facility filter. Postgres does not auto-index FKs.
-    index('certifier_project_emissions_facility_id_idx').on(table.facilityId),
-    // Window chronology guard — start must precede or equal end.
-    check(
-      'certifier_project_emissions_window_chronology',
-      sql`${table.lcaWindowStartOn} <= ${table.lcaWindowEndOn}`
-    ),
-  ]
-);
+// (The `certifier_project_emissions` LCA-journal table lived here under
+// ADR 0005 Posture B; removed per ADR 0018 — Isometric is the sole
+// system-of-record for PROJECT-scope emission Components.)
 
 // One Isometric GHG Statement — an independent, period-anchored artifact
 // that rolls up multiple Removals for a supplier-chosen reporting period

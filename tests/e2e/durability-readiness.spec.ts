@@ -6,7 +6,8 @@
  * samples distributed across both runs/days, must roll up to:
  *   - the credit-batch detail's durability panel (sample table + readiness
  *     chips + the submitted mean ± s.d.), and
- *   - the lab-sample form's derived-batch progress preview.
+ *   - the lab-sample form's batch progress preview (the sample anchors on the
+ *     credit batch directly — issue #309).
  *
  * Pure UI + DB (no Isometric) — runs in PR CI, NOT @live. The live
  * measurement-samples POST is gated (`DURABILITY_MEASUREMENT_SAMPLES_LIVE`), so
@@ -40,7 +41,7 @@ test.describe("200-year durability readiness", () => {
 
     // The three readiness signals: ≥3 met, distributed across runs/days, eligible.
     const signals = panel.getByTestId("durability-readiness-signals");
-    await expect(signals).toContainText("3 of 3 replicates");
+    await expect(signals).toContainText("3 of 3 usable samples");
     await expect(signals).toContainText("distinct runs/days");
     await expect(signals).toContainText("Eligible");
 
@@ -55,7 +56,7 @@ test.describe("200-year durability readiness", () => {
     ).toBeVisible();
   });
 
-  test("lab-sample form previews the derived credit batch's sampling progress", async ({
+  test("lab-sample form previews the selected credit batch's sampling progress", async ({
     adminPage,
     seededData,
   }) => {
@@ -71,8 +72,8 @@ test.describe("200-year durability readiness", () => {
     await adminPage.getByRole("button", { name: "New Sample" }).click();
     await waitForSideSheet(adminPage);
 
-    // Selecting one of the batch's runs derives the credit batch it characterises.
-    await selectEntity(adminPage, "Production Run", batch.runIds[0]);
+    // Samples anchor on the credit batch directly (issue #309).
+    await selectEntity(adminPage, "Credit Batch", batch.creditBatchId);
 
     const progress = adminPage.getByTestId("sample-batch-progress");
     await expect(progress).toContainText(
@@ -80,7 +81,7 @@ test.describe("200-year durability readiness", () => {
     );
     await expect(
       progress.getByTestId("durability-readiness-signals"),
-    ).toContainText("3 of 3 replicates");
+    ).toContainText("3 of 3 usable samples");
     await expect(progress).toContainText("Eligible");
   });
 });

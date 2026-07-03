@@ -29,6 +29,7 @@ import {
 } from "@/lib/chain-of-custody/sankey";
 import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
+import { getCo2eStoredPreviews } from "./credit-batches";
 import {
   getDashboardOperations,
   type DashboardEvidenceRow,
@@ -272,8 +273,8 @@ export async function getDashboardOverview(
         ),
       db
         .select({
+          id: creditBatches.id,
           endDate: creditBatches.endDate,
-          totalCo2eStoredTons: creditBatches.totalCo2eStoredTons,
         })
         .from(creditBatches)
         .where(
@@ -306,6 +307,18 @@ export async function getDashboardOverview(
     getAttentionItems(facilityId),
     getDashboardOperations(userId, facilityId),
   ]);
+
+  // Derived CO₂e stored per batch (issue #285): the same preview figure the
+  // credit-batch detail page shows — the stored column no longer exists.
+  // The "all" period fetches every batch in the facility (fetchStart null),
+  // so the helper's internal PREVIEW_FANOUT_CONCURRENCY chunking is what
+  // keeps the per-batch chain-of-custody walks from bursting the pool.
+  const batchPreviews = await getCo2eStoredPreviews(
+    userId,
+    batchRows.map((row) => row.id),
+  );
+  const storedTonnesOf = (batchId: string): number | null =>
+    batchPreviews[batchId]?.co2eStoredTonnes ?? null;
 
   // ---- normalize to dated points -----------------------------------------
 
@@ -412,16 +425,16 @@ export async function getDashboardOverview(
   );
   const previousBatches = batchPoints.filter((p) => inPreviousPeriod(p.ms, bounds));
   const currentStoredBatches = currentBatches.filter(
-    (p) => p.row.totalCo2eStoredTons != null,
+    (p) => storedTonnesOf(p.row.id) != null,
   );
   const previousStoredBatches = previousBatches.filter(
-    (p) => p.row.totalCo2eStoredTons != null,
+    (p) => storedTonnesOf(p.row.id) != null,
   );
   const storedCurrentTons = sum(
-    currentStoredBatches.map((p) => p.row.totalCo2eStoredTons ?? 0),
+    currentStoredBatches.map((p) => storedTonnesOf(p.row.id) ?? 0),
   );
   const storedPreviousTons = sum(
-    previousStoredBatches.map((p) => p.row.totalCo2eStoredTons ?? 0),
+    previousStoredBatches.map((p) => storedTonnesOf(p.row.id) ?? 0),
   );
 
   const yieldSeriesIn = bucketSeries(
@@ -532,7 +545,7 @@ export async function getDashboardOverview(
       series: bucketSeries(
         currentStoredBatches.map((p) => ({
           ms: p.ms,
-          value: p.row.totalCo2eStoredTons ?? 0,
+          value: storedTonnesOf(p.row.id) ?? 0,
         })),
         seriesStartMs,
         bounds.nowMs,

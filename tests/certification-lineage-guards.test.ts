@@ -188,6 +188,7 @@ async function createLineageFixture(
         facilityId: facility.id,
         orderId: order.id,
         biocharProductId: product.id,
+        status: "delivered",
         deliveryDate: new Date("2026-06-15T00:00:00Z"),
         deliveredWetMassKg: 300,
         massDryKg: 285,

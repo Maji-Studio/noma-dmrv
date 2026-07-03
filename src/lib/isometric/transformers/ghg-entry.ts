@@ -1,6 +1,5 @@
 import { SafeError } from "@/lib/errors";
 import type { components } from "../generated/certify";
-import type { AggregatedProductionData } from "../utils/aggregation";
 import { isSequestrationBlueprintKey } from "./measurement-sample";
 
 type CreateGhgEntryRequest = components["schemas"]["CreateGhgEntryRequest"];
@@ -19,7 +18,11 @@ export interface BuildCreateGhgEntryArgs {
   // Resolved scalar datapoint IDs keyed by `${rtcId}::${inputKey}` — orchestrator
   // populates one entry per monitored input plus pre-bound fixed inputs.
   datapointIdsByRtcInput: Map<string, string>;
-  agg: AggregatedProductionData;
+  // The removal's reporting window (biochar protocol v1.3 §8.6.2): starts with
+  // production, ends when the biochar is applied at the storage site — NOT the
+  // production window. The orchestrator derives `completedOn` from the latest
+  // application date across the removal's lineages (issue #320).
+  reportingWindow: { startedOn: Date; completedOn: Date };
   projectId: string;
   supplierRefId: string;
 }
@@ -31,7 +34,7 @@ export function buildCreateGhgEntryRequest(
     template,
     blueprintsByKey,
     datapointIdsByRtcInput,
-    agg,
+    reportingWindow,
     projectId,
     supplierRefId,
   } = args;
@@ -101,9 +104,12 @@ export function buildCreateGhgEntryRequest(
   }
 
   return {
-    completed_on: toISODate(agg.latestEndTime),
+    // §8.6.2: the Reporting Period "ends upon application of biochar from that
+    // batch at the storage site" — completed_on carries the latest application
+    // date, not production end (issue #320).
+    completed_on: toISODate(reportingWindow.completedOn),
     project_id: projectId,
-    started_on: toISODate(agg.earliestStartTime),
+    started_on: toISODate(reportingWindow.startedOn),
     supplier_reference_id: supplierRefId,
     ghg_entry_template_id: template.id,
     ghg_entry_template_components: rtComponents,

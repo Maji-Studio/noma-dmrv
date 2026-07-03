@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { deleteApplication } from "@/data-access/applications";
+import { getCreditBatchById } from "@/data-access/credit-batches";
 import { applications, soilTemperatureMeasurements } from "@/db/schema/application";
 import {
   creditBatches,
@@ -236,10 +237,6 @@ async function createCreditBatchRecord(
   runId: string,
   status: "draft" | "pending" | "verified" | "issued" | "rejected",
   fields?: {
-    weightTons?: number | null;
-    totalCo2eStoredTons?: number | null;
-    totalCo2eEmissionsTons?: number | null;
-    totalCo2eCounterfactualTons?: number | null;
     fDurableCalculated?: number | null;
   },
 ): Promise<string> {
@@ -256,10 +253,6 @@ async function createCreditBatchRecord(
       certifier: "isometric",
       durabilityOption: "200_year",
       hToCorgRatio: 0.4,
-      weightTons: fields?.weightTons ?? null,
-      totalCo2eStoredTons: fields?.totalCo2eStoredTons ?? null,
-      totalCo2eEmissionsTons: fields?.totalCo2eEmissionsTons ?? null,
-      totalCo2eCounterfactualTons: fields?.totalCo2eCounterfactualTons ?? null,
       fDurableCalculated: fields?.fDurableCalculated ?? null,
     })
     .returning({ id: creditBatches.id });
@@ -275,7 +268,7 @@ async function createCreditBatchRecord(
 }
 
 describe("deleteApplication", () => {
-  it("refreshes draft or pending credit batch summaries after removing a linked application", async () => {
+  it("shrinks the derived applied weight after removing a linked application", async () => {
     const runId = `${crypto.randomUUID()}-pending`;
     const fixture = await createDeleteFixture(runId);
 
@@ -297,14 +290,15 @@ describe("deleteApplication", () => {
         fixture,
         runId,
         "pending",
-        {
-          weightTons: 7,
-          totalCo2eStoredTons: 5,
-          totalCo2eEmissionsTons: 0.5,
-          totalCo2eCounterfactualTons: 0.2,
-          fDurableCalculated: 0.85,
-        },
+        { fDurableCalculated: 0.85 },
       );
+
+      // Derived on read (issue #285): Σ member applications' applied tons —
+      // no stored column, so nothing can go stale.
+      const batchBefore = await getCreditBatchById(TEST_USER_ID, creditBatchId, {
+        skipPreview: true,
+      });
+      expect(batchBefore?.appliedWeightTons).toBe(7);
 
       await deleteApplication(TEST_USER_ID, deletedApplicationId);
       fixture.applicationIds = fixture.applicationIds.filter((id) => id !== deletedApplicationId);
@@ -325,27 +319,19 @@ describe("deleteApplication", () => {
         .from(soilTemperatureMeasurements)
         .where(eq(soilTemperatureMeasurements.applicationId, deletedApplicationId));
 
-      const [updatedBatch] = await db
-        .select({
-          weightTons: creditBatches.weightTons,
-          totalCo2eStoredTons: creditBatches.totalCo2eStoredTons,
-          totalCo2eEmissionsTons: creditBatches.totalCo2eEmissionsTons,
-          totalCo2eCounterfactualTons: creditBatches.totalCo2eCounterfactualTons,
-          fDurableCalculated: creditBatches.fDurableCalculated,
-        })
-        .from(creditBatches)
-        .where(eq(creditBatches.id, creditBatchId));
-
       expect(remainingApplication).toBeUndefined();
       expect(productionRunLinks).toEqual([{ productionRunId: fixture.productionRunId }]);
       expect(remainingMeasurements).toHaveLength(0);
-      expect(updatedBatch).toEqual({
-        weightTons: 2,
-        totalCo2eStoredTons: 1.4,
-        totalCo2eEmissionsTons: null,
-        totalCo2eCounterfactualTons: null,
-        fDurableCalculated: null,
+
+      // The derived figure reflects the remaining member application with no
+      // write-back to the batch row.
+      const batchAfter = await getCreditBatchById(TEST_USER_ID, creditBatchId, {
+        skipPreview: true,
       });
+      expect(batchAfter?.appliedWeightTons).toBe(2);
+      // fDurableCalculated is sample-derived (ADR 0013/0016) — an application
+      // delete no longer touches it.
+      expect(batchAfter?.fDurableCalculated).toBe(0.85);
     } finally {
       await cleanupDeleteFixture(fixture);
     }
@@ -362,10 +348,6 @@ describe("deleteApplication", () => {
         co2eStoredTonnes: 3.6,
       });
       await createCreditBatchRecord(fixture, runId, "issued", {
-        weightTons: 5,
-        totalCo2eStoredTons: 3.6,
-        totalCo2eEmissionsTons: 0.5,
-        totalCo2eCounterfactualTons: 0.2,
         fDurableCalculated: 0.85,
       });
 

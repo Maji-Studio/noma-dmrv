@@ -22,15 +22,16 @@ const CO2_STORED = {
   groupKey: "co2-stored",
   blueprintKey: "carbon_rich_substance_sequestration",
 } as const;
-// Energy enters at a single pyrolysis measurement point (ADR 0015): one grid
-// electricity datapoint and one diesel-genset datapoint.
+// Energy enters at a single pyrolysis measurement point (ADR 0015, amended by
+// issue #319): one grid electricity datapoint (kWh) and one combined diesel
+// datapoint (litres, `fuel_usage_by_volume` — the EF is template-side).
 const PYROLYSIS_ELECTRICITY = {
   groupKey: "pyrolysis",
   blueprintKey: "grid_electricity_use",
 } as const;
-const PYROLYSIS_GENSET = {
+const PYROLYSIS_FUEL_VOLUME = {
   groupKey: "pyrolysis",
-  blueprintKey: "energy_based_ci_emissions",
+  blueprintKey: "fuel_usage_by_volume",
 } as const;
 const baseAgg: AggregatedProductionData = {
   weightedOrganicCarbonPercent: 80,
@@ -42,16 +43,25 @@ const baseAgg: AggregatedProductionData = {
   totalFeedstockDryMassKg: 4000,
   totalStartupDieselLitres: 50,
   totalGensetDieselLitres: 20,
+  // Combined diesel litres = 50 startup + 20 genset (issue #319 — submitted
+  // by volume through pyrolysis/fuel_usage_by_volume).
+  totalDieselLitres: 70,
   totalElectricityKwh: 200,
   feedstockTransportMassDistanceTonneKm: 50,
   biocharTransportMassDistanceTonneKm: 100,
   sampleTransportMassDistanceTonneKm: 12,
-  // 20 L × 3.375 kWh/L (enriched genset figure — ADR 0015 single point).
-  totalGensetKwh: 67.5,
   earliestStartTime: new Date("2026-01-01T00:00:00Z"),
   latestEndTime: new Date("2026-01-31T23:59:59Z"),
   sourceProductionRunIds: ["pr_1", "pr_2"],
   warnings: [],
+};
+
+// The §8.6.2 reporting window `buildCreateGhgEntryRequest` consumes (issue
+// #320): starts with production, ends at the latest biochar application. The
+// orchestrator derives it; the transformer just formats it.
+const baseReportingWindow = {
+  startedOn: new Date("2026-01-01T00:00:00Z"),
+  completedOn: new Date("2026-01-31T23:59:59Z"),
 };
 
 function blueprintInput(
@@ -150,22 +160,30 @@ describe("buildCreateDatapointRequest", () => {
     expect(result.quantity.magnitude).toBe(200);
   });
 
-  it("maps pyrolysis genset energy to the combined totalGensetKwh", () => {
+  it("maps pyrolysis fuel volume to the combined totalDieselLitres (issue #319)", () => {
+    // Genset + startup diesel submit as ONE litres datapoint through
+    // fuel_usage_by_volume; the volumetric EF is a fixed input pre-bound on
+    // the Isometric template. No litres→kWh conversion anywhere.
     const result = buildCreateDatapointRequest({
-      groupKey: PYROLYSIS_GENSET.groupKey,
-      componentBlueprintKey: PYROLYSIS_GENSET.blueprintKey,
-      rtcInput: rtcInput({ input_key: "energy", quantity_kind: "energy" }),
+      groupKey: PYROLYSIS_FUEL_VOLUME.groupKey,
+      componentBlueprintKey: PYROLYSIS_FUEL_VOLUME.blueprintKey,
+      rtcInput: rtcInput({
+        input_key: "volume_of_fuel",
+        quantity_kind: "volume",
+      }),
       blueprintInput: blueprintInput({
-        input_key: "energy",
-        compatible_unit: "kWh",
-        quantity_kind: "energy",
+        input_key: "volume_of_fuel",
+        compatible_unit: "l",
+        quantity_kind: "volume",
       }),
       agg: baseAgg,
       projectId: PROJECT_ID,
       supplierRefId: SUPPLIER_REF,
     });
 
-    expect(result.quantity).toEqual({ magnitude: 67.5, unit: "kWh" });
+    // 50 startup + 20 genset = 70 combined litres.
+    expect(result.quantity).toEqual({ magnitude: 70, unit: "l" });
+    expect(result.type).toBe("REPORTED");
   });
 
   it("rejects an unknown (group, blueprint, input) tuple with a SafeError pointing to the mapping file", () => {
@@ -337,25 +355,14 @@ describe("buildCreateDatapointRequest", () => {
         "mass_distance",
       ],
       ["biochar-transport", "mass_distance_based_ci_emissions", "mass_distance"],
-      // Energy — single combined measurement point under pyrolysis (ADR 0015):
-      // grid electricity → totalElectricityKwh, diesel genset → totalGensetKwh.
-      // The per-stage `metered_energy_based_ci_emissions` electricity entry and
-      // the biochar-processing / biomass-feedstock-processing energy entries are
-      // gone.
+      // Energy — single combined measurement point under pyrolysis (ADR 0015,
+      // amended by issue #319): grid electricity → totalElectricityKwh, and
+      // combined diesel litres → totalDieselLitres via fuel_usage_by_volume
+      // (EF template-side). The former energy_based_ci_emissions genset entry
+      // and the biomass-feedstock-sourcing / -processing fuel entries are gone
+      // (the latter would double-count the combined litres).
       ["pyrolysis", "grid_electricity_use", "electricity_use"],
-      ["pyrolysis", "energy_based_ci_emissions", "energy"],
-      // Volume-based fuel mapping retained for templates that re-declare the
-      // component (the live template declares none → non-blocking warning).
-      [
-        "biomass-feedstock-sourcing",
-        "fuel_usage_by_volume",
-        "volume_of_fuel",
-      ],
-      [
-        "biomass-feedstock-processing",
-        "fuel_usage_by_volume",
-        "volume_of_fuel",
-      ],
+      ["pyrolysis", "fuel_usage_by_volume", "volume_of_fuel"],
       [
         "sampling-required-for-mrv",
         "mass_distance_based_ci_emissions",
@@ -447,7 +454,7 @@ describe("buildCreateGhgEntryRequest", () => {
       template: tmpl,
       blueprintsByKey: blueprints,
       datapointIdsByRtcInput: datapointIds,
-      agg: baseAgg,
+      reportingWindow: baseReportingWindow,
       projectId: PROJECT_ID,
       supplierRefId: SUPPLIER_REF,
     });
@@ -486,7 +493,7 @@ describe("buildCreateGhgEntryRequest", () => {
       template: tmpl,
       blueprintsByKey: blueprints,
       datapointIdsByRtcInput: datapointIds,
-      agg: baseAgg,
+      reportingWindow: baseReportingWindow,
       projectId: PROJECT_ID,
       supplierRefId: SUPPLIER_REF,
     });
@@ -519,7 +526,7 @@ describe("buildCreateGhgEntryRequest", () => {
       template: tmpl,
       blueprintsByKey: blueprints,
       datapointIdsByRtcInput: datapointIds,
-      agg: baseAgg,
+      reportingWindow: baseReportingWindow,
       projectId: PROJECT_ID,
       supplierRefId: SUPPLIER_REF,
     });
@@ -538,7 +545,7 @@ describe("buildCreateGhgEntryRequest", () => {
         template: tmpl,
         blueprintsByKey: new Map(),
         datapointIdsByRtcInput: new Map(),
-        agg: baseAgg,
+        reportingWindow: baseReportingWindow,
         projectId: PROJECT_ID,
         supplierRefId: SUPPLIER_REF,
       }),
@@ -560,7 +567,7 @@ describe("buildCreateGhgEntryRequest", () => {
         template: tmpl,
         blueprintsByKey: blueprints,
         datapointIdsByRtcInput: new Map(),
-        agg: baseAgg,
+        reportingWindow: baseReportingWindow,
         projectId: PROJECT_ID,
         supplierRefId: SUPPLIER_REF,
       }),
@@ -578,7 +585,7 @@ describe("buildCreateGhgEntryRequest", () => {
         template: tmpl,
         blueprintsByKey: blueprints,
         datapointIdsByRtcInput: new Map(),
-        agg: baseAgg,
+        reportingWindow: baseReportingWindow,
         projectId: PROJECT_ID,
         supplierRefId: SUPPLIER_REF,
       }),
@@ -593,10 +600,9 @@ describe("buildCreateGhgEntryRequest", () => {
       template: tmpl,
       blueprintsByKey: new Map([["mass_blueprint", blueprintMass]]),
       datapointIdsByRtcInput: new Map([["rtc_A::mass", "dtp_1"]]),
-      agg: {
-        ...baseAgg,
-        earliestStartTime: new Date("2026-03-15T08:30:45Z"),
-        latestEndTime: new Date("2026-04-02T17:00:00Z"),
+      reportingWindow: {
+        startedOn: new Date("2026-03-15T08:30:45Z"),
+        completedOn: new Date("2026-04-02T17:00:00Z"),
       },
       projectId: PROJECT_ID,
       supplierRefId: SUPPLIER_REF,

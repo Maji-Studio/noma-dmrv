@@ -148,11 +148,11 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
     totalFeedstockDryMassKg: 1,
     totalStartupDieselLitres: 0,
     totalGensetDieselLitres: 0,
+    totalDieselLitres: 0,
     totalElectricityKwh: 0,
     feedstockTransportMassDistanceTonneKm: 0,
     biocharTransportMassDistanceTonneKm: 0,
     sampleTransportMassDistanceTonneKm: 0,
-    totalGensetKwh: 0,
     earliestStartTime: new Date(0),
     latestEndTime: new Date(0),
     sourceProductionRunIds: [],
@@ -211,6 +211,32 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
       // The generic missing-entry message must NOT fire — that would mean the
       // scope-conflict guard didn't run first.
       expect(message).not.toMatch(/No INPUT_MAPPING entry/);
+    }
+  });
+
+  it("wins over a conflicting INPUT_MAPPING entry (guard ordering)", () => {
+    // Regression (PR #324 review): the PROJECT-scope guard must run BEFORE
+    // the INPUT_MAPPING lookup. Before the fix, re-adding a period tuple to
+    // INPUT_MAPPING bypassed the guard and emitted a real Removal datapoint.
+    const tuple = PERIOD_INPUT_TUPLE_CANON[0]; // staff-travel/distance_based_ci_emissions/distance
+    expect(INPUT_MAPPING[tuple.group]).toBeUndefined();
+    INPUT_MAPPING[tuple.group] = {
+      [tuple.blueprint]: {
+        [tuple.input]: {
+          source: "totalBiocharDryMassKg",
+          unit: STUB_COMPATIBLE_UNIT,
+          datapointType: "REPORTED",
+          expectedQuantityKind: "mass",
+        },
+      },
+    };
+    try {
+      expect(callWith(tuple)).toThrowError(SafeError);
+      expect(callWith(tuple)).toThrowError(/PROJECT/);
+      const dp = callWith(tuple, { allowPeriodInputStub: true })();
+      expect(dp.quantity.magnitude).toBe(0);
+    } finally {
+      delete INPUT_MAPPING[tuple.group];
     }
   });
 

@@ -101,8 +101,8 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await waitForSideSheet(page);
 
     await page.fill('input[name="deliveryDate"]', today);
-    // Select the first available order
-    await page.selectOption('select[name="status"]', "upcoming");
+    // Applications require a delivered delivery (issue #284)
+    await page.selectOption('select[name="status"]', "delivered");
     // The order picker is a FormEntitySelect (custom dropdown) — pick the first option
     await selectFirstEntity(page, "Order");
     await page.fill('input[name="deliveredWetMassKg"]', "10000");
@@ -203,6 +203,68 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await expect(uploadedEvidence.first()).toContainText("No geotag:", {
       timeout: 10000,
     });
+  });
+
+  test("blocks application against an undelivered delivery", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    const today = new Date().toISOString().split("T")[0];
+
+    // Step 1: Create an order
+    await page.goto(`/orders?facility=${seededData.facility.id}`);
+    await page.waitForLoadState("networkidle");
+    await page.click('button:has-text("New Order")');
+    await waitForSideSheet(page);
+
+    await page.fill('input[name="orderDate"]', today);
+    await page.selectOption('select[name="customerId"]', seededData.customer.id);
+    await page.waitForSelector(
+      'select[name="customerLocationId"]:not([disabled])',
+      { timeout: 8000 }
+    );
+    await page.selectOption(
+      'select[name="customerLocationId"]',
+      seededData.customerLocation.id
+    );
+    await selectEntity(
+      page,
+      "Biochar Product",
+      seededData.biocharProduct.id,
+      seededData.biocharProduct.code
+    );
+    await page.selectOption('select[name="packaging"]', "loose");
+    await page.fill('input[name="quantityKg"]', "100");
+
+    await page.locator('[role="dialog"]').locator('button:has-text("Create Order")').click();
+    await waitForSideSheetClose(page);
+
+    // Step 2: Create a delivery left in "upcoming" status
+    await page.goto(`/deliveries?facility=${seededData.facility.id}`);
+    await page.waitForLoadState("networkidle");
+    await page.click('button:has-text("New Delivery")');
+    await waitForSideSheet(page);
+
+    await page.fill('input[name="deliveryDate"]', today);
+    await page.selectOption('select[name="status"]', "upcoming");
+    await selectFirstEntity(page, "Order");
+    await page.fill('input[name="deliveredWetMassKg"]', "10000");
+
+    await page.locator('[role="dialog"]').locator('button:has-text("Create Delivery")').click();
+    await waitForSideSheetClose(page);
+
+    // Step 3: The application form lists the undelivered delivery but
+    // disables it (issue #284 custody-ordering guard)
+    await page.goto(`/applications?facility=${seededData.facility.id}`);
+    await page.waitForLoadState("networkidle");
+    await page.click('button:has-text("New Application")');
+    await waitForSideSheet(page);
+
+    const undeliveredOption = page.locator(
+      'select[name="deliveryId"] option:has-text("not yet delivered")'
+    );
+    await expect(undeliveredOption.first()).toBeAttached({ timeout: 8000 });
+    await expect(undeliveredOption.first()).toBeDisabled();
   });
 
   test("create credit batch via UI form", async ({

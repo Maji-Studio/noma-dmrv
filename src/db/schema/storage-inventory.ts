@@ -1,7 +1,8 @@
-import { type AnyPgColumn, check, pgTable, real, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { type AnyPgColumn, check, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { biocharProducts } from './products';
 import { storageLocations } from './facilities';
+import { massKg } from './numeric-families';
 
 // ============================================
 // Biochar Storage Inventory - Product batches in storage bins
@@ -22,8 +23,8 @@ export const biocharStorageInventory = pgTable(
     storageLocationId: uuid('storage_location_id')
       .notNull()
       .references(() => storageLocations.id),
-    quantityKgStored: real('quantity_kg_stored').notNull(), // Initial amount placed in bin
-    quantityKgRemaining: real('quantity_kg_remaining').notNull(), // Decremented by deliveries/transfers
+    quantityKgStored: massKg('quantity_kg_stored').notNull(), // Initial amount placed in bin
+    quantityKgRemaining: massKg('quantity_kg_remaining').notNull(), // Decremented by deliveries/transfers
     storedAt: timestamp('stored_at').notNull(),
     // Set when this record was created by transferring from another bin
     sourceInventoryId: uuid('source_inventory_id').references(

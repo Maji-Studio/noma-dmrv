@@ -75,10 +75,11 @@ export async function getStorageLocationsFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to load storage locations",
+      error: storageLocationActionError(
+        error,
+        "Failed to load storage locations",
+        "storage-location:list",
+      ),
     };
   }
 }
@@ -103,10 +104,11 @@ export async function getStorageLocationByIdFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to load storage location",
+      error: storageLocationActionError(
+        error,
+        "Failed to load storage location",
+        "storage-location:get",
+      ),
     };
   }
 }
@@ -131,10 +133,11 @@ export async function getStorageLocationWithFacilityFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to load storage location details",
+      error: storageLocationActionError(
+        error,
+        "Failed to load storage location details",
+        "storage-location:detail",
+      ),
     };
   }
 }
@@ -159,10 +162,11 @@ export async function getStorageLocationsByFacilityFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to load storage locations for facility",
+      error: storageLocationActionError(
+        error,
+        "Failed to load storage locations for facility",
+        "storage-location:by-facility",
+      ),
     };
   }
 }
@@ -189,10 +193,11 @@ export async function checkStorageLocationCodeFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to check storage location code",
+      error: storageLocationActionError(
+        error,
+        "Failed to check storage location code",
+        "storage-location:check-code",
+      ),
     };
   }
 }

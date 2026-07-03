@@ -13,6 +13,104 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-07-03 (issue #319 — diesel submits as fuel_usage_by_volume, litres × template EF)
+
+Fixes protocol-noncompliant fuel accounting (energy-use-accounting v1.3 Eq 7:
+fuel emissions = fuel quantity × a well-to-wheel fuel EF). Genset diesel was
+converted litres → kWh via the facility genset yield and submitted through
+`pyrolysis/energy_based_ci_emissions/energy` — modeling fuel as electricity CI.
+Decision recorded as an amendment to
+[ADR 0015](../adr/0015-energy-single-combined-measurement-point.md).
+
+- **Mapping** — `src/lib/isometric/transformers/datapoint.ts`: under
+  `pyrolysis`, `energy_based_ci_emissions` is deleted and
+  `fuel_usage_by_volume/volume_of_fuel` added (unit `l`, quantity kind
+  `volume`, source `totalDieselLitres`). The
+  `biomass-feedstock-sourcing`/`-processing` `fuel_usage_by_volume` entries
+  are deleted (their startup diesel now rides in the combined figure — keeping
+  them would double-count). `MAPPING_REVISION` re-hashes, so resubmits
+  supersede prior Removal versions (intended).
+- **Aggregation** — `src/lib/isometric/utils/aggregation.ts`:
+  `AggregatedProductionData.totalDieselLitres` = `totalStartupDieselLitres` +
+  `totalGensetDieselLitres` (both attribution-scaled; split fields kept for
+  local reporting). `totalGensetKwh`, `FacilityEmissionConfig`, and
+  `enrichWithFacilityConfig` are deleted; `submit-removal.ts` drops
+  `resolveFacilityEmissionConfig` — the genset yield no longer gates or
+  affects submission. The volumetric diesel EF is a **fixed input pre-bound on
+  the Isometric template**; noma never stores or submits it (an unbound EF
+  fails closed via the existing `unboundFixedInputs` SafeError).
+- **Registry/UI** — `certify-field-registry.ts` maps `dieselGensetLiters` and
+  `startupDieselFuelUsage` to the shared pyrolysis volume tuple;
+  `facilityEmissionConfig` descriptors emptied (admin genset-yield field loses
+  its certify badge; the column/form stay as a vestigial local estimate —
+  dropping them is a follow-up migration). `/energy` submission preview shows
+  one combined "Diesel fuel (genset + startup)" litres row; the litres×yield
+  copy and yield-missing prompt are gone.
+- **Warnings** — `submission-warnings.ts` advisory now covers genset diesel
+  too and checks specifically for a `fuel_usage_by_volume` component in the
+  `pyrolysis` group (mitigates silent under-reporting if a future template
+  drops the component).
+- **Deploy sequencing** — the live/sandbox template must be re-authored to
+  declare `pyrolysis/fuel_usage_by_volume` with the diesel EF bound as a fixed
+  input. Code-before-template and template-before-code both fail closed
+  (missing-mapping / quantity-kind SafeErrors). Live flip gated on the sandbox
+  confirm per the issue's acceptance criteria.
+- **Out of scope** — wood/kg-metered fuels (`fuel_usage_by_mass`, #319b);
+  dropping `certifier_projects.genset_energy_yield_kwh_per_litre`.
+
+## 2026-07-03 (issue #320 — removal period end anchored to biochar application date)
+
+Biochar protocol v1.3 §8.6.2: the Reporting Period "ends upon application of
+biochar from that batch at the storage site" — a batch produced in Q1 but
+applied in Q2 belongs to the Q2 GHG Statement.
+
+- **`completed_on` = MAX(`applications.application_date`) across the removal's
+  lineages** (`resolveLatestApplicationTime` in
+  `fn/certification/removal-reporting-window.ts`); `buildCreateGhgEntryRequest` now takes
+  an explicit `reportingWindow` instead of the production aggregation. Fails
+  closed on an empty lineage list — no fallback to production end anywhere.
+- **`measured_at` (durability measurement samples) and the sensor-telemetry
+  window keep production-run semantics** — `agg.latestEndTime` still feeds
+  them; only the GHG-entry dates, the semantic hash, and the local
+  `certifier_removals.startedOn/completedOn` stamp moved.
+- **Hash-covered ⇒ supersede:** the new `completedOn` is part of the semantic
+  payload hash, so resubmitting an already-submitted removal creates a new
+  version that supersedes the production-end-dated one (intended one-time
+  correction wave). Pre-#320 locked drafts resume with their snapshot's
+  production-end window by design.
+- **Inversion guard:** an application dated before the earliest production
+  start blocks the submit with an actionable SafeError (before any POST), so
+  the DB `startedOn <= completedOn` check can never be tripped by the
+  best-effort local stamp.
+- **Straddle advisory (non-blocking):** `buildSubmissionWarnings` warns when
+  the UTC month of the earliest run start differs from the latest application
+  month — §8.6.2 attributes operations emissions to the period they occur in.
+- The live behaviour flip stays gated behind the issue's two sandbox confirms
+  (statement-membership inequality + `reporting_period_start_at` derivation).
+
+## 2026-07-02 (ADR 0018 — project-emissions journal removed)
+
+Executes the approved removal plan
+([`docs/archive/plans/2026-06-17-remove-project-emissions-journal.md`](../archive/plans/2026-06-17-remove-project-emissions-journal.md));
+decision recorded in [ADR 0018](../adr/0018-isometric-owns-project-emissions.md),
+which supersedes the journal half of ADR 0005.
+
+- **Deleted:** the "Period emissions (LCA-derived)" journal section + registry
+  drift panel on `/certification/settings`, the `certifier_project_emissions`
+  table + `project_emission_category` pgEnum (migration `0065`, destructive —
+  no prod data), the project-emissions schemas/data-access/fn/hooks, the
+  `CATEGORY_TO_BLUEPRINT` matcher, and the drift half of
+  `scripts/isometric-coverage-check.ts` (its `expectedCategories` fixture field
+  included).
+- **Kept:** the scope-conflict guard (`PERIOD_INPUT_TUPLES` + `SafeError` in
+  `transformers/datapoint.ts`, now self-contained string literals) and the
+  template-coverage half of the coverage check (still in
+  `isometric-health.yml`; `--source=db` now reads `certifier_projects` only).
+- **Operational expectation:** the operator authors PROJECT-scope Components in
+  the Isometric UI and attaches the source LCA PDF to each Component's
+  **Sources** field — the registry is the sole system-of-record for period
+  emissions (matters most for `pyrolyzer_direct`).
+
 ## 2026-06-20 (ADR 0017 Track 2 — Method-B unlock backend + operator UI)
 
 Track 2 activates the Method-B unlock end-to-end (ADR 0017; implementation record

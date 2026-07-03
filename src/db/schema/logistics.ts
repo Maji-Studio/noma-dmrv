@@ -21,6 +21,7 @@ import {
   transportMethod,
 } from './common';
 import { facilities, storageLocations } from './facilities';
+import { massKg, percent } from './numeric-families';
 import { customerLocations, customers, drivers } from './parties';
 import { biocharProducts } from './products';
 import { biocharStorageInventory } from './storage-inventory';
@@ -128,9 +129,9 @@ export const deliveries = pgTable(
     biocharStorageInventoryId: uuid('biochar_storage_inventory_id').references(
       () => biocharStorageInventory.id
     ),
-    moistureContentPercent: real('moisture_content_percent'),
-    deliveredWetMassKg: real('delivered_wet_mass_kg'),
-    massDryKg: real('mass_dry_kg'),
+    moistureContentPercent: percent('moisture_content_percent'),
+    deliveredWetMassKg: massKg('delivered_wet_mass_kg'),
+    massDryKg: massKg('mass_dry_kg'),
 
     // --- Operational transport (emissions canonical in transport_legs) ---
     driverId: uuid('driver_id').references(() => drivers.id),
@@ -196,7 +197,7 @@ export const transportLegs = pgTable(
     modelYear: integer('model_year'),
 
     // --- Load Details (Isometric: Distance-Based Method, Eq. 3 — W_j, the cargo mass) ---
-    loadMassKg: real('load_mass_kg'),
+    loadMassKg: massKg('load_mass_kg'),
 
     // --- Method (distance-based only — see ADR/changes; the emission factor
     // lives in the Isometric component blueprint, NOT here: we submit distance +

@@ -1,22 +1,20 @@
 /**
- * Isometric coverage check (ADR 0005, Plan §7 / Thread B1).
+ * Isometric coverage check (ADR 0005 scope rules / ADR 0018, Plan §7 / B1).
  *
  * Fails CI if:
  *   1. Any (group, blueprint, input) tuple in a live Removal Template is
  *      missing from INPUT_MAPPING — AND not in PERIOD_INPUT_TUPLES.
  *   2. Any tuple in the template is in PERIOD_INPUT_TUPLES (= the template
- *      itself is wrong: a period input declared as REMOVAL-scope).
- *   3. Any expected `PROJECT`-scope category has no matching Component
- *      in Isometric (within ±0.5% magnitude tolerance via
- *      `matchEmissionToComponent`).
- *   4. Any `PROJECT`-scope Component in Isometric has no matching
- *      expected entry (orphan).
+ *      itself is wrong: a period input declared as REMOVAL-scope; those
+ *      belong to PROJECT-scope Components authored in the Isometric UI).
+ *
+ * (The former PROJECT-scope drift checks against noma's LCA journal were
+ * removed with the journal itself — ADR 0018.)
  *
  * Source modes:
  *   --source=fixture (default)  Reads tests/fixtures/isometric-coverage.json.
  *                              CI default — no DATABASE_URL required.
- *   --source=db                 Reads certifier_projects +
- *                              certifier_project_emissions from the local DB.
+ *   --source=db                 Reads certifier_projects from the local DB.
  *                              Requires DATABASE_URL. Local dev only.
  *
  * Usage:
@@ -27,7 +25,6 @@ import { config } from "dotenv";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { projectEmissionCategoryValues } from "../src/schemas/project-emissions";
 
 config({ path: ".env.local" });
 
@@ -47,20 +44,11 @@ type Source = "fixture" | "db";
 // Runtime validation for the fixture file — CI gates on the script's exit
 // code, so a typo in the fixture (e.g. `externalProjctId`) must fail loud
 // here rather than silently let downstream Isometric calls receive
-// `undefined`. Categories validate against the canonical enum so a typo
-// like `staff_trvel` is caught here, not as an opaque undefined access
-// inside `matchEmissionToComponent`.
-const expectedCategorySchema = z.object({
-  category: z.enum(projectEmissionCategoryValues),
-  magnitude: z.number().finite(),
-  unit: z.string().min(1),
-});
-
+// `undefined`.
 const facilityFixtureSchema = z.object({
   label: z.string().min(1),
   externalProjectId: z.string().min(1),
   defaultRemovalTemplateId: z.string().min(1),
-  expectedCategories: z.array(expectedCategorySchema),
 });
 
 const fixtureFileSchema = z.object({
@@ -117,11 +105,9 @@ async function loadFromDb(): Promise<FacilityFixtureEntry[]> {
     process.exit(2);
   }
   const { db } = await import("../src/db");
-  const { certifierProjects, certifierProjectEmissions } = await import(
-    "../src/db/schema/certification"
-  );
+  const { certifierProjects } = await import("../src/db/schema/certification");
   const { facilities } = await import("../src/db/schema/facilities");
-  const { eq, inArray } = await import("drizzle-orm");
+  const { eq } = await import("drizzle-orm");
 
   // innerJoin: facilityId is NOT NULL FK, so a left join can never produce
   // a NULL right side.
@@ -136,31 +122,11 @@ async function loadFromDb(): Promise<FacilityFixtureEntry[]> {
     .innerJoin(facilities, eq(certifierProjects.facilityId, facilities.id));
 
   const usableProjects = projects.filter((p) => p.defaultRemovalTemplateId);
-  if (usableProjects.length === 0) return [];
-
-  // Single batched query (was N+1: one SELECT per project).
-  const facilityIds = usableProjects.map((p) => p.facilityId);
-  const allRows = await db
-    .select()
-    .from(certifierProjectEmissions)
-    .where(inArray(certifierProjectEmissions.facilityId, facilityIds));
-
-  const rowsByFacility = new Map<string, typeof allRows>();
-  for (const row of allRows) {
-    const bucket = rowsByFacility.get(row.facilityId) ?? [];
-    bucket.push(row);
-    rowsByFacility.set(row.facilityId, bucket);
-  }
 
   return usableProjects.map((p) => ({
     label: p.facilityCode ?? p.facilityId,
     externalProjectId: p.externalProjectId,
     defaultRemovalTemplateId: p.defaultRemovalTemplateId!,
-    expectedCategories: (rowsByFacility.get(p.facilityId) ?? []).map((r) => ({
-      category: r.category,
-      magnitude: r.magnitude,
-      unit: r.unit,
-    })),
   }));
 }
 
@@ -177,16 +143,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  const { listGhgEntryTemplates, listComponents, listDatapoints } = await import(
-    "../src/lib/isometric"
-  );
+  const { listGhgEntryTemplates } = await import("../src/lib/isometric");
   const { lookupInputMapping, lookupPeriodInputTuple } = await import(
     "../src/lib/isometric/transformers/datapoint"
   );
-  const {
-    matchEmissionToComponent,
-    findOrphanComponents,
-  } = await import("../src/lib/isometric/utils/project-emission-match");
 
   let failed = 0;
 
@@ -235,82 +195,22 @@ async function main(): Promise<void> {
     console.log(`  template monitored tuples: ${tuples.length}`);
 
     for (const t of tuples) {
-      const mapping = lookupInputMapping(t.group, t.blueprint, t.input);
-      if (mapping) continue;
+      // Scope-conflict check runs BEFORE accepting a mapping — a tuple
+      // present in both PERIOD_INPUT_TUPLES and INPUT_MAPPING must fail
+      // (mirrors the guard ordering in transformers/datapoint.ts, ADR 0018).
       const periodTuple = lookupPeriodInputTuple(t.group, t.blueprint, t.input);
       if (periodTuple) {
         console.error(
-          `  ✗ scope-conflict: template declares ${t.group}/${t.blueprint}/${t.input} as REMOVAL-scope, but it belongs to PROJECT (category="${periodTuple.category}"). Remove from template (ADR 0005).`,
-        );
-        failed += 1;
-      } else {
-        console.error(
-          `  ✗ missing INPUT_MAPPING entry: ${t.group}/${t.blueprint}/${t.input}`,
-        );
-        failed += 1;
-      }
-    }
-
-    // ── 2. Project-scope drift ────────────────────────────────────────
-    const expected = facility.expectedCategories;
-    if (expected.length === 0) {
-      console.log(`  (no expected PROJECT-scope categories; skipping drift)`);
-    } else {
-      let components;
-      let datapoints;
-      try {
-        [components, datapoints] = await Promise.all([
-          listComponents({
-            projectId: facility.externalProjectId,
-            scope: "PROJECT",
-          }),
-          listDatapoints({
-            projectId: facility.externalProjectId,
-            usedInScope: "PROJECT",
-          }),
-        ]);
-      } catch (err) {
-        console.error(
-          `  ✗ Failed to fetch PROJECT-scope inventory: ${err instanceof Error ? err.message : err}`,
+          `  ✗ scope-conflict: template declares ${t.group}/${t.blueprint}/${t.input} as REMOVAL-scope, but it belongs to PROJECT (category="${periodTuple.category}"). Remove from template (ADR 0018).`,
         );
         failed += 1;
         continue;
       }
-
-      const datapointsById = new Map(datapoints.map((dp) => [dp.id, dp]));
-      // expected.category is already validated against projectEmissionCategoryValues
-      // by the fixture schema, so the matcher receives the precise enum type
-      // it expects — no casts needed.
-      const rowShapes = expected.map((e, idx) => ({
-        id: `fixture-${idx}`,
-        category: e.category,
-        magnitude: e.magnitude,
-        unit: e.unit,
-      }));
-
-      for (const shape of rowShapes) {
-        const status = matchEmissionToComponent(
-          shape,
-          components,
-          datapointsById,
+      const mapping = lookupInputMapping(t.group, t.blueprint, t.input);
+      if (!mapping) {
+        console.error(
+          `  ✗ missing INPUT_MAPPING entry: ${t.group}/${t.blueprint}/${t.input}`,
         );
-        if (status.kind === "match") continue;
-        if (status.kind === "ambiguous") {
-          console.error(
-            `  ✗ ambiguous drift: ${shape.category} (${shape.magnitude}${shape.unit}) matches ${status.candidates.length} Components — reconcile manually.`,
-          );
-          failed += 1;
-        } else {
-          console.error(
-            `  ✗ missing PROJECT-scope Component for ${shape.category} (${shape.magnitude}${shape.unit}): ${status.reason}`,
-          );
-          failed += 1;
-        }
-      }
-
-      const orphans = findOrphanComponents(rowShapes, components, datapointsById);
-      for (const o of orphans) {
-        console.error(`  ✗ orphan: ${o.reason}`);
         failed += 1;
       }
     }

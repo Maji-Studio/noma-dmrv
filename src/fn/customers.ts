@@ -84,8 +84,11 @@ export async function getCustomersFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load customers",
+      error: customerActionError(
+        error,
+        "Failed to load customers",
+        "customer:list",
+      ),
     };
   }
 }
@@ -107,7 +110,11 @@ export async function getCustomerByIdFn(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load customer",
+      error: customerActionError(
+        error,
+        "Failed to load customer",
+        "customer:get",
+      ),
     };
   }
 }
@@ -129,10 +136,11 @@ export async function getCustomerWithRelationsFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to load customer details",
+      error: customerActionError(
+        error,
+        "Failed to load customer details",
+        "customer:detail",
+      ),
     };
   }
 }
@@ -172,10 +180,11 @@ export async function getCustomerLocationsFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to load customer locations",
+      error: customerActionError(
+        error,
+        "Failed to load customer locations",
+        "customer:locations",
+      ),
     };
   }
 }
@@ -197,8 +206,11 @@ export async function getCustomerCropTypesFn(): Promise<
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load crop types",
+      error: customerActionError(
+        error,
+        "Failed to load crop types",
+        "customer:crop-types",
+      ),
     };
   }
 }
@@ -225,10 +237,11 @@ export async function checkCustomerCodeFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to check customer code",
+      error: customerActionError(
+        error,
+        "Failed to check customer code",
+        "customer:check-code",
+      ),
     };
   }
 }
@@ -391,10 +404,11 @@ export async function getCustomerLocationByIdFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to load customer location",
+      error: customerActionError(
+        error,
+        "Failed to load customer location",
+        "customer-location:get",
+      ),
     };
   }
 }
