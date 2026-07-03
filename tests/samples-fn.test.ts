@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockCreateSample = vi.fn();
+const mockGetSampleById = vi.fn();
 const mockWithAutoCode = vi.fn();
 
 vi.mock("@/lib/auth/server", () => ({
@@ -19,7 +20,7 @@ vi.mock("@/data-access/samples", () => ({
   createSample: (...args: unknown[]) => mockCreateSample(...args),
   deleteSample: vi.fn(),
   generateNextSampleCode: vi.fn(),
-  getSampleById: vi.fn(),
+  getSampleById: (...args: unknown[]) => mockGetSampleById(...args),
   getSampleStats: vi.fn(),
   getSamples: vi.fn(),
   isSampleCodeAvailable: vi.fn(),
@@ -30,7 +31,7 @@ vi.mock("@/data-access/code-generator", () => ({
   withAutoCode: (...args: unknown[]) => mockWithAutoCode(...args),
 }));
 
-import { createSampleFn } from "@/fn/samples";
+import { createSampleFn, getSampleByIdFn } from "@/fn/samples";
 
 const CREDIT_BATCH_ID = "22222222-2222-4222-8222-222222222222";
 
@@ -78,5 +79,30 @@ describe("createSampleFn", () => {
 
     expect(result.success).toBe(false);
     expect(mockCreateSample).not.toHaveBeenCalled();
+  });
+});
+
+describe("getSampleByIdFn", () => {
+  beforeEach(() => {
+    mockGetSampleById.mockReset();
+  });
+
+  it("sanitizes raw database errors into the generic fallback (issue #251)", async () => {
+    mockGetSampleById.mockRejectedValue(
+      new Error(
+        'Failed query: select "samples"."id" from "samples" where "samples"."id" = $1 -- params: ["66666666-6666-4666-8666-666666666666"]',
+      ),
+    );
+
+    const result = await getSampleByIdFn(
+      "66666666-6666-4666-8666-666666666666",
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBe("Failed to load sample");
+      expect(result.error).not.toMatch(/select/);
+      expect(result.error).not.toMatch(/params:/);
+    }
   });
 });
