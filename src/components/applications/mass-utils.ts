@@ -2,6 +2,7 @@ import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { formatSafeDate } from "@/lib/format-utils";
 import type { SoilTemperatureSource } from "@/schemas/applications";
+import type { DeliveryStatus } from "@/schemas/deliveries";
 
 /** The only source a delivery-derived prefill can assert (approved global dataset). */
 export const SOIL_TEMPERATURE_SOURCE_GLOBAL =
@@ -10,6 +11,7 @@ export const SOIL_TEMPERATURE_SOURCE_GLOBAL =
 export interface ApplicationDeliveryOption {
   id: string;
   code: string;
+  status: DeliveryStatus;
   deliveryDate: Date | string;
   orderCode: string | null;
   formulationName: string | null;

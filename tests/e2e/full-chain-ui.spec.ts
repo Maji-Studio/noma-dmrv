@@ -536,7 +536,8 @@ test.describe("Full Chain UI Smoke Test", () => {
       await waitForSideSheet(page);
 
       await page.fill('input[name="deliveryDate"]', today);
-      await page.selectOption('select[name="status"]', "upcoming");
+      // Applications require a delivered delivery (issue #284)
+      await page.selectOption('select[name="status"]', "delivered");
 
       // Select the first available order (FormEntitySelect, not a native <select>)
       await selectFirstEntity(page, "Order");

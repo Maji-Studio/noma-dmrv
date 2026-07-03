@@ -11,6 +11,7 @@
 
 import { numericValue } from "@/lib/form-utils";
 import { formatLocalDate } from "@/lib/date-utils";
+import { formatSafeDate } from "@/lib/format-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 import { useEffect } from "react";
@@ -245,9 +246,15 @@ export function ApplicationForm({
   const gpsLatitude = useWatch({ control, name: "gpsLatitude" }) as number | null | undefined;
   const gpsLongitude = useWatch({ control, name: "gpsLongitude" }) as number | null | undefined;
 
+  // Only delivered deliveries accept applications (issue #284) — undelivered
+  // ones stay visible but disabled so operators see why they can't pick them.
   const deliveryOptions = deliveries.map((d) => ({
     value: d.id,
-    label: formatApplicationDeliveryOptionLabel(d),
+    label:
+      d.status === "delivered"
+        ? formatApplicationDeliveryOptionLabel(d)
+        : `${formatApplicationDeliveryOptionLabel(d)} · not yet delivered`,
+    disabled: d.status !== "delivered",
   }));
   const selectedDelivery = deliveries.find((delivery) => delivery.id === selectedDeliveryId);
 
@@ -318,6 +325,34 @@ export function ApplicationForm({
   const availableKg = deliveryCapacityKg !== null ? deliveryCapacityKg - alreadyApplied + currentApplicationKg : null;
 
   const handleFormSubmit = handleSubmit(async (data) => {
+    // Custody ordering (issue #284): the server rejects this too — but a
+    // legacy application can still reference an undelivered delivery (the
+    // option is disabled yet survives edit-mode defaults), so surface a
+    // field error instead of a generic server error.
+    if (selectedDelivery && selectedDelivery.status !== "delivered") {
+      setError("deliveryId", {
+        type: "manual",
+        message:
+          "This delivery has not been delivered yet — mark it as delivered before recording an application",
+      });
+      return;
+    }
+
+    // Custody ordering (issue #284): the server rejects this too — surface a
+    // field error here instead of a generic server error. Day-string compare
+    // keeps both sides on local-date granularity.
+    if (
+      selectedDelivery &&
+      formatLocalDate(data.applicationDate) <
+        formatLocalDate(new Date(selectedDelivery.deliveryDate))
+    ) {
+      setError("applicationDate", {
+        type: "manual",
+        message: `Application date cannot be before the delivery date (${formatSafeDate(selectedDelivery.deliveryDate)})`,
+      });
+      return;
+    }
+
     if (availableKg !== null && data.biocharAppliedTons > availableKg) {
       setError("biocharAppliedTons", {
         type: "manual",
