@@ -10,7 +10,7 @@ const PG_UNIQUE_VIOLATION = "23505";
  * True when `err` is a Postgres unique-constraint violation on the named
  * index. Match the *specific* constraint — a table often carries several
  * unique indexes, and relabeling any 23505 as one conflict masks unrelated
- * violations (the bug `data-access/project-emissions.ts` documents).
+ * violations.
  */
 export function isPgUniqueViolation(err: unknown, constraint: string): boolean {
   if (typeof err !== "object" || err === null) return false;

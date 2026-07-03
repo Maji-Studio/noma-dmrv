@@ -315,8 +315,8 @@ export function CreditBatchList() {
             {
               label: "Total Biochar Weight",
               value:
-                sideSheetEntity.weightTons != null
-                  ? `${sideSheetEntity.weightTons.toFixed(2)} t`
+                sideSheetEntity.appliedWeightTons != null
+                  ? `${sideSheetEntity.appliedWeightTons.toFixed(2)} t`
                   : null,
             },
             {

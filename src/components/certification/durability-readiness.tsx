@@ -132,7 +132,7 @@ export function DurabilityReadinessSignals({
           )
         }
       >
-        {usableReplicateCount} of {minimumReplicates} replicates
+        {usableReplicateCount} of {minimumReplicates} usable samples
       </ReadinessChip>
 
       {meetsMinimum && (

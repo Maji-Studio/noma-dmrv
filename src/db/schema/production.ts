@@ -11,6 +11,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { relations, sql, type InferSelectModel } from 'drizzle-orm';
 import { electricitySourceCategory, incidentSeverity, productionRunStatus } from './common';
+import { fraction, massKg, percent, ppm } from './numeric-families';
 import { facilities, reactors, storageLocations } from './facilities';
 import { operators } from './parties';
 import { feedstocks } from './feedstock';
@@ -53,18 +54,18 @@ export const productionRuns = pgTable(
     lowCarbonPercentage: real('low_carbon_percentage'), // % from renewables/low-carbon grid (0–100)
 
     // --- Biochar Output ---
-    biocharOutputKg: real('biochar_output_kg'), // Wet mass (recorded value)
-    biocharMoisturePercent: real('biochar_moisture_percent'), // Typically 1-2%, default 0 if unknown
-    biocharDryMassKg: real('biochar_dry_mass_kg'), // Derived: wetMass * (1 - moisture/100)
+    biocharOutputKg: massKg('biochar_output_kg'), // Wet mass (recorded value)
+    biocharMoisturePercent: percent('biochar_moisture_percent'), // Typically 1-2%, default 0 if unknown
+    biocharDryMassKg: massKg('biochar_dry_mass_kg'), // Derived: wetMass * (1 - moisture/100)
     biocharStorageLocationId: uuid('biochar_storage_location_id').references(
       () => storageLocations.id
     ),
     feedstockStorageLocationId: uuid('feedstock_storage_location_id').references(
       () => storageLocations.id
     ),
-    feedstockWetMassKg: real('feedstock_wet_mass_kg'),
-    feedstockMoisturePercent: real('feedstock_moisture_percent'),
-    feedstockMassDryKg: real('feedstock_mass_dry_kg'),
+    feedstockWetMassKg: massKg('feedstock_wet_mass_kg'),
+    feedstockMoisturePercent: percent('feedstock_moisture_percent'),
+    feedstockMassDryKg: massKg('feedstock_mass_dry_kg'),
 
     // Stamped by the facility archive cascade; NULL = active
     archivedAt: timestamp('archived_at'),
@@ -198,24 +199,24 @@ export const samples = pgTable('samples', {
   saltContentGPerKg: real('salt_content_g_per_kg'),
 
   // --- Stability Ratios ---
-  hToCOrgRatio: real('h_to_c_org_ratio'),
-  oToCOrgRatio: real('o_to_c_org_ratio'),
+  hToCOrgRatio: fraction('h_to_c_org_ratio'),
+  oToCOrgRatio: fraction('o_to_c_org_ratio'),
 
   // --- Heavy Metals (mg/kg) ---
-  arsenicMgKg: real('arsenic_mg_kg'),
-  cadmiumMgKg: real('cadmium_mg_kg'),
-  chromiumMgKg: real('chromium_mg_kg'),
-  copperMgKg: real('copper_mg_kg'),
-  leadMgKg: real('lead_mg_kg'),
-  mercuryMgKg: real('mercury_mg_kg'),
-  nickelMgKg: real('nickel_mg_kg'),
-  zincMgKg: real('zinc_mg_kg'),
+  arsenicMgKg: ppm('arsenic_mg_kg'),
+  cadmiumMgKg: ppm('cadmium_mg_kg'),
+  chromiumMgKg: ppm('chromium_mg_kg'),
+  copperMgKg: ppm('copper_mg_kg'),
+  leadMgKg: ppm('lead_mg_kg'),
+  mercuryMgKg: ppm('mercury_mg_kg'),
+  nickelMgKg: ppm('nickel_mg_kg'),
+  zincMgKg: ppm('zinc_mg_kg'),
 
   // --- Contaminants ---
-  pahTotalMgKg: real('pah_total_mg_kg'),
-  pcbTotalMgKg: real('pcb_total_mg_kg'),
-  dioxinsNgKg: real('dioxins_ng_kg'),
-  furansNgKg: real('furans_ng_kg'),
+  pahTotalMgKg: ppm('pah_total_mg_kg'),
+  pcbTotalMgKg: ppm('pcb_total_mg_kg'),
+  dioxinsNgKg: ppm('dioxins_ng_kg'),
+  furansNgKg: ppm('furans_ng_kg'),
 
   // --- Nutrients (%) ---
   phosphorusPercent: real('phosphorus_percent'),
@@ -269,7 +270,7 @@ export const productionRunFeedstocks = pgTable('production_run_feedstocks', {
   feedstockId: uuid('feedstock_id')
     .notNull()
     .references(() => feedstocks.id),
-  massUsedKg: real('mass_used_kg').notNull(),
+  massUsedKg: massKg('mass_used_kg').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

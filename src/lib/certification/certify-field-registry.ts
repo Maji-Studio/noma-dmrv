@@ -58,11 +58,11 @@ export const AGGREGATED_PRODUCTION_DATA_KEYS = [
   "totalFeedstockDryMassKg",
   "totalStartupDieselLitres",
   "totalGensetDieselLitres",
+  "totalDieselLitres",
   "totalElectricityKwh",
   "feedstockTransportMassDistanceTonneKm",
   "biocharTransportMassDistanceTonneKm",
   "sampleTransportMassDistanceTonneKm",
-  "totalGensetKwh",
   "earliestStartTime",
   "latestEndTime",
   "sourceProductionRunIds",
@@ -80,15 +80,17 @@ const mapping = (
   inputTuples?: readonly CertifyInputTuple[],
 ): CertifySourceMapping => ({ source, inputTuples });
 
-// Combined energy submits at a single pyrolysis measurement point (ADR 0015):
-// one grid-electricity datapoint and one genset datapoint. The per-stage split
-// is gone, so each maps to one combined source + one input tuple.
+// Combined energy submits at a single pyrolysis measurement point (ADR 0015,
+// amended by issue #319): one grid-electricity datapoint and one combined
+// diesel-volume datapoint (genset + startup litres via `fuel_usage_by_volume`;
+// the volumetric EF is a fixed input on the Isometric template). The per-stage
+// split is gone, so each maps to one combined source + one input tuple.
 const electricityMapping = mapping("totalElectricityKwh", [
   tuple("pyrolysis", "grid_electricity_use", "electricity_use"),
 ]);
 
-const gensetKwhMapping = mapping("totalGensetKwh", [
-  tuple("pyrolysis", "energy_based_ci_emissions", "energy"),
+const dieselFuelVolumeMapping = mapping("totalDieselLitres", [
+  tuple("pyrolysis", "fuel_usage_by_volume", "volume_of_fuel"),
 ]);
 
 // Each transport category submits a single `mass_distance` (tonne·km) datapoint
@@ -161,37 +163,21 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       mappings: [mapping("totalBiocharDryMassKg")],
     },
     {
-      // ADR 0015: the live template declares no `fuel_usage_by_volume`
-      // component, so startup/plant diesel + preprocessing fuel are NOT
-      // certify-required. A `derived` descriptor with no `formFields` badges no
-      // input and never gates readiness, while still covering
-      // `totalStartupDieselLitres` for the INPUT_MAPPING drift guard (the
-      // mapping is retained for a template that re-declares the component). A
-      // recorded value with no carrying component surfaces a non-blocking
-      // warning at submit/readiness instead of a required-field badge.
+      // Issue #319: startup/plant diesel + preprocessing fuel feed the
+      // combined `totalDieselLitres` submitted through the pyrolysis
+      // `fuel_usage_by_volume` component (alongside genset diesel). A
+      // `derived` descriptor with no `formFields` badges no input and never
+      // gates readiness; the split source is kept for local reporting.
       key: "startupDieselFuelUsage",
       label: "Startup / plant diesel",
       kind: "derived",
-      mappings: [
-        mapping("totalStartupDieselLitres", [
-          tuple(
-            "biomass-feedstock-sourcing",
-            "fuel_usage_by_volume",
-            "volume_of_fuel",
-          ),
-          tuple(
-            "biomass-feedstock-processing",
-            "fuel_usage_by_volume",
-            "volume_of_fuel",
-          ),
-        ]),
-      ],
+      mappings: [mapping("totalStartupDieselLitres"), dieselFuelVolumeMapping],
     },
     {
       key: "dieselGensetLiters",
       label: "Genset diesel",
       kind: "entered",
-      mappings: [mapping("totalGensetDieselLitres"), gensetKwhMapping],
+      mappings: [mapping("totalGensetDieselLitres"), dieselFuelVolumeMapping],
     },
     {
       key: "electricityKwh",
@@ -285,16 +271,12 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       mappings: transportMassDistanceMappings,
     },
   ],
-  facilityEmissionConfig: [
-    {
-      // ADR 0015 dropped the three stage-split fields; only the genset yield
-      // (litres → kWh) remains as facility emission config.
-      key: "gensetEnergyYieldKwhPerLitre",
-      label: "Genset energy yield",
-      kind: "entered",
-      mappings: [gensetKwhMapping],
-    },
-  ],
+  // Issue #319 removed the litres→kWh genset conversion — diesel submits by
+  // volume with the EF bound on the Isometric template, so no facility
+  // emission-config field is emissions-affecting anymore. The genset-yield
+  // column/admin form stay (vestigial local estimate) but carry no certify
+  // badge.
+  facilityEmissionConfig: [],
   // The kinds below are badge/mapping documentation only — they are never fed
   // to `deriveEntityCertifyReadiness` (their gaps surface through the derived
   // transport legs and the CO2e-stored preview instead).

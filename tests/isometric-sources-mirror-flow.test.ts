@@ -147,6 +147,7 @@ beforeEach(() => {
       {
         applicationId: APPLICATION_ID,
         productionRunId: PRODUCTION_RUN_ID,
+        biocharAppliedTons: 1,
       },
     ],
   );

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
-import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import type { CreditBatchDurabilityInput } from "@/lib/isometric/utils/durability-aggregation";
 import { collectTransportEntityIds } from "@/lib/isometric/utils/transport-lineage";
 
 function lineage(
@@ -20,15 +20,17 @@ function lineage(
   } as ChainOfCustodyData;
 }
 
-function run(id: string, sampleIds: string[]): ProductionRunWithSamples {
+function batch(id: string, sampleIds: string[]): CreditBatchDurabilityInput {
   return {
-    id,
+    creditBatchId: id,
+    creditBatchCode: id.toUpperCase(),
+    runs: [],
     samples: sampleIds.map((sid) => ({ id: sid })),
-  } as unknown as ProductionRunWithSamples;
+  } as unknown as CreditBatchDurabilityInput;
 }
 
 describe("collectTransportEntityIds", () => {
-  it("returns empty arrays when no lineages or runs are provided", () => {
+  it("returns empty arrays when no lineages or batches are provided", () => {
     expect(collectTransportEntityIds([], [])).toEqual({
       feedstockIds: [],
       biocharProductIds: [],
@@ -66,10 +68,10 @@ describe("collectTransportEntityIds", () => {
     expect(result.feedstockIds.sort()).toEqual(["fs-a", "fs-b", "fs-c"]);
   });
 
-  it("collects sample IDs from every run, deduped", () => {
+  it("collects sample IDs from every batch, deduped (issue #309: samples anchor on batches)", () => {
     const result = collectTransportEntityIds(
       [],
-      [run("pr-1", ["s-1", "s-2"]), run("pr-2", ["s-2", "s-3"])],
+      [batch("cb-1", ["s-1", "s-2"]), batch("cb-2", ["s-2", "s-3"])],
     );
     expect(result.sampleIds.sort()).toEqual(["s-1", "s-2", "s-3"]);
   });
@@ -82,8 +84,8 @@ describe("collectTransportEntityIds", () => {
     expect(result.biocharProductIds).toEqual([]);
   });
 
-  it("handles runs with no samples without producing entries", () => {
-    const result = collectTransportEntityIds([], [run("pr-1", [])]);
+  it("handles batches with no samples without producing entries", () => {
+    const result = collectTransportEntityIds([], [batch("cb-1", [])]);
     expect(result.sampleIds).toEqual([]);
   });
 });

@@ -29,6 +29,18 @@ import type { ActionResult } from "@/types/actions";
 import { withAutoCode } from "@/data-access/code-generator";
 import { biocharProducts } from "@/db/schema";
 import { toCompositionJsonb } from "@/lib/biochar-composition/composition";
+import { toLoggedActionError } from "./action-errors";
+
+function biocharProductActionError(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): string {
+  return toLoggedActionError(error, fallbackMessage, {
+    message: "biochar product action failed",
+    context: { op },
+  });
+}
 
 // ============================================
 // Biochar Product List/Query Operations
@@ -61,8 +73,11 @@ export async function getBiocharProductsFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load biochar products",
+      error: biocharProductActionError(
+        error,
+        "Failed to load biochar products",
+        "biochar-product:list",
+      ),
     };
   }
 }
@@ -84,7 +99,11 @@ export async function getBiocharProductByIdFn(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load biochar product",
+      error: biocharProductActionError(
+        error,
+        "Failed to load biochar product",
+        "biochar-product:get",
+      ),
     };
   }
 }
@@ -106,8 +125,11 @@ export async function getBiocharProductOptionsFn(): Promise<
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load biochar product options",
+      error: biocharProductActionError(
+        error,
+        "Failed to load biochar product options",
+        "biochar-product:options",
+      ),
     };
   }
 }
@@ -134,10 +156,11 @@ export async function checkBiocharProductCodeFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to check biochar product code",
+      error: biocharProductActionError(
+        error,
+        "Failed to check biochar product code",
+        "biochar-product:check-code",
+      ),
     };
   }
 }
@@ -193,8 +216,11 @@ export async function createBiocharProductFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to create biochar product",
+      error: biocharProductActionError(
+        error,
+        "Failed to create biochar product",
+        "biochar-product:create",
+      ),
     };
   }
 }
@@ -243,8 +269,11 @@ export async function updateBiocharProductFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to update biochar product",
+      error: biocharProductActionError(
+        error,
+        "Failed to update biochar product",
+        "biochar-product:update",
+      ),
     };
   }
 }
@@ -278,8 +307,11 @@ export async function deleteBiocharProductFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to delete biochar product",
+      error: biocharProductActionError(
+        error,
+        "Failed to delete biochar product",
+        "biochar-product:delete",
+      ),
     };
   }
 }

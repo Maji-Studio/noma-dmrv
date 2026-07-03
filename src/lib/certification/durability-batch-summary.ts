@@ -62,6 +62,13 @@ export interface DurabilityBatchSummaryInput extends CreditBatchDurabilityInput 
   samplingMethod: SamplingMethod;
   /** Member runs (id + code + dry mass) — code labels the replicate provenance. */
   runs: Array<{ id: string; code: string; biocharDryMassKg: number | null }>;
+  /**
+   * The batch's declared durability tier. A Sample characterises its credit
+   * batch, so the tier lives on the batch and the lab-sample form DERIVES it
+   * (issue #309) — optional here only so fixture inputs stay light; the DB
+   * loader always supplies it.
+   */
+  durabilityOption?: "200_year" | "1000_year";
 }
 
 /** One raw lab replicate row, shaped for the roll-up table. */
@@ -108,6 +115,8 @@ export interface DurabilityBatchSummary {
   creditBatchId: string;
   creditBatchCode: string;
   samplingMethod: SamplingMethod;
+  /** The batch's declared durability tier — samples inherit it (issue #309). */
+  durabilityOption: "200_year" | "1000_year";
   /** Raw lab sample rows pooled on this batch (across member runs/days). */
   sampleCount: number;
   /** Replicates carrying paired H/C_org + O/C_org — the eligibility / ≥3-count set. */
@@ -180,6 +189,7 @@ export function buildDurabilityBatchSummaries(
       creditBatchId: batch.creditBatchId,
       creditBatchCode: batch.creditBatchCode,
       samplingMethod: batch.samplingMethod,
+      durabilityOption: batch.durabilityOption ?? "200_year",
       sampleCount: batch.samples.length,
       usableReplicateCount: eligibility.usableReplicateCount,
       minimumReplicates: MINIMUM_REPLICATES_PER_BATCH,

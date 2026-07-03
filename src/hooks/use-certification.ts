@@ -11,7 +11,6 @@ import {
   deleteFacilityCertifierMapping,
   loadBatchHealth,
   loadCreditBatchDurabilitySummary,
-  loadRunDurabilitySummary,
   loadCertificationHealth,
   loadCertificationOverview,
   loadCreditBatchHealthSummaries,
@@ -75,12 +74,6 @@ export const certificationKeys = {
       ...certificationKeys.all,
       "batch-durability-summary",
       creditBatchId,
-    ] as const,
-  runDurabilitySummary: (productionRunId: string) =>
-    [
-      ...certificationKeys.all,
-      "run-durability-summary",
-      productionRunId,
     ] as const,
   batchHealthSummaries: (facilityId: string, batchIds: string[]) =>
     [
@@ -309,8 +302,11 @@ export function useBatchHealth(creditBatchId: string, enabled = true) {
 
 // Durability sampling roll-up + readiness for one credit batch — the detail
 // page's durability section (sample list, submitted mean ± std-dev, eligibility /
-// ≥3 / distribution). Sample mutations invalidate this key directly (see
-// use-samples.ts), so the panel reflects new chemistry without a manual refresh.
+// ≥3 / distribution) AND the lab-sample form's batch progress preview (samples
+// anchor on the batch directly — issue #309; pass "" while no batch is chosen,
+// the enabled guard keeps the query idle). Sample mutations invalidate this key
+// directly (see use-samples.ts), so both surfaces reflect new chemistry without
+// a manual refresh.
 export function useBatchDurabilitySummary(
   creditBatchId: string,
   enabled = true,
@@ -323,25 +319,6 @@ export function useBatchDurabilitySummary(
       return result.data;
     },
     enabled: enabled && !!creditBatchId,
-    staleTime: DEFAULT_STALE_MS,
-  });
-}
-
-// Durability sampling progress for the credit batch a production run belongs to —
-// the lab-sample form's derived-batch preview. Disabled until a run is chosen;
-// `creditBatch` is null when the run is uncommitted (the form says so honestly).
-export function useRunDurabilitySummary(
-  productionRunId: string | undefined,
-  enabled = true,
-) {
-  return useQuery({
-    queryKey: certificationKeys.runDurabilitySummary(productionRunId ?? ""),
-    queryFn: async () => {
-      const result = await loadRunDurabilitySummary(productionRunId ?? "");
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-    enabled: enabled && !!productionRunId,
     staleTime: DEFAULT_STALE_MS,
   });
 }

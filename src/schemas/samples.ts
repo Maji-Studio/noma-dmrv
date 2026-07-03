@@ -1,11 +1,13 @@
 /**
  * Samples Validation Schemas
  * Zod schemas for lab sample tracking forms, server actions, and filtering
- * Linked to production runs per Isometric Protocol Section 8.3
+ * A Sample characterises ONE credit batch (the protocol production batch) —
+ * Isometric Protocol Section 8.3 / issue #309. The batch's runs are commingled,
+ * so no production-run link is captured.
  */
 
 import { z } from "zod";
-import { emptyToNull } from "@/schemas/helpers";
+import { PG_INTEGER_MAX } from "./helpers";
 
 // ============================================
 // Constants
@@ -39,7 +41,7 @@ const requiredNumber = z.union([
  * Used in SampleForm component for creating/editing samples
  *
  * Form sections:
- * 1. Sample Info — code, samplingTime, production run
+ * 1. Sample Info — code, samplingTime, credit batch
  * 2. Carbon Analysis — totalCarbonPercent, organicCarbonPercent, inorganicCarbonPercent
  * 3. Elemental — H, N, O, S percentages
  * 4. Proximate — ash, volatile matter, moisture
@@ -50,12 +52,11 @@ const requiredNumber = z.union([
 export const sampleFormSchema = z
   .object({
     // === Section 1: Sample Info ===
-    // Provenance — which run the replicate was physically drawn from (ADR 0016).
-    productionRunId: z.string().min(1, "Please select a production run").uuid("Invalid production run"),
     // The credit batch (protocol production batch) this lab replicate
-    // characterises. Optional at create time — a sample may be drawn before its
-    // batch is formed and associated to it later.
-    creditBatchId: z.string().uuid("Invalid credit batch").nullable().or(emptyToNull).optional(),
+    // characterises — required: every sample belongs to exactly one batch
+    // (issue #309). The batch pools biochar across its member runs, so the
+    // sample never anchors on a production run.
+    creditBatchId: z.string().min(1, "Please select a credit batch").uuid("Invalid credit batch"),
     samplingTime: z.union([
       z.date(),
       z.string().transform((val, ctx) => {
@@ -115,13 +116,20 @@ export const sampleFormSchema = z
     oToCOrgRatio: optionalNumber,
 
     // === Section 7: 1000-Year Durability (conditional) ===
+    // Not user-selected: the form derives it from the chosen credit batch's
+    // declared tier (issue #309) and keeps it in form state so the conditional
+    // 1000-year validation below still applies.
     durabilityOption: z.enum(["200_year", "1000_year"]).default("200_year"),
 
     // R₀ reflectance (required for 1000-year)
     randomReflectanceR0Percent: optionalNumber,
     r0MeasurementCount: z.union([
-      z.number().int().min(0),
-      z.string().transform((val) => (val === "" ? null : parseInt(val, 10))),
+      z.number().int().min(0).max(PG_INTEGER_MAX, "Measurement count is too large"),
+      z.string()
+        .transform((val) => (val === "" ? null : parseInt(val, 10)))
+        .pipe(
+          z.number().int().min(0).max(PG_INTEGER_MAX, "Measurement count is too large").nullable(),
+        ),
       z.null(),
     ]).optional().nullable(),
     r0AnalysisDate: z.union([
@@ -212,8 +220,7 @@ export const updateSampleSchema = z.object({
     .max(50)
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
-  productionRunId: z.string().uuid().optional(),
-  creditBatchId: z.string().uuid("Invalid credit batch").nullable().or(emptyToNull).optional(),
+  creditBatchId: z.string().uuid("Invalid credit batch").optional(),
   samplingTime: z.union([
     z.date(),
     z.string().transform((val, ctx) => {
@@ -252,7 +259,7 @@ export const updateSampleSchema = z.object({
   oToCOrgRatio: z.number().optional().nullable(),
   durabilityOption: z.enum(["200_year", "1000_year"]).optional(),
   randomReflectanceR0Percent: z.number().optional().nullable(),
-  r0MeasurementCount: z.number().int().optional().nullable(),
+  r0MeasurementCount: z.number().int().min(0).max(PG_INTEGER_MAX, "Measurement count is too large").optional().nullable(),
   r0AnalysisDate: z.union([z.date(), z.string(), z.null()]).optional().nullable(),
   r0HistogramFileUrl: z.string().max(2000).optional().nullable(),
   reactiveCarbonPercent: z.number().optional().nullable(),
@@ -289,10 +296,10 @@ export const sampleFilterSchema = z.object({
     .max(255, "Search query must be less than 255 characters")
     .optional(),
 
-  // Filter by production run
-  productionRunId: z.string().uuid().optional(),
+  // Filter by credit batch
+  creditBatchId: z.string().uuid().optional(),
 
-  // Filter by facility through the linked production run
+  // Filter by facility through the linked credit batch
   facilityId: z.string().uuid().optional(),
 
   // Filter by durability option

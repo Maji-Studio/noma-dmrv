@@ -14,11 +14,17 @@ export interface AggregatedProductionData {
   weightedMoisturePercent: number | null;
   totalBiocharDryMassKg: number;
   totalFeedstockDryMassKg: number;
-  // Diesel split by use: startup/plant diesel feeds the volume-based
-  // Certify component; genset diesel feeds the energy-based genset
-  // components (converted to kWh via the facility's genset yield).
+  // Diesel is recorded split by use (startup/plant vs genset) but submits as
+  // ONE combined `fuel_usage_by_volume` datapoint in litres (issue #319 —
+  // energy-use-accounting v1.3 Eq 7: fuel emissions = fuel quantity × a
+  // volumetric well-to-wheel EF held as a fixed input on the Isometric
+  // template; noma never converts litres to kWh). The split fields stay for
+  // local reporting/preview.
   totalStartupDieselLitres: number;
   totalGensetDieselLitres: number;
+  // Combined diesel litres = totalStartupDieselLitres + totalGensetDieselLitres
+  // (both already attribution-scaled) — the single submitted volume.
+  totalDieselLitres: number;
   totalElectricityKwh: number;
   // Per-category transport mass-distance (tonne·km) = Σⱼ(distⱼ × massⱼ) over
   // the category's legs — the exact quantity Certify's
@@ -38,12 +44,6 @@ export interface AggregatedProductionData {
   // Sample shipment is optional: 0 (a true value — "no sample transport")
   // rather than null when no sample legs exist.
   sampleTransportMassDistanceTonneKm: number;
-  // Combined genset energy in kWh — genset litres × the facility's genset
-  // yield, applied by `enrichWithFacilityConfig`. Null until enriched (the raw
-  // litres live in `totalGensetDieselLitres`). ADR 0015 removed the per-stage
-  // energy split: all energy now submits as a single combined measurement
-  // point, so there is one genset-kWh figure instead of three stage shares.
-  totalGensetKwh: number | null;
   earliestStartTime: Date;
   latestEndTime: Date;
   sourceProductionRunIds: string[];
@@ -225,13 +225,13 @@ export function aggregateProductionRuns(
     totalFeedstockDryMassKg,
     totalStartupDieselLitres,
     totalGensetDieselLitres,
+    totalDieselLitres: totalStartupDieselLitres + totalGensetDieselLitres,
     totalElectricityKwh,
-    // Transport + genset-kWh fields default to null/0. Caller enriches via
-    // `enrichWithTransportLegs` and `enrichWithFacilityConfig`.
+    // Transport fields default to null/0. Caller enriches via
+    // `enrichWithTransportLegs`.
     feedstockTransportMassDistanceTonneKm: null,
     biocharTransportMassDistanceTonneKm: null,
     sampleTransportMassDistanceTonneKm: 0,
-    totalGensetKwh: null,
     earliestStartTime,
     latestEndTime,
     sourceProductionRunIds,
@@ -273,31 +273,6 @@ export function enrichWithTransportLegs(
     // AND falls back to 0 here — the pipeline blocks on the warning either way.
     sampleTransportMassDistanceTonneKm: sample.massDistanceTonneKm ?? 0,
     warnings: [...agg.warnings, ...newWarnings],
-  };
-}
-
-// Per-facility emission-estimate config on `certifier_projects`. ADR 0015
-// dropped the three `stageSplit*Pct` columns (the per-stage split is gone);
-// the genset yield remains because it is emissions-affecting (litres → kWh).
-// The submission path validates non-null before calling
-// `enrichWithFacilityConfig`.
-export interface FacilityEmissionConfig {
-  gensetEnergyYieldKwhPerLitre: number;
-}
-
-// Layers combined genset energy (kWh) onto an aggregation result (ADR 0015).
-// Pure; returns a new object. Converts the run-combined genset litres to kWh
-// via the facility's genset yield — the only facility-config-derived energy
-// figure left after the per-stage split was removed. `totalElectricityKwh` is
-// already the combined grid figure, so it needs no enrichment.
-export function enrichWithFacilityConfig(
-  agg: AggregatedProductionData,
-  config: FacilityEmissionConfig,
-): AggregatedProductionData {
-  return {
-    ...agg,
-    totalGensetKwh:
-      agg.totalGensetDieselLitres * config.gensetEnergyYieldKwhPerLitre,
   };
 }
 

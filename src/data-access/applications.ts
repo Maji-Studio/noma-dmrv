@@ -22,6 +22,7 @@ import type {
   CreateApplicationData,
   UpdateApplicationData,
 } from "@/schemas/applications";
+import type { DeliveryStatus } from "@/schemas/deliveries";
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
@@ -37,6 +38,7 @@ const IMMUTABLE_CREDIT_BATCH_STATUSES = new Set<string>(["verified", "issued"]);
 export interface ApplicationDeliveryOptionData {
   id: string;
   code: string;
+  status: DeliveryStatus;
   deliveryDate: Date;
   orderCode: string | null;
   formulationName: string | null;
@@ -109,6 +111,55 @@ async function getDeliveryCapacityAndApplied(
   };
 }
 
+/**
+ * Custody-ordering guard (issue #284): applications may only be recorded
+ * against deliveries already marked delivered, and never dated before the
+ * delivery. `deliveryDate` is the delivered date by convention — there is no
+ * separate delivered-at column.
+ */
+async function assertDeliveryAcceptsApplication(
+  deliveryId: string,
+  applicationDate: Date,
+  txOrDb: DbTransaction | typeof db = db,
+): Promise<void> {
+  const deliveryQuery = txOrDb
+    .select({
+      code: deliveries.code,
+      status: deliveries.status,
+      deliveryDate: deliveries.deliveryDate,
+    })
+    .from(deliveries)
+    .where(eq(deliveries.id, deliveryId));
+
+  // Lock the row inside a transaction (mirrors getDeliveryCapacityAndApplied)
+  // so a concurrent delivered→upcoming flip can't slip past the guard.
+  const [delivery] = await (txOrDb === db
+    ? deliveryQuery
+    : deliveryQuery.for("update"));
+
+  if (!delivery) {
+    throw new SafeError("Delivery not found");
+  }
+
+  if (delivery.status !== "delivered") {
+    throw new SafeError(
+      `Delivery ${delivery.code} has not been delivered yet — mark it as delivered before recording an application against it`,
+    );
+  }
+
+  // Compare at day granularity — application dates arrive as UTC midnight
+  // (z.coerce.date on a date-only string) while delivery dates may carry a
+  // time component, so truncate in UTC to keep both on the same basis
+  // regardless of server timezone.
+  const deliveryDayStart = new Date(delivery.deliveryDate);
+  deliveryDayStart.setUTCHours(0, 0, 0, 0);
+  if (applicationDate < deliveryDayStart) {
+    throw new SafeError(
+      `Application date cannot be before the delivery date of ${delivery.code}`,
+    );
+  }
+}
+
 async function getLinkedCreditBatches(
   tx: DbTransaction,
   applicationId: string,
@@ -147,60 +198,6 @@ async function getLinkedCreditBatches(
     .for("update", { of: creditBatches });
 
   return rows;
-}
-
-async function refreshCreditBatchSummaries(
-  tx: DbTransaction,
-  creditBatchId: string,
-): Promise<void> {
-  const linkedApplications = await tx
-    .select({
-      biocharAppliedTons: applications.biocharAppliedTons,
-      co2eStoredTonnes: applications.co2eStoredTonnes,
-    })
-    .from(applications)
-    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-    .leftJoin(orders, eq(deliveries.orderId, orders.id))
-    .innerJoin(
-      biocharProducts,
-      sql`${biocharProducts.id} = coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
-    )
-    .innerJoin(
-      creditBatchProductionRuns,
-      eq(
-        creditBatchProductionRuns.productionRunId,
-        biocharProducts.linkedProductionRunId,
-      ),
-    )
-    .where(eq(creditBatchProductionRuns.creditBatchId, creditBatchId));
-
-  const weightTons = linkedApplications.reduce(
-    (total, application) => total + Number(application.biocharAppliedTons),
-    0,
-  );
-  const hasUnknownStoredTotal = linkedApplications.some(
-    (application) => application.co2eStoredTonnes == null,
-  );
-  const totalCo2eStoredTons = hasUnknownStoredTotal
-    ? null
-    : linkedApplications.reduce(
-        (total, application) =>
-          total + Number(application.co2eStoredTonnes ?? 0),
-        0,
-      );
-
-  await tx
-    .update(creditBatches)
-    .set({
-      weightTons,
-      totalCo2eStoredTons,
-      // These batch-level values are no longer trustworthy once membership changes.
-      totalCo2eEmissionsTons: null,
-      totalCo2eCounterfactualTons: null,
-      fDurableCalculated: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(creditBatches.id, creditBatchId));
 }
 
 async function resolveApplicationDryMassTons(
@@ -341,6 +338,7 @@ export async function getApplicationDeliveryOptions(
       .select({
         id: deliveries.id,
         code: deliveries.code,
+        status: deliveries.status,
         deliveryDate: deliveries.deliveryDate,
         orderCode: orders.code,
         formulationName: formulations.name,
@@ -485,6 +483,10 @@ export async function createApplication(
       "create",
     );
 
+    // Before the capacity check — upcoming deliveries carry no delivered
+    // mass, so checkDeliveryCapacity skips and would silently accept them.
+    await assertDeliveryAcceptsApplication(data.deliveryId, data.applicationDate, tx);
+
     const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(data.deliveryId, undefined, tx);
     const check = checkDeliveryCapacity({ capacityKg, alreadyAppliedTons, requestedTons: data.biocharAppliedTons });
     if (!check.ok) throw new SafeError(check.errorMessage!);
@@ -563,6 +565,14 @@ export async function updateApplication(
         tx,
         { entityType: "delivery", entityId: data.deliveryId },
         "update",
+      );
+    }
+
+    if (data.deliveryId !== undefined || data.applicationDate !== undefined) {
+      await assertDeliveryAcceptsApplication(
+        effectiveDeliveryId,
+        data.applicationDate ?? existingApplication.applicationDate,
+        tx,
       );
     }
 
@@ -661,12 +671,8 @@ export async function deleteApplication(userId: string, id: string): Promise<voi
       .where(eq(soilTemperatureMeasurements.applicationId, id));
 
     await tx.delete(applications).where(eq(applications.id, id));
-
-    for (const creditBatchId of new Set(
-      linkedCreditBatches.map((batch) => batch.creditBatchId),
-    )) {
-      await refreshCreditBatchSummaries(tx, creditBatchId);
-    }
+    // Batch aggregates (applied weight, CO2e stored) are derived on read
+    // (issue #285) — no write-back sync is needed after removing a member.
   });
 }
 

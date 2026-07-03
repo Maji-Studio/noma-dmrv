@@ -73,8 +73,11 @@ export async function getSamplesFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load samples",
+      error: sampleActionError(
+        error,
+        "Failed to load samples",
+        "sample:list",
+      ),
     };
   }
 }
@@ -96,7 +99,11 @@ export async function getSampleByIdFn(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load sample",
+      error: sampleActionError(
+        error,
+        "Failed to load sample",
+        "sample:get",
+      ),
     };
   }
 }
@@ -105,7 +112,7 @@ export async function getSampleByIdFn(
  * Get sample statistics
  */
 export async function getSampleStatsFn(
-  productionRunId?: string,
+  creditBatchId?: string,
   facilityId?: string,
 ): Promise<ActionResult<SampleStats>> {
   try {
@@ -114,23 +121,26 @@ export async function getSampleStatsFn(
       return { success: false, error: "Unauthorized" };
     }
 
-    const validatedProductionRunId = productionRunId
-      ? z.string().uuid().parse(productionRunId)
+    const validatedCreditBatchId = creditBatchId
+      ? z.string().uuid().parse(creditBatchId)
       : undefined;
     const validatedFacilityId = facilityId
       ? z.string().uuid().parse(facilityId)
       : undefined;
     const stats = await getSampleStatsData(
       user.id,
-      validatedProductionRunId,
+      validatedCreditBatchId,
       validatedFacilityId,
     );
     return { success: true, data: stats };
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load sample stats",
+      error: sampleActionError(
+        error,
+        "Failed to load sample stats",
+        "sample:stats",
+      ),
     };
   }
 }
@@ -157,10 +167,11 @@ export async function checkSampleCodeFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to check sample code",
+      error: sampleActionError(
+        error,
+        "Failed to check sample code",
+        "sample:check-code",
+      ),
     };
   }
 }
@@ -182,10 +193,11 @@ export async function generateNextSampleCodeFn(): Promise<
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to generate sample code",
+      error: sampleActionError(
+        error,
+        "Failed to generate sample code",
+        "sample:generate-code",
+      ),
     };
   }
 }
@@ -215,7 +227,6 @@ export async function createSampleFn(
         const validated = createSampleSchema.parse({ ...data, sampleCode });
         return createSample(user.id, {
           sampleCode,
-          productionRunId: validated.productionRunId,
           creditBatchId: validated.creditBatchId,
           samplingTime:
             validated.samplingTime instanceof Date
@@ -308,7 +319,6 @@ export async function updateSampleFn(
 
     const sample = await updateSample(user.id, validated.sampleId, {
       sampleCode: validated.sampleCode,
-      productionRunId: validated.productionRunId,
       creditBatchId: validated.creditBatchId,
       samplingTime: validated.samplingTime
         ? validated.samplingTime instanceof Date

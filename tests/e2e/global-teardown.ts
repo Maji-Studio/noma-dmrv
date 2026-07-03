@@ -432,6 +432,24 @@ export default async function globalTeardown() {
       // ─── Suppliers ───
       await client.query(`DELETE FROM suppliers WHERE code LIKE 'E2E-%'`);
 
+      // ─── Production processes (FK to facilities + feedstock_types) ───
+      // Must go after credit_batches (production_process_id FKs this table)
+      // and before feedstock_types/facilities. Without this sweep a single
+      // orphaned row aborts the whole transaction (it's all-or-nothing).
+      await client.query(`
+        DELETE FROM production_processes
+        WHERE facility_id IN (
+                SELECT id FROM facilities
+                WHERE code LIKE 'E2E-%'
+                   OR name LIKE 'UI %'
+                   OR name LIKE 'Chain %'
+                   OR name LIKE 'Duplicate Test %'
+              )
+           OR feedstock_type_id IN (
+                SELECT id FROM feedstock_types WHERE code LIKE 'E2E-%'
+              )
+      `);
+
       // ─── Feedstock types ───
       await client.query(`DELETE FROM feedstock_types WHERE code LIKE 'E2E-%'`);
 
@@ -506,18 +524,6 @@ export default async function globalTeardown() {
       // ─── Certifier GHG statements (FK to facilities) ───
       await client.query(`
         DELETE FROM certifier_ghg_statements
-        WHERE facility_id IN (
-          SELECT id FROM facilities
-          WHERE code LIKE 'E2E-%'
-             OR name LIKE 'UI %'
-             OR name LIKE 'Chain %'
-             OR name LIKE 'Duplicate Test %'
-        )
-      `);
-
-      // ─── Certifier project emissions (FK to facilities) ───
-      await client.query(`
-        DELETE FROM certifier_project_emissions
         WHERE facility_id IN (
           SELECT id FROM facilities
           WHERE code LIKE 'E2E-%'

@@ -11,6 +11,13 @@ import { requireAuth } from "./utils";
 export interface ApplicationForRun {
   applicationId: string;
   productionRunId: string;
+  biocharAppliedTons: number;
+}
+
+export interface BatchApplicationRollup {
+  applicationIds: string[];
+  /** Σ member applications' biocharAppliedTons — derived, never stored (issue #285). */
+  appliedWeightTons: number;
 }
 
 function unique(values: string[]): string[] {
@@ -53,6 +60,7 @@ async function getApplicationsForRunsWithExecutor(
     .select({
       applicationId: applications.id,
       productionRunId: biocharProducts.linkedProductionRunId,
+      biocharAppliedTons: applications.biocharAppliedTons,
     })
     .from(applications)
     .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
@@ -82,7 +90,13 @@ async function getApplicationsForRunsWithExecutor(
 
   return rows.flatMap((row) =>
     row.productionRunId
-      ? [{ applicationId: row.applicationId, productionRunId: row.productionRunId }]
+      ? [
+          {
+            applicationId: row.applicationId,
+            productionRunId: row.productionRunId,
+            biocharAppliedTons: row.biocharAppliedTons,
+          },
+        ]
       : [],
   );
 }
@@ -95,12 +109,17 @@ export async function getApplicationsForRuns(
   return getApplicationsForRunsWithExecutor(db, runIds);
 }
 
-export async function getApplicationIdsByBatchFromRuns(
-  userId: string,
+/**
+ * Roll up member applications per batch from the run membership map:
+ * unique application ids + derived applied weight (Σ biocharAppliedTons).
+ * This replaces the stored `weightTons` column (issue #285) — the figure is
+ * recomputed on every read so edited/deleted applications can never leave a
+ * stale headline number on a credit batch.
+ */
+export function summarizeApplicationsForBatches(
+  applicationsForRuns: ApplicationForRun[],
   productionRunIdsByBatchId: Record<string, string[]>,
-): Promise<Record<string, string[]>> {
-  const runIds = unique(Object.values(productionRunIdsByBatchId).flat());
-  const applicationsForRuns = await getApplicationsForRuns(userId, runIds);
+): Record<string, BatchApplicationRollup> {
   const batchIdByRunId = new Map<string, string>();
   for (const [batchId, batchRunIds] of Object.entries(productionRunIdsByBatchId)) {
     for (const runId of batchRunIds) {
@@ -108,18 +127,52 @@ export async function getApplicationIdsByBatchFromRuns(
     }
   }
 
-  const applicationIdsByBatchId: Record<string, string[]> = {};
+  // Dedupe by application id (defensive — the lineage walk yields one row per
+  // application) so a duplicate row can never double-count applied weight.
+  const appliedTonsByBatchId = new Map<string, Map<string, number>>();
   for (const row of applicationsForRuns) {
     const batchId = batchIdByRunId.get(row.productionRunId);
     if (!batchId) continue;
-    applicationIdsByBatchId[batchId] ??= [];
-    applicationIdsByBatchId[batchId].push(row.applicationId);
+    const batchApps = appliedTonsByBatchId.get(batchId) ?? new Map();
+    batchApps.set(row.applicationId, row.biocharAppliedTons);
+    appliedTonsByBatchId.set(batchId, batchApps);
   }
 
   return Object.fromEntries(
-    Object.entries(applicationIdsByBatchId).map(([batchId, applicationIds]) => [
+    Array.from(appliedTonsByBatchId.entries()).map(([batchId, batchApps]) => [
       batchId,
-      unique(applicationIds),
+      {
+        applicationIds: Array.from(batchApps.keys()),
+        appliedWeightTons: Array.from(batchApps.values()).reduce(
+          (total, tons) => total + tons,
+          0,
+        ),
+      },
     ]),
   );
+}
+
+export async function getApplicationRollupsByBatchFromRuns(
+  userId: string,
+  productionRunIdsByBatchId: Record<string, string[]>,
+): Promise<Record<string, BatchApplicationRollup>> {
+  const runIds = unique(Object.values(productionRunIdsByBatchId).flat());
+  const applicationsForRuns = await getApplicationsForRuns(userId, runIds);
+  return summarizeApplicationsForBatches(
+    applicationsForRuns,
+    productionRunIdsByBatchId,
+  );
+}
+
+/**
+ * Convenience entry point when only batch ids are at hand (wizard, dashboard):
+ * resolves the run membership first, then rolls up member applications.
+ */
+export async function getApplicationRollupsByBatchIds(
+  userId: string,
+  batchIds: string[],
+): Promise<Record<string, BatchApplicationRollup>> {
+  requireAuth(userId);
+  const productionRunIdsByBatchId = await getProductionRunIdsByBatchId(batchIds);
+  return getApplicationRollupsByBatchFromRuns(userId, productionRunIdsByBatchId);
 }

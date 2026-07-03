@@ -1,5 +1,10 @@
 # Period-level emissions live as Project-scope Components; noma is the LCA journal, not the publisher
 
+> **Superseded by [ADR 0018](./0018-isometric-owns-project-emissions.md)**
+> (2026-07-02). The `PROJECT`-scope placement stands; the noma-side LCA journal
+> + drift panel this ADR introduced were removed — Isometric is the sole
+> system-of-record for project emissions. Kept as the historical record.
+
 > **Status: Accepted, design-only** (2026-05-24). Resolves
 > `isometric/phase-3.7-period-inputs` (originally raised 2026-05-21,
 > scope-revised 2026-05-22 under ADR 0003). Implementation tracked under

@@ -1,13 +1,15 @@
 /**
  * CreditBatchDetail — the credit-batch detail route's client body
- * (`/credit-batches/[id]`), recut in Phase 5 of the visual design plan:
- * proper detail header (eyebrow, code, status, period) over a KPI strip
- * (CO₂e stored · credit weight · buffer pool · applications), the batch
- * health check as a compact checklist strip, and the batch's own data as
- * read panels — the edit form only mounts behind the "Edit details" toggle,
- * so inputs no longer sit directly in the detail view. The health strip's
- * carbon fix link anchors to the `#batch-details` section here, closing the
- * loop on a single page.
+ * (`/credit-batches/[id]`). One question drives the layout: is this batch
+ * ready to become credits, and what needs fixing if not?
+ *
+ * Header (code, status, Edit) → 3-card KPI strip (CO₂e stored · lab samples
+ * toward the ≥3 minimum · production runs) → certification checklist →
+ * lab-sample roll-up → a read-only Details reference card. Editing opens the
+ * standard entity side sheet from the header — the same pattern as the list
+ * page — so the detail body stays read-only. Registry-issuance figures
+ * (credit weight, buffer pool) live in the Details card, not the KPI strip:
+ * they are null until issuance and carry no operational signal.
  */
 "use client";
 
@@ -15,19 +17,19 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   CaretRightIcon,
+  FlaskIcon,
   LeafIcon,
-  ScalesIcon,
-  ShieldCheckIcon,
+  PencilSimpleIcon,
   StackIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { formatSafeDate, formatTonnes } from "@/lib/format-utils";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui/button";
-import { InfoHint } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import {
   DetailField,
   DetailRow,
@@ -43,6 +45,7 @@ import {
   useCreditBatch,
   useUpdateCreditBatch,
 } from "@/hooks/use-credit-batches";
+import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 import { CreditBatchForm } from "./credit-batch-form";
 import { CreditBatchHealthStrip } from "./credit-batch-health-strip";
 import { CreditBatchDurabilityPanel } from "./credit-batch-durability-panel";
@@ -75,17 +78,11 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** CO₂e stored: the registry figure when present, else the certify preview. */
+/** CO₂e stored: the derived certify preview (issue #285 — never stored). */
 function co2eStoredKpi(batch: CreditBatchWithRelations): {
   value: string;
   description: string | undefined;
 } {
-  if (batch.totalCo2eStoredTons != null) {
-    return {
-      value: formatTonnes(batch.totalCo2eStoredTons, { unit: "t CO₂e" }),
-      description: "Registry accounting",
-    };
-  }
   if (batch.co2eStoredPreview?.co2eStoredTonnes != null) {
     return {
       value: formatTonnes(batch.co2eStoredPreview.co2eStoredTonnes, {
@@ -102,9 +99,17 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
   // Scope to this batch's facility — overlap validation is per-facility, and
   // credit batches must never be read across the facility boundary.
   const updateCreditBatch = useUpdateCreditBatch();
+  // Same roll-up the durability panel renders — React Query dedupes the fetch.
+  const { data: durability, isLoading: durabilityLoading } =
+    useBatchDurabilitySummary(creditBatchId);
   const toast = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
+
+  const closeEdit = () => {
+    setUpdateError(null);
+    setIsEditing(false);
+  };
 
   const handleUpdate = async (data: CreditBatchFormData) => {
     setUpdateError(null);
@@ -174,22 +179,31 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
     <Shell>
       <Breadcrumb code={creditBatch.code} />
 
-      {/* Header */}
+      {/* Header — status + the single Edit entry point for the whole page */}
       <PageHeader
         area="verification"
         title={creditBatch.code}
         subtitle={`${creditBatch.facility?.name ?? "No facility"} · ${period}`}
         actions={
-          <StatusBadge
-            status={creditBatch.status}
-            label={formatCreditBatchStatus(creditBatch.status)}
-            size="large"
-          />
+          <div className="flex items-center gap-12">
+            <StatusBadge
+              status={creditBatch.status}
+              label={formatCreditBatchStatus(creditBatch.status)}
+              size="large"
+            />
+            <Button variant="default" onClick={() => setIsEditing(true)}>
+              <PencilSimpleIcon size={16} aria-hidden />
+              Edit batch
+            </Button>
+          </div>
         }
       />
 
       {/* KPI strip */}
-      <div className="grid grid-cols-1 gap-24 sm:grid-cols-2 xl:grid-cols-4">
+      <div
+        data-testid="batch-kpis"
+        className="grid grid-cols-1 gap-24 sm:grid-cols-3"
+      >
         <StatCard
           title="CO₂e stored"
           value={stored.value}
@@ -197,137 +211,131 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
           icon={<LeafIcon size={24} />}
         />
         <StatCard
-          title="Credit weight"
-          value={formatTonnes(creditBatch.weightTons)}
-          description="Registry issuance"
-          icon={<ScalesIcon size={24} />}
-        />
-        <StatCard
-          title="Buffer pool"
+          title="Lab samples"
           value={
-            creditBatch.bufferPoolPercent != null
-              ? `${creditBatch.bufferPoolPercent}%`
+            durability
+              ? `${durability.usableReplicateCount} of ${durability.minimumReplicates}`
               : "—"
           }
-          description="Risk-based (2–20%)"
-          icon={<ShieldCheckIcon size={24} />}
+          description="usable for certification"
+          icon={<FlaskIcon size={24} />}
+          isLoading={durabilityLoading}
         />
         <StatCard
           title="Production runs"
           value={creditBatch.productionRunCount}
-          description="Cohort membership"
+          description="in this batch"
           icon={<StackIcon size={24} />}
         />
       </div>
 
-      {/* Health check strip */}
+      {/* Certification checklist */}
       <CreditBatchHealthStrip
         creditBatchId={creditBatchId}
         facilityId={creditBatch.facilityId}
       />
 
-      {/* Durability sample roll-up + readiness (ADR 0016) */}
+      {/* Lab-sample roll-up + readiness (ADR 0016) */}
       <CreditBatchDurabilityPanel creditBatchId={creditBatchId} />
 
-      {/* Batch details — read panels; the edit form mounts behind the toggle.
-          Anchor target for the health strip's carbon fix link. */}
+      {/* Details — read-only reference. Anchor target for checklist fix links. */}
       <section
         id="batch-details"
-        className="flex flex-col gap-24 bg-[var(--panel-bg)] [border:var(--panel-border)] p-32 scroll-mt-24"
+        className="flex flex-col gap-20 bg-[var(--panel-bg)] [border:var(--panel-border)] p-32 scroll-mt-24"
       >
-        <div className="flex items-center justify-between gap-16">
-          <h2 className="title-heading-3 flex items-center gap-6">
-            Batch details
-            <InfoHint>
-              Crediting period and durability drive the carbon accounting
-              above.
-            </InfoHint>
-          </h2>
-          {!isEditing && (
-            <Button variant="default" onClick={() => setIsEditing(true)}>
-              Edit details
-            </Button>
-          )}
-        </div>
+        <h2 className="title-heading-3">Details</h2>
 
-        {updateError && <ServerError message={updateError} />}
-
-        {isEditing ? (
-          <CreditBatchForm
-            creditBatch={creditBatch}
-            onSubmit={handleUpdate}
-            onCancel={() => {
-              setUpdateError(null);
-              setIsEditing(false);
-            }}
-            isSubmitting={updateCreditBatch.isPending}
-            submitLabel="Save changes"
-            stickyActions={false}
-          />
-        ) : (
-          <div className="flex flex-col gap-20">
-            <DetailSection title="Overview" divider={false}>
-              <DetailRow>
-                <DetailField
-                  label="Start date"
-                  value={formatSafeDate(creditBatch.startDate)}
-                />
-                <DetailField
-                  label="End date"
-                  value={formatSafeDate(creditBatch.endDate)}
-                />
-              </DetailRow>
-            </DetailSection>
-
-            <DetailSection title="Durability">
-              <DetailRow>
-                <DetailField
-                  label="Durability option"
-                  value={formatDurabilityOption(creditBatch.durabilityOption)}
-                />
-                <DetailField
-                  label="Member production runs"
-                  value={creditBatch.productionRunCount}
-                />
-              </DetailRow>
-            </DetailSection>
-
-            <DetailSection title="Site management">
+        <div className="flex flex-col gap-20">
+          <DetailSection title="Overview" divider={false}>
+            <DetailRow>
               <DetailField
-                label="Notes"
+                label="Start date"
+                value={formatSafeDate(creditBatch.startDate)}
+              />
+              <DetailField
+                label="End date"
+                value={formatSafeDate(creditBatch.endDate)}
+              />
+            </DetailRow>
+            <DetailRow>
+              <DetailField
+                label="Durability option"
+                value={formatDurabilityOption(creditBatch.durabilityOption)}
+              />
+              <DetailField
+                label="Site management notes"
                 value={creditBatch.siteManagementNotes}
               />
-            </DetailSection>
+            </DetailRow>
+          </DetailSection>
 
-            <DetailSection title="Registry & accounting">
-              <DetailRow>
-                <DetailField
-                  label="CO₂e emissions"
-                  value={formatTonnes(creditBatch.totalCo2eEmissionsTons)}
-                />
-                <DetailField
-                  label="CO₂e counterfactual"
-                  value={formatTonnes(creditBatch.totalCo2eCounterfactualTons)}
-                />
-              </DetailRow>
-              <DetailRow>
-                <DetailField
-                  label="Registry"
-                  value={creditBatch.registry}
-                />
-                <DetailField
-                  label="Credit value"
-                  value={
-                    creditBatch.value != null
-                      ? `${creditBatch.value}${creditBatch.currency ? ` ${creditBatch.currency}` : ""}`
-                      : "—"
-                  }
-                />
-              </DetailRow>
-            </DetailSection>
-          </div>
-        )}
+          <DetailSection title="Registry & accounting">
+            <DetailRow>
+              <DetailField
+                label="Applied weight"
+                value={formatTonnes(creditBatch.appliedWeightTons)}
+              />
+              <DetailField
+                label="Buffer pool"
+                value={
+                  creditBatch.bufferPoolPercent != null
+                    ? `${creditBatch.bufferPoolPercent}%`
+                    : "—"
+                }
+              />
+            </DetailRow>
+            <DetailRow>
+              <DetailField
+                label="Registry"
+                value={creditBatch.registry}
+              />
+              <DetailField
+                label="Credit value"
+                value={
+                  creditBatch.value != null
+                    ? `${creditBatch.value}${creditBatch.currency ? ` ${creditBatch.currency}` : ""}`
+                    : "—"
+                }
+              />
+            </DetailRow>
+          </DetailSection>
+        </div>
       </section>
+
+      {/* Edit side sheet — the same form the list page mounts */}
+      <SlideOverPanel.Root
+        open={isEditing}
+        onOpenChange={(open) => {
+          if (!open) closeEdit();
+        }}
+      >
+        <SlideOverPanel.Content size="wide">
+          <SlideOverPanel.Header showClose>
+            <div className="flex min-w-0 flex-col gap-4">
+              <SlideOverPanel.Title>{creditBatch.code}</SlideOverPanel.Title>
+              <SlideOverPanel.Description>
+                {creditBatch.facility?.name ?? "No facility"}
+              </SlideOverPanel.Description>
+            </div>
+          </SlideOverPanel.Header>
+          <SlideOverPanel.Body noPaddingBottom fillHeight>
+            {updateError && (
+              <div className="mb-24">
+                <ServerError message={updateError} />
+              </div>
+            )}
+            <CreditBatchForm
+              key={creditBatch.id}
+              creditBatch={creditBatch}
+              onSubmit={handleUpdate}
+              onClearServerError={() => setUpdateError(null)}
+              onCancel={closeEdit}
+              isSubmitting={updateCreditBatch.isPending}
+              submitLabel="Save changes"
+            />
+          </SlideOverPanel.Body>
+        </SlideOverPanel.Content>
+      </SlideOverPanel.Root>
     </Shell>
   );
 }

@@ -4,8 +4,9 @@
  * Dashboard: KPI strip with sparkline slots, the Action center (record flags +
  * evidence gaps + live signal merged), feedstock mix, custody-flow ribbon, and
  * the period toggle — all facility-scoped.
- * Credit batch detail: header KPI row, compact health strip, and read panels
- * with the edit form behind the "Edit details" toggle.
+ * Credit batch detail: header KPI row (CO₂e stored · lab samples · runs),
+ * certification checklist strip, read-only Details card, and the edit form
+ * behind the header's "Edit batch" side sheet.
  */
 import { test, expect } from "./fixtures/auth-fixtures";
 import { seedCreditBatch } from "./fixtures/seed-chain-data";
@@ -48,7 +49,7 @@ test.describe("Dashboard (Phase 5)", () => {
 });
 
 test.describe("Credit batch detail (Phase 5)", () => {
-  test("header KPI row, health strip, and read panels with edit toggle", async ({
+  test("header KPI row, checklist strip, and read-only details with edit sheet", async ({
     adminPage,
     seededData,
   }) => {
@@ -63,20 +64,22 @@ test.describe("Credit batch detail (Phase 5)", () => {
     // Detail header: code as title, status badge alongside
     await expect(page.getByRole("heading", { name: batch.code })).toBeVisible();
 
-    // KPI row
-    await expect(page.getByText("CO₂e stored")).toBeVisible();
-    await expect(page.getByText("Credit weight")).toBeVisible();
-    await expect(page.getByText("Buffer pool")).toBeVisible();
+    // KPI row: CO₂e stored · lab samples toward the ≥3 minimum · runs
+    const kpis = page.getByTestId("batch-kpis");
+    await expect(kpis.getByText("CO₂e stored")).toBeVisible();
+    await expect(kpis.getByText("Lab samples")).toBeVisible();
+    await expect(kpis.getByText("Production runs")).toBeVisible();
 
-    // Compact health strip replaces the full panel
+    // Certification checklist strip
     await expect(page.getByTestId("batch-health-strip")).toBeVisible();
+    await expect(page.getByText("Certification checklist")).toBeVisible();
 
-    // Read panels by default — the edit form (date inputs) is not mounted
+    // Read-only details card — the edit form (date inputs) is not mounted
     await expect(page.getByText("Registry & accounting")).toBeVisible();
     await expect(page.locator("#startDate")).toHaveCount(0);
 
-    // Edit toggle mounts the form; cancel returns to the read panels
-    await page.getByRole("button", { name: "Edit details" }).click();
+    // Header edit opens the side-sheet form; cancel closes it again
+    await page.getByRole("button", { name: "Edit batch" }).click();
     await expect(page.locator("#startDate")).toBeVisible();
     await page.getByRole("button", { name: "Cancel" }).click();
     await expect(page.locator("#startDate")).toHaveCount(0);

@@ -57,7 +57,39 @@ Also removed the same day (not Isometric-related): the legacy Next.js-starter
 `[projectId]` route tree, data-access, fn, hooks, components, and `requireProjectMember`
 guard. Pure starter-template residue; the app is facility-scoped.
 
+### Lab-characterization chemistry in `samples` kept `real` in the numeric conversion (`schema/samples-chemistry-precision`, opened 2026-07-03)
+
+- **Decision (PR #342, issue #280):** the real→numeric conversion moved
+  `h_to_c_org_ratio` and the heavy-metal/contaminant panel to exact `numeric`,
+  but `total_carbon_percent` / `inorganic_carbon_percent` /
+  `organic_carbon_percent` / `random_reflectance_r0_percent` intentionally stay
+  `real` (`src/db/schema/production.ts`) — even though `organic_carbon_percent`
+  feeds CO₂e-stored math directly. Rationale: float4 relative error (~1e-7) is
+  far below lab assay precision, so no credit-bearing digit is at risk.
+- **To resolve:** revisit whether issue #280's registry-reproducibility
+  rationale (round-trip exactly what the operator entered) extends to these
+  lab-characterization columns too; if yes, migrate them to the `percent`
+  family in `src/db/schema/numeric-families.ts`.
+- **Related note:** the `ppm` family caps at 999,999.9999 — marginally below
+  the 1,000,000 ppm physical maximum of a pure substance. Irrelevant for
+  hand-entered assay values; matters only if a lab/CSV import path ever writes
+  gas-composition or contaminant ppm columns (none exists today).
+
 ## Architecture
+
+### Auto-fill sample chemistry from an uploaded lab report (`samples/coa-autofill`, opened 2026-07-02)
+
+- **Deferred from issue #309** (samples re-anchored on credit batches — built).
+  The issue also asked: "it would be very nice if the user can upload the lab
+  results and all the entries are automatically updated" — i.e. parse an
+  uploaded COA/lab-report PDF and pre-fill the sample form's chemistry fields.
+- **Why it matters:** the sample form has ~30 numeric fields transcribed by
+  hand from the lab certificate; transcription errors feed directly into
+  certified carbon figures.
+- **To resolve:** decide extraction approach (LLM extraction vs. per-lab
+  templates), confidence/review UX (never silently overwrite operator entries),
+  and where parsing runs (server action + storage provider). The upload slot
+  already exists (`lab_report` document on the sample's Evidence step).
 
 ### Validate production-run window ⊆ credit-batch period (`production/run-window`, opened 2026-07-01)
 
@@ -188,6 +220,36 @@ guard. Pure starter-template residue; the app is facility-scoped.
   isolation guarantees beyond data-access-layer enforcement.
 
 ## Isometric Certify integration
+
+### Eq.6 R₀-term semantics — 1000-year F_durable normalization (`certification/fdurable-1000-r0-semantics`, opened 2026-07-03)
+
+- **From issue #142** (1000-year CO₂e-stored preview path, built). The storage
+  module ("Biochar Storage in Soil Environments" v1.2, Eq.6 §5.1.1.3.2) is
+  internally inconsistent about the units/semantics of the first Eq.6 factor:
+  - The **formal glossary** defines R̄₀ as the "mean of all R₀ measurements"
+    and Table 3 lists both R₀ and C_non-reactive in **percent** — but the
+    literal product of two percent-magnitude terms is dimensionally incoherent
+    with the 0.95 cap (percent-as-number always saturates the cap at ~165;
+    both-as-fractions yields an absurd ~0.0165).
+  - The **narrative** ("credited for the percentage of their biochar which
+    passes the 2% R₀ benchmark") instead implies the first multiplicand is the
+    histogram **fraction of R₀ measurements ≥ 2%** (a 0–1 value), contradicting
+    the glossary's mean-reflectance reading.
+- **Local choice (preview only):** `computeFDurable1000`
+  (`src/lib/calculations/biochar-removal.ts`) applies Eq.6 literally to the
+  stored batch columns — R₀ term as mean-minus-std-dev in percent, carbon term
+  normalized percent → fraction (÷100) so the 0.95 cap is meaningful — with the
+  mandatory `min(0.95, max(0, …))` bounds guaranteeing output ∈ [0, 0.95] under
+  any reading. The interpretation is documented loudly at the function.
+- **Why it matters:** the local figure is a preview (the registry computes the
+  authoritative F_durable at submission), but a wrong interpretation would show
+  operators a misleading crediting estimate. **Needs Isometric confirmation
+  before any LIVE 1000-year submission is driven off this preview.**
+- **To resolve:** ask Isometric which reading is intended (mean R₀ vs. the
+  ≥ 2% histogram fraction, and the exact unit treatment), then align
+  `computeFDurable1000` + its tests and record the decision in
+  `docs/isometric/changes.md`. Authoritative module:
+  <https://registry.isometric.com/module/biochar-storage-soil-environments/1.2?tag=1.2.0>
 
 ### Credit-batch lab-sampling — Method-B Track 2 unlock followups (`certification/method-b-unlock-track-2`)
 
@@ -428,8 +490,8 @@ they don't churn a freshly-introduced surface mid-review:
   `certify.d.ts` — the deprecated `Removal*` schemas + `GhgStatement.removal_ids`
   / `Component.removal_template_component_id` keys disappear, so the test mocks
   that still carry both old+new fields (`isometric-reconciliation.test.ts`,
-  `isometric-ghg-statement-flow.test.ts`, `isometric-ghg-statement-submit.test.ts`,
-  `project-emission-match.test.ts`) drop the deprecated keys; (b) delete the
+  `isometric-ghg-statement-flow.test.ts`,
+  `isometric-ghg-statement-submit.test.ts`) drop the deprecated keys; (b) delete the
   🚫-marked deprecated rows from `docs/isometric/openapi-index.md`. No app-code
   change expected — the wire layer already only calls the new routes.
 - Full inventory + verified renames + phased plan:
@@ -510,65 +572,6 @@ capability, not a blocker — tracked here so they are not lost:
   draft row has a null start until Isometric returns the window — the constraint
   would need to tolerate that or be deferred). Decide if the DB-level guarantee
   is worth the `btree_gist` extension + null-start handling.
-
-### Project-emission category disambiguator for `mass_based_ci_emissions` (opened 2026-05-24)
-
-- **`miscellaneous` and `sampling_consumables` collide on the same Isometric blueprint**
-  (`mass_based_ci_emissions` / `mass` / `kg`). The matcher in
-  `src/lib/isometric/utils/project-emission-match.ts` distinguishes them by
-  magnitude only; when both Components have similar magnitudes (<±0.5%) the
-  matcher returns `kind: "ambiguous"` and surfaces a reason naming the two
-  Component `display_name`s.
-- Today this is a documented operational requirement on the Isometric operator
-  ("give the two Components distinct display_names"). It works but is fragile.
-- Resolve via: pick a disambiguator strategy — either (a) match by
-  Component `display_name` regex per category (operator naming becomes part of
-  the contract), or (b) attach a noma-side `supplierRefIdPrefix` to
-  `CATEGORY_TO_BLUEPRINT` and only consider Components whose latest Datapoint
-  carries that prefix. Decision needed before the next operator-facing release.
-
-### Project-emissions tracking strategy — journal vs. measured actuals (opened 2026-05-26)
-
-- **Current state (ADR 0005, Posture B):** `/admin/emission-estimates`
-  carries a "Period emissions" section that journals five LCA-derived
-  categories (`staff_travel`, `pyrolyzer_direct`, `biochar_storage_fuel`,
-  `miscellaneous`, `lab_electricity`, `sampling_consumables`) into
-  `certifier_project_emissions`. Operator re-publishes the same numbers
-  in the Isometric UI as `PROJECT`-scope Components; drift panel on
-  `/certification/` reconciles. **noma stores the numbers but does not
-  consume them in any calculation.**
-- **Question:** is the journal the right long-term home, or should noma
-  capture **measured actuals** for the three categories that are
-  measurable inside the dMRV (`pyrolyzer_direct`, `biochar_storage_fuel`,
-  `lab_electricity` + `sampling_consumables`), keeping the journal only
-  for genuinely admin-overhead categories (`staff_travel`,
-  `miscellaneous`)?
-- **Why it matters:** the LCA produces forecasts. Investors and
-  verifiers will eventually want forecast-vs-actual variance. Three of
-  five categories have measurement potential in the dMRV today
-  (pyrolyzer gas composition lives on `production_run_readings` /
-  `production_samples`; fuel + lab utilities would be small additive
-  entities). Until the strategy is set we are storing forecasts in
-  a place that pretends to be a measurement system.
-- **Decision needed:**
-  1. Confirm GHG Statement cadence (annual vs. quarterly vs.
-     per-removal). Annual + `GHG_STATEMENT`-scope is the simplest
-     posture; sub-annual forces `PROJECT`-scope + Isometric
-     amortization (ADR 0005 default).
-  2. Decide whether noma should track measured actuals for the three
-     measurable categories. If yes: scope the new entities
-     (`facility_fuel_log`, `lab_utility_log`) and confirm
-     `production_run_readings` captures gas mass flow + CH₄/CO
-     concentration end-to-end.
-  3. Decide year-end reconciliation behaviour — does noma feed the
-     next LCA, or does the LCA remain externally authored and noma
-     supplies variance evidence only?
-- **Resolve via:** stakeholder conversation on reporting cadence +
-  investor narrative requirements; once cadence is set, the
-  measurement-vs-journal split becomes a mechanical follow-up. Until
-  then, ship the journal as-is and treat it as Phase 1 of a larger
-  project-emissions story (see ADR 0005 "Posture C remains an upgrade
-  path").
 
 ### Transport-leg compliance follow-ups (opened 2026-05-13)
 
@@ -1074,13 +1077,16 @@ should fail-closed). Clicking SUBMIT on a Removal raised this SafeError:
 > published in the Isometric UI from a row in
 > /admin/emission-estimates (ADR 0005)`
 
+(Message wording since revised by ADR 0018 — it now points at the
+Isometric UI directly; the journal it referenced was removed.)
+
 - **Question:** the seeded default Removal Template still references the
   `direct-emissions/ghg_direct_emissions/concentration` input. Under
-  ADR 0005 the `pyrolyzer_direct` magnitude lives in
-  `certifier_project_emissions` and is published in Isometric as a
-  PROJECT-scope Component — the Removal payload must not carry that
-  input. The check at submit time fails-closed correctly; the seed /
-  default template carries a category that ADR 0005 said to remove.
+  ADR 0005 (scope) / ADR 0018 (ownership) the `pyrolyzer_direct`
+  magnitude lives as a PROJECT-scope Component authored in the
+  Isometric UI — the Removal payload must not carry that input. The
+  check at submit time fails-closed correctly; the seed / default
+  template carries a category that ADR 0005 said to remove.
 - **Why it matters:** blocks Case F end-to-end test pass for the
   Sources panel, and any operator who tries to submit using the seeded
   default template hits the same error.
@@ -1094,10 +1100,12 @@ should fail-closed). Clicking SUBMIT on a Removal raised this SafeError:
   `/certification/removals`. The root cause is upstream of the template:
   noma has **no source for the `pyrolyzer_direct` magnitude** (exhaust
   CH₄/CO concentration + gas mass flow). It is not operational
-  production-run data — it comes from the annual external LCA, and the
-  `certifier_project_emissions` rows are still Moshi-LCA **placeholders**,
-  not real extracted values (ADR 0005 "no production promotion until the
-  seed is replaced").
+  production-run data — it comes from the annual external LCA, and no
+  real extracted value has been published as a PROJECT-scope Component
+  in Isometric yet. (The former `certifier_project_emissions` journal
+  rows were Moshi-LCA placeholders; the journal is gone per ADR 0018 —
+  the value now lives only where the operator publishes it in the
+  Isometric UI.)
   - **The interim-`0` temptation is the exact integrity bug ADR 0005
     removed.** Pyrolyzer direct emissions are *positive* emissions that
     *reduce* net removal. Sending `0` (the old zero-stub behaviour)
@@ -1106,8 +1114,8 @@ should fail-closed). Clicking SUBMIT on a Removal raised this SafeError:
     an over-claim until the real LCA value lands.
   - **Stakeholder questions to resolve:**
     1. Who owns the LCA report, and what is the real `pyrolyzer_direct`
-       value (kg CO₂e for the window) we should transcribe into
-       `/admin/emission-estimates`?
+       value (kg CO₂e for the window) the operator should publish as a
+       PROJECT-scope Component in the Isometric UI (ADR 0018)?
     2. Until that value exists, is the agreed interim posture (a) **omit
        the component from the template** so the Removal simply doesn't
        carry it (data absent, not a false `0`), or (b) a deliberately
@@ -1117,8 +1125,9 @@ should fail-closed). Clicking SUBMIT on a Removal raised this SafeError:
        production submission? (Sandbox: unblock by editing the sandbox
        template only — no registry consequence.)
   - **Do NOT re-add a zero-stub `INPUT_MAPPING` entry to bypass the
-    guard.** That reverts ADR 0005 and re-introduces the over-claim.
-    The unblock path is template-field removal, not a fake datapoint.
+    guard.** That reverts ADR 0005/0018 and re-introduces the
+    over-claim. The unblock path is template-field removal, not a fake
+    datapoint.
 
 ### Certify-removal redesign — pinned biochar protocol behind latest certified (opened 2026-06-04)
 
@@ -1149,10 +1158,11 @@ should fail-closed). Clicking SUBMIT on a Removal raised this SafeError:
     per-run *applied-mass* attribution, not a co-product split — only bites if a
     creditable co-product is ever added.
   - **GHGAM 1.1 20-year amortization cap + residual-debt reporting + mandatory
-    year-1/3/5 reviews:** amortization is server-side (ADR 0005 — Isometric owns
-    it; noma is the LCA journal, not the publisher), so the cap is enforced
-    registry-side. Low code impact; operator-process change; aligns with the
-    in-flight `docs/archive/plans/2026-06-17-remove-project-emissions-journal.md`.
+    year-1/3/5 reviews:** amortization is server-side (ADR 0005/0018 — Isometric
+    owns project emissions end-to-end), so the cap is enforced registry-side.
+    Low code impact; operator-process change; the journal removal planned in
+    `docs/archive/plans/2026-06-17-remove-project-emissions-journal.md` was
+    executed 2026-07-02 (ADR 0018).
   - **GHGAM 1.1 embodied-emissions LC-stage + staff-travel clarifications:**
     verify the ADR 0005 period-emission category definitions (staff travel is
     one) still match — doc-level.
@@ -1293,12 +1303,11 @@ two oversized data-access files. The remainder is still open:
 - **Single-tenant authorization → facility-membership model**
   (`security/facility-membership-authz`)
   - Acknowledged in `docs/isometric/integration-plan.md` pre-deploy
-    gate #3. Every `data-access/{certification,project-emissions,
+    gate #3. Every `data-access/{certification,
     certifier-removals,certifier-ghg-statements}.ts` accessor guards only
     with `requireAuth(userId)` — no facility-membership check. On a
     multi-tenant deployment, any authenticated user could enumerate or
-    mutate any facility's rows by id. The new `project_emissions.ts`
-    inherits this posture explicitly (file header comment lines 11–15).
+    mutate any facility's rows by id.
   - Resolve via: introduce `requireFacilityAccess(userId, facilityId)`,
     update every data-access chokepoint, audit all `localEntityId`
     accessors in `certifier_sync_events` for the same shape.
@@ -1319,14 +1328,6 @@ two oversized data-access files. The remainder is still open:
 
 ### Performance / scalability
 
-- **Drift loader `AbortSignal`** (`perf/isometric-drift-abort`)
-  - `loadProjectEmissionDrift` issues two paginated Isometric fetches.
-    On rapid facility-toggle the in-flight server invocation continues
-    against Isometric's API, wasting quota and occasionally surfacing
-    older facility's drift during the transition. React Query auto-injects
-    `signal` into `queryFn` — wire it through `loadProjectEmissionDrift
-    → listComponents → paginateAll → isometric.get`.
-
 - **Sequential datapoint POSTs in `submitRemoval`** (`perf/datapoint-fanout`)
   - `src/fn/certification/submit-removal.ts:576` iterates
     `transport.datapointBodies` and awaits each `createOrReconcile`
@@ -1336,22 +1337,17 @@ two oversized data-access files. The remainder is still open:
     overwhelming Isometric's per-second budget. Sync-event ordering
     becomes interleaved — trade-off the owner should call.
 
-- **Missing composite indexes** (`perf/missing-indexes`)
-  - `certifier_project_emissions` list query filters `(provider,
-    facility_id)` and orders `(lca_window_end_on DESC, created_at DESC)`
-    but the migration ships only a single-column FK index — Postgres
-    sorts in memory per request.
+- **Missing composite index** (`perf/missing-indexes`)
   - `certifier_sync_events(entity_type, entity_id, attempted_at DESC)`
     has no index. Table grows ~2–3 rows per submission × ~20 submissions
     per facility per month; every detail page does a seq scan.
-  - Resolve via: one migration adding both composite indexes.
+  - Resolve via: one migration adding the composite index.
 
 - **CI coverage script serial per-facility loop** (`perf/coverage-check-fanout`)
-  - The N+1 DB query is fixed (batched `inArray`), but the outer
-    `for (const facility of facilities)` in `scripts/isometric-coverage-check.ts`
-    still iterates facilities one at a time. Each facility runs 1×
-    `listRemovalTemplates` + `Promise.all([listComponents, listDatapoints])`.
-    `p-limit(4)` over the facility array cuts CI wall-time linearly.
+  - The outer `for (const facility of facilities)` in
+    `scripts/isometric-coverage-check.ts` iterates facilities one at a
+    time; each runs 1× `listGhgEntryTemplates`. `p-limit(4)` over the
+    facility array cuts CI wall-time linearly.
 
 ### Correctness / observability
 
@@ -1366,20 +1362,6 @@ two oversized data-access files. The remainder is still open:
     `row.payloadSnapshot.__mappingRevision`) AND
     `runtime_mapping_revision` (current module constant) on every resume
     sync event. Minor JSONB shape addition, no migration.
-
-- **CATEGORY_REGISTRY consolidation** (`code/category-registry`)
-  - Four parallel sources of truth for project-emission categories:
-    `project_emission_category` pgEnum, `projectEmissionCategoryValues`
-    Zod tuple, `CATEGORY_TO_BLUEPRINT` in
-    `src/lib/isometric/utils/project-emission-match.ts`, and the
-    `PERIOD_INPUT_TUPLES` category strings in
-    `src/lib/isometric/transformers/datapoint.ts`. Comments warn
-    contributors to keep them in sync; nothing enforces it.
-  - Resolve via: one `CATEGORY_REGISTRY` in
-    `src/lib/isometric/categories.ts` keyed by `ProjectEmissionCategory`
-    with `{pgValue, blueprintKey, primaryInputKey, expectedUnit,
-    groupKeys[], inputKeys[]}`. Derive the other three from it; add a
-    build-time test asserting registry keys match the pgEnum array.
 
 - **Lossy `IsometricApiError` in submission catch paths** (`obs/preserve-error-context`)
   - `createOrReconcile` (`submit-removal.ts:721-749`) and
@@ -1396,19 +1378,17 @@ two oversized data-access files. The remainder is still open:
 
 ### Accessibility
 
-- **Color-only severity convention in drift panel** (`a11y/wcag-1.4.1`)
-  - The drift-panel warn variant now carries an SR-only "Warning:"
-    prefix and `<ul>/<li>` list semantics — but the visual severity is
-    still encoded only by `--color-signal-orange` left border + a
+- **Color-only severity convention in warning notices** (`a11y/wcag-1.4.1`)
+  - Warning notices (e.g. `BlockerNotice` in `certify-panel.tsx`) encode
+    visual severity only by the `--color-signal-orange` left border + a
     decorative `!` glyph. WCAG 1.4.1 (use of color) requires a
-    non-color cue; the SR-only text satisfies AT users but the sighted-
+    non-color cue; SR-only text satisfies AT users but the sighted-
     low-vision case still needs a non-color visual signal (e.g.,
     "Warning" inline text, an icon with sufficient contrast).
   - Resolve via: dedicated `audit-a11y` pass that also runs a runtime
     contrast check on `--color-signal-orange` against the white
     background, and that picks the project's house style for severity
-    badges (consider promoting `DriftRow` into a project-wide notice
-    primitive if a sibling appears).
+    badges.
 
 ## Documentation hygiene
 

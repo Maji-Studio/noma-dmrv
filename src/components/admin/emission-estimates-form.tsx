@@ -93,10 +93,9 @@ export function EmissionEstimatesForm({
         <FormField
           id="gensetEnergyYieldKwhPerLitre"
           label="Genset energy yield (kWh per litre)"
-          required
           certifyRequired={isEmissionConfigCertifyField("gensetEnergyYieldKwhPerLitre")}
           error={errors.gensetEnergyYieldKwhPerLitre?.message}
-          helperText="Electrical kWh produced per litre of genset diesel. ~3.375 from the Dark Earth LCA (diesel 2.7 kgCO2e/L ÷ genset 0.8 kgCO2e/kWh)."
+          helperText="Optional local estimate — genset diesel now submits by volume, so this yield no longer affects submissions (issue #319). Electrical kWh produced per litre of genset diesel; ~3.375 from the Dark Earth LCA (diesel 2.7 kgCO2e/L ÷ genset 0.8 kgCO2e/kWh)."
         >
           <FormInput
             id="gensetEnergyYieldKwhPerLitre"

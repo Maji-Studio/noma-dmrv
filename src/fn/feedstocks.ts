@@ -104,7 +104,11 @@ export async function getFeedstocksFn(
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load feedstocks",
+      error: feedstockActionError(
+        error,
+        "Failed to load feedstocks",
+        "feedstock:list",
+      ),
     };
   }
 }
@@ -121,7 +125,11 @@ export async function getFeedstockByIdFn(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load feedstock",
+      error: feedstockActionError(
+        error,
+        "Failed to load feedstock",
+        "feedstock:get",
+      ),
     };
   }
 }
@@ -138,7 +146,11 @@ export async function getFeedstockStatsFn(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load feedstock stats",
+      error: feedstockActionError(
+        error,
+        "Failed to load feedstock stats",
+        "feedstock:stats",
+      ),
     };
   }
 }
@@ -155,7 +167,11 @@ export async function getFeedstockOptionsFn(): Promise<
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load feedstock options",
+      error: feedstockActionError(
+        error,
+        "Failed to load feedstock options",
+        "feedstock:options",
+      ),
     };
   }
 }
@@ -173,7 +189,11 @@ export async function checkFeedstockCodeFn(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to check code",
+      error: feedstockActionError(
+        error,
+        "Failed to check code",
+        "feedstock:check-code",
+      ),
     };
   }
 }

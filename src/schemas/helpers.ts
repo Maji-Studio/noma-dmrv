@@ -166,6 +166,9 @@ export const optionalPercent = z.preprocess(
     .optional()
 );
 
+/** Largest value a Postgres `integer` column can hold. */
+export const PG_INTEGER_MAX = 2_147_483_647;
+
 /** Plausible soil-temperature range for biochar application sites (°C). */
 export const SOIL_TEMPERATURE_MIN_C = -50;
 export const SOIL_TEMPERATURE_MAX_C = 60;

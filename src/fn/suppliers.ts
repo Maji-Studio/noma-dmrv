@@ -37,6 +37,18 @@ import {
 } from "@/schemas/suppliers";
 import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
+import { toLoggedActionError } from "./action-errors";
+
+function supplierActionError(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): string {
+  return toLoggedActionError(error, fallbackMessage, {
+    message: "supplier action failed",
+    context: { op },
+  });
+}
 
 // ============================================
 // Supplier List/Query Operations
@@ -69,8 +81,11 @@ export async function getSuppliersFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load suppliers",
+      error: supplierActionError(
+        error,
+        "Failed to load suppliers",
+        "supplier:list",
+      ),
     };
   }
 }
@@ -92,7 +107,11 @@ export async function getSupplierByIdFn(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load supplier",
+      error: supplierActionError(
+        error,
+        "Failed to load supplier",
+        "supplier:get",
+      ),
     };
   }
 }
@@ -114,8 +133,11 @@ export async function getSupplierLocationsFn(): Promise<
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load locations",
+      error: supplierActionError(
+        error,
+        "Failed to load locations",
+        "supplier:locations",
+      ),
     };
   }
 }
@@ -137,8 +159,11 @@ export async function getSupplierOptionsFn(): Promise<
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load supplier options",
+      error: supplierActionError(
+        error,
+        "Failed to load supplier options",
+        "supplier:options",
+      ),
     };
   }
 }
@@ -165,10 +190,11 @@ export async function checkSupplierCodeFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to check supplier code",
+      error: supplierActionError(
+        error,
+        "Failed to check supplier code",
+        "supplier:check-code",
+      ),
     };
   }
 }
@@ -226,8 +252,11 @@ export async function createSupplierFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to create supplier",
+      error: supplierActionError(
+        error,
+        "Failed to create supplier",
+        "supplier:create",
+      ),
     };
   }
 }
@@ -293,8 +322,11 @@ export async function createSupplierWithLocationsFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to create supplier",
+      error: supplierActionError(
+        error,
+        "Failed to create supplier",
+        "supplier:create-with-locations",
+      ),
     };
   }
 }
@@ -345,8 +377,11 @@ export async function updateSupplierFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to update supplier",
+      error: supplierActionError(
+        error,
+        "Failed to update supplier",
+        "supplier:update",
+      ),
     };
   }
 }
@@ -380,8 +415,11 @@ export async function deleteSupplierFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to delete supplier",
+      error: supplierActionError(
+        error,
+        "Failed to delete supplier",
+        "supplier:delete",
+      ),
     };
   }
 }
@@ -409,7 +447,11 @@ export async function getSupplierLocationsBySupplierFn(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load supplier locations",
+      error: supplierActionError(
+        error,
+        "Failed to load supplier locations",
+        "supplier-location:list",
+      ),
     };
   }
 }
@@ -452,7 +494,11 @@ export async function createSupplierLocationFn(
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to create supplier location",
+      error: supplierActionError(
+        error,
+        "Failed to create supplier location",
+        "supplier-location:create",
+      ),
     };
   }
 }
@@ -494,7 +540,11 @@ export async function updateSupplierLocationFn(
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to update supplier location",
+      error: supplierActionError(
+        error,
+        "Failed to update supplier location",
+        "supplier-location:update",
+      ),
     };
   }
 }
@@ -521,7 +571,11 @@ export async function deleteSupplierLocationFn(
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to delete supplier location",
+      error: supplierActionError(
+        error,
+        "Failed to delete supplier location",
+        "supplier-location:delete",
+      ),
     };
   }
 }

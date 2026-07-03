@@ -82,6 +82,7 @@ const EXTERNAL_PROJECT_ID = "prj_test";
 const APPLICATION_FOR_PR_1 = {
   applicationId: "app-1",
   productionRunId: "pr-1",
+  biocharAppliedTons: 1,
 };
 
 function mapping(
@@ -223,6 +224,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       application: {
         id: "app-1",
         code: "APP-1",
+        // Same UTC month as the run start — no straddle advisory (issue #320).
+        applicationDate: new Date("2026-01-20T00:00:00Z"),
         biocharAppliedDryTons: 1,
       } as never,
       delivery: { id: "del-1" } as never,
@@ -242,6 +245,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
+        startTime: new Date("2026-01-05T00:00:00Z"),
         biocharDryMassKg: 1000,
         samples: [],
         readingsCount: 1,
@@ -278,6 +283,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       application: {
         id: "app-1",
         code: "APP-1",
+        // Same UTC month as the run start — no straddle advisory (issue #320).
+        applicationDate: new Date("2026-01-20T00:00:00Z"),
         biocharAppliedDryTons: 1,
       } as never,
       delivery: { id: "del-1" } as never,
@@ -297,6 +304,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
+        startTime: new Date("2026-01-05T00:00:00Z"),
         biocharDryMassKg: 1000,
         samples: [],
         readingsCount: 0,
@@ -413,7 +422,9 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
 
     mockedGetLineage.mockResolvedValue({
       facility: { id: FACILITY_ID, code: "F", name: "F" },
-      application: {} as never,
+      application: {
+        applicationDate: new Date("2026-01-20T00:00:00Z"),
+      } as never,
       delivery: {} as never,
       order: null,
       biocharProduct: { id: "bp-1" } as never,
@@ -427,6 +438,8 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
+        startTime: new Date("2026-01-05T00:00:00Z"),
         feedstockWetMassKg: 100,
         feedstockMoisturePercent: 10,
         biocharOutputKg: 40,
@@ -435,8 +448,22 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         preprocessingFuelLiters: 0,
         dieselGensetLiters: 0,
         electricityKwh: 0,
-        samples: [{ id: "s-1" } as never, { id: "s-2" } as never],
+        samples: [],
         readingsCount: 1,
+      } as never,
+    ]);
+    // Samples anchor on the credit batch (issue #309) — the transport walk
+    // reads them from the batch pool, not from the runs.
+    mockedGetBatchesWithSamples.mockResolvedValue([
+      {
+        creditBatchId: CREDIT_BATCH_ID,
+        creditBatchCode: "CB-1",
+        productionProcessId: null,
+        samplingMethod: "method_a",
+        declaredHToCorgRatio: null,
+        durabilityOption: "200_year",
+        runs: [{ id: "pr-1", code: "PR-1", biocharDryMassKg: 35 }],
+        samples: [{ id: "s-1" } as never, { id: "s-2" } as never],
       } as never,
     ]);
 
@@ -602,7 +629,10 @@ describe("requiredTransportCategories", () => {
     ]);
     mockedGetLineage.mockResolvedValue({
       facility: { id: FACILITY_ID, code: "F", name: "F" },
-      application: { biocharAppliedDryTons: 0.1 } as never,
+      application: {
+        biocharAppliedDryTons: 0.1,
+        applicationDate: new Date("2026-01-20T00:00:00Z"),
+      } as never,
       delivery: {} as never,
       order: null,
       biocharProduct: { id: "bp-1" } as never,
@@ -616,6 +646,8 @@ describe("requiredTransportCategories", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
+        startTime: new Date("2026-01-05T00:00:00Z"),
         feedstockWetMassKg: 100,
         feedstockMoisturePercent: 10,
         biocharOutputKg: 40,
@@ -669,7 +701,10 @@ describe("requiredTransportCategories", () => {
     mockedListBlueprints.mockResolvedValue([]);
     mockedGetLineage.mockResolvedValue({
       facility: { id: FACILITY_ID, code: "F", name: "F" },
-      application: { biocharAppliedDryTons: 0.1 } as never,
+      application: {
+        biocharAppliedDryTons: 0.1,
+        applicationDate: new Date("2026-01-20T00:00:00Z"),
+      } as never,
       delivery: {} as never,
       order: null,
       biocharProduct: null,
@@ -683,6 +718,8 @@ describe("requiredTransportCategories", () => {
         id: "pr-1",
         code: "PR-1",
         status: "complete",
+        // issue #320: buildSubmissionWarnings reads startTime for the month-straddle check.
+        startTime: new Date("2026-01-05T00:00:00Z"),
         feedstockWetMassKg: 100,
         feedstockMoisturePercent: 10,
         biocharOutputKg: 40,
@@ -693,6 +730,20 @@ describe("requiredTransportCategories", () => {
         dieselGensetLiters: 0,
         electricityKwh: 0,
         readingsCount: 1,
+        samples: [],
+      } as never,
+    ]);
+    // Samples anchor on the credit batch (issue #309); the sample inherits the
+    // batch's declared 1000-year tier for its readiness derivation.
+    mockedGetBatchesWithSamples.mockResolvedValue([
+      {
+        creditBatchId: CREDIT_BATCH_ID,
+        creditBatchCode: "CB-1",
+        productionProcessId: null,
+        samplingMethod: "method_a",
+        declaredHToCorgRatio: null,
+        durabilityOption: "1000_year",
+        runs: [{ id: "pr-1", code: "PR-1", biocharDryMassKg: 35 }],
         samples: [
           {
             id: "s-1",
@@ -702,7 +753,7 @@ describe("requiredTransportCategories", () => {
             randomReflectanceR0Percent: null,
             reactiveCarbonPercent: null,
             residualCarbonPercent: null,
-          },
+          } as never,
         ],
       } as never,
     ]);

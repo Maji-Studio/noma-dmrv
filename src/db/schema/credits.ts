@@ -14,6 +14,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { creditBatchStatus, durabilityOption } from './common';
+import { fraction, percent, ppm } from './numeric-families';
 import { facilities } from './facilities';
 import { feedstockTypes } from './feedstock';
 import { productionProcesses } from './production-processes';
@@ -57,12 +58,13 @@ export const creditBatches = pgTable(
     registry: text('registry'), // e.g., "Isometric"
 
     // --- Credit Details (Isometric Protocol Section 8) ---
-    weightTons: real('weight_tons'),
+    // Applied weight is derived on read from member applications
+    // (Σ biocharAppliedTons) — never stored (issue #285, ADR 0014).
     value: real('value'),
     currency: text('currency').notNull().default('TZS'), // ISO 4217 code
 
     // Isometric: Buffer pool contribution (risk-based 2-20%)
-    bufferPoolPercent: real('buffer_pool_percent'),
+    bufferPoolPercent: percent('buffer_pool_percent'),
 
     // --- Durability Calculation (Isometric: Soil Storage Module Section 5.1) ---
     // Project-level choice: 200-year (H:Corg + soil temp) or 1000-year (R0 reflectance)
@@ -74,45 +76,42 @@ export const creditBatches = pgTable(
     // Soil temperature inputs (soil_temperature_c, soil_temperature_source) live on applications
     // Formula: F_durable,200 = min(0.95, 1 - [c + (a + b·ln(T_soil))·H/C_org])
     // Where: a=-0.383, b=0.350, c=-0.048
-    hToCorgRatio: real('h_to_c_org_ratio'), // H:Corg ratio (calculated from samples)
+    hToCorgRatio: fraction('h_to_c_org_ratio'), // H:Corg ratio (calculated from samples)
 
     // --- 1000-Year Durability Fields ---
     // Based on petrographic analysis (R₀) and TGA (non-reactive carbon)
     // Formula: F_durable,1000 = min(0.95, max(0, (R̄₀ - s_R₀) × (C̄_non-reactive - s_C_non-reactive)))
-    meanRandomReflectancePercent: real('mean_random_reflectance_percent'), // Mean R₀ from samples
-    stdRandomReflectance: real('std_random_reflectance'), // Standard deviation of R₀
-    meanNonReactiveCarbonPercent: real('mean_non_reactive_carbon_percent'), // Mean from TGA
-    stdNonReactiveCarbonPercent: real('std_non_reactive_carbon_percent'), // Std dev from TGA
+    meanRandomReflectancePercent: percent('mean_random_reflectance_percent'), // Mean R₀ from samples
+    stdRandomReflectance: percent('std_random_reflectance'), // Standard deviation of R₀
+    meanNonReactiveCarbonPercent: percent('mean_non_reactive_carbon_percent'), // Mean from TGA
+    stdNonReactiveCarbonPercent: percent('std_non_reactive_carbon_percent'), // Std dev from TGA
 
     // --- Calculated Durability Fraction ---
     // Applies to all applications in this batch (max 0.95)
-    fDurableCalculated: real('f_durable_calculated'),
+    fDurableCalculated: fraction('f_durable_calculated'),
 
-    // --- Net CO2e Removal Calculation (Isometric GHG Accounting Module v1.0) ---
-    // Net CO₂e Removal = CO₂e Stored - CO₂e Emissions - CO₂e Counterfactual
-    totalCo2eStoredTons: real('total_co2e_stored_tons'), // Carbon durably stored
-    totalCo2eEmissionsTons: real('total_co2e_emissions_tons'), // Project emissions
-    totalCo2eCounterfactualTons: real('total_co2e_counterfactual_tons'), // Baseline emissions
-    // netCo2eRemovalTons: derivable from stored - emissions - counterfactual
+    // --- Net CO2e Removal (Isometric GHG Accounting Module) ---
+    // CO₂e stored is derived on read from member applications (co2eStored
+    // preview); project emissions / counterfactual are registry-owned
+    // (ADR 0018) — no local copies are stored (issue #285).
 
-    // --- Feedstock Eligibility Summary (Isometric: >25% ineligible-biomass cap, P0-01) ---
-    // Computed by app logic when building/updating a batch from linked feedstock batches
-    totalFeedstockMassKg: real('total_feedstock_mass_kg'),
-    ineligibleFeedstockMassKg: real('ineligible_feedstock_mass_kg'),
+    // --- Feedstock Eligibility (Isometric: >25% ineligible-biomass cap, P0-01) ---
+    // Feedstock masses are derived on read from the run-feedstock lineage
+    // (Σ massUsedKg, split by feedstock eligibilityStatus) — never stored.
 
     // --- Site Management Summary (Isometric: Section 5.2.1) ---
     // Aggregated info for GHG Statement submission
     siteManagementNotes: text('site_management_notes'), // Irrigation, tillage, fertilizer summary
 
     // --- Gas Composition (batch-level, moved from production_run_readings) ---
-    ch4CompositionPercent: real('ch4_composition_percent'),
-    ch4Ppm: real('ch4_ppm'),
-    coCompositionPercent: real('co_composition_percent'),
-    coPpm: real('co_ppm'),
-    co2CompositionPercent: real('co2_composition_percent'),
-    co2Ppm: real('co2_ppm'),
-    n2oCompositionPercent: real('n2o_composition_percent'),
-    n2oPpm: real('n2o_ppm'),
+    ch4CompositionPercent: percent('ch4_composition_percent'),
+    ch4Ppm: ppm('ch4_ppm'),
+    coCompositionPercent: percent('co_composition_percent'),
+    coPpm: ppm('co_ppm'),
+    co2CompositionPercent: percent('co2_composition_percent'),
+    co2Ppm: ppm('co2_ppm'),
+    n2oCompositionPercent: percent('n2o_composition_percent'),
+    n2oPpm: ppm('n2o_ppm'),
 
     // --- Isometric Removal grouping ---
     // The Isometric Removal this credit batch is submitted within. N credit
@@ -145,20 +144,6 @@ export const creditBatches = pgTable(
       'credit_batches_isometric_max_one_month',
       sql`${table.certifier} is distinct from 'isometric'
         or ${table.endDate} <= (${table.startDate} + interval '1 month')::date`
-    ),
-    check(
-      'credit_batches_total_feedstock_mass_non_negative',
-      sql`${table.totalFeedstockMassKg} is null or ${table.totalFeedstockMassKg} >= 0`
-    ),
-    check(
-      'credit_batches_ineligible_feedstock_mass_non_negative',
-      sql`${table.ineligibleFeedstockMassKg} is null or ${table.ineligibleFeedstockMassKg} >= 0`
-    ),
-    check(
-      'credit_batches_ineligible_feedstock_check',
-      sql`${table.ineligibleFeedstockMassKg} is null
-        or ${table.totalFeedstockMassKg} is null
-        or ${table.ineligibleFeedstockMassKg} <= ${table.totalFeedstockMassKg}`
     ),
     // Indexes the Removal grouping FK — drives "find credit batches in
     // removal X" lookups during submission. Postgres does not auto-index

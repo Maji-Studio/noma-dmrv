@@ -60,7 +60,8 @@ function toEntityOption(r: {
     id: r.id,
     code: r.code,
     name: r.formulationName ?? PURE_BIOCHAR_LABEL,
-    subtitle: formatStockSubtitle(r.massKg, r.totalDeliveredKg),
+    // Raw SQL aggregates over numeric columns arrive as strings — coerce at the boundary.
+    subtitle: formatStockSubtitle(r.massKg, Number(r.totalDeliveredKg)),
   };
 }
 

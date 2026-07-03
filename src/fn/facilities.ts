@@ -79,8 +79,11 @@ export async function getFacilitiesFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load facilities",
+      error: facilityActionError(
+        error,
+        "Failed to load facilities",
+        "facility:list",
+      ),
     };
   }
 }
@@ -102,7 +105,11 @@ export async function getFacilityByIdFn(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load facility",
+      error: facilityActionError(
+        error,
+        "Failed to load facility",
+        "facility:get",
+      ),
     };
   }
 }
@@ -124,10 +131,11 @@ export async function getFacilityWithRelationsFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to load facility details",
+      error: facilityActionError(
+        error,
+        "Failed to load facility details",
+        "facility:detail",
+      ),
     };
   }
 }
@@ -161,8 +169,11 @@ export async function getFacilityReactorsFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load facility reactors",
+      error: facilityActionError(
+        error,
+        "Failed to load facility reactors",
+        "facility:reactors",
+      ),
     };
   }
 }
@@ -200,10 +211,11 @@ export async function getFacilityStorageLocationsFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to load facility storage locations",
+      error: facilityActionError(
+        error,
+        "Failed to load facility storage locations",
+        "facility:storage-locations",
+      ),
     };
   }
 }
@@ -225,8 +237,11 @@ export async function getFacilityCountriesFn(): Promise<
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load countries",
+      error: facilityActionError(
+        error,
+        "Failed to load countries",
+        "facility:countries",
+      ),
     };
   }
 }
@@ -253,10 +268,11 @@ export async function checkFacilityCodeFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to check facility code",
+      error: facilityActionError(
+        error,
+        "Failed to check facility code",
+        "facility:check-code",
+      ),
     };
   }
 }
@@ -391,10 +407,11 @@ export async function getFacilityArchiveImpactFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to load archive impact",
+      error: facilityActionError(
+        error,
+        "Failed to load archive impact",
+        "facility:archive-impact",
+      ),
     };
   }
 }

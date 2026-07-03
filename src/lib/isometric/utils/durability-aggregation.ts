@@ -166,6 +166,69 @@ export function buildPerBatchDurabilityData(
   });
 }
 
+// ── Batch-grain weighted chemistry (issue #309) ──────────────────────────────
+
+/** The sample-derived chemistry scalars `AggregatedProductionData` carries. */
+export interface WeightedBatchChemistry {
+  weightedOrganicCarbonPercent: number | null;
+  weightedHToCorgRatio: number | null;
+  weightedOToCorgRatio: number | null;
+  weightedAshPercent: number | null;
+  weightedMoisturePercent: number | null;
+}
+
+/**
+ * Mass-weighted chemistry scalars at the CREDIT-BATCH grain. Samples anchor on
+ * the batch (issue #309), so `aggregation.ts`'s run-grain weighted means no
+ * longer see them — the submission pipeline overlays these figures instead.
+ * Within a batch the figure is the POOLED replicate mean (the protocol
+ * characterises the batch); across batches the means are weighted by each
+ * batch's attribution-scaled product mass, mirroring
+ * `buildPerBatchDurabilityData`'s `productMassKg`. When no contributing batch
+ * carries usable mass, the means fall back to equal weights rather than
+ * vanishing — mass gaps surface through the product-mass datapoints, not by
+ * nulling chemistry.
+ */
+export function weightedBatchChemistry(
+  batches: CreditBatchDurabilityInput[],
+  attributionByRunId?: Map<string, number>,
+): WeightedBatchChemistry {
+  const weighted = (pick: (s: Sample) => number | null | undefined) => {
+    const contributions: Array<{ mean: number; massKg: number }> = [];
+    for (const batch of batches) {
+      const values = batch.samples.map(pick).filter(isUsableNumber);
+      if (values.length === 0) continue;
+      const mean = values.reduce((a, b) => a + b, 0) / values.length;
+      const massKg = batch.runs.reduce(
+        (sum, run) =>
+          sum +
+          (run.biocharDryMassKg ?? 0) *
+            clampFactor(attributionByRunId?.get(run.id)),
+        0,
+      );
+      contributions.push({ mean, massKg });
+    }
+    if (contributions.length === 0) return null;
+    const totalMass = contributions.reduce((acc, c) => acc + c.massKg, 0);
+    if (totalMass <= 0) {
+      return (
+        contributions.reduce((acc, c) => acc + c.mean, 0) / contributions.length
+      );
+    }
+    return (
+      contributions.reduce((acc, c) => acc + c.mean * c.massKg, 0) / totalMass
+    );
+  };
+
+  return {
+    weightedOrganicCarbonPercent: weighted((s) => s.organicCarbonPercent),
+    weightedHToCorgRatio: weighted((s) => s.hToCOrgRatio),
+    weightedOToCorgRatio: weighted((s) => s.oToCOrgRatio),
+    weightedAshPercent: weighted((s) => s.ashContentPercent),
+    weightedMoisturePercent: weighted((s) => s.moistureContentPercent),
+  };
+}
+
 // ── Conservative soil temperature (D2 soil-temp resolution) ──────────────────
 
 export interface ConservativeSoilTemperature {

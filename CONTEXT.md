@@ -22,6 +22,18 @@ diesel against. Production runs are the membership primitive for a
 **Removal** through their derived application lineage — a run is *not*
 1:1 with a Removal.
 
+**Production run status**:
+The run's lifecycle: *draft* → *running* → a terminal outcome.
+*Complete* — the batch finished and its core quantities (feedstock
+consumed, biochar output) are recorded. *Failed* — the run physically
+happened and consumed feedstock but did not produce usable biochar;
+its material stays in the mass balance (conversion loss, dump-back)
+but never joins a credit batch. *Cancelled* — the record was created
+in error; the event never happened and counts nowhere. Failed marks a
+real event with a bad outcome; cancelled marks a record that should
+not exist.
+_Avoid_: void (old name for cancelled), aborted.
+
 **Genset energy**:
 Electricity produced by an on-site diesel generator. Operators measure
 the diesel consumed in **litres**; genset energy in kWh is derived from
@@ -92,18 +104,21 @@ protocol production batch), analysed by an ISO 17025 lab — a record
 carrying *both* the sampling event (code, time, mass) *and* the lab
 chemistry (organic carbon, hydrogen, H/C_org, ash, …). A sampled credit
 batch carries **≥3 Samples**; their mean and standard deviation
-characterise that batch's biochar. Each Sample is **drawn from one
-production run** (its provenance and natural point of entry); its credit
-batch is **derived** from that run's membership, and the ≥3 must be
-**independent samples distributed across the batch's runs/days**
-(protocol §8.3.1) — never aliquots of a single grab. The lab's
-certificate of analysis is attached as a `lab_report` **document**, not
-a separate record. Distinct from the in-process spot-checks logged
-against a **production run** (the ~2-hourly field measurements) — those
-are internal-only and never submitted. _Avoid_: characterising at the
-production-run grain (the run is provenance only — characterisation and
-the ≥3 count are per credit batch); treating the certificate as its own
-record; conflating with reactor **readings** (telemetry).
+characterise that batch's biochar. Each Sample belongs to **exactly one
+credit batch**, recorded against it directly — the batch's biochar is
+**commingled across its production runs**, so no single run is
+attributable (a run link survives only on legacy rows as provenance).
+The Sample inherits the batch's declared **durability tier** (200- vs
+1000-year), and the ≥3 must be **independent samples distributed across
+the batch** (distinct sampling points/days — protocol §8.3.1), never
+aliquots of a single grab. The lab's certificate of analysis is attached
+as a `lab_report` **document**, not a separate record. Distinct from the
+in-process spot-checks logged against a **production run** (the
+~2-hourly field measurements) — those are internal-only and never
+submitted. _Avoid_: anchoring or characterising at the production-run
+grain (characterisation, the ≥3 count, and the record itself are per
+credit batch); treating the certificate as its own record; conflating
+with reactor **readings** (telemetry).
 
 **Replicate**:
 The role a **Sample** plays within its **credit batch**'s set — each
@@ -331,6 +346,27 @@ routing differs from the destination's stored distance. Absence means
 the stored distance governs — so later corrections to the stored
 distance keep propagating.
 _Avoid_: treating the override as the primary distance value.
+
+### Geography & transport
+
+**Transport distance**:
+The road distance (km) of a **transport leg**, fed to Isometric's
+distance-based transport equation. A distance computed from coordinates
+by the map's routing service is an **estimate** — modeled from a road
+graph, not the hauled distance on a bill of lading or weigh ticket. It
+is a *suggested default*, always operator-editable, and in the same
+measured-vs-derived family as an **emission estimate**. Document-backed
+distances (bill of lading, weigh ticket) are the authoritative form.
+_Avoid_: treating a routed distance as a measurement.
+
+**Distance source**:
+The provenance of a stored distance — `map_estimate` (routed via the
+map's routing service), `manual` (hand-entered), or `document`
+(bill-of-lading / weigh-ticket backed). Lives wherever a distance can be
+written (supplier, customer location, transport leg) and is inherited by
+a derived leg from its supplier/customer default. Orthogonal to a leg's
+`isDerived` flag. Without a configured routing key there is no
+`map_estimate` path — distance entry stays manual.
 
 ### Operational oversight
 

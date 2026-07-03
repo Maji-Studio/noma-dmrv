@@ -1,6 +1,7 @@
 import { relations, sql } from 'drizzle-orm';
-import { check, doublePrecision, pgTable, text, timestamp, uuid, real, unique } from 'drizzle-orm/pg-core';
+import { check, doublePrecision, pgTable, text, timestamp, uuid, unique } from 'drizzle-orm/pg-core';
 import { feedstockEligibilityStatus, feedstockStatus, feedstockTypeUsage } from './common';
+import { massKg, percent, tonnes } from './numeric-families';
 import { facilities, storageLocations } from './facilities';
 import { suppliers } from './parties';
 import { vehicles } from './logistics';
@@ -34,8 +35,8 @@ export const feedstockDeliveries = pgTable(
     feedstockTypeId: uuid('feedstock_type_id').references(
       () => feedstockTypes.id
     ),
-    wetMassKg: real('wet_mass_kg'),
-    moisturePercent: real('moisture_percent'),
+    wetMassKg: massKg('wet_mass_kg'),
+    moisturePercent: percent('moisture_percent'),
 
     // --- Documentation ---
     notes: text('notes'),
@@ -117,10 +118,10 @@ export const feedstocks = pgTable(
     feedstockTypeId: uuid('feedstock_type_id')
       .notNull()
       .references(() => feedstockTypes.id),
-    massWetKg: real('mass_wet_kg'), // Nullable: moisture changes over time in bins
-    massDryKg: real('mass_dry_kg').notNull(),
-    moistureContentPercent: real('moisture_content_percent'),
-    co2eFeedstockTons: real('co2e_feedstock_tons'),
+    massWetKg: massKg('mass_wet_kg'), // Nullable: moisture changes over time in bins
+    massDryKg: massKg('mass_dry_kg').notNull(),
+    moistureContentPercent: percent('moisture_content_percent'),
+    co2eFeedstockTons: tonnes('co2e_feedstock_tons'),
     feedstockSourceRegion: text('feedstock_source_region'),
     storageLocationId: uuid('storage_location_id').references(
       () => storageLocations.id
@@ -128,10 +129,10 @@ export const feedstocks = pgTable(
 
     // --- Counterfactual & Leakage (Isometric §3–4) ---
     counterfactualCategory: text('counterfactual_category'),
-    counterfactualEmissions15Tons: real('counterfactual_emissions_15_tons'),
-    counterfactualStorage50Tons: real('counterfactual_storage_50_tons'),
+    counterfactualEmissions15Tons: tonnes('counterfactual_emissions_15_tons'),
+    counterfactualStorage50Tons: tonnes('counterfactual_storage_50_tons'),
     marketLeakageMethod: text('market_leakage_method'),
-    marketLeakageTons: real('market_leakage_tons'),
+    marketLeakageTons: tonnes('market_leakage_tons'),
     baselineScenario: text('baseline_scenario').notNull().default('unknown'),
     baselineDescription: text('baseline_description').notNull().default(''),
 

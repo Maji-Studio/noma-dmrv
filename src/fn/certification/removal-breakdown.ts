@@ -52,8 +52,9 @@ function unique(values: string[]): string[] {
 /**
  * Carbon-accounting breakdown for a single removal, on demand for the removal
  * detail sheet. Cheap by construction: it sums the per-batch certify previews
- * (`getCo2eStoredPreviews`, no chain-of-custody walk) for Sequestrations and
- * reads emissions/counterfactual straight off the member credit-batch rows.
+ * (`getCo2eStoredPreviews`, no chain-of-custody walk) for Sequestrations;
+ * emissions/counterfactual are registry-owned (ADR 0018) so the local
+ * estimate leaves them "not recorded".
  *
  * If the removal has been submitted it also reads the GHG entry back from the
  * registry for the authoritative net, the uncertainty discount and the
@@ -105,12 +106,11 @@ export async function loadRemovalBreakdown(
       sequestrationTonnesByBatch: batches.map(
         (batch) => previews[batch.id]?.co2eStoredTonnes ?? null,
       ),
-      emissionsTonnesByBatch: batches.map(
-        (batch) => batch.totalCo2eEmissionsTons,
-      ),
-      counterfactualTonnesByBatch: batches.map(
-        (batch) => batch.totalCo2eCounterfactualTons,
-      ),
+      // Project emissions and counterfactual are registry-owned (ADR 0018) —
+      // there is no local copy (issue #285). All-null renders "not recorded";
+      // the registry read below supplies the authoritative net when submitted.
+      emissionsTonnesByBatch: batches.map(() => null),
+      counterfactualTonnesByBatch: batches.map(() => null),
       missingInputs: unique(
         batches.flatMap((batch) => previews[batch.id]?.missingInputs ?? []),
       ),

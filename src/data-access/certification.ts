@@ -294,7 +294,9 @@ export async function upsertCertifierProject(
 export interface FacilityEmissionConfigInput {
   facilityId: string;
   provider?: CertifierProvider;
-  gensetEnergyYieldKwhPerLitre: number;
+  // Vestigial local estimate since issue #319 (diesel submits by volume) —
+  // optional so a facility with no genset can save the soil-temp fields.
+  gensetEnergyYieldKwhPerLitre?: number | null;
   defaultSoilTemperatureC?: number | null;
   defaultSoilTemperatureSource?: string | null;
 }
@@ -313,7 +315,7 @@ export async function updateFacilityEmissionConfig(
   const [row] = await db
     .update(certifierProjects)
     .set({
-      gensetEnergyYieldKwhPerLitre: input.gensetEnergyYieldKwhPerLitre,
+      gensetEnergyYieldKwhPerLitre: input.gensetEnergyYieldKwhPerLitre ?? null,
       defaultSoilTemperatureC: input.defaultSoilTemperatureC ?? null,
       defaultSoilTemperatureSource: input.defaultSoilTemperatureSource ?? null,
       updatedAt: sql`now()`,

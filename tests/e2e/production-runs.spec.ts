@@ -4,13 +4,14 @@
  * Tests creating production runs and samples through the browser UI.
  * Uses seeded prerequisite data (facility, reactor, feedstock) from fixtures.
  *
- * Chain: Facility → Reactor → Production Run → Sample
+ * Chain: Facility → Reactor → Production Run; samples anchor on a
+ * credit batch directly (issue #309).
  */
 import type { Page } from "@playwright/test";
 import { test, expect, type SeededChainData } from "./fixtures";
+import { seedCreditBatch } from "./fixtures/seed-chain-data";
 import {
   selectEntity,
-  selectFirstEntity,
   waitForSideSheet,
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
@@ -63,10 +64,15 @@ test.describe("Production Run + Sample UI CRUD", () => {
   });
 
   test("create sample via UI form", async ({ adminPage: page, seededData }) => {
-    await createProductionRun(page, seededData);
+    // Samples anchor on a credit batch, not a production run (issue #309).
+    const batch = await seedCreditBatch(
+      seededData.facility.id,
+      crypto.randomUUID().slice(0, 8),
+      seededData.feedstockType.id,
+    );
 
     // Navigate to samples
-    await page.goto("/samples");
+    await page.goto(`/samples?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
 
     // Click "New Sample"
@@ -74,7 +80,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
     await waitForSideSheet(page);
 
     const sampleDialog = page.locator('[role="dialog"]');
-    await selectFirstEntity(page, "Production Run");
+    await selectEntity(page, "Credit Batch", batch.id, batch.code);
 
     // Fill some carbon analysis data
     await page.fill('input[name="totalCarbonPercent"]', "75");

@@ -28,6 +28,18 @@ import {
   reactorFilterSchema,
 } from "@/schemas/reactors";
 import type { ActionResult } from "@/types/actions";
+import { toLoggedActionError } from "./action-errors";
+
+function reactorActionError(
+  error: unknown,
+  fallbackMessage: string,
+  op: string,
+): string {
+  return toLoggedActionError(error, fallbackMessage, {
+    message: "reactor action failed",
+    context: { op },
+  });
+}
 
 // ============================================
 // List/Query Operations
@@ -60,8 +72,11 @@ export async function getReactorsFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load reactors",
+      error: reactorActionError(
+        error,
+        "Failed to load reactors",
+        "reactor:list",
+      ),
     };
   }
 }
@@ -83,7 +98,11 @@ export async function getReactorByIdFn(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load reactor",
+      error: reactorActionError(
+        error,
+        "Failed to load reactor",
+        "reactor:get",
+      ),
     };
   }
 }
@@ -105,8 +124,11 @@ export async function getReactorsByFacilityFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load facility reactors",
+      error: reactorActionError(
+        error,
+        "Failed to load facility reactors",
+        "reactor:by-facility",
+      ),
     };
   }
 }
@@ -126,8 +148,11 @@ export async function getReactorTypesFn(): Promise<ActionResult<string[]>> {
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load reactor types",
+      error: reactorActionError(
+        error,
+        "Failed to load reactor types",
+        "reactor:types",
+      ),
     };
   }
 }
@@ -154,10 +179,11 @@ export async function checkReactorCodeFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to check reactor code",
+      error: reactorActionError(
+        error,
+        "Failed to check reactor code",
+        "reactor:check-code",
+      ),
     };
   }
 }
@@ -206,8 +232,11 @@ export async function createReactorFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to create reactor",
+      error: reactorActionError(
+        error,
+        "Failed to create reactor",
+        "reactor:create",
+      ),
     };
   }
 }
@@ -249,8 +278,11 @@ export async function updateReactorFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to update reactor",
+      error: reactorActionError(
+        error,
+        "Failed to update reactor",
+        "reactor:update",
+      ),
     };
   }
 }
@@ -284,8 +316,11 @@ export async function deleteReactorFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to delete reactor",
+      error: reactorActionError(
+        error,
+        "Failed to delete reactor",
+        "reactor:delete",
+      ),
     };
   }
 }

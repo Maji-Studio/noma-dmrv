@@ -1,15 +1,17 @@
 /**
- * DB-backed tests for the credit-batch ↔ lab-sample linking write paths
- * (ADR 0016: a Sample characterises the credit batch its run belongs to, and
- * BOTH links stay populated). Two derivation/back-fill paths must keep
- * `samples.creditBatchId` consistent with run membership:
+ * DB-backed tests for the credit-batch ↔ lab-sample linking write paths.
+ * Since issue #309 a Sample anchors on ONE credit batch directly — the batch's
+ * biochar is commingled across runs, so `createSample` requires
+ * `creditBatchId` and never takes a production run. Two paths must keep
+ * `samples.creditBatchId` consistent:
  *
- *   1. Sample side — `createSample`/`updateSample` derive `creditBatchId` from
- *      the run's batch membership when not set explicitly (the form never sets
- *      it). Null for an uncommitted run.
- *   2. Batch side — `createCreditBatch`/`updateCreditBatch` back-fill the member
- *      runs' existing samples onto the batch, and re-point (unlink removed runs'
- *      samples, link added runs') on a membership change.
+ *   1. Sample side — `createSample` links the given batch (and rejects an
+ *      unknown one); `updateSample` can move a sample to another batch.
+ *   2. Batch side (legacy rows) — pre-re-grain samples carry a
+ *      `productionRunId`; `createCreditBatch`/`updateCreditBatch` still
+ *      back-fill those onto the batch via run membership, and re-point
+ *      (unlink removed runs' samples, link added runs') on a membership
+ *      change. Batch-anchored samples (null run link) are never re-pointed.
  *
  * Requires a running database (uses DATABASE_URL from .env.test or test
  * defaults), mirroring tests/credit-batch-validation.test.ts.
@@ -34,7 +36,6 @@ import {
   updateCreditBatch,
 } from "@/data-access/credit-batches";
 import { createSample, updateSample } from "@/data-access/samples";
-import { resolveRunCreditBatchId } from "@/data-access/credit-batch-samples";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000777";
 
@@ -49,15 +50,17 @@ const createdIds = {
 };
 
 let facilityId: string;
-// Six independent runs (all single-feedstock, in the June window) so each test
+// Independent runs (all single-feedstock, in the June window) so each test
 // owns its own runs — a run belongs to at most one batch (unique constraint).
 let runDerive: string;
-let runUncommitted: string;
 let runBackfill: string;
 let runReA: string;
 let runReB: string;
 let runReC: string;
 let runUpdate: string;
+let runMoveB: string;
+let runTier1000: string;
+let runTierFrom: string;
 
 const baseBatchData = {
   startDate: new Date("2025-06-01"),
@@ -68,21 +71,44 @@ const baseBatchData = {
   currency: "TZS" as const,
 };
 
+/** Create a sample through the write path — anchored on a credit batch. */
 async function makeSample(
-  runId: string,
+  creditBatchId: string,
   code: string,
-  overrides: { hToCOrgRatio?: number; oToCOrgRatio?: number } = {},
 ): Promise<string> {
   const sample = await createSample(TEST_USER_ID, {
     sampleCode: code,
-    productionRunId: runId,
+    creditBatchId,
     samplingTime: new Date("2025-06-15T10:00:00Z"),
     totalCarbonPercent: 80,
     organicCarbonPercent: 78,
-    ...overrides,
   });
   createdIds.samples.push(sample.id);
   return sample.id;
+}
+
+/**
+ * Insert a LEGACY pre-re-grain sample row directly: run-linked, with the batch
+ * link as it stood (the batch-side back-fill/re-point paths only act on these).
+ */
+async function insertLegacySample(
+  productionRunId: string,
+  code: string,
+  creditBatchId: string | null = null,
+): Promise<string> {
+  const [row] = await db
+    .insert(samples)
+    .values({
+      sampleCode: code,
+      productionRunId,
+      creditBatchId,
+      samplingTime: new Date("2025-06-15T10:00:00Z"),
+      totalCarbonPercent: 80,
+      organicCarbonPercent: 78,
+    })
+    .returning({ id: samples.id });
+  createdIds.samples.push(row.id);
+  return row.id;
 }
 
 async function batchIdOfSample(sampleId: string): Promise<string | null> {
@@ -138,21 +164,38 @@ beforeAll(async () => {
   const runRows = await db
     .insert(productionRuns)
     .values(
-      ["derive", "uncommitted", "backfill", "reA", "reB", "reC", "update"].map(
-        (tag, i) => ({
-          code: `PR-SL-${tag}-${runId}`,
-          facilityId,
-          reactorId: reactor.id,
-          date: `2025-06-1${i}`,
-          startTime: new Date(`2025-06-1${i}T08:00:00Z`),
-          endTime: new Date(`2025-06-1${i}T12:00:00Z`),
-          biocharDryMassKg: 4000,
-        }),
-      ),
+      [
+        "derive",
+        "backfill",
+        "reA",
+        "reB",
+        "reC",
+        "update",
+        "moveB",
+        "tier1000",
+        "tierFrom",
+      ].map((tag, i) => ({
+        code: `PR-SL-${tag}-${runId}`,
+        facilityId,
+        reactorId: reactor.id,
+        date: `2025-06-1${i}`,
+        startTime: new Date(`2025-06-1${i}T08:00:00Z`),
+        endTime: new Date(`2025-06-1${i}T12:00:00Z`),
+        biocharDryMassKg: 4000,
+      })),
     )
     .returning({ id: productionRuns.id });
-  [runDerive, runUncommitted, runBackfill, runReA, runReB, runReC, runUpdate] =
-    runRows.map((r) => r.id);
+  [
+    runDerive,
+    runBackfill,
+    runReA,
+    runReB,
+    runReC,
+    runUpdate,
+    runMoveB,
+    runTier1000,
+    runTierFrom,
+  ] = runRows.map((r) => r.id);
   createdIds.productionRuns.push(...runRows.map((r) => r.id));
 
   // Every run needs a single-feedstock link for createCreditBatch's derivation.
@@ -222,18 +265,8 @@ afterAll(async () => {
   });
 });
 
-describe("resolveRunCreditBatchId", () => {
-  it("returns null for an uncommitted run", async () => {
-    expect(await resolveRunCreditBatchId(db, runUncommitted)).toBeNull();
-  });
-
-  it("returns null for a null run id", async () => {
-    expect(await resolveRunCreditBatchId(db, null)).toBeNull();
-  });
-});
-
-describe("Sample side — derive creditBatchId from the run's batch", () => {
-  it("createSample derives the batch when the run is already committed", async () => {
+describe("Sample side — anchor directly on the credit batch (issue #309)", () => {
+  it("createSample links the sample to the given batch, with no run link", async () => {
     const batch = await createCreditBatch(TEST_USER_ID, {
       ...baseBatchData,
       code: `CB-SL-DERIVE-${Date.now().toString(36)}`,
@@ -242,46 +275,167 @@ describe("Sample side — derive creditBatchId from the run's batch", () => {
     });
     createdIds.creditBatches.push(batch.id);
 
-    expect(await resolveRunCreditBatchId(db, runDerive)).toBe(batch.id);
-
-    const sampleId = await makeSample(runDerive, `S-SL-DERIVE-${Date.now()}`);
+    const sampleId = await makeSample(batch.id, `S-SL-DIRECT-${Date.now()}`);
     expect(await batchIdOfSample(sampleId)).toBe(batch.id);
+
+    const [row] = await db
+      .select({ productionRunId: samples.productionRunId })
+      .from(samples)
+      .where(eq(samples.id, sampleId));
+    expect(row.productionRunId).toBeNull();
   });
 
-  it("createSample leaves creditBatchId null for an uncommitted run", async () => {
-    const sampleId = await makeSample(
-      runUncommitted,
-      `S-SL-UNCOMMITTED-${Date.now()}`,
-    );
-    expect(await batchIdOfSample(sampleId)).toBeNull();
+  it("createSample rejects an unknown credit batch", async () => {
+    await expect(
+      createSample(TEST_USER_ID, {
+        sampleCode: `S-SL-NOBATCH-${Date.now()}`,
+        creditBatchId: "00000000-0000-4000-8000-000000000000",
+        samplingTime: new Date("2025-06-15T10:00:00Z"),
+        totalCarbonPercent: 80,
+        organicCarbonPercent: 78,
+      }),
+    ).rejects.toThrow("Credit batch not found");
   });
 
-  it("updateSample re-derives the batch when the sample's run changes", async () => {
-    // A sample created on an uncommitted run (null link).
-    const sampleId = await makeSample(
-      runUncommitted,
-      `S-SL-MOVE-${Date.now()}`,
-    );
-    expect(await batchIdOfSample(sampleId)).toBeNull();
-
-    // A batch on a different run; moving the sample to it must re-derive the link.
-    const batch = await createCreditBatch(TEST_USER_ID, {
+  it("updateSample moves the sample to another batch", async () => {
+    const batchA = await createCreditBatch(TEST_USER_ID, {
       ...baseBatchData,
-      code: `CB-SL-UPDATE-${Date.now().toString(36)}`,
+      code: `CB-SL-MOVE-A-${Date.now().toString(36)}`,
       facilityId,
       productionRunIds: [runUpdate],
     });
-    createdIds.creditBatches.push(batch.id);
+    createdIds.creditBatches.push(batchA.id);
 
-    await updateSample(TEST_USER_ID, sampleId, { productionRunId: runUpdate });
-    expect(await batchIdOfSample(sampleId)).toBe(batch.id);
+    const sampleId = await makeSample(batchA.id, `S-SL-MOVE-${Date.now()}`);
+    expect(await batchIdOfSample(sampleId)).toBe(batchA.id);
+
+    const batchB = await createCreditBatch(TEST_USER_ID, {
+      ...baseBatchData,
+      code: `CB-SL-MOVE-B-${Date.now().toString(36)}`,
+      facilityId,
+      productionRunIds: [runMoveB],
+    });
+    createdIds.creditBatches.push(batchB.id);
+
+    await updateSample(TEST_USER_ID, sampleId, { creditBatchId: batchB.id });
+    expect(await batchIdOfSample(sampleId)).toBe(batchB.id);
   });
 });
 
-describe("Batch side — back-fill and re-point member runs' samples", () => {
-  it("createCreditBatch back-fills a pre-existing sample on its member run", async () => {
-    // Sample created BEFORE the batch exists → starts unlinked.
-    const sampleId = await makeSample(
+describe("Server-side 1000-year evidence guard — batch tier is source of truth (PR #336)", () => {
+  let tier1000BatchId: string;
+  let fromBatchId: string;
+
+  beforeAll(async () => {
+    const suffix = Date.now().toString(36);
+    const tier1000Batch = await createCreditBatch(TEST_USER_ID, {
+      ...baseBatchData,
+      durabilityOption: "1000_year" as const,
+      code: `CB-SL-T1000-${suffix}`,
+      facilityId,
+      productionRunIds: [runTier1000],
+    });
+    tier1000BatchId = tier1000Batch.id;
+    createdIds.creditBatches.push(tier1000Batch.id);
+
+    const fromBatch = await createCreditBatch(TEST_USER_ID, {
+      ...baseBatchData,
+      code: `CB-SL-TFROM-${suffix}`,
+      facilityId,
+      productionRunIds: [runTierFrom],
+    });
+    fromBatchId = fromBatch.id;
+    createdIds.creditBatches.push(fromBatch.id);
+  });
+
+  /** A replicate carrying the full 1000-year evidence set. */
+  function completeEvidence() {
+    return {
+      samplingTime: new Date("2025-06-15T10:00:00Z"),
+      totalCarbonPercent: 80,
+      organicCarbonPercent: 78,
+      randomReflectanceR0Percent: 2.1,
+      residualCarbonPercent: 65,
+    };
+  }
+
+  it("createSample rejects a 1000-year batch sample missing R₀ — regardless of the client-sent tier", async () => {
+    await expect(
+      createSample(TEST_USER_ID, {
+        sampleCode: `S-SL-NO-R0-${Date.now()}`,
+        creditBatchId: tier1000BatchId,
+        samplingTime: new Date("2025-06-15T10:00:00Z"),
+        totalCarbonPercent: 80,
+        organicCarbonPercent: 78,
+      }),
+    ).rejects.toThrow(/R₀ reflectance is required/);
+  });
+
+  it("createSample rejects a 1000-year batch sample with R₀ but no TGA data", async () => {
+    await expect(
+      createSample(TEST_USER_ID, {
+        sampleCode: `S-SL-NO-TGA-${Date.now()}`,
+        creditBatchId: tier1000BatchId,
+        samplingTime: new Date("2025-06-15T10:00:00Z"),
+        totalCarbonPercent: 80,
+        organicCarbonPercent: 78,
+        randomReflectanceR0Percent: 2.1,
+      }),
+    ).rejects.toThrow(/TGA non-reactive carbon data is required/);
+  });
+
+  it("createSample accepts a 1000-year batch sample carrying R₀ + TGA evidence", async () => {
+    const sample = await createSample(TEST_USER_ID, {
+      sampleCode: `S-SL-T1000-OK-${Date.now()}`,
+      creditBatchId: tier1000BatchId,
+      ...completeEvidence(),
+    });
+    createdIds.samples.push(sample.id);
+    expect(await batchIdOfSample(sample.id)).toBe(tier1000BatchId);
+  });
+
+  it("updateSample rejects moving an evidence-less sample onto a 1000-year batch", async () => {
+    const sampleId = await makeSample(fromBatchId, `S-SL-TMOVE-${Date.now()}`);
+    await expect(
+      updateSample(TEST_USER_ID, sampleId, { creditBatchId: tier1000BatchId }),
+    ).rejects.toThrow(/R₀ reflectance is required/);
+    expect(await batchIdOfSample(sampleId)).toBe(fromBatchId);
+  });
+
+  it("updateSample rejects nulling out R₀ in place on a 1000-year batch sample", async () => {
+    const sample = await createSample(TEST_USER_ID, {
+      sampleCode: `S-SL-TNULL-${Date.now()}`,
+      creditBatchId: tier1000BatchId,
+      ...completeEvidence(),
+    });
+    createdIds.samples.push(sample.id);
+
+    await expect(
+      updateSample(TEST_USER_ID, sample.id, {
+        randomReflectanceR0Percent: null,
+      }),
+    ).rejects.toThrow(/R₀ reflectance is required/);
+  });
+
+  it("updateSample still allows unrelated edits on a compliant 1000-year batch sample", async () => {
+    const sample = await createSample(TEST_USER_ID, {
+      sampleCode: `S-SL-TEDIT-${Date.now()}`,
+      creditBatchId: tier1000BatchId,
+      ...completeEvidence(),
+    });
+    createdIds.samples.push(sample.id);
+
+    const updated = await updateSample(TEST_USER_ID, sample.id, {
+      labName: "Tier Lab",
+    });
+    expect(updated.labName).toBe("Tier Lab");
+  });
+});
+
+describe("Batch side — back-fill and re-point LEGACY run-linked samples", () => {
+  it("createCreditBatch back-fills a pre-existing legacy sample on its member run", async () => {
+    // Legacy sample created BEFORE the batch exists → starts unlinked.
+    const sampleId = await insertLegacySample(
       runBackfill,
       `S-SL-BACKFILL-${Date.now()}`,
     );
@@ -299,7 +453,7 @@ describe("Batch side — back-fill and re-point member runs' samples", () => {
     expect(await batchIdOfSample(sampleId)).toBe(batch.id);
   });
 
-  it("updateCreditBatch unlinks a removed run's sample and links an added run's sample", async () => {
+  it("updateCreditBatch unlinks a removed run's legacy sample and links an added run's", async () => {
     const batch = await createCreditBatch(TEST_USER_ID, {
       ...baseBatchData,
       code: `CB-SL-REPOINT-${Date.now().toString(36)}`,
@@ -308,10 +462,18 @@ describe("Batch side — back-fill and re-point member runs' samples", () => {
     });
     createdIds.creditBatches.push(batch.id);
 
-    const sampleA = await makeSample(runReA, `S-SL-REA-${Date.now()}`);
-    const sampleB = await makeSample(runReB, `S-SL-REB-${Date.now()}`);
-    // A pre-existing unlinked sample on a run NOT yet in the batch.
-    const sampleC = await makeSample(runReC, `S-SL-REC-${Date.now()}`);
+    const sampleA = await insertLegacySample(
+      runReA,
+      `S-SL-REA-${Date.now()}`,
+      batch.id,
+    );
+    const sampleB = await insertLegacySample(
+      runReB,
+      `S-SL-REB-${Date.now()}`,
+      batch.id,
+    );
+    // A pre-existing unlinked legacy sample on a run NOT yet in the batch.
+    const sampleC = await insertLegacySample(runReC, `S-SL-REC-${Date.now()}`);
     expect(await batchIdOfSample(sampleA)).toBe(batch.id);
     expect(await batchIdOfSample(sampleB)).toBe(batch.id);
     expect(await batchIdOfSample(sampleC)).toBeNull();

@@ -239,25 +239,7 @@ export const certificationSubmissionStatus = pgEnum(
   ]
 );
 
-// Per-reporting-period LCA emission categories (ADR 0005). These live as
-// PROJECT-scope Components in Isometric (amortized server-side via the
-// ProjectComponentAmortizationStrategy enum) — noma is the LCA journal
-// (`/admin/emission-estimates` rows), not the publisher. Each enum value
-// pins to one Isometric blueprint key (capturing its primary scalar input
-// for drift matching); secondary inputs on the same Component are managed
-// by the operator in the Isometric UI per the LCA document. The
-// blueprint mapping lives in CATEGORY_TO_BLUEPRINT in
-// src/lib/isometric/utils/project-emission-match.ts.
-//
-// `lab_electricity` (`grid_electricity_use`) and `sampling_consumables`
-// (`mass_based_ci_emissions`) are split because they're two distinct
-// Isometric Components under the `sampling-required-for-mrv` group; one
-// noma row would not match cleanly.
-export const projectEmissionCategory = pgEnum('project_emission_category', [
-  'staff_travel',
-  'pyrolyzer_direct',
-  'biochar_storage_fuel',
-  'miscellaneous',
-  'lab_electricity',
-  'sampling_consumables',
-]);
+// (The `project_emission_category` pgEnum lived here for the ADR 0005
+// LCA journal; removed per ADR 0018. The category strings survive as
+// self-contained literals in PERIOD_INPUT_TUPLES,
+// src/lib/isometric/transformers/datapoint.ts.)
