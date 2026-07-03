@@ -74,11 +74,30 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
     reconcileRemoval: vi.fn(),
   };
 });
+// The Phase 3 measurement-samples flag is a build-time const (false while the
+// two sandbox confirms are pending). The issue #320 window test needs the
+// durability path live to observe `measured_at` staying production-anchored, so
+// expose the flag through a mutable getter (default: the real staged-off state)
+// and stub the POST-ing submitter.
+const durabilityFlag = vi.hoisted(() => ({ live: false }));
+vi.mock("@/fn/certification/durability-measurement-samples", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("@/fn/certification/durability-measurement-samples")
+  >();
+  return {
+    ...actual,
+    get DURABILITY_MEASUREMENT_SAMPLES_LIVE() {
+      return durabilityFlag.live;
+    },
+    submitDurabilityMeasurementSamples: vi.fn(),
+  };
+});
 
 import * as ledger from "@/data-access/certification";
 import * as ledgerClaim from "@/data-access/certification-submissions";
 import * as removalsDA from "@/data-access/certifier-removals";
 import * as certifyContext from "@/fn/certification/certify-context-core";
+import * as durabilitySamples from "@/fn/certification/durability-measurement-samples";
 import * as isometric from "@/lib/isometric";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { makeClaimSubmissionDraftFake } from "./fixtures/fake-claim";
@@ -399,23 +418,7 @@ function makeContext(
     latestSubmission: latest,
     linkedGhgStatement: null,
     isProduction: false,
-    lineages: [
-      {
-        facility: { id: FACILITY_ID, code: "F", name: "F" },
-        application: {
-          id: APPLICATION_ID,
-          code: "APP-TEST-001",
-          biocharAppliedDryTons: biocharMassKg / 1000,
-        } as never,
-        delivery: { id: "del-1" } as never,
-        order: null,
-        biocharProduct: { id: "bp-1" } as never,
-        productionRun: { id: PRODUCTION_RUN_ID } as never,
-        reactor: null,
-        feedstocks: [],
-        warnings: [],
-      } as never,
-    ],
+    lineages: [makeLineage({ biocharMassKg })],
     runs,
     batchesWithSamples,
     attributionByRunId: new Map([[PRODUCTION_RUN_ID, 1]]),
@@ -430,6 +433,34 @@ function makeContext(
       warnings: [],
     },
   };
+}
+
+// One chain-of-custody lineage. The application date is deliberately AFTER the
+// run window (Jan 2026) — §8.6.2 anchors the removal's `completed_on` on it
+// (issue #320), so the fixture pins the production-end → application-date swap.
+function makeLineage(args: {
+  applicationId?: string;
+  code?: string;
+  applicationDate?: Date;
+  biocharMassKg?: number;
+}): certifyContext.RemovalSubmissionContext["lineages"][number] {
+  const biocharMassKg = args.biocharMassKg ?? ORIGINAL_BIOCHAR_MASS_KG;
+  return {
+    facility: { id: FACILITY_ID, code: "F", name: "F" },
+    application: {
+      id: args.applicationId ?? APPLICATION_ID,
+      code: args.code ?? "APP-TEST-001",
+      applicationDate: args.applicationDate ?? new Date("2026-04-05T00:00:00Z"),
+      biocharAppliedDryTons: biocharMassKg / 1000,
+    } as never,
+    delivery: { id: "del-1" } as never,
+    order: null,
+    biocharProduct: { id: "bp-1" } as never,
+    productionRun: { id: PRODUCTION_RUN_ID } as never,
+    reactor: null,
+    feedstocks: [],
+    warnings: [],
+  } as never;
 }
 
 // Helper: latest row for THIS removal's submission key. The orchestrator's
@@ -454,6 +485,8 @@ beforeEach(() => {
   vi.resetAllMocks();
   storedRows = [];
   nextLedgerRowId = 1;
+  // Real staged-off state; the issue #320 window test flips it per-test.
+  durabilityFlag.live = false;
 
   // The claim choreography is one mocked function backed by the in-memory
   // ledger + the real pure decision core; lock/CAS/re-resolution behavior
@@ -567,13 +600,15 @@ describe("submitRemoval — happy path", () => {
     });
     expect(datapointBody.supplier_reference_id).toMatch(/^nm-/);
 
-    // Removal payload wires the datapoint id back onto the component.
+    // Removal payload wires the datapoint id back onto the component. The
+    // window ends at the application date (§8.6.2, issue #320), not the
+    // production end (2026-01-31).
     const removalBody = vi.mocked(isometric.createGhgEntry).mock.calls[0][0];
     expect(removalBody).toMatchObject({
       project_id: EXTERNAL_PROJECT_ID,
       ghg_entry_template_id: TEMPLATE_ID,
       started_on: "2026-01-01",
-      completed_on: "2026-01-31",
+      completed_on: "2026-04-05",
     });
     expect(removalBody.ghg_entry_template_components ?? []).toHaveLength(1);
     expect(removalBody.ghg_entry_template_components?.[0]).toMatchObject({
@@ -587,11 +622,13 @@ describe("submitRemoval — happy path", () => {
       ],
     });
 
-    // Reporting window was persisted onto the removal row.
+    // Reporting window was persisted onto the removal row — completedOn
+    // carries the application date, keeping every period consumer (detail
+    // sheet, GHG-statement partition, dashboard) on the §8.6.2 window.
     expect(removalsDA.updateRemovalDates).toHaveBeenCalledWith(
       USER_ID,
       REMOVAL_ID,
-      { startedOn: "2026-01-01", completedOn: "2026-01-31" },
+      { startedOn: "2026-01-01", completedOn: "2026-04-05" },
     );
   });
 
@@ -742,6 +779,173 @@ describe("submitRemoval — durability sampling gates (D3)", () => {
     ).rejects.toThrow(/replicate/i);
     // Failed closed — nothing was posted and no ledger row was claimed.
     expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue #320 — the reporting window's end anchors on the biochar application
+// date (§8.6.2), while durability `measured_at` keeps production-end semantics
+// (caveat 1) and a back-dated application fails closed before any POST
+// (caveat 4).
+// ---------------------------------------------------------------------------
+
+describe("submitRemoval — reporting window anchored to application date (issue #320)", () => {
+  // A template carrying BOTH the ordinary mass component and a sequestration
+  // component, so one submit exercises the GHG-entry window AND the durability
+  // measurement-samples path side by side.
+  function makeCombinedTemplate(): IsometricGhgEntryTemplate {
+    const base = makeTemplate();
+    const seq = makeSequestrationTemplate();
+    return {
+      ...base,
+      groups: [...base.groups, ...seq.groups],
+    } as IsometricGhgEntryTemplate;
+  }
+
+  it("uses MAX(applicationDate) across lineages for completed_on while durability measured_at keeps the production end", async () => {
+    durabilityFlag.live = true;
+    vi.mocked(
+      durabilitySamples.submitDurabilityMeasurementSamples,
+    ).mockResolvedValue({ submitted: 2 } as never);
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+      ...makeContext(),
+      defaultTemplate: makeCombinedTemplate(),
+      lineages: [
+        makeLineage({
+          applicationId: "app-early",
+          code: "APP-TEST-001",
+          applicationDate: new Date("2026-02-10T00:00:00Z"),
+        }),
+        makeLineage({
+          applicationId: "app-late",
+          code: "APP-TEST-002",
+          applicationDate: new Date("2026-04-05T00:00:00Z"),
+        }),
+      ],
+    });
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dp") as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      fakeExternalIds("rmv") as never,
+    );
+
+    await submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID });
+
+    // completed_on = the LATEST application date across lineages; started_on
+    // stays the production start.
+    const removalBody = vi.mocked(isometric.createGhgEntry).mock.calls[0][0];
+    expect(removalBody.started_on).toBe("2026-01-01");
+    expect(removalBody.completed_on).toBe("2026-04-05");
+    expect(removalsDA.updateRemovalDates).toHaveBeenCalledWith(
+      USER_ID,
+      REMOVAL_ID,
+      { startedOn: "2026-01-01", completedOn: "2026-04-05" },
+    );
+
+    // Caveat 1: the durability measurement samples keep production-end
+    // `measured_at` (a lab/production-time measurement) — the application
+    // anchor moves ONLY the GHG-entry window.
+    const submitArgs = vi.mocked(
+      durabilitySamples.submitDurabilityMeasurementSamples,
+    ).mock.calls[0][0];
+    expect(submitArgs.submissions.length).toBeGreaterThan(0);
+    for (const submission of submitArgs.submissions) {
+      expect(submission.body.measured_at).toBe("2026-01-31T23:59:59.000Z");
+    }
+  });
+
+  it("allows an application dated the same UTC day as a mid-day production start (date-granular guard)", async () => {
+    const ctx = makeContext();
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+      ...ctx,
+      // Run starts mid-day; the form-entered application date is UTC midnight
+      // of the SAME day. A millisecond comparison would wrongly block this
+      // (issue #320 caveat 4) — the guard must compare at date granularity.
+      runs: [{ ...ctx.runs[0], startTime: new Date("2026-01-01T06:00:00Z") }],
+      lineages: [
+        makeLineage({
+          applicationDate: new Date("2026-01-01T00:00:00Z"),
+        }),
+      ],
+    });
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dp") as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      fakeExternalIds("rmv") as never,
+    );
+
+    await submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID });
+
+    const removalBody = vi.mocked(isometric.createGhgEntry).mock.calls[0][0];
+    expect(removalBody.started_on).toBe("2026-01-01");
+    expect(removalBody.completed_on).toBe("2026-01-01");
+  });
+
+  it("fails closed before any POST when the latest application predates production start", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+      ...makeContext(),
+      lineages: [
+        makeLineage({
+          applicationDate: new Date("2025-12-15T00:00:00Z"),
+        }),
+      ],
+    });
+    const createDatapointFake = vi.fn(fakeExternalIds("dp"));
+    const createGhgEntryFake = vi.fn(fakeExternalIds("rmv"));
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      createDatapointFake as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      createGhgEntryFake as never,
+    );
+
+    await expect(
+      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+    ).rejects.toThrow(/correct the application date/i);
+    // The guard names the offending application and runs BEFORE any registry
+    // POST or ledger claim.
+    expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(createGhgEntryFake).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
+  });
+
+  it("rejects a backdated application even when a later valid application carries the max date", async () => {
+    // Mixed removal: the LATEST application (April) is after the earliest
+    // production start (2026-01-01), so a max-date-only guard would pass —
+    // the guard must scan every lineage and name the December offender.
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+      ...makeContext(),
+      lineages: [
+        makeLineage({
+          applicationId: "app-backdated",
+          code: "APP-TEST-001",
+          applicationDate: new Date("2025-12-15T00:00:00Z"),
+        }),
+        makeLineage({
+          applicationId: "app-valid",
+          code: "APP-TEST-002",
+          applicationDate: new Date("2026-04-05T00:00:00Z"),
+        }),
+      ],
+    });
+    const createDatapointFake = vi.fn(fakeExternalIds("dp"));
+    const createGhgEntryFake = vi.fn(fakeExternalIds("rmv"));
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      createDatapointFake as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      createGhgEntryFake as never,
+    );
+
+    await expect(
+      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+    ).rejects.toThrow(/APP-TEST-001.*2025-12-15/);
+    // Fails closed before any registry POST or ledger claim.
+    expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(createGhgEntryFake).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
   });
 });

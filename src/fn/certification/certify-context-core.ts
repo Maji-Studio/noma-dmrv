@@ -690,6 +690,7 @@ export async function buildRemovalContext(
     ...buildSubmissionWarnings({
       defaultTemplate: facilityFacts.defaultTemplate,
       runs,
+      lineages,
     }),
     ...durabilityWarnings,
     ...soilTemperatureReconciliationWarnings,
