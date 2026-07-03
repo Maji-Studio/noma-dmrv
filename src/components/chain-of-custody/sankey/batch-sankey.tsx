@@ -105,10 +105,6 @@ function formatMassKg(value: number): string {
   return `${Math.round(value).toLocaleString()} kg`;
 }
 
-function formatNetCo2e(tons: number): string {
-  return `${tons.toLocaleString(undefined, { maximumFractionDigits: 2 })} tCO₂e net`;
-}
-
 function exitTone(exit: SankeyExit): string {
   return exit.tone === "alert" ? "var(--st-bad)" : "var(--color-text-tertiary)";
 }
@@ -564,17 +560,6 @@ export function BatchSankey({ sankey, batchCode }: BatchSankeyProps) {
         />
         <Controls showInteractive={false} className={GRAPH_CONTROLS_CLASS} />
       </ReactFlow>
-
-      {sankey.netCo2eRemovalTons != null ? (
-        <div className="absolute right-16 top-16 z-10 border-[1.5px] border-[var(--clr-dark-purple-20)] bg-[var(--paper)] px-12 py-8">
-          <p className="font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-[var(--clr-dark-purple-60)]">
-            Net removal
-          </p>
-          <p className="mt-2 font-mono text-[13px] text-[var(--color-text-primary)]">
-            {formatNetCo2e(sankey.netCo2eRemovalTons)}
-          </p>
-        </div>
-      ) : null}
 
       {selection ? (
         <SankeyTooltip

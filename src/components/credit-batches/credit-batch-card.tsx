@@ -114,8 +114,8 @@ export function CreditBatchCard({
               Weight
             </p>
             <p className="title-heading-3">
-              {creditBatch.weightTons != null
-                ? `${creditBatch.weightTons.toFixed(2)} t`
+              {creditBatch.appliedWeightTons != null
+                ? `${creditBatch.appliedWeightTons.toFixed(2)} t`
                 : "—"}
             </p>
           </div>

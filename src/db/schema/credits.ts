@@ -14,7 +14,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { creditBatchStatus, durabilityOption } from './common';
-import { fraction, massKg, percent, ppm, tonnes } from './numeric-families';
+import { fraction, percent, ppm } from './numeric-families';
 import { facilities } from './facilities';
 import { feedstockTypes } from './feedstock';
 import { productionProcesses } from './production-processes';
@@ -58,7 +58,8 @@ export const creditBatches = pgTable(
     registry: text('registry'), // e.g., "Isometric"
 
     // --- Credit Details (Isometric Protocol Section 8) ---
-    weightTons: tonnes('weight_tons'),
+    // Applied weight is derived on read from member applications
+    // (Σ biocharAppliedTons) — never stored (issue #285, ADR 0014).
     value: real('value'),
     currency: text('currency').notNull().default('TZS'), // ISO 4217 code
 
@@ -89,17 +90,14 @@ export const creditBatches = pgTable(
     // Applies to all applications in this batch (max 0.95)
     fDurableCalculated: fraction('f_durable_calculated'),
 
-    // --- Net CO2e Removal Calculation (Isometric GHG Accounting Module v1.0) ---
-    // Net CO₂e Removal = CO₂e Stored - CO₂e Emissions - CO₂e Counterfactual
-    totalCo2eStoredTons: tonnes('total_co2e_stored_tons'), // Carbon durably stored
-    totalCo2eEmissionsTons: tonnes('total_co2e_emissions_tons'), // Project emissions
-    totalCo2eCounterfactualTons: tonnes('total_co2e_counterfactual_tons'), // Baseline emissions
-    // netCo2eRemovalTons: derivable from stored - emissions - counterfactual
+    // --- Net CO2e Removal (Isometric GHG Accounting Module) ---
+    // CO₂e stored is derived on read from member applications (co2eStored
+    // preview); project emissions / counterfactual are registry-owned
+    // (ADR 0018) — no local copies are stored (issue #285).
 
-    // --- Feedstock Eligibility Summary (Isometric: >25% ineligible-biomass cap, P0-01) ---
-    // Computed by app logic when building/updating a batch from linked feedstock batches
-    totalFeedstockMassKg: massKg('total_feedstock_mass_kg'),
-    ineligibleFeedstockMassKg: massKg('ineligible_feedstock_mass_kg'),
+    // --- Feedstock Eligibility (Isometric: >25% ineligible-biomass cap, P0-01) ---
+    // Feedstock masses are derived on read from the run-feedstock lineage
+    // (Σ massUsedKg, split by feedstock eligibilityStatus) — never stored.
 
     // --- Site Management Summary (Isometric: Section 5.2.1) ---
     // Aggregated info for GHG Statement submission
@@ -146,20 +144,6 @@ export const creditBatches = pgTable(
       'credit_batches_isometric_max_one_month',
       sql`${table.certifier} is distinct from 'isometric'
         or ${table.endDate} <= (${table.startDate} + interval '1 month')::date`
-    ),
-    check(
-      'credit_batches_total_feedstock_mass_non_negative',
-      sql`${table.totalFeedstockMassKg} is null or ${table.totalFeedstockMassKg} >= 0`
-    ),
-    check(
-      'credit_batches_ineligible_feedstock_mass_non_negative',
-      sql`${table.ineligibleFeedstockMassKg} is null or ${table.ineligibleFeedstockMassKg} >= 0`
-    ),
-    check(
-      'credit_batches_ineligible_feedstock_check',
-      sql`${table.ineligibleFeedstockMassKg} is null
-        or ${table.totalFeedstockMassKg} is null
-        or ${table.ineligibleFeedstockMassKg} <= ${table.totalFeedstockMassKg}`
     ),
     // Indexes the Removal grouping FK — drives "find credit batches in
     // removal X" lookups during submission. Postgres does not auto-index

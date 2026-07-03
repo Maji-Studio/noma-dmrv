@@ -6,8 +6,8 @@
  * 1. Overview — startDate, endDate
  * 2. Production cohort — selected production runs in the production window
  * 3. Durability — read-only; inherited from the facility's default option (PDD-level decision)
- * 4. GHG Accounting — emissions/counterfactual, buffer pool % (read-only)
- * 5. Verification — registry, weight, value, currency (read-only)
+ * 4. Registry & accounting — buffer pool %, registry, derived applied weight,
+ *    value (read-only; emissions/counterfactual are registry-owned, ADR 0018)
  */
 "use client";
 
@@ -193,7 +193,11 @@ function parseWatchedDate(value: unknown): Date | null {
 // ============================================
 interface CreditBatchFormProps {
   /** Existing credit batch data for editing (undefined for create mode) */
-  creditBatch?: CreditBatch & { productionRunIds?: string[] };
+  creditBatch?: CreditBatch & {
+    productionRunIds?: string[];
+    /** Derived Σ member applications' applied tons (issue #285). */
+    appliedWeightTons?: number;
+  };
   /** Form submission handler */
   onSubmit: (data: CreditBatchFormData) => Promise<void> | void;
   /** Called when the user edits the date range — used to clear a stale submit-time server error (e.g. an overlap message that no longer applies) */
@@ -484,16 +488,6 @@ export function CreditBatchForm({
       >
         <dl className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-24 gap-y-20 p-20 bg-[var(--color-background-sunken)] border border-[var(--color-border-tertiary)]">
           <ReadOnlyField
-            label="CO₂e emissions"
-            value={formatTons(creditBatch?.totalCo2eEmissionsTons ?? null)}
-            hint="Project emissions"
-          />
-          <ReadOnlyField
-            label="CO₂e counterfactual"
-            value={formatTons(creditBatch?.totalCo2eCounterfactualTons ?? null)}
-            hint="Baseline emissions"
-          />
-          <ReadOnlyField
             label="Buffer pool"
             value={formatMaybe(creditBatch?.bufferPoolPercent ?? null, "%")}
             hint="Risk-based (2–20%)"
@@ -504,8 +498,8 @@ export function CreditBatchForm({
           />
           <ReadOnlyField
             label="Weight"
-            value={formatTons(creditBatch?.weightTons ?? null)}
-            hint="Total credit weight"
+            value={formatTons(creditBatch?.appliedWeightTons ?? null)}
+            hint="Applied to soil (derived)"
           />
           <ReadOnlyField
             label="Value"

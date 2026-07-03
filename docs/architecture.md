@@ -308,8 +308,9 @@ deep-link selectors:
 Batch roll-up merges every member application's rollback, dedupes production
 runs, and exposes **DAG | Map | Sankey**. Application drill-down exposes
 **Lineage | Map | Split | Trail**. The Sankey is a dry-mass balance with
-explicit exits for ineligible feedstock, conversion loss, and in-storage mass;
-net CO2e is a label, not a ribbon width.
+explicit exits for ineligible feedstock (derived from feedstock eligibility
+flags, issue #285), conversion loss, and in-storage mass; no net-CO2e figure
+is shown (registry-owned, ADR 0018).
 
 - **Components**: `src/components/chain-of-custody/` (page, graph, map,
   sankey, trail, constants).
