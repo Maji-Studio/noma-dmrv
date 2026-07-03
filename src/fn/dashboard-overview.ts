@@ -7,6 +7,7 @@ import {
 } from "@/data-access/dashboard-overview";
 import { getUser } from "@/lib/auth/server";
 import type { ActionResult } from "@/types/actions";
+import { toLoggedActionError } from "./action-errors";
 
 const getDashboardOverviewSchema = z.object({
   facilityId: z.uuid(),
@@ -46,10 +47,14 @@ export async function getDashboardOverviewFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to load the dashboard overview",
+      error: toLoggedActionError(
+        error,
+        "Failed to load the dashboard overview",
+        {
+          message: "dashboard overview action failed",
+          context: { op: "dashboard-overview:get" },
+        },
+      ),
     };
   }
 }

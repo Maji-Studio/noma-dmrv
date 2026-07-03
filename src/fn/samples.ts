@@ -73,8 +73,11 @@ export async function getSamplesFn(
     }
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load samples",
+      error: sampleActionError(
+        error,
+        "Failed to load samples",
+        "sample:list",
+      ),
     };
   }
 }
@@ -96,7 +99,11 @@ export async function getSampleByIdFn(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to load sample",
+      error: sampleActionError(
+        error,
+        "Failed to load sample",
+        "sample:get",
+      ),
     };
   }
 }
@@ -129,8 +136,11 @@ export async function getSampleStatsFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load sample stats",
+      error: sampleActionError(
+        error,
+        "Failed to load sample stats",
+        "sample:stats",
+      ),
     };
   }
 }
@@ -157,10 +167,11 @@ export async function checkSampleCodeFn(
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to check sample code",
+      error: sampleActionError(
+        error,
+        "Failed to check sample code",
+        "sample:check-code",
+      ),
     };
   }
 }
@@ -182,10 +193,11 @@ export async function generateNextSampleCodeFn(): Promise<
   } catch (error) {
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to generate sample code",
+      error: sampleActionError(
+        error,
+        "Failed to generate sample code",
+        "sample:generate-code",
+      ),
     };
   }
 }
