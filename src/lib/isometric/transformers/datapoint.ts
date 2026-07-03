@@ -1,6 +1,9 @@
 import { SafeError } from "@/lib/errors";
 import type { components } from "../generated/certify";
-import type { AggregatedProductionData } from "../utils/aggregation";
+import type {
+  AggregatedProductionData,
+  EmissionInputBucket,
+} from "../utils/aggregation";
 import { payloadHash } from "../utils/payload-hash";
 
 type DatapointType = components["schemas"]["DatapointType"];
@@ -14,6 +17,12 @@ export interface InputMappingEntry {
   unit: string;
   datapointType: DatapointType;
   expectedQuantityKind: QuantityKindType;
+  // §8.6.2 attribution basis (issue #349, ADR 0020): PRODUCTION front-loads
+  // in full on the batch's claiming GHG entry; DELIVERY/STORED are
+  // applied-mass-scoped. Enforcement lives in aggregation.ts (SOURCE_BUCKETS)
+  // + submit-removal.ts (claim gate); the two classifications are welded by
+  // tests/isometric-emission-buckets.test.ts.
+  bucket: EmissionInputBucket;
   transform?: (value: number) => number;
 }
 
@@ -43,6 +52,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "dimensionless",
         datapointType: "REPORTED",
         expectedQuantityKind: "dimensionless",
+        bucket: "stored",
         transform: (v) => v / 100,
       },
       product_mass: {
@@ -50,6 +60,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "kg",
         datapointType: "REPORTED",
         expectedQuantityKind: "mass",
+        bucket: "stored",
       },
     },
   },
@@ -68,6 +79,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "tonne * km",
         datapointType: "REPORTED",
         expectedQuantityKind: "mass_distance",
+        bucket: "production",
       },
     },
     specific_volume_based_emissions: {
@@ -76,6 +88,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "kg",
         datapointType: "REPORTED",
         expectedQuantityKind: "mass",
+        bucket: "production",
       },
     },
   },
@@ -89,6 +102,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "tonne * km",
         datapointType: "REPORTED",
         expectedQuantityKind: "mass_distance",
+        bucket: "delivery",
       },
     },
     specific_volume_based_emissions: {
@@ -97,6 +111,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "kg",
         datapointType: "REPORTED",
         expectedQuantityKind: "mass",
+        bucket: "delivery",
       },
     },
   },
@@ -120,6 +135,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "tonne * km",
         datapointType: "REPORTED",
         expectedQuantityKind: "mass_distance",
+        bucket: "production",
       },
     },
   },
@@ -143,6 +159,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "kWh",
         datapointType: "REPORTED",
         expectedQuantityKind: "energy",
+        bucket: "production",
       },
     },
     fuel_usage_by_volume: {
@@ -151,6 +168,7 @@ export const INPUT_MAPPING: InputMappingTable = {
         unit: "l",
         datapointType: "REPORTED",
         expectedQuantityKind: "volume",
+        bucket: "production",
       },
     },
   },

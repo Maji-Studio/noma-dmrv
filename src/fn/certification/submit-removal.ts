@@ -353,6 +353,23 @@ export async function submitRemoval(
     throw new SafeError("This removal has no credit batches.");
   }
 
+  // §8.6.2 front-loading (issue #349, ADR 0020): a credit batch's
+  // production-bucket emissions submit exactly once. Unclaimed batches and
+  // batches claimed by THIS removal (resubmit/supersede) proceed; a batch
+  // claimed by a DIFFERENT removal fails closed — the delivery-only
+  // follow-up entry is gated behind issue #353. Runs BEFORE aggregation,
+  // the evidence ledgers, and every registry POST.
+  const foreignClaims = ctx.memberBatchClaims.filter(
+    (b) => b.claimedByRemovalId != null && b.claimedByRemovalId !== removalId,
+  );
+  if (foreignClaims.length > 0) {
+    throw new SafeError(
+      `Production emissions for ${foreignClaims.map((b) => b.code).join(", ")} ` +
+        "were already claimed by another removal (§8.6.2 front-loading). " +
+        "A delivery-only follow-up entry is not yet supported (issue #353).",
+    );
+  }
+
   const lineageWarnings: string[] = [];
   for (const lineage of ctx.lineages) {
     lineageWarnings.push(
@@ -388,12 +405,15 @@ export async function submitRemoval(
     expectedDefaultRemovalTemplateId: ctx.mapping.defaultRemovalTemplateId,
   };
 
-  // Aggregate every member batch's runs into ONE Removal, applied-scoped:
-  // `attributionByRunId` weights each run by the share of its biochar that
-  // actually reached an application in this removal (linear mass allocation).
-  // Chemistry scalars are overlaid at the CREDIT-BATCH grain — samples anchor
-  // on the batch (issue #309), so the run-grain weighted means no longer see
-  // them; `weightedBatchChemistry` pools each batch's replicates instead.
+  // Aggregate every member batch's runs into ONE Removal. Attribution basis
+  // splits by §8.6.2 bucket (issue #349, ADR 0020): `attributionByRunId`
+  // scopes the STORED biochar mass + chemistry weights by each run's applied
+  // share (linear mass allocation), while PRODUCTION-bucket inputs (feedstock
+  // mass, diesel, electricity) sum full run totals — front-loaded once on
+  // this claiming entry. Chemistry scalars are overlaid at the CREDIT-BATCH
+  // grain — samples anchor on the batch (issue #309), so the run-grain
+  // weighted means no longer see them; `weightedBatchChemistry` pools each
+  // batch's replicates instead.
   const baseAgg = {
     ...aggregateProductionRuns(ctx.runs, ctx.attributionByRunId),
     ...weightedBatchChemistry(ctx.batchesWithSamples, ctx.attributionByRunId),
@@ -415,7 +435,19 @@ export async function submitRemoval(
     );
   }
 
-  const transportAgg = enrichWithTransportLegs(baseAgg, ctx.transportLegs);
+  // DELIVERY bucket (§8.6.2): biochar transport scales with the applied share.
+  // Removal-wide fraction — the biochar legs are already lineage-scoped to this
+  // removal's applications; uniform scaling across legs is a documented
+  // approximation (per-delivery scoping needs the application→batch junction,
+  // deferred with issue #353). Zero/absent output falls back to full (1),
+  // mirroring buildMassAccounting's per-run fallback.
+  const appliedBiocharFraction =
+    ctx.runSummary.totalBiocharOutputKg > 0
+      ? ctx.runSummary.appliedDryKg / ctx.runSummary.totalBiocharOutputKg
+      : 1;
+  const transportAgg = enrichWithTransportLegs(baseAgg, ctx.transportLegs, {
+    appliedBiocharFraction,
+  });
   // Pooling legs across member batches raises the chance of a mixed
   // method/factor — Isometric Transportation v1.1 §5 requires per-leg
   // accounting, so block submission on those warnings.
@@ -730,6 +762,10 @@ export async function submitRemoval(
         },
         externalProjectId,
         durabilityMeasurementSubmissions,
+        // The live member set — membership can't drift under a locked draft
+        // (assertRemovalAllowsCreditBatchMutation), so these are the batches
+        // whose production bucket this submission claims.
+        claimBatchIds: memberCreditBatchIds,
         supersedePreviousId: claimed.supersedePreviousId,
         resumed: claimed.resumed,
         log,
@@ -756,6 +792,9 @@ interface RunRemovalSubmissionArgs {
   durabilityMeasurementSubmissions:
     | DurabilityMeasurementSampleSubmission[]
     | null;
+  // Member credit batches whose §8.6.2 production-bucket claim this submission
+  // stamps on success (issue #349, ADR 0020).
+  claimBatchIds: string[];
   supersedePreviousId: string | null;
   resumed: boolean;
   /** Attempt-scoped logger (carries submissionAttemptId) from submitRemoval. */
@@ -773,6 +812,7 @@ async function runRemovalSubmission({
   reportingWindow,
   externalProjectId,
   durabilityMeasurementSubmissions,
+  claimBatchIds,
   supersedePreviousId,
   resumed,
   log,
@@ -861,6 +901,9 @@ async function runRemovalSubmission({
   await markSubmissionSubmitted(userId, row.id, {
     externalId: externalRemovalId,
     supersedePreviousId,
+    // §8.6.2 (issue #349, ADR 0020): stamp the production-bucket claim onto
+    // the member batches in the same transaction as the ledger flip.
+    productionEmissionsClaim: { removalId, creditBatchIds: claimBatchIds },
   });
 
   // Persist the derived reporting window onto the removal row (best-effort —

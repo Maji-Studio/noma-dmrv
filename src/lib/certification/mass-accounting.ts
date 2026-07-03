@@ -7,14 +7,17 @@
  *     count, total biochar output, applied dry mass) so an operator sees what's
  *     being submitted at a glance.
  *   - `attributionByRunId` — the per-run applied-biochar fraction the submit
- *     pipeline scopes by, so a partially-applied run contributes only its
- *     applied share.
+ *     pipeline scopes STORED/DELIVERY-bucket quantities by, so a
+ *     partially-applied run contributes only its applied share of those.
+ *     PRODUCTION-bucket inputs are exempt: they front-load in full on the
+ *     batch's claiming GHG entry (§8.6.2, issue #349, ADR 0020).
  *
  * Computing both from one walk is deliberate: the Review summary and the submit
  * payload share the same numerator (applied dry kg per run) and denominator
- * (run output), so the two can never drift (ADR 0003 — a removal counts only
- * the biochar that reached soil). `appliedDryKg / totalBiocharOutputKg` is the
- * overall attribution; per run it's `aggregateProductionRuns`'s scoping factor.
+ * (run output), so the two can never drift (ADR 0003 as narrowed by ADR 0020 —
+ * a removal's stored quantity counts only the biochar that reached soil).
+ * `appliedDryKg / totalBiocharOutputKg` is the overall attribution; per run
+ * it's `aggregateProductionRuns`'s scoping factor.
  *
  * Pure and dependency-light: it takes the two arrays the submission context
  * already resolves via narrow structural params, so it stays unit-testable and

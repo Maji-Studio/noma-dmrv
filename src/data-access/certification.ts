@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
 import {
@@ -8,6 +8,7 @@ import {
   certificationSubmissions,
   certifierSyncEvents,
 } from "@/db/schema/certification";
+import { creditBatches } from "@/db/schema/credits";
 import { documents } from "@/db/schema/documentation";
 import { facilities } from "@/db/schema/facilities";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
@@ -440,7 +441,16 @@ export async function getSubmissionById(
 export async function markSubmissionSubmitted(
   userId: string,
   id: string,
-  args: { externalId: string; supersedePreviousId?: string | null },
+  args: {
+    externalId: string;
+    supersedePreviousId?: string | null;
+    // §8.6.2 (issue #349): stamp the claiming removal onto its member credit
+    // batches in the SAME transaction that flips the ledger row to
+    // 'submitted'. Guarded (unclaimed-or-self) so a resubmit/supersede by the
+    // same removal is idempotent. Optional — telemetry / GHG-statement
+    // callers don't claim.
+    productionEmissionsClaim?: { removalId: string; creditBatchIds: string[] };
+  },
 ): Promise<void> {
   requireAuth(userId);
   await db.transaction(async (tx) => {
@@ -463,6 +473,30 @@ export async function markSubmissionSubmitted(
           updatedAt: sql`now()`,
         })
         .where(eq(certificationSubmissions.id, args.supersedePreviousId));
+    }
+    if (
+      args.productionEmissionsClaim &&
+      args.productionEmissionsClaim.creditBatchIds.length > 0
+    ) {
+      const { removalId, creditBatchIds } = args.productionEmissionsClaim;
+      // Guarded UPDATE (IS NULL OR = self): a foreign-claimed row is silently
+      // NOT updated here — submitRemoval's pre-POST assertion is the loud
+      // guard against foreign claims (ADR 0020).
+      await tx
+        .update(creditBatches)
+        .set({
+          productionEmissionsClaimedByRemovalId: removalId,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            inArray(creditBatches.id, creditBatchIds),
+            or(
+              isNull(creditBatches.productionEmissionsClaimedByRemovalId),
+              eq(creditBatches.productionEmissionsClaimedByRemovalId, removalId),
+            ),
+          ),
+        );
     }
   });
 }
