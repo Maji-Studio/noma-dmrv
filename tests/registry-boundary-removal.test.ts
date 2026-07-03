@@ -373,7 +373,8 @@ function makeContext(
     // ledger/registry recovery, not the claim gate (isometric-submit-removal
     // covers it). The real claim UPDATE inside markSubmissionSubmitted takes
     // its ids from `memberBatches` (random UUIDs with no credit_batches row),
-    // so it matches zero rows — harmless by design.
+    // so it matches zero rows — harmless by design; the guarded predicate
+    // itself is pinned against real rows in production-claim-write.test.ts.
     memberBatchClaims: [
       {
         creditBatchId: "cb-bd-1",
