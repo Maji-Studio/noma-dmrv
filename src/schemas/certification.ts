@@ -2,7 +2,7 @@ import { z } from "zod";
 import {
   defaultSoilTemperatureSchema,
   emptyToNull,
-  requiredNumber,
+  optionalNumber,
 } from "@/schemas/helpers";
 
 // Hard cap on the free-text "summary of changes" the operator writes when
@@ -66,17 +66,23 @@ export type SaveMappingInput = z.infer<typeof saveMappingSchema>;
 
 // ADR 0015 collapsed energy to a single combined measurement point, dropping
 // the three process-stage split percentages (and their sum constraint). Only
-// the genset yield — emissions-affecting (litres → kWh) — and the soil-temp
-// fallback remain.
+// the genset yield and the soil-temp fallback remain — and issue #319 made
+// the yield vestigial (diesel submits as litres via `fuel_usage_by_volume`),
+// so it is OPTIONAL: requiring it would block an admin from saving the
+// soil-temperature fields that 200-year removals need.
 // Cap on the free-text soil-temperature dataset citation — enough for a
 // dataset + region note for the PDD without letting an oversized blob land.
 export const SOIL_TEMPERATURE_SOURCE_MAX_LENGTH = 500;
 
 export const facilityEmissionConfigSchema = z.object({
   facilityId: z.string().uuid("Select a facility"),
-  gensetEnergyYieldKwhPerLitre: requiredNumber(
-    "Genset energy yield is required",
-  ).pipe(z.number().positive("Genset energy yield must be greater than 0")),
+  gensetEnergyYieldKwhPerLitre: optionalNumber.pipe(
+    z
+      .number()
+      .positive("Genset energy yield must be greater than 0")
+      .nullable()
+      .optional(),
+  ),
   defaultSoilTemperatureC: defaultSoilTemperatureSchema,
   // Dataset / region citation for the reference soil temperature (PDD audit
   // trail). Empty string normalizes to null so it stores identically whether

@@ -182,9 +182,10 @@ export async function loadIsometricProjectTemplates(
   });
 }
 
-// Admin-only: this per-facility emission-estimate config feeds the genset
-// energy datapoint of every Isometric submission (litres → kWh), so the
-// admin-area UI guard alone is not sufficient.
+// Admin-only: this per-facility emission-estimate config feeds the reference
+// soil temperature submitted with every 200-year removal (the genset yield is
+// a vestigial local estimate since issue #319), so the admin-area UI guard
+// alone is not sufficient.
 export async function saveFacilityEmissionConfig(
   input: FacilityEmissionConfigFormData,
 ): Promise<ActionResult<CertifierProjectRow>> {
@@ -194,7 +195,7 @@ export async function saveFacilityEmissionConfig(
     return updateFacilityEmissionConfig(userId, {
       facilityId: parsed.facilityId,
       provider: ISOMETRIC_PROVIDER,
-      gensetEnergyYieldKwhPerLitre: parsed.gensetEnergyYieldKwhPerLitre,
+      gensetEnergyYieldKwhPerLitre: parsed.gensetEnergyYieldKwhPerLitre ?? null,
       defaultSoilTemperatureC: parsed.defaultSoilTemperatureC ?? null,
       defaultSoilTemperatureSource: parsed.defaultSoilTemperatureSource ?? null,
     });
