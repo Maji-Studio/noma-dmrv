@@ -122,7 +122,7 @@ async function assertDeliveryAcceptsApplication(
   applicationDate: Date,
   txOrDb: DbTransaction | typeof db = db,
 ): Promise<void> {
-  const [delivery] = await txOrDb
+  const deliveryQuery = txOrDb
     .select({
       code: deliveries.code,
       status: deliveries.status,
@@ -130,6 +130,12 @@ async function assertDeliveryAcceptsApplication(
     })
     .from(deliveries)
     .where(eq(deliveries.id, deliveryId));
+
+  // Lock the row inside a transaction (mirrors getDeliveryCapacityAndApplied)
+  // so a concurrent delivered→upcoming flip can't slip past the guard.
+  const [delivery] = await (txOrDb === db
+    ? deliveryQuery
+    : deliveryQuery.for("update"));
 
   if (!delivery) {
     throw new SafeError("Delivery not found");
@@ -530,7 +536,7 @@ export async function createApplication(
     );
 
     // Before the capacity check — upcoming deliveries carry no delivered
-    // mass, which would otherwise surface as a confusing capacity error.
+    // mass, so checkDeliveryCapacity skips and would silently accept them.
     await assertDeliveryAcceptsApplication(data.deliveryId, data.applicationDate, tx);
 
     const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(data.deliveryId, undefined, tx);

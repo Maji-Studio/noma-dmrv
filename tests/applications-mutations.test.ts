@@ -351,6 +351,48 @@ describe("application mutations", () => {
     }
   });
 
+  it("accepts an application dated the same day as the delivery", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+
+    try {
+      const application = await createApplication(TEST_USER_ID, {
+        code: `AP-AM-${runId}-SAME-DAY`,
+        deliveryId: fixture.deliveryIds[0],
+        applicationDate: new Date("2025-07-05"),
+        biocharAppliedTons: 2,
+      });
+      fixture.applicationIds.push(application.id);
+
+      expect(application.applicationDate).toEqual(new Date("2025-07-05"));
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
+  it("rejects update when the application date precedes the delivery date", async () => {
+    const runId = crypto.randomUUID();
+    const fixture = await createMutationFixture(runId);
+
+    try {
+      const application = await createApplication(TEST_USER_ID, {
+        code: `AP-AM-${runId}-EARLY-UPDATE`,
+        deliveryId: fixture.deliveryIds[0],
+        applicationDate: new Date("2025-07-08"),
+        biocharAppliedTons: 2,
+      });
+      fixture.applicationIds.push(application.id);
+
+      await expect(
+        updateApplication(TEST_USER_ID, application.id, {
+          applicationDate: new Date("2025-07-04"),
+        }),
+      ).rejects.toThrow("cannot be before the delivery date");
+    } finally {
+      await cleanupMutationFixture(fixture);
+    }
+  });
+
   it("rejects update re-pointing an application to an undelivered delivery", async () => {
     const runId = crypto.randomUUID();
     const fixture = await createMutationFixture(runId);
