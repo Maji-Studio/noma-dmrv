@@ -61,6 +61,10 @@ const GAP = 8;
 // ── Number formatting (DM Mono, tabular) ─────────────────────────────────────
 const nf2 = (n: number): string =>
   n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// 4dp for the applied-biochar share so the printed operands trace the scaled
+// subtotal without hiding the fraction behind 2dp rounding.
+const nf4 = (n: number): string =>
+  n.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 const nfi = (n: number): string => n.toLocaleString("en-US");
 
 const styles = StyleSheet.create({
@@ -390,17 +394,58 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
     t([styles.thText, { width: COL.tkm, textAlign: "right", paddingLeft: GAP }], "t·km"),
   );
   const rows = cat.legs.map((leg, i) => legRow(leg, i === cat.legs.length - 1));
-  const foot = v(styles.tfoot, {},
-    t([styles.subLabel, { flex: 1 }], `Subtotal — ${cat.key} · ${cat.legs.length} legs`),
-    v({ width: COL.tkm + 40 }, {},
-      t(styles.subVal, nf2(cat.subtotalTkm)),
-      t(styles.subUnit, "t·km"),
-    ),
-  );
+  // §8.6.2 delivery bucket (ADR 0020): a scaled category shows its arithmetic
+  // explicitly — raw leg sum, × applied share, then the submitted subtotal —
+  // so the per-leg rows still reconcile to the registry scalar. ("§" avoided
+  // in rendered text: the bundled font subset may lack the glyph, like U+2192.)
+  const footRow = (
+    label: string,
+    value: string,
+    unit: string | null,
+    override?: Record<string, unknown>,
+  ) =>
+    v([styles.tfoot, override], {},
+      t([styles.subLabel, { flex: 1 }], label),
+      v({ width: COL.tkm + 40 }, {},
+        t(styles.subVal, value),
+        unit ? t(styles.subUnit, unit) : null,
+      ),
+    );
+  // Intermediate operand rows sit on the lighter wash; the submitted subtotal
+  // keeps the default emphasized footer treatment.
+  const operandRow = { backgroundColor: C.sea };
+  const stackedRow = { borderTopWidth: 1, borderTopColor: C.ink12 };
+  const foot = cat.scaling
+    ? v({}, {},
+        footRow(
+          `Leg sum — ${cat.key} · ${cat.legs.length} legs`,
+          nf2(cat.scaling.rawSubtotalTkm),
+          "t·km",
+          operandRow,
+        ),
+        footRow(
+          "× applied share — delivery bucket · protocol 8.6.2 · ADR 0020",
+          `× ${nf4(cat.scaling.appliedFraction)}`,
+          null,
+          { ...operandRow, ...stackedRow },
+        ),
+        footRow(
+          `Subtotal — ${cat.key} · submitted scalar`,
+          nf2(cat.subtotalTkm),
+          "t·km",
+          stackedRow,
+        ),
+      )
+    : footRow(
+        `Subtotal — ${cat.key} · ${cat.legs.length} legs`,
+        nf2(cat.subtotalTkm),
+        "t·km",
+      );
   return v(styles.section, {}, header, v(styles.table, {}, th, ...rows, foot));
 }
 
-function apparatus(): ReactElement {
+function apparatus(model: LedgerModel): ReactElement {
+  const hasScaling = model.categories.some((c) => c.scaling);
   const note = v(styles.noteCol, {},
     t(styles.noteH, "Method note"),
     t(styles.noteBody,
@@ -410,7 +455,12 @@ function apparatus(): ReactElement {
       "by the registry, not in this ledger — noma submits distance and mass; Certify computes " +
       "the sum of (distance × mass) over legs, times that factor. This sheet exists because the " +
       "aggregate scalar alone hides the per-leg breakdown; here every row that backs each scalar " +
-      "is auditable, and the per-leg bills of lading remain attached as Sources on the Removal.",
+      "is auditable, and the per-leg bills of lading remain attached as Sources on the Removal." +
+      (hasScaling
+        ? " Biochar distribution is delivery-bucket scoped (Biochar Protocol 8.6.2, ADR 0020): " +
+          "its submitted scalar is the leg sum × the applied-biochar share, shown explicitly " +
+          "in that category's subtotal."
+        : ""),
     ),
   );
   const legendRow = (k: string, d: string) =>
@@ -449,7 +499,7 @@ function buildDocument(model: LedgerModel): ReactElement {
       masthead(model),
       claimBand(model),
       ...sections,
-      apparatus(),
+      apparatus(model),
       footer(model),
     ),
   );

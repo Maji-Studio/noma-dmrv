@@ -57,6 +57,22 @@ export const EMPTY_RUN_SUMMARY: RemovalRunSummary = {
   appliedDryKg: 0,
 };
 
+/**
+ * Removal-wide applied-biochar fraction — the DELIVERY-bucket scaling factor
+ * (§8.6.2, issue #349, ADR 0020): appliedDryKg / totalBiocharOutputKg, falling
+ * back to full attribution (1) when output is zero/absent, mirroring the
+ * per-run fallback in `buildMassAccounting`. The ONE shared definition: both
+ * the submitted biochar-transport scalar (`submitRemoval` →
+ * `enrichWithTransportLegs`) and the transport evidence-ledger PDF's explicit
+ * "× applied share" line derive from it, so the ledger always reconciles to
+ * the submitted datapoint by construction.
+ */
+export function appliedBiocharFraction(summary: RemovalRunSummary): number {
+  return summary.totalBiocharOutputKg > 0
+    ? summary.appliedDryKg / summary.totalBiocharOutputKg
+    : 1;
+}
+
 // Only the fields the accounting reads — structurally satisfied by
 // `ChainOfCustodyData` / `ProductionRunWithSamples` at the call site.
 interface AppliedLineage {

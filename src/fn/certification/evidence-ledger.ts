@@ -14,6 +14,7 @@
  * rides into the removal's `source_ids`.
  */
 import { getFacilityById } from "@/data-access/facilities";
+import { appliedBiocharFraction } from "@/lib/certification/mass-accounting";
 import { buildLedgerModel } from "@/lib/certification/evidence-ledger/build-model";
 import { renderEvidenceLedgerPdf } from "@/lib/certification/evidence-ledger/pdf";
 import {
@@ -80,6 +81,10 @@ export async function ensureTransportEvidenceLedgerSourceFromContext(
     facilityName: facility?.name ?? null,
     externalProjectId: ctx.mapping.externalProjectId,
     generatedAtIso: new Date().toISOString(),
+    // §8.6.2 delivery bucket (ADR 0020): the SAME removal-wide fraction the
+    // submit pipeline scales the biochar-transport datapoint by, so the
+    // ledger's biochar subtotal reconciles to the submitted scalar.
+    appliedBiocharFraction: appliedBiocharFraction(ctx.runSummary),
   });
 
   const metadata: TransportEvidenceLedgerDocMetadata = {
