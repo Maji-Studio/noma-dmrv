@@ -7,6 +7,7 @@ import {
   soilTemperatureSource,
 } from "./common";
 import { deliveries } from "./logistics";
+import { tonnes } from "./numeric-families";
 
 // ============================================
 // Applications - Field application of biochar to soil
@@ -29,8 +30,8 @@ export const applications = pgTable(
       .references(() => deliveries.id),
 
     // --- Application Details (Isometric: Soil Storage Module) ---
-    biocharAppliedTons: real("biochar_applied_tons").notNull(),
-    biocharAppliedDryTons: real("biochar_applied_dry_tons").notNull(),
+    biocharAppliedTons: tonnes("biochar_applied_tons").notNull(),
+    biocharAppliedDryTons: tonnes("biochar_applied_dry_tons").notNull(),
     // Derived fields (compute at query time):
     //   - biochar_dry_matter_tons = biochar_applied_dry_tons × (1 - ash_content/100) via lab samples
     //   - total_applied_tons = biochar_applied_tons + amendments via formulation ratios
@@ -60,7 +61,7 @@ export const applications = pgTable(
 
     // --- CO2e Calculation Results ---
     // These are the per-application calculated outputs
-    co2eStoredTonnes: real("co2e_stored_tonnes"), // This application's contribution
+    co2eStoredTonnes: tonnes("co2e_stored_tonnes"), // This application's contribution
 
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
