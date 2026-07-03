@@ -213,7 +213,9 @@ means production period, not application period. Batch membership is
 production runs — each run one feedstock, matching the batch; member
 applications are derived from lineage. On submission, one or more
 credit batches group into a single Isometric **Removal** (default 1:1
-per cohort).
+per cohort). A credit batch's production emissions are claimed by
+exactly one Removal — recorded on the batch as the claiming Removal —
+so they are never double-counted across entries (ADR 0020).
 _Avoid_: batch, issuance; "production batch" as a separate entity —
 the credit batch *is* noma's production batch.
 
@@ -222,8 +224,11 @@ The Isometric **submission unit** — a facility-scoped registry record
 of verified, applied-biochar CO₂e accounting, held locally by a
 `certifierRemovals` row. **N credit batches map into one Removal.** A
 Removal aggregates the deduped union of **production runs** reached
-through its member credit batches' application lineage, **applied-biochar
-scoped** — each run weighted by `appliedDryKg / runTotalBiocharOutput`.
+through its member credit batches' application lineage. Attribution
+basis splits by emission-input bucket (ADR 0020): **stored** quantities
+are ex-post applied-scoped (each run weighted by its applied share);
+the **production** bucket submits in full, once, on the claiming
+Removal; the **delivery** bucket is applied-scoped.
 Submission is single-phase (`submitRemoval`) **to the registry**. There is
 **no remote Removal status** in this integration, so a Removal's lifecycle
 ends at *Submitted* (+ *Superseded* on a re-version) — never *Accepted* /
