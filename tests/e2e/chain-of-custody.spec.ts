@@ -145,6 +145,9 @@ async function selectEntity(
  * the Sankey emits all three planned exits:
  *   feedstock 1000 → (ineligible 100) → runs out 300 → lots 300
  *   → applied 250 (0.1 t + 0.15 t) → in storage 50; conversion loss 600.
+ * The ineligible exit derives from a second feedstock flagged
+ * `eligibilityStatus: 'ineligible'` with a 100 kg run allocation (issue #285)
+ * — there is no batch-level ineligible-mass column anymore.
  */
 async function seedBatchChain(seededData: SeededChainData) {
   const { db, pool } = createDbConnection();
@@ -152,6 +155,7 @@ async function seedBatchChain(seededData: SeededChainData) {
 
   const ids = {
     productionRun: crypto.randomUUID(),
+    ineligibleFeedstock: crypto.randomUUID(),
     orderA: crypto.randomUUID(),
     orderB: crypto.randomUUID(),
     deliveryA: crypto.randomUUID(),
@@ -165,6 +169,7 @@ async function seedBatchChain(seededData: SeededChainData) {
   };
   const codes = {
     productionRun: `E2E-BPR-${suffix}`,
+    ineligibleFeedstock: `E2E-BFSI-${suffix}`,
     applicationA: `E2E-BAPA-${suffix}`,
     applicationB: `E2E-BAPB-${suffix}`,
     creditBatch: `E2E-CB-${suffix}`,
@@ -190,12 +195,31 @@ async function seedBatchChain(seededData: SeededChainData) {
         biocharOutputKg: 320,
       });
 
-      await tx.insert(schema.productionRunFeedstocks).values({
-        id: crypto.randomUUID(),
-        productionRunId: ids.productionRun,
-        feedstockId: seededData.feedstock.id,
-        massUsedKg: 1000,
+      // 900 kg eligible + 100 kg ineligible allocations; the run's recorded
+      // 1000 kg input stays authoritative for the Sankey's feedstock column.
+      await tx.insert(schema.feedstocks).values({
+        id: ids.ineligibleFeedstock,
+        code: codes.ineligibleFeedstock,
+        facilityId: seededData.facility.id,
+        feedstockTypeId: seededData.feedstockType.id,
+        massDryKg: 100,
+        eligibilityStatus: "ineligible",
+        storageLocationId: seededData.feedstockStorageLocation.id,
       });
+      await tx.insert(schema.productionRunFeedstocks).values([
+        {
+          id: crypto.randomUUID(),
+          productionRunId: ids.productionRun,
+          feedstockId: seededData.feedstock.id,
+          massUsedKg: 900,
+        },
+        {
+          id: crypto.randomUUID(),
+          productionRunId: ids.productionRun,
+          feedstockId: ids.ineligibleFeedstock,
+          massUsedKg: 100,
+        },
+      ]);
 
       await tx
         .update(schema.biocharProducts)
@@ -274,8 +298,6 @@ async function seedBatchChain(seededData: SeededChainData) {
         productionProcessId: ids.productionProcess,
         startDate: "2026-03-01",
         endDate: "2026-03-31",
-        totalFeedstockMassKg: 1000,
-        ineligibleFeedstockMassKg: 100,
         // Default durabilityOption='200_year' has a CHECK constraint that
         // requires this field; the spec doesn't read the durability math.
         hToCorgRatio: 0.4,
@@ -619,8 +641,9 @@ test.describe("Chain of Custody Views (credit-batch anchor)", () => {
     const trail = adminPage.getByTestId("application-trail");
     await expect(trail).toBeVisible({ timeout: 15000 });
 
-    // Full chain: feedstock → run → lot → order → delivery → application.
-    await expect(trail.getByTestId("trail-step")).toHaveCount(6);
+    // Full chain: 2 feedstocks (eligible + ineligible) → run → lot → order
+    // → delivery → application.
+    await expect(trail.getByTestId("trail-step")).toHaveCount(7);
     await expect(
       trail.getByText(batch.codes.productionRun, { exact: true })
     ).toBeVisible();

@@ -115,14 +115,13 @@ export async function getCreditBatchesByRemovalId(
 
 // A credit batch summarised for the GHG-statement cross-link accordion — the
 // few fields an operator needs to recognise a batch (code, status, crediting
-// window, stored CO₂e) without opening it.
+// window) without opening it.
 export interface RemovalCreditBatchSummary {
   id: string;
   code: string;
   status: CreditBatchRow["status"];
   startDate: string;
   endDate: string;
-  totalCo2eStoredTons: number | null;
 }
 
 // Batched credit-batch summaries for a set of removals — one grouped query
@@ -146,7 +145,6 @@ export async function getCreditBatchSummariesByRemovalIds(
       status: creditBatches.status,
       startDate: creditBatches.startDate,
       endDate: creditBatches.endDate,
-      totalCo2eStoredTons: creditBatches.totalCo2eStoredTons,
     })
     .from(creditBatches)
     .where(inArray(creditBatches.removalId, removalIds))
@@ -160,7 +158,6 @@ export async function getCreditBatchSummariesByRemovalIds(
       status: row.status,
       startDate: row.startDate,
       endDate: row.endDate,
-      totalCo2eStoredTons: row.totalCo2eStoredTons,
     };
     const existing = result.get(row.removalId);
     if (existing) existing.push(summary);
@@ -170,16 +167,14 @@ export async function getCreditBatchSummariesByRemovalIds(
 }
 
 // A credit batch not yet grouped into a removal, with the display fields the
-// New-Removal wizard's selection cards render (code, crediting window, weight,
-// stored CO₂e, durability). The wizard pairs each row with a per-batch health
-// verdict it derives separately; this query is the cheap list half.
+// New-Removal wizard's selection cards render (code, crediting window,
+// durability). Applied weight and stored CO₂e are derived per batch by the
+// wizard (issue #285); this query is the cheap list half.
 export interface UngroupedCreditBatchRow {
   id: string;
   code: string;
   startDate: string;
   endDate: string;
-  weightTons: number | null;
-  totalCo2eStoredTons: number | null;
   durabilityOption: CreditBatchRow["durabilityOption"];
 }
 
@@ -196,8 +191,6 @@ export async function listUngroupedCreditBatches(
       code: creditBatches.code,
       startDate: creditBatches.startDate,
       endDate: creditBatches.endDate,
-      weightTons: creditBatches.weightTons,
-      totalCo2eStoredTons: creditBatches.totalCo2eStoredTons,
       durabilityOption: creditBatches.durabilityOption,
     })
     .from(creditBatches)

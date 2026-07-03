@@ -78,17 +78,11 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** CO₂e stored: the registry figure when present, else the certify preview. */
+/** CO₂e stored: the derived certify preview (issue #285 — never stored). */
 function co2eStoredKpi(batch: CreditBatchWithRelations): {
   value: string;
   description: string | undefined;
 } {
-  if (batch.totalCo2eStoredTons != null) {
-    return {
-      value: formatTonnes(batch.totalCo2eStoredTons, { unit: "t CO₂e" }),
-      description: "Registry figure",
-    };
-  }
   if (batch.co2eStoredPreview?.co2eStoredTonnes != null) {
     return {
       value: formatTonnes(batch.co2eStoredPreview.co2eStoredTonnes, {
@@ -278,18 +272,8 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
           <DetailSection title="Registry & accounting">
             <DetailRow>
               <DetailField
-                label="CO₂e emissions"
-                value={formatTonnes(creditBatch.totalCo2eEmissionsTons)}
-              />
-              <DetailField
-                label="CO₂e counterfactual"
-                value={formatTonnes(creditBatch.totalCo2eCounterfactualTons)}
-              />
-            </DetailRow>
-            <DetailRow>
-              <DetailField
-                label="Credit weight"
-                value={formatTonnes(creditBatch.weightTons)}
+                label="Applied weight"
+                value={formatTonnes(creditBatch.appliedWeightTons)}
               />
               <DetailField
                 label="Buffer pool"

@@ -20,8 +20,9 @@ The header carries a **credit batch selector** (shared `EntitySelect`) plus a
 **production-run filter** (`RunFilterSelect`) whose options are derived from
 the loaded batch's lineages — the runs below the batch, never an unscoped
 fetch. The run filter narrows the roll-up (DAG, Map, and a client-side
-recomputed Sankey — batch-level facts like ineligible mass and net tCO₂e
-don't decompose per run, so the filtered Sankey omits them) and deep-links as
+recomputed Sankey — every figure, including the ineligible-feedstock exit,
+derives from the filtered lineages themselves (issue #285), so nothing is
+lost in the narrowed view) and deep-links as
 `?run=`. The application drill-down opens by clicking an application card in
 the batch DAG or via the `?application=` deep link (so unbatched applications
 — pre-assembly QA — stay reachable). With both `?batch=` and `?application=`
@@ -38,11 +39,13 @@ roll-up" button leads back.
     Feedstock → Production runs → Biochar lots → Applied. Every loss is an
     explicit labeled exit, never hidden by normalizing column widths:
     *ineligible feedstock* exits column 1 (red — the >25% Isometric cap made
-    visible, `creditBatches.ineligibleFeedstockMassKg`); *conversion loss*
-    (pyrolysis syngas/vapour/ash — expected physics) exits at the runs;
+    visible, derived from run-feedstock allocations whose feedstock is
+    flagged `eligibilityStatus = 'ineligible'`; issue #285); *conversion
+    loss* (pyrolysis syngas/vapour/ash — expected physics) exits at the runs;
     *not bagged into lots* covers output that never reached a lot;
     *in storage / undelivered* exits before "Applied". The terminal node is
-    the batch's applied mass; net tCO₂e is a label, not a ribbon.
+    the batch's applied mass; no net-tCO₂e figure is shown — project
+    emissions/counterfactual are registry-owned (ADR 0018).
     Inconsistent residuals clamp to zero and surface as warnings.
     Columns follow the stage color ramp (rose biomass → orange production →
     red biochar → purple field use) and ribbons blend between adjacent stage
@@ -95,7 +98,7 @@ roll-up" button leads back.
   crossing lines separable, and the mass chip hides below
   `EDGE_LABEL_MIN_ZOOM` (zoomed out the flow reads as shape; quantities
   arrive as you move in). Per-step CO₂e isn't recorded along the lineage —
-  net removal lives on the Sankey's header label.
+  net removal is a registry-owned figure (ADR 0018) and isn't shown here.
 - **Hover focus:** hovering a card fades back every card and edge outside
   its lineage (ancestors + descendants) and thickens the path edges — dense
   batch roll-ups stay readable. Interactive cards show a hover affordance

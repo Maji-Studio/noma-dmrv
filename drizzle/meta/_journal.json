@@ -470,6 +470,13 @@
       "when": 1783058212677,
       "tag": "0066_silent_swarm",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1783084313777,
+      "tag": "0067_long_mephistopheles",
+      "breakpoints": true
     }
   ]
 }

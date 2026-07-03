@@ -38,8 +38,6 @@ export interface CreditBatchChainBatch {
   status: string | null;
   startDate: string;
   endDate: string;
-  totalFeedstockMassKg: number | null;
-  ineligibleFeedstockMassKg: number | null;
 }
 
 export interface CreditBatchChainLineage {
@@ -125,15 +123,7 @@ export async function getCreditBatchChainData(
     warnings.push("This credit batch has no member applications yet.");
   }
 
-  const sankey = buildBatchSankey(
-    lineages.map(({ chain }) => chain),
-    {
-      ineligibleFeedstockMassKg: batch.ineligibleFeedstockMassKg,
-      totalCo2eStoredTons: batch.totalCo2eStoredTons,
-      totalCo2eEmissionsTons: batch.totalCo2eEmissionsTons,
-      totalCo2eCounterfactualTons: batch.totalCo2eCounterfactualTons,
-    },
-  );
+  const sankey = buildBatchSankey(lineages.map(({ chain }) => chain));
 
   return {
     batch: {
@@ -142,8 +132,6 @@ export async function getCreditBatchChainData(
       status: batch.status,
       startDate: batch.startDate,
       endDate: batch.endDate,
-      totalFeedstockMassKg: batch.totalFeedstockMassKg,
-      ineligibleFeedstockMassKg: batch.ineligibleFeedstockMassKg,
     },
     facility:
       lineages[0]?.chain.facility ?? (await getFacilityIdentity(batch.facilityId)),

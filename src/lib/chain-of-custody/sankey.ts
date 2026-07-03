@@ -7,16 +7,19 @@
  * normalizing column widths:
  *
  *   - ineligible feedstock exits the feedstock column (the >25% Isometric
- *     cap made visible — `creditBatches.ineligibleFeedstockMassKg`);
+ *     cap made visible — derived from the lineage's run-feedstock allocations
+ *     whose feedstock is flagged `eligibilityStatus = 'ineligible'`);
  *   - conversion loss (pyrolysis syngas/vapour/ash — expected physics, not an
  *     error) exits at the production runs;
  *   - output never bagged into a lot exits between runs and lots;
  *   - in-storage / undelivered lot mass exits before "Applied".
  *
- * The terminal node is the batch's applied mass; net tCO₂e is a label, not a
- * ribbon. Mirrors `buildMassAccounting`'s walk (lineages + deduped runs) but
- * keeps full run masses — the exits, not attribution fractions, account for
- * mass that never reached this batch's applications.
+ * The terminal node is the batch's applied mass. No net-tCO₂e figure is
+ * carried at all — the registry owns project emissions/counterfactual
+ * (ADR 0018, issue #285), so no honest local net exists. Mirrors
+ * `buildMassAccounting`'s walk (lineages + deduped runs) but keeps full run
+ * masses — the exits, not attribution fractions, account for mass that never
+ * reached this batch's applications.
  *
  * Pure and dependency-light (same contract as
  * `@/lib/certification/mass-accounting`): takes the already-resolved lineage
@@ -62,8 +65,6 @@ export interface CreditBatchSankeyData {
   columns: SankeyColumn[];
   /** Non-zero labeled exits, in flow order. */
   exits: SankeyExit[];
-  /** Label only, never a ribbon (stored − emissions − counterfactual). */
-  netCo2eRemovalTons: number | null;
   /** Mass-balance inconsistencies (negative residuals clamped to zero). */
   warnings: string[];
 }
@@ -78,14 +79,11 @@ export interface SankeyLineage {
     biocharDryMassKg: number | null;
   } | null;
   biocharProduct: { id: string; massKg: number | null } | null;
-  feedstocks: { id: string; massUsedKg: number | null }[];
-}
-
-export interface SankeyBatchFacts {
-  ineligibleFeedstockMassKg: number | null;
-  totalCo2eStoredTons: number | null;
-  totalCo2eEmissionsTons: number | null;
-  totalCo2eCounterfactualTons: number | null;
+  feedstocks: {
+    id: string;
+    massUsedKg: number | null;
+    eligibilityStatus: "eligible" | "ineligible" | "conditional" | null;
+  }[];
 }
 
 /** Residuals smaller than this are rounding noise, not a labeled exit. */
@@ -112,7 +110,6 @@ function residual(
 
 export function buildBatchSankey(
   lineages: readonly SankeyLineage[],
-  batch: SankeyBatchFacts,
 ): CreditBatchSankeyData {
   const warnings: string[] = [];
 
@@ -123,6 +120,9 @@ export function buildBatchSankey(
   const feedstockIds = new Set<string>();
   // Feedstock allocations keyed per run so a shared run's allocations count once.
   const allocationsByRunId = new Map<string, number>();
+  // Ineligible slice of each run's allocations (issue #285): derived from the
+  // lineage's feedstock eligibility flags, deduped per run like the totals.
+  const ineligibleAllocationsByRunId = new Map<string, number>();
 
   let appliedKg = 0;
   for (const lineage of lineages) {
@@ -133,6 +133,16 @@ export function buildBatchSankey(
         allocationsByRunId.set(
           lineage.productionRun.id,
           lineage.feedstocks.reduce((sum, f) => sum + (f.massUsedKg ?? 0), 0),
+        );
+        ineligibleAllocationsByRunId.set(
+          lineage.productionRun.id,
+          lineage.feedstocks.reduce(
+            (sum, f) =>
+              f.eligibilityStatus === "ineligible"
+                ? sum + (f.massUsedKg ?? 0)
+                : sum,
+            0,
+          ),
         );
       }
     }
@@ -160,7 +170,13 @@ export function buildBatchSankey(
   }
 
   // The ineligible exit can never carry more than the column it leaves from.
-  const rawIneligibleKg = Math.max(0, batch.ineligibleFeedstockMassKg ?? 0);
+  const rawIneligibleKg = Math.max(
+    0,
+    Array.from(ineligibleAllocationsByRunId.values()).reduce(
+      (sum, kg) => sum + kg,
+      0,
+    ),
+  );
   const ineligibleKg = Math.min(rawIneligibleKg, feedstockInKg);
   if (rawIneligibleKg > feedstockInKg + EXIT_EPSILON_KG) {
     warnings.push(
@@ -227,13 +243,6 @@ export function buildBatchSankey(
     });
   }
 
-  const netCo2eRemovalTons =
-    batch.totalCo2eStoredTons == null
-      ? null
-      : batch.totalCo2eStoredTons -
-        (batch.totalCo2eEmissionsTons ?? 0) -
-        (batch.totalCo2eCounterfactualTons ?? 0);
-
   return {
     columns: [
       {
@@ -262,7 +271,6 @@ export function buildBatchSankey(
       },
     ],
     exits,
-    netCo2eRemovalTons,
     warnings,
   };
 }
@@ -382,7 +390,6 @@ export function buildStageFlow(totals: StageFlowTotals): CreditBatchSankeyData {
       },
     ],
     exits,
-    netCo2eRemovalTons: null,
     warnings,
   };
 }

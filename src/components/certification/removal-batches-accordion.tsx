@@ -17,7 +17,6 @@ import Link from "next/link";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
 import { Accordion } from "@/components/ui/accordion";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { formatTonnes } from "@/lib/format-utils";
 import { formatCreditBatchStatus } from "@/schemas/credit-batches";
 import type { RemovalCreditBatchSummary } from "@/fn/certification/ghg-statements";
 
@@ -99,10 +98,6 @@ export function RemovalBatchesAccordion({
                           </span>
                           <span className="body-caption text-[var(--color-text-tertiary)]">
                             {batch.startDate} → {batch.endDate}
-                            {batch.totalCo2eStoredTons != null &&
-                              ` · ${formatTonnes(batch.totalCo2eStoredTons, {
-                                unit: "t CO₂e",
-                              })}`}
                           </span>
                         </span>
                         <StatusBadge

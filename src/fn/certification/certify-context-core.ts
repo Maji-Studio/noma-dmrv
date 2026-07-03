@@ -18,11 +18,15 @@ import {
   type ChainOfCustodyData,
 } from "@/data-access/chain-of-custody";
 import {
+  getCo2eStoredPreviews,
   getCreditBatchById,
   type CreditBatchCo2eStoredPreview,
 } from "@/data-access/credit-batches";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
-import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
+import {
+  getApplicationRollupsByBatchIds,
+  getApplicationsForRuns,
+} from "@/data-access/credit-batch-production-runs";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
 import {
   deriveBatchHealth,
@@ -879,6 +883,11 @@ export async function loadRemovalsForFacility(
 // card in the New-Removal wizard's first step.
 export interface SelectableBatch extends UngroupedCreditBatchRow {
   health: BatchHealth;
+  // Derived on read (issue #285): Σ member applications' biocharAppliedTons.
+  appliedWeightTons: number;
+  // Derived on read (issue #285): the same CO₂e stored preview figure the
+  // credit-batch detail page shows; null while preview inputs are incomplete.
+  co2eStoredTonnes: number | null;
 }
 
 export interface SelectableBatchesData {
@@ -905,6 +914,19 @@ export async function loadSelectableBatchesForFacility(
   return withAction(async (userId) => {
     const facilityFacts = await loadFacilityCertifierFacts(userId, facilityId);
     const ungrouped = await listUngroupedCreditBatches(userId, facilityId);
+    const ungroupedIds = ungrouped.map((row) => row.id);
+    // Derived per-batch figures (issue #285): applied weight from member
+    // applications, stored CO₂e from the same preview the batch page shows.
+    // Compute the rollups ONCE and hand them to the preview builder — it would
+    // otherwise re-walk the same run membership internally. The preview's own
+    // per-batch fan-out is bounded inside getCo2eStoredPreviews.
+    const applicationRollups = await getApplicationRollupsByBatchIds(
+      userId,
+      ungroupedIds,
+    );
+    const co2ePreviews = await getCo2eStoredPreviews(userId, ungroupedIds, {
+      applicationRollups,
+    });
     // Bounded chunks (order-preserving) rather than one unbounded Promise.all
     // over every ungrouped batch — see FANOUT_CONCURRENCY.
     const batches: SelectableBatch[] = [];
@@ -918,6 +940,9 @@ export async function loadSelectableBatchesForFacility(
           return {
             ...row,
             health: deriveBatchHealth(toBatchHealthFacts(ctx, row.id)),
+            appliedWeightTons:
+              applicationRollups[row.id]?.appliedWeightTons ?? 0,
+            co2eStoredTonnes: co2ePreviews[row.id]?.co2eStoredTonnes ?? null,
           };
         }),
       );
