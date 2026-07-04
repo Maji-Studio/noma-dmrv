@@ -1,5 +1,6 @@
 import {
   markSubmissionSubmitted,
+  stampProductionEmissionsClaim,
   type CertificationSubmissionRow,
 } from "@/data-access/certification";
 import {
@@ -9,10 +10,10 @@ import {
 } from "@/data-access/certification-submissions";
 import { env } from "@/config/env";
 import { updateRemovalDates } from "@/data-access/certifier-removals";
+import { appliedBiocharFraction } from "@/lib/certification/mass-accounting";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { logger, type Logger } from "@/lib/log";
-import { z } from "zod";
 import {
   aggregateProductionRuns,
   buildRemovalSupplierRef,
@@ -46,6 +47,17 @@ import {
   readRemovalDurabilityMeasurementSamples,
 } from "./durability-measurement-sample-snapshot";
 import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
+import {
+  assertNoForeignProductionClaims,
+  assertProductionClaimGateFresh,
+  assertResumedSnapshotRevisionCurrent,
+} from "./production-claim-gate";
+import {
+  readRemovalFixedInputs,
+  readRemovalTransport,
+  type ResolvedFixedInput,
+  type RemovalTransportSnapshot,
+} from "./removal-snapshot-readers";
 import {
   assertReportingWindowNotInverted,
   readRemovalReportingWindow,
@@ -83,57 +95,6 @@ interface ResolvedMonitoredInput {
   quantity: { magnitude: number; unit: string };
   datapointType: string;
 }
-
-interface ResolvedFixedInput {
-  removalTemplateComponentId: string;
-  inputKey: string;
-  preboundDatapointId: string;
-}
-
-interface DatapointTransport {
-  rtcId: string;
-  inputKey: string;
-  body: CreateDatapointRequest;
-}
-
-interface RemovalTransportSnapshot {
-  removalSupplierRef: string;
-  datapointBodies: DatapointTransport[];
-}
-
-// Runtime guard for the JSONB payload_snapshot.transport read-back. The
-// snapshot was written by an earlier deploy and may not match this deploy's
-// in-memory shape — fail loud rather than post malformed datapoints when the
-// schema has drifted (e.g. a body field renamed or removed).
-const datapointTransportSchema = z.object({
-  rtcId: z.string().min(1),
-  inputKey: z.string().min(1),
-  body: z
-    .object({
-      supplier_reference_id: z.string().min(1),
-      // Phase 3.5: source_ids must be present in every snapshot. A
-      // pre-Phase-3.5 draft (without this field) is "stale" — fail loud
-      // locally rather than ship a malformed Datapoint to Isometric.
-      source_ids: z.array(z.string()),
-    })
-    .passthrough(),
-});
-const removalTransportSnapshotSchema = z.object({
-  removalSupplierRef: z.string().min(1),
-  datapointBodies: z.array(datapointTransportSchema),
-});
-
-// The `fixed` entries inside payload_snapshot.semantic.inputs. On resume these
-// are the version-stamped bindings the original attempt locked — read back so a
-// resumed submission never mixes the live template's fixed bindings with the
-// stored transport snapshot (a stale-locked draft resumes regardless of hash,
-// so live `fixed` may have drifted from what the snapshot was built against).
-const fixedSnapshotInputSchema = z.object({
-  rtcId: z.string().min(1),
-  inputKey: z.string().min(1),
-  kind: z.literal("fixed"),
-  preboundDatapointId: z.string().min(1),
-});
 
 export interface SubmitRemovalArgs {
   userId: string;
@@ -353,6 +314,12 @@ export async function submitRemoval(
     throw new SafeError("This removal has no credit batches.");
   }
 
+  // §8.6.2 front-loading pre-flight (issue #349, ADR 0020): fail closed on a
+  // foreign production-bucket claim BEFORE aggregation, the evidence ledgers,
+  // and every registry POST. Re-asserted from a fresh read after the draft
+  // claim below — see production-claim-gate.ts for the TOCTOU rationale.
+  assertNoForeignProductionClaims(ctx.memberBatchClaims, removalId);
+
   const lineageWarnings: string[] = [];
   for (const lineage of ctx.lineages) {
     lineageWarnings.push(
@@ -388,12 +355,15 @@ export async function submitRemoval(
     expectedDefaultRemovalTemplateId: ctx.mapping.defaultRemovalTemplateId,
   };
 
-  // Aggregate every member batch's runs into ONE Removal, applied-scoped:
-  // `attributionByRunId` weights each run by the share of its biochar that
-  // actually reached an application in this removal (linear mass allocation).
-  // Chemistry scalars are overlaid at the CREDIT-BATCH grain — samples anchor
-  // on the batch (issue #309), so the run-grain weighted means no longer see
-  // them; `weightedBatchChemistry` pools each batch's replicates instead.
+  // Aggregate every member batch's runs into ONE Removal. Attribution basis
+  // splits by §8.6.2 bucket (issue #349, ADR 0020): `attributionByRunId`
+  // scopes the STORED biochar mass + chemistry weights by each run's applied
+  // share (linear mass allocation), while PRODUCTION-bucket inputs (feedstock
+  // mass, diesel, electricity) sum full run totals — front-loaded once on
+  // this claiming entry. Chemistry scalars are overlaid at the CREDIT-BATCH
+  // grain — samples anchor on the batch (issue #309), so the run-grain
+  // weighted means no longer see them; `weightedBatchChemistry` pools each
+  // batch's replicates instead.
   const baseAgg = {
     ...aggregateProductionRuns(ctx.runs, ctx.attributionByRunId),
     ...weightedBatchChemistry(ctx.batchesWithSamples, ctx.attributionByRunId),
@@ -415,7 +385,15 @@ export async function submitRemoval(
     );
   }
 
-  const transportAgg = enrichWithTransportLegs(baseAgg, ctx.transportLegs);
+  // DELIVERY bucket (§8.6.2): biochar transport scales with the applied share.
+  // Removal-wide fraction via the shared `appliedBiocharFraction` definition —
+  // the evidence-ledger PDF reconciles against the same one. The biochar legs
+  // are already lineage-scoped to this removal's applications; uniform scaling
+  // across legs is a documented approximation (per-delivery scoping needs the
+  // application→batch junction, deferred with issue #353).
+  const transportAgg = enrichWithTransportLegs(baseAgg, ctx.transportLegs, {
+    appliedBiocharFraction: appliedBiocharFraction(ctx.runSummary),
+  });
   // Pooling legs across member batches raises the chance of a mixed
   // method/factor — Isometric Transportation v1.1 §5 requires per-leg
   // accounting, so block submission on those warnings.
@@ -686,12 +664,40 @@ export async function submitRemoval(
     case "blocked":
       throw new SafeError(REMOVAL_CLAIM_BLOCKED_MESSAGES[claimed.reason]);
     case "existing":
+      // §8.6.2 lazy claim backfill (ADR 0020): a removal submitted before
+      // migration 0068 whose payload hash is unchanged short-circuits here
+      // and never reaches markSubmissionSubmitted's transactional stamp.
+      // Stamp locally (no POST) — the blocking `submitted` row freezes
+      // membership, so the live member set equals the submitted payload's.
+      // The pre-flight gate above already asserted no foreign claims; a
+      // raced foreign claim trips the stamp's rowcount backstop loudly.
+      await stampProductionEmissionsClaim(userId, {
+        removalId,
+        creditBatchIds: memberCreditBatchIds,
+      });
       return {
         removalId,
         externalId: claimed.externalId,
         version: claimed.version,
       };
     case "claimed": {
+      // ADR 0020 resume gate: never complete a draft whose snapshot was
+      // built under an older INPUT_MAPPING revision — retire it and fail
+      // closed instead (see production-claim-gate.ts).
+      if (claimed.resumed) {
+        await assertResumedSnapshotRevisionCurrent(userId, claimed.row);
+      }
+      // §8.6.2 fresh-read re-assert (issue #349, ADR 0020): the blocking
+      // draft row now exists, so membership is frozen — a foreign claim OR a
+      // membership/run-lineage regroup that landed between context load and
+      // this point is caught HERE, before any registry POST, instead of
+      // shipping a stale payload and tripping the claim-stamp backstop after
+      // the POSTs. See production-claim-gate.ts.
+      await assertProductionClaimGateFresh(
+        userId,
+        removalId,
+        ctx.memberBatchClaims,
+      );
       if (claimed.reason === "rejected-hash-changed") {
         log.warn(
           { submissionId: claimed.row.id },
@@ -730,6 +736,10 @@ export async function submitRemoval(
         },
         externalProjectId,
         durabilityMeasurementSubmissions,
+        // The live member set — membership can't drift under a locked draft
+        // (assertRemovalAllowsCreditBatchMutation), so these are the batches
+        // whose production bucket this submission claims.
+        claimBatchIds: memberCreditBatchIds,
         supersedePreviousId: claimed.supersedePreviousId,
         resumed: claimed.resumed,
         log,
@@ -756,6 +766,9 @@ interface RunRemovalSubmissionArgs {
   durabilityMeasurementSubmissions:
     | DurabilityMeasurementSampleSubmission[]
     | null;
+  // Member credit batches whose §8.6.2 production-bucket claim this submission
+  // stamps on success (issue #349, ADR 0020).
+  claimBatchIds: string[];
   supersedePreviousId: string | null;
   resumed: boolean;
   /** Attempt-scoped logger (carries submissionAttemptId) from submitRemoval. */
@@ -773,6 +786,7 @@ async function runRemovalSubmission({
   reportingWindow,
   externalProjectId,
   durabilityMeasurementSubmissions,
+  claimBatchIds,
   supersedePreviousId,
   resumed,
   log,
@@ -861,6 +875,9 @@ async function runRemovalSubmission({
   await markSubmissionSubmitted(userId, row.id, {
     externalId: externalRemovalId,
     supersedePreviousId,
+    // §8.6.2 (issue #349, ADR 0020): stamp the production-bucket claim onto
+    // the member batches in the same transaction as the ledger flip.
+    productionEmissionsClaim: { removalId, creditBatchIds: claimBatchIds },
   });
 
   // Persist the derived reporting window onto the removal row (best-effort —
@@ -896,60 +913,4 @@ async function runRemovalSubmission({
   }
 
   return { removalId, externalId: externalRemovalId, version: row.version };
-}
-
-function readRemovalTransport(
-  row: CertificationSubmissionRow,
-): RemovalTransportSnapshot {
-  const snapshot = row.payloadSnapshot as { transport?: unknown } | null;
-  const parsed = removalTransportSnapshotSchema.safeParse(snapshot?.transport);
-  if (!parsed.success) {
-    throw new SafeError(
-      "Stale submission cannot be resumed because its transport snapshot does not match the current payload schema.",
-    );
-  }
-  return {
-    removalSupplierRef: parsed.data.removalSupplierRef,
-    datapointBodies: parsed.data.datapointBodies as DatapointTransport[],
-  };
-}
-
-// Reads the locked `fixed` bindings back out of the stored snapshot for the
-// resume path. Mirrors readRemovalTransport's fail-loud stance: a `kind:"fixed"`
-// entry that no longer matches the schema means the snapshot drifted, so refuse
-// to resume rather than emit a GHG entry referencing a wrong/absent datapoint.
-function readRemovalFixedInputs(
-  row: CertificationSubmissionRow,
-): ResolvedFixedInput[] {
-  const snapshot = row.payloadSnapshot as {
-    semantic?: { inputs?: unknown } | null;
-  } | null;
-  const inputs = snapshot?.semantic?.inputs;
-  if (!Array.isArray(inputs)) {
-    throw new SafeError(
-      "Stale submission cannot be resumed because its payload snapshot does not match the current schema.",
-    );
-  }
-  const fixed: ResolvedFixedInput[] = [];
-  for (const entry of inputs) {
-    if (
-      typeof entry !== "object" ||
-      entry === null ||
-      (entry as { kind?: unknown }).kind !== "fixed"
-    ) {
-      continue;
-    }
-    const parsed = fixedSnapshotInputSchema.safeParse(entry);
-    if (!parsed.success) {
-      throw new SafeError(
-        "Stale submission cannot be resumed because its fixed-input snapshot does not match the current schema.",
-      );
-    }
-    fixed.push({
-      removalTemplateComponentId: parsed.data.rtcId,
-      inputKey: parsed.data.inputKey,
-      preboundDatapointId: parsed.data.preboundDatapointId,
-    });
-  }
-  return fixed;
 }

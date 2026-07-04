@@ -119,6 +119,18 @@ export const creditBatches = pgTable(
     // batch is assigned to — or lazily creates — a removal at submission time.
     removalId: uuid('removal_id').references(() => certifierRemovals.id),
 
+    // --- §8.6.2 production-emissions front-loading (issue #349, ADR 0020) ---
+    // The removal (GHG entry) that claimed this batch's PRODUCTION-bucket
+    // emissions in full. Null until the batch's removal first submits
+    // successfully; written transactionally with the ledger 'submitted' flip.
+    // Idempotent across resubmit/supersede of the SAME removal; a DIFFERENT
+    // removal must suppress the production bucket — in this slice that is a
+    // fail-closed submit block (delivery-only follow-up entries are gated
+    // behind issue #353).
+    productionEmissionsClaimedByRemovalId: uuid(
+      'production_emissions_claimed_by_removal_id'
+    ).references(() => certifierRemovals.id),
+
     // --- Third-Party Sale Verification (Isometric: SubRequirement G-SZZR-0) ---
     // Required when biochar is sold to third parties before application
     affidavitReference: text('affidavit_reference'), // Legally binding declaration ref
@@ -149,6 +161,11 @@ export const creditBatches = pgTable(
     // removal X" lookups during submission. Postgres does not auto-index
     // foreign keys.
     index('credit_batches_removal_id_idx').on(table.removalId),
+    // Indexes the production-emissions claim FK (issue #349, ADR 0020) —
+    // same rationale: Postgres does not auto-index foreign keys.
+    index('credit_batches_production_claim_removal_id_idx').on(
+      table.productionEmissionsClaimedByRemovalId
+    ),
     foreignKey({
       name: 'credit_batches_process_identity_fk',
       columns: [

@@ -53,6 +53,17 @@ export interface LedgerLeg {
   massMissing: boolean;
 }
 
+/**
+ * DELIVERY-bucket scaling detail (§8.6.2, issue #349, ADR 0020) for a category
+ * whose submitted scalar is the raw leg-sum × the applied-biochar share.
+ */
+export interface LedgerCategoryScaling {
+  /** Σ per-leg t·km before scaling — what the table rows sum to, 2dp. */
+  rawSubtotalTkm: number;
+  /** Applied-biochar share, clamped into [0, 1]. */
+  appliedFraction: number;
+}
+
 export interface LedgerCategory {
   key: LedgerCategoryKey;
   /** "Feedstock collection" etc. */
@@ -60,7 +71,18 @@ export interface LedgerCategory {
   /** "supplier → facility" etc. */
   tag: string;
   legs: LedgerLeg[];
+  /**
+   * The reconciled subtotal — always equals the submitted registry scalar.
+   * When `scaling` is present this is rawSubtotalTkm × appliedFraction; the
+   * PDF shows that arithmetic explicitly so per-leg rows still reconcile.
+   */
   subtotalTkm: number;
+  /**
+   * Present only for the biochar (DELIVERY-bucket) category of a
+   * partially-applied removal (§8.6.2, ADR 0020). Omitted — not null — at
+   * full application, so fully-applied ledgers keep a stable content hash.
+   */
+  scaling?: LedgerCategoryScaling;
 }
 
 export interface LedgerModel {

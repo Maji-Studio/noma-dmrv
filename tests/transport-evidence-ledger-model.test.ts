@@ -179,4 +179,76 @@ describe("buildLedgerModel", () => {
     expect(model.externalProjectId).toBe("prj_TEST");
     expect(model.generatedAtIso).toBe("2026-06-19T00:00:00.000Z");
   });
+
+  // §8.6.2 delivery bucket (issue #349, ADR 0020): the submitted biochar
+  // scalar is leg-sum × applied share, so a partially-applied removal's ledger
+  // must carry the scaling explicitly to stay an honest reconciliation.
+  describe("applied-biochar scaling (delivery bucket, §8.6.2)", () => {
+    const scaledLegs: TransportLegsByCategory = {
+      feedstock: [leg({ id: "leg-f", distanceKm: 50, loadMassKg: 1000 })], // 50
+      biochar: [leg({ id: "leg-b", distanceKm: 10, loadMassKg: 1000 })], // 10
+      sample: [leg({ id: "leg-s", distanceKm: 20, loadMassKg: 500 })], // 10
+    };
+
+    it("reconciles the biochar subtotal to leg-sum × fraction; feedstock/sample stay raw sums", () => {
+      const model = buildLedgerModel({
+        ...META,
+        legsByCategory: scaledLegs,
+        appliedBiocharFraction: 0.4,
+      });
+      const feed = model.categories.find((c) => c.key === "feedstock")!;
+      const bio = model.categories.find((c) => c.key === "biochar")!;
+      const samp = model.categories.find((c) => c.key === "sample")!;
+      // PRODUCTION-bucket categories: raw sums, no scaling detail.
+      expect(feed.subtotalTkm).toBe(50);
+      expect(feed.scaling).toBeUndefined();
+      expect(samp.subtotalTkm).toBe(10);
+      expect(samp.scaling).toBeUndefined();
+      // DELIVERY bucket: submitted scalar = 10 × 0.4, operands exposed.
+      expect(bio.subtotalTkm).toBe(4);
+      expect(bio.scaling).toEqual({ rawSubtotalTkm: 10, appliedFraction: 0.4 });
+      // The grand total sums the RECONCILED subtotals (matches submission).
+      expect(model.totalTkm).toBe(50 + 4 + 10);
+    });
+
+    it("omits scaling and keeps the raw biochar subtotal at full application", () => {
+      const full = buildLedgerModel({
+        ...META,
+        legsByCategory: scaledLegs,
+        appliedBiocharFraction: 1,
+      });
+      const omitted = buildLedgerModel({ ...META, legsByCategory: scaledLegs });
+      for (const model of [full, omitted]) {
+        const bio = model.categories.find((c) => c.key === "biochar")!;
+        expect(bio.subtotalTkm).toBe(10);
+        expect(bio.scaling).toBeUndefined();
+        // Omitted (not null) so fully-applied ledgers keep the same JSON
+        // shape — and therefore content hash — as before the scaling field.
+        expect("scaling" in bio).toBe(false);
+      }
+    });
+
+    it("clamps an out-of-range fraction like the submit pipeline does", () => {
+      const above = buildLedgerModel({
+        ...META,
+        legsByCategory: scaledLegs,
+        appliedBiocharFraction: 1.5,
+      });
+      expect(
+        above.categories.find((c) => c.key === "biochar")!.subtotalTkm,
+      ).toBe(10);
+      expect(
+        above.categories.find((c) => c.key === "biochar")!.scaling,
+      ).toBeUndefined();
+
+      const below = buildLedgerModel({
+        ...META,
+        legsByCategory: scaledLegs,
+        appliedBiocharFraction: -0.5,
+      });
+      const bio = below.categories.find((c) => c.key === "biochar")!;
+      expect(bio.subtotalTkm).toBe(0);
+      expect(bio.scaling).toEqual({ rawSubtotalTkm: 10, appliedFraction: 0 });
+    });
+  });
 });

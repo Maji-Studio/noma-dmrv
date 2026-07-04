@@ -1,10 +1,13 @@
 /**
- * Applied-biochar scoping tests
+ * Emission-input bucket tests for `aggregateProductionRuns` (§8.6.2,
+ * issue #349, ADR 0020).
  *
- * A Removal counts only the biochar that actually got applied to soil
- * (ADR 0003). `aggregateProductionRuns` takes an `attributionByRunId` map —
- * the per-run applied fraction (linear mass allocation) — and scales every
- * run-derived quantity by it. These tests pin that math.
+ * `attributionByRunId` — the per-run applied fraction (linear mass
+ * allocation) — scopes ONLY the STORED-bucket biochar mass and the chemistry
+ * weights. PRODUCTION-bucket inputs (feedstock mass, diesel, electricity)
+ * sum full run totals: they front-load once on the credit batch's claiming
+ * GHG entry, with no applied-mass weighting. These tests pin that split —
+ * a regression back to uniform proration MUST fail here.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -31,8 +34,8 @@ function run(
   } as unknown as ProductionRunWithSamples;
 }
 
-describe("aggregateProductionRuns — applied-biochar scoping", () => {
-  it("counts full run output when no attribution map is supplied", () => {
+describe("aggregateProductionRuns — emission-input buckets (§8.6.2)", () => {
+  it("counts full run totals when no attribution map is supplied", () => {
     const agg = aggregateProductionRuns([run({ id: "a" })]);
     expect(agg.totalBiocharDryMassKg).toBe(1000);
     expect(agg.totalFeedstockDryMassKg).toBe(4000);
@@ -43,19 +46,19 @@ describe("aggregateProductionRuns — applied-biochar scoping", () => {
     expect(agg.totalElectricityKwh).toBe(200);
   });
 
-  it("scales a partially-applied run by its attribution factor", () => {
+  it("scales only the stored-bucket biochar mass by the attribution factor; production-bucket inputs stay full", () => {
     const agg = aggregateProductionRuns(
       [run({ id: "a" })],
       new Map([["a", 0.6]]),
     );
-    // 60% of every run-derived quantity reaches this removal.
+    // STORED bucket: 60% of the biochar reached this removal's applications.
     expect(agg.totalBiocharDryMassKg).toBeCloseTo(600);
-    expect(agg.totalFeedstockDryMassKg).toBeCloseTo(2400);
-    expect(agg.totalStartupDieselLitres).toBeCloseTo(60);
-    expect(agg.totalGensetDieselLitres).toBeCloseTo(30);
-    // Combined diesel scales with its attribution-scaled parts.
-    expect(agg.totalDieselLitres).toBeCloseTo(90);
-    expect(agg.totalElectricityKwh).toBeCloseTo(120);
+    // PRODUCTION bucket: full run totals — front-loaded, never prorated.
+    expect(agg.totalFeedstockDryMassKg).toBe(4000);
+    expect(agg.totalStartupDieselLitres).toBe(100);
+    expect(agg.totalGensetDieselLitres).toBe(50);
+    expect(agg.totalDieselLitres).toBe(150);
+    expect(agg.totalElectricityKwh).toBe(200);
   });
 
   it("clamps an attribution factor above 1 to full attribution", () => {
@@ -66,14 +69,15 @@ describe("aggregateProductionRuns — applied-biochar scoping", () => {
     expect(agg.totalBiocharDryMassKg).toBe(1000);
   });
 
-  it("clamps a negative attribution factor to zero", () => {
+  it("clamps a negative attribution factor to zero for the stored bucket only", () => {
     const agg = aggregateProductionRuns(
       [run({ id: "a" })],
       new Map([["a", -0.2]]),
     );
     expect(agg.totalBiocharDryMassKg).toBe(0);
-    expect(agg.totalFeedstockDryMassKg).toBe(0);
-    expect(agg.totalElectricityKwh).toBe(0);
+    // Production-bucket inputs are unaffected by the (clamped) factor.
+    expect(agg.totalFeedstockDryMassKg).toBe(4000);
+    expect(agg.totalElectricityKwh).toBe(200);
   });
 
   it("sums applied biochar across runs in a multi-batch removal", () => {
