@@ -7,7 +7,7 @@
 import { z } from "zod";
 import { deliveryDryMassSchema } from "./isometric";
 import { optionalDistanceSource } from "./distance-source";
-import { emptyToNull, MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE } from "./helpers";
+import { emptyToNull, optionalMassKgSchema } from "./helpers";
 
 // ============================================
 // Constants and Enums
@@ -25,13 +25,8 @@ export type DeliveryStatus = (typeof deliveryStatuses)[number];
 // ============================================
 
 const optionalNumber = z.number().finite().optional().nullable();
-// Mass (kg) inputs additionally carry the shared mass cap.
-const optionalMassKg = z
-  .number()
-  .finite()
-  .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE)
-  .optional()
-  .nullable();
+const optionalWetMassKg = optionalMassKgSchema("Wet mass must be >= 0");
+const optionalDryMassKg = optionalMassKgSchema("Dry mass must be >= 0");
 const optionalNote = z.string().max(500, "Note must be less than 500 characters").optional().nullable().or(z.literal(""));
 
 function validateDistanceOverride(
@@ -64,8 +59,8 @@ const deliveryFormBaseSchema = z.object({
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(deliveryStatuses).default("upcoming"),
-  deliveredWetMassKg: optionalMassKg,
-  massDryKg: optionalMassKg,
+  deliveredWetMassKg: optionalWetMassKg,
+  massDryKg: optionalDryMassKg,
   moistureContentPercent: optionalNumber,
   // Per-delivery road-distance override (km) + reason for the distribution leg.
   distanceKmOverride: optionalNumber,
@@ -140,8 +135,8 @@ export const createDeliverySchema = z.object({
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(deliveryStatuses).default("upcoming"),
-  deliveredWetMassKg: optionalMassKg,
-  massDryKg: optionalMassKg,
+  deliveredWetMassKg: optionalWetMassKg,
+  massDryKg: optionalDryMassKg,
   moistureContentPercent: optionalNumber,
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
@@ -189,8 +184,8 @@ export const updateDeliverySchema = z.object({
   driverId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(deliveryStatuses).optional(),
-  deliveredWetMassKg: optionalMassKg,
-  massDryKg: optionalMassKg,
+  deliveredWetMassKg: optionalWetMassKg,
+  massDryKg: optionalDryMassKg,
   moistureContentPercent: optionalNumber,
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,

@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { emptyToNull, MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE } from "./helpers";
+import { emptyToNull, positiveMassKgSchema } from "./helpers";
 
 // ============================================
 // Constants and Enums
@@ -68,10 +68,7 @@ export const storageLocationFormSchema = z.object({
   facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
 
   // Optional fields
-  capacityKg: z
-    .number()
-    .positive("Capacity must be a positive number")
-    .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE)
+  capacityKg: positiveMassKgSchema("Capacity must be a positive number")
     .optional()
     .nullable(),
   feedstockTypeId: emptyToNull.or(z.string().uuid("Invalid feedstock type")).nullable().optional(),
@@ -129,7 +126,7 @@ export const updateStorageLocationSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   type: z.enum(storageLocationTypes).optional(),
   facilityId: z.string().uuid().optional(),
-  capacityKg: z.number().positive().max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).optional().nullable(),
+  capacityKg: positiveMassKgSchema().optional().nullable(),
   feedstockTypeId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   formulationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   storageMethod: z.string().max(255).optional().nullable(),
