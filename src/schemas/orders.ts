@@ -4,7 +4,11 @@
  */
 
 import { z } from "zod";
-import { emptyToNull } from "@/schemas/helpers";
+import {
+  emptyToNull,
+  MASS_INPUT_MAX_KG,
+  MASS_MAX_KG_MESSAGE,
+} from "@/schemas/helpers";
 import { orderFulfillmentStatuses } from "@/lib/orders/fulfillment";
 
 // ============================================
@@ -36,6 +40,7 @@ export const orderFormSchema = z.object({
   quantityKg: z
     .number({ error: "Quantity is required" })
     .min(0.01, "Quantity must be greater than 0")
+    .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE)
     .finite("Quantity must be a valid number"),
   packaging: z.enum(packagingTypes, { error: "Packaging type is required" }),
 
@@ -76,7 +81,7 @@ export const updateOrderSchema = z.object({
   customerLocationId: z.string().uuid().optional().nullable(),
   biocharProductId: z.string().uuid().optional(),
   orderDate: z.coerce.date().optional(),
-  quantityKg: z.number().min(0.01).finite().optional(),
+  quantityKg: z.number().min(0.01).max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).finite().optional(),
   packaging: z.enum(packagingTypes).optional(),
   value: z.number().min(0).finite().optional().nullable(),
   currency: z.string().max(10).optional(),

@@ -9,6 +9,7 @@ import {
   latitudeSchema,
   longitudeSchema,
   optionalPositiveNumber,
+  requiredPositiveMassKgSchema,
   toNumberOrUndefined,
 } from "./helpers";
 
@@ -81,16 +82,10 @@ const baseTransportLegShape = {
 
   // Cargo mass moved on this leg (Eq. 3, W_j) — required on every leg so the
   // Certify aggregator can mass-weight distance across a category.
-  loadMassKg: z.preprocess(
-    toNumberOrUndefined,
-    z
-      .number({
-        error: (iss) =>
-          iss.input === undefined
-            ? "Load mass is required"
-            : "Load mass must be a number",
-      })
-      .positive("Load mass must be greater than 0"),
+  loadMassKg: requiredPositiveMassKgSchema(
+    "Load mass is required",
+    "Load mass must be a number",
+    "Load mass must be greater than 0",
   ),
 
   // Method — distance_based only.

@@ -1,0 +1,3 @@
+ALTER TABLE "credit_batches" ADD COLUMN "production_emissions_claimed_by_removal_id" uuid;--> statement-breakpoint
+ALTER TABLE "credit_batches" ADD CONSTRAINT "credit_batches_production_emissions_claimed_by_removal_id_certifier_removals_id_fk" FOREIGN KEY ("production_emissions_claimed_by_removal_id") REFERENCES "public"."certifier_removals"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "credit_batches_production_claim_removal_id_idx" ON "credit_batches" USING btree ("production_emissions_claimed_by_removal_id");

@@ -406,6 +406,102 @@ export function buildSoilTemperatureReconciliationWarnings(args: {
   ];
 }
 
+// ── Soil-temperature applicability (200-year-only input) ─────────────────────
+
+/** A batch's durability tier plus the ids of the runs whose applications it credits. */
+export interface SoilTemperatureBatchTier {
+  durabilityOption: "200_year" | "1000_year";
+  /** Ids of the (applied) production runs composing this batch. */
+  runIds: string[];
+}
+
+export interface SoilTemperatureScope {
+  /**
+   * True when the removal has at least one 200-year batch — the ONLY tier whose
+   * durable fraction takes soil temperature. When false, the reference-temp
+   * blocker and the over-crediting advisory are both inapplicable.
+   */
+  applies: boolean;
+  /**
+   * Run ids composing the removal's 200-year batches; the applications whose
+   * site temperatures a soil-temperature check may legitimately act on. Site
+   * temps from runs absent here feed only 1000-year batches and must be ignored.
+   */
+  runIds: Set<string>;
+}
+
+/**
+ * Resolve which of a removal's batches soil temperature actually credits.
+ *
+ * Soil temperature is an input ONLY to the 200-year durable fraction
+ * (F_durable,200 = min(0.95, 1 − [c + (a + b·ln(T_soil))·H/C_org]), soil module
+ * §5.1). 1000-year batches derive F_durable from petrographic reflectance (R₀)
+ * and TGA non-reactive carbon with NO temperature term, so the reference-temp
+ * blocker and the "reference may over-credit durability" advisory must never
+ * apply to them. A mixed removal still gates its 200-year members; `runIds`
+ * lets the caller restrict the advisory's site temperatures to the applications
+ * those 200-year batches credit.
+ */
+export function resolveSoilTemperatureScope(
+  batches: SoilTemperatureBatchTier[],
+): SoilTemperatureScope {
+  const twoHundredYear = batches.filter(
+    (b) => b.durabilityOption === "200_year",
+  );
+  return {
+    applies: twoHundredYear.length > 0,
+    runIds: new Set(twoHundredYear.flatMap((b) => b.runIds)),
+  };
+}
+
+export interface SoilTemperatureGate {
+  /** Fail-closed blocker(s): an unset reference for a 200-year removal. */
+  blockers: string[];
+  /** Non-blocking over-crediting advisory(s). */
+  warnings: string[];
+}
+
+/**
+ * The full soil-temperature readiness gate for a removal: the fail-closed
+ * reference-temp blocker plus the non-blocking over-crediting advisory, BOTH
+ * scoped to the removal's 200-year batches (soil temperature credits only the
+ * 200-year durable fraction — see `resolveSoilTemperatureScope`). A removal with
+ * no 200-year batch returns empty lists. `siteTemperatures` pairs each member
+ * application's soil temperature with the id of the run that produced its
+ * biochar, so the advisory compares only the sites a 200-year batch credits.
+ */
+export function buildSoilTemperatureGate(args: {
+  facilityReference: FacilityReferenceSoilTemperature | null;
+  batches: SoilTemperatureBatchTier[];
+  siteTemperatures: Array<{
+    runId: string | null;
+    soilTemperatureC: number | null;
+  }>;
+}): SoilTemperatureGate {
+  const scope = resolveSoilTemperatureScope(args.batches);
+  if (!scope.applies) return { blockers: [], warnings: [] };
+
+  if (args.facilityReference == null) {
+    return {
+      blockers: [
+        "Set this facility's reference soil temperature (admin → Emission " +
+          "estimates) before submitting a 200-year removal.",
+      ],
+      warnings: [],
+    };
+  }
+
+  return {
+    blockers: [],
+    warnings: buildSoilTemperatureReconciliationWarnings({
+      facilityReference: args.facilityReference,
+      applicationSoilTemperaturesC: args.siteTemperatures
+        .filter((s) => s.runId != null && scope.runIds.has(s.runId))
+        .map((s) => s.soilTemperatureC),
+    }),
+  };
+}
+
 // ── Declared H/C reconciliation (D5a) ────────────────────────────────────────
 
 /**

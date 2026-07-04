@@ -7,7 +7,9 @@ import { z } from "zod";
 import { optionalDistanceSource } from "./distance-source";
 import {
   emptyToNull,
+  massKgSchema,
   optionalPositiveNumber,
+  requiredMassKgSchema,
   requiredNumber,
 } from "./helpers";
 
@@ -18,9 +20,7 @@ import {
 const MOISTURE_MIN = 0;
 const MOISTURE_MAX = 100;
 
-const requiredNonNegativeNumber = requiredNumber().pipe(
-  z.number().min(0, "Must be 0 or greater")
-);
+const requiredNonNegativeNumber = requiredMassKgSchema("Must be 0 or greater");
 
 const requiredMoisturePercent = requiredNumber().pipe(
   z
@@ -131,9 +131,9 @@ export const updateFeedstockSchema = z.object({
   transportDistanceKm: optionalPositiveNumber,
   transportDistanceSource: optionalDistanceSource,
   feedstockTypeId: z.string().uuid().optional(),
-  massWetKg: z.number().min(0).optional(),
+  massWetKg: massKgSchema().optional(),
   moistureContentPercent: z.number().min(0).max(100).optional(),
-  massDryKg: z.number().min(0).optional(),
+  massDryKg: massKgSchema().optional(),
   storageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   overrideJustification: z.string().max(2000).optional().nullable().or(z.literal("")),
   notes: z.string().max(2000).optional().nullable().or(z.literal("")),

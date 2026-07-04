@@ -11,8 +11,8 @@ result, and submits it to the Isometric carbon registry for verification.
 **Process stage**:
 One of the three phases of the biochar workflow — *pre-processing*
 (biomass preparation), *pyrolysis*, and *post-processing* (biochar
-processing). Operators do not meter energy separately per stage; the
-per-stage split is an estimate.
+processing). Operators do not meter energy separately per stage — all
+energy is recorded once per production run, with no per-stage split.
 _Avoid_: phase, step.
 
 **Production run**:
@@ -40,24 +40,22 @@ the diesel consumed in **litres**; genset energy in kWh is derived from
 litres via a per-facility conversion yield.
 _Avoid_: generator power, backup power.
 
-**Reactor-day file**:
-The telemetry export unit the PLC logger produces — one CSV per
-reactor per calendar day, minute-interval rows keyed by time-of-day
-only, with the reactor code and date carried in the filename. A
-production run's readings are the slice of one or more reactor-day
-files inside the run's window.
-_Avoid_: sensor dump, log file.
-
-**Channel mapping**:
-The per-reactor declaration of which **reactor-day file** column feeds
-each protocol-relevant reading — temperature, pressure, gas flow. Set
-once per reactor, re-confirmed only when a file's header drifts from
-it; an import never proceeds on a guessed mapping.
-_Avoid_: column config, CSV schema.
+**Readings file**:
+The telemetry export operators upload per reactor — a CSV with a
+canonical **UTC** timestamp on every row (required: timestamp,
+temperature, pressure; optional: dryer/reactor frequency), matched
+directly by header name, so one file can span multiple days. A
+production run's readings are the slice of one or more readings files
+inside the run's window. Replaces the older reactor-day format
+(filename-encoded date, local time-of-day rows, and a per-reactor
+**channel mapping** step declaring which column fed which reading) —
+the canonical header does that job now, so no per-reactor mapping is
+declared or stored.
+_Avoid_: sensor dump, log file, reactor-day file, channel mapping.
 
 **Emission estimate**:
-A per-facility configured value (genset yield, stage-split percentages,
-default soil temperature) used to derive submission data noma does not
+A per-facility configured value (genset yield, default soil
+temperature) used to derive submission data noma does not
 measure directly. Distinct from a measured value.
 
 ### Materials & formulation
@@ -108,8 +106,9 @@ characterise that batch's biochar. Each Sample belongs to **exactly one
 credit batch**, recorded against it directly — the batch's biochar is
 **commingled across its production runs**, so no single run is
 attributable (a run link survives only on legacy rows as provenance).
-The Sample inherits the batch's declared **durability tier** (200- vs
-1000-year), and the ≥3 must be **independent samples distributed across
+The Sample inherits the **durability tier** (200- vs 1000-year) its
+**facility** declares, carried through its credit batch, and the ≥3 must
+be **independent samples distributed across
 the batch** (distinct sampling points/days — protocol §8.3.1), never
 aliquots of a single grab. The lab's certificate of analysis is attached
 as a `lab_report` **document**, not a separate record. Distinct from the
@@ -169,14 +168,17 @@ samples); scoping eligibility to a reactor or facility rather than the
 production process.
 
 **Durability tier**:
-The crediting time horizon a biochar batch is certified against.
+The crediting time horizon a **facility** certifies its biochar against.
 Isometric's soil module offers exactly two: *200-year* (modelled from
 the H/C_org ratio and soil temperature) and *1000-year* (from random
-reflectance R₀ and non-reactive carbon). There is **no 100-year option**
-under the Isometric biochar module — 100-year permanence belongs to
-other standards (e.g. Puro / EBC) and to GWP-100, neither of which this
-system credits against. _Avoid_: 100-year durability; permanence period
-as a free-typed value.
+reflectance R₀ and non-reactive carbon). A facility declares **one**
+tier; its **credit batches**, their **Samples**, and its Isometric
+**removal template** all inherit it — there is no per-batch or
+per-production-process override. There is **no 100-year option** under
+the Isometric biochar module — 100-year permanence belongs to other
+standards (e.g. Puro / EBC) and to GWP-100, neither of which this system
+credits against. _Avoid_: 100-year durability; a per-batch or
+per-production-process tier; permanence period as a free-typed value.
 
 **Carbon-rich-substance sequestration**:
 The Isometric removal-template **component** (group `co2-stored`) that
@@ -215,7 +217,9 @@ means production period, not application period. Batch membership is
 production runs — each run one feedstock, matching the batch; member
 applications are derived from lineage. On submission, one or more
 credit batches group into a single Isometric **Removal** (default 1:1
-per cohort).
+per cohort). A credit batch's production emissions are claimed by
+exactly one Removal — recorded on the batch as the claiming Removal —
+so they are never double-counted across entries (ADR 0020).
 _Avoid_: batch, issuance; "production batch" as a separate entity —
 the credit batch *is* noma's production batch.
 
@@ -224,8 +228,11 @@ The Isometric **submission unit** — a facility-scoped registry record
 of verified, applied-biochar CO₂e accounting, held locally by a
 `certifierRemovals` row. **N credit batches map into one Removal.** A
 Removal aggregates the deduped union of **production runs** reached
-through its member credit batches' application lineage, **applied-biochar
-scoped** — each run weighted by `appliedDryKg / runTotalBiocharOutput`.
+through its member credit batches' application lineage. Attribution
+basis splits by emission-input bucket (ADR 0020): **stored** quantities
+are ex-post applied-scoped (each run weighted by its applied share);
+the **production** bucket submits in full, once, on the claiming
+Removal; the **delivery** bucket is applied-scoped.
 Submission is single-phase (`submitRemoval`) **to the registry**. There is
 **no remote Removal status** in this integration, so a Removal's lifecycle
 ends at *Submitted* (+ *Superseded* on a re-version) — never *Accepted* /
@@ -418,7 +425,10 @@ _Avoid_: teammate, seat.
 - A **Credit batch** aggregates many **Production runs**
 - A **Removal** is the Isometric submission unit — it aggregates the
   deduped union of **Production runs** reached through its member credit
-  batches' application lineage, applied-biochar scoped
+  batches' application lineage; attribution basis splits by
+  emission-input bucket (ADR 0020) — production is claimed in full once
+  by the claiming Removal, stored and delivery remain applied-biochar
+  scoped
 - A **GHG Statement** rolls up many **Removals** by reporting-period
   date range
 - A **Removal** is built from **Monitored inputs** (per-submission data)

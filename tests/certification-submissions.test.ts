@@ -586,6 +586,11 @@ describe("claimSubmissionDraft — mapping guard", () => {
         .for("update")
         .limit(1);
       claimPromise = claimSubmissionDraft(USER_ID, baseArgs(fixture));
+      // The claim can reject in the window between the repoint committing and
+      // the `.rejects` expectation below attaching — pre-attach a no-op
+      // handler so the runner never sees an unhandled rejection (flaked in
+      // CI). `expect(...).rejects` still observes the rejection.
+      claimPromise.catch(() => {});
       await sleep(PARK_DELAY_MS);
       await tx
         .update(certifierProjects)

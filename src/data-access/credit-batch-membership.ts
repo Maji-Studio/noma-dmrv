@@ -172,3 +172,26 @@ export async function resolveSingleFeedstockType(
 
   return typeIds[0];
 }
+
+/**
+ * Guard that a batch's member runs match the feedstock type declared on the
+ * form (ADR 0016 amendment 2026-07-04: feedstock type is now a declared input,
+ * not derived from the runs). Resolves the runs' single feedstock type — reusing
+ * the >1-type / no-feedstock assertions above — then requires it to equal the
+ * declared type. Keeps the one-feedstock grain while letting the UI scope the
+ * process/Method-A-B context up front.
+ */
+export async function assertDeclaredFeedstockType(
+  tx: DbTransaction,
+  productionRunIds: string[],
+  declaredFeedstockTypeId: string,
+): Promise<void> {
+  const resolved = await resolveSingleFeedstockType(tx, productionRunIds);
+  if (resolved !== declaredFeedstockTypeId) {
+    throw new SafeError(
+      `The selected production runs are a different feedstock than the one chosen for this batch. ` +
+        `A credit batch is a single feedstock (ADR 0016) — pick runs matching the chosen feedstock, ` +
+        `or change the batch's feedstock type.`,
+    );
+  }
+}

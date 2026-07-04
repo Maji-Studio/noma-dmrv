@@ -1,5 +1,7 @@
 import {
   markSubmissionSubmitted,
+  retireStaleSubmissionDraft,
+  stampProductionEmissionsClaim,
   type CertificationSubmissionRow,
 } from "@/data-access/certification";
 import {
@@ -12,26 +14,17 @@ import { updateRemovalDates } from "@/data-access/certifier-removals";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { logger, type Logger } from "@/lib/log";
-import { z } from "zod";
 import {
-  aggregateProductionRuns,
   buildRemovalSupplierRef,
   createDatapoint,
   createGhgEntry,
-  enrichWithTransportLegs,
   payloadHash,
   reconcileDatapoint,
   reconcileRemoval,
-  type AggregatedProductionData,
-  type CreateDatapointRequest,
   type IsometricComponentBlueprint,
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
-import {
-  buildCreateDatapointRequest,
-  MAPPING_REVISION,
-} from "@/lib/isometric/transformers/datapoint";
-import { weightedBatchChemistry } from "@/lib/isometric/utils/durability-aggregation";
+import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import { isSequestrationBlueprintKey } from "@/lib/isometric/transformers/measurement-sample";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
@@ -42,20 +35,24 @@ import {
 } from "./durability-measurement-samples";
 import {
   buildVersionedMeasurementSampleSubmissions,
-  normalizeMeasurementSamplesForHash,
   readRemovalDurabilityMeasurementSamples,
 } from "./durability-measurement-sample-snapshot";
 import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
 import {
-  assertReportingWindowNotInverted,
-  readRemovalReportingWindow,
-  resolveLatestApplicationTime,
-} from "./removal-reporting-window";
-import { performRegistryCreate, supplierRefLookup } from "./registry-create";
+  assertNoForeignProductionClaims,
+  assertProductionClaimGateFresh,
+  assertResumedSnapshotRevisionCurrent,
+} from "./production-claim-gate";
 import {
-  collectCandidateDocumentIdsForRemoval,
-  resolveSourceIdsForRemoval,
-} from "./sources";
+  readRemovalFixedInputs,
+  readRemovalTransport,
+  type ResolvedFixedInput,
+  type RemovalTransportSnapshot,
+} from "./removal-snapshot-readers";
+import { readRemovalReportingWindow } from "./removal-reporting-window";
+import { buildRemovalSubmissionBuild } from "./removal-submission-build";
+import { performRegistryCreate, supplierRefLookup } from "./registry-create";
+import { resolveSourceIdsForRemoval } from "./sources";
 import {
   appendSyncEventBestEffort,
   assertProductionConfirmed,
@@ -76,64 +73,6 @@ const REMOVAL_CLAIM_BLOCKED_MESSAGES: Record<ClaimBlockedReason, string> = {
   "state-changed":
     "Submission state changed while preparing the removal. Reload and retry.",
 };
-interface ResolvedMonitoredInput {
-  removalTemplateComponentId: string;
-  componentBlueprintKey: string;
-  inputKey: string;
-  quantity: { magnitude: number; unit: string };
-  datapointType: string;
-}
-
-interface ResolvedFixedInput {
-  removalTemplateComponentId: string;
-  inputKey: string;
-  preboundDatapointId: string;
-}
-
-interface DatapointTransport {
-  rtcId: string;
-  inputKey: string;
-  body: CreateDatapointRequest;
-}
-
-interface RemovalTransportSnapshot {
-  removalSupplierRef: string;
-  datapointBodies: DatapointTransport[];
-}
-
-// Runtime guard for the JSONB payload_snapshot.transport read-back. The
-// snapshot was written by an earlier deploy and may not match this deploy's
-// in-memory shape — fail loud rather than post malformed datapoints when the
-// schema has drifted (e.g. a body field renamed or removed).
-const datapointTransportSchema = z.object({
-  rtcId: z.string().min(1),
-  inputKey: z.string().min(1),
-  body: z
-    .object({
-      supplier_reference_id: z.string().min(1),
-      // Phase 3.5: source_ids must be present in every snapshot. A
-      // pre-Phase-3.5 draft (without this field) is "stale" — fail loud
-      // locally rather than ship a malformed Datapoint to Isometric.
-      source_ids: z.array(z.string()),
-    })
-    .passthrough(),
-});
-const removalTransportSnapshotSchema = z.object({
-  removalSupplierRef: z.string().min(1),
-  datapointBodies: z.array(datapointTransportSchema),
-});
-
-// The `fixed` entries inside payload_snapshot.semantic.inputs. On resume these
-// are the version-stamped bindings the original attempt locked — read back so a
-// resumed submission never mixes the live template's fixed bindings with the
-// stored transport snapshot (a stale-locked draft resumes regardless of hash,
-// so live `fixed` may have drifted from what the snapshot was built against).
-const fixedSnapshotInputSchema = z.object({
-  rtcId: z.string().min(1),
-  inputKey: z.string().min(1),
-  kind: z.literal("fixed"),
-  preboundDatapointId: z.string().min(1),
-});
 
 export interface SubmitRemovalArgs {
   userId: string;
@@ -145,132 +84,6 @@ export interface RemovalSubmissionResult {
   removalId: string;
   externalId: string;
   version: number;
-}
-
-interface ResolvedTemplateInputs {
-  monitored: ResolvedMonitoredInput[];
-  fixed: ResolvedFixedInput[];
-  datapointBodyByKey: Map<string, CreateDatapointRequest>;
-}
-
-// Walks the removal template's components, classifying every input as a
-// monitored datapoint (built from the aggregation) or a pre-bound fixed
-// datapoint. Throws on any template/blueprint/mapping gap, on an unbound
-// fixed input, or on a null aggregated source; blocks zero-stub inputs in
-// production. Pure over its inputs — no I/O.
-function resolveTemplateInputs(args: {
-  template: IsometricGhgEntryTemplate;
-  blueprintsByKey: Map<string, IsometricComponentBlueprint>;
-  agg: AggregatedProductionData;
-  externalProjectId: string;
-  // Removal-wide Isometric Source IDs (Phase 3.5). Threaded into every
-  // monitored Datapoint's `source_ids` so the audit trail attaches evidence
-  // to each datapoint posted to Isometric.
-  sourceIds: string[];
-  // Sandbox-only: allow a 0-magnitude stub for PERIOD_INPUT_TUPLES inputs a
-  // template still declares (ADR 0005). Off in production — see
-  // buildCreateDatapointRequest + docs/open-questions.md.
-  allowPeriodInputStub: boolean;
-}): ResolvedTemplateInputs {
-  const {
-    template,
-    blueprintsByKey,
-    agg,
-    externalProjectId,
-    sourceIds,
-    allowPeriodInputStub,
-  } = args;
-
-  const monitored: ResolvedMonitoredInput[] = [];
-  const fixed: ResolvedFixedInput[] = [];
-  const datapointBodyByKey = new Map<string, CreateDatapointRequest>();
-  const unboundFixedInputs: { component: string; inputKey: string }[] = [];
-
-  for (const group of template.groups) {
-    for (const component of group.components) {
-      // The `biochar_sequestration_200_year_*` components are fed by the
-      // measurement-samples step (Phase 3), NOT the aggregation→datapoint loop,
-      // so skip them here — their inputs have no INPUT_MAPPING entry, and
-      // buildCreateGhgEntryRequest skips them in the removal body to match.
-      if (isSequestrationBlueprintKey(component.blueprint_key)) continue;
-      const blueprint = blueprintsByKey.get(component.blueprint_key);
-      if (!blueprint) {
-        throw new SafeError(
-          `Blueprint "${component.blueprint_key}" missing from catalog.`,
-        );
-      }
-      for (const rtcInput of component.inputs) {
-        if (rtcInput.type === "fixed") {
-          if (!rtcInput.datapoint_id) {
-            unboundFixedInputs.push({
-              component: component.display_name,
-              inputKey: rtcInput.input_key,
-            });
-            continue;
-          }
-          fixed.push({
-            removalTemplateComponentId: component.id,
-            inputKey: rtcInput.input_key,
-            preboundDatapointId: rtcInput.datapoint_id,
-          });
-          continue;
-        }
-
-        const blueprintInput = blueprint.inputs.find(
-          (i) => i.input_key === rtcInput.input_key,
-        );
-        if (!blueprintInput) {
-          throw new SafeError(
-            `Blueprint "${blueprint.key}" missing input "${rtcInput.input_key}".`,
-          );
-        }
-        // Don't pre-check the mapping here — buildCreateDatapointRequest
-        // already runs the missing-mapping check AND the period-input
-        // scope-conflict variant (ADR 0005 §3). A pre-check here would
-        // throw the generic missing-mapping error first and swallow the
-        // actionable scope-conflict guidance.
-        const draft = buildCreateDatapointRequest({
-          groupKey: group.key,
-          componentBlueprintKey: component.blueprint_key,
-          rtcInput,
-          blueprintInput,
-          agg,
-          projectId: externalProjectId,
-          supplierRefId: "__placeholder__",
-          sourceIds,
-          allowPeriodInputStub,
-        });
-        monitored.push({
-          removalTemplateComponentId: component.id,
-          componentBlueprintKey: component.blueprint_key,
-          inputKey: rtcInput.input_key,
-          quantity: {
-            magnitude: draft.quantity.magnitude,
-            unit: draft.quantity.unit ?? "",
-          },
-          datapointType: draft.type,
-        });
-        datapointBodyByKey.set(`${component.id}::${rtcInput.input_key}`, draft);
-      }
-    }
-  }
-
-  if (unboundFixedInputs.length > 0) {
-    const lines = unboundFixedInputs
-      .map((u) => `  • ${u.component} → ${u.inputKey}`)
-      .join("\n");
-    throw new SafeError(
-      `Template "${template.display_name}" has ${unboundFixedInputs.length} fixed input(s) without a pre-bound datapoint:\n${lines}\nBind each as a constant in the Isometric template editor before submitting.`,
-    );
-  }
-
-  // ADR 0005 deletes the legacy zero-stub plumbing — period-input families
-  // moved to PROJECT scope and the scope-conflict SafeError in
-  // buildCreateDatapointRequest catches templates that still declare them
-  // here. No production-promotion gate at this layer; pre-deploy gate #4
-  // in integration-plan.md now lives in the nightly coverage check.
-
-  return { monitored, fixed, datapointBodyByKey };
 }
 
 // The submission unit: one Isometric Removal == one certifierRemovals row.
@@ -353,29 +166,11 @@ export async function submitRemoval(
     throw new SafeError("This removal has no credit batches.");
   }
 
-  const lineageWarnings: string[] = [];
-  for (const lineage of ctx.lineages) {
-    lineageWarnings.push(
-      ...lineage.warnings.map(
-        (warning) => `Application ${lineage.application.code}: ${warning}`,
-      ),
-    );
-    if (!lineage.productionRun) {
-      throw new SafeError(
-        `Application ${lineage.application.code} has no linked production run - cannot aggregate.`,
-      );
-    }
-  }
-  if (lineageWarnings.length > 0) {
-    throw new SafeError(
-      `Lineage incomplete for submission:\n${lineageWarnings.join("\n")}`,
-    );
-  }
-  if (ctx.runs.length === 0) {
-    throw new SafeError(
-      "Production runs not found for the removal's credit batches.",
-    );
-  }
+  // §8.6.2 front-loading pre-flight (issue #349, ADR 0020): fail closed on a
+  // foreign production-bucket claim BEFORE aggregation, the evidence ledgers,
+  // and every registry POST. Re-asserted from a fresh read after the draft
+  // claim below — see production-claim-gate.ts for the TOCTOU rationale.
+  assertNoForeignProductionClaims(ctx.memberBatchClaims, removalId);
 
   const blueprintsByKey = new Map(
     ctx.blueprintsForTemplate.map((bp) => [bp.key, bp]),
@@ -388,70 +183,6 @@ export async function submitRemoval(
     expectedDefaultRemovalTemplateId: ctx.mapping.defaultRemovalTemplateId,
   };
 
-  // Aggregate every member batch's runs into ONE Removal, applied-scoped:
-  // `attributionByRunId` weights each run by the share of its biochar that
-  // actually reached an application in this removal (linear mass allocation).
-  // Chemistry scalars are overlaid at the CREDIT-BATCH grain — samples anchor
-  // on the batch (issue #309), so the run-grain weighted means no longer see
-  // them; `weightedBatchChemistry` pools each batch's replicates instead.
-  const baseAgg = {
-    ...aggregateProductionRuns(ctx.runs, ctx.attributionByRunId),
-    ...weightedBatchChemistry(ctx.batchesWithSamples, ctx.attributionByRunId),
-  };
-  if (baseAgg.warnings.length > 0) {
-    throw new SafeError(
-      `Removal submission blocked:\n${baseAgg.warnings.join("\n")}`,
-    );
-  }
-
-  // D3 fail-closed durability gates: eligibility (per-run mean H/C_org < 0.5 AND
-  // O/C_org < 0.2), every Method A run sampled, and ≥3 replicates per sampled
-  // run. Computed once in `buildRemovalContext` (method read live off each run's
-  // reactor, D6) so the readiness surfaces predict the exact same block; this is
-  // the authoritative fail-closed enforcement of that shared result.
-  if (ctx.durabilityGateBlockers.length > 0) {
-    throw new SafeError(
-      `Removal submission blocked — sampling & eligibility:\n${ctx.durabilityGateBlockers.join("\n")}`,
-    );
-  }
-
-  const transportAgg = enrichWithTransportLegs(baseAgg, ctx.transportLegs);
-  // Pooling legs across member batches raises the chance of a mixed
-  // method/factor — Isometric Transportation v1.1 §5 requires per-leg
-  // accounting, so block submission on those warnings.
-  const transportWarnings = transportAgg.warnings.slice(
-    baseAgg.warnings.length,
-  );
-  if (transportWarnings.length > 0) {
-    throw new SafeError(
-      `Removal transport-leg aggregation — submission blocked:\n${transportWarnings.join("\n")}`,
-    );
-  }
-
-  const agg = transportAgg;
-
-  // §8.6.2 (issue #320): the removal's reporting window ends at the latest
-  // biochar application, not production end. The inversion guard fails loudly
-  // BEFORE any registry POST (see removal-reporting-window.ts for why).
-  const latestApplicationTime = resolveLatestApplicationTime(ctx.lineages);
-  assertReportingWindowNotInverted({
-    lineages: ctx.lineages,
-    runStartTimeByRunId: new Map(
-      ctx.runs.map((run) => [run.id, run.startTime]),
-    ),
-  });
-
-  // Non-blocking: surface (don't block on) submission advisories — e.g.
-  // recorded diesel the active template has no `fuel_usage_by_volume`
-  // component to carry (issue #319). The value is simply not submitted; the
-  // operator already sees the same warning at readiness.
-  if (ctx.submissionWarnings.length > 0) {
-    log.warn(
-      { submissionWarnings: ctx.submissionWarnings },
-      "removal has non-blocking submission warnings",
-    );
-  }
-
   // Regenerate every Source-mirrored evidence ledger (transport mass·distance +
   // 200-year durability) from the live context and mirror them BEFORE candidate
   // documents are collected, so the current ledgers ride into source_ids on this
@@ -462,30 +193,6 @@ export async function submitRemoval(
   // has nothing to evidence.
   await ensureEvidenceLedgersFromContext(userId, removalId, ctx, log);
 
-  // Phase 3.5: mirrored Isometric Source IDs ride into every monitored
-  // Datapoint (removal-wide attribution). They are part of the semantic
-  // hash so a sources change supersedes the previous Removal version. The
-  // resolution is read-only and idempotent; submitRemoval is the canonical
-  // place to snapshot the source set because that's when the payload is
-  // locked.
-  //
-  // The candidate-document set is derived deterministically from the chain
-  // ctx so it can be re-walked inside the locked transaction below. The
-  // first resolution here is the "tentative" set used for the claim
-  // decision; the locked re-resolution inside the snapshot insert is the
-  // authoritative set, and if it differs we recompute the hash before
-  // writing.
-  const candidateDocumentIds = await collectCandidateDocumentIdsForRemoval(
-    userId,
-    {
-      lineages: ctx.lineages,
-      memberBatchIds: ctx.memberBatches.map((b) => b.id),
-    },
-  );
-  const sourceIds = await resolveSourceIdsForRemoval(userId, {
-    candidateDocumentIds,
-  });
-
   // ADR 0005 escape hatch: in SANDBOX, a Removal Template that still declares a
   // period-input tuple (e.g. pyrolyzer_direct concentration) emits a
   // 0-magnitude stub instead of failing closed, so the pipeline can be
@@ -493,74 +200,29 @@ export async function submitRemoval(
   // over-claim for these positive emissions. See docs/open-questions.md.
   const allowPeriodInputStub = env.ISOMETRIC_ENVIRONMENT === "sandbox";
 
-  const { monitored, fixed, datapointBodyByKey } = resolveTemplateInputs({
-    template: defaultTemplate,
-    blueprintsByKey,
-    agg,
-    externalProjectId,
-    sourceIds,
-    allowPeriodInputStub,
-  });
-  const durabilityMeasurementSampleArgs =
-    hasDurabilityComponents && ctx.facilityReferenceSoilTemperature
-      ? {
-          removalId,
-          externalProjectId,
-          batches: ctx.batchesWithSamples,
-          attributionByRunId: ctx.attributionByRunId,
-          facilityReferenceSoilTemperature: ctx.facilityReferenceSoilTemperature,
-          measuredAt: agg.latestEndTime.toISOString(),
-        }
-      : null;
-  const semanticMeasurementSamples = durabilityMeasurementSampleArgs
-    ? normalizeMeasurementSamplesForHash(
-        buildVersionedMeasurementSampleSubmissions({
-          ...durabilityMeasurementSampleArgs,
-          version: 0,
-        }),
-      )
-    : [];
-
-  // The hash is a function of what gets sent to Isometric — the run set and
-  // the resolved inputs. Member credit-batch ids are recorded in the snapshot
-  // for audit but kept OUT of the hash: a pure-membership change must not
-  // POST a duplicate Isometric Removal (the supplier ref carries the version).
-  const semanticPayload = {
+  const initialBuild = await buildRemovalSubmissionBuild({
+    userId,
     removalId,
-    templateId: defaultTemplate.id,
-    sourceProductionRunIds: [...agg.sourceProductionRunIds].sort(),
-    startedOn: agg.earliestStartTime.toISOString(),
-    // §8.6.2: period end = latest application date (hash-covered, so a changed
-    // application date supersedes the prior version — intended).
-    completedOn: latestApplicationTime.toISOString(),
-    // Phase 3.5: sorted, deduped Isometric Source IDs. Hash-covered so
-    // mirroring or unmirroring a source forces a new version (supersede).
+    ctx,
+    defaultTemplate,
+    blueprintsByKey,
+    externalProjectId,
+    allowPeriodInputStub,
+    hasDurabilityComponents,
+    log,
+  });
+  const {
+    agg,
+    latestApplicationTime,
+    candidateDocumentIds,
     sourceIds,
-    ...(semanticMeasurementSamples.length > 0
-      ? { durabilityMeasurementSamples: semanticMeasurementSamples }
-      : {}),
-    inputs: [
-      ...monitored.map((m) => ({
-        rtcId: m.removalTemplateComponentId,
-        inputKey: m.inputKey,
-        kind: "monitored" as const,
-        value: m.quantity.magnitude,
-        unit: m.quantity.unit,
-        datapointType: m.datapointType,
-      })),
-      ...fixed.map((f) => ({
-        rtcId: f.removalTemplateComponentId,
-        inputKey: f.inputKey,
-        kind: "fixed" as const,
-        preboundDatapointId: f.preboundDatapointId,
-      })),
-    ].sort((a, b) =>
-      `${a.rtcId}::${a.inputKey}`.localeCompare(`${b.rtcId}::${b.inputKey}`),
-    ),
-  };
-  const memberCreditBatchIds = ctx.memberBatches
-    .map((b) => b.id)
-    .sort((a, b) => a.localeCompare(b));
+    semanticPayload,
+    monitored,
+    fixed,
+    datapointBodyByKey,
+    durabilityMeasurementSampleArgs,
+    memberCreditBatchIds,
+  } = initialBuild;
 
   // Claim a ledger draft through the submission-ledger module. The module
   // holds the mapping lock plus the per-document mirror locks while it
@@ -601,23 +263,22 @@ export async function submitRemoval(
         lockedSourceIds.some((id, i) => id !== sourceIds[i]);
       if (!sourceIdsChanged) return tentative;
 
-      const finalResolved = resolveTemplateInputs({
-        template: defaultTemplate,
+      const finalBuild = await buildRemovalSubmissionBuild({
+        userId,
+        removalId,
+        ctx,
+        defaultTemplate,
         blueprintsByKey,
-        agg,
         externalProjectId,
-        sourceIds: lockedSourceIds,
         allowPeriodInputStub,
+        hasDurabilityComponents,
+        sourceIds: lockedSourceIds,
       });
       return {
-        semanticPayload: {
-          ...tentative.semanticPayload,
-          sourceIds: lockedSourceIds,
-        },
-        monitored: finalResolved.monitored,
-        datapointBodyByKey: finalResolved.datapointBodyByKey,
-        durabilityMeasurementSampleArgs:
-          tentative.durabilityMeasurementSampleArgs,
+        semanticPayload: finalBuild.semanticPayload,
+        monitored: finalBuild.monitored,
+        datapointBodyByKey: finalBuild.datapointBodyByKey,
+        durabilityMeasurementSampleArgs: finalBuild.durabilityMeasurementSampleArgs,
       };
     },
     buildSnapshot: ({ inputs, nextVersion }) => {
@@ -686,12 +347,46 @@ export async function submitRemoval(
     case "blocked":
       throw new SafeError(REMOVAL_CLAIM_BLOCKED_MESSAGES[claimed.reason]);
     case "existing":
+      // §8.6.2 lazy claim backfill (ADR 0020): a removal submitted before
+      // migration 0068 whose payload hash is unchanged short-circuits here
+      // and never reaches markSubmissionSubmitted's transactional stamp.
+      // Stamp locally (no POST) — the blocking `submitted` row freezes
+      // membership, so the live member set equals the submitted payload's.
+      // The pre-flight gate above already asserted no foreign claims; a
+      // raced foreign claim trips the stamp's rowcount backstop loudly.
+      await stampProductionEmissionsClaim(userId, {
+        removalId,
+        creditBatchIds: memberCreditBatchIds,
+      });
       return {
         removalId,
         externalId: claimed.externalId,
         version: claimed.version,
       };
     case "claimed": {
+      // ADR 0020 resume gate: never complete a draft whose snapshot was
+      // built under an older INPUT_MAPPING revision — retire it and fail
+      // closed instead (see production-claim-gate.ts).
+      if (claimed.resumed) {
+        await assertResumedSnapshotRevisionCurrent(userId, claimed.row);
+      }
+      // §8.6.2 fresh-read re-assert (issue #349, ADR 0020): the blocking
+      // draft row now exists, so membership is frozen — a foreign claim OR a
+      // membership/run-lineage regroup that landed between context load and
+      // this point is caught HERE, before any registry POST, instead of
+      // shipping a stale payload and tripping the claim-stamp backstop after
+      // the POSTs. See production-claim-gate.ts.
+      await assertProductionClaimGateFresh(
+        userId,
+        removalId,
+        ctx.memberBatchClaims,
+      );
+      await assertClaimedRemovalPayloadFresh({
+        userId,
+        removalId,
+        row: claimed.row,
+        allowPeriodInputStub,
+      });
       if (claimed.reason === "rejected-hash-changed") {
         log.warn(
           { submissionId: claimed.row.id },
@@ -730,12 +425,83 @@ export async function submitRemoval(
         },
         externalProjectId,
         durabilityMeasurementSubmissions,
+        // The live member set — membership can't drift under a locked draft
+        // (assertRemovalAllowsCreditBatchMutation), so these are the batches
+        // whose production bucket this submission claims.
+        claimBatchIds: memberCreditBatchIds,
         supersedePreviousId: claimed.supersedePreviousId,
         resumed: claimed.resumed,
         log,
       });
     }
   }
+}
+
+async function assertClaimedRemovalPayloadFresh(args: {
+  userId: string;
+  removalId: string;
+  row: CertificationSubmissionRow;
+  allowPeriodInputStub: boolean;
+}): Promise<void> {
+  const { userId, removalId, row, allowPeriodInputStub } = args;
+
+  const freshCtx = await loadRemovalSubmissionContext(userId, removalId);
+  if (
+    !freshCtx.mapping ||
+    freshCtx.missingDefaultTemplateId ||
+    !freshCtx.defaultTemplate ||
+    freshCtx.defaultTemplate.credit_type !== "REMOVAL" ||
+    freshCtx.unresolvedBlueprintKeys.length > 0 ||
+    freshCtx.defaultTemplate.groups.length === 0
+  ) {
+    await retireStaleSubmissionDraft(userId, row.id, {
+      reason: "semantic payload rebuild failed after draft claim",
+    });
+    throw new SafeError(
+      "Removal source data or template configuration changed while preparing this submission. The draft was retired; reload and submit again.",
+    );
+  }
+  const freshHasDurabilityComponents = freshCtx.defaultTemplate.groups.some((group) =>
+    group.components.some((c) => isSequestrationBlueprintKey(c.blueprint_key)),
+  );
+  if (freshHasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
+    await retireStaleSubmissionDraft(userId, row.id, {
+      reason: "durability measurement-sample gate changed after draft claim",
+    });
+    throw new SafeError(
+      "Removal template configuration changed while preparing this submission. The draft was retired; reload and submit again.",
+    );
+  }
+
+  let freshBuild: Awaited<ReturnType<typeof buildRemovalSubmissionBuild>>;
+  try {
+    freshBuild = await buildRemovalSubmissionBuild({
+      userId,
+      removalId,
+      ctx: freshCtx,
+      defaultTemplate: freshCtx.defaultTemplate,
+      blueprintsByKey: new Map(
+        freshCtx.blueprintsForTemplate.map((bp) => [bp.key, bp]),
+      ),
+      externalProjectId: freshCtx.mapping.externalProjectId,
+      allowPeriodInputStub,
+      hasDurabilityComponents: freshHasDurabilityComponents,
+    });
+  } catch (err) {
+    await retireStaleSubmissionDraft(userId, row.id, {
+      reason: "semantic payload rebuild failed after draft claim",
+    });
+    throw err;
+  }
+  const freshHash = payloadHash(freshBuild.semanticPayload);
+  if (freshHash === row.payloadHash) return;
+
+  await retireStaleSubmissionDraft(userId, row.id, {
+    reason: `semantic payload drift: snapshot ${String(row.payloadHash)} != current ${freshHash}`,
+  });
+  throw new SafeError(
+    "Removal source data changed while preparing this submission. The stale draft was retired; reload and submit again.",
+  );
 }
 
 interface RunRemovalSubmissionArgs {
@@ -756,6 +522,9 @@ interface RunRemovalSubmissionArgs {
   durabilityMeasurementSubmissions:
     | DurabilityMeasurementSampleSubmission[]
     | null;
+  // Member credit batches whose §8.6.2 production-bucket claim this submission
+  // stamps on success (issue #349, ADR 0020).
+  claimBatchIds: string[];
   supersedePreviousId: string | null;
   resumed: boolean;
   /** Attempt-scoped logger (carries submissionAttemptId) from submitRemoval. */
@@ -773,6 +542,7 @@ async function runRemovalSubmission({
   reportingWindow,
   externalProjectId,
   durabilityMeasurementSubmissions,
+  claimBatchIds,
   supersedePreviousId,
   resumed,
   log,
@@ -861,6 +631,9 @@ async function runRemovalSubmission({
   await markSubmissionSubmitted(userId, row.id, {
     externalId: externalRemovalId,
     supersedePreviousId,
+    // §8.6.2 (issue #349, ADR 0020): stamp the production-bucket claim onto
+    // the member batches in the same transaction as the ledger flip.
+    productionEmissionsClaim: { removalId, creditBatchIds: claimBatchIds },
   });
 
   // Persist the derived reporting window onto the removal row (best-effort —
@@ -896,60 +669,4 @@ async function runRemovalSubmission({
   }
 
   return { removalId, externalId: externalRemovalId, version: row.version };
-}
-
-function readRemovalTransport(
-  row: CertificationSubmissionRow,
-): RemovalTransportSnapshot {
-  const snapshot = row.payloadSnapshot as { transport?: unknown } | null;
-  const parsed = removalTransportSnapshotSchema.safeParse(snapshot?.transport);
-  if (!parsed.success) {
-    throw new SafeError(
-      "Stale submission cannot be resumed because its transport snapshot does not match the current payload schema.",
-    );
-  }
-  return {
-    removalSupplierRef: parsed.data.removalSupplierRef,
-    datapointBodies: parsed.data.datapointBodies as DatapointTransport[],
-  };
-}
-
-// Reads the locked `fixed` bindings back out of the stored snapshot for the
-// resume path. Mirrors readRemovalTransport's fail-loud stance: a `kind:"fixed"`
-// entry that no longer matches the schema means the snapshot drifted, so refuse
-// to resume rather than emit a GHG entry referencing a wrong/absent datapoint.
-function readRemovalFixedInputs(
-  row: CertificationSubmissionRow,
-): ResolvedFixedInput[] {
-  const snapshot = row.payloadSnapshot as {
-    semantic?: { inputs?: unknown } | null;
-  } | null;
-  const inputs = snapshot?.semantic?.inputs;
-  if (!Array.isArray(inputs)) {
-    throw new SafeError(
-      "Stale submission cannot be resumed because its payload snapshot does not match the current schema.",
-    );
-  }
-  const fixed: ResolvedFixedInput[] = [];
-  for (const entry of inputs) {
-    if (
-      typeof entry !== "object" ||
-      entry === null ||
-      (entry as { kind?: unknown }).kind !== "fixed"
-    ) {
-      continue;
-    }
-    const parsed = fixedSnapshotInputSchema.safeParse(entry);
-    if (!parsed.success) {
-      throw new SafeError(
-        "Stale submission cannot be resumed because its fixed-input snapshot does not match the current schema.",
-      );
-    }
-    fixed.push({
-      removalTemplateComponentId: parsed.data.rtcId,
-      inputKey: parsed.data.inputKey,
-      preboundDatapointId: parsed.data.preboundDatapointId,
-    });
-  }
-  return fixed;
 }

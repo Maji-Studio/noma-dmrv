@@ -15,7 +15,11 @@ import {
   type FormulationIngredient,
 } from "@/db/schema";
 import { biocharProducts } from "@/db/schema/products";
-import type { FormulationFilterData } from "@/schemas/formulations";
+import {
+  RATIO_SUM_EXCEEDED_MESSAGE,
+  exceedsFormulationRatioSum,
+  type FormulationFilterData,
+} from "@/schemas/formulations";
 
 // ============================================
 // Types
@@ -71,6 +75,21 @@ async function assertBlendFeedstockTypes(ingredients?: IngredientInput[]) {
 
   if (rows.some((row) => row.usage !== "blend")) {
     throw new SafeError("Formulation lines must use blend-usage feedstock types");
+  }
+}
+
+/**
+ * Hard-block a formulation whose biochar + ingredient ratios over-allocate the
+ * solid blend (> 100%). Enforced here in addition to the Zod refine because
+ * ingredients are child rows the update layer can reconcile against existing
+ * state (issue #282).
+ */
+function assertRatioSumWithinBounds(
+  biocharRatio: number | null | undefined,
+  ingredients: ReadonlyArray<{ ratio?: number | null }> | null | undefined,
+) {
+  if (exceedsFormulationRatioSum(biocharRatio, ingredients)) {
+    throw new SafeError(RATIO_SUM_EXCEEDED_MESSAGE);
   }
 }
 
@@ -217,6 +236,7 @@ export async function createFormulation(
   }
 
   await assertBlendFeedstockTypes(data.ingredients);
+  assertRatioSumWithinBounds(data.biocharRatio, data.ingredients);
 
   return db.transaction(async (tx) => {
     const [formulation] = await tx
@@ -304,6 +324,34 @@ export async function updateFormulation(
   const { ingredients: ingredientData, ...formulationFields } = data;
 
   return db.transaction(async (tx) => {
+    // Lock the parent row so concurrent updates serialize and the ratio guard
+    // below always reconciles against the latest committed state — validating
+    // outside the transaction lets two partial updates (one changing the
+    // biochar ratio, one changing ingredients) jointly commit > 100%.
+    const [locked] = await tx
+      .select()
+      .from(formulations)
+      .where(eq(formulations.id, formulationId))
+      .for("update");
+
+    if (!locked) {
+      throw new SafeError("Formulation not found");
+    }
+
+    // Guard the effective post-update blend: a partial payload may change only
+    // the biochar ratio or only the ingredients, so reconcile each side against
+    // what is already stored before checking the sum.
+    const effectiveBiocharRatio =
+      data.biocharRatio !== undefined ? data.biocharRatio : locked.biocharRatio;
+    const effectiveIngredients =
+      ingredientData !== undefined
+        ? ingredientData
+        : await tx
+            .select({ ratio: formulationIngredients.ratio })
+            .from(formulationIngredients)
+            .where(eq(formulationIngredients.formulationId, formulationId));
+    assertRatioSumWithinBounds(effectiveBiocharRatio, effectiveIngredients);
+
     const [updated] = await tx
       .update(formulations)
       .set({
