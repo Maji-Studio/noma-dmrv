@@ -27,7 +27,12 @@
  *      A throw here leaves the draft locked until the lock TTL — safe
  *      (fail-closed, and the pre-flight gate re-fires loudly on retry).
  */
+import {
+  retireStaleSubmissionDraft,
+  type CertificationSubmissionRow,
+} from "@/data-access/certification";
 import { SafeError } from "@/lib/errors";
+import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import { resolveScopeForRemoval } from "./certify-context-core";
 
 export interface MemberBatchClaim {
@@ -114,6 +119,31 @@ export function assertMemberBatchLineageUnchanged(
         `submission (${[...drifted].sort().join(", ")}). Reload and retry.`,
     );
   }
+}
+
+// Resume gate (ADR 0020): a resumed draft's snapshot is transport truth, but
+// a snapshot built under an older INPUT_MAPPING revision encodes obsolete
+// accounting (e.g. pre-front-loading prorated production values). Completing
+// it would POST those stale datapoint bodies and then stamp the production
+// claim off them. Retire the draft (terminal `superseded`, non-blocking — see
+// retireStaleSubmissionDraft for why not `rejected`) and fail closed; the
+// next attempt mints a fresh version from live data under the current
+// revision. Missing `__mappingRevision` (pre-ADR-0005 snapshot) counts as
+// stale.
+export async function assertResumedSnapshotRevisionCurrent(
+  userId: string,
+  row: CertificationSubmissionRow,
+): Promise<void> {
+  const revision = (row.payloadSnapshot as { __mappingRevision?: unknown } | null)
+    ?.__mappingRevision;
+  if (revision === MAPPING_REVISION) return;
+  await retireStaleSubmissionDraft(userId, row.id, {
+    reason: `mapping revision drift: snapshot ${String(revision)} != current ${MAPPING_REVISION}`,
+  });
+  throw new SafeError(
+    "This removal's interrupted draft was built under an older accounting " +
+      "revision and has been retired. Submit again to rebuild it from current data.",
+  );
 }
 
 function sortedEqual(a: readonly string[], b: readonly string[]): boolean {

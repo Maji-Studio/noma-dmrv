@@ -528,6 +528,35 @@ async function stampProductionEmissionsClaimWithExecutor(
   }
 }
 
+// Retires a claimed draft this deploy refuses to resume (currently: its
+// snapshot predates the live INPUT_MAPPING revision — see
+// production-claim-gate.ts). `superseded` is terminal and NON-blocking, so
+// the next submit attempt mints a fresh version from live data; `rejected`
+// would route straight back to resume on an unchanged hash and loop forever.
+// Status-guarded to drafts — never retires a row that progressed.
+export async function retireStaleSubmissionDraft(
+  userId: string,
+  id: string,
+  args: { reason: string },
+): Promise<void> {
+  requireAuth(userId);
+  await db
+    .update(certificationSubmissions)
+    .set({
+      status: "superseded",
+      supersededAt: sql`now()`,
+      lockedAt: null,
+      updatedAt: sql`now()`,
+      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object('retiredReason', ${args.reason}::text)`,
+    })
+    .where(
+      and(
+        eq(certificationSubmissions.id, id),
+        eq(certificationSubmissions.status, "draft"),
+      ),
+    );
+}
+
 export async function markSubmissionRejected(
   userId: string,
   id: string,

@@ -49,6 +49,7 @@ import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
 import {
   assertNoForeignProductionClaims,
   assertProductionClaimGateFresh,
+  assertResumedSnapshotRevisionCurrent,
 } from "./production-claim-gate";
 import {
   readRemovalFixedInputs,
@@ -668,6 +669,12 @@ export async function submitRemoval(
         version: claimed.version,
       };
     case "claimed": {
+      // ADR 0020 resume gate: never complete a draft whose snapshot was
+      // built under an older INPUT_MAPPING revision — retire it and fail
+      // closed instead (see production-claim-gate.ts).
+      if (claimed.resumed) {
+        await assertResumedSnapshotRevisionCurrent(userId, claimed.row);
+      }
       // §8.6.2 fresh-read re-assert (issue #349, ADR 0020): the blocking
       // draft row now exists, so membership is frozen — a foreign claim OR a
       // membership/run-lineage regroup that landed between context load and

@@ -574,6 +574,16 @@ beforeEach(() => {
       }
     },
   );
+  vi.mocked(ledger.retireStaleSubmissionDraft).mockImplementation(
+    async (_userId, id) => {
+      const row = storedRows.find((r) => r.id === id);
+      if (row && row.status === "draft") {
+        row.status = "superseded";
+        row.supersededAt = new Date();
+        row.lockedAt = null;
+      }
+    },
+  );
   vi.mocked(ledger.appendSyncEvent).mockResolvedValue(undefined as never);
   vi.mocked(removalsDA.updateRemovalDates).mockResolvedValue(
     undefined as never,
@@ -1194,5 +1204,60 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
     expect(createDatapointFake).not.toHaveBeenCalled();
     expect(createGhgEntryFake).not.toHaveBeenCalled();
     expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
+  });
+});
+
+describe("submitRemoval — stale-revision resume gate (ADR 0020)", () => {
+  it("retires an expired draft built under an older mapping revision, fails closed, and a retry mints a fresh version", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    // An interrupted draft from a previous deploy: lock long expired (routes
+    // to resume), snapshot stamped with an obsolete INPUT_MAPPING revision.
+    const staleRow = newLedgerRow({
+      provider: "isometric",
+      submissionType: "removal",
+      localEntityType: "removal",
+      localEntityId: REMOVAL_ID,
+      version: 1,
+      payloadSnapshot: { __mappingRevision: "rev-obsolete" },
+      payloadHash: "hash-from-old-accounting",
+      metadata: null,
+    });
+    staleRow.lockedAt = new Date(0);
+    storedRows.push(staleRow);
+    const createDatapointFake = vi.fn(fakeExternalIds("dp"));
+    const createGhgEntryFake = vi.fn(fakeExternalIds("rmv"));
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      createDatapointFake as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      createGhgEntryFake as never,
+    );
+
+    await expect(
+      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+    ).rejects.toThrow(/older accounting revision/);
+    // Retired (terminal, non-blocking), nothing POSTed, nothing flipped.
+    expect(ledger.retireStaleSubmissionDraft).toHaveBeenCalledWith(
+      USER_ID,
+      staleRow.id,
+      expect.objectContaining({
+        reason: expect.stringContaining("rev-obsolete"),
+      }),
+    );
+    expect(staleRow.status).toBe("superseded");
+    expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(createGhgEntryFake).not.toHaveBeenCalled();
+    expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
+
+    // The retry does NOT resume the retired draft: it mints a fresh version
+    // from live data under the current revision (no stuck-forever loop).
+    const retried = await submitRemoval({
+      userId: USER_ID,
+      removalId: REMOVAL_ID,
+    });
+    expect(retried.version).toBe(2);
+    expect(createGhgEntryFake).toHaveBeenCalledTimes(1);
   });
 });
