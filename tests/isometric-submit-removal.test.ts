@@ -730,6 +730,14 @@ describe("submitRemoval — happy path", () => {
     expect(removalsDA.updateRemovalDates).not.toHaveBeenCalled();
     // No new ledger row.
     expect(storedRows).toHaveLength(1);
+    // …but the §8.6.2 claim IS lazily stamped (ADR 0020): a removal
+    // submitted before the claim column existed would otherwise never
+    // record its production-emissions claim (the guarded UPDATE is
+    // idempotent for the already-stamped common case).
+    expect(ledger.stampProductionEmissionsClaim).toHaveBeenCalledWith(
+      USER_ID,
+      { removalId: REMOVAL_ID, creditBatchIds: [CREDIT_BATCH_ID] },
+    );
   });
 
   it("supersedes to v=2 when the aggregated source data changes between submits", async () => {

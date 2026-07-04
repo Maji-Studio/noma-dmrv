@@ -490,6 +490,20 @@ export async function markSubmissionSubmitted(
   });
 }
 
+// Standalone claim stamp for the no-POST paths (issue #349, ADR 0020):
+// a removal that short-circuits via `return-existing` was submitted before
+// the claim column existed (migration 0068) with an unchanged payload hash,
+// so it never reaches markSubmissionSubmitted's transactional stamp — this
+// lazily backfills the claim. Same guarded UPDATE + rowcount backstop.
+export async function stampProductionEmissionsClaim(
+  userId: string,
+  args: { removalId: string; creditBatchIds: string[] },
+): Promise<void> {
+  requireAuth(userId);
+  if (args.creditBatchIds.length === 0) return;
+  await stampProductionEmissionsClaimWithExecutor(db, args);
+}
+
 // §8.6.2 claim stamp (issue #349, ADR 0020). Guarded UPDATE (IS NULL OR =
 // self): unclaimed rows and self re-claims (resubmit/supersede) are stamped;
 // a foreign-claimed row is excluded by the predicate. The rowcount backstop

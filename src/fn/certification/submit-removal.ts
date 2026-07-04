@@ -1,5 +1,6 @@
 import {
   markSubmissionSubmitted,
+  stampProductionEmissionsClaim,
   type CertificationSubmissionRow,
 } from "@/data-access/certification";
 import {
@@ -663,6 +664,17 @@ export async function submitRemoval(
     case "blocked":
       throw new SafeError(REMOVAL_CLAIM_BLOCKED_MESSAGES[claimed.reason]);
     case "existing":
+      // §8.6.2 lazy claim backfill (ADR 0020): a removal submitted before
+      // migration 0068 whose payload hash is unchanged short-circuits here
+      // and never reaches markSubmissionSubmitted's transactional stamp.
+      // Stamp locally (no POST) — the blocking `submitted` row freezes
+      // membership, so the live member set equals the submitted payload's.
+      // The pre-flight gate above already asserted no foreign claims; a
+      // raced foreign claim trips the stamp's rowcount backstop loudly.
+      await stampProductionEmissionsClaim(userId, {
+        removalId,
+        creditBatchIds: memberCreditBatchIds,
+      });
       return {
         removalId,
         externalId: claimed.externalId,
