@@ -3,9 +3,11 @@ import type { Sample } from "@/db/schema";
 import {
   buildPerBatchDurabilityData,
   buildSoilTemperatureReconciliationWarnings,
+  buildSoilTemperatureGate,
   reconcileDeclaredHToCorg,
   resolveConservativeSoilTemperature,
   resolveFacilityReferenceSoilTemperature,
+  resolveSoilTemperatureScope,
   type CreditBatchDurabilityInput,
   type FacilityReferenceSoilTemperature,
 } from "./durability-aggregation";
@@ -285,5 +287,120 @@ describe("buildSoilTemperatureReconciliationWarnings (conservative-direction che
         applicationSoilTemperaturesC: [null, undefined],
       }),
     ).toEqual([]);
+  });
+});
+
+describe("resolveSoilTemperatureScope (200-year-only input)", () => {
+  it("does not apply when every batch is 1000-year (soil temp is irrelevant)", () => {
+    const scope = resolveSoilTemperatureScope([
+      { durabilityOption: "1000_year", runIds: ["r1"] },
+      { durabilityOption: "1000_year", runIds: ["r2", "r3"] },
+    ]);
+    expect(scope.applies).toBe(false);
+    expect(scope.runIds.size).toBe(0);
+  });
+
+  it("applies and covers only 200-year runs in a mixed removal", () => {
+    const scope = resolveSoilTemperatureScope([
+      { durabilityOption: "200_year", runIds: ["r1", "r2"] },
+      { durabilityOption: "1000_year", runIds: ["r3"] },
+    ]);
+    expect(scope.applies).toBe(true);
+    expect([...scope.runIds].sort()).toEqual(["r1", "r2"]);
+    // A run that only composes the 1000-year batch is excluded.
+    expect(scope.runIds.has("r3")).toBe(false);
+  });
+
+  it("applies and covers all runs when every batch is 200-year", () => {
+    const scope = resolveSoilTemperatureScope([
+      { durabilityOption: "200_year", runIds: ["r1"] },
+      { durabilityOption: "200_year", runIds: ["r2"] },
+    ]);
+    expect(scope.applies).toBe(true);
+    expect([...scope.runIds].sort()).toEqual(["r1", "r2"]);
+  });
+
+  it("does not apply for an empty batch list", () => {
+    const scope = resolveSoilTemperatureScope([]);
+    expect(scope.applies).toBe(false);
+    expect(scope.runIds.size).toBe(0);
+  });
+
+  it("applies even when a 200-year batch has no applied runs (still needs a reference)", () => {
+    const scope = resolveSoilTemperatureScope([
+      { durabilityOption: "200_year", runIds: [] },
+    ]);
+    expect(scope.applies).toBe(true);
+    expect(scope.runIds.size).toBe(0);
+  });
+});
+
+describe("buildSoilTemperatureGate (200-year-scoped blocker + advisory)", () => {
+  const reference: FacilityReferenceSoilTemperature = {
+    declaredSoilTemperatureC: 24.2,
+    effectiveSoilTemperatureC: 24.2,
+    source: null,
+    temperatureFloored: false,
+    method: "ref",
+    warnings: [],
+  };
+
+  it("is silent for a 1000-year-only removal even when a site is warmer", () => {
+    const gate = buildSoilTemperatureGate({
+      facilityReference: reference,
+      batches: [{ durabilityOption: "1000_year", runIds: ["r1"] }],
+      siteTemperatures: [{ runId: "r1", soilTemperatureC: 25.2 }],
+    });
+    expect(gate.blockers).toEqual([]);
+    expect(gate.warnings).toEqual([]);
+  });
+
+  it("blocks a 200-year removal when no facility reference is set", () => {
+    const gate = buildSoilTemperatureGate({
+      facilityReference: null,
+      batches: [{ durabilityOption: "200_year", runIds: ["r1"] }],
+      siteTemperatures: [{ runId: "r1", soilTemperatureC: 20 }],
+    });
+    expect(gate.blockers).toHaveLength(1);
+    expect(gate.blockers[0]).toMatch(/reference soil temperature/i);
+    expect(gate.warnings).toEqual([]);
+  });
+
+  it("does not block a 1000-year-only removal with no reference", () => {
+    const gate = buildSoilTemperatureGate({
+      facilityReference: null,
+      batches: [{ durabilityOption: "1000_year", runIds: ["r1"] }],
+      siteTemperatures: [{ runId: "r1", soilTemperatureC: 20 }],
+    });
+    expect(gate.blockers).toEqual([]);
+    expect(gate.warnings).toEqual([]);
+  });
+
+  it("advises when a 200-year site is warmer than the reference", () => {
+    const gate = buildSoilTemperatureGate({
+      facilityReference: reference,
+      batches: [{ durabilityOption: "200_year", runIds: ["r1"] }],
+      siteTemperatures: [{ runId: "r1", soilTemperatureC: 25.2 }],
+    });
+    expect(gate.blockers).toEqual([]);
+    expect(gate.warnings).toHaveLength(1);
+    expect(gate.warnings[0]).toMatch(/25\.2/);
+    expect(gate.warnings[0]).toMatch(/over-credit/i);
+  });
+
+  it("ignores a warm site that only feeds a 1000-year batch in a mixed removal", () => {
+    const gate = buildSoilTemperatureGate({
+      facilityReference: reference,
+      batches: [
+        { durabilityOption: "200_year", runIds: ["r1"] },
+        { durabilityOption: "1000_year", runIds: ["r2"] },
+      ],
+      siteTemperatures: [
+        { runId: "r1", soilTemperatureC: 22 }, // 200-year site, below ref
+        { runId: "r2", soilTemperatureC: 25.2 }, // 1000-year site — irrelevant
+      ],
+    });
+    expect(gate.blockers).toEqual([]);
+    expect(gate.warnings).toEqual([]);
   });
 });

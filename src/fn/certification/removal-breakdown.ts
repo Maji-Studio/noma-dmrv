@@ -91,11 +91,16 @@ export async function loadRemovalBreakdown(
     // sites (each preview's per-site value is already 7 °C-floored). Only build
     // it when at least one site carries a temperature, so removals without
     // durability soil-temp data don't show a spurious "indeterminate" note.
-    const siteSoilTemperaturesC = batches.flatMap((batch) =>
-      (previews[batch.id]?.applicationResults ?? []).map(
-        (app) => app.effectiveSoilTemperatureC,
-      ),
-    );
+    // Restricted to 200-year batches: soil temperature drives only the 200-year
+    // durable fraction — 1000-year (R₀/TGA) batches have no temperature term, so
+    // surfacing a soil-temp note for them would misdescribe what credits them.
+    const siteSoilTemperaturesC = batches
+      .filter((batch) => batch.durabilityOption === "200_year")
+      .flatMap((batch) =>
+        (previews[batch.id]?.applicationResults ?? []).map(
+          (app) => app.effectiveSoilTemperatureC,
+        ),
+      );
     const soilTemperature = siteSoilTemperaturesC.some(
       (t) => t != null && Number.isFinite(t),
     )

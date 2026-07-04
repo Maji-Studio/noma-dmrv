@@ -56,7 +56,7 @@ import {
 import { lookupInputMapping } from "@/lib/isometric/transformers/datapoint";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
 import {
-  buildSoilTemperatureReconciliationWarnings,
+  buildSoilTemperatureGate,
   resolveFacilityReferenceSoilTemperature,
   type FacilityReferenceSoilTemperature,
 } from "@/lib/isometric/utils/durability-aggregation";
@@ -688,39 +688,34 @@ export async function buildRemovalContext(
 
   // Facility reference soil temperature (Phase 2, ADR 0013): the authoritative
   // value submitted as the `biochar_soil` measurement, 7 °C-floored. When there
-  // are credit batches to submit, an unset reference is fail-closed — it joins
+  // is a 200-year batch to submit, an unset reference is fail-closed — it joins
   // the durability gate blockers so readiness predicts the submit-pipeline block.
-  // (1000-year/R0 batches do not use soil temperature; out of Tier-1 scope, so
-  // every submittable batch here is treated as 200-year.)
   const facilityReferenceSoilTemperature =
     resolveFacilityReferenceSoilTemperature({
       declaredSoilTemperatureC: facilityFacts.mapping?.defaultSoilTemperatureC,
       source: facilityFacts.mapping?.defaultSoilTemperatureSource,
     });
-  const soilTemperatureBlockers =
-    batchesWithSamples.length > 0 && facilityReferenceSoilTemperature == null
-      ? [
-          "Set this facility's reference soil temperature (admin → Emission " +
-            "estimates) before submitting a 200-year removal.",
-        ]
-      : [];
+
+  // Soil temperature credits only the 200-year durable fraction; 1000-year
+  // (R₀/TGA) batches have no temperature term. `buildSoilTemperatureGate` scopes
+  // both the fail-closed reference-temp blocker and the over-crediting advisory
+  // to the removal's 200-year batches (and to the sites those batches credit), so
+  // a 1000-year batch never trips either (a mixed removal still gates its members).
+  const soilTemperatureGate = buildSoilTemperatureGate({
+    facilityReference: facilityReferenceSoilTemperature,
+    batches: batchesWithSamples.map((batch) => ({
+      durabilityOption: batch.durabilityOption,
+      runIds: batch.runs.map((run) => run.id),
+    })),
+    siteTemperatures: lineages.map((l) => ({
+      runId: l.productionRun?.id ?? null,
+      soilTemperatureC: l.application.soilTemperatureC,
+    })),
+  });
   const durabilityGateBlockers = [
     ...durabilityBatchBlockers,
-    ...soilTemperatureBlockers,
+    ...soilTemperatureGate.blockers,
   ];
-
-  // Conservative-direction reconciliation: warn (non-blocking) when a member
-  // application site is warmer than the declared reference (the reference would
-  // over-credit that site). Only meaningful once a reference is set.
-  const soilTemperatureReconciliationWarnings =
-    facilityReferenceSoilTemperature && batchesWithSamples.length > 0
-      ? buildSoilTemperatureReconciliationWarnings({
-          facilityReference: facilityReferenceSoilTemperature,
-          applicationSoilTemperaturesC: lineages.map(
-            (l) => l.application.soilTemperatureC,
-          ),
-        })
-      : [];
 
   const submissionWarnings = [
     ...buildSubmissionWarnings({
@@ -729,7 +724,7 @@ export async function buildRemovalContext(
       lineages,
     }),
     ...durabilityWarnings,
-    ...soilTemperatureReconciliationWarnings,
+    ...soilTemperatureGate.warnings,
   ];
 
   return {
