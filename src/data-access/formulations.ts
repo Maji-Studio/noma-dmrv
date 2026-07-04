@@ -320,24 +320,38 @@ export async function updateFormulation(
 
   await assertBlendFeedstockTypes(data.ingredients);
 
-  // Guard the effective post-update blend: a partial payload may change only
-  // the biochar ratio or only the ingredients, so reconcile each side against
-  // what is already stored before checking the sum.
-  const effectiveBiocharRatio =
-    data.biocharRatio !== undefined ? data.biocharRatio : existing.biocharRatio;
-  const effectiveIngredients =
-    data.ingredients !== undefined
-      ? data.ingredients
-      : await db
-          .select({ ratio: formulationIngredients.ratio })
-          .from(formulationIngredients)
-          .where(eq(formulationIngredients.formulationId, formulationId));
-  assertRatioSumWithinBounds(effectiveBiocharRatio, effectiveIngredients);
-
   // Separate ingredients from formulation fields
   const { ingredients: ingredientData, ...formulationFields } = data;
 
   return db.transaction(async (tx) => {
+    // Lock the parent row so concurrent updates serialize and the ratio guard
+    // below always reconciles against the latest committed state — validating
+    // outside the transaction lets two partial updates (one changing the
+    // biochar ratio, one changing ingredients) jointly commit > 100%.
+    const [locked] = await tx
+      .select()
+      .from(formulations)
+      .where(eq(formulations.id, formulationId))
+      .for("update");
+
+    if (!locked) {
+      throw new SafeError("Formulation not found");
+    }
+
+    // Guard the effective post-update blend: a partial payload may change only
+    // the biochar ratio or only the ingredients, so reconcile each side against
+    // what is already stored before checking the sum.
+    const effectiveBiocharRatio =
+      data.biocharRatio !== undefined ? data.biocharRatio : locked.biocharRatio;
+    const effectiveIngredients =
+      ingredientData !== undefined
+        ? ingredientData
+        : await tx
+            .select({ ratio: formulationIngredients.ratio })
+            .from(formulationIngredients)
+            .where(eq(formulationIngredients.formulationId, formulationId));
+    assertRatioSumWithinBounds(effectiveBiocharRatio, effectiveIngredients);
+
     const [updated] = await tx
       .update(formulations)
       .set({

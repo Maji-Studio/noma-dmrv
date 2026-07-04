@@ -55,6 +55,28 @@ export function exceedsFormulationRatioSum(
   );
 }
 
+/**
+ * Shared refinement flagging `biocharRatio` when the blend over-allocates.
+ * On update payloads this only guards when both ratios are present; the
+ * data-access layer reconciles the effective post-update state when one side
+ * is omitted.
+ */
+function ratioSumRefinement(
+  data: {
+    biocharRatio?: number | null;
+    ingredients?: ReadonlyArray<{ ratio?: number | null }>;
+  },
+  ctx: z.RefinementCtx,
+) {
+  if (exceedsFormulationRatioSum(data.biocharRatio, data.ingredients)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["biocharRatio"],
+      message: RATIO_SUM_EXCEEDED_MESSAGE,
+    });
+  }
+}
+
 // ============================================
 // Ratio Validation (0 to 1)
 // ============================================
@@ -103,15 +125,7 @@ export const formulationFormSchema = z
 
     ingredients: z.array(formulationIngredientSchema).optional(),
   })
-  .superRefine((data, ctx) => {
-    if (exceedsFormulationRatioSum(data.biocharRatio, data.ingredients)) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["biocharRatio"],
-        message: RATIO_SUM_EXCEEDED_MESSAGE,
-      });
-    }
-  });
+  .superRefine(ratioSumRefinement);
 
 // ============================================
 // Server Action Schemas - Formulation
@@ -133,17 +147,7 @@ export const updateFormulationSchema = z
     description: z.string().max(1000).optional().nullable().or(z.literal("")),
     ingredients: z.array(formulationIngredientSchema).optional(),
   })
-  .superRefine((data, ctx) => {
-    // Only guards payloads that carry both ratios; the data-access layer
-    // reconciles the effective post-update state when one side is omitted.
-    if (exceedsFormulationRatioSum(data.biocharRatio, data.ingredients)) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["biocharRatio"],
-        message: RATIO_SUM_EXCEEDED_MESSAGE,
-      });
-    }
-  });
+  .superRefine(ratioSumRefinement);
 
 export const deleteFormulationSchema = z.object({
   formulationId: z.string().uuid("Invalid formulation ID"),

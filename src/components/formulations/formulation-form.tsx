@@ -85,6 +85,7 @@ export function FormulationForm({
   const totalRatio = formulationRatioSum(biocharRatio, ingredients);
   const ratioSumExceeded = exceedsFormulationRatioSum(biocharRatio, ingredients);
   const ratioSumAtTarget =
+    !ratioSumExceeded &&
     Math.abs(totalRatio - RATIO_SUM_MAX) < RATIO_DISPLAY_TOLERANCE;
 
   return (
