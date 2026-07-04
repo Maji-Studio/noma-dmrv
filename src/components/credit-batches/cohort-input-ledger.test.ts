@@ -16,6 +16,7 @@ function makeRun(
     dieselGensetLiters: null,
     preprocessingFuelLiters: null,
     electricityKwh: null,
+    feedstockTypeIds: [],
     assignedCreditBatchId: null,
     assignedCreditBatchCode: null,
     ...overrides,
