@@ -13,6 +13,9 @@ import { Button } from "@/components/ui";
 import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import {
   formulationFormSchema,
+  formulationRatioSum,
+  exceedsFormulationRatioSum,
+  RATIO_SUM_MAX,
   FORMULATION_LINE_FEEDSTOCK_USAGE,
   type FormulationFormData,
 } from "@/schemas/formulations";
@@ -22,6 +25,9 @@ const EMPTY_INGREDIENT = {
   feedstockTypeId: "",
   ratio: null,
 };
+
+/** Tolerance for the "sums to exactly 100%" green display state. */
+const RATIO_DISPLAY_TOLERANCE = 0.001;
 
 // ============================================
 // Component
@@ -73,14 +79,14 @@ export function FormulationForm({
     return onSubmit(data as FormulationFormData);
   });
 
-  // Watch ratios for sum display
+  // Watch ratios for the live total-ratio indicator
   const biocharRatio = useWatch({ control, name: "biocharRatio" });
   const ingredients = useWatch({ control, name: "ingredients" });
-  const ingredientRatioSum = (ingredients ?? []).reduce(
-    (sum, ing) => sum + (ing?.ratio ?? 0),
-    0
-  );
-  const totalRatio = (biocharRatio ?? 0) + ingredientRatioSum;
+  const totalRatio = formulationRatioSum(biocharRatio, ingredients);
+  const ratioSumExceeded = exceedsFormulationRatioSum(biocharRatio, ingredients);
+  const ratioSumAtTarget =
+    !ratioSumExceeded &&
+    Math.abs(totalRatio - RATIO_SUM_MAX) < RATIO_DISPLAY_TOLERANCE;
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
@@ -216,18 +222,21 @@ export function FormulationForm({
         {(biocharRatio != null || fields.length > 0) && (
           <div
             className={`body-small px-12 py-8 border ${
-              Math.abs(totalRatio - 1) < 0.001
+              ratioSumAtTarget
                 ? "border-[var(--color-signal-green)] text-[var(--color-signal-green)] bg-[var(--color-signal-green)]/5"
-                : totalRatio > 1
+                : ratioSumExceeded
                   ? "border-[var(--color-signal-red)] text-[var(--color-signal-red)] bg-[var(--color-signal-red)]/5"
                   : "border-[var(--color-border-tertiary)] text-[var(--color-text-secondary)]"
             }`}
           >
             Total ratio: {(totalRatio * 100).toFixed(0)}%
-            {Math.abs(totalRatio - 1) >= 0.001 && totalRatio > 0 && (
+            {ratioSumExceeded && (
               <span className="ml-8">
-                {totalRatio > 1 ? "(exceeds 100%)" : "(does not sum to 100%)"}
+                — exceeds 100%, reduce ratios before saving
               </span>
+            )}
+            {!ratioSumExceeded && !ratioSumAtTarget && totalRatio > 0 && (
+              <span className="ml-8">(does not sum to 100%)</span>
             )}
           </div>
         )}
