@@ -11,7 +11,7 @@ Status: accepted (2026-06-19); amended 2026-07-02 (issue #309); amended 2026-07-
 > changes, this ADR's grain decision: the "both links stay populated / derive the batch from
 > the run" mechanics below describe the pre-amendment write path and now apply only to the
 > batch-side back-fill of legacy run-linked rows.
-
+>
 > **Amendment (2026-07-04, feedstock declared):** the batch's feedstock type flips from
 > **derived** to **declared**. It is now chosen on the credit-batch form up front (a required
 > `feedstockTypeId`), because the (facility, feedstock) **production process** it resolves
@@ -26,7 +26,7 @@ Status: accepted (2026-06-19); amended 2026-07-02 (issue #309); amended 2026-07-
 > (runs). Touch-points: `credit_batches.feedstock_type_id` is written from the declared value
 > in `createCreditBatch`/`updateCreditBatch`; the run picker filters to the declared type;
 > a `FeedstockProcessChip` previews the resolved process + Method A/B + progress-to-baseline.
-
+>
 > **Refines ADR 0014** (credit batch as production cohort) — it does **not** supersede it.
 > ADR 0014's run-membership (`credit_batch_production_runs`, `unique(productionRunId)`),
 > derived applications, 12-month clock, and produced-vs-applied coverage all stand. This ADR
