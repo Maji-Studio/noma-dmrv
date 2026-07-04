@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
 import {
@@ -8,6 +8,7 @@ import {
   certificationSubmissions,
   certifierSyncEvents,
 } from "@/db/schema/certification";
+import { creditBatches } from "@/db/schema/credits";
 import { documents } from "@/db/schema/documentation";
 import { facilities } from "@/db/schema/facilities";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
@@ -440,7 +441,16 @@ export async function getSubmissionById(
 export async function markSubmissionSubmitted(
   userId: string,
   id: string,
-  args: { externalId: string; supersedePreviousId?: string | null },
+  args: {
+    externalId: string;
+    supersedePreviousId?: string | null;
+    // §8.6.2 (issue #349): stamp the claiming removal onto its member credit
+    // batches in the SAME transaction that flips the ledger row to
+    // 'submitted'. Guarded (unclaimed-or-self) so a resubmit/supersede by the
+    // same removal is idempotent. Optional — telemetry / GHG-statement
+    // callers don't claim.
+    productionEmissionsClaim?: { removalId: string; creditBatchIds: string[] };
+  },
 ): Promise<void> {
   requireAuth(userId);
   await db.transaction(async (tx) => {
@@ -464,7 +474,101 @@ export async function markSubmissionSubmitted(
         })
         .where(eq(certificationSubmissions.id, args.supersedePreviousId));
     }
+    if (
+      args.productionEmissionsClaim &&
+      args.productionEmissionsClaim.creditBatchIds.length > 0
+    ) {
+      // A throw here rolls back the ledger flip too: the row stays a locked
+      // draft, the resume path reconciles the already-POSTed registry
+      // artifacts by supplier ref, and the pre-flight claim gate re-fires
+      // loudly on retry.
+      await stampProductionEmissionsClaimWithExecutor(
+        tx,
+        args.productionEmissionsClaim,
+      );
+    }
   });
+}
+
+// Standalone claim stamp for the no-POST paths (issue #349, ADR 0020):
+// a removal that short-circuits via `return-existing` was submitted before
+// the claim column existed (migration 0068) with an unchanged payload hash,
+// so it never reaches markSubmissionSubmitted's transactional stamp — this
+// lazily backfills the claim. Same guarded UPDATE + rowcount backstop.
+export async function stampProductionEmissionsClaim(
+  userId: string,
+  args: { removalId: string; creditBatchIds: string[] },
+): Promise<void> {
+  requireAuth(userId);
+  if (args.creditBatchIds.length === 0) return;
+  await stampProductionEmissionsClaimWithExecutor(db, args);
+}
+
+// §8.6.2 claim stamp (issue #349, ADR 0020). Guarded UPDATE (IS NULL OR =
+// self): unclaimed rows and self re-claims (resubmit/supersede) are stamped;
+// a foreign-claimed row is excluded by the predicate. The rowcount backstop
+// turns that exclusion into a loud failure — submit-removal's pre-POST gates
+// make it practically unreachable, but the member batches are not locked
+// between the draft claim and this write, so a mid-flight foreign claim
+// would otherwise leave the ledger submitted with no local error.
+async function stampProductionEmissionsClaimWithExecutor(
+  executor: Tx | typeof db,
+  args: { removalId: string; creditBatchIds: string[] },
+): Promise<void> {
+  const { removalId, creditBatchIds } = args;
+  const stamped = await executor
+    .update(creditBatches)
+    .set({
+      productionEmissionsClaimedByRemovalId: removalId,
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        inArray(creditBatches.id, creditBatchIds),
+        or(
+          isNull(creditBatches.productionEmissionsClaimedByRemovalId),
+          eq(creditBatches.productionEmissionsClaimedByRemovalId, removalId),
+        ),
+      ),
+    )
+    .returning({ id: creditBatches.id });
+  if (stamped.length !== creditBatchIds.length) {
+    const stampedIds = new Set(stamped.map((row) => row.id));
+    const skipped = creditBatchIds.filter((id) => !stampedIds.has(id));
+    throw new SafeError(
+      `Production-emissions claim failed: ${skipped.length} credit batch(es) ` +
+        "were claimed by another removal mid-submission (§8.6.2). Reload and retry.",
+    );
+  }
+}
+
+// Retires a claimed draft this deploy refuses to resume (currently: its
+// snapshot predates the live INPUT_MAPPING revision — see
+// production-claim-gate.ts). `superseded` is terminal and NON-blocking, so
+// the next submit attempt mints a fresh version from live data; `rejected`
+// would route straight back to resume on an unchanged hash and loop forever.
+// Status-guarded to drafts — never retires a row that progressed.
+export async function retireStaleSubmissionDraft(
+  userId: string,
+  id: string,
+  args: { reason: string },
+): Promise<void> {
+  requireAuth(userId);
+  await db
+    .update(certificationSubmissions)
+    .set({
+      status: "superseded",
+      supersededAt: sql`now()`,
+      lockedAt: null,
+      updatedAt: sql`now()`,
+      metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object('retiredReason', ${args.reason}::text)`,
+    })
+    .where(
+      and(
+        eq(certificationSubmissions.id, id),
+        eq(certificationSubmissions.status, "draft"),
+      ),
+    );
 }
 
 export async function markSubmissionRejected(

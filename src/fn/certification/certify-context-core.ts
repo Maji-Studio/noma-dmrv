@@ -184,9 +184,22 @@ export interface RemovalSubmissionContext extends RemovalCertifyContext {
   // to the removal's applied run set so product mass is attribution-correct.
   batchesWithSamples: CreditBatchWithSamples[];
   // Per-run applied-biochar fraction (linear mass allocation). Passed to
-  // `aggregateProductionRuns` so a partially-applied run contributes only
-  // its applied share.
+  // `aggregateProductionRuns`, where it scopes ONLY stored/delivery-bucket
+  // quantities + chemistry weights — production-bucket inputs sum full run
+  // totals (§8.6.2 front-loading, issue #349, ADR 0020).
   attributionByRunId: Map<string, number>;
+  // §8.6.2 per-member-batch production-bucket claim state (issue #349) —
+  // drives the submit-path foreign-claim assertion and the claim write. The
+  // sorted lineage arrays are the fingerprint the post-claim fresh re-assert
+  // compares to a fresh scope read, failing closed when membership or run
+  // lineage drifted between context load and the draft claim (ADR 0020).
+  memberBatchClaims: {
+    creditBatchId: string;
+    code: string;
+    claimedByRemovalId: string | null;
+    productionRunIds: string[];
+    applicationIds: string[];
+  }[];
   // Transport legs pooled across every member batch's lineage, deduped by
   // entity id. Fed to `enrichWithTransportLegs` by the submit pipeline.
   transportLegs: TransportLegsByCategory;
@@ -287,6 +300,9 @@ interface RemovalScope {
     productionRunIds: string[];
     applicationIds: string[];
     durabilityOption: DurabilityOption;
+    // §8.6.2 production-bucket claim state (issue #349, ADR 0020): the removal
+    // that already claimed this batch's production emissions, or null.
+    productionEmissionsClaimedByRemovalId: string | null;
     co2eStoredPreview?: CreditBatchCo2eStoredPreview;
   }[];
 }
@@ -328,6 +344,8 @@ async function resolveScopeForCreditBatch(
           productionRunIds: batch.productionRunIds,
           applicationIds,
           durabilityOption: batch.durabilityOption,
+          productionEmissionsClaimedByRemovalId:
+            batch.productionEmissionsClaimedByRemovalId,
           co2eStoredPreview: batch.co2eStoredPreview ?? undefined,
         },
       ],
@@ -369,6 +387,8 @@ export async function resolveScopeForRemoval(
         productionRunIds: full.productionRunIds,
         applicationIds,
         durabilityOption: full.durabilityOption,
+        productionEmissionsClaimedByRemovalId:
+          full.productionEmissionsClaimedByRemovalId,
         co2eStoredPreview: full.co2eStoredPreview ?? undefined,
       };
     }),
@@ -542,6 +562,17 @@ export async function buildRemovalContext(
     code: b.code,
     co2eStoredPreview: b.co2eStoredPreview,
   }));
+  // §8.6.2 claim state per member batch (issue #349) — kept off
+  // `MemberCreditBatch` (UI-facing) and carried only on the submission context.
+  // Lineage arrays sorted here so the post-claim fresh re-assert compares
+  // order-insensitively.
+  const memberBatchClaims = scope.memberBatches.map((b) => ({
+    creditBatchId: b.id,
+    code: b.code,
+    claimedByRemovalId: b.productionEmissionsClaimedByRemovalId,
+    productionRunIds: [...b.productionRunIds].sort(),
+    applicationIds: [...b.applicationIds].sort(),
+  }));
 
   // The removal's own submission + its linked GHG Statement status resolve from
   // the scope alone, so load them up-front: every short-circuit path then
@@ -593,6 +624,7 @@ export async function buildRemovalContext(
       runs: [],
       batchesWithSamples: [],
       attributionByRunId: new Map<string, number>(),
+      memberBatchClaims,
       transportLegs: { feedstock: [], biochar: [], sample: [] },
       facilityReferenceSoilTemperature: resolveFacilityReferenceSoilTemperature({
         declaredSoilTemperatureC: facilityFacts.mapping?.defaultSoilTemperatureC,
@@ -719,6 +751,7 @@ export async function buildRemovalContext(
     runs,
     batchesWithSamples,
     attributionByRunId,
+    memberBatchClaims,
     transportLegs,
     facilityReferenceSoilTemperature,
   };

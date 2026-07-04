@@ -67,7 +67,10 @@ import {
   certifierRemovals,
   certifierSyncEvents,
 } from "@/db/schema/certification";
+import { creditBatches } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
+import { feedstockTypes } from "@/db/schema/feedstock";
+import { productionProcesses } from "@/db/schema/production-processes";
 import type { CertifierProjectRow } from "@/data-access/certification";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as sources from "@/fn/certification/sources";
@@ -97,8 +100,15 @@ const STALE_LOCK_OFFSET_MS = LOCK_TTL_MS + 60_000;
 
 const createdFacilityIds: string[] = [];
 const createdRemovalIds: string[] = [];
+const createdBatchIds: string[] = [];
+const createdFeedstockTypeIds: string[] = [];
 
 afterAll(async () => {
+  if (createdBatchIds.length > 0) {
+    await db
+      .delete(creditBatches)
+      .where(inArray(creditBatches.id, createdBatchIds));
+  }
   if (createdRemovalIds.length > 0) {
     await db
       .delete(certificationSubmissions)
@@ -110,11 +120,22 @@ afterAll(async () => {
       .delete(certifierRemovals)
       .where(inArray(certifierRemovals.id, createdRemovalIds));
   }
-  if (createdFacilityIds.length === 0) return;
-  await db
-    .delete(certifierProjects)
-    .where(inArray(certifierProjects.facilityId, createdFacilityIds));
-  await db.delete(facilities).where(inArray(facilities.id, createdFacilityIds));
+  if (createdFacilityIds.length > 0) {
+    await db
+      .delete(productionProcesses)
+      .where(inArray(productionProcesses.facilityId, createdFacilityIds));
+    await db
+      .delete(certifierProjects)
+      .where(inArray(certifierProjects.facilityId, createdFacilityIds));
+    await db
+      .delete(facilities)
+      .where(inArray(facilities.id, createdFacilityIds));
+  }
+  if (createdFeedstockTypeIds.length > 0) {
+    await db
+      .delete(feedstockTypes)
+      .where(inArray(feedstockTypes.id, createdFeedstockTypeIds));
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -125,6 +146,7 @@ afterAll(async () => {
 interface Fixture {
   facilityId: string;
   removalId: string;
+  creditBatchId: string;
   externalProjectId: string;
 }
 
@@ -147,7 +169,44 @@ async function createFixture(): Promise<Fixture> {
     .values({ facilityId: facility.id, provider: "isometric" })
     .returning({ id: certifierRemovals.id });
   createdRemovalIds.push(removal.id);
-  return { facilityId: facility.id, removalId: removal.id, externalProjectId };
+  // A real member credit batch (with its FK chain): the §8.6.2 claim stamp
+  // inside the REAL markSubmissionSubmitted is rowcount-backstopped, so the
+  // claimed batch ids must match real rows or every submit throws.
+  const [feedstockType] = await db
+    .insert(feedstockTypes)
+    .values({
+      code: `FT-BD-${runId}`,
+      name: `Boundary Feedstock ${runId}`,
+      category: "forestry",
+      usage: "pyrolysis",
+    })
+    .returning({ id: feedstockTypes.id });
+  createdFeedstockTypeIds.push(feedstockType.id);
+  const [productionProcess] = await db
+    .insert(productionProcesses)
+    .values({ facilityId: facility.id, feedstockTypeId: feedstockType.id })
+    .returning({ id: productionProcesses.id });
+  const [batch] = await db
+    .insert(creditBatches)
+    .values({
+      code: `CB-BD-${runId}`,
+      facilityId: facility.id,
+      feedstockTypeId: feedstockType.id,
+      productionProcessId: productionProcess.id,
+      status: "pending",
+      startDate: "2026-01-01",
+      endDate: "2026-01-31",
+      certifier: "isometric",
+      removalId: removal.id,
+    })
+    .returning({ id: creditBatches.id });
+  createdBatchIds.push(batch.id);
+  return {
+    facilityId: facility.id,
+    removalId: removal.id,
+    creditBatchId: batch.id,
+    externalProjectId,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -313,7 +372,7 @@ function makeContext(
     missingDefaultTemplateId: null,
     blueprintsForTemplate: makeBlueprints(),
     unresolvedBlueprintKeys: [],
-    memberBatches: [{ id: crypto.randomUUID(), code: "CB-BD-001" }],
+    memberBatches: [{ id: fixture.creditBatchId, code: "CB-BD-001" }],
     transportCoverage: {
       feedstock: emptyCoverage,
       biochar: emptyCoverage,
@@ -369,6 +428,21 @@ function makeContext(
       },
     ],
     attributionByRunId: new Map([[PRODUCTION_RUN_ID, 1]]),
+    // §8.6.2 claim state (issue #349): unclaimed — the boundary tests exercise
+    // ledger/registry recovery, not the claim gate (isometric-submit-removal
+    // covers it). `memberBatches` points at the fixture's REAL credit-batch
+    // row so the rowcount-backstopped claim UPDATE inside the real
+    // markSubmissionSubmitted stamps exactly one row; the guarded predicate
+    // itself is pinned against real rows in production-claim-write.test.ts.
+    memberBatchClaims: [
+      {
+        creditBatchId: fixture.creditBatchId,
+        code: "CB-BD-001",
+        claimedByRemovalId: null,
+        productionRunIds: [PRODUCTION_RUN_ID],
+        applicationIds: ["app-bd-1"],
+      },
+    ],
     transportLegs: { feedstock: [], biochar: [], sample: [] },
     facilityReferenceSoilTemperature: {
       declaredSoilTemperatureC: 24.2,
@@ -386,6 +460,23 @@ function setContext(fixture: Fixture, biocharMassKg?: number): void {
   vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
     makeContext(fixture, biocharMassKg),
   );
+  // The post-claim fresh re-assert (production-claim-gate) re-reads the
+  // removal scope; mirror the context so the gate sees no drift.
+  vi.mocked(certifyContext.resolveScopeForRemoval).mockResolvedValue({
+    facilityId: fixture.facilityId,
+    removalId: fixture.removalId,
+    removal: null,
+    memberBatches: [
+      {
+        id: fixture.creditBatchId,
+        code: "CB-BD-001",
+        productionRunIds: [PRODUCTION_RUN_ID],
+        applicationIds: ["app-bd-1"],
+        durabilityOption: "200_year",
+        productionEmissionsClaimedByRemovalId: null,
+      },
+    ],
+  } as never);
 }
 
 // ---------------------------------------------------------------------------

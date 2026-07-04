@@ -370,6 +370,7 @@ function durabilityBlockersFor(
 
 function makeContext(
   biocharMassKg = ORIGINAL_BIOCHAR_MASS_KG,
+  overrides: Partial<certifyContext.RemovalSubmissionContext> = {},
 ): certifyContext.RemovalSubmissionContext {
   const latest = storedLatest();
   const runs = [makeRun(biocharMassKg)];
@@ -424,6 +425,17 @@ function makeContext(
     runs,
     batchesWithSamples,
     attributionByRunId: new Map([[PRODUCTION_RUN_ID, 1]]),
+    // §8.6.2 production-bucket claim state (issue #349) — default: unclaimed,
+    // lineage matching the fixture's single run/application.
+    memberBatchClaims: [
+      {
+        creditBatchId: CREDIT_BATCH_ID,
+        code: "CB-TEST-001",
+        claimedByRemovalId: null,
+        productionRunIds: [PRODUCTION_RUN_ID],
+        applicationIds: [APPLICATION_ID],
+      },
+    ],
     transportLegs: { feedstock: [], biochar: [], sample: [] },
     facilityReferenceSoilTemperature: {
       declaredSoilTemperatureC: 24.2,
@@ -434,6 +446,7 @@ function makeContext(
         "Facility reference soil temperature (annual average; 7 °C floor) — Test dataset (annual mean)",
       warnings: [],
     },
+    ...overrides,
   };
 }
 
@@ -462,6 +475,30 @@ function makeLineage(args: {
     reactor: null,
     feedstocks: [],
     warnings: [],
+  } as never;
+}
+
+// The fresh scope the post-claim re-assert (production-claim-gate) reads via
+// resolveScopeForRemoval — claims + lineage fingerprint per member batch.
+function makeFreshScope(overrides: {
+  claimedByRemovalId: string | null;
+  productionRunIds?: string[];
+  applicationIds?: string[];
+}): Awaited<ReturnType<typeof certifyContext.resolveScopeForRemoval>> {
+  return {
+    facilityId: FACILITY_ID,
+    removalId: REMOVAL_ID,
+    removal: null,
+    memberBatches: [
+      {
+        id: CREDIT_BATCH_ID,
+        code: "CB-TEST-001",
+        productionRunIds: overrides.productionRunIds ?? [PRODUCTION_RUN_ID],
+        applicationIds: overrides.applicationIds ?? [APPLICATION_ID],
+        durabilityOption: "200_year",
+        productionEmissionsClaimedByRemovalId: overrides.claimedByRemovalId,
+      },
+    ],
   } as never;
 }
 
@@ -537,9 +574,26 @@ beforeEach(() => {
       }
     },
   );
+  vi.mocked(ledger.retireStaleSubmissionDraft).mockImplementation(
+    async (_userId, id) => {
+      const row = storedRows.find((r) => r.id === id);
+      if (row && row.status === "draft") {
+        row.status = "superseded";
+        row.supersededAt = new Date();
+        row.lockedAt = null;
+      }
+    },
+  );
   vi.mocked(ledger.appendSyncEvent).mockResolvedValue(undefined as never);
   vi.mocked(removalsDA.updateRemovalDates).mockResolvedValue(
     undefined as never,
+  );
+  // §8.6.2 fresh-read re-assert (production-claim-gate): after the draft
+  // claim, submitRemoval re-reads the removal scope (claims + lineage
+  // fingerprint) through resolveScopeForRemoval. Default: unclaimed,
+  // lineage matching makeContext; the TOCTOU tests override per-test.
+  vi.mocked(certifyContext.resolveScopeForRemoval).mockResolvedValue(
+    makeFreshScope({ claimedByRemovalId: null }),
   );
 
   vi.mocked(isometric.reconcileDatapoint).mockResolvedValue({ found: false });
@@ -676,6 +730,14 @@ describe("submitRemoval — happy path", () => {
     expect(removalsDA.updateRemovalDates).not.toHaveBeenCalled();
     // No new ledger row.
     expect(storedRows).toHaveLength(1);
+    // …but the §8.6.2 claim IS lazily stamped (ADR 0020): a removal
+    // submitted before the claim column existed would otherwise never
+    // record its production-emissions claim (the guarded UPDATE is
+    // idempotent for the already-stamped common case).
+    expect(ledger.stampProductionEmissionsClaim).toHaveBeenCalledWith(
+      USER_ID,
+      { removalId: REMOVAL_ID, creditBatchIds: [CREDIT_BATCH_ID] },
+    );
   });
 
   it("supersedes to v=2 when the aggregated source data changes between submits", async () => {
@@ -969,5 +1031,241 @@ describe("submitRemoval — durability measurement-samples gate (Phase 3, staged
     // Gated before any aggregation/claim — nothing posted, no ledger row.
     expect(createDatapointFake).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue #349 / ADR 0020 — §8.6.2 production-emissions front-loading. A credit
+// batch's production-bucket emissions submit exactly once: the first successful
+// submit stamps the claiming removal onto the batch; a DIFFERENT removal fails
+// closed before any POST; the SAME removal resubmits/supersedes freely.
+// ---------------------------------------------------------------------------
+
+describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349)", () => {
+  it("fails closed before any POST when a member batch is claimed by a different removal", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(ORIGINAL_BIOCHAR_MASS_KG, {
+        memberBatchClaims: [
+          {
+            creditBatchId: CREDIT_BATCH_ID,
+            code: "CB-TEST-001",
+            claimedByRemovalId: "rem-other",
+            productionRunIds: [PRODUCTION_RUN_ID],
+            applicationIds: [APPLICATION_ID],
+          },
+        ],
+      }),
+    );
+    const createDatapointFake = vi.fn(fakeExternalIds("dp"));
+    const createGhgEntryFake = vi.fn(fakeExternalIds("rmv"));
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      createDatapointFake as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      createGhgEntryFake as never,
+    );
+
+    await expect(
+      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+    ).rejects.toThrow(/already claimed/);
+    // Failed closed — nothing was posted and no ledger row was claimed.
+    expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(createGhgEntryFake).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
+  });
+
+  it("records the claim on the member batches when the ledger flips to submitted", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dp") as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      fakeExternalIds("rmv") as never,
+    );
+
+    await submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID });
+
+    expect(ledger.markSubmissionSubmitted).toHaveBeenCalledWith(
+      USER_ID,
+      storedRows[0].id,
+      expect.objectContaining({
+        productionEmissionsClaim: {
+          removalId: REMOVAL_ID,
+          creditBatchIds: [CREDIT_BATCH_ID],
+        },
+      }),
+    );
+  });
+
+  it("keeps claiming on a supersede re-submit by the same removal", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(ORIGINAL_BIOCHAR_MASS_KG),
+    );
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      fakeExternalIds("dp") as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      fakeExternalIds("rmv") as never,
+    );
+
+    await submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID });
+
+    // Second submit: the batch is now claimed by THIS removal (the first
+    // submit stamped it) and the source mass changed → v=2 supersede. The
+    // self-claim must not block — in the pre-flight gate NOR the post-claim
+    // fresh-read re-assert — and the claim arg rides again (idempotent
+    // guarded UPDATE on the data-access side).
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(CHANGED_BIOCHAR_MASS_KG, {
+        memberBatchClaims: [
+          {
+            creditBatchId: CREDIT_BATCH_ID,
+            code: "CB-TEST-001",
+            claimedByRemovalId: REMOVAL_ID,
+            productionRunIds: [PRODUCTION_RUN_ID],
+            applicationIds: [APPLICATION_ID],
+          },
+        ],
+      }),
+    );
+    vi.mocked(certifyContext.resolveScopeForRemoval).mockResolvedValue(
+      makeFreshScope({ claimedByRemovalId: REMOVAL_ID }),
+    );
+
+    const second = await submitRemoval({
+      userId: USER_ID,
+      removalId: REMOVAL_ID,
+    });
+
+    expect(second.version).toBe(2);
+    const lastCall = vi
+      .mocked(ledger.markSubmissionSubmitted)
+      .mock.calls.at(-1);
+    expect(lastCall?.[2]).toMatchObject({
+      productionEmissionsClaim: {
+        removalId: REMOVAL_ID,
+        creditBatchIds: [CREDIT_BATCH_ID],
+      },
+    });
+  });
+
+  it("re-asserts from a fresh read after the draft claim: a mid-flight foreign claim blocks before any POST", async () => {
+    // TOCTOU window: the pre-flight context still says unclaimed…
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    // …but by the time the draft row is claimed, the DB says a DIFFERENT
+    // removal stamped the batch (regroup + foreign submit in the window).
+    vi.mocked(certifyContext.resolveScopeForRemoval).mockResolvedValue(
+      makeFreshScope({ claimedByRemovalId: "rem-other" }),
+    );
+    const createDatapointFake = vi.fn(fakeExternalIds("dp"));
+    const createGhgEntryFake = vi.fn(fakeExternalIds("rmv"));
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      createDatapointFake as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      createGhgEntryFake as never,
+    );
+
+    await expect(
+      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+    ).rejects.toThrow(/already claimed/);
+    // Blocked AFTER the draft claim (the locked draft row exists, safe —
+    // pre-flight re-fires on retry once the lock TTL passes) but BEFORE any
+    // registry POST or ledger flip.
+    expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(createGhgEntryFake).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(1);
+    expect(storedRows[0].status).toBe("draft");
+    expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
+  });
+
+  it("fails closed before any POST when the batch's run lineage changed between context load and the draft claim", async () => {
+    // The payload was built from a context whose batch carried ONE run…
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    // …but by the time the draft row froze membership, a regroup had added a
+    // second run to the batch — the built payload no longer covers the
+    // batch's production bucket, so stamping the claim would under-claim.
+    vi.mocked(certifyContext.resolveScopeForRemoval).mockResolvedValue(
+      makeFreshScope({
+        claimedByRemovalId: null,
+        productionRunIds: [PRODUCTION_RUN_ID, "pr-added-in-window"],
+      }),
+    );
+    const createDatapointFake = vi.fn(fakeExternalIds("dp"));
+    const createGhgEntryFake = vi.fn(fakeExternalIds("rmv"));
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      createDatapointFake as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      createGhgEntryFake as never,
+    );
+
+    await expect(
+      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+    ).rejects.toThrow(/membership or run lineage changed/);
+    expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(createGhgEntryFake).not.toHaveBeenCalled();
+    expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
+  });
+});
+
+describe("submitRemoval — stale-revision resume gate (ADR 0020)", () => {
+  it("retires an expired draft built under an older mapping revision, fails closed, and a retry mints a fresh version", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    // An interrupted draft from a previous deploy: lock long expired (routes
+    // to resume), snapshot stamped with an obsolete INPUT_MAPPING revision.
+    const staleRow = newLedgerRow({
+      provider: "isometric",
+      submissionType: "removal",
+      localEntityType: "removal",
+      localEntityId: REMOVAL_ID,
+      version: 1,
+      payloadSnapshot: { __mappingRevision: "rev-obsolete" },
+      payloadHash: "hash-from-old-accounting",
+      metadata: null,
+    });
+    staleRow.lockedAt = new Date(0);
+    storedRows.push(staleRow);
+    const createDatapointFake = vi.fn(fakeExternalIds("dp"));
+    const createGhgEntryFake = vi.fn(fakeExternalIds("rmv"));
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      createDatapointFake as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      createGhgEntryFake as never,
+    );
+
+    await expect(
+      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+    ).rejects.toThrow(/older accounting revision/);
+    // Retired (terminal, non-blocking), nothing POSTed, nothing flipped.
+    expect(ledger.retireStaleSubmissionDraft).toHaveBeenCalledWith(
+      USER_ID,
+      staleRow.id,
+      expect.objectContaining({
+        reason: expect.stringContaining("rev-obsolete"),
+      }),
+    );
+    expect(staleRow.status).toBe("superseded");
+    expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(createGhgEntryFake).not.toHaveBeenCalled();
+    expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
+
+    // The retry does NOT resume the retired draft: it mints a fresh version
+    // from live data under the current revision (no stuck-forever loop).
+    const retried = await submitRemoval({
+      userId: USER_ID,
+      removalId: REMOVAL_ID,
+    });
+    expect(retried.version).toBe(2);
+    expect(createGhgEntryFake).toHaveBeenCalledTimes(1);
   });
 });
