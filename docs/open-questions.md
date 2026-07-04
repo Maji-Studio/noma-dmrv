@@ -514,6 +514,14 @@ they don't churn a freshly-introduced surface mid-review:
   `isometric-ghg-statement-submit.test.ts`) drop the deprecated keys; (b) delete the
   🚫-marked deprecated rows from `docs/isometric/openapi-index.md`. No app-code
   change expected — the wire layer already only calls the new routes.
+- **Sunset date CONFIRMED ~September 2026** (issue #353, 2026-07-04) — previously
+  an unverified assumption from #291. Post-sunset cleanup above is unchanged.
+- **Domain term "Removal" is RETAINED** (stakeholder decision, 2026-07-04): the
+  `Removal → GhgEntry` *domain* rename floated in ADR 0014 is **decided against**.
+  Only the wire/API layer uses `ghg_entry*` (already done); our routes, UI,
+  tables, and `CONTEXT.md` keep "Removal" as the canonical submission-unit term.
+  Verified 2026-07-04 that no deprecated `/removals` or `/removal_templates`
+  endpoint calls remain (`submissions.test.ts` guards it).
 - Full inventory + verified renames + phased plan:
   [`docs/plans/2026-06-10-isometric-ghg-entry-migration.md`](./plans/2026-06-10-isometric-ghg-entry-migration.md).
 
