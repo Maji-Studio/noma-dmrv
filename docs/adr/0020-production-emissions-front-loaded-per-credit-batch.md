@@ -55,16 +55,20 @@ start → latest application).
    boolean) because the predicate is identity — "claimed by ME vs ANOTHER" —
    which enables the guarded UPDATE, answers the audit question directly,
    and stays forward-compatible with issue #353's earliest-entry semantics.
-3. **Foreign claim fails closed — twice, both before any registry POST.**
+3. **Foreign claim and stale payloads fail closed before any registry POST.**
    `submitRemoval` asserts that no member batch is claimed by a *different*
    removal: once pre-flight against the loaded context, and once from a
    fresh database read immediately after the submission draft is claimed
    (the blocking draft row freezes membership, so a foreign claim stamped
    between context load and draft claim is caught before it could be
-   silently no-opped by the guarded UPDATE after the POSTs). The correct
-   follow-up — a delivery-only entry that suppresses the production
-   bucket — is deferred behind issue #353; until then the condition is a
-   loud error, never silent suppression.
+   silently no-opped by the guarded UPDATE after the POSTs). After that draft
+   exists, the pipeline also rebuilds the full semantic payload and compares
+   its hash to the claimed snapshot hash; same-ID source-data edits that change
+   applied mass/date, run inputs, sample chemistry, transport scalars, or
+   source bindings retire the stale draft before any POST. The correct
+   follow-up — a delivery-only entry that suppresses the production bucket — is
+   deferred behind issue #353; until then these conditions are loud errors,
+   never silent suppression.
 4. **Uniform delivery fraction.** Biochar transport scales by one
    removal-wide fraction (`appliedDryKg / totalBiocharOutputKg`, the shared
    `appliedBiocharFraction` definition). The legs are already

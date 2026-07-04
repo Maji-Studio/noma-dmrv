@@ -1306,9 +1306,7 @@ two oversized data-access files. The remainder is still open:
   `transportLegs (entity_type, entity_id)`. One `pnpm db:generate` migration.
   (Superset of the narrower isometric-table composites in `perf/missing-indexes`
   below — fold those into the same migration.)
-- **Phase 3 — read-path + correctness.** `creditBatches` aggregate-drift (T2) is
-  resolved (2026-07-03) — the stored CO₂e/mass columns were dropped and are now
-  derived on read (ADR 0019). Remaining: H5 explicit column selection on
+- **Phase 3 — read-path + correctness.** H5 explicit column selection on
   wide-table reads, full document pagination, a central `query-config.ts`,
   narrowed React Query invalidation, and `revalidatePath` on key mutations.
 - **Phase 4 (remainder) — file size.** `seed-data.ts` (1165 LOC) and ~11

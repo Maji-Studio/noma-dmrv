@@ -884,7 +884,7 @@ pnpm add @phosphor-icons/react
 
 **IMPORTANT - Correct Import Path and Names:**
 
-⚠️ **Always use the `/dist/ssr` import path with the `*Icon`-suffixed export names** — the bare names (`Trash`, `Pencil`, `Plus`, …) are deprecated by the library and no longer used anywhere in this codebase:
+⚠️ **Use the `/dist/ssr` import path with the `*Icon`-suffixed export names for new code** — the bare names (`Trash`, `Pencil`, `Plus`, …) are deprecated by the library and may still exist in older surfaces:
 
 ```tsx
 // ✅ CORRECT - SSR-compatible, works in both client and server components
@@ -977,7 +977,7 @@ A versatile button component with support for different variants, sizes, and sta
 **Example Usage:**
 ```tsx
 import { Button } from '@/src/components/ui/Button'
-import { ArrowRight, Plus } from '@phosphor-icons/react/dist/ssr'
+import { ArrowRightIcon, PlusIcon } from '@phosphor-icons/react/dist/ssr'
 
 // Basic button
 <Button>Click me</Button>
@@ -985,12 +985,12 @@ import { ArrowRight, Plus } from '@phosphor-icons/react/dist/ssr'
 // Primary action with icon
 <Button variant="primary">
   Continue
-  <ArrowRight size={20} weight="bold" />
+  <ArrowRightIcon size={20} weight="bold" />
 </Button>
 
 // Icon-only button
 <Button width="square" aria-label="Add">
-  <Plus size={20} weight="bold" />
+  <PlusIcon size={20} weight="bold" />
 </Button>
 
 // As a link (polymorphic)

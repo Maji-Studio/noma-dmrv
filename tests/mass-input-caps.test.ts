@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { updateApplicationSchema } from "@/schemas/applications";
 import { deliveryFormSchema } from "@/schemas/deliveries";
+import { storageLocationQuickAddSchema } from "@/schemas/quick-add";
+import {
+  storageLocationFormSchema,
+  updateStorageLocationSchema,
+} from "@/schemas/storage-locations";
+import { createTransportLegSchema } from "@/schemas/transport-legs";
 import {
   MASS_INPUT_MAX_KG,
   MASS_INPUT_MAX_TONNES,
@@ -43,6 +49,31 @@ describe("mass input caps", () => {
     expect(result.success).toBe(true);
   });
 
+  it("rejects negative delivery wet and dry mass before the DB check", () => {
+    const result = deliveryFormSchema.safeParse({
+      orderId: UUID,
+      deliveryDate: new Date("2026-07-01"),
+      deliveredWetMassKg: -1,
+      massDryKg: -1,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["deliveredWetMassKg"],
+            message: "Wet mass must be >= 0",
+          }),
+          expect.objectContaining({
+            path: ["massDryKg"],
+            message: "Dry mass must be >= 0",
+          }),
+        ]),
+      );
+    }
+  });
+
   it("rejects a tonne-denominated application mass above the shared cap", () => {
     const result = updateApplicationSchema.safeParse({
       applicationId: UUID,
@@ -60,5 +91,87 @@ describe("mass input caps", () => {
         ]),
       );
     }
+  });
+
+  it("rejects storage capacity above the shared kg cap across form, update, and quick-add schemas", () => {
+    const cases = [
+      storageLocationFormSchema.safeParse({
+        name: "Biochar bin",
+        type: "biochar_bin",
+        facilityId: UUID,
+        capacityKg: MASS_INPUT_MAX_KG + 1,
+      }),
+      updateStorageLocationSchema.safeParse({
+        storageLocationId: UUID,
+        capacityKg: MASS_INPUT_MAX_KG + 1,
+      }),
+      storageLocationQuickAddSchema.safeParse({
+        name: "Biochar bin",
+        type: "biochar_bin",
+        facilityId: UUID,
+        capacityKg: MASS_INPUT_MAX_KG + 1,
+      }),
+    ];
+
+    for (const result of cases) {
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              path: ["capacityKg"],
+              message: MASS_MAX_KG_MESSAGE,
+            }),
+          ]),
+        );
+      }
+    }
+  });
+
+  it("accepts storage capacity exactly at the shared kg cap", () => {
+    const result = storageLocationFormSchema.safeParse({
+      name: "Biochar bin",
+      type: "biochar_bin",
+      facilityId: UUID,
+      capacityKg: MASS_INPUT_MAX_KG,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects transport load mass above the shared kg cap", () => {
+    const result = createTransportLegSchema.safeParse({
+      entityType: "biochar",
+      entityId: UUID,
+      distanceKm: 10,
+      transportMethodType: "road",
+      loadMassKg: MASS_INPUT_MAX_KG + 1,
+      calculationMethodType: "distance_based",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["loadMassKg"],
+            message: MASS_MAX_KG_MESSAGE,
+          }),
+        ]),
+      );
+    }
+  });
+
+  it("accepts transport load mass exactly at the shared kg cap", () => {
+    const result = createTransportLegSchema.safeParse({
+      entityType: "biochar",
+      entityId: UUID,
+      distanceKm: 10,
+      transportMethodType: "road",
+      loadMassKg: MASS_INPUT_MAX_KG,
+      calculationMethodType: "distance_based",
+    });
+
+    expect(result.success).toBe(true);
   });
 });

@@ -26,6 +26,9 @@
  *           and then stamp a production claim for changed batch contents.
  *      A throw here leaves the draft locked until the lock TTL — safe
  *      (fail-closed, and the pre-flight gate re-fires loudly on retry).
+ *      `submitRemoval` then compares the full semantic payload hash from a
+ *      fresh rebuild against the claimed draft snapshot, catching same-ID
+ *      source-data edits that lineage IDs cannot represent.
  */
 import {
   retireStaleSubmissionDraft,
