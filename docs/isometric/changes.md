@@ -13,6 +13,35 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-07-04 (Isometric compliance sign-off — issue #353)
+
+Answers confirmed for the three protocol/platform questions raised in #353
+(follow-up to #349 / ADR 0020). Recorded per stakeholder confirmation on
+2026-07-04:
+
+- **§8.6.2 cross-period allocation — CONFIRMED IN WRITING by Isometric.** The
+  front-loading pattern is accepted: a batch's **earliest-quarter** GHG entry
+  carries **all** production-side operational emissions (grid electricity,
+  genset + startup diesel, feedstock mass CI, feedstock/sample transport);
+  later-quarter entries from the same batch carry **only** that quarter's
+  delivery emissions + applied-mass-scoped stored CO₂e. This is more
+  conservative than proration (emissions land earlier, never deferred) and
+  **unblocks the #349 cross-quarter straddle-path live submission**.
+- **`removal*` / `removal_template*` alias sunset — CONFIRMED ~Sept 2026.** The
+  deprecated endpoint aliases (renamed to `ghg_entry*`) sunset around September
+  2026. **Action:** migrate all remaining `removal*`/`removal_template*` API
+  usage to `ghg_entry*` now and remove the deprecated surface (see the dated
+  entry below once the migration lands). Supersedes the "~Sept 2026 (unverified)"
+  note from #291.
+- **Post-verification material-error remedy — CONFIRMED.** Verified GHG
+  statements are immutable; the remedy for a material error is always buffer
+  pool / reversal, never a restatement of the verified statement.
+- **API-level datapoint sharing across a batch's GHG entries — STILL OPEN.**
+  Not yet confirmed; #353 stays open on this item only. Measurement samples are
+  batch-anchored, so sharing one batch's chemistry across its two quarterly
+  entries via the API is the *presumed* model, but Isometric has not confirmed
+  the UI "cannot share between removals" restriction is UI-only.
+
 ## 2026-07-04 (generator/startup diesel split — two pyrolysis fuel_usage_by_volume components)
 
 Amends #319. The Dark Earth template now declares **two** pyrolysis
