@@ -29,6 +29,7 @@ import {
 import { feedstocks } from "@/db/schema/feedstock";
 import type {
   CreateCreditBatchData,
+  DurabilityOption,
   UpdateCreditBatchData,
 } from "@/schemas/credit-batches";
 
@@ -75,6 +76,13 @@ export type {
 
 export interface CreditBatchWithRelations extends CreditBatch {
   facility: { name: string } | null;
+  /**
+   * The batch's durability tier — join-derived from its facility (ADR 0021).
+   * The tier is no longer a `credit_batches` column; every batch-loading query
+   * re-attaches it from `facilities.durabilityOption` so the ~28 downstream
+   * `batch.durabilityOption` read sites keep working unchanged.
+   */
+  durabilityOption: DurabilityOption;
   applicationCount: number;
   applicationIds: string[];
   productionRunCount: number;
@@ -94,6 +102,12 @@ type CreditBatchWithOptionalPreview = Omit<
 
 const CERTIFIER_PROVIDER = "isometric" as const;
 const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
+
+// Fallback tier when the facility LEFT JOIN yields null. Every credit batch has
+// a NOT NULL `facility_id` FK, so this is unreachable in practice — it only
+// satisfies the leftJoin's nullable column type. Matches the facility column
+// default (ADR 0021).
+const DURABILITY_TIER_FALLBACK: DurabilityOption = "1000_year";
 
 export interface CreditBatchProductionRunOption {
   id: string;
@@ -233,6 +247,7 @@ export async function getCreditBatches(
     .select({
       creditBatch: creditBatches,
       facilityName: facilities.name,
+      facilityDurabilityOption: facilities.durabilityOption,
     })
     .from(creditBatches)
     .leftJoin(facilities, eq(creditBatches.facilityId, facilities.id))
@@ -258,6 +273,7 @@ export async function getCreditBatches(
     return {
       ...b.creditBatch,
       facility: b.facilityName ? { name: b.facilityName } : null,
+      durabilityOption: b.facilityDurabilityOption ?? DURABILITY_TIER_FALLBACK,
       applicationCount: applicationIds.length,
       applicationIds,
       productionRunCount: productionRunIds.length,
@@ -291,6 +307,7 @@ export async function getCreditBatchById(
     .select({
       creditBatch: creditBatches,
       facilityName: facilities.name,
+      facilityDurabilityOption: facilities.durabilityOption,
     })
     .from(creditBatches)
     .leftJoin(facilities, eq(creditBatches.facilityId, facilities.id))
@@ -299,6 +316,9 @@ export async function getCreditBatchById(
   if (!batch) {
     return null;
   }
+
+  const durabilityOption =
+    batch.facilityDurabilityOption ?? DURABILITY_TIER_FALLBACK;
 
   const productionRunIdsByBatch = await getProductionRunIdsByBatchId([id]);
   const productionRunIds = productionRunIdsByBatch[id] ?? [];
@@ -312,6 +332,7 @@ export async function getCreditBatchById(
   const result = {
     ...batch.creditBatch,
     facility: batch.facilityName ? { name: batch.facilityName } : null,
+    durabilityOption,
     applicationCount: applicationIds.length,
     applicationIds,
     productionRunCount: productionRunIds.length,
@@ -329,7 +350,7 @@ export async function getCreditBatchById(
     ...result,
     co2eStoredPreview: await buildCo2eStoredPreview(
       userId,
-      batch.creditBatch,
+      { ...batch.creditBatch, durabilityOption },
       applicationIds
     ),
     previewAvailable: true,
@@ -398,7 +419,8 @@ export async function createCreditBatch(
         startDate: formatUtcDate(batchData.startDate),
         endDate: formatUtcDate(batchData.endDate),
         certifier,
-        durabilityOption: batchData.durabilityOption,
+        // durabilityOption is no longer a batch column — inherited from the
+        // facility (ADR 0021).
         hToCorgRatio: batchData.hToCorgRatio ?? null,
         meanRandomReflectancePercent:
           batchData.meanRandomReflectancePercent ?? null,
@@ -435,11 +457,12 @@ export async function createCreditBatch(
     return batch;
   });
 
-  // Fetch facility name
+  // Fetch facility name + the facility-derived durability tier (ADR 0021).
   const [facility] = await db
-    .select({ name: facilities.name })
+    .select({ name: facilities.name, durabilityOption: facilities.durabilityOption })
     .from(facilities)
     .where(eq(facilities.id, creditBatch.facilityId));
+  const durabilityOption = facility?.durabilityOption ?? DURABILITY_TIER_FALLBACK;
   const memberProductionRunIds = productionRunIds ?? [];
   const rollup =
     memberProductionRunIds.length > 0
@@ -452,7 +475,8 @@ export async function createCreditBatch(
 
   return {
     ...creditBatch,
-    facility: facility ?? null,
+    facility: facility ? { name: facility.name } : null,
+    durabilityOption,
     applicationCount: applicationIds.length,
     applicationIds,
     productionRunCount: memberProductionRunIds.length,
@@ -460,7 +484,7 @@ export async function createCreditBatch(
     appliedWeightTons: rollup?.appliedWeightTons ?? 0,
     co2eStoredPreview: await buildCo2eStoredPreview(
       userId,
-      creditBatch,
+      { ...creditBatch, durabilityOption },
       applicationIds
     ),
     previewAvailable: true,
@@ -490,8 +514,7 @@ export async function updateCreditBatch(
     updateData.startDate = formatUtcDate(updateFields.startDate);
   if (updateFields.endDate !== undefined)
     updateData.endDate = formatUtcDate(updateFields.endDate);
-  if (updateFields.durabilityOption !== undefined)
-    updateData.durabilityOption = updateFields.durabilityOption;
+  // durabilityOption is inherited from the facility (ADR 0021) — no batch write.
   if (updateFields.hToCorgRatio !== undefined)
     updateData.hToCorgRatio = updateFields.hToCorgRatio;
   if (updateFields.meanRandomReflectancePercent !== undefined)

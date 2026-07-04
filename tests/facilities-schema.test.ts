@@ -8,7 +8,7 @@ import {
 const baseFacilityInput = {
   name: "Moshi Biochar Production Center",
   country: "Tanzania",
-  defaultDurabilityOption: "200_year",
+  durabilityOption: "200_year",
 };
 
 describe("facility schemas", () => {

@@ -336,7 +336,7 @@ export async function seedGroupedRemovalWithChain(
         startDate: today,
         endDate: today,
         status: "draft",
-        durabilityOption: "200_year",
+        // Tier is inherited from the facility (ADR 0021), not a batch column.
         hToCorgRatio: CREDIT_BATCH_H_TO_CORG_RATIO,
         removalId: id.removal,
       });
@@ -680,7 +680,7 @@ export async function seedUngroupedReadyBatchWithChain(
         startDate: today,
         endDate: today,
         status: "draft",
-        durabilityOption: "200_year",
+        // Tier is inherited from the facility (ADR 0021), not a batch column.
         hToCorgRatio: CREDIT_BATCH_H_TO_CORG_RATIO,
       });
       await tx.insert(schema.creditBatchProductionRuns).values({

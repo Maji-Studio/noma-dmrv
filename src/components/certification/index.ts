@@ -6,6 +6,7 @@ export {
 } from "./facility-certifier-dialog";
 export { FacilityCertifierLinkLoader } from "./facility-certifier-link-loader";
 export { FacilityIsometricConnector } from "./facility-isometric-connector";
+export { DurabilityTierSelect } from "./durability-tier-select";
 export { CertifyPanel } from "./certify-panel";
 export { SourcesPanel } from "./sources-panel";
 export { RemovalsList } from "./removals-list";
