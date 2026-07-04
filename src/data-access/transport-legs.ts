@@ -29,6 +29,10 @@ import {
   positiveOrNull,
   type DerivedTransportLeg,
 } from "@/lib/calculations/transport-leg";
+import {
+  assertCanMutateCertifiedLineage,
+  type CertifiedLineageEntityType,
+} from "./certification-lineage-guards";
 import { requireAuth } from "./utils";
 
 export type TransportEntityType = TransportEntityTypeValue;
@@ -37,6 +41,15 @@ const ENTITY_LABEL: Record<TransportEntityType, string> = {
   feedstock: "Feedstock",
   biochar: "Biochar product",
   sample: "Sample",
+};
+
+const CERTIFIED_LINEAGE_TARGET: Record<
+  TransportEntityType,
+  CertifiedLineageEntityType
+> = {
+  feedstock: "feedstock",
+  biochar: "biocharProduct",
+  sample: "sample",
 };
 
 // sample resolves indirectly via `production_runs.facility_id`; others have
@@ -164,13 +177,24 @@ export async function createTransportLeg(
 
   await resolveEntityFacility(input.entityType, input.entityId);
 
-  const [row] = await db
-    .insert(transportLegs)
-    .values({
-      ...input,
-      entityType: input.entityType,
-    })
-    .returning();
+  const [row] = await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      {
+        entityType: CERTIFIED_LINEAGE_TARGET[input.entityType],
+        entityId: input.entityId,
+      },
+      "create",
+    );
+
+    return tx
+      .insert(transportLegs)
+      .values({
+        ...input,
+        entityType: input.entityType,
+      })
+      .returning();
+  });
 
   if (!row) {
     throw new SafeError("Failed to create transport leg");
@@ -199,11 +223,22 @@ export async function updateTransportLeg(
   }
   await resolveEntityFacility(existing.entityType, existing.entityId);
 
-  const [row] = await db
-    .update(transportLegs)
-    .set({ ...input, updatedAt: new Date() })
-    .where(eq(transportLegs.id, id))
-    .returning();
+  const [row] = await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      {
+        entityType: CERTIFIED_LINEAGE_TARGET[existing.entityType],
+        entityId: existing.entityId,
+      },
+      "update",
+    );
+
+    return tx
+      .update(transportLegs)
+      .set({ ...input, updatedAt: new Date() })
+      .where(eq(transportLegs.id, id))
+      .returning();
+  });
 
   if (!row) {
     throw new SafeError("Transport leg not found");
@@ -227,10 +262,21 @@ export async function deleteTransportLeg(
   }
   await resolveEntityFacility(existing.entityType, existing.entityId);
 
-  const result = await db
-    .delete(transportLegs)
-    .where(eq(transportLegs.id, id))
-    .returning({ id: transportLegs.id });
+  const result = await db.transaction(async (tx) => {
+    await assertCanMutateCertifiedLineage(
+      tx,
+      {
+        entityType: CERTIFIED_LINEAGE_TARGET[existing.entityType],
+        entityId: existing.entityId,
+      },
+      "delete",
+    );
+
+    return tx
+      .delete(transportLegs)
+      .where(eq(transportLegs.id, id))
+      .returning({ id: transportLegs.id });
+  });
 
   if (result.length === 0) {
     throw new SafeError("Transport leg not found");

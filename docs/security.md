@@ -64,9 +64,10 @@ ever receives a `SafeError` or Zod validation message, or a generic fallback
 otherwise. `sanitizeErrorMessage` (`src/lib/log`) additionally redacts
 everything from a query's `params:` marker onward before logging, so bound
 values never land in server logs either — only the parameterized SQL shape
-is kept for debuggability. Numeric Zod fields are capped at `PG_INTEGER_MAX`
-(`src/schemas/helpers`) so integer overflow can't itself trigger a raw DB
-error.
+is kept for debuggability. Mass-input schemas use the shared caps in
+`src/schemas/helpers` (`MASS_INPUT_MAX_*`) so mass overflows are rejected by Zod
+before they can surface as raw DB errors; integer/count fields use
+`PG_INTEGER_MAX` where they map to Postgres integer columns.
 
 ## Operational Defaults
 
