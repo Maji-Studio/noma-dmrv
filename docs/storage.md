@@ -203,6 +203,16 @@ The local-fs route also enforces a hard `LOCAL_FS_GLOBAL_MAX_BYTES =
   legacy `fileUrl`, pending refusal, invariant violation).
 - `tests/storage-local-fs.test.ts` — path-safety + HMAC token
   round-trip / tampering / expiry tests.
+- `scripts/storage-smoke.ts` (`pnpm storage:smoke`) — a real round-trip
+  against the configured S3-compatible bucket (presigned PUT → HEAD →
+  signed GET, byte-for-byte → DELETE → HEAD 404), covering what the unit
+  tests above deliberately fake: credentials, region/endpoint, path-style
+  addressing, and bucket permissions. Refuses to run against `local-fs`
+  (exit 2) — a round-trip there proves nothing. Runs daily against the
+  staging bucket via `.github/workflows/storage-health.yml` (mirrors
+  `isometric-health.yml`; skips cleanly if `OP_SERVICE_ACCOUNT_TOKEN` is
+  absent). Does not test browser CORS — only a cross-origin PUT from the
+  app exercises that.
 
 ## Related
 

@@ -7,14 +7,17 @@
  *     count, total biochar output, applied dry mass) so an operator sees what's
  *     being submitted at a glance.
  *   - `attributionByRunId` — the per-run applied-biochar fraction the submit
- *     pipeline scopes by, so a partially-applied run contributes only its
- *     applied share.
+ *     pipeline scopes STORED/DELIVERY-bucket quantities by, so a
+ *     partially-applied run contributes only its applied share of those.
+ *     PRODUCTION-bucket inputs are exempt: they front-load in full on the
+ *     batch's claiming GHG entry (§8.6.2, issue #349, ADR 0020).
  *
  * Computing both from one walk is deliberate: the Review summary and the submit
  * payload share the same numerator (applied dry kg per run) and denominator
- * (run output), so the two can never drift (ADR 0003 — a removal counts only
- * the biochar that reached soil). `appliedDryKg / totalBiocharOutputKg` is the
- * overall attribution; per run it's `aggregateProductionRuns`'s scoping factor.
+ * (run output), so the two can never drift (ADR 0003 as narrowed by ADR 0020 —
+ * a removal's stored quantity counts only the biochar that reached soil).
+ * `appliedDryKg / totalBiocharOutputKg` is the overall attribution; per run
+ * it's `aggregateProductionRuns`'s scoping factor.
  *
  * Pure and dependency-light: it takes the two arrays the submission context
  * already resolves via narrow structural params, so it stays unit-testable and
@@ -53,6 +56,22 @@ export const EMPTY_RUN_SUMMARY: RemovalRunSummary = {
   totalBiocharOutputKg: 0,
   appliedDryKg: 0,
 };
+
+/**
+ * Removal-wide applied-biochar fraction — the DELIVERY-bucket scaling factor
+ * (§8.6.2, issue #349, ADR 0020): appliedDryKg / totalBiocharOutputKg, falling
+ * back to full attribution (1) when output is zero/absent, mirroring the
+ * per-run fallback in `buildMassAccounting`. The ONE shared definition: both
+ * the submitted biochar-transport scalar (`submitRemoval` →
+ * `enrichWithTransportLegs`) and the transport evidence-ledger PDF's explicit
+ * "× applied share" line derive from it, so the ledger always reconciles to
+ * the submitted datapoint by construction.
+ */
+export function appliedBiocharFraction(summary: RemovalRunSummary): number {
+  return summary.totalBiocharOutputKg > 0
+    ? summary.appliedDryKg / summary.totalBiocharOutputKg
+    : 1;
+}
 
 // Only the fields the accounting reads — structurally satisfied by
 // `ChainOfCustodyData` / `ProductionRunWithSamples` at the call site.

@@ -3,6 +3,8 @@ import {
   gpsPairSuperRefine,
   latitudeSchema,
   longitudeSchema,
+  MASS_INPUT_MAX_TONNES,
+  MASS_MAX_TONNES_MESSAGE,
 } from "./helpers";
 
 // ============================================
@@ -56,10 +58,12 @@ const applicationFormBaseSchema = z.object({
   deliveryId: z.string().min(1, "Please select a delivery").uuid("Invalid delivery"),
   biocharAppliedTons: z
     .number({ error: "Biochar applied (kg) is required" })
-    .min(0, "Must be a positive number"),
+    .min(0, "Must be a positive number")
+    .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE),
   biocharAppliedDryTons: z
     .number()
     .min(0, "Must be a positive number")
+    .max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE)
     .optional()
     .nullable(),
 
@@ -131,8 +135,8 @@ export const updateApplicationSchema = z.object({
     .optional(),
   applicationDate: z.coerce.date().optional(),
   deliveryId: z.string().uuid().optional(),
-  biocharAppliedTons: z.number().min(0).optional(),
-  biocharAppliedDryTons: z.number().min(0).optional().nullable(),
+  biocharAppliedTons: z.number().min(0).max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE).optional(),
+  biocharAppliedDryTons: z.number().min(0).max(MASS_INPUT_MAX_TONNES, MASS_MAX_TONNES_MESSAGE).optional().nullable(),
   fieldSizeHa: z.number().min(0).optional().nullable(),
   fieldIdentifier: z.string().max(255).optional().nullable(),
   cropType: z.string().max(100).optional().nullable(),

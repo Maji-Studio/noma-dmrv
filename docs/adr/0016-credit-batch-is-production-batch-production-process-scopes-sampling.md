@@ -1,6 +1,6 @@
 # The credit batch is the protocol production batch; a production process scopes Method A/B sampling
 
-Status: accepted (2026-06-19); amended 2026-07-02 (issue #309)
+Status: accepted (2026-06-19); amended 2026-07-02 (issue #309); amended 2026-07-04 (feedstock declared)
 
 > **Amendment (2026-07-02, issue #309):** the lab-sample entry point moved from the
 > production run to the **credit batch itself**. The batch's biochar is commingled across
@@ -11,7 +11,22 @@ Status: accepted (2026-06-19); amended 2026-07-02 (issue #309)
 > changes, this ADR's grain decision: the "both links stay populated / derive the batch from
 > the run" mechanics below describe the pre-amendment write path and now apply only to the
 > batch-side back-fill of legacy run-linked rows.
-
+>
+> **Amendment (2026-07-04, feedstock declared):** the batch's feedstock type flips from
+> **derived** to **declared**. It is now chosen on the credit-batch form up front (a required
+> `feedstockTypeId`), because the (facility, feedstock) **production process** it resolves
+> carries the Method A/B regime, sampling cadence, and borrow pool — surfacing the durability
+> method *before* runs are assigned, and letting the form scope the run cohort to a single
+> feedstock (which makes auto-selecting the eligible runs unambiguous). This does **not**
+> change the one-feedstock grain (Decision #1/#2 stand) or make runs any less the membership
+> primitive: `resolveSingleFeedstockType` is retained as an **equality guard**
+> (`assertDeclaredFeedstockType`) — every member run must still resolve to exactly the declared
+> type, so the declaration can never drift from the actual runs. The dependency inverts only
+> for *how the type is chosen* (declared, then guarded), not for what the batch is made of
+> (runs). Touch-points: `credit_batches.feedstock_type_id` is written from the declared value
+> in `createCreditBatch`/`updateCreditBatch`; the run picker filters to the declared type;
+> a `FeedstockProcessChip` previews the resolved process + Method A/B + progress-to-baseline.
+>
 > **Refines ADR 0014** (credit batch as production cohort) — it does **not** supersede it.
 > ADR 0014's run-membership (`credit_batch_production_runs`, `unique(productionRunId)`),
 > derived applications, 12-month clock, and produced-vs-applied coverage all stand. This ADR

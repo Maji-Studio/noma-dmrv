@@ -5,7 +5,12 @@
 > "credit batch = GHG Statement" model). The "GHG Statements are
 > decoupled and dormant" clause below was lifted by
 > [ADR 0004](./0004-ghg-statement-as-independent-artifact.md) — the
-> GHG Statement is now a live, independent artifact.
+> GHG Statement is now a live, independent artifact. The
+> "Applied-biochar scoping" clause was narrowed by
+> [ADR 0020](./0020-production-emissions-front-loaded-per-credit-batch.md):
+> applied-mass weighting now governs only stored/delivery-bucket
+> quantities — production-bucket emission inputs front-load in full on
+> the batch's claiming GHG entry (§8.6.2).
 
 ## Context
 

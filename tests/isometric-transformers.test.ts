@@ -160,30 +160,54 @@ describe("buildCreateDatapointRequest", () => {
     expect(result.quantity.magnitude).toBe(200);
   });
 
-  it("maps pyrolysis fuel volume to the combined totalDieselLitres (issue #319)", () => {
-    // Genset + startup diesel submit as ONE litres datapoint through
-    // fuel_usage_by_volume; the volumetric EF is a fixed input pre-bound on
-    // the Isometric template. No litres→kWh conversion anywhere.
-    const result = buildCreateDatapointRequest({
-      groupKey: PYROLYSIS_FUEL_VOLUME.groupKey,
-      componentBlueprintKey: PYROLYSIS_FUEL_VOLUME.blueprintKey,
-      rtcInput: rtcInput({
-        input_key: "volume_of_fuel",
-        quantity_kind: "volume",
-      }),
-      blueprintInput: blueprintInput({
-        input_key: "volume_of_fuel",
-        compatible_unit: "l",
-        quantity_kind: "volume",
-      }),
-      agg: baseAgg,
-      projectId: PROJECT_ID,
-      supplierRefId: SUPPLIER_REF,
-    });
+  // The Dark Earth template declares TWO pyrolysis `fuel_usage_by_volume`
+  // components sharing one (group, blueprint, input) triple; the datapoint
+  // source is resolved per component display name (docs/isometric/changes.md).
+  const fuelVolumeArgs = (componentDisplayName: string) => ({
+    groupKey: PYROLYSIS_FUEL_VOLUME.groupKey,
+    componentBlueprintKey: PYROLYSIS_FUEL_VOLUME.blueprintKey,
+    componentDisplayName,
+    rtcInput: rtcInput({ input_key: "volume_of_fuel", quantity_kind: "volume" }),
+    blueprintInput: blueprintInput({
+      input_key: "volume_of_fuel",
+      compatible_unit: "l",
+      quantity_kind: "volume",
+    }),
+    agg: baseAgg,
+    projectId: PROJECT_ID,
+    supplierRefId: SUPPLIER_REF,
+  });
 
-    // 50 startup + 20 genset = 70 combined litres.
-    expect(result.quantity).toEqual({ magnitude: 70, unit: "l" });
+  it("maps the Generator diesel component to totalGensetDieselLitres", () => {
+    const result = buildCreateDatapointRequest(
+      fuelVolumeArgs("Generator diesel usage"),
+    );
+    // genset + preprocessing = 20 litres, NOT the combined 70.
+    expect(result.quantity).toEqual({ magnitude: 20, unit: "l" });
     expect(result.type).toBe("REPORTED");
+  });
+
+  it("maps the Startup diesel component to totalStartupDieselLitres", () => {
+    const result = buildCreateDatapointRequest(
+      fuelVolumeArgs("Startup diesel usage"),
+    );
+    // startup / plant diesel = 50 litres, NOT the combined 70.
+    expect(result.quantity).toEqual({ magnitude: 50, unit: "l" });
+  });
+
+  it("resolves the diesel component name case/whitespace-insensitively", () => {
+    const result = buildCreateDatapointRequest(
+      fuelVolumeArgs("  GENERATOR Diesel Usage  "),
+    );
+    expect(result.quantity.magnitude).toBe(20);
+  });
+
+  it("fails closed on an unrecognized pyrolysis diesel component name", () => {
+    // A rename / added component must surface loudly, never silently
+    // double-count or land in the wrong bucket.
+    expect(() =>
+      buildCreateDatapointRequest(fuelVolumeArgs("Diesel usage")),
+    ).toThrow(/not a recognized pyrolysis diesel component/);
   });
 
   it("rejects an unknown (group, blueprint, input) tuple with a SafeError pointing to the mapping file", () => {

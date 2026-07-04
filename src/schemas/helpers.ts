@@ -166,6 +166,54 @@ export const optionalPercent = z.preprocess(
     .optional()
 );
 
+// ============================================
+// Mass Input Caps
+// ============================================
+
+/**
+ * Ceiling for any single mass form input, in kg. Far below the `massKg`
+ * family's numeric(14,3) DB ceiling (~1e11 kg) so a fat-fingered entry fails
+ * Zod validation with a friendly message instead of reaching Postgres as a
+ * raw `numeric field overflow` (#342 review follow-up). 100,000,000 kg
+ * (100 kt) is generous for any single bin, lot, delivery, or truckload.
+ */
+export const MASS_INPUT_MAX_KG = 100_000_000;
+/** The same ceiling for tonne-denominated inputs (100,000 t). */
+export const MASS_INPUT_MAX_TONNES = MASS_INPUT_MAX_KG / 1000;
+
+export const MASS_MAX_KG_MESSAGE = `Must be ${MASS_INPUT_MAX_KG.toLocaleString("en-US")} kg or less`;
+export const MASS_MAX_TONNES_MESSAGE = `Must be ${MASS_INPUT_MAX_TONNES.toLocaleString("en-US")} tonnes or less`;
+
+export function massKgSchema(minMessage = "Must be 0 or greater") {
+  return z.number().min(0, minMessage).max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE);
+}
+
+export function positiveMassKgSchema(message = "Must be greater than 0") {
+  return z.number().positive(message).max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE);
+}
+
+export function requiredMassKgSchema(message = "Must be 0 or greater") {
+  return requiredNumber().pipe(massKgSchema(message));
+}
+
+export function requiredPositiveMassKgSchema(
+  requiredMessage = "Mass is required",
+  invalidMessage = "Mass must be a number",
+  positiveMessage = "Mass must be greater than 0",
+) {
+  return requiredNumber(requiredMessage, invalidMessage).pipe(
+    positiveMassKgSchema(positiveMessage),
+  );
+}
+
+export function optionalMassKgSchema(message = "Must be 0 or greater") {
+  return massKgSchema(message).optional().nullable();
+}
+
+export function optionalMassKgInputSchema(message = "Must be 0 or greater") {
+  return z.preprocess(toNumberOrNull, optionalMassKgSchema(message));
+}
+
 /** Largest value a Postgres `integer` column can hold. */
 export const PG_INTEGER_MAX = 2_147_483_647;
 

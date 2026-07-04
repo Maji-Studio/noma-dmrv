@@ -6,9 +6,12 @@
 import { z } from "zod";
 import {
   emptyToNull,
+  massKgSchema,
+  optionalMassKgInputSchema,
+  optionalMassKgSchema,
   optionalPositiveNumber,
+  requiredMassKgSchema,
   requiredNumber,
-  toNumberOrNull,
 } from "./helpers";
 
 // ============================================
@@ -19,7 +22,7 @@ export const MOISTURE_MIN = 0;
 export const MOISTURE_MAX = 100;
 
 const requiredNonNegativeNumber = (message: string) =>
-  requiredNumber().pipe(z.number().min(0, message));
+  requiredMassKgSchema(message);
 
 const requiredPercent = requiredNumber().pipe(
   z
@@ -54,12 +57,12 @@ const ingredientBinBaseSchema = z.object({
   feedstockTypeName: z.string(),
   feedstockTypeCategory: z.string(),
   ratio: z.number().min(0).max(1).optional().nullable(),
-  massKg: z.number().min(0).optional().nullable(),
+  massKg: optionalMassKgSchema(),
 });
 
 const ingredientBinFormSchema = ingredientBinBaseSchema.extend({
   storageLocationId: emptyToNull.or(z.string().uuid()).optional().nullable(),
-  massKg: z.preprocess(toNumberOrNull, z.number().min(0).optional().nullable()),
+  massKg: optionalMassKgInputSchema(),
 });
 
 const ingredientBinUpdateSchema = ingredientBinBaseSchema.extend({
@@ -134,10 +137,10 @@ export const updateBiocharProductSchema = z.object({
   status: z.enum(biocharProductStatusValues).optional(),
   linkedProductionRunId: z.string().uuid("Invalid production run").optional(),
   storageLocationId: z.string().uuid("Invalid storage location").optional(),
-  massKg: z.number().min(0).optional(),
+  massKg: massKgSchema().optional(),
   moistureContentPercent: z.number().min(MOISTURE_MIN).max(MOISTURE_MAX).optional(),
   densityKgM3: z.number().min(0).optional().nullable(),
-  waterAddedKg: z.number().min(0).optional(),
+  waterAddedKg: massKgSchema().optional(),
   ingredientBins: z.array(ingredientBinUpdateSchema).optional(),
 });
 

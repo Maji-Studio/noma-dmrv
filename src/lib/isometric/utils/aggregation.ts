@@ -18,12 +18,18 @@ export interface AggregatedProductionData {
   // ONE combined `fuel_usage_by_volume` datapoint in litres (issue #319 —
   // energy-use-accounting v1.3 Eq 7: fuel emissions = fuel quantity × a
   // volumetric well-to-wheel EF held as a fixed input on the Isometric
-  // template; noma never converts litres to kWh). The split fields stay for
-  // local reporting/preview.
+  // template; noma never converts litres to kWh). The two split fields each
+  // feed their OWN pyrolysis `fuel_usage_by_volume` component now (the Dark
+  // Earth template splits generator vs. startup diesel — see
+  // PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT in transformers/datapoint.ts;
+  // docs/isometric/changes.md amends #319). Startup = reactor-startup /
+  // on-site plant diesel; genset = generator diesel + preprocessing fuel
+  // ("summarized").
   totalStartupDieselLitres: number;
   totalGensetDieselLitres: number;
   // Combined diesel litres = totalStartupDieselLitres + totalGensetDieselLitres
-  // (both already attribution-scaled) — the single submitted volume.
+  // (both full run totals — PRODUCTION bucket, §8.6.2/ADR 0020). Kept for
+  // preview/reporting; the two split fields are what get submitted.
   totalDieselLitres: number;
   totalElectricityKwh: number;
   // Per-category transport mass-distance (tonne·km) = Σⱼ(distⱼ × massⱼ) over
@@ -48,6 +54,35 @@ export interface AggregatedProductionData {
   latestEndTime: Date;
   sourceProductionRunIds: string[];
   warnings: string[];
+}
+
+// §8.6.2 emission-input buckets (issue #349, ADR 0020). PRODUCTION sources
+// front-load IN FULL on the credit batch's claiming GHG entry — no
+// applied-mass weighting. DELIVERY and STORED sources scale with the mass
+// actually applied in this removal. The submit-side classification is the
+// `bucket` attribute on INPUT_MAPPING entries (transformers/datapoint.ts);
+// tests/isometric-emission-buckets.test.ts welds the two so they cannot drift.
+export type EmissionInputBucket = "production" | "delivery" | "stored";
+
+export const SOURCE_BUCKETS = {
+  weightedOrganicCarbonPercent: "stored",
+  totalBiocharDryMassKg: "stored", // also biochar-transport feedstock_mass (delivery) — both applied-scoped
+  totalFeedstockDryMassKg: "production",
+  totalStartupDieselLitres: "production",
+  totalGensetDieselLitres: "production",
+  totalDieselLitres: "production",
+  totalElectricityKwh: "production",
+  feedstockTransportMassDistanceTonneKm: "production",
+  sampleTransportMassDistanceTonneKm: "production",
+  biocharTransportMassDistanceTonneKm: "delivery",
+} as const satisfies Partial<
+  Record<keyof AggregatedProductionData, EmissionInputBucket>
+>;
+
+export function isAppliedScopedSource(
+  source: keyof typeof SOURCE_BUCKETS,
+): boolean {
+  return SOURCE_BUCKETS[source] !== "production";
 }
 
 // Aggregates a category's transport legs into a single mass-distance
@@ -151,10 +186,12 @@ export function clampFactor(value: number | null | undefined): number {
 }
 
 // `attributionByRunId` carries the applied-biochar fraction for each run —
-// appliedDryKgFromThisRemoval / runTotalBiocharOutput. A run only partially
-// applied within this removal contributes proportionally (linear mass
-// allocation, equivalent to an Isometric attribution factor). Omitted or a
-// missing entry defaults to 1.0 (the run is fully attributed).
+// appliedDryKgFromThisRemoval / runTotalBiocharOutput. It scopes ONLY the
+// stored-bucket biochar mass and the chemistry weights (see SOURCE_BUCKETS):
+// production-bucket inputs (feedstock mass, diesel, electricity) sum the FULL
+// run totals — §8.6.2 front-loads them once on the batch's claiming GHG entry
+// (issue #349, ADR 0020). Omitted or a missing entry defaults to 1.0 (the run
+// is fully attributed).
 export function aggregateProductionRuns(
   runs: ProductionRunWithSamples[],
   attributionByRunId?: Map<string, number>,
@@ -176,13 +213,19 @@ export function aggregateProductionRuns(
 
   for (const run of runs) {
     const factor = clampFactor(attributionByRunId?.get(run.id));
+    // STORED bucket: only the applied share is credited (ex-post, unchanged).
     totalBiocharDryMassKg += nz(run.biocharDryMassKg) * factor;
-    totalFeedstockDryMassKg += nz(run.feedstockMassDryKg) * factor;
-    totalStartupDieselLitres +=
-      (nz(run.dieselOperationLiters) + nz(run.preprocessingFuelLiters)) *
-      factor;
-    totalGensetDieselLitres += nz(run.dieselGensetLiters) * factor;
-    totalElectricityKwh += nz(run.electricityKwh) * factor;
+    // PRODUCTION bucket (§8.6.2, ADR 0020): full run totals — front-loaded on
+    // the batch's claiming entry, no applied-mass weighting. See SOURCE_BUCKETS.
+    totalFeedstockDryMassKg += nz(run.feedstockMassDryKg);
+    // Startup bucket = reactor-startup / on-site plant diesel only.
+    totalStartupDieselLitres += nz(run.dieselOperationLiters);
+    // Genset ("summarized") bucket = generator diesel + preprocessing fuel;
+    // preprocess rides with genset per the Dark Earth template's two-component
+    // pyrolysis diesel split (docs/isometric/changes.md, amends #319).
+    totalGensetDieselLitres +=
+      nz(run.dieselGensetLiters) + nz(run.preprocessingFuelLiters);
+    totalElectricityKwh += nz(run.electricityKwh);
     if (run.startTime < earliestStartTime) earliestStartTime = run.startTime;
     if (run.endTime > latestEndTime) latestEndTime = run.endTime;
 
@@ -249,10 +292,17 @@ export interface TransportLegsByCategory {
 // Pure: returns a new object, doesn't mutate `agg`. Per-category warnings
 // (mixed methods/factors, missing per-leg data) are appended to
 // `agg.warnings`, which the submission pipeline short-circuits on.
+//
+// `options.appliedBiocharFraction` scales the biochar category ONLY — biochar
+// transport is the DELIVERY bucket (§8.6.2, ADR 0020) and counts the applied
+// share; feedstock/sample legs are PRODUCTION-bucket and stay whole. An
+// omitted option means factor 1 via clampFactor's null default.
 export function enrichWithTransportLegs(
   agg: AggregatedProductionData,
   legs: TransportLegsByCategory,
+  options?: { appliedBiocharFraction?: number },
 ): AggregatedProductionData {
+  const deliveryFactor = clampFactor(options?.appliedBiocharFraction);
   const feedstock = aggregateTransportMassDistance(legs.feedstock, "Feedstock");
   const biochar = aggregateTransportMassDistance(legs.biochar, "Biochar");
   const sample = aggregateTransportMassDistance(legs.sample, "Sample");
@@ -265,7 +315,10 @@ export function enrichWithTransportLegs(
   return {
     ...agg,
     feedstockTransportMassDistanceTonneKm: feedstock.massDistanceTonneKm,
-    biocharTransportMassDistanceTonneKm: biochar.massDistanceTonneKm,
+    biocharTransportMassDistanceTonneKm:
+      biochar.massDistanceTonneKm == null
+        ? null
+        : biochar.massDistanceTonneKm * deliveryFactor,
     // Sample shipment is optional, so an empty category collapses to 0 (a
     // true "no sample transport" value); feedstock/biochar stay null when
     // empty so a forgotten required leg fails closed at submit. A blocked
@@ -281,6 +334,10 @@ export function enrichWithTransportLegs(
 // reflects the biochar that actually got applied. Runs with no usable
 // samples, zero mass, or a zero attribution factor are dropped from both
 // numerator and denominator.
+//
+// Chemistry weighting deliberately STAYS applied-mass-based (unlike the
+// production-bucket sums above): the weighted means characterise the stored
+// biochar, which is ex-post applied-scoped (§8.6.2, ADR 0020).
 function weightedAverage(
   runs: ProductionRunWithSamples[],
   pick: (s: Sample) => number | null,

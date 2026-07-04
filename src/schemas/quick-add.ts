@@ -7,7 +7,7 @@
  */
 
 import { z } from "zod";
-import { emptyToNull } from "./helpers";
+import { emptyToNull, positiveMassKgSchema } from "./helpers";
 import {
   storageLocationTypes,
   type StorageLocationType,
@@ -106,9 +106,7 @@ export const storageLocationQuickAddSchema = z.object({
   facilityId: z
     .string()
     .uuid("Invalid facility ID"),
-  capacityKg: z
-    .number()
-    .positive("Capacity must be positive")
+  capacityKg: positiveMassKgSchema("Capacity must be positive")
     .optional()
     .nullable(),
   // Feedstock bins only — restricts the bin to one feedstock type

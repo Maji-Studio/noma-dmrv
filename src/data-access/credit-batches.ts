@@ -21,7 +21,12 @@ import {
   certifierRemovals,
 } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
-import { productionRuns, samples } from "@/db/schema/production";
+import {
+  productionRuns,
+  productionRunFeedstocks,
+  samples,
+} from "@/db/schema/production";
+import { feedstocks } from "@/db/schema/feedstock";
 import type {
   CreateCreditBatchData,
   UpdateCreditBatchData,
@@ -30,7 +35,7 @@ import type {
 import { requireAuth } from "./utils";
 import { findOrCreateProductionProcess } from "./production-processes";
 import {
-  resolveSingleFeedstockType,
+  assertDeclaredFeedstockType,
   validateProductionRunIds,
 } from "./credit-batch-membership";
 import { gcRemovalIfOrphaned } from "./certifier-removals";
@@ -96,6 +101,26 @@ export interface CreditBatchProductionRunOption {
   date: string;
   status: string;
   biocharDryMassKg: number | null;
+  /**
+   * Run-local production-emission inputs, surfaced so the credit-batch form can
+   * show a live cohort input summary as runs are (de)selected. These are the
+   * front-loaded production-bucket quantities the batch claims (#349, ADR 0020);
+   * the registry applies the emission factors (ADR 0018) — noma never holds a
+   * CO₂e figure here, only the submitted quantities.
+   */
+  feedstockMassDryKg: number | null;
+  dieselOperationLiters: number | null;
+  dieselGensetLiters: number | null;
+  preprocessingFuelLiters: number | null;
+  electricityKwh: number | null;
+  /**
+   * The run's DISTINCT feedstock-type ids. A run can consume feedstocks of more
+   * than one type (schema 1:N), so this is a set: the form treats a run as a
+   * member of a declared-type batch iff its set is exactly `{declaredType}`
+   * (single). Empty or multi-type sets can't join a single-feedstock batch
+   * (ADR 0016) and are filtered out.
+   */
+  feedstockTypeIds: string[];
   assignedCreditBatchId: string | null;
   assignedCreditBatchCode: string | null;
 }
@@ -340,13 +365,14 @@ export async function createCreditBatch(
     const certifier = await resolveCreditBatchCertifier(tx, batchData.facilityId);
     assertCreditBatchProductionWindow(batchData.startDate, batchData.endDate);
 
-    // ADR 0016: the credit batch is the protocol production batch (one
-    // feedstock). Validate the member runs FIRST (existence, facility, window,
-    // prior assignment) so a bad run ID surfaces a precise error rather than a
-    // confusing "no linked feedstock" from the derivation step. Then derive the
-    // single feedstock type (loud assertion on >1 type) and find-or-create the
-    // (facility, feedstock) production process this batch is a <=1-month slice of.
+    // ADR 0016 (amended 2026-07-04): the credit batch is the protocol production
+    // batch (one feedstock), and the feedstock type is now DECLARED on the form,
+    // not derived from the runs. Validate the member runs FIRST (existence,
+    // facility, window, prior assignment), then GUARD that they all match the
+    // declared feedstock type, then find-or-create the (facility, feedstock)
+    // production process this batch is a <=1-month slice of.
     const runIds = productionRunIds ?? [];
+    const feedstockTypeId = batchData.feedstockTypeId;
     await validateProductionRunIds(
       tx,
       runIds,
@@ -354,7 +380,7 @@ export async function createCreditBatch(
       batchData.startDate,
       batchData.endDate,
     );
-    const feedstockTypeId = await resolveSingleFeedstockType(tx, runIds);
+    await assertDeclaredFeedstockType(tx, runIds, feedstockTypeId);
     const process = await findOrCreateProductionProcess(
       userId,
       { facilityId: batchData.facilityId, feedstockTypeId },
@@ -499,6 +525,7 @@ export async function updateCreditBatch(
         startDate: creditBatches.startDate,
         endDate: creditBatches.endDate,
         removalId: creditBatches.removalId,
+        feedstockTypeId: creditBatches.feedstockTypeId,
       })
       .from(creditBatches)
       .where(eq(creditBatches.id, id))
@@ -570,23 +597,45 @@ export async function updateCreditBatch(
       );
     }
 
-    // ADR 0016: re-derive the single feedstock type + production process when
-    // the membership or facility changes — either can shift which (facility,
-    // feedstock) process this batch belongs to. When runs are unchanged but the
-    // facility moved, derive from the existing membership after validation so
-    // bad run IDs/facility mismatches surface precise errors first.
+    // ADR 0016 (amended 2026-07-04): feedstock type is DECLARED, not derived.
+    // Re-guard the membership against the effective declared type + refresh the
+    // (facility, feedstock) production process whenever the runs, the facility,
+    // or the declared type changes — any of the three can shift which process
+    // this batch belongs to, or make the member runs mismatch the declaration.
+    const effectiveFeedstockTypeId =
+      updateFields.feedstockTypeId ?? existingBatch.feedstockTypeId;
     let feedstockRunIds: string[] | undefined = productionRunIds;
-    if (feedstockRunIds === undefined && facilityChanged) {
-      feedstockRunIds = existingRunIdsForRevalidation;
+    if (
+      feedstockRunIds === undefined &&
+      (facilityChanged || updateFields.feedstockTypeId !== undefined)
+    ) {
+      // Runs unchanged but the facility or declared type moved — guard the
+      // current members. Reuse the set already fetched for revalidation when the
+      // facility/window changed; otherwise (type-only edit) fetch them now.
+      feedstockRunIds =
+        existingRunIdsForRevalidation ??
+        (
+          await tx
+            .select({
+              productionRunId: creditBatchProductionRuns.productionRunId,
+            })
+            .from(creditBatchProductionRuns)
+            .where(eq(creditBatchProductionRuns.creditBatchId, id))
+        ).map((link) => link.productionRunId);
+      if (feedstockRunIds.length === 0) {
+        throw new SafeError(
+          "A credit batch must include at least one production run.",
+        );
+      }
     }
     if (feedstockRunIds !== undefined) {
-      const feedstockTypeId = await resolveSingleFeedstockType(tx, feedstockRunIds);
+      await assertDeclaredFeedstockType(tx, feedstockRunIds, effectiveFeedstockTypeId);
       const process = await findOrCreateProductionProcess(
         userId,
-        { facilityId: targetFacilityId, feedstockTypeId },
+        { facilityId: targetFacilityId, feedstockTypeId: effectiveFeedstockTypeId },
         tx,
       );
-      updateData.feedstockTypeId = feedstockTypeId;
+      updateData.feedstockTypeId = effectiveFeedstockTypeId;
       updateData.productionProcessId = process.id;
     }
 
@@ -742,13 +791,18 @@ export async function getCreditBatchProductionRunOptions(
     if (assignmentScope) conditions.push(assignmentScope);
   }
 
-  return db
+  const rows = await db
     .select({
       id: productionRuns.id,
       code: productionRuns.code,
       date: productionRuns.date,
       status: productionRuns.status,
       biocharDryMassKg: productionRuns.biocharDryMassKg,
+      feedstockMassDryKg: productionRuns.feedstockMassDryKg,
+      dieselOperationLiters: productionRuns.dieselOperationLiters,
+      dieselGensetLiters: productionRuns.dieselGensetLiters,
+      preprocessingFuelLiters: productionRuns.preprocessingFuelLiters,
+      electricityKwh: productionRuns.electricityKwh,
       assignedCreditBatchId: creditBatchProductionRuns.creditBatchId,
       assignedCreditBatchCode: creditBatches.code,
     })
@@ -763,6 +817,36 @@ export async function getCreditBatchProductionRunOptions(
     )
     .where(and(...conditions))
     .orderBy(desc(productionRuns.date));
+
+  // Resolve each run's DISTINCT feedstock-type set in a SEPARATE query — joining
+  // productionRunFeedstocks into the select above would fan out the row set (a
+  // run has N feedstock rows). Attach as a set so the form can scope runs to a
+  // single declared feedstock type (ADR 0016).
+  const runIds = rows.map((row) => row.id);
+  const typeRows = runIds.length
+    ? await db
+        .selectDistinct({
+          productionRunId: productionRunFeedstocks.productionRunId,
+          feedstockTypeId: feedstocks.feedstockTypeId,
+        })
+        .from(productionRunFeedstocks)
+        .innerJoin(
+          feedstocks,
+          eq(feedstocks.id, productionRunFeedstocks.feedstockId),
+        )
+        .where(inArray(productionRunFeedstocks.productionRunId, runIds))
+    : [];
+  const typesByRun = new Map<string, string[]>();
+  for (const typeRow of typeRows) {
+    const list = typesByRun.get(typeRow.productionRunId) ?? [];
+    list.push(typeRow.feedstockTypeId);
+    typesByRun.set(typeRow.productionRunId, list);
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    feedstockTypeIds: typesByRun.get(row.id) ?? [],
+  }));
 }
 
 /**

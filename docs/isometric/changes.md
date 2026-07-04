@@ -13,6 +13,76 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-07-04 (Isometric compliance sign-off — issue #353)
+
+Answers confirmed for the three protocol/platform questions raised in #353
+(follow-up to #349 / ADR 0020). Recorded per stakeholder confirmation on
+2026-07-04:
+
+- **§8.6.2 cross-period allocation — CONFIRMED IN WRITING by Isometric.** The
+  front-loading pattern is accepted: a batch's **earliest-quarter** GHG entry
+  carries **all** production-side operational emissions (grid electricity,
+  genset + startup diesel, feedstock mass CI, feedstock/sample transport);
+  later-quarter entries from the same batch carry **only** that quarter's
+  delivery emissions + applied-mass-scoped stored CO₂e. This is more
+  conservative than proration (emissions land earlier, never deferred) and
+  **unblocks the #349 cross-quarter straddle-path live submission**.
+- **`removal*` / `removal_template*` alias sunset — CONFIRMED ~Sept 2026.** The
+  deprecated endpoint aliases (renamed to `ghg_entry*`) sunset around September
+  2026. **Action:** migrate all remaining `removal*`/`removal_template*` API
+  usage to `ghg_entry*` now and remove the deprecated surface (see the dated
+  entry below once the migration lands). Supersedes the "~Sept 2026 (unverified)"
+  note from #291.
+- **Post-verification material-error remedy — CONFIRMED.** Verified GHG
+  statements are immutable; the remedy for a material error is always buffer
+  pool / reversal, never a restatement of the verified statement.
+- **API-level datapoint sharing across a batch's GHG entries — STILL OPEN.**
+  Not yet confirmed; #353 stays open on this item only. Measurement samples are
+  batch-anchored, so sharing one batch's chemistry across its two quarterly
+  entries via the API is the *presumed* model, but Isometric has not confirmed
+  the UI "cannot share between removals" restriction is UI-only.
+
+## 2026-07-04 (generator/startup diesel split — two pyrolysis fuel_usage_by_volume components)
+
+Amends #319. The Dark Earth template now declares **two** pyrolysis
+`fuel_usage_by_volume` components instead of one combined diesel datapoint:
+"Generator diesel usage" and "Startup diesel usage", both sharing the same fixed
+volumetric EF. Because the EF is identical on both, total emissions are
+unchanged versus one combined component — the split is **presentation-only** (it
+shows generator vs. startup diesel separately on the registry). It exists
+because a single `fuel_usage_by_volume` triple declared by two components would
+otherwise send the combined litres to **each** component (double-count).
+
+- **Re-bucket** — `src/lib/isometric/utils/aggregation.ts`: preprocessing fuel
+  moves from the startup bucket to the genset ("summarized") bucket, so
+  `totalStartupDieselLitres` = `dieselOperationLiters` only and
+  `totalGensetDieselLitres` = `dieselGensetLiters` + `preprocessingFuelLiters`.
+  `totalDieselLitres` (the sum) is unchanged. The Energy summary query
+  (`data-access/production-runs/queries.ts`) mirrors the same split.
+- **Component-aware mapping** — `transformers/datapoint.ts`: the pyrolysis
+  `fuel_usage_by_volume/volume_of_fuel` entry gains `sourceByComponent`
+  (`PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT`). Certify's template model has **no
+  stable per-component key**, so the source is resolved by the component
+  **display name** (normalized), via `resolveDatapointSource`.
+  `buildCreateDatapointRequest` now takes `componentDisplayName`
+  (threaded from `submit-removal.ts`) and **fails closed** on an unrecognized
+  name — a rename or added component surfaces loudly instead of silently
+  double-counting or mis-bucketing.
+- **Cert badging** — `certify-field-registry.ts`: the derived, unbadged
+  `startupDieselFuelUsage` descriptor is replaced by three `entered` (badged +
+  readiness-gating) descriptors — `dieselOperationLiters`,
+  `preprocessingFuelLiters`, `dieselGensetLiters` — so all four energy inputs
+  (incl. electricity) are cert-relevant. `isPresent(0)` is true, so a recorded
+  `0` still satisfies readiness; a **blank** field now gates.
+- **Template requirement** — the two components must be named exactly
+  `Generator diesel usage` (carries genset + preprocessing litres) and
+  `Startup diesel usage` (reactor-startup / plant litres), matched
+  case/whitespace-insensitively. Rename ⇒ update
+  `PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT`.
+- **Deferred** — the display-name coupling is interim; a facility-configurable
+  component→source mapping + assignment wizard is tracked in
+  `docs/open-questions.md`.
+
 ## 2026-07-03 (issue #319 — diesel submits as fuel_usage_by_volume, litres × template EF)
 
 Fixes protocol-noncompliant fuel accounting (energy-use-accounting v1.3 Eq 7:

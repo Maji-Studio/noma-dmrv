@@ -882,16 +882,16 @@ We use [Phosphor Icons](https://phosphoricons.com/) for all icons in the applica
 pnpm add @phosphor-icons/react
 ```
 
-**IMPORTANT - Correct Import Path:**
+**IMPORTANT - Correct Import Path and Names:**
 
-⚠️ **Always use `/dist/ssr` import path** to avoid deprecation warnings:
+⚠️ **Use the `/dist/ssr` import path with the `*Icon`-suffixed export names for new code** — the bare names (`Trash`, `Pencil`, `Plus`, …) are deprecated by the library and may still exist in older surfaces:
 
 ```tsx
 // ✅ CORRECT - SSR-compatible, works in both client and server components
-import { Trash, Pencil, Plus } from "@phosphor-icons/react/dist/ssr";
+import { TrashIcon, PencilIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 
-// ❌ WRONG - Deprecated, will show TypeScript warnings
-import { Trash, Pencil, Plus } from "@phosphor-icons/react";
+// ❌ WRONG - deprecated bare-export names, will show TypeScript warnings
+import { Trash, Pencil, Plus } from "@phosphor-icons/react/dist/ssr";
 ```
 
 **Usage Guidelines:**
@@ -912,48 +912,36 @@ import { Trash, Pencil, Plus } from "@phosphor-icons/react";
 3. **Color:** Icons inherit text color by default, or use semantic color tokens
    ```tsx
    // Inherits text color
-   <Trash size={20} />
+   <TrashIcon size={20} />
 
    // Custom color using design tokens
-   <Trash size={20} className="text-[var(--color-text-error)]" />
+   <TrashIcon size={20} className="text-[var(--color-text-error)]" />
    ```
 
 **Example Usage:**
 
 ```tsx
-import { Trash, Pencil, Plus, House } from "@phosphor-icons/react/dist/ssr";
+import { TrashIcon, PencilIcon, PlusIcon, HouseIcon } from "@phosphor-icons/react/dist/ssr";
 
 // Basic icon
-<Trash size={20} />
+<TrashIcon size={20} />
 
 // Icon with weight
-<Plus size={20} weight="bold" />
+<PlusIcon size={20} weight="bold" />
 
 // Icon in button
 <button className="flex items-center gap-s">
-  <Plus size={20} weight="bold" />
+  <PlusIcon size={20} weight="bold" />
   Add Item
 </button>
 
 // Icon with conditional weight (e.g., navigation)
-<House size={20} weight={isActive ? "fill" : "regular"} />
+<HouseIcon size={20} weight={isActive ? "fill" : "regular"} />
 
 // Icon with semantic color
 <button className="text-[var(--color-text-error)]">
-  <Trash size={20} />
+  <TrashIcon size={20} />
 </button>
-```
-
-**Migration Note:**
-
-If you see TypeScript deprecation warnings like `'Trash' is deprecated.ts(6385)`, update your imports to use `/dist/ssr`:
-
-```tsx
-// Before
-import { Trash } from "@phosphor-icons/react";
-
-// After
-import { Trash } from "@phosphor-icons/react/dist/ssr";
 ```
 
 ---
@@ -989,7 +977,7 @@ A versatile button component with support for different variants, sizes, and sta
 **Example Usage:**
 ```tsx
 import { Button } from '@/src/components/ui/Button'
-import { ArrowRight, Plus } from '@phosphor-icons/react/dist/ssr'
+import { ArrowRightIcon, PlusIcon } from '@phosphor-icons/react/dist/ssr'
 
 // Basic button
 <Button>Click me</Button>
@@ -997,12 +985,12 @@ import { ArrowRight, Plus } from '@phosphor-icons/react/dist/ssr'
 // Primary action with icon
 <Button variant="primary">
   Continue
-  <ArrowRight size={20} weight="bold" />
+  <ArrowRightIcon size={20} weight="bold" />
 </Button>
 
 // Icon-only button
 <Button width="square" aria-label="Add">
-  <Plus size={20} weight="bold" />
+  <PlusIcon size={20} weight="bold" />
 </Button>
 
 // As a link (polymorphic)
