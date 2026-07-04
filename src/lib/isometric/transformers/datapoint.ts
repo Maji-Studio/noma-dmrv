@@ -193,10 +193,14 @@ export const INPUT_MAPPING: InputMappingTable = {
     fuel_usage_by_volume: {
       volume_of_fuel: {
         // TWO components share this triple (generator vs. startup diesel);
-        // sourceByComponent resolves each by display name. `source` is the
-        // combined fallback, used only if a template collapses them into one
-        // component. Same volumetric EF on both, so the split is
-        // presentation-only (docs/isometric/changes.md, amends #319).
+        // sourceByComponent resolves each by display name. Because
+        // sourceByComponent is set, resolveDatapointSource FAILS CLOSED on an
+        // unrecognized component name — it never falls back to `source` at
+        // runtime (a collapsed/renamed template surfaces loudly, see
+        // resolveDatapointSource). `source` is retained only to satisfy the
+        // non-optional type and to keep the combined litres in MAPPING_REVISION.
+        // Same volumetric EF on both, so the split is presentation-only
+        // (docs/isometric/changes.md, amends #319).
         source: "totalDieselLitres",
         sourceByComponent: PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT,
         unit: "l",
