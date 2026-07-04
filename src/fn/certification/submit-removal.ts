@@ -49,7 +49,7 @@ import {
 import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
 import {
   assertNoForeignProductionClaims,
-  assertNoForeignProductionClaimsFresh,
+  assertProductionClaimGateFresh,
 } from "./production-claim-gate";
 import {
   assertReportingWindowNotInverted,
@@ -715,11 +715,16 @@ export async function submitRemoval(
       };
     case "claimed": {
       // §8.6.2 fresh-read re-assert (issue #349, ADR 0020): the blocking
-      // draft row now exists, so membership is frozen and no new foreign
-      // claim can appear — a foreign claim stamped between context load and
+      // draft row now exists, so membership is frozen — a foreign claim OR a
+      // membership/run-lineage regroup that landed between context load and
       // this point is caught HERE, before any registry POST, instead of
-      // being silently no-opped by the guarded claim UPDATE after the POSTs.
-      await assertNoForeignProductionClaimsFresh(userId, removalId);
+      // shipping a stale payload and tripping the claim-stamp backstop after
+      // the POSTs. See production-claim-gate.ts.
+      await assertProductionClaimGateFresh(
+        userId,
+        removalId,
+        ctx.memberBatchClaims,
+      );
       if (claimed.reason === "rejected-hash-changed") {
         log.warn(
           { submissionId: claimed.row.id },

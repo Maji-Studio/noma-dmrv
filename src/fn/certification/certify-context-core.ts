@@ -189,11 +189,16 @@ export interface RemovalSubmissionContext extends RemovalCertifyContext {
   // totals (§8.6.2 front-loading, issue #349, ADR 0020).
   attributionByRunId: Map<string, number>;
   // §8.6.2 per-member-batch production-bucket claim state (issue #349) —
-  // drives the submit-path foreign-claim assertion and the claim write.
+  // drives the submit-path foreign-claim assertion and the claim write. The
+  // sorted lineage arrays are the fingerprint the post-claim fresh re-assert
+  // compares to a fresh scope read, failing closed when membership or run
+  // lineage drifted between context load and the draft claim (ADR 0020).
   memberBatchClaims: {
     creditBatchId: string;
     code: string;
     claimedByRemovalId: string | null;
+    productionRunIds: string[];
+    applicationIds: string[];
   }[];
   // Transport legs pooled across every member batch's lineage, deduped by
   // entity id. Fed to `enrichWithTransportLegs` by the submit pipeline.
@@ -559,10 +564,14 @@ export async function buildRemovalContext(
   }));
   // §8.6.2 claim state per member batch (issue #349) — kept off
   // `MemberCreditBatch` (UI-facing) and carried only on the submission context.
+  // Lineage arrays sorted here so the post-claim fresh re-assert compares
+  // order-insensitively.
   const memberBatchClaims = scope.memberBatches.map((b) => ({
     creditBatchId: b.id,
     code: b.code,
     claimedByRemovalId: b.productionEmissionsClaimedByRemovalId,
+    productionRunIds: [...b.productionRunIds].sort(),
+    applicationIds: [...b.applicationIds].sort(),
   }));
 
   // The removal's own submission + its linked GHG Statement status resolve from

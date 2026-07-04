@@ -425,12 +425,15 @@ function makeContext(
     runs,
     batchesWithSamples,
     attributionByRunId: new Map([[PRODUCTION_RUN_ID, 1]]),
-    // §8.6.2 production-bucket claim state (issue #349) — default: unclaimed.
+    // §8.6.2 production-bucket claim state (issue #349) — default: unclaimed,
+    // lineage matching the fixture's single run/application.
     memberBatchClaims: [
       {
         creditBatchId: CREDIT_BATCH_ID,
         code: "CB-TEST-001",
         claimedByRemovalId: null,
+        productionRunIds: [PRODUCTION_RUN_ID],
+        applicationIds: [APPLICATION_ID],
       },
     ],
     transportLegs: { feedstock: [], biochar: [], sample: [] },
@@ -472,6 +475,30 @@ function makeLineage(args: {
     reactor: null,
     feedstocks: [],
     warnings: [],
+  } as never;
+}
+
+// The fresh scope the post-claim re-assert (production-claim-gate) reads via
+// resolveScopeForRemoval — claims + lineage fingerprint per member batch.
+function makeFreshScope(overrides: {
+  claimedByRemovalId: string | null;
+  productionRunIds?: string[];
+  applicationIds?: string[];
+}): Awaited<ReturnType<typeof certifyContext.resolveScopeForRemoval>> {
+  return {
+    facilityId: FACILITY_ID,
+    removalId: REMOVAL_ID,
+    removal: null,
+    memberBatches: [
+      {
+        id: CREDIT_BATCH_ID,
+        code: "CB-TEST-001",
+        productionRunIds: overrides.productionRunIds ?? [PRODUCTION_RUN_ID],
+        applicationIds: overrides.applicationIds ?? [APPLICATION_ID],
+        durabilityOption: "200_year",
+        productionEmissionsClaimedByRemovalId: overrides.claimedByRemovalId,
+      },
+    ],
   } as never;
 }
 
@@ -552,16 +579,12 @@ beforeEach(() => {
     undefined as never,
   );
   // §8.6.2 fresh-read re-assert (production-claim-gate): after the draft
-  // claim, submitRemoval re-reads the member batches' claim columns through
-  // getCreditBatchesByRemovalId. Default: unclaimed, matching makeContext;
-  // the TOCTOU test overrides this per-test.
-  vi.mocked(removalsDA.getCreditBatchesByRemovalId).mockResolvedValue([
-    {
-      id: CREDIT_BATCH_ID,
-      code: "CB-TEST-001",
-      productionEmissionsClaimedByRemovalId: null,
-    },
-  ] as never);
+  // claim, submitRemoval re-reads the removal scope (claims + lineage
+  // fingerprint) through resolveScopeForRemoval. Default: unclaimed,
+  // lineage matching makeContext; the TOCTOU tests override per-test.
+  vi.mocked(certifyContext.resolveScopeForRemoval).mockResolvedValue(
+    makeFreshScope({ claimedByRemovalId: null }),
+  );
 
   vi.mocked(isometric.reconcileDatapoint).mockResolvedValue({ found: false });
   vi.mocked(isometric.reconcileRemoval).mockResolvedValue({ found: false });
@@ -1009,6 +1032,8 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
             creditBatchId: CREDIT_BATCH_ID,
             code: "CB-TEST-001",
             claimedByRemovalId: "rem-other",
+            productionRunIds: [PRODUCTION_RUN_ID],
+            applicationIds: [APPLICATION_ID],
           },
         ],
       }),
@@ -1081,17 +1106,15 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
             creditBatchId: CREDIT_BATCH_ID,
             code: "CB-TEST-001",
             claimedByRemovalId: REMOVAL_ID,
+            productionRunIds: [PRODUCTION_RUN_ID],
+            applicationIds: [APPLICATION_ID],
           },
         ],
       }),
     );
-    vi.mocked(removalsDA.getCreditBatchesByRemovalId).mockResolvedValue([
-      {
-        id: CREDIT_BATCH_ID,
-        code: "CB-TEST-001",
-        productionEmissionsClaimedByRemovalId: REMOVAL_ID,
-      },
-    ] as never);
+    vi.mocked(certifyContext.resolveScopeForRemoval).mockResolvedValue(
+      makeFreshScope({ claimedByRemovalId: REMOVAL_ID }),
+    );
 
     const second = await submitRemoval({
       userId: USER_ID,
@@ -1117,13 +1140,9 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
     );
     // …but by the time the draft row is claimed, the DB says a DIFFERENT
     // removal stamped the batch (regroup + foreign submit in the window).
-    vi.mocked(removalsDA.getCreditBatchesByRemovalId).mockResolvedValue([
-      {
-        id: CREDIT_BATCH_ID,
-        code: "CB-TEST-001",
-        productionEmissionsClaimedByRemovalId: "rem-other",
-      },
-    ] as never);
+    vi.mocked(certifyContext.resolveScopeForRemoval).mockResolvedValue(
+      makeFreshScope({ claimedByRemovalId: "rem-other" }),
+    );
     const createDatapointFake = vi.fn(fakeExternalIds("dp"));
     const createGhgEntryFake = vi.fn(fakeExternalIds("rmv"));
     vi.mocked(isometric.createDatapoint).mockImplementation(
@@ -1143,6 +1162,37 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
     expect(createGhgEntryFake).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(1);
     expect(storedRows[0].status).toBe("draft");
+    expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
+  });
+
+  it("fails closed before any POST when the batch's run lineage changed between context load and the draft claim", async () => {
+    // The payload was built from a context whose batch carried ONE run…
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(),
+    );
+    // …but by the time the draft row froze membership, a regroup had added a
+    // second run to the batch — the built payload no longer covers the
+    // batch's production bucket, so stamping the claim would under-claim.
+    vi.mocked(certifyContext.resolveScopeForRemoval).mockResolvedValue(
+      makeFreshScope({
+        claimedByRemovalId: null,
+        productionRunIds: [PRODUCTION_RUN_ID, "pr-added-in-window"],
+      }),
+    );
+    const createDatapointFake = vi.fn(fakeExternalIds("dp"));
+    const createGhgEntryFake = vi.fn(fakeExternalIds("rmv"));
+    vi.mocked(isometric.createDatapoint).mockImplementation(
+      createDatapointFake as never,
+    );
+    vi.mocked(isometric.createGhgEntry).mockImplementation(
+      createGhgEntryFake as never,
+    );
+
+    await expect(
+      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+    ).rejects.toThrow(/membership or run lineage changed/);
+    expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(createGhgEntryFake).not.toHaveBeenCalled();
     expect(ledger.markSubmissionSubmitted).not.toHaveBeenCalled();
   });
 });

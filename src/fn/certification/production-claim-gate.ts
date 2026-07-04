@@ -10,24 +10,39 @@
  *
  *   1. Pre-flight, against the loaded context (`ctx.memberBatchClaims`) —
  *      cheap, fails before the evidence-ledger HTTP work.
- *   2. Fresh-read re-assert, immediately after `claimSubmissionDraft` — the
- *      blocking draft row now exists, so membership is frozen
- *      (`assertRemovalAllowsCreditBatchMutation` blocks regroups on
- *      BLOCKING_SUBMISSION_STATUSES, which includes `draft`) and no NEW
- *      foreign claim can appear; a foreign claim stamped in the window
- *      between context load and draft claim is caught here. This closes the
- *      TOCTOU where the guarded UPDATE in `markSubmissionSubmitted` would
- *      otherwise silently no-op AFTER the registry POSTs already happened.
+ *   2. Fresh-read re-assert (`assertProductionClaimGateFresh`), immediately
+ *      after `claimSubmissionDraft` — the blocking draft row now exists, so
+ *      membership is frozen (`assertRemovalAllowsCreditBatchMutation` blocks
+ *      regroups on BLOCKING_SUBMISSION_STATUSES, which includes `draft`) and
+ *      no NEW foreign claim or membership/lineage drift can appear. One fresh
+ *      scope read serves two asserts:
+ *        a. no foreign claim was stamped in the window between context load
+ *           and draft claim (would otherwise trip the rowcount backstop in
+ *           `markSubmissionSubmitted` only AFTER the registry POSTs);
+ *        b. the member-batch set and each batch's run/application lineage
+ *           still match what the payload was built from — `updateCreditBatch`
+ *           can regroup runs (or the batch itself) right up until the draft
+ *           row exists, and the POST would otherwise ship the stale snapshot
+ *           and then stamp a production claim for changed batch contents.
  *      A throw here leaves the draft locked until the lock TTL — safe
  *      (fail-closed, and the pre-flight gate re-fires loudly on retry).
  */
-import { getCreditBatchesByRemovalId } from "@/data-access/certifier-removals";
 import { SafeError } from "@/lib/errors";
+import { resolveScopeForRemoval } from "./certify-context-core";
 
 export interface MemberBatchClaim {
   creditBatchId: string;
   code: string;
   claimedByRemovalId: string | null;
+}
+
+// The payload-relevant lineage of one member batch as the submission context
+// loaded it (sorted). What the fresh re-assert compares against.
+export interface MemberBatchLineage {
+  creditBatchId: string;
+  code: string;
+  productionRunIds: string[];
+  applicationIds: string[];
 }
 
 export function assertNoForeignProductionClaims(
@@ -46,20 +61,64 @@ export function assertNoForeignProductionClaims(
   }
 }
 
-// Fresh-read variant (gate step 2 above): re-reads the member batches' claim
-// columns from the database rather than trusting the context loaded before
-// the draft claim.
-export async function assertNoForeignProductionClaimsFresh(
+// Gate step 2 (see module docblock): one fresh scope read, two asserts.
+export async function assertProductionClaimGateFresh(
   userId: string,
   removalId: string,
+  expected: readonly MemberBatchLineage[],
 ): Promise<void> {
-  const batches = await getCreditBatchesByRemovalId(userId, removalId);
+  const scope = await resolveScopeForRemoval(userId, removalId, {
+    skipPreview: true,
+  });
   assertNoForeignProductionClaims(
-    batches.map((b) => ({
+    scope.memberBatches.map((b) => ({
       creditBatchId: b.id,
       code: b.code,
       claimedByRemovalId: b.productionEmissionsClaimedByRemovalId,
     })),
     removalId,
   );
+  assertMemberBatchLineageUnchanged(expected, scope.memberBatches);
+}
+
+// Pure fingerprint compare: same member-batch set, and per batch the same
+// production-run and application sets. Order-insensitive.
+export function assertMemberBatchLineageUnchanged(
+  expected: readonly MemberBatchLineage[],
+  fresh: readonly {
+    id: string;
+    code: string;
+    productionRunIds: string[];
+    applicationIds: string[];
+  }[],
+): void {
+  const drifted = new Set<string>();
+  const freshById = new Map(fresh.map((b) => [b.id, b]));
+  for (const exp of expected) {
+    const now = freshById.get(exp.creditBatchId);
+    if (
+      !now ||
+      !sortedEqual(exp.productionRunIds, now.productionRunIds) ||
+      !sortedEqual(exp.applicationIds, now.applicationIds)
+    ) {
+      drifted.add(exp.code);
+    }
+    freshById.delete(exp.creditBatchId);
+  }
+  for (const added of freshById.values()) {
+    drifted.add(added.code);
+  }
+  if (drifted.size > 0) {
+    throw new SafeError(
+      `Credit batch membership or run lineage changed while preparing this ` +
+        `submission (${[...drifted].sort().join(", ")}). Reload and retry.`,
+    );
+  }
+}
+
+function sortedEqual(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.every((value, i) => value === sortedB[i]);
 }
