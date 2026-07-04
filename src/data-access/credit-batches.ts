@@ -96,6 +96,18 @@ export interface CreditBatchProductionRunOption {
   date: string;
   status: string;
   biocharDryMassKg: number | null;
+  /**
+   * Run-local production-emission inputs, surfaced so the credit-batch form can
+   * show a live cohort input summary as runs are (de)selected. These are the
+   * front-loaded production-bucket quantities the batch claims (#349, ADR 0020);
+   * the registry applies the emission factors (ADR 0018) — noma never holds a
+   * CO₂e figure here, only the submitted quantities.
+   */
+  feedstockMassDryKg: number | null;
+  dieselOperationLiters: number | null;
+  dieselGensetLiters: number | null;
+  preprocessingFuelLiters: number | null;
+  electricityKwh: number | null;
   assignedCreditBatchId: string | null;
   assignedCreditBatchCode: string | null;
 }
@@ -749,6 +761,11 @@ export async function getCreditBatchProductionRunOptions(
       date: productionRuns.date,
       status: productionRuns.status,
       biocharDryMassKg: productionRuns.biocharDryMassKg,
+      feedstockMassDryKg: productionRuns.feedstockMassDryKg,
+      dieselOperationLiters: productionRuns.dieselOperationLiters,
+      dieselGensetLiters: productionRuns.dieselGensetLiters,
+      preprocessingFuelLiters: productionRuns.preprocessingFuelLiters,
+      electricityKwh: productionRuns.electricityKwh,
       assignedCreditBatchId: creditBatchProductionRuns.creditBatchId,
       assignedCreditBatchCode: creditBatches.code,
     })

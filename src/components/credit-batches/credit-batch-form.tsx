@@ -16,7 +16,7 @@ import { formatSafeDate } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, FormTextarea, FormSection, SectionLabel, FormActions } from "@/components/forms";
@@ -29,6 +29,7 @@ import {
 import type { CreditBatch } from "@/db/schema/credits";
 import type { CreditBatchProductionRunOption } from "@/data-access/credit-batches";
 import { useCreditBatchProductionRunOptions } from "@/hooks/use-credit-batches";
+import { CohortInputLedger } from "./cohort-input-ledger";
 
 // ============================================
 // Section helpers
@@ -294,14 +295,17 @@ export function CreditBatchForm({
     .map((run) => run.id);
   const selectedProductionRunIdsKey = selectedProductionRunIds.join(",");
   const selectableProductionRunIdsKey = selectableProductionRunIds.join(",");
+  const selectedRuns = productionRunOptions.filter((run) =>
+    selectedProductionRunIds.includes(run.id),
+  );
 
+  // Edit mode: prune the batch's saved members down to the still-selectable set
+  // when the window changes. Only against a successfully loaded options list —
+  // on edit mount (or after a failed fetch, when options fall back to []) pruning
+  // would wipe the saved cohort, forcing a full re-select. `isSuccess`, not
+  // `isFetched`: the latter is also true after an errored fetch.
   useEffect(() => {
-    // Only prune against a successfully loaded options list — on edit mount
-    // (or after a failed fetch, when options fall back to []) pruning would
-    // wipe the batch's member-run defaults, forcing the user to re-select the
-    // whole cohort. `isSuccess`, not `isFetched`: the latter is also true
-    // after an errored fetch.
-    if (!productionRunOptionsLoaded) {
+    if (!productionRunOptionsLoaded || !isEditMode) {
       return;
     }
     const selectedIds = selectedProductionRunIdsKey
@@ -317,6 +321,35 @@ export function CreditBatchForm({
       setValue("productionRunIds", nextSelected, { shouldValidate: true });
     }
   }, [
+    isEditMode,
+    productionRunOptionsLoaded,
+    selectableProductionRunIdsKey,
+    selectedProductionRunIdsKey,
+    setValue,
+  ]);
+
+  // Create mode: the date window IS the batch boundary, so every eligible
+  // (unassigned) run in it is a member by default — opt-out, not opt-in. Re-fill
+  // only when the selectable set itself changes (new window/facility); tracking
+  // the last auto-filled key preserves the user's manual deselections within a
+  // window instead of clobbering them on every render.
+  const autoSelectedKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (isEditMode || !productionRunOptionsLoaded) {
+      return;
+    }
+    if (autoSelectedKeyRef.current === selectableProductionRunIdsKey) {
+      return;
+    }
+    autoSelectedKeyRef.current = selectableProductionRunIdsKey;
+    const nextSelected = selectableProductionRunIdsKey
+      ? selectableProductionRunIdsKey.split(",")
+      : [];
+    if (nextSelected.join(",") !== selectedProductionRunIdsKey) {
+      setValue("productionRunIds", nextSelected, { shouldValidate: true });
+    }
+  }, [
+    isEditMode,
     productionRunOptionsLoaded,
     selectableProductionRunIdsKey,
     selectedProductionRunIdsKey,
@@ -427,6 +460,9 @@ export function CreditBatchForm({
           {errors.productionRunIds.message}
         </p>
       )}
+
+      {/* ── Cohort input ledger (live front-loaded production inputs) ── */}
+      <CohortInputLedger runs={selectedRuns} />
 
       {/* ── Durability ── */}
       <FormSection
