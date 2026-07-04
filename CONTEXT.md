@@ -106,8 +106,9 @@ characterise that batch's biochar. Each Sample belongs to **exactly one
 credit batch**, recorded against it directly — the batch's biochar is
 **commingled across its production runs**, so no single run is
 attributable (a run link survives only on legacy rows as provenance).
-The Sample inherits the batch's declared **durability tier** (200- vs
-1000-year), and the ≥3 must be **independent samples distributed across
+The Sample inherits the **durability tier** (200- vs 1000-year) its
+**facility** declares, carried through its credit batch, and the ≥3 must
+be **independent samples distributed across
 the batch** (distinct sampling points/days — protocol §8.3.1), never
 aliquots of a single grab. The lab's certificate of analysis is attached
 as a `lab_report` **document**, not a separate record. Distinct from the
@@ -167,14 +168,17 @@ samples); scoping eligibility to a reactor or facility rather than the
 production process.
 
 **Durability tier**:
-The crediting time horizon a biochar batch is certified against.
+The crediting time horizon a **facility** certifies its biochar against.
 Isometric's soil module offers exactly two: *200-year* (modelled from
 the H/C_org ratio and soil temperature) and *1000-year* (from random
-reflectance R₀ and non-reactive carbon). There is **no 100-year option**
-under the Isometric biochar module — 100-year permanence belongs to
-other standards (e.g. Puro / EBC) and to GWP-100, neither of which this
-system credits against. _Avoid_: 100-year durability; permanence period
-as a free-typed value.
+reflectance R₀ and non-reactive carbon). A facility declares **one**
+tier; its **credit batches**, their **Samples**, and its Isometric
+**removal template** all inherit it — there is no per-batch or
+per-production-process override. There is **no 100-year option** under
+the Isometric biochar module — 100-year permanence belongs to other
+standards (e.g. Puro / EBC) and to GWP-100, neither of which this system
+credits against. _Avoid_: 100-year durability; a per-batch or
+per-production-process tier; permanence period as a free-typed value.
 
 **Carbon-rich-substance sequestration**:
 The Isometric removal-template **component** (group `co2-stored`) that

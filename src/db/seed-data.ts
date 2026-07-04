@@ -121,10 +121,15 @@ const ids = {
   productionRun2: demoId(1821),
   productionRun3: demoId(1822),
 
-  // Samples
+  // Samples — ≥3 complete-chemistry replicates per sampled credit batch
+  // (§8.3.1 durability gate): samples 1/3/4 pool on batch 1, samples 2/5/6
+  // on batch 2.
   sample1: demoId(1850),
   sample2: demoId(1851),
   sample3: demoId(1852),
+  sample4: demoId(1853),
+  sample5: demoId(1854),
+  sample6: demoId(1855),
 
   // Formulations
   formulationStandard: demoId(1900),
@@ -170,7 +175,7 @@ const ids = {
   creditApp2: demoId(2351),
   creditApp3: demoId(2352),
 
-  // Transport Legs (one feedstock + biochar + sample leg per production run)
+  // Transport Legs (one per feedstock/biochar product, one per lab sample)
   transportLegFeedstock1: demoId(2400),
   transportLegFeedstock2: demoId(2401),
   transportLegFeedstock3: demoId(2402),
@@ -180,6 +185,9 @@ const ids = {
   transportLegSample1: demoId(2406),
   transportLegSample2: demoId(2407),
   transportLegSample3: demoId(2408),
+  transportLegSample4: demoId(2409),
+  transportLegSample5: demoId(2410),
+  transportLegSample6: demoId(2411),
 } as const;
 
 // Demo timestamps (realistic timeline)
@@ -908,8 +916,15 @@ async function seedDemoData() {
       // — before samples — rather than after applications.
       await seedProductionProcessesAndCreditBatches(tx, ids, demoTimestamps);
 
+      // Each sampled credit batch pools >=3 replicates with a complete
+      // H/C_org + O/C_org pair (durability gate, module §8.3.1 / §3 Table 2);
+      // batch 2 is 1000-year, so its samples also carry the R0 + TGA evidence
+      // the intake guard requires (requireBatchTierEvidence, issue #341).
+      // Molar ratios are consistent with the elemental percentages
+      // (H/C_org = (H/1)/(C_org/12), O/C_org = (O/16)/(C_org/12)).
       console.log('Creating samples...');
       await tx.insert(schema.samples).values([
+        // --- Credit batch 1 (200-year, woodchips): runs 1 + 3, 3 replicates ---
         {
           id: ids.sample1,
           productionRunId: ids.productionRun1,
@@ -925,28 +940,11 @@ async function seedDemoData() {
           inorganicCarbonPercent: 0.9,
           organicCarbonPercent: 78.3,
           totalHydrogenPercent: 1.8,
+          totalOxygenPercent: 7.5,
           hToCOrgRatio: 0.27,
+          oToCOrgRatio: 0.07,
           ashContentPercent: 9.5,
           moistureContentPercent: 4.8,
-        },
-        {
-          id: ids.sample2,
-          productionRunId: ids.productionRun2,
-          creditBatchId: ids.creditBatch2,
-          samplingTime: new Date('2026-05-15T09:00:00.000Z'),
-          sampleCode: 'SAM-26-002',
-          weightGrams: 485,
-          volumeMl: 920,
-          labName: 'Kibo Analytical Labs',
-          labAccreditation: 'ISO 17025',
-          analysisDate: '2026-05-22',
-          totalCarbonPercent: 81.5,
-          inorganicCarbonPercent: 0.7,
-          organicCarbonPercent: 80.8,
-          totalHydrogenPercent: 1.5,
-          hToCOrgRatio: 0.22,
-          ashContentPercent: 8.2,
-          moistureContentPercent: 5.1,
         },
         {
           id: ids.sample3,
@@ -963,9 +961,120 @@ async function seedDemoData() {
           inorganicCarbonPercent: 1.0,
           organicCarbonPercent: 76.8,
           totalHydrogenPercent: 2.0,
+          totalOxygenPercent: 8.7,
           hToCOrgRatio: 0.31,
+          oToCOrgRatio: 0.09,
           ashContentPercent: 10.8,
           moistureContentPercent: 5.4,
+        },
+        {
+          // Third replicate drawn from the curing pad the morning after run 3
+          // — a distinct sampling day, so the batch's replicates span three
+          // (run, day) provenance keys (§8.3.1 distribution expectation).
+          id: ids.sample4,
+          productionRunId: ids.productionRun3,
+          creditBatchId: ids.creditBatch1,
+          samplingTime: new Date('2026-05-18T08:30:00.000Z'),
+          sampleCode: 'SAM-26-004',
+          weightGrams: 505,
+          volumeMl: 950,
+          labName: 'Kibo Analytical Labs',
+          labAccreditation: 'ISO 17025',
+          analysisDate: '2026-05-24',
+          totalCarbonPercent: 80.4,
+          inorganicCarbonPercent: 0.8,
+          organicCarbonPercent: 79.6,
+          totalHydrogenPercent: 1.7,
+          totalOxygenPercent: 6.9,
+          hToCOrgRatio: 0.25,
+          oToCOrgRatio: 0.07,
+          ashContentPercent: 8.9,
+          moistureContentPercent: 4.6,
+        },
+        // --- Credit batch 2 (1000-year, coffee husk): run 2, 3 replicates
+        // with R0 petrography + TGA evidence. Sample means reconcile with the
+        // batch's stored meanRandomReflectancePercent (2.8) and
+        // meanNonReactiveCarbonPercent (68). ---
+        {
+          id: ids.sample2,
+          productionRunId: ids.productionRun2,
+          creditBatchId: ids.creditBatch2,
+          samplingTime: new Date('2026-05-15T09:00:00.000Z'),
+          sampleCode: 'SAM-26-002',
+          weightGrams: 485,
+          volumeMl: 920,
+          labName: 'Kibo Analytical Labs',
+          labAccreditation: 'ISO 17025',
+          analysisDate: '2026-05-22',
+          totalCarbonPercent: 81.5,
+          inorganicCarbonPercent: 0.7,
+          organicCarbonPercent: 80.8,
+          totalHydrogenPercent: 1.5,
+          totalOxygenPercent: 6.0,
+          hToCOrgRatio: 0.22,
+          oToCOrgRatio: 0.06,
+          ashContentPercent: 8.2,
+          moistureContentPercent: 5.1,
+          randomReflectanceR0Percent: 2.9,
+          r0MeasurementCount: 100,
+          reactiveCarbonPercent: 31.8,
+          residualCarbonPercent: 68.2,
+          r0AnalysisDate: '2026-05-22',
+          tgaAnalysisDate: '2026-05-22',
+        },
+        {
+          id: ids.sample5,
+          productionRunId: ids.productionRun2,
+          creditBatchId: ids.creditBatch2,
+          samplingTime: new Date('2026-05-16T09:15:00.000Z'),
+          sampleCode: 'SAM-26-005',
+          weightGrams: 495,
+          volumeMl: 940,
+          labName: 'Kibo Analytical Labs',
+          labAccreditation: 'ISO 17025',
+          analysisDate: '2026-05-23',
+          totalCarbonPercent: 82.1,
+          inorganicCarbonPercent: 0.6,
+          organicCarbonPercent: 81.5,
+          totalHydrogenPercent: 1.4,
+          totalOxygenPercent: 5.4,
+          hToCOrgRatio: 0.21,
+          oToCOrgRatio: 0.05,
+          ashContentPercent: 7.8,
+          moistureContentPercent: 4.9,
+          randomReflectanceR0Percent: 2.8,
+          r0MeasurementCount: 100,
+          reactiveCarbonPercent: 32.4,
+          residualCarbonPercent: 67.6,
+          r0AnalysisDate: '2026-05-23',
+          tgaAnalysisDate: '2026-05-23',
+        },
+        {
+          id: ids.sample6,
+          productionRunId: ids.productionRun2,
+          creditBatchId: ids.creditBatch2,
+          samplingTime: new Date('2026-05-17T08:45:00.000Z'),
+          sampleCode: 'SAM-26-006',
+          weightGrams: 500,
+          volumeMl: 955,
+          labName: 'Kibo Analytical Labs',
+          labAccreditation: 'ISO 17025',
+          analysisDate: '2026-05-24',
+          totalCarbonPercent: 80.9,
+          inorganicCarbonPercent: 0.8,
+          organicCarbonPercent: 80.1,
+          totalHydrogenPercent: 1.6,
+          totalOxygenPercent: 6.4,
+          hToCOrgRatio: 0.24,
+          oToCOrgRatio: 0.06,
+          ashContentPercent: 8.5,
+          moistureContentPercent: 5.2,
+          randomReflectanceR0Percent: 2.7,
+          r0MeasurementCount: 100,
+          reactiveCarbonPercent: 31.9,
+          residualCarbonPercent: 68.1,
+          r0AnalysisDate: '2026-05-24',
+          tgaAnalysisDate: '2026-05-24',
         },
       ]);
 
@@ -1083,8 +1192,8 @@ async function seedDemoData() {
 
       // ============================================================
       // TRANSPORT LEGS (Isometric Transportation Module v1.1)
-      // One feedstock + biochar + sample leg per production run, so the
-      // Certify panel's per-run transport-coverage gate is satisfied and
+      // One leg per feedstock, biochar product, and lab sample, so the
+      // Certify panel's transport-coverage gate is satisfied and
       // submitCreditBatch can build complete Removal payloads. All legs
       // use the distance-based method with one shared emission factor per
       // category — mixed methods/factors would block aggregation.
@@ -1244,6 +1353,45 @@ async function seedDemoData() {
           id: ids.transportLegSample3,
           entityType: 'sample',
           entityId: ids.sample3,
+          originName: 'Dark Earth Moshi Biochar Hub',
+          destinationName: 'Kibo Analytical Labs, Arusha',
+          distanceKm: 82,
+          distanceSource: 'map_estimate',
+          transportMethodType: 'road',
+          vehicleType: 'Courier van',
+          loadMassKg: 5,
+          calculationMethodType: 'distance_based',
+        },
+        {
+          id: ids.transportLegSample4,
+          entityType: 'sample',
+          entityId: ids.sample4,
+          originName: 'Dark Earth Moshi Biochar Hub',
+          destinationName: 'Kibo Analytical Labs, Arusha',
+          distanceKm: 82,
+          distanceSource: 'map_estimate',
+          transportMethodType: 'road',
+          vehicleType: 'Courier van',
+          loadMassKg: 5,
+          calculationMethodType: 'distance_based',
+        },
+        {
+          id: ids.transportLegSample5,
+          entityType: 'sample',
+          entityId: ids.sample5,
+          originName: 'Dark Earth Moshi Biochar Hub',
+          destinationName: 'Kibo Analytical Labs, Arusha',
+          distanceKm: 82,
+          distanceSource: 'map_estimate',
+          transportMethodType: 'road',
+          vehicleType: 'Courier van',
+          loadMassKg: 5,
+          calculationMethodType: 'distance_based',
+        },
+        {
+          id: ids.transportLegSample6,
+          entityType: 'sample',
+          entityId: ids.sample6,
           originName: 'Dark Earth Moshi Biochar Hub',
           destinationName: 'Kibo Analytical Labs, Arusha',
           distanceKm: 82,
@@ -1640,8 +1788,8 @@ async function seedDemoData() {
     console.log('  - 2 Drivers, 2 Operators, 2 Vehicles');
     console.log('  - 9 Feedstock Types');
     console.log('  - 3 Feedstock Deliveries -> 3 Feedstocks');
-    console.log('  - 3 Production Runs -> 285 telemetry readings -> 3 Samples');
-    console.log('  - 9 Transport Legs (3 feedstock, 3 biochar, 3 sample)');
+    console.log('  - 3 Production Runs -> 285 telemetry readings -> 6 Samples (3 per credit batch)');
+    console.log('  - 12 Transport Legs (3 feedstock, 3 biochar, 6 sample)');
     console.log('  - 3 Formulations');
     console.log('  - 3 Biochar Products');
     console.log('  - 3 Orders -> 3 Deliveries');

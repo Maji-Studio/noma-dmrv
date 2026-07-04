@@ -221,6 +221,26 @@ guard. Pure starter-template residue; the app is facility-scoped.
 
 ## Isometric Certify integration
 
+### Template component → dmrv source mapping is hardcoded by display name (`certification/template-component-source-wizard`, opened 2026-07-04)
+
+- **Decision needed** — where should the "this template component carries this
+  dmrv aggregated source" mapping live? Today it's a code constant
+  (`PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT` in `transformers/datapoint.ts`), keyed
+  by the component **display name**, because Certify's template model exposes no
+  stable per-component key. It only bites when one `(group, blueprint, input)`
+  triple is declared by more than one component — currently just the pyrolysis
+  generator/startup diesel split (2026-07-04 changes.md entry).
+- **Why it matters** — a display-name rename in the Isometric UI silently
+  requires a code change (it fails closed with a clear SafeError, so it can't
+  mis-submit — but it blocks the submit until code catches up). This couples the
+  registry template to a code deploy, which a non-engineer operator can't do.
+- **What we'd need to resolve it** — a facility-configurable component→source
+  mapping (persisted on the certifier mapping row) plus a small assignment
+  wizard in facility settings (pick each unmapped monitored component → dmrv
+  source). The code constant becomes the seed/default. Scope it when a second
+  multi-component triple appears, or when an operator needs to re-author the
+  template without an engineer.
+
 ### Eq.6 R₀-term semantics — 1000-year F_durable normalization (`certification/fdurable-1000-r0-semantics`, opened 2026-07-03)
 
 - **From issue #142** (1000-year CO₂e-stored preview path, built). The storage
@@ -494,6 +514,14 @@ they don't churn a freshly-introduced surface mid-review:
   `isometric-ghg-statement-submit.test.ts`) drop the deprecated keys; (b) delete the
   🚫-marked deprecated rows from `docs/isometric/openapi-index.md`. No app-code
   change expected — the wire layer already only calls the new routes.
+- **Sunset date CONFIRMED ~September 2026** (issue #353, 2026-07-04) — previously
+  an unverified assumption from #291. Post-sunset cleanup above is unchanged.
+- **Domain term "Removal" is RETAINED** (stakeholder decision, 2026-07-04): the
+  `Removal → GhgEntry` *domain* rename floated in ADR 0014 is **decided against**.
+  Only the wire/API layer uses `ghg_entry*` (already done); our routes, UI,
+  tables, and `CONTEXT.md` keep "Removal" as the canonical submission-unit term.
+  Verified 2026-07-04 that no deprecated `/removals` or `/removal_templates`
+  endpoint calls remain (`submissions.test.ts` guards it).
 - Full inventory + verified renames + phased plan:
   [`docs/plans/2026-06-10-isometric-ghg-entry-migration.md`](./plans/2026-06-10-isometric-ghg-entry-migration.md).
 

@@ -18,13 +18,18 @@ export interface AggregatedProductionData {
   // ONE combined `fuel_usage_by_volume` datapoint in litres (issue #319 —
   // energy-use-accounting v1.3 Eq 7: fuel emissions = fuel quantity × a
   // volumetric well-to-wheel EF held as a fixed input on the Isometric
-  // template; noma never converts litres to kWh). The split fields stay for
-  // local reporting/preview.
+  // template; noma never converts litres to kWh). The two split fields each
+  // feed their OWN pyrolysis `fuel_usage_by_volume` component now (the Dark
+  // Earth template splits generator vs. startup diesel — see
+  // PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT in transformers/datapoint.ts;
+  // docs/isometric/changes.md amends #319). Startup = reactor-startup /
+  // on-site plant diesel; genset = generator diesel + preprocessing fuel
+  // ("summarized").
   totalStartupDieselLitres: number;
   totalGensetDieselLitres: number;
   // Combined diesel litres = totalStartupDieselLitres + totalGensetDieselLitres
-  // (both full run totals — PRODUCTION bucket, §8.6.2/ADR 0020) — the single
-  // submitted volume.
+  // (both full run totals — PRODUCTION bucket, §8.6.2/ADR 0020). Kept for
+  // preview/reporting; the two split fields are what get submitted.
   totalDieselLitres: number;
   totalElectricityKwh: number;
   // Per-category transport mass-distance (tonne·km) = Σⱼ(distⱼ × massⱼ) over
@@ -213,9 +218,13 @@ export function aggregateProductionRuns(
     // PRODUCTION bucket (§8.6.2, ADR 0020): full run totals — front-loaded on
     // the batch's claiming entry, no applied-mass weighting. See SOURCE_BUCKETS.
     totalFeedstockDryMassKg += nz(run.feedstockMassDryKg);
-    totalStartupDieselLitres +=
-      nz(run.dieselOperationLiters) + nz(run.preprocessingFuelLiters);
-    totalGensetDieselLitres += nz(run.dieselGensetLiters);
+    // Startup bucket = reactor-startup / on-site plant diesel only.
+    totalStartupDieselLitres += nz(run.dieselOperationLiters);
+    // Genset ("summarized") bucket = generator diesel + preprocessing fuel;
+    // preprocess rides with genset per the Dark Earth template's two-component
+    // pyrolysis diesel split (docs/isometric/changes.md, amends #319).
+    totalGensetDieselLitres +=
+      nz(run.dieselGensetLiters) + nz(run.preprocessingFuelLiters);
     totalElectricityKwh += nz(run.electricityKwh);
     if (run.startTime < earliestStartTime) earliestStartTime = run.startTime;
     if (run.endTime > latestEndTime) latestEndTime = run.endTime;

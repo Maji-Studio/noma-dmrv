@@ -15,6 +15,8 @@ import { creditBatchFormSchema } from "@/schemas/credit-batches";
 
 const validBase = {
   facilityId: "11111111-1111-4111-8111-111111111111",
+  // Declared up front (ADR 0016 amendment) and required by the form schema.
+  feedstockTypeId: "33333333-3333-4333-8333-333333333333",
   productionRunIds: ["22222222-2222-4222-8222-222222222222"],
   durabilityOption: "200_year" as const,
   hToCorgRatio: 0.4,
@@ -56,7 +58,7 @@ describe("creditBatchFormSchema — production window", () => {
     }
   });
 
-  it("requires at least one production run (the batch's feedstock is derived from membership)", () => {
+  it("requires at least one production run", () => {
     const result = creditBatchFormSchema.safeParse({
       ...validBase,
       productionRunIds: [],

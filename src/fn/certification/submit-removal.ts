@@ -193,6 +193,7 @@ function resolveTemplateInputs(args: {
         const draft = buildCreateDatapointRequest({
           groupKey: group.key,
           componentBlueprintKey: component.blueprint_key,
+          componentDisplayName: component.display_name,
           rtcInput,
           blueprintInput,
           agg,

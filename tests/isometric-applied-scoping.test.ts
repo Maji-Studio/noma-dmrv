@@ -46,6 +46,23 @@ describe("aggregateProductionRuns — emission-input buckets (§8.6.2)", () => {
     expect(agg.totalElectricityKwh).toBe(200);
   });
 
+  it("buckets preprocessing fuel with genset, not startup (generator/startup diesel split)", () => {
+    // Startup = reactor-startup / plant diesel only; the generator
+    // ("summarized") figure absorbs preprocessing fuel (docs/isometric/changes.md).
+    const agg = aggregateProductionRuns([
+      run({
+        id: "a",
+        dieselOperationLiters: 100,
+        preprocessingFuelLiters: 10,
+        dieselGensetLiters: 50,
+      }),
+    ]);
+    expect(agg.totalStartupDieselLitres).toBe(100);
+    expect(agg.totalGensetDieselLitres).toBe(60);
+    // Combined is unchanged by the re-bucket (still the full run diesel sum).
+    expect(agg.totalDieselLitres).toBe(160);
+  });
+
   it("scales only the stored-bucket biochar mass by the attribution factor; production-bucket inputs stay full", () => {
     const agg = aggregateProductionRuns(
       [run({ id: "a" })],

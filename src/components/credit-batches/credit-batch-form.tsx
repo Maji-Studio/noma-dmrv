@@ -16,10 +16,10 @@ import { formatSafeDate } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormTextarea, FormSection, SectionLabel, FormActions } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, SectionLabel, FormActions } from "@/components/forms";
 import {
   creditBatchFormSchema,
   formatDurabilityOption,
@@ -29,6 +29,8 @@ import {
 import type { CreditBatch } from "@/db/schema/credits";
 import type { CreditBatchProductionRunOption } from "@/data-access/credit-batches";
 import { useCreditBatchProductionRunOptions } from "@/hooks/use-credit-batches";
+import { CohortInputLedger } from "./cohort-input-ledger";
+import { FeedstockProcessChip } from "./feedstock-process-chip";
 
 // ============================================
 // Section helpers
@@ -108,13 +110,16 @@ function CohortPickerSection({
   count,
   totalCount,
   hasDates,
+  notReadyMessage,
   noMatchMessage,
   children,
 }: {
   title: string;
   count: number;
   totalCount: number;
+  /** Whether the cohort's prerequisites (feedstock + window) are all set. */
   hasDates: boolean;
+  notReadyMessage: string;
   noMatchMessage: string;
   children: React.ReactNode;
 }) {
@@ -137,7 +142,7 @@ function CohortPickerSection({
       {!hasDates ? (
         <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
           <span className="body-small text-[var(--color-text-tertiary)]">
-            Set start and end dates to load {title.toLowerCase()}.
+            {notReadyMessage}
           </span>
         </div>
       ) : totalCount === 0 ? (
@@ -234,6 +239,7 @@ export function CreditBatchForm({
     resolver: zodResolver(creditBatchFormSchema),
     defaultValues: {
       facilityId: creditBatch?.facilityId ?? contextFacilityId ?? "",
+      feedstockTypeId: creditBatch?.feedstockTypeId ?? "",
       startDate: toDateInputValue(creditBatch?.startDate),
       endDate: toDateInputValue(creditBatch?.endDate),
       productionRunIds: creditBatch?.productionRunIds ?? [],
@@ -259,17 +265,22 @@ export function CreditBatchForm({
     }
   }, [creditBatch, selectedFacility?.defaultDurabilityOption, setValue]);
 
-  // Watch dates and facilityId for cohort selection
+  // Watch dates, facility, and declared feedstock type for cohort selection
   const watchedStartDate = useWatch({ control, name: "startDate" });
   const watchedEndDate = useWatch({ control, name: "endDate" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
+  const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
   const watchedProductionRunIds = useWatch({ control, name: "productionRunIds" });
   const durabilityOption = useWatch({ control, name: "durabilityOption" });
   const effectiveFacilityId = watchedFacilityId || contextFacilityId || "";
+  const declaredFeedstockTypeId = watchedFeedstockTypeId || "";
 
   const startDate = parseWatchedDate(watchedStartDate);
   const endDate = parseWatchedDate(watchedEndDate);
   const hasBothDates = startDate != null && endDate != null && endDate >= startDate;
+  // The cohort is scoped by BOTH the window and the declared feedstock type
+  // (ADR 0016 amendment): runs load only once both are set.
+  const isCohortReady = hasBothDates && declaredFeedstockTypeId !== "";
 
   const startDateStr = startDate ? formatUtcDate(startDate) : "";
   const endDateStr = endDate ? formatUtcDate(endDate) : "";
@@ -285,7 +296,17 @@ export function CreditBatchForm({
     endDate: hasBothDates ? endDateStr : undefined,
     includeCreditBatchId: creditBatch?.id,
   });
-  const selectableProductionRunIds = productionRunOptions
+  // Scope options to runs of exactly the declared feedstock type. A run with an
+  // empty or multi-type set can't belong to a single-feedstock batch (ADR 0016),
+  // so it never appears once a type is declared.
+  const typedRunOptions = declaredFeedstockTypeId
+    ? productionRunOptions.filter(
+        (run) =>
+          run.feedstockTypeIds.length === 1 &&
+          run.feedstockTypeIds[0] === declaredFeedstockTypeId,
+      )
+    : [];
+  const selectableProductionRunIds = typedRunOptions
     .filter(
       (run) =>
         !run.assignedCreditBatchId ||
@@ -294,14 +315,17 @@ export function CreditBatchForm({
     .map((run) => run.id);
   const selectedProductionRunIdsKey = selectedProductionRunIds.join(",");
   const selectableProductionRunIdsKey = selectableProductionRunIds.join(",");
+  const selectedRuns = typedRunOptions.filter((run) =>
+    selectedProductionRunIds.includes(run.id),
+  );
 
+  // Edit mode: prune the batch's saved members down to the still-selectable set
+  // when the window changes. Only against a successfully loaded options list —
+  // on edit mount (or after a failed fetch, when options fall back to []) pruning
+  // would wipe the saved cohort, forcing a full re-select. `isSuccess`, not
+  // `isFetched`: the latter is also true after an errored fetch.
   useEffect(() => {
-    // Only prune against a successfully loaded options list — on edit mount
-    // (or after a failed fetch, when options fall back to []) pruning would
-    // wipe the batch's member-run defaults, forcing the user to re-select the
-    // whole cohort. `isSuccess`, not `isFetched`: the latter is also true
-    // after an errored fetch.
-    if (!productionRunOptionsLoaded) {
+    if (!productionRunOptionsLoaded || !isEditMode) {
       return;
     }
     const selectedIds = selectedProductionRunIdsKey
@@ -317,6 +341,35 @@ export function CreditBatchForm({
       setValue("productionRunIds", nextSelected, { shouldValidate: true });
     }
   }, [
+    isEditMode,
+    productionRunOptionsLoaded,
+    selectableProductionRunIdsKey,
+    selectedProductionRunIdsKey,
+    setValue,
+  ]);
+
+  // Create mode: the date window IS the batch boundary, so every eligible
+  // (unassigned) run in it is a member by default — opt-out, not opt-in. Re-fill
+  // only when the selectable set itself changes (new window/facility); tracking
+  // the last auto-filled key preserves the user's manual deselections within a
+  // window instead of clobbering them on every render.
+  const autoSelectedKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (isEditMode || !productionRunOptionsLoaded) {
+      return;
+    }
+    if (autoSelectedKeyRef.current === selectableProductionRunIdsKey) {
+      return;
+    }
+    autoSelectedKeyRef.current = selectableProductionRunIdsKey;
+    const nextSelected = selectableProductionRunIdsKey
+      ? selectableProductionRunIdsKey.split(",")
+      : [];
+    if (nextSelected.join(",") !== selectedProductionRunIdsKey) {
+      setValue("productionRunIds", nextSelected, { shouldValidate: true });
+    }
+  }, [
+    isEditMode,
     productionRunOptionsLoaded,
     selectableProductionRunIdsKey,
     selectedProductionRunIdsKey,
@@ -335,6 +388,24 @@ export function CreditBatchForm({
     <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* ── Overview ── */}
       <FormSection title="Overview" divider={false}>
+
+        <div className="space-y-8">
+          <FormEntitySelect
+            control={control}
+            name="feedstockTypeId"
+            label="Feedstock Type"
+            entityType="feedstockType"
+            placeholder="Select feedstock type..."
+            disabled={isSubmitting}
+            required
+            filterBy={{ usage: "pyrolysis" }}
+            helperText="The batch is one feedstock — this sets its production process and Method A/B, and scopes which runs you can add."
+          />
+          <FeedstockProcessChip
+            facilityId={effectiveFacilityId || undefined}
+            feedstockTypeId={declaredFeedstockTypeId || undefined}
+          />
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
@@ -376,11 +447,12 @@ export function CreditBatchForm({
       <CohortPickerSection
         title="Production runs"
         count={selectedProductionRunIds.length}
-        totalCount={productionRunOptions.length}
-        hasDates={hasBothDates}
-        noMatchMessage="No production runs fall within this production window."
+        totalCount={typedRunOptions.length}
+        hasDates={isCohortReady}
+        notReadyMessage="Select a feedstock type and set the production window to load runs."
+        noMatchMessage="No runs of this feedstock type fall within the production window."
       >
-        {productionRunOptions.map((run: CreditBatchProductionRunOption) => {
+        {typedRunOptions.map((run: CreditBatchProductionRunOption) => {
           const assignedElsewhere =
             !!run.assignedCreditBatchId &&
             run.assignedCreditBatchId !== creditBatch?.id;
@@ -427,6 +499,9 @@ export function CreditBatchForm({
           {errors.productionRunIds.message}
         </p>
       )}
+
+      {/* ── Cohort input ledger (live front-loaded production inputs) ── */}
+      <CohortInputLedger runs={selectedRuns} />
 
       {/* ── Durability ── */}
       <FormSection

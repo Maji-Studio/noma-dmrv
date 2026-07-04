@@ -52,6 +52,12 @@ export const creditBatchFormSchema = z
   .object({
     // === Section 1: Overview ===
     facilityId: z.string().min(1, "Please select a facility").uuid("Invalid facility"),
+    // Declared up front (ADR 0016 amendment): resolves the production process +
+    // Method A/B and scopes the run cohort to a single feedstock.
+    feedstockTypeId: z
+      .string()
+      .min(1, "Please select a feedstock type")
+      .uuid("Invalid feedstock type"),
     startDate: z.coerce.date({ message: "Start date is required" }),
     endDate: z.coerce.date({ message: "End date is required" }),
 
@@ -172,6 +178,7 @@ export const updateCreditBatchSchema = z.object({
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
   facilityId: z.string().uuid().optional(),
+  feedstockTypeId: z.string().uuid().optional(),
   startDate: z.coerce.date().optional(),
   endDate: z.coerce.date().optional(),
   productionRunIds: z
