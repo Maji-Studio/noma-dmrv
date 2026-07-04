@@ -421,7 +421,10 @@ _Avoid_: teammate, seat.
 - A **Credit batch** aggregates many **Production runs**
 - A **Removal** is the Isometric submission unit — it aggregates the
   deduped union of **Production runs** reached through its member credit
-  batches' application lineage, applied-biochar scoped
+  batches' application lineage; attribution basis splits by
+  emission-input bucket (ADR 0020) — production is claimed in full once
+  by the claiming Removal, stored and delivery remain applied-biochar
+  scoped
 - A **GHG Statement** rolls up many **Removals** by reporting-period
   date range
 - A **Removal** is built from **Monitored inputs** (per-submission data)
