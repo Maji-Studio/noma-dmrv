@@ -436,10 +436,12 @@ export async function getFacilityEnergyTotals(
   return {
     runCount: Number(row.runCount),
     electricityKwh: Number(row.electricityKwh) || 0,
-    gensetLitres: Number(row.gensetLitres) || 0,
-    startupLitres:
-      (Number(row.operationLitres) || 0) +
-      (Number(row.preprocessingLitres) || 0),
+    // Genset ("summarized") = generator diesel + preprocessing fuel; startup =
+    // reactor-startup / plant diesel only. Mirrors the submission split in
+    // aggregation.ts (docs/isometric/changes.md).
+    gensetLitres:
+      (Number(row.gensetLitres) || 0) + (Number(row.preprocessingLitres) || 0),
+    startupLitres: Number(row.operationLitres) || 0,
   };
 }
 

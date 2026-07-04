@@ -24,6 +24,18 @@ export interface InputMappingEntry {
   // tests/isometric-emission-buckets.test.ts.
   bucket: EmissionInputBucket;
   transform?: (value: number) => number;
+  // Per-template-component source override. Set ONLY where one
+  // (group, blueprint, input) triple is declared by MORE THAN ONE component
+  // (e.g. the pyrolysis diesel split: "Generator diesel usage" vs "Startup
+  // diesel usage"). Certify's template model exposes no stable per-component
+  // key, so the component display name (normalized: trimmed + lowercased) is
+  // the only discriminator. When present it REPLACES `source`, and
+  // buildCreateDatapointRequest fails closed on an unrecognized name — a rename
+  // or added component surfaces loudly instead of silently double-counting or
+  // mis-bucketing. The data-driven replacement (facility-configurable
+  // component→source map + assignment wizard) is tracked in
+  // docs/open-questions.md.
+  sourceByComponent?: Readonly<Record<string, keyof AggregatedProductionData>>;
 }
 
 // Maps (group_key, blueprint_key, input_key) tuples to a noma aggregated
@@ -40,6 +52,22 @@ export type InputMappingTable = Record<
   string,
   Record<string, Record<string, InputMappingEntry>>
 >;
+
+// Resolves each pyrolysis `fuel_usage_by_volume` component to its diesel source
+// by normalized (trimmed + lowercased) display name. The Dark Earth removal
+// template declares TWO such components — "Generator diesel usage"
+// (generator + preprocessing, the "summarized" figure) and "Startup diesel
+// usage" (reactor-startup / plant diesel) — and Certify exposes no stable
+// per-component key, so the display name is the only discriminator. Keys MUST
+// match the template component display names (case/whitespace-insensitive). A
+// facility-configurable mapping + assignment wizard is the planned replacement
+// (docs/open-questions.md).
+const PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT: Readonly<
+  Record<string, keyof AggregatedProductionData>
+> = {
+  "generator diesel usage": "totalGensetDieselLitres",
+  "startup diesel usage": "totalStartupDieselLitres",
+};
 
 export const INPUT_MAPPING: InputMappingTable = {
   // CO₂ stored from biochar application
@@ -140,18 +168,18 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
   },
 
-  // Pyrolysis energy — single combined measurement point (ADR 0015, amended
-  // 2026-07-03 by issue #319). All energy enters here as two scalars: grid
-  // electricity (`grid_electricity_use`, kWh) and combined diesel
-  // (`fuel_usage_by_volume`, litres). noma submits the run-combined totals
-  // with NO per-stage split — feedstock-processing and biochar-processing
-  // cannot be metered separately, so there is nothing to apportion.
-  // `totalElectricityKwh` is the combined grid figure; `totalDieselLitres` is
-  // genset + startup/preprocessing diesel litres. The volumetric diesel EF is
-  // a fixed input pre-bound on the Isometric template (energy-use-accounting
-  // v1.3 Eq 7) — noma never converts litres to kWh and never submits the EF.
-  // The former `energy_based_ci_emissions` genset entry modeled fuel as
-  // electricity CI and is gone (protocol-noncompliant; issue #319).
+  // Pyrolysis energy (ADR 0015, amended by #319 and again by the generator/
+  // startup diesel split — docs/isometric/changes.md). Energy enters as grid
+  // electricity (`grid_electricity_use`, kWh) plus diesel volume
+  // (`fuel_usage_by_volume`, litres). The Dark Earth template declares TWO
+  // diesel components — "Generator diesel usage" (generator + preprocessing)
+  // and "Startup diesel usage" (reactor-startup / plant) — so the single
+  // `volume_of_fuel` triple resolves per component via
+  // PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT. Both share one volumetric well-to-
+  // wheel EF pre-bound on the template (energy-use-accounting v1.3 Eq 7), so
+  // the split is presentation-only; noma never converts litres to kWh nor
+  // submits the EF. The former `energy_based_ci_emissions` genset entry modeled
+  // fuel as electricity CI and is gone (protocol-noncompliant; issue #319).
   pyrolysis: {
     grid_electricity_use: {
       electricity_use: {
@@ -164,7 +192,13 @@ export const INPUT_MAPPING: InputMappingTable = {
     },
     fuel_usage_by_volume: {
       volume_of_fuel: {
+        // TWO components share this triple (generator vs. startup diesel);
+        // sourceByComponent resolves each by display name. `source` is the
+        // combined fallback, used only if a template collapses them into one
+        // component. Same volumetric EF on both, so the split is
+        // presentation-only (docs/isometric/changes.md, amends #319).
         source: "totalDieselLitres",
+        sourceByComponent: PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT,
         unit: "l",
         datapointType: "REPORTED",
         expectedQuantityKind: "volume",
@@ -197,6 +231,33 @@ export function lookupInputMapping(
   inputKey: string,
 ): InputMappingEntry | undefined {
   return INPUT_MAPPING[groupKey]?.[blueprintKey]?.[inputKey];
+}
+
+// Resolves the aggregated-source field for a mapping. Usually just
+// `mapping.source`; when the mapping carries a per-component override (a triple
+// declared by >1 template component — e.g. the pyrolysis diesel split), it
+// resolves by normalized component display name and FAILS CLOSED on an
+// unrecognized name so a rename/added component can never silently double-count
+// or land in the wrong bucket.
+export function resolveDatapointSource(
+  mapping: InputMappingEntry,
+  componentDisplayName: string | undefined,
+): keyof AggregatedProductionData {
+  if (!mapping.sourceByComponent) return mapping.source;
+  const normalized = (componentDisplayName ?? "").trim().toLowerCase();
+  const resolved = mapping.sourceByComponent[normalized];
+  if (!resolved) {
+    const expected = Object.keys(mapping.sourceByComponent)
+      .map((k) => `"${k}"`)
+      .join(", ");
+    throw new SafeError(
+      `Template component "${componentDisplayName}" is not a recognized pyrolysis diesel component ` +
+        `(expected, matched case/whitespace-insensitively: ${expected}). Rename the component to match, ` +
+        `or update PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT in transformers/datapoint.ts ` +
+        `(a facility-configurable mapping is planned — docs/open-questions.md).`,
+    );
+  }
+  return resolved;
 }
 
 // Tuples that used to live in INPUT_MAPPING as `zeroStub: true` families
@@ -265,6 +326,11 @@ export const MAPPING_REVISION: string = payloadHash(INPUT_MAPPING);
 export interface BuildCreateDatapointArgs {
   groupKey: string;
   componentBlueprintKey: string;
+  // Template component display name — the discriminator when one
+  // (group, blueprint, input) triple is declared by more than one component
+  // (see InputMappingEntry.sourceByComponent). Ignored for single-component
+  // triples; omitting it for a shared triple fails closed (never mis-buckets).
+  componentDisplayName?: string;
   rtcInput: GhgEntryTemplateComponentInput;
   blueprintInput: ComponentBlueprintInput;
   agg: AggregatedProductionData;
@@ -296,6 +362,7 @@ export function buildCreateDatapointRequest(
   const {
     groupKey,
     componentBlueprintKey,
+    componentDisplayName,
     rtcInput,
     blueprintInput,
     agg,
@@ -361,10 +428,11 @@ export function buildCreateDatapointRequest(
     );
   }
 
-  const raw = agg[mapping.source];
+  const source = resolveDatapointSource(mapping, componentDisplayName);
+  const raw = agg[source];
   if (raw == null) {
     throw new SafeError(
-      `Input "${inputKey}": aggregated source ${String(mapping.source)} is null. Cannot build datapoint.`,
+      `Input "${inputKey}": aggregated source ${String(source)} is null. Cannot build datapoint.`,
     );
   }
   const magnitude = mapping.transform

@@ -13,6 +13,47 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-07-04 (generator/startup diesel split — two pyrolysis fuel_usage_by_volume components)
+
+Amends #319. The Dark Earth template now declares **two** pyrolysis
+`fuel_usage_by_volume` components instead of one combined diesel datapoint:
+"Generator diesel usage" and "Startup diesel usage", both sharing the same fixed
+volumetric EF. Because the EF is identical on both, total emissions are
+unchanged versus one combined component — the split is **presentation-only** (it
+shows generator vs. startup diesel separately on the registry). It exists
+because a single `fuel_usage_by_volume` triple declared by two components would
+otherwise send the combined litres to **each** component (double-count).
+
+- **Re-bucket** — `src/lib/isometric/utils/aggregation.ts`: preprocessing fuel
+  moves from the startup bucket to the genset ("summarized") bucket, so
+  `totalStartupDieselLitres` = `dieselOperationLiters` only and
+  `totalGensetDieselLitres` = `dieselGensetLiters` + `preprocessingFuelLiters`.
+  `totalDieselLitres` (the sum) is unchanged. The Energy summary query
+  (`data-access/production-runs/queries.ts`) mirrors the same split.
+- **Component-aware mapping** — `transformers/datapoint.ts`: the pyrolysis
+  `fuel_usage_by_volume/volume_of_fuel` entry gains `sourceByComponent`
+  (`PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT`). Certify's template model has **no
+  stable per-component key**, so the source is resolved by the component
+  **display name** (normalized), via `resolveDatapointSource`.
+  `buildCreateDatapointRequest` now takes `componentDisplayName`
+  (threaded from `submit-removal.ts`) and **fails closed** on an unrecognized
+  name — a rename or added component surfaces loudly instead of silently
+  double-counting or mis-bucketing.
+- **Cert badging** — `certify-field-registry.ts`: the derived, unbadged
+  `startupDieselFuelUsage` descriptor is replaced by three `entered` (badged +
+  readiness-gating) descriptors — `dieselOperationLiters`,
+  `preprocessingFuelLiters`, `dieselGensetLiters` — so all four energy inputs
+  (incl. electricity) are cert-relevant. `isPresent(0)` is true, so a recorded
+  `0` still satisfies readiness; a **blank** field now gates.
+- **Template requirement** — the two components must be named exactly
+  `Generator diesel usage` (carries genset + preprocessing litres) and
+  `Startup diesel usage` (reactor-startup / plant litres), matched
+  case/whitespace-insensitively. Rename ⇒ update
+  `PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT`.
+- **Deferred** — the display-name coupling is interim; a facility-configurable
+  component→source mapping + assignment wizard is tracked in
+  `docs/open-questions.md`.
+
 ## 2026-07-03 (issue #319 — diesel submits as fuel_usage_by_volume, litres × template EF)
 
 Fixes protocol-noncompliant fuel accounting (energy-use-accounting v1.3 Eq 7:
