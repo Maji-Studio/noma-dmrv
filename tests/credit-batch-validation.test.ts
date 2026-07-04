@@ -60,6 +60,7 @@ let runInFacilityB: { id: string };
 let primaryFeedstockTypeId: string;
 let multiFeedstockRunInFacilityA: { id: string };
 let noFeedstockRunInFacilityA: { id: string };
+let mismatchedFeedstockRunInFacilityA: { id: string };
 
 beforeAll(async () => {
   // Per-run suffix to avoid uniqueness collisions across parallel runs
@@ -189,6 +190,18 @@ beforeAll(async () => {
         endTime: new Date("2025-06-19T12:00:00Z"),
         biocharDryMassKg: 3700,
       },
+      {
+        // ADR 0016 amendment: a run whose SINGLE feedstock is valid but differs
+        // from the type declared on the batch. The equality guard must reject
+        // it so the declaration can never drift from the actual runs.
+        code: `PR-VAL-A8-${runId}`,
+        facilityId: facilityA.id,
+        reactorId: reactorA.id,
+        date: "2025-06-21",
+        startTime: new Date("2025-06-21T08:00:00Z"),
+        endTime: new Date("2025-06-21T12:00:00Z"),
+        biocharDryMassKg: 3600,
+      },
     ])
     .returning({ id: productionRuns.id });
   [
@@ -200,6 +213,7 @@ beforeAll(async () => {
     runInFacilityB,
     multiFeedstockRunInFacilityA,
     noFeedstockRunInFacilityA,
+    mismatchedFeedstockRunInFacilityA,
   ] = productionRunRows;
   createdIds.productionRuns.push(...productionRunRows.map((run) => run.id));
 
@@ -271,6 +285,9 @@ beforeAll(async () => {
     { productionRunId: runInFacilityB.id, feedstockId: feedstockBPrimary.id, massUsedKg: 400 },
     { productionRunId: multiFeedstockRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 250 },
     { productionRunId: multiFeedstockRunInFacilityA.id, feedstockId: feedstockASecondary.id, massUsedKg: 150 },
+    // A8 uses ONLY the secondary type — a single, valid feedstock that differs
+    // from the primary type the batch will declare (equality-guard fixture).
+    { productionRunId: mismatchedFeedstockRunInFacilityA.id, feedstockId: feedstockASecondary.id, massUsedKg: 400 },
   ]);
 
   // Create biochar products (needs formulation)
@@ -461,6 +478,12 @@ describe("Credit Batch Production-Run Validation", () => {
     durabilityOption: "200_year" as const,
     hToCorgRatio: 0.4,
     currency: "TZS" as const,
+    // Feedstock type is now DECLARED (ADR 0016 amendment) and guarded against the
+    // member runs. A getter defers reading the module-scoped id until each test
+    // spreads baseBatchData — after beforeAll has seeded it.
+    get feedstockTypeId() {
+      return primaryFeedstockTypeId;
+    },
   };
 
   it("rejects missing production run IDs", async () => {
@@ -508,7 +531,7 @@ describe("Credit Batch Production-Run Validation", () => {
     ).rejects.toThrow("fall outside the credit batch production window");
   });
 
-  it("accepts valid same-facility production run IDs and derives the single feedstock", async () => {
+  it("accepts valid same-facility runs matching the declared feedstock", async () => {
     const result = await createCreditBatch(TEST_USER_ID, {
       ...baseBatchData,
       code: "CB-VAL-OK",
@@ -520,8 +543,8 @@ describe("Credit Batch Production-Run Validation", () => {
     expect(result.productionRunIds).toEqual([runInFacilityA.id]);
     expect(result.applicationIds).toEqual([appInFacilityA.id]);
     expect(result.applicationCount).toBe(1);
-    // ADR 0016: the batch's feedstock + production process are derived from the
-    // member run, never supplied by the caller.
+    // ADR 0016 (amended 2026-07-04): feedstock type is DECLARED on the batch and
+    // guarded against the member runs; the production process is resolved from it.
     expect(result.feedstockTypeId).toBe(primaryFeedstockTypeId);
     expect(result.productionProcessId).toBeTruthy();
   });
@@ -546,6 +569,21 @@ describe("Credit Batch Production-Run Validation", () => {
         productionRunIds: [noFeedstockRunInFacilityA.id],
       }),
     ).rejects.toThrow(/no linked feedstock/i);
+  });
+
+  it("rejects a run whose single feedstock differs from the declared type", async () => {
+    // baseBatchData declares the PRIMARY type, but this run resolves to a valid
+    // SINGLE feedstock of the SECONDARY type. The equality guard (ADR 0016
+    // amendment) must reject it — a declared type that doesn't match the member
+    // runs can never be silently accepted.
+    await expect(
+      createCreditBatch(TEST_USER_ID, {
+        ...baseBatchData,
+        code: "CB-VAL-MISMATCH",
+        facilityId: facilityA.id,
+        productionRunIds: [mismatchedFeedstockRunInFacilityA.id],
+      }),
+    ).rejects.toThrow(/different feedstock/i);
   });
 
   it("rejects facility change when existing linked production runs belong to old facility", async () => {

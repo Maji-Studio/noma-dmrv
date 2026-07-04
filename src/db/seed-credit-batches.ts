@@ -79,8 +79,13 @@ export async function seedProductionProcessesAndCreditBatches(
       certifier: "isometric",
       registry: "Isometric Registry",
       durabilityOption: "1000_year",
+      // Eq.6 petrography/TGA inputs — means and n−1 std devs consistent with
+      // the batch's three seeded replicates (R₀ 2.9/2.8/2.7; residual carbon
+      // 68.2/67.6/68.1 in seed-data.ts).
       meanRandomReflectancePercent: 2.8,
+      stdRandomReflectance: 0.1,
       meanNonReactiveCarbonPercent: 68,
+      stdNonReactiveCarbonPercent: 0.32,
     },
   ]);
 

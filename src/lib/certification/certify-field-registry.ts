@@ -80,11 +80,14 @@ const mapping = (
   inputTuples?: readonly CertifyInputTuple[],
 ): CertifySourceMapping => ({ source, inputTuples });
 
-// Combined energy submits at a single pyrolysis measurement point (ADR 0015,
-// amended by issue #319): one grid-electricity datapoint and one combined
-// diesel-volume datapoint (genset + startup litres via `fuel_usage_by_volume`;
-// the volumetric EF is a fixed input on the Isometric template). The per-stage
-// split is gone, so each maps to one combined source + one input tuple.
+// Pyrolysis energy: one grid-electricity datapoint plus diesel volume via
+// `fuel_usage_by_volume` (ADR 0015, amended by #319 then the generator/startup
+// diesel split — docs/isometric/changes.md). The Dark Earth template declares
+// two `fuel_usage_by_volume` components (generator + preprocessing vs. startup)
+// sharing one fixed volumetric EF; datapoint.ts resolves each to its own
+// source. `dieselFuelVolumeMapping` links the shared input tuple for badge
+// traceability — the per-field source (startup vs. genset litres) is set on
+// each descriptor.
 const electricityMapping = mapping("totalElectricityKwh", [
   tuple("pyrolysis", "grid_electricity_use", "electricity_use"),
 ]);
@@ -163,15 +166,22 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       mappings: [mapping("totalBiocharDryMassKg")],
     },
     {
-      // Issue #319: startup/plant diesel + preprocessing fuel feed the
-      // combined `totalDieselLitres` submitted through the pyrolysis
-      // `fuel_usage_by_volume` component (alongside genset diesel). A
-      // `derived` descriptor with no `formFields` badges no input and never
-      // gates readiness; the split source is kept for local reporting.
-      key: "startupDieselFuelUsage",
+      // Reactor-startup / on-site plant diesel — its own pyrolysis
+      // `fuel_usage_by_volume` component ("Startup diesel usage") →
+      // totalStartupDieselLitres. Split from genset (docs/isometric/changes.md,
+      // amends #319); all diesel is cert-relevant, so this now badges + gates.
+      key: "dieselOperationLiters",
       label: "Startup / plant diesel",
-      kind: "derived",
+      kind: "entered",
       mappings: [mapping("totalStartupDieselLitres"), dieselFuelVolumeMapping],
+    },
+    {
+      // Preprocessing fuel rides with genset in the "Generator diesel usage"
+      // ("summarized") component → totalGensetDieselLitres.
+      key: "preprocessingFuelLiters",
+      label: "Preprocess fuel",
+      kind: "entered",
+      mappings: [mapping("totalGensetDieselLitres"), dieselFuelVolumeMapping],
     },
     {
       key: "dieselGensetLiters",

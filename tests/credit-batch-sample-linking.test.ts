@@ -69,6 +69,9 @@ const baseBatchData = {
   durabilityOption: "200_year" as const,
   hToCorgRatio: 0.4,
   currency: "TZS" as const,
+  // Feedstock type is now DECLARED (ADR 0016 amendment) and guarded against the
+  // member runs. Set in beforeAll to the single seeded type all runs share.
+  feedstockTypeId: "",
 };
 
 /** Create a sample through the write path — anchored on a credit batch. */
@@ -149,6 +152,7 @@ beforeAll(async () => {
     })
     .returning({ id: feedstockTypes.id });
   createdIds.feedstockTypes.push(feedstockType.id);
+  baseBatchData.feedstockTypeId = feedstockType.id;
 
   const [feedstock] = await db
     .insert(feedstocks)
