@@ -478,27 +478,54 @@ export async function markSubmissionSubmitted(
       args.productionEmissionsClaim &&
       args.productionEmissionsClaim.creditBatchIds.length > 0
     ) {
-      const { removalId, creditBatchIds } = args.productionEmissionsClaim;
-      // Guarded UPDATE (IS NULL OR = self): a foreign-claimed row is silently
-      // NOT updated here — submitRemoval's pre-POST assertion is the loud
-      // guard against foreign claims (ADR 0020).
-      await tx
-        .update(creditBatches)
-        .set({
-          productionEmissionsClaimedByRemovalId: removalId,
-          updatedAt: sql`now()`,
-        })
-        .where(
-          and(
-            inArray(creditBatches.id, creditBatchIds),
-            or(
-              isNull(creditBatches.productionEmissionsClaimedByRemovalId),
-              eq(creditBatches.productionEmissionsClaimedByRemovalId, removalId),
-            ),
-          ),
-        );
+      // A throw here rolls back the ledger flip too: the row stays a locked
+      // draft, the resume path reconciles the already-POSTed registry
+      // artifacts by supplier ref, and the pre-flight claim gate re-fires
+      // loudly on retry.
+      await stampProductionEmissionsClaimWithExecutor(
+        tx,
+        args.productionEmissionsClaim,
+      );
     }
   });
+}
+
+// §8.6.2 claim stamp (issue #349, ADR 0020). Guarded UPDATE (IS NULL OR =
+// self): unclaimed rows and self re-claims (resubmit/supersede) are stamped;
+// a foreign-claimed row is excluded by the predicate. The rowcount backstop
+// turns that exclusion into a loud failure — submit-removal's pre-POST gates
+// make it practically unreachable, but the member batches are not locked
+// between the draft claim and this write, so a mid-flight foreign claim
+// would otherwise leave the ledger submitted with no local error.
+async function stampProductionEmissionsClaimWithExecutor(
+  executor: Tx | typeof db,
+  args: { removalId: string; creditBatchIds: string[] },
+): Promise<void> {
+  const { removalId, creditBatchIds } = args;
+  const stamped = await executor
+    .update(creditBatches)
+    .set({
+      productionEmissionsClaimedByRemovalId: removalId,
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        inArray(creditBatches.id, creditBatchIds),
+        or(
+          isNull(creditBatches.productionEmissionsClaimedByRemovalId),
+          eq(creditBatches.productionEmissionsClaimedByRemovalId, removalId),
+        ),
+      ),
+    )
+    .returning({ id: creditBatches.id });
+  if (stamped.length !== creditBatchIds.length) {
+    const stampedIds = new Set(stamped.map((row) => row.id));
+    const skipped = creditBatchIds.filter((id) => !stampedIds.has(id));
+    throw new SafeError(
+      `Production-emissions claim failed: ${skipped.length} credit batch(es) ` +
+        "were claimed by another removal mid-submission (§8.6.2). Reload and retry.",
+    );
+  }
 }
 
 export async function markSubmissionRejected(

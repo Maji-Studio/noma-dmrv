@@ -7,9 +7,9 @@
  * the registry-boundary harness deliberately passes batch ids that match zero
  * rows, so without this suite the predicate is pinned only by code review.
  * Asserts: an unclaimed batch is stamped; a self re-claim is idempotent; a
- * foreign claim is silently skipped (the row keeps its original claimant)
- * while the ledger flip itself still commits — the loud foreign-claim error
- * belongs to the submit path's pre-POST gate, not this transaction.
+ * foreign claim throws via the rowcount backstop AND rolls back the ledger
+ * flip (fail-closed) — the pre-POST gate in the submit path is the first
+ * line, this backstop is the last.
  *
  * Requires a real Postgres (`.env.test`), like
  * tests/certification-submissions.test.ts.
@@ -161,7 +161,7 @@ async function readClaim(batchId: string): Promise<string | null> {
 }
 
 describe("markSubmissionSubmitted — production-emissions claim write (§8.6.2)", () => {
-  it("stamps an unclaimed batch, is idempotent on self re-claim, and skips a foreign claim", async () => {
+  it("stamps an unclaimed batch, is idempotent on self re-claim, and fails loudly on a foreign claim", async () => {
     const { batchId, removalAId, removalBId } = await createFixture();
 
     // 1. Unclaimed → the claiming removal is stamped.
@@ -188,23 +188,26 @@ describe("markSubmissionSubmitted — production-emissions claim write (§8.6.2)
     expect(await readClaim(batchId)).toBe(removalAId);
 
     // 3. Foreign claim (a DIFFERENT removal) → the guarded UPDATE's
-    // `IS NULL OR = self` predicate matches zero rows; the original claimant
-    // survives and the ledger flip still commits (silent-skip by design —
-    // the loud guard is the submit path's pre-POST assertion).
+    // `IS NULL OR = self` predicate excludes the row; the rowcount backstop
+    // throws, the original claimant survives, and the ledger flip ROLLS BACK
+    // (fail-closed) — a registry POST can no longer be marked submitted while
+    // its claim silently no-ops.
     const subB1 = await insertDraftSubmission(removalBId, 1);
-    await markSubmissionSubmitted(TEST_USER_ID, subB1, {
-      externalId: "ext_pcw_b1",
-      productionEmissionsClaim: {
-        removalId: removalBId,
-        creditBatchIds: [batchId],
-      },
-    });
+    await expect(
+      markSubmissionSubmitted(TEST_USER_ID, subB1, {
+        externalId: "ext_pcw_b1",
+        productionEmissionsClaim: {
+          removalId: removalBId,
+          creditBatchIds: [batchId],
+        },
+      }),
+    ).rejects.toThrow(/claimed by another removal/);
     expect(await readClaim(batchId)).toBe(removalAId);
     const [ledgerRow] = await db
       .select({ status: certificationSubmissions.status })
       .from(certificationSubmissions)
       .where(eq(certificationSubmissions.id, subB1));
-    expect(ledgerRow.status).toBe("submitted");
+    expect(ledgerRow.status).toBe("draft");
   });
 
   it("leaves claims untouched when no productionEmissionsClaim is passed", async () => {
