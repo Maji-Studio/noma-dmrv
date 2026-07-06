@@ -65,7 +65,7 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
         description={
           stats?.missingDataFeedstocks === 0
             ? "All feedstocks complete"
-            : `${stats?.missingDataFeedstocks} need data`
+            : `${stats?.missingDataFeedstocks ?? 0} need data`
         }
       />
     </div>
