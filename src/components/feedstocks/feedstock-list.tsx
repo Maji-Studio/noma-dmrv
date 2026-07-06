@@ -17,6 +17,7 @@ import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { SelectFacilityEmptyState } from "@/components/navigation";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
@@ -326,6 +327,19 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       ? ({ entity: focusedFeedstock.data, mode: "view" } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+
+  if (!contextFacilityId) {
+    return (
+      <div className="flex flex-col gap-32">
+        <PageHeader
+          area="production"
+          title="Feedstocks"
+          subtitle="Track incoming biomass deliveries and bin allocations"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its feedstock deliveries." />
+      </div>
+    );
+  }
 
   if (fetchError) {
     return (

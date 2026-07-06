@@ -17,7 +17,11 @@ import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, File
 import { FormField, FormInput, DryMassInput, FormActions, FormSection, FormSpine, SectionLabel, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { FormSelect } from "@/components/forms/form-select";
-import { EntitySelect } from "@/components/forms/entity-select";
+import {
+  EntitySelect,
+  StorageLocationQuickAddDialog,
+  useQuickAddDialog,
+} from "@/components/forms/entity-select";
 import { useEntityById } from "@/hooks/use-entities";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import {
@@ -28,6 +32,7 @@ import {
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
+import type { StorageLocationType } from "@/schemas/storage-locations";
 
 // ============================================
 // Constants for select options
@@ -40,6 +45,11 @@ const statusOptions: readonly { value: string; label: string }[] = productionRun
 
 const isProductionRunCertifyField = (field: string) =>
   isCertifyFormField("productionRun", field);
+
+// Quick-add on the Biochar Storage select only mints biochar bins (the run's
+// output lands here), mirroring how the biochar-product form scopes its bin.
+const BIOCHAR_BIN_QUICK_ADD_TYPES = ["biochar_bin"] as const satisfies readonly StorageLocationType[];
+const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 
 // ============================================
 // Process Flow Visual
@@ -299,6 +309,9 @@ export function ProductionRunForm({
   const { data: selectedReactor } = useEntityById("reactor", watchedReactorId || undefined);
   const { data: selectedSourceBin } = useEntityById("storageLocation", watchedSourceBinId || undefined);
   const { data: selectedDestBin } = useEntityById("storageLocation", watchedDestBinId || undefined);
+
+  // Inline "Add New Bin" quick-add for the Biochar Storage select.
+  const biocharBinDialog = useQuickAddDialog();
 
   // Watch wet mass + moisture for dry mass preview
   const watchWetMass = useWatch({ control, name: "feedstockWetMassKg" });
@@ -594,6 +607,9 @@ export function ProductionRunForm({
                 disabled={isSubmitting || !watchedFacilityId}
                 error={!!errors.biocharStorageLocationId}
                 filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "biochar_bin" } : undefined}
+                allowCreate={!!watchedFacilityId}
+                createLabel="Add New Bin"
+                onCreateNew={() => biocharBinDialog.open()}
               />
             )}
           />
@@ -789,6 +805,20 @@ export function ProductionRunForm({
         </div>
       )}
       </form>
+
+      {watchedFacilityId && (
+        <StorageLocationQuickAddDialog
+          isOpen={biocharBinDialog.isOpen}
+          onClose={biocharBinDialog.close}
+          onSuccess={(entity) => {
+            setValue("biocharStorageLocationId", entity.id, SET_VALUE_OPTS);
+            biocharBinDialog.close();
+          }}
+          defaultBinType="biochar_bin"
+          allowedTypes={BIOCHAR_BIN_QUICK_ADD_TYPES}
+          facilityId={watchedFacilityId}
+        />
+      )}
 
       {/* ── Extension content (e.g. readings/samples/incidents) — always before the CTA ── */}
       {children}

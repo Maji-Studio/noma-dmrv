@@ -27,6 +27,7 @@ import {
   useDeliveryStats,
 } from "@/hooks/use-deliveries";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { SelectFacilityEmptyState } from "@/components/navigation";
 import type {
   DeliveryFormData,
   CreateDeliveryData,
@@ -244,6 +245,19 @@ export function DeliveryList() {
   );
 
   const deliveries = deliveriesData?.items ?? [];
+
+  if (!contextFacilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader
+          area="distribution"
+          title="Deliveries"
+          subtitle="Track outbound biochar product deliveries"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its deliveries." />
+      </div>
+    );
+  }
 
   if (fetchError) {
     return (

@@ -40,6 +40,7 @@ import {
   useCreditBatchChain,
 } from "@/hooks/use-chain-of-custody";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { SelectFacilityEmptyState } from "@/components/navigation";
 import {
   GRAPH_CANVAS_CLASS,
   GRAPH_CONTROLS_CLASS,
@@ -681,6 +682,18 @@ export function ChainOfCustodyPage() {
       />
     );
   })();
+
+  if (!facilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader
+          title="Chain of Custody"
+          subtitle="Trace a credit batch's provenance back through production to feedstock."
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to trace its chain of custody." />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--color-text-primary)]">
