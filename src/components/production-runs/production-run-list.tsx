@@ -28,6 +28,7 @@ import {
   useProductionRunStats,
 } from "@/hooks/use-production-runs";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ServerError } from "@/components/forms";
@@ -342,6 +343,19 @@ export function ProductionRunList() {
     setUpdateError(null);
     setSideSheet({ entity: displaySideSheet.entity, mode });
   };
+
+  if (!facilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader
+          area="production"
+          title="Production Runs"
+          subtitle="Pyrolysis batches from feedstock to biochar output"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its production runs." />
+      </div>
+    );
+  }
 
   if (fetchError) {
     return (

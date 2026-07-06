@@ -23,6 +23,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { SelectFacilityEmptyState } from "@/components/navigation";
 import { TransportLegsSummary } from "@/components/transport-legs";
 import { BiocharProductForm } from "./biochar-product-form";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
@@ -269,6 +270,19 @@ export function BiocharProductList() {
   const isSubmitting = createProduct.isPending || updateProduct.isPending;
 
   const columns = createColumns(openEdit, handleDelete);
+
+  if (!contextFacilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader
+          area="production"
+          title="Biochar Products"
+          subtitle="Finished biochar inventory and certifications"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its biochar products." />
+      </div>
+    );
+  }
 
   if (fetchError) {
     return (

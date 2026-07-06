@@ -48,6 +48,7 @@ import {
 } from "@/schemas/credit-batches";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { SelectFacilityEmptyState } from "@/components/navigation";
 
 // ============================================
 // Helpers
@@ -242,6 +243,19 @@ export function CreditBatchList() {
   };
 
   const hasActiveFilters = Boolean(searchQuery || statusFilter);
+
+  if (!contextFacilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader
+          area="verification"
+          title="Credit Batches"
+          subtitle="Carbon credit batches for verification and registry"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its credit batches." />
+      </div>
+    );
+  }
 
   if (error) {
     return (

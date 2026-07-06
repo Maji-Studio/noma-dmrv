@@ -10,8 +10,9 @@
 "use client";
 
 import { useState } from "react";
-import { BuildingsIcon, WarningOctagonIcon } from "@phosphor-icons/react/dist/ssr";
+import { WarningOctagonIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui/empty-state";
+import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
 import type { DashboardRange } from "@/data-access/dashboard-overview";
@@ -58,11 +59,7 @@ export function DashboardView() {
       </header>
 
       {!facilityId ? (
-        <EmptyState
-          icon={<BuildingsIcon size={48} />}
-          title="Select a facility"
-          description="Choose a facility from the sidebar to monitor its carbon removal."
-        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to monitor its carbon removal." />
       ) : error ? (
         <EmptyState
           padding="md"

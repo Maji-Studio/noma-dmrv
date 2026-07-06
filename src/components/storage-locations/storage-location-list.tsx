@@ -26,6 +26,7 @@ import {
   useUpdateStorageLocation,
 } from "@/hooks/use-storage-locations";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { SelectFacilityEmptyState } from "@/components/navigation";
 import { formatMass, formatSafeDate } from "@/lib/format-utils";
 import { ServerError } from "@/components/forms";
 import {
@@ -304,6 +305,19 @@ export function StorageLocationList() {
   const hasActiveFilters = Boolean(searchQuery);
   const editingEntity = sideSheet?.mode === "edit" ? sideSheet.entity : null;
   const isSubmitting = createStorageLocation.isPending || updateStorageLocation.isPending;
+
+  if (!facilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader
+          area="infrastructure"
+          title="Storage"
+          subtitle="Bins and stores for feedstock, biochar, and finished product"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its storage bins." />
+      </div>
+    );
+  }
 
   if (fetchError) {
     return (

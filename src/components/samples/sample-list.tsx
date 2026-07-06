@@ -18,6 +18,7 @@ import {
 } from "@/hooks/use-samples";
 import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -314,6 +315,19 @@ export function SampleList() {
   const isSubmitting = createSample.isPending || updateSample.isPending;
 
   const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
+
+  if (!contextFacilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader
+          area="verification"
+          title="Lab Samples"
+          subtitle="Lab analysis of biochar samples and carbon permanence"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its lab samples." />
+      </div>
+    );
+  }
 
   if (fetchError) {
     return <div className="container-max py-32"><ServerError message={fetchError.message || "Failed to load samples"} /></div>;
