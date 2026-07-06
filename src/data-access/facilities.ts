@@ -581,6 +581,18 @@ export async function createFacility(
 // Update Operations
 // ============================================
 
+// Credit-batch statuses that lock a facility's durability tier. Since ADR 0021
+// the tier is join-derived onto every batch at read time (there is no per-batch
+// durability column), so flipping the facility tier retroactively reinterprets
+// every existing batch under it: a 200→1000-year flip feeds
+// `computeApplicationCo2eStored` a 1000-year tier with no R₀/TGA data and the
+// CO₂e-stored preview silently collapses, and it invalidates any registry data
+// already built under the old tier. Once a batch reaches a consequential
+// (verified/issued) status the tier is therefore locked — mirroring the
+// externalProjectId/externalFacilityId registry-invalidation guard in
+// `certification.ts`.
+const TIER_LOCKING_BATCH_STATUSES = ["verified", "issued"] as const;
+
 /**
  * Update an existing facility
  */
@@ -622,6 +634,33 @@ export async function updateFacility(
 
     if (duplicate) {
       throw new SafeError("A facility with this code already exists");
+    }
+  }
+
+  // Lock the durability tier once the facility has consequential batches: the
+  // tier is join-derived onto every batch (ADR 0021), so changing it here would
+  // silently reinterpret existing verified/issued batches and collapse their
+  // stored-carbon claims. Only probe when the tier actually changes.
+  if (
+    data.durabilityOption !== undefined &&
+    data.durabilityOption !== existing.durabilityOption
+  ) {
+    const [blockingBatch] = await db
+      .select({ id: creditBatches.id })
+      .from(creditBatches)
+      .where(
+        and(
+          eq(creditBatches.facilityId, facilityId),
+          isNull(creditBatches.archivedAt),
+          inArray(creditBatches.status, TIER_LOCKING_BATCH_STATUSES),
+        ),
+      )
+      .limit(1);
+
+    if (blockingBatch) {
+      throw new SafeError(
+        "Cannot change this facility's durability tier: it has verified or issued credit batches whose stored-carbon claims were calculated under the current tier. Archive or reassign those batches first.",
+      );
     }
   }
 
