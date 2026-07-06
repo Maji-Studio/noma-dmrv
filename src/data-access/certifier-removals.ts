@@ -6,7 +6,10 @@ import {
 } from "@/db/schema/certification";
 import { creditBatches } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
-import type { DurabilityOption } from "@/schemas/credit-batches";
+import {
+  DURABILITY_TIER_FALLBACK,
+  type DurabilityOption,
+} from "@/schemas/credit-batches";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
@@ -126,7 +129,7 @@ export async function getCreditBatchesByRemovalId(
     .where(eq(creditBatches.removalId, removalId));
   return rows.map((row) => ({
     ...row.creditBatch,
-    durabilityOption: row.facilityDurabilityOption ?? "200_year",
+    durabilityOption: row.facilityDurabilityOption ?? DURABILITY_TIER_FALLBACK,
   }));
 }
 
@@ -223,7 +226,7 @@ export async function listUngroupedCreditBatches(
     .orderBy(desc(creditBatches.createdAt));
   return rows.map((row) => ({
     ...row,
-    durabilityOption: row.durabilityOption ?? "200_year",
+    durabilityOption: row.durabilityOption ?? DURABILITY_TIER_FALLBACK,
   }));
 }
 

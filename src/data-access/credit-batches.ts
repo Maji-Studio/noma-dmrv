@@ -27,10 +27,11 @@ import {
   samples,
 } from "@/db/schema/production";
 import { feedstocks } from "@/db/schema/feedstock";
-import type {
-  CreateCreditBatchData,
-  DurabilityOption,
-  UpdateCreditBatchData,
+import {
+  DURABILITY_TIER_FALLBACK,
+  type CreateCreditBatchData,
+  type DurabilityOption,
+  type UpdateCreditBatchData,
 } from "@/schemas/credit-batches";
 
 import { requireAuth } from "./utils";
@@ -102,12 +103,6 @@ type CreditBatchWithOptionalPreview = Omit<
 
 const CERTIFIER_PROVIDER = "isometric" as const;
 const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
-
-// Fallback tier when the facility LEFT JOIN yields null. Every credit batch has
-// a NOT NULL `facility_id` FK, so this is unreachable in practice — it only
-// satisfies the leftJoin's nullable column type. Matches the facility column
-// default (ADR 0021).
-const DURABILITY_TIER_FALLBACK: DurabilityOption = "1000_year";
 
 export interface CreditBatchProductionRunOption {
   id: string;

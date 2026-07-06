@@ -98,6 +98,29 @@ export interface BuildDurabilityMeasurementSampleSubmissionsArgs {
 export function buildDurabilityMeasurementSampleSubmissions(
   args: BuildDurabilityMeasurementSampleSubmissionsArgs,
 ): DurabilityMeasurementSampleSubmission[] {
+  // Tier dispatch (ADR 0021): this orchestration only builds the 200-year
+  // (H/C + carbon + soil-temp) bodies. A 1000-year batch needs the per-replicate
+  // `carbon_contents` + `s_fraction` lists from `build1000YearSequestrationSample`,
+  // which is not yet wired here — it depends on reading `samples.s_reflectance_fraction`
+  // (form capture is issue #348) and the remaining sandbox list-input binding
+  // confirm. Fail closed rather than silently emitting a 200-year body for a
+  // 1000-year batch. (Today this is unreachable: `submitRemoval` blocks every
+  // sequestration template while `DURABILITY_MEASUREMENT_SAMPLES_LIVE` is false —
+  // this is the backstop for when that flag flips.)
+  const thousandYearBatch = args.batches.find(
+    (b) => b.durabilityOption === "1000_year",
+  );
+  if (thousandYearBatch) {
+    throw new Error(
+      `buildDurabilityMeasurementSampleSubmissions: credit batch ` +
+        `${thousandYearBatch.creditBatchCode} is on the 1000-year durability tier, ` +
+        `whose measurement-sample submission path is not yet wired (pending ` +
+        `samples.s_reflectance_fraction capture — issue #348 — and the sandbox ` +
+        `list-input binding confirm). Refusing to emit 200-year sample bodies for a ` +
+        `1000-year batch.`,
+    );
+  }
+
   const perBatch = buildPerBatchDurabilityData(
     args.batches,
     args.attributionByRunId,

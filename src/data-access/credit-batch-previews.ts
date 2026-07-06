@@ -10,7 +10,10 @@ import { creditBatches, type CreditBatch } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
 import { certifierProjects } from "@/db/schema/certification";
 import { applications } from "@/db/schema/application";
-import type { DurabilityOption } from "@/schemas/credit-batches";
+import {
+  DURABILITY_TIER_FALLBACK,
+  type DurabilityOption,
+} from "@/schemas/credit-batches";
 
 import { requireAuth } from "./utils";
 import { getChainOfCustodyData } from "./chain-of-custody";
@@ -225,7 +228,7 @@ export async function getCo2eStoredPreviews(
   // Re-attach the facility-derived tier onto each raw batch row (ADR 0021).
   const batches = batchRows.map((row) => ({
     ...row.creditBatch,
-    durabilityOption: row.facilityDurabilityOption ?? ("200_year" as const),
+    durabilityOption: row.facilityDurabilityOption ?? DURABILITY_TIER_FALLBACK,
   }));
 
   const allowedIds = batches.map((batch) => batch.id);

@@ -7,6 +7,7 @@ import { productionRuns, samples } from "@/db/schema/production";
 import type { Sample } from "@/db/schema";
 import type { SamplingMethod } from "@/lib/certification/sampling-requirements";
 import type { CreditBatchDurabilityInput } from "@/lib/isometric/utils/durability-aggregation";
+import { DURABILITY_TIER_FALLBACK } from "@/schemas/credit-batches";
 import { requireAuth } from "./utils";
 
 /**
@@ -133,7 +134,7 @@ export async function getCreditBatchesWithSamples(
       ? samplingMethodByProcess.get(batch.productionProcessId) ?? "method_a"
       : "method_a",
     declaredHToCorgRatio: batch.declaredHToCorgRatio,
-    durabilityOption: batch.durabilityOption ?? "200_year",
+    durabilityOption: batch.durabilityOption ?? DURABILITY_TIER_FALLBACK,
     runs: runsByBatch.get(batch.id) ?? [],
     samples: samplesByBatch.get(batch.id) ?? [],
   }));

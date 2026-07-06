@@ -30,6 +30,15 @@ export const durabilityOptions = ["200_year", "1000_year"] as const;
 export type DurabilityOption = (typeof durabilityOptions)[number];
 
 /**
+ * Tier used when a facility LEFT JOIN yields null while deriving a batch's
+ * durability tier (ADR 0021). Every credit batch has a NOT NULL `facility_id`
+ * FK, so this branch is unreachable in practice — it only satisfies the join's
+ * nullable column type. Kept as one shared constant (matching the facility
+ * column default) so the read-path fallbacks don't diverge.
+ */
+export const DURABILITY_TIER_FALLBACK: DurabilityOption = "1000_year";
+
+/**
  * Currency codes (ISO 4217)
  */
 export const currencyCodes = ["TZS", "USD", "EUR", "GBP", "KES"] as const;
