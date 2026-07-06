@@ -5,6 +5,11 @@ import {
   certificationSubmissions,
 } from "@/db/schema/certification";
 import { creditBatches } from "@/db/schema/credits";
+import { facilities } from "@/db/schema/facilities";
+import {
+  DURABILITY_TIER_FALLBACK,
+  type DurabilityOption,
+} from "@/schemas/credit-batches";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
@@ -102,15 +107,30 @@ export async function listRemovalsForFacility(
     .orderBy(desc(certifierRemovals.createdAt));
 }
 
+// A credit batch row with its durability tier join-derived from the facility
+// (ADR 0021) — the tier is no longer a batch column, so it is re-attached here
+// for the ~few callers (removal breakdown, certify context) that branch on it.
+export type CreditBatchRowWithTier = CreditBatchRow & {
+  durabilityOption: DurabilityOption;
+};
+
 export async function getCreditBatchesByRemovalId(
   userId: string,
   removalId: string,
-): Promise<CreditBatchRow[]> {
+): Promise<CreditBatchRowWithTier[]> {
   requireAuth(userId);
-  return db
-    .select()
+  const rows = await db
+    .select({
+      creditBatch: creditBatches,
+      facilityDurabilityOption: facilities.durabilityOption,
+    })
     .from(creditBatches)
+    .leftJoin(facilities, eq(creditBatches.facilityId, facilities.id))
     .where(eq(creditBatches.removalId, removalId));
+  return rows.map((row) => ({
+    ...row.creditBatch,
+    durabilityOption: row.facilityDurabilityOption ?? DURABILITY_TIER_FALLBACK,
+  }));
 }
 
 // A credit batch summarised for the GHG-statement cross-link accordion — the
@@ -175,7 +195,8 @@ export interface UngroupedCreditBatchRow {
   code: string;
   startDate: string;
   endDate: string;
-  durabilityOption: CreditBatchRow["durabilityOption"];
+  /** Join-derived from the batch's facility (ADR 0021), not a batch column. */
+  durabilityOption: DurabilityOption;
 }
 
 // Credit batches in a facility not yet assigned to any removal — the pool the
@@ -185,15 +206,17 @@ export async function listUngroupedCreditBatches(
   facilityId: string,
 ): Promise<UngroupedCreditBatchRow[]> {
   requireAuth(userId);
-  return db
+  const rows = await db
     .select({
       id: creditBatches.id,
       code: creditBatches.code,
       startDate: creditBatches.startDate,
       endDate: creditBatches.endDate,
-      durabilityOption: creditBatches.durabilityOption,
+      // Tier inherited from the facility (ADR 0021); this list is facility-scoped.
+      durabilityOption: facilities.durabilityOption,
     })
     .from(creditBatches)
+    .leftJoin(facilities, eq(creditBatches.facilityId, facilities.id))
     .where(
       and(
         eq(creditBatches.facilityId, facilityId),
@@ -201,6 +224,10 @@ export async function listUngroupedCreditBatches(
       ),
     )
     .orderBy(desc(creditBatches.createdAt));
+  return rows.map((row) => ({
+    ...row,
+    durabilityOption: row.durabilityOption ?? DURABILITY_TIER_FALLBACK,
+  }));
 }
 
 // Deferred-create: spins up a fresh removal in `facilityId` and assigns every

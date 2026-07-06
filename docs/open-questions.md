@@ -270,6 +270,19 @@ guard. Pure starter-template residue; the app is facility-scoped.
   `computeFDurable1000` + its tests and record the decision in
   `docs/isometric/changes.md`. Authoritative module:
   <https://registry.isometric.com/module/biochar-storage-soil-environments/1.2?tag=1.2.0>
+- **Update (2026-07-04, research + ADR 0021).** The **live Certify blueprint**
+  `biochar_sequestration_1000_year` resolves the ambiguity in favour of the
+  **narrative reading**: its `s_fraction` LIST input is the per-replicate
+  **proportion of R₀ readings ≥ 2%** (0–1), and the registry computes
+  `product_mass × mean(carbon_contents) × durable_fraction × 3.667` with
+  `durable_fraction = mean(s_fraction) − √(mean·(1−mean)/n)` (binomial SE). The
+  blueprint has **NO non-reactive-carbon factor and NO 0.95 cap** — so it
+  **diverges from module Eq.6** (which has both, and uses std-dev not binomial
+  SE). **The blueprint is what runs**, so the live 1000-year path is built to it,
+  not Eq.6 (`build1000YearSequestrationSample`); `computeFDurable1000` (Eq.6) stays
+  the local **preview**. **Still needs Isometric staff sign-off:** which of Eq.6
+  vs. the blueprint governs verification credit, and total-vs-organic carbon for
+  `carbon_contents`. This question stays open until that sign-off.
 
 ### Credit-batch lab-sampling — Method-B Track 2 unlock followups (`certification/method-b-unlock-track-2`)
 
@@ -358,6 +371,29 @@ they don't churn a freshly-introduced surface mid-review:
   **Do not remove this entry until `DURABILITY_MEASUREMENT_SAMPLES_LIVE` is flipped on
   after the operator runs the confirms** — at the same cutover, delete the stale
   `carbon_rich_substance_sequestration` `INPUT_MAPPING` entry (see the Phase 3 note).
+
+- **1000-year extension (2026-07-04, ADR 0021).** The durability tier is now
+  facility-scoped; DEC (Moshi) is 1000-year. The recognition + guard plumbing for
+  the **1000-year** submission path is built (still behind the same
+  `DURABILITY_MEASUREMENT_SAMPLES_LIVE` flag):
+  - `biochar_sequestration_1000_year` is in `SEQUESTRATION_BLUEPRINT_KEYS`;
+    `resolveTemplateInputs` skips the whole sequestration **family**
+    (`isSequestrationBlueprintFamily`), so a 1000-year template no longer throws
+    the misleading "no INPUT_MAPPING entry" error — it reaches the staging gate.
+  - `submitRemoval` now validates the template's sequestration blueprint against
+    the facility tier (`expectedSequestrationBlueprintKeys`) and fails closed early
+    on a mismatch (200-year facility with a 1000-year template, or vice versa).
+  - `build1000YearSequestrationSample` builds the blueprint inputs
+    (per-replicate `carbon_contents` + `s_fraction` LISTS + `product_mass` SCALAR,
+    NO local mean/−SE/cap — the registry reduces). It is unit-tested but **not yet
+    wired into the (blocked) submit path** — the exact datapoint↔list-input binding
+    is the remaining sandbox confirm, mirroring the 200-year confirms below.
+  - **s_fraction data model:** stored per Sample as
+    `samples.s_reflectance_fraction` (the ISO 7404-5 inertinite fraction —
+    proportion of that sample's R₀ readings ≥ 2%). **Open Isometric confirm:**
+    whether the registry wants this computed proportion or the raw R₀ reading set;
+    and whether `carbon_contents` is total (blueprint) vs. organic carbon. Sample
+    **form capture** of `s_reflectance_fraction` is a follow-up (issue #348).
 
 - **Grill-with-docs resolution (2026-06-19).** The Tier-1 wiring plan was stress-tested
   against ADR 0013 / ADR 0016 and the authoritative protocol (biochar 1.2 §8.3.1; soil module

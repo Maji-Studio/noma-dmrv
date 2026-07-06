@@ -163,7 +163,7 @@ export async function getFacilities(
       contactEmail: facilities.contactEmail,
       contactPhone: facilities.contactPhone,
       timezone: facilities.timezone,
-      defaultDurabilityOption: facilities.defaultDurabilityOption,
+      durabilityOption: facilities.durabilityOption,
       archivedAt: facilities.archivedAt,
       createdAt: facilities.createdAt,
       updatedAt: facilities.updatedAt,
@@ -542,7 +542,7 @@ export async function createFacility(
     timezone: string;
     contactEmail?: string | null;
     contactPhone?: string | null;
-    defaultDurabilityOption?: "200_year" | "1000_year";
+    durabilityOption?: "200_year" | "1000_year";
   }
 ): Promise<Facility> {
   requireAuth(userId);
@@ -570,7 +570,7 @@ export async function createFacility(
       timezone: data.timezone,
       contactEmail: data.contactEmail ?? null,
       contactPhone: data.contactPhone ?? null,
-      defaultDurabilityOption: data.defaultDurabilityOption ?? "200_year",
+      durabilityOption: data.durabilityOption ?? "1000_year",
     })
     .returning();
 
@@ -598,7 +598,7 @@ export async function updateFacility(
     timezone?: string;
     contactEmail?: string | null;
     contactPhone?: string | null;
-    defaultDurabilityOption?: "200_year" | "1000_year";
+    durabilityOption?: "200_year" | "1000_year";
   }
 ): Promise<Facility> {
   requireAuth(userId);

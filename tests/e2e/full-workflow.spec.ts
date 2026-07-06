@@ -109,7 +109,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       name: `E2E Test Facility ${testRunId}`,
       location: "Test Location",
       country: "Tanzania",
-      defaultDurabilityOption: "200_year",
+      durabilityOption: "200_year",
     });
 
     // 2. Create Reactor (linked to facility)
@@ -332,7 +332,6 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
       startDate: today,
       endDate: today,
       status: "draft",
-      durabilityOption: "200_year",
       hToCorgRatio: 0.4,
     });
 

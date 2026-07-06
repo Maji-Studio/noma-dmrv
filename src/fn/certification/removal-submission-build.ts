@@ -9,7 +9,7 @@ import {
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
 import { buildCreateDatapointRequest } from "@/lib/isometric/transformers/datapoint";
-import { isSequestrationBlueprintKey } from "@/lib/isometric/transformers/measurement-sample";
+import { isSequestrationBlueprintFamily } from "@/lib/isometric/transformers/measurement-sample";
 import { weightedBatchChemistry } from "@/lib/isometric/utils/durability-aggregation";
 import type { Logger } from "@/lib/log";
 import {
@@ -257,7 +257,16 @@ function resolveTemplateInputs(args: {
 
   for (const group of template.groups) {
     for (const component of group.components) {
-      if (isSequestrationBlueprintKey(component.blueprint_key)) continue;
+      // EVERY sequestration component (200-year sampled/unsampled + 1000-year,
+      // and any unknown variant) is fed by the measurement-samples step
+      // (Phase 3), NOT the aggregation→datapoint loop, so skip it here — its
+      // inputs have no INPUT_MAPPING entry (skipping via the FAMILY predicate is
+      // what kills the misleading "no INPUT_MAPPING entry … update
+      // transformers/datapoint.ts" error for a 1000-year template), and
+      // buildCreateGhgEntryRequest skips it in the removal body to match. The
+      // submit-time template↔tier guard fails closed on a sequestration
+      // component outside the facility tier's expected set.
+      if (isSequestrationBlueprintFamily(component.blueprint_key)) continue;
       const blueprint = blueprintsByKey.get(component.blueprint_key);
       if (!blueprint) {
         throw new SafeError(

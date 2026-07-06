@@ -230,6 +230,15 @@ export const samples = pgTable('samples', {
   r0MeasurementCount: integer('r0_measurement_count'),
   reactiveCarbonPercent: real('reactive_carbon_percent'),
   residualCarbonPercent: real('residual_carbon_percent'),
+  // Per-sample `s_fraction` for the live `biochar_sequestration_1000_year`
+  // blueprint (ADR 0021): the proportion (0–1) of THIS sample's R₀ readings
+  // ≥ 2% — the inertinite fraction from the ISO 7404-5:2009 histogram. The
+  // registry needs the full per-replicate list to compute the conservative
+  // −binomial-SE durable fraction, so this is stored per sample, NOT collapsed
+  // to a batch mean. Nullable (lab-supplied; not yet a form input — #348).
+  // ⚠️ Whether the registry wants this computed proportion vs. the raw R₀
+  // reading set is an open Isometric confirm (docs/open-questions.md).
+  sReflectanceFraction: real('s_reflectance_fraction'),
   tgaAnalysisDate: date('tga_analysis_date'),
   r0AnalysisDate: date('r0_analysis_date'),
   r0HistogramFileUrl: text('r0_histogram_file_url'),

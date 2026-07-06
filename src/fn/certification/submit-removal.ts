@@ -26,7 +26,11 @@ import {
 } from "@/lib/isometric";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
-import { isSequestrationBlueprintKey } from "@/lib/isometric/transformers/measurement-sample";
+import {
+  expectedSequestrationBlueprintKeys,
+  isSequestrationBlueprintFamily,
+  isSequestrationBlueprintKey,
+} from "@/lib/isometric/transformers/measurement-sample";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
 import {
   DURABILITY_MEASUREMENT_SAMPLES_LIVE,
@@ -141,6 +145,38 @@ export async function submitRemoval(
     );
   }
 
+  // Phase 4 template↔tier guard (ADR 0021): the removal template's sequestration
+  // blueprint must match the facility's durability tier — a 200-year facility
+  // submits against a `biochar_sequestration_200_year_*` template, a 1000-year
+  // facility against `biochar_sequestration_1000_year`. Fail closed EARLY with an
+  // actionable message on a mismatch (or an unknown sequestration variant),
+  // rather than letting resolveTemplateInputs silently skip the component or the
+  // generic staging gate below misdescribe a template↔tier misconfiguration as
+  // "staged but not live". The tier is a single facility-scoped value (ADR 0021),
+  // read here from the durability data plane.
+  const facilityTier = ctx.batchesWithSamples[0]?.durabilityOption ?? null;
+  const templateSequestrationKeys = defaultTemplate.groups.flatMap((group) =>
+    group.components
+      .map((component) => component.blueprint_key)
+      .filter(isSequestrationBlueprintFamily),
+  );
+  if (facilityTier && templateSequestrationKeys.length > 0) {
+    const expectedKeys = expectedSequestrationBlueprintKeys(facilityTier);
+    const mismatched = templateSequestrationKeys.find(
+      (key) => !expectedKeys.has(key),
+    );
+    if (mismatched) {
+      const tierLabel = facilityTier === "1000_year" ? "1000-year" : "200-year";
+      throw new SafeError(
+        `This facility is on the ${tierLabel} durability tier, but its removal ` +
+          `template's sequestration component is "${mismatched}". Re-author the ` +
+          `facility's Isometric removal template to the ` +
+          `${Array.from(expectedKeys).join(" or ")} blueprint, or change the ` +
+          `facility's durability tier in facility settings.`,
+      );
+    }
+  }
+
   // Phase 3 gate: a template carrying a `biochar_sequestration_200_year_*`
   // component routes its durability inputs through the measurement-samples step,
   // whose live POST is staged behind two sandbox-empirical confirms (binding +
@@ -154,9 +190,10 @@ export async function submitRemoval(
   );
   if (hasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
     throw new SafeError(
-      "200-year durability submission is staged but not yet live — pending two " +
-        "sandbox confirms (datapoint↔input binding + measurement unit scalings). " +
-        "Enable DURABILITY_MEASUREMENT_SAMPLES_LIVE after confirming both.",
+      "Durability submission is staged but not yet live — pending the sandbox " +
+        "confirms (datapoint↔input binding, measurement unit scalings, and — for " +
+        "1000-year — the s_fraction derivation). Enable " +
+        "DURABILITY_MEASUREMENT_SAMPLES_LIVE after confirming them.",
     );
   }
 
