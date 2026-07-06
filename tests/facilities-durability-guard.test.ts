@@ -23,6 +23,10 @@ import { facilities } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { creditBatches } from "@/db/schema/credits";
+import {
+  certifierRemovals,
+  certificationSubmissions,
+} from "@/db/schema/certification";
 import { creditBatchStatus } from "@/db/schema/common";
 import { updateFacility } from "@/data-access/facilities";
 import { SafeError } from "@/lib/errors";
@@ -36,6 +40,8 @@ const createdIds = {
   feedstockTypes: [] as string[],
   productionProcesses: [] as string[],
   creditBatches: [] as string[],
+  certifierRemovals: [] as string[],
+  certificationSubmissions: [] as string[],
 };
 
 const runId = Date.now().toString(36);
@@ -109,6 +115,35 @@ async function insertBatch(
   return batch.id;
 }
 
+/**
+ * Build a registry-consequential Removal for the facility: a `certifier_removals`
+ * row plus a `certification_submissions` ledger row in a blocking status. This
+ * is the registry lifecycle the tier guard must respect — it is tracked here,
+ * NOT on `credit_batches.status`, so a submitted removal can coexist with
+ * `pending` member batches (the gap this regression covers).
+ */
+async function insertBlockingRemoval(
+  chain: FacilityChain,
+  status: "draft" | "submitted" | "accepted" = "submitted",
+): Promise<void> {
+  const [removal] = await db
+    .insert(certifierRemovals)
+    .values({ facilityId: chain.facilityId })
+    .returning({ id: certifierRemovals.id });
+  createdIds.certifierRemovals.push(removal.id);
+
+  const [submission] = await db
+    .insert(certificationSubmissions)
+    .values({
+      submissionType: "removal",
+      localEntityType: "removal",
+      localEntityId: removal.id,
+      status,
+    })
+    .returning({ id: certificationSubmissions.id });
+  createdIds.certificationSubmissions.push(submission.id);
+}
+
 async function tierOf(facilityId: string): Promise<string> {
   const [row] = await db
     .select({ durabilityOption: facilities.durabilityOption })
@@ -122,8 +157,18 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (createdIds.certificationSubmissions.length) {
+    await db
+      .delete(certificationSubmissions)
+      .where(inArray(certificationSubmissions.id, createdIds.certificationSubmissions));
+  }
   if (createdIds.creditBatches.length) {
     await db.delete(creditBatches).where(inArray(creditBatches.id, createdIds.creditBatches));
+  }
+  if (createdIds.certifierRemovals.length) {
+    await db
+      .delete(certifierRemovals)
+      .where(inArray(certifierRemovals.id, createdIds.certifierRemovals));
   }
   if (createdIds.productionProcesses.length) {
     await db
@@ -139,9 +184,31 @@ afterAll(async () => {
 });
 
 describe("updateFacility durability-tier guard", () => {
-  it("rejects a tier change when a verified/issued batch exists", async () => {
-    const chain = await setupFacility("blocked", "200_year");
-    await insertBatch(chain, "issued");
+  // Both locking statuses must be exercised — a regression that dropped one from
+  // the lock set would otherwise pass while only `issued` is tested.
+  for (const status of ["verified", "issued"] as const) {
+    it(`rejects a tier change when a ${status} batch exists`, async () => {
+      const chain = await setupFacility(`blocked-${status}`, "200_year");
+      await insertBatch(chain, status);
+
+      await expect(
+        updateFacility(TEST_USER_ID, chain.facilityId, {
+          durabilityOption: "1000_year",
+        }),
+      ).rejects.toBeInstanceOf(SafeError);
+
+      // The write must not have landed.
+      expect(await tierOf(chain.facilityId)).toBe("200_year");
+    });
+  }
+
+  it("rejects a tier change when a submitted removal exists but its batches are still pending", async () => {
+    // Registry submission does not flip `credit_batches.status`; a submitted
+    // removal can leave member batches at `pending`. The tier must still lock,
+    // since registry data was already built under the current tier.
+    const chain = await setupFacility("registry", "200_year");
+    await insertBatch(chain, "pending");
+    await insertBlockingRemoval(chain, "submitted");
 
     await expect(
       updateFacility(TEST_USER_ID, chain.facilityId, {
@@ -149,7 +216,6 @@ describe("updateFacility durability-tier guard", () => {
       }),
     ).rejects.toBeInstanceOf(SafeError);
 
-    // The write must not have landed.
     expect(await tierOf(chain.facilityId)).toBe("200_year");
   });
 

@@ -586,11 +586,16 @@ export async function createFacility(
 // durability column), so flipping the facility tier retroactively reinterprets
 // every existing batch under it: a 200→1000-year flip feeds
 // `computeApplicationCo2eStored` a 1000-year tier with no R₀/TGA data and the
-// CO₂e-stored preview silently collapses, and it invalidates any registry data
-// already built under the old tier. Once a batch reaches a consequential
-// (verified/issued) status the tier is therefore locked — mirroring the
-// externalProjectId/externalFacilityId registry-invalidation guard in
-// `certification.ts`.
+// CO₂e-stored preview silently collapses. A batch locally committed to a
+// consequential (verified/issued) status has a preview that was computed under
+// the current tier, so the tier is locked once one exists.
+//
+// This is only the LOCAL-commitment half of the lock. The registry half — a
+// Removal / GHG Statement already built for the facility under the current tier
+// — is NOT reflected in `credit_batches.status` (the registry submit path never
+// writes it; it lives in `certification_submissions`). `updateFacility` probes
+// that separately via `hasBlockingFacilitySubmission`, the same helper that
+// guards removal regroup and certifier-mapping repoint.
 const TIER_LOCKING_BATCH_STATUSES = ["verified", "issued"] as const;
 
 /**
@@ -639,8 +644,16 @@ export async function updateFacility(
 
   // Lock the durability tier once the facility has consequential batches: the
   // tier is join-derived onto every batch (ADR 0021), so changing it here would
-  // silently reinterpret existing verified/issued batches and collapse their
-  // stored-carbon claims. Only probe when the tier actually changes.
+  // silently reinterpret existing batches and collapse their stored-carbon
+  // claims. Two independent signals lock it — only probe when the tier changes:
+  //   1. Local commitment — a non-archived verified/issued credit batch, whose
+  //      CO₂e-stored preview was computed under the current tier.
+  //   2. Registry submission — a Removal / GHG Statement already built for this
+  //      facility under the current tier. The registry lifecycle is tracked in
+  //      `certification_submissions`, NOT `credit_batches.status` (which the
+  //      submit path never writes), so a submitted removal can leave its member
+  //      batches at `pending`; `hasBlockingFacilitySubmission` reads the ledger
+  //      directly, staying consistent with the regroup/repoint guards.
   if (
     data.durabilityOption !== undefined &&
     data.durabilityOption !== existing.durabilityOption
@@ -657,9 +670,14 @@ export async function updateFacility(
       )
       .limit(1);
 
-    if (blockingBatch) {
+    // Cheap indexed status probe first; only hit the ledger when it clears.
+    const tierIsLocked =
+      blockingBatch !== undefined ||
+      (await hasBlockingFacilitySubmission(db, facilityId, "isometric"));
+
+    if (tierIsLocked) {
       throw new SafeError(
-        "Cannot change this facility's durability tier: it has verified or issued credit batches whose stored-carbon claims were calculated under the current tier. Archive or reassign those batches first.",
+        "Cannot change this facility's durability tier: it has verified or issued credit batches, or registry submissions, built under the current tier. Archive or reassign those before changing the tier.",
       );
     }
   }

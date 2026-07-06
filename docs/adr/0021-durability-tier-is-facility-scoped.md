@@ -33,6 +33,18 @@ pre-filled an independently-editable per-batch toggle.
 - The Isometric removal template is not auto-selected; submission **validates**
   that the template's `co2-stored` sequestration blueprint matches the facility
   tier and fails closed early with an actionable message otherwise.
+- The facility tier is **locked once the facility is consequential**
+  (`updateFacility` guard in `src/data-access/facilities.ts`). Two independent
+  signals lock it, since flipping the tier retroactively reinterprets every
+  join-derived batch under it: (1) a non-archived `verified`/`issued` credit
+  batch, whose CO₂e-stored preview was computed under the current tier, and
+  (2) a registry submission (Removal / GHG Statement) already built for the
+  facility — tracked in `certification_submissions`, **not**
+  `credit_batches.status` (the submit path never writes it), so the guard reuses
+  `hasBlockingFacilitySubmission`, the same probe that gates removal regroup and
+  certifier-mapping repoint. Either case is rejected with a `SafeError`. This
+  relocates the "locked after `verified`/`issued`" invariant that previously
+  lived on the per-batch tier toggle and extends it to registry-built claims.
 - Product framing (2026-07-04): **1000-year is the available tier**; 200-year is
   surfaced but disabled ("available later") in the facility / durability UI. This
   is independent of the durability *submission* staging gate
