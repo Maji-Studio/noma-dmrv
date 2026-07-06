@@ -150,6 +150,7 @@ const facilityFormBaseSchema = z.object({
   // Required fields
   name: z
     .string()
+    .trim()
     .min(1, "Facility name is required")
     .max(255, "Facility name must be less than 255 characters"),
   country: z
@@ -202,7 +203,7 @@ export const updateFacilitySchema = z.object({
     .max(50)
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
-  name: z.string().min(1).max(255).optional(),
+  name: z.string().trim().min(1).max(255).optional(),
   country: z.string().min(1).max(100).optional(),
   location: z.string().max(255).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
@@ -303,7 +304,7 @@ export type FacilitySelectData = z.infer<typeof facilitySelectSchema>;
  * Minimal required fields for rapid data entry
  */
 export const quickAddFacilitySchema = z.object({
-  name: z.string().min(1, "Facility name is required").max(255),
+  name: z.string().trim().min(1, "Facility name is required").max(255),
   country: z.string().min(1, "Country is required").max(100),
   location: z.string().max(255).optional().or(z.literal("")),
 });

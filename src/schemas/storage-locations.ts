@@ -60,6 +60,7 @@ export const storageLocationFormSchema = z.object({
   // Required fields
   name: z
     .string()
+    .trim()
     .min(1, "Storage location name is required")
     .max(255, "Name must be less than 255 characters"),
   type: z.enum(storageLocationTypes, {
@@ -123,7 +124,7 @@ export const updateStorageLocationSchema = z.object({
     .max(50)
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
-  name: z.string().min(1).max(255).optional(),
+  name: z.string().trim().min(1).max(255).optional(),
   type: z.enum(storageLocationTypes).optional(),
   facilityId: z.string().uuid().optional(),
   capacityKg: positiveMassKgSchema().optional().nullable(),
