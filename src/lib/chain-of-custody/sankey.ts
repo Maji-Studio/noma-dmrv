@@ -27,6 +27,7 @@
  * any data-access / "use server" coupling.
  */
 
+import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 
 export type SankeyColumnKey =
@@ -78,7 +79,11 @@ export interface SankeyLineage {
     feedstockMassDryKg: number | null;
     biocharDryMassKg: number | null;
   } | null;
-  biocharProduct: { id: string; massKg: number | null } | null;
+  biocharProduct: {
+    id: string;
+    massKg: number | null;
+    moistureContentPercent: number | null;
+  } | null;
   feedstocks: {
     id: string;
     massUsedKg: number | null;
@@ -164,9 +169,16 @@ export function buildBatchSankey(
     runOutputKg += run.biocharDryMassKg ?? 0;
   }
 
+  // `massKg` is the lot's WET mass, but every other column here is dry, so
+  // convert via the recorded moisture (biochar runs 1–2%) to keep one basis
+  // end to end (issue #361 F14; mirrors the dashboard custody ribbon). A lot
+  // with no moisture reading counts at wet mass rather than vanishing.
   let lotMassKg = 0;
   for (const lot of lotById.values()) {
-    lotMassKg += lot.massKg ?? 0;
+    lotMassKg +=
+      computeClampedDryMass(lot.massKg, lot.moistureContentPercent) ??
+      lot.massKg ??
+      0;
   }
 
   // The ineligible exit can never carry more than the column it leaves from.
