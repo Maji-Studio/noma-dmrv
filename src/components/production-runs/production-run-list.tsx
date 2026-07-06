@@ -206,9 +206,14 @@ export function ProductionRunList() {
     [searchQuery, facilityId, statusFilter, currentPage, pageSize]
   );
 
-  const { data: runsData, isLoading, error: fetchError } = useProductionRuns(filters);
+  const { data: runsData, isLoading, error: fetchError } = useProductionRuns(filters, {
+    enabled: !!facilityId,
+  });
   const focusedRun = useProductionRun(focusedRunId ?? "", !!focusedRunId);
-  const { data: statsData, isLoading: statsLoading } = useProductionRunStats(facilityId || undefined);
+  const { data: statsData, isLoading: statsLoading } = useProductionRunStats(
+    facilityId || undefined,
+    !!facilityId,
+  );
 
   const createRun = useCreateProductionRun();
   const updateRun = useUpdateProductionRun();
