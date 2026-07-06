@@ -13,7 +13,7 @@ import {
   unique,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
-import { creditBatchStatus, durabilityOption } from './common';
+import { creditBatchStatus } from './common';
 import { fraction, percent, ppm } from './numeric-families';
 import { facilities } from './facilities';
 import { feedstockTypes } from './feedstock';
@@ -67,10 +67,12 @@ export const creditBatches = pgTable(
     bufferPoolPercent: percent('buffer_pool_percent'),
 
     // --- Durability Calculation (Isometric: Soil Storage Module Section 5.1) ---
-    // Project-level choice: 200-year (H:Corg + soil temp) or 1000-year (R0 reflectance)
-    durabilityOption: durabilityOption('durability_option')
-      .notNull()
-      .default('200_year'),
+    // The durability tier (200-year / 1000-year) is NO LONGER stored per batch —
+    // it is declared once per facility and inherited (ADR 0021). Batch-loading
+    // queries JOIN `facilities` and expose `durabilityOption` on the returned
+    // batch object (join-derive on read), so downstream `batch.durabilityOption`
+    // reads keep working. The tier-specific evidence columns below stay; they
+    // now gate on the FACILITY tier.
 
     // --- 200-Year Durability Fields ---
     // Soil temperature inputs (soil_temperature_c, soil_temperature_source) live on applications

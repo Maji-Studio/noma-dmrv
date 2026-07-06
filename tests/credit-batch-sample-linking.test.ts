@@ -59,14 +59,16 @@ let runReB: string;
 let runReC: string;
 let runUpdate: string;
 let runMoveB: string;
-let runTier1000: string;
+// A spare run on the MAIN (200-year) facility — the "move from" batch in the
+// 1000-year guard block must be a 200-year batch (ADR 0021).
 let runTierFrom: string;
 
 const baseBatchData = {
   startDate: new Date("2025-06-01"),
   endDate: new Date("2025-06-30"),
   certifier: "isometric" as const,
-  durabilityOption: "200_year" as const,
+  // Durability tier is inherited from the facility (ADR 0021), no longer a batch
+  // field — the main test facility is explicitly 200-year below.
   hToCorgRatio: 0.4,
   currency: "TZS" as const,
   // Feedstock type is now DECLARED (ADR 0016 amendment) and guarded against the
@@ -127,7 +129,13 @@ beforeAll(async () => {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ name: `Sample-Link Facility ${runId}`, code: `FAC-SL-${runId}` })
+    .values({
+      name: `Sample-Link Facility ${runId}`,
+      code: `FAC-SL-${runId}`,
+      // Explicit 200-year: the base/derive/move tests create samples without R₀,
+      // which the 1000-year intake guard would reject (ADR 0021).
+      durabilityOption: "200_year",
+    })
     .returning({ id: facilities.id });
   facilityId = facility.id;
   createdIds.facilities.push(facility.id);
@@ -176,7 +184,6 @@ beforeAll(async () => {
         "reC",
         "update",
         "moveB",
-        "tier1000",
         "tierFrom",
       ].map((tag, i) => ({
         code: `PR-SL-${tag}-${runId}`,
@@ -197,7 +204,6 @@ beforeAll(async () => {
     runReC,
     runUpdate,
     runMoveB,
-    runTier1000,
     runTierFrom,
   ] = runRows.map((r) => r.id);
   createdIds.productionRuns.push(...runRows.map((r) => r.id));
@@ -332,16 +338,73 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
 
   beforeAll(async () => {
     const suffix = Date.now().toString(36);
+
+    // The tier is now facility-scoped (ADR 0021), so this guard block runs under
+    // its OWN 1000-year facility (with dedicated reactor/feedstock/runs); the
+    // main test facility is 200-year. Both batches here inherit 1000-year.
+    const [tier1000Facility] = await db
+      .insert(facilities)
+      .values({
+        name: `Sample-Link 1000yr Facility ${suffix}`,
+        code: `FAC-SL-K-${suffix}`,
+        durabilityOption: "1000_year",
+      })
+      .returning({ id: facilities.id });
+    createdIds.facilities.push(tier1000Facility.id);
+
+    const [tier1000Reactor] = await db
+      .insert(reactors)
+      .values({
+        code: `RE-SL-K-${suffix}`,
+        facilityId: tier1000Facility.id,
+        identifier: "Sample-Link 1000yr Reactor",
+        reactorType: "fixed-bed",
+      })
+      .returning({ id: reactors.id });
+    createdIds.reactors.push(tier1000Reactor.id);
+
+    const [tier1000Feedstock] = await db
+      .insert(feedstocks)
+      .values({
+        code: `FS-SL-K-${suffix}`,
+        facilityId: tier1000Facility.id,
+        feedstockTypeId: baseBatchData.feedstockTypeId,
+        massDryKg: 9000,
+      })
+      .returning({ id: feedstocks.id });
+    createdIds.feedstocks.push(tier1000Feedstock.id);
+
+    const [kRun] = await db
+      .insert(productionRuns)
+      .values({
+        code: `PR-SL-k-tier1000-${suffix}`,
+        facilityId: tier1000Facility.id,
+        reactorId: tier1000Reactor.id,
+        date: "2025-06-20",
+        startTime: new Date("2025-06-20T08:00:00Z"),
+        endTime: new Date("2025-06-20T12:00:00Z"),
+        biocharDryMassKg: 4000,
+      })
+      .returning({ id: productionRuns.id });
+    createdIds.productionRuns.push(kRun.id);
+    await db.insert(productionRunFeedstocks).values({
+      productionRunId: kRun.id,
+      feedstockId: tier1000Feedstock.id,
+      massUsedKg: 400,
+    });
+
     const tier1000Batch = await createCreditBatch(TEST_USER_ID, {
       ...baseBatchData,
-      durabilityOption: "1000_year" as const,
       code: `CB-SL-T1000-${suffix}`,
-      facilityId,
-      productionRunIds: [runTier1000],
+      facilityId: tier1000Facility.id,
+      productionRunIds: [kRun.id],
     });
     tier1000BatchId = tier1000Batch.id;
     createdIds.creditBatches.push(tier1000Batch.id);
 
+    // The "move from" batch is 200-year — created on the MAIN facility so an
+    // evidence-less sample can be created on it before the move-onto-1000-year
+    // update is rejected.
     const fromBatch = await createCreditBatch(TEST_USER_ID, {
       ...baseBatchData,
       code: `CB-SL-TFROM-${suffix}`,

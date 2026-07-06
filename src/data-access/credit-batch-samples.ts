@@ -1,11 +1,13 @@
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
+import { facilities } from "@/db/schema/facilities";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { productionRuns, samples } from "@/db/schema/production";
 import type { Sample } from "@/db/schema";
 import type { SamplingMethod } from "@/lib/certification/sampling-requirements";
 import type { CreditBatchDurabilityInput } from "@/lib/isometric/utils/durability-aggregation";
+import { DURABILITY_TIER_FALLBACK } from "@/schemas/credit-batches";
 import { requireAuth } from "./utils";
 
 /**
@@ -51,9 +53,11 @@ export async function getCreditBatchesWithSamples(
       code: creditBatches.code,
       productionProcessId: creditBatches.productionProcessId,
       declaredHToCorgRatio: creditBatches.hToCorgRatio,
-      durabilityOption: creditBatches.durabilityOption,
+      // Tier is inherited from the facility (ADR 0021), not a batch column.
+      durabilityOption: facilities.durabilityOption,
     })
     .from(creditBatches)
+    .leftJoin(facilities, eq(creditBatches.facilityId, facilities.id))
     .where(inArray(creditBatches.id, ids));
   if (batchRows.length === 0) return [];
 
@@ -130,7 +134,7 @@ export async function getCreditBatchesWithSamples(
       ? samplingMethodByProcess.get(batch.productionProcessId) ?? "method_a"
       : "method_a",
     declaredHToCorgRatio: batch.declaredHToCorgRatio,
-    durabilityOption: batch.durabilityOption,
+    durabilityOption: batch.durabilityOption ?? DURABILITY_TIER_FALLBACK,
     runs: runsByBatch.get(batch.id) ?? [],
     samples: samplesByBatch.get(batch.id) ?? [],
   }));

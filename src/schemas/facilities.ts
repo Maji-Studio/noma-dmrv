@@ -168,7 +168,9 @@ const facilityFormBaseSchema = z.object({
   gpsLongitude: longitudeSchema,
   contactEmail: contactEmailSchema,
   contactPhone: contactPhoneSchema,
-  defaultDurabilityOption: z.enum(durabilityOptions).default("200_year"),
+  // Authoritative durability tier for the facility (ADR 0021) — inherited by
+  // its credit batches and samples. 1000-year is the go-forward default.
+  durabilityOption: z.enum(durabilityOptions).default("1000_year"),
   timezone: z.preprocess(
     (v) => (v === "" ? undefined : v),
     z.enum(timezones, { message: "Timezone is required" })
@@ -208,7 +210,7 @@ export const updateFacilitySchema = z.object({
   gpsLongitude: longitudeSchema,
   contactEmail: z.string().email().max(255).optional().nullable().or(z.literal("")),
   contactPhone: z.string().max(30).optional().nullable().or(z.literal("")),
-  defaultDurabilityOption: z.enum(durabilityOptions).optional(),
+  durabilityOption: z.enum(durabilityOptions).optional(),
   timezone: z.enum(timezones).optional(),
 }).superRefine(gpsPairSuperRefine);
 

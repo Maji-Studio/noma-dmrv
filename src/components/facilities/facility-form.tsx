@@ -14,25 +14,22 @@ import {
 } from "@/schemas/facilities";
 import {
   durabilityOptions,
-  formatDurabilityOption,
   type DurabilityOption,
 } from "@/schemas/credit-batches";
 import type { Facility } from "@/db/schema/facilities";
-import { FacilityIsometricConnector } from "@/components/certification";
+import {
+  DurabilityTierSelect,
+  FacilityIsometricConnector,
+} from "@/components/certification";
 
-const DEFAULT_DURABILITY_OPTION: DurabilityOption = "200_year";
+// 1000-year is the go-forward tier (ADR 0021); new facilities default to it.
+const DEFAULT_DURABILITY_OPTION: DurabilityOption = "1000_year";
 
 const timezoneOptions: readonly { value: string; label: string }[] =
   timezones.map((tz) => ({ value: tz, label: formatTimezoneLabel(tz) }));
 
-const durabilityOptionList: readonly { value: string; label: string }[] =
-  durabilityOptions.map((option) => ({
-    value: option,
-    label: formatDurabilityOption(option as DurabilityOption),
-  }));
-
 function getDefaultDurabilityOption(
-  option: Facility["defaultDurabilityOption"] | null | undefined
+  option: Facility["durabilityOption"] | null | undefined
 ): DurabilityOption {
   return durabilityOptions.includes(option as DurabilityOption)
     ? (option as DurabilityOption)
@@ -76,8 +73,8 @@ export function FacilityForm({
       timezone: (facility?.timezone && timezones.includes(facility.timezone as Timezone)
         ? facility.timezone as Timezone
         : undefined),
-      defaultDurabilityOption: getDefaultDurabilityOption(
-        facility?.defaultDurabilityOption,
+      durabilityOption: getDefaultDurabilityOption(
+        facility?.durabilityOption,
       ),
     },
   });
@@ -86,6 +83,7 @@ export function FacilityForm({
 
   const gpsLatitude = watch("gpsLatitude");
   const gpsLongitude = watch("gpsLongitude");
+  const durabilityOption = watch("durabilityOption") ?? DEFAULT_DURABILITY_OPTION;
 
   const handleFormSubmit = handleSubmit((data) => {
     onSubmit(data as FacilityFormData);
@@ -200,17 +198,21 @@ export function FacilityForm({
 
       <div className="grid grid-cols-1 gap-y-20">
         <FormField
-          id="defaultDurabilityOption"
-          label="Default Durability Option"
-          error={errors.defaultDurabilityOption?.message}
-          hint="Isometric crediting tier applied to this facility's new credit batches. New batches inherit this default; existing batches keep their original option. The 1000-year tier also requires biochar reflectance lab data."
+          id="durabilityOption"
+          label="Durability Tier"
+          error={errors.durabilityOption?.message}
+          hint="The Isometric crediting tier for this facility. It is inherited by every credit batch and sample here, and must match the facility's removal template. 1000-year uses reflectance (R₀) + TGA lab data; the 200-year (H:Corg + soil-temperature) pathway is available when a 200-year client onboards."
         >
-          <FormSelect
-            id="defaultDurabilityOption"
+          <DurabilityTierSelect
+            value={durabilityOption}
+            onChange={(value) =>
+              setValue("durabilityOption", value, {
+                shouldDirty: true,
+                shouldValidate: true,
+              })
+            }
             disabled={isSubmitting}
-            error={!!errors.defaultDurabilityOption}
-            options={durabilityOptionList}
-            {...register("defaultDurabilityOption")}
+            aria-label="Facility durability tier"
           />
         </FormField>
       </div>

@@ -67,19 +67,66 @@ export const SEQUESTRATION_BLUEPRINT_UNSAMPLED =
   "biochar_sequestration_200_year_unsampled";
 
 /**
- * The two sequestration blueprint keys (sampled + unsampled). These components
- * are NOT fed by the legacy aggregation→datapoint loop — `resolveTemplateInputs`
- * and `buildCreateGhgEntryRequest` skip them, and the measurement-samples step
- * carries their inputs instead. `submitRemoval` uses this set to detect a
- * durability template and gate it behind `DURABILITY_MEASUREMENT_SAMPLES_LIVE`.
+ * 1000-year durability blueprint (ADR 0021). Implemented to the LIVE Certify
+ * blueprint, NOT module Eq.6 — the two disagree and the blueprint is what runs
+ * (research 2026-07-04). Inputs: `carbon_contents` (per-replicate LIST, total
+ * carbon dry basis), `product_mass` (SCALAR kg), `s_fraction` (per-replicate
+ * LIST = each sample's proportion of R₀ readings ≥ 2%). The registry computes
+ * `product_mass × mean(carbon_contents) × durable_fraction × 3.667`, where
+ * `durable_fraction = mean(s_fraction) − √(mean·(1−mean)/n)`. No non-reactive
+ * carbon input, no 0.95 cap (both present in module Eq.6 — divergence flagged in
+ * ADR 0013 / open-questions). See `build1000YearSequestrationSample`.
+ */
+export const SEQUESTRATION_BLUEPRINT_1000_YEAR =
+  "biochar_sequestration_1000_year";
+
+/**
+ * Every sequestration blueprint key we recognise (200-year sampled + Method-B
+ * unsampled, and 1000-year). These components are NOT fed by the legacy
+ * aggregation→datapoint loop — `resolveTemplateInputs` and
+ * `buildCreateGhgEntryRequest` skip them (see `isSequestrationBlueprintFamily`),
+ * and the measurement-samples step carries their inputs instead. `submitRemoval`
+ * uses this set to detect a durability template and gate it behind
+ * `DURABILITY_MEASUREMENT_SAMPLES_LIVE`.
  */
 export const SEQUESTRATION_BLUEPRINT_KEYS: ReadonlySet<string> = new Set([
   SEQUESTRATION_BLUEPRINT_SAMPLED,
   SEQUESTRATION_BLUEPRINT_UNSAMPLED,
+  SEQUESTRATION_BLUEPRINT_1000_YEAR,
 ]);
 
 export function isSequestrationBlueprintKey(blueprintKey: string): boolean {
   return SEQUESTRATION_BLUEPRINT_KEYS.has(blueprintKey);
+}
+
+/**
+ * Prefix predicate recognising ANY biochar sequestration blueprint — including a
+ * future/unknown variant we don't yet carry inputs for. `resolveTemplateInputs`
+ * skips every sequestration component with this (not the datapoint loop, which
+ * would throw a misleading missing-INPUT_MAPPING error); the submit-time
+ * template↔tier guard then fails closed on any component NOT in the facility
+ * tier's expected set (`expectedSequestrationBlueprintKeys`).
+ */
+export function isSequestrationBlueprintFamily(blueprintKey: string): boolean {
+  return blueprintKey.startsWith("biochar_sequestration_");
+}
+
+/**
+ * A facility's durability tier → the sequestration blueprint key(s) its Isometric
+ * removal template must carry (ADR 0021). 200-year has two (lab-sampled +
+ * Method-B unsampled); 1000-year has one. The submit-time guard rejects a
+ * template whose sequestration component is outside this set for the facility
+ * tier, with an actionable "re-author the template / change the tier" message.
+ */
+export function expectedSequestrationBlueprintKeys(
+  tier: "200_year" | "1000_year",
+): ReadonlySet<string> {
+  return tier === "1000_year"
+    ? new Set([SEQUESTRATION_BLUEPRINT_1000_YEAR])
+    : new Set([
+        SEQUESTRATION_BLUEPRINT_SAMPLED,
+        SEQUESTRATION_BLUEPRINT_UNSAMPLED,
+      ]);
 }
 
 /** Blueprint unit for `h_c_molar_ratios`. */
@@ -326,6 +373,119 @@ export function buildBiocharUnsampledBatchSample(args: {
         },
       },
     ],
+  };
+}
+
+// ── 1000-year sequestration (ADR 0021) — ⚠️ SANDBOX-GATED wire binding ────────
+//
+// Built to the LIVE `biochar_sequestration_1000_year` blueprint, NOT module
+// Eq.6 (they disagree; the blueprint is what runs — research 2026-07-04). The
+// registry computes `product_mass × mean(carbon_contents) × durable_fraction ×
+// 3.667`, where `durable_fraction = mean(s_fraction) − √(mean·(1−mean)/n)`. We
+// submit ONLY the per-replicate inputs and the product mass — NEVER a
+// pre-reduced mean/−SE/cap (collapsing to one aggregate → n=1 → massive
+// over-penalty). The registry owns the reduction (mirrors ADR 0013).
+//
+// ⚠️ The exact datapoint↔list-input binding and unit declarations are the
+// remaining sandbox confirms (mirrors the 200-year gated confirms). Inert until
+// `DURABILITY_MEASUREMENT_SAMPLES_LIVE` flips, so a wrong guess can never reach a
+// live credit. See `docs/open-questions.md`.
+
+/** Total carbon content, dry basis — the 1000-year `carbon_contents` list input. */
+export const CARBON_CONTENTS_MEASUREMENT_PROPERTY: IsometricMeasurementProperty =
+  {
+    quantity_kind: "mass_fraction_dry_basis",
+    qualifier: "total_carbon",
+  };
+
+/**
+ * Per-sample `s_fraction` — the ISO 7404-5 inertinite fraction (proportion of
+ * the sample's R₀ readings ≥ 2%). The 1000-year `s_fraction` list input.
+ */
+export const S_FRACTION_MEASUREMENT_PROPERTY: IsometricMeasurementProperty = {
+  quantity_kind: "dimensionless",
+  qualifier: "inertinite_fraction",
+};
+
+/** Blueprint unit for `carbon_contents` (a 0–1 dry-basis mass fraction). */
+export const CARBON_CONTENTS_UNIT = "dimensionless";
+
+/** Blueprint unit for `s_fraction` (a 0–1 proportion). */
+export const S_FRACTION_UNIT = "dimensionless";
+
+/** One 1000-year replicate: its total-carbon fraction + durable (s) fraction. */
+export interface Sequestration1000YearReplicate {
+  /** Total carbon, dry basis, as a 0–1 mass fraction. */
+  carbonContentFraction: number;
+  /** Proportion (0–1) of this sample's R₀ readings ≥ 2% (s_fraction). */
+  sFraction: number;
+}
+
+export interface Build1000YearSequestrationSampleArgs {
+  replicates: Sequestration1000YearReplicate[];
+  /** Attribution-scaled dry biochar product mass applied (kg). */
+  productMassKg: number;
+  projectId: string;
+  supplierRefId: string;
+  measuredAt: string;
+  productionBatchId?: string | null;
+}
+
+/**
+ * Build the `biochar_production_batch` measurement sample carrying the 1000-year
+ * blueprint inputs: the per-replicate `carbon_contents` LIST + `s_fraction` LIST
+ * (one value each per replicate) and the single `product_mass` SCALAR. Each list
+ * value yields a datapoint the registry binds to the matching
+ * `biochar_sequestration_1000_year` list input; the registry computes the
+ * conservative −binomial-SE durable fraction from the FULL list, so this submits
+ * the raw per-replicate values with no local reduction. Returns null when the
+ * batch pooled no replicate. Pure — no I/O. ⚠️ Sandbox-gated (see header).
+ */
+export function build1000YearSequestrationSample(
+  args: Build1000YearSequestrationSampleArgs,
+): CreateMeasurementSampleRequest | null {
+  if (args.replicates.length === 0) return null;
+
+  const values: CreateMeasurementSampleValueRequest[] = [];
+  for (const replicate of args.replicates) {
+    values.push({
+      measurement_property: CARBON_CONTENTS_MEASUREMENT_PROPERTY,
+      value: {
+        magnitude: replicate.carbonContentFraction,
+        standard_deviation: null,
+        unit: CARBON_CONTENTS_UNIT,
+      },
+    });
+    values.push({
+      measurement_property: S_FRACTION_MEASUREMENT_PROPERTY,
+      value: {
+        magnitude: replicate.sFraction,
+        standard_deviation: null,
+        unit: S_FRACTION_UNIT,
+      },
+    });
+  }
+
+  // Product mass (kg) — a single per-batch scalar, no std-dev.
+  values.push({
+    measurement_property: PRODUCT_MASS_MEASUREMENT_PROPERTY,
+    value: {
+      magnitude: args.productMassKg,
+      standard_deviation: null,
+      unit: PRODUCT_MASS_UNIT,
+    },
+  });
+
+  return {
+    feedstock_batch_id: null,
+    measured_at: args.measuredAt,
+    measurement_location_id: null,
+    measurement_type: "biochar_production_batch",
+    production_batch_id: args.productionBatchId ?? null,
+    project_id: args.projectId,
+    storage_location_id: null,
+    supplier_reference_id: args.supplierRefId,
+    values,
   };
 }
 

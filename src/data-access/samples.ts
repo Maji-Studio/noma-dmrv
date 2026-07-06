@@ -248,7 +248,7 @@ export async function getSamples(
       createdAt: samples.createdAt,
       updatedAt: samples.updatedAt,
       creditBatchCode: creditBatches.code,
-      batchDurabilityOption: creditBatches.durabilityOption,
+      batchDurabilityOption: batchFacilities.durabilityOption,
       facilityCode: sql<string | null>`coalesce(${batchFacilities.code}, ${runFacilities.code})`,
       facilityName: sql<string | null>`coalesce(${batchFacilities.name}, ${runFacilities.name})`,
     })
@@ -346,7 +346,7 @@ export async function getSampleById(
       createdAt: samples.createdAt,
       updatedAt: samples.updatedAt,
       creditBatchCode: creditBatches.code,
-      batchDurabilityOption: creditBatches.durabilityOption,
+      batchDurabilityOption: batchFacilities.durabilityOption,
       facilityCode: sql<string | null>`coalesce(${batchFacilities.code}, ${runFacilities.code})`,
       facilityName: sql<string | null>`coalesce(${batchFacilities.name}, ${runFacilities.name})`,
     })
@@ -416,10 +416,10 @@ export async function getSampleStats(
     .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
     .where(whereClause);
 
-  // Count 1000-year samples — the tier is the credit batch's declared choice
-  // (issue #309); legacy batchless rows fall back to R₀-reflectance presence.
+  // Count 1000-year samples — the tier is inherited from the batch's facility
+  // (ADR 0021); legacy batchless rows fall back to R₀-reflectance presence.
   const is1000Year = sql`(
-    ${creditBatches.durabilityOption} = '1000_year'
+    ${batchFacilities.durabilityOption} = '1000_year'
     or (${creditBatches.id} is null and ${samples.randomReflectanceR0Percent} is not null)
   )`;
   const [samples1000Year] = await db
@@ -427,6 +427,7 @@ export async function getSampleStats(
     .from(samples)
     .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
     .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
+    .leftJoin(batchFacilities, eq(creditBatches.facilityId, batchFacilities.id))
     .where(whereClause ? and(whereClause, is1000Year) : is1000Year);
 
   const total = Number(stats.totalSamples);
@@ -464,9 +465,11 @@ async function requireBatchTierEvidence(
     residualCarbonPercent: number | null;
   },
 ): Promise<void> {
+  // Tier is inherited from the batch's facility (ADR 0021), not a batch column.
   const [creditBatch] = await tx
-    .select({ durabilityOption: creditBatches.durabilityOption })
+    .select({ durabilityOption: facilities.durabilityOption })
     .from(creditBatches)
+    .leftJoin(facilities, eq(creditBatches.facilityId, facilities.id))
     .where(eq(creditBatches.id, creditBatchId));
 
   if (!creditBatch) {

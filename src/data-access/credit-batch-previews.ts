@@ -7,8 +7,13 @@
 import { eq, inArray, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { creditBatches, type CreditBatch } from "@/db/schema/credits";
+import { facilities } from "@/db/schema/facilities";
 import { certifierProjects } from "@/db/schema/certification";
 import { applications } from "@/db/schema/application";
+import {
+  DURABILITY_TIER_FALLBACK,
+  type DurabilityOption,
+} from "@/schemas/credit-batches";
 
 import { requireAuth } from "./utils";
 import { getChainOfCustodyData } from "./chain-of-custody";
@@ -76,16 +81,17 @@ function unique(values: string[]): string[] {
 
 export async function buildCo2eStoredPreview(
   userId: string,
+  // The durability tier is join-derived from the facility (ADR 0021), so it is
+  // supplied alongside the raw batch row rather than read off it.
   batch: Pick<
     CreditBatch,
     | "id"
     | "facilityId"
-    | "durabilityOption"
     | "meanRandomReflectancePercent"
     | "stdRandomReflectance"
     | "meanNonReactiveCarbonPercent"
     | "stdNonReactiveCarbonPercent"
-  >,
+  > & { durabilityOption: DurabilityOption },
   applicationIds: string[]
 ): Promise<CreditBatchCo2eStoredPreview> {
   const provider = await getFacilityCertifier(userId, batch.facilityId);
@@ -210,10 +216,20 @@ export async function getCo2eStoredPreviews(
   const ids = unique(batchIds);
   if (ids.length === 0) return {};
 
-  const batches = await db
-    .select()
+  const batchRows = await db
+    .select({
+      creditBatch: creditBatches,
+      facilityDurabilityOption: facilities.durabilityOption,
+    })
     .from(creditBatches)
+    .leftJoin(facilities, eq(creditBatches.facilityId, facilities.id))
     .where(inArray(creditBatches.id, ids));
+
+  // Re-attach the facility-derived tier onto each raw batch row (ADR 0021).
+  const batches = batchRows.map((row) => ({
+    ...row.creditBatch,
+    durabilityOption: row.facilityDurabilityOption ?? DURABILITY_TIER_FALLBACK,
+  }));
 
   const allowedIds = batches.map((batch) => batch.id);
   if (allowedIds.length === 0) return {};
