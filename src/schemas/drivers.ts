@@ -12,6 +12,7 @@ import { z } from "zod";
 export const driverFormSchema = z.object({
   name: z
     .string()
+    .trim()
     .min(1, "Driver name is required")
     .max(255, "Driver name must be less than 255 characters"),
   licenseNumber: z
@@ -36,7 +37,7 @@ export const createDriverSchema = driverFormSchema;
 
 export const updateDriverSchema = z.object({
   driverId: z.string().uuid("Invalid driver ID"),
-  name: z.string().min(1).max(255).optional(),
+  name: z.string().trim().min(1).max(255).optional(),
   licenseNumber: z.string().max(50).optional().nullable(),
   contactPhone: z.string().max(30).optional().nullable(),
 });

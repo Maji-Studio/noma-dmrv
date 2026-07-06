@@ -9,7 +9,7 @@ function lineage(overrides: Partial<SankeyLineage> = {}): SankeyLineage {
       feedstockMassDryKg: 10_000,
       biocharDryMassKg: 3_000,
     },
-    biocharProduct: { id: "lot-1", massKg: 3_000 },
+    biocharProduct: { id: "lot-1", massKg: 3_000, moistureContentPercent: null },
     feedstocks: [
       { id: "fs-1", massUsedKg: 10_000, eligibilityStatus: "eligible" },
     ],
@@ -71,7 +71,7 @@ describe("buildBatchSankey", () => {
         feedstockMassDryKg: 10_000,
         biocharDryMassKg: 3_000,
       },
-      biocharProduct: { id: "lot-1", massKg: 3_000 },
+      biocharProduct: { id: "lot-1", massKg: 3_000, moistureContentPercent: null },
       feedstocks: [
         {
           id: "fs-1",
@@ -99,7 +99,7 @@ describe("buildBatchSankey", () => {
         feedstockMassDryKg: 10_000,
         biocharDryMassKg: 3_000,
       },
-      biocharProduct: { id: "lot-1", massKg: 3_000 },
+      biocharProduct: { id: "lot-1", massKg: 3_000, moistureContentPercent: null },
       feedstocks: [
         {
           id: "fs-1",
@@ -144,7 +144,13 @@ describe("buildBatchSankey", () => {
 
   it("emits an unallocated-output exit when run output never reaches a lot", () => {
     const result = buildBatchSankey([
-      lineage({ biocharProduct: { id: "lot-1", massKg: 2_200 } }),
+      lineage({
+        biocharProduct: {
+          id: "lot-1",
+          massKg: 2_200,
+          moistureContentPercent: null,
+        },
+      }),
     ]);
 
     expect(result.exits).toContainEqual(
@@ -161,7 +167,11 @@ describe("buildBatchSankey", () => {
           feedstockMassDryKg: 1_000,
           biocharDryMassKg: 3_000, // > input
         },
-        biocharProduct: { id: "lot-1", massKg: 4_000 }, // > run output
+        biocharProduct: {
+          id: "lot-1",
+          massKg: 4_000,
+          moistureContentPercent: null,
+        }, // > run output
         feedstocks: [
           // Ineligible allocation exceeds the run's recorded input mass.
           { id: "fs-1", massUsedKg: 2_000, eligibilityStatus: "ineligible" },
@@ -178,6 +188,35 @@ describe("buildBatchSankey", () => {
       ),
     ).toEqual([]);
     expect(result.warnings).toHaveLength(4);
+  });
+
+  it("converts a moist lot to a dry basis so it balances against runs (F14)", () => {
+    // Runs output 475 kg dry; the lot's WET mass is 500 kg at 5% moisture, so
+    // its dry mass is 475 kg. Without the conversion the lots column (500)
+    // would falsely exceed run output (475) and raise a mass-balance warning.
+    const result = buildBatchSankey([
+      lineage({
+        application: { id: "app-1", biocharAppliedDryTons: 0.38 },
+        productionRun: {
+          id: "run-1",
+          feedstockMassDryKg: 475,
+          biocharDryMassKg: 475,
+        },
+        biocharProduct: { id: "lot-1", massKg: 500, moistureContentPercent: 5 },
+        feedstocks: [
+          { id: "fs-1", massUsedKg: 475, eligibilityStatus: "eligible" },
+        ],
+      }),
+    ]);
+
+    // Lots column reports dry mass (475), not the wet 500.
+    expect(result.columns[2].massKg).toBe(475);
+    expect(result.warnings).toEqual([]);
+    // In-storage exit uses the dry figure: 475 dry − 380 applied = 95.
+    expect(result.exits).toContainEqual(
+      expect.objectContaining({ key: "in_storage", massKg: 95 }),
+    );
+    expect(result.exits.map((e) => e.key)).not.toContain("unallocated_output");
   });
 
   it("handles lineages that stop at product level (no production run)", () => {

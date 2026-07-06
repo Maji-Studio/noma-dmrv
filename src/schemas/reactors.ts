@@ -42,6 +42,7 @@ export const reactorFormSchema = z.object({
   // Required fields
   identifier: z
     .string()
+    .trim()
     .min(1, "Identifier is required")
     .max(255, "Identifier must be less than 255 characters"),
   facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
@@ -65,7 +66,7 @@ export const reactorFormSchema = z.object({
  * nominalThroughputTph stores tonnes-per-hour directly
  */
 export const createReactorSchema = z.object({
-  identifier: z.string().min(1).max(255),
+  identifier: z.string().trim().min(1).max(255),
   facilityId: z.string().min(1).uuid(),
   reactorType: z.enum(reactorTypes),
   nominalThroughputTph: z.number().positive().optional().nullable(),
@@ -84,7 +85,7 @@ export const updateReactorSchema = z.object({
     .max(50)
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
-  identifier: z.string().min(1).max(255).optional(),
+  identifier: z.string().trim().min(1).max(255).optional(),
   facilityId: z.string().uuid().optional(),
   reactorType: z.enum(reactorTypes).optional(),
   nominalThroughputTph: z.number().positive().optional().nullable(),

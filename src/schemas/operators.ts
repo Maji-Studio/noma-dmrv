@@ -12,6 +12,7 @@ import { z } from "zod";
 export const operatorFormSchema = z.object({
   name: z
     .string()
+    .trim()
     .min(1, "Operator name is required")
     .max(255, "Operator name must be less than 255 characters"),
   credentials: z
@@ -36,7 +37,7 @@ export const createOperatorSchema = operatorFormSchema;
 
 export const updateOperatorSchema = z.object({
   operatorId: z.string().uuid("Invalid operator ID"),
-  name: z.string().min(1).max(255).optional(),
+  name: z.string().trim().min(1).max(255).optional(),
   credentials: z.string().max(255).optional().nullable(),
   contactPhone: z.string().max(30).optional().nullable(),
 });

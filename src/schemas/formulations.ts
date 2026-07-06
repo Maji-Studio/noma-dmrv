@@ -112,6 +112,7 @@ export const formulationFormSchema = z
   .object({
     name: z
       .string()
+      .trim()
       .min(1, "Formulation name is required")
       .max(255, "Formulation name must be less than 255 characters"),
 
@@ -142,7 +143,7 @@ export const updateFormulationSchema = z
       .max(50)
       .regex(/^[A-Z0-9-]+$/)
       .optional(),
-    name: z.string().min(1).max(255).optional(),
+    name: z.string().trim().min(1).max(255).optional(),
     biocharRatio: optionalRatioSchema,
     description: z.string().max(1000).optional().nullable().or(z.literal("")),
     ingredients: z.array(formulationIngredientSchema).optional(),
