@@ -211,7 +211,9 @@ export function StorageLocationList() {
     [searchQuery, facilityId]
   );
 
-  const { data: storageLocationsData, isLoading, error: fetchError } = useStorageLocations(filters);
+  const { data: storageLocationsData, isLoading, error: fetchError } = useStorageLocations(filters, {
+    enabled: !!facilityId,
+  });
 
   const createStorageLocation = useCreateStorageLocation();
   const updateStorageLocation = useUpdateStorageLocation();
