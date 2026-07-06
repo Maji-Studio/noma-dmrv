@@ -111,6 +111,12 @@ export function DurabilityTierSelect({
             <div
               key={tier.value}
               className={baseCardClass}
+              // Keep radio semantics inside the radiogroup even when disabled
+              // (e.g. form-submitting) so the group never loses all its
+              // `role="radio"` descendants. A div carries no tabindex, so it
+              // stays out of the tab order — the WAI-ARIA disabled-radio contract.
+              role={interactive ? "radio" : undefined}
+              aria-checked={interactive ? isActive : undefined}
               aria-disabled={interactive ? true : undefined}
               title={
                 interactive && !tier.available

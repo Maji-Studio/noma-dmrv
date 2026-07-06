@@ -44,7 +44,7 @@ blueprint, not to module Eq.6; they disagree and the blueprint is what runs.**
 
 | Input | Shape / quantity kind | Unit | Source from our data |
 |---|---|---|---|
-| `carbon_contents` | LIST, `mass_fraction_dry_basis` | mg/kg (or %) | **one datapoint per replicate** — total carbon, dry basis |
+| `carbon_contents` | LIST, `mass_fraction_dry_basis` | dimensionless (0–1 fraction) | **one datapoint per replicate** — total carbon, dry basis |
 | `product_mass` | SCALAR, `mass` | kg | one scalar — dry biochar product mass applied |
 | `s_fraction` | LIST, `dimensionless` | — | **one datapoint per replicate** = that sample's proportion (0–1) of R₀ readings ≥ 2% |
 
