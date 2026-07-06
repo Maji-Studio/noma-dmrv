@@ -25,6 +25,12 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
     enabled: !!effectiveFacilityId,
   });
 
+  // Only surface the warning treatment when there is a real positive
+  // missing-data count. When stats are undefined (no facility selected) or
+  // zero, use the neutral/complete styling instead of a misleading warning.
+  const missingDataCount = stats?.missingDataFeedstocks ?? 0;
+  const hasMissingData = missingDataCount > 0;
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-16">
       <StatCard
@@ -55,18 +61,14 @@ export function FeedstockStats({ facilityId }: FeedstockStatsProps) {
         title="Data Status"
         value={`${stats?.completeFeedstocks ?? 0} / ${stats?.totalFeedstocks ?? 0}`}
         icon={
-          stats?.missingDataFeedstocks === 0 ? (
-            <CheckCircleIcon size={20} className="text-[var(--color-status-success)]" />
-          ) : (
+          hasMissingData ? (
             <WarningIcon size={20} className="text-[var(--clr-orange)]" />
+          ) : (
+            <CheckCircleIcon size={20} className="text-[var(--color-status-success)]" />
           )
         }
         isLoading={isLoading}
-        description={
-          stats?.missingDataFeedstocks === 0
-            ? "All feedstocks complete"
-            : `${stats?.missingDataFeedstocks ?? 0} need data`
-        }
+        description={hasMissingData ? `${missingDataCount} need data` : "All feedstocks complete"}
       />
     </div>
   );
