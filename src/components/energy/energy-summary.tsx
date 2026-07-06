@@ -19,7 +19,8 @@
 
 import { FireIcon, GasPumpIcon, LightningIcon } from "@phosphor-icons/react";
 import { ServerError } from "@/components/forms";
-import { EmptyState, PageHeader } from "@/components/ui";
+import { PageHeader } from "@/components/ui";
+import { SelectFacilityEmptyState } from "@/components/navigation";
 import { StatCard } from "@/components/ui/stat-card";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useFacilityEnergyTotals } from "@/hooks/use-production-runs";
@@ -57,12 +58,7 @@ export function EnergySummary() {
           title="Energy"
           subtitle="Facility energy use feeding Isometric submission datapoints"
         />
-        <EmptyState
-          padding="md"
-          icon={<LightningIcon size={48} />}
-          title="Select a facility"
-          description="Choose a facility from the sidebar to view its energy summary"
-        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its energy summary." />
       </div>
     );
   }

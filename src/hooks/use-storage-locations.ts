@@ -56,7 +56,8 @@ export const storageLocationKeys = {
  * Hook to fetch paginated list of storage locations with filtering
  */
 export function useStorageLocations(
-  filters?: Partial<StorageLocationFilterData>
+  filters?: Partial<StorageLocationFilterData>,
+  options?: { enabled?: boolean },
 ) {
   return useQuery({
     queryKey: storageLocationKeys.list(filters),
@@ -68,6 +69,7 @@ export function useStorageLocations(
       return result.data;
     },
     staleTime: 30000, // 30 seconds
+    enabled: options?.enabled,
   });
 }
 
