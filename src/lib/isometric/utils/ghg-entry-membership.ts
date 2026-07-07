@@ -95,3 +95,34 @@ export function decideRemovalMembership(
 
   return { toLink, linkedRemovalIds, warnings };
 }
+
+/** A removal the operator expected in a period, with its registry-facing id. */
+export interface ExpectedRemoval {
+  /** Local certifier_removals id. */
+  localId: string;
+  /** Isometric removal id (rmv_…) — what the operator recognises. */
+  externalId: string;
+}
+
+/**
+ * The honesty delta the reconciliation itself can't see: removals the operator
+ * expected in this period (predicted in-window at create time) that Isometric
+ * did *not* link. `decideRemovalMembership` only warns about ids Isometric
+ * *returned* — this is the inverse: a removal we predicted but the registry
+ * silently placed in a different (usually prior) reporting period.
+ *
+ * Pure; the caller supplies the expected set (from the same window logic the
+ * preview used) and the reconciled `linkedRemovalIds`.
+ */
+export function expectedButExcludedWarnings(
+  expected: readonly ExpectedRemoval[],
+  linkedRemovalIds: readonly string[],
+): string[] {
+  const linked = new Set(linkedRemovalIds);
+  return expected
+    .filter((removal) => !linked.has(removal.localId))
+    .map(
+      (removal) =>
+        `Removal ${removal.externalId} was expected in this period but Isometric linked it elsewhere — likely a prior reporting period. Open it to check its completion date.`,
+    );
+}
