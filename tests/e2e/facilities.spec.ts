@@ -282,3 +282,34 @@ test.describe("Facilities Duplicate Code Handling", () => {
     ).rejects.toThrow();
   });
 });
+
+// ============================================
+// Durability Tier — read-only info, not a false choice (#348)
+// ============================================
+
+test.describe("Facility durability tier", () => {
+  test("renders as read-only info, not a radio with a locked option", async ({
+    adminPage: page,
+  }) => {
+    await page.goto("/facilities");
+    await expect(page.getByText("Active Facilities")).toBeVisible({
+      timeout: 15000,
+    });
+
+    await page.getByRole("button", { name: /New Facility/i }).click();
+    const dialog = page
+      .getByRole("dialog")
+      .filter({ has: page.getByRole("button", { name: /Create Facility/i }) });
+    await expect(dialog).toBeVisible();
+
+    // The single unlocked tier shows as a plain info block…
+    const tierInfo = dialog.getByTestId("durability-tier-info");
+    await expect(tierInfo).toBeVisible();
+    await expect(tierInfo).toContainText(/1000-year durability/i);
+
+    // …not a selectable radio group, and with no locked "Available later"
+    // option that reads as a choice the operator is failing to make.
+    await expect(dialog.getByRole("radiogroup")).toHaveCount(0);
+    await expect(dialog.getByText(/Available later/i)).toHaveCount(0);
+  });
+});

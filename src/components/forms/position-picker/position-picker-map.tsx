@@ -38,6 +38,12 @@ const SAT_LAYER_ID = `${OWN_LAYER_PREFIX}sat-layer`;
 const SAT_TILE_SIZE = 256;
 /** Ease animation when the position changes from outside the map (ms). */
 const EASE_DURATION_MS = 600;
+/**
+ * If the basemap style never finishes loading within this window (a failed or
+ * hanging MapTiler request — expired/domain-locked key, offline, tile 5xx),
+ * fall back to manual coordinates instead of leaving a silent blank box.
+ */
+const STYLE_LOAD_TIMEOUT_MS = 12_000;
 /** ~0.1 m precision — more than enough to pin a site. */
 const COORD_DECIMALS = 6;
 
@@ -118,7 +124,26 @@ export default function PositionPickerMap({
     }
     mapRef.current = map;
 
+    // Guard against a basemap that never paints: maplibre only throws on a
+    // failed WebGL init, not on a failed *style* fetch. A bad/expired key,
+    // domain-lock rejection, or offline network leaves the canvas blank with
+    // no "load" event, so trip the manual-entry fallback on the first pre-load
+    // error and as a timeout backstop for a silent hang.
+    let styleLoaded = false;
+    const failIfUnloaded = () => {
+      if (styleLoaded) return;
+      // Drop the ref so the marker-sync effect and sat toggle no-op; the effect
+      // cleanup still removes the map exactly once via its captured local.
+      mapRef.current = null;
+      // Deferred so the effect never sets state synchronously (React Compiler).
+      queueMicrotask(() => setMapFailed(true));
+    };
+    const loadTimer = setTimeout(failIfUnloaded, STYLE_LOAD_TIMEOUT_MS);
+    map.on("error", failIfUnloaded);
+
     map.once("load", () => {
+      styleLoaded = true;
+      clearTimeout(loadTimer);
       applyBrandRecolor(map);
       map.addSource(SAT_SOURCE_ID, {
         type: "raster",
@@ -148,6 +173,7 @@ export default function PositionPickerMap({
     });
 
     return () => {
+      clearTimeout(loadTimer);
       markerRef.current = null;
       mapRef.current = null;
       map.remove();
@@ -219,8 +245,8 @@ export default function PositionPickerMap({
           Map preview unavailable
         </span>
         <span className="body-caption text-[var(--color-text-tertiary)]">
-          The browser could not start the map renderer (WebGL). Manual
-          coordinates below still work.
+          The map preview could not load. Enter coordinates manually below —
+          they still work.
         </span>
       </div>
     );

@@ -1,9 +1,30 @@
 # Removal & GHG-Statement Flow — Deep Analysis + Operator-Friendly Redesign
 
-Date: 2026-07-07 · Author: e2e QA + design pass (Claude) · Status: **proposal, for discussion**
+Date: 2026-07-07 · Author: e2e QA + design pass (Claude) · Status: **built — Phases 0–4 on `feat/removal-ghg-legible-guided`, ready for PR to `staging`** (see [Implementation status](#implementation-status-as-of-2026-07-07))
 Scope: `/certification/removals` (New-removal wizard + detail sheet) and `/certification/ghg-statements` (create wizard + detail sheet).
 
 > Grounding note: Isometric protocol/registry facts below are cross-checked against the `isometric` MCP (`key-certify-concepts`, biochar protocol v1.3, ghg-accounting module v1.1). Any interpretation of Isometric docs is **non-authoritative** — verify against the linked registry docs before changing credit logic.
+
+---
+
+## Implementation status (as of 2026-07-07)
+
+Branch **`feat/removal-ghg-legible-guided`** (off `staging`), epic **#380**. **All phases built; whole branch (Slice 1 + Phases 0–4) is one PR-ready unit to `staging`.** The §9 plan below is the authoritative task spec; this section records what shipped.
+
+| Phase | State | Notes |
+|---|---|---|
+| **Slice 1** — #378 facility-name fallback, #379 explicit supplier pick | ✅ shipped | Low-risk quick wins. |
+| **Phase 0** — one readiness source (#246) | ✅ shipped | `src/lib/certification/requirement-labels.ts` (`CERT_REQUIREMENT_META`) attached to every check type. |
+| **Phase 1** — plain language + ⓘ "Why?" (#291 partial) | ✅ shipped | `whyDetail` behind `InfoHint`; CERT-badge tooltip. Template-driven field *visibility* (#291 core) deferred — see below. |
+| **Phase 2** — removal readiness workspace (#247) | ✅ shipped | Step 1 = ready-lead / not-ready-collapsed; every gap deep-links to its fix; no dead-end Continue. |
+| **Phase 3** — GHG honesty + empty-statement guard (#245/#250) | ✅ shipped | Server guards for 0-in-window / 0-linked; honest "expected in this statement" framing; one status ladder. |
+| **Phase 4** — onboarding / CRUD polish (#348 + QA C1–C5) | ✅ shipped | **C1/#348** durability tier → read-only info block (no locked "Available later" false choice); **C2** energy `e.g.` placeholders; **C3** CERT tooltip (already Phase 1); **C4** map style-fetch failure now trips the manual-entry fallback (error handler + 12s timeout). |
+
+**Decisions closing Phase 4:**
+- **C5** (first-run dashboard "start here") — **OUT OF SCOPE** for #380; #362 (first-run pass) is closed and this is a separate P3. Revisit as its own ticket if wanted.
+- **Deferred (not built):** #291 template-driven field *visibility* — ~10 open stakeholder questions; do not build speculatively.
+
+**Next step:** PR the whole branch to `staging` (Slice 1 + Phases 0–4). No further Phase-4 code work is open.
 
 ---
 
