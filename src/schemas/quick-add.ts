@@ -42,6 +42,7 @@ export {
 export const vehicleQuickAddSchema = z.object({
   name: z
     .string()
+    .trim()
     .min(1, "Vehicle name is required")
     .max(255, "Vehicle name must be less than 255 characters"),
   identifier: z
@@ -100,6 +101,7 @@ const FEEDSTOCK_TYPE_FEEDSTOCK_BIN_MESSAGE =
 export const storageLocationQuickAddSchema = z.object({
   name: z
     .string()
+    .trim()
     .min(1, "Bin name is required")
     .max(255, "Name must be less than 255 characters"),
   type: z.enum(storageLocationTypes, { message: "Bin type is required" }),

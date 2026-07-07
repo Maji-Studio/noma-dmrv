@@ -19,6 +19,7 @@ export const supplierFormSchema = z.object({
   // Required fields
   name: z
     .string()
+    .trim()
     .min(1, "Supplier name is required")
     .max(255, "Supplier name must be less than 255 characters"),
 
@@ -92,7 +93,7 @@ export const updateSupplierSchema = z.object({
     .max(50)
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
-  name: z.string().min(1).max(255).optional(),
+  name: z.string().trim().min(1).max(255).optional(),
   location: z.string().max(255).optional().nullable().or(z.literal("")),
   gpsLatitude: latitudeSchema,
   gpsLongitude: longitudeSchema,

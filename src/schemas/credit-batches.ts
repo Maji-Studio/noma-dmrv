@@ -30,6 +30,15 @@ export const durabilityOptions = ["200_year", "1000_year"] as const;
 export type DurabilityOption = (typeof durabilityOptions)[number];
 
 /**
+ * Tier used when a facility LEFT JOIN yields null while deriving a batch's
+ * durability tier (ADR 0021). Every credit batch has a NOT NULL `facility_id`
+ * FK, so this branch is unreachable in practice — it only satisfies the join's
+ * nullable column type. Kept as one shared constant (matching the facility
+ * column default) so the read-path fallbacks don't diverge.
+ */
+export const DURABILITY_TIER_FALLBACK: DurabilityOption = "1000_year";
+
+/**
  * Currency codes (ISO 4217)
  */
 export const currencyCodes = ["TZS", "USD", "EUR", "GBP", "KES"] as const;
@@ -68,7 +77,9 @@ export const creditBatchFormSchema = z
       .default([]),
 
     // === Section 3: Durability ===
-    durabilityOption: z.enum(durabilityOptions).default("200_year"),
+    // The tier is NOT a batch input — it is inherited from the facility
+    // (ADR 0021) and shown read-only on the form. The tier-specific evidence
+    // fields below gate on the facility tier.
 
     // 200-year durability fields
     hToCorgRatio: z
@@ -185,7 +196,7 @@ export const updateCreditBatchSchema = z.object({
     .array(z.string().uuid())
     .min(1, "Select at least one production run")
     .optional(),
-  durabilityOption: z.enum(durabilityOptions).optional(),
+  // durabilityOption is inherited from the facility (ADR 0021), not a batch field.
   hToCorgRatio: z.number().min(0).max(1).optional().nullable(),
   meanRandomReflectancePercent: z.number().min(0).max(100).optional().nullable(),
   stdRandomReflectance: z.number().min(0).optional().nullable(),

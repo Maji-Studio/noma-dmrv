@@ -20,9 +20,16 @@ export const facilities = pgTable(
     address: text('address'),
     contactEmail: text('contact_email'),
     contactPhone: text('contact_phone'),
-    defaultDurabilityOption: durabilityOption('default_durability_option')
+    // Durability tier is declared once per facility and inherited downward by
+    // its credit batches, their samples, and the facility's Isometric removal
+    // template (ADR 0021). This is the single source of truth — the former
+    // per-batch `credit_batches.durability_option` column is gone; tier is
+    // read from the facility (join-derived) wherever a batch needs it.
+    // 1000-year is the go-forward tier; 200-year is surfaced-but-disabled in
+    // the UI until a 200-year client onboards.
+    durabilityOption: durabilityOption('durability_option')
       .notNull()
-      .default('200_year'),
+      .default('1000_year'),
 
     // Soft-delete: archiving a facility cascades the same stamp to all
     // facility-scoped child tables in one transaction (see data-access/facilities.ts).

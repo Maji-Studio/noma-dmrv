@@ -97,6 +97,7 @@ function validateCategoryUsage(
 export const feedstockTypeFormSchema = z.object({
   name: z
     .string()
+    .trim()
     .min(1, "Feedstock type name is required")
     .max(255, "Name must be less than 255 characters"),
   category: z.enum(feedstockCategories, { message: "Category is required" }),
@@ -123,7 +124,7 @@ export const createFeedstockTypeSchema = feedstockTypeFormSchema;
 
 export const updateFeedstockTypeSchema = z.object({
   feedstockTypeId: z.string().uuid("Invalid feedstock type ID"),
-  name: z.string().min(1).max(255).optional(),
+  name: z.string().trim().min(1).max(255).optional(),
   category: z.enum(feedstockCategories).optional(),
   usage: z.enum(feedstockTypeUsages).optional(),
   description: z.string().max(1000).optional().nullable(),

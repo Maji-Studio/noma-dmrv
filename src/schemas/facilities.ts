@@ -150,6 +150,7 @@ const facilityFormBaseSchema = z.object({
   // Required fields
   name: z
     .string()
+    .trim()
     .min(1, "Facility name is required")
     .max(255, "Facility name must be less than 255 characters"),
   country: z
@@ -168,7 +169,9 @@ const facilityFormBaseSchema = z.object({
   gpsLongitude: longitudeSchema,
   contactEmail: contactEmailSchema,
   contactPhone: contactPhoneSchema,
-  defaultDurabilityOption: z.enum(durabilityOptions).default("200_year"),
+  // Authoritative durability tier for the facility (ADR 0021) — inherited by
+  // its credit batches and samples. 1000-year is the go-forward default.
+  durabilityOption: z.enum(durabilityOptions).default("1000_year"),
   timezone: z.preprocess(
     (v) => (v === "" ? undefined : v),
     z.enum(timezones, { message: "Timezone is required" })
@@ -200,7 +203,7 @@ export const updateFacilitySchema = z.object({
     .max(50)
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
-  name: z.string().min(1).max(255).optional(),
+  name: z.string().trim().min(1).max(255).optional(),
   country: z.string().min(1).max(100).optional(),
   location: z.string().max(255).optional().nullable(),
   address: z.string().max(500).optional().nullable(),
@@ -208,7 +211,7 @@ export const updateFacilitySchema = z.object({
   gpsLongitude: longitudeSchema,
   contactEmail: z.string().email().max(255).optional().nullable().or(z.literal("")),
   contactPhone: z.string().max(30).optional().nullable().or(z.literal("")),
-  defaultDurabilityOption: z.enum(durabilityOptions).optional(),
+  durabilityOption: z.enum(durabilityOptions).optional(),
   timezone: z.enum(timezones).optional(),
 }).superRefine(gpsPairSuperRefine);
 
@@ -301,7 +304,7 @@ export type FacilitySelectData = z.infer<typeof facilitySelectSchema>;
  * Minimal required fields for rapid data entry
  */
 export const quickAddFacilitySchema = z.object({
-  name: z.string().min(1, "Facility name is required").max(255),
+  name: z.string().trim().min(1, "Facility name is required").max(255),
   country: z.string().min(1, "Country is required").max(100),
   location: z.string().max(255).optional().or(z.literal("")),
 });

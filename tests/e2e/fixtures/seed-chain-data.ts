@@ -68,6 +68,11 @@ export async function seedChainData(
         // and makes stub reverse-geocode/route-distance assertions exact.
         gpsLatitude: -6.163,
         gpsLongitude: 35.7516,
+        // Declare the tier explicitly (ADR 0021): the facility default is now
+        // '1000_year', which would push every seeded batch onto the 1000-year
+        // R₀/TGA evidence path and break unrelated sample-CRUD flows. The generic
+        // chain is a 200-year (soil-temp) flow.
+        durabilityOption: "200_year",
       });
 
       // 2. Reactor (needs facility)
@@ -260,10 +265,9 @@ export async function seedCreditBatch(
       productionProcessId,
       startDate: start,
       endDate: end,
-      // Default durabilityOption='200_year' has a CHECK constraint
-      // (credit_batches_200_year_requires_h_to_corg) that requires this
-      // field. Any non-null value satisfies it; the spec doesn't depend
-      // on the actual durability calculation.
+      // Durability tier is inherited from the facility (ADR 0021; the seed
+      // facility is 200-year). Carry a declared H/C_org so the batch has
+      // realistic chemistry; the spec doesn't depend on the durability calc.
       hToCorgRatio: SEEDED_H_TO_CORG_RATIO,
     });
     return { id, code };
