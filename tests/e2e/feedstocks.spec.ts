@@ -98,4 +98,37 @@ test.describe("Feedstock UI CRUD", () => {
       dialog.locator('input[name="transportDistanceKm"]')
     ).toHaveValue("");
   });
+
+  test("explains the CERT badge on hover instead of leaving it bare (Phase 1, §6)", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.waitForLoadState("networkidle");
+
+    await page.click('button:has-text("New Feedstock")');
+    await waitForSideSheet(page);
+
+    const dialog = page.locator('[role="dialog"]');
+    // The explanation ships as an always-on sr-only string for assistive tech
+    // (one per CERT chip). Hovering a chip mounts a visible tooltip carrying the
+    // SAME text — so the previously-unexplained "CERT" chip is legible to
+    // sighted users too. The tooltip portals to <body> (outside the dialog), so
+    // the robust signal is a page-scoped count that grows by exactly one.
+    const explanationOnPage = page.getByText("Required for certification", {
+      exact: true,
+    });
+    const beforeHover = await explanationOnPage.count();
+    expect(beforeHover).toBeGreaterThan(0);
+
+    // The CERT chip is the sr-only text's parent span (the tooltip trigger);
+    // hover a chip that lives inside the dialog so it isn't under the overlay.
+    const chipInDialog = dialog
+      .getByText("Required for certification", { exact: true })
+      .first()
+      .locator("xpath=..");
+    await chipInDialog.hover();
+
+    await expect(explanationOnPage).toHaveCount(beforeHover + 1);
+  });
 });
