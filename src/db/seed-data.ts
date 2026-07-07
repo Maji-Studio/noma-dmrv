@@ -266,7 +266,9 @@ async function seedDemoData() {
           address: 'Soweto Industrial Area, Moshi Municipality',
           contactEmail: 'moshi@noma-biochar.tz',
           contactPhone: '+255700100001',
-          defaultDurabilityOption: '200_year',
+          // Dark Earth Carbon runs the 1000-year (R₀ + TGA) tier (ADR 0021);
+          // the tier is inherited by every batch and sample here.
+          durabilityOption: '1000_year',
         },
       ]);
 
@@ -917,14 +919,16 @@ async function seedDemoData() {
       await seedProductionProcessesAndCreditBatches(tx, ids, demoTimestamps);
 
       // Each sampled credit batch pools >=3 replicates with a complete
-      // H/C_org + O/C_org pair (durability gate, module §8.3.1 / §3 Table 2);
-      // batch 2 is 1000-year, so its samples also carry the R0 + TGA evidence
-      // the intake guard requires (requireBatchTierEvidence, issue #341).
-      // Molar ratios are consistent with the elemental percentages
+      // H/C_org + O/C_org pair (durability gate, module §8.3.1 / §3 Table 2).
+      // Moshi is a 1000-year facility (ADR 0021), so EVERY batch's samples carry
+      // the R0 + TGA evidence the intake guard requires (requireBatchTierEvidence,
+      // issue #341) plus the per-sample s_fraction (proportion of R0 readings
+      // >= 2% — the inertinite fraction) the 1000-year sequestration blueprint
+      // consumes. Molar ratios are consistent with the elemental percentages
       // (H/C_org = (H/1)/(C_org/12), O/C_org = (O/16)/(C_org/12)).
       console.log('Creating samples...');
       await tx.insert(schema.samples).values([
-        // --- Credit batch 1 (200-year, woodchips): runs 1 + 3, 3 replicates ---
+        // --- Credit batch 1 (1000-year, woodchips): runs 1 + 3, 3 replicates ---
         {
           id: ids.sample1,
           productionRunId: ids.productionRun1,
@@ -945,6 +949,13 @@ async function seedDemoData() {
           oToCOrgRatio: 0.07,
           ashContentPercent: 9.5,
           moistureContentPercent: 4.8,
+          randomReflectanceR0Percent: 2.85,
+          r0MeasurementCount: 100,
+          reactiveCarbonPercent: 32.6,
+          residualCarbonPercent: 67.4,
+          sReflectanceFraction: 0.92,
+          r0AnalysisDate: '2026-05-20',
+          tgaAnalysisDate: '2026-05-20',
         },
         {
           id: ids.sample3,
@@ -966,6 +977,13 @@ async function seedDemoData() {
           oToCOrgRatio: 0.09,
           ashContentPercent: 10.8,
           moistureContentPercent: 5.4,
+          randomReflectanceR0Percent: 2.75,
+          r0MeasurementCount: 100,
+          reactiveCarbonPercent: 32.1,
+          residualCarbonPercent: 67.9,
+          sReflectanceFraction: 0.90,
+          r0AnalysisDate: '2026-05-24',
+          tgaAnalysisDate: '2026-05-24',
         },
         {
           // Third replicate drawn from the curing pad the morning after run 3
@@ -990,6 +1008,13 @@ async function seedDemoData() {
           oToCOrgRatio: 0.07,
           ashContentPercent: 8.9,
           moistureContentPercent: 4.6,
+          randomReflectanceR0Percent: 2.9,
+          r0MeasurementCount: 100,
+          reactiveCarbonPercent: 32.4,
+          residualCarbonPercent: 67.6,
+          sReflectanceFraction: 0.93,
+          r0AnalysisDate: '2026-05-24',
+          tgaAnalysisDate: '2026-05-24',
         },
         // --- Credit batch 2 (1000-year, coffee husk): run 2, 3 replicates
         // with R0 petrography + TGA evidence. Sample means reconcile with the
@@ -1019,6 +1044,7 @@ async function seedDemoData() {
           r0MeasurementCount: 100,
           reactiveCarbonPercent: 31.8,
           residualCarbonPercent: 68.2,
+          sReflectanceFraction: 0.94,
           r0AnalysisDate: '2026-05-22',
           tgaAnalysisDate: '2026-05-22',
         },
@@ -1046,6 +1072,7 @@ async function seedDemoData() {
           r0MeasurementCount: 100,
           reactiveCarbonPercent: 32.4,
           residualCarbonPercent: 67.6,
+          sReflectanceFraction: 0.91,
           r0AnalysisDate: '2026-05-23',
           tgaAnalysisDate: '2026-05-23',
         },
@@ -1073,6 +1100,7 @@ async function seedDemoData() {
           r0MeasurementCount: 100,
           reactiveCarbonPercent: 31.9,
           residualCarbonPercent: 68.1,
+          sReflectanceFraction: 0.89,
           r0AnalysisDate: '2026-05-24',
           tgaAnalysisDate: '2026-05-24',
         },

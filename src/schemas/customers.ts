@@ -42,6 +42,7 @@ export const customerFormSchema = z.object({
   // Required fields
   name: z
     .string()
+    .trim()
     .min(1, "Customer name is required")
     .max(255, "Customer name must be less than 255 characters"),
 
@@ -81,6 +82,7 @@ export const customerLocationFormSchema = z.object({
   // Required fields
   name: z
     .string()
+    .trim()
     .min(1, "Location name is required")
     .max(255, "Location name must be less than 255 characters"),
   country: z.string().min(1, "Country is required").max(100, "Country must be less than 100 characters"),
@@ -120,7 +122,7 @@ export const updateCustomerSchema = z.object({
     .max(50)
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
-  name: z.string().min(1).max(255).optional(),
+  name: z.string().trim().min(1).max(255).optional(),
   cropType: z.string().max(100).optional().nullable().or(z.literal("")),
   address: z.string().max(500).optional().nullable().or(z.literal("")),
   contactEmail: z.string().email().max(255).optional().nullable().or(z.literal("")),
@@ -145,6 +147,7 @@ export const createCustomerLocationSchema = z.object({
   customerId: z.string().uuid("Invalid customer ID"),
   name: z
     .string()
+    .trim()
     .min(1, "Location name is required")
     .max(255, "Location name must be less than 255 characters"),
   country: z.string().min(1, "Country is required").max(LOCATION_PART_MAX),
@@ -164,7 +167,7 @@ export const createCustomerLocationSchema = z.object({
  */
 export const updateCustomerLocationSchema = z.object({
   locationId: z.string().uuid("Invalid location ID"),
-  name: z.string().min(1).max(255).optional(),
+  name: z.string().trim().min(1).max(255).optional(),
   country: z.string().min(1).max(LOCATION_PART_MAX).optional(),
   stateRegion: locationPartSchema,
   city: locationPartSchema,

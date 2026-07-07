@@ -56,9 +56,15 @@ export async function seedProductionProcessesAndCreditBatches(
       certifier: "isometric",
       registry: "Isometric Registry",
       bufferPoolPercent: 10,
-      durabilityOption: "200_year",
+      // Tier is inherited from the (1000-year) Moshi facility (ADR 0021), no
+      // longer a batch column. H:Corg stays as the universal eligibility input;
+      // the 1000-year petrography/TGA batch means mirror this batch's three
+      // seeded replicates (R₀ 2.9/2.8/2.85; residual carbon 67.4/67.9/67.6).
       hToCorgRatio: 0.269,
-      fDurableCalculated: 0.851,
+      meanRandomReflectancePercent: 2.85,
+      stdRandomReflectance: 0.05,
+      meanNonReactiveCarbonPercent: 67.6,
+      stdNonReactiveCarbonPercent: 0.25,
       siteManagementNotes:
         "Biochar incorporated into planting rows within 48 hours; no synthetic nitrogen applied during the application window.",
       affidavitReference: "AFF-MOSHI-2026-001",
@@ -78,7 +84,7 @@ export async function seedProductionProcessesAndCreditBatches(
       endDate: "2026-05-31",
       certifier: "isometric",
       registry: "Isometric Registry",
-      durabilityOption: "1000_year",
+      // Tier inherited from the (1000-year) Moshi facility (ADR 0021).
       // Eq.6 petrography/TGA inputs — means and n−1 std devs consistent with
       // the batch's three seeded replicates (R₀ 2.9/2.8/2.7; residual carbon
       // 68.2/67.6/68.1 in seed-data.ts).

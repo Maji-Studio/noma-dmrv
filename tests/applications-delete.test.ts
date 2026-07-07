@@ -251,7 +251,6 @@ async function createCreditBatchRecord(
       startDate: "2025-06-01",
       endDate: "2025-06-30",
       certifier: "isometric",
-      durabilityOption: "200_year",
       hToCorgRatio: 0.4,
       fDurableCalculated: fields?.fDurableCalculated ?? null,
     })

@@ -138,6 +138,20 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
     ).toThrow(/only valid under Method B/);
   });
 
+  it("fails closed for a 1000-year batch (builder not yet wired — issue #348)", () => {
+    expect(() =>
+      buildDurabilityMeasurementSampleSubmissions({
+        ...common,
+        batches: [
+          {
+            ...sampledBatch("t", "CB-T"),
+            durabilityOption: "1000_year",
+          },
+        ],
+      }),
+    ).toThrow(/1000-year durability tier/);
+  });
+
   it("scales product mass by the per-run applied attribution", () => {
     const [pb] = buildDurabilityMeasurementSampleSubmissions({
       ...common,

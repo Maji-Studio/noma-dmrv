@@ -52,6 +52,7 @@ export const FUEL_TYPE_OPTIONS: ReadonlyArray<{ value: FuelType; label: string }
 export const vehicleFormSchema = z.object({
   name: z
     .string()
+    .trim()
     .min(1, "Vehicle name is required")
     .max(255, "Vehicle name must be less than 255 characters"),
   // Optional: audit/evidence metadata, not used in the certified transport calc.
@@ -94,7 +95,7 @@ export const createVehicleSchema = vehicleFormSchema;
 
 export const updateVehicleSchema = z.object({
   vehicleId: z.string().uuid("Invalid vehicle ID"),
-  name: z.string().min(1).max(255).optional(),
+  name: z.string().trim().min(1).max(255).optional(),
   identifier: z.string().max(50).optional().nullable(),
   vehicleType: z.string().min(1).max(50).optional(),
   fuelType: z.string().max(50).optional().nullable(),

@@ -312,7 +312,7 @@ export async function createFacilityFn(
           timezone: validated.timezone,
           contactEmail: validated.contactEmail || null,
           contactPhone: validated.contactPhone || null,
-          defaultDurabilityOption: validated.defaultDurabilityOption,
+          durabilityOption: validated.durabilityOption,
         })
     );
 
@@ -364,7 +364,7 @@ export async function updateFacilityFn(
       timezone: validated.timezone,
       contactEmail: validated.contactEmail,
       contactPhone: validated.contactPhone,
-      defaultDurabilityOption: validated.defaultDurabilityOption,
+      durabilityOption: validated.durabilityOption,
     });
 
     return { success: true, data: facility };

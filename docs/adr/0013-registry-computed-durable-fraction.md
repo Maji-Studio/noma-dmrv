@@ -90,3 +90,20 @@ against it with a divergence warning.
 - Scope is **200-year**. 1000-year durability (Eq.4–6, random reflectance R₀ + non-reactive
   carbon — surfaced as `biochar_production_batch` inertinite/semi-inertinite/poorly-carbonized
   fractions) is deferred — its inputs are captured but unrouted.
+
+## Amendment (2026-07-04, ADR 0021) — the live 1000-year blueprint ≠ module Eq.6
+
+Authoritative research (Isometric MCP, 2026-07-04) found that the **live Certify blueprint**
+`biochar_sequestration_1000_year` and **module Eq.6** disagree, and **the blueprint is what
+runs**. The blueprint takes three inputs — `carbon_contents` (per-replicate LIST, total carbon
+dry basis), `product_mass` (SCALAR kg), `s_fraction` (per-replicate LIST = each sample's
+proportion of R₀ readings ≥ 2%) — and computes
+`product_mass × mean(carbon_contents) × durable_fraction × 3.667`, where
+`durable_fraction = mean(s_fraction) − √(mean·(1−mean)/n)` (binomial SE). It has **no
+non-reactive-carbon factor and no 0.95 cap** (both present in Eq.6), and uses **binomial SE**
+not std-dev. This is fully consistent with this ADR's principle — **the registry owns the
+durable-fraction computation**; noma submits only the per-replicate inputs and never a
+pre-reduced mean. The live 1000-year path (`build1000YearSequestrationSample`, ADR 0021) is
+therefore built to the **blueprint**, while `computeFDurable1000` (Eq.6) stays a local
+**preview**. Which of the two governs verification credit is an open Isometric sign-off
+(`open-questions.md` `certification/fdurable-1000-r0-semantics`).

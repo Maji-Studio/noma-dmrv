@@ -20,9 +20,9 @@ import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, SectionLabel, FormActions } from "@/components/forms";
+import { DurabilityTierSelect } from "@/components/certification";
 import {
   creditBatchFormSchema,
-  formatDurabilityOption,
   type CreditBatchFormData,
   type DurabilityOption,
 } from "@/schemas/credit-batches";
@@ -202,6 +202,8 @@ interface CreditBatchFormProps {
     productionRunIds?: string[];
     /** Derived Σ member applications' applied tons (issue #285). */
     appliedWeightTons?: number;
+    /** Facility-derived durability tier (ADR 0021) — shown read-only. */
+    durabilityOption?: DurabilityOption;
   };
   /** Form submission handler */
   onSubmit: (data: CreditBatchFormData) => Promise<void> | void;
@@ -243,10 +245,6 @@ export function CreditBatchForm({
       startDate: toDateInputValue(creditBatch?.startDate),
       endDate: toDateInputValue(creditBatch?.endDate),
       productionRunIds: creditBatch?.productionRunIds ?? [],
-      durabilityOption:
-        (creditBatch?.durabilityOption as DurabilityOption) ??
-        (selectedFacility?.defaultDurabilityOption as DurabilityOption) ??
-        "200_year",
       siteManagementNotes: creditBatch?.siteManagementNotes ?? "",
     },
   });
@@ -258,20 +256,20 @@ export function CreditBatchForm({
     }
   }, [creditBatch, contextFacilityId, setValue]);
 
-  // Sync durability option from facility default when it arrives
-  useEffect(() => {
-    if (!creditBatch && selectedFacility?.defaultDurabilityOption) {
-      setValue("durabilityOption", selectedFacility.defaultDurabilityOption as DurabilityOption);
-    }
-  }, [creditBatch, selectedFacility?.defaultDurabilityOption, setValue]);
-
   // Watch dates, facility, and declared feedstock type for cohort selection
   const watchedStartDate = useWatch({ control, name: "startDate" });
   const watchedEndDate = useWatch({ control, name: "endDate" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
   const watchedProductionRunIds = useWatch({ control, name: "productionRunIds" });
-  const durabilityOption = useWatch({ control, name: "durabilityOption" });
+  // Tier is inherited from the facility (ADR 0021), shown read-only here — never
+  // a batch input. Prefer the batch's own join-derived tier (edit mode); fall
+  // back to the active facility's tier (create mode). Pages are facility-scoped,
+  // so the active facility is the batch's facility.
+  const durabilityOption: DurabilityOption =
+    (creditBatch?.durabilityOption as DurabilityOption | undefined) ??
+    (selectedFacility?.durabilityOption as DurabilityOption | undefined) ??
+    "1000_year";
   const effectiveFacilityId = watchedFacilityId || contextFacilityId || "";
   const declaredFeedstockTypeId = watchedFeedstockTypeId || "";
 
@@ -508,30 +506,14 @@ export function CreditBatchForm({
         title="Durability"
         hint={
           <>
-            The durability crediting tier is a project-level (PDD) decision,
-            set per facility and snapshotted onto the batch when it&apos;s
-            created — not a per-batch claim. The <code>1000_year</code> tier
-            additionally requires reflectance lab data and is not yet
-            supported by the CO₂e preview.
+            The durability crediting tier is declared once per facility and
+            inherited by every batch and sample here (ADR 0021). It must match
+            the facility&apos;s removal template. Change it in the
+            facility&apos;s settings, not per batch.
           </>
         }
       >
-
-        {/* Snapshotted from the facility's default at create; kept in form state
-            so it round-trips on update, but not editable here. */}
-        <input type="hidden" {...register("durabilityOption")} />
-
-        <dl>
-          <ReadOnlyField
-            label="Durability Option"
-            value={
-              durabilityOption
-                ? formatDurabilityOption(durabilityOption as DurabilityOption)
-                : "—"
-            }
-            hint="Change it for future batches in the facility's settings."
-          />
-        </dl>
+        <DurabilityTierSelect value={durabilityOption} readOnly />
       </FormSection>
 
       {/* ── Site Management Notes ── */}

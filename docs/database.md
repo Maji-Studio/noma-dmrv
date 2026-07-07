@@ -165,6 +165,9 @@ Recent notable migrations:
 | `0049_backfill_facility_timezone` | Backfills and enforces non-null facility timezone with `UTC` default. |
 | `0066_silent_swarm` | Converts 44 credit-bearing columns across 12 tables (masses, CO2e, contaminant ppm, ratios, percents) from `real` to exact `numeric(p,s)` families, so verifier-facing figures can't drift from float rounding (issue #280). Telemetry and lab-characterization columns stay `real`. |
 | `0067_long_mephistopheles` | Drops the six stored `credit_batches` aggregate columns (applied weight, CO2e stored/emissions/counterfactual, feedstock mass, ineligible feedstock mass) and their CHECK constraints — replaced by read-time derivation (ADR 0019). |
+| `0068_organic_sinister_six` | Adds `credit_batches.production_emissions_claimed_by_removal_id` (FK → `certifier_removals`) + index — the claim that front-loads a batch's full production-emissions bucket onto a single Removal (ADR 0020). |
+| `0069_thankful_morg` | **Durability tier moves from per-batch to facility-scoped (ADR 0021).** Renames `facilities.default_durability_option` → `durability_option` (backfilled, `NOT NULL`, default `1000_year`), **drops** `credit_batches.durability_option`, and adds `samples.s_reflectance_fraction`. Destructive: the per-batch tier column is removed; tier is now read from the facility. |
+| `0070_..._facility_scoped_durability_evidence_triggers` | Hand-written trigger migration (db:generate can't emit function bodies): re-declares the three P0-06 durability-evidence trigger functions (from `0053`/`0054`) to derive the tier from the batch's facility (`facilities.durability_option`) via join, since `credit_batches.durability_option` no longer exists (ADR 0021). Bindings unchanged; snapshot is an intentional copy of `0069`. |
 
 When a migration is destructive, document the rationale in the related feature doc or `docs/open-questions.md` if the dropped surface may return later.
 

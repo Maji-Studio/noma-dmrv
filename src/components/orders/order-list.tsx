@@ -11,6 +11,7 @@ import type { Order } from "@/db/schema";
 import { useCreateOrder, useDeleteOrder, useOrders, useUpdateOrder } from "@/hooks/use-orders";
 import { useCustomers } from "@/hooks/use-customers";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -239,6 +240,19 @@ export function OrderList() {
   const hasActiveFilters = !!searchQuery || !!statusFilter || !!customerFilter;
 
   const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
+
+  if (!facilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader
+          area="distribution"
+          title="Orders"
+          subtitle="Customer orders for biochar products"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its orders." />
+      </div>
+    );
+  }
 
   if (fetchError) {
     return <div className="container-max py-32"><ServerError message={fetchError.message || "Failed to load orders"} /></div>;

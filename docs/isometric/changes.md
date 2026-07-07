@@ -13,6 +13,52 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-07-04 (durability tier facility-scoped + 1000-year submission path — ADR 0021, issue #358)
+
+The durability tier (200-year vs 1000-year) is now **declared once per facility
+and inherited downward** — its credit batches, their samples, and the facility's
+Isometric removal template all read one tier (**ADR 0021**). `facility.durabilityOption`
+is authoritative (renamed from `defaultDurabilityOption`); the per-batch
+`credit_batches.durability_option` column is **dropped** and the tier is
+**join-derived from the facility** on every batch-loading query, so the ~28
+existing `batch.durabilityOption` read sites keep working. 1000-year is the
+go-forward tier; 200-year is surfaced-but-disabled ("available later") in the UI.
+DEC (Moshi) reseeds as a 1000-year facility.
+
+- **Submit-time template↔tier guard.** `submitRemoval` now maps the facility tier
+  to its expected sequestration blueprint (`expectedSequestrationBlueprintKeys`:
+  200-year → `biochar_sequestration_200_year_{c_org,unsampled}`; 1000-year →
+  `biochar_sequestration_1000_year`) and **fails closed early** with an actionable
+  message when the template's `co2-stored` component is outside that set. This
+  replaces today's misleading "no INPUT_MAPPING entry … update
+  transformers/datapoint.ts" error for a 1000-year template.
+- **Sequestration family recognition.** `resolveTemplateInputs` now skips the whole
+  `biochar_sequestration_*` **family** (`isSequestrationBlueprintFamily`) from the
+  datapoint loop, and `biochar_sequestration_1000_year` is in
+  `SEQUESTRATION_BLUEPRINT_KEYS`, so a 1000-year template reaches the staging gate
+  (`DURABILITY_MEASUREMENT_SAMPLES_LIVE`, still **false**) — the intended
+  "staged, not yet live" stop — instead of the missing-mapping error.
+- **1000-year measurement-sample builder (⚠️ built to the live BLUEPRINT, not
+  module Eq.6).** `build1000YearSequestrationSample` submits per-replicate
+  `carbon_contents` + `s_fraction` LISTS + a `product_mass` SCALAR, with **no local
+  mean/−SE/cap** — the registry computes
+  `product_mass × mean(carbon_contents) × (mean(s_fraction) − binomial SE) × 3.667`.
+  The blueprint has no non-reactive-carbon input and no 0.95 cap (both in Eq.6 —
+  divergence recorded in ADR 0013 and `open-questions.md`
+  `certification/fdurable-1000-r0-semantics`). Unit-tested; **not yet wired into the
+  (blocked) submit path** — the exact datapoint↔list-input binding is the remaining
+  sandbox confirm.
+- **s_fraction data model.** New nullable `samples.s_reflectance_fraction` — the
+  per-sample proportion (0–1) of R₀ readings ≥ 2% (ISO 7404-5 inertinite fraction).
+  Seeded on the 1000-year replicates. Form capture deferred to #348.
+- **Still needs Isometric staff sign-off** (does not block the gated plumbing):
+  Eq.6-vs-blueprint governance for the durable fraction; total-vs-organic carbon for
+  `carbon_contents`; cross-entry shared-datapoint uncertainty; the empirical sandbox
+  test-submit before flipping the flag. See `open-questions.md`.
+
+All local protocol summaries are non-authoritative — verify against the linked
+Isometric blueprint/module before making a credit claim.
+
 ## 2026-07-04 (Isometric compliance sign-off — issue #353)
 
 Answers confirmed for the three protocol/platform questions raised in #353

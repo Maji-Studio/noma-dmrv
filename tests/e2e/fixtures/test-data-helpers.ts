@@ -110,6 +110,10 @@ export async function createTestFacility(
       name: facility.name,
       location: facility.location,
       timezone: facility.timezone,
+      // Declare the tier explicitly (ADR 0021): the facility default is now
+      // '1000_year', which would silently make generic test facilities 1000-year
+      // flows (R₀/TGA evidence). Default this helper to the simpler 200-year tier.
+      durabilityOption: "200_year",
     });
 
     return facility;
