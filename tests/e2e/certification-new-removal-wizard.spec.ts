@@ -20,8 +20,11 @@
 import { expect, test } from "./fixtures";
 import {
   type SeededGroupedRemoval,
+  type SeededIncompleteBatch,
+  SANDBOX_PROJECT_ID,
   seedCertifierMapping,
   seedGroupedRemovalWithChain,
+  seedUngroupedIncompleteBatch,
 } from "./fixtures/certification-helpers";
 
 // DB-only link target; never reaches Isometric, so any string is fine.
@@ -133,6 +136,116 @@ test.describe("Certification — New-Removal wizard", () => {
     } finally {
       try {
         await removal?.cleanup();
+      } finally {
+        await mapping.cleanup();
+      }
+    }
+  });
+
+  // The one readiness source (Phase 0) renders this neutral requirement label
+  // — from `CERT_REQUIREMENT_META` — on every surface. A runless batch is
+  // deterministically missing its production data, so this row is always open.
+  const PRODUCTION_REQUIREMENT = "Linked production data";
+  // The retired problem-phrased headline the batch page used to show for this
+  // same gap — its absence proves the migration to the shared requirement label.
+  const OLD_PRODUCTION_HEADLINE = "Production data not linked";
+
+  test("batch checklist shows the neutral requirement label, not the old contradictory copy (Phase 0)", async ({
+    adminPage: page,
+    seededData,
+    cleanupTestData,
+  }) => {
+    void cleanupTestData;
+
+    const facilityId = seededData.facility.id;
+    const testRunId = seededData.facility.code.replace(/^E2E-FAC-/, "");
+    // No certifier mapping here: the batch-detail health strip evaluates the
+    // batch's own data without any Isometric call, so this runs in hermetic PR
+    // CI. The wizard surface (which needs a registry link) is covered by the
+    // @live cross-surface test below.
+    let batch: SeededIncompleteBatch | undefined;
+
+    try {
+      batch = await seedUngroupedIncompleteBatch(
+        { facilityId, feedstockTypeId: seededData.feedstockType.id },
+        testRunId,
+      );
+
+      await page.goto(
+        `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
+      );
+      const healthStrip = page.getByTestId("batch-health-strip");
+      // The open gap reads as the plain requirement…
+      await expect(healthStrip).toContainText(PRODUCTION_REQUIREMENT, {
+        timeout: COLD_COMPILE_TIMEOUT_MS,
+      });
+      // …never the old problem-phrased headline (or an affirmative "…complete").
+      await expect(healthStrip).not.toContainText(OLD_PRODUCTION_HEADLINE);
+    } finally {
+      await batch?.cleanup();
+    }
+  });
+});
+
+// @live — the wizard's selection step needs a linked registry, so this asserts
+// the cross-surface identity against the real Isometric sandbox. Excluded from
+// PR CI (e2e.yml runs --grep-invert @live) and run by the nightly e2e-live
+// workflow; the CI-safe batch-page half is covered above.
+test.describe("Certification — New-Removal wizard (Phase 0 cross-surface)", { tag: "@live" }, () => {
+  test.skip(
+    !SANDBOX_PROJECT_ID,
+    "Requires ISOMETRIC_DEMO_PROJECT_ID (real sandbox project) to link the facility.",
+  );
+
+  const PRODUCTION_REQUIREMENT = "Linked production data";
+
+  test("shows the same plain-language gap string on the batch page and the wizard", async ({
+    adminPage: page,
+    seededData,
+    cleanupTestData,
+  }) => {
+    void cleanupTestData;
+
+    const facilityId = seededData.facility.id;
+    const testRunId = seededData.facility.code.replace(/^E2E-FAC-/, "");
+    const mapping = await seedCertifierMapping(facilityId, {
+      externalProjectId: SANDBOX_PROJECT_ID as string,
+    });
+    let batch: SeededIncompleteBatch | undefined;
+
+    try {
+      batch = await seedUngroupedIncompleteBatch(
+        { facilityId, feedstockTypeId: seededData.feedstockType.id },
+        testRunId,
+      );
+
+      // Surface 1 — the credit-batch detail page's certification checklist.
+      await page.goto(
+        `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
+      );
+      await expect(page.getByTestId("batch-health-strip")).toContainText(
+        PRODUCTION_REQUIREMENT,
+        { timeout: COLD_COMPILE_TIMEOUT_MS },
+      );
+
+      // Surface 2 — the New-Removal wizard's selection card for the SAME batch.
+      await page.goto(`/certification/removals?facility=${facilityId}`);
+      await page
+        .getByRole("button", { name: "New removal", exact: true })
+        .first()
+        .click();
+      const dialog = page.getByRole("dialog");
+      await expect(
+        dialog.getByRole("heading", { name: "Select credit batches" }),
+      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
+      await expect(dialog.getByText(batch.code)).toBeVisible({
+        timeout: COLD_COMPILE_TIMEOUT_MS,
+      });
+      // The identical requirement string appears in the wizard too.
+      await expect(dialog.getByText(PRODUCTION_REQUIREMENT).first()).toBeVisible();
+    } finally {
+      try {
+        await batch?.cleanup();
       } finally {
         await mapping.cleanup();
       }

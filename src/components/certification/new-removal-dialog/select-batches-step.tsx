@@ -127,8 +127,11 @@ function IncompleteCard({
       <ul className="flex flex-col gap-6">
         {gaps.map((check) => (
           <li key={check.key} className="flex flex-col gap-2">
+            {/* One plain-language requirement string, identical to the batch
+                page's checklist (Phase 0) — never the affirmative "…complete"
+                label next to a "Missing:" line. */}
             <span className="body-caption font-medium text-[var(--color-text-secondary)]">
-              {check.label}
+              {check.requirementLabel}
             </span>
             {check.detail && (
               <span className="body-caption text-[var(--color-text-tertiary)]">

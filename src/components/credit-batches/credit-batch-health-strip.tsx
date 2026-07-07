@@ -28,7 +28,6 @@ import { useBatchHealth } from "@/hooks/use-certification";
 import type { BatchHealth, BatchHealthCheck } from "@/lib/certification/batch-health";
 import {
   batchHealthFixLinkFor,
-  openCheckHeadline,
   skippedBatchHealthFixLink,
 } from "@/lib/certification/batch-health-links";
 import { cn } from "@/lib/utils";
@@ -65,8 +64,11 @@ function OpenCheckRow({
           className="mt-1 shrink-0 text-[var(--st-wait)]"
         />
         <div className="flex min-w-0 flex-col gap-2">
+          {/* The one plain-language requirement string — identical to the
+              removal wizard's gap row (Phase 0). Neutral, so it reads correctly
+              next to this warning icon without saying "…complete". */}
           <span className="body-medium font-medium text-[var(--color-text-primary)]">
-            {openCheckHeadline(check.key)}
+            {check.requirementLabel}
           </span>
           {check.detail && (
             <span className="body-caption text-[var(--color-text-secondary)]">
@@ -124,7 +126,7 @@ function ClearedSummary({
             weight="fill"
             className="shrink-0 text-[var(--st-ok)]"
           />
-          {check.label}
+          {check.requirementLabel}
         </span>
       ))}
       {skipped.map((check) => (
@@ -136,7 +138,7 @@ function ClearedSummary({
             size={14}
             className="shrink-0 text-[var(--color-text-quaternary)]"
           />
-          {check.label}
+          {check.requirementLabel}
           <Link
             href={skippedFix.href}
             className="inline-flex items-center gap-4 font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
