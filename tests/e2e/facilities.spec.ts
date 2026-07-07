@@ -202,6 +202,53 @@ test.describe("Facility + Reactor UI CRUD", () => {
 });
 
 // ============================================
+// Whitespace-name display fallback (#378)
+// ============================================
+
+test.describe("Facility blank-name display fallback", () => {
+  let blankNameFacility: TestFacility;
+
+  test.beforeAll(async () => {
+    // Seed straight into the DB (bypassing the trimming form schema) to mimic a
+    // stray legacy/manual whitespace-only name. The card/selector must fall back
+    // to the always-present code rather than render an empty heading.
+    blankNameFacility = await createTestFacility({
+      code: `E2E-BLANK-${RUN_ID}`,
+      name: "   ",
+    });
+  });
+
+  test.afterAll(async () => {
+    if (blankNameFacility?.id) {
+      await deleteTestFacility(blankNameFacility.id);
+    }
+  });
+
+  test("a whitespace-only facility name renders its code, not a blank card", async ({
+    adminPage: page,
+  }) => {
+    await page.goto("/facilities");
+    await expect(page.getByText("Active Facilities")).toBeVisible({
+      timeout: 15000,
+    });
+
+    // Filter to just the seeded facility by its code (search matches code).
+    const searchBox = page.getByRole("textbox", { name: "Search facilities" });
+    await searchBox.fill(blankNameFacility.code);
+    await page.waitForTimeout(500); // debounce
+
+    const card = page
+      .locator("article")
+      .filter({ hasText: blankNameFacility.code });
+    await expect(card).toBeVisible({ timeout: 10000 });
+
+    // The name heading falls back to the code (never an empty string).
+    const heading = card.getByRole("heading", { level: 3 });
+    await expect(heading).toHaveText(blankNameFacility.code);
+  });
+});
+
+// ============================================
 // DB-Level Duplicate Code Enforcement
 // ============================================
 

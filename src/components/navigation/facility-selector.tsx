@@ -19,7 +19,12 @@ export function FacilitySelector() {
   const containerRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
 
-  const selectedFacilityName = selectedFacility?.name ?? "Select facility";
+  // Fall back to the always-present code when a name is blank/whitespace-only
+  // (legacy/manual data — the schema now trims on every write) so the selector
+  // never renders an empty label (#378).
+  const selectedFacilityName = selectedFacility
+    ? selectedFacility.name?.trim() || selectedFacility.code
+    : "Select facility";
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -113,7 +118,9 @@ export function FacilitySelector() {
                           : "text-[var(--color-white-75)] hover:text-white hover:bg-[var(--color-white-100)]/[0.06]"
                       }`}
                     >
-                      <span className="truncate">{facility.name}</span>
+                      <span className="truncate">
+                        {facility.name?.trim() || facility.code}
+                      </span>
                       {isSelected && (
                         <CheckIcon
                           size={12}
