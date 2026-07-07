@@ -301,3 +301,97 @@ test.describe("Certification — New-Removal wizard (Phase 0 cross-surface)", { 
     }
   });
 });
+
+// @live — the readiness workspace (Phase 2) lives on the wizard's selection
+// step, which needs a linked registry to render batches. Excluded from PR CI
+// (--grep-invert @live); the CI-safe requirement-label + ⓘ halves are covered by
+// the hermetic batch-page tests above. Verifies the workspace reshape: with no
+// ready batch, the not-ready batches collapse under "Not ready yet (N)" (opened
+// by default so it isn't a dead-end), and every gap carries its own deep link to
+// the exact fix — no single "go fix it elsewhere" hop.
+test.describe("Certification — New-Removal wizard (Phase 2 readiness workspace)", { tag: "@live" }, () => {
+  test.skip(
+    !SANDBOX_PROJECT_ID,
+    "Requires ISOMETRIC_DEMO_PROJECT_ID (real sandbox project) to link the facility.",
+  );
+
+  test("collapses not-ready batches and gives every gap its own deep-link fix", async ({
+    adminPage: page,
+    seededData,
+    cleanupTestData,
+  }) => {
+    void cleanupTestData;
+
+    const facilityId = seededData.facility.id;
+    const testRunId = seededData.facility.code.replace(/^E2E-FAC-/, "");
+    const mapping = await seedCertifierMapping(facilityId, {
+      externalProjectId: SANDBOX_PROJECT_ID as string,
+    });
+    let batch: SeededIncompleteBatch | undefined;
+
+    try {
+      // A runless batch is deterministically not-ready (missing lab chemistry +
+      // production data), so it lands in the collapsed "Not ready yet" group.
+      batch = await seedUngroupedIncompleteBatch(
+        { facilityId, feedstockTypeId: seededData.feedstockType.id },
+        testRunId,
+      );
+
+      await page.goto(`/certification/removals?facility=${facilityId}`);
+      await page
+        .getByRole("button", { name: "New removal", exact: true })
+        .first()
+        .click();
+
+      const dialog = page.getByRole("dialog");
+      await expect(
+        dialog.getByRole("heading", { name: "Select credit batches" }),
+      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
+
+      // With nothing ready, the step names the situation instead of dead-ending
+      // on a disabled Continue…
+      await expect(
+        dialog.getByText("No batches are ready to certify yet", { exact: false }),
+      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
+      // …and the not-ready batch is grouped under the disclosure (open by
+      // default here, so its gaps are visible).
+      await expect(
+        dialog.getByText(/Not ready yet \(\d+\)/),
+      ).toBeVisible();
+      await expect(dialog.getByText(batch.code)).toBeVisible();
+
+      // A runless batch's deterministic open gap is production lineage — its
+      // only missing carbon input (applicationIds) is filtered out, so carbon
+      // reads met (see NON_CARBON_MISSING_INPUTS). It renders as the shared
+      // plain requirement label…
+      await expect(
+        dialog.getByText("Linked production data").first(),
+      ).toBeVisible();
+      // …and carries its own deep link to the exact fix (this batch has no
+      // application in its crediting period → Applications), mirroring the batch
+      // page's own health strip. New tab so this workspace stays put while the
+      // operator resolves it.
+      const fixLink = dialog.getByRole("link", { name: "Review applications" });
+      await expect(fixLink).toBeVisible();
+      await expect(fixLink).toHaveAttribute(
+        "href",
+        new RegExp(`/applications\\?facility=${facilityId}`),
+      );
+      await expect(fixLink).toHaveAttribute("target", "_blank");
+
+      // The whole-batch overview link is still one click away.
+      await expect(
+        dialog.getByRole("link", { name: "Open full checklist on batch page" }),
+      ).toHaveAttribute(
+        "href",
+        new RegExp(`/credit-batches/${batch.creditBatchId}\\?facility=${facilityId}`),
+      );
+    } finally {
+      try {
+        await batch?.cleanup();
+      } finally {
+        await mapping.cleanup();
+      }
+    }
+  });
+});

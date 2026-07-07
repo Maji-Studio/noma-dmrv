@@ -1,11 +1,14 @@
 /**
- * SelectBatchesStep — step 1 of the New-Removal wizard. Lists the facility's
- * ungrouped credit batches paired with the per-batch health verdict
- * (`useSelectableBatches`). A "ready" batch is a selectable checkbox card; an
- * "incomplete" batch is non-selectable and shows its exact gaps inline (carbon,
- * production, transport, the batch's own entity certifier fields) with a link out
- * to the batch page where each is fixed — so the operator resolves everything
- * here, at selection, rather than discovering it after grouping (design doc §4).
+ * SelectBatchesStep — step 1 of the New-Removal wizard, reshaped as a readiness
+ * workspace (design doc §4.1–4.2, Phase 2). Ready batches lead as selectable
+ * cards; not-ready batches collapse under a "Not ready yet (N)" disclosure so the
+ * happy path is what the operator sees first. Each gap on a not-ready batch is an
+ * action that deep-links straight to where it's fixed (lab samples, production
+ * runs, deliveries) — the same `batchHealthFixLinkFor` targets the batch page
+ * uses, so the two never diverge — opened in a new tab so this workspace stays
+ * put. No more diagnosis-only dead-end: even with zero ready batches the operator
+ * has a concrete next click on every gap.
+ *
  * When facility setup is incomplete a banner blocks grouping for the whole
  * facility — there's no registry to submit to without it (§8).
  */
@@ -14,11 +17,13 @@
 import Link from "next/link";
 import {
   ArrowSquareOutIcon,
+  CaretDownIcon,
   CheckCircleIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { formatSafeDate, formatTonnes } from "@/lib/format-utils";
 import { InfoHint } from "@/components/ui/tooltip";
+import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import { certificationSettingsHref } from "@/lib/certification/links";
 import { formatDurabilityOption } from "@/schemas/credit-batches";
 import type { SelectableBatch } from "@/fn/certification";
@@ -106,8 +111,9 @@ function IncompleteCard({
   facilityId: string;
 }) {
   // The unmet checks, each with the exact missing items — shown inline so the
-  // operator sees precisely what's outstanding without leaving the dialog, then
-  // jumps to the batch page to resolve it.
+  // operator sees precisely what's outstanding without leaving the dialog. Every
+  // gap carries its own deep link to the exact fix, so there's forward motion on
+  // each one rather than a single "go fix it elsewhere" hop (design doc §4.1).
   const gaps = batch.health.checks.filter((c) => c.status === "unmet");
   return (
     <div className="flex flex-col gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)] p-16">
@@ -124,36 +130,53 @@ function IncompleteCard({
       <span className="body-caption text-[var(--color-text-tertiary)]">
         {formatSafeDate(batch.startDate)} — {formatSafeDate(batch.endDate)}
       </span>
-      <ul className="flex flex-col gap-6">
-        {gaps.map((check) => (
-          <li key={check.key} className="flex flex-col gap-2">
-            {/* One plain-language requirement string, identical to the batch
-                page's checklist (Phase 0) — never the affirmative "…complete"
-                label next to a "Missing:" line. Protocol reasoning sits behind
-                the ⓘ "Why?" (Phase 1). */}
-            <span className="inline-flex items-center gap-6 body-caption font-medium text-[var(--color-text-secondary)]">
-              {check.requirementLabel}
-              {check.whyDetail && (
-                <InfoHint label="Why is this required?">
-                  {check.whyDetail}
-                </InfoHint>
-              )}
-            </span>
-            {check.detail && (
-              <span className="body-caption text-[var(--color-text-tertiary)]">
-                {check.detail}
+      <ul className="flex flex-col gap-10">
+        {gaps.map((check) => {
+          // The exact fix workflow for this gap — the same target map the batch
+          // page's health strip uses (batch→samples, run→readings, application→
+          // deliveries), so a gap resolves identically wherever it's shown.
+          const fix = batchHealthFixLinkFor(check, facilityId);
+          return (
+            <li key={check.key} className="flex flex-col gap-4">
+              {/* One plain-language requirement string, identical to the batch
+                  page's checklist (Phase 0) — never the affirmative "…complete"
+                  label next to a "Missing:" line. Protocol reasoning sits behind
+                  the ⓘ "Why?" (Phase 1). */}
+              <span className="inline-flex items-center gap-6 body-caption font-medium text-[var(--color-text-secondary)]">
+                {check.requirementLabel}
+                {check.whyDetail && (
+                  <InfoHint label="Why is this required?">
+                    {check.whyDetail}
+                  </InfoHint>
+                )}
               </span>
-            )}
-          </li>
-        ))}
+              {check.detail && (
+                <span className="body-caption text-[var(--color-text-tertiary)]">
+                  {check.detail}
+                </span>
+              )}
+              {/* New tab: the fix opens alongside so this readiness workspace
+                  stays put — the operator resolves the gap and returns here. */}
+              <Link
+                href={fix.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-4 self-start body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
+              >
+                {fix.label}
+                <ArrowSquareOutIcon size={12} aria-hidden />
+              </Link>
+            </li>
+          );
+        })}
       </ul>
       <Link
         href={`/credit-batches/${batch.id}?facility=${facilityId}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-4 self-start body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
+        className="inline-flex items-center gap-4 self-start body-caption text-[var(--color-text-tertiary)] underline-offset-2 hover:text-[var(--color-text-secondary)] hover:underline"
       >
-        Fix on batch page
+        Open full checklist on batch page
         <ArrowSquareOutIcon size={12} aria-hidden />
       </Link>
     </div>
@@ -169,6 +192,10 @@ export function SelectBatchesStep({
   isLoading,
   isError,
 }: SelectBatchesStepProps) {
+  const readyBatches = batches.filter((b) => b.health.state === "ready");
+  const notReadyBatches = batches.filter((b) => b.health.state !== "ready");
+  const hasBatches = batches.length > 0;
+
   return (
     <div className="flex flex-col gap-16">
       <h3 className="title-heading-3 flex items-center gap-6">
@@ -210,27 +237,59 @@ export function SelectBatchesStep({
         <p className="body-small text-[var(--color-signal-red)]" role="alert">
           Couldn&apos;t load credit batches. Try again.
         </p>
-      ) : batches.length === 0 ? (
+      ) : !hasBatches ? (
         <p className="body-small text-[var(--color-text-tertiary)]">
           No ungrouped credit batches in this facility.
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-12 sm:grid-cols-2">
-          {batches.map((batch) =>
-            batch.health.state === "ready" ? (
-              <ReadyCard
-                key={batch.id}
-                batch={batch}
-                selected={selectedIds.has(batch.id)}
-                onToggle={onToggle}
-              />
-            ) : (
-              <IncompleteCard
-                key={batch.id}
-                batch={batch}
-                facilityId={facilityId}
-              />
-            ),
+        <div className="flex flex-col gap-16">
+          {/* Ready batches lead — the happy path (design doc §4.2). */}
+          {readyBatches.length > 0 && (
+            <div className="grid grid-cols-1 gap-12 sm:grid-cols-2">
+              {readyBatches.map((batch) => (
+                <ReadyCard
+                  key={batch.id}
+                  batch={batch}
+                  selected={selectedIds.has(batch.id)}
+                  onToggle={onToggle}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* With nothing ready this isn't a dead-end: name the situation and
+              point at the gaps, which are actionable one click each below. */}
+          {readyBatches.length === 0 && (
+            <p className="body-small text-[var(--color-text-secondary)]">
+              No batches are ready to certify yet. Resolve the gaps below and
+              they&apos;ll move up here.
+            </p>
+          )}
+
+          {/* Not-ready batches collapse away from the happy path, but open by
+              default when nothing is ready so the operator lands on the work. */}
+          {notReadyBatches.length > 0 && (
+            <details className="group flex flex-col" open={readyBatches.length === 0}>
+              <summary className="flex cursor-pointer list-none items-center gap-8 py-4 [&::-webkit-details-marker]:hidden">
+                <CaretDownIcon
+                  size={14}
+                  aria-hidden
+                  className="shrink-0 text-[var(--color-text-tertiary)] transition-transform duration-150 group-open:rotate-180"
+                />
+                <span className="body-small font-medium text-[var(--color-text-secondary)]">
+                  Not ready yet ({notReadyBatches.length})
+                </span>
+              </summary>
+              <div className="mt-12 grid grid-cols-1 gap-12 sm:grid-cols-2">
+                {notReadyBatches.map((batch) => (
+                  <IncompleteCard
+                    key={batch.id}
+                    batch={batch}
+                    facilityId={facilityId}
+                  />
+                ))}
+              </div>
+            </details>
           )}
         </div>
       )}
