@@ -24,6 +24,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { buttonVariants } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { InfoHint } from "@/components/ui/tooltip";
 import { useBatchHealth } from "@/hooks/use-certification";
 import type { BatchHealth, BatchHealthCheck } from "@/lib/certification/batch-health";
 import {
@@ -66,9 +67,13 @@ function OpenCheckRow({
         <div className="flex min-w-0 flex-col gap-2">
           {/* The one plain-language requirement string — identical to the
               removal wizard's gap row (Phase 0). Neutral, so it reads correctly
-              next to this warning icon without saying "…complete". */}
-          <span className="body-medium font-medium text-[var(--color-text-primary)]">
+              next to this warning icon without saying "…complete". The raw
+              protocol reasoning is tucked behind the ⓘ "Why?" (Phase 1). */}
+          <span className="inline-flex items-center gap-6 body-medium font-medium text-[var(--color-text-primary)]">
             {check.requirementLabel}
+            {check.whyDetail && (
+              <InfoHint label="Why is this required?">{check.whyDetail}</InfoHint>
+            )}
           </span>
           {check.detail && (
             <span className="body-caption text-[var(--color-text-secondary)]">

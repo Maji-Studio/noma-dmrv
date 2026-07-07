@@ -213,6 +213,7 @@ export function SubmitStep({
             status={check.status}
             label={check.label}
             detail={check.detail}
+            whyDetail={check.whyDetail}
             isFirst={index === 0}
             fix={
               check.status === "unmet"

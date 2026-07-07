@@ -149,6 +149,10 @@ test.describe("Certification — New-Removal wizard", () => {
   // The retired problem-phrased headline the batch page used to show for this
   // same gap — its absence proves the migration to the shared requirement label.
   const OLD_PRODUCTION_HEADLINE = "Production data not linked";
+  // Phase 1 tucks the raw protocol reasoning behind an ⓘ "Why?" so the primary
+  // requirement label stays plain. Distinctive substring of the production
+  // check's `whyDetail` (from CERT_REQUIREMENT_META), only present once opened.
+  const PRODUCTION_WHY_DETAIL = "trace back to at least one production run";
 
   test("batch checklist shows the neutral requirement label, not the old contradictory copy (Phase 0)", async ({
     adminPage: page,
@@ -181,6 +185,51 @@ test.describe("Certification — New-Removal wizard", () => {
       });
       // …never the old problem-phrased headline (or an affirmative "…complete").
       await expect(healthStrip).not.toContainText(OLD_PRODUCTION_HEADLINE);
+    } finally {
+      await batch?.cleanup();
+    }
+  });
+
+  test("tucks the requirement's protocol reasoning behind an ⓘ 'Why?' affordance (Phase 1)", async ({
+    adminPage: page,
+    seededData,
+    cleanupTestData,
+  }) => {
+    void cleanupTestData;
+
+    const facilityId = seededData.facility.id;
+    const testRunId = seededData.facility.code.replace(/^E2E-FAC-/, "");
+    // Same hermetic seed as the Phase 0 test above (no certifier mapping → no
+    // Isometric call), so this runs in PR CI.
+    let batch: SeededIncompleteBatch | undefined;
+
+    try {
+      batch = await seedUngroupedIncompleteBatch(
+        { facilityId, feedstockTypeId: seededData.feedstockType.id },
+        testRunId,
+      );
+
+      await page.goto(
+        `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
+      );
+      const healthStrip = page.getByTestId("batch-health-strip");
+      // The open production gap renders as a plain requirement row…
+      const productionRow = healthStrip.locator("li", {
+        hasText: PRODUCTION_REQUIREMENT,
+      });
+      await expect(productionRow).toBeVisible({
+        timeout: COLD_COMPILE_TIMEOUT_MS,
+      });
+      // …with the raw protocol reasoning hidden until the ⓘ is opened (the
+      // tooltip mounts on open, so it is absent from the DOM up front).
+      await expect(page.getByText(PRODUCTION_WHY_DETAIL)).toBeHidden();
+
+      // Opening the ⓘ reveals the whyDetail. The tooltip portals to <body>, so
+      // assert on the page rather than within the row.
+      await productionRow
+        .getByRole("button", { name: "Why is this required?" })
+        .hover();
+      await expect(page.getByText(PRODUCTION_WHY_DETAIL)).toBeVisible();
     } finally {
       await batch?.cleanup();
     }
