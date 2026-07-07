@@ -67,4 +67,35 @@ test.describe("Feedstock UI CRUD", () => {
       page.locator("table tbody tr, [role='row']").first()
     ).toBeVisible({ timeout: 10000 });
   });
+
+  test("does not silently pre-select a supplier on open (#379)", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.waitForLoadState("networkidle");
+
+    await page.click('button:has-text("New Feedstock")');
+    await waitForSideSheet(page);
+
+    const dialog = page.locator('[role="dialog"]');
+    const supplierTrigger = dialog
+      .locator("label")
+      .filter({ hasText: "Supplier" })
+      .first()
+      .locator(
+        "xpath=ancestor::div[.//*[@data-testid='entity-select-trigger']][1]"
+      )
+      .locator('[data-testid="entity-select-trigger"]');
+
+    // Suppliers are org-shared: the form must not auto-pick one (which would
+    // silently attribute the delivery and cascade that supplier's transport
+    // distance). The trigger shows its placeholder until the operator chooses.
+    await expect(supplierTrigger).toHaveText(/Select supplier/i);
+
+    // With no supplier chosen, no supplier-derived transport distance cascades.
+    await expect(
+      dialog.locator('input[name="transportDistanceKm"]')
+    ).toHaveValue("");
+  });
 });
