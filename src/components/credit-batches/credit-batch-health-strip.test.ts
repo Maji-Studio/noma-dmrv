@@ -80,13 +80,15 @@ describe("fallbackBatchHealthFixTarget", () => {
 describe("batchHealthFixLinkFor", () => {
   const facilityId = "fac-001";
 
+  // The link routing depends only on the check's key + explicit fixTarget, so
+  // tests construct just those (matching the function's narrowed input).
+  const check = (
+    key: BatchHealthCheck["key"],
+    fixTarget?: BatchHealthCheck["fixTarget"],
+  ): Pick<BatchHealthCheck, "key" | "fixTarget"> => ({ key, fixTarget });
+
   it("routes a carbon check with no explicit fixTarget to Lab Samples", () => {
-    const check: BatchHealthCheck = {
-      key: "carbon",
-      label: "Carbon & durability inputs complete",
-      status: "unmet",
-    };
-    const link = batchHealthFixLinkFor(check, facilityId);
+    const link = batchHealthFixLinkFor(check("carbon"), facilityId);
     expect(link.label).toBe("Add lab sample data");
     expect(link.href).toBe(`/samples?facility=${facilityId}`);
   });
@@ -94,92 +96,62 @@ describe("batchHealthFixLinkFor", () => {
   it("routes an explicit applications fixTarget to the applications page", () => {
     // The noApplications production gap routes here: applications auto-match by
     // crediting period, so there is no manual "link" action to offer.
-    const check: BatchHealthCheck = {
-      key: "production",
-      label: "Production data linked",
-      status: "unmet",
-      fixTarget: "applications",
-    };
-    const link = batchHealthFixLinkFor(check, facilityId);
+    const link = batchHealthFixLinkFor(
+      check("production", "applications"),
+      facilityId,
+    );
     expect(link.label).toBe("Review applications");
     expect(link.href).toBe(`/applications?facility=${facilityId}`);
   });
 
   it("uses 'Edit details' label for an explicit batchDetails fixTarget", () => {
-    const check: BatchHealthCheck = {
-      key: "production",
-      label: "Production data linked",
-      status: "unmet",
-      fixTarget: "batchDetails",
-    };
-    const link = batchHealthFixLinkFor(check, facilityId);
+    const link = batchHealthFixLinkFor(
+      check("production", "batchDetails"),
+      facilityId,
+    );
     expect(link.label).toBe("Edit details");
     expect(link.href).toBe("#batch-details");
   });
 
   it("routes a production check with no fixTarget to productionRuns with the facility", () => {
-    const check: BatchHealthCheck = {
-      key: "production",
-      label: "Production data linked",
-      status: "unmet",
-    };
-    const link = batchHealthFixLinkFor(check, facilityId);
+    const link = batchHealthFixLinkFor(check("production"), facilityId);
     expect(link.href).toBe(`/production-runs?facility=${facilityId}`);
   });
 
   it("routes a transport check to deliveries with the facility", () => {
-    const check: BatchHealthCheck = {
-      key: "transport",
-      label: "Transport legs present",
-      status: "unmet",
-    };
-    const link = batchHealthFixLinkFor(check, facilityId);
+    const link = batchHealthFixLinkFor(check("transport"), facilityId);
     expect(link.href).toBe(`/deliveries?facility=${facilityId}`);
   });
 
   it("routes entityReadiness to sourceData (production-runs) with the facility", () => {
-    const check: BatchHealthCheck = {
-      key: "entityReadiness",
-      label: "Entity certifier fields complete",
-      status: "unmet",
-    };
-    const link = batchHealthFixLinkFor(check, facilityId);
+    const link = batchHealthFixLinkFor(check("entityReadiness"), facilityId);
     expect(link.href).toContain("/production-runs");
     expect(link.href).toContain(facilityId);
   });
 
   it("routes an explicit biocharProducts fixTarget to biochar-products", () => {
-    const check: BatchHealthCheck = {
-      key: "production",
-      label: "Production data linked",
-      status: "unmet",
-      fixTarget: "biocharProducts",
-    };
-    const link = batchHealthFixLinkFor(check, facilityId);
+    const link = batchHealthFixLinkFor(
+      check("production", "biocharProducts"),
+      facilityId,
+    );
     expect(link.href).toBe(`/biochar-products?facility=${facilityId}`);
     expect(link.label).toBe("Link production run");
   });
 
   it("routes an explicit deliveries fixTarget to deliveries with the facility", () => {
-    const check: BatchHealthCheck = {
-      key: "transport",
-      label: "Transport legs present",
-      status: "unmet",
-      fixTarget: "deliveries",
-    };
-    const link = batchHealthFixLinkFor(check, facilityId);
+    const link = batchHealthFixLinkFor(
+      check("transport", "deliveries"),
+      facilityId,
+    );
     expect(link.href).toBe(`/deliveries?facility=${facilityId}`);
   });
 
   it("prefers an explicit fixTarget over the fallback", () => {
     // carbon normally falls back to batchDetails, but an explicit override wins.
-    const check: BatchHealthCheck = {
-      key: "carbon",
-      label: "Carbon & durability inputs complete",
-      status: "unmet",
-      fixTarget: "sourceData",
-    };
-    const link = batchHealthFixLinkFor(check, facilityId);
+    const link = batchHealthFixLinkFor(
+      check("carbon", "sourceData"),
+      facilityId,
+    );
     expect(link.href).toContain("/production-runs");
   });
 

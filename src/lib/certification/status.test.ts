@@ -76,29 +76,29 @@ describe("deriveStatementStatus", () => {
     expect(s.label).toBe("In progress");
   });
 
-  it("treats a missing row as not created", () => {
+  it("treats a missing row as the ladder's first rung, Draft", () => {
     const s = deriveStatementStatus({
       local: null,
       lockInFlight: false,
       remoteStatus: null,
     });
-    expect(s.label).toBe("Not created");
+    expect(s.label).toBe("Draft");
     expect(s.isActionable).toBe(true);
   });
 
-  it("surfaces Awaiting verifier from the remote overlay (not 'Submitted')", () => {
+  it("surfaces In verification from the remote overlay (not 'Submitted')", () => {
     const s = deriveStatementStatus({
       ...base,
       remoteStatus: "AWAITING_VERIFICATION",
     });
-    expect(s.label).toBe("Awaiting verifier");
+    expect(s.label).toBe("In verification");
     expect(s.value).toBe("pending");
     expect(s.isTerminal).toBe(false);
   });
 
-  it("surfaces Credits issued — the payoff state — from the remote overlay", () => {
+  it("surfaces Issued — the payoff state — from the remote overlay", () => {
     const s = deriveStatementStatus({ ...base, remoteStatus: "CREDITS_ISSUED" });
-    expect(s.label).toBe("Credits issued");
+    expect(s.label).toBe("Issued");
     expect(s.value).toBe("issued");
     expect(s.isTerminal).toBe(true);
   });
@@ -118,10 +118,11 @@ describe("deriveStatementStatus", () => {
     expect(s.isActionable).toBe(true);
   });
 
-  it("falls back to local 'Submitted' when remote is still DRAFT", () => {
+  it("shows 'In registry' when created but remote is still DRAFT (was the colliding 'Submitted')", () => {
     const s = deriveStatementStatus({ ...base, remoteStatus: "DRAFT" });
-    expect(s.label).toBe("Submitted");
-    expect(s.value).toBe("pending");
+    expect(s.label).toBe("In registry");
+    expect(s.value).toBe("running");
+    expect(s.isTerminal).toBe(false);
   });
 
   it("falls back to local 'Draft' before any submission", () => {

@@ -67,4 +67,72 @@ test.describe("Feedstock UI CRUD", () => {
       page.locator("table tbody tr, [role='row']").first()
     ).toBeVisible({ timeout: 10000 });
   });
+
+  test("does not silently pre-select a supplier on open (#379)", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.waitForLoadState("networkidle");
+
+    await page.click('button:has-text("New Feedstock")');
+    await waitForSideSheet(page);
+
+    const dialog = page.locator('[role="dialog"]');
+    const supplierTrigger = dialog
+      .locator("label")
+      .filter({ hasText: "Supplier" })
+      .first()
+      .locator(
+        "xpath=ancestor::div[.//*[@data-testid='entity-select-trigger']][1]"
+      )
+      .locator('[data-testid="entity-select-trigger"]');
+
+    // Suppliers are org-shared: the form must not auto-pick one (which would
+    // silently attribute the delivery and cascade that supplier's transport
+    // distance). The trigger shows its placeholder until the operator chooses.
+    await expect(supplierTrigger).toHaveText(/Select supplier/i);
+
+    // With no supplier chosen, no supplier-derived transport distance cascades.
+    await expect(
+      dialog.locator('input[name="transportDistanceKm"]')
+    ).toHaveValue("");
+  });
+
+  test("explains the CERT badge on hover instead of leaving it bare (Phase 1, §6)", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.waitForLoadState("networkidle");
+
+    await page.click('button:has-text("New Feedstock")');
+    await waitForSideSheet(page);
+
+    const dialog = page.locator('[role="dialog"]');
+    // The explanation ships as an always-on sr-only string for assistive tech
+    // (one per CERT chip). Hovering a chip mounts a visible tooltip carrying the
+    // SAME text — so the previously-unexplained "CERT" chip is legible to
+    // sighted users too. The tooltip portals to <body> (outside the dialog), so
+    // the robust signal is a page-scoped count that grows by exactly one.
+    const explanationOnPage = page.getByText("Required for certification", {
+      exact: true,
+    });
+    // waitForSideSheet resolves on dialog attach, not form paint — retry until
+    // the first sr-only explanation exists (the chips mount in one commit)
+    // before snapshotting the non-retrying count.
+    await expect(explanationOnPage.first()).toBeAttached();
+    const beforeHover = await explanationOnPage.count();
+    expect(beforeHover).toBeGreaterThan(0);
+
+    // The CERT chip is the sr-only text's parent span (the tooltip trigger);
+    // hover a chip that lives inside the dialog so it isn't under the overlay.
+    const chipInDialog = dialog
+      .getByText("Required for certification", { exact: true })
+      .first()
+      .locator("xpath=..");
+    await chipInDialog.hover();
+
+    await expect(explanationOnPage).toHaveCount(beforeHover + 1);
+  });
 });

@@ -40,12 +40,15 @@ import {
   useGhgStatementsForFacility,
   useOpenRemovalsForFacility,
 } from "@/hooks/use-certification";
-import { addDaysIso } from "@/lib/date-utils";
+import {
+  derivePeriodStart,
+  overlappingEnd,
+  partitionByWindow,
+} from "@/lib/isometric/utils/ghg-reporting-window";
 import {
   createGhgStatementSchema,
   type CreateGhgStatementInput,
 } from "@/schemas/certification";
-import type { OpenRemovalView } from "@/fn/certification/ghg-statements";
 import { EnvBanner } from "./env-banner";
 import { ProductionConfirmation } from "./production-confirmation";
 import { RemovalBatchesAccordion } from "./removal-batches-accordion";
@@ -58,34 +61,14 @@ interface GhgStatementCreateDrawerProps {
 }
 
 const STEPS: StepFlowStep[] = [
-  { key: "period", label: "Period", description: "Pick the end date" },
-  { key: "preview", label: "Preview", description: "Predicted removals" },
+  { key: "period", label: "Period", description: "Confirm the period" },
+  { key: "preview", label: "Contents", description: "What it contains" },
   { key: "confirm", label: "Confirm", description: "Create the statement" },
 ];
 
-// The latest existing period end strictly before `endOn` defines the new
-// period's start (day after) — Isometric derives the same. Null for the first
-// statement, where Isometric anchors the start to the project start.
-function derivePeriodStart(
-  endOn: string,
-  existingEnds: string[],
-): string | null {
-  const priorEnd = existingEnds
-    .filter((end) => end < endOn)
-    .reduce<string | null>((max, end) => (!max || end > max ? end : max), null);
-  return priorEnd ? addDaysIso(priorEnd, 1) : null;
-}
-
-// The latest existing end that the chosen `endOn` would overlap — periods are
-// consecutive, so a new end on or before another statement's end carves a
-// period inside it. The own-end is excluded so re-picking an existing period
-// resolves to that statement instead of erroring.
-function overlappingEnd(endOn: string, existingEnds: string[]): string | null {
-  const latestOther = existingEnds
-    .filter((end) => end !== endOn)
-    .reduce<string | null>((max, end) => (!max || end > max ? end : max), null);
-  return latestOther && endOn <= latestOther ? latestOther : null;
-}
+// Period-derivation + window logic is shared with the server empty-statement
+// guard (`ghg-reporting-window.ts`) so the operator's preview and the registry
+// never disagree on what a period contains.
 
 export function GhgStatementCreateDrawer({
   facilityId,
@@ -154,6 +137,15 @@ function DrawerBody({
   // The preview query only runs once the operator reaches the Preview step.
   const openQuery = useOpenRemovalsForFacility(facilityId, stepIndex >= 1);
 
+  // Predicted in-window membership drives both the #245 empty-statement gate
+  // (can't advance/create an empty period) and the Contents step's framing.
+  // Same window logic the server guard applies, so the two never disagree.
+  const previewLoaded = openQuery.data !== undefined;
+  const inPeriodCount = openQuery.data
+    ? partitionByWindow(openQuery.data, derivedStart, endOn).inPeriod.length
+    : 0;
+  const isEmptyPeriod = previewLoaded && inPeriodCount === 0;
+
   const goTo = async (index: number) => {
     if (index > stepIndex && stepIndex === 0) {
       if (!(await trigger("reportingPeriodEndOn"))) return;
@@ -208,7 +200,7 @@ function DrawerBody({
         <SlideOverPanel.Description>
           {result
             ? "Created — review what Isometric linked"
-            : "Pick a reporting period — Isometric links the removals completed inside it"}
+            : "Confirm what this reporting period contains before you create it"}
         </SlideOverPanel.Description>
       </SlideOverPanel.Header>
 
@@ -289,11 +281,19 @@ function DrawerBody({
                 variant="primary"
                 onClick={onCreate}
                 busy={mutation.isPending}
+                disabled={isEmptyPeriod}
               >
                 Create GHG Statement
               </Button>
             ) : (
-              <Button variant="primary" onClick={advance}>
+              <Button
+                variant="primary"
+                onClick={advance}
+                // On the Contents step, block advancing an empty period (#245):
+                // a statement with no removals in-window would be a dead-end
+                // registry record. Also wait for the preview to settle.
+                disabled={stepIndex === 1 && (!previewLoaded || isEmptyPeriod)}
+              >
                 Next
               </Button>
             )}
@@ -336,11 +336,16 @@ function StepPeriod({
       <h3 className="title-heading-4 flex items-center gap-6">
         Reporting period
         <InfoHint>
-          Pick the reporting-period end date. Isometric links every Removal
-          whose completion date falls in the period to this statement, and
-          derives the period start from the previous statement.
+          Isometric links every Removal whose completion date falls in the
+          period to this statement, and derives the period start from the
+          previous statement — you only set the end.
         </InfoHint>
       </h3>
+      <p className="body-small text-[var(--color-text-secondary)]">
+        A GHG statement bundles the removals you&apos;ve already submitted this
+        period so a verifier can review them. Pick the period end — the next
+        step shows exactly which removals fall inside.
+      </p>
       <FormField
         id="reportingPeriodEndOn"
         label="Reporting period end"
@@ -395,35 +400,25 @@ function StepPreview({
     );
   }
 
-  // Lexical comparison is correct for YYYY-MM-DD strings. A removal with no
-  // completion date cannot be predicted in-period. Isometric links removals
-  // whose completion falls within [derivedStart, endOn] — `derivedStart` is the
-  // day after the previous statement (null for the first statement, where
-  // Isometric anchors to the project start). Filtering only by `endOn` would
-  // predict removals that Isometric then excludes, so apply the lower bound too.
-  const inPeriod: OpenRemovalView[] = [];
-  const outside: OpenRemovalView[] = [];
-  for (const removal of query.data) {
-    const completedOn = removal.completedOn;
-    if (
-      completedOn !== null &&
-      completedOn <= endOn &&
-      (derivedStart === null || completedOn >= derivedStart)
-    ) {
-      inPeriod.push(removal);
-    } else {
-      outside.push(removal);
-    }
-  }
+  // Same window logic as the server empty-statement guard: Isometric links
+  // removals whose completion falls within [derivedStart, endOn] (derivedStart
+  // is null for the first statement, where Isometric anchors to the project
+  // start). Filtering only by `endOn` would predict removals Isometric then
+  // excludes, so the shared util applies the lower bound too.
+  const { inPeriod, outside } = partitionByWindow(
+    query.data,
+    derivedStart,
+    endOn,
+  );
 
   return (
     <div className="flex flex-col gap-16">
       <h3 className="title-heading-4 flex items-center gap-6">
-        Predicted removals
+        Expected contents
         <InfoHint>
-          Membership is decided server-side by Isometric and confirmed after
-          the statement is created — this predicts it by completion date within
-          the reporting window{" "}
+          Isometric decides membership server-side and confirms it right after
+          you create the statement — this is what it should contain, by
+          completion date within the reporting window{" "}
           {derivedStart ? `${derivedStart} → ${endOn}` : `up to ${endOn}`}.
           Removals before the window roll into the previous statement. Expand a
           removal to see its credit batches.
@@ -431,13 +426,28 @@ function StepPreview({
       </h3>
 
       <div className="flex flex-col gap-8">
-        <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-          Predicted to be linked ({inPeriod.length})
-        </span>
+        <div className="flex flex-col gap-2">
+          <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+            Expected in this statement ({inPeriod.length})
+          </span>
+          <span className="body-caption text-[var(--color-text-tertiary)]">
+            Confirmed after you create it.
+          </span>
+        </div>
         {inPeriod.length === 0 ? (
-          <p className="body-caption text-[var(--color-text-tertiary)]">
-            No open removals fall within this reporting window.
-          </p>
+          <div className="flex items-start gap-8 border-l-2 border-[var(--color-signal-orange)] bg-[var(--st-wait-bg)] pl-12 pr-12 py-8">
+            <WarningIcon
+              size={16}
+              weight="fill"
+              aria-hidden
+              className="mt-px shrink-0 text-[var(--color-signal-orange)]"
+            />
+            <p className="body-small text-[var(--color-text-primary)]">
+              This period has no submitted removals yet — a statement now would
+              be empty. Submit a removal first, or pick a period end that
+              includes one.
+            </p>
+          </div>
         ) : (
           <RemovalBatchesAccordion
             facilityId={facilityId}

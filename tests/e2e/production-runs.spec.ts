@@ -63,6 +63,33 @@ test.describe("Production Run + Sample UI CRUD", () => {
     ).toBeVisible({ timeout: 10000 });
   });
 
+  test("energy fields use example ('e.g.') placeholders, not bare numbers", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    // Bare-number placeholders ("50") read as filled values against the
+    // "a blank field reads as missing, not zero" helper (QA C2); every energy
+    // input must show an example instead so an empty CERT-critical field is
+    // never mistaken for entered.
+    await page.goto(`/production-runs?facility=${seededData.facility.id}`);
+    await page.getByRole("button", { name: "New Production Run" }).click();
+    await waitForSideSheet(page);
+
+    const dialog = page.locator('[role="dialog"]');
+    const expected: Record<string, string> = {
+      dieselOperationLiters: "e.g. 50",
+      dieselGensetLiters: "e.g. 25",
+      preprocessingFuelLiters: "e.g. 10",
+      electricityKwh: "e.g. 100",
+    };
+    for (const [name, placeholder] of Object.entries(expected)) {
+      await expect(dialog.locator(`input[name="${name}"]`)).toHaveAttribute(
+        "placeholder",
+        placeholder,
+      );
+    }
+  });
+
   test("create sample via UI form", async ({ adminPage: page, seededData }) => {
     // Samples anchor on a credit batch, not a production run (issue #309).
     const batch = await seedCreditBatch(

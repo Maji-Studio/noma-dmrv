@@ -102,7 +102,9 @@ function buildPopupContent(
   content[`facility:${facility.id}`] = {
     typeLabel: "Facility",
     status: null,
-    details: [{ label: "Name", value: facility.name }],
+    // Blank/whitespace-only names (legacy/manual data — the schema now trims
+    // on every write) fall back to the always-present code (#378).
+    details: [{ label: "Name", value: facility.name?.trim() || facility.code }],
   };
   return content;
 }

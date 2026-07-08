@@ -461,7 +461,7 @@ function buildNow(args: {
       id: `now-statement-${row.id}`,
       kind: "verifier",
       code: row.externalId ?? row.id.slice(0, 8),
-      detail: row.lockedAt ? "Submission in progress" : "Awaiting verifier",
+      detail: row.lockedAt ? "Submission in progress" : "In verification",
       status: row.lockedAt ? "locked" : "submitted",
       href: statementHref(facilityId, row.id),
     });

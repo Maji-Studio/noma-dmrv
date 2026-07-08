@@ -20,6 +20,7 @@ import {
   defaultProductionReadinessGap,
   type ProductionReadinessGap,
 } from "./production-readiness";
+import { CERT_REQUIREMENT_META } from "./requirement-labels";
 
 export type BatchHealthState =
   | "ready" // every applicable batch-level check is met — selectable
@@ -50,12 +51,31 @@ export interface BatchHealthCheck {
   key: BatchHealthCheckKey;
   /** Affirmative label — what's true when the check is met. */
   label: string;
+  /**
+   * Plain-language requirement, identical across every readiness surface
+   * (Phase 0). Rendered instead of `label` so a batch's gaps read the same on
+   * the batch page and in the removal wizard. Attached uniformly in
+   * `deriveBatchHealth` from `CERT_REQUIREMENT_META`.
+   */
+  requirementLabel: string;
+  /** Protocol/lab context for the ⓘ "Why?" affordance (Phase 1). */
+  whyDetail?: string;
   status: BatchHealthCheckStatus;
   /** Missing items when unmet, or context when skipped/met. */
   detail?: string;
   /** UI hint for the most specific workflow that resolves an unmet check. */
   fixTarget?: BatchHealthFixTarget;
 }
+
+/**
+ * The per-check builders below construct everything except the shared
+ * requirement metadata, which `deriveBatchHealth` attaches uniformly from
+ * `CERT_REQUIREMENT_META` so it can never drift per check.
+ */
+type BatchHealthCheckBase = Omit<
+  BatchHealthCheck,
+  "requirementLabel" | "whyDetail"
+>;
 
 export interface BatchTransportFact {
   category: TransportCategory;
@@ -113,7 +133,7 @@ function describeCategories(categories: TransportCategory[]): string {
   return categories.join(", ");
 }
 
-function carbonCheck(facts: BatchHealthFacts): BatchHealthCheck {
+function carbonCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
   if (facts.carbonMissingInputs.length === 0) {
     return { key: "carbon", label: CARBON_LABEL, status: "met" };
   }
@@ -125,7 +145,7 @@ function carbonCheck(facts: BatchHealthFacts): BatchHealthCheck {
   };
 }
 
-function productionCheck(facts: BatchHealthFacts): BatchHealthCheck {
+function productionCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
   if (facts.hasSubmittableRuns) {
     return { key: "production", label: PRODUCTION_LABEL, status: "met" };
   }
@@ -139,7 +159,7 @@ function productionCheck(facts: BatchHealthFacts): BatchHealthCheck {
   };
 }
 
-function transportCheck(facts: BatchHealthFacts): BatchHealthCheck {
+function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
   // Required categories come from the facility's default template; without a
   // resolved facility setup we cannot know them, so the check is not yet
   // evaluable. The wizard surfaces the facility-setup gap separately, so a
@@ -173,7 +193,7 @@ function transportCheck(facts: BatchHealthFacts): BatchHealthCheck {
       };
 }
 
-function entityReadinessCheck(facts: BatchHealthFacts): BatchHealthCheck {
+function entityReadinessCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
   if (facts.entityReadinessGaps.length === 0) {
     return {
       key: "entityReadiness",
@@ -213,11 +233,24 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
     productionCheck(facts),
     transportCheck(facts),
     entityReadinessCheck(facts),
-  ];
+  ].map(withRequirementMeta);
   const issueCount = checks.filter((c) => c.status === "unmet").length;
   return {
     state: issueCount > 0 ? "incomplete" : "ready",
     issueCount,
     checks,
+  };
+}
+
+// Attach the one plain-language requirement label (+ why) every readiness
+// surface renders — the same string on the batch page and in the removal
+// wizard, so a batch's gaps can never read one way in one place and another in
+// the other.
+function withRequirementMeta(check: BatchHealthCheckBase): BatchHealthCheck {
+  const meta = CERT_REQUIREMENT_META[check.key];
+  return {
+    ...check,
+    requirementLabel: meta.requirementLabel,
+    whyDetail: meta.whyDetail,
   };
 }

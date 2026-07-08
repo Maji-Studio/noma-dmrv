@@ -54,6 +54,15 @@ import {
   type GhgStatementStatus,
 } from "@/lib/isometric";
 import {
+  expectedButExcludedWarnings,
+  type ExpectedRemoval,
+} from "@/lib/isometric/utils/ghg-entry-membership";
+import {
+  derivePeriodStart,
+  isRemovalInWindow,
+  overlappingEnd,
+} from "@/lib/isometric/utils/ghg-reporting-window";
+import {
   chooseGhgSubmitMode,
   ghgSubmitFingerprintChanged,
   type GhgSubmitMode,
@@ -219,18 +228,61 @@ export async function createGhgStatementDraft(
     // statement's end. The own-end is excluded so an idempotent re-create
     // (same end, double-click / two tabs) still resolves to the existing row
     // via the submission-claim machinery below rather than being blocked.
+    // `overlappingEnd` is the same rule the create drawer applies client-side.
     const existing = await listGhgStatementsForFacility(
       userId,
       parsed.facilityId,
     );
-    const latestOtherEnd = existing
-      .map((s) => s.reportingPeriodEndOn)
-      .filter((end) => end !== parsed.reportingPeriodEndOn)
-      .reduce<string | null>((max, end) => (!max || end > max ? end : max), null);
-    if (latestOtherEnd && parsed.reportingPeriodEndOn <= latestOtherEnd) {
+    const existingEnds = existing.map((s) => s.reportingPeriodEndOn);
+    const overlap = overlappingEnd(parsed.reportingPeriodEndOn, existingEnds);
+    if (overlap) {
       throw new SafeError(
-        `This reporting period overlaps an existing GHG statement ending ${latestOtherEnd}. Pick an end date after ${latestOtherEnd}.`,
+        `This reporting period overlaps an existing GHG statement ending ${overlap}. Pick an end date after ${overlap}.`,
       );
+    }
+
+    // Empty-statement guard (#245). A GHG statement rolls up the removals
+    // already submitted in its period ("POST /ghg_statements — submits a series
+    // of removals for verification"), so creating one for a period with none
+    // mints a junk registry record that can't be withdrawn. Predict the
+    // in-window membership exactly as the drawer preview does — the day after
+    // the prior period's end through `end_on` — and refuse a create that would
+    // be empty. Skipped when a statement already exists for this exact period:
+    // an idempotent re-create must resolve to it below (its membership is
+    // authoritative and may be non-empty; its own removals are no longer
+    // "open"). The authoritative backstop is the 0-linked block in
+    // submitGhgStatementToVerifier — this predictive gate just spares the
+    // operator a dead-end record and captures the "expected" set so the
+    // create result can flag any removal the registry then places elsewhere.
+    const periodAlreadyExists = existingEnds.includes(
+      parsed.reportingPeriodEndOn,
+    );
+    const expected: ExpectedRemoval[] = [];
+    if (!periodAlreadyExists) {
+      const derivedStart = derivePeriodStart(
+        parsed.reportingPeriodEndOn,
+        existingEnds,
+      );
+      const openRemovals = await listOpenRemovalsForFacility(
+        userId,
+        parsed.facilityId,
+      );
+      for (const { removal, externalId } of openRemovals) {
+        if (
+          isRemovalInWindow(
+            removal.completedOn,
+            derivedStart,
+            parsed.reportingPeriodEndOn,
+          )
+        ) {
+          expected.push({ localId: removal.id, externalId });
+        }
+      }
+      if (expected.length === 0) {
+        throw new SafeError(
+          "This reporting period has no submitted removals yet — a statement now would be empty. Submit a removal first, or pick a period end that includes one.",
+        );
+      }
     }
 
     // Get-or-create the local statement row. Its id is stable per
@@ -289,6 +341,7 @@ export async function createGhgStatementDraft(
           externalProjectId: project.externalProjectId,
           endOn: parsed.reportingPeriodEndOn,
           submissionAttemptId,
+          expected,
         });
     }
   }, { rateLimit: submitRateLimit("cert:create-ghg-statement") });
@@ -307,6 +360,9 @@ async function createGhgStatementRemote(args: {
   externalProjectId: string;
   endOn: string;
   submissionAttemptId: string;
+  // Removals predicted in-window at create time (empty on the resumed/existing
+  // paths, where the guard is skipped). Used to flag any the registry excludes.
+  expected: ExpectedRemoval[];
 }): Promise<CreateGhgStatementResult> {
   const {
     userId,
@@ -316,6 +372,7 @@ async function createGhgStatementRemote(args: {
     externalProjectId,
     endOn,
     submissionAttemptId,
+    expected,
   } = args;
 
   const requestPayload = { end_on: endOn, project_id: externalProjectId };
@@ -341,7 +398,7 @@ async function createGhgStatementRemote(args: {
     }),
   });
 
-  return finalizeGhgStatement({ userId, statement, row, externalId });
+  return finalizeGhgStatement({ userId, statement, row, externalId, expected });
 }
 
 // Shared tail for the fresh-create and reconciled-create paths (the audit
@@ -356,8 +413,9 @@ async function finalizeGhgStatement(args: {
   statement: CertifierGhgStatementRow;
   row: CertificationSubmissionRow;
   externalId: string;
+  expected: ExpectedRemoval[];
 }): Promise<CreateGhgStatementResult> {
-  const { userId, statement, row, externalId } = args;
+  const { userId, statement, row, externalId, expected } = args;
 
   await markSubmissionSubmitted(userId, row.id, {
     externalId,
@@ -399,7 +457,13 @@ async function finalizeGhgStatement(args: {
       ghgStatementId: statement.id,
       externalId,
       linkedRemovalIds: reconciled.linkedRemovalIds,
-      warnings: reconciled.warnings,
+      // Reconcile warns about ids the registry *returned* but we couldn't
+      // match; the honesty delta is the inverse — removals we predicted
+      // in-window that the registry silently placed in a different period.
+      warnings: [
+        ...reconciled.warnings,
+        ...expectedButExcludedWarnings(expected, reconciled.linkedRemovalIds),
+      ],
     };
   });
 }
@@ -446,6 +510,22 @@ export async function submitGhgStatementToVerifier(
       getFacilityById(userId, statement.facilityId),
       getGhgStatement(submission.externalId).catch(() => null),
     ]);
+
+    // Empty-statement backstop (#245). Never send a statement with nothing to
+    // verify. The registry's own membership (`ghg_entry_ids`) is authoritative;
+    // fall back to the reconciled local count only when the live fetch failed.
+    // This is the hard gate the predictive create-guard defers to — and it
+    // fail-closes any 0-removal statement that already exists in the registry.
+    const linkedCount = remoteBefore
+      ? remoteBefore.ghg_entry_ids.length
+      : (await countRemovalsByGhgStatementIds(userId, [ghgStatementId])).get(
+          ghgStatementId,
+        ) ?? 0;
+    if (linkedCount === 0) {
+      throw new SafeError(
+        "This GHG statement has no linked removals, so there's nothing to submit. Submit a removal in this reporting period first.",
+      );
+    }
 
     const submitMode = chooseGhgSubmitModeFromKnownState(
       remoteBefore,

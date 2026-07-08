@@ -44,8 +44,15 @@ export function DashboardView() {
           <p className="label-micro text-[var(--color-text-tertiary)]">
             Dashboard
           </p>
+          {/* Blank/whitespace-only names (legacy/manual data — the schema now
+              trims on every write) fall back to the always-present code so the
+              title never renders empty (#378). */}
           <h1 className="title-heading-1 truncate">
-            {facilityId ? (selectedFacility?.name ?? "Facility") : "Operations"}
+            {facilityId
+              ? selectedFacility
+                ? selectedFacility.name?.trim() || selectedFacility.code
+                : "Facility"
+              : "Operations"}
           </h1>
           <p className="body-medium text-[var(--color-text-secondary)]">
             {facilityId

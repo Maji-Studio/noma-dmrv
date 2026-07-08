@@ -689,7 +689,7 @@ export function ProductionRunForm({
               id="dieselOperationLiters"
               type="number"
               step="0.1"
-              placeholder="50"
+              placeholder="e.g. 50"
               disabled={isSubmitting}
               error={!!errors.dieselOperationLiters}
               {...register("dieselOperationLiters", {
@@ -710,7 +710,7 @@ export function ProductionRunForm({
               id="dieselGensetLiters"
               type="number"
               step="0.1"
-              placeholder="25"
+              placeholder="e.g. 25"
               disabled={isSubmitting}
               error={!!errors.dieselGensetLiters}
               {...register("dieselGensetLiters", {
@@ -731,7 +731,7 @@ export function ProductionRunForm({
               id="preprocessingFuelLiters"
               type="number"
               step="0.1"
-              placeholder="10"
+              placeholder="e.g. 10"
               disabled={isSubmitting}
               error={!!errors.preprocessingFuelLiters}
               {...register("preprocessingFuelLiters", {
@@ -752,7 +752,7 @@ export function ProductionRunForm({
               id="electricityKwh"
               type="number"
               step="0.1"
-              placeholder="100"
+              placeholder="e.g. 100"
               disabled={isSubmitting}
               error={!!errors.electricityKwh}
               {...register("electricityKwh", {
