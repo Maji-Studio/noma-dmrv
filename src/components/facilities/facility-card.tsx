@@ -54,8 +54,11 @@ export function FacilityCard({
 
         {/* Name + location */}
         <div>
+          {/* Defensive fallback: a stray whitespace-only name (legacy/manual
+              data — the schema now trims on every write) would render blank, so
+              fall back to the always-present code (#378). */}
           <h3 className="title-heading-3 text-[var(--color-text-primary)]">
-            {facility.name}
+            {facility.name?.trim() || facility.code}
           </h3>
           {facility.location && (
             <p className="mt-6 flex items-center gap-6 body-caption text-[var(--color-text-tertiary)]">

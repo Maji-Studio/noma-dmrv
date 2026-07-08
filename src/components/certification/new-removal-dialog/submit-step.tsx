@@ -211,8 +211,13 @@ export function SubmitStep({
           <CheckRow
             key={check.key}
             status={check.status}
-            label={check.label}
+            // The one plain-language requirement string every readiness surface
+            // renders (Phase 0/2) — never the affirmative "…complete" label,
+            // which reads as a contradiction next to an unmet warning icon. Raw
+            // protocol vocabulary stays tucked behind the ⓘ "Why?".
+            label={check.requirementLabel}
             detail={check.detail}
+            whyDetail={check.whyDetail}
             isFirst={index === 0}
             fix={
               check.status === "unmet"
@@ -239,7 +244,7 @@ export function SubmitStep({
         {requirementsMet ? (
           submitButton
         ) : (
-          <Tooltip content="Resolve the registry requirements above before submitting.">
+          <Tooltip content="Finish the outstanding items above before this removal can be submitted.">
             <span className="inline-flex" tabIndex={0}>
               {submitButton}
             </span>

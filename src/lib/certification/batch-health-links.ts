@@ -12,23 +12,10 @@ export interface BatchHealthFixLink {
 
 export const NEXT_ACTION_DETAIL_MAX_CHARS = 180;
 
-/**
- * Problem-phrased headline for an UNMET check. `BatchHealthCheck.label` is
- * written affirmatively (what's true once the check is met — "…complete",
- * "…linked", "…present"), which reads as a contradiction next to a red warning
- * icon. The gate shows this headline instead while a check is open, so the
- * title states the gap rather than the satisfied condition.
- */
-const OPEN_CHECK_HEADLINES: Record<BatchHealthCheckKey, string> = {
-  carbon: "Carbon & durability inputs missing",
-  production: "Production data not linked",
-  transport: "Transport legs missing",
-  entityReadiness: "Entity certifier fields incomplete",
-};
-
-export function openCheckHeadline(key: BatchHealthCheckKey): string {
-  return OPEN_CHECK_HEADLINES[key];
-}
+// Note: the problem-phrased "open check headline" was retired in Phase 0 — every
+// readiness surface now renders the one neutral `BatchHealthCheck.requirementLabel`
+// (see `requirement-labels.ts`), so the batch page and the removal wizard can't
+// phrase the same gap differently.
 
 export function compactBatchHealthDetail(
   detail: string,
@@ -59,7 +46,9 @@ export function fallbackBatchHealthFixTarget(
 }
 
 export function batchHealthFixLinkFor(
-  check: BatchHealthCheck,
+  // Only the key + explicit fixTarget drive the link — narrower than the full
+  // check so callers (and tests) needn't construct unrelated fields.
+  check: Pick<BatchHealthCheck, "key" | "fixTarget">,
   facilityId: string,
 ): BatchHealthFixLink {
   const target = check.fixTarget ?? fallbackBatchHealthFixTarget(check.key);

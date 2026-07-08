@@ -10,6 +10,7 @@ import {
   type RemovalReadinessFacts,
   type TransportCoverageFact,
 } from "./readiness";
+import { CERT_REQUIREMENT_META } from "./requirement-labels";
 
 function checkFor(
   checks: PreflightCheck[],
@@ -488,6 +489,26 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
     const entityReadiness = reqFor(checks, "entityReadiness");
     expect(entityReadiness.status).toBe("unmet");
     expect(entityReadiness.detail).toContain("Electricity reading");
+  });
+});
+
+describe("shared requirement metadata (Phase 0)", () => {
+  it("attaches requirementLabel + why to every pre-flight check from the shared source", () => {
+    for (const check of buildRemovalPreflightChecklist(ready())) {
+      expect(check.requirementLabel).toBe(
+        CERT_REQUIREMENT_META[check.key].requirementLabel,
+      );
+      expect(check.whyDetail).toBe(CERT_REQUIREMENT_META[check.key].whyDetail);
+    }
+  });
+
+  it("attaches requirementLabel + why to every requirements check from the shared source", () => {
+    for (const check of buildRemovalRequirementsChecklist(ready())) {
+      expect(check.requirementLabel).toBe(
+        CERT_REQUIREMENT_META[check.key].requirementLabel,
+      );
+      expect(check.whyDetail).toBe(CERT_REQUIREMENT_META[check.key].whyDetail);
+    }
   });
 });
 

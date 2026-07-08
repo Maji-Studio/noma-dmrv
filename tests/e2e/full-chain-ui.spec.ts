@@ -595,7 +595,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.fill('input[name="startDate"]', today);
       await page.fill('input[name="endDate"]', today);
 
-      await selectFirstCreditBatchProductionRun(page);
+      await selectFirstCreditBatchProductionRun(page, seededData.feedstockType);
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Credit Batch")').click();
       await waitForSideSheetClose(page);
