@@ -139,7 +139,19 @@ export default function PositionPickerMap({
       queueMicrotask(() => setMapFailed(true));
     };
     const loadTimer = setTimeout(failIfUnloaded, STYLE_LOAD_TIMEOUT_MS);
-    map.on("error", failIfUnloaded);
+    // Tile/source requests only start once the style JSON has parsed
+    // ("styledata"), so an error before that is the style fetch itself failing
+    // (bad/expired key, domain-lock rejection, offline) — fatal. An error
+    // after it is a transient tile 404/5xx on an otherwise-valid key and must
+    // not tear the map down: "load" still fires and the errored tile just
+    // stays blank. The timeout above backstops a silent post-parse hang.
+    let styleParsed = false;
+    map.once("styledata", () => {
+      styleParsed = true;
+    });
+    map.on("error", () => {
+      if (!styleParsed) failIfUnloaded();
+    });
 
     map.once("load", () => {
       styleLoaded = true;
