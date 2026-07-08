@@ -118,6 +118,10 @@ test.describe("Feedstock UI CRUD", () => {
     const explanationOnPage = page.getByText("Required for certification", {
       exact: true,
     });
+    // waitForSideSheet resolves on dialog attach, not form paint — retry until
+    // the first sr-only explanation exists (the chips mount in one commit)
+    // before snapshotting the non-retrying count.
+    await expect(explanationOnPage.first()).toBeAttached();
     const beforeHover = await explanationOnPage.count();
     expect(beforeHover).toBeGreaterThan(0);
 
