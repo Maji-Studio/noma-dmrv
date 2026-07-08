@@ -27,6 +27,7 @@ import {
   useRefreshGhgStatementStatus,
 } from "@/hooks/use-certification";
 import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
+import type { GhgStatement } from "@/lib/isometric";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import { chooseGhgSubmitMode } from "@/lib/isometric/utils/ghg-statement-state";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
@@ -53,6 +54,28 @@ function statementPeriod(item: GhgStatementListItem): string {
   return reportingPeriodStartOn
     ? `${reportingPeriodStartOn} → ${reportingPeriodEndOn}`
     : `Ends ${reportingPeriodEndOn}`;
+}
+
+// Friendly one-line phrase for the raw registry verifier status. The raw enum
+// ("DRAFT") next to a top badge reading "In registry" is the exact #250
+// collision — DRAFT here means "created in the registry, not yet sent to the
+// verifier", not the operator's mental "draft".
+function verifierStatusLabel(remote: GhgStatement | null): string {
+  if (!remote) return "Not yet created in Isometric";
+  switch (remote.status) {
+    case "DRAFT":
+      return "In registry — not yet sent to the verifier";
+    case "AWAITING_VERIFICATION":
+      return "In verification";
+    case "VERIFIED":
+      return "Verified";
+    case "CREDITS_ISSUED":
+      return "Credits issued";
+    case "FAILED_VERIFICATION":
+      return "Verification failed";
+    default:
+      return remote.status;
+  }
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -176,16 +199,24 @@ function DetailState({
   const { statementSubmission, linkedRemovals, remote, recentSyncEvents } =
     query.data;
   const mode = remote ? chooseGhgSubmitMode(remote) : "submit";
+  // Never offer "Submit to verifier" on a 0-removal statement (#245) — the
+  // server rejects it, and the button on an empty statement is exactly the
+  // dead-end the redesign kills. Membership is authoritative here (reconciled
+  // from the registry's `ghg_entry_ids`).
+  const hasLinkedRemovals = linkedRemovals.length > 0;
   const canSubmit =
     Boolean(statementSubmission?.externalId) &&
-    (mode === "submit" || mode === "resubmit");
+    (mode === "submit" || mode === "resubmit") &&
+    hasLinkedRemovals;
   const isResubmit = mode === "resubmit";
   const blockedNote =
     mode === "blocked-awaiting"
-      ? "Awaiting verification — no action needed."
+      ? "In verification — no action needed."
       : mode === "blocked-verified"
         ? "Verified — no further submission."
-        : null;
+        : (mode === "submit" || mode === "resubmit") && !hasLinkedRemovals
+          ? "No linked removals yet — there's nothing to submit. Add a removal in this reporting period, then refresh."
+          : null;
 
   const handleRefresh = () => {
     if (!statementSubmission) return;
@@ -198,9 +229,7 @@ function DetailState({
 
   return (
     <div className="flex flex-col gap-20 border-t border-[var(--color-border-tertiary)] pt-20">
-      <Field label="Verifier status">
-        {remote ? remote.status : "Not yet created in Isometric"}
-      </Field>
+      <Field label="Verifier status">{verifierStatusLabel(remote)}</Field>
 
       <div className="flex flex-col gap-8">
         <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">

@@ -9,7 +9,7 @@
  * - Facility, Customer, CustomerLocation, BiocharProduct seeded via seededData
  */
 import type { Page } from "@playwright/test";
-import { test, expect } from "./fixtures";
+import { test, expect, type SeededChainData } from "./fixtures";
 import { deliveryStatuses } from "../../src/schemas/deliveries";
 import { selectEntity, selectEntityByText } from "./fixtures/page-helpers";
 
@@ -30,6 +30,78 @@ async function selectBiocharProduct(page: Page, productId: string) {
   await selectEntity(page, "Biochar Product", productId);
 }
 
+async function createOrderViaUi(
+  page: Page,
+  seededData: SeededChainData,
+  quantityKg: string,
+) {
+  const ordersUrl = `${ORDERS_URL}?facility=${seededData.facility.id}`;
+
+  await page.goto(ordersUrl);
+  await expect(page).toHaveURL(new RegExp(ORDERS_URL), { timeout: 10000 });
+
+  // Wait for full hydration — the sidebar facility selector only shows the
+  // facility name once the FacilityProvider has loaded and resolved.
+  await expect(
+    page.locator("aside").getByText(seededData.facility.name, { exact: false })
+  ).toBeVisible({ timeout: 15000 });
+
+  await page.click('button:has-text("New Order")');
+  await page.waitForSelector('[role="dialog"]', { timeout: 15000 });
+
+  await page.fill('input[name="orderDate"]', "2026-03-02");
+  await page.selectOption('select[name="customerId"]', seededData.customer.id);
+  await page.waitForSelector('select[name="customerLocationId"]:not([disabled])', {
+    timeout: 8000,
+  });
+  await page.selectOption(
+    'select[name="customerLocationId"]',
+    seededData.customerLocation.id
+  );
+
+  // Selecting a location surfaces the read-only details panel with the stored
+  // facility distance and its provenance (issue #196). The mini map is not
+  // asserted — it needs a MapTiler key absent in hermetic CI.
+  await expect(page.getByTestId("order-location-details")).toBeVisible({
+    timeout: 8000,
+  });
+  await expect(page.getByTestId("order-location-distance")).toContainText(
+    "25 km from"
+  );
+
+  await page.selectOption('select[name="packaging"]', "loose");
+  await page.fill('input[name="quantityKg"]', quantityKg);
+  await selectBiocharProduct(page, seededData.biocharProduct.id);
+  await page.click('button[type="submit"]:has-text("Create Order")');
+  await page.waitForSelector('[role="dialog"]', {
+    state: "hidden",
+    timeout: 10000,
+  });
+}
+
+async function createDeliveryViaUi(page: Page, seededData: SeededChainData) {
+  await createOrderViaUi(page, seededData, "50");
+
+  const deliveriesUrl = `${DELIVERIES_URL}?facility=${seededData.facility.id}`;
+  await page.goto(deliveriesUrl);
+  await expect(page).toHaveURL(new RegExp(DELIVERIES_URL), {
+    timeout: 10000,
+  });
+
+  await page.click('button:has-text("New Delivery")');
+  await page.waitForSelector('[role="dialog"]', { timeout: 8000 });
+
+  await page.fill('input[name="deliveryDate"]', "2026-03-02");
+  await page.selectOption('select[name="status"]', "upcoming");
+  await selectEntityByText(page, "Order", seededData.customer.name);
+  await page.fill('input[name="deliveredWetMassKg"]', "95");
+  await page.click('button[type="submit"]:has-text("Create Delivery")');
+  await page.waitForSelector('[role="dialog"]', {
+    state: "hidden",
+    timeout: 10000,
+  });
+}
+
 // ============================================
 // Order + Delivery UI CRUD
 // ============================================
@@ -45,70 +117,7 @@ test.describe("Order + Delivery UI CRUD", () => {
     cleanupTestData,
   }) => {
     void cleanupTestData; // ensure fixture is active for auto-cleanup
-    const ordersUrl = `${ORDERS_URL}?facility=${seededData.facility.id}`;
-
-    // Navigate to the orders list
-    await adminPage.goto(ordersUrl);
-    await expect(adminPage).toHaveURL(new RegExp(ORDERS_URL), { timeout: 10000 });
-
-    // Wait for full hydration — the sidebar facility selector only shows the
-    // facility name once the FacilityProvider has loaded and resolved.
-    await expect(
-      adminPage.locator("aside").getByText(seededData.facility.name, { exact: false })
-    ).toBeVisible({ timeout: 15000 });
-
-    // Open the "New Order" side sheet
-    await adminPage.click('button:has-text("New Order")');
-    await adminPage.waitForSelector('[role="dialog"]', { timeout: 15000 });
-
-    // --- Fill in required fields ---
-
-    // Order Date
-    await adminPage.fill('input[name="orderDate"]', "2026-03-02");
-
-    // Customer — selecting triggers an async load of customer locations
-    await adminPage.selectOption(
-      'select[name="customerId"]',
-      seededData.customer.id
-    );
-
-    // Wait for the cascading customerLocationId select to become enabled
-    await adminPage.waitForSelector(
-      'select[name="customerLocationId"]:not([disabled])',
-      { timeout: 8000 }
-    );
-    await adminPage.selectOption(
-      'select[name="customerLocationId"]',
-      seededData.customerLocation.id
-    );
-
-    // Selecting a location surfaces the read-only details panel with the
-    // stored facility distance and its provenance (issue #196). The mini map
-    // is not asserted — it needs a MapTiler key absent in hermetic CI.
-    await expect(
-      adminPage.getByTestId("order-location-details")
-    ).toBeVisible({ timeout: 8000 });
-    await expect(
-      adminPage.getByTestId("order-location-distance")
-    ).toContainText("25 km from");
-
-    // Packaging
-    await adminPage.selectOption('select[name="packaging"]', "loose");
-
-    // Quantity
-    await adminPage.fill('input[name="quantityKg"]', "100");
-
-    // Biochar Product
-    await selectBiocharProduct(adminPage, seededData.biocharProduct.id);
-
-    // Submit the form
-    await adminPage.click('button[type="submit"]:has-text("Create Order")');
-
-    // Side sheet should close on success
-    await adminPage.waitForSelector('[role="dialog"]', {
-      state: "hidden",
-      timeout: 10000,
-    });
+    await createOrderViaUi(adminPage, seededData, "100");
 
     // --- Verify the new order appears in the list ---
 
@@ -132,14 +141,16 @@ test.describe("Order + Delivery UI CRUD", () => {
 
   test("orders list shows at least one order", async ({
     adminPage,
+    seededData,
     cleanupTestData,
   }) => {
     void cleanupTestData;
+    await createOrderViaUi(adminPage, seededData, "100");
 
-    await adminPage.goto(ORDERS_URL);
+    await adminPage.goto(`${ORDERS_URL}?facility=${seededData.facility.id}`);
     await expect(adminPage).toHaveURL(new RegExp(ORDERS_URL), { timeout: 10000 });
 
-    // Verify the orders list has at least one row (from create test or prior runs)
+    // Verify the orders list has at least one row from this test's seed.
     await expect(
       adminPage.locator("table tbody tr").first()
     ).toBeVisible({ timeout: 8000 });
@@ -155,74 +166,7 @@ test.describe("Order + Delivery UI CRUD", () => {
     cleanupTestData,
   }) => {
     void cleanupTestData;
-    const ordersUrl = `${ORDERS_URL}?facility=${seededData.facility.id}`;
-    const deliveriesUrl = `${DELIVERIES_URL}?facility=${seededData.facility.id}`;
-
-    // ---- First, ensure an order exists to select in the delivery form ----
-    // We create one inline so this test is self-contained even when run in isolation.
-
-    await adminPage.goto(ordersUrl);
-    await expect(adminPage).toHaveURL(new RegExp(ORDERS_URL), { timeout: 10000 });
-
-    // Wait for full hydration — the sidebar facility selector only shows the
-    // facility name once the FacilityProvider has loaded and resolved.
-    await expect(
-      adminPage.locator("aside").getByText(seededData.facility.name, { exact: false })
-    ).toBeVisible({ timeout: 15000 });
-
-    await adminPage.click('button:has-text("New Order")');
-    await adminPage.waitForSelector('[role="dialog"]', { timeout: 15000 });
-
-    await adminPage.fill('input[name="orderDate"]', "2026-03-02");
-    await adminPage.selectOption('select[name="customerId"]', seededData.customer.id);
-    await adminPage.waitForSelector(
-      'select[name="customerLocationId"]:not([disabled])',
-      { timeout: 8000 }
-    );
-    await adminPage.selectOption(
-      'select[name="customerLocationId"]',
-      seededData.customerLocation.id
-    );
-    await adminPage.selectOption('select[name="packaging"]', "loose");
-    await adminPage.fill('input[name="quantityKg"]', "50");
-    await selectBiocharProduct(adminPage, seededData.biocharProduct.id);
-    await adminPage.click('button[type="submit"]:has-text("Create Order")');
-    await adminPage.waitForSelector('[role="dialog"]', {
-      state: "hidden",
-      timeout: 10000,
-    });
-
-    // ---- Navigate to Deliveries and open the creation form ----
-
-    await adminPage.goto(deliveriesUrl);
-    await expect(adminPage).toHaveURL(new RegExp(DELIVERIES_URL), {
-      timeout: 10000,
-    });
-
-    await adminPage.click('button:has-text("New Delivery")');
-    await adminPage.waitForSelector('[role="dialog"]', { timeout: 8000 });
-
-    // Delivery Date
-    await adminPage.fill('input[name="deliveryDate"]', "2026-03-02");
-
-    // Status
-    await adminPage.selectOption('select[name="status"]', "upcoming");
-
-    // Order — a searchable EntitySelect (order code primary, customer in the
-    // meta line), so pick the option showing our seeded customer name.
-    await selectEntityByText(adminPage, "Order", seededData.customer.name);
-
-    // Wet mass
-    await adminPage.fill('input[name="deliveredWetMassKg"]', "95");
-
-    // Submit
-    await adminPage.click('button[type="submit"]:has-text("Create Delivery")');
-
-    // Side sheet should close on success
-    await adminPage.waitForSelector('[role="dialog"]', {
-      state: "hidden",
-      timeout: 10000,
-    });
+    await createDeliveryViaUi(adminPage, seededData);
 
     // ---- Verify delivery appears in the list ----
     // Customer text may be off-screen/paginated; assert list row render instead.
@@ -237,16 +181,18 @@ test.describe("Order + Delivery UI CRUD", () => {
 
   test("deliveries list shows at least one delivery", async ({
     adminPage,
+    seededData,
     cleanupTestData,
   }) => {
     void cleanupTestData;
+    await createDeliveryViaUi(adminPage, seededData);
 
-    await adminPage.goto(DELIVERIES_URL);
+    await adminPage.goto(`${DELIVERIES_URL}?facility=${seededData.facility.id}`);
     await expect(adminPage).toHaveURL(new RegExp(DELIVERIES_URL), {
       timeout: 10000,
     });
 
-    // Verify the deliveries list has at least one row
+    // Verify the deliveries list has at least one row from this test's seed.
     await expect(
       adminPage.locator("table tbody tr").first()
     ).toBeVisible({ timeout: 8000 });

@@ -13,10 +13,13 @@
  *     ends at "Submitted" (+ "Superseded" on a re-version). Verified in code:
  *     `submit-removal.ts` only ever marks the ledger row `submitted`.
  *
- *   - **GHG Statement** → submitted to a **verifier**. Extends the shared local
- *     base with a remote overlay (Awaiting verifier → Verified → Credits issued
- *     / Verification failed) read from the persisted submission metadata
- *     (`metadata.remoteStatus`) — never a per-row live fetch.
+ *   - **GHG Statement** → submitted to a **verifier**. One linear ladder
+ *     (#250): Draft → In registry → In verification → Verified → Issued (with
+ *     Verification failed off the verifier arm). The verifier lifecycle beyond
+ *     "In registry" is read from the persisted submission metadata
+ *     (`metadata.remoteStatus`) — never a per-row live fetch. "Submitted" is
+ *     deliberately absent: it collided with the "Submit to verifier" action
+ *     (it meant "created in the registry", not "sent to the verifier").
  */
 
 import type { StatusValue } from "@/components/ui/status-badge";
@@ -159,7 +162,7 @@ export function deriveStatementStatus({
   if (local === null) {
     return {
       value: "draft",
-      label: "Not created",
+      label: "Draft",
       isActionable: true,
       isTerminal: false,
     };
@@ -170,7 +173,7 @@ export function deriveStatementStatus({
     case "AWAITING_VERIFICATION":
       return {
         value: "pending",
-        label: "Awaiting verifier",
+        label: "In verification",
         isActionable: false,
         isTerminal: false,
       };
@@ -184,7 +187,7 @@ export function deriveStatementStatus({
     case "CREDITS_ISSUED":
       return {
         value: "issued",
-        label: "Credits issued",
+        label: "Issued",
         isActionable: false,
         isTerminal: true,
       };
@@ -209,10 +212,11 @@ export function deriveStatementStatus({
         isTerminal: false,
       };
     case "submitted":
-      // Submitted to the verifier locally; remote AWAITING not yet reflected.
+      // Created in the registry, not yet sent to the verifier (remote DRAFT).
+      // The next operator action is "Submit to verifier".
       return {
-        value: "pending",
-        label: "Submitted",
+        value: "running",
+        label: "In registry",
         isActionable: false,
         isTerminal: false,
       };

@@ -21,6 +21,7 @@ import {
   defaultProductionReadinessGap,
   type ProductionReadinessGap,
 } from "./production-readiness";
+import { CERT_REQUIREMENT_META } from "./requirement-labels";
 
 export type RemovalReadinessState =
   | "submitted" // done from noma's side — nothing to action
@@ -225,9 +226,37 @@ export interface PreflightCheck {
     | "durability";
   /** Affirmative label — what's true when the check is met. */
   label: string;
+  /**
+   * Plain-language requirement, identical across every readiness surface
+   * (Phase 0). Attached uniformly from `CERT_REQUIREMENT_META`.
+   */
+  requirementLabel: string;
+  /** Protocol/lab context for the ⓘ "Why?" affordance (Phase 1). */
+  whyDetail?: string;
+  /**
+   * Deep-link target for the fix (Phase 2, readiness workspace). Left unset in
+   * Phase 0 — resolving the concrete href needs facility context the pure
+   * classifier doesn't hold; the workspace step attaches it at render.
+   */
+  fixTarget?: string;
   status: PreflightCheckStatus;
   /** The blocker text when unmet, or context when met/skipped. */
   detail?: string;
+}
+
+/**
+ * The builders below construct everything except the shared requirement
+ * metadata, which is attached uniformly from `CERT_REQUIREMENT_META`.
+ */
+type PreflightCheckBase = Omit<PreflightCheck, "requirementLabel" | "whyDetail">;
+
+function withPreflightMeta(check: PreflightCheckBase): PreflightCheck {
+  const meta = CERT_REQUIREMENT_META[check.key];
+  return {
+    ...check,
+    requirementLabel: meta.requirementLabel,
+    whyDetail: meta.whyDetail,
+  };
 }
 
 /**
@@ -244,7 +273,7 @@ export function buildRemovalPreflightChecklist(
   const linked = facts.hasMapping;
   const templateClean = templateResolvesCleanly(facts);
 
-  const transport = ((): PreflightCheck => {
+  const transport = ((): PreflightCheckBase => {
     if (!linked || !templateClean) {
       return {
         key: "transport",
@@ -271,7 +300,7 @@ export function buildRemovalPreflightChecklist(
         };
   })();
 
-  const entityReadiness = ((): PreflightCheck => {
+  const entityReadiness = ((): PreflightCheckBase => {
     // Gaps are derived from the production runs, so with nothing to submit the
     // list is empty for the "not evaluated" reason, not the "all complete" one.
     // Skip rather than let an unevaluated check read as satisfied.
@@ -293,7 +322,7 @@ export function buildRemovalPreflightChecklist(
         };
   })();
 
-  return [
+  const checks: PreflightCheckBase[] = [
     {
       key: "mapping",
       label: "Facility linked to an Isometric project",
@@ -318,12 +347,15 @@ export function buildRemovalPreflightChecklist(
     entityReadiness,
     durabilityPreflightCheck(facts),
   ];
+  return checks.map(withPreflightMeta);
 }
 
 // Sampling/eligibility pre-flight row (D3). Derived from the production runs, so
 // it skips (rather than reads "met") when there is nothing to submit, mirroring
 // the entity-readiness row.
-function durabilityPreflightCheck(facts: RemovalReadinessFacts): PreflightCheck {
+function durabilityPreflightCheck(
+  facts: RemovalReadinessFacts,
+): PreflightCheckBase {
   if (!facts.hasSubmittableRuns) {
     return { key: "durability", label: DURABILITY_LABEL, status: "skipped" };
   }
@@ -357,9 +389,38 @@ export interface RemovalRequirementCheck {
   key: RemovalRequirementKey;
   /** Affirmative label — what's true when the check is met. */
   label: string;
+  /**
+   * Plain-language requirement, identical across every readiness surface
+   * (Phase 0). Attached uniformly from `CERT_REQUIREMENT_META`.
+   */
+  requirementLabel: string;
+  /** Protocol/lab context for the ⓘ "Why?" affordance (Phase 1). */
+  whyDetail?: string;
+  /**
+   * Deep-link target for the fix (Phase 2, readiness workspace). Left unset in
+   * Phase 0 — resolving the concrete href needs facility context the pure
+   * classifier doesn't hold; the workspace step attaches it at render.
+   */
+  fixTarget?: string;
   status: PreflightCheckStatus;
   /** The blocker text when unmet, or context when met/skipped. */
   detail?: string;
+}
+
+type RemovalRequirementCheckBase = Omit<
+  RemovalRequirementCheck,
+  "requirementLabel" | "whyDetail"
+>;
+
+function withRequirementMeta(
+  check: RemovalRequirementCheckBase,
+): RemovalRequirementCheck {
+  const meta = CERT_REQUIREMENT_META[check.key];
+  return {
+    ...check,
+    requirementLabel: meta.requirementLabel,
+    whyDetail: meta.whyDetail,
+  };
 }
 
 /**
@@ -379,7 +440,7 @@ export function buildRemovalRequirementsChecklist(
   const linked = facts.hasMapping;
   const templateClean = templateResolvesCleanly(facts);
 
-  const uniformity = ((): RemovalRequirementCheck => {
+  const uniformity = ((): RemovalRequirementCheckBase => {
     // Uniformity is only meaningful once the template chain resolves and legs
     // are actually present (presence is the batch's concern, not this step's).
     if (!linked || !templateClean) {
@@ -406,7 +467,7 @@ export function buildRemovalRequirementsChecklist(
         };
   })();
 
-  const entityReadiness = ((): RemovalRequirementCheck => {
+  const entityReadiness = ((): RemovalRequirementCheckBase => {
     const gaps = facts.entityReadinessGaps ?? [];
     return gaps.length === 0
       ? {
@@ -424,7 +485,7 @@ export function buildRemovalRequirementsChecklist(
         };
   })();
 
-  const durability = ((): RemovalRequirementCheck => {
+  const durability = ((): RemovalRequirementCheckBase => {
     // Sampling/eligibility is a run-level concern batch health does not cover,
     // so a "ready" batch can still carry an unsampled run — surface it here.
     // Derived from runs, so skip when there is nothing to submit.
@@ -444,7 +505,7 @@ export function buildRemovalRequirementsChecklist(
         };
   })();
 
-  return [
+  const checks: RemovalRequirementCheckBase[] = [
     {
       key: "mapping",
       label: "Facility linked to an Isometric project",
@@ -461,6 +522,7 @@ export function buildRemovalRequirementsChecklist(
     entityReadiness,
     durability,
   ];
+  return checks.map(withRequirementMeta);
 }
 
 /**

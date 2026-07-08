@@ -202,6 +202,53 @@ test.describe("Facility + Reactor UI CRUD", () => {
 });
 
 // ============================================
+// Whitespace-name display fallback (#378)
+// ============================================
+
+test.describe("Facility blank-name display fallback", () => {
+  let blankNameFacility: TestFacility;
+
+  test.beforeAll(async () => {
+    // Seed straight into the DB (bypassing the trimming form schema) to mimic a
+    // stray legacy/manual whitespace-only name. The card/selector must fall back
+    // to the always-present code rather than render an empty heading.
+    blankNameFacility = await createTestFacility({
+      code: `E2E-BLANK-${RUN_ID}`,
+      name: "   ",
+    });
+  });
+
+  test.afterAll(async () => {
+    if (blankNameFacility?.id) {
+      await deleteTestFacility(blankNameFacility.id);
+    }
+  });
+
+  test("a whitespace-only facility name renders its code, not a blank card", async ({
+    adminPage: page,
+  }) => {
+    await page.goto("/facilities");
+    await expect(page.getByText("Active Facilities")).toBeVisible({
+      timeout: 15000,
+    });
+
+    // Filter to just the seeded facility by its code (search matches code).
+    const searchBox = page.getByRole("textbox", { name: "Search facilities" });
+    await searchBox.fill(blankNameFacility.code);
+    await page.waitForTimeout(500); // debounce
+
+    const card = page
+      .locator("article")
+      .filter({ hasText: blankNameFacility.code });
+    await expect(card).toBeVisible({ timeout: 10000 });
+
+    // The name heading falls back to the code (never an empty string).
+    const heading = card.getByRole("heading", { level: 3 });
+    await expect(heading).toHaveText(blankNameFacility.code);
+  });
+});
+
+// ============================================
 // DB-Level Duplicate Code Enforcement
 // ============================================
 
@@ -233,5 +280,36 @@ test.describe("Facilities Duplicate Code Handling", () => {
         location: "Duplicate Location",
       })
     ).rejects.toThrow();
+  });
+});
+
+// ============================================
+// Durability Tier — read-only info, not a false choice (#348)
+// ============================================
+
+test.describe("Facility durability tier", () => {
+  test("renders as read-only info, not a radio with a locked option", async ({
+    adminPage: page,
+  }) => {
+    await page.goto("/facilities");
+    await expect(page.getByText("Active Facilities")).toBeVisible({
+      timeout: 15000,
+    });
+
+    await page.getByRole("button", { name: /New Facility/i }).click();
+    const dialog = page
+      .getByRole("dialog")
+      .filter({ has: page.getByRole("button", { name: /Create Facility/i }) });
+    await expect(dialog).toBeVisible();
+
+    // The single unlocked tier shows as a plain info block…
+    const tierInfo = dialog.getByTestId("durability-tier-info");
+    await expect(tierInfo).toBeVisible();
+    await expect(tierInfo).toContainText(/1000-year durability/i);
+
+    // …not a selectable radio group, and with no locked "Available later"
+    // option that reads as a choice the operator is failing to make.
+    await expect(dialog.getByRole("radiogroup")).toHaveCount(0);
+    await expect(dialog.getByText(/Available later/i)).toHaveCount(0);
   });
 });

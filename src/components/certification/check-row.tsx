@@ -11,6 +11,7 @@
 import type { ElementType, ReactNode } from "react";
 import Link from "next/link";
 import { CheckCircleIcon, CircleIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
+import { InfoHint } from "@/components/ui/tooltip";
 
 export type CheckStatus = "met" | "unmet" | "skipped";
 
@@ -35,6 +36,12 @@ interface CheckRowProps {
   status: CheckStatus;
   label: string;
   detail?: string | null;
+  /**
+   * Protocol/registry reasoning for this requirement, revealed behind an ⓘ
+   * "Why?" affordance next to the label so the raw vocabulary (R₀, tonne·km,
+   * § citations) stays off the primary line (Phase 1).
+   */
+  whyDetail?: string;
   /** First row omits the top divider. */
   isFirst: boolean;
   /** Horizontal padding — requirements step uses 16, the health strip 20. */
@@ -49,6 +56,7 @@ export function CheckRow({
   status,
   label,
   detail,
+  whyDetail,
   isFirst,
   paddingX = 16,
   fix,
@@ -70,8 +78,9 @@ export function CheckRow({
         style={{ color: STATUS_COLOR[status] }}
       />
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <span className="body-small text-[var(--color-text-primary)]">
+        <span className="inline-flex items-center gap-6 body-small text-[var(--color-text-primary)]">
           {label}
+          {whyDetail && <InfoHint label="Why is this required?">{whyDetail}</InfoHint>}
         </span>
         {detail && (
           <span className="body-caption text-[var(--color-text-secondary)]">

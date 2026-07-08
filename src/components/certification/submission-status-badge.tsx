@@ -3,8 +3,9 @@
  * Thin renderer over the canonical status mappers in `@/lib/certification`. A
  * Removal is local-only (no remote status exists in this integration); a GHG
  * Statement folds in the persisted remote overlay (`metadata.remoteStatus`) so
- * operators see "Awaiting verifier" / "Credits issued" rather than a flat
- * "Submitted". "In progress" derives from the lock-flight check. The row →
+ * operators see the linear ladder ("In registry" → "In verification" →
+ * "Verified" → "Issued") rather than a flat, colliding "Submitted" (#250).
+ * "In progress" derives from the lock-flight check. The row →
  * status derivation lives in `deriveSubmissionStatus` so list/queue surfaces
  * filter on the exact same verdict this badge renders.
  */

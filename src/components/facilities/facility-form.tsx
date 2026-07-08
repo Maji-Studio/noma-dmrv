@@ -201,7 +201,7 @@ export function FacilityForm({
           id="durabilityOption"
           label="Durability Tier"
           error={errors.durabilityOption?.message}
-          hint="The Isometric crediting tier for this facility. It is inherited by every credit batch and sample here, and must match the facility's removal template. 1000-year uses reflectance (R₀) + TGA lab data; the 200-year (H:Corg + soil-temperature) pathway is available when a 200-year client onboards."
+          hint="Set once for your registry program and inherited by every credit batch and sample at this facility. The 200-year pathway opens when a 200-year client onboards."
         >
           <DurabilityTierSelect
             value={durabilityOption}

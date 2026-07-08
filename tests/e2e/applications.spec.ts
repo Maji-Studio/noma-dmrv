@@ -284,7 +284,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await page.fill('input[name="startDate"]', today);
     await page.fill('input[name="endDate"]', today);
 
-    await selectFirstCreditBatchProductionRun(page);
+    await selectFirstCreditBatchProductionRun(page, seededData.feedstockType);
 
     // Durability is snapshotted from the facility default and rendered read-only.
 

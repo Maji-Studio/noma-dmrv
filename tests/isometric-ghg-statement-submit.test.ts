@@ -15,6 +15,11 @@
  *   3. Submit-to-verifier on the created statement → POST /submit →
  *                       remote status flips to AWAITING_VERIFICATION,
  *                       report document attached.
+ *   4. Empty-statement guard (#245): create fail-closes before any local row
+ *                       or remote POST when the window holds no submitted
+ *                       removal (none open, or the only one out-of-window).
+ *   5. Zero-linked backstop (#245): submit fail-closes when the registry's
+ *                       authoritative membership is empty.
  *
  * Out of scope (left to dedicated tests): resubmit-after-failure,
  * stale-lock recovery, double-create dedup details, and the verified
@@ -30,8 +35,10 @@ import type {
 import type { InsertDraftSubmissionInput } from "@/data-access/certification-submissions";
 import type {
   CertifierGhgStatementRow,
+  OpenRemoval,
   ReconcileResult,
 } from "@/data-access/certifier-ghg-statements";
+import type { CertifierRemovalRow } from "@/data-access/certifier-removals";
 import type { GhgStatement } from "@/lib/isometric";
 
 // ---------------------------------------------------------------------------
@@ -83,6 +90,7 @@ import { makeClaimSubmissionDraftFake } from "./fixtures/fake-claim";
 import * as facilitiesDA from "@/data-access/facilities";
 import * as authServer from "@/lib/auth/server";
 import * as isometric from "@/lib/isometric";
+import { __resetRateLimitForTests } from "@/lib/rate-limit/in-memory";
 import {
   createGhgStatementDraft,
   submitGhgStatementToVerifier,
@@ -101,6 +109,10 @@ const EXTERNAL_PROJECT_ID = "prj_test_1";
 const EXTERNAL_STATEMENT_ID = "ggs_test_1";
 const EXTERNAL_REMOVAL_ID = "rmv_test_1";
 const REPORTING_PERIOD_END = "2026-01-31";
+// Inside the reporting window (no prior statement → unbounded start, so any
+// completion on or before REPORTING_PERIOD_END is in-window).
+const IN_WINDOW_COMPLETED_ON = "2026-01-15";
+const OUT_OF_WINDOW_COMPLETED_ON = "2026-02-15";
 const REPORT_URL = "https://example.com/report.pdf";
 
 // ---------------------------------------------------------------------------
@@ -122,6 +134,26 @@ function makeStatementRow(): CertifierGhgStatementRow {
     createdAt: new Date(),
     updatedAt: new Date(),
   } as CertifierGhgStatementRow;
+}
+
+function makeOpenRemoval(
+  overrides: Partial<CertifierRemovalRow> = {},
+): OpenRemoval {
+  return {
+    removal: {
+      id: REMOVAL_ID,
+      facilityId: FACILITY_ID,
+      provider: "isometric",
+      startedOn: null,
+      completedOn: IN_WINDOW_COMPLETED_ON,
+      ghgStatementId: null,
+      metadata: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...overrides,
+    } as CertifierRemovalRow,
+    externalId: EXTERNAL_REMOVAL_ID,
+  };
 }
 
 function makeMapping(): CertifierProjectRow {
@@ -203,6 +235,9 @@ function newLedgerRow(
 
 beforeEach(() => {
   vi.resetAllMocks();
+  // The submit actions share a per-user in-memory rate limiter (5/min); all
+  // tests here run as the same synthetic user, so clear it between tests.
+  __resetRateLimitForTests();
   storedLedger = [];
   storedStatements = [makeStatementRow()];
   nextLedgerRowId = 1;
@@ -321,6 +356,14 @@ beforeEach(() => {
   // get-or-create; no siblings here, so nothing to overlap.
   vi.mocked(ghgDA.listGhgStatementsForFacility).mockResolvedValue([]);
 
+  // The empty-statement guard (#245) predicts period membership from the
+  // facility's open removals. Default to one completed in-window so creates
+  // pass the guard unless a test overrides this to exercise the fail-closed
+  // branches.
+  vi.mocked(ghgDA.listOpenRemovalsForFacility).mockResolvedValue([
+    makeOpenRemoval(),
+  ]);
+
   // GHG-statement DA ops touched after the remote create.
   vi.mocked(ghgDA.reconcileRemovalMembership).mockResolvedValue({
     linkedRemovalIds: [REMOVAL_ID],
@@ -427,6 +470,71 @@ describe("createGhgStatementDraft — happy path", () => {
     expect(ghgDA.updateGhgStatementReportingWindow).not.toHaveBeenCalled();
     // No new ledger row — the existing v=1 row was returned.
     expect(storedLedger).toHaveLength(1);
+  });
+});
+
+describe("createGhgStatementDraft — empty-statement guard (#245)", () => {
+  it("fail-closes before any local row or remote POST when no removals are open", async () => {
+    vi.mocked(ghgDA.listOpenRemovalsForFacility).mockResolvedValue([]);
+
+    const result = await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toMatch(/no submitted removals/i);
+    // Refused before minting anything: no local statement upsert, no ledger
+    // draft, no registry POST.
+    expect(ghgDA.getOrCreateGhgStatementDraft).not.toHaveBeenCalled();
+    expect(isometric.createGhgStatement).not.toHaveBeenCalled();
+    expect(storedLedger).toHaveLength(0);
+  });
+
+  it("fail-closes when the only open removal completed outside the window", async () => {
+    vi.mocked(ghgDA.listOpenRemovalsForFacility).mockResolvedValue([
+      makeOpenRemoval({ completedOn: OUT_OF_WINDOW_COMPLETED_ON }),
+    ]);
+
+    const result = await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toMatch(/no submitted removals/i);
+    expect(isometric.createGhgStatement).not.toHaveBeenCalled();
+    expect(storedLedger).toHaveLength(0);
+  });
+});
+
+describe("submitGhgStatementToVerifier — zero-linked backstop (#245)", () => {
+  it("refuses to submit a statement whose registry membership is empty", async () => {
+    // Create succeeds, but the registry links nothing into the statement —
+    // the authoritative `ghg_entry_ids` stays empty.
+    const remoteEmpty = makeRemoteStatement({
+      ghg_entry_ids: [],
+      removal_ids: [],
+    });
+    vi.mocked(isometric.createGhgStatement).mockResolvedValue(remoteEmpty);
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remoteEmpty);
+    await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+
+    const result = await submitGhgStatementToVerifier(STATEMENT_ID, {
+      reportUrl: REPORT_URL,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toMatch(/no linked removals/i);
+    // The backstop trips before the report attach and the verifier POST.
+    expect(ledger.attachReportDocument).not.toHaveBeenCalled();
+    expect(isometric.submitGhgStatement).not.toHaveBeenCalled();
   });
 });
 

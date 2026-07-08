@@ -6,6 +6,7 @@ import {
   type BatchHealthCheckKey,
   type BatchHealthFacts,
 } from "./batch-health";
+import { CERT_REQUIREMENT_META } from "./requirement-labels";
 
 // A fully-healthy batch: no missing carbon inputs, production linked, facility
 // set up, and every required transport category present.
@@ -164,6 +165,26 @@ describe("deriveBatchHealth", () => {
     expect(checkFor(result, "carbon").status).toBe("unmet");
     expect(result.issueCount).toBe(1);
     expect(result.state).toBe("incomplete");
+  });
+
+  it("attaches the shared plain-language requirement label + why to every check", () => {
+    // Phase 0: the removal wizard's gap row and the batch page's checklist both
+    // render `requirementLabel`, so it must come from the single shared source
+    // for every check — never drift per surface.
+    const result = deriveBatchHealth(
+      facts({ carbonMissingInputs: ["sample carbon content"] }),
+    );
+    for (const check of result.checks) {
+      expect(check.requirementLabel).toBe(
+        CERT_REQUIREMENT_META[check.key].requirementLabel,
+      );
+      expect(check.whyDetail).toBe(CERT_REQUIREMENT_META[check.key].whyDetail);
+    }
+    // The carbon gap now reads as its neutral requirement, so it never
+    // contradicts the "Missing:" detail beside it with an affirmative label.
+    const carbon = checkFor(result, "carbon");
+    expect(carbon.requirementLabel).toBe("Lab chemistry results");
+    expect(carbon.requirementLabel).not.toMatch(/complete/i);
   });
 
   it("counts every unmet check toward issueCount", () => {
