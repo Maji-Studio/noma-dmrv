@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { Tooltip } from "@/components/ui/tooltip";
 
 const CERTIFICATION_FIELD_TAG_LABEL = "CERT";
 
@@ -44,21 +45,30 @@ export function CertificationFieldTag({
   description,
   status = "neutral",
 }: CertificationFieldTagProps) {
+  const explanation = description ?? STATUS_DESCRIPTION[status];
   return (
-    <span
-      className={cn(
-        // `relative` gives the absolutely-positioned `.sr-only` child below a
-        // positioned containing block. Without it, the sr-only span resolves its
-        // static position against <html>; inside a wide, horizontally-scrolled
-        // table its border-box lands far to the right and inflates the document
-        // scroll width, producing page-level horizontal scroll on mobile.
-        "relative body-caption border px-4 py-1",
-        STATUS_STYLES[status],
-        className,
-      )}
-    >
-      {label}
-      <span className="sr-only">{description ?? STATUS_DESCRIPTION[status]}</span>
-    </span>
+    // The badge recurs ~10×/form, so the same explanation is exposed two ways
+    // without adding it to the tab order (that many stops would swamp keyboard
+    // nav): an always-on `.sr-only` string for assistive tech, and a pointer
+    // tooltip that makes the text visible to sighted users, who previously saw
+    // an unexplained "CERT" chip (redesign §6). The chip stays a non-interactive
+    // span — the tooltip is a supplementary hover hint, not a control.
+    <Tooltip content={explanation}>
+      <span
+        className={cn(
+          // `relative` gives the absolutely-positioned `.sr-only` child below a
+          // positioned containing block. Without it, the sr-only span resolves its
+          // static position against <html>; inside a wide, horizontally-scrolled
+          // table its border-box lands far to the right and inflates the document
+          // scroll width, producing page-level horizontal scroll on mobile.
+          "relative body-caption border px-4 py-1",
+          STATUS_STYLES[status],
+          className,
+        )}
+      >
+        {label}
+        <span className="sr-only">{explanation}</span>
+      </span>
+    </Tooltip>
   );
 }

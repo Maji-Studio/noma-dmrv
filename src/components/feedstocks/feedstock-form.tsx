@@ -286,6 +286,11 @@ export function FeedstockForm({
               placeholder="Select supplier..."
               disabled={isSubmitting}
               required
+              // Suppliers are org-shared, so a lone one is not "the" supplier for
+              // this delivery. Require an explicit pick (#379) — the default
+              // auto-select-when-single would silently attribute the delivery and
+              // cascade that supplier's transport distance.
+              autoSelectSingle={false}
             />
           </div>
         </FormSection>

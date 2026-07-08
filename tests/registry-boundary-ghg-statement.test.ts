@@ -40,6 +40,7 @@ import {
   certificationSubmissions,
   certifierGhgStatements,
   certifierProjects,
+  certifierRemovals,
   certifierSyncEvents,
 } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
@@ -52,6 +53,9 @@ import {
 } from "./fixtures/fake-registry";
 
 const REPORTING_PERIOD_END = "2026-03-31";
+// Inside the reporting window (first statement → unbounded start, so any
+// completion on or before REPORTING_PERIOD_END is in-window).
+const IN_WINDOW_COMPLETED_ON = "2026-03-15";
 const MULTIPLE_DRAFTS_MESSAGE =
   "Multiple draft GHG statements exist for this project and period in Isometric.";
 const STALE_LOCK_OFFSET_MS = LOCK_TTL_MS + 60_000;
@@ -60,6 +64,21 @@ const createdFacilityIds: string[] = [];
 
 afterAll(async () => {
   if (createdFacilityIds.length === 0) return;
+  // The seeded open removals (and their ledger rows) go first — they FK both
+  // the facility and, once reconciled, the statement.
+  const removals = await db
+    .select({ id: certifierRemovals.id })
+    .from(certifierRemovals)
+    .where(inArray(certifierRemovals.facilityId, createdFacilityIds));
+  const removalIds = removals.map((removal) => removal.id);
+  if (removalIds.length > 0) {
+    await db
+      .delete(certificationSubmissions)
+      .where(inArray(certificationSubmissions.localEntityId, removalIds));
+    await db
+      .delete(certifierRemovals)
+      .where(inArray(certifierRemovals.id, removalIds));
+  }
   const statements = await db
     .select({ id: certifierGhgStatements.id })
     .from(certifierGhgStatements)
@@ -93,7 +112,9 @@ interface Fixture {
   externalProjectId: string;
 }
 
-async function createFixture(): Promise<Fixture> {
+async function createFixture(
+  { seedOpenRemoval = true }: { seedOpenRemoval?: boolean } = {},
+): Promise<Fixture> {
   const runId = crypto.randomUUID().slice(0, 8);
   const externalProjectId = `prj_ggs_bd_${runId}`;
   const [facility] = await db
@@ -106,6 +127,25 @@ async function createFixture(): Promise<Fixture> {
     provider: "isometric",
     externalProjectId,
   });
+  if (seedOpenRemoval) {
+    // The empty-statement guard (#245) predicts period membership from the
+    // facility's open removals — an already-submitted removal (latest ledger
+    // row carries an externalId) completed inside the window. Seed one so
+    // creates get past the guard to the registry boundary under test.
+    const [removal] = await db
+      .insert(certifierRemovals)
+      .values({ facilityId: facility.id, completedOn: IN_WINDOW_COMPLETED_ON })
+      .returning({ id: certifierRemovals.id });
+    await db.insert(certificationSubmissions).values({
+      provider: "isometric",
+      submissionType: "removal",
+      localEntityType: "removal",
+      localEntityId: removal.id,
+      externalId: `rmv_ggs_bd_${runId}`,
+      version: 1,
+      status: "submitted",
+    });
+  }
   vi.mocked(authServer.getUser).mockResolvedValue({
     id: `test-user-ggs-${runId}`,
     email: `ggs-${runId}@example.com`,
@@ -254,5 +294,26 @@ describe("createGhgStatementDraft boundary — orphan reconciliation (test 3)", 
     expect(
       events.filter((event) => event.status === "failed"),
     ).toHaveLength(0);
+  });
+});
+
+describe("createGhgStatementDraft boundary — empty-statement guard (#245)", () => {
+  it("fail-closes before the registry when the period holds no submitted removals", async () => {
+    const fixture = await createFixture({ seedOpenRemoval: false });
+
+    const result = await createGhgStatementDraft({
+      facilityId: fixture.facilityId,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toMatch(/no submitted removals/i);
+
+    // Refused before anything was minted: no registry POST, no local
+    // statement row, no ledger draft.
+    expect(registry.requestCount("POST", "/ghg_statements")).toBe(0);
+    expect(registry.ghgStatements).toHaveLength(0);
+    expect(await latestLedgerRow(fixture.facilityId)).toBeNull();
   });
 });

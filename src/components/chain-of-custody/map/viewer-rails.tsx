@@ -422,9 +422,14 @@ function FacilityHub({
           <span className="font-mono text-[13px] font-medium leading-none tracking-[0.02em] text-[var(--clr-dark-purple)]">
             {facility.code}
           </span>
-          <span className="mt-[3px] max-w-[160px] truncate font-mono text-[8.5px] uppercase tracking-[0.08em] text-[var(--clr-dark-purple-60)]">
-            {facility.name}
-          </span>
+          {/* The code renders just above, so a blank/whitespace-only name
+              (legacy/manual data — the schema now trims on every write) drops
+              the subtitle line instead of duplicating the code (#378). */}
+          {facility.name?.trim() ? (
+            <span className="mt-[3px] max-w-[160px] truncate font-mono text-[8.5px] uppercase tracking-[0.08em] text-[var(--clr-dark-purple-60)]">
+              {facility.name}
+            </span>
+          ) : null}
         </span>
       </span>
       <span className="flex items-center gap-6 whitespace-nowrap font-mono text-[9px] font-medium uppercase tracking-[0.08em] text-[var(--clr-dark-purple-60)]">

@@ -436,6 +436,76 @@ export async function teardownWizardRemovalForBatch(
   }
 }
 
+export interface SeededIncompleteBatch {
+  creditBatchId: string;
+  code: string;
+  cleanup: () => Promise<void>;
+}
+
+/**
+ * Seed an UNGROUPED credit batch with NO production runs, so `deriveBatchHealth`
+ * → "incomplete" with the production (and carbon) checks unmet. Both the
+ * New-Removal wizard's selection card and the credit-batch detail checklist then
+ * render the SAME plain-language requirement string — the Phase 0 cross-surface
+ * consistency the redesign guarantees. Needs only a facility + a feedstock type
+ * (the credit batch is single-feedstock, NOT NULL — ADR 0016); no chain, samples
+ * or transport legs, which keeps it independent of the Isometric sandbox.
+ */
+export async function seedUngroupedIncompleteBatch(
+  refs: { facilityId: string; feedstockTypeId: string },
+  testRunId: string,
+): Promise<SeededIncompleteBatch> {
+  const { db, pool } = createDbConnection();
+  const id = {
+    creditBatch: crypto.randomUUID(),
+    productionProcess: crypto.randomUUID(),
+  };
+  const code = `E2E-INC-${testRunId}`;
+  const today = new Date().toISOString().slice(0, 10);
+
+  try {
+    await db.transaction(async (tx) => {
+      await tx.insert(schema.productionProcesses).values({
+        id: id.productionProcess,
+        facilityId: refs.facilityId,
+        feedstockTypeId: refs.feedstockTypeId,
+      });
+      await tx.insert(schema.creditBatches).values({
+        id: id.creditBatch,
+        code,
+        facilityId: refs.facilityId,
+        feedstockTypeId: refs.feedstockTypeId,
+        productionProcessId: id.productionProcess,
+        startDate: today,
+        endDate: today,
+        status: "draft",
+        hToCorgRatio: CREDIT_BATCH_H_TO_CORG_RATIO,
+        // Ungrouped: no removalId, no linked production runs.
+      });
+    });
+  } finally {
+    await pool.end();
+  }
+
+  return {
+    creditBatchId: id.creditBatch,
+    code,
+    cleanup: async () => {
+      const conn = createDbConnection();
+      try {
+        await conn.db
+          .delete(schema.creditBatches)
+          .where(eq(schema.creditBatches.id, id.creditBatch));
+        await conn.db
+          .delete(schema.productionProcesses)
+          .where(eq(schema.productionProcesses.id, id.productionProcess));
+      } finally {
+        await conn.pool.end();
+      }
+    },
+  };
+}
+
 // ── Ungrouped "ready" batch (full create→submit happy path) ──────────────────
 //
 // A batch is selectable in the New-Removal wizard only when `deriveBatchHealth`
