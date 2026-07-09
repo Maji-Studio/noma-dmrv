@@ -4,7 +4,7 @@ Concrete IDs, commands, and prompt skeletons for the conductor. Pull the piece y
 
 ## Contents
 - [Project board (ProjectV2 "noma dMRV" #9)](#project-board)
-- [Chrome E2E login recipe](#chrome-e2e-login-recipe)
+- [UI verification](#ui-verification)
 - [Codex review](#codex-review)
 - [Subagent prompt skeletons](#subagent-prompt-skeletons)
 
@@ -40,36 +40,40 @@ gh project item-edit --id <ITEM_ID> \
 
 A plan-file target has no issue → skip all board ops and the `Closes #` reference.
 
-## Chrome E2E login recipe
+## UI verification
 
-The verify step drives the **real UI** in Chrome (not the Playwright HTTP-auth fixtures). Give this recipe to the implementer subagent.
+The verify step drives the **real UI** (not the Playwright HTTP-auth fixtures). Give this to the implementer subagent.
 
-1. **Dev server on :3100.** Check `curl -sf http://localhost:3100 >/dev/null`. If it's down, start it: `pnpm dev` runs `dev:docker` (needs Docker Postgres up) — launch it in the background and wait for :3100 to answer. `.env.local` sets `DISABLE_RATE_LIMIT=true`, so repeated logins are fine.
-2. **Credentials from `.env.local`** (never hardcode, never log the value):
+**Step 0 — dev server on :3100 (both paths).** Check `curl -sf http://localhost:3100 >/dev/null`. If it's down, start it: `pnpm dev` runs `dev:docker` (needs Docker Postgres up) — launch it in the background and wait for :3100 to answer. `.env.local` sets `DISABLE_RATE_LIMIT=true`, so repeated logins are fine. The seeded admin can access every facility, so it can reach any changed page.
+
+**Default — delegate to gpt-5.5 via the codex-computer-use skill** (`.claude/skills/codex-computer-use/SKILL.md`). Follow that skill's mechanics: binary lookup, artifact dir, self-contained prompt (repo path, `http://localhost:3100`, sign-in via `ADMIN_EMAIL`/`ADMIN_PASSWORD` from `.env.local` — never printed, the exact flow to drive, acceptance checks, screenshots into the artifact dir), `codex exec ... -s danger-full-access`. Then **read the report and screenshots and judge them yourself** — codex output is evidence, not authority. Codex runs can exceed Bash's 10-min timeout: pass a longer timeout or background+poll.
+
+**Fallback — claude-in-chrome recipe** (codex absent/errors, or the flow needs the user's own browser session):
+
+1. **Credentials from `.env.local`** (never hardcode, never log the value):
    ```bash
    EMAIL=$(grep -E '^ADMIN_EMAIL=' .env.local | cut -d= -f2- | tr -d '"')
    # read ADMIN_PASSWORD the same way; keep it out of any echo/log
    ```
-   The seeded admin can access every facility, so it can reach any changed page.
-3. **Drive Chrome via MCP.** Load the browser tools in one ToolSearch call (`tabs_context_mcp,navigate,computer,read_page,form_input,tabs_create_mcp`), open a new tab, navigate to `http://localhost:3100`, sign in with the creds, then navigate to the page the change touches, exercise the changed flow, and capture a screenshot as evidence.
-4. Report what was exercised and the result. Backend-only change with no UI surface → run the matching `pnpm test:e2e` spec or unit path instead and say which.
+2. **Drive Chrome via MCP.** Load the browser tools in one ToolSearch call (`tabs_context_mcp,navigate,computer,read_page,form_input,tabs_create_mcp`), open a new tab, navigate to `http://localhost:3100`, sign in with the creds, then navigate to the page the change touches, exercise the changed flow, and capture a screenshot as evidence.
+
+Either path: report what was exercised and the result. Backend-only change with no UI surface → run the matching `pnpm test:e2e` spec or unit path instead and say which.
 
 ## Codex review
 
-Codex CLI is installed but **not on PATH** — call it by absolute path:
+Follow the **codex-review skill** (`.claude/skills/codex-review/SKILL.md`) for mechanics — binary lookup (`CODEX="$(command -v codex || echo "/Applications/Codex.app/Contents/Resources/codex")"`), artifact dir, and the Mode A/B split. For this phase, prefer Mode B (custom prompt naming the target `git diff staging...HEAD` plus the brief's requirements); Mode A is `"$CODEX" -C "$PWD" review --base staging > "$REPORT"`.
 
-```bash
-~/Library/pnpm/bin/codex exec review --base staging --title "<pr title>" > /tmp/codex-review.txt 2>&1
-```
-
-`exec review` reviews the current branch against `staging` and streams findings to stdout — run it in Phase 4, before the resolver changes anything. If it stalls on approvals in headless use, add `--dangerously-bypass-approvals-and-sandbox` (acceptable here: review is read-only; do not let codex write). Capture the substantive findings and post them: `gh pr comment <PR> --body-file /tmp/codex-review.txt` under a "Codex review" heading. Best-effort: if `~/Library/pnpm/bin/codex` is missing or errors, skip and note it in the Phase 6 report.
+Run it in Phase 4, before the resolver changes anything. Codex runs can exceed Bash's 10-min timeout: pass a longer timeout or background+poll. Post the substantive findings: `gh pr comment <PR> --body-file "$REPORT"` under a "Codex review (gpt-5.5)" heading, noting they are unverified gpt-5.5 output (the Phase 5 resolver verifies every comment against the code). Best-effort: if codex is missing or errors, skip and note it in the Phase 6 report.
 
 ## Subagent prompt skeletons
 
 Each skeleton ends by demanding a summary under ~200 words. Fill the `<…>` slots.
 
 **Implementer (Phase 2)** — synchronous:
-> Implement the change described in `<brief path>`. Repo root `<path>`; follow `.claude/CLAUDE.md` (layered flow schema→data-access+guards→fn→hooks→components, `pnpm` only, reuse existing hooks/utilities). Keep `pnpm lint` and `pnpm typecheck` green — read real output, don't trust piped exit codes. Commit on the current feature branch with conventional commits (body says why). Then verify in a real browser using the Chrome login recipe in `references/playbook.md`; capture a screenshot. Return under ~200 words: files changed, key decisions/deviations, lint+typecheck status, what you exercised and its result. Do NOT paste diffs or file contents.
+> Implement the change described in `<brief path>`. Repo root `<path>`; follow `.claude/CLAUDE.md` (layered flow schema→data-access+guards→fn→hooks→components, `pnpm` only, reuse existing hooks/utilities). If the brief is bulk/mechanical (clear-spec, migration, sweep), you may delegate the patch to gpt-5.5 via `.claude/skills/codex-implementation/SKILL.md` and then inspect the diff yourself; user-facing UI/copy you write yourself. Keep `pnpm lint` and `pnpm typecheck` green — read real output, don't trust piped exit codes. Commit on the current feature branch with conventional commits (body says why). Then verify in a real browser per the UI verification section of `references/playbook.md` (default: codex-computer-use skill; fallback: claude-in-chrome) and judge the evidence yourself. Return under ~200 words: files changed, key decisions/deviations, lint+typecheck status, what was exercised and its result. Do NOT paste diffs or file contents.
+
+**Codex reviewer (Phase 4)** — background, concurrent:
+> Run a gpt-5.5 review of PR #`<n>`'s branch against `staging` per `.claude/skills/codex-review/SKILL.md` and the Codex review section of `references/playbook.md` (Mode B preferred; include the brief's requirements in the prompt). Post the substantive findings as ONE `gh pr comment` under a "Codex review (gpt-5.5)" heading, noting they are unverified. If codex is missing or errors, post nothing and return the error. Return under ~200 words: findings posted (or the skip reason).
 
 **Publisher (Phase 3)** — synchronous:
 > Push the current branch with `-u` and open a PR to `staging` for `<repo>`. Title/body from the branch commits + `<brief path>`; include `Closes #<n>` if there is an issue. Then move board item `<itemId>` to In review (Maji) per `references/playbook.md`. Return only: PR number and URL.
