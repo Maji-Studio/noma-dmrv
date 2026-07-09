@@ -39,6 +39,7 @@ import {
   type DashboardProgressStage,
 } from "./dashboard-operations";
 import { requireAuth } from "./utils";
+import { productionRunDateExpr } from "./production-runs/date-expr";
 
 // Re-exported so components import every dashboard type from one module.
 export type {
@@ -227,7 +228,7 @@ export async function getDashboardOverview(
     Promise.all([
       db
         .select({
-          date: productionRuns.date,
+          date: productionRunDateExpr(),
           feedstockMassDryKg: productionRuns.feedstockMassDryKg,
           biocharDryMassKg: productionRuns.biocharDryMassKg,
         })
@@ -238,7 +239,7 @@ export async function getDashboardOverview(
             isNull(productionRuns.archivedAt),
             ne(productionRuns.status, "void"),
             ...(fetchStart
-              ? [gte(productionRuns.date, fetchStart.toISOString().slice(0, 10))]
+              ? [gte(productionRunDateExpr(), fetchStart.toISOString().slice(0, 10))]
               : []),
           ),
         ),
@@ -669,7 +670,7 @@ async function getAttentionItems(
             ),
           ),
         )
-        .orderBy(desc(productionRuns.date))
+        .orderBy(desc(productionRuns.startTime))
         .limit(ATTENTION_PER_CHECK),
       db
         .select({ id: biocharProducts.id, code: biocharProducts.code })

@@ -36,6 +36,7 @@ import {
 } from "@/db/schema";
 import { requireAuth } from "../utils";
 import { SafeError } from "@/lib/errors";
+import { productionRunDateExpr } from "./date-expr";
 import type { ProductionRunFilterData } from "@/schemas/production-runs";
 import type {
   ProductionRunFeedstockWithDetails,
@@ -90,24 +91,26 @@ export async function getProductionRuns(
   }
 
   if (startDate) {
-    conditions.push(gte(productionRuns.date, formatLocalDate(startDate)));
+    // Inclusive-day range on the run's calendar date (derived from start_time).
+    conditions.push(gte(productionRunDateExpr(), formatLocalDate(startDate)));
   }
 
   if (endDate) {
-    conditions.push(lte(productionRuns.date, formatLocalDate(endDate)));
+    conditions.push(lte(productionRunDateExpr(), formatLocalDate(endDate)));
   }
 
   const whereClause = and(...conditions);
 
-  // Build sort clause
+  // Build sort clause. The "date" sort key now orders by start_time (the run's
+  // instant), which sorts identically to the old date column but breaks ties.
   const sortColumn = {
     code: productionRuns.code,
-    date: productionRuns.date,
+    date: productionRuns.startTime,
     status: productionRuns.status,
     biocharOutputKg: productionRuns.biocharOutputKg,
     createdAt: productionRuns.createdAt,
     updatedAt: productionRuns.updatedAt,
-  }[sortBy] ?? productionRuns.date;
+  }[sortBy] ?? productionRuns.startTime;
 
   const orderFn = sortOrder === "asc" ? asc : desc;
 
@@ -131,7 +134,7 @@ export async function getProductionRuns(
       id: productionRuns.id,
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
-      date: productionRuns.date,
+      date: productionRunDateExpr(),
       status: productionRuns.status,
       startTime: productionRuns.startTime,
       endTime: productionRuns.endTime,
@@ -272,7 +275,7 @@ export async function getProductionRunById(
       id: productionRuns.id,
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
-      date: productionRuns.date,
+      date: productionRunDateExpr(),
       status: productionRuns.status,
       startTime: productionRuns.startTime,
       endTime: productionRuns.endTime,
@@ -547,10 +550,10 @@ export async function getProductionRunOptions(
     .select({
       id: productionRuns.id,
       code: productionRuns.code,
-      date: productionRuns.date,
+      date: productionRunDateExpr(),
       status: productionRuns.status,
     })
     .from(productionRuns)
     .where(isNull(productionRuns.archivedAt))
-    .orderBy(desc(productionRuns.date));
+    .orderBy(desc(productionRuns.startTime));
 }

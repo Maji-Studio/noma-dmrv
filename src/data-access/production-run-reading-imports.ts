@@ -4,6 +4,7 @@ import { documents, productionRunReadings, productionRuns } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
 import type { ReadingsCsvRow } from "@/lib/production-readings/readings-csv";
 import { requireAuth } from "./utils";
+import { productionRunDateExpr } from "./production-runs/date-expr";
 
 export interface ProductionRunReadingsImportContext {
   documentId: string;
@@ -34,7 +35,7 @@ export async function getProductionRunReadingsImportContext(
       mimeType: documents.mimeType,
       productionRunId: productionRuns.id,
       runCode: productionRuns.code,
-      runDate: productionRuns.date,
+      runDate: productionRunDateExpr(),
       runWindowStart: productionRuns.startTime,
       runWindowEnd: productionRuns.endTime,
     })
@@ -51,6 +52,14 @@ export async function getProductionRunReadingsImportContext(
   }
   if (!row.storageKey) {
     throw new SafeError("Readings file has no managed storage key");
+  }
+  // An open run has no end instant, so there is no window to slot readings into.
+  // Reject with a clear message rather than the old zero-duration failure (#259,
+  // the misleading-error half of #207).
+  if (!row.runWindowEnd) {
+    throw new SafeError(
+      `Run ${row.runCode} has no end time yet — set the run's end time before importing readings`,
+    );
   }
 
   return {
