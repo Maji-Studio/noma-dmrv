@@ -1,11 +1,22 @@
 /**
  * DB-backed regression tests for the resolved-facility scope on the
- * certification submit surface (issue #277). These prove that a submission
- * anchored to facility A is refused when the caller scopes the read to facility
- * B — the defence-in-depth guard that closes the id-confusion / cross-facility
- * mixing gap while the full membership model (issue #372 / ADR 0010) is
- * deferred. Per ADR 0008 the guard resolves facility from the anchor row in
- * real Postgres, so these run DB-backed rather than against an in-memory fake.
+ * certification submit surface (issue #277).
+ *
+ * SCOPE OF WHAT THESE PROVE: they exercise the data-access guard *contract* —
+ * `getSubmissionById` / `getLatestSubmission` / `getLatestSubmissionsForEntities`
+ * resolve a submission's owning facility from its anchor row and refuse (or drop)
+ * a read scoped to a different facility, failing closed on a dangling anchor.
+ * They deliberately hand the helper a mismatched `facilityBId` directly — a
+ * state today's wired entry points cannot themselves produce, because each
+ * derives its `expectedFacilityId` from the same anchor id it is reading (so the
+ * live comparison is lineage-consistency, whose only reachable rejection is a
+ * dangling anchor). A true entry-point IDOR rejection can't be expressed until
+ * an independent caller facility exists (membership model / active-facility
+ * context, issue #372 / ADR 0010); these tests are the seam's contract guard,
+ * not a proof that any submit action rejects a cross-facility swap.
+ *
+ * Per ADR 0008 the guard resolves facility from the anchor row in real Postgres,
+ * so these run DB-backed rather than against an in-memory fake.
  */
 import { afterAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
