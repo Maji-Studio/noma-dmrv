@@ -22,9 +22,10 @@ single session (the full traceability chain end to end).
 
 ## Authentication
 
-Auth uses the **HTTP API** (`createDirectAuthContext`), **not** UI login — this avoids the
-scrypt password-hashing overhead and Better Auth's sign-in rate limiting. Two requirements
-follow from that:
+Auth uses the **HTTP API**, **not** UI login — the worker fixture in
+`tests/e2e/fixtures/auth-fixtures.ts` builds storage states via
+`createSignedAuthStorageState`. This avoids the scrypt password-hashing overhead and Better
+Auth's sign-in rate limiting. Two requirements follow from that:
 
 - **`DISABLE_RATE_LIMIT=true` must be set in `.env.local`.** Better Auth rate-limits sign-in
   to 10 requests / 15 min; without this toggle the fixtures trip the limiter.
@@ -39,8 +40,9 @@ otherwise the fixtures fall back to a dead `DATABASE_URL` and every spec fails t
 
 ## Timeouts
 
-Global timeout is **60s**. First-load compilation in dev mode can take 10–30s, so a spec's
-first page navigation is legitimately slow — the generous timeout absorbs it.
+Global per-test timeout is **60s in CI, 90s locally** (`playwright.config.ts`). First-load
+compilation in dev mode can take 10–30s, so a spec's first page navigation is legitimately
+slow — the generous timeout absorbs it.
 
 ## Common gotchas
 

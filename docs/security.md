@@ -83,11 +83,11 @@ invalid or missing-required var.
 
 **Document NAMES only, never values** — here, in code, in comments, or in tests.
 
-Inventory by group:
+Inventory by group (app-validated in `src/config/env.ts`):
 
 - **Core:** `DATABASE_URL`, `NEXT_PUBLIC_APP_URL`, `BETTER_AUTH_SECRET` (32+ chars),
-  `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`,
-  `ALLOW_SELF_SIGNUP`, `NODE_ENV`
+  `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `ADMIN_EMAIL`, `ALLOW_SELF_SIGNUP`,
+  `NODE_ENV`
 - **Logging / DB pool:** `LOG_LEVEL`, `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`,
   `DB_POOL_CONNECTION_TIMEOUT_MS`
 - **Storage:** `STORAGE_PROVIDER` (`s3-compatible` required in prod),
@@ -95,11 +95,20 @@ Inventory by group:
   `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_SIGNING_SECRET`,
   `STORAGE_LOCAL_FS_ROOT`
 - **Isometric:** `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
-  (both-or-neither), `ISOMETRIC_ENVIRONMENT`, `ISOMETRIC_UPLOAD_HOST_ALLOWLIST`
+  (both-or-neither), `ISOMETRIC_ENVIRONMENT`, `ISOMETRIC_UPLOAD_HOST_ALLOWLIST`,
+  `ISOMETRIC_STORAGE_REDIRECT_HOSTS` (document-redirect allowlist)
 - **Geo / maps** (all optional — graceful degradation): `OPENROUTESERVICE_API_KEY`
   (server-only geocode/routing), `NEXT_PUBLIC_MAPTILER_KEY` (public,
   domain-locked basemap key), `GEO_PROVIDER` (`ors` default; `stub` = hermetic
   test fixtures, rejected in prod)
+
+Not validated by `env.ts` — read directly from `process.env` by scripts/tests:
+
+- `ADMIN_PASSWORD` — consumed only by the admin-bootstrap CLI
+  (`src/lib/cli/ensure-admin.ts`), never by the running app.
+- `DISABLE_RATE_LIMIT` — test-only toggle read in `src/lib/auth/better-auth.ts`;
+  required for E2E fixtures (see `docs/testing.md`).
+- `ISOMETRIC_DEMO_PROJECT_ID` — CI/staging smoke-test target.
 
 ### The three environment items intentionally differ
 

@@ -173,6 +173,6 @@ Use current entity patterns such as facilities, feedstocks, and credit batches a
 - Track deferred work as a **dated entry** in `docs/open-questions.md`, never as
   a code `TODO`.
 - Resolve a deferred item by **removing its entry** from `docs/open-questions.md`
-  and recording the decision in the relevant feature doc (e.g.
-  `docs/isometric/changes.md`) — i.e. update the feature doc when a decision
-  becomes settled.
+  and recording the decision in the relevant evergreen feature doc (e.g.
+  `docs/isometric/README.md`) or an ADR — i.e. update the feature doc when a
+  decision becomes settled; dated implementation notes go to `docs/archive/`.

@@ -67,7 +67,9 @@ authority**.
 - Respect the **layered architecture** (components → hooks → fn → data-access → db); `fn/`
   files have `"use server"` + Zod validation; every `data-access/` function calls an auth
   guard.
-- **Never read or edit `.env*` files**; never log PII (log IDs, not emails/names).
+- **Never read or edit `.env*` files** (sole exception: the codex-computer-use sign-in flow
+  reads `ADMIN_EMAIL`/`ADMIN_PASSWORD` from `.env.local` — that skill covers it); never log
+  PII (log IDs, not emails/names).
 - **kebab-case** file names; **no file may exceed 1000 lines**.
 - **Never touch `staging`/`main`** or create commits.
 

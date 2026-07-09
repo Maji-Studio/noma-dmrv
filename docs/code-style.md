@@ -60,14 +60,13 @@ route / spec).
    share a base schema between the form and update variants; use `@/schemas/helpers`.
 2. **DB schema** (`src/db/schema/`) — define the table, export its types, add it to
    `schema/index.ts`, then `pnpm db:generate`.
-3. **Data access** (`src/data-access/`) — CRUD functions, each calling `requireAuth()` or
-   `requireProjectMember()`.
+3. **Data access** (`src/data-access/`) — CRUD functions, each calling `requireAuth()`.
 4. **Server actions** (`src/fn/`) — `"use server"`, validate input with Zod, return
    `ActionResult<T>`.
 5. **Hooks** (`src/hooks/`) — query + mutation hooks with invalidation.
 6. **Components** (`src/components/your-feature/`) — React Hook Form forms, design tokens,
    barrel export.
-7. **Route** — biochar entities use flat routes (`/facilities`); project-scoped features use
-   `/[projectId]/…`. Route params are async (Next.js 16).
+7. **Route** — entities use flat routes under `(app)` (`/facilities`, `/reactors`, …);
+   the legacy `[projectId]` route tree was removed. Route params are async (Next.js 16).
 8. **E2E** (`tests/e2e/your-feature.spec.ts`) — use the `adminPage` + `seededData` fixtures
    (see `docs/testing.md`).

@@ -42,7 +42,7 @@ Every `data-access/` function calls an auth guard before touching the database
 
 ```typescript
 export async function createItem(userId: string, data: CreateItem) {
-  await requireAuth();          // or requireProjectMember()
+  requireAuth(userId); // throws if userId is falsy
   // safe to proceed
 }
 ```
@@ -136,7 +136,7 @@ This app uses **Next.js 16's `proxy.ts`** instead of traditional `middleware.ts`
 - React Query provider is mounted once in `src/app/layout.tsx`.
 - Feature hooks in `src/hooks/` call server actions and invalidate cache keys.
 - Facility-scoped query keys include the active `facilityId` when the resource is facility-specific.
-- **Query keys**: `["resource", projectId, ...specifics]`; invalidate related
+- **Query keys**: `["resource", facilityId, ...specifics]`; invalidate related
   queries after every mutation.
 - **Stale time**: 30s for current data, 5m for historical.
 - **Always check `src/hooks/` first** — every entity has a hook file

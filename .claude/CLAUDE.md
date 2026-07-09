@@ -5,14 +5,14 @@ Guidance for Claude Code. **These instructions OVERRIDE default behavior — fol
 ## DO NOT — Critical Rules
 
 - ❌ **NEVER use npm or yarn** — always `pnpm`.
-- ❌ **NEVER skip auth guards** — every `data-access/` function calls `requireAuth()` / `requireProjectMember()`.
+- ❌ **NEVER skip auth guards** — every `data-access/` function calls `requireAuth()` (`src/data-access/utils.ts`).
 - ❌ **NEVER let a file exceed 1000 lines** — split into modular files.
 - ❌ **NEVER hard-code magic numbers** — constants at top of file or in `@/config`; use design tokens, never hardcoded values.
 - ❌ **NEVER commit `.env` files, secrets, API keys, or credentials** — not even in docs or tests.
 - ❌ **NEVER log PII (emails, names)** — log IDs (`userId`, `removalId`); the server logger redacts as a backstop, not a license.
 - ❌ **NEVER commit to `staging` or `main` directly, and never modify `staging` during branch work** — feature branch + PR only; verify `git branch --show-current` before every commit.
 - ❌ **NEVER assume local env matches staging/production** — the three 1Password items intentionally differ (`docs/security.md`).
-- ❌ **NEVER create messy docs** — only evergreen docs in `/docs`; deferred work → `docs/open-questions.md`, not code TODOs.
+- ❌ **NEVER create messy docs** — only evergreen docs in `/docs` (dated plans → `docs/plans/`, historical notes → `docs/archive/`); deferred work → `docs/open-questions.md`, not code TODOs.
 
 ## Project Overview
 
