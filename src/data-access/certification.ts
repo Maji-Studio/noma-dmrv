@@ -13,6 +13,10 @@ import { documents } from "@/db/schema/documentation";
 import { facilities } from "@/db/schema/facilities";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { DEFAULT_PROTOCOL_SLUG } from "@/config/certification";
+import {
+  GHG_STATEMENT_ENTITY_TYPE,
+  REMOVAL_ENTITY_TYPE,
+} from "@/lib/isometric/utils/constants";
 import { SafeError } from "@/lib/errors";
 import { requireAuth } from "./utils";
 
@@ -402,13 +406,18 @@ export type CertifierSyncEventRow = typeof certifierSyncEvents.$inferSelect;
 // so id/key-addressed reads can be refused when they cross a facility boundary,
 // mirroring reconcileRemovalMembership's step-0 facility resolve.
 //
-// This is NOT per-user membership: there is no membership model yet (issue
-// #372 / ADR 0010), so an authenticated caller can still act within any linked
-// facility. What it closes is the id-confusion / cross-facility-mixing gap on
-// the submit surface — a caller that already resolved the facility it is
-// operating within passes it as `expectedFacilityId` and gets a hard rejection
-// instead of silently acting on another facility's ledger row. See
-// docs/open-questions.md `security/certification-submit-authz`.
+// This is NOT per-user membership, and it is NOT (yet) cross-facility
+// authorization. There is no membership model (issue #372 / ADR 0010) and no
+// independent active-facility context on the server actions, so today every
+// wired caller derives `expectedFacilityId` from the *same* anchor id it is
+// operating on. That makes the comparison lineage-consistency, whose only
+// live rejection is a dangling/unresolvable anchor (fail-closed) — a genuine
+// cross-facility id swap can only be rejected once an *independent* facility
+// (a real membership check or a session-level active facility) is threaded in.
+// These helpers are that seam: they resolve a submission's owning facility
+// from its anchor row (never a client-supplied field), so the id/key-addressed
+// reads can be refused the moment #372 lands an independent value to compare
+// against. See docs/open-questions.md `security/certification-submit-authz`.
 
 // `removal` covers both Removal and telemetry (dataUpload) submissions (ADR
 // 0006 — both key `localEntityId` to certifierRemovals.id); `ghgStatement`
@@ -422,14 +431,14 @@ async function facilityIdsForLocalEntities(
   ids: string[],
 ): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map();
-  if (localEntityType === "removal") {
+  if (localEntityType === REMOVAL_ENTITY_TYPE) {
     const rows = await executor
       .select({ id: certifierRemovals.id, facilityId: certifierRemovals.facilityId })
       .from(certifierRemovals)
       .where(inArray(certifierRemovals.id, ids));
     return new Map(rows.map((r) => [r.id, r.facilityId]));
   }
-  if (localEntityType === "ghgStatement") {
+  if (localEntityType === GHG_STATEMENT_ENTITY_TYPE) {
     const rows = await executor
       .select({
         id: certifierGhgStatements.id,
