@@ -571,6 +571,10 @@ export function FeedstockForm({
           isSubmitting={isSubmitting}
           submitLabel={submitLabel}
           defaultSubmitLabel={defaultSubmitLabel}
+          // The update path rebuilds the derived transport leg from the
+          // submitted values, so saving before the saved leg has prefilled
+          // trip type/distance would silently reset them to defaults.
+          submitDisabled={isEditMode && existingLegs === undefined}
         />
       </form>
 
