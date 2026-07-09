@@ -59,7 +59,14 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
 
     const [run] = await db
       .insert(productionRuns)
-      .values({ code: `PR-PBF-${tag}`, facilityId, reactorId, date: "2026-01-01", status: "complete" })
+      .values({
+        code: `PR-PBF-${tag}`,
+        facilityId,
+        reactorId,
+        status: "complete",
+        startTime: new Date("2026-01-01T08:00:00Z"),
+        endTime: new Date("2026-01-01T12:00:00Z"),
+      })
       .returning({ id: productionRuns.id });
     runId = run.id;
 

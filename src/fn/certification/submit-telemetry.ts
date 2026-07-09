@@ -129,13 +129,21 @@ export async function submitTelemetry(
   };
 
   // ADR 0006 - pure clock window on production_run_readings.timestamp;
-  // derived from the runs the removal aggregates.
+  // derived from the runs the removal aggregates. Every run must be closed —
+  // an open run (NULL end) has no window to publish, so fail loudly (#259).
+  const openRun = ctx.runs.find((r) => r.endTime == null);
+  if (openRun) {
+    throw new SafeError(
+      `Run ${openRun.code} has no end time yet — complete the run before publishing telemetry`,
+    );
+  }
+  const endTimes = ctx.runs
+    .map((r) => r.endTime)
+    .filter((d): d is Date => d != null);
   const windowStart = new Date(
     Math.min(...ctx.runs.map((r) => r.startTime.getTime())),
   );
-  const windowEnd = new Date(
-    Math.max(...ctx.runs.map((r) => r.endTime.getTime())),
-  );
+  const windowEnd = new Date(Math.max(...endTimes.map((d) => d.getTime())));
 
   // Ensure a sensor mapping exists per (reactor x channel).
   const reactorIds = [...new Set(ctx.runs.map((r) => r.reactorId))];

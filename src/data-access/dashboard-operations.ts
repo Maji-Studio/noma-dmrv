@@ -50,6 +50,7 @@ import {
   APPLICATION_VISUAL_EVIDENCE_ROLES,
 } from "@/lib/certification/application-evidence";
 import { requireAuth } from "./utils";
+import { productionRunDateExpr } from "./production-runs/date-expr";
 import { loadMapTrace } from "./dashboard-map-trace";
 import type {
   DashboardMapEdge,
@@ -381,7 +382,7 @@ async function loadRunningRuns(facilityId: string): Promise<RunRow[]> {
     .select({
       id: productionRuns.id,
       code: productionRuns.code,
-      date: productionRuns.date,
+      date: productionRunDateExpr(),
     })
     .from(productionRuns)
     .where(
@@ -403,7 +404,7 @@ async function loadRecentCompletedRuns(
     .select({
       id: productionRuns.id,
       code: productionRuns.code,
-      date: productionRuns.date,
+      date: productionRunDateExpr(),
     })
     .from(productionRuns)
     .where(
@@ -411,10 +412,10 @@ async function loadRecentCompletedRuns(
         eq(productionRuns.facilityId, facilityId),
         isNull(productionRuns.archivedAt),
         eq(productionRuns.status, "complete"),
-        gte(productionRuns.date, sinceDate),
+        gte(productionRunDateExpr(), sinceDate),
       ),
     )
-    .orderBy(desc(productionRuns.date))
+    .orderBy(desc(productionRuns.startTime))
     .limit(ROW_LIMIT);
 }
 

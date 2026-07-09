@@ -160,15 +160,22 @@ describe("createProductionRun — feedstock type usage gate", () => {
     }
   });
 
+  // These fixtures share one reactor and are torn down only in afterAll, so each
+  // run needs its own non-overlapping window or the reactor-overlap guard (#259)
+  // would preempt the feedstock-type assertions being tested here.
+  let runWindowSeq = 0;
   function baseRunInput(codeSuffix: string, feedstockStorageLocationId: string) {
-    const startTime = new Date("2026-01-15T08:00:00Z");
+    const startHour = 8 + runWindowSeq * 3;
+    runWindowSeq++;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const startTime = new Date(`2026-01-15T${pad(startHour)}:00:00Z`);
+    const endTime = new Date(`2026-01-15T${pad(startHour + 2)}:00:00Z`);
     return {
       code: `PR-PRG-${codeSuffix}-${tag}`,
       facilityId,
       reactorId,
-      date: startTime,
       startTime,
-      endTime: new Date("2026-01-15T10:00:00Z"),
+      endTime,
       feedstockWetMassKg: 50,
       feedstockMoisturePercent: 20,
       feedstockStorageLocationId,

@@ -15,6 +15,7 @@ import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
 import { feedstocks } from "@/db/schema/feedstock";
 import { productionRuns, productionRunFeedstocks } from "@/db/schema/production";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
+import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
 
 /**
@@ -42,7 +43,7 @@ export async function validateProductionRunIds(
       id: productionRuns.id,
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
-      date: productionRuns.date,
+      date: productionRunDateExpr(),
     })
     .from(productionRuns)
     .where(inArray(productionRuns.id, productionRunIds));

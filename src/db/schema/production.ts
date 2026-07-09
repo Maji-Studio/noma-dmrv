@@ -8,6 +8,7 @@ import {
   real,
   date,
   integer,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { relations, sql, type InferSelectModel } from 'drizzle-orm';
 import { electricitySourceCategory, incidentSeverity, productionRunStatus } from './common';
@@ -29,12 +30,16 @@ export const productionRuns = pgTable(
     facilityId: uuid('facility_id')
       .notNull()
       .references(() => facilities.id),
-    date: date('date').notNull(),
     status: productionRunStatus('status').default('running').notNull(),
 
     // --- Overview ---
+    // The run's physical time window. `startTime` is the natural key (with
+    // reactor) and its date is the run's calendar date — the standalone `date`
+    // column was dropped (issue #259); consumers derive it from `startTime`.
     startTime: timestamp('start_time').defaultNow().notNull(),
-    endTime: timestamp('end_time').defaultNow().notNull(),
+    // NULL = the run has started but not ended yet (an "open" run). A closed
+    // run occupies [startTime, endTime); an open run occupies [startTime, ∞).
+    endTime: timestamp('end_time'),
     reactorId: uuid('reactor_id')
       .notNull()
       .references(() => reactors.id),
@@ -75,6 +80,18 @@ export const productionRuns = pgTable(
   },
   (table) => [
     index('production_runs_facility_id_idx').on(table.facilityId),
+    // A run's window must be forward in time (or still open). Mirrors the
+    // server-side overlap guard (#259).
+    check(
+      'production_runs_end_after_start',
+      sql`${table.endTime} is null or ${table.endTime} > ${table.startTime}`
+    ),
+    // One physical run per (reactor, start instant): two runs can't begin at the
+    // same moment on the same reactor. Partial so voided/archived rows free the
+    // slot. The server layer additionally rejects overlapping windows (#259).
+    uniqueIndex('production_runs_reactor_start_unique_idx')
+      .on(table.reactorId, table.startTime)
+      .where(sql`${table.status} <> 'void' and ${table.archivedAt} is null`),
     check(
       'production_runs_feedstock_wet_mass_non_negative',
       sql`${table.feedstockWetMassKg} is null or ${table.feedstockWetMassKg} >= 0`

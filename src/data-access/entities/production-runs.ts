@@ -5,6 +5,7 @@
 import { ilike, eq, and, isNull, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { productionRuns, facilities, storageLocations } from "@/db/schema";
+import { productionRunDateExpr } from "@/data-access/production-runs/date-expr";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 
 // Deterministic integer formatting. Bare `Number.prototype.toLocaleString()`
@@ -51,7 +52,7 @@ export async function getProductionRunsEntity(params: {
     .select({
       id: productionRuns.id,
       code: productionRuns.code,
-      date: productionRuns.date,
+      date: productionRunDateExpr(),
       status: productionRuns.status,
       facilityName: facilities.name,
       biocharOutputKg: productionRuns.biocharOutputKg,
@@ -80,7 +81,7 @@ export async function getProductionRunEntityById(id: string): Promise<EntityOpti
     .select({
       id: productionRuns.id,
       code: productionRuns.code,
-      date: productionRuns.date,
+      date: productionRunDateExpr(),
       status: productionRuns.status,
       facilityName: facilities.name,
       biocharOutputKg: productionRuns.biocharOutputKg,

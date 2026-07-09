@@ -21,6 +21,8 @@ import {
   addProductionRunReading as addProductionRunReadingData,
   updateProductionRun,
   isProductionRunCodeAvailable as isProductionRunCodeAvailableData,
+  ProductionRunOverlapError,
+  productionRunDateExpr,
   type PaginatedProductionRuns,
   type ProductionRunWithRelations,
   type ProductionRunStats,
@@ -132,7 +134,7 @@ export async function getProductionRunBiocharPreviewFn(
 
     const [run] = await db
       .select({
-        date: productionRuns.date,
+        date: productionRunDateExpr(),
         biocharOutputKg: productionRuns.biocharOutputKg,
         biocharStorageLocationCode: storageLocations.code,
       })
@@ -294,17 +296,12 @@ export async function createProductionRunFn(
         createProductionRun(user.id, {
           code,
           facilityId: validated.facilityId,
-          date: validated.date instanceof Date ? validated.date : new Date(validated.date),
           reactorId: validated.reactorId,
           status: validated.status,
           startTime: validated.startTime instanceof Date ? validated.startTime : new Date(validated.startTime),
-          endTime: validated.endTime
-            ? validated.endTime instanceof Date
-              ? validated.endTime
-              : new Date(validated.endTime)
-            : validated.startTime instanceof Date
-              ? validated.startTime
-              : new Date(validated.startTime),
+          // Absent end time now stores NULL (an open run) — no silent coercion
+          // to startTime, which produced misleading zero-duration windows (#259).
+          endTime: validated.endTime instanceof Date ? validated.endTime : null,
           operatorId: validated.operatorId || null,
           feedstockWetMassKg: validated.feedstockWetMassKg ?? null,
           feedstockMoisturePercent: validated.feedstockMoisturePercent ?? null,
@@ -328,6 +325,9 @@ export async function createProductionRunFn(
         success: false,
         error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
       };
+    }
+    if (error instanceof ProductionRunOverlapError) {
+      return { success: false, error: error.message, conflict: error.conflict };
     }
     return {
       success: false,
@@ -402,11 +402,18 @@ export async function updateProductionRunFn(
     const run = await updateProductionRun(user.id, validated.productionRunId, {
       code: validated.code,
       facilityId: validated.facilityId,
-      date: validated.date instanceof Date ? validated.date : validated.date ? new Date(validated.date) : undefined,
       reactorId: validated.reactorId,
       status: validated.status,
       startTime: validated.startTime instanceof Date ? validated.startTime : validated.startTime ? new Date(validated.startTime) : undefined,
-      endTime: validated.endTime instanceof Date ? validated.endTime : validated.endTime ? new Date(validated.endTime) : undefined,
+      // null clears the end time; undefined leaves it unchanged.
+      endTime:
+        validated.endTime === null
+          ? null
+          : validated.endTime instanceof Date
+            ? validated.endTime
+            : validated.endTime
+              ? new Date(validated.endTime)
+              : undefined,
       operatorId: validated.operatorId,
       feedstockWetMassKg: validated.feedstockWetMassKg,
       feedstockMoisturePercent: validated.feedstockMoisturePercent,
@@ -429,6 +436,9 @@ export async function updateProductionRunFn(
         success: false,
         error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
       };
+    }
+    if (error instanceof ProductionRunOverlapError) {
+      return { success: false, error: error.message, conflict: error.conflict };
     }
     return {
       success: false,

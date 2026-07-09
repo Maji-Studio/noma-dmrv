@@ -48,6 +48,7 @@ import {
   summarizeApplicationsForBatches,
 } from "./credit-batch-production-runs";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
+import { productionRunDateExpr } from "./production-runs/date-expr";
 import {
   buildCo2eStoredPreview,
   getFacilityCertifierWithExecutor,
@@ -798,7 +799,10 @@ export async function getCreditBatchProductionRunOptions(
       params.startDate,
       params.endDate,
     );
-    conditions.push(gte(productionRuns.date, startStr), lte(productionRuns.date, endStr));
+    conditions.push(
+      gte(productionRunDateExpr(), startStr),
+      lte(productionRunDateExpr(), endStr),
+    );
   }
 
   if (params.includeCreditBatchId) {
@@ -813,7 +817,7 @@ export async function getCreditBatchProductionRunOptions(
     .select({
       id: productionRuns.id,
       code: productionRuns.code,
-      date: productionRuns.date,
+      date: productionRunDateExpr(),
       status: productionRuns.status,
       biocharDryMassKg: productionRuns.biocharDryMassKg,
       feedstockMassDryKg: productionRuns.feedstockMassDryKg,
@@ -834,7 +838,7 @@ export async function getCreditBatchProductionRunOptions(
       eq(creditBatches.id, creditBatchProductionRuns.creditBatchId),
     )
     .where(and(...conditions))
-    .orderBy(desc(productionRuns.date));
+    .orderBy(desc(productionRuns.startTime));
 
   // Resolve each run's DISTINCT feedstock-type set in a SEPARATE query — joining
   // productionRunFeedstocks into the select above would fan out the row set (a

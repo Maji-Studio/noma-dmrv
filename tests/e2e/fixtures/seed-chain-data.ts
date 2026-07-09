@@ -14,6 +14,7 @@ import { createDbConnection } from "./db";
 const SEEDED_CREDIT_BATCH_CODE_PREFIX = "E2E-CB";
 const SEEDED_CREDIT_BATCH_DURATION_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const MS_PER_HOUR = 60 * 60 * 1000;
 const SEEDED_H_TO_CORG_RATIO = 0.4;
 
 export interface SeededChainData {
@@ -345,13 +346,17 @@ export async function seedDurabilityBatch(
         facilityId,
         feedstockTypeId,
       });
+      // Both runs share one reactor, so each needs a distinct start instant to
+      // satisfy the (reactor, start_time) unique index (#259). day1/day2 are
+      // distinct calendar days; give each a closed 6-hour window.
       await tx.insert(schema.productionRuns).values([
         {
           id: run1Id,
           code: `${code}-PR1`,
           facilityId,
           reactorId,
-          date: dateStr(day1),
+          startTime: day1,
+          endTime: new Date(day1.getTime() + 6 * MS_PER_HOUR),
           biocharDryMassKg: 1000,
         },
         {
@@ -359,7 +364,8 @@ export async function seedDurabilityBatch(
           code: `${code}-PR2`,
           facilityId,
           reactorId,
-          date: dateStr(day2),
+          startTime: day2,
+          endTime: new Date(day2.getTime() + 6 * MS_PER_HOUR),
           biocharDryMassKg: 1000,
         },
       ]);

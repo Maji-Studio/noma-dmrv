@@ -29,8 +29,23 @@ import {
 } from "@/fn/production-runs";
 import { facilityKeys } from "@/hooks/use-facilities";
 import { reactorKeys } from "@/hooks/use-reactors";
+import { ProductionRunConflictError } from "@/lib/production-runs/overlap-conflict";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+
+/**
+ * Turn a failed production-run action into a thrown error, preserving the
+ * structured overlap conflict (#259) so the form can surface it inline.
+ */
+function throwProductionRunActionError(result: {
+  error: string;
+  conflict?: { entity: string; id: string; code: string };
+}): never {
+  if (result.conflict) {
+    throw new ProductionRunConflictError(result.error, result.conflict);
+  }
+  throw new Error(result.error);
+}
 
 // ============================================
 // Query Keys
@@ -196,7 +211,7 @@ export function useCreateProductionRun(
     mutationFn: async (data: CreateProductionRunData) => {
       const result = await createProductionRunFn(data);
       if (!result.success) {
-        throw new Error(result.error);
+        throwProductionRunActionError(result);
       }
       return result.data;
     },
@@ -246,7 +261,7 @@ export function useUpdateProductionRun(
     mutationFn: async (data: UpdateProductionRunData) => {
       const result = await updateProductionRunFn(data);
       if (!result.success) {
-        throw new Error(result.error);
+        throwProductionRunActionError(result);
       }
       return result.data;
     },

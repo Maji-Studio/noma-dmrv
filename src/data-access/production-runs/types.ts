@@ -19,7 +19,8 @@ export interface ProductionRunWithRelations {
   date: string;
   status: "draft" | "running" | "complete" | "void";
   startTime: Date;
-  endTime: Date;
+  // NULL = the run has started but not ended yet (an "open" run). #259.
+  endTime: Date | null;
   reactorId: string;
   operatorId: string | null;
   feedingRateKgHr: number | null;
