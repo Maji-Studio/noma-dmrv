@@ -1,7 +1,12 @@
 /**
  * EmissionEstimatesForm
- * Admin form for a facility's Phase 3.7 emission-estimate config —
- * genset energy yield persisted onto the facility's certifier_projects row.
+ * Admin form for a facility's emission-estimate config on the certifier_projects
+ * row. The only user-facing input is the reference soil temperature, which is a
+ * 200-year-only durability input — so the form renders fields only for 200-year
+ * facilities and an explanatory note for 1000-year ones (ADR 0021). Genset
+ * energy yield is round-tripped as a hidden field: issue #319 made it vestigial
+ * (diesel submits by volume) but the stored value is preserved without a
+ * migration.
  */
 "use client";
 
@@ -21,20 +26,24 @@ import {
   type FacilityEmissionConfigFormData,
 } from "@/schemas/certification";
 import { useSaveFacilityEmissionConfig } from "@/hooks/use-certification";
-import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import type { CertifierProjectRow } from "@/data-access/certification";
-
-const isEmissionConfigCertifyField = (field: string) =>
-  isCertifyFormField("facilityEmissionConfig", field);
 
 interface EmissionEstimatesFormProps {
   facilityId: string;
   mapping: CertifierProjectRow | null;
+  /**
+   * Facility durability tier (ADR 0021). Reference soil temperature is an input
+   * ONLY to the 200-year durable fraction — 1000-year batches derive it from
+   * petrographic reflectance (R₀) — so the soil section renders only for
+   * 200-year facilities.
+   */
+  durabilityOption: "200_year" | "1000_year";
 }
 
 export function EmissionEstimatesForm({
   facilityId,
   mapping,
+  durabilityOption,
 }: EmissionEstimatesFormProps) {
   const toast = useToast();
   const saveMutation = useSaveFacilityEmissionConfig();
@@ -65,6 +74,20 @@ export function EmissionEstimatesForm({
     );
   }
 
+  // Reference soil temperature is a 200-year-only input. A 1000-year facility
+  // has nothing to configure here — genset diesel submits by volume (#319) and
+  // the durable fraction comes from petrographic reflectance, not soil temp.
+  const showSoilReference = durabilityOption === "200_year";
+  if (!showSoilReference) {
+    return (
+      <p className="body-medium text-[var(--color-text-secondary)]">
+        No emission estimates to configure for 1000-year durability. Genset
+        diesel submits by volume, and reference soil temperature applies only to
+        200-year removals.
+      </p>
+    );
+  }
+
   const onSubmit = async (raw: unknown) => {
     try {
       await saveMutation.mutateAsync(raw as FacilityEmissionConfigFormData);
@@ -87,26 +110,12 @@ export function EmissionEstimatesForm({
         <ServerError message={errors.root.serverError.message} />
       )}
       <input type="hidden" {...register("facilityId")} />
-
-      <div className="flex flex-col gap-16">
-        <SectionLabel>Diesel genset</SectionLabel>
-        <FormField
-          id="gensetEnergyYieldKwhPerLitre"
-          label="Genset energy yield (kWh per litre)"
-          certifyRequired={isEmissionConfigCertifyField("gensetEnergyYieldKwhPerLitre")}
-          error={errors.gensetEnergyYieldKwhPerLitre?.message}
-          helperText="Optional local estimate — genset diesel now submits by volume, so this yield no longer affects submissions (issue #319). Electrical kWh produced per litre of genset diesel; ~3.375 from the Dark Earth LCA (diesel 2.7 kgCO2e/L ÷ genset 0.8 kgCO2e/kWh)."
-        >
-          <FormInput
-            id="gensetEnergyYieldKwhPerLitre"
-            type="number"
-            step="0.001"
-            min={0}
-            error={!!errors.gensetEnergyYieldKwhPerLitre}
-            {...register("gensetEnergyYieldKwhPerLitre")}
-          />
-        </FormField>
-      </div>
+      {/* Genset energy yield is no longer user-configurable: issue #319 switched
+          genset diesel to submit by volume (`fuel_usage_by_volume`), so the
+          kWh-per-litre yield feeds no submission. Round-tripped as a hidden
+          field so saving soil estimates preserves the stored value without a
+          migration to drop the column. */}
+      <input type="hidden" {...register("gensetEnergyYieldKwhPerLitre")} />
 
       <div className="flex flex-col gap-16">
         <SectionLabel>Soil durability reference</SectionLabel>
