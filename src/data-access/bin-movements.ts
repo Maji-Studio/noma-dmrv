@@ -16,6 +16,7 @@ import {
   type BinMovement,
 } from "@/db/schema";
 import type { BinMovementLane, BinMovementType } from "@/schemas/bin-movements";
+import { laneForStorageType } from "@/schemas/bin-movements";
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
 
@@ -115,12 +116,19 @@ export async function createBinMovement(
   requireAuth(userId);
 
   const [location] = await db
-    .select({ id: storageLocations.id })
+    .select({ id: storageLocations.id, type: storageLocations.type })
     .from(storageLocations)
     .where(eq(storageLocations.id, input.storageLocationId));
 
   if (!location) {
     throw new SafeError("Storage location not found");
+  }
+
+  // A bin physically holds one material, so a movement's lane must match the
+  // bin's type. Enforced here (the trust boundary) so it covers every caller —
+  // stock-take and loss alike — not just the paths that check it themselves.
+  if (laneForStorageType(location.type) !== input.lane) {
+    throw new SafeError("This lane does not match the bin's material type");
   }
 
   // A loss can only ever remove material (DB check mirrors this).
