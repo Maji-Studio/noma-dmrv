@@ -352,6 +352,7 @@ export async function replaceDerivedTransportLeg(
     vehicleType: derived.vehicleType,
     modelYear: derived.modelYear,
     loadMassKg: derived.loadMassKg as number,
+    tripType: derived.tripType,
   };
 
   await db
@@ -416,6 +417,7 @@ export async function syncBiocharProductTransportLeg(
       loadMassKg: deliveries.deliveredWetMassKg,
       deliveryDistanceKmOverride: deliveries.distanceKmOverride,
       deliveryDistanceSource: deliveries.distanceSource,
+      deliveryTripType: deliveries.tripType,
       locationDistanceKm: customerLocations.distanceFromFacilityKm,
       locationDistanceSource: customerLocations.distanceSource,
       locationName: customerLocations.name,
@@ -448,6 +450,7 @@ export async function syncBiocharProductTransportLeg(
         locationName: row.locationName,
         locationGpsLatitude: row.locationGpsLatitude,
         locationGpsLongitude: row.locationGpsLongitude,
+        tripType: row.deliveryTripType,
       };
     }),
   );
@@ -467,6 +470,7 @@ export async function syncBiocharProductTransportLeg(
     loadMassKg: agg.totalMassKg > 0 ? agg.totalMassKg : null,
     storedDistanceKm: agg.weightedDistanceKm,
     storedDistanceSource: agg.distanceSource,
+    tripType: agg.tripType,
   });
 
   // When no delivery qualifies, `derived` is not persistable and the replace

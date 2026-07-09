@@ -1,5 +1,5 @@
 import { relations, sql } from 'drizzle-orm';
-import { check, doublePrecision, pgTable, text, timestamp, uuid, real, jsonb } from 'drizzle-orm/pg-core';
+import { check, doublePrecision, pgTable, text, timestamp, uniqueIndex, uuid, real, jsonb } from 'drizzle-orm/pg-core';
 import { storageLocationType, durabilityOption } from './common';
 
 // ============================================
@@ -55,25 +55,39 @@ export const facilities = pgTable(
 // Reactors - Pyrolysis equipment
 // ============================================
 
-export const reactors = pgTable('reactors', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  code: text('code').notNull().unique(), // e.g., "R-001"
-  identifier: text('identifier').notNull(),
-  facilityId: uuid('facility_id')
-    .notNull()
-    .references(() => facilities.id),
-  // Isometric Protocol: Reactor design requirements (Section 9.2)
-  reactorType: text('reactor_type').notNull(), // fixed-bed, auger, rotary-kiln
-  // NOTE: sampling_method moved OFF reactors onto production_processes (ADR
-  // 0016) — the protocol scopes the Method A/B regime to (feedstock × conditions),
-  // which spans reactors; reactor identity is not part of that boundary.
-  nominalThroughputTph: real('nominal_throughput_tph'),
-  specifications: jsonb('specifications'), // { description, manufacturer, ... }
-  // Stamped by the facility archive cascade; NULL = active
-  archivedAt: timestamp('archived_at'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+export const reactors = pgTable(
+  'reactors',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    code: text('code').notNull().unique(), // e.g., "R-001"
+    identifier: text('identifier').notNull(),
+    facilityId: uuid('facility_id')
+      .notNull()
+      .references(() => facilities.id),
+    // Isometric Protocol: Reactor design requirements (Section 9.2)
+    reactorType: text('reactor_type').notNull(), // fixed-bed, auger, rotary-kiln
+    // NOTE: sampling_method moved OFF reactors onto production_processes (ADR
+    // 0016) — the protocol scopes the Method A/B regime to (feedstock × conditions),
+    // which spans reactors; reactor identity is not part of that boundary.
+    nominalThroughputTph: real('nominal_throughput_tph'),
+    specifications: jsonb('specifications'), // { description, manufacturer, ... }
+    // Stamped by the facility archive cascade; NULL = active
+    archivedAt: timestamp('archived_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    // Human identifier is unique per facility, case- and whitespace-insensitive
+    // (issue #252) — two indistinguishable reactors in one facility let an
+    // operator attach a run to the wrong one. Decommission-and-reuse is handled
+    // by renaming the retired reactor; archived rows still hold their identifier
+    // so a restore can't collide (mirrors the code-reservation rule).
+    uniqueIndex('reactors_facility_identifier_unique').on(
+      table.facilityId,
+      sql`lower(trim(${table.identifier}))`,
+    ),
+  ],
+);
 
 // ============================================
 // Storage Locations - Bins/piles for materials
@@ -110,6 +124,13 @@ export const storageLocations = pgTable(
     check(
       'storage_locations_formulation_product_bin_only',
       sql`${table.type} = 'product_bin' or ${table.formulationId} is null`
+    ),
+    // Bin name is unique per facility, case- and whitespace-insensitive (issue
+    // #252). Archived bins keep their name reserved so a facility restore can't
+    // collide (mirrors the code-reservation rule).
+    uniqueIndex('storage_locations_facility_name_unique').on(
+      table.facilityId,
+      sql`lower(trim(${table.name}))`,
     ),
   ],
 );

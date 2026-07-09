@@ -180,11 +180,14 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
   });
 
   async function makeProductBin(formulationId: string | null): Promise<string> {
+    // Names must be unique per call, not per suite: storage locations are
+    // unique on (facility_id, name) and each test creates its own bin.
+    const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [bin] = await db
       .insert(storageLocations)
       .values({
-        code: `BIN-PBF-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
-        name: `PBF Bin ${tag}`,
+        code: `BIN-PBF-${suffix}`,
+        name: `PBF Bin ${tag} ${suffix}`,
         type: "product_bin",
         facilityId,
         formulationId,
@@ -195,11 +198,12 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
   }
 
   async function makeFeedstockBin(feedstockTypeId: string): Promise<string> {
+    const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [bin] = await db
       .insert(storageLocations)
       .values({
-        code: `BIN-PBF-FS-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
-        name: `PBF Feedstock Bin ${tag}`,
+        code: `BIN-PBF-FS-${suffix}`,
+        name: `PBF Feedstock Bin ${tag} ${suffix}`,
         type: "feedstock_bin",
         facilityId,
         feedstockTypeId,

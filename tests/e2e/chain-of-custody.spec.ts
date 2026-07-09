@@ -332,11 +332,15 @@ async function seedBatchChain(seededData: SeededChainData) {
 test.describe("Chain of Custody Visualization", () => {
   test("page loads with the batch-selector empty state", async ({
     adminPage,
+    seededData,
     cleanupTestData,
   }) => {
     void cleanupTestData;
 
-    await adminPage.goto("/chain-of-custody");
+    // Anchor a facility explicitly: without one the page renders the
+    // "Select a facility" empty state instead, so this test only passed
+    // when an earlier spec in the shard happened to leave a facility.
+    await adminPage.goto(chainUrl(seededData.facility.id));
 
     await expect(
       adminPage.getByRole("heading", { name: /Chain of Custody/i })

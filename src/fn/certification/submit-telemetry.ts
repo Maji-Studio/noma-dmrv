@@ -237,12 +237,21 @@ export async function submitTelemetry(
   };
   const semanticHash = payloadHash(semanticPayload);
 
-  const latest = await getLatestSubmission(userId, {
-    provider: ISOMETRIC_PROVIDER,
-    submissionType: DATA_UPLOAD_SUBMISSION_TYPE,
-    localEntityType: DATA_UPLOAD_ENTITY_TYPE,
-    localEntityId: args.removalId,
-  });
+  // Facility-scoped to the removal's own facility (issue #277). ctx.facilityId
+  // is server-derived from this same args.removalId, so the scope is
+  // lineage-consistency (fail-closed if the removal anchor is dangling), not a
+  // cross-facility authorization check — that would need an independent caller
+  // facility, deferred to #372. Left wired so the guard activates once one exists.
+  const latest = await getLatestSubmission(
+    userId,
+    {
+      provider: ISOMETRIC_PROVIDER,
+      submissionType: DATA_UPLOAD_SUBMISSION_TYPE,
+      localEntityType: DATA_UPLOAD_ENTITY_TYPE,
+      localEntityId: args.removalId,
+    },
+    ctx.facilityId,
+  );
   const dataUploadResume = latest ? readResumeSnapshot(latest) : undefined;
   const claim = decideSubmissionClaim({
     latest,

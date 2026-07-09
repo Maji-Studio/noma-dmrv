@@ -1,5 +1,5 @@
 {
-  "id": "190541c1-c633-4f05-9912-7d49df8ff875",
+  "id": "9e3cde7b-6790-4b99-9917-b0e071001dea",
   "prevId": "fac84a5a-ff2d-43bc-a744-2f20361c4cc9",
   "version": "7",
   "dialect": "postgresql",
@@ -589,6 +589,149 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.bin_movements": {
+      "name": "bin_movements",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "storage_location_id": {
+          "name": "storage_location_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lane": {
+          "name": "lane",
+          "type": "bin_movement_lane",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "movement_type": {
+          "name": "movement_type",
+          "type": "bin_movement_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mass_delta_kg": {
+          "name": "mass_delta_kg",
+          "type": "numeric(14, 3)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "counted_mass_kg": {
+          "name": "counted_mass_kg",
+          "type": "numeric(14, 3)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "derived_mass_kg_at_time": {
+          "name": "derived_mass_kg_at_time",
+          "type": "numeric(14, 3)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "counted_wet_mass_kg": {
+          "name": "counted_wet_mass_kg",
+          "type": "numeric(14, 3)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "moisture_ratio_used": {
+          "name": "moisture_ratio_used",
+          "type": "numeric(7, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "bin_movements_storage_location_lane_idx": {
+          "name": "bin_movements_storage_location_lane_idx",
+          "columns": [
+            {
+              "expression": "storage_location_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lane",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "bin_movements_storage_location_id_storage_locations_id_fk": {
+          "name": "bin_movements_storage_location_id_storage_locations_id_fk",
+          "tableFrom": "bin_movements",
+          "tableTo": "storage_locations",
+          "columnsFrom": [
+            "storage_location_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "bin_movements_created_by_users_id_fk": {
+          "name": "bin_movements_created_by_users_id_fk",
+          "tableFrom": "bin_movements",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "bin_movements_loss_is_negative": {
+          "name": "bin_movements_loss_is_negative",
+          "value": "\"bin_movements\".\"movement_type\" <> 'loss' OR \"bin_movements\".\"mass_delta_kg\" < 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.certification_submissions": {
@@ -4449,6 +4592,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "date": {
+          "name": "date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
         "status": {
           "name": "status",
           "type": "production_run_status",
@@ -4468,7 +4617,8 @@
           "name": "end_time",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": "now()"
         },
         "reactor_id": {
           "name": "reactor_id",
@@ -4615,28 +4765,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "production_runs_reactor_start_unique_idx": {
-          "name": "production_runs_reactor_start_unique_idx",
-          "columns": [
-            {
-              "expression": "reactor_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "start_time",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"production_runs\".\"status\" <> 'void' and \"production_runs\".\"archived_at\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -4718,10 +4846,6 @@
       },
       "policies": {},
       "checkConstraints": {
-        "production_runs_end_after_start": {
-          "name": "production_runs_end_after_start",
-          "value": "\"production_runs\".\"end_time\" is null or \"production_runs\".\"end_time\" > \"production_runs\".\"start_time\""
-        },
         "production_runs_feedstock_wet_mass_non_negative": {
           "name": "production_runs_feedstock_wet_mass_non_negative",
           "value": "\"production_runs\".\"feedstock_wet_mass_kg\" is null or \"production_runs\".\"feedstock_wet_mass_kg\" >= 0"
@@ -6651,6 +6775,23 @@
       "values": [
         "delivered",
         "applied"
+      ]
+    },
+    "public.bin_movement_lane": {
+      "name": "bin_movement_lane",
+      "schema": "public",
+      "values": [
+        "feedstock",
+        "biochar",
+        "product"
+      ]
+    },
+    "public.bin_movement_type": {
+      "name": "bin_movement_type",
+      "schema": "public",
+      "values": [
+        "adjustment",
+        "loss"
       ]
     },
     "public.biochar_product_status": {
