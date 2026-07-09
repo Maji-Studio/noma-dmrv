@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { getTableName, sql } from "drizzle-orm";
 import type { PgTable, PgColumn } from "drizzle-orm/pg-core";
 import { isPgUniqueViolation } from "@/db/errors";
+import { SafeError } from "@/lib/errors";
 
 const MAX_RETRIES = 3;
 
@@ -139,7 +140,7 @@ export async function withAutoCode<T>(
       return await insertFn(userCode);
     } catch (error) {
       if (isCodeUniqueViolation(error, table, codeColumn)) {
-        throw new Error(`Code "${userCode}" already exists. Please use a different code.`);
+        throw new SafeError(`Code "${userCode}" already exists. Please use a different code.`);
       }
       throw error;
     }
