@@ -2,7 +2,7 @@
 
 import { getStorageProvider } from "@/lib/storage";
 import { SafeError } from "@/lib/errors";
-import { sanitizeErrorMessage } from "@/lib/log";
+import { logger, sanitizeErrorMessage } from "@/lib/log";
 import { parseReadingsCsv } from "@/lib/production-readings/readings-csv";
 import {
   getProductionRunReadingsImportContext,
@@ -99,12 +99,23 @@ export async function importProductionRunReadingsFromDocumentFn(
       // Sanitize before persisting: a Drizzle/Postgres error (e.g. from the
       // insert) can embed bound parameter values, and this message is stored in
       // the document's metadata, so it must not leak raw query details.
-      await recordReadingsImportOutcome(userId, documentId, {
-        status: "failed",
-        error: sanitizeErrorMessage(
-          error instanceof Error ? error.message : "Failed to import readings",
-        ),
-      });
+      const message = sanitizeErrorMessage(
+        error instanceof Error ? error.message : "Failed to import readings",
+      );
+      // Never let a failure to persist the outcome mask the real import error
+      // or strand the document without its recoverable "failed" flag (#398):
+      // record the outcome best-effort, then always re-throw the original error.
+      try {
+        await recordReadingsImportOutcome(userId, documentId, {
+          status: "failed",
+          error: message,
+        });
+      } catch (recordError) {
+        logger.error(
+          { documentId, error: sanitizeErrorMessage(recordError) },
+          "Failed to record readings import outcome",
+        );
+      }
       throw error;
     }
   });
