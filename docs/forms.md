@@ -645,6 +645,48 @@ massKg: optionalNumber,
 moisturePercent: optionalPercent,
 ```
 
+Also available: `toIntOrNull` (empty → `null`, otherwise `parseInt`) for
+integer-only optional fields.
+
+### GPS Latitude / Longitude Schemas
+
+`@/schemas/helpers` provides ready-made coordinate schemas — never hand-roll
+range checks. All variants expect a **number** input, so form schemas receiving
+raw React Hook Form values must wrap them in `z.preprocess` with the matching
+numeric helper. The required variants have the Zod 4 error callback built in,
+so a preprocessed empty field reports "required" rather than "invalid number":
+
+```typescript
+import {
+  latitudeSchema, longitudeSchema,                 // optional number (null ok)
+  requiredLatitudeSchema, requiredLongitudeSchema, // required number
+  toNumberOrUndefined, toNumberOrNull,
+} from "@/schemas/helpers";
+
+// Optional coordinate pair (form input: empty → null)
+gpsLatitude: z.preprocess(toNumberOrNull, latitudeSchema),
+gpsLongitude: z.preprocess(toNumberOrNull, longitudeSchema),
+
+// Required coordinate pair (form input: empty → "required" error)
+gpsLatitude: z.preprocess(toNumberOrUndefined, requiredLatitudeSchema),
+gpsLongitude: z.preprocess(toNumberOrUndefined, requiredLongitudeSchema),
+```
+
+Optional variants validate `-90..90` / `-180..180`; required variants add the
+undefined-vs-invalid message distinction. Reference usage: `src/schemas/customers.ts`.
+
+### Optional UUID for EntitySelect Fields
+
+An `EntitySelect` sends `""` when nothing is picked but a UUID once a record is
+chosen. Coerce the empty string to `null` before the UUID check with the shared
+`emptyToNull` helper:
+
+```typescript
+import { emptyToNull } from "@/schemas/helpers";
+
+storageLocationId: emptyToNull.or(z.uuid()).optional().nullable(),
+```
+
 ### Entity Select Cache Seeding
 
 After a quick-add dialog creates a new entity, use `seedEntityCache` to make it immediately available in EntitySelect dropdowns without a full list refetch:
@@ -655,6 +697,19 @@ import { seedEntityCache } from "@/components/forms/entity-select/cache-utils";
 // After successful quick-add
 seedEntityCache(queryClient, "driver", { id: newDriver.id, label: newDriver.name });
 ```
+
+### Quick-Add — inline creation of prerequisite entities
+
+Quick-add lets a form create a missing prerequisite (a supplier, driver, etc.)
+without leaving the current form:
+
+- **Schemas** live in `src/schemas/quick-add.ts` and carry only the minimal
+  required fields for the entity.
+- After a successful create, call `seedEntityCache()` (above) to populate the
+  dropdown immediately without a full list refetch.
+- `useOpenCreateIntent()` (`@/hooks/use-open-create-intent`) opens the create
+  dialog from a `?create=true` deep link, so a "create X" link elsewhere in the
+  app lands directly on the open form.
 
 ### Cascading / Dependent Selects (`dependsOn`)
 

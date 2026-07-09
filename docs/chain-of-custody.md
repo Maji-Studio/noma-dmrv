@@ -80,6 +80,9 @@ roll-up" button leads back.
 
 ## Graph Behavior
 
+- Nodes are auto-laid-out with **Dagre in left-to-right (LR) direction**
+  (`@dagrejs/dagre` in `use-chain-graph.ts`) on a React Flow canvas with
+  minimap and zoom/pan controls.
 - Card hierarchy is **date-first**: the event date is the card's primary line
   (mono, readable at default zoom), the record code is secondary, then
   label/value detail rows (mono micro-label left, value right). Dateless
