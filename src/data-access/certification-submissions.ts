@@ -31,7 +31,10 @@ import {
   decideSubmissionClaim,
   type SubmissionClaimPolicy,
 } from "@/lib/isometric/utils/submission-claim";
-import type { CertificationSubmissionRow } from "./certification";
+import {
+  assertSubmissionInFacility,
+  type CertificationSubmissionRow,
+} from "./certification";
 import { requireAuth } from "./utils";
 
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
@@ -356,9 +359,17 @@ async function createDraft<H>(
 export async function getLatestSubmission(
   userId: string,
   key: SubmissionKey,
+  // Defence-in-depth facility scope (issue #277). When set, the resolved row's
+  // anchor entity must live in this facility, else SafeError — the caller is
+  // acting within one facility and must not receive another's ledger row.
+  expectedFacilityId?: string,
 ): Promise<CertificationSubmissionRow | null> {
   requireAuth(userId);
-  return getLatestSubmissionWithExecutor(db, key);
+  const row = await getLatestSubmissionWithExecutor(db, key);
+  if (row && expectedFacilityId !== undefined) {
+    await assertSubmissionInFacility(db, row, expectedFacilityId);
+  }
+  return row;
 }
 
 async function getLatestSubmissionWithExecutor(
