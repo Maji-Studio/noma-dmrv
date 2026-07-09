@@ -61,6 +61,14 @@ export function binCurrentMassKg(s: StorageLocationWithFacility): number {
   return s.productInventory.currentMassKg;
 }
 
+/**
+ * True when the bin's derived on-hand stock has gone negative — draws + losses
+ * have outrun recorded intake, so the count needs reconciling (issue #194).
+ */
+export function binNeedsReconciliation(s: StorageLocationWithFacility): boolean {
+  return binCurrentMassKg(s) < 0;
+}
+
 /** Fill level (0–100) vs capacity, or null when no capacity is set. */
 export function binCapacityPercent(
   s: StorageLocationWithFacility

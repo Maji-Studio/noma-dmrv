@@ -56,6 +56,23 @@ export const feedstockTypeUsage = pgEnum('feedstock_type_usage', [
   'blend',
 ]);
 
+// Material lane a bin-reconciliation movement applies to. Mirrors the three
+// storage-location types (feedstock_bin / biochar_bin / product_bin) but named
+// for the material so the movement ledger reads on its own.
+export const binMovementLane = pgEnum('bin_movement_lane', [
+  'feedstock',
+  'biochar',
+  'product',
+]);
+
+// Kind of reconciliation movement. `adjustment` = stock-take correction (the
+// count didn't match), `loss` = a documented write-off (spoilage, spillage,
+// failed run). Extensible later for `transfer` (#34).
+export const binMovementType = pgEnum('bin_movement_type', [
+  'adjustment',
+  'loss',
+]);
+
 export const packagingType = pgEnum('packaging_type', ['loose', 'bagged']);
 
 export const applicationMethod = pgEnum('application_method', [
