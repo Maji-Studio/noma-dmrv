@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { documents, productionRunReadings, productionRuns } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
@@ -167,5 +167,14 @@ export async function recordReadingsImportOutcome(
       metadata: sql`${documents.metadata} || ${JSON.stringify(patch)}::jsonb`,
       updatedAt: new Date(),
     })
-    .where(eq(documents.id, documentId));
+    // Scope the write to production-run readings documents so this exported
+    // helper can never stamp a readings-import outcome onto an unrelated
+    // document, independent of what the caller passes.
+    .where(
+      and(
+        eq(documents.id, documentId),
+        eq(documents.entityType, "production_run"),
+        eq(documents.documentType, "sensor_data"),
+      ),
+    );
 }
