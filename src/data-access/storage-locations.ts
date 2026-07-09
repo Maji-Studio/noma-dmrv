@@ -81,6 +81,7 @@ export interface PaginatedStorageLocations {
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { guardStorageLocationName } from "./unique-name-guards";
 
 type BaseStorageLocationRow = {
   id: string;
@@ -686,24 +687,26 @@ export async function createStorageLocation(
     }
   }
 
-  const [storageLocation] = await db
-    .insert(storageLocations)
-    .values({
-      code: data.code,
-      name: data.name,
-      type: data.type,
-      facilityId: data.facilityId,
-      capacityKg: data.capacityKg ?? null,
-      // Only meaningful on feedstock bins, like formulationId below.
-      feedstockTypeId: isFeedstockBinType(data.type)
-        ? data.feedstockTypeId ?? null
-        : null,
-      formulationId,
-      storageMethod: data.storageMethod ?? null,
-      storageDescription: data.storageDescription ?? null,
-      supplierReferenceId: data.supplierReferenceId ?? null,
-    })
-    .returning();
+  const [storageLocation] = await guardStorageLocationName(data.name, () =>
+    db
+      .insert(storageLocations)
+      .values({
+        code: data.code,
+        name: data.name,
+        type: data.type,
+        facilityId: data.facilityId,
+        capacityKg: data.capacityKg ?? null,
+        // Only meaningful on feedstock bins, like formulationId below.
+        feedstockTypeId: isFeedstockBinType(data.type)
+          ? data.feedstockTypeId ?? null
+          : null,
+        formulationId,
+        storageMethod: data.storageMethod ?? null,
+        storageDescription: data.storageDescription ?? null,
+        supplierReferenceId: data.supplierReferenceId ?? null,
+      })
+      .returning()
+  );
 
   return storageLocation;
 }
@@ -848,16 +851,21 @@ export async function updateStorageLocation(
   const dataWithoutNormalized = { ...data };
   delete dataWithoutNormalized.formulationId;
   delete dataWithoutNormalized.feedstockTypeId;
-  const [updated] = await db
-    .update(storageLocations)
-    .set({
-      ...dataWithoutNormalized,
-      feedstockTypeId: normalizedFeedstockTypeId,
-      formulationId: normalizedFormulationId,
-      updatedAt: new Date(),
-    })
-    .where(eq(storageLocations.id, storageLocationId))
-    .returning();
+  // A rename OR a facility move can collide with the per-facility name index.
+  const [updated] = await guardStorageLocationName(
+    data.name ?? existing.name,
+    () =>
+      db
+        .update(storageLocations)
+        .set({
+          ...dataWithoutNormalized,
+          feedstockTypeId: normalizedFeedstockTypeId,
+          formulationId: normalizedFormulationId,
+          updatedAt: new Date(),
+        })
+        .where(eq(storageLocations.id, storageLocationId))
+        .returning()
+  );
 
   return updated;
 }
