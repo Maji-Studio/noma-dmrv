@@ -463,8 +463,8 @@ test.describe("Full Chain UI Smoke Test", () => {
         seededData.reactor.identifier
       );
 
-      // Fill date
-      await page.fill('input[name="date"]', today);
+      // Fill start date
+      await page.fill('input[name="startDate"]', today);
 
       await selectEntityById(
         page,
