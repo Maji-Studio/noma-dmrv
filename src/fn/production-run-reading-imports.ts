@@ -31,16 +31,19 @@ export async function importProductionRunReadingsFromDocumentFn(
 ): Promise<ActionResult<ProductionRunReadingsImportResult>> {
   return withAction(async (userId) => {
     const { documentId } = importProductionRunReadingsSchema.parse(input);
-    const context = await getProductionRunReadingsImportContext(
-      userId,
-      documentId,
-    );
 
     // Persist the outcome onto the document so a failed import stays
     // recoverable from the UI (#398): only documents whose prior import failed
-    // get a re-import affordance. Any failure past this point is recorded as
-    // failed, then re-thrown so the operator still sees the error.
+    // get a re-import affordance. Context validation runs inside this path too,
+    // so a recoverable context failure (e.g. the run has no end time yet)
+    // records `failed` and surfaces the re-import action once the operator
+    // fixes the run. Any failure past this point is recorded as failed, then
+    // re-thrown so the operator still sees the error.
     try {
+      const context = await getProductionRunReadingsImportContext(
+        userId,
+        documentId,
+      );
       assertCsvDocument(context.fileName, context.mimeType);
 
       const csvText = await readManagedDocumentText(context.storageKey);
