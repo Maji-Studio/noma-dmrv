@@ -1,6 +1,6 @@
 {
-  "id": "9e3cde7b-6790-4b99-9917-b0e071001dea",
-  "prevId": "fac84a5a-ff2d-43bc-a744-2f20361c4cc9",
+  "id": "60e18afc-f0a1-4d50-9abe-1dd5e64994c0",
+  "prevId": "9e3cde7b-6790-4b99-9917-b0e071001dea",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -5930,6 +5930,14 @@
           "primaryKey": false,
           "notNull": false
         },
+        "trip_type": {
+          "name": "trip_type",
+          "type": "transport_trip_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'return'"
+        },
         "biochar_product_id": {
           "name": "biochar_product_id",
           "type": "uuid",
@@ -6397,6 +6405,14 @@
           "type": "numeric(14, 3)",
           "primaryKey": false,
           "notNull": false
+        },
+        "trip_type": {
+          "name": "trip_type",
+          "type": "transport_trip_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'return'"
         },
         "calculation_method": {
           "name": "calculation_method",
@@ -7048,6 +7064,14 @@
         "ship",
         "pipeline",
         "aircraft"
+      ]
+    },
+    "public.transport_trip_type": {
+      "name": "transport_trip_type",
+      "schema": "public",
+      "values": [
+        "return",
+        "one_way"
       ]
     },
     "public.user_role": {

@@ -15,6 +15,7 @@ export * from "./logistics";
 export * from "./application";
 export * from "./credits";
 export * from "./storage-inventory";
+export * from "./bin-movements";
 export * from "./documentation";
 export * from "./certification";
 export * from "./compliance";

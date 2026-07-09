@@ -293,6 +293,16 @@ export async function createGhgStatementDraft(
       facilityId: parsed.facilityId,
       reportingPeriodEndOn: parsed.reportingPeriodEndOn,
     });
+    // getOrCreate self-consistency invariant (issue #277). parsed.facilityId is
+    // client-supplied and every read above (project gate, get-or-create) is
+    // keyed on it, so this compares the resolved statement against that same
+    // value — it is NOT caller-scope authorization (there is no independent
+    // caller facility until #372). What it guarantees is that a future
+    // getOrCreate change can't silently anchor the ledger (and its registry
+    // writes) to another facility's statement.
+    if (statement.facilityId !== parsed.facilityId) {
+      throw new SafeError("GHG statement does not belong to this facility.");
+    }
 
     const semanticPayload = {
       projectId: project.externalProjectId,
@@ -488,23 +498,32 @@ export async function submitGhgStatementToVerifier(
       "ghg statement submit started",
     );
 
-    // getLatestSubmission's key constrains type + entity, so the returned
-    // row provably belongs to this GHG statement.
-    const submission = await getLatestSubmission(userId, {
-      provider: ISOMETRIC_PROVIDER,
-      submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
-      localEntityType: GHG_STATEMENT_ENTITY_TYPE,
-      localEntityId: ghgStatementId,
-    });
-    if (!submission?.externalId) {
-      throw new SafeError("Create the GHG statement before submitting it.");
-    }
-
+    // Resolve the statement (and its facility) first, then scope the ledger
+    // read to that facility (issue #277). getLatestSubmission's key already
+    // constrains type + entity to this GHG statement. NOTE: statement.facilityId
+    // is derived from this same client-supplied ghgStatementId, so the scope is
+    // lineage-consistency (fail-closed if the anchor is dangling), not a
+    // cross-facility authorization check — that needs an independent caller
+    // facility (#372). Left wired so the guard activates the moment one exists.
     const statement = await getCertifierGhgStatementById(
       userId,
       ghgStatementId,
     );
     if (!statement) throw new SafeError("GHG statement not found.");
+
+    const submission = await getLatestSubmission(
+      userId,
+      {
+        provider: ISOMETRIC_PROVIDER,
+        submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
+        localEntityType: GHG_STATEMENT_ENTITY_TYPE,
+        localEntityId: ghgStatementId,
+      },
+      statement.facilityId,
+    );
+    if (!submission?.externalId) {
+      throw new SafeError("Create the GHG statement before submitting it.");
+    }
 
     const [facility, remoteBefore] = await Promise.all([
       getFacilityById(userId, statement.facilityId),
@@ -682,17 +701,34 @@ export async function refreshGhgStatementStatus(
     if (!submission.externalId) {
       throw new SafeError("GHG statement submission has no remote ID.");
     }
+    // Resolve the statement this submission anchors to, so the follow-up ledger
+    // read is scoped to its facility (issue #277). The higher-consequence read
+    // above (getSubmissionById by raw submissionId) is necessarily unscoped —
+    // submissionId is the only handle and the facility is discovered *from* it —
+    // and statement.facilityId is likewise derived from that same row, so this
+    // scope is lineage-consistency / fail-closed-on-dangling-anchor, not a
+    // cross-facility authorization check (that needs an independent caller
+    // facility, deferred to #372).
+    const statement = await getCertifierGhgStatementById(
+      userId,
+      submission.localEntityId,
+    );
+    if (!statement) throw new SafeError("GHG statement not found.");
     // Only mirror remote state onto the latest version of the (provider,
     // submissionType, localEntityType, localEntityId) row. Superseded rows
     // stay frozen so the audit trail keeps showing the snapshot from when
     // they were submitted; refreshing a stale row would silently rewrite
     // history with whatever the new version's remote state happens to be.
-    const latest = await getLatestSubmission(userId, {
-      provider: submission.provider,
-      submissionType: submission.submissionType,
-      localEntityType: submission.localEntityType,
-      localEntityId: submission.localEntityId,
-    });
+    const latest = await getLatestSubmission(
+      userId,
+      {
+        provider: submission.provider,
+        submissionType: submission.submissionType,
+        localEntityType: submission.localEntityType,
+        localEntityId: submission.localEntityId,
+      },
+      statement.facilityId,
+    );
     if (!latest || latest.id !== submission.id) {
       throw new SafeError(
         "This GHG statement version has been superseded. Refresh the page to see the latest one.",

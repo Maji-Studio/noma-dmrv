@@ -317,9 +317,21 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       kind: "entered",
     },
     {
+      // Soil temperature feeds ONLY the 200-year (Woolf 2021) durable fraction;
+      // 1000-year removals derive durability from petrographic reflectance +
+      // TGA non-reactive carbon and never submit it (ADR 0021). The condition
+      // scopes the certify marker/readiness gap to 200-year facilities so a
+      // 1000-year application is not mis-flagged for a missing soil temperature.
+      // `durabilityOption` is join-derived onto the application row in
+      // data-access/applications.ts.
       key: "soilTemperatureC",
       label: "Soil temperature",
       kind: "entered",
+      condition: {
+        field: "durabilityOption",
+        equals: "200_year",
+        label: "200-year durability",
+      },
     },
   ],
   customerLocation: [

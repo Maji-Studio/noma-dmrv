@@ -29,6 +29,10 @@ function leg(distanceKm: number, loadMassKg: number | null): TransportLeg {
     vehicleType: null,
     modelYear: null,
     loadMassKg,
+    // These cases assert the raw per-leg sum, so the builder pins `one_way`
+    // (no ×2). The round-trip multiplier (#316) is covered in
+    // src/lib/isometric/utils/aggregation.test.ts.
+    tripType: "one_way",
     calculationMethodType: "distance_based",
     isDerived: false,
     billOfLading: null,
