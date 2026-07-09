@@ -269,12 +269,17 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
   async function editFirstRow(page: Page) {
     // Edit via the row overflow menu (openEdit — it does NOT set the deep-link
     // focus that would re-open a view sheet after save, so the sheet closes
-    // cleanly). Let the post-save list refetch settle first: an in-flight
-    // refetch re-renders the row and detaches the menu's "Edit" item mid-click.
-    await page.waitForLoadState("networkidle");
-    const firstRow = page.locator("tbody tr").first();
-    await firstRow.getByRole("button", { name: /Actions for/ }).click();
-    await page.getByRole("menuitem", { name: "Edit" }).click();
+    // cleanly). A post-save list refetch can re-render the row and detach the
+    // menu's "Edit" item mid-click, so retry the open→Edit sequence instead of
+    // waiting for network idle (CI dev servers may never settle within budget).
+    await expect(async () => {
+      await page
+        .locator("tbody tr")
+        .first()
+        .getByRole("button", { name: /Actions for/ })
+        .click({ timeout: 5000 });
+      await page.getByRole("menuitem", { name: "Edit" }).click({ timeout: 5000 });
+    }).toPass({ timeout: 30000 });
     await waitForSideSheet(page);
     await expect(
       page.locator('[role="dialog"] input[name="startTime"]'),
