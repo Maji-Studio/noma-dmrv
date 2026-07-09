@@ -14,6 +14,7 @@
  */
 import type { TransportLeg } from "@/db/schema";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
+import { roundTripDistanceFactor } from "@/schemas/trip-type";
 import {
   aggregateTransportMassDistance,
   clampFactor,
@@ -89,7 +90,12 @@ function buildLeg(leg: TransportLeg, ref: string): LedgerLeg {
   const loadMassKg =
     leg.loadMassKg != null && leg.loadMassKg > 0 ? leg.loadMassKg : 0;
   const massMissing = loadMassKg === 0;
-  const tkm = round2(leg.distanceKm * kgToTonnes(loadMassKg));
+  // Round-trip legs (#316, §4.2) carry the doubled distance into the t·km so the
+  // per-leg row reconciles to the category subtotal, which
+  // `aggregateTransportMassDistance` also doubles.
+  const factor = roundTripDistanceFactor(leg.tripType);
+  const effectiveDistanceKm = leg.distanceKm * factor;
+  const tkm = round2(effectiveDistanceKm * kgToTonnes(loadMassKg));
   const vehicle =
     leg.vehicleType && leg.modelYear
       ? `${leg.vehicleType} · ${leg.modelYear}`
@@ -100,8 +106,9 @@ function buildLeg(leg: TransportLeg, ref: string): LedgerLeg {
     destinationName: leg.destinationName,
     originGeo: geoOf(leg.originGpsLatitude, leg.originGpsLongitude),
     destinationGeo: geoOf(leg.destinationGpsLatitude, leg.destinationGpsLongitude),
-    distanceKm: leg.distanceKm,
+    distanceKm: effectiveDistanceKm,
     loadMassKg,
+    roundTrip: factor > 1,
     mode: capitalize(leg.transportMethodType),
     vehicle,
     basis: basisOf(leg),
