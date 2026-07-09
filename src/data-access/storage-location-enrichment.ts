@@ -27,6 +27,7 @@ import {
   type StorageLocation,
 } from "@/db/schema";
 import { getBinMovementLaneSums, groupLaneSumsByLocation } from "./bin-movements";
+import { requireAuth } from "./utils";
 
 // ============================================
 // Types
@@ -108,6 +109,8 @@ export async function enrichStorageLocationRows(
   userId: string,
   rows: BaseStorageLocationRow[]
 ): Promise<StorageLocationWithFacility[]> {
+  requireAuth(userId);
+
   const storageLocationIds = rows.map((row) => row.id);
   const storageLocationIdsSql = sql.join(
     storageLocationIds.map((id) => sql`${id}`),
