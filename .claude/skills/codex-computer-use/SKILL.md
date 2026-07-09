@@ -15,6 +15,11 @@ or acting on real accounts/data).
 
 ## Shared invocation rules
 
+- **Interactive sessions only.** In auto/unattended mode the permission classifier denies
+  `-s danger-full-access` and every credential-materialization workaround (verified
+  2026-07-09) — don't retry variants. Verify via a Playwright e2e spec (HTTP-auth fixtures,
+  `docs/testing.md`) instead, or defer this skill to an interactive session where the user
+  approves the prompt. Read-only codex runs (`-s read-only`) are unaffected.
 - Locate the binary with the PATH-then-bundle fallback and always call it via `"$CODEX"`:
   ```bash
   CODEX="$(command -v codex || echo "/Applications/Codex.app/Contents/Resources/codex")"
