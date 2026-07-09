@@ -228,6 +228,7 @@ export async function createFeedstockFn(
           data.transportDistanceKm,
           data.transportDistanceSource,
         ),
+        tripType: data.transportTripType ?? undefined,
       },
     );
 
@@ -263,8 +264,13 @@ export async function updateFeedstockFn(
 
     // transportDistanceKm/-Source are not feedstock columns — they drive the
     // derived transport leg, so strip them before the feedstock update spread.
-    const { feedstockId, transportDistanceKm, transportDistanceSource, ...updateData } =
-      updateFeedstockSchema.parse(input);
+    const {
+      feedstockId,
+      transportDistanceKm,
+      transportDistanceSource,
+      transportTripType,
+      ...updateData
+    } = updateFeedstockSchema.parse(input);
     const data = await updateFeedstock(user.id, feedstockId, updateData);
 
     await syncFeedstockLegsBestEffort(user.id, [feedstockId], {
@@ -273,6 +279,7 @@ export async function updateFeedstockFn(
         transportDistanceKm,
         transportDistanceSource,
       ),
+      tripType: transportTripType ?? undefined,
     });
 
     return { success: true, data };

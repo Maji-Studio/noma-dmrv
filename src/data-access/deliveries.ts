@@ -91,6 +91,7 @@ type DeliveryColumnAvailability = {
   distanceKmOverride: boolean;
   distanceSource: boolean;
   distanceNote: boolean;
+  tripType: boolean;
   archivedAt: boolean;
 };
 
@@ -108,6 +109,7 @@ async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAvailabili
             'distance_km_override',
             'distance_source',
             'distance_note',
+            'trip_type',
             'archived_at'
           )
       `)
@@ -118,6 +120,7 @@ async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAvailabili
           distanceKmOverride: columns.has("distance_km_override"),
           distanceSource: columns.has("distance_source"),
           distanceNote: columns.has("distance_note"),
+          tripType: columns.has("trip_type"),
           archivedAt: columns.has("archived_at"),
         };
       });
@@ -152,6 +155,9 @@ function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
     distanceNote: columns.distanceNote
       ? deliveries.distanceNote
       : sql<string | null>`null`.as("distance_note"),
+    tripType: columns.tripType
+      ? deliveries.tripType
+      : sql<"return" | "one_way">`'return'`.as("trip_type"),
     driverId: deliveries.driverId,
     vehicleId: deliveries.vehicleId,
     archivedAt: columns.archivedAt
@@ -350,6 +356,7 @@ export async function getDeliveryWithRelations(
     distanceKmOverride: deliveryRow.distanceKmOverride,
     distanceSource: deliveryRow.distanceSource,
     distanceNote: deliveryRow.distanceNote,
+    tripType: deliveryRow.tripType,
     driverId: deliveryRow.driverId,
     vehicleId: deliveryRow.vehicleId,
     archivedAt: deliveryRow.archivedAt,
@@ -506,6 +513,7 @@ export async function createDelivery(
     distanceKmOverride?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
     distanceNote?: string | null;
+    tripType?: "return" | "one_way" | null;
   }
 ): Promise<Delivery> {
   requireAuth(userId);
@@ -583,6 +591,9 @@ export async function createDelivery(
       ...(deliveryColumns.distanceNote
         ? { distanceNote: data.distanceNote ?? null }
         : {}),
+      ...(deliveryColumns.tripType && data.tripType != null
+        ? { tripType: data.tripType }
+        : {}),
     })
     .returning(getDeliveryBaseSelection(deliveryColumns));
 
@@ -614,6 +625,7 @@ export async function updateDelivery(
     distanceKmOverride?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
     distanceNote?: string | null;
+    tripType?: "return" | "one_way" | null;
   }
 ): Promise<Delivery> {
   requireAuth(userId);
@@ -714,6 +726,11 @@ export async function updateDelivery(
         ...(deliveryColumns.distanceNote
           ? {}
           : { distanceNote: undefined }),
+        // Null/absent tripType leaves the stored value untouched (Drizzle drops
+        // undefined keys); strip entirely when the column is not yet migrated.
+        ...(deliveryColumns.tripType && data.tripType != null
+          ? { tripType: data.tripType }
+          : { tripType: undefined }),
         updatedAt: new Date(),
       })
       .where(eq(deliveries.id, deliveryId))

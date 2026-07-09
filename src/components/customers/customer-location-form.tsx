@@ -239,10 +239,10 @@ export function CustomerLocationForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <DistanceCalcField
             id="distanceFromFacilityKm"
-            label="Distance from facility (km)"
+            label="One-way distance from facility (per leg, km)"
             error={errors.distanceFromFacilityKm?.message}
             certifyRequired={isCertifyFormField("customerLocation", "distanceFromFacilityKm")}
-            helperText="Road distance to this site, used for transport emissions."
+            helperText="One-way road distance to this site. Return trips are doubled at emissions time; set the trip type on each delivery."
             disabled={isSubmitting}
             distanceKm={distanceFromFacilityKm}
             distanceSource={distanceSource}

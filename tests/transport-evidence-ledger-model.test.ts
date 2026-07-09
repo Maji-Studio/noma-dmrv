@@ -29,6 +29,10 @@ function leg(overrides: Partial<TransportLeg>): TransportLeg {
     vehicleType: "Heavy truck",
     modelYear: null,
     loadMassKg: 1000,
+    // These cases assert exact one-way t·km reconciliation, so the builder pins
+    // `one_way` (no ×2). The round-trip doubling (#316) is covered by its own
+    // case below and in the aggregation unit tests.
+    tripType: "one_way",
     calculationMethodType: "distance_based",
     isDerived: false,
     ...overrides,
@@ -59,6 +63,22 @@ describe("buildLedgerModel", () => {
     expect(model.categories.find((c) => c.key === "feedstock")!.legs[0].tkm).toBe(
       153,
     );
+  });
+
+  it("doubles a Return leg's distance and t·km, reconciling to the subtotal (#316)", () => {
+    const model = buildLedgerModel({
+      ...META,
+      legsByCategory: {
+        ...emptyCategories(),
+        feedstock: [leg({ distanceKm: 34, loadMassKg: 4500, tripType: "return" })],
+      },
+    });
+    const cat = model.categories.find((c) => c.key === "feedstock")!;
+    // Round trip: distance shown as 68 (34 × 2), t·km = 68 × 4.5 = 306.
+    expect(cat.legs[0].distanceKm).toBe(68);
+    expect(cat.legs[0].roundTrip).toBe(true);
+    expect(cat.legs[0].tkm).toBe(306);
+    expect(cat.subtotalTkm).toBe(306);
   });
 
   it("sets subtotal from the canonical raw-sum scalar, not Σ rounded rows", () => {

@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import { optionalDistanceSource } from "./distance-source";
+import { DEFAULT_TRIP_TYPE, tripTypes } from "./trip-type";
 import {
   latitudeSchema,
   longitudeSchema,
@@ -71,6 +72,13 @@ const baseTransportLegShape = {
   // Provenance of distanceKm (audit metadata; defaults to manual at the write
   // boundary — explicit/manual legs own their distance and its source).
   distanceSource: optionalDistanceSource,
+
+  // Round-trip vs one-way accounting (issue #316). Defaults to the conservative
+  // round trip (matches the notNull `transport_trip_type` column default); the
+  // stored distanceKm stays one-way and the ×2 is applied at mass-distance
+  // aggregation. Manual legs set it here so an evidenced one-way trip isn't
+  // silently doubled.
+  tripType: z.enum(tripTypes).default(DEFAULT_TRIP_TYPE),
 
   // Transport details. Vehicle type is metadata that maps to the Isometric
   // component's emission factor (Eq. 3) — optional, not a blocker.

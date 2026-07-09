@@ -305,6 +305,7 @@ export async function createDeliveryFn(
             validated.distanceSource,
           ),
           distanceNote: validated.distanceNote || null,
+          tripType: validated.tripType ?? undefined,
         });
       }
     );
@@ -369,6 +370,7 @@ export async function updateDeliveryFn(
         validated.distanceSource,
       ),
       distanceNote: validated.distanceNote || null,
+      tripType: validated.tripType ?? undefined,
     });
 
     await resyncBiocharLegs(user.id, [

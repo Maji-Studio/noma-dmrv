@@ -22,6 +22,7 @@ import {
   DISTANCE_SOURCE_LABELS,
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
+import { DEFAULT_TRIP_TYPE, TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import type { TransportLeg } from "@/db/schema";
 import { TransportLegDocuments } from "./transport-leg-documents";
@@ -58,6 +59,7 @@ function legToFormDefaults(leg: TransportLeg | null | undefined) {
     vehicleType: leg?.vehicleType ?? "",
     modelYear: leg?.modelYear ?? null,
     loadMassKg: leg?.loadMassKg ?? null,
+    tripType: leg?.tripType ?? DEFAULT_TRIP_TYPE,
     calculationMethodType: "distance_based" as const,
     billOfLading: leg?.billOfLading ?? "",
     weighScaleTicketRef: leg?.weighScaleTicketRef ?? "",
@@ -240,6 +242,20 @@ export function TransportLegForm({
               options={transportMethodOptions}
               error={!!errors.transportMethodType}
               {...register("transportMethodType")}
+            />
+          </FormField>
+          <FormField
+            id="tripType"
+            label="Trip type"
+            error={errors.tripType?.message}
+            helperText="Return doubles the distance (vehicle returns empty). Choose One-way only with an evidenced onward destination."
+          >
+            <FormSelect
+              id="tripType"
+              options={TRIP_TYPE_OPTIONS}
+              disabled={isSubmitting}
+              error={!!errors.tripType}
+              {...register("tripType")}
             />
           </FormField>
           <FormField

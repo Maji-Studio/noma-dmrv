@@ -24,6 +24,8 @@ import {
   type FeedstockFormData,
 } from "@/schemas/feedstocks";
 import { type DistanceSourceValue } from "@/schemas/distance-source";
+import { DEFAULT_TRIP_TYPE, TRIP_TYPE_OPTIONS, type TripTypeValue } from "@/schemas/trip-type";
+import { FormSelect } from "@/components/forms/form-select";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import { VehicleQuickAddDialog } from "@/components/forms/entity-select/vehicle-quick-add-dialog";
 import { FeedstockTypeQuickAddDialog } from "@/components/forms/entity-select/feedstock-type-quick-add-dialog";
@@ -78,6 +80,7 @@ export function FeedstockForm({
     vehicleId: feedstock?.vehicleId ?? "",
     transportDistanceKm: undefined as number | undefined,
     transportDistanceSource: null as DistanceSourceValue | null,
+    transportTripType: DEFAULT_TRIP_TYPE as TripTypeValue,
     feedstockTypeId: feedstock?.feedstockTypeId ?? "",
     totalWetMassKg: feedstock?.massWetKg ?? ("" as unknown as number),
     moisturePercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),
@@ -208,6 +211,16 @@ export function FeedstockForm({
     }
   }, [suggestedDistanceKm, suggestedDistanceSource, dirtyFields.transportDistanceKm, setValue]);
 
+  // Prefill the saved leg's trip type in edit mode (async), unless the user
+  // already changed it. New feedstock defaults to Return via defaultValues.
+  const existingLegTripType = existingLegs?.[0]?.tripType ?? null;
+  useEffect(() => {
+    if (!isEditMode || dirtyFields.transportTripType) return;
+    if (existingLegTripType) {
+      setValue("transportTripType", existingLegTripType);
+    }
+  }, [isEditMode, existingLegTripType, dirtyFields.transportTripType, setValue]);
+
   // Sum of allocated wet mass
   const allocatedTotalWetKg = (watchAllocations ?? []).reduce((sum, a) => {
     const val = typeof a.allocatedWetMassKg === "number" ? a.allocatedWetMassKg : 0;
@@ -299,8 +312,8 @@ export function FeedstockForm({
         <FormSection
           title="Transport Details"
           icon={<MapPinIcon size={14} weight="bold" />}
-          hint="We record distance plus the delivery wet mass as one road transport leg. Isometric applies the emission factor."
-          fields={["vehicleId", "transportDistanceKm"]}
+          hint="We record the one-way distance plus the delivery wet mass as one road transport leg. Return trips double the distance at emissions time; Isometric applies the emission factor."
+          fields={["vehicleId", "transportDistanceKm", "transportTripType"]}
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormEntitySelect
@@ -318,14 +331,14 @@ export function FeedstockForm({
 
             <FormField
               id="transportDistanceKm"
-              label="Transport distance (km)"
+              label="One-way distance (per leg, km)"
               error={errors.transportDistanceKm?.message}
               certifyRequired={isFeedstockCertifyField("transportDistanceKm")}
               certifyStatus={transportDistanceCertStatus}
               helperText={
                 storedDistanceKm != null
-                  ? "Autofilled from the supplier's default location or supplier default; override if the route differs."
-                  : "Set a distance on the supplier (or its default location) to autofill this."
+                  ? "One-way supplier › facility distance, autofilled from the supplier; return trips are doubled at emissions time. Override if the route differs."
+                  : "Set a one-way distance on the supplier (or its default location) to autofill this."
               }
             >
               <div className="relative">
@@ -362,6 +375,21 @@ export function FeedstockForm({
                   </button>
                 )}
               </div>
+            </FormField>
+
+            <FormField
+              id="transportTripType"
+              label="Trip type"
+              error={errors.transportTripType?.message}
+              helperText="Return doubles the distance (vehicle comes back empty). Choose One-way only with an evidenced onward destination."
+            >
+              <FormSelect
+                id="transportTripType"
+                options={TRIP_TYPE_OPTIONS}
+                disabled={isSubmitting}
+                error={!!errors.transportTripType}
+                {...register("transportTripType")}
+              />
             </FormField>
           </div>
         </FormSection>
@@ -543,6 +571,10 @@ export function FeedstockForm({
           isSubmitting={isSubmitting}
           submitLabel={submitLabel}
           defaultSubmitLabel={defaultSubmitLabel}
+          // The update path rebuilds the derived transport leg from the
+          // submitted values, so saving before the saved leg has prefilled
+          // trip type/distance would silently reset them to defaults.
+          submitDisabled={isEditMode && existingLegs === undefined}
         />
       </form>
 

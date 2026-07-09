@@ -634,6 +634,7 @@ export async function syncFeedstockTransportLeg(
   distanceOverride?: {
     distanceKm?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
+    tripType?: "return" | "one_way" | null;
   },
 ): Promise<void> {
   requireAuth(userId);
@@ -704,6 +705,7 @@ export async function syncFeedstockTransportLeg(
     storedDistanceSource,
     distanceKmOverride: distanceOverride?.distanceKm,
     distanceSourceOverride: distanceOverride?.distanceSource,
+    tripType: distanceOverride?.tripType,
   });
 
   await replaceDerivedTransportLeg(userId, "feedstock", feedstockId, derived);

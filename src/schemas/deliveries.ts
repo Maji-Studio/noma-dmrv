@@ -7,6 +7,7 @@
 import { z } from "zod";
 import { deliveryDryMassSchema } from "./isometric";
 import { optionalDistanceSource } from "./distance-source";
+import { optionalTripType } from "./trip-type";
 import { emptyToNull, optionalMassKgSchema } from "./helpers";
 
 // ============================================
@@ -66,6 +67,8 @@ const deliveryFormBaseSchema = z.object({
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
+  // Round-trip vs one-way accounting for the distribution leg (issue #316).
+  tripType: optionalTripType,
 });
 
 /**
@@ -141,6 +144,7 @@ export const createDeliverySchema = z.object({
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
+  tripType: optionalTripType,
 }).superRefine((value, ctx) => {
   if (value.massDryKg != null && value.massDryKg < 0) {
     ctx.addIssue({
@@ -190,6 +194,7 @@ export const updateDeliverySchema = z.object({
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
+  tripType: optionalTripType,
 }).superRefine((value, ctx) => {
   if (value.massDryKg != null && value.massDryKg < 0) {
     ctx.addIssue({

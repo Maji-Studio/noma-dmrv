@@ -253,6 +253,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         vehicleId: data.vehicleId || null,
         transportDistanceKm: data.transportDistanceKm ?? null,
         transportDistanceSource: data.transportDistanceSource ?? null,
+        transportTripType: data.transportTripType ?? null,
         feedstockTypeId: data.feedstockTypeId,
         massWetKg: data.allocations[0]?.allocatedWetMassKg ?? data.totalWetMassKg,
         moistureContentPercent: data.moisturePercent,
