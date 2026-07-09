@@ -138,7 +138,6 @@ beforeAll(async () => {
     productionRunIds: [run.id],
     startDate: new Date("2025-06-01"),
     endDate: new Date("2025-06-30"),
-    certifier: "isometric",
     hToCorgRatio: 0.4,
     currency: "TZS",
     feedstockTypeId: feedstockType.id,
