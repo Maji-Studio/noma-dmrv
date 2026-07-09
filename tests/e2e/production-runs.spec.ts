@@ -36,7 +36,7 @@ test.describe("Production Run + Sample UI CRUD", () => {
     );
 
     const today = new Date().toISOString().split("T")[0];
-    await page.fill('input[name="date"]', today);
+    await page.fill('input[name="startDate"]', today);
 
     await selectEntity(
       page,
@@ -125,5 +125,221 @@ test.describe("Production Run + Sample UI CRUD", () => {
     await expect(
       page.locator("table tbody tr, [role='row']").first()
     ).toBeVisible({ timeout: 10000 });
+  });
+});
+
+test.describe("Production Run reactor time-window overlap (#259)", () => {
+  const overlapText = /overlaps run|unfinished run/i;
+
+  async function openRunForm(
+    page: Page,
+    seededData: SeededChainData,
+    window: {
+      startDate: string;
+      startTime: string;
+      endDate?: string;
+      endTime?: string;
+      status?: string;
+    },
+  ) {
+    await page.goto(`/production-runs?facility=${seededData.facility.id}`);
+    await page.getByRole("button", { name: "New Production Run" }).click();
+    await waitForSideSheet(page);
+    await page.selectOption('select[name="status"]', window.status ?? "running");
+    await selectEntity(
+      page,
+      "Reactor",
+      seededData.reactor.id,
+      seededData.reactor.identifier,
+    );
+    await page.fill('input[name="startDate"]', window.startDate);
+    await page.fill('input[name="startTime"]', window.startTime);
+    if (window.endDate) await page.fill('input[name="endDate"]', window.endDate);
+    if (window.endTime) await page.fill('input[name="endTime"]', window.endTime);
+  }
+
+  async function submitCreate(page: Page) {
+    await page
+      .locator('[role="dialog"]')
+      .locator('button:has-text("Create Production Run")')
+      .click();
+  }
+
+  test("rejects a duplicate start on the same reactor", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await openRunForm(page, seededData, {
+      startDate: "2027-01-05",
+      startTime: "08:00",
+      endDate: "2027-01-05",
+      endTime: "12:00",
+      status: "complete",
+    });
+    await submitCreate(page);
+    await waitForSideSheetClose(page);
+
+    await openRunForm(page, seededData, {
+      startDate: "2027-01-05",
+      startTime: "08:00",
+      endDate: "2027-01-05",
+      endTime: "10:00",
+      status: "complete",
+    });
+    await submitCreate(page);
+
+    await expect(
+      page.locator('[role="dialog"]').getByText(overlapText),
+    ).toBeVisible({ timeout: 10000 });
+  });
+
+  test("rejects an overlapping window on the same reactor", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await openRunForm(page, seededData, {
+      startDate: "2027-02-05",
+      startTime: "08:00",
+      endDate: "2027-02-05",
+      endTime: "12:00",
+      status: "complete",
+    });
+    await submitCreate(page);
+    await waitForSideSheetClose(page);
+
+    // 10:00–11:00 sits inside the first run's 08:00–12:00 window.
+    await openRunForm(page, seededData, {
+      startDate: "2027-02-05",
+      startTime: "10:00",
+      endDate: "2027-02-05",
+      endTime: "11:00",
+      status: "complete",
+    });
+    await submitCreate(page);
+
+    await expect(
+      page.locator('[role="dialog"]').getByText(overlapText),
+    ).toBeVisible({ timeout: 10000 });
+  });
+
+  test("rejects a run starting after an unfinished (open) run", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    // Open run (no end time) — occupies [08:00, ∞) on the reactor.
+    await openRunForm(page, seededData, {
+      startDate: "2027-03-05",
+      startTime: "08:00",
+      status: "running",
+    });
+    await submitCreate(page);
+    await waitForSideSheetClose(page);
+
+    // A later run cannot start until the open run is closed.
+    await openRunForm(page, seededData, {
+      startDate: "2027-03-05",
+      startTime: "13:00",
+      endDate: "2027-03-05",
+      endTime: "15:00",
+      status: "complete",
+    });
+    await submitCreate(page);
+
+    await expect(
+      page.locator('[role="dialog"]').getByText(overlapText),
+    ).toBeVisible({ timeout: 10000 });
+  });
+
+  test("accepts an overnight run (end date is the next day)", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await openRunForm(page, seededData, {
+      startDate: "2027-04-05",
+      startTime: "22:00",
+      endDate: "2027-04-06",
+      endTime: "02:00",
+      status: "complete",
+    });
+    await submitCreate(page);
+    // A clean save closes the side sheet.
+    await waitForSideSheetClose(page);
+  });
+
+  async function editFirstRow(page: Page) {
+    // Edit via the row overflow menu (openEdit — it does NOT set the deep-link
+    // focus that would re-open a view sheet after save, so the sheet closes
+    // cleanly). A post-save list refetch can re-render the row and detach the
+    // menu's "Edit" item mid-click, so retry the open→Edit sequence instead of
+    // waiting for network idle (CI dev servers may never settle within budget).
+    await expect(async () => {
+      await page
+        .locator("tbody tr")
+        .first()
+        .getByRole("button", { name: /Actions for/ })
+        .click({ timeout: 5000 });
+      await page.getByRole("menuitem", { name: "Edit" }).click({ timeout: 5000 });
+    }).toPass({ timeout: 30000 });
+    await waitForSideSheet(page);
+    await expect(
+      page.locator('[role="dialog"] input[name="startTime"]'),
+    ).toBeVisible();
+  }
+
+  async function saveEdit(page: Page) {
+    await page
+      .locator('[role="dialog"]')
+      .locator('button:has-text("Save Changes")')
+      .click();
+  }
+
+  test("edit into a conflict is rejected; a non-time edit still saves", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    // Two non-overlapping runs on one reactor, with a gap between them.
+    await openRunForm(page, seededData, {
+      startDate: "2027-05-05",
+      startTime: "08:00",
+      endDate: "2027-05-05",
+      endTime: "10:00",
+      status: "complete",
+    });
+    await submitCreate(page);
+    await waitForSideSheetClose(page);
+
+    await openRunForm(page, seededData, {
+      startDate: "2027-05-05",
+      startTime: "14:00",
+      endDate: "2027-05-05",
+      endTime: "16:00",
+      status: "complete",
+    });
+    await submitCreate(page);
+    await waitForSideSheetClose(page);
+
+    // Edit whichever run is row 1 and stretch its window to 08:30–15:30, which
+    // overlaps the OTHER run regardless of which one this is.
+    await editFirstRow(page);
+    await page.fill('input[name="startTime"]', "08:30");
+    await page.fill('input[name="endTime"]', "15:30");
+    await expect(page.locator('[role="dialog"] input[name="startTime"]')).toHaveValue("08:30");
+    await saveEdit(page);
+    await expect(
+      page.locator('[role="dialog"]').getByText(overlapText),
+    ).toBeVisible({ timeout: 10000 });
+
+    // Move it to a slot clear of both runs — the edit now saves.
+    await page.fill('input[name="startTime"]', "18:00");
+    await page.fill('input[name="endTime"]', "19:00");
+    await saveEdit(page);
+    await waitForSideSheetClose(page);
+
+    // Re-open a run and change only a non-time field; the run's own unchanged
+    // window must not trip the overlap guard (self-exclusion).
+    await editFirstRow(page);
+    await page.fill('input[name="feedstockMoisturePercent"]', "18");
+    await saveEdit(page);
+    await waitForSideSheetClose(page);
   });
 });

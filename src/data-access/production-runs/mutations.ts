@@ -17,12 +17,34 @@ import {
   feedstockTypes,
 } from "@/db/schema";
 import { computeClampedDryMass, deriveMassDryKg } from "@/lib/calculations/mass-dry";
-import { formatLocalDate } from "@/lib/date-utils";
 import { requireAuth } from "../utils";
 import { SafeError } from "@/lib/errors";
 import { getProductionRunById } from "./queries";
 import type { ProductionRunWithRelations } from "./types";
 import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
+import {
+  assertNoReactorRunOverlap,
+  isReactorStartUniqueViolation,
+} from "./overlap";
+
+/**
+ * Reject a time window that is malformed or inconsistent with the run's status.
+ * Re-checks, in data-access, the rules the form schema enforces client-side
+ * (issue #259): an end time must be after the start, and a Complete run needs an
+ * end time.
+ */
+function assertRunWindowConsistent(
+  startTime: Date,
+  endTime: Date | null,
+  status: "draft" | "running" | "complete" | "void",
+): void {
+  if (endTime && endTime.getTime() <= startTime.getTime()) {
+    throw new SafeError("End time must be after the start time");
+  }
+  if (status === "complete" && !endTime) {
+    throw new SafeError("A complete run needs an end time");
+  }
+}
 
 /**
  * Proportionally allocate total mass across feedstock batches stored in a bin.
@@ -118,11 +140,10 @@ export async function createProductionRun(
   data: {
     code: string;
     facilityId: string;
-    date: Date;
     reactorId: string;
     status?: "draft" | "running" | "complete" | "void";
     startTime: Date;
-    endTime: Date;
+    endTime: Date | null;
     operatorId?: string | null;
     feedstockWetMassKg?: number | null;
     feedstockMoisturePercent?: number | null;
@@ -174,6 +195,9 @@ export async function createProductionRun(
     throw new SafeError("Reactor does not belong to the selected facility");
   }
 
+  const status = data.status ?? "draft";
+  assertRunWindowConsistent(data.startTime, data.endTime, status);
+
   // Compute dry mass from wet mass + moisture
   const computedDryMass =
     data.feedstockWetMassKg != null && data.feedstockMoisturePercent != null
@@ -184,14 +208,22 @@ export async function createProductionRun(
   const biocharDryMass = computeClampedDryMass(data.biocharOutputKg, data.biocharMoisturePercent);
 
   // Create production run + M:M allocation in a transaction
-  const run = await db.transaction(async (tx) => {
+  let run: typeof productionRuns.$inferSelect;
+  try {
+    run = await db.transaction(async (tx) => {
+    // Reject an overlapping window before writing (serialized per-reactor).
+    await assertNoReactorRunOverlap(tx, {
+      reactorId: data.reactorId,
+      startTime: data.startTime,
+      endTime: data.endTime,
+    });
+
     const [created] = await tx
       .insert(productionRuns)
       .values({
         code: data.code,
         facilityId: data.facilityId,
-        date: formatLocalDate(data.date),
-        status: data.status ?? "draft",
+        status,
         startTime: data.startTime,
         endTime: data.endTime,
         reactorId: data.reactorId,
@@ -238,7 +270,17 @@ export async function createProductionRun(
     }
 
     return created;
-  });
+    });
+  } catch (error) {
+    // Race backstop: map a raw (reactor, start_time) unique violation that
+    // slipped past the advisory lock to the friendly overlap message.
+    if (isReactorStartUniqueViolation(error)) {
+      throw new SafeError(
+        "Another run on this reactor already starts at that time — pick a different start time",
+      );
+    }
+    throw error;
+  }
 
   return getProductionRunById(userId, run.id);
 }
@@ -252,11 +294,10 @@ export async function updateProductionRun(
   data: {
     code?: string;
     facilityId?: string;
-    date?: Date;
     reactorId?: string;
     status?: "draft" | "running" | "complete" | "void";
     startTime?: Date;
-    endTime?: Date;
+    endTime?: Date | null;
     operatorId?: string | null;
     feedstockWetMassKg?: number | null;
     feedstockMoisturePercent?: number | null;
@@ -329,6 +370,14 @@ export async function updateProductionRun(
     }
   }
 
+  // Resolve the effective time window (merging unchanged fields) so the window
+  // and overlap guards see the run as it will be after this edit.
+  const effectiveStartTime = data.startTime ?? existing.startTime;
+  const effectiveEndTime =
+    data.endTime !== undefined ? data.endTime : existing.endTime;
+  const effectiveStatus = data.status ?? existing.status;
+  assertRunWindowConsistent(effectiveStartTime, effectiveEndTime, effectiveStatus);
+
   // Update production run + M:M re-allocation in a transaction
   const updateData: Record<string, unknown> = {
     updatedAt: new Date(),
@@ -336,7 +385,6 @@ export async function updateProductionRun(
 
   if (data.code !== undefined) updateData.code = data.code;
   if (data.facilityId !== undefined) updateData.facilityId = data.facilityId;
-  if (data.date !== undefined) updateData.date = formatLocalDate(data.date);
   if (data.reactorId !== undefined) updateData.reactorId = data.reactorId;
   if (data.status !== undefined) updateData.status = data.status;
   if (data.startTime !== undefined) updateData.startTime = data.startTime;
@@ -379,12 +427,23 @@ export async function updateProductionRun(
     data.feedstockWetMassKg !== undefined ||
     data.feedstockMoisturePercent !== undefined;
 
-  await db.transaction(async (tx) => {
+  try {
+    await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
       tx,
       { entityType: "productionRun", entityId: productionRunId },
       "update",
     );
+
+    // A void run frees its slot, so only a non-void run needs the overlap guard.
+    if (effectiveStatus !== "void") {
+      await assertNoReactorRunOverlap(tx, {
+        reactorId: effectiveReactorId,
+        startTime: effectiveStartTime,
+        endTime: effectiveEndTime,
+        selfId: productionRunId,
+      });
+    }
 
     await tx
       .update(productionRuns)
@@ -434,7 +493,17 @@ export async function updateProductionRun(
         );
       }
     }
-  });
+    });
+  } catch (error) {
+    // Race backstop (see createProductionRun): map a raw (reactor, start_time)
+    // unique violation to the friendly overlap message.
+    if (isReactorStartUniqueViolation(error)) {
+      throw new SafeError(
+        "Another run on this reactor already starts at that time — pick a different start time",
+      );
+    }
+    throw error;
+  }
 
   return getProductionRunById(userId, productionRunId);
 }

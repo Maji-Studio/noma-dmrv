@@ -25,7 +25,7 @@ const SAMPLE_ID = "55555555-5555-4555-8555-555555555555";
 
 const validRunBase = {
   facilityId: FACILITY_ID,
-  date: "2026-01-15",
+  startDate: "2026-01-15",
   reactorId: REACTOR_ID,
   startTime: "08:00",
 };

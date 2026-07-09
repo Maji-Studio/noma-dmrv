@@ -34,7 +34,7 @@ async function createProductionRunForCreditBatch(
     seededData.reactor.id,
     seededData.reactor.identifier,
   );
-  await page.fill('input[name="date"]', date);
+  await page.fill('input[name="startDate"]', date);
   await selectEntity(
     page,
     "Source Bin",

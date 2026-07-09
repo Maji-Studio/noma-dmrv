@@ -10,9 +10,11 @@ import { formatLocalDate, formatLocalTime, combineDateAndTime } from "@/lib/date
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import Link from "next/link";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
 import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, FileCsvIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, DryMassInput, FormActions, FormSection, FormSpine, SectionLabel, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
@@ -250,12 +252,17 @@ export function ProductionRunForm({
 
   const defaultValues = {
     facilityId: productionRun?.facilityId || contextFacilityId || "",
-    date: productionRun?.date ?? formatLocalDate(new Date()),
     reactorId: productionRun?.reactorId ?? "",
     status: (productionRun?.status as ProductionRunStatus) ?? "draft",
+    // Start and end are explicit date + time pairs (issue #259). The end pair is
+    // blank for an unfinished run; an overnight run gets an end date one day on.
+    startDate: productionRun?.startTime
+      ? formatLocalDate(new Date(productionRun.startTime))
+      : formatLocalDate(new Date()),
     startTime: productionRun?.startTime
       ? formatLocalTime(new Date(productionRun.startTime))
       : formatLocalTime(new Date()),
+    endDate: productionRun?.endTime ? formatLocalDate(new Date(productionRun.endTime)) : "",
     endTime: productionRun?.endTime ? formatLocalTime(new Date(productionRun.endTime)) : "",
     operatorId: productionRun?.operatorId ?? "",
     feedstockStorageLocationId: productionRun?.feedstockStorageLocationId ?? "",
@@ -277,6 +284,8 @@ export function ProductionRunForm({
     handleSubmit,
     control,
     setValue,
+    setError,
+    clearErrors,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(productionRunFormSchema),
@@ -284,6 +293,9 @@ export function ProductionRunForm({
     mode: "onTouched",
     defaultValues,
   });
+
+  // The run this run's window overlaps, if the server rejected the save (#259).
+  const [overlapConflict, setOverlapConflict] = useState<RunConflict | null>(null);
 
   // CERT chips reflect the saved record (frozen), neutral while creating.
   const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
@@ -357,16 +369,39 @@ export function ProductionRunForm({
 
   const defaultSubmitLabel = isEditMode ? "Update Production Run" : "Create Production Run";
 
-  const handleFormSubmit = handleSubmit((data) => {
-    // date comes as "YYYY-MM-DD" string from the input
-    const dateStr = typeof data.date === "string" ? data.date : formatLocalDate(data.date as Date);
+  const handleFormSubmit = handleSubmit(async (data) => {
+    // Dates arrive as "YYYY-MM-DD" strings from the inputs. The end date
+    // defaults to the start date when only an end time was entered.
+    const startDateStr =
+      typeof data.startDate === "string" ? data.startDate : formatLocalDate(data.startDate as Date);
+    const endDateStr = data.endDate
+      ? typeof data.endDate === "string"
+        ? data.endDate
+        : formatLocalDate(data.endDate as Date)
+      : startDateStr;
     const combined = {
       ...data,
-      date: new Date(dateStr + "T00:00:00"), // local midnight
-      startTime: combineDateAndTime(dateStr, data.startTime as string),
-      endTime: data.endTime ? combineDateAndTime(dateStr, data.endTime as string) : undefined,
+      startTime: combineDateAndTime(startDateStr, data.startTime as string),
+      endTime: data.endTime ? combineDateAndTime(endDateStr, data.endTime as string) : undefined,
     };
-    return onSubmit(combined as ProductionRunFormData);
+
+    // Clear any prior overlap state before re-submitting.
+    setOverlapConflict(null);
+    clearErrors("startTime");
+    try {
+      await onSubmit(combined as ProductionRunFormData);
+    } catch (error) {
+      const conflict = getRunConflict(error);
+      if (conflict) {
+        setError("startTime", {
+          type: "server",
+          message: error instanceof Error ? error.message : "Overlaps another run on this reactor",
+        });
+        setOverlapConflict(conflict);
+        return;
+      }
+      throw error;
+    }
   });
 
   return (
@@ -377,7 +412,7 @@ export function ProductionRunForm({
       <FormSection
         title="Run Setup"
         icon={<FactoryIcon size={14} weight="bold" />}
-        fields={["reactorId", "status", "date", "operatorId", "startTime", "endTime"]}
+        fields={["reactorId", "status", "startDate", "startTime", "endDate", "endTime", "operatorId"]}
       >
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
@@ -419,10 +454,55 @@ export function ProductionRunForm({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField id="date" label="Date" error={errors.date?.message} required>
-            <FormInput id="date" type="date" disabled={isSubmitting} error={!!errors.date} {...register("date")} />
+          <FormField id="startDate" label="Start Date" error={errors.startDate?.message} required>
+            <FormInput id="startDate" type="date" disabled={isSubmitting} error={!!errors.startDate} {...register("startDate")} />
           </FormField>
 
+          <FormField id="startTime" label="Start Time" error={errors.startTime?.message} required>
+            <FormInput
+              id="startTime"
+              type="time"
+              disabled={isSubmitting}
+              error={!!errors.startTime}
+              {...register("startTime")}
+            />
+          </FormField>
+        </div>
+
+        {overlapConflict && watchedFacilityId && (
+          <p className="body-caption text-[var(--color-text-secondary)]">
+            <Link
+              href={`/production-runs?facility=${watchedFacilityId}&run=${overlapConflict.id}`}
+              className="text-[var(--clr-dark-purple)] underline"
+            >
+              Open {overlapConflict.code}
+            </Link>{" "}
+            to adjust its time window.
+          </p>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
+          <FormField
+            id="endDate"
+            label="End Date"
+            error={errors.endDate?.message}
+            helperText="Leave the end blank until the run finishes. For an overnight run, set the next day."
+          >
+            <FormInput id="endDate" type="date" disabled={isSubmitting} error={!!errors.endDate} {...register("endDate")} />
+          </FormField>
+
+          <FormField id="endTime" label="End Time" error={errors.endTime?.message}>
+            <FormInput
+              id="endTime"
+              type="time"
+              disabled={isSubmitting}
+              error={!!errors.endTime}
+              {...register("endTime")}
+            />
+          </FormField>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField id="operatorId" label="Operator" error={errors.operatorId?.message}>
             <Controller
               name="operatorId"
@@ -437,28 +517,6 @@ export function ProductionRunForm({
                   error={!!errors.operatorId}
                 />
               )}
-            />
-          </FormField>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField id="startTime" label="Start Time" error={errors.startTime?.message} required>
-            <FormInput
-              id="startTime"
-              type="time"
-              disabled={isSubmitting}
-              error={!!errors.startTime}
-              {...register("startTime")}
-            />
-          </FormField>
-
-          <FormField id="endTime" label="End Time" error={errors.endTime?.message}>
-            <FormInput
-              id="endTime"
-              type="time"
-              disabled={isSubmitting}
-              error={!!errors.endTime}
-              {...register("endTime")}
             />
           </FormField>
         </div>

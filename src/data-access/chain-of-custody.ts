@@ -20,6 +20,7 @@ import {
   suppliers,
 } from "@/db/schema";
 import { requireAuth } from "./utils";
+import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
 
 export interface ChainFacility {
@@ -286,7 +287,7 @@ async function getProductionRunLineage(
       id: productionRuns.id,
       code: productionRuns.code,
       status: productionRuns.status,
-      date: productionRuns.date,
+      date: productionRunDateExpr(),
       biocharDryMassKg: productionRuns.biocharDryMassKg,
       feedstockMassDryKg: productionRuns.feedstockMassDryKg,
     })

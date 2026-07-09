@@ -769,7 +769,6 @@ async function seedDemoData() {
           id: ids.productionRun1,
           code: 'PR-26-001',
           facilityId: ids.facilityMoshi,
-          date: '2026-05-13',
           status: 'complete',
           startTime: demoTimestamps.run1Start,
           endTime: demoTimestamps.run1End,
@@ -796,7 +795,6 @@ async function seedDemoData() {
           id: ids.productionRun2,
           code: 'PR-26-002',
           facilityId: ids.facilityMoshi,
-          date: '2026-05-15',
           status: 'complete',
           startTime: demoTimestamps.run2Start,
           endTime: demoTimestamps.run2End,
@@ -823,7 +821,6 @@ async function seedDemoData() {
           id: ids.productionRun3,
           code: 'PR-26-003',
           facilityId: ids.facilityMoshi,
-          date: '2026-05-17',
           status: 'complete',
           startTime: demoTimestamps.run3Start,
           endTime: demoTimestamps.run3End,
@@ -1769,12 +1766,19 @@ async function seedDemoData() {
             storageLocationId: binId,
           });
         } else if (type === 'biochar_bin') {
+          // All extra runs share one reactor, so their windows must not
+          // overlap (#259: unique start per reactor AND no window overlap).
+          // Stagger starts by 6 hours per bin index — each closed 4-hour
+          // window then has a 2-hour gap before the next run.
+          const runStart = new Date(Date.UTC(2026, 4, 20, i * 6, 0, 0));
+          const runEnd = new Date(runStart.getTime() + 4 * 60 * 60 * 1000);
           extraRuns.push({
             id: demoId(extraBinBase + 200 + i),
             code: `PR-26-${900 + i}`,
             facilityId: ids.facilityMoshi,
-            date: '2026-05-20',
             status: 'complete',
+            startTime: runStart,
+            endTime: runEnd,
             reactorId: ids.reactorMoshi1,
             biocharStorageLocationId: binId,
             biocharOutputKg: massKg,

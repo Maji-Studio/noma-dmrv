@@ -73,6 +73,7 @@ function runDateToProductionDate(runDate: string | Date): Date {
 // ============================================
 
 import { requireAuth } from "./utils";
+import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
 import { deleteTransportLegsForEntity } from "./transport-legs";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
@@ -440,7 +441,7 @@ export async function createBiocharProduct(
     .select({
       id: productionRuns.id,
       facilityId: productionRuns.facilityId,
-      date: productionRuns.date,
+      date: productionRunDateExpr(),
     })
     .from(productionRuns)
     .where(eq(productionRuns.id, data.linkedProductionRunId));
@@ -675,7 +676,7 @@ export async function updateBiocharProduct(
       .select({
         id: productionRuns.id,
         facilityId: productionRuns.facilityId,
-        date: productionRuns.date,
+        date: productionRunDateExpr(),
       })
       .from(productionRuns)
       .where(eq(productionRuns.id, effectiveLinkedRunId));
