@@ -40,6 +40,9 @@ function importSummary(result: ProductionRunReadingsImportResult): string {
   if (result.duplicateRows > 0) {
     parts.push(`${result.duplicateRows} already imported`);
   }
+  if (result.intraFileDuplicateRows > 0) {
+    parts.push(`${result.intraFileDuplicateRows} duplicate rows in file`);
+  }
   if (result.skippedRows > 0) parts.push(`${result.skippedRows} skipped`);
   if (result.invalidRequiredRows > 0) {
     parts.push(`${result.invalidRequiredRows} missing temperature/pressure`);

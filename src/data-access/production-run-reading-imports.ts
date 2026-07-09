@@ -79,8 +79,10 @@ export async function getProductionRunReadingsImportContext(
  * Insert parsed readings, skipping any row whose `(production_run_id, timestamp)`
  * already exists (#398). ON CONFLICT DO NOTHING against the unique index — never
  * an upsert: telemetry already published to Isometric must not be silently
- * rewritten. Returns the number of rows actually inserted, so the caller can
- * report `parsed − inserted` as "already imported" and re-imports are visibly
+ * rewritten. Returns the number of rows actually inserted alongside the count of
+ * intra-file duplicate timestamps collapsed before insert, so the caller can
+ * report rows already in the table ("already imported") separately from
+ * duplicate timestamps within the uploaded file, and re-imports stay visibly
  * idempotent.
  */
 export async function insertProductionRunReadingsSkippingDuplicates(
@@ -89,7 +91,7 @@ export async function insertProductionRunReadingsSkippingDuplicates(
     productionRunId: string;
     readings: ReadingsCsvRow[];
   },
-): Promise<number> {
+): Promise<{ insertedRows: number; intraFileDuplicateRows: number }> {
   requireAuth(userId);
 
   const [run] = await db
@@ -102,13 +104,16 @@ export async function insertProductionRunReadingsSkippingDuplicates(
   // Collapse duplicate timestamps within the same file first: ON CONFLICT DO
   // NOTHING guards against rows already in the table, but two rows with the
   // same timestamp inside one INSERT statement would still trip the unique
-  // index. Last occurrence wins.
+  // index. Last occurrence wins. These intra-file collisions are reported
+  // separately from rows already present in the table, so a first import of a
+  // file that repeats a timestamp is not misreported as "already imported".
   const deduped = Array.from(
     new Map(
       args.readings.map((reading) => [reading.timestamp.getTime(), reading]),
     ).values(),
   );
-  if (deduped.length === 0) return 0;
+  const intraFileDuplicateRows = args.readings.length - deduped.length;
+  if (deduped.length === 0) return { insertedRows: 0, intraFileDuplicateRows };
 
   const inserted = await db
     .insert(productionRunReadings)
@@ -130,7 +135,7 @@ export async function insertProductionRunReadingsSkippingDuplicates(
     })
     .returning({ id: productionRunReadings.id });
 
-  return inserted.length;
+  return { insertedRows: inserted.length, intraFileDuplicateRows };
 }
 
 export interface ReadingsImportOutcome {

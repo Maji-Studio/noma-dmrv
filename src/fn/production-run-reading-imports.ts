@@ -24,6 +24,8 @@ export interface ProductionRunReadingsImportResult {
   invalidRequiredRows: number;
   /** In-window rows skipped because that (run, timestamp) was already imported. */
   duplicateRows: number;
+  /** In-window rows collapsed because the file repeated a timestamp. */
+  intraFileDuplicateRows: number;
 }
 
 export async function importProductionRunReadingsFromDocumentFn(
@@ -64,16 +66,16 @@ export async function importProductionRunReadingsFromDocumentFn(
         );
       }
 
-      const insertedRows = await insertProductionRunReadingsSkippingDuplicates(
-        userId,
-        {
+      const { insertedRows, intraFileDuplicateRows } =
+        await insertProductionRunReadingsSkippingDuplicates(userId, {
           productionRunId: context.productionRunId,
           readings: parsed.readings,
-        },
-      );
-      // Everything that was in-window but not newly inserted was already
-      // present — the visible signal that a re-run is idempotent.
-      const duplicateRows = parsed.inWindowRows - insertedRows;
+        });
+      // In-window rows that were neither newly inserted nor collapsed as an
+      // intra-file duplicate timestamp were already present from a prior
+      // import — the visible signal that a re-run is idempotent.
+      const duplicateRows =
+        parsed.inWindowRows - insertedRows - intraFileDuplicateRows;
 
       await recordReadingsImportOutcome(userId, documentId, {
         status: "succeeded",
@@ -90,6 +92,7 @@ export async function importProductionRunReadingsFromDocumentFn(
         skippedRows: parsed.skippedRows,
         invalidRequiredRows: parsed.invalidRequiredRows,
         duplicateRows,
+        intraFileDuplicateRows,
       };
     } catch (error) {
       await recordReadingsImportOutcome(userId, documentId, {
