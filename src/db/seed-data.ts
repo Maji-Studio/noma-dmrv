@@ -1766,11 +1766,11 @@ async function seedDemoData() {
             storageLocationId: binId,
           });
         } else if (type === 'biochar_bin') {
-          // All extra runs share one reactor, so each needs a distinct start
-          // instant to satisfy the (reactor, start_time) unique index (#259).
-          // Stagger them across 2026-05-20 by the bin index; each is a closed
-          // 4-hour window (end_time > start_time).
-          const runStart = new Date(Date.UTC(2026, 4, 20, i, 0, 0));
+          // All extra runs share one reactor, so their windows must not
+          // overlap (#259: unique start per reactor AND no window overlap).
+          // Stagger starts by 6 hours per bin index — each closed 4-hour
+          // window then has a 2-hour gap before the next run.
+          const runStart = new Date(Date.UTC(2026, 4, 20, i * 6, 0, 0));
           const runEnd = new Date(runStart.getTime() + 4 * 60 * 60 * 1000);
           extraRuns.push({
             id: demoId(extraBinBase + 200 + i),
