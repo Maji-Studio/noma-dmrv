@@ -133,7 +133,7 @@ export async function createBinMovement(
 
   // A loss can only ever remove material (DB check mirrors this).
   if (input.movementType === "loss" && input.massDeltaKg >= 0) {
-    throw new SafeError("A loss must be a positive amount removed from the bin");
+    throw new SafeError("A loss must be recorded as a negative mass delta");
   }
 
   const [movement] = await db
