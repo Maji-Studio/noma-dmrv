@@ -43,6 +43,10 @@ export const suppliers = pgTable(
       'suppliers_distance_to_facility_km_non_negative',
       sql`${table.distanceToFacilityKm} is null or ${table.distanceToFacilityKm} >= 0`
     ),
+    // Supplier name is globally unique, case- and whitespace-insensitive (issue
+    // #252). Global today; when multi-tenancy lands (ADR 0010) this joins
+    // organization_id. Reuse a retired name by renaming the old record.
+    uniqueIndex('suppliers_name_unique').on(sql`lower(trim(${table.name}))`),
   ]
 );
 
@@ -50,17 +54,26 @@ export const suppliers = pgTable(
 // Customers - Biochar product buyers/farmers
 // ============================================
 
-export const customers = pgTable('customers', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  code: text('code').notNull().unique(),
-  name: text('name').notNull(),
-  cropType: text('crop_type'), // e.g., "Coffee"
-  address: text('address'),
-  contactEmail: text('contact_email'),
-  contactPhone: text('contact_phone'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+export const customers = pgTable(
+  'customers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    code: text('code').notNull().unique(),
+    name: text('name').notNull(),
+    cropType: text('crop_type'), // e.g., "Coffee"
+    address: text('address'),
+    contactEmail: text('contact_email'),
+    contactPhone: text('contact_phone'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    // Customer name is globally unique, case- and whitespace-insensitive (issue
+    // #252). Global today; when multi-tenancy lands (ADR 0010) this joins
+    // organization_id. Reuse a retired name by renaming the old record.
+    uniqueIndex('customers_name_unique').on(sql`lower(trim(${table.name}))`),
+  ]
+);
 
 // ============================================
 // Customer Locations - Multi-location destinations per customer

@@ -481,8 +481,17 @@ export function EntitySelect({
                       "bg-[var(--color-interaction-light)]"
                   )}
                 >
-                  <span className="text-[var(--text-s)] text-[var(--color-text-primary)]">
-                    {option.name}
+                  <span className="flex items-baseline justify-between gap-8">
+                    <span className="truncate text-[var(--text-s)] text-[var(--color-text-primary)]">
+                      {option.name}
+                    </span>
+                    {option.code && (
+                      // Show the auto-code so legacy duplicate names stay
+                      // tellable-apart at pick time (issue #252).
+                      <span className="shrink-0 font-mono text-[var(--text-xs)] text-[var(--color-text-tertiary)]">
+                        {option.code}
+                      </span>
+                    )}
                   </span>
                   {option.subtitle && (
                     <span className="block body-small text-[var(--color-text-secondary)] mt-2">
