@@ -257,6 +257,9 @@ export function useUpdateDelivery(
               ? {
                   ...old,
                   ...variables,
+                  // tripType is nullable/optional on the update payload but
+                  // non-null on the row — keep the prior value when unset.
+                  tripType: variables.tripType ?? old.tripType,
                   updatedAt: new Date(),
                 }
               : old

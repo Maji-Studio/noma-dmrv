@@ -19,6 +19,7 @@ import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-
 import { FormSelect } from "@/components/forms/form-select";
 import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
+import { DEFAULT_TRIP_TYPE, TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
 import type { Delivery } from "@/db/schema";
 import { useOrdersForSelect } from "@/hooks/use-orders";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -94,6 +95,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     distanceKmOverride: delivery?.distanceKmOverride ?? undefined,
     distanceSource: delivery?.distanceSource ?? null,
     distanceNote: delivery?.distanceNote ?? "",
+    tripType: delivery?.tripType ?? DEFAULT_TRIP_TYPE,
   };
 
   const {
@@ -200,10 +202,10 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   });
 
   const distanceHelperText = !watchOrderId
-    ? "Select an order to load the destination's stored distance."
+    ? "Select an order to load the destination's stored one-way distance."
     : storedDistanceKm == null
-      ? "No stored distance for this destination — add it on the customer location. A one-off manual distance is still possible."
-      : "Prefilled from the destination's stored distance. Edit only when this trip's routing differs.";
+      ? "No stored distance for this destination — add it on the customer location. A one-off manual one-way distance is still possible. Return trips are doubled at emissions time."
+      : "One-way facility › destination distance, prefilled from the customer location; return trips are doubled at emissions time. Edit only when routing differs.";
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
@@ -317,12 +319,12 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       <FormSection
         title="Transport"
         icon={<MapPinIcon size={14} weight="bold" />}
-        fields={["distanceKmOverride", "distanceNote"]}
+        fields={["distanceKmOverride", "tripType", "distanceNote"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="distanceKmOverride"
-            label="Distance (km)"
+            label="One-way distance (per leg, km)"
             error={errors.distanceKmOverride?.message}
             helperText={distanceHelperText}
           >
@@ -356,6 +358,21 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
                 </p>
               ) : null}
             </div>
+          </FormField>
+
+          <FormField
+            id="tripType"
+            label="Trip type"
+            error={errors.tripType?.message}
+            helperText="Return doubles the distance (vehicle returns empty). Choose One-way only with an evidenced onward destination."
+          >
+            <FormSelect
+              id="tripType"
+              options={TRIP_TYPE_OPTIONS}
+              disabled={isSubmitting}
+              error={!!errors.tripType}
+              {...register("tripType")}
+            />
           </FormField>
         </div>
 

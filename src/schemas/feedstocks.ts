@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import { optionalDistanceSource } from "./distance-source";
+import { optionalTripType } from "./trip-type";
 import {
   emptyToNull,
   massKgSchema,
@@ -77,6 +78,9 @@ export const feedstockFormSchema = z.object({
   // leg at sync time.
   transportDistanceKm: optionalPositiveNumber,
   transportDistanceSource: optionalDistanceSource,
+  // Round-trip vs one-way accounting for the feedstock transport leg (#316).
+  // Transient (not a feedstock column) — flows into the derived leg at sync.
+  transportTripType: optionalTripType,
 
   // --- Material ---
   feedstockTypeId: z
@@ -130,6 +134,7 @@ export const updateFeedstockSchema = z.object({
   vehicleId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   transportDistanceKm: optionalPositiveNumber,
   transportDistanceSource: optionalDistanceSource,
+  transportTripType: optionalTripType,
   feedstockTypeId: z.string().uuid().optional(),
   massWetKg: massKgSchema().optional(),
   moistureContentPercent: z.number().min(0).max(100).optional(),

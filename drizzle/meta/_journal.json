@@ -498,6 +498,13 @@
       "when": 1783175990649,
       "tag": "0070_facility_scoped_durability_evidence_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1783595295402,
+      "tag": "0071_strong_spencer_smythe",
+      "breakpoints": true
     }
   ]
 }
