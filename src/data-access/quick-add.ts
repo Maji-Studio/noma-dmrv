@@ -11,6 +11,7 @@ import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { guardStorageLocationName } from "./unique-name-guards";
 
 // ============================================
 // Driver Quick Add
@@ -283,18 +284,20 @@ export async function createStorageLocation(
   }
 
   try {
-    const [location] = await db
-      .insert(storageLocations)
-      .values({
-        code: data.code,
-        name: data.name,
-        type: data.type,
-        facilityId: data.facilityId,
-        capacityKg: data.capacityKg ?? null,
-        feedstockTypeId: data.feedstockTypeId ?? null,
-        formulationId: data.formulationId ?? null,
-      })
-      .returning();
+    const [location] = await guardStorageLocationName(data.name, () =>
+      db
+        .insert(storageLocations)
+        .values({
+          code: data.code,
+          name: data.name,
+          type: data.type,
+          facilityId: data.facilityId,
+          capacityKg: data.capacityKg ?? null,
+          feedstockTypeId: data.feedstockTypeId ?? null,
+          formulationId: data.formulationId ?? null,
+        })
+        .returning(),
+    );
 
     return {
       id: location.id,

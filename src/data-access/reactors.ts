@@ -35,6 +35,7 @@ export interface PaginatedReactors {
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { guardReactorIdentifier } from "./unique-name-guards";
 
 // ADR 0016 removed the reactor-level sampling method. Reactor surfaces still
 // need a stable Method-A value while Method B is process-scoped.
@@ -302,17 +303,19 @@ export async function createReactor(
   // ADR 0016: a reactor no longer declares a sampling method (it lives on the
   // production process). Nothing Method-B to validate at reactor creation.
 
-  const [reactor] = await db
-    .insert(reactors)
-    .values({
-      code: data.code,
-      identifier: data.identifier,
-      facilityId: data.facilityId,
-      reactorType: data.reactorType,
-      nominalThroughputTph: data.nominalThroughputTph ?? null,
-      specifications: data.specifications ?? null,
-    })
-    .returning();
+  const [reactor] = await guardReactorIdentifier(data.identifier, () =>
+    db
+      .insert(reactors)
+      .values({
+        code: data.code,
+        identifier: data.identifier,
+        facilityId: data.facilityId,
+        reactorType: data.reactorType,
+        nominalThroughputTph: data.nominalThroughputTph ?? null,
+        specifications: data.specifications ?? null,
+      })
+      .returning()
+  );
 
   return reactor;
 }
@@ -376,14 +379,20 @@ export async function updateReactor(
   // production process), so there is no Method-B eligibility to re-validate on
   // a reactor update.
 
-  const [updated] = await db
-    .update(reactors)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
-    .where(eq(reactors.id, reactorId))
-    .returning();
+  // A rename OR a facility move can collide with the per-facility identifier
+  // index, so guard the update too.
+  const [updated] = await guardReactorIdentifier(
+    data.identifier ?? existing.identifier,
+    () =>
+      db
+        .update(reactors)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(reactors.id, reactorId))
+        .returning()
+  );
 
   return updated;
 }

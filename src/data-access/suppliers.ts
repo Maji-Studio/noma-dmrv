@@ -57,6 +57,7 @@ export interface PaginatedSuppliers {
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { guardSupplierName } from "./unique-name-guards";
 
 // Single-org / shared-data model: all authenticated users share the same
 // supplier records, so these guards verify existence only (not per-user
@@ -254,24 +255,26 @@ export async function createSupplier(
   // insert-time unique violation (a concurrent auto-code collision) is left to
   // propagate raw so withAutoCode can detect and retry it — catching it here as
   // a SafeError would mask the signal it matches on. Mirrors createFacility.
-  const [supplier] = await db
-    .insert(suppliers)
-    .values({
-      userId,
-      code: data.code,
-      name: data.name,
-      location: data.location ?? null,
-      gpsLatitude: data.gpsLatitude ?? null,
-      gpsLongitude: data.gpsLongitude ?? null,
-      address: data.address ?? null,
-      contactName: data.contactName ?? null,
-      contactEmail: data.contactEmail ?? null,
-      contactPhone: data.contactPhone ?? null,
-      sourceRegion: data.sourceRegion ?? null,
-      distanceToFacilityKm: data.distanceToFacilityKm ?? null,
-      distanceSource: data.distanceSource ?? null,
-    })
-    .returning();
+  const [supplier] = await guardSupplierName(data.name, () =>
+    db
+      .insert(suppliers)
+      .values({
+        userId,
+        code: data.code,
+        name: data.name,
+        location: data.location ?? null,
+        gpsLatitude: data.gpsLatitude ?? null,
+        gpsLongitude: data.gpsLongitude ?? null,
+        address: data.address ?? null,
+        contactName: data.contactName ?? null,
+        contactEmail: data.contactEmail ?? null,
+        contactPhone: data.contactPhone ?? null,
+        sourceRegion: data.sourceRegion ?? null,
+        distanceToFacilityKm: data.distanceToFacilityKm ?? null,
+        distanceSource: data.distanceSource ?? null,
+      })
+      .returning()
+  );
 
   return supplier;
 }
@@ -290,7 +293,8 @@ export async function createSupplierWithLocations(
   // in-transaction pre-check covers an already-committed duplicate code; an
   // insert-time unique violation (concurrent auto-code collision) propagates
   // raw so withAutoCode can detect and retry it. Mirrors createFacility.
-  return db.transaction(async (tx) => {
+  return guardSupplierName(data.name, () =>
+    db.transaction(async (tx) => {
     const [existing] = await tx
       .select({ id: suppliers.id })
       .from(suppliers)
@@ -341,7 +345,8 @@ export async function createSupplierWithLocations(
     );
 
     return supplier;
-  });
+    })
+  );
 }
 
 // ============================================
@@ -393,14 +398,18 @@ export async function updateSupplier(
     }
   }
 
-  const [updated] = await db
-    .update(suppliers)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
-    .where(eq(suppliers.id, supplierId))
-    .returning();
+  const [updated] = await guardSupplierName(
+    data.name ?? existing.name,
+    () =>
+      db
+        .update(suppliers)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(suppliers.id, supplierId))
+        .returning()
+  );
 
   if (!updated) {
     throw new SafeError("Supplier not found");

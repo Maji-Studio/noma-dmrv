@@ -62,6 +62,7 @@ export interface CustomerLocationDetail extends CustomerLocation {
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { guardCustomerName } from "./unique-name-guards";
 
 // ============================================
 // Customer Read Operations
@@ -335,17 +336,19 @@ export async function createCustomer(
     throw new SafeError("A customer with this code already exists");
   }
 
-  const [customer] = await db
-    .insert(customers)
-    .values({
-      code: data.code,
-      name: data.name,
-      cropType: data.cropType ?? null,
-      address: data.address ?? null,
-      contactEmail: data.contactEmail ?? null,
-      contactPhone: data.contactPhone ?? null,
-    })
-    .returning();
+  const [customer] = await guardCustomerName(data.name, () =>
+    db
+      .insert(customers)
+      .values({
+        code: data.code,
+        name: data.name,
+        cropType: data.cropType ?? null,
+        address: data.address ?? null,
+        contactEmail: data.contactEmail ?? null,
+        contactPhone: data.contactPhone ?? null,
+      })
+      .returning()
+  );
 
   return customer;
 }
@@ -393,14 +396,18 @@ export async function updateCustomer(
     }
   }
 
-  const [updated] = await db
-    .update(customers)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
-    .where(eq(customers.id, customerId))
-    .returning();
+  const [updated] = await guardCustomerName(
+    data.name ?? existing.name,
+    () =>
+      db
+        .update(customers)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(eq(customers.id, customerId))
+        .returning()
+  );
 
   return updated;
 }
