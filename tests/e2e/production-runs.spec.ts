@@ -266,16 +266,38 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
     await waitForSideSheetClose(page);
   });
 
+  async function editFirstRow(page: Page) {
+    // Edit via the row overflow menu (openEdit — it does NOT set the deep-link
+    // focus that would re-open a view sheet after save, so the sheet closes
+    // cleanly). Let the post-save list refetch settle first: an in-flight
+    // refetch re-renders the row and detaches the menu's "Edit" item mid-click.
+    await page.waitForLoadState("networkidle");
+    const firstRow = page.locator("tbody tr").first();
+    await firstRow.getByRole("button", { name: /Actions for/ }).click();
+    await page.getByRole("menuitem", { name: "Edit" }).click();
+    await waitForSideSheet(page);
+    await expect(
+      page.locator('[role="dialog"] input[name="startTime"]'),
+    ).toBeVisible();
+  }
+
+  async function saveEdit(page: Page) {
+    await page
+      .locator('[role="dialog"]')
+      .locator('button:has-text("Save Changes")')
+      .click();
+  }
+
   test("edit into a conflict is rejected; a non-time edit still saves", async ({
     adminPage: page,
     seededData,
   }) => {
-    // Two non-overlapping runs on one reactor.
+    // Two non-overlapping runs on one reactor, with a gap between them.
     await openRunForm(page, seededData, {
       startDate: "2027-05-05",
       startTime: "08:00",
       endDate: "2027-05-05",
-      endTime: "12:00",
+      endTime: "10:00",
       status: "complete",
     });
     await submitCreate(page);
@@ -291,29 +313,28 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
     await submitCreate(page);
     await waitForSideSheetClose(page);
 
-    // Runs are listed newest-start first, so row 1 is the 14:00 run. Open it and
-    // move its start into the first run's window.
-    await page.locator("tbody tr").first().click();
-    await waitForSideSheet(page);
-    await page
-      .locator('[role="dialog"]')
-      .getByRole("button", { name: "Edit Production Run" })
-      .click();
-    await page.fill('input[name="startTime"]', "10:00");
-    await page
-      .locator('[role="dialog"]')
-      .locator('button:has-text("Save Changes")')
-      .click();
+    // Edit whichever run is row 1 and stretch its window to 08:30–15:30, which
+    // overlaps the OTHER run regardless of which one this is.
+    await editFirstRow(page);
+    await page.fill('input[name="startTime"]', "08:30");
+    await page.fill('input[name="endTime"]', "15:30");
+    await expect(page.locator('[role="dialog"] input[name="startTime"]')).toHaveValue("08:30");
+    await saveEdit(page);
     await expect(
       page.locator('[role="dialog"]').getByText(overlapText),
     ).toBeVisible({ timeout: 10000 });
 
-    // Move it back to a clear time — the edit now saves and the sheet closes.
-    await page.fill('input[name="startTime"]', "14:00");
-    await page
-      .locator('[role="dialog"]')
-      .locator('button:has-text("Save Changes")')
-      .click();
+    // Move it to a slot clear of both runs — the edit now saves.
+    await page.fill('input[name="startTime"]', "18:00");
+    await page.fill('input[name="endTime"]', "19:00");
+    await saveEdit(page);
+    await waitForSideSheetClose(page);
+
+    // Re-open a run and change only a non-time field; the run's own unchanged
+    // window must not trip the overlap guard (self-exclusion).
+    await editFirstRow(page);
+    await page.fill('input[name="feedstockMoisturePercent"]', "18");
+    await saveEdit(page);
     await waitForSideSheetClose(page);
   });
 });

@@ -8,7 +8,7 @@
  * `production_runs_reactor_start_unique_idx` is the exact-start backstop.
  */
 
-import { and, eq, isNull, ne, sql, type SQL } from "drizzle-orm";
+import { and, eq, gt, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { productionRuns } from "@/db/schema";
 import { formatLocalDate, formatLocalTime } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
@@ -101,11 +101,29 @@ export async function assertNoReactorRunOverlap(
     eq(productionRuns.reactorId, reactorId),
     ne(productionRuns.status, "void"),
     isNull(productionRuns.archivedAt),
-    // candidate.start < COALESCE(existing.end, +inf)
-    sql`${startTime}::timestamp < coalesce(${productionRuns.endTime}, 'infinity'::timestamp)`,
-    // existing.start < COALESCE(candidate.end, +inf)
-    sql`${productionRuns.startTime} < coalesce(${endTime ?? null}::timestamp, 'infinity'::timestamp)`,
   ];
+
+  // Half-open window intersection. These MUST go through drizzle's typed
+  // comparisons (`gt`/`lt`), not a raw `${date}::timestamp` cast: `start_time`
+  // and `end_time` are `timestamp` columns drizzle serialises in UTC, whereas a
+  // bare `Date` interpolated into a `sql` template is bound in the server's
+  // local zone. Mixing the two shifts the candidate window by the local UTC
+  // offset and silently drops real conflicts with earlier runs (issue #259).
+
+  // candidate.start < COALESCE(existing.end, +inf): an open existing run
+  // (NULL end) extends to +inf, so it always satisfies this half.
+  const startBeforeExistingEnd = or(
+    isNull(productionRuns.endTime),
+    gt(productionRuns.endTime, startTime),
+  );
+  if (startBeforeExistingEnd) conditions.push(startBeforeExistingEnd);
+
+  // existing.start < COALESCE(candidate.end, +inf): an open candidate
+  // (NULL end) extends to +inf, so every existing start satisfies this half.
+  if (endTime !== null) {
+    conditions.push(lt(productionRuns.startTime, endTime));
+  }
+
   if (selfId) conditions.push(ne(productionRuns.id, selfId));
 
   const [conflict] = await tx
