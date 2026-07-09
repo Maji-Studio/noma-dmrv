@@ -179,7 +179,10 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const { facilityId: contextFacilityId, selectedFacility } = useFacilityContext();
   // Facility durability tier (ADR 0021). Soil temperature is a 200-year-only
   // input, so the form section and detail row are hidden under 1000-year.
-  const durabilityOption = selectedFacility?.durabilityOption ?? "1000_year";
+  // Fall back to 200-year while facility context resolves: showing the field
+  // for a 1000-year facility is recoverable; hiding it for a 200-year one
+  // suppresses a required protocol input.
+  const durabilityOption = selectedFacility?.durabilityOption ?? "200_year";
 
   // Side sheet state
   const [sideSheet, setSideSheet] = useState<{
