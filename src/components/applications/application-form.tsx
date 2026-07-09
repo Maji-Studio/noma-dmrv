@@ -34,6 +34,7 @@ import {
   type SoilTemperatureSource,
 } from "@/schemas/applications";
 import type { Application } from "@/db/schema/application";
+import type { DurabilityOption } from "@/schemas/credit-batches";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import {
   applicationKgToTons,
@@ -190,6 +191,14 @@ interface ApplicationFormProps {
   isSubmitting?: boolean;
   /** Custom label for the submit button */
   submitLabel?: string;
+  /**
+   * Facility durability tier (ADR 0021), threaded from the list page's
+   * facility context. Soil temperature is a 200-year-only input — under
+   * 1000-year the whole Soil Temperature section (and its prefill) is hidden.
+   * Defaults to 200-year so an omitted tier never hides a field the operator
+   * might need.
+   */
+  durabilityOption?: DurabilityOption;
 }
 
 export function ApplicationForm({
@@ -199,8 +208,12 @@ export function ApplicationForm({
   onCancel,
   isSubmitting = false,
   submitLabel,
+  durabilityOption = "200_year",
 }: ApplicationFormProps) {
   const isEditMode = !!application;
+  // Soil temperature feeds only the 200-year durable fraction; 1000-year
+  // removals derive durability from petrographic reflectance + TGA.
+  const hideSoilTemperature = durabilityOption === "1000_year";
 
   const defaultValues = {
     applicationDate: application?.applicationDate
@@ -264,7 +277,8 @@ export function ApplicationForm({
   // always mirror the selected delivery — including clearing a stale
   // prefill when the new delivery has no default.
   useEffect(() => {
-    if (isEditMode || !selectedDelivery) return;
+    // No soil-temperature capture under 1000-year — skip the prefill entirely.
+    if (isEditMode || !selectedDelivery || hideSoilTemperature) return;
 
     const temperatureState = getFieldState("soilTemperatureC");
     const sourceState = getFieldState("soilTemperatureSource");
@@ -284,7 +298,7 @@ export function ApplicationForm({
       shouldDirty: false,
       shouldValidate: true,
     });
-  }, [getFieldState, isEditMode, selectedDelivery, setValue]);
+  }, [getFieldState, isEditMode, selectedDelivery, setValue, hideSoilTemperature]);
 
   // Prefill the field position from the delivery's destination customer
   // location, but only while the operator hasn't touched it (pin drag and
@@ -642,7 +656,10 @@ export function ApplicationForm({
         />
       </FormSection>
 
-      {/* === Section 4: Soil Temperature === */}
+      {/* === Section 4: Soil Temperature (200-year only) === */}
+      {/* Hidden under 1000-year durability — soil temperature feeds only the
+          Woolf 2021 200-year durable fraction (ADR 0021). */}
+      {!hideSoilTemperature && (
       <FormSection
         title="Soil Temperature"
         icon={<ThermometerIcon size={14} weight="bold" />}
@@ -687,6 +704,7 @@ export function ApplicationForm({
           </FormField>
         </div>
       </FormSection>
+      )}
       </FormSpine>
 
       <FormActions

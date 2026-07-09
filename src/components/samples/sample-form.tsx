@@ -38,6 +38,7 @@ import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import {
   sampleFormSchema,
   calculateHToCOrgRatio,
+  calculateOToCOrgRatio,
   formatDurabilityOption,
   type SampleFormData,
 } from "@/schemas/samples";
@@ -154,7 +155,9 @@ export function SampleForm({
   const watchedCreditBatchId = watch("creditBatchId");
   const watchedDurabilityOption = watch("durabilityOption");
   const watchedHydrogenPercent = watch("totalHydrogenPercent");
+  const watchedOxygenPercent = watch("totalOxygenPercent");
   const watchedOrganicCarbonPercent = watch("organicCarbonPercent");
+  const watchedOToCOrgRatio = watch("oToCOrgRatio");
   const watchedNutrientClaimEnabled = watch("nutrientClaimEnabled");
 
   // The durability tier is NOT selected on the sample — it's the credit batch's
@@ -206,12 +209,79 @@ export function SampleForm({
     watchedOrganicCarbonPercent as number | null
   );
 
+  // Derive O:C org from O% and C_org% so the universal eligibility gate
+  // (O/C_org < 0.2) survives when the manual O:Corg input is left blank —
+  // relevant under 1000-year where the ratios sit behind a collapsed
+  // disclosure. A manually-entered O:Corg still wins.
+  const calculatedOToCRatio = calculateOToCOrgRatio(
+    watchedOxygenPercent as number | null,
+    watchedOrganicCarbonPercent as number | null
+  );
+  const resolvedOToCRatio =
+    (watchedOToCOrgRatio as number | null | undefined) ?? calculatedOToCRatio;
+
+  const is1000Year = watchedDurabilityOption === "1000_year";
+
+  // The H:Corg / O:Corg input pair. Rendered inline under 200-year (H:Corg
+  // drives durability) and inside an optional disclosure under 1000-year.
+  const stabilityRatioFields = (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
+      <FormField
+        id="hToCOrgRatio"
+        label="H:C org Ratio"
+        error={errors.hToCOrgRatio?.message}
+        helperText="Auto-calculated from H% and C_org%"
+        certifyRequired={isSampleCertifyField("hToCOrgRatio")}
+        certifyStatus={certStatus("hToCOrgRatio")}
+      >
+        <FormInput
+          id="hToCOrgRatio"
+          type="number"
+          step="0.0001"
+          placeholder="Auto-calculated"
+          disabled
+          readOnly
+          value={calculatedHToCRatio !== null ? calculatedHToCRatio.toFixed(4) : ""}
+          error={!!errors.hToCOrgRatio}
+        />
+      </FormField>
+
+      <FormField
+        id="oToCOrgRatio"
+        label="O:C org Ratio"
+        error={errors.oToCOrgRatio?.message}
+        helperText="Enter to override, or leave blank to derive from O% and C_org%"
+      >
+        <FormInput
+          id="oToCOrgRatio"
+          type="number"
+          step="0.0001"
+          placeholder={
+            calculatedOToCRatio !== null
+              ? calculatedOToCRatio.toFixed(4)
+              : "e.g., 0.15"
+          }
+          disabled={isSubmitting}
+          error={!!errors.oToCOrgRatio}
+          {...register("oToCOrgRatio", {
+            setValueAs: numericValue,
+          })}
+        />
+      </FormField>
+    </div>
+  );
+
   const defaultSubmitLabel = isEditMode ? "Update Sample" : "Create Sample";
 
   const handleFormSubmit = handleSubmit((data) => {
     // Inject calculated H:C ratio at submit time
     if (calculatedHToCRatio !== null) {
       data.hToCOrgRatio = parseFloat(calculatedHToCRatio.toFixed(4));
+    }
+    // Fall back to the derived O:Corg when no manual value was entered, so the
+    // O/C_org eligibility gate has an input even under 1000-year.
+    if (data.oToCOrgRatio == null && calculatedOToCRatio !== null) {
+      data.oToCOrgRatio = parseFloat(calculatedOToCRatio.toFixed(4));
     }
     onSubmit(data as unknown as SampleFormData);
   });
@@ -391,7 +461,7 @@ export function SampleForm({
                   id="organicCarbonPercent"
                   label="Organic Carbon (%)"
                   error={errors.organicCarbonPercent?.message}
-                  helperText="Used to estimate biochar durability."
+                  helperText="Basis for the H:Corg / O:Corg eligibility ratios and durable-carbon accounting (both tiers)."
                   required
                   certifyRequired={isSampleCertifyField("organicCarbonPercent")}
                   certifyStatus={certStatus("organicCarbonPercent")}
@@ -670,49 +740,33 @@ export function SampleForm({
                   : "The durability tier is inherited from the selected credit batch."}
               </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
-                <FormField
-                  id="hToCOrgRatio"
-                  label="H:C org Ratio"
-                  error={errors.hToCOrgRatio?.message}
-                  helperText="Auto-calculated from H% and C_org%"
-                  certifyRequired={isSampleCertifyField("hToCOrgRatio")}
-                  certifyStatus={certStatus("hToCOrgRatio")}
-                >
-                  <FormInput
-                    id="hToCOrgRatio"
-                    type="number"
-                    step="0.0001"
-                    placeholder="Auto-calculated"
-                    disabled
-                    readOnly
-                    value={calculatedHToCRatio !== null ? calculatedHToCRatio.toFixed(4) : ""}
-                    error={!!errors.hToCOrgRatio}
-                  />
-                </FormField>
-
-                <FormField
-                  id="oToCOrgRatio"
-                  label="O:C org Ratio"
-                  error={errors.oToCOrgRatio?.message}
-                >
-                  <FormInput
-                    id="oToCOrgRatio"
-                    type="number"
-                    step="0.0001"
-                    placeholder="e.g., 0.15"
-                    disabled={isSubmitting}
-                    error={!!errors.oToCOrgRatio}
-                    {...register("oToCOrgRatio", {
-                      setValueAs: numericValue,
-                    })}
-                  />
-                </FormField>
-              </div>
+              {/* Under 1000-year, durability is measured by R₀ + TGA (below), so
+                  the H:Corg/O:Corg ratios move behind an optional disclosure —
+                  they're kept only for the universal eligibility gate
+                  (H/C_org < 0.5, O/C_org < 0.2), not the durability estimate.
+                  Under 200-year they stay in view (H:Corg drives durability). */}
+              {is1000Year ? (
+                <details className="border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)]">
+                  <summary className="cursor-pointer px-12 py-8 body-small font-medium text-[var(--color-text-primary)] marker:text-[var(--color-text-tertiary)]">
+                    Eligibility ratios (H:Corg, O:Corg) — optional
+                  </summary>
+                  <div className="flex flex-col gap-16 border-t border-[var(--color-border-tertiary)] p-12">
+                    <p className="body-caption text-[var(--color-text-tertiary)]">
+                      Not used for the 1000-year durability estimate. Kept for the
+                      universal eligibility check (H/C_org &lt; 0.5, O/C_org &lt;
+                      0.2). H:Corg auto-calculates from H% and C_org%; O:Corg
+                      derives from O% and C_org% unless you enter it.
+                    </p>
+                    {stabilityRatioFields}
+                  </div>
+                </details>
+              ) : (
+                stabilityRatioFields
+              )}
 
               <SampleEligibilityAdvisory
                 hToCOrgRatio={calculatedHToCRatio}
-                oToCOrgRatio={watch("oToCOrgRatio") as number | null | undefined}
+                oToCOrgRatio={resolvedOToCRatio}
               />
         </FormSection>
 

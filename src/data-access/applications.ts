@@ -6,6 +6,7 @@ import {
   type Application,
 } from "@/db/schema/application";
 import { certifierProjects } from "@/db/schema/certification";
+import { facilities } from "@/db/schema/facilities";
 import {
   creditBatches,
   creditBatchApplications,
@@ -242,6 +243,13 @@ async function resolveApplicationDryMassTons(
 export interface ApplicationListItem extends Application {
   customerName: string | null;
   locationName: string | null;
+  /**
+   * Facility durability tier (ADR 0021), join-derived via the delivery's
+   * facility. Drives tier-aware certify readiness — soil temperature is a
+   * 200-year-only input, so its gap is scoped to 200-year facilities
+   * (certify-field-registry.ts → application.soilTemperatureC condition).
+   */
+  durabilityOption: "200_year" | "1000_year";
 }
 
 export async function getApplications(
@@ -294,9 +302,11 @@ export async function getApplications(
       updatedAt: applications.updatedAt,
       customerName: customers.name,
       locationName: customerLocations.name,
+      durabilityOption: facilities.durabilityOption,
     })
     .from(applications)
     .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+    .innerJoin(facilities, eq(facilities.id, deliveries.facilityId))
     .leftJoin(orders, eq(deliveries.orderId, orders.id))
     .leftJoin(customers, eq(orders.customerId, customers.id))
     .leftJoin(
