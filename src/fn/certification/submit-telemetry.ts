@@ -229,9 +229,11 @@ export async function submitTelemetry(
   };
   const semanticHash = payloadHash(semanticPayload);
 
-  // Facility-scoped to the removal's own facility (issue #277): ctx.facilityId
-  // is server-derived from the removal, so the ledger row for this removal must
-  // live in that facility — a mismatch is refused rather than acted on.
+  // Facility-scoped to the removal's own facility (issue #277). ctx.facilityId
+  // is server-derived from this same args.removalId, so the scope is
+  // lineage-consistency (fail-closed if the removal anchor is dangling), not a
+  // cross-facility authorization check — that would need an independent caller
+  // facility, deferred to #372. Left wired so the guard activates once one exists.
   const latest = await getLatestSubmission(
     userId,
     {

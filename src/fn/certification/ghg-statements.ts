@@ -293,11 +293,13 @@ export async function createGhgStatementDraft(
       facilityId: parsed.facilityId,
       reportingPeriodEndOn: parsed.reportingPeriodEndOn,
     });
-    // Resolved-facility invariant (issue #277): every read above is keyed on
-    // parsed.facilityId and the create is gated on that facility having a linked
-    // project, but assert the anchor row we just resolved actually lives in it
-    // so a future getOrCreate change can't silently anchor the ledger (and its
-    // registry writes) to another facility's statement.
+    // getOrCreate self-consistency invariant (issue #277). parsed.facilityId is
+    // client-supplied and every read above (project gate, get-or-create) is
+    // keyed on it, so this compares the resolved statement against that same
+    // value — it is NOT caller-scope authorization (there is no independent
+    // caller facility until #372). What it guarantees is that a future
+    // getOrCreate change can't silently anchor the ledger (and its registry
+    // writes) to another facility's statement.
     if (statement.facilityId !== parsed.facilityId) {
       throw new SafeError("GHG statement does not belong to this facility.");
     }
@@ -498,8 +500,11 @@ export async function submitGhgStatementToVerifier(
 
     // Resolve the statement (and its facility) first, then scope the ledger
     // read to that facility (issue #277). getLatestSubmission's key already
-    // constrains type + entity to this GHG statement; the facility scope is
-    // defence in depth against acting on a row anchored to another facility.
+    // constrains type + entity to this GHG statement. NOTE: statement.facilityId
+    // is derived from this same client-supplied ghgStatementId, so the scope is
+    // lineage-consistency (fail-closed if the anchor is dangling), not a
+    // cross-facility authorization check — that needs an independent caller
+    // facility (#372). Left wired so the guard activates the moment one exists.
     const statement = await getCertifierGhgStatementById(
       userId,
       ghgStatementId,
@@ -697,8 +702,13 @@ export async function refreshGhgStatementStatus(
       throw new SafeError("GHG statement submission has no remote ID.");
     }
     // Resolve the statement this submission anchors to, so the follow-up ledger
-    // read is scoped to its facility (issue #277) — defence in depth against a
-    // submissionId whose anchor entity lives in another facility.
+    // read is scoped to its facility (issue #277). The higher-consequence read
+    // above (getSubmissionById by raw submissionId) is necessarily unscoped —
+    // submissionId is the only handle and the facility is discovered *from* it —
+    // and statement.facilityId is likewise derived from that same row, so this
+    // scope is lineage-consistency / fail-closed-on-dangling-anchor, not a
+    // cross-facility authorization check (that needs an independent caller
+    // facility, deferred to #372).
     const statement = await getCertifierGhgStatementById(
       userId,
       submission.localEntityId,
