@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 Drive a ticket end-to-end. The main thread is a **conductor**: it resolves the target, then hands each phase to a subagent and keeps only their compact returns — it never reads code, diffs, or issue bodies into its own window. That is the point. A full cycle should cost the main context a few thousand tokens, not tens of thousands.
 
-Read [`references/playbook.md`](references/playbook.md) for the concrete board IDs, `gh`/`codex` commands, the Chrome-login recipe, and subagent prompt skeletons. Pull from it as you spawn each subagent.
+Read [`references/playbook.md`](references/playbook.md) for the concrete board IDs, `gh` commands, verification recipes, and subagent prompt skeletons. Pull from it as you spawn each subagent. gpt-5.5 work (implementation, review, UI verification) goes through the **codex-implementation**, **codex-review**, and **codex-computer-use** skills (`.claude/skills/codex-*/SKILL.md`) — point subagents at those files for invocation mechanics instead of restating commands.
 
 **Leanness rule.** Every subagent returns a structured summary under ~200 words (files touched, decisions, test result, blockers). If one starts dumping a diff or file contents back to you, that is a failure — tell it to summarize. Spawn phase subagents synchronously (you need each result to proceed); the Phase 4 reviewers are independent and run concurrently.
 
@@ -25,10 +25,10 @@ Completion: brief file written, feature branch checked out, board moved (if appl
 
 Spawn ONE subagent with only the brief path, the repo root, and a pointer to `.claude/CLAUDE.md`. Its task:
 
-- Implement the change through the layered flow (schema → data-access+guards → fn → hooks → components), reusing existing hooks/utilities.
+- Implement the change through the layered flow (schema → data-access+guards → fn → hooks → components), reusing existing hooks/utilities. Per the model rubric in CLAUDE.md, bulk/mechanical briefs (clear-spec implementation, migrations, sweeps) may be delegated to gpt-5.5 via the **codex-implementation** skill — the subagent then owns inspecting the diff and verifying, and codex output is evidence, not authority. User-facing work (UI, copy, API design) stays with Claude.
 - Keep `pnpm lint` and `pnpm typecheck` green — never trust exit 0 from a piped command; read the real output.
 - Commit on the feature branch (conventional commits; body says *why*).
-- **Verify in a real browser**: ensure the dev server is up on :3100, log in via Chrome using the `.env.local` admin creds (playbook recipe), drive the changed flow, capture a screenshot as evidence. For a backend-only change with no UI surface, exercise the relevant `pnpm test:e2e` spec or unit path instead and say which.
+- **Verify in a real browser**: ensure the dev server is up on :3100, then delegate the run to the **codex-computer-use** skill (playbook: UI verification) — it signs in with the `.env.local` admin creds, drives the changed flow, and returns screenshots + a report the subagent judges itself. Fall back to the claude-in-chrome recipe (playbook) if codex is absent or errors. For a backend-only change with no UI surface, exercise the relevant `pnpm test:e2e` spec or unit path instead and say which.
 
 Completion: change committed, lint+typecheck green, the changed behaviour observed working. If verify goes red, send the failure back to the same subagent (SendMessage) to fix — never open a PR on red.
 
@@ -43,7 +43,7 @@ Completion: PR open against `staging`, issue linked, board moved.
 Three reviews converge on the PR. Keep the reviewer **fresh** — never the implementer — so it stays unbiased. Run the first two concurrently:
 
 - **Fresh reviewer subagent** — review the diff against the brief/issue and repo standards. Verify every finding against the actual code before reporting; false positives (even bogus P0s) are common here. Post ONE PR comment, signed as a session-local reviewer.
-- **Codex** (best-effort) — a subagent runs `codex exec review --base staging` (playbook) and posts codex's findings as a PR comment. If the binary is absent or errors, skip and note it.
+- **Codex** (best-effort) — a subagent runs a gpt-5.5 review via the **codex-review** skill (playbook) and posts the findings as a PR comment under a "Codex review (gpt-5.5)" heading, labeled as unverified — Phase 5 verifies every comment anyway. If the binary is absent or errors, skip and note it.
 - **CodeRabbit** — auto-reviews PRs to `staging`. Wait for its review to land before Phase 5 (poll `gh pr view <n> --json reviews` until a coderabbit review appears or ~10 min elapse; proceed with what exists if it doesn't).
 
 Completion: fresh review posted, codex attempted, CodeRabbit review present (or waited-out and noted).
