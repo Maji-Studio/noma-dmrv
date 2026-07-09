@@ -31,8 +31,23 @@
 | `sandbox-template-authoring.md` | Walkthrough for authoring the `noma-mvp` Removal Template in the sandbox Registry UI + fixed-constant bootstrap |
 | `openapi-index.md` | Annotated index of every Certify + Registry OpenAPI operation/schema with current noma integration status |
 
-Decisions live in `docs/adr/0001`–`0007`. Open design questions and
+Decisions live in `docs/adr/0001`–`0008`. Open design questions and
 deferred work live in `docs/open-questions.md`.
+
+### Implementation code
+
+The registry integration itself lives in **`src/lib/isometric/`** (submits
+removals / GHG statements / sensor data): `client.ts`, `submissions.ts`,
+`ghg-statements.ts`, `sensors.ts`, `sources.ts`, `links.ts`. It is **server-side
+only** and instrumented with the structured logger (`@/lib/log`). The
+certification UI lives in **`src/components/certification/`**.
+
+### Authoritative protocol content — Isometric MCP
+
+An `isometric` MCP server exposes authoritative protocol content. **Call its
+`how_to` tool first** for any protocol/compliance question, and verify against
+it before implementing credit logic — the local KB files here are
+interpretations, not the source of truth.
 
 ## How To Use
 
@@ -49,7 +64,7 @@ deferred work live in `docs/open-questions.md`.
 ### For integration work
 
 1. Read `integration-plan.md` for the current model, phase status, and pre-deploy gates.
-2. Skim the ADRs (`docs/adr/0001`–`0007`) for the design decisions.
+2. Skim the ADRs (`docs/adr/0001`–`0008`) for the design decisions.
 3. Check `docs/open-questions.md` for active deferrals.
 4. When changing the Certify surface, follow `update-playbook.md` and append to `changes.md`.
 

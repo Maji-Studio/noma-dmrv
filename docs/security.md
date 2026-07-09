@@ -74,6 +74,55 @@ before they can surface as raw DB errors; integer/count fields use
 - Better Auth rate limits are enabled with stricter rules for auth-sensitive endpoints.
 - DB pool limits are centralized in `src/db/index.ts` and configurable via env.
 
+## Environment Variables
+
+All env vars are validated with **Zod in `src/config/env.ts`**; a `superRefine`
+block enforces cross-field rules (e.g. Isometric token+secret are both-or-neither,
+`local-fs` / `stub` are rejected in production). The app refuses to boot on an
+invalid or missing-required var.
+
+**Document NAMES only, never values** — here, in code, in comments, or in tests.
+
+Inventory by group (app-validated in `src/config/env.ts`):
+
+- **Core:** `DATABASE_URL`, `NEXT_PUBLIC_APP_URL`, `BETTER_AUTH_SECRET` (32+ chars),
+  `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `ADMIN_EMAIL`, `ALLOW_SELF_SIGNUP`,
+  `NODE_ENV`
+- **Logging / DB pool:** `LOG_LEVEL`, `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`,
+  `DB_POOL_CONNECTION_TIMEOUT_MS`
+- **Storage:** `STORAGE_PROVIDER` (`s3-compatible` required in prod),
+  `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`,
+  `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_SIGNING_SECRET`,
+  `STORAGE_LOCAL_FS_ROOT`
+- **Isometric:** `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
+  (both-or-neither), `ISOMETRIC_ENVIRONMENT`, `ISOMETRIC_UPLOAD_HOST_ALLOWLIST`,
+  `ISOMETRIC_STORAGE_REDIRECT_HOSTS` (document-redirect allowlist)
+- **Geo / maps** (all optional — graceful degradation): `OPENROUTESERVICE_API_KEY`
+  (server-only geocode/routing), `NEXT_PUBLIC_MAPTILER_KEY` (public,
+  domain-locked basemap key), `GEO_PROVIDER` (`ors` default; `stub` = hermetic
+  test fixtures, rejected in prod)
+
+Not validated by `env.ts` — read directly from `process.env` by scripts/tests:
+
+- `ADMIN_PASSWORD` — consumed only by the admin-bootstrap CLI
+  (`src/lib/cli/ensure-admin.ts`), never by the running app.
+- `DISABLE_RATE_LIMIT` — test-only toggle read in `src/lib/auth/better-auth.ts`;
+  required for E2E fixtures (see `docs/testing.md`).
+- `ISOMETRIC_DEMO_PROJECT_ID` — CI/staging smoke-test target.
+
+### The three environment items intentionally differ
+
+The `local`, `staging`, and `production` 1Password items are **not** copies of
+each other. `local` has its own `DATABASE_URL` (Docker Postgres),
+`NEXT_PUBLIC_APP_URL` (`localhost:3100`), dev admin credentials, and test
+toggles (`DISABLE_RATE_LIMIT`).
+
+Before debugging any env/auth issue, **state your assumptions about local vs.
+deployed config and confirm them against the right item.** The `op` CLI needs
+interactive desktop approval — a sandboxed shell can't reproduce 1Password auth,
+so ask the user to run `op` commands themselves (`! op …`) rather than
+diagnosing around a sign-in you can't perform.
+
 ## Secrets Management
 
 Secrets live in **1Password** (vault `Environment Variables`), never in the repo. One item per environment, with fields named exactly like the env vars:
@@ -99,6 +148,14 @@ Notes:
 - Two CI-only fields are **not** in `.env.tpl`, so they aren't pulled locally and must be set directly on the items: `ISOMETRIC_DEMO_PROJECT_ID` (staging) and `ADMIN_PASSWORD` (both items).
 - **Optional vars may be missing from an item.** Both sync scripts pre-check the item's field names and skip template refs with no matching field (per-var warning) instead of letting `op inject` hard-fail. They abort only when a **required** field is missing — `REQUIRED_LOCAL_VARS` / `REQUIRED_DEPLOYED_VARS` in `scripts/env-tpl-utils.ts`, the vars `src/config/env.ts` cannot boot without. `pnpm env:check` reports the same split (missing-optional is advisory; missing-required exits 1).
 - `load-secrets-action` **fails the step** when a referenced `op://` field doesn't exist — it does not skip. Add the field before the workflow runs.
+
+### Never expose real keys
+
+- Never put real keys in code, comments, or docs — use the placeholder
+  `<REDACTED_API_KEY>` when an example needs one.
+- **If a key leaks:** rotate it immediately (edit the 1Password item), then
+  scrub it from git history with `git-filter-repo`.
+- Review PR diffs for accidental secret exposure before merging.
 
 ## Dependency Supply Chain
 

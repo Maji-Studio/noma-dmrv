@@ -29,8 +29,10 @@ Key files:
 
 ## Current Behavior
 
-- `ALLOW_SELF_SIGNUP=false` disables public email signup by default.
+- `ALLOW_SELF_SIGNUP=false` disables public email signup by default (admin-invite only).
 - `ALLOW_SELF_SIGNUP=true` enables public signup.
+- `ADMIN_EMAIL` designates the admin user — the account seeded/promoted to the `admin` role.
+- Sessions use Better Auth session cookies, wired through the `nextCookies` plugin.
 - Email verification is required before login is considered valid.
 - Auth emails use Resend when configured.
 - If `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are unset, reset/verification links are logged locally for development.

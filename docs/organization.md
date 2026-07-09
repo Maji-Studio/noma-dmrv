@@ -164,7 +164,15 @@ Use current entity patterns such as facilities, feedstocks, and credit batches a
 
 ## Documentation Hygiene
 
-- Keep evergreen design and architecture notes in `/docs`.
-- Move dated plans, audit notes, and implementation logs to `docs/archive/`.
-- Track deferred work in `docs/open-questions.md`, not code comments.
-- Update the relevant feature doc when a decision becomes settled.
+- Keep only **evergreen** design and architecture notes in `/docs` (product,
+  architecture, design-system, database, auth, troubleshooting, …).
+- Move implementation logs, quick fixes, dated debugging, superseded docs, and
+  dated plans/audit notes to `docs/archive/`.
+- **Before creating a doc, ask:** is it evergreen? does it duplicate an existing
+  doc? If it duplicates, update the existing doc instead of adding a new one.
+- Track deferred work as a **dated entry** in `docs/open-questions.md`, never as
+  a code `TODO`.
+- Resolve a deferred item by **removing its entry** from `docs/open-questions.md`
+  and recording the decision in the relevant evergreen feature doc (e.g.
+  `docs/isometric/README.md`) or an ADR — i.e. update the feature doc when a
+  decision becomes settled; dated implementation notes go to `docs/archive/`.
