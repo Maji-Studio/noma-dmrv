@@ -87,7 +87,6 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
       code: `PR-DEL-${runId}`,
       facilityId: facility.id,
       reactorId: reactor.id,
-      date: "2025-06-15",
       startTime: new Date("2025-06-15T08:00:00Z"),
       endTime: new Date("2025-06-15T12:00:00Z"),
       biocharDryMassKg: 10_000,

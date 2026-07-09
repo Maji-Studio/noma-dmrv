@@ -121,7 +121,6 @@ async function createLineageFixture(
       .values({
         code: `PR-CLG-${tag}`,
         facilityId: facility.id,
-        date: "2026-06-13",
         startTime: new Date("2026-06-13T08:00:00Z"),
         endTime: new Date("2026-06-13T12:00:00Z"),
         reactorId: reactor.id,

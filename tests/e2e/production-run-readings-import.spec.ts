@@ -5,7 +5,6 @@ import { createDbConnection } from "./fixtures/db";
 import * as schema from "../../src/db/schema";
 import { parseReadingsCsv } from "../../src/lib/production-readings/readings-csv";
 
-const RUN_DATE = "2026-04-02";
 // A canonical readings CSV carries a full UTC timestamp per row, so the run
 // window is expressed directly in UTC (no facility-timezone conversion).
 const RUN_WINDOW_START = new Date("2026-04-02T00:00:00.000Z");
@@ -32,7 +31,6 @@ async function seedProductionRun(seededData: SeededChainData) {
       id: runId,
       code,
       facilityId: seededData.facility.id,
-      date: RUN_DATE,
       status: "complete",
       startTime: RUN_WINDOW_START,
       endTime: RUN_WINDOW_END,
