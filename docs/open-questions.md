@@ -581,6 +581,24 @@ capability, not a blocker — tracked here so they are not lost:
 
 ### Certification submit surface is authenticated but not facility-scoped — IDOR (`security/certification-submit-authz`, opened 2026-06-18)
 
+- **Partial fix shipped (issue #277, 2026-07-09):** added a resolved-facility
+  scope seam on the submit surface — `resolveSubmissionFacilityId` /
+  `assertSubmissionInFacility` in `data-access/certification.ts` resolve a
+  submission's owning facility from its anchor row (Removal / GHG Statement,
+  both carry `facilityId`) and refuse a read that crosses a facility boundary.
+  The id/key-addressed reads (`getSubmissionById`, `getLatestSubmission`,
+  `getLatestSubmissionsForEntities`) now take an optional `expectedFacilityId`
+  and fail-closed on a mismatch/unresolvable anchor; `submitGhgStatementToVerifier`,
+  `refreshGhgStatementStatus`, and `submitTelemetry` thread the facility they
+  resolve from the row, and `createGhgStatementDraft` asserts its anchor
+  statement lives in the requested facility. This closes the id-confusion /
+  cross-facility-**mixing** gap and pre-wires the guard for the membership model.
+  **Still open (needs #372/ADR 0010):** true per-*user* membership — there is no
+  membership table, so an authenticated caller can still act within any linked
+  facility (the submit/refresh actions have no independent caller-facility to
+  compare against yet), and the three admin mapping/emission actions remain
+  gated by the **global** `requireAdminAction()`. Do not close #277's parent
+  concern until the membership model lands.
 - **Blocker before a second facility/org operator shares the deployment.**
   Formalizes pre-deploy gate #3 in
   [`integration-plan.md`](./isometric/integration-plan.md) and depends on the

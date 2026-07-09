@@ -392,6 +392,83 @@ export type CertificationSubmissionRow =
   typeof certificationSubmissions.$inferSelect;
 export type CertifierSyncEventRow = typeof certifierSyncEvents.$inferSelect;
 
+// =====================================================================
+// Resolved-facility scope (defence in depth — issue #277)
+// =====================================================================
+//
+// Every certification submission is anchored to a Removal or a GHG Statement,
+// both of which carry `facilityId` directly. These helpers resolve the facility
+// that OWNS a submission from that anchor row — never a client-supplied field —
+// so id/key-addressed reads can be refused when they cross a facility boundary,
+// mirroring reconcileRemovalMembership's step-0 facility resolve.
+//
+// This is NOT per-user membership: there is no membership model yet (issue
+// #372 / ADR 0010), so an authenticated caller can still act within any linked
+// facility. What it closes is the id-confusion / cross-facility-mixing gap on
+// the submit surface — a caller that already resolved the facility it is
+// operating within passes it as `expectedFacilityId` and gets a hard rejection
+// instead of silently acting on another facility's ledger row. See
+// docs/open-questions.md `security/certification-submit-authz`.
+
+// `removal` covers both Removal and telemetry (dataUpload) submissions (ADR
+// 0006 — both key `localEntityId` to certifierRemovals.id); `ghgStatement`
+// resolves through certifierGhgStatements. Both anchor tables carry facilityId.
+//
+// Batched facility lookup for a set of local-entity ids of one type. Returns an
+// id → facilityId map; ids whose anchor row no longer exists are simply absent.
+async function facilityIdsForLocalEntities(
+  executor: Tx | typeof db,
+  localEntityType: string,
+  ids: string[],
+): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  if (localEntityType === "removal") {
+    const rows = await executor
+      .select({ id: certifierRemovals.id, facilityId: certifierRemovals.facilityId })
+      .from(certifierRemovals)
+      .where(inArray(certifierRemovals.id, ids));
+    return new Map(rows.map((r) => [r.id, r.facilityId]));
+  }
+  if (localEntityType === "ghgStatement") {
+    const rows = await executor
+      .select({
+        id: certifierGhgStatements.id,
+        facilityId: certifierGhgStatements.facilityId,
+      })
+      .from(certifierGhgStatements)
+      .where(inArray(certifierGhgStatements.id, ids));
+    return new Map(rows.map((r) => [r.id, r.facilityId]));
+  }
+  return new Map();
+}
+
+// Resolves the facility that owns a submission row via its anchor entity.
+// Returns null for an unknown local-entity type or a dangling anchor.
+export async function resolveSubmissionFacilityId(
+  executor: Tx | typeof db,
+  row: Pick<CertificationSubmissionRow, "localEntityType" | "localEntityId">,
+): Promise<string | null> {
+  const byId = await facilityIdsForLocalEntities(executor, row.localEntityType, [
+    row.localEntityId,
+  ]);
+  return byId.get(row.localEntityId) ?? null;
+}
+
+// Throws SafeError unless the submission's resolved facility matches the one the
+// caller is operating within. Fail-closed: an unresolvable anchor is refused
+// rather than allowed (a submission whose facility can't be proven must not be
+// acted on across a boundary).
+export async function assertSubmissionInFacility(
+  executor: Tx | typeof db,
+  row: Pick<CertificationSubmissionRow, "localEntityType" | "localEntityId">,
+  expectedFacilityId: string,
+): Promise<void> {
+  const facilityId = await resolveSubmissionFacilityId(executor, row);
+  if (facilityId !== expectedFacilityId) {
+    throw new SafeError("Submission does not belong to this facility.");
+  }
+}
+
 // Batched sibling of getLatestSubmission — one round-trip for N local
 // entities. DISTINCT ON keeps the highest-version row per localEntityId, the
 // same "latest" rule as getLatestSubmission. Returns a localEntityId → row
@@ -404,6 +481,10 @@ export async function getLatestSubmissionsForEntities(
     localEntityType: string;
     localEntityIds: string[];
   },
+  // Defence-in-depth facility scope (issue #277). When set, rows whose anchor
+  // entity lives in a different facility are dropped from the result — a
+  // batched read must not leak another facility's ledger rows.
+  expectedFacilityId?: string,
 ): Promise<Map<string, CertificationSubmissionRow>> {
   requireAuth(userId);
   if (key.localEntityIds.length === 0) return new Map();
@@ -422,12 +503,30 @@ export async function getLatestSubmissionsForEntities(
       certificationSubmissions.localEntityId,
       desc(certificationSubmissions.version),
     );
-  return new Map(rows.map((row) => [row.localEntityId, row]));
+  if (expectedFacilityId === undefined) {
+    return new Map(rows.map((row) => [row.localEntityId, row]));
+  }
+  const facilityById = await facilityIdsForLocalEntities(
+    db,
+    key.localEntityType,
+    rows.map((row) => row.localEntityId),
+  );
+  return new Map(
+    rows
+      .filter(
+        (row) => facilityById.get(row.localEntityId) === expectedFacilityId,
+      )
+      .map((row) => [row.localEntityId, row]),
+  );
 }
 
 export async function getSubmissionById(
   userId: string,
   id: string,
+  // Defence-in-depth facility scope (issue #277). When set, a submission whose
+  // anchor entity resolves to a different facility is refused (SafeError)
+  // instead of returned by raw id.
+  expectedFacilityId?: string,
 ): Promise<CertificationSubmissionRow | null> {
   requireAuth(userId);
   const [row] = await db
@@ -435,7 +534,11 @@ export async function getSubmissionById(
     .from(certificationSubmissions)
     .where(eq(certificationSubmissions.id, id))
     .limit(1);
-  return row ?? null;
+  if (!row) return null;
+  if (expectedFacilityId !== undefined) {
+    await assertSubmissionInFacility(db, row, expectedFacilityId);
+  }
+  return row;
 }
 
 export async function markSubmissionSubmitted(

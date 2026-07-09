@@ -229,12 +229,19 @@ export async function submitTelemetry(
   };
   const semanticHash = payloadHash(semanticPayload);
 
-  const latest = await getLatestSubmission(userId, {
-    provider: ISOMETRIC_PROVIDER,
-    submissionType: DATA_UPLOAD_SUBMISSION_TYPE,
-    localEntityType: DATA_UPLOAD_ENTITY_TYPE,
-    localEntityId: args.removalId,
-  });
+  // Facility-scoped to the removal's own facility (issue #277): ctx.facilityId
+  // is server-derived from the removal, so the ledger row for this removal must
+  // live in that facility — a mismatch is refused rather than acted on.
+  const latest = await getLatestSubmission(
+    userId,
+    {
+      provider: ISOMETRIC_PROVIDER,
+      submissionType: DATA_UPLOAD_SUBMISSION_TYPE,
+      localEntityType: DATA_UPLOAD_ENTITY_TYPE,
+      localEntityId: args.removalId,
+    },
+    ctx.facilityId,
+  );
   const dataUploadResume = latest ? readResumeSnapshot(latest) : undefined;
   const claim = decideSubmissionClaim({
     latest,
