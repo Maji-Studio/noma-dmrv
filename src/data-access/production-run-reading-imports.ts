@@ -1,4 +1,4 @@
-import { and, eq, gte, lt } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { documents, productionRunReadings, productionRuns } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
@@ -75,12 +75,18 @@ export async function getProductionRunReadingsImportContext(
   };
 }
 
-export async function replaceProductionRunReadingsInWindow(
+/**
+ * Insert parsed readings, skipping any row whose `(production_run_id, timestamp)`
+ * already exists (#398). ON CONFLICT DO NOTHING against the unique index — never
+ * an upsert: telemetry already published to Isometric must not be silently
+ * rewritten. Returns the number of rows actually inserted, so the caller can
+ * report `parsed − inserted` as "already imported" and re-imports are visibly
+ * idempotent.
+ */
+export async function insertProductionRunReadingsSkippingDuplicates(
   userId: string,
   args: {
     productionRunId: string;
-    windowStart: Date;
-    windowEnd: Date;
     readings: ReadingsCsvRow[];
   },
 ): Promise<number> {
@@ -93,21 +99,21 @@ export async function replaceProductionRunReadingsInWindow(
 
   if (!run) throw new SafeError("Production run not found");
 
-  await db.transaction(async (tx) => {
-    await tx
-      .delete(productionRunReadings)
-      .where(
-        and(
-          eq(productionRunReadings.productionRunId, args.productionRunId),
-          gte(productionRunReadings.timestamp, args.windowStart),
-          lt(productionRunReadings.timestamp, args.windowEnd),
-        ),
-      );
+  // Collapse duplicate timestamps within the same file first: ON CONFLICT DO
+  // NOTHING guards against rows already in the table, but two rows with the
+  // same timestamp inside one INSERT statement would still trip the unique
+  // index. Last occurrence wins.
+  const deduped = Array.from(
+    new Map(
+      args.readings.map((reading) => [reading.timestamp.getTime(), reading]),
+    ).values(),
+  );
+  if (deduped.length === 0) return 0;
 
-    if (args.readings.length === 0) return;
-
-    await tx.insert(productionRunReadings).values(
-      args.readings.map((reading) => ({
+  const inserted = await db
+    .insert(productionRunReadings)
+    .values(
+      deduped.map((reading) => ({
         productionRunId: args.productionRunId,
         timestamp: reading.timestamp,
         temperatureC: reading.temperatureC,
@@ -115,8 +121,46 @@ export async function replaceProductionRunReadingsInWindow(
         dryerFrequencyHz: reading.dryerFrequencyHz,
         reactorFrequencyHz: reading.reactorFrequencyHz,
       })),
-    );
-  });
+    )
+    .onConflictDoNothing({
+      target: [
+        productionRunReadings.productionRunId,
+        productionRunReadings.timestamp,
+      ],
+    })
+    .returning({ id: productionRunReadings.id });
 
-  return args.readings.length;
+  return inserted.length;
+}
+
+export interface ReadingsImportOutcome {
+  status: "succeeded" | "failed";
+  error?: string;
+  insertedRows?: number;
+  duplicateRows?: number;
+}
+
+/**
+ * Persist the outcome of a readings import onto the source document's metadata
+ * (#398). Durable status is what lets the UI offer a re-import affordance on a
+ * document whose prior import failed, and only on those documents. Merges into
+ * `metadata` so unrelated keys survive.
+ */
+export async function recordReadingsImportOutcome(
+  userId: string,
+  documentId: string,
+  outcome: ReadingsImportOutcome,
+): Promise<void> {
+  requireAuth(userId);
+
+  const patch = {
+    readingsImport: { ...outcome, at: new Date().toISOString() },
+  };
+  await db
+    .update(documents)
+    .set({
+      metadata: sql`${documents.metadata} || ${JSON.stringify(patch)}::jsonb`,
+      updatedAt: new Date(),
+    })
+    .where(eq(documents.id, documentId));
 }

@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { FileIcon, TrashIcon, ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  FileIcon,
+  TrashIcon,
+  ArrowSquareOutIcon,
+  ArrowClockwiseIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -14,6 +20,7 @@ import {
   useDocumentsForEntity,
 } from "@/hooks/use-documents";
 import { useImportProductionRunReadings } from "@/hooks/use-production-run-reading-imports";
+import type { ProductionRunReadingsImportResult } from "@/fn/production-run-reading-imports";
 import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
 
 interface ProductionReadingsDocumentsProps {
@@ -26,6 +33,27 @@ const READINGS_DOC_TYPE: DocumentType = "sensor_data";
 const ENTITY_TYPE: DocumentEntityType = "production_run";
 const READINGS_ACCEPT = ".csv";
 const READINGS_MAX_MB = 25;
+
+/** One human-readable summary line for a completed import. */
+function importSummary(result: ProductionRunReadingsImportResult): string {
+  const parts = [`${result.droppedRows} outside run window`];
+  if (result.duplicateRows > 0) {
+    parts.push(`${result.duplicateRows} already imported`);
+  }
+  if (result.skippedRows > 0) parts.push(`${result.skippedRows} skipped`);
+  if (result.invalidRequiredRows > 0) {
+    parts.push(`${result.invalidRequiredRows} missing temperature/pressure`);
+  }
+  return `Imported ${result.insertedRows} readings (${parts.join(", ")})`;
+}
+
+/** Reads the durable import status the fn writes to `metadata.readingsImport`. */
+function readingsImportFailed(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== "object") return false;
+  const imp = (metadata as Record<string, unknown>).readingsImport;
+  if (!imp || typeof imp !== "object") return false;
+  return (imp as Record<string, unknown>).status === "failed";
+}
 
 /**
  * Readings CSV upload + file list for a production run, persisted as
@@ -40,6 +68,7 @@ export function ProductionReadingsDocuments({
   readOnly = false,
 }: ProductionReadingsDocumentsProps) {
   const toast = useToast();
+  const queryClient = useQueryClient();
   const { data: docs, isLoading, error } = useDocumentsForEntity(
     ENTITY_TYPE,
     productionRunId,
@@ -52,24 +81,21 @@ export function ProductionReadingsDocuments({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  const handleUploaded = (documentId: string) => {
+  const runImport = (documentId: string) => {
     setUploadError(null);
     void (async () => {
       try {
         const result = await importReadings.mutateAsync(documentId);
-        const skippedSuffix =
-          result.skippedRows > 0 ? `, ${result.skippedRows} skipped` : "";
-        const invalidSuffix =
-          result.invalidRequiredRows > 0
-            ? `, ${result.invalidRequiredRows} missing temperature/pressure`
-            : "";
-        toast.success(
-          `Imported ${result.insertedRows} readings (${result.droppedRows} outside run window${skippedSuffix}${invalidSuffix})`,
-        );
+        toast.success(importSummary(result));
       } catch (err) {
         setUploadError(
           err instanceof Error ? err.message : "Failed to import readings",
         );
+      } finally {
+        // The import writes its outcome to the document's metadata; refetch so a
+        // failed import surfaces the "Re-import" affordance (and a recovered one
+        // clears it).
+        void queryClient.invalidateQueries({ queryKey: invalidateKey });
       }
     })();
   };
@@ -121,7 +147,9 @@ export function ProductionReadingsDocuments({
         </p>
       ) : (
         <ul className="flex flex-col gap-8">
-          {uploadedDocs.map((doc) => (
+          {uploadedDocs.map((doc) => {
+            const importFailed = readingsImportFailed(doc.metadata);
+            return (
             <li
               key={doc.id}
               className="flex items-center gap-8 border border-[var(--color-border-tertiary)] px-12 py-8"
@@ -137,8 +165,28 @@ export function ProductionReadingsDocuments({
                 </span>
                 <span className="body-caption text-[var(--color-text-tertiary)]">
                   Readings CSV · {formatFileSize(doc.fileSizeBytes)}
+                  {importFailed && (
+                    <>
+                      {" · "}
+                      <span className="text-[var(--color-status-error)]">
+                        Import failed
+                      </span>
+                    </>
+                  )}
                 </span>
               </div>
+              {!readOnly && importFailed && (
+                <Button
+                  variant="weak"
+                  size="small"
+                  onClick={() => runImport(doc.id)}
+                  disabled={importReadings.isPending}
+                  className="shrink-0"
+                >
+                  <ArrowClockwiseIcon size={14} weight="bold" />
+                  Re-import
+                </Button>
+              )}
               <a
                 href={`/api/documents/${doc.id}`}
                 target="_blank"
@@ -161,7 +209,8 @@ export function ProductionReadingsDocuments({
                 </Button>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
 
@@ -169,15 +218,15 @@ export function ProductionReadingsDocuments({
         <FormFileUpload
           id={`production-run-${productionRunId}-readings-upload`}
           accept={READINGS_ACCEPT}
-          // One file per selection: every upload triggers a replace-import, and
-          // concurrent imports with overlapping windows resolve nondeterministically.
+          // One file per selection: every upload inserts new readings and skips
+          // any (run, timestamp) already imported, so a re-run is idempotent.
           multiple={false}
           maxSizeMb={READINGS_MAX_MB}
           disabled={importReadings.isPending}
           entityType={ENTITY_TYPE}
           entityId={productionRunId}
           documentType={READINGS_DOC_TYPE}
-          onUploaded={handleUploaded}
+          onUploaded={runImport}
           onUploadError={(err) => setUploadError(err)}
         />
       )}

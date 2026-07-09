@@ -159,7 +159,12 @@ export const productionRunReadings = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [
-    index('production_run_readings_run_timestamp_idx').on(
+    // One canonical reading per (run, UTC timestamp). The unique constraint is
+    // the storage-level guarantee behind the idempotent readings import (#398):
+    // re-importing a file inserts with ON CONFLICT DO NOTHING against this
+    // index, so duplicate telemetry for the same reactor instant is impossible
+    // and can never reach an Isometric sensor submission.
+    uniqueIndex('production_run_readings_run_timestamp_uq').on(
       table.productionRunId,
       table.timestamp
     ),

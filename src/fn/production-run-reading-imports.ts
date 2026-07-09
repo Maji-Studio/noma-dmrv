@@ -5,7 +5,8 @@ import { SafeError } from "@/lib/errors";
 import { parseReadingsCsv } from "@/lib/production-readings/readings-csv";
 import {
   getProductionRunReadingsImportContext,
-  replaceProductionRunReadingsInWindow,
+  insertProductionRunReadingsSkippingDuplicates,
+  recordReadingsImportOutcome,
 } from "@/data-access/production-run-reading-imports";
 import { importProductionRunReadingsSchema } from "@/schemas/production-run-reading-imports";
 import type { ActionResult } from "@/types/actions";
@@ -21,6 +22,8 @@ export interface ProductionRunReadingsImportResult {
   droppedRows: number;
   skippedRows: number;
   invalidRequiredRows: number;
+  /** In-window rows skipped because that (run, timestamp) was already imported. */
+  duplicateRows: number;
 }
 
 export async function importProductionRunReadingsFromDocumentFn(
@@ -32,42 +35,67 @@ export async function importProductionRunReadingsFromDocumentFn(
       userId,
       documentId,
     );
-    assertCsvDocument(context.fileName, context.mimeType);
 
-    const csvText = await readManagedDocumentText(context.storageKey);
-    const parsed = parseReadingsForImport({
-      csvText,
-      runWindowStart: context.runWindowStart,
-      runWindowEnd: context.runWindowEnd,
-    });
+    // Persist the outcome onto the document so a failed import stays
+    // recoverable from the UI (#398): only documents whose prior import failed
+    // get a re-import affordance. Any failure past this point is recorded as
+    // failed, then re-thrown so the operator still sees the error.
+    try {
+      assertCsvDocument(context.fileName, context.mimeType);
 
-    if (!parsed.replacementWindow) {
-      // Nothing landed inside the run window. Fail loudly instead of returning
-      // a green "Imported 0 readings" toast, so a wrong or out-of-window file
-      // is obvious and existing readings are known to be untouched.
-      throw new SafeError(
-        parsed.parsedRows > 0
-          ? `None of the ${parsed.parsedRows} timestamped row(s) fall within this run's time window. Check the file covers the run period, or adjust the run's start and end times.`
-          : "No timestamped readings were found in this file. Check it is a canonical readings CSV with a timestamp_utc column and one row per reading.",
+      const csvText = await readManagedDocumentText(context.storageKey);
+      const parsed = parseReadingsForImport({
+        csvText,
+        runWindowStart: context.runWindowStart,
+        runWindowEnd: context.runWindowEnd,
+      });
+
+      if (parsed.inWindowRows === 0) {
+        // Nothing landed inside the run window. Fail loudly instead of
+        // returning a green "Imported 0 readings" toast, so a wrong or
+        // out-of-window file is obvious and existing readings are untouched.
+        throw new SafeError(
+          parsed.parsedRows > 0
+            ? `None of the ${parsed.parsedRows} timestamped row(s) fall within this run's time window. Check the file covers the run period, or adjust the run's start and end times.`
+            : "No timestamped readings were found in this file. Check it is a canonical readings CSV with a timestamp_utc column and one row per reading.",
+        );
+      }
+
+      const insertedRows = await insertProductionRunReadingsSkippingDuplicates(
+        userId,
+        {
+          productionRunId: context.productionRunId,
+          readings: parsed.readings,
+        },
       );
+      // Everything that was in-window but not newly inserted was already
+      // present — the visible signal that a re-run is idempotent.
+      const duplicateRows = parsed.inWindowRows - insertedRows;
+
+      await recordReadingsImportOutcome(userId, documentId, {
+        status: "succeeded",
+        insertedRows,
+        duplicateRows,
+      });
+
+      return {
+        productionRunId: context.productionRunId,
+        insertedRows,
+        parsedRows: parsed.parsedRows,
+        inWindowRows: parsed.inWindowRows,
+        droppedRows: parsed.droppedRows,
+        skippedRows: parsed.skippedRows,
+        invalidRequiredRows: parsed.invalidRequiredRows,
+        duplicateRows,
+      };
+    } catch (error) {
+      await recordReadingsImportOutcome(userId, documentId, {
+        status: "failed",
+        error:
+          error instanceof Error ? error.message : "Failed to import readings",
+      });
+      throw error;
     }
-
-    const insertedRows = await replaceProductionRunReadingsInWindow(userId, {
-      productionRunId: context.productionRunId,
-      windowStart: parsed.replacementWindow.start,
-      windowEnd: parsed.replacementWindow.end,
-      readings: parsed.readings,
-    });
-
-    return {
-      productionRunId: context.productionRunId,
-      insertedRows,
-      parsedRows: parsed.parsedRows,
-      inWindowRows: parsed.inWindowRows,
-      droppedRows: parsed.droppedRows,
-      skippedRows: parsed.skippedRows,
-      invalidRequiredRows: parsed.invalidRequiredRows,
-    };
   });
 }
 
