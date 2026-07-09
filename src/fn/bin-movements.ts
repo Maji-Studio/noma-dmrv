@@ -6,7 +6,9 @@
  * On-demand bin reconciliation: stock-take adjustments and documented losses.
  * The ledger is append-only — there are no update/delete actions. Stock-take
  * deltas are computed server-side against fresh (movement-inclusive) derived
- * stock so the client can't submit a stale delta.
+ * stock so the client can't submit a stale delta. For feedstock wet counts the
+ * dry figure is likewise recomputed here from the wet count and moisture ratio,
+ * so the persisted delta and the snapshot columns can never disagree.
  */
 
 import { z } from "zod";
@@ -104,7 +106,14 @@ export async function recordStockTakeFn(
     }
 
     const derivedMassKgAtTime = laneDerivedMassKg(entity, validated.lane);
-    const massDeltaKg = validated.countedMassKg - derivedMassKgAtTime;
+    // Recompute the dry count server-side from the wet count + snapshot ratio so
+    // a stale/tampered client can't submit a dry value inconsistent with its own
+    // provenance. A direct dry count (no wet provenance) passes through as-is.
+    const countedMassKg =
+      validated.countedWetMassKg != null && validated.moistureRatioUsed != null
+        ? validated.countedWetMassKg * (1 - validated.moistureRatioUsed)
+        : validated.countedMassKg;
+    const massDeltaKg = countedMassKg - derivedMassKgAtTime;
 
     const movement = await createBinMovement(user.id, {
       storageLocationId: validated.storageLocationId,
@@ -112,7 +121,7 @@ export async function recordStockTakeFn(
       movementType: "adjustment",
       massDeltaKg,
       reason: validated.reason,
-      countedMassKg: validated.countedMassKg,
+      countedMassKg,
       derivedMassKgAtTime,
       countedWetMassKg: validated.countedWetMassKg ?? null,
       moistureRatioUsed: validated.moistureRatioUsed ?? null,
