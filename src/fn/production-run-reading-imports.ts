@@ -2,6 +2,7 @@
 
 import { getStorageProvider } from "@/lib/storage";
 import { SafeError } from "@/lib/errors";
+import { sanitizeErrorMessage } from "@/lib/log";
 import { parseReadingsCsv } from "@/lib/production-readings/readings-csv";
 import {
   getProductionRunReadingsImportContext,
@@ -95,10 +96,14 @@ export async function importProductionRunReadingsFromDocumentFn(
         intraFileDuplicateRows,
       };
     } catch (error) {
+      // Sanitize before persisting: a Drizzle/Postgres error (e.g. from the
+      // insert) can embed bound parameter values, and this message is stored in
+      // the document's metadata, so it must not leak raw query details.
       await recordReadingsImportOutcome(userId, documentId, {
         status: "failed",
-        error:
+        error: sanitizeErrorMessage(
           error instanceof Error ? error.message : "Failed to import readings",
+        ),
       });
       throw error;
     }
