@@ -2,14 +2,16 @@
  * Data-access for Organizations, members, and invitations (multi-tenancy).
  *
  * Read helpers are scoped to `ctx.organizationId` so one org can never read
- * another's membership. Org lifecycle helpers (create) are Platform-Admin-only
- * and enforce that gate in the `fn/` layer via `requirePlatformAdmin()`.
+ * another's membership. Cross-org directory and lifecycle helpers enforce the
+ * Platform-Admin gate in this layer as well as in their `fn/` callers.
  */
 import { randomUUID } from "node:crypto";
 import { and, count, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { invitations, members, organizations, users } from "@/db/schema";
-import type { OrgContext } from "@/lib/auth/server";
+import { requireAuth } from "@/data-access/utils";
+import { getBetterAuthSession } from "@/lib/auth/providers/better-auth-server";
+import { requirePlatformAdmin, type OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 
 export type OrgMemberRow = {
@@ -41,6 +43,7 @@ export type OrganizationSummary = {
 
 /** Members of the active org, joined to their user identity. */
 export async function listOrgMembers(ctx: OrgContext): Promise<OrgMemberRow[]> {
+  requireAuth(ctx.userId);
   return db
     .select({
       memberId: members.id,
@@ -60,6 +63,7 @@ export async function listOrgMembers(ctx: OrgContext): Promise<OrgMemberRow[]> {
 export async function listOrgInvitations(
   ctx: OrgContext
 ): Promise<OrgInvitationRow[]> {
+  requireAuth(ctx.userId);
   return db
     .select({
       id: invitations.id,
@@ -81,6 +85,7 @@ export async function listOrgInvitations(
 
 /** The active org's profile (name, slug, logo). */
 export async function getActiveOrganization(ctx: OrgContext) {
+  requireAuth(ctx.userId);
   const [org] = await db
     .select()
     .from(organizations)
@@ -91,6 +96,7 @@ export async function getActiveOrganization(ctx: OrgContext) {
 
 /** All organizations with member counts — Platform Admin directory. */
 export async function listAllOrganizations(): Promise<OrganizationSummary[]> {
+  await requirePlatformAdmin();
   const rows = await db
     .select({
       id: organizations.id,
@@ -109,6 +115,7 @@ export async function listAllOrganizations(): Promise<OrganizationSummary[]> {
 
 /** Total number of organizations (drives the PR-1 single-org isolation gate). */
 export async function countOrganizations(): Promise<number> {
+  await requirePlatformAdmin();
   const [row] = await db.select({ value: count() }).from(organizations);
   return Number(row?.value ?? 0);
 }
@@ -116,7 +123,7 @@ export async function countOrganizations(): Promise<number> {
 /**
  * Create an organization and stamp the given user as its Owner, in one
  * transaction. The Owner is a real member (not the Platform Admin who ran the
- * action). Callers must gate this with `requirePlatformAdmin()` and the
+ * action). The `fn/` caller also enforces the Platform-Admin gate and the
  * single-org isolation check.
  */
 export async function createOrganizationWithOwner(input: {
@@ -124,6 +131,7 @@ export async function createOrganizationWithOwner(input: {
   slug: string;
   ownerUserId: string;
 }): Promise<{ id: string }> {
+  await requirePlatformAdmin();
   const organizationId = randomUUID();
   await db.transaction(async (tx) => {
     const [ownerUser] = await tx
@@ -159,10 +167,32 @@ export async function createOrganizationWithOwner(input: {
 
 /** Look up a user id by email (for the create-org owner picker). */
 export async function findUserIdByEmail(email: string): Promise<string | null> {
+  await requirePlatformAdmin();
   const [row] = await db
     .select({ id: users.id })
     .from(users)
     .where(eq(users.email, email.toLowerCase().trim()))
     .limit(1);
   return row?.id ?? null;
+}
+
+/** The signed-in user's role in a target organization, if they are a member. */
+export async function findMembershipRole(
+  organizationId: string
+): Promise<string | null> {
+  const session = await getBetterAuthSession();
+  const userId = session?.user?.id ?? "";
+  requireAuth(userId);
+
+  const [membership] = await db
+    .select({ role: members.role })
+    .from(members)
+    .where(
+      and(
+        eq(members.userId, userId),
+        eq(members.organizationId, organizationId)
+      )
+    )
+    .limit(1);
+  return membership?.role ?? null;
 }

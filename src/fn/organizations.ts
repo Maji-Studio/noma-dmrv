@@ -27,6 +27,7 @@ import { env } from "@/config/env";
 import {
   countOrganizations,
   createOrganizationWithOwner,
+  findMembershipRole,
   findUserIdByEmail,
   getActiveOrganization,
   listAllOrganizations,
@@ -222,10 +223,15 @@ export async function setActiveOrganizationAction(
     const { organizationId } = z
       .object({ organizationId: z.string().min(1) })
       .parse(input);
-    const ctx = await getOrgContextOrThrowSignedIn();
+    const session = await getBetterAuthSession();
+    const sessionId = session?.session?.id;
+    if (!session?.user?.id || !sessionId) {
+      throw new SafeError("You must be signed in.");
+    }
 
-    if (ctx.membershipRole) {
-      // Real member: let the plugin handle it (verifies membership + cookie).
+    const membershipRole = await findMembershipRole(organizationId);
+    if (membershipRole) {
+      // Target-org member: let the plugin verify membership and refresh cookie.
       await auth.api.setActiveOrganization({
         body: { organizationId },
         headers: await headers(),
@@ -233,33 +239,14 @@ export async function setActiveOrganizationAction(
       return { organizationId };
     }
 
-    if (!ctx.isPlatformAdmin) {
+    const isPlatformAdmin =
+      (session.user as { role?: string }).role === "admin";
+    if (!isPlatformAdmin) {
       throw new SafeError("You are not a member of this organization.");
     }
-    await setActiveOrgForPlatformAdmin(ctx.sessionId, organizationId);
+    await setActiveOrgForPlatformAdmin(sessionId, organizationId);
     return { organizationId };
   }, "Failed to switch organization.");
-}
-
-async function getOrgContextOrThrowSignedIn(): Promise<{
-  userId: string;
-  sessionId: string;
-  isPlatformAdmin: boolean;
-  membershipRole: string | null;
-}> {
-  const session = await getBetterAuthSession();
-  const userId = session?.user?.id;
-  const sessionId = session?.session?.id;
-  if (!userId || !sessionId) {
-    throw new SafeError("You must be signed in.");
-  }
-  const ctx = await getOrgContext();
-  return {
-    userId,
-    sessionId,
-    isPlatformAdmin: (session.user as { role?: string }).role === "admin",
-    membershipRole: ctx?.orgRole ?? null,
-  };
 }
 
 async function setActiveOrgForPlatformAdmin(
