@@ -64,11 +64,16 @@ async function movementLaneDeltaKg(
 }
 
 /**
- * Reject a production-run feedstock draw larger than the bin's on-hand dry stock.
+ * Reject a production-run feedstock draw larger than the bin's physical on-hand
+ * dry stock.
  *
- * Available = complete-batch dry intake − dry mass already consumed by runs
- * (optionally excluding one run, so an edit doesn't count its own prior draw) +
- * signed feedstock movements. Mirrors the feedstock lane of enrichment.
+ * Available = ALL recorded batch dry mass in the bin (complete + missing-data
+ * pending) − dry mass already consumed by runs (optionally excluding one run, so
+ * an edit doesn't count its own prior draw) + signed feedstock movements. This
+ * is the physical on-hand: it equals the bin card's `currentDryMassKg` +
+ * `pendingDryMassKg`. A batch with incomplete metadata still physically occupies
+ * the bin, so its mass counts toward what can be drawn — the block is about
+ * physical over-draw, not data completeness (that is a separate concern).
  */
 export async function assertFeedstockDrawAvailable(
   tx: DbTransaction,
@@ -82,27 +87,21 @@ export async function assertFeedstockDrawAvailable(
   const { storageLocationId, requestedDryKg, excludeRunId } = params;
   if (requestedDryKg <= 0) return;
 
-  const [intakeRow] = await tx
-    .select({
-      code: storageLocations.code,
-      totalDryKg: sql<number>`
-        COALESCE(
-          (
-            SELECT SUM(${feedstocks.massDryKg})
-            FROM ${feedstocks}
-            WHERE ${feedstocks.storageLocationId} = ${storageLocations.id}
-              AND ${feedstocks.status} = 'complete'
-          ),
-          0
-        )
-      `,
-    })
+  const [binRow] = await tx
+    .select({ code: storageLocations.code })
     .from(storageLocations)
     .where(eq(storageLocations.id, storageLocationId));
 
-  if (!intakeRow) {
+  if (!binRow) {
     throw new SafeError("Feedstock storage location not found");
   }
+
+  const [intakeRow] = await tx
+    .select({
+      totalDryKg: sql<number>`COALESCE(SUM(${feedstocks.massDryKg}), 0)`,
+    })
+    .from(feedstocks)
+    .where(eq(feedstocks.storageLocationId, storageLocationId));
 
   const consumedConditions = [
     eq(productionRuns.feedstockStorageLocationId, storageLocationId),
@@ -129,13 +128,13 @@ export async function assertFeedstockDrawAvailable(
   );
 
   const availableKg =
-    Number(intakeRow.totalDryKg) -
+    Number(intakeRow?.totalDryKg ?? 0) -
     Number(consumedRow?.consumedDryKg ?? 0) +
     movementDelta;
 
   if (requestedDryKg > availableKg + STOCK_EPSILON_KG) {
     throw new SafeError(
-      `Cannot draw ${formatKg(requestedDryKg)} of feedstock from bin ${intakeRow.code}: only ${formatKg(
+      `Cannot draw ${formatKg(requestedDryKg)} of feedstock from bin ${binRow.code}: only ${formatKg(
         availableKg,
       )} on hand. ${RECONCILE_HINT}`,
     );
@@ -187,26 +186,21 @@ export async function assertBiocharDrawAvailable(
   const binId = runRow?.binId;
   if (!binId) return; // Run's biochar isn't tracked in a bin — nothing to guard.
 
-  const [producedRow] = await tx
-    .select({
-      code: storageLocations.code,
-      producedKg: sql<number>`
-        COALESCE(
-          (
-            SELECT SUM(${productionRuns.biocharOutputKg})
-            FROM ${productionRuns}
-            WHERE ${productionRuns.biocharStorageLocationId} = ${storageLocations.id}
-          ),
-          0
-        )
-      `,
-    })
+  const [binRow] = await tx
+    .select({ code: storageLocations.code })
     .from(storageLocations)
     .where(eq(storageLocations.id, binId));
 
-  if (!producedRow) {
+  if (!binRow) {
     throw new SafeError("Biochar storage location not found");
   }
+
+  const [producedRow] = await tx
+    .select({
+      producedKg: sql<number>`COALESCE(SUM(${productionRuns.biocharOutputKg}), 0)`,
+    })
+    .from(productionRuns)
+    .where(eq(productionRuns.biocharStorageLocationId, binId));
 
   const allocatedConditions = [
     eq(productionRuns.biocharStorageLocationId, binId),
@@ -237,13 +231,13 @@ export async function assertBiocharDrawAvailable(
   const movementDelta = await movementLaneDeltaKg(tx, binId, "biochar");
 
   const availableKg =
-    Number(producedRow.producedKg) -
+    Number(producedRow?.producedKg ?? 0) -
     Number(allocatedRow?.allocatedKg ?? 0) +
     movementDelta;
 
   if (requestedBiocharKg > availableKg + STOCK_EPSILON_KG) {
     throw new SafeError(
-      `Cannot draw ${formatKg(requestedBiocharKg)} of biochar from bin ${producedRow.code}: only ${formatKg(
+      `Cannot draw ${formatKg(requestedBiocharKg)} of biochar from bin ${binRow.code}: only ${formatKg(
         availableKg,
       )} on hand. ${RECONCILE_HINT}`,
     );
