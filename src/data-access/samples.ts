@@ -116,7 +116,29 @@ export interface SampleStats {
 
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { isPgUniqueViolation } from "@/db/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+
+// DB-enforced sample-code uniqueness (issue #395). Drizzle names the
+// `.unique()` on `samples.sampleCode` this constraint.
+const SAMPLE_CODE_UNIQUE_CONSTRAINT = "samples_sample_code_unique";
+
+/**
+ * Run `fn`; map a user-supplied duplicate sample_code (23505 on the unique
+ * index) to a friendly SafeError instead of a raw driver error. Only the
+ * *update* path needs this — the create path routes its code through
+ * `withAutoCode`, which owns the same friendly mapping (and auto-code retry).
+ */
+async function guardSampleCode<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (isPgUniqueViolation(err, SAMPLE_CODE_UNIQUE_CONSTRAINT)) {
+      throw new SafeError("A sample with this code already exists");
+    }
+    throw err;
+  }
+}
 
 const runFacilities = alias(facilities, "sample_run_facilities");
 const batchFacilities = alias(facilities, "sample_batch_facilities");
@@ -542,17 +564,9 @@ export async function createSample(
 ): Promise<SampleWithRelations> {
   requireAuth(userId);
 
-  // Check for duplicate code
-  const [existing] = await db
-    .select({ id: samples.id })
-    .from(samples)
-    .where(eq(samples.sampleCode, data.sampleCode));
-
-  if (existing) {
-    throw new SafeError("A sample with this code already exists");
-  }
-
-  // Create sample
+  // Sample-code uniqueness is DB-enforced (issue #395: `samples_sample_code_unique`).
+  // No racy pre-check — a colliding auto-generated code is retried by
+  // `withAutoCode`; a user-supplied duplicate surfaces via that same guard.
   const sample = await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
       tx,
@@ -681,17 +695,9 @@ export async function updateSample(
     throw new SafeError("Sample not found");
   }
 
-  // If code is being changed, check for duplicates
-  if (data.sampleCode && data.sampleCode !== existing.sampleCode) {
-    const [duplicate] = await db
-      .select({ id: samples.id })
-      .from(samples)
-      .where(eq(samples.sampleCode, data.sampleCode));
-
-    if (duplicate) {
-      throw new SafeError("A sample with this code already exists");
-    }
-  }
+  // Sample-code uniqueness is DB-enforced (issue #395). No racy pre-check —
+  // a user-supplied duplicate is mapped to a friendly SafeError by the
+  // `guardSampleCode` wrapper around the write below.
 
   // Build update data
   const updateData: Record<string, unknown> = {
@@ -746,7 +752,7 @@ export async function updateSample(
   if (data.calciumPercent !== undefined) updateData.calciumPercent = data.calciumPercent;
   if (data.ironPercent !== undefined) updateData.ironPercent = data.ironPercent;
 
-  await db.transaction(async (tx) => {
+  await guardSampleCode(() => db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
       tx,
       { entityType: "sample", entityId: sampleId },
@@ -792,7 +798,7 @@ export async function updateSample(
     }
 
     await tx.update(samples).set(updateData).where(eq(samples.id, sampleId));
-  });
+  }));
 
   return getSampleById(userId, sampleId);
 }

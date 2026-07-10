@@ -526,6 +526,13 @@
       "when": 1783612589696,
       "tag": "0074_nostalgic_magus",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1783613816848,
+      "tag": "0075_solid_master_chief",
+      "breakpoints": true
     }
   ]
 }
