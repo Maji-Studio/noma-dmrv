@@ -242,7 +242,7 @@ export async function assertBiocharProductDrawWithinStock(
 
   const [[product], [delivered]] = await Promise.all([
     tx
-      .select({ massKg: biocharProducts.massKg })
+      .select({ code: biocharProducts.code, massKg: biocharProducts.massKg })
       .from(biocharProducts)
       .where(eq(biocharProducts.id, params.biocharProductId)),
     tx
@@ -256,6 +256,15 @@ export async function assertBiocharProductDrawWithinStock(
 
   const available = Number(product?.massKg ?? 0) - Number(delivered.total);
   if (isOverdraw(params.requestedWetKg, available)) {
-    throw overdrawError("biochar", available, params.requestedWetKg);
+    // Batch-specific copy: a delivery over-draw is against the product batch's
+    // remaining wet mass, not a bin lane, so the #194 bin reconcile workflow is
+    // the wrong lever — point the operator at the source bin or the product.
+    throw new SafeError(
+      `Cannot deliver ${formatKg(params.requestedWetKg)} from product ${
+        product?.code ?? "this batch"
+      }: only ${formatKg(
+        available,
+      )} remain undelivered. Reconcile the source bin or adjust the product before delivering.`,
+    );
   }
 }
