@@ -10,9 +10,12 @@ export const orgRoleSchema = z.enum(["owner", "admin", "member"]);
 export type OrgRoleValue = z.infer<typeof orgRoleSchema>;
 
 export const inviteMemberSchema = z.object({
+  // Normalize before validating — z.email() would reject padded input first.
   email: z
-    .email("Enter a valid email address.")
-    .transform((value) => value.toLowerCase().trim()),
+    .string()
+    .trim()
+    .toLowerCase()
+    .pipe(z.email("Enter a valid email address.")),
   role: orgRoleSchema,
 });
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;
@@ -28,7 +31,9 @@ export const createOrganizationSchema = z.object({
       "Slug may only contain lowercase letters, numbers, and hyphens."
     ),
   ownerEmail: z
-    .email("Enter a valid owner email.")
-    .transform((value) => value.toLowerCase().trim()),
+    .string()
+    .trim()
+    .toLowerCase()
+    .pipe(z.email("Enter a valid owner email.")),
 });
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
