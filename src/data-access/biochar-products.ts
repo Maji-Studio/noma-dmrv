@@ -78,6 +78,7 @@ import { SafeError } from "@/lib/errors";
 import { deleteTransportLegsForEntity } from "./transport-legs";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { validateCompositionIngredientBins } from "./biochar-product-composition";
+import { assertBiocharDrawAvailable } from "./bin-stock-guards";
 
 // ============================================
 // Biochar Product Read Operations
@@ -421,6 +422,9 @@ export async function createBiocharProduct(
   if (data.massKg == null || !Number.isFinite(data.massKg) || data.massKg < 0) {
     throw new SafeError("Wet mass must be a non-negative finite number");
   }
+  // Narrowed to a number here; capture it so the value survives into the
+  // transaction closure (TS drops property narrowing across closures).
+  const productMassKg = data.massKg;
 
   if (
     data.moistureContentPercent == null ||
@@ -505,6 +509,14 @@ export async function createBiocharProduct(
         "Product bin is reserved for a different formulation. Pick a matching or empty bin."
       );
     }
+
+    // Hard-block drawing more biochar out of the linked run's biochar bin than
+    // it holds (#116).
+    await assertBiocharDrawAvailable(tx, {
+      linkedProductionRunId: run.id,
+      massKg: productMassKg,
+      formulationId,
+    });
 
     const [inserted] = await tx
       .insert(biocharProducts)
@@ -753,6 +765,25 @@ export async function updateBiocharProduct(
       if (effectiveFormulationId && storage.formulationId === null) {
         claimBinFormulationId = effectiveFormulationId;
       }
+    }
+
+    // Hard-block a re-measured/relinked product from drawing more biochar out of
+    // the linked run's biochar bin than it holds (#116). Only re-check when a
+    // field that changes the draw or its source moves.
+    if (
+      effectiveLinkedRunId &&
+      effectiveMassKg != null &&
+      (data.massKg !== undefined ||
+        data.formulationId !== undefined ||
+        data.linkedProductionRunId !== undefined ||
+        facilityChanged)
+    ) {
+      await assertBiocharDrawAvailable(tx, {
+        linkedProductionRunId: effectiveLinkedRunId,
+        massKg: effectiveMassKg,
+        formulationId: effectiveFormulationId,
+        excludeProductId: productId,
+      });
     }
 
     const [row] = await tx

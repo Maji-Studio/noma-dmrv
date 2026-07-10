@@ -82,6 +82,7 @@ export interface DeliveryStats {
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { assertBiocharProductDrawAvailable } from "./bin-stock-guards";
 
 // ============================================
 // Read Operations
@@ -568,34 +569,55 @@ export async function createDelivery(
     }
   }
 
-  const [delivery] = await db
-    .insert(deliveries)
-    .values({
-      code: data.code,
-      orderId: data.orderId,
-      facilityId: data.facilityId,
-      deliveryDate: data.deliveryDate,
-      biocharProductId: effectiveBiocharProductId ?? null,
-      driverId: data.driverId ?? null,
-      vehicleId: data.vehicleId ?? null,
-      status: data.status ?? "upcoming",
-      deliveredWetMassKg: data.deliveredWetMassKg ?? null,
-      massDryKg: data.massDryKg ?? null,
-      moistureContentPercent: data.moistureContentPercent ?? null,
-      ...(deliveryColumns.distanceKmOverride
-        ? { distanceKmOverride: data.distanceKmOverride ?? null }
-        : {}),
-      ...(deliveryColumns.distanceSource
-        ? { distanceSource: data.distanceSource ?? null }
-        : {}),
-      ...(deliveryColumns.distanceNote
-        ? { distanceNote: data.distanceNote ?? null }
-        : {}),
-      ...(deliveryColumns.tripType && data.tripType != null
-        ? { tripType: data.tripType }
-        : {}),
-    })
-    .returning(getDeliveryBaseSelection(deliveryColumns));
+  const status = data.status ?? "upcoming";
+
+  // Guard and insert atomically so a delivered draw can't overshoot the product's
+  // remaining stock between check and write (#116).
+  const delivery = await db.transaction(async (tx) => {
+    // Only a `delivered` row physically leaves the bin — hard-block it from
+    // drawing more wet mass than the product still holds.
+    if (
+      status === "delivered" &&
+      effectiveBiocharProductId &&
+      data.deliveredWetMassKg != null
+    ) {
+      await assertBiocharProductDrawAvailable(tx, {
+        biocharProductId: effectiveBiocharProductId,
+        requestedWetKg: data.deliveredWetMassKg,
+      });
+    }
+
+    const [row] = await tx
+      .insert(deliveries)
+      .values({
+        code: data.code,
+        orderId: data.orderId,
+        facilityId: data.facilityId,
+        deliveryDate: data.deliveryDate,
+        biocharProductId: effectiveBiocharProductId ?? null,
+        driverId: data.driverId ?? null,
+        vehicleId: data.vehicleId ?? null,
+        status,
+        deliveredWetMassKg: data.deliveredWetMassKg ?? null,
+        massDryKg: data.massDryKg ?? null,
+        moistureContentPercent: data.moistureContentPercent ?? null,
+        ...(deliveryColumns.distanceKmOverride
+          ? { distanceKmOverride: data.distanceKmOverride ?? null }
+          : {}),
+        ...(deliveryColumns.distanceSource
+          ? { distanceSource: data.distanceSource ?? null }
+          : {}),
+        ...(deliveryColumns.distanceNote
+          ? { distanceNote: data.distanceNote ?? null }
+          : {}),
+        ...(deliveryColumns.tripType && data.tripType != null
+          ? { tripType: data.tripType }
+          : {}),
+      })
+      .returning(getDeliveryBaseSelection(deliveryColumns));
+
+    return row;
+  });
 
   return delivery;
 }
@@ -706,12 +728,28 @@ export async function updateDelivery(
     }
   }
 
+  const effectiveStatus = data.status ?? existing.status;
+
   const updated = await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
       tx,
       { entityType: "delivery", entityId: deliveryId },
       "update",
     );
+
+    // Hard-block a delivered draw that would overshoot the product's remaining
+    // stock (#116), excluding this delivery's own already-counted mass.
+    if (
+      effectiveStatus === "delivered" &&
+      effectiveBiocharProductId &&
+      finalWetMass != null
+    ) {
+      await assertBiocharProductDrawAvailable(tx, {
+        biocharProductId: effectiveBiocharProductId,
+        requestedWetKg: finalWetMass,
+        excludeDeliveryId: deliveryId,
+      });
+    }
 
     const [row] = await tx
       .update(deliveries)

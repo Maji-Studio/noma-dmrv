@@ -22,6 +22,7 @@ import { SafeError } from "@/lib/errors";
 import { getProductionRunById } from "./queries";
 import type { ProductionRunWithRelations } from "./types";
 import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
+import { assertFeedstockDrawAvailable } from "../bin-stock-guards";
 import {
   assertNoReactorRunOverlap,
   isReactorStartUniqueViolation,
@@ -255,6 +256,12 @@ export async function createProductionRun(
 
     // Auto-populate M:M feedstock relationships from bin contents
     if (data.feedstockStorageLocationId && computedDryMass) {
+      // Hard-block a draw larger than the bin's on-hand dry stock (#116).
+      await assertFeedstockDrawAvailable(tx, {
+        storageLocationId: data.feedstockStorageLocationId,
+        requestedDryKg: computedDryMass,
+        excludeRunId: created.id,
+      });
       const allocated = await allocateFeedstockMass(
         data.feedstockStorageLocationId,
         computedDryMass,
@@ -483,6 +490,13 @@ export async function updateProductionRun(
       const dryMassKg = (updateData.feedstockMassDryKg as number | null) ?? existing.feedstockMassDryKg;
 
       if (effectiveFeedstockStorageId && dryMassKg) {
+        // Hard-block a draw larger than the bin's on-hand dry stock (#116). The
+        // run's prior draw was just deleted above; excluding it is belt-and-braces.
+        await assertFeedstockDrawAvailable(tx, {
+          storageLocationId: effectiveFeedstockStorageId,
+          requestedDryKg: dryMassKg,
+          excludeRunId: productionRunId,
+        });
         const allocated = await allocateFeedstockMass(effectiveFeedstockStorageId, dryMassKg, tx);
         await tx.insert(productionRunFeedstocks).values(
           allocated.map((a) => ({
