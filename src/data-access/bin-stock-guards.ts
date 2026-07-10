@@ -48,13 +48,15 @@ function formatKg(kg: number): string {
 /**
  * Build the shared over-draw error: available quantity + reconcile pointer.
  * `material` names the lane in plain language ("feedstock", "biochar", …).
+ * The available quantity is shown as derived — no zero-clamp — so an already
+ * over-drawn bin surfaces its true (negative) deficit for reconciliation (#116).
  */
 function overdrawError(
   material: string,
   availableKg: number,
   requestedKg: number,
 ): SafeError {
-  const available = availableKg > 0 ? formatKg(availableKg) : "0 kg";
+  const available = formatKg(availableKg);
   return new SafeError(
     `Not enough ${material} in this bin — ${available} available but this draw needs ${formatKg(
       requestedKg,
