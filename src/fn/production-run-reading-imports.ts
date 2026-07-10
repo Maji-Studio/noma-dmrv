@@ -96,12 +96,15 @@ export async function importProductionRunReadingsFromDocumentFn(
         intraFileDuplicateRows,
       };
     } catch (error) {
-      // Sanitize before persisting: a Drizzle/Postgres error (e.g. from the
-      // insert) can embed bound parameter values, and this message is stored in
-      // the document's metadata, so it must not leak raw query details.
-      const message = sanitizeErrorMessage(
-        error instanceof Error ? error.message : "Failed to import readings",
-      );
+      // Persist only operator-safe text: document metadata is API-readable, so
+      // it follows the toActionError rule — SafeError messages verbatim,
+      // anything else (e.g. a Drizzle/Postgres failure whose message embeds
+      // query text) collapses to a generic message. withAction already logs
+      // the original error server-side.
+      const message =
+        error instanceof SafeError
+          ? error.message
+          : "Failed to import readings";
       // Never let a failure to persist the outcome mask the real import error
       // or strand the document without its recoverable "failed" flag (#398):
       // record the outcome best-effort, then always re-throw the original error.
