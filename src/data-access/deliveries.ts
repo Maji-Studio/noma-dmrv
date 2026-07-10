@@ -82,6 +82,22 @@ export interface DeliveryStats {
 import { requireAuth } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { assertBiocharProductDrawWithinStock } from "./bin-stock-guards";
+
+/**
+ * A delivery physically leaves the bin only once it is `delivered` — an
+ * `upcoming` delivery has not drawn stock yet, so it is not over-draw checked.
+ */
+function deliveryDrawsStock(
+  status: string | null | undefined,
+  deliveredWetMassKg: number | null | undefined,
+): deliveredWetMassKg is number {
+  return (
+    status === "delivered" &&
+    deliveredWetMassKg != null &&
+    deliveredWetMassKg > 0
+  );
+}
 
 // ============================================
 // Read Operations
@@ -568,34 +584,51 @@ export async function createDelivery(
     }
   }
 
-  const [delivery] = await db
-    .insert(deliveries)
-    .values({
-      code: data.code,
-      orderId: data.orderId,
-      facilityId: data.facilityId,
-      deliveryDate: data.deliveryDate,
-      biocharProductId: effectiveBiocharProductId ?? null,
-      driverId: data.driverId ?? null,
-      vehicleId: data.vehicleId ?? null,
-      status: data.status ?? "upcoming",
-      deliveredWetMassKg: data.deliveredWetMassKg ?? null,
-      massDryKg: data.massDryKg ?? null,
-      moistureContentPercent: data.moistureContentPercent ?? null,
-      ...(deliveryColumns.distanceKmOverride
-        ? { distanceKmOverride: data.distanceKmOverride ?? null }
-        : {}),
-      ...(deliveryColumns.distanceSource
-        ? { distanceSource: data.distanceSource ?? null }
-        : {}),
-      ...(deliveryColumns.distanceNote
-        ? { distanceNote: data.distanceNote ?? null }
-        : {}),
-      ...(deliveryColumns.tripType && data.tripType != null
-        ? { tripType: data.tripType }
-        : {}),
-    })
-    .returning(getDeliveryBaseSelection(deliveryColumns));
+  const effectiveStatus = data.status ?? "upcoming";
+
+  const delivery = await db.transaction(async (tx) => {
+    // Hard-block shipping more than the product batch physically holds (#116).
+    if (
+      effectiveBiocharProductId &&
+      deliveryDrawsStock(effectiveStatus, data.deliveredWetMassKg)
+    ) {
+      await assertBiocharProductDrawWithinStock(tx, {
+        biocharProductId: effectiveBiocharProductId,
+        requestedWetKg: data.deliveredWetMassKg,
+      });
+    }
+
+    const [row] = await tx
+      .insert(deliveries)
+      .values({
+        code: data.code,
+        orderId: data.orderId,
+        facilityId: data.facilityId,
+        deliveryDate: data.deliveryDate,
+        biocharProductId: effectiveBiocharProductId ?? null,
+        driverId: data.driverId ?? null,
+        vehicleId: data.vehicleId ?? null,
+        status: effectiveStatus,
+        deliveredWetMassKg: data.deliveredWetMassKg ?? null,
+        massDryKg: data.massDryKg ?? null,
+        moistureContentPercent: data.moistureContentPercent ?? null,
+        ...(deliveryColumns.distanceKmOverride
+          ? { distanceKmOverride: data.distanceKmOverride ?? null }
+          : {}),
+        ...(deliveryColumns.distanceSource
+          ? { distanceSource: data.distanceSource ?? null }
+          : {}),
+        ...(deliveryColumns.distanceNote
+          ? { distanceNote: data.distanceNote ?? null }
+          : {}),
+        ...(deliveryColumns.tripType && data.tripType != null
+          ? { tripType: data.tripType }
+          : {}),
+      })
+      .returning(getDeliveryBaseSelection(deliveryColumns));
+
+    return row;
+  });
 
   return delivery;
 }
@@ -706,12 +739,27 @@ export async function updateDelivery(
     }
   }
 
+  const effectiveStatus = data.status ?? existing.status;
+
   const updated = await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
       tx,
       { entityType: "delivery", entityId: deliveryId },
       "update",
     );
+
+    // Hard-block shipping more than the product batch holds (#116). Exclude this
+    // delivery so its own prior draw isn't counted against the replacement.
+    if (
+      effectiveBiocharProductId &&
+      deliveryDrawsStock(effectiveStatus, finalWetMass)
+    ) {
+      await assertBiocharProductDrawWithinStock(tx, {
+        biocharProductId: effectiveBiocharProductId,
+        requestedWetKg: finalWetMass,
+        excludeDeliveryId: deliveryId,
+      });
+    }
 
     const [row] = await tx
       .update(deliveries)
