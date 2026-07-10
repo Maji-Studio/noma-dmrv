@@ -77,7 +77,8 @@ async function ensureOrgFoundation(
       });
     });
     teammate = { id: teammateId };
-    console.log(`Created dev teammate user ${TEAMMATE_EMAIL}`);
+    // No email in logs (PII rule) — the id is enough to correlate.
+    console.log(`Created dev teammate user userId=${teammateId}`);
   }
 
   const [teammateMembership] = await db
