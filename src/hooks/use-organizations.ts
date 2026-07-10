@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   changeMemberRoleAction,
   createOrganizationAction,
+  getActiveOrganizationProfile,
   inviteMemberAction,
   listInvitationsFn,
   listMembersFn,
@@ -22,7 +23,20 @@ export const organizationKeys = {
   members: () => [...organizationKeys.all, "members"] as const,
   invitations: () => [...organizationKeys.all, "invitations"] as const,
   directory: () => [...organizationKeys.all, "directory"] as const,
+  activeProfile: () => [...organizationKeys.all, "active-profile"] as const,
 };
+
+/**
+ * The active org's profile via our own override-aware server helper. The
+ * plugin's useActiveOrganization() resolves through a members-only endpoint,
+ * so it stays empty for Platform Admins inside an org they don't belong to.
+ */
+export function useActiveOrganizationProfile() {
+  return useQuery({
+    queryKey: organizationKeys.activeProfile(),
+    queryFn: () => getActiveOrganizationProfile(),
+  });
+}
 
 function unwrap<T>(result: ActionResult<T>): T {
   if (!result.success) {
@@ -33,10 +47,16 @@ function unwrap<T>(result: ActionResult<T>): T {
 
 export function useResetAfterOrgSwitch() {
   return function resetAfterOrgSwitch() {
-    if (typeof window !== "undefined") {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
       window.localStorage.removeItem(FACILITY_STORAGE_KEY);
-      // An org switch replaces the whole workspace context. A hard load makes
-      // every server component, Better Auth store, and client cache re-read it.
+    } finally {
+      // localStorage can throw when storage is blocked; the switch already
+      // succeeded server-side, so always land in the new workspace. A hard
+      // load makes every server component, Better Auth store, and client
+      // cache re-read the new context.
       window.location.assign("/dashboard");
     }
   };

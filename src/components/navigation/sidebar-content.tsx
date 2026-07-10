@@ -45,6 +45,7 @@ import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { FacilitySelector } from "./facility-selector";
 import { OrgSwitcher } from "./org-switcher";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useActiveOrganizationProfile } from "@/hooks/use-organizations";
 
 interface NavItem {
   href: string;
@@ -256,7 +257,10 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { facilityId: facilityParam } = useFacilityContext();
   const { signOut } = useAuth();
   const { data: session } = authClient.useSession();
-  const { data: activeOrg } = authClient.useActiveOrganization();
+  // Override-aware active-org lookup: the plugin's useActiveOrganization() is
+  // members-only, so it never resolves for Platform Admins inside an org they
+  // don't belong to.
+  const { data: activeOrg } = useActiveOrganizationProfile();
   const activeOrgName = activeOrg?.name?.trim() || "noma dMRV";
   const orgInitial = activeOrgName.charAt(0).toUpperCase();
 
