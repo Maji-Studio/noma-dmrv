@@ -1,18 +1,24 @@
 ---
 name: codex-review
-description: Ask Codex CLI (gpt-5.5) for an independent code review of uncommitted changes, a branch diff, a commit, or a specific implementation. This is how gpt-5.5 is invoked for review work. Use when the user asks for a Codex/gpt-5.5 review or second opinion, or when the model-selection rubric calls for an extra independent review perspective. For a review by Claude itself, use the normal review process instead.
+description: Ask Codex CLI (gpt-5.6-sol at high reasoning effort — the flat-rate OpenAI model slot, formerly gpt-5.5) for an independent code review of uncommitted changes, a branch diff, a commit, or a specific implementation. This is how the Codex model is invoked for review work. Use when the user asks for a Codex/gpt-5.5/gpt-5.6 review or second opinion, or when the model-selection rubric calls for an extra independent review perspective. For a review by Claude itself, use the normal review process instead.
 ---
 
-Delegate a code review to the Codex CLI (gpt-5.5) and bring the findings back for Claude to
+Delegate a code review to the Codex CLI (gpt-5.6-sol, high reasoning — set as the default in
+`~/.codex/config.toml`) and bring the findings back for Claude to
 verify before presenting them. Claude stays responsible for judging the findings — Codex's
 output is **evidence, not authority**.
 
 ## Shared invocation rules
 
-- Locate the binary with the PATH-then-bundle fallback and always call it via `"$CODEX"`:
+- Locate the binary with the PATH-then-pnpm fallback and always call it via `"$CODEX"`:
   ```bash
-  CODEX="$(command -v codex || echo "/Applications/Codex.app/Contents/Resources/codex")"
+  CODEX="$(command -v codex || echo "$HOME/Library/pnpm/bin/codex")"
   ```
+  Last resort: the ChatGPT.app bundle at `/Applications/ChatGPT.app/Contents/Resources/codex`.
+  (The old `/Applications/Codex.app/Contents/Resources/codex` path no longer exists.)
+- **gpt-5.6-sol requires codex-cli ≥ 0.144** — older CLIs fail with a 400
+  `"requires a newer version of Codex"`. If that error appears, upgrade with
+  `pnpm add -g @openai/codex@latest` (verified working on 0.144.1, 2026-07-10).
 - Codex runs can exceed the Bash tool's 10-minute timeout. Either pass an explicit longer
   `timeout` to the Bash tool, or run the command in the background and poll for `$REPORT`.
 - If `codex` is not installed or the command fails, report the error and offer to do the
@@ -38,8 +44,8 @@ Write a self-contained review prompt into `$PROMPT` (template below).
 
 ### 3. Run `codex review`
 
-The target flags are **mutually exclusive with a custom prompt** (verified on codex-cli
-0.142.5 — `--uncommitted`/`--base`/`--commit` each reject `[PROMPT]`). Pick one mode:
+The target flags are **mutually exclusive with a custom prompt** (re-verified on codex-cli
+0.144.1 — `--uncommitted`/`--base`/`--commit` each reject `[PROMPT]`). Pick one mode:
 
 ```bash
 # Mode A — default review instructions, structured target flag:
