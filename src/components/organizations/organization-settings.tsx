@@ -12,6 +12,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { inviteMemberSchema } from "@/schemas/organizations";
 import {
   CheckCircleIcon,
   CopyIcon,
@@ -38,11 +39,7 @@ const ROLE_OPTIONS = [
   { value: "member", label: "Member" },
 ] as const;
 
-const inviteSchema = z.object({
-  email: z.email("Enter a valid email address."),
-  role: z.enum(["owner", "admin", "member"]),
-});
-type InviteForm = z.infer<typeof inviteSchema>;
+type InviteForm = z.infer<typeof inviteMemberSchema>;
 
 export function OrganizationSettings({ canManage }: { canManage: boolean }) {
   const toast = useToast();
@@ -71,7 +68,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
     reset,
     formState: { errors },
   } = useForm<InviteForm>({
-    resolver: zodResolver(inviteSchema),
+    resolver: zodResolver(inviteMemberSchema),
     defaultValues: { role: "member" },
   });
 

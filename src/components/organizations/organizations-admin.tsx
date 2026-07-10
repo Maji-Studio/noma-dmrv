@@ -22,19 +22,9 @@ import {
   useCreateOrganization,
   useEnterOrganization,
 } from "@/hooks/use-organizations";
+import { createOrganizationSchema } from "@/schemas/organizations";
 
-const createSchema = z.object({
-  name: z.string().trim().min(2, "Name must be at least 2 characters."),
-  slug: z
-    .string()
-    .trim()
-    .regex(
-      /^[a-z0-9-]+$/,
-      "Lowercase letters, numbers, and hyphens only."
-    ),
-  ownerEmail: z.email("Enter a valid owner email."),
-});
-type CreateForm = z.infer<typeof createSchema>;
+type CreateForm = z.infer<typeof createOrganizationSchema>;
 
 export function OrganizationsAdmin() {
   const toast = useToast();
@@ -48,7 +38,7 @@ export function OrganizationsAdmin() {
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<CreateForm>({ resolver: zodResolver(createSchema) });
+  } = useForm<CreateForm>({ resolver: zodResolver(createOrganizationSchema) });
 
   const hasExistingOrg = (organizations?.length ?? 0) >= 1;
 

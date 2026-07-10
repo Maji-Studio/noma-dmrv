@@ -25,7 +25,6 @@ import { logActionError } from "@/fn/action-errors";
 import { env } from "@/config/env";
 import {
   cancelInvitationAsPlatformAdmin,
-  countOrganizations,
   createInvitationAsPlatformAdmin,
   createOrganizationWithOwner,
   findMembershipRole,
@@ -41,26 +40,11 @@ import {
   type OrgMemberRow,
 } from "@/data-access/organizations";
 import type { ActionResult } from "@/types/actions";
-
-const orgRoleSchema = z.enum(["owner", "admin", "member"]);
-
-const inviteMemberSchema = z.object({
-  email: z.email().transform((value) => value.toLowerCase().trim()),
-  role: orgRoleSchema,
-});
-
-const createOrganizationSchema = z.object({
-  name: z.string().trim().min(2, "Name must be at least 2 characters."),
-  slug: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(
-      /^[a-z0-9-]+$/,
-      "Slug may only contain lowercase letters, numbers, and hyphens."
-    ),
-  ownerEmail: z.email().transform((value) => value.toLowerCase().trim()),
-});
+import {
+  createOrganizationSchema,
+  inviteMemberSchema,
+  orgRoleSchema,
+} from "@/schemas/organizations";
 
 /**
  * Run a body producing an ActionResult, mapping thrown errors. SafeError and
@@ -301,16 +285,6 @@ export async function createOrganizationAction(
   return toResult(async () => {
     const { name, slug, ownerEmail } = createOrganizationSchema.parse(input);
     await requirePlatformAdmin();
-
-    // PR-1 isolation gate: a second org would see PR-1's still-shared domain
-    // data. Blocked here until PR 2 ("org-scope domain data") lands and removes
-    // this check. Cheap and compiler-visible.
-    const existing = await countOrganizations();
-    if (existing >= 1) {
-      throw new SafeError(
-        "Creating additional organizations is disabled until org-scoped data ships (multi-tenancy PR 2)."
-      );
-    }
 
     const ownerUserId = await findUserIdByEmail(ownerEmail);
     if (!ownerUserId) {
