@@ -2,12 +2,14 @@
  * Authentication schema
  * Defines user, session, and verification tables for Better Auth
  */
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   text,
   timestamp,
   boolean,
   unique,
+  uniqueIndex,
   index,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
@@ -195,6 +197,12 @@ export const invitations = pgTable(
   (table) => [
     index("invitations_organization_id_idx").on(table.organizationId),
     index("invitations_email_idx").on(table.email),
+    // One active invitation per org+email: the cancel-then-insert flows in the
+    // plugin and the Platform-Admin override race under concurrency; the DB is
+    // the authority.
+    uniqueIndex("invitations_org_email_pending_unique")
+      .on(table.organizationId, sql`lower(${table.email})`)
+      .where(sql`${table.status} = 'pending'`),
   ]
 );
 
