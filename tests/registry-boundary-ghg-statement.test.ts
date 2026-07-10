@@ -194,6 +194,9 @@ describe("createGhgStatementDraft boundary — orphan reconciliation (test 3)", 
     // The create commits server-side; the client sees a network error and
     // the in-attempt lookup is also down — orphan + locked draft left behind.
     registry.failNext("POST /ghg_statements", "drop-after-commit");
+    // The create path now checks for an existing exact-period draft before
+    // POSTing. Let that preflight return none, then fail the recovery lookup.
+    registry.passNext("GET /ghg_statements");
     registry.failNext("GET /ghg_statements", "reject-before-commit", {
       status: 503,
     });
@@ -246,6 +249,7 @@ describe("createGhgStatementDraft boundary — orphan reconciliation (test 3)", 
   it("rejects with the ambiguity message when the period holds two drafts", async () => {
     const fixture = await createFixture();
     registry.failNext("POST /ghg_statements", "drop-after-commit");
+    registry.passNext("GET /ghg_statements");
     registry.failNext("GET /ghg_statements", "reject-before-commit", {
       status: 503,
     });
