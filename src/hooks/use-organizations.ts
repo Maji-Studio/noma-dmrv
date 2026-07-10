@@ -3,6 +3,7 @@
  * Admin org directory. Mutations invalidate the member/invitation lists.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import {
   changeMemberRoleAction,
   createOrganizationAction,
@@ -12,7 +13,9 @@ import {
   listOrganizationsFn,
   removeMemberAction,
   revokeInvitationAction,
+  setActiveOrganizationAction,
 } from "@/fn/organizations";
+import { FACILITY_STORAGE_KEY } from "@/hooks/use-facility-context";
 import type { ActionResult } from "@/types/actions";
 
 export const organizationKeys = {
@@ -27,6 +30,32 @@ function unwrap<T>(result: ActionResult<T>): T {
     throw new Error(result.error);
   }
   return result.data;
+}
+
+export function useResetAfterOrgSwitch() {
+  const queryClient = useQueryClient();
+  const router = useRouter();
+
+  return function resetAfterOrgSwitch() {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(FACILITY_STORAGE_KEY);
+    }
+    queryClient.clear();
+    router.replace("/dashboard");
+    router.refresh();
+  };
+}
+
+export function useEnterOrganization() {
+  const resetAfterOrgSwitch = useResetAfterOrgSwitch();
+
+  return async function enterOrganization(organizationId: string) {
+    const result = await setActiveOrganizationAction({ organizationId });
+    if (result.success) {
+      resetAfterOrgSwitch();
+    }
+    return result;
+  };
 }
 
 export function useOrgMembers(enabled = true) {

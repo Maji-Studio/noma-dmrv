@@ -6,12 +6,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { acceptInvitationAction } from "@/fn/organizations";
-
-const FACILITY_STORAGE_KEY = "noma:selected-facility-id";
+import { useResetAfterOrgSwitch } from "@/hooks/use-organizations";
 
 export function AcceptInvitation({
   invitationId,
@@ -20,8 +17,7 @@ export function AcceptInvitation({
   invitationId: string;
   userEmail: string;
 }) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
+  const resetAfterOrgSwitch = useResetAfterOrgSwitch();
   const [status, setStatus] = useState<"idle" | "accepting" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -34,12 +30,7 @@ export function AcceptInvitation({
       setError(result.error);
       return;
     }
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(FACILITY_STORAGE_KEY);
-    }
-    queryClient.clear();
-    router.replace("/dashboard");
-    router.refresh();
+    resetAfterOrgSwitch();
   }
 
   return (

@@ -9,8 +9,6 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   BuildingsIcon,
   CaretDownIcon,
@@ -18,17 +16,16 @@ import {
 } from "@phosphor-icons/react";
 import { authClient } from "@/lib/auth/client";
 import { useIsAdmin } from "@/hooks/use-is-admin";
-import { useAllOrganizations } from "@/hooks/use-organizations";
-import { setActiveOrganizationAction } from "@/fn/organizations";
-
-const FACILITY_STORAGE_KEY = "noma:selected-facility-id";
+import {
+  useAllOrganizations,
+  useEnterOrganization,
+} from "@/hooks/use-organizations";
 
 type SwitchableOrg = { id: string; name: string };
 
 export function OrgSwitcher() {
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const isAdmin = useIsAdmin();
+  const enterOrganization = useEnterOrganization();
   const listboxId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -77,20 +74,12 @@ export function OrgSwitcher() {
     }
     setIsSwitching(true);
     try {
-      const result = await setActiveOrganizationAction({ organizationId });
+      const result = await enterOrganization(organizationId);
       if (!result.success) {
         setIsSwitching(false);
         return;
       }
-      // Reset facility selection (belongs to the old org) and nuke all cached
-      // data before navigating to a clean dashboard.
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem(FACILITY_STORAGE_KEY);
-      }
-      queryClient.clear();
       setIsOpen(false);
-      router.replace("/dashboard");
-      router.refresh();
     } finally {
       setIsSwitching(false);
     }

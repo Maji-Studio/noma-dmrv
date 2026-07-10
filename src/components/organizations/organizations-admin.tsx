@@ -9,8 +9,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -22,10 +20,8 @@ import { useToast } from "@/components/ui/toast";
 import {
   useAllOrganizations,
   useCreateOrganization,
+  useEnterOrganization,
 } from "@/hooks/use-organizations";
-import { setActiveOrganizationAction } from "@/fn/organizations";
-
-const FACILITY_STORAGE_KEY = "noma:selected-facility-id";
 
 const createSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters."),
@@ -42,10 +38,9 @@ type CreateForm = z.infer<typeof createSchema>;
 
 export function OrganizationsAdmin() {
   const toast = useToast();
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const { data: organizations, isLoading } = useAllOrganizations();
   const createOrg = useCreateOrganization();
+  const enterOrganization = useEnterOrganization();
   const [enteringId, setEnteringId] = useState<string | null>(null);
 
   const {
@@ -72,17 +67,11 @@ export function OrganizationsAdmin() {
   async function enterOrg(organizationId: string) {
     setEnteringId(organizationId);
     try {
-      const result = await setActiveOrganizationAction({ organizationId });
+      const result = await enterOrganization(organizationId);
       if (!result.success) {
         toast.error(result.error);
         return;
       }
-      if (typeof window !== "undefined") {
-        window.localStorage.removeItem(FACILITY_STORAGE_KEY);
-      }
-      queryClient.clear();
-      router.replace("/dashboard");
-      router.refresh();
     } finally {
       setEnteringId(null);
     }

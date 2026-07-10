@@ -8,9 +8,11 @@
 import { type ReactNode, useEffect, useMemo } from "react";
 import { useQueryState, parseAsString } from "nuqs";
 import { useFacilities, useFacility } from "@/hooks/use-facilities";
-import { FacilityContext, type FacilityContextValue } from "@/hooks/use-facility-context";
-
-const FACILITY_STORAGE_KEY = "noma:selected-facility-id";
+import {
+  FACILITY_STORAGE_KEY,
+  FacilityContext,
+  type FacilityContextValue,
+} from "@/hooks/use-facility-context";
 
 function readStoredFacilityId(): string | null {
   if (typeof window === "undefined") {

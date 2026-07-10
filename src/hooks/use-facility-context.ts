@@ -7,6 +7,8 @@
 import { createContext, useContext } from "react";
 import type { Facility } from "@/db/schema";
 
+export const FACILITY_STORAGE_KEY = "noma:selected-facility-id";
+
 export interface FacilityContextValue {
   /** Currently selected facility ID (resolved from URL/local storage/fallback) */
   facilityId: string | null;
