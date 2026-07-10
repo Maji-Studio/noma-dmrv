@@ -277,6 +277,78 @@ export async function seedCreditBatch(
   }
 }
 
+const SEEDED_INVALIDATION_BATCH_CODE_PREFIX = "E2E-INV";
+
+/**
+ * Seed a credit batch backed by a "complete" production run whose biochar
+ * product is linked as the run's output (issue #396). Applications created
+ * through the UI against a delivery of that biochar product roll up into the
+ * batch's derived `appliedWeightTons` (credit-batch-production-runs.ts), so
+ * this lineage lets a spec assert the credit-batches view reflects an
+ * application create/update/delete without a page reload. Only the
+ * production/credit-batch side is seeded directly — the UI has no fast path
+ * to a "complete" run — the application itself is created through the form.
+ */
+export async function seedCreditBatchProductionLineage(
+  data: SeededChainData,
+  testRunId: string,
+): Promise<{ creditBatchId: string; creditBatchCode: string }> {
+  const { db, pool } = createDbConnection();
+  try {
+    const creditBatchId = crypto.randomUUID();
+    const productionProcessId = crypto.randomUUID();
+    const productionRunId = crypto.randomUUID();
+    const code = `${SEEDED_INVALIDATION_BATCH_CODE_PREFIX}-${testRunId}`;
+    const now = new Date();
+    const start = now.toISOString().slice(0, 10);
+    const end = new Date(
+      now.getTime() + SEEDED_CREDIT_BATCH_DURATION_DAYS * MS_PER_DAY,
+    )
+      .toISOString()
+      .slice(0, 10);
+
+    await db.transaction(async (tx) => {
+      await tx.insert(schema.productionRuns).values({
+        id: productionRunId,
+        code: `${code}-PR1`,
+        facilityId: data.facility.id,
+        reactorId: data.reactor.id,
+        status: "complete",
+        startTime: now,
+        endTime: new Date(now.getTime() + 6 * MS_PER_HOUR),
+        biocharDryMassKg: 10000,
+      });
+      await tx
+        .update(schema.biocharProducts)
+        .set({ linkedProductionRunId: productionRunId })
+        .where(eq(schema.biocharProducts.id, data.biocharProduct.id));
+      await tx.insert(schema.productionProcesses).values({
+        id: productionProcessId,
+        facilityId: data.facility.id,
+        feedstockTypeId: data.feedstockType.id,
+      });
+      await tx.insert(schema.creditBatches).values({
+        id: creditBatchId,
+        code,
+        facilityId: data.facility.id,
+        feedstockTypeId: data.feedstockType.id,
+        productionProcessId,
+        startDate: start,
+        endDate: end,
+        hToCorgRatio: SEEDED_H_TO_CORG_RATIO,
+      });
+      await tx.insert(schema.creditBatchProductionRuns).values({
+        creditBatchId,
+        productionRunId,
+      });
+    });
+
+    return { creditBatchId, creditBatchCode: code };
+  } finally {
+    await pool.end();
+  }
+}
+
 const SEEDED_DURABILITY_BATCH_CODE_PREFIX = "E2E-DUR";
 
 /**
