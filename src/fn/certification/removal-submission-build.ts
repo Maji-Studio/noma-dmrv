@@ -164,14 +164,21 @@ export async function buildRemovalSubmissionBuild(args: {
     sourceIds,
     allowPeriodInputStub,
   });
+  const hasOnly1000YearBatches =
+    ctx.batchesWithSamples.length > 0 &&
+    ctx.batchesWithSamples.every(
+      (batch) => batch.durabilityOption === "1000_year",
+    );
   const durabilityMeasurementSampleArgs =
-    hasDurabilityComponents && ctx.facilityReferenceSoilTemperature
+    hasDurabilityComponents &&
+    (hasOnly1000YearBatches || ctx.facilityReferenceSoilTemperature)
       ? {
           removalId,
           externalProjectId,
           batches: ctx.batchesWithSamples,
           attributionByRunId: ctx.attributionByRunId,
-          facilityReferenceSoilTemperature: ctx.facilityReferenceSoilTemperature,
+          facilityReferenceSoilTemperature:
+            ctx.facilityReferenceSoilTemperature ?? null,
           measuredAt: agg.latestEndTime.toISOString(),
         }
       : null;

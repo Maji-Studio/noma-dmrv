@@ -24,6 +24,7 @@
  * the versioned supplier reference, mirroring the datapoint/removal/sensor flows.
  */
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
+import { env } from "@/config/env";
 import type { Logger } from "@/lib/log";
 import {
   buildMeasurementSampleReference,
@@ -35,10 +36,13 @@ import {
   buildBiocharProductionBatchSample,
   buildBiocharSoilSample,
   buildBiocharUnsampledBatchSample,
+  build1000YearSequestrationSample,
   selectSequestrationBlueprintKey,
   SEQUESTRATION_BLUEPRINT_SAMPLED,
 } from "@/lib/isometric/transformers/measurement-sample";
 import type { SamplingMethod } from "@/lib/certification/sampling-requirements";
+import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
+import { SafeError } from "@/lib/errors";
 import {
   buildPerBatchDurabilityData,
   type FacilityReferenceSoilTemperature,
@@ -53,7 +57,9 @@ import { REMOVAL_ENTITY_TYPE } from "./shared";
  * `submitRemoval` blocks any sequestration-template submission while it is off,
  * so no half-confirmed payload can reach a live credit.
  */
-export const DURABILITY_MEASUREMENT_SAMPLES_LIVE = false;
+export const DURABILITY_MEASUREMENT_SAMPLES_LIVE =
+  env.ISOMETRIC_ENVIRONMENT === "sandbox" &&
+  env.DURABILITY_MEASUREMENT_SAMPLES_LIVE;
 
 /** One measurement-sample POST: its versioned supplier ref + the request body. */
 export interface DurabilityMeasurementSampleSubmission {
@@ -74,8 +80,8 @@ export interface BuildDurabilityMeasurementSampleSubmissionsArgs {
   batches: CreditBatchWithSamples[];
   /** Per-run applied-biochar fraction (scales each batch's product mass). */
   attributionByRunId: Map<string, number>;
-  /** Facility reference soil temperature (7 °C-floored; non-null past the gate). */
-  facilityReferenceSoilTemperature: FacilityReferenceSoilTemperature;
+  /** Facility reference soil temperature; required only for 200-year batches. */
+  facilityReferenceSoilTemperature: FacilityReferenceSoilTemperature | null;
   /** ISO date-time the chemistry is reported for (the removal window end). */
   measuredAt: string;
 }
@@ -98,32 +104,12 @@ export interface BuildDurabilityMeasurementSampleSubmissionsArgs {
 export function buildDurabilityMeasurementSampleSubmissions(
   args: BuildDurabilityMeasurementSampleSubmissionsArgs,
 ): DurabilityMeasurementSampleSubmission[] {
-  // Tier dispatch (ADR 0021): this orchestration only builds the 200-year
-  // (H/C + carbon + soil-temp) bodies. A 1000-year batch needs the per-replicate
-  // `carbon_contents` + `s_fraction` lists from `build1000YearSequestrationSample`,
-  // which is not yet wired here — it depends on reading `samples.s_reflectance_fraction`
-  // (form capture is issue #348) and the remaining sandbox list-input binding
-  // confirm. Fail closed rather than silently emitting a 200-year body for a
-  // 1000-year batch. (Today this is unreachable: `submitRemoval` blocks every
-  // sequestration template while `DURABILITY_MEASUREMENT_SAMPLES_LIVE` is false —
-  // this is the backstop for when that flag flips.)
-  const thousandYearBatch = args.batches.find(
-    (b) => b.durabilityOption === "1000_year",
-  );
-  if (thousandYearBatch) {
-    throw new Error(
-      `buildDurabilityMeasurementSampleSubmissions: credit batch ` +
-        `${thousandYearBatch.creditBatchCode} is on the 1000-year durability tier, ` +
-        `whose measurement-sample submission path is not yet wired (pending ` +
-        `samples.s_reflectance_fraction capture — issue #348 — and the sandbox ` +
-        `list-input binding confirm). Refusing to emit 200-year sample bodies for a ` +
-        `1000-year batch.`,
-    );
-  }
-
   const perBatch = buildPerBatchDurabilityData(
     args.batches,
     args.attributionByRunId,
+  );
+  const sourceBatchById = new Map(
+    args.batches.map((batch) => [batch.creditBatchId, batch]),
   );
   // The process's current method per batch (the unsampled route is Method B only).
   const samplingMethodByBatch = new Map<string, SamplingMethod>(
@@ -141,6 +127,47 @@ export function buildDurabilityMeasurementSampleSubmissions(
 
     const samplingMethod =
       samplingMethodByBatch.get(batch.creditBatchId) ?? "method_a";
+    const sourceBatch = sourceBatchById.get(batch.creditBatchId);
+    if (sourceBatch?.durabilityOption === "1000_year") {
+      const replicates = sourceBatch.samples.flatMap((sample) =>
+        sample.totalCarbonPercent == null || sample.sReflectanceFraction == null
+          ? []
+          : [
+              {
+                carbonContentFraction: sample.totalCarbonPercent / 100,
+                sFraction: sample.sReflectanceFraction,
+              },
+            ],
+      );
+      const incompleteReplicates = sourceBatch.samples.length - replicates.length;
+      if (incompleteReplicates > 0) {
+        throw new SafeError(
+          `Credit batch ${batch.creditBatchCode} has ${incompleteReplicates} sample(s) missing total carbon or the R₀ readings-at-or-above-2% fraction required for 1000-year submission.`,
+        );
+      }
+      if (replicates.length < MINIMUM_REPLICATES_PER_BATCH) {
+        throw new SafeError(
+          `Credit batch ${batch.creditBatchCode} has ${replicates.length} complete 1000-year replicate(s); ≥ ${MINIMUM_REPLICATES_PER_BATCH} required.`,
+        );
+      }
+      const body = build1000YearSequestrationSample({
+        replicates,
+        productMassKg: batch.productMassKg,
+        projectId: args.externalProjectId,
+        supplierRefId,
+        measuredAt: args.measuredAt,
+      });
+      if (body) {
+        submissions.push({
+          operationKey: `pb:${batch.creditBatchId}`,
+          supplierRefId,
+          body,
+          label: `production batch ${batch.creditBatchCode}`,
+        });
+      }
+      continue;
+    }
+
     // The blueprint IS the Method A/B distinction (D6) and the single source of
     // routing truth — dispatch on it, not a second `batch.sampled` re-check. It
     // throws for an unsampled Method-A batch (impossible state — fail closed)
@@ -180,22 +207,29 @@ export function buildDurabilityMeasurementSampleSubmissions(
     }
   }
 
-  const soilSupplierRefId = buildMeasurementSampleReference({
-    removalId: args.removalId,
-    role: "soil",
-    version: args.version,
-  });
-  submissions.push({
-    operationKey: "soil",
-    supplierRefId: soilSupplierRefId,
-    body: buildBiocharSoilSample({
-      soilTemp: args.facilityReferenceSoilTemperature,
-      projectId: args.externalProjectId,
+  if (args.batches.some((batch) => batch.durabilityOption === "200_year")) {
+    if (!args.facilityReferenceSoilTemperature) {
+      throw new Error(
+        "A facility reference soil temperature is required for 200-year durability samples.",
+      );
+    }
+    const soilSupplierRefId = buildMeasurementSampleReference({
+      removalId: args.removalId,
+      role: "soil",
+      version: args.version,
+    });
+    submissions.push({
+      operationKey: "soil",
       supplierRefId: soilSupplierRefId,
-      measuredAt: args.measuredAt,
-    }),
-    label: "facility soil reference",
-  });
+      body: buildBiocharSoilSample({
+        soilTemp: args.facilityReferenceSoilTemperature,
+        projectId: args.externalProjectId,
+        supplierRefId: soilSupplierRefId,
+        measuredAt: args.measuredAt,
+      }),
+      label: "facility soil reference",
+    });
+  }
 
   return submissions;
 }

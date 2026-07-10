@@ -161,6 +161,7 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness.gaps.map((gap) => gap.key)).toEqual([
       "tgaNonReactiveCarbonData",
       "randomReflectanceR0Percent",
+      "sReflectanceFraction",
     ]);
   });
 
@@ -170,6 +171,7 @@ describe("deriveEntityCertifyReadiness", () => {
       organicCarbonPercent: 80,
       hToCOrgRatio: 0.4,
       randomReflectanceR0Percent: 1.2,
+      sReflectanceFraction: 0.85,
       reactiveCarbonPercent: null,
       residualCarbonPercent: 85,
     });

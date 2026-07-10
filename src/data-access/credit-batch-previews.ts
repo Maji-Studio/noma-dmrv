@@ -28,6 +28,8 @@ import {
   computeApplicationCo2eStored,
 } from "@/lib/calculations/biochar-removal";
 import { weightedBatchChemistry } from "@/lib/isometric/utils/durability-aggregation";
+import { sampleMeanStdDev } from "@/lib/calculations/stats";
+import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 
 export type CertifierProvider =
   (typeof certifierProjects.$inferSelect)["provider"];
@@ -50,6 +52,75 @@ export interface CreditBatchCo2eStoredPreview {
   applicationResults: ApplicationCo2eStoredPreview[];
   missingInputs: string[];
   warnings: string[];
+}
+
+interface ThousandYearPreviewSample {
+  randomReflectanceR0Percent: number | null;
+  reactiveCarbonPercent: number | null;
+  residualCarbonPercent: number | null;
+}
+
+type ThousandYearPreviewStats = Pick<
+  CreditBatch,
+  | "meanRandomReflectancePercent"
+  | "stdRandomReflectance"
+  | "meanNonReactiveCarbonPercent"
+  | "stdNonReactiveCarbonPercent"
+>;
+
+const EMPTY_1000_YEAR_PREVIEW_STATS: ThousandYearPreviewStats = {
+  meanRandomReflectancePercent: null,
+  stdRandomReflectance: null,
+  meanNonReactiveCarbonPercent: null,
+  stdNonReactiveCarbonPercent: null,
+};
+
+function nonReactiveCarbonPercent(
+  sample: ThousandYearPreviewSample,
+): number | null {
+  if (sample.residualCarbonPercent != null) return sample.residualCarbonPercent;
+  return sample.reactiveCarbonPercent == null
+    ? null
+    : 100 - sample.reactiveCarbonPercent;
+}
+
+export function derive1000YearPreviewStats(
+  samples: ThousandYearPreviewSample[],
+): ThousandYearPreviewStats | null {
+  const hasSampleEvidence = samples.some(
+    (sample) =>
+      sample.randomReflectanceR0Percent != null ||
+      sample.residualCarbonPercent != null ||
+      sample.reactiveCarbonPercent != null,
+  );
+  if (!hasSampleEvidence) return null;
+
+  // Pair the two measurements per replicate. Partial sample evidence must not
+  // be mixed with legacy batch aggregates: until the complete ≥3 set exists,
+  // return an explicitly incomplete sample-derived result.
+  const completeReplicates = samples.flatMap((sample) => {
+    const nonReactive = nonReactiveCarbonPercent(sample);
+    return sample.randomReflectanceR0Percent == null || nonReactive == null
+      ? []
+      : [[sample.randomReflectanceR0Percent, nonReactive] as const];
+  });
+  if (completeReplicates.length < MINIMUM_REPLICATES_PER_BATCH) {
+    return EMPTY_1000_YEAR_PREVIEW_STATS;
+  }
+
+  const reflectance = sampleMeanStdDev(
+    completeReplicates.map(([value]) => value),
+  );
+  const nonReactiveCarbon = sampleMeanStdDev(
+    completeReplicates.map(([, value]) => value),
+  );
+
+  return {
+    meanRandomReflectancePercent: reflectance?.mean ?? null,
+    stdRandomReflectance: reflectance?.stdDev ?? null,
+    meanNonReactiveCarbonPercent: nonReactiveCarbon?.mean ?? null,
+    stdNonReactiveCarbonPercent: nonReactiveCarbon?.stdDev ?? null,
+  };
 }
 
 export async function getFacilityCertifierWithExecutor(
@@ -143,6 +214,17 @@ export async function buildCo2eStoredPreview(
   ]);
   const { weightedOrganicCarbonPercent, weightedHToCorgRatio } =
     weightedBatchChemistry(batchesWithSamples);
+  const samplePreviewStats =
+    batch.durabilityOption === "1000_year"
+      ? derive1000YearPreviewStats(batchesWithSamples[0]?.samples ?? [])
+      : null;
+  const thousandYearStats =
+    samplePreviewStats ?? {
+      meanRandomReflectancePercent: batch.meanRandomReflectancePercent,
+      stdRandomReflectance: batch.stdRandomReflectance,
+      meanNonReactiveCarbonPercent: batch.meanNonReactiveCarbonPercent,
+      stdNonReactiveCarbonPercent: batch.stdNonReactiveCarbonPercent,
+    };
 
   // The engine branches on durabilityOption: "1000_year" consumes the batch's
   // stored petrography/TGA columns (Eq.6, issue #142); the default 200-year
@@ -157,10 +239,13 @@ export async function buildCo2eStoredPreview(
       soilTemperatureC: app?.soilTemperatureC ?? null,
       hToCorgRatio: weightedHToCorgRatio,
       organicCarbonPercent: weightedOrganicCarbonPercent,
-      meanRandomReflectancePercent: batch.meanRandomReflectancePercent,
-      stdRandomReflectance: batch.stdRandomReflectance,
-      meanNonReactiveCarbonPercent: batch.meanNonReactiveCarbonPercent,
-      stdNonReactiveCarbonPercent: batch.stdNonReactiveCarbonPercent,
+      meanRandomReflectancePercent:
+        thousandYearStats.meanRandomReflectancePercent,
+      stdRandomReflectance: thousandYearStats.stdRandomReflectance,
+      meanNonReactiveCarbonPercent:
+        thousandYearStats.meanNonReactiveCarbonPercent,
+      stdNonReactiveCarbonPercent:
+        thousandYearStats.stdNonReactiveCarbonPercent,
     });
 
     return {

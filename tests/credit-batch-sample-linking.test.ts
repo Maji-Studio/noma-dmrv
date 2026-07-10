@@ -420,6 +420,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
       totalCarbonPercent: 80,
       organicCarbonPercent: 78,
       randomReflectanceR0Percent: 2.1,
+      sReflectanceFraction: 0.92,
       residualCarbonPercent: 65,
     };
   }
@@ -457,6 +458,23 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     });
     createdIds.samples.push(sample.id);
     expect(await batchIdOfSample(sample.id)).toBe(tier1000BatchId);
+    expect(sample.sReflectanceFraction).toBe(0.92);
+  });
+
+  it("createSample rejects a 1000-year batch sample missing s_fraction", async () => {
+    const action = createSample(TEST_USER_ID, {
+      sampleCode: `S-SL-NO-S-FRACTION-${Date.now()}`,
+      creditBatchId: tier1000BatchId,
+      samplingTime: new Date("2025-06-15T10:00:00Z"),
+      totalCarbonPercent: 80,
+      organicCarbonPercent: 78,
+      randomReflectanceR0Percent: 2.1,
+      residualCarbonPercent: 65,
+    }).then((sample) => {
+      createdIds.samples.push(sample.id);
+      return sample;
+    });
+    await expect(action).rejects.toThrow(/R₀ readings.*2%/);
   });
 
   it("updateSample rejects moving an evidence-less sample onto a 1000-year batch", async () => {
@@ -494,6 +512,19 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
       labName: "Tier Lab",
     });
     expect(updated.labName).toBe("Tier Lab");
+  });
+
+  it("updateSample persists a changed s_fraction", async () => {
+    const sample = await createSample(TEST_USER_ID, {
+      sampleCode: `S-SL-T-S-FRACTION-${Date.now()}`,
+      creditBatchId: tier1000BatchId,
+      ...completeEvidence(),
+    });
+    createdIds.samples.push(sample.id);
+    const updated = await updateSample(TEST_USER_ID, sample.id, {
+      sReflectanceFraction: 0.94,
+    });
+    expect(updated.sReflectanceFraction).toBe(0.94);
   });
 });
 
