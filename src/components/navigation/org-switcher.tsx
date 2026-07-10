@@ -31,7 +31,14 @@ export function OrgSwitcher() {
   const [isOpen, setIsOpen] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
 
-  const { data: activeOrg } = authClient.useActiveOrganization();
+  // The plugin's useActiveOrganization() resolves the full org through a
+  // members-only endpoint, so it stays empty for Platform Admins entering an
+  // org they don't belong to. The session's activeOrganizationId works for
+  // both members and Platform Admins; the name resolves from the switch list.
+  const { data: sessionData } = authClient.useSession();
+  const activeOrganizationId =
+    (sessionData?.session as { activeOrganizationId?: string | null } | undefined)
+      ?.activeOrganizationId ?? null;
   const { data: memberOrgs } = authClient.useListOrganizations();
   // Platform Admins have no memberships, so their switch list is every org.
   const { data: allOrgs } = useAllOrganizations(isAdmin);
@@ -63,12 +70,11 @@ export function OrgSwitcher() {
   }
 
   const activeOrgName =
-    switchable.find((org) => org.id === activeOrg?.id)?.name ??
-    activeOrg?.name ??
+    switchable.find((org) => org.id === activeOrganizationId)?.name ??
     "Select organization";
 
   async function handleSelect(organizationId: string) {
-    if (organizationId === activeOrg?.id) {
+    if (organizationId === activeOrganizationId) {
       setIsOpen(false);
       return;
     }
@@ -128,7 +134,7 @@ export function OrgSwitcher() {
                 </li>
               )}
               {switchable.map((org) => {
-                const isSelected = org.id === activeOrg?.id;
+                const isSelected = org.id === activeOrganizationId;
                 return (
                   <li key={org.id}>
                     <button

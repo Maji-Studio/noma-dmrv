@@ -3,10 +3,9 @@
 /**
  * Server actions for the Organization foundation (multi-tenancy PR 1):
  * org switching, member management, invitations, and Platform-Admin org
- * lifecycle. Member/invitation mutations delegate to the Better Auth
- * organization plugin (which enforces org-role authorization server-side); we
- * add a coarse `requireOrgRole` pre-gate and the Platform-Admin / single-org
- * gates the plugin does not own.
+ * lifecycle. Member/invitation mutations use the Better Auth organization
+ * plugin for real org members and scoped data-access overrides for Platform
+ * Admins, who deliberately have no membership rows.
  */
 import { cookies, headers } from "next/headers";
 import { eq } from "drizzle-orm";
@@ -25,7 +24,9 @@ import { SafeError, toActionError } from "@/lib/errors";
 import { logActionError } from "@/fn/action-errors";
 import { env } from "@/config/env";
 import {
+  cancelInvitationAsPlatformAdmin,
   countOrganizations,
+  createInvitationAsPlatformAdmin,
   createOrganizationWithOwner,
   findMembershipRole,
   findUserIdByEmail,
@@ -33,6 +34,8 @@ import {
   listAllOrganizations,
   listOrgInvitations,
   listOrgMembers,
+  removeMemberAsPlatformAdmin,
+  updateMemberRoleAsPlatformAdmin,
   type OrganizationSummary,
   type OrgInvitationRow,
   type OrgMemberRow,
@@ -137,7 +140,7 @@ export async function listOrganizationsFn(): Promise<
   }, "Failed to load organizations.");
 }
 
-// --- Member management (delegates to the org plugin) ----------------------
+// --- Member management ----------------------------------------------------
 
 export async function inviteMemberAction(
   input: unknown
@@ -146,10 +149,13 @@ export async function inviteMemberAction(
     const { email, role } = inviteMemberSchema.parse(input);
     const ctx = await requireOrgContext();
     requireOrgRole(ctx, "admin");
-    const result = await auth.api.createInvitation({
-      body: { email, role, organizationId: ctx.organizationId },
-      headers: await headers(),
-    });
+    const result =
+      ctx.orgRole !== null
+        ? await auth.api.createInvitation({
+            body: { email, role, organizationId: ctx.organizationId },
+            headers: await headers(),
+          })
+        : await createInvitationAsPlatformAdmin(ctx, { email, role });
     return {
       invitationId: result.id,
       acceptUrl: buildAcceptUrl(result.id),
@@ -166,10 +172,14 @@ export async function revokeInvitationAction(
       .parse(input);
     const ctx = await requireOrgContext();
     requireOrgRole(ctx, "admin");
-    await auth.api.cancelInvitation({
-      body: { invitationId },
-      headers: await headers(),
-    });
+    if (ctx.orgRole !== null) {
+      await auth.api.cancelInvitation({
+        body: { invitationId },
+        headers: await headers(),
+      });
+    } else {
+      await cancelInvitationAsPlatformAdmin(ctx, invitationId);
+    }
     return { invitationId };
   }, "Failed to revoke invitation.");
 }
@@ -183,10 +193,14 @@ export async function changeMemberRoleAction(
       .parse(input);
     const ctx = await requireOrgContext();
     requireOrgRole(ctx, "admin");
-    await auth.api.updateMemberRole({
-      body: { memberId, role, organizationId: ctx.organizationId },
-      headers: await headers(),
-    });
+    if (ctx.orgRole !== null) {
+      await auth.api.updateMemberRole({
+        body: { memberId, role, organizationId: ctx.organizationId },
+        headers: await headers(),
+      });
+    } else {
+      await updateMemberRoleAsPlatformAdmin(ctx, memberId, role);
+    }
     return { memberId };
   }, "Failed to change member role.");
 }
@@ -200,10 +214,14 @@ export async function removeMemberAction(
       .parse(input);
     const ctx = await requireOrgContext();
     requireOrgRole(ctx, "admin");
-    await auth.api.removeMember({
-      body: { memberIdOrEmail, organizationId: ctx.organizationId },
-      headers: await headers(),
-    });
+    if (ctx.orgRole !== null) {
+      await auth.api.removeMember({
+        body: { memberIdOrEmail, organizationId: ctx.organizationId },
+        headers: await headers(),
+      });
+    } else {
+      await removeMemberAsPlatformAdmin(ctx, memberIdOrEmail);
+    }
     return { memberIdOrEmail };
   }, "Failed to remove member.");
 }

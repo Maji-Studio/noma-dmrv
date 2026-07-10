@@ -3,7 +3,6 @@
  * Admin org directory. Mutations invalidate the member/invitation lists.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import {
   changeMemberRoleAction,
   createOrganizationAction,
@@ -33,16 +32,13 @@ function unwrap<T>(result: ActionResult<T>): T {
 }
 
 export function useResetAfterOrgSwitch() {
-  const queryClient = useQueryClient();
-  const router = useRouter();
-
   return function resetAfterOrgSwitch() {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(FACILITY_STORAGE_KEY);
+      // An org switch replaces the whole workspace context. A hard load makes
+      // every server component, Better Auth store, and client cache re-read it.
+      window.location.assign("/dashboard");
     }
-    queryClient.clear();
-    router.replace("/dashboard");
-    router.refresh();
   };
 }
 
