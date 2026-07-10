@@ -1,5 +1,5 @@
 {
-  "id": "468c580b-e40c-4005-81c2-ac8117129d59",
+  "id": "79a52ada-c0dd-428f-94bd-79c87ba7648c",
   "prevId": "193ba32e-b5e5-4750-9ce8-4cf93176f2b0",
   "version": "7",
   "dialect": "postgresql",
@@ -4602,8 +4602,8 @@
         }
       },
       "indexes": {
-        "production_run_readings_run_timestamp_uq": {
-          "name": "production_run_readings_run_timestamp_uq",
+        "production_run_readings_run_timestamp_idx": {
+          "name": "production_run_readings_run_timestamp_idx",
           "columns": [
             {
               "expression": "production_run_id",
@@ -4618,7 +4618,7 @@
               "nulls": "last"
             }
           ],
-          "isUnique": true,
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -5452,7 +5452,15 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "samples_sample_code_unique": {
+          "name": "samples_sample_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "sample_code"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

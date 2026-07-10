@@ -1,0 +1,1 @@
+ALTER TABLE "samples" ADD CONSTRAINT "samples_sample_code_unique" UNIQUE("sample_code");
