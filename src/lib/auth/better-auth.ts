@@ -42,6 +42,18 @@ function sanitizeAuthUrl(url: string) {
   }
 }
 
+// User-controlled values (profile name, organization name) are interpolated
+// into email HTML; escape them so a crafted name can't inject markup into
+// what email clients render.
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 function logAuthEmailFallback(args: {
   type: "reset-password" | "verify-email";
   userId: string;
@@ -161,7 +173,7 @@ export const auth = betterAuth({
           subject: "Reset your password",
           url,
           html: `
-            <p>Hello ${user.name || "there"},</p>
+            <p>Hello ${escapeHtml(user.name || "there")},</p>
             <p>You requested to reset your password. Click the link below to continue:</p>
             <p><a href="${url}">Reset Password</a></p>
             <p>This link will expire in 24 hours.</p>
@@ -191,7 +203,7 @@ export const auth = betterAuth({
           url,
           subject: "Verify your email",
           html: `
-            <p>Hello ${user.name || "there"},</p>
+            <p>Hello ${escapeHtml(user.name || "there")},</p>
             <p>Please verify your email address by clicking the link below:</p>
             <p><a href="${url}">Verify Email</a></p>
             <p>This link will expire in 24 hours.</p>
@@ -286,7 +298,7 @@ export const auth = betterAuth({
             subject: `You're invited to join ${data.organization.name}`,
             html: `
               <p>Hello,</p>
-              <p>You've been invited to join <strong>${data.organization.name}</strong> as ${data.role}.</p>
+              <p>You've been invited to join <strong>${escapeHtml(data.organization.name)}</strong> as ${escapeHtml(data.role)}.</p>
               <p><a href="${acceptUrl}">Accept invitation</a></p>
               <p>This invitation expires in 7 days.</p>
             `,
