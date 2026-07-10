@@ -6,7 +6,7 @@
  * Platform-Admin gate in this layer as well as in their `fn/` callers.
  */
 import { randomUUID } from "node:crypto";
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { invitations, members, organizations, users } from "@/db/schema";
 import { requireAuth } from "@/data-access/utils";
@@ -298,18 +298,19 @@ export async function listAllOrganizations(): Promise<OrganizationSummary[]> {
   return rows.map((row) => ({ ...row, memberCount: Number(row.memberCount) }));
 }
 
-/** Total number of organizations (drives the PR-1 single-org isolation gate). */
-export async function countOrganizations(): Promise<number> {
-  await requirePlatformAdmin();
-  const [row] = await db.select({ value: count() }).from(organizations);
-  return Number(row?.value ?? 0);
-}
+// PR-1 isolation gate: until PR 2 ("org-scope domain data") lands, a second
+// org would see the platform's still-shared domain data, so creation stops at
+// one. Remove the gate (and its advisory lock) with PR 2.
+const MAX_ORGANIZATIONS_UNTIL_PR2 = 1;
+// Serializes the count-and-create check across concurrent transactions.
+// Arbitrary app-unique key, scoped to this transaction (xact lock).
+const ORG_CREATE_LOCK_KEY = 0x6f7267; // "org"
 
 /**
  * Create an organization and stamp the given user as its Owner, in one
  * transaction. The Owner is a real member (not the Platform Admin who ran the
- * action). The `fn/` caller also enforces the Platform-Admin gate and the
- * single-org isolation check.
+ * action). Enforces the PR-1 single-org gate atomically: an advisory lock
+ * serializes the count-and-insert so concurrent creates can't both pass.
  */
 export async function createOrganizationWithOwner(input: {
   name: string;
@@ -319,6 +320,13 @@ export async function createOrganizationWithOwner(input: {
   await requirePlatformAdmin();
   const organizationId = randomUUID();
   await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${ORG_CREATE_LOCK_KEY})`);
+    const [existing] = await tx.select({ value: count() }).from(organizations);
+    if (Number(existing?.value ?? 0) >= MAX_ORGANIZATIONS_UNTIL_PR2) {
+      throw new SafeError(
+        "Creating additional organizations is disabled until org-scoped data ships (multi-tenancy PR 2)."
+      );
+    }
     const [ownerUser] = await tx
       .select({ id: users.id })
       .from(users)
