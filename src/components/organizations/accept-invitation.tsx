@@ -24,13 +24,19 @@ export function AcceptInvitation({
   async function accept() {
     setStatus("accepting");
     setError(null);
-    const result = await acceptInvitationAction({ invitationId });
-    if (!result.success) {
+    try {
+      const result = await acceptInvitationAction({ invitationId });
+      if (!result.success) {
+        setStatus("error");
+        setError(result.error);
+        return;
+      }
+      resetAfterOrgSwitch();
+    } catch {
+      // Rejected request (network/server): don't leave the button stuck.
       setStatus("error");
-      setError(result.error);
-      return;
+      setError("Something went wrong accepting the invitation. Try again.");
     }
-    resetAfterOrgSwitch();
   }
 
   return (
