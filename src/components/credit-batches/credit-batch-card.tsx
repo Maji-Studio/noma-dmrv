@@ -20,6 +20,8 @@ import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 
 interface CreditBatchCardProps {
   creditBatch: CreditBatchWithRelations;
+  /** Facility-level registry mapping; batches inherit their certifier. */
+  certifierLabel: string | null;
   /** Per-batch certification readiness (undefined while loading). */
   health?: CreditBatchHealthSummary;
   onView: (creditBatch: CreditBatchWithRelations) => void;
@@ -52,6 +54,7 @@ function CertReadinessTag({ health }: { health: CreditBatchHealthSummary }) {
 
 export function CreditBatchCard({
   creditBatch,
+  certifierLabel,
   health,
   onView,
   onEdit,
@@ -163,7 +166,7 @@ export function CreditBatchCard({
       {/* Footer */}
       <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-20 py-12">
         <span className="body-caption text-[var(--color-text-tertiary)]">
-          {creditBatch.certifier ?? "No certifier"}
+          {certifierLabel ?? "No certifier"}
         </span>
 
         <div

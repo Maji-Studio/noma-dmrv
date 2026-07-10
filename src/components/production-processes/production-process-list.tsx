@@ -270,7 +270,10 @@ export function ProductionProcessList() {
 
       <StartNewProcessDialog
         isOpen={!!resetId}
-        onClose={() => setResetId(null)}
+        onClose={() => {
+          setResetId(null);
+          setDetailId(null);
+        }}
         process={byId(resetId)}
       />
     </div>
