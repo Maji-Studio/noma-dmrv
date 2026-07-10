@@ -1,4 +1,5 @@
 import * as crypto from "crypto";
+import { eq } from "drizzle-orm";
 import { test, expect, type SeededChainData } from "./fixtures";
 import { waitForSideSheet } from "./fixtures/page-helpers";
 import { createDbConnection } from "./fixtures/db";
@@ -20,6 +21,48 @@ const READINGS_CSV = [
 ].join("\n");
 
 const CSV_FILE_NAME = "reactor-readings 2026-04-02.csv";
+
+// Same headers, but every timestamp lands outside the run window, so the import
+// fails loudly (nothing to insert) while the upload itself succeeds — the exact
+// shape that must leave a recoverable, re-importable document (#398).
+const OUT_OF_WINDOW_CSV = [
+  "timestamp_utc,temperature_c,pressure_bar",
+  "2026-05-01T00:00:00Z,500,0.12",
+  "",
+].join("\n");
+
+async function countReadings(runId: string): Promise<number> {
+  const { db, pool } = createDbConnection();
+  try {
+    const rows = await db
+      .select({ id: schema.productionRunReadings.id })
+      .from(schema.productionRunReadings)
+      .where(eq(schema.productionRunReadings.productionRunId, runId));
+    return rows.length;
+  } finally {
+    await pool.end();
+  }
+}
+
+async function openReadingsUpload(
+  page: import("@playwright/test").Page,
+  seededData: SeededChainData,
+  run: { id: string; code: string },
+) {
+  await page.goto(`/production-runs?facility=${seededData.facility.id}`);
+  await expect(page.getByText(run.code).first()).toBeVisible();
+  const runRow = page.locator("tr", { hasText: run.code });
+  await runRow.locator("td").first().click();
+  await waitForSideSheet(page);
+  await page.getByRole("button", { name: "Edit Production Run" }).click();
+  const dialog = page.locator('[role="dialog"]');
+  await dialog.getByText("Readings CSV Import").first().scrollIntoViewIfNeeded();
+  const uploadInput = dialog.locator(
+    `#production-run-${run.id}-readings-upload`,
+  );
+  await expect(uploadInput).toBeAttached();
+  return { dialog, uploadInput };
+}
 
 async function seedProductionRun(seededData: SeededChainData) {
   const { db, pool } = createDbConnection();
@@ -126,5 +169,75 @@ test.describe("production run readings CSV import", () => {
 
     await page.getByRole("button", { name: "Cancel" }).click();
     await expect(runRow.getByLabel("Ready for certification")).toBeVisible();
+  });
+
+  test("re-importing the same file skips already-imported rows (#398)", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    const run = await seedProductionRun(seededData);
+    const { uploadInput } = await openReadingsUpload(page, seededData, run);
+
+    // First import: 2 rows in-window, 1 dropped at the exclusive window end.
+    await uploadInput.setInputFiles({
+      name: CSV_FILE_NAME,
+      mimeType: "text/csv",
+      buffer: Buffer.from(READINGS_CSV),
+    });
+    await expect(
+      page.getByText(/Imported 2 readings/).first(),
+    ).toBeVisible({ timeout: 30000 });
+    expect(await countReadings(run.id)).toBe(2);
+
+    // Second import of the identical file: every in-window row already exists,
+    // so ON CONFLICT DO NOTHING inserts nothing and the operator is told the
+    // rows were already imported. No duplicate rows are created.
+    await uploadInput.setInputFiles({
+      name: CSV_FILE_NAME,
+      mimeType: "text/csv",
+      buffer: Buffer.from(READINGS_CSV),
+    });
+    await expect(
+      page.getByText(/Imported 0 readings.*2 already imported/).first(),
+    ).toBeVisible({ timeout: 30000 });
+    expect(await countReadings(run.id)).toBe(2);
+  });
+
+  test("a failed import stays recoverable via a Re-import action (#398)", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    const run = await seedProductionRun(seededData);
+    const { dialog, uploadInput } = await openReadingsUpload(
+      page,
+      seededData,
+      run,
+    );
+
+    // Upload succeeds, but the import fails because nothing lands in-window.
+    await uploadInput.setInputFiles({
+      name: CSV_FILE_NAME,
+      mimeType: "text/csv",
+      buffer: Buffer.from(OUT_OF_WINDOW_CSV),
+    });
+    await expect(
+      page.getByText(/None of the 1 timestamped row\(s\) fall within/).first(),
+    ).toBeVisible({ timeout: 30000 });
+    expect(await countReadings(run.id)).toBe(0);
+
+    // The failed document is flagged and offers a scoped re-import affordance;
+    // successful documents never get one.
+    await expect(dialog.getByText("Import failed").first()).toBeVisible({
+      timeout: 30000,
+    });
+    const reimport = dialog.getByRole("button", { name: /Re-import/ });
+    await expect(reimport).toBeVisible();
+
+    // The action wires all the way through fn -> data-access and reports.
+    await reimport.click();
+    await expect(
+      page.getByText(/None of the 1 timestamped row\(s\) fall within/).first(),
+    ).toBeVisible({ timeout: 30000 });
+    expect(await countReadings(run.id)).toBe(0);
   });
 });

@@ -533,6 +533,13 @@
       "when": 1783613816848,
       "tag": "0075_solid_master_chief",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1783669184018,
+      "tag": "0076_charming_blizzard",
+      "breakpoints": true
     }
   ]
 }
