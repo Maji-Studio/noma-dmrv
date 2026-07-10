@@ -160,7 +160,11 @@ export async function seedChainData(
         facilityId: facilityId,
         formulationId: formulationId,
         status: "ready",
-        massKg: 500,
+        // Holds enough biochar to cover the delivery masses specs draw against
+        // it (up to 10 t): the bin over-draw block (#116) rejects a delivered
+        // draw exceeding the batch's on-hand mass, so the seeded batch must be
+        // internally consistent with what the chain ships out of it.
+        massKg: 100000,
         productionDate,
         expiresAt,
       });
@@ -199,6 +203,11 @@ export async function seedChainData(
         supplierId: supplierId,
         // Material fields
         feedstockTypeId: feedstockTypeId,
+        // 'complete' so the batch counts as confirmed on-hand stock: the bin
+        // over-draw guard (#116) measures draws against complete-batch stock,
+        // matching the derived figure shown on the bin card. A 'missing_data'
+        // batch is "pending completion" and excluded from drawable stock.
+        status: "complete",
         massDryKg: 100,
         massWetKg: 120,
         moistureContentPercent: 16.7,

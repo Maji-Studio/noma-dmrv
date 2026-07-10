@@ -22,6 +22,7 @@ import { SafeError } from "@/lib/errors";
 import { getProductionRunById } from "./queries";
 import type { ProductionRunWithRelations } from "./types";
 import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
+import { assertFeedstockDrawWithinStock } from "../bin-stock-guards";
 import {
   assertNoReactorRunOverlap,
   isReactorStartUniqueViolation,
@@ -255,6 +256,11 @@ export async function createProductionRun(
 
     // Auto-populate M:M feedstock relationships from bin contents
     if (data.feedstockStorageLocationId && computedDryMass) {
+      // Hard-block a draw that exceeds the bin's derived on-hand stock (#116).
+      await assertFeedstockDrawWithinStock(tx, {
+        storageLocationId: data.feedstockStorageLocationId,
+        requestedDryKg: computedDryMass,
+      });
       const allocated = await allocateFeedstockMass(
         data.feedstockStorageLocationId,
         computedDryMass,
@@ -483,6 +489,14 @@ export async function updateProductionRun(
       const dryMassKg = (updateData.feedstockMassDryKg as number | null) ?? existing.feedstockMassDryKg;
 
       if (effectiveFeedstockStorageId && dryMassKg) {
+        // Hard-block an over-draw (#116). The run's prior allocation was just
+        // deleted; exclude it so the replacement draw is measured against the
+        // stock this run is not currently holding.
+        await assertFeedstockDrawWithinStock(tx, {
+          storageLocationId: effectiveFeedstockStorageId,
+          requestedDryKg: dryMassKg,
+          excludeRunId: productionRunId,
+        });
         const allocated = await allocateFeedstockMass(effectiveFeedstockStorageId, dryMassKg, tx);
         await tx.insert(productionRunFeedstocks).values(
           allocated.map((a) => ({

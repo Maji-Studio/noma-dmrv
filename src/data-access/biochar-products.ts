@@ -78,6 +78,19 @@ import { SafeError } from "@/lib/errors";
 import { deleteTransportLegsForEntity } from "./transport-legs";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { validateCompositionIngredientBins } from "./biochar-product-composition";
+import { assertBiocharDrawWithinStock } from "./bin-stock-guards";
+
+/**
+ * Biochar-equivalent mass a product draws from its source biochar bin: its wet
+ * mass scaled by the formulation's biochar ratio (1 for pure biochar). Mirrors
+ * the allocation term in the biochar-bin stock derivation.
+ */
+function biocharEquivalentKg(
+  massKg: number | null,
+  biocharRatio: number | null,
+): number {
+  return (massKg ?? 0) * (biocharRatio ?? 1);
+}
 
 // ============================================
 // Biochar Product Read Operations
@@ -442,6 +455,7 @@ export async function createBiocharProduct(
       id: productionRuns.id,
       facilityId: productionRuns.facilityId,
       date: productionRunDateExpr(),
+      biocharStorageLocationId: productionRuns.biocharStorageLocationId,
     })
     .from(productionRuns)
     .where(eq(productionRuns.id, data.linkedProductionRunId));
@@ -454,6 +468,15 @@ export async function createBiocharProduct(
   }
 
   const productionDate = runDateToProductionDate(run.date);
+
+  // Biochar ratio scales the wet mass to the biochar-equivalent draw (#116).
+  const [formulationRatioRow] = formulationId
+    ? await db
+        .select({ biocharRatio: formulations.biocharRatio })
+        .from(formulations)
+        .where(eq(formulations.id, formulationId))
+    : [];
+  const biocharRatio = formulationRatioRow?.biocharRatio ?? null;
 
   const destinationBinId = data.storageLocationId;
 
@@ -504,6 +527,15 @@ export async function createBiocharProduct(
       throw new SafeError(
         "Product bin is reserved for a different formulation. Pick a matching or empty bin."
       );
+    }
+
+    // Hard-block a biochar draw that exceeds the source biochar bin's derived
+    // on-hand stock (#116). Skip when the run has no biochar bin to draw from.
+    if (run.biocharStorageLocationId) {
+      await assertBiocharDrawWithinStock(tx, {
+        biocharStorageLocationId: run.biocharStorageLocationId,
+        requestedBiocharKg: biocharEquivalentKg(data.massKg ?? null, biocharRatio),
+      });
     }
 
     const [inserted] = await tx
@@ -752,6 +784,42 @@ export async function updateBiocharProduct(
       }
       if (effectiveFormulationId && storage.formulationId === null) {
         claimBinFormulationId = effectiveFormulationId;
+      }
+    }
+
+    // Re-check the biochar over-draw whenever the draw's inputs move — wet mass,
+    // formulation ratio, or the source run (its biochar bin) (#116). Exclude this
+    // product so its own prior allocation isn't double-counted against itself.
+    if (
+      (data.massKg !== undefined ||
+        data.formulationId !== undefined ||
+        data.linkedProductionRunId !== undefined ||
+        facilityChanged) &&
+      effectiveLinkedRunId &&
+      effectiveMassKg != null
+    ) {
+      const [effectiveRun] = await tx
+        .select({
+          biocharStorageLocationId: productionRuns.biocharStorageLocationId,
+        })
+        .from(productionRuns)
+        .where(eq(productionRuns.id, effectiveLinkedRunId));
+
+      if (effectiveRun?.biocharStorageLocationId) {
+        const [ratioRow] = effectiveFormulationId
+          ? await tx
+              .select({ biocharRatio: formulations.biocharRatio })
+              .from(formulations)
+              .where(eq(formulations.id, effectiveFormulationId))
+          : [];
+        await assertBiocharDrawWithinStock(tx, {
+          biocharStorageLocationId: effectiveRun.biocharStorageLocationId,
+          requestedBiocharKg: biocharEquivalentKg(
+            effectiveMassKg,
+            ratioRow?.biocharRatio ?? null,
+          ),
+          excludeProductId: productId,
+        });
       }
     }
 
