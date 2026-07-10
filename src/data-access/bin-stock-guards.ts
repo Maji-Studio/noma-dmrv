@@ -40,8 +40,13 @@ type DbReader = Pick<typeof db, "select">;
  */
 const STOCK_OVERDRAW_EPSILON_KG = 1e-6;
 
-/** Round a kilogram figure for operator-facing copy (whole kg, grouped). */
+/**
+ * Round a kilogram figure for operator-facing copy (whole kg, grouped).
+ * Sub-kilogram magnitudes keep one decimal — whole-kg rounding would collapse
+ * them to "0 kg" and drop the sign of a small negative deficit (#116).
+ */
 function formatKg(kg: number): string {
+  if (kg !== 0 && Math.abs(kg) < 1) return `${kg.toFixed(1)} kg`;
   return `${Math.round(kg).toLocaleString()} kg`;
 }
 
