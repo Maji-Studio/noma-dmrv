@@ -94,14 +94,22 @@ export async function createFacilityAction(input: CreateFacilityInput) {
 
 ## Tenancy And Data Ownership
 
-The biochar MRV domain is single-org / shared-data today:
+Multi-tenancy is being introduced in phases (plan: `docs/plans/2026-06-11-multi-tenancy.md`, ADR 0010).
 
-- Every authenticated user can read and operate on the same facilities, suppliers, runs, products, logistics records, applications, and credit batches.
-- `userId` columns are attribution only.
-- Data-access guards verify authentication and relevant record existence; they are not per-user ownership checks.
-- Facility context scopes workflows and UI, not authorization.
+**PR 1 — organization foundation (shipped):**
 
-If multi-tenancy is introduced, revisit every `src/data-access/` list/query/ensure helper and add tenant/facility membership constraints before onboarding a second operator group.
+- Better Auth **organization plugin** is enabled: `organizations`, `members`, `invitations` tables (`src/db/schema/auth.ts`) and `session.activeOrganizationId`.
+- **Organization / Platform Admin / Member** naming is binding (CONTEXT.md) — never "client"/"tenant" in code.
+- Org context guards live in `src/lib/auth/server.ts`:
+  - `getOrgContext()` / `requireOrgContext()` → `OrgContext { userId, organizationId, orgRole, isPlatformAdmin }`. `requireOrgContext()` throws `SafeError` (never redirects) so action wrappers surface it cleanly.
+  - `requireOrgRole(ctx, "owner"|"admin"|"member")` — Owner ⊃ Admin ⊃ Member; Platform Admins always pass.
+  - `requirePlatformAdmin()` — global `admin` role; org lifecycle + cross-org tools.
+- On sign-in a session hook auto-selects the active org when the user has exactly one membership. Platform Admins (no memberships) pick an org in the switcher.
+- Org switching: members go through the plugin's `setActiveOrganization`; a Platform Admin entering a non-member org writes `session.activeOrganizationId` directly and clears the cached session snapshot (`setActiveOrganizationAction`).
+- Member management (`src/fn/organizations.ts`) delegates to the plugin (which enforces org-role authz server-side) behind a coarse `requireOrgRole` pre-gate. Invitations surface a **copyable accept link** in the UI (`/settings/organization`); email delivery via Resend is best-effort (console-link fallback in dev, no PII logged).
+- **Isolation gate:** creating a second organization is blocked server-side until PR 2 (`createOrganizationAction`), because domain data is still shared.
+
+**Still shared until PR 2:** domain tables have no `organizationId` yet, so every authenticated user still reads the same facilities/suppliers/runs/etc. `userId` columns remain attribution only. PR 2 adds `organizationId NOT NULL` to every domain table and the data-access scoping sweep; do not rely on org isolation of domain data before then.
 
 ## Notes
 

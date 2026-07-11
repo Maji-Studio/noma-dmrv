@@ -8,4 +8,5 @@ export { MobileNav } from "./mobile-nav";
 export { SidebarContent } from "./sidebar-content";
 export { FacilityProvider } from "./facility-provider";
 export { FacilitySelector } from "./facility-selector";
+export { OrgSwitcher } from "./org-switcher";
 export { SelectFacilityEmptyState } from "./select-facility-empty-state";

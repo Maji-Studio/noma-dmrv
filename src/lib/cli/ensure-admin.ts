@@ -1,9 +1,10 @@
 /**
- * Ensures the admin user exists with a valid credential account.
- * Creates the user if missing, or updates the password hash if it already exists.
- * Does NOT seed any entity data — use `pnpm db:seed` for that.
+ * Ensures the admin user exists with a valid credential account, plus a default
+ * "Dark Earth Carbon" organization so local/dev flows keep working once the app
+ * is org-scoped. Creates the user if missing, or updates the password hash if it
+ * already exists. Does NOT seed any domain-entity data — use `pnpm db:seed`.
  */
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { config } from 'dotenv';
 import { Pool } from 'pg';
@@ -12,6 +13,99 @@ import { hashPassword } from '../auth/hash-password';
 import { getPgPoolConfig } from '../pg-pool-config';
 
 config({ path: '.env.local' });
+
+type Db = ReturnType<typeof drizzle<typeof schema>>;
+
+// Fixed bootstrap identifiers so reseeds are stable across environments.
+const DEC_ORG_ID = 'org_dark_earth_carbon';
+const DEC_ORG_NAME = 'Dark Earth Carbon';
+const DEC_ORG_SLUG = 'dark-earth-carbon';
+// A dev teammate (org member, not admin) so member-management flows have a
+// second member to change roles on / remove during local testing.
+const TEAMMATE_EMAIL = 'teammate@darkearthcarbon.dev';
+const TEAMMATE_NAME = 'Dev Teammate';
+
+/**
+ * Ensure the default organization exists, the Platform Admin has no member
+ * row, and a dev teammate owns it. Idempotent on every `db:reset`.
+ */
+async function ensureOrgFoundation(
+  db: Db,
+  adminUserId: string,
+  passwordHash: string
+): Promise<void> {
+  // 1. Organization row (fixed id).
+  await db
+    .insert(schema.organizations)
+    .values({ id: DEC_ORG_ID, name: DEC_ORG_NAME, slug: DEC_ORG_SLUG })
+    .onConflictDoNothing({ target: schema.organizations.id });
+
+  // 2. Heal older seeds: Platform Admin authority comes from users.role only.
+  await db
+    .delete(schema.members)
+    .where(
+      and(
+        eq(schema.members.organizationId, DEC_ORG_ID),
+        eq(schema.members.userId, adminUserId)
+      )
+    );
+
+  // 3. Dev teammate user + credential + Owner membership.
+  let [teammate] = await db
+    .select({ id: schema.users.id })
+    .from(schema.users)
+    .where(eq(schema.users.email, TEAMMATE_EMAIL))
+    .limit(1);
+
+  if (!teammate) {
+    const teammateId = crypto.randomUUID();
+    await db.transaction(async (tx) => {
+      await tx.insert(schema.users).values({
+        id: teammateId,
+        email: TEAMMATE_EMAIL,
+        name: TEAMMATE_NAME,
+        role: 'user',
+        emailVerified: true,
+      });
+      await tx.insert(schema.accounts).values({
+        id: `teammate-account-${Date.now()}`,
+        userId: teammateId,
+        accountId: `teammate-${teammateId}`,
+        providerId: 'credential',
+        password: passwordHash,
+      });
+    });
+    teammate = { id: teammateId };
+    // No email in logs (PII rule) — the id is enough to correlate.
+    console.log(`Created dev teammate user userId=${teammateId}`);
+  }
+
+  const [teammateMembership] = await db
+    .select({ id: schema.members.id, role: schema.members.role })
+    .from(schema.members)
+    .where(
+      and(
+        eq(schema.members.organizationId, DEC_ORG_ID),
+        eq(schema.members.userId, teammate.id)
+      )
+    )
+    .limit(1);
+  if (!teammateMembership) {
+    await db.insert(schema.members).values({
+      id: crypto.randomUUID(),
+      organizationId: DEC_ORG_ID,
+      userId: teammate.id,
+      role: 'owner',
+    });
+  } else if (teammateMembership.role !== 'owner') {
+    await db
+      .update(schema.members)
+      .set({ role: 'owner' })
+      .where(eq(schema.members.id, teammateMembership.id));
+  }
+
+  console.log(`Ensured organization "${DEC_ORG_NAME}" with teammate owner`);
+}
 
 async function ensureAdmin() {
   const adminEmail = process.env.ADMIN_EMAIL;
@@ -44,7 +138,9 @@ async function ensureAdmin() {
       .where(eq(schema.users.email, adminEmail))
       .limit(1);
 
+    let adminUserId: string;
     if (existing) {
+      adminUserId = existing.id;
       // Update password hash
       const [account] = await db
         .select({ id: schema.accounts.id })
@@ -69,10 +165,10 @@ async function ensureAdmin() {
       console.log(`Updated admin credentials for ${adminEmail}`);
     } else {
       // Create user + credential account in a transaction
+      adminUserId = crypto.randomUUID();
       await db.transaction(async (tx) => {
-        const userId = crypto.randomUUID();
         await tx.insert(schema.users).values({
-          id: userId,
+          id: adminUserId,
           email: adminEmail,
           name: 'Admin',
           role: 'admin',
@@ -80,14 +176,16 @@ async function ensureAdmin() {
         });
         await tx.insert(schema.accounts).values({
           id: `admin-account-${Date.now()}`,
-          userId,
-          accountId: `admin-${userId}`,
+          userId: adminUserId,
+          accountId: `admin-${adminUserId}`,
           providerId: 'credential',
           password: passwordHash,
         });
       });
       console.log(`Created admin user ${adminEmail}`);
     }
+
+    await ensureOrgFoundation(db, adminUserId, passwordHash);
   } finally {
     await pool.end();
   }

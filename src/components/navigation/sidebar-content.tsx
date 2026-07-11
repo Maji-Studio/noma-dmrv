@@ -43,7 +43,9 @@ import { useAuth, authClient } from "@/lib/auth/client";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { FacilitySelector } from "./facility-selector";
+import { OrgSwitcher } from "./org-switcher";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useActiveOrganizationProfile } from "@/hooks/use-organizations";
 
 interface NavItem {
   href: string;
@@ -255,6 +257,12 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { facilityId: facilityParam } = useFacilityContext();
   const { signOut } = useAuth();
   const { data: session } = authClient.useSession();
+  // Override-aware active-org lookup: the plugin's useActiveOrganization() is
+  // members-only, so it never resolves for Platform Admins inside an org they
+  // don't belong to.
+  const { data: activeOrg } = useActiveOrganizationProfile();
+  const activeOrgName = activeOrg?.name?.trim() || "noma dMRV";
+  const orgInitial = activeOrgName.charAt(0).toUpperCase();
 
   // Append the Admin section only for admin users. `useIsAdmin()` is
   // hydration-safe (server snapshot is `false`, so the admin subtree only
@@ -297,15 +305,24 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           className="flex items-center gap-10"
         >
           <div className="size-28 bg-[var(--clr-purple)] flex items-center justify-center shrink-0">
-            <span className="text-white font-bold text-[length:var(--text-xxs)] leading-none">
-              D
+            <span
+              className="text-white font-bold text-[length:var(--text-xxs)] leading-none"
+              suppressHydrationWarning
+            >
+              {orgInitial}
             </span>
           </div>
-          <span className="body-small font-medium text-white truncate">
-            Dark Earth Carbon
+          <span
+            className="body-small font-medium text-white truncate"
+            suppressHydrationWarning
+          >
+            {activeOrgName}
           </span>
         </Link>
       </div>
+
+      {/* Organization switcher (multi-org members + Platform Admins only) */}
+      <OrgSwitcher />
 
       {/* Facility Selector */}
       <FacilitySelector />
@@ -366,6 +383,14 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               {session?.user?.email ?? " "}
             </span>
           </div>
+          <Link
+            href="/settings/organization"
+            onClick={onNavigate}
+            className="flex items-center justify-center size-44 md:size-28 text-[var(--color-white-25)] hover:text-white transition-colors duration-150"
+            aria-label="Organization settings"
+          >
+            <GearSixIcon size={16} />
+          </Link>
           <button
             type="button"
             onClick={() => {
