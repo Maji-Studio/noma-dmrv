@@ -5,7 +5,12 @@
  * admin layout's requireAdmin() guard.
  */
 import type { CSSProperties, ElementType } from "react";
-import { ArrowRightIcon, GaugeIcon, UsersIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  ArrowRightIcon,
+  BuildingsIcon,
+  GaugeIcon,
+  UsersIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { Card } from "@/components/ui/card";
 
 interface AdminTile {
@@ -18,6 +23,14 @@ interface AdminTile {
 }
 
 const ADMIN_TILES: AdminTile[] = [
+  {
+    href: "/admin/organizations",
+    icon: BuildingsIcon,
+    title: "Organizations",
+    description:
+      "Onboard operators, enter any organization's workspace, and manage the platform's tenants.",
+    accent: "var(--clr-red)",
+  },
   {
     // Emission-estimate config now lives in the certification workspace; link
     // straight there rather than through the deprecated /admin redirect hop.
