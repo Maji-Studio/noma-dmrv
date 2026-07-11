@@ -4,6 +4,7 @@ import { SafeError } from "@/lib/errors";
 const mockReadState = vi.fn();
 const mockCreateAccount = vi.fn();
 const mockHashPassword = vi.fn();
+const mockGetSession = vi.fn();
 const mockSignInEmail = vi.fn();
 const mockAcceptInvitation = vi.fn();
 const mockSetActiveOrganization = vi.fn();
@@ -20,6 +21,7 @@ vi.mock("@/lib/auth/hash-password", () => ({
 vi.mock("@/lib/auth/better-auth", () => ({
   auth: {
     api: {
+      getSession: (...args: unknown[]) => mockGetSession(...args),
       signInEmail: (...args: unknown[]) => mockSignInEmail(...args),
       acceptInvitation: (...args: unknown[]) => mockAcceptInvitation(...args),
       setActiveOrganization: (...args: unknown[]) =>
@@ -49,6 +51,7 @@ const VALID_INPUT = {
 describe("bootstrapInvitationAccountAction", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetSession.mockResolvedValue(null);
     mockReadState.mockResolvedValue({
       invitationId: INVITATION_ID,
       organizationId: ORGANIZATION_ID,
@@ -73,6 +76,19 @@ describe("bootstrapInvitationAccountAction", () => {
       password: "short",
       email: EMAIL,
     });
+
+    expect(result.success).toBe(false);
+    expect(mockReadState).not.toHaveBeenCalled();
+    expect(mockCreateAccount).not.toHaveBeenCalled();
+  });
+
+  it("rejects bootstrap while a session is already active", async () => {
+    mockGetSession.mockResolvedValue({
+      user: { id: "user-999" },
+      session: { id: "session-999" },
+    });
+
+    const result = await bootstrapInvitationAccountAction(VALID_INPUT);
 
     expect(result.success).toBe(false);
     expect(mockReadState).not.toHaveBeenCalled();

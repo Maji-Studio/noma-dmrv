@@ -28,11 +28,9 @@ export default async function AcceptInvitationPage({
     redirect(`/login?from=${encodeURIComponent(`/accept-invitation/${id}`)}`);
   }
 
-  if (
-    invitation.accountExists &&
-    user &&
-    user.email.toLowerCase() !== invitation.email.toLowerCase()
-  ) {
+  // A signed-in user can only accept with the invited address; bootstrap is
+  // for anonymous visitors, so any active session must be signed out first.
+  if (user && user.email.toLowerCase() !== invitation.email.toLowerCase()) {
     return (
       <InvitationCard error="Sign out, then sign in with the invited email address." />
     );

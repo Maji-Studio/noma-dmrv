@@ -71,6 +71,14 @@ export async function bootstrapInvitationAccountAction(
   return toResult(async () => {
     const { invitationId, name, password } =
       invitationBootstrapSchema.parse(input);
+    const existingSession = await auth.api.getSession({
+      headers: await currentAuthHeaders(),
+    });
+    if (existingSession) {
+      throw new SafeError(
+        "You are already signed in. Sign out before creating a new account from an invitation."
+      );
+    }
     const state = await readInvitationBootstrapState(invitationId);
     if (state.accountExists) {
       throw new SafeError(
