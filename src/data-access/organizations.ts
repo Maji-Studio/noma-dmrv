@@ -111,7 +111,7 @@ export async function createInvitationAsPlatformAdmin(
     const [existingUser] = await tx
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.email, email))
+      .where(sql`lower(${users.email}) = ${email}`)
       .limit(1);
     if (existingUser) {
       const [existingMember] = await tx
@@ -385,7 +385,7 @@ export async function findUserIdByEmail(email: string): Promise<string | null> {
   const [row] = await db
     .select({ id: users.id })
     .from(users)
-    .where(eq(users.email, email.toLowerCase().trim()))
+    .where(sql`lower(${users.email}) = ${email.toLowerCase().trim()}`)
     .limit(1);
   return row?.id ?? null;
 }
