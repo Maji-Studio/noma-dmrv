@@ -14,6 +14,7 @@
 
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
+import type { OrgContext } from "@/lib/auth/server";
 import {
   feedstocks,
   feedstockTypes,
@@ -27,7 +28,7 @@ import {
   type StorageLocation,
 } from "@/db/schema";
 import { getBinMovementLaneSums, groupLaneSumsByLocation } from "./bin-movements";
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 
 // ============================================
 // Types
@@ -80,6 +81,7 @@ export interface PaginatedStorageLocations {
 
 export type BaseStorageLocationRow = {
   id: string;
+  organizationId: string;
   code: string;
   name: string;
   type: StorageLocation["type"];
@@ -106,10 +108,10 @@ function splitAggregateLabels(value: string | null): string[] {
 }
 
 export async function enrichStorageLocationRows(
-  userId: string,
+  ctx: OrgContext,
   rows: BaseStorageLocationRow[]
 ): Promise<StorageLocationWithFacility[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const storageLocationIds = rows.map((row) => row.id);
   const storageLocationIdsSql = sql.join(
@@ -148,8 +150,19 @@ export async function enrichStorageLocationRows(
             `,
           })
           .from(feedstocks)
-          .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
-          .where(inArray(feedstocks.storageLocationId, storageLocationIds))
+          .leftJoin(
+            feedstockTypes,
+            and(
+              eq(feedstocks.feedstockTypeId, feedstockTypes.id),
+              eq(feedstockTypes.organizationId, ctx.organizationId),
+            ),
+          )
+          .where(
+            and(
+              inArray(feedstocks.storageLocationId, storageLocationIds),
+              eq(feedstocks.organizationId, ctx.organizationId),
+            ),
+          )
           .groupBy(feedstocks.storageLocationId),
         db
           .select({
@@ -159,9 +172,17 @@ export async function enrichStorageLocationRows(
           .from(productionRuns)
           .leftJoin(
             productionRunFeedstocks,
-            eq(productionRunFeedstocks.productionRunId, productionRuns.id)
+            and(
+              eq(productionRunFeedstocks.productionRunId, productionRuns.id),
+              eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+            ),
           )
-          .where(inArray(productionRuns.feedstockStorageLocationId, storageLocationIds))
+          .where(
+            and(
+              inArray(productionRuns.feedstockStorageLocationId, storageLocationIds),
+              eq(productionRuns.organizationId, ctx.organizationId),
+            ),
+          )
           .groupBy(productionRuns.feedstockStorageLocationId),
         db
           .select({
@@ -170,7 +191,12 @@ export async function enrichStorageLocationRows(
             producedKg: sql<number>`COALESCE(SUM(${productionRuns.biocharOutputKg}), 0)`,
           })
           .from(productionRuns)
-          .where(inArray(productionRuns.biocharStorageLocationId, storageLocationIds))
+          .where(
+            and(
+              inArray(productionRuns.biocharStorageLocationId, storageLocationIds),
+              eq(productionRuns.organizationId, ctx.organizationId),
+            ),
+          )
           .groupBy(productionRuns.biocharStorageLocationId),
         db
           .select({
@@ -190,10 +216,24 @@ export async function enrichStorageLocationRows(
           .from(productionRuns)
           .innerJoin(
             biocharProducts,
-            eq(biocharProducts.linkedProductionRunId, productionRuns.id)
+            and(
+              eq(biocharProducts.linkedProductionRunId, productionRuns.id),
+              eq(biocharProducts.organizationId, ctx.organizationId),
+            ),
           )
-          .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
-          .where(inArray(productionRuns.biocharStorageLocationId, storageLocationIds))
+          .leftJoin(
+            formulations,
+            and(
+              eq(biocharProducts.formulationId, formulations.id),
+              eq(formulations.organizationId, ctx.organizationId),
+            ),
+          )
+          .where(
+            and(
+              inArray(productionRuns.biocharStorageLocationId, storageLocationIds),
+              eq(productionRuns.organizationId, ctx.organizationId),
+            ),
+          )
           .groupBy(productionRuns.biocharStorageLocationId),
         db
           .select({
@@ -213,8 +253,19 @@ export async function enrichStorageLocationRows(
             `,
           })
           .from(biocharProducts)
-          .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
-          .where(inArray(biocharProducts.storageLocationId, storageLocationIds))
+          .leftJoin(
+            formulations,
+            and(
+              eq(biocharProducts.formulationId, formulations.id),
+              eq(formulations.organizationId, ctx.organizationId),
+            ),
+          )
+          .where(
+            and(
+              inArray(biocharProducts.storageLocationId, storageLocationIds),
+              eq(biocharProducts.organizationId, ctx.organizationId),
+            ),
+          )
           .groupBy(biocharProducts.storageLocationId),
         db
           .select({
@@ -233,15 +284,31 @@ export async function enrichStorageLocationRows(
             lastAppliedAt: sql<Date | null>`MAX(${applications.applicationDate})`,
           })
           .from(applications)
-          .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-          .leftJoin(orders, eq(deliveries.orderId, orders.id))
+          .innerJoin(
+            deliveries,
+            and(
+              eq(applications.deliveryId, deliveries.id),
+              eq(deliveries.organizationId, ctx.organizationId),
+            ),
+          )
+          .leftJoin(
+            orders,
+            and(
+              eq(deliveries.orderId, orders.id),
+              eq(orders.organizationId, ctx.organizationId),
+            ),
+          )
           .leftJoin(
             biocharProducts,
-            sql`${biocharProducts.id} = COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId})`
+            and(
+              sql`${biocharProducts.id} = COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+              eq(biocharProducts.organizationId, ctx.organizationId),
+            ),
           )
           .where(
             and(
               eq(applications.status, "applied"),
+              eq(applications.organizationId, ctx.organizationId),
               sql`COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId}) IS NOT NULL`,
               sql`COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId}) IN (${storageLocationIdsSql})`
             )
@@ -258,7 +325,7 @@ export async function enrichStorageLocationRows(
         }>(sql`
           WITH events AS (
             SELECT storage_location_id, 'in' as activity_type, created_at, mass_dry_kg as mass_kg, code as label
-            FROM feedstocks WHERE storage_location_id IN (${storageLocationIdsSql})
+            FROM feedstocks WHERE organization_id = ${ctx.organizationId} AND storage_location_id IN (${storageLocationIdsSql})
             UNION ALL
             SELECT
               pr.feedstock_storage_location_id,
@@ -267,8 +334,8 @@ export async function enrichStorageLocationRows(
               COALESCE(SUM(prf.mass_used_kg), pr.feedstock_mass_dry_kg, 0) as mass_kg,
               pr.code
             FROM production_runs pr
-            LEFT JOIN production_run_feedstocks prf ON prf.production_run_id = pr.id
-            WHERE pr.feedstock_storage_location_id IN (${storageLocationIdsSql})
+            LEFT JOIN production_run_feedstocks prf ON prf.production_run_id = pr.id AND prf.organization_id = ${ctx.organizationId}
+            WHERE pr.organization_id = ${ctx.organizationId} AND pr.feedstock_storage_location_id IN (${storageLocationIdsSql})
             GROUP BY
               pr.id,
               pr.feedstock_storage_location_id,
@@ -277,16 +344,16 @@ export async function enrichStorageLocationRows(
               pr.code
             UNION ALL
             SELECT biochar_storage_location_id, 'in', created_at, biochar_output_kg, code
-            FROM production_runs WHERE biochar_storage_location_id IN (${storageLocationIdsSql})
+            FROM production_runs WHERE organization_id = ${ctx.organizationId} AND biochar_storage_location_id IN (${storageLocationIdsSql})
             UNION ALL
             SELECT pr.biochar_storage_location_id, 'out', bp.created_at, bp.mass_kg * COALESCE(f.biochar_ratio, 1), bp.code
             FROM biochar_products bp
-            JOIN production_runs pr ON bp.linked_production_run_id = pr.id
-            LEFT JOIN formulations f ON bp.formulation_id = f.id
-            WHERE pr.biochar_storage_location_id IN (${storageLocationIdsSql})
+            JOIN production_runs pr ON bp.linked_production_run_id = pr.id AND pr.organization_id = ${ctx.organizationId}
+            LEFT JOIN formulations f ON bp.formulation_id = f.id AND f.organization_id = ${ctx.organizationId}
+            WHERE bp.organization_id = ${ctx.organizationId} AND pr.biochar_storage_location_id IN (${storageLocationIdsSql})
             UNION ALL
             SELECT storage_location_id, 'in', created_at, mass_kg, code
-            FROM biochar_products WHERE storage_location_id IN (${storageLocationIdsSql})
+            FROM biochar_products WHERE organization_id = ${ctx.organizationId} AND storage_location_id IN (${storageLocationIdsSql})
           )
           SELECT DISTINCT ON (storage_location_id)
             storage_location_id, activity_type, created_at as activity_date, mass_kg, label
@@ -294,7 +361,7 @@ export async function enrichStorageLocationRows(
           WHERE storage_location_id IS NOT NULL
           ORDER BY storage_location_id, created_at DESC
         `),
-        getBinMovementLaneSums(userId, storageLocationIds),
+        getBinMovementLaneSums(ctx.userId, storageLocationIds),
       ])
     : [
         [],

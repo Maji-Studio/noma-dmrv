@@ -8,7 +8,8 @@
  * dispatcher so the auth gate is never bypassed.
  */
 
-import { requireAuth } from "../utils";
+import { requireOrgScope } from "../utils";
+import type { OrgContext } from "@/lib/auth/server";
 import { productionRunStatus } from "@/db/schema/common";
 import type {
   EntityOption,
@@ -63,25 +64,25 @@ interface GetEntitiesParams {
 }
 
 export async function getEntities(
-  userId: string,
+  ctx: OrgContext,
   params: GetEntitiesParams
 ): Promise<EntityOption[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const { entityType, search, filterBy, limit = DEFAULT_ENTITY_LIMIT } = params;
 
   switch (entityType) {
     case "facility":
-      return getFacilities({ search, limit });
+      return getFacilities(ctx, { search, limit });
     case "reactor":
-      return getReactors({ search, facilityId: filterBy?.facilityId, limit });
+      return getReactors(ctx, { search, facilityId: filterBy?.facilityId, limit });
     case "supplier":
-      return getSuppliers({ search, limit });
+      return getSuppliers(ctx, { search, limit });
     case "customer":
-      return getCustomers({ search, limit });
+      return getCustomers(ctx, { search, limit });
     case "driver":
-      return getDrivers({ search, limit });
+      return getDrivers(ctx, { search, limit });
     case "operator":
-      return getOperators({ search, limit });
+      return getOperators(ctx, { search, limit });
     case "storageLocation": {
       // Validate every token against the allowed set before passing it down —
       // an unknown `filterBy.type` would otherwise be cast straight into a SQL
@@ -114,8 +115,7 @@ export async function getEntities(
         rawFeedstockTypeUsage === "pyrolysis" || rawFeedstockTypeUsage === "blend"
           ? rawFeedstockTypeUsage
           : undefined;
-      return getStorageLocations({
-        userId,
+      return getStorageLocations(ctx, {
         search,
         facilityId: filterBy?.facilityId,
         type,
@@ -127,21 +127,21 @@ export async function getEntities(
       });
     }
     case "vehicle":
-      return getVehicles({ search, limit });
+      return getVehicles(ctx, { search, limit });
     case "feedstockType": {
       const rawUsage = filterBy?.usage?.trim() ?? filterBy?.feedstockTypeUsage?.trim();
       const usage =
         rawUsage === "pyrolysis" || rawUsage === "blend" ? rawUsage : undefined;
-      return getFeedstockTypes({ search, usage, limit });
+      return getFeedstockTypes(ctx, { search, usage, limit });
     }
     case "feedstock":
-      return getFeedstocks({ search, facilityId: filterBy?.facilityId, limit });
+      return getFeedstocks(ctx, { search, facilityId: filterBy?.facilityId, limit });
     case "productionRun": {
       const validStatuses = productionRunStatus.enumValues as readonly string[];
       const status = filterBy?.status && validStatuses.includes(filterBy.status)
         ? (filterBy.status as (typeof productionRunStatus.enumValues)[number])
         : undefined;
-      return getProductionRunsEntity({
+      return getProductionRunsEntity(ctx, {
         search,
         facilityId: filterBy?.facilityId,
         status,
@@ -149,69 +149,67 @@ export async function getEntities(
       });
     }
     case "application":
-      return getApplicationsEntity({ search, facilityId: filterBy?.facilityId, limit });
+      return getApplicationsEntity(ctx, { search, facilityId: filterBy?.facilityId, limit });
     case "formulation":
-      return getFormulationsEntity({ search, limit });
+      return getFormulationsEntity(ctx, { search, limit });
     case "biocharProduct":
-      return getBiocharProducts({
-        userId,
+      return getBiocharProducts(ctx, {
         search,
         facilityId: filterBy?.facilityId,
         limit,
       });
     case "order":
-      return getOrdersEntity({
-        userId,
+      return getOrdersEntity(ctx, {
         search,
         facilityId: filterBy?.facilityId,
         limit,
       });
     case "creditBatch":
-      return getCreditBatchesEntity({ search, facilityId: filterBy?.facilityId, limit });
+      return getCreditBatchesEntity(ctx, { search, facilityId: filterBy?.facilityId, limit });
     default:
       return [];
   }
 }
 
 export async function getEntityById(
-  userId: string,
+  ctx: OrgContext,
   entityType: EntityType,
   id: string
 ): Promise<EntityOption | null> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   switch (entityType) {
     case "facility":
-      return getFacilityById(id);
+      return getFacilityById(ctx, id);
     case "reactor":
-      return getReactorById(id);
+      return getReactorById(ctx, id);
     case "supplier":
-      return getSupplierById(id);
+      return getSupplierById(ctx, id);
     case "customer":
-      return getCustomerById(id);
+      return getCustomerById(ctx, id);
     case "driver":
-      return getDriverById(id);
+      return getDriverById(ctx, id);
     case "operator":
-      return getOperatorById(id);
+      return getOperatorById(ctx, id);
     case "storageLocation":
-      return getStorageLocationById(userId, id);
+      return getStorageLocationById(ctx, id);
     case "vehicle":
-      return getVehicleById(id);
+      return getVehicleById(ctx, id);
     case "feedstockType":
-      return getFeedstockTypeById(id);
+      return getFeedstockTypeById(ctx, id);
     case "feedstock":
-      return getFeedstockById(id);
+      return getFeedstockById(ctx, id);
     case "productionRun":
-      return getProductionRunEntityById(id);
+      return getProductionRunEntityById(ctx, id);
     case "application":
-      return getApplicationEntityById(id);
+      return getApplicationEntityById(ctx, id);
     case "formulation":
-      return getFormulationEntityById(id);
+      return getFormulationEntityById(ctx, id);
     case "biocharProduct":
-      return getBiocharProductEntityById(userId, id);
+      return getBiocharProductEntityById(ctx, id);
     case "order":
-      return getOrderEntityById(userId, id);
+      return getOrderEntityById(ctx, id);
     case "creditBatch":
-      return getCreditBatchEntityById(id);
+      return getCreditBatchEntityById(ctx, id);
     default:
       return null;
   }

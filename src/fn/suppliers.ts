@@ -24,7 +24,7 @@ import {
   deleteSupplierLocation,
   type PaginatedSuppliers,
 } from "@/data-access/suppliers";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import {
   createSupplierSchema,
   createSupplierWithLocationsSchema,
@@ -61,15 +61,12 @@ export async function getSuppliersFn(
   filters?: Partial<z.infer<typeof supplierFilterSchema>>
 ): Promise<ActionResult<PaginatedSuppliers>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validatedFilters = filters
       ? supplierFilterSchema.parse(filters)
       : undefined;
-    const suppliers = await getSuppliersData(user.id, validatedFilters);
+    const suppliers = await getSuppliersData(ctx, validatedFilters);
 
     return { success: true, data: suppliers };
   } catch (error) {
@@ -97,12 +94,9 @@ export async function getSupplierByIdFn(
   supplierId: string
 ): Promise<ActionResult<Supplier>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const supplier = await getSupplierByIdData(user.id, supplierId);
+    const supplier = await getSupplierByIdData(ctx, supplierId);
     return { success: true, data: supplier };
   } catch (error) {
     return {
@@ -123,12 +117,9 @@ export async function getSupplierLocationsFn(): Promise<
   ActionResult<string[]>
 > {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const locations = await getSupplierLocationsData(user.id);
+    const locations = await getSupplierLocationsData(ctx);
     return { success: true, data: locations };
   } catch (error) {
     return {
@@ -149,12 +140,9 @@ export async function getSupplierOptionsFn(): Promise<
   ActionResult<Array<{ id: string; code: string; name: string }>>
 > {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const options = await getSupplierOptionsData(user.id);
+    const options = await getSupplierOptionsData(ctx);
     return { success: true, data: options };
   } catch (error) {
     return {
@@ -176,13 +164,10 @@ export async function checkSupplierCodeFn(
   excludeSupplierId?: string
 ): Promise<ActionResult<{ available: boolean }>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const available = await isSupplierCodeAvailableData(
-      user.id,
+      ctx,
       code,
       excludeSupplierId
     );
@@ -210,20 +195,18 @@ export async function createSupplierFn(
   data: z.infer<typeof createSupplierSchema>
 ): Promise<ActionResult<Supplier>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = createSupplierSchema.parse(data);
 
     const supplier = await withAutoCode(
+      ctx,
       "SUP",
       suppliers,
       suppliers.code,
       undefined,
       (code) =>
-        createSupplier(user.id, {
+        createSupplier(ctx, {
           code,
           name: validated.name,
           location: validated.location || null,
@@ -265,20 +248,18 @@ export async function createSupplierWithLocationsFn(
   data: z.infer<typeof createSupplierWithLocationsSchema>
 ): Promise<ActionResult<Supplier>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = createSupplierWithLocationsSchema.parse(data);
 
     const supplier = await withAutoCode(
+      ctx,
       "SUP",
       suppliers,
       suppliers.code,
       undefined,
       (code) =>
-        createSupplierWithLocations(user.id, {
+        createSupplierWithLocations(ctx, {
           code,
           name: validated.supplier.name,
           location: validated.supplier.location || null,
@@ -342,14 +323,11 @@ export async function updateSupplierFn(
   data: z.infer<typeof updateSupplierSchema>
 ): Promise<ActionResult<Supplier>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = updateSupplierSchema.parse(data);
 
-    const supplier = await updateSupplier(user.id, validated.supplierId, {
+    const supplier = await updateSupplier(ctx, validated.supplierId, {
       code: validated.code,
       name: validated.name,
       location: validated.location,
@@ -397,13 +375,10 @@ export async function deleteSupplierFn(
   data: z.infer<typeof deleteSupplierSchema>
 ): Promise<ActionResult<void>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = deleteSupplierSchema.parse(data);
-    await deleteSupplier(user.id, validated.supplierId);
+    await deleteSupplier(ctx, validated.supplierId);
 
     return { success: true, data: undefined };
   } catch (error) {
@@ -432,17 +407,14 @@ export async function getSupplierLocationsBySupplierFn(
   supplierId: string
 ): Promise<ActionResult<SupplierLocation[]>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const parsed = z.string().uuid("Invalid supplier ID").safeParse(supplierId);
     if (!parsed.success) {
       return { success: false, error: parsed.error.issues[0].message };
     }
 
-    const locations = await getSupplierLocationsBySupplierData(user.id, supplierId);
+    const locations = await getSupplierLocationsBySupplierData(ctx, supplierId);
     return { success: true, data: locations };
   } catch (error) {
     return {
@@ -460,14 +432,11 @@ export async function createSupplierLocationFn(
   data: z.infer<typeof createSupplierLocationSchema>
 ): Promise<ActionResult<SupplierLocation>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = createSupplierLocationSchema.parse(data);
 
-    const location = await createSupplierLocation(user.id, {
+    const location = await createSupplierLocation(ctx, {
       supplierId: validated.supplierId,
       name: validated.name || null,
       country: validated.country,
@@ -507,14 +476,11 @@ export async function updateSupplierLocationFn(
   data: z.infer<typeof updateSupplierLocationSchema>
 ): Promise<ActionResult<SupplierLocation>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = updateSupplierLocationSchema.parse(data);
 
-    const location = await updateSupplierLocation(user.id, validated.locationId, {
+    const location = await updateSupplierLocation(ctx, validated.locationId, {
       name: validated.name,
       country: validated.country,
       stateRegion: validated.stateRegion,
@@ -553,13 +519,10 @@ export async function deleteSupplierLocationFn(
   data: z.infer<typeof deleteSupplierLocationSchema>
 ): Promise<ActionResult<void>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = deleteSupplierLocationSchema.parse(data);
-    await deleteSupplierLocation(user.id, validated.locationId);
+    await deleteSupplierLocation(ctx, validated.locationId);
 
     return { success: true, data: undefined };
   } catch (error) {
