@@ -154,15 +154,9 @@ export async function buildCo2eStoredPreview(
   userId: string,
   // The durability tier is join-derived from the facility (ADR 0021), so it is
   // supplied alongside the raw batch row rather than read off it.
-  batch: Pick<
-    CreditBatch,
-    | "id"
-    | "facilityId"
-    | "meanRandomReflectancePercent"
-    | "stdRandomReflectance"
-    | "meanNonReactiveCarbonPercent"
-    | "stdNonReactiveCarbonPercent"
-  > & { durabilityOption: DurabilityOption },
+  batch: Pick<CreditBatch, "id" | "facilityId"> & {
+    durabilityOption: DurabilityOption;
+  },
   applicationIds: string[]
 ): Promise<CreditBatchCo2eStoredPreview> {
   const provider = await getFacilityCertifier(userId, batch.facilityId);
@@ -214,17 +208,16 @@ export async function buildCo2eStoredPreview(
   ]);
   const { weightedOrganicCarbonPercent, weightedHToCorgRatio } =
     weightedBatchChemistry(batchesWithSamples);
-  const samplePreviewStats =
-    batch.durabilityOption === "1000_year"
-      ? derive1000YearPreviewStats(batchesWithSamples[0]?.samples ?? [])
-      : null;
+  // Sample-derived only: a 1000-year batch with no (or incomplete) sample
+  // evidence stays null rather than falling back to persisted legacy batch
+  // columns — those are still written elsewhere but must not surface here
+  // (issue #375). No evidence degrades to the same empty stats as the
+  // incomplete-replicate path.
   const thousandYearStats =
-    samplePreviewStats ?? {
-      meanRandomReflectancePercent: batch.meanRandomReflectancePercent,
-      stdRandomReflectance: batch.stdRandomReflectance,
-      meanNonReactiveCarbonPercent: batch.meanNonReactiveCarbonPercent,
-      stdNonReactiveCarbonPercent: batch.stdNonReactiveCarbonPercent,
-    };
+    batch.durabilityOption === "1000_year"
+      ? (derive1000YearPreviewStats(batchesWithSamples[0]?.samples ?? []) ??
+        EMPTY_1000_YEAR_PREVIEW_STATS)
+      : EMPTY_1000_YEAR_PREVIEW_STATS;
 
   // The engine branches on durabilityOption: "1000_year" consumes the batch's
   // stored petrography/TGA columns (Eq.6, issue #142); the default 200-year
