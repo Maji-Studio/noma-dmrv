@@ -108,6 +108,27 @@ export async function createInvitationAsPlatformAdmin(
   const invitationId = randomUUID();
 
   await db.transaction(async (tx) => {
+    const [existingUser] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+    if (existingUser) {
+      const [existingMember] = await tx
+        .select({ id: members.id })
+        .from(members)
+        .where(
+          and(
+            eq(members.organizationId, ctx.organizationId),
+            eq(members.userId, existingUser.id)
+          )
+        )
+        .limit(1);
+      if (existingMember) {
+        throw new SafeError("User is already a member of this organization.");
+      }
+    }
+
     await tx
       .update(invitations)
       .set({ status: "canceled" })
