@@ -1,3 +1,4 @@
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
@@ -12,6 +13,7 @@ import { productionRuns, productionRunFeedstocks } from "@/db/schema/production"
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
 
+
 describe("createProductionRun — feedstock type usage gate", () => {
   const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
   let facilityId: string;
@@ -23,16 +25,19 @@ describe("createProductionRun — feedstock type usage gate", () => {
   const createdRunIds: string[] = [];
   const createdFeedstockIds: string[] = [];
 
-  beforeAll(async () => {
+  beforeAll(() => ensureTestOrg());
+
+beforeAll(async () => {
     const [facility] = await db
       .insert(facilities)
-      .values({ code: `FAC-PRG-${tag}`, name: `PRG Facility ${tag}` })
+      .values({ organizationId: TEST_ORG_ID, code: `FAC-PRG-${tag}`, name: `PRG Facility ${tag}` })
       .returning({ id: facilities.id });
     facilityId = facility.id;
 
     const [reactor] = await db
       .insert(reactors)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `R-PRG-${tag}`,
         identifier: `PRG Reactor ${tag}`,
         facilityId,
@@ -44,6 +49,7 @@ describe("createProductionRun — feedstock type usage gate", () => {
     const [pyrolysisType] = await db
       .insert(feedstockTypes)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `FT-PRG-P-${tag}`,
         name: `PRG Pyrolysis ${tag}`,
         category: "forestry",
@@ -55,6 +61,7 @@ describe("createProductionRun — feedstock type usage gate", () => {
     const [blendType] = await db
       .insert(feedstockTypes)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `FT-PRG-B-${tag}`,
         name: `PRG Blend ${tag}`,
         category: "ingredient",
@@ -67,6 +74,7 @@ describe("createProductionRun — feedstock type usage gate", () => {
       .insert(storageLocations)
       .values([
         {
+          organizationId: TEST_ORG_ID,
           code: `BIN-PRG-P-${tag}`,
           name: `PRG Pyrolysis Bin ${tag}`,
           type: "feedstock_bin",
@@ -74,6 +82,7 @@ describe("createProductionRun — feedstock type usage gate", () => {
           feedstockTypeId: pyrolysisTypeId,
         },
         {
+          organizationId: TEST_ORG_ID,
           code: `BIN-PRG-B-${tag}`,
           name: `PRG Blend Bin ${tag}`,
           type: "feedstock_bin",
@@ -90,6 +99,7 @@ describe("createProductionRun — feedstock type usage gate", () => {
       .insert(feedstocks)
       .values([
         {
+          organizationId: TEST_ORG_ID,
           code: `FS-PRG-P-${tag}`,
           facilityId,
           status: "complete",
@@ -100,6 +110,7 @@ describe("createProductionRun — feedstock type usage gate", () => {
           storageLocationId: pyrolysisBinId,
         },
         {
+          organizationId: TEST_ORG_ID,
           code: `FS-PRG-B-${tag}`,
           facilityId,
           status: "complete",
@@ -184,7 +195,7 @@ describe("createProductionRun — feedstock type usage gate", () => {
 
   it("allows a source bin holding pyrolysis-usage feedstock", async () => {
     const run = await createProductionRun(
-      TEST_USER_ID,
+      makeTestOrgContext(TEST_USER_ID),
       baseRunInput("ALLOW", pyrolysisBinId),
     );
     createdRunIds.push(run.id);
@@ -194,7 +205,7 @@ describe("createProductionRun — feedstock type usage gate", () => {
 
   it("does not return archived production runs by id", async () => {
     const run = await createProductionRun(
-      TEST_USER_ID,
+      makeTestOrgContext(TEST_USER_ID),
       baseRunInput("ARCHIVED", pyrolysisBinId),
     );
     createdRunIds.push(run.id);
@@ -204,19 +215,19 @@ describe("createProductionRun — feedstock type usage gate", () => {
       .set({ archivedAt: new Date() })
       .where(eq(productionRuns.id, run.id));
 
-    await expect(getProductionRunById(TEST_USER_ID, run.id)).rejects.toThrow(
+    await expect(getProductionRunById(makeTestOrgContext(TEST_USER_ID), run.id)).rejects.toThrow(
       "Production run not found",
     );
   });
 
   it("rejects a source bin holding blend-usage feedstock", async () => {
     await expect(
-      createProductionRun(TEST_USER_ID, baseRunInput("REJECT", blendBinId)),
+      createProductionRun(makeTestOrgContext(TEST_USER_ID), baseRunInput("REJECT", blendBinId)),
     ).rejects.toThrow("Source bin holds a blend feedstock type");
   });
 
   it("returns only pyrolysis-usage source bins for production-run pickers", async () => {
-    const options = await getEntities(TEST_USER_ID, {
+    const options = await getEntities(makeTestOrgContext(TEST_USER_ID), {
       entityType: "storageLocation",
       filterBy: {
         facilityId,

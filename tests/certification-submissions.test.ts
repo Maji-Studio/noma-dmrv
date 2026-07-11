@@ -1,3 +1,4 @@
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed tests for `claimSubmissionDraft` (the submission-ledger claim
  * module). Per ADR 0008 these run against real Postgres — the module's
@@ -9,7 +10,7 @@
  * a conflicting ledger mutation through a second pool connection before
  * releasing — exactly the window the in-lock re-decision exists for.
  */
-import { afterAll, describe, expect, it } from "vitest";
+import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -22,6 +23,7 @@ import {
 import {
   certificationSubmissions,
   certifierProjects,
+  certifierRemovals,
 } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
 import { SafeError } from "@/lib/errors";
@@ -50,6 +52,9 @@ afterAll(async () => {
   }
   if (createdFacilityIds.length === 0) return;
   await db
+    .delete(certifierRemovals)
+    .where(inArray(certifierRemovals.facilityId, createdFacilityIds));
+  await db
     .delete(certifierProjects)
     .where(inArray(certifierProjects.facilityId, createdFacilityIds));
   await db.delete(facilities).where(inArray(facilities.id, createdFacilityIds));
@@ -74,15 +79,26 @@ async function createFixture(): Promise<Fixture> {
   const externalProjectId = `prj_claim_${runId}`;
   const [facility] = await db
     .insert(facilities)
-    .values({ name: `Claim Test Facility ${runId}`, code: `FAC-CL-${runId}` })
+    .values({ organizationId: TEST_ORG_ID, name: `Claim Test Facility ${runId}`, code: `FAC-CL-${runId}` })
     .returning({ id: facilities.id });
   createdFacilityIds.push(facility.id);
   await db.insert(certifierProjects).values({
+    organizationId: TEST_ORG_ID,
     facilityId: facility.id,
     provider: PROVIDER,
     externalProjectId,
   });
-  const localEntityId = crypto.randomUUID();
+  // The claim path proves the submission anchor (the removal row) belongs to
+  // the caller's org, so the fixture needs a real certifier_removals row.
+  const [removal] = await db
+    .insert(certifierRemovals)
+    .values({
+      organizationId: TEST_ORG_ID,
+      facilityId: facility.id,
+      provider: PROVIDER,
+    })
+    .returning({ id: certifierRemovals.id });
+  const localEntityId = removal.id;
   createdEntityIds.push(localEntityId);
   return {
     facilityId: facility.id,
@@ -158,6 +174,7 @@ async function seedRow(
   const [row] = await db
     .insert(certificationSubmissions)
     .values({
+      organizationId: TEST_ORG_ID,
       ...key,
       version: args.version,
       status: args.status,
@@ -192,11 +209,14 @@ async function whileHoldingMappingLock(
   });
 }
 
+
+beforeAll(() => ensureTestOrg());
+
 describe("claimSubmissionDraft — create path", () => {
   it("claims a v=1 draft on first submit and persists the built snapshot", async () => {
     const fixture = await createFixture();
 
-    const outcome = await claimSubmissionDraft(USER_ID, baseArgs(fixture));
+    const outcome = await claimSubmissionDraft(makeTestOrgContext(USER_ID), baseArgs(fixture));
 
     expect(outcome.kind).toBe("claimed");
     if (outcome.kind !== "claimed") throw new Error("unreachable");
@@ -229,7 +249,7 @@ describe("claimSubmissionDraft — create path", () => {
       externalId: fixture.ext("v1"),
     });
 
-    const outcome = await claimSubmissionDraft(USER_ID, baseArgs(fixture));
+    const outcome = await claimSubmissionDraft(makeTestOrgContext(USER_ID), baseArgs(fixture));
 
     expect(outcome).toMatchObject({
       kind: "claimed",
@@ -250,7 +270,7 @@ describe("claimSubmissionDraft — create path", () => {
       externalId: fixture.ext("v1"),
     });
 
-    const outcome = await claimSubmissionDraft(USER_ID, baseArgs(fixture));
+    const outcome = await claimSubmissionDraft(makeTestOrgContext(USER_ID), baseArgs(fixture));
 
     expect(outcome).toEqual({
       kind: "existing",
@@ -270,7 +290,7 @@ describe("claimSubmissionDraft — create path", () => {
     });
 
     const outcome = await claimSubmissionDraft(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       baseArgs(fixture, {
         policy: { onSubmittedHashChanged: "invalid-changed-hash" },
       }),
@@ -288,7 +308,7 @@ describe("claimSubmissionDraft — create path", () => {
       externalId: fixture.ext("v1"),
     });
 
-    const outcome = await claimSubmissionDraft(USER_ID, baseArgs(fixture));
+    const outcome = await claimSubmissionDraft(makeTestOrgContext(USER_ID), baseArgs(fixture));
 
     expect(outcome).toEqual({
       kind: "blocked",
@@ -302,8 +322,8 @@ describe("claimSubmissionDraft — concurrency (the GHG drift regression)", () =
     const fixture = await createFixture();
 
     const [a, b] = await Promise.all([
-      claimSubmissionDraft(USER_ID, baseArgs(fixture)),
-      claimSubmissionDraft(USER_ID, baseArgs(fixture)),
+      claimSubmissionDraft(makeTestOrgContext(USER_ID), baseArgs(fixture)),
+      claimSubmissionDraft(makeTestOrgContext(USER_ID), baseArgs(fixture)),
     ]);
 
     const kinds = [a, b].map((o) => o.kind).sort();
@@ -323,7 +343,7 @@ describe("claimSubmissionDraft — concurrency (the GHG drift regression)", () =
     await whileHoldingMappingLock(fixture.facilityId, async () => {
       // Tentative decide sees an empty ledger → create path → parks on the
       // mapping lock we are holding.
-      claimPromise = claimSubmissionDraft(USER_ID, baseArgs(fixture));
+      claimPromise = claimSubmissionDraft(makeTestOrgContext(USER_ID), baseArgs(fixture));
       await sleep(PARK_DELAY_MS);
       // A concurrent submit completes meanwhile: same payload hash, with an
       // external id (markSubmissionSubmitted does not take the mapping lock).
@@ -352,7 +372,7 @@ describe("claimSubmissionDraft — concurrency (the GHG drift regression)", () =
 
     let claimPromise!: Promise<ClaimOutcome>;
     await whileHoldingMappingLock(fixture.facilityId, async () => {
-      claimPromise = claimSubmissionDraft(USER_ID, baseArgs(fixture));
+      claimPromise = claimSubmissionDraft(makeTestOrgContext(USER_ID), baseArgs(fixture));
       await sleep(PARK_DELAY_MS);
       // A concurrent attempt claimed a draft and then failed without an
       // external id → its row is rejected with our hash → in-lock decide
@@ -375,7 +395,7 @@ describe("claimSubmissionDraft — in-lock re-resolution", () => {
     const fixture = await createFixture();
 
     const outcome = await claimSubmissionDraft(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       baseArgs(fixture, {
         resolve: async (_tx, tentative) => ({
           value: `${tentative.value}-shifted`,
@@ -405,7 +425,7 @@ describe("claimSubmissionDraft — in-lock re-resolution", () => {
     });
 
     const outcome = await claimSubmissionDraft(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       baseArgs(fixture, {
         resolve: async () => ({ value: "v-shifted" }),
       }),
@@ -434,7 +454,7 @@ describe("claimSubmissionDraft — resume", () => {
     let resolveCalled = false;
     let buildSnapshotCalled = false;
     const outcome = await claimSubmissionDraft(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       baseArgs(fixture, {
         resolve: async (_tx, tentative) => {
           resolveCalled = true;
@@ -476,7 +496,7 @@ describe("claimSubmissionDraft — resume", () => {
       lockedAt: new Date(),
     });
 
-    const outcome = await claimSubmissionDraft(USER_ID, baseArgs(fixture));
+    const outcome = await claimSubmissionDraft(makeTestOrgContext(USER_ID), baseArgs(fixture));
     expect(outcome).toEqual({ kind: "blocked", reason: "in-flight" });
   });
 
@@ -493,7 +513,7 @@ describe("claimSubmissionDraft — resume", () => {
     await whileHoldingMappingLock(fixture.facilityId, async () => {
       // Tentative decide sees the stale draft → resume path → parks on the
       // mapping lock inside the resume transaction.
-      claimPromise = claimSubmissionDraft(USER_ID, baseArgs(fixture));
+      claimPromise = claimSubmissionDraft(makeTestOrgContext(USER_ID), baseArgs(fixture));
       await sleep(PARK_DELAY_MS);
       // A concurrent claimant resumed the draft AND completed: the row is
       // now submitted with our hash. The broad CAS predicate alone
@@ -534,7 +554,7 @@ describe("claimSubmissionDraft — resume", () => {
     await whileHoldingMappingLock(fixture.facilityId, async () => {
       // Tentative decide sees the stale draft → resume path → parks on the
       // mapping lock inside the resume transaction.
-      claimPromise = claimSubmissionDraft(USER_ID, baseArgs(fixture));
+      claimPromise = claimSubmissionDraft(makeTestOrgContext(USER_ID), baseArgs(fixture));
       await sleep(PARK_DELAY_MS);
       // A concurrent claimant wins the race and re-locks the draft.
       await db
@@ -553,7 +573,7 @@ describe("claimSubmissionDraft — mapping guard", () => {
     const fixture = await createFixture();
 
     const claim = claimSubmissionDraft(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       baseArgs(fixture, {
         guard: { ...fixture.guard, expectedExternalProjectId: "prj_other" },
       }),
@@ -585,7 +605,7 @@ describe("claimSubmissionDraft — mapping guard", () => {
         )
         .for("update")
         .limit(1);
-      claimPromise = claimSubmissionDraft(USER_ID, baseArgs(fixture));
+      claimPromise = claimSubmissionDraft(makeTestOrgContext(USER_ID), baseArgs(fixture));
       // The claim can reject in the window between the repoint committing and
       // the `.rejects` expectation below attaching — pre-attach a no-op
       // handler so the runner never sees an unhandled rejection (flaked in
@@ -616,7 +636,7 @@ describe("claimSubmissionDraft — mapping guard", () => {
       .where(eq(certifierProjects.facilityId, fixture.facilityId));
 
     await expect(
-      claimSubmissionDraft(USER_ID, baseArgs(fixture)),
+      claimSubmissionDraft(makeTestOrgContext(USER_ID), baseArgs(fixture)),
     ).rejects.toMatchObject({
       message: expect.stringMatching(/no longer linked/i),
     });

@@ -139,9 +139,9 @@ test.describe("Organization foundation UI", () => {
     await expect(organization).toContainText(/\d+ members?/);
 
     const createSection = sectionWithHeading(page, "Create organization");
-    await expect(createSection).toContainText(
-      "disabled until org-scoped data ships",
-    );
+    await expect(
+      createSection.getByRole("button", { name: "Create organization" }),
+    ).toBeEnabled();
 
     await organization.getByRole("button", { name: "Enter" }).click();
     await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);

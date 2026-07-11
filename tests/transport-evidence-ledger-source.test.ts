@@ -1,3 +1,4 @@
+import { makeTestOrgContext } from "./helpers/test-org";
 /**
  * Core-logic tests for `ensureTransportEvidenceLedgerSourceFromContext` — the
  * generate → store → mirror → supersede flow that rides into a removal's
@@ -147,7 +148,7 @@ beforeEach(() => {
   vi.mocked(listDocumentsByKindForRemoval).mockResolvedValue([]);
   vi.mocked(getDocumentUploadByDocument).mockResolvedValue(null);
   vi.mocked(insertDocument).mockImplementation(
-    async (_userId: string, row: Record<string, unknown>) =>
+    async (_ctx, row: Record<string, unknown>) =>
       ({ ...row, id: "doc-new" }) as never,
   );
   vi.mocked(mirrorDocumentToSourceForUser).mockResolvedValue({
@@ -160,7 +161,7 @@ beforeEach(() => {
 describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
   it("creates a fresh ledger document, stores it, and mirrors it", async () => {
     const result = await ensureTransportEvidenceLedgerSourceFromContext(
-      USER,
+      makeTestOrgContext(USER),
       REMOVAL,
       ctx(),
     );
@@ -191,7 +192,7 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
     expect(meta.removalId).toBe(REMOVAL);
     expect(typeof meta.contentHash).toBe("string");
 
-    expect(mirrorDocumentToSourceForUser).toHaveBeenCalledWith(USER, {
+    expect(mirrorDocumentToSourceForUser).toHaveBeenCalledWith(makeTestOrgContext(USER), {
       removalId: REMOVAL,
       documentId: "doc-new",
       isPublic: false,
@@ -219,7 +220,7 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
   it("reuses an identical-content ledger that is already mirrored (no-op)", async () => {
     // Phase 1: a fresh create captures the real content hash for these legs.
     const created = await ensureTransportEvidenceLedgerSourceFromContext(
-      USER,
+      makeTestOrgContext(USER),
       REMOVAL,
       ctx(),
     );
@@ -240,7 +241,7 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
     } as never);
 
     const result = await ensureTransportEvidenceLedgerSourceFromContext(
-      USER,
+      makeTestOrgContext(USER),
       REMOVAL,
       ctx(),
     );
@@ -268,7 +269,7 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
     ]);
 
     const result = await ensureTransportEvidenceLedgerSourceFromContext(
-      USER,
+      makeTestOrgContext(USER),
       REMOVAL,
       ctx(),
     );
@@ -278,11 +279,11 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
     expect(insertDocument).toHaveBeenCalledOnce();
     // Retire order: mapping first (FK is RESTRICT), then row, then bytes.
     expect(deleteDocumentUploadByDocument).toHaveBeenCalledWith(
-      USER,
+      makeTestOrgContext(USER),
       "isometric",
       "doc-old",
     );
-    expect(deleteDocumentRow).toHaveBeenCalledWith(USER, "doc-old");
+    expect(deleteDocumentRow).toHaveBeenCalledWith(makeTestOrgContext(USER), "doc-old");
     expect(deleteObject).toHaveBeenCalledWith("transport-evidence/old-hash.pdf");
   });
 
@@ -296,7 +297,7 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
     ]);
 
     const result = await ensureTransportEvidenceLedgerSourceFromContext(
-      USER,
+      makeTestOrgContext(USER),
       REMOVAL,
       ctx({ legs: { feedstock: [], biochar: [], sample: [] } }),
     );
@@ -306,16 +307,16 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
     expect(insertDocument).not.toHaveBeenCalled();
     expect(mirrorDocumentToSourceForUser).not.toHaveBeenCalled();
     expect(deleteDocumentUploadByDocument).toHaveBeenCalledWith(
-      USER,
+      makeTestOrgContext(USER),
       "isometric",
       "doc-old",
     );
-    expect(deleteDocumentRow).toHaveBeenCalledWith(USER, "doc-old");
+    expect(deleteDocumentRow).toHaveBeenCalledWith(makeTestOrgContext(USER), "doc-old");
   });
 
   it("skips entirely when the facility has no Isometric project", async () => {
     const result = await ensureTransportEvidenceLedgerSourceFromContext(
-      USER,
+      makeTestOrgContext(USER),
       REMOVAL,
       ctx({ mapping: null }),
     );

@@ -1,3 +1,4 @@
+import { makeTestOrgContext } from "./helpers/test-org";
 /**
  * Transport-leg evidence → Sources.
  *
@@ -124,7 +125,7 @@ beforeEach(() => {
 
 describe("collectCandidateDocumentIdsForRemoval — transport-leg evidence", () => {
   it("includes bill-of-lading docs uploaded against biochar + sample legs", async () => {
-    const ids = await collectCandidateDocumentIdsForRemoval(USER_ID, lineageArgs);
+    const ids = await collectCandidateDocumentIdsForRemoval(makeTestOrgContext(USER_ID), lineageArgs);
 
     expect(ids).toContain(BIOCHAR_LEG_DOC_ID);
     expect(ids).toContain(SAMPLE_LEG_DOC_ID);
@@ -135,7 +136,7 @@ describe("collectCandidateDocumentIdsForRemoval — transport-leg evidence", () 
   });
 
   it("resolves legs for the feedstock / biochar / sample entities in the lineage", async () => {
-    await collectCandidateDocumentIdsForRemoval(USER_ID, lineageArgs);
+    await collectCandidateDocumentIdsForRemoval(makeTestOrgContext(USER_ID), lineageArgs);
 
     const calls = vi.mocked(transportLegsDA.getTransportLegsForEntities).mock
       .calls;
@@ -164,7 +165,7 @@ describe("collectCandidateDocumentIdsForRemoval — transport-leg evidence", () 
     };
 
     const ids = await collectCandidateDocumentIdsForRemoval(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       sharedBiocharArgs,
     );
 
@@ -175,7 +176,7 @@ describe("collectCandidateDocumentIdsForRemoval — transport-leg evidence", () 
     vi.mocked(documentsDA.listDocumentsForEntity).mockResolvedValue(
       [] as never,
     );
-    const ids = await collectCandidateDocumentIdsForRemoval(USER_ID, lineageArgs);
+    const ids = await collectCandidateDocumentIdsForRemoval(makeTestOrgContext(USER_ID), lineageArgs);
     expect(ids).toStrictEqual([]);
   });
 });
@@ -189,7 +190,7 @@ describe("resolveSourceIdsForRemoval — leg doc → Source id", () => {
       },
     ] as never);
 
-    const sourceIds = await resolveSourceIdsForRemoval(USER_ID, {
+    const sourceIds = await resolveSourceIdsForRemoval(makeTestOrgContext(USER_ID), {
       candidateDocumentIds: [BIOCHAR_LEG_DOC_ID],
     });
 

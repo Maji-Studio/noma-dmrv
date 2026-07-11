@@ -1,3 +1,4 @@
+import { makeTestOrgContext } from "./helpers/test-org";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/db", () => {
@@ -124,7 +125,7 @@ describe("insertDraftSubmissionWithMappingLock", () => {
     mockTransaction(stub.tx);
 
     await expect(
-      insertDraftSubmissionWithMappingLock(USER_ID, baseInput, baseGuard),
+      insertDraftSubmissionWithMappingLock(makeTestOrgContext(USER_ID), baseInput, baseGuard),
     ).rejects.toBeInstanceOf(SafeError);
     expect(stub.insertCalls).toHaveLength(0);
   });
@@ -139,7 +140,7 @@ describe("insertDraftSubmissionWithMappingLock", () => {
     mockTransaction(stub.tx);
 
     await expect(
-      insertDraftSubmissionWithMappingLock(USER_ID, baseInput, baseGuard),
+      insertDraftSubmissionWithMappingLock(makeTestOrgContext(USER_ID), baseInput, baseGuard),
     ).rejects.toMatchObject({
       message: expect.stringMatching(/repointed/i),
     });
@@ -156,7 +157,7 @@ describe("insertDraftSubmissionWithMappingLock", () => {
     mockTransaction(stub.tx);
 
     await expect(
-      insertDraftSubmissionWithMappingLock(USER_ID, baseInput, baseGuard),
+      insertDraftSubmissionWithMappingLock(makeTestOrgContext(USER_ID), baseInput, baseGuard),
     ).rejects.toMatchObject({
       message: expect.stringMatching(/template changed/i),
     });
@@ -174,7 +175,7 @@ describe("insertDraftSubmissionWithMappingLock", () => {
     });
     mockTransaction(stub.tx);
 
-    const row = await insertDraftSubmissionWithMappingLock(USER_ID, baseInput, baseGuard);
+    const row = await insertDraftSubmissionWithMappingLock(makeTestOrgContext(USER_ID), baseInput, baseGuard);
     expect(row).toEqual(insertedRow);
     expect(stub.insertCalls).toHaveLength(1);
   });
@@ -196,7 +197,7 @@ describe("insertDraftSubmissionWithMappingLock", () => {
       expectedExternalProjectId: CURRENT_PROJECT,
     };
     const row = await insertDraftSubmissionWithMappingLock(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       baseInput,
       guardWithoutTemplate,
     );
@@ -221,7 +222,7 @@ describe("resetSubmissionToDraftWithMappingLock", () => {
 
     await expect(
       resetSubmissionToDraftWithMappingLock(
-        USER_ID,
+        makeTestOrgContext(USER_ID),
         "sub_1",
         baseGuard,
         LOCK_TTL_MS,
@@ -242,7 +243,7 @@ describe("resetSubmissionToDraftWithMappingLock", () => {
     mockTransaction(stub.tx);
 
     const row = await resetSubmissionToDraftWithMappingLock(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       "sub_1",
       baseGuard,
       LOCK_TTL_MS,
@@ -266,7 +267,7 @@ describe("resetSubmissionToDraftWithMappingLock", () => {
 
     await expect(
       resetSubmissionToDraftWithMappingLock(
-        USER_ID,
+        makeTestOrgContext(USER_ID),
         "sub_1",
         baseGuard,
         LOCK_TTL_MS,

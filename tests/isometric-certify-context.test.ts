@@ -1,3 +1,4 @@
+import { makeTestOrgContext } from "./helpers/test-org";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getCertifierProjectByFacility,
@@ -167,7 +168,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     mockedGetMapping.mockResolvedValue(null);
 
     const result = await loadCertifyContextForCreditBatchForUser(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       CREDIT_BATCH_ID,
     );
 
@@ -194,7 +195,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     mockedListTemplates.mockResolvedValue([template("rvt_1")]);
 
     const result = await loadCertifyContextForCreditBatchForUser(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       CREDIT_BATCH_ID,
     );
 
@@ -254,7 +255,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     ]);
 
     const result = await loadCertifyContextForCreditBatchForUser(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       CREDIT_BATCH_ID,
     );
 
@@ -262,7 +263,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(result.hasSubmittableRuns).toBe(true);
     expect(result.productionReadinessGap).toBeNull();
     expect(result.runSummary.runCount).toBe(1);
-    expect(mockedGetLineage).toHaveBeenCalledWith(USER_ID, "app-1");
+    expect(mockedGetLineage).toHaveBeenCalledWith(makeTestOrgContext(USER_ID), "app-1");
   });
 
   it("flags resolved production runs that have no telemetry readings", async () => {
@@ -313,7 +314,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     ]);
 
     const result = await loadCertifyContextForCreditBatchForUser(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       CREDIT_BATCH_ID,
     );
 
@@ -332,7 +333,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     mockedListTemplates.mockResolvedValue([template("rvt_other")]);
 
     const result = await loadCertifyContextForCreditBatchForUser(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       CREDIT_BATCH_ID,
     );
 
@@ -354,7 +355,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     mockedListBlueprints.mockResolvedValue([blueprint("key_known")]);
 
     const result = await loadCertifyContextForCreditBatchForUser(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       CREDIT_BATCH_ID,
     );
 
@@ -381,7 +382,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     ]);
 
     const result = await loadCertifyContextForCreditBatchForUser(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       CREDIT_BATCH_ID,
     );
 
@@ -477,7 +478,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     });
 
     const result = await loadCertifyContextForCreditBatchForUser(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       CREDIT_BATCH_ID,
     );
 
@@ -582,7 +583,7 @@ describe("requiredTransportCategories", () => {
     mockedListTemplates.mockResolvedValue([transportTemplate("tpl_full")]);
 
     const result = await loadCertifyContextForCreditBatchForUser(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       CREDIT_BATCH_ID,
     );
     expect(result.requiredTransportCategories).toEqual([
@@ -601,7 +602,7 @@ describe("requiredTransportCategories", () => {
     ]);
 
     const result = await loadCertifyContextForCreditBatchForUser(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       CREDIT_BATCH_ID,
     );
     expect(result.requiredTransportCategories).toEqual([
@@ -677,7 +678,7 @@ describe("requiredTransportCategories", () => {
     });
 
     const result = await loadCertifyContextForCreditBatchForUser(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       CREDIT_BATCH_ID,
     );
 
@@ -759,7 +760,7 @@ describe("requiredTransportCategories", () => {
     ]);
 
     const result = await loadCertifyContextForCreditBatchForUser(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       CREDIT_BATCH_ID,
     );
 
@@ -777,7 +778,7 @@ describe("requiredTransportCategories", () => {
     ]);
 
     const result = await loadCertifyContextForCreditBatchForUser(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       CREDIT_BATCH_ID,
     );
     expect(result.requiredTransportCategories).toEqual([]);
@@ -790,7 +791,7 @@ describe("requiredTransportCategories", () => {
     mockedListTemplates.mockResolvedValue([]);
 
     const result = await loadCertifyContextForCreditBatchForUser(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       CREDIT_BATCH_ID,
     );
     expect(result.requiredTransportCategories).toEqual([]);
