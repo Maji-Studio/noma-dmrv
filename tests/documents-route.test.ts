@@ -148,6 +148,18 @@ describe("GET /api/documents/[id]", () => {
     expect(res.headers.get("location")).toBe(SIGNED_URL);
   });
 
+  it("public + authed cross-org → 302 via public fallback", async () => {
+    vi.mocked(getOrgContext).mockResolvedValueOnce(TEST_CTX);
+    vi.mocked(getDocumentById).mockResolvedValueOnce(null);
+    vi.mocked(getPublicDocumentById).mockResolvedValueOnce({
+      ...baseRow,
+      visibility: "public",
+    } as never);
+    const res = await GET(makeRequest(), makeCtx());
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(SIGNED_URL);
+  });
+
   it("uploadStatus=pending → 404 (refuses un-confirmed uploads)", async () => {
     vi.mocked(getOrgContext).mockResolvedValueOnce(TEST_CTX);
     vi.mocked(getDocumentById).mockResolvedValueOnce({

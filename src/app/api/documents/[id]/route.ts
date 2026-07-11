@@ -22,12 +22,12 @@ export async function GET(
     return new NextResponse("Bad Request", { status: 400 });
   }
 
-  // Org-scoped read when the caller has an active organization; signed-out or
-  // org-less callers only reach explicitly public documents.
+  // Prefer the active organization's document, then allow the same public
+  // cross-organization fallback available to signed-out or org-less callers.
   const orgCtx = await getOrgContext();
-  const row = orgCtx
-    ? await getDocumentById(orgCtx, id)
-    : await getPublicDocumentById(id);
+  const row =
+    (orgCtx ? await getDocumentById(orgCtx, id) : null) ??
+    (await getPublicDocumentById(id));
   if (!row) {
     return new NextResponse(orgCtx ? "Not Found" : "Unauthorized", {
       status: orgCtx ? 404 : 401,

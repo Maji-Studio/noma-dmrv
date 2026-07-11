@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { env } from "@/config/env";
 import { db } from "@/db";
 import { creditBatches } from "@/db/schema";
@@ -203,7 +203,12 @@ export async function loadCreditBatchHealthSummaries(
         facilityId: creditBatches.facilityId,
       })
       .from(creditBatches)
-      .where(inArray(creditBatches.id, ids));
+      .where(
+        and(
+          inArray(creditBatches.id, ids),
+          eq(creditBatches.organizationId, orgCtx.organizationId),
+        ),
+      );
     const facilityByBatchId = new Map(
       batchFacilityRows.map((row) => [row.id, row.facilityId]),
     );

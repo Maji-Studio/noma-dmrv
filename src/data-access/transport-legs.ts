@@ -295,16 +295,19 @@ export async function deleteTransportLeg(
 // polymorphic, so PostgreSQL cannot enforce FK cascades for feedstocks,
 // biochar products, or samples.
 export async function deleteTransportLegsForEntity(
+  ctx: OrgContext,
   tx: DbTransaction,
   entityType: TransportEntityType,
   entityId: string,
 ): Promise<void> {
+  requireOrgScope(ctx);
   await tx
     .delete(transportLegs)
     .where(
       and(
         eq(transportLegs.entityType, entityType),
         eq(transportLegs.entityId, entityId),
+        eq(transportLegs.organizationId, ctx.organizationId),
       ),
     );
 }

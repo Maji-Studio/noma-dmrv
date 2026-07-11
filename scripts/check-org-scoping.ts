@@ -1,17 +1,15 @@
 /**
  * Heuristic guard against unscoped domain-table access in data-access modules.
  *
- * This is intentionally not a TypeScript parser. It finds db.select/insert/
+ * This is intentionally not a TypeScript parser. It finds db/tx select/insert/
  * update/delete chains through their terminating semicolon, identifies schema
  * table references, and requires organizationId to appear in domain chains.
- * Transaction-local `tx.` chains are skipped: transactions are only entered
- * through the surrounding guarded data-access function.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { extname, join, relative } from "node:path";
 
 const ROOT = process.cwd();
-const DATA_ACCESS_DIR = join(ROOT, "src/data-access");
+const SCANNED_DIRS = [join(ROOT, "src/data-access"), join(ROOT, "src/fn")];
 const SCHEMA_DIR = join(ROOT, "src/db/schema");
 const WAIVER = /\/\/\s*org-scope-ok:\s*\S/;
 
@@ -103,6 +101,47 @@ function findChainEnd(source: string, start: number): number {
   return source.length;
 }
 
+/**
+ * Extract the balanced-parentheses argument lists of every `.where(...)` call in
+ * a chain. A trailing `.returning({ organizationId: ... })` after `.where(...)`
+ * must NOT count toward org-scoping, so we look only inside each where-call's own
+ * argument list rather than slicing to the chain's end.
+ */
+function whereArgumentLists(chain: string): string[] {
+  const lists: string[] = [];
+  const whereCall = /\.where\s*\(/g;
+
+  for (const match of chain.matchAll(whereCall)) {
+    if (match.index === undefined) continue;
+    const open = match.index + match[0].length - 1;
+    let depth = 0;
+    let quote: "'" | '"' | "`" | null = null;
+    let escaped = false;
+    for (let index = open; index < chain.length; index += 1) {
+      const char = chain[index];
+      if (quote) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === quote) quote = null;
+        continue;
+      }
+      if (char === "'" || char === '"' || char === "`") {
+        quote = char;
+      } else if (char === "(") {
+        depth += 1;
+      } else if (char === ")") {
+        depth -= 1;
+        if (depth === 0) {
+          lists.push(chain.slice(open + 1, index));
+          break;
+        }
+      }
+    }
+  }
+
+  return lists;
+}
+
 function referencedTables(chain: string): Set<string> {
   const tables = new Set<string>();
   const tableCall =
@@ -117,7 +156,8 @@ function referencedTables(chain: string): Set<string> {
 function inspectFile(file: string, domainTables: Set<string>): Violation[] {
   const source = readFileSync(file, "utf8");
   const violations: Violation[] = [];
-  const chainStart = /\bdb\s*\.\s*(?:select|insert|update|delete)\s*\(/g;
+  const chainStart =
+    /\b(?:db|tx)\s*\.\s*(select|insert|update|delete)\s*\(/g;
 
   for (const match of source.matchAll(chainStart)) {
     if (match.index === undefined) continue;
@@ -135,7 +175,14 @@ function inspectFile(file: string, domainTables: Set<string>): Violation[] {
     const tables = [...referencedTables(chain)].filter((table) =>
       domainTables.has(table),
     );
-    if (tables.length === 0 || chain.includes("organizationId")) continue;
+    const operation = match[1];
+    const scoped =
+      operation === "update" || operation === "delete"
+        ? whereArgumentLists(chain).some((args) =>
+            args.includes("organizationId"),
+          )
+        : chain.includes("organizationId");
+    if (tables.length === 0 || scoped) continue;
 
     violations.push({
       file: relative(ROOT, file),
@@ -148,8 +195,8 @@ function inspectFile(file: string, domainTables: Set<string>): Violation[] {
 }
 
 const domainTables = loadDomainTables();
-const violations = walkTsFiles(DATA_ACCESS_DIR).flatMap((file) =>
-  inspectFile(file, domainTables),
+const violations = SCANNED_DIRS.flatMap((directory) =>
+  walkTsFiles(directory).flatMap((file) => inspectFile(file, domainTables)),
 );
 
 if (violations.length > 0) {

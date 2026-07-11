@@ -175,7 +175,7 @@ export async function ensureLedgerSource(
     try {
       const pdf = await spec.render();
       const provider = getStorageProvider();
-      const storageKey = `${spec.storageKeyPrefix}/${spec.facilityId}/${spec.removalId}/${spec.contentHash}.pdf`;
+      const storageKey = `org/${orgCtx.organizationId}/${spec.storageKeyPrefix}/${spec.facilityId}/${spec.removalId}/${spec.contentHash}.pdf`;
       await provider.putObject(storageKey, pdf, PDF_MIME);
 
       const doc = await insertDocument(orgCtx, {

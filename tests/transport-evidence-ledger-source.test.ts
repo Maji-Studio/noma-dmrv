@@ -1,4 +1,4 @@
-import { makeTestOrgContext } from "./helpers/test-org";
+import { makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Core-logic tests for `ensureTransportEvidenceLedgerSourceFromContext` — the
  * generate → store → mirror → supersede flow that rides into a removal's
@@ -170,7 +170,7 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
     expect(putObject).toHaveBeenCalledOnce();
     const [key, body, contentType] = putObject.mock.calls[0];
     expect(key).toMatch(
-      new RegExp(`^transport-evidence/${FACILITY}/${REMOVAL}/[a-f0-9]{64}\\.pdf$`),
+      new RegExp(`^org/${TEST_ORG_ID}/transport-evidence/${FACILITY}/${REMOVAL}/[a-f0-9]{64}\\.pdf$`),
     );
     expect(Buffer.isBuffer(body)).toBe(true);
     expect(contentType).toBe("application/pdf");

@@ -46,7 +46,7 @@ export async function insertOrGetDocumentUpload(
   txOrDb: DbClient = db,
 ): Promise<{ row: CertifierDocumentUploadRow; inserted: boolean }> {
   requireOrgScope(ctx);
-  await assertSameOrg(ctx, documents, input.documentId);
+  await assertSameOrg(ctx, documents, input.documentId, txOrDb);
   const [row] = await txOrDb
     .insert(certifierDocumentUploads)
     .values({
