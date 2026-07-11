@@ -678,7 +678,7 @@ export async function updateFacility(
     // Cheap indexed status probe first; only hit the ledger when it clears.
     const tierIsLocked =
       blockingBatch !== undefined ||
-      (await hasBlockingFacilitySubmission(db, facilityId, "isometric"));
+      (await hasBlockingFacilitySubmission(ctx, db, facilityId, "isometric"));
 
     if (tierIsLocked) {
       throw new SafeError(
@@ -767,7 +767,7 @@ export async function getFacilityArchiveImpact(
     db.select({ count: count() }).from(creditBatches).where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId))),
     db.select({ count: count() }).from(stockpileEvents).where(and(eq(stockpileEvents.facilityId, facilityId), eq(stockpileEvents.organizationId, ctx.organizationId))),
     db.select({ count: count() }).from(powerProcurementEvidence).where(and(eq(powerProcurementEvidence.facilityId, facilityId), eq(powerProcurementEvidence.organizationId, ctx.organizationId))),
-    hasBlockingFacilitySubmission(db, facilityId, "isometric"),
+    hasBlockingFacilitySubmission(ctx, db, facilityId, "isometric"),
   ]);
 
   return {

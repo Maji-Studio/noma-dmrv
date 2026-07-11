@@ -2,7 +2,9 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { certifierDocumentUploads } from "@/db/schema/certification";
 import { certificationSubmissions } from "@/db/schema/certification";
-import { requireAuth } from "./utils";
+import { documents } from "@/db/schema/documentation";
+import type { OrgContext } from "@/lib/auth/server";
+import { assertSameOrg, requireOrgScope } from "./utils";
 
 type DbClient = DbTransaction | typeof db;
 
@@ -39,14 +41,16 @@ export interface InsertDocumentUploadInput {
 // is now an orphan". The mirror flow emits an orphan-detected sync_event in
 // the loser case so an out-of-band sweep can clean up.
 export async function insertOrGetDocumentUpload(
-  userId: string,
+  ctx: OrgContext,
   input: InsertDocumentUploadInput,
   txOrDb: DbClient = db,
 ): Promise<{ row: CertifierDocumentUploadRow; inserted: boolean }> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
+  await assertSameOrg(ctx, documents, input.documentId);
   const [row] = await txOrDb
     .insert(certifierDocumentUploads)
     .values({
+      organizationId: ctx.organizationId,
       documentId: input.documentId,
       provider: input.provider,
       externalDocumentId: input.externalDocumentId,
@@ -61,7 +65,7 @@ export async function insertOrGetDocumentUpload(
     .returning();
   if (row) return { row, inserted: true };
   const existing = await getDocumentUploadByDocument(
-    userId,
+    ctx,
     input.provider,
     input.documentId,
     txOrDb,
@@ -75,12 +79,12 @@ export async function insertOrGetDocumentUpload(
 }
 
 export async function getDocumentUploadByDocument(
-  userId: string,
+  ctx: OrgContext,
   provider: CertifierProvider,
   documentId: string,
   txOrDb: DbClient = db,
 ): Promise<CertifierDocumentUploadRow | null> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const [row] = await txOrDb
     .select()
     .from(certifierDocumentUploads)
@@ -88,6 +92,7 @@ export async function getDocumentUploadByDocument(
       and(
         eq(certifierDocumentUploads.provider, provider),
         eq(certifierDocumentUploads.documentId, documentId),
+        eq(certifierDocumentUploads.organizationId, ctx.organizationId),
       ),
     )
     .limit(1);
@@ -95,12 +100,12 @@ export async function getDocumentUploadByDocument(
 }
 
 export async function listDocumentUploadsForDocuments(
-  userId: string,
+  ctx: OrgContext,
   provider: CertifierProvider,
   documentIds: string[],
   txOrDb: DbClient = db,
 ): Promise<CertifierDocumentUploadRow[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   if (documentIds.length === 0) return [];
   return txOrDb
     .select()
@@ -109,24 +114,25 @@ export async function listDocumentUploadsForDocuments(
       and(
         eq(certifierDocumentUploads.provider, provider),
         inArray(certifierDocumentUploads.documentId, documentIds),
+        eq(certifierDocumentUploads.organizationId, ctx.organizationId),
       ),
     );
 }
 
 export async function updateDocumentUploadMetadata(
-  userId: string,
+  ctx: OrgContext,
   rowId: string,
   metadata: DocumentUploadMetadata,
   txOrDb: DbClient = db,
 ): Promise<CertifierDocumentUploadRow> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const [row] = await txOrDb
     .update(certifierDocumentUploads)
     .set({
       metadata: metadata as unknown as Record<string, unknown>,
       updatedAt: new Date(),
     })
-    .where(eq(certifierDocumentUploads.id, rowId))
+    .where(and(eq(certifierDocumentUploads.id, rowId), eq(certifierDocumentUploads.organizationId, ctx.organizationId)))
     .returning();
   if (!row) {
     throw new Error(`Document upload ${rowId} not found`);
@@ -135,18 +141,19 @@ export async function updateDocumentUploadMetadata(
 }
 
 export async function deleteDocumentUploadByDocument(
-  userId: string,
+  ctx: OrgContext,
   provider: CertifierProvider,
   documentId: string,
   txOrDb: DbClient = db,
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   await txOrDb
     .delete(certifierDocumentUploads)
     .where(
       and(
         eq(certifierDocumentUploads.provider, provider),
         eq(certifierDocumentUploads.documentId, documentId),
+        eq(certifierDocumentUploads.organizationId, ctx.organizationId),
       ),
     );
 }
@@ -161,12 +168,12 @@ export async function deleteDocumentUploadByDocument(
 // nested array equals X"; using `@>` containment is awkward across nested
 // arrays.
 export async function isExternalSourceReferencedInSnapshots(
-  userId: string,
+  ctx: OrgContext,
   provider: CertifierProvider,
   externalDocumentId: string,
   txOrDb: DbClient = db,
 ): Promise<boolean> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   // Provider scoping is forward-compat: only `isometric` issues source_ids
   // today, but the enum permits `puro_earth` / `verra` and nothing
   // structurally prevents two providers from generating the same source_id
@@ -180,6 +187,7 @@ export async function isExternalSourceReferencedInSnapshots(
     SELECT 1 AS found
     FROM ${certificationSubmissions}
     WHERE ${eq(certificationSubmissions.provider, provider)}
+      AND ${eq(certificationSubmissions.organizationId, ctx.organizationId)}
       AND jsonb_path_exists(
         payload_snapshot,
         '$.transport.datapointBodies[*].body.source_ids[*] ? (@ == $val)',

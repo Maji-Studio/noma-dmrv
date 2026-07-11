@@ -446,6 +446,7 @@ export async function updateProductionRun(
   try {
     await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "productionRun", entityId: productionRunId },
       "update",
@@ -560,6 +561,7 @@ export async function deleteProductionRun(
   // The FK violation propagates out and is caught by the server action.
   await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "productionRun", entityId: productionRunId },
       "delete",

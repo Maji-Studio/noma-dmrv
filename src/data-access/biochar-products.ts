@@ -494,6 +494,7 @@ export async function createBiocharProduct(
     // certification. Mirror the update/delete guards so the create path can't
     // bypass certification locking by attaching a fresh product to a locked run.
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "productionRun", entityId: run.id },
       "create",
@@ -742,6 +743,7 @@ export async function updateBiocharProduct(
   // products with different formulations can't strand a mismatch in one bin.
   const updated = await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "biocharProduct", entityId: productId },
       "update",
@@ -881,6 +883,7 @@ export async function deleteBiocharProduct(
 
   await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "biocharProduct", entityId: productId },
       "delete",

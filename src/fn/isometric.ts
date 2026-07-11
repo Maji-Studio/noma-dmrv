@@ -41,10 +41,10 @@ export type ProcessSamplingEligibilityResult = {
 export async function validateProcessSamplingMethodFn(
   data: z.infer<typeof processSamplingMethodSchema>
 ): Promise<ActionResult<ProcessSamplingEligibilityResult>> {
-  return withAction(async (userId) => {
+  return withAction(async (orgCtx) => {
     const validated = processSamplingMethodSchema.parse(data);
 
-    const eligibility = await getMethodBEligibilityByProcess(userId, {
+    const eligibility = await getMethodBEligibilityByProcess(orgCtx, {
       productionProcessId: validated.process_id,
     });
 

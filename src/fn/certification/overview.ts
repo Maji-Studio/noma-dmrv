@@ -100,11 +100,11 @@ export interface CertificationOverviewData {
 export async function loadCertificationOverview(
   facilityId: string,
 ): Promise<ActionResult<CertificationOverviewData>> {
-  return withAction(async (userId) => {
+  return withAction(async (orgCtx) => {
     const [removalRows, ungroupedBatches, facilityFacts] = await Promise.all([
-      listRemovalsForFacility(userId, facilityId),
-      listUngroupedCreditBatches(userId, facilityId),
-      loadFacilityCertifierFacts(userId, facilityId),
+      listRemovalsForFacility(orgCtx, facilityId),
+      listUngroupedCreditBatches(orgCtx, facilityId),
+      loadFacilityCertifierFacts(orgCtx, facilityId),
     ]);
 
     // Process in bounded chunks (order-preserving) rather than one unbounded
@@ -115,10 +115,10 @@ export async function loadCertificationOverview(
         removalRows
           .slice(i, i + READINESS_CONCURRENCY)
           .map(async (removal): Promise<RemovalPreflightSummary> => {
-            const scope = await resolveScopeForRemoval(userId, removal.id, {
+            const scope = await resolveScopeForRemoval(orgCtx, removal.id, {
               skipPreview: true,
             });
-            const ctx = await buildRemovalContext(userId, scope, facilityFacts);
+            const ctx = await buildRemovalContext(orgCtx, scope, facilityFacts);
             const facts = toRemovalReadinessFacts(ctx);
             const readiness = deriveRemovalReadiness(facts);
 
@@ -150,7 +150,7 @@ export async function loadCertificationOverview(
           .slice(i, i + READINESS_CONCURRENCY)
           .map(async (batch) => {
             const ctx = await buildCreditBatchContextWithFacts(
-              userId,
+              orgCtx,
               batch.id,
               facilityFacts,
             );
@@ -186,7 +186,7 @@ export async function loadCreditBatchHealthSummaries(
   facilityId: string,
   batchIds: string[],
 ): Promise<ActionResult<Record<string, CreditBatchHealthSummary>>> {
-  return withAction(async (userId) => {
+  return withAction(async (orgCtx) => {
     const validFacilityId = z.string().uuid().parse(facilityId);
     const ids = z
       .array(z.string().uuid())
@@ -215,7 +215,7 @@ export async function loadCreditBatchHealthSummaries(
     }
 
     const facilityFacts = await loadFacilityCertifierFacts(
-      userId,
+      orgCtx,
       validFacilityId,
     );
     const summaries: Record<string, CreditBatchHealthSummary> = {};
@@ -223,7 +223,7 @@ export async function loadCreditBatchHealthSummaries(
       const verdicts = await Promise.all(
         ids.slice(i, i + READINESS_CONCURRENCY).map(async (batchId) => {
           const ctx = await buildCreditBatchContextWithFacts(
-            userId,
+            orgCtx,
             batchId,
             facilityFacts,
           );

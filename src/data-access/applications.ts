@@ -504,6 +504,7 @@ export async function createApplication(
 
   return db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "delivery", entityId: data.deliveryId },
       "create",
@@ -572,6 +573,7 @@ export async function updateApplication(
     }
 
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "application", entityId: id },
       "update",
@@ -589,6 +591,7 @@ export async function updateApplication(
       data.deliveryId !== existingApplication.deliveryId
     ) {
       await assertCanMutateCertifiedLineage(
+        ctx,
         tx,
         { entityType: "delivery", entityId: data.deliveryId },
         "update",
@@ -673,6 +676,7 @@ export async function deleteApplication(ctx: OrgContext, id: string): Promise<vo
     }
 
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "application", entityId: id },
       "delete",

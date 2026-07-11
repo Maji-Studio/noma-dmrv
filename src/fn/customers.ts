@@ -464,7 +464,7 @@ export async function updateCustomerLocationFn(
     // of every product delivered here. Best-effort — a stale leg self-heals on
     // the next delivery write and must not fail the location update.
     try {
-      await syncBiocharLegsForCustomerLocation(ctx.userId, validated.locationId);
+      await syncBiocharLegsForCustomerLocation(ctx, validated.locationId);
     } catch (error) {
       logger.warn(
         {

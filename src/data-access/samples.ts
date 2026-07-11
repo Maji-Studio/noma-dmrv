@@ -582,6 +582,7 @@ export async function createSample(
   // `withAutoCode`; a user-supplied duplicate surfaces via that same guard.
   const sample = await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "creditBatch", entityId: data.creditBatchId },
       "create",
@@ -775,6 +776,7 @@ export async function updateSample(
 
   await guardSampleCode(() => db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "sample", entityId: sampleId },
       "update",
@@ -787,6 +789,7 @@ export async function updateSample(
       data.creditBatchId !== existing.creditBatchId
     ) {
       await assertCanMutateCertifiedLineage(
+        ctx,
         tx,
         { entityType: "creditBatch", entityId: data.creditBatchId },
         "update",
@@ -853,6 +856,7 @@ export async function deleteSample(
 
   await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "sample", entityId: sampleId },
       "delete",

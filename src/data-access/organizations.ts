@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 import { and, count, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { invitations, members, organizations, users } from "@/db/schema";
-import { requireAuth } from "@/data-access/utils";
+import { requireOrgScope } from "@/data-access/utils";
 import { getBetterAuthSession } from "@/lib/auth/providers/better-auth-server";
 import {
   requirePlatformAdmin,
@@ -50,7 +50,7 @@ export type OrganizationSummary = {
 };
 
 function requirePlatformAdminOverride(ctx: OrgContext): void {
-  requireAuth(ctx.userId);
+  requireOrgScope(ctx);
   if (!ctx.isPlatformAdmin) {
     throw new SafeError("Platform Admin access is required for this action.");
   }
@@ -58,7 +58,7 @@ function requirePlatformAdminOverride(ctx: OrgContext): void {
 
 /** Members of the active org, joined to their user identity. */
 export async function listOrgMembers(ctx: OrgContext): Promise<OrgMemberRow[]> {
-  requireAuth(ctx.userId);
+  requireOrgScope(ctx);
   return db
     .select({
       memberId: members.id,
@@ -78,7 +78,7 @@ export async function listOrgMembers(ctx: OrgContext): Promise<OrgMemberRow[]> {
 export async function listOrgInvitations(
   ctx: OrgContext
 ): Promise<OrgInvitationRow[]> {
-  requireAuth(ctx.userId);
+  requireOrgScope(ctx);
   return db
     .select({
       id: invitations.id,
@@ -291,7 +291,7 @@ export async function removeMemberAsPlatformAdmin(
 
 /** The active org's profile (name, slug, logo). */
 export async function getActiveOrganization(ctx: OrgContext) {
-  requireAuth(ctx.userId);
+  requireOrgScope(ctx);
   const [org] = await db
     .select()
     .from(organizations)
@@ -396,7 +396,9 @@ export async function findMembershipRole(
 ): Promise<string | null> {
   const session = await getBetterAuthSession();
   const userId = session?.user?.id ?? "";
-  requireAuth(userId);
+  if (!userId) {
+    throw new Error("Unauthorized");
+  }
 
   const [membership] = await db
     .select({ role: members.role })

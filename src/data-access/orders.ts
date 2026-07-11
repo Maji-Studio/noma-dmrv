@@ -623,6 +623,7 @@ export async function updateOrder(
 
   const updated = await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "order", entityId: orderId },
       "update",
@@ -668,6 +669,7 @@ export async function deleteOrder(
 
   await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "order", entityId: orderId },
       "delete",

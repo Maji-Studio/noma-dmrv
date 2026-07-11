@@ -17,9 +17,9 @@ import { loadCertifyContextForCreditBatchForUser } from "./certify-context-core"
 export async function loadBatchHealth(
   creditBatchId: string,
 ): Promise<ActionResult<BatchHealth>> {
-  return withAction(async (userId) => {
+  return withAction(async (orgCtx) => {
     const ctx = await loadCertifyContextForCreditBatchForUser(
-      userId,
+      orgCtx,
       creditBatchId,
     );
     return deriveBatchHealth(toBatchHealthFacts(ctx, creditBatchId));

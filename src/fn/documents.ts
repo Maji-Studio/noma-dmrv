@@ -300,7 +300,7 @@ export async function deleteDocument(
     // Fast user-facing path; the FK-backed delete below remains the real race
     // guard in case a mirror appears after this check.
     const isometricMirror = await getDocumentUploadByDocument(
-      ctx.userId, ISOMETRIC_PROVIDER,
+      ctx, ISOMETRIC_PROVIDER,
       row.id,
     );
     if (isometricMirror) {
@@ -314,7 +314,7 @@ export async function deleteDocument(
       deleted = await deleteDocumentRow(ctx, row.id);
     } catch (err) {
       const mirror = await getDocumentUploadByDocument(
-        ctx.userId, ISOMETRIC_PROVIDER,
+        ctx, ISOMETRIC_PROVIDER,
         row.id,
       );
       if (mirror) {

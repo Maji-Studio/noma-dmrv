@@ -189,7 +189,7 @@ export async function getProductionProcessSummariesByFacility(
 
   if (processRows.length === 0) return [];
 
-  const eligibleSamplesByProcess = await countEligibleSamplesByProcess(db, {
+  const eligibleSamplesByProcess = await countEligibleSamplesByProcess(ctx, db, {
     facilityId,
   });
 
@@ -302,7 +302,7 @@ export async function unlockMethodBForProcess(
     // pre-unlock boundary as the DB trigger (migration 0060) and the two can't
     // disagree at unlock.
     const now = new Date();
-    const eligibleByProcess = await countEligibleSamplesByProcess(tx, {
+    const eligibleByProcess = await countEligibleSamplesByProcess(ctx, tx, {
       facilityId: process.facilityId,
       asOfDate: now,
     });

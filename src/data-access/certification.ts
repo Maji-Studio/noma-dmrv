@@ -18,7 +18,8 @@ import {
   REMOVAL_ENTITY_TYPE,
 } from "@/lib/isometric/utils/constants";
 import { SafeError } from "@/lib/errors";
-import { requireAuth } from "./utils";
+import type { OrgContext } from "@/lib/auth/server";
+import { assertSameOrg, requireOrgScope } from "./utils";
 
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
 export type CertifierProjectRow = typeof certifierProjects.$inferSelect;
@@ -44,11 +45,11 @@ export interface LinkedFacilitySummary {
 }
 
 export async function getCertifierProjectByFacility(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string,
   provider: CertifierProvider = "isometric",
 ): Promise<CertifierProjectRow | null> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const [row] = await db
     .select()
     .from(certifierProjects)
@@ -56,6 +57,7 @@ export async function getCertifierProjectByFacility(
       and(
         eq(certifierProjects.facilityId, facilityId),
         eq(certifierProjects.provider, provider),
+        eq(certifierProjects.organizationId, ctx.organizationId),
       ),
     )
     .limit(1);
@@ -63,11 +65,11 @@ export async function getCertifierProjectByFacility(
 }
 
 export async function listFacilitiesLinkedToExternal(
-  userId: string,
+  ctx: OrgContext,
   provider: CertifierProvider,
   externalProjectId: string,
 ): Promise<LinkedFacilitySummary[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const rows = await db
     .select({
       facilityId: facilities.id,
@@ -75,11 +77,12 @@ export async function listFacilitiesLinkedToExternal(
       name: facilities.name,
     })
     .from(certifierProjects)
-    .innerJoin(facilities, eq(certifierProjects.facilityId, facilities.id))
+    .innerJoin(facilities, and(eq(certifierProjects.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
     .where(
       and(
         eq(certifierProjects.provider, provider),
         eq(certifierProjects.externalProjectId, externalProjectId),
+        eq(certifierProjects.organizationId, ctx.organizationId),
       ),
     );
   return rows;
@@ -90,10 +93,10 @@ export interface LinkedFacilityByProject extends LinkedFacilitySummary {
 }
 
 export async function listAllFacilitiesLinkedByProvider(
-  userId: string,
+  ctx: OrgContext,
   provider: CertifierProvider,
 ): Promise<LinkedFacilityByProject[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   return db
     .select({
       externalProjectId: certifierProjects.externalProjectId,
@@ -102,8 +105,8 @@ export async function listAllFacilitiesLinkedByProvider(
       name: facilities.name,
     })
     .from(certifierProjects)
-    .innerJoin(facilities, eq(certifierProjects.facilityId, facilities.id))
-    .where(eq(certifierProjects.provider, provider));
+    .innerJoin(facilities, and(eq(certifierProjects.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .where(and(eq(certifierProjects.provider, provider), eq(certifierProjects.organizationId, ctx.organizationId)));
 }
 
 export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -118,10 +121,12 @@ const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
 // Exported for the facility archive-with-warning gate (archive stays allowed;
 // the dialog surfaces a warning when registry submissions exist).
 export async function hasBlockingFacilitySubmission(
+  ctx: OrgContext,
   executor: Tx | typeof db,
   facilityId: string,
   provider: CertifierProvider,
 ): Promise<boolean> {
+  requireOrgScope(ctx);
   // Two facility-scoped artifacts can pin a mapping: a Removal (ADR 0003,
   // which also covers its telemetry data-upload per ADR 0006 — both join
   // through certifierRemovals) and a GHG Statement (ADR 0004). Each carries
@@ -133,7 +138,7 @@ export async function hasBlockingFacilitySubmission(
       .from(certificationSubmissions)
       .innerJoin(
         certifierRemovals,
-        eq(certificationSubmissions.localEntityId, certifierRemovals.id),
+        and(eq(certificationSubmissions.localEntityId, certifierRemovals.id), eq(certifierRemovals.organizationId, ctx.organizationId)),
       )
       .where(
         and(
@@ -145,6 +150,7 @@ export async function hasBlockingFacilitySubmission(
           ),
           eq(certifierRemovals.facilityId, facilityId),
           inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
+          eq(certificationSubmissions.organizationId, ctx.organizationId),
         ),
       )
       .limit(1),
@@ -153,7 +159,7 @@ export async function hasBlockingFacilitySubmission(
       .from(certificationSubmissions)
       .innerJoin(
         certifierGhgStatements,
-        eq(certificationSubmissions.localEntityId, certifierGhgStatements.id),
+        and(eq(certificationSubmissions.localEntityId, certifierGhgStatements.id), eq(certifierGhgStatements.organizationId, ctx.organizationId)),
       )
       .where(
         and(
@@ -162,6 +168,7 @@ export async function hasBlockingFacilitySubmission(
           eq(certificationSubmissions.submissionType, "ghg_statement"),
           eq(certifierGhgStatements.facilityId, facilityId),
           inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
+          eq(certificationSubmissions.organizationId, ctx.organizationId),
         ),
       )
       .limit(1),
@@ -194,11 +201,12 @@ async function withExternalFacilityConflictGuard<T>(
 }
 
 export async function upsertCertifierProject(
-  userId: string,
+  ctx: OrgContext,
   input: UpsertCertifierProjectInput,
 ): Promise<CertifierProjectRow> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const values = {
+    organizationId: ctx.organizationId,
     facilityId: input.facilityId,
     provider: input.provider,
     externalProjectId: input.externalProjectId,
@@ -218,6 +226,7 @@ export async function upsertCertifierProject(
           and(
             eq(certifierProjects.facilityId, input.facilityId),
             eq(certifierProjects.provider, input.provider),
+            eq(certifierProjects.organizationId, ctx.organizationId),
           ),
         )
         .for("update")
@@ -238,7 +247,7 @@ export async function upsertCertifierProject(
             name: facilities.name,
           })
           .from(certifierProjects)
-          .innerJoin(facilities, eq(certifierProjects.facilityId, facilities.id))
+          .innerJoin(facilities, and(eq(certifierProjects.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
           .where(
             and(
               eq(certifierProjects.provider, input.provider),
@@ -247,6 +256,7 @@ export async function upsertCertifierProject(
                 values.externalFacilityId,
               ),
               ne(certifierProjects.facilityId, input.facilityId),
+              eq(certifierProjects.organizationId, ctx.organizationId),
             ),
           )
           .limit(1);
@@ -263,6 +273,7 @@ export async function upsertCertifierProject(
           existing.externalFacilityId !== values.externalFacilityId);
       if (mappingIdentifiersChanged) {
         const blocked = await hasBlockingFacilitySubmission(
+          ctx,
           tx,
           input.facilityId,
           input.provider,
@@ -312,10 +323,10 @@ export interface FacilityEmissionConfigInput {
 // stage-split columns. The facility must already be linked to an Isometric
 // project — the config has no meaning otherwise.
 export async function updateFacilityEmissionConfig(
-  userId: string,
+  ctx: OrgContext,
   input: FacilityEmissionConfigInput,
 ): Promise<CertifierProjectRow> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const provider = input.provider ?? "isometric";
   const [row] = await db
     .update(certifierProjects)
@@ -329,6 +340,7 @@ export async function updateFacilityEmissionConfig(
       and(
         eq(certifierProjects.facilityId, input.facilityId),
         eq(certifierProjects.provider, provider),
+        eq(certifierProjects.organizationId, ctx.organizationId),
       ),
     )
     .returning();
@@ -341,11 +353,11 @@ export async function updateFacilityEmissionConfig(
 }
 
 export async function deleteCertifierProject(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string,
   provider: CertifierProvider = "isometric",
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   await db.transaction(async (tx) => {
     // Lock the mapping row so a concurrent submission insert that depends on
@@ -357,6 +369,7 @@ export async function deleteCertifierProject(
         and(
           eq(certifierProjects.facilityId, facilityId),
           eq(certifierProjects.provider, provider),
+          eq(certifierProjects.organizationId, ctx.organizationId),
         ),
       )
       .for("update")
@@ -364,7 +377,7 @@ export async function deleteCertifierProject(
 
     // Unlink guard: refuse if any facility-scoped certifier removal
     // submission depends on this mapping.
-    const blocked = await hasBlockingFacilitySubmission(tx, facilityId, provider);
+    const blocked = await hasBlockingFacilitySubmission(ctx, tx, facilityId, provider);
     if (blocked) {
       throw new SafeError(
         "Cannot unlink: this facility has certifier submissions. Supersede or reject them first.",
@@ -377,6 +390,7 @@ export async function deleteCertifierProject(
         and(
           eq(certifierProjects.facilityId, facilityId),
           eq(certifierProjects.provider, provider),
+          eq(certifierProjects.organizationId, ctx.organizationId),
         ),
       );
   });
@@ -426,6 +440,7 @@ export type CertifierSyncEventRow = typeof certifierSyncEvents.$inferSelect;
 // Batched facility lookup for a set of local-entity ids of one type. Returns an
 // id → facilityId map; ids whose anchor row no longer exists are simply absent.
 async function facilityIdsForLocalEntities(
+  ctx: OrgContext,
   executor: Tx | typeof db,
   localEntityType: string,
   ids: string[],
@@ -435,7 +450,7 @@ async function facilityIdsForLocalEntities(
     const rows = await executor
       .select({ id: certifierRemovals.id, facilityId: certifierRemovals.facilityId })
       .from(certifierRemovals)
-      .where(inArray(certifierRemovals.id, ids));
+      .where(and(inArray(certifierRemovals.id, ids), eq(certifierRemovals.organizationId, ctx.organizationId)));
     return new Map(rows.map((r) => [r.id, r.facilityId]));
   }
   if (localEntityType === GHG_STATEMENT_ENTITY_TYPE) {
@@ -445,7 +460,7 @@ async function facilityIdsForLocalEntities(
         facilityId: certifierGhgStatements.facilityId,
       })
       .from(certifierGhgStatements)
-      .where(inArray(certifierGhgStatements.id, ids));
+      .where(and(inArray(certifierGhgStatements.id, ids), eq(certifierGhgStatements.organizationId, ctx.organizationId)));
     return new Map(rows.map((r) => [r.id, r.facilityId]));
   }
   return new Map();
@@ -454,10 +469,12 @@ async function facilityIdsForLocalEntities(
 // Resolves the facility that owns a submission row via its anchor entity.
 // Returns null for an unknown local-entity type or a dangling anchor.
 export async function resolveSubmissionFacilityId(
+  ctx: OrgContext,
   executor: Tx | typeof db,
   row: Pick<CertificationSubmissionRow, "localEntityType" | "localEntityId">,
 ): Promise<string | null> {
-  const byId = await facilityIdsForLocalEntities(executor, row.localEntityType, [
+  requireOrgScope(ctx);
+  const byId = await facilityIdsForLocalEntities(ctx, executor, row.localEntityType, [
     row.localEntityId,
   ]);
   return byId.get(row.localEntityId) ?? null;
@@ -468,11 +485,13 @@ export async function resolveSubmissionFacilityId(
 // rather than allowed (a submission whose facility can't be proven must not be
 // acted on across a boundary).
 export async function assertSubmissionInFacility(
+  ctx: OrgContext,
   executor: Tx | typeof db,
   row: Pick<CertificationSubmissionRow, "localEntityType" | "localEntityId">,
   expectedFacilityId: string,
 ): Promise<void> {
-  const facilityId = await resolveSubmissionFacilityId(executor, row);
+  requireOrgScope(ctx);
+  const facilityId = await resolveSubmissionFacilityId(ctx, executor, row);
   if (facilityId !== expectedFacilityId) {
     throw new SafeError("Submission does not belong to this facility.");
   }
@@ -483,7 +502,7 @@ export async function assertSubmissionInFacility(
 // same "latest" rule as getLatestSubmission. Returns a localEntityId → row
 // map; entities with no submission are simply absent.
 export async function getLatestSubmissionsForEntities(
-  userId: string,
+  ctx: OrgContext,
   key: {
     provider: CertifierProvider;
     submissionType: string;
@@ -495,7 +514,7 @@ export async function getLatestSubmissionsForEntities(
   // batched read must not leak another facility's ledger rows.
   expectedFacilityId?: string,
 ): Promise<Map<string, CertificationSubmissionRow>> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   if (key.localEntityIds.length === 0) return new Map();
   const rows = await db
     .selectDistinctOn([certificationSubmissions.localEntityId])
@@ -506,6 +525,7 @@ export async function getLatestSubmissionsForEntities(
         eq(certificationSubmissions.submissionType, key.submissionType),
         eq(certificationSubmissions.localEntityType, key.localEntityType),
         inArray(certificationSubmissions.localEntityId, key.localEntityIds),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
       ),
     )
     .orderBy(
@@ -516,6 +536,7 @@ export async function getLatestSubmissionsForEntities(
     return new Map(rows.map((row) => [row.localEntityId, row]));
   }
   const facilityById = await facilityIdsForLocalEntities(
+    ctx,
     db,
     key.localEntityType,
     rows.map((row) => row.localEntityId),
@@ -530,28 +551,28 @@ export async function getLatestSubmissionsForEntities(
 }
 
 export async function getSubmissionById(
-  userId: string,
+  ctx: OrgContext,
   id: string,
   // Defence-in-depth facility scope (issue #277). When set, a submission whose
   // anchor entity resolves to a different facility is refused (SafeError)
   // instead of returned by raw id.
   expectedFacilityId?: string,
 ): Promise<CertificationSubmissionRow | null> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const [row] = await db
     .select()
     .from(certificationSubmissions)
-    .where(eq(certificationSubmissions.id, id))
+    .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)))
     .limit(1);
   if (!row) return null;
   if (expectedFacilityId !== undefined) {
-    await assertSubmissionInFacility(db, row, expectedFacilityId);
+    await assertSubmissionInFacility(ctx, db, row, expectedFacilityId);
   }
   return row;
 }
 
 export async function markSubmissionSubmitted(
-  userId: string,
+  ctx: OrgContext,
   id: string,
   args: {
     externalId: string;
@@ -564,7 +585,7 @@ export async function markSubmissionSubmitted(
     productionEmissionsClaim?: { removalId: string; creditBatchIds: string[] };
   },
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   await db.transaction(async (tx) => {
     await tx
       .update(certificationSubmissions)
@@ -575,7 +596,7 @@ export async function markSubmissionSubmitted(
         lockedAt: null,
         updatedAt: sql`now()`,
       })
-      .where(eq(certificationSubmissions.id, id));
+      .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
     if (args.supersedePreviousId) {
       await tx
         .update(certificationSubmissions)
@@ -584,7 +605,7 @@ export async function markSubmissionSubmitted(
           supersededAt: sql`now()`,
           updatedAt: sql`now()`,
         })
-        .where(eq(certificationSubmissions.id, args.supersedePreviousId));
+        .where(and(eq(certificationSubmissions.id, args.supersedePreviousId), eq(certificationSubmissions.organizationId, ctx.organizationId)));
     }
     if (
       args.productionEmissionsClaim &&
@@ -595,6 +616,7 @@ export async function markSubmissionSubmitted(
       // artifacts by supplier ref, and the pre-flight claim gate re-fires
       // loudly on retry.
       await stampProductionEmissionsClaimWithExecutor(
+        ctx,
         tx,
         args.productionEmissionsClaim,
       );
@@ -608,12 +630,12 @@ export async function markSubmissionSubmitted(
 // so it never reaches markSubmissionSubmitted's transactional stamp — this
 // lazily backfills the claim. Same guarded UPDATE + rowcount backstop.
 export async function stampProductionEmissionsClaim(
-  userId: string,
+  ctx: OrgContext,
   args: { removalId: string; creditBatchIds: string[] },
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   if (args.creditBatchIds.length === 0) return;
-  await stampProductionEmissionsClaimWithExecutor(db, args);
+  await stampProductionEmissionsClaimWithExecutor(ctx, db, args);
 }
 
 // §8.6.2 claim stamp (issue #349, ADR 0020). Guarded UPDATE (IS NULL OR =
@@ -624,6 +646,7 @@ export async function stampProductionEmissionsClaim(
 // between the draft claim and this write, so a mid-flight foreign claim
 // would otherwise leave the ledger submitted with no local error.
 async function stampProductionEmissionsClaimWithExecutor(
+  ctx: OrgContext,
   executor: Tx | typeof db,
   args: { removalId: string; creditBatchIds: string[] },
 ): Promise<void> {
@@ -641,6 +664,7 @@ async function stampProductionEmissionsClaimWithExecutor(
           isNull(creditBatches.productionEmissionsClaimedByRemovalId),
           eq(creditBatches.productionEmissionsClaimedByRemovalId, removalId),
         ),
+        eq(creditBatches.organizationId, ctx.organizationId),
       ),
     )
     .returning({ id: creditBatches.id });
@@ -661,11 +685,11 @@ async function stampProductionEmissionsClaimWithExecutor(
 // would route straight back to resume on an unchanged hash and loop forever.
 // Status-guarded to drafts — never retires a row that progressed.
 export async function retireStaleSubmissionDraft(
-  userId: string,
+  ctx: OrgContext,
   id: string,
   args: { reason: string },
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   await db
     .update(certificationSubmissions)
     .set({
@@ -679,16 +703,17 @@ export async function retireStaleSubmissionDraft(
       and(
         eq(certificationSubmissions.id, id),
         eq(certificationSubmissions.status, "draft"),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
       ),
     );
 }
 
 export async function markSubmissionRejected(
-  userId: string,
+  ctx: OrgContext,
   id: string,
   args: { errorMessage: string },
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   await db
     .update(certificationSubmissions)
     .set({
@@ -697,7 +722,7 @@ export async function markSubmissionRejected(
       updatedAt: sql`now()`,
       metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || jsonb_build_object('lastError', ${args.errorMessage}::text)`,
     })
-    .where(eq(certificationSubmissions.id, id));
+    .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
 }
 
 // Accumulates per-step recovery IDs into `payload_snapshot.journaled`
@@ -708,12 +733,12 @@ export async function markSubmissionRejected(
 // journaled object and drop earlier steps' IDs (e.g. step 2 erasing step 1's
 // fileUploadId/uploadUrl), defeating recovery.
 export async function appendSubmissionJournal(
-  userId: string,
+  ctx: OrgContext,
   id: string,
   patch: Record<string, unknown>,
   tx?: Tx,
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   await (tx ?? db)
     .update(certificationSubmissions)
     .set({
@@ -726,27 +751,27 @@ export async function appendSubmissionJournal(
       )`,
       updatedAt: sql`now()`,
     })
-    .where(eq(certificationSubmissions.id, id));
+    .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
 }
 
 export async function updateSubmissionMetadata(
-  userId: string,
+  ctx: OrgContext,
   id: string,
   patch: Record<string, unknown>,
   tx?: Tx,
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   await (tx ?? db)
     .update(certificationSubmissions)
     .set({
       metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
       updatedAt: sql`now()`,
     })
-    .where(eq(certificationSubmissions.id, id));
+    .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
 }
 
 export async function setSubmissionTerminalStatus(
-  userId: string,
+  ctx: OrgContext,
   id: string,
   args: {
     status: "accepted" | "rejected";
@@ -754,7 +779,7 @@ export async function setSubmissionTerminalStatus(
   },
   tx?: Tx,
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   await (tx ?? db)
     .update(certificationSubmissions)
     .set({
@@ -763,16 +788,16 @@ export async function setSubmissionTerminalStatus(
       metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(args.metadataPatch ?? {})}::jsonb`,
       updatedAt: sql`now()`,
     })
-    .where(eq(certificationSubmissions.id, id));
+    .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
 }
 
 export async function clearTerminalStatusForResubmit(
-  userId: string,
+  ctx: OrgContext,
   id: string,
   args: { metadataPatch?: Record<string, unknown> } = {},
   tx?: Tx,
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   await (tx ?? db)
     .update(certificationSubmissions)
     .set({
@@ -781,18 +806,18 @@ export async function clearTerminalStatusForResubmit(
       metadata: sql`coalesce(${certificationSubmissions.metadata}, '{}'::jsonb) || ${JSON.stringify(args.metadataPatch ?? {})}::jsonb`,
       updatedAt: sql`now()`,
     })
-    .where(eq(certificationSubmissions.id, id));
+    .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)));
 }
 
 export async function getSubmissionWithLatestSyncEvent(
-  userId: string,
+  ctx: OrgContext,
   id: string,
 ): Promise<{
   submission: CertificationSubmissionRow;
   latestSyncEvent: CertifierSyncEventRow | null;
 } | null> {
-  requireAuth(userId);
-  const submission = await getSubmissionById(userId, id);
+  requireOrgScope(ctx);
+  const submission = await getSubmissionById(ctx, id);
   if (!submission) return null;
   const [latestSyncEvent] = await db
     .select()
@@ -801,6 +826,7 @@ export async function getSubmissionWithLatestSyncEvent(
       and(
         eq(certifierSyncEvents.entityType, submission.localEntityType),
         eq(certifierSyncEvents.entityId, submission.localEntityId),
+        eq(certifierSyncEvents.organizationId, ctx.organizationId),
       ),
     )
     .orderBy(desc(certifierSyncEvents.attemptedAt))
@@ -809,7 +835,7 @@ export async function getSubmissionWithLatestSyncEvent(
 }
 
 export async function attachReportDocument(
-  userId: string,
+  ctx: OrgContext,
   args: {
     submissionId: string;
     reportUrl: string;
@@ -817,10 +843,12 @@ export async function attachReportDocument(
     metadata?: Record<string, unknown>;
   },
 ): Promise<DocumentRow> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
+  await assertSameOrg(ctx, certificationSubmissions, args.submissionId);
   const [row] = await db
     .insert(documents)
     .values({
+      organizationId: ctx.organizationId,
       entityType: "ghgStatement",
       entityId: args.submissionId,
       documentType: "pdf",
@@ -828,7 +856,7 @@ export async function attachReportDocument(
       fileName: deriveFileName(args.reportUrl),
       description: args.description,
       metadata: (args.metadata ?? {}) as Record<string, unknown>,
-      createdBy: userId,
+      createdBy: ctx.userId,
     })
     .returning();
   return row;
@@ -846,11 +874,12 @@ export interface AppendSyncEventInput {
 }
 
 export async function appendSyncEvent(
-  userId: string,
+  ctx: OrgContext,
   input: AppendSyncEventInput,
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   await db.insert(certifierSyncEvents).values({
+    organizationId: ctx.organizationId,
     provider: input.provider,
     entityType: input.entityType,
     entityId: input.entityId,
@@ -863,10 +892,10 @@ export async function appendSyncEvent(
 }
 
 export async function listRecentSyncEvents(
-  userId: string,
+  ctx: OrgContext,
   args: { entityType: string; entityId: string; limit: number },
 ): Promise<CertifierSyncEventRow[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   return db
     .select()
     .from(certifierSyncEvents)
@@ -874,6 +903,7 @@ export async function listRecentSyncEvents(
       and(
         eq(certifierSyncEvents.entityType, args.entityType),
         eq(certifierSyncEvents.entityId, args.entityId),
+        eq(certifierSyncEvents.organizationId, ctx.organizationId),
       ),
     )
     .orderBy(desc(certifierSyncEvents.attemptedAt))

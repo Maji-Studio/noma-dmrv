@@ -8,7 +8,8 @@ import {
 import { SafeError } from "@/lib/errors";
 import { decideRemovalMembership } from "@/lib/isometric/utils/ghg-entry-membership";
 import type { Tx } from "./certification";
-import { requireAuth } from "./utils";
+import type { OrgContext } from "@/lib/auth/server";
+import { assertSameOrg, requireOrgScope } from "./utils";
 import type { CertifierRemovalRow } from "./certifier-removals";
 
 export type CertifierGhgStatementRow =
@@ -17,27 +18,27 @@ export type CertifierGhgStatementRow =
 const ISOMETRIC = "isometric" as const;
 
 export async function getCertifierGhgStatementById(
-  userId: string,
+  ctx: OrgContext,
   id: string,
 ): Promise<CertifierGhgStatementRow | null> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const [row] = await db
     .select()
     .from(certifierGhgStatements)
-    .where(eq(certifierGhgStatements.id, id))
+    .where(and(eq(certifierGhgStatements.id, id), eq(certifierGhgStatements.organizationId, ctx.organizationId)))
     .limit(1);
   return row ?? null;
 }
 
 export async function listGhgStatementsForFacility(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string,
 ): Promise<CertifierGhgStatementRow[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   return db
     .select()
     .from(certifierGhgStatements)
-    .where(eq(certifierGhgStatements.facilityId, facilityId))
+    .where(and(eq(certifierGhgStatements.facilityId, facilityId), eq(certifierGhgStatements.organizationId, ctx.organizationId)))
     .orderBy(desc(certifierGhgStatements.createdAt));
 }
 
@@ -58,13 +59,14 @@ export interface GetOrCreateGhgStatementResult {
 // constraint — a losing concurrent insert hits the conflict and falls
 // through to the select.
 export async function getOrCreateGhgStatementDraft(
-  userId: string,
+  ctx: OrgContext,
   input: { facilityId: string; reportingPeriodEndOn: string },
 ): Promise<GetOrCreateGhgStatementResult> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const [inserted] = await db
     .insert(certifierGhgStatements)
     .values({
+      organizationId: ctx.organizationId,
       facilityId: input.facilityId,
       reportingPeriodEndOn: input.reportingPeriodEndOn,
     })
@@ -89,6 +91,7 @@ export async function getOrCreateGhgStatementDraft(
           certifierGhgStatements.reportingPeriodEndOn,
           input.reportingPeriodEndOn,
         ),
+        eq(certifierGhgStatements.organizationId, ctx.organizationId),
       ),
     )
     .limit(1);
@@ -106,30 +109,31 @@ export async function getOrCreateGhgStatementDraft(
 // Persists the server-derived reporting-period start after the statement is
 // created in Isometric (the create API derives it; we cannot set it).
 export async function updateGhgStatementReportingWindow(
-  userId: string,
+  ctx: OrgContext,
   id: string,
   args: { reportingPeriodStartOn: string | null },
   tx?: Tx,
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   await (tx ?? db)
     .update(certifierGhgStatements)
     .set({
       reportingPeriodStartOn: args.reportingPeriodStartOn,
       updatedAt: sql`now()`,
     })
-    .where(eq(certifierGhgStatements.id, id));
+    .where(and(eq(certifierGhgStatements.id, id), eq(certifierGhgStatements.organizationId, ctx.organizationId)));
 }
 
 export async function getRemovalsByGhgStatementId(
-  userId: string,
+  ctx: OrgContext,
   ghgStatementId: string,
 ): Promise<CertifierRemovalRow[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
+  await assertSameOrg(ctx, certifierGhgStatements, ghgStatementId);
   return db
     .select()
     .from(certifierRemovals)
-    .where(eq(certifierRemovals.ghgStatementId, ghgStatementId))
+    .where(and(eq(certifierRemovals.ghgStatementId, ghgStatementId), eq(certifierRemovals.organizationId, ctx.organizationId)))
     .orderBy(desc(certifierRemovals.completedOn));
 }
 
@@ -137,10 +141,10 @@ export async function getRemovalsByGhgStatementId(
 // query instead of one getRemovalsByGhgStatementId per statement. Returns a
 // ghgStatementId → count map; statements with no removals are simply absent.
 export async function countRemovalsByGhgStatementIds(
-  userId: string,
+  ctx: OrgContext,
   ghgStatementIds: string[],
 ): Promise<Map<string, number>> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   if (ghgStatementIds.length === 0) return new Map();
   const rows = await db
     .select({
@@ -148,7 +152,7 @@ export async function countRemovalsByGhgStatementIds(
       count: sql<number>`count(*)::int`,
     })
     .from(certifierRemovals)
-    .where(inArray(certifierRemovals.ghgStatementId, ghgStatementIds))
+    .where(and(inArray(certifierRemovals.ghgStatementId, ghgStatementIds), eq(certifierRemovals.organizationId, ctx.organizationId)))
     .groupBy(certifierRemovals.ghgStatementId);
   return new Map(
     rows.flatMap((row) =>
@@ -169,10 +173,10 @@ export interface OpenRemoval {
 // preview. "Latest" means highest ledger version, the same rule as
 // getLatestSubmission.
 export async function listOpenRemovalsForFacility(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string,
 ): Promise<OpenRemoval[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const latest = db
     .selectDistinctOn([certificationSubmissions.localEntityId], {
       removalId: certificationSubmissions.localEntityId,
@@ -184,6 +188,7 @@ export async function listOpenRemovalsForFacility(
         eq(certificationSubmissions.provider, ISOMETRIC),
         eq(certificationSubmissions.submissionType, "removal"),
         eq(certificationSubmissions.localEntityType, "removal"),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
       ),
     )
     .orderBy(
@@ -204,6 +209,7 @@ export async function listOpenRemovalsForFacility(
         eq(certifierRemovals.facilityId, facilityId),
         isNull(certifierRemovals.ghgStatementId),
         isNotNull(latest.externalId),
+        eq(certifierRemovals.organizationId, ctx.organizationId),
       ),
     )
     .orderBy(desc(certifierRemovals.completedOn));
@@ -232,12 +238,12 @@ export interface ReconcileResult {
 // to a different statement — the FOR UPDATE read + IS NULL guard make the
 // link decision and the write atomic.
 export async function reconcileRemovalMembership(
-  userId: string,
+  ctx: OrgContext,
   ghgStatementId: string,
   externalRemovalIds: string[],
   tx?: Tx,
 ): Promise<ReconcileResult> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   if (externalRemovalIds.length === 0) {
     return { linkedRemovalIds: [], warnings: [] };
   }
@@ -252,7 +258,7 @@ export async function reconcileRemovalMembership(
     const [target] = await tx
       .select({ facilityId: certifierGhgStatements.facilityId })
       .from(certifierGhgStatements)
-      .where(eq(certifierGhgStatements.id, ghgStatementId))
+      .where(and(eq(certifierGhgStatements.id, ghgStatementId), eq(certifierGhgStatements.organizationId, ctx.organizationId)))
       .limit(1);
     if (!target) {
       throw new SafeError("GHG statement not found for reconciliation.");
@@ -273,6 +279,7 @@ export async function reconcileRemovalMembership(
           eq(certificationSubmissions.submissionType, "removal"),
           eq(certificationSubmissions.localEntityType, "removal"),
           inArray(certificationSubmissions.externalId, externalRemovalIds),
+          eq(certificationSubmissions.organizationId, ctx.organizationId),
         ),
       );
 
@@ -297,7 +304,7 @@ export async function reconcileRemovalMembership(
           ghgStatementId: certifierRemovals.ghgStatementId,
         })
         .from(certifierRemovals)
-        .where(inArray(certifierRemovals.id, candidateIds))
+        .where(and(inArray(certifierRemovals.id, candidateIds), eq(certifierRemovals.organizationId, ctx.organizationId)))
         .for("update");
       for (const r of current) {
         if (r.facilityId !== targetFacilityId) {
@@ -334,6 +341,7 @@ export async function reconcileRemovalMembership(
             inArray(certifierRemovals.id, decision.toLink),
             eq(certifierRemovals.facilityId, targetFacilityId),
             isNull(certifierRemovals.ghgStatementId),
+            eq(certifierRemovals.organizationId, ctx.organizationId),
           ),
         );
     }

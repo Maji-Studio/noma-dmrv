@@ -183,6 +183,7 @@ export async function createTransportLeg(
 
   const [row] = await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       {
         entityType: CERTIFIED_LINEAGE_TARGET[input.entityType],
@@ -230,6 +231,7 @@ export async function updateTransportLeg(
 
   const [row] = await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       {
         entityType: CERTIFIED_LINEAGE_TARGET[existing.entityType],
@@ -269,6 +271,7 @@ export async function deleteTransportLeg(
 
   const result = await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       {
         entityType: CERTIFIED_LINEAGE_TARGET[existing.entityType],

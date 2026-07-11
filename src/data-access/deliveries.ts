@@ -754,6 +754,7 @@ export async function updateDelivery(
 
   const updated = await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "delivery", entityId: deliveryId },
       "update",
@@ -826,6 +827,7 @@ export async function deleteDelivery(
 
   await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "delivery", entityId: deliveryId },
       "delete",

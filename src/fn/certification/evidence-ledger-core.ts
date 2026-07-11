@@ -19,9 +19,10 @@
  * is why retirement is a direct local delete, not `unlinkDocumentSource` (whose
  * snapshot-reference guard would refuse). See docs/isometric/changes.md.
  *
- * Server-internal (no "use server" — takes an explicit `userId`, called from the
+ * Server-internal (no "use server" — takes an explicit `orgCtx`, called from the
  * submit pipeline which already resolved the caller).
  */
+import type { OrgContext } from "@/lib/auth/server";
 import { createHash } from "node:crypto";
 import {
   deleteDocumentUploadByDocument,
@@ -125,12 +126,12 @@ async function withRemovalLedgerSerialization<T>(
  * best-effort).
  */
 export async function ensureLedgerSource(
-  userId: string,
+  orgCtx: OrgContext,
   spec: LedgerArtifactSpec,
 ): Promise<EnsureLedgerResult> {
   return withRemovalLedgerSerialization(spec.removalId, async () => {
     const priors = await listDocumentsByKindForRemoval(
-      userId,
+      orgCtx,
       spec.kind,
       spec.removalId,
     );
@@ -138,7 +139,7 @@ export async function ensureLedgerSource(
     if (spec.isEmpty) {
       // Nothing to evidence — drop any stale ledger so it stops riding into
       // source_ids, then skip.
-      await retireSupersededLedgers(userId, priors, null, spec.log);
+      await retireSupersededLedgers(orgCtx, priors, null, spec.log);
       return { status: "skipped", reason: spec.emptyReason };
     }
 
@@ -148,12 +149,12 @@ export async function ensureLedgerSource(
     );
     if (sameContent) {
       const upload = await getDocumentUploadByDocument(
-        userId,
+        orgCtx,
         ISOMETRIC_PROVIDER,
         sameContent.id,
       );
       if (upload) {
-        await retireSupersededLedgers(userId, priors, sameContent, spec.log);
+        await retireSupersededLedgers(orgCtx, priors, sameContent, spec.log);
         spec.log.info({ documentId: sameContent.id }, "reused evidence ledger");
         return {
           status: "reused",
@@ -177,7 +178,7 @@ export async function ensureLedgerSource(
       const storageKey = `${spec.storageKeyPrefix}/${spec.facilityId}/${spec.removalId}/${spec.contentHash}.pdf`;
       await provider.putObject(storageKey, pdf, PDF_MIME);
 
-      const doc = await insertDocument(userId, {
+      const doc = await insertDocument(orgCtx, {
         entityType: "credit_batch",
         entityId: spec.attachBatchId,
         documentType: "pdf",
@@ -192,21 +193,21 @@ export async function ensureLedgerSource(
         uploadStatus: "uploaded",
         capturedAt: new Date(),
         metadata: spec.buildMetadata(),
-        createdBy: userId,
+        createdBy: orgCtx.userId,
       });
 
       // Mirror to a Source (idempotent on documentId). The document sits on a
       // member credit batch, so the candidate-document lineage walk already
       // finds it → its Source rides into source_ids on submit with no extra
       // plumbing.
-      const mirror = await mirrorDocumentToSourceForUser(userId, {
+      const mirror = await mirrorDocumentToSourceForUser(orgCtx, {
         removalId: spec.removalId,
         documentId: doc.id,
         isPublic: false,
       });
 
       // Supersede: retire every prior ledger now that the current one is mirrored.
-      await retireSupersededLedgers(userId, priors, doc, spec.log);
+      await retireSupersededLedgers(orgCtx, priors, doc, spec.log);
       spec.log.info(
         { documentId: doc.id, retired: priors.length },
         "generated evidence ledger",
@@ -221,7 +222,7 @@ export async function ensureLedgerSource(
     } catch (err) {
       // Drop the stale priors so they can't masquerade as current evidence;
       // best-effort so a retirement hiccup doesn't mask the original failure.
-      await retireSupersededLedgers(userId, priors, null, spec.log).catch(
+      await retireSupersededLedgers(orgCtx, priors, null, spec.log).catch(
         (retireErr) => {
           spec.log.warn(
             {
@@ -244,7 +245,7 @@ export async function ensureLedgerSource(
  * with the kept document's key.
  */
 async function retireSupersededLedgers(
-  userId: string,
+  orgCtx: OrgContext,
   priors: DocumentRow[],
   keep: DocumentRow | null,
   log: LedgerLog,
@@ -255,8 +256,8 @@ async function retireSupersededLedgers(
   const provider = getStorageProvider();
   await Promise.all(
     stale.map(async (doc) => {
-      await deleteDocumentUploadByDocument(userId, ISOMETRIC_PROVIDER, doc.id);
-      await deleteDocumentRow(userId, doc.id);
+      await deleteDocumentUploadByDocument(orgCtx, ISOMETRIC_PROVIDER, doc.id);
+      await deleteDocumentRow(orgCtx, doc.id);
       if (doc.storageKey && doc.storageKey !== keep?.storageKey) {
         // Orphaned bytes are harmless (the row + mapping are gone, so it can
         // never re-enter source_ids); a delete failure must not fail the submit.

@@ -525,6 +525,7 @@ export async function updateFeedstock(
 
   await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "feedstock", entityId: feedstockId },
       "update",
@@ -564,6 +565,7 @@ export async function deleteFeedstock(
 
   await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "feedstock", entityId: feedstockId },
       "delete",
@@ -733,7 +735,7 @@ export async function syncFeedstockTransportLeg(
     tripType: distanceOverride?.tripType,
   });
 
-  await replaceDerivedTransportLeg(ctx.userId, "feedstock", feedstockId, derived);
+  await replaceDerivedTransportLeg(ctx, "feedstock", feedstockId, derived);
 }
 
 // ============================================

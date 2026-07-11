@@ -754,7 +754,7 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string): Promise<vo
 
     // Drop the removal if this was its last member and it has no history.
     if (batch?.removalId) {
-      await gcRemovalIfOrphaned(tx, batch.removalId);
+      await gcRemovalIfOrphaned(ctx, tx, batch.removalId);
     }
   });
 }
