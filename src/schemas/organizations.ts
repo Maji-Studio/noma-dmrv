@@ -6,6 +6,9 @@
  */
 import { z } from "zod";
 
+export const INVITATION_PASSWORD_MIN_LENGTH = 8;
+export const INVITATION_PASSWORD_MAX_LENGTH = 72;
+
 export const orgRoleSchema = z.enum(["owner", "admin", "member"]);
 export type OrgRoleValue = z.infer<typeof orgRoleSchema>;
 
@@ -37,3 +40,24 @@ export const createOrganizationSchema = z.object({
     .pipe(z.email("Enter a valid owner email.")),
 });
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
+
+export const invitationIdSchema = z.object({
+  invitationId: z.string().trim().min(1, "Invitation id is required."),
+});
+
+export const invitationBootstrapSchema = invitationIdSchema.extend({
+  name: z.string().trim().min(1, "Name is required."),
+  password: z
+    .string()
+    .min(
+      INVITATION_PASSWORD_MIN_LENGTH,
+      `Password must be at least ${INVITATION_PASSWORD_MIN_LENGTH} characters.`
+    )
+    .max(
+      INVITATION_PASSWORD_MAX_LENGTH,
+      `Password must be at most ${INVITATION_PASSWORD_MAX_LENGTH} characters.`
+    ),
+});
+export type InvitationBootstrapInput = z.infer<
+  typeof invitationBootstrapSchema
+>;

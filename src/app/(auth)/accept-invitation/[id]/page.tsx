@@ -1,11 +1,13 @@
 /**
- * Accept-invitation landing page. Requires a signed-in session whose email
- * matches the invite (the plugin enforces the match on accept). Unauthenticated
- * visitors are sent to sign in and returned here.
+ * Accept-invitation landing page. Existing users sign in with the invited
+ * address; new users can bootstrap an account from the invitation token.
  */
+import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { getUser } from "@/lib/auth/server";
 import { AcceptInvitation } from "@/components/organizations/accept-invitation";
+import { InvitationBootstrapForm } from "@/components/organizations/invitation-bootstrap-form";
+import { getInvitationBootstrapState } from "@/fn/invitation-bootstrap";
 
 export default async function AcceptInvitationPage({
   params,
@@ -13,11 +15,50 @@ export default async function AcceptInvitationPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const invitationResult = await getInvitationBootstrapState({
+    invitationId: id,
+  });
+  if (!invitationResult.success) {
+    return <InvitationCard error={invitationResult.error} />;
+  }
+
+  const invitation = invitationResult.data;
   const user = await getUser();
-  if (!user) {
+  if (invitation.accountExists && !user) {
     redirect(`/login?from=${encodeURIComponent(`/accept-invitation/${id}`)}`);
   }
 
+  if (
+    invitation.accountExists &&
+    user &&
+    user.email.toLowerCase() !== invitation.email.toLowerCase()
+  ) {
+    return (
+      <InvitationCard error="Sign out, then sign in with the invited email address." />
+    );
+  }
+
+  return (
+    <InvitationCard>
+      {invitation.accountExists && user ? (
+        <AcceptInvitation invitationId={id} userEmail={user.email} />
+      ) : (
+        <InvitationBootstrapForm
+          invitationId={id}
+          email={invitation.email}
+        />
+      )}
+    </InvitationCard>
+  );
+}
+
+function InvitationCard({
+  children,
+  error,
+}: {
+  children?: ReactNode;
+  error?: string;
+}) {
   return (
     <div className="w-full max-w-[400px] mx-auto">
       <div className="mb-32 text-center">
@@ -27,7 +68,13 @@ export default async function AcceptInvitationPage({
         </p>
       </div>
       <div className="bg-[var(--color-background-white)] border border-[var(--color-border-primary)] p-32 shadow-sm">
-        <AcceptInvitation invitationId={id} userEmail={user.email} />
+        {error ? (
+          <p className="body-small text-[var(--st-bad)] border border-[var(--st-bad-border)] bg-[var(--st-bad-bg)] p-12">
+            {error}
+          </p>
+        ) : (
+          children
+        )}
       </div>
     </div>
   );
