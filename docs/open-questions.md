@@ -219,6 +219,23 @@ guard. Pure starter-template residue; the app is facility-scoped.
   per-transaction `SET LOCAL` if a client contractually requires hard
   isolation guarantees beyond data-access-layer enforcement.
 
+### Certifier-credential key rotation (`tenancy/credentials-key-rotation`, opened 2026-07-12)
+
+- **Problem:** stored per-org certifier credentials
+  (`certifier_credentials.*_encrypted`) are AES-256-GCM payloads prefixed with
+  `v1:` — a *payload-format* version, **not** a key identifier. There is exactly
+  one active `CREDENTIALS_ENCRYPTION_KEY`, so rotating it makes every existing
+  row undecryptable (fail-closed: reads throw "authentication failed", not
+  silent corruption). No dual-key or re-encrypt path exists today.
+- **Why it matters:** the moment real production credentials are stored, key
+  rotation (routine hygiene, or incident response after a suspected leak)
+  becomes a data-loss event requiring every org to re-enter its secrets.
+- **Decide before production data exists:** (a) add a key-id to the payload
+  header (e.g. `v1:<keyId>:…`) so rows self-describe which key encrypted them;
+  (b) support a primary + set of decrypt-only retired keys, with a background
+  re-encrypt pass during a bounded rotation window. Cheap to design now,
+  expensive to retrofit once rows exist (M).
+
 ## Isometric Certify integration
 
 ### Template component → dmrv source mapping is hardcoded by display name (`certification/template-component-source-wizard`, opened 2026-07-04)
