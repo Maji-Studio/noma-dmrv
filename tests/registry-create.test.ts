@@ -25,6 +25,7 @@
  *                            successful create.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { makeTestOrgContext } from "./helpers/test-org";
 
 vi.mock("@/data-access/certification");
 
@@ -52,7 +53,7 @@ function makeArgs(
   overrides: Partial<PerformRegistryCreateArgs> = {},
 ): PerformRegistryCreateArgs {
   return {
-    userId: USER_ID,
+    orgCtx: makeTestOrgContext(USER_ID),
     entityType: "removal",
     entityId: ENTITY_ID,
     submissionRowId: ROW_ID,
@@ -83,7 +84,7 @@ describe("performRegistryCreate", () => {
     expect(result).toEqual({ externalId: EXTERNAL_ID, source: "create" });
     expect(args.create).toHaveBeenCalledTimes(1);
     expect(args.reconcile).not.toHaveBeenCalled();
-    expect(ledger.appendSyncEvent).toHaveBeenCalledExactlyOnceWith(USER_ID, {
+    expect(ledger.appendSyncEvent).toHaveBeenCalledExactlyOnceWith(makeTestOrgContext(USER_ID), {
       provider: "isometric",
       entityType: "removal",
       entityId: ENTITY_ID,
@@ -115,7 +116,7 @@ describe("performRegistryCreate", () => {
     expect(result).toEqual({ externalId: ORPHAN_ID, source: "reconciliation" });
     expect(args.create).not.toHaveBeenCalled();
     expect(ledger.appendSyncEvent).toHaveBeenCalledExactlyOnceWith(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       expect.objectContaining({
         operation: `${OPERATION}:reconciled`,
         status: "succeeded",
@@ -156,7 +157,7 @@ describe("performRegistryCreate", () => {
 
     expect(result).toEqual({ externalId: ORPHAN_ID, source: "reconciliation" });
     expect(ledger.appendSyncEvent).toHaveBeenCalledExactlyOnceWith(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       expect.objectContaining({
         operation: `${OPERATION}:reconciled`,
         status: "succeeded",
@@ -183,7 +184,7 @@ describe("performRegistryCreate", () => {
     );
 
     expect(args.reconcile).toHaveBeenCalledTimes(1);
-    expect(ledger.appendSyncEvent).toHaveBeenCalledExactlyOnceWith(USER_ID, {
+    expect(ledger.appendSyncEvent).toHaveBeenCalledExactlyOnceWith(makeTestOrgContext(USER_ID), {
       provider: "isometric",
       entityType: "removal",
       entityId: ENTITY_ID,
@@ -200,7 +201,7 @@ describe("performRegistryCreate", () => {
       errorMessage: "Provider rejected the request (422): quantity must be positive",
     });
     expect(ledger.markSubmissionRejected).toHaveBeenCalledExactlyOnceWith(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       ROW_ID,
       {
         errorMessage:
@@ -219,7 +220,7 @@ describe("performRegistryCreate", () => {
     await expect(performRegistryCreate(args)).rejects.toThrowError(SafeError);
 
     expect(ledger.appendSyncEvent).toHaveBeenCalledExactlyOnceWith(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       expect.objectContaining({
         status: "failed",
         responsePayload: { mapping_revision: MAPPING_REVISION },
@@ -246,7 +247,7 @@ describe("performRegistryCreate", () => {
     );
 
     expect(ledger.markSubmissionRejected).toHaveBeenCalledExactlyOnceWith(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       ROW_ID,
       { errorMessage: ambiguousMessage },
     );

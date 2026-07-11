@@ -7,7 +7,7 @@ import { describe, it, expect, vi } from "vitest";
 import { z } from "zod";
 
 vi.mock("@/lib/auth/server", () => ({
-  getUser: vi.fn(),
+  requireOrgContext: vi.fn(),
 }));
 
 vi.mock("@/lib/log", () => ({
@@ -20,7 +20,8 @@ vi.mock("@/lib/log", () => ({
 
 import { withAction } from "@/fn/with-action";
 import { SafeError } from "@/lib/errors";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
+import { makeTestOrgContext } from "./helpers/test-org";
 
 const mockUser = {
   id: "user-123",
@@ -31,39 +32,45 @@ const mockUser = {
   createdAt: new Date("2025-01-01"),
   updatedAt: new Date("2025-01-01"),
 };
+const TEST_CTX = makeTestOrgContext(mockUser.id);
 
 describe("withAction", () => {
-  it("returns Unauthorized when getUser returns null", async () => {
-    vi.mocked(getUser).mockResolvedValue(null);
+  it("returns the org-context guard error when no organization is active", async () => {
+    vi.mocked(requireOrgContext).mockRejectedValue(
+      new SafeError("Select an organization to continue."),
+    );
+
+    const result = await withAction(async () => "data");
+
+    expect(result).toEqual({
+      success: false,
+      error: "Select an organization to continue.",
+    });
+  });
+
+  it("returns Unauthorized when the context guard rejects the user", async () => {
+    vi.mocked(requireOrgContext).mockRejectedValue(new SafeError("Unauthorized"));
 
     const result = await withAction(async () => "data");
 
     expect(result).toEqual({ success: false, error: "Unauthorized" });
   });
 
-  it("returns Unauthorized when user has no id", async () => {
-    vi.mocked(getUser).mockResolvedValue({ ...mockUser, id: "" } as never);
+  it("passes OrgContext to callback and returns success result", async () => {
+    vi.mocked(requireOrgContext).mockResolvedValue(TEST_CTX);
 
-    const result = await withAction(async () => "data");
-
-    expect(result).toEqual({ success: false, error: "Unauthorized" });
-  });
-
-  it("passes userId to callback and returns success result", async () => {
-    vi.mocked(getUser).mockResolvedValue(mockUser);
-
-    const result = await withAction(async (userId) => {
-      return { receivedUserId: userId };
+    const result = await withAction(async (ctx) => {
+      return { receivedContext: ctx };
     });
 
     expect(result).toEqual({
       success: true,
-      data: { receivedUserId: "user-123" },
+      data: { receivedContext: TEST_CTX },
     });
   });
 
   it("formats ZodError with default prefix", async () => {
-    vi.mocked(getUser).mockResolvedValue(mockUser);
+    vi.mocked(requireOrgContext).mockResolvedValue(TEST_CTX);
 
     const schema = z.object({ name: z.string().min(1, "Name is required") });
 
@@ -78,7 +85,7 @@ describe("withAction", () => {
   });
 
   it("formats ZodError with custom zodErrorPrefix", async () => {
-    vi.mocked(getUser).mockResolvedValue(mockUser);
+    vi.mocked(requireOrgContext).mockResolvedValue(TEST_CTX);
 
     const schema = z.object({ page: z.number().min(1, "Page must be positive") });
 
@@ -93,7 +100,7 @@ describe("withAction", () => {
   });
 
   it("forwards SafeError.message verbatim", async () => {
-    vi.mocked(getUser).mockResolvedValue(mockUser);
+    vi.mocked(requireOrgContext).mockResolvedValue(TEST_CTX);
 
     const result = await withAction(async () => {
       throw new SafeError("Order not found");
@@ -107,7 +114,7 @@ describe("withAction", () => {
 
   it("suppresses plain Error.message in non-dev mode", async () => {
     vi.stubEnv("NODE_ENV", "production");
-    vi.mocked(getUser).mockResolvedValue(mockUser);
+    vi.mocked(requireOrgContext).mockResolvedValue(TEST_CTX);
 
     try {
       const result = await withAction(async () => {
@@ -124,7 +131,7 @@ describe("withAction", () => {
   });
 
   it("suppresses raw database-like Error.message in default mode", async () => {
-    vi.mocked(getUser).mockResolvedValue(mockUser);
+    vi.mocked(requireOrgContext).mockResolvedValue(TEST_CTX);
 
     const result = await withAction(async () => {
       throw new Error(
@@ -139,7 +146,7 @@ describe("withAction", () => {
   });
 
   it("uses default fallbackMessage for non-Error throws", async () => {
-    vi.mocked(getUser).mockResolvedValue(mockUser);
+    vi.mocked(requireOrgContext).mockResolvedValue(TEST_CTX);
 
     const result = await withAction(async () => {
       throw "string error";
@@ -152,7 +159,7 @@ describe("withAction", () => {
   });
 
   it("uses custom fallbackMessage for non-Error throws", async () => {
-    vi.mocked(getUser).mockResolvedValue(mockUser);
+    vi.mocked(requireOrgContext).mockResolvedValue(TEST_CTX);
 
     const result = await withAction(async () => {
       throw 42;

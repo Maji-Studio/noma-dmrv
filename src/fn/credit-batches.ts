@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import type { ActionResult } from "@/types/actions";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import { toActionError } from "@/lib/errors";
 import { logger, sanitizeErrorMessage } from "@/lib/log";
 import { creditBatches } from "@/db/schema";
@@ -45,14 +45,11 @@ export async function getCreditBatchesFn(
   facilityId: string,
 ): Promise<ActionResult<CreditBatchWithRelations[]>> {
   try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validatedFacilityId = z.string().uuid().parse(facilityId);
     const creditBatches = await getCreditBatchesData(
-      user.id,
+      ctx,
       validatedFacilityId,
     );
     return { success: true, data: creditBatches };
@@ -72,12 +69,9 @@ export async function getCreditBatchByIdFn(
   id: string
 ): Promise<ActionResult<CreditBatchWithRelations>> {
   try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const creditBatch = await getCreditBatchById(user.id, id);
+    const creditBatch = await getCreditBatchById(ctx, id);
     if (!creditBatch) {
       return { success: false, error: "Credit batch not found" };
     }
@@ -96,10 +90,7 @@ export async function getCo2eStoredPreviewsFn(
   batchIds: string[]
 ): Promise<ActionResult<Record<string, CreditBatchCo2eStoredPreview>>> {
   try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const ids = z
       .array(z.string().uuid())
@@ -108,7 +99,7 @@ export async function getCo2eStoredPreviewsFn(
         `Select at most ${MAX_BATCH_PREVIEWS} credit batches for preview`,
       )
       .parse(batchIds);
-    const previews = await getCo2eStoredPreviewsData(user.id, ids);
+    const previews = await getCo2eStoredPreviewsData(ctx, ids);
     return { success: true, data: previews };
   } catch (error) {
     logCreditBatchError("Failed to get CO2e stored previews", error);
@@ -135,14 +126,11 @@ export async function getCreditBatchProductionRunOptionsFn(
   },
 ): Promise<ActionResult<CreditBatchProductionRunOption[]>> {
   try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = creditBatchProductionRunOptionsSchema.parse(input);
     const options = await getCreditBatchProductionRunOptions(
-      user.id,
+      ctx,
       validated,
     );
     return { success: true, data: options };
@@ -165,19 +153,17 @@ export async function createCreditBatchFn(
   data: z.infer<typeof createCreditBatchSchema>
 ): Promise<ActionResult<CreditBatchWithRelations>> {
   try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = createCreditBatchSchema.parse(data);
 
     const creditBatch = await withAutoCode(
+      ctx,
       "CB",
       creditBatches,
       creditBatches.code,
       undefined,
-      (code) => createCreditBatchData(user.id, { ...validated, code })
+      (code) => createCreditBatchData(ctx, { ...validated, code })
     );
 
     return { success: true, data: creditBatch };
@@ -201,16 +187,13 @@ export async function updateCreditBatchFn(
   data: z.infer<typeof updateCreditBatchSchema>
 ): Promise<ActionResult<CreditBatchWithRelations>> {
   try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = updateCreditBatchSchema.parse(data);
     const { creditBatchId, ...updateData } = validated;
 
     // Check credit batch exists
-    const existing = await getCreditBatchById(user.id, creditBatchId);
+    const existing = await getCreditBatchById(ctx, creditBatchId);
     if (!existing) {
       return { success: false, error: "Credit batch not found" };
     }
@@ -218,7 +201,7 @@ export async function updateCreditBatchFn(
     // Check for duplicate code if code is being updated
     if (updateData.code && updateData.code !== existing.code) {
       const codeExists = await creditBatchCodeExists(
-        user.id,
+        ctx,
         updateData.code,
         creditBatchId
       );
@@ -230,7 +213,7 @@ export async function updateCreditBatchFn(
       }
     }
 
-    const creditBatch = await updateCreditBatchData(user.id, creditBatchId, updateData);
+    const creditBatch = await updateCreditBatchData(ctx, creditBatchId, updateData);
     return { success: true, data: creditBatch };
   } catch (error) {
     logCreditBatchError("Failed to update credit batch", error);
@@ -254,20 +237,17 @@ export async function deleteCreditBatchFn(
   data: z.infer<typeof deleteCreditBatchSchema>
 ): Promise<ActionResult<void>> {
   try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = deleteCreditBatchSchema.parse(data);
 
     // Check credit batch exists
-    const existing = await getCreditBatchById(user.id, validated.creditBatchId);
+    const existing = await getCreditBatchById(ctx, validated.creditBatchId);
     if (!existing) {
       return { success: false, error: "Credit batch not found" };
     }
 
-    await deleteCreditBatchData(user.id, validated.creditBatchId);
+    await deleteCreditBatchData(ctx, validated.creditBatchId);
     return { success: true, data: undefined };
   } catch (error) {
     logCreditBatchError("Failed to delete credit batch", error);

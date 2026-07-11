@@ -1,5 +1,6 @@
 import * as crypto from "crypto";
 import { eq } from "drizzle-orm";
+import { DEC_ORG_ID } from "@/db/org-defaults";
 import { test, expect, type SeededChainData } from "./fixtures";
 import { waitForSideSheet } from "./fixtures/page-helpers";
 import { createDbConnection } from "./fixtures/db";
@@ -71,6 +72,7 @@ async function seedProductionRun(seededData: SeededChainData) {
 
   try {
     await db.insert(schema.productionRuns).values({
+        organizationId: DEC_ORG_ID,
       id: runId,
       code,
       facilityId: seededData.facility.id,

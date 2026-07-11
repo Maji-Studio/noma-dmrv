@@ -30,6 +30,7 @@
  *      fresh rebuild against the claimed draft snapshot, catching same-ID
  *      source-data edits that lineage IDs cannot represent.
  */
+import type { OrgContext } from "@/lib/auth/server";
 import {
   retireStaleSubmissionDraft,
   type CertificationSubmissionRow,
@@ -71,11 +72,11 @@ export function assertNoForeignProductionClaims(
 
 // Gate step 2 (see module docblock): one fresh scope read, two asserts.
 export async function assertProductionClaimGateFresh(
-  userId: string,
+  orgCtx: OrgContext,
   removalId: string,
   expected: readonly MemberBatchLineage[],
 ): Promise<void> {
-  const scope = await resolveScopeForRemoval(userId, removalId, {
+  const scope = await resolveScopeForRemoval(orgCtx, removalId, {
     skipPreview: true,
   });
   assertNoForeignProductionClaims(
@@ -134,13 +135,13 @@ export function assertMemberBatchLineageUnchanged(
 // revision. Missing `__mappingRevision` (pre-ADR-0005 snapshot) counts as
 // stale.
 export async function assertResumedSnapshotRevisionCurrent(
-  userId: string,
+  orgCtx: OrgContext,
   row: CertificationSubmissionRow,
 ): Promise<void> {
   const revision = (row.payloadSnapshot as { __mappingRevision?: unknown } | null)
     ?.__mappingRevision;
   if (revision === MAPPING_REVISION) return;
-  await retireStaleSubmissionDraft(userId, row.id, {
+  await retireStaleSubmissionDraft(orgCtx, row.id, {
     reason: `mapping revision drift: snapshot ${String(revision)} != current ${MAPPING_REVISION}`,
   });
   throw new SafeError(

@@ -12,7 +12,7 @@
  */
 
 import { z } from "zod";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import {
   createBinMovement,
   getBinMovements as getBinMovementsData,
@@ -59,11 +59,8 @@ export async function getBinMovementsFn(
   storageLocationId: string
 ): Promise<ActionResult<BinMovementWithActor[]>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
-    const movements = await getBinMovementsData(user.id, storageLocationId);
+    const ctx = await requireOrgContext();
+    const movements = await getBinMovementsData(ctx, storageLocationId);
     return { success: true, data: movements };
   } catch (error) {
     return {
@@ -85,17 +82,14 @@ export async function recordStockTakeFn(
   data: z.infer<typeof recordStockTakeSchema>
 ): Promise<ActionResult<BinMovement>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = recordStockTakeSchema.parse(data);
 
     // Recompute derived stock server-side so the delta reflects the latest
     // state (including prior movements), not whatever the client last saw.
     const entity = await getStorageLocationWithFacilityData(
-      user.id,
+      ctx,
       validated.storageLocationId
     );
     if (laneForStorageType(entity.type) !== validated.lane) {
@@ -115,7 +109,7 @@ export async function recordStockTakeFn(
         : validated.countedMassKg;
     const massDeltaKg = countedMassKg - derivedMassKgAtTime;
 
-    const movement = await createBinMovement(user.id, {
+    const movement = await createBinMovement(ctx, {
       storageLocationId: validated.storageLocationId,
       lane: validated.lane,
       movementType: "adjustment",
@@ -150,14 +144,11 @@ export async function recordLossFn(
   data: z.infer<typeof recordLossSchema>
 ): Promise<ActionResult<BinMovement>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = recordLossSchema.parse(data);
 
-    const movement = await createBinMovement(user.id, {
+    const movement = await createBinMovement(ctx, {
       storageLocationId: validated.storageLocationId,
       lane: validated.lane,
       movementType: "loss",

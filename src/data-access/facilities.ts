@@ -5,6 +5,7 @@
 
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
+import type { OrgContext } from "@/lib/auth/server";
 import {
   facilities,
   reactors,
@@ -77,7 +78,7 @@ export interface FacilityDetail extends Facility {
 // Auth Guards
 // ============================================
 
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 
 // ============================================
@@ -89,10 +90,10 @@ import { SafeError } from "@/lib/errors";
  * Supports search, country filter, sorting, and pagination
  */
 export async function getFacilities(
-  userId: string,
+  ctx: OrgContext,
   filters?: Partial<FacilityFilterData>
 ): Promise<PaginatedFacilities> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const {
     search,
@@ -106,6 +107,7 @@ export async function getFacilities(
 
   // Build where conditions — active facilities by default, archived-only view on demand
   const conditions: SQL[] = [
+    eq(facilities.organizationId, ctx.organizationId),
     archived ? isNotNull(facilities.archivedAt) : isNull(facilities.archivedAt),
   ];
 
@@ -140,6 +142,7 @@ export async function getFacilities(
   const orderFn = sortOrder === "desc" ? desc : asc;
 
   // Count total for pagination
+  // org-scope-ok: whereClause includes the active organization predicate.
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(facilities)
@@ -153,6 +156,7 @@ export async function getFacilities(
   const facilityList = await db
     .select({
       id: facilities.id,
+      organizationId: facilities.organizationId,
       code: facilities.code,
       name: facilities.name,
       location: facilities.location,
@@ -197,7 +201,7 @@ export async function getFacilities(
             reactorType: reactors.reactorType,
           })
           .from(reactors)
-          .where(inArray(reactors.facilityId, facilityIds))
+          .where(and(inArray(reactors.facilityId, facilityIds), eq(reactors.organizationId, ctx.organizationId)))
           .orderBy(asc(reactors.facilityId), asc(reactors.code)),
         db
           .select({
@@ -206,7 +210,7 @@ export async function getFacilities(
             count: count(),
           })
           .from(storageLocations)
-          .where(inArray(storageLocations.facilityId, facilityIds))
+          .where(and(inArray(storageLocations.facilityId, facilityIds), eq(storageLocations.organizationId, ctx.organizationId)))
           .groupBy(storageLocations.facilityId, storageLocations.type),
         db
           .select({
@@ -214,7 +218,7 @@ export async function getFacilities(
             totalDryKg: sql<number>`COALESCE(SUM(${feedstocks.massDryKg}), 0)`,
           })
           .from(feedstocks)
-          .where(inArray(feedstocks.facilityId, facilityIds))
+          .where(and(inArray(feedstocks.facilityId, facilityIds), eq(feedstocks.organizationId, ctx.organizationId)))
           .groupBy(feedstocks.facilityId),
         db
           .select({
@@ -224,9 +228,9 @@ export async function getFacilities(
           .from(productionRuns)
           .leftJoin(
             productionRunFeedstocks,
-            eq(productionRunFeedstocks.productionRunId, productionRuns.id)
+            and(eq(productionRunFeedstocks.productionRunId, productionRuns.id), eq(productionRunFeedstocks.organizationId, ctx.organizationId))
           )
-          .where(inArray(productionRuns.facilityId, facilityIds))
+          .where(and(inArray(productionRuns.facilityId, facilityIds), eq(productionRuns.organizationId, ctx.organizationId)))
           .groupBy(productionRuns.facilityId),
         db
           .select({
@@ -234,7 +238,7 @@ export async function getFacilities(
             totalProducedKg: sql<number>`COALESCE(SUM(${productionRuns.biocharOutputKg}), 0)`,
           })
           .from(productionRuns)
-          .where(inArray(productionRuns.facilityId, facilityIds))
+          .where(and(inArray(productionRuns.facilityId, facilityIds), eq(productionRuns.organizationId, ctx.organizationId)))
           .groupBy(productionRuns.facilityId),
         db
           .select({
@@ -249,8 +253,8 @@ export async function getFacilities(
             `,
           })
           .from(biocharProducts)
-          .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
-          .where(inArray(biocharProducts.facilityId, facilityIds))
+          .leftJoin(formulations, and(eq(biocharProducts.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
+          .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId)))
           .groupBy(biocharProducts.facilityId),
         db
           .select({
@@ -258,7 +262,7 @@ export async function getFacilities(
             totalProductKg: sql<number>`COALESCE(SUM(${biocharProducts.massKg}), 0)`,
           })
           .from(biocharProducts)
-          .where(inArray(biocharProducts.facilityId, facilityIds))
+          .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId)))
           .groupBy(biocharProducts.facilityId),
       ])
     : [[], [], [], [], [], [], []];
@@ -364,15 +368,15 @@ export async function getFacilities(
  * Returns facility data without relations
  */
 export async function getFacilityById(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string
 ): Promise<Facility> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [facility] = await db
     .select()
     .from(facilities)
-    .where(eq(facilities.id, facilityId));
+    .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
 
   if (!facility) {
     throw new SafeError("Facility not found");
@@ -386,16 +390,16 @@ export async function getFacilityById(
  * Includes reactors and storage locations
  */
 export async function getFacilityWithRelations(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string
 ): Promise<FacilityDetail> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Get facility
   const [facility] = await db
     .select()
     .from(facilities)
-    .where(eq(facilities.id, facilityId));
+    .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
 
   if (!facility) {
     throw new SafeError("Facility not found");
@@ -410,7 +414,7 @@ export async function getFacilityWithRelations(
       reactorType: reactors.reactorType,
     })
     .from(reactors)
-    .where(eq(reactors.facilityId, facilityId))
+    .where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId)))
     .orderBy(asc(reactors.code));
 
   // Get associated storage locations
@@ -422,7 +426,7 @@ export async function getFacilityWithRelations(
       type: storageLocations.type,
     })
     .from(storageLocations)
-    .where(eq(storageLocations.facilityId, facilityId))
+    .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId)))
     .orderBy(asc(storageLocations.code));
 
   return {
@@ -436,7 +440,7 @@ export async function getFacilityWithRelations(
  * Get reactors associated with a facility
  */
 export async function getFacilityReactors(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string
 ): Promise<
   Array<{
@@ -449,13 +453,13 @@ export async function getFacilityReactors(
     updatedAt: Date;
   }>
 > {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify facility exists
   const [facility] = await db
     .select({ id: facilities.id })
     .from(facilities)
-    .where(eq(facilities.id, facilityId));
+    .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
 
   if (!facility) {
     throw new SafeError("Facility not found");
@@ -472,7 +476,7 @@ export async function getFacilityReactors(
       updatedAt: reactors.updatedAt,
     })
     .from(reactors)
-    .where(eq(reactors.facilityId, facilityId))
+    .where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId)))
     .orderBy(asc(reactors.code));
 }
 
@@ -480,7 +484,7 @@ export async function getFacilityReactors(
  * Get storage locations associated with a facility
  */
 export async function getFacilityStorageLocations(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string
 ): Promise<
   Array<{
@@ -494,13 +498,13 @@ export async function getFacilityStorageLocations(
     updatedAt: Date;
   }>
 > {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify facility exists
   const [facility] = await db
     .select({ id: facilities.id })
     .from(facilities)
-    .where(eq(facilities.id, facilityId));
+    .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
 
   if (!facility) {
     throw new SafeError("Facility not found");
@@ -518,7 +522,7 @@ export async function getFacilityStorageLocations(
       updatedAt: storageLocations.updatedAt,
     })
     .from(storageLocations)
-    .where(eq(storageLocations.facilityId, facilityId))
+    .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId)))
     .orderBy(asc(storageLocations.code));
 }
 
@@ -530,7 +534,7 @@ export async function getFacilityStorageLocations(
  * Create a new facility
  */
 export async function createFacility(
-  userId: string,
+  ctx: OrgContext,
   data: {
     code: string;
     name: string;
@@ -545,13 +549,13 @@ export async function createFacility(
     durabilityOption?: "200_year" | "1000_year";
   }
 ): Promise<Facility> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Check for duplicate code
   const [existing] = await db
     .select({ id: facilities.id })
     .from(facilities)
-    .where(eq(facilities.code, data.code));
+    .where(and(eq(facilities.code, data.code), eq(facilities.organizationId, ctx.organizationId)));
 
   if (existing) {
     throw new SafeError("A facility with this code already exists");
@@ -560,6 +564,7 @@ export async function createFacility(
   const [facility] = await db
     .insert(facilities)
     .values({
+      organizationId: ctx.organizationId,
       code: data.code,
       name: data.name,
       country: data.country,
@@ -602,7 +607,7 @@ const TIER_LOCKING_BATCH_STATUSES = ["verified", "issued"] as const;
  * Update an existing facility
  */
 export async function updateFacility(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string,
   data: {
     code?: string;
@@ -618,13 +623,13 @@ export async function updateFacility(
     durabilityOption?: "200_year" | "1000_year";
   }
 ): Promise<Facility> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify facility exists
   const [existing] = await db
     .select()
     .from(facilities)
-    .where(eq(facilities.id, facilityId));
+    .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Facility not found");
@@ -635,7 +640,7 @@ export async function updateFacility(
     const [duplicate] = await db
       .select({ id: facilities.id })
       .from(facilities)
-      .where(eq(facilities.code, data.code));
+      .where(and(eq(facilities.code, data.code), eq(facilities.organizationId, ctx.organizationId)));
 
     if (duplicate) {
       throw new SafeError("A facility with this code already exists");
@@ -664,6 +669,7 @@ export async function updateFacility(
       .where(
         and(
           eq(creditBatches.facilityId, facilityId),
+          eq(creditBatches.organizationId, ctx.organizationId),
           isNull(creditBatches.archivedAt),
           inArray(creditBatches.status, TIER_LOCKING_BATCH_STATUSES),
         ),
@@ -673,7 +679,7 @@ export async function updateFacility(
     // Cheap indexed status probe first; only hit the ledger when it clears.
     const tierIsLocked =
       blockingBatch !== undefined ||
-      (await hasBlockingFacilitySubmission(db, facilityId, "isometric"));
+      (await hasBlockingFacilitySubmission(ctx, db, facilityId, "isometric"));
 
     if (tierIsLocked) {
       throw new SafeError(
@@ -688,7 +694,7 @@ export async function updateFacility(
       ...data,
       updatedAt: new Date(),
     })
-    .where(eq(facilities.id, facilityId))
+    .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)))
     .returning();
 
   return updated;
@@ -723,15 +729,15 @@ export interface FacilityArchiveImpact {
  * Drives the confirm dialog (child counts + registry-submission warning).
  */
 export async function getFacilityArchiveImpact(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string
 ): Promise<FacilityArchiveImpact> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [existing] = await db
     .select({ id: facilities.id })
     .from(facilities)
-    .where(eq(facilities.id, facilityId));
+    .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Facility not found");
@@ -751,18 +757,18 @@ export async function getFacilityArchiveImpact(
     [powerEvidenceCount],
     hasRegistrySubmissions,
   ] = await Promise.all([
-    db.select({ count: count() }).from(reactors).where(eq(reactors.facilityId, facilityId)),
-    db.select({ count: count() }).from(storageLocations).where(eq(storageLocations.facilityId, facilityId)),
-    db.select({ count: count() }).from(feedstockDeliveries).where(eq(feedstockDeliveries.facilityId, facilityId)),
-    db.select({ count: count() }).from(feedstocks).where(eq(feedstocks.facilityId, facilityId)),
-    db.select({ count: count() }).from(productionRuns).where(eq(productionRuns.facilityId, facilityId)),
-    db.select({ count: count() }).from(biocharProducts).where(eq(biocharProducts.facilityId, facilityId)),
-    db.select({ count: count() }).from(orders).where(eq(orders.facilityId, facilityId)),
-    db.select({ count: count() }).from(deliveries).where(eq(deliveries.facilityId, facilityId)),
-    db.select({ count: count() }).from(creditBatches).where(eq(creditBatches.facilityId, facilityId)),
-    db.select({ count: count() }).from(stockpileEvents).where(eq(stockpileEvents.facilityId, facilityId)),
-    db.select({ count: count() }).from(powerProcurementEvidence).where(eq(powerProcurementEvidence.facilityId, facilityId)),
-    hasBlockingFacilitySubmission(db, facilityId, "isometric"),
+    db.select({ count: count() }).from(reactors).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId))),
+    db.select({ count: count() }).from(storageLocations).where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId))),
+    db.select({ count: count() }).from(feedstockDeliveries).where(and(eq(feedstockDeliveries.facilityId, facilityId), eq(feedstockDeliveries.organizationId, ctx.organizationId))),
+    db.select({ count: count() }).from(feedstocks).where(and(eq(feedstocks.facilityId, facilityId), eq(feedstocks.organizationId, ctx.organizationId))),
+    db.select({ count: count() }).from(productionRuns).where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId))),
+    db.select({ count: count() }).from(biocharProducts).where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId))),
+    db.select({ count: count() }).from(orders).where(and(eq(orders.facilityId, facilityId), eq(orders.organizationId, ctx.organizationId))),
+    db.select({ count: count() }).from(deliveries).where(and(eq(deliveries.facilityId, facilityId), eq(deliveries.organizationId, ctx.organizationId))),
+    db.select({ count: count() }).from(creditBatches).where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId))),
+    db.select({ count: count() }).from(stockpileEvents).where(and(eq(stockpileEvents.facilityId, facilityId), eq(stockpileEvents.organizationId, ctx.organizationId))),
+    db.select({ count: count() }).from(powerProcurementEvidence).where(and(eq(powerProcurementEvidence.facilityId, facilityId), eq(powerProcurementEvidence.organizationId, ctx.organizationId))),
+    hasBlockingFacilitySubmission(ctx, db, facilityId, "isometric"),
   ]);
 
   return {
@@ -788,16 +794,16 @@ export async function getFacilityArchiveImpact(
  * certifier registry mirrors are hidden transitively through their parent.
  */
 export async function archiveFacility(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string
 ): Promise<Facility> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   return db.transaction(async (tx) => {
     const [existing] = await tx
       .select({ id: facilities.id, archivedAt: facilities.archivedAt })
       .from(facilities)
-      .where(eq(facilities.id, facilityId));
+      .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
 
     if (!existing) {
       throw new SafeError("Facility not found");
@@ -811,23 +817,23 @@ export async function archiveFacility(
     const [archived] = await tx
       .update(facilities)
       .set({ archivedAt, updatedAt: archivedAt })
-      .where(eq(facilities.id, facilityId))
+      .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)))
       .returning();
 
     // Cascade: only rows not already archived get this stamp, so a future
     // per-entity archive cannot be clobbered (restore clears indiscriminately
     // today because facility cascade is the only writer of archived_at).
-    await tx.update(reactors).set({ archivedAt }).where(and(eq(reactors.facilityId, facilityId), isNull(reactors.archivedAt)));
-    await tx.update(storageLocations).set({ archivedAt }).where(and(eq(storageLocations.facilityId, facilityId), isNull(storageLocations.archivedAt)));
-    await tx.update(feedstockDeliveries).set({ archivedAt }).where(and(eq(feedstockDeliveries.facilityId, facilityId), isNull(feedstockDeliveries.archivedAt)));
-    await tx.update(feedstocks).set({ archivedAt }).where(and(eq(feedstocks.facilityId, facilityId), isNull(feedstocks.archivedAt)));
-    await tx.update(productionRuns).set({ archivedAt }).where(and(eq(productionRuns.facilityId, facilityId), isNull(productionRuns.archivedAt)));
-    await tx.update(biocharProducts).set({ archivedAt }).where(and(eq(biocharProducts.facilityId, facilityId), isNull(biocharProducts.archivedAt)));
-    await tx.update(orders).set({ archivedAt }).where(and(eq(orders.facilityId, facilityId), isNull(orders.archivedAt)));
-    await tx.update(deliveries).set({ archivedAt }).where(and(eq(deliveries.facilityId, facilityId), isNull(deliveries.archivedAt)));
-    await tx.update(creditBatches).set({ archivedAt }).where(and(eq(creditBatches.facilityId, facilityId), isNull(creditBatches.archivedAt)));
-    await tx.update(stockpileEvents).set({ archivedAt }).where(and(eq(stockpileEvents.facilityId, facilityId), isNull(stockpileEvents.archivedAt)));
-    await tx.update(powerProcurementEvidence).set({ archivedAt }).where(and(eq(powerProcurementEvidence.facilityId, facilityId), isNull(powerProcurementEvidence.archivedAt)));
+    await tx.update(reactors).set({ archivedAt }).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId), isNull(reactors.archivedAt)));
+    await tx.update(storageLocations).set({ archivedAt }).where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId), isNull(storageLocations.archivedAt)));
+    await tx.update(feedstockDeliveries).set({ archivedAt }).where(and(eq(feedstockDeliveries.facilityId, facilityId), eq(feedstockDeliveries.organizationId, ctx.organizationId), isNull(feedstockDeliveries.archivedAt)));
+    await tx.update(feedstocks).set({ archivedAt }).where(and(eq(feedstocks.facilityId, facilityId), eq(feedstocks.organizationId, ctx.organizationId), isNull(feedstocks.archivedAt)));
+    await tx.update(productionRuns).set({ archivedAt }).where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId), isNull(productionRuns.archivedAt)));
+    await tx.update(biocharProducts).set({ archivedAt }).where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)));
+    await tx.update(orders).set({ archivedAt }).where(and(eq(orders.facilityId, facilityId), eq(orders.organizationId, ctx.organizationId), isNull(orders.archivedAt)));
+    await tx.update(deliveries).set({ archivedAt }).where(and(eq(deliveries.facilityId, facilityId), eq(deliveries.organizationId, ctx.organizationId), isNull(deliveries.archivedAt)));
+    await tx.update(creditBatches).set({ archivedAt }).where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId), isNull(creditBatches.archivedAt)));
+    await tx.update(stockpileEvents).set({ archivedAt }).where(and(eq(stockpileEvents.facilityId, facilityId), eq(stockpileEvents.organizationId, ctx.organizationId), isNull(stockpileEvents.archivedAt)));
+    await tx.update(powerProcurementEvidence).set({ archivedAt }).where(and(eq(powerProcurementEvidence.facilityId, facilityId), eq(powerProcurementEvidence.organizationId, ctx.organizationId), isNull(powerProcurementEvidence.archivedAt)));
 
     return archived;
   });
@@ -837,16 +843,16 @@ export async function archiveFacility(
  * Restore an archived facility and all children archived by the cascade.
  */
 export async function restoreFacility(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string
 ): Promise<Facility> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   return db.transaction(async (tx) => {
     const [existing] = await tx
       .select({ id: facilities.id, archivedAt: facilities.archivedAt })
       .from(facilities)
-      .where(eq(facilities.id, facilityId));
+      .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
 
     if (!existing) {
       throw new SafeError("Facility not found");
@@ -860,7 +866,7 @@ export async function restoreFacility(
     const [restored] = await tx
       .update(facilities)
       .set({ archivedAt, updatedAt: new Date() })
-      .where(eq(facilities.id, facilityId))
+      .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)))
       .returning();
 
     // The facility cascade is the only writer of archived_at, so restore clears
@@ -868,17 +874,17 @@ export async function restoreFacility(
     // ever added, guard these updates with .where(isNull(<table>.archivedAt))
     // captured at archive time, or restore will un-archive individually
     // archived rows.
-    await tx.update(reactors).set({ archivedAt }).where(eq(reactors.facilityId, facilityId));
-    await tx.update(storageLocations).set({ archivedAt }).where(eq(storageLocations.facilityId, facilityId));
-    await tx.update(feedstockDeliveries).set({ archivedAt }).where(eq(feedstockDeliveries.facilityId, facilityId));
-    await tx.update(feedstocks).set({ archivedAt }).where(eq(feedstocks.facilityId, facilityId));
-    await tx.update(productionRuns).set({ archivedAt }).where(eq(productionRuns.facilityId, facilityId));
-    await tx.update(biocharProducts).set({ archivedAt }).where(eq(biocharProducts.facilityId, facilityId));
-    await tx.update(orders).set({ archivedAt }).where(eq(orders.facilityId, facilityId));
-    await tx.update(deliveries).set({ archivedAt }).where(eq(deliveries.facilityId, facilityId));
-    await tx.update(creditBatches).set({ archivedAt }).where(eq(creditBatches.facilityId, facilityId));
-    await tx.update(stockpileEvents).set({ archivedAt }).where(eq(stockpileEvents.facilityId, facilityId));
-    await tx.update(powerProcurementEvidence).set({ archivedAt }).where(eq(powerProcurementEvidence.facilityId, facilityId));
+    await tx.update(reactors).set({ archivedAt }).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId)));
+    await tx.update(storageLocations).set({ archivedAt }).where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId)));
+    await tx.update(feedstockDeliveries).set({ archivedAt }).where(and(eq(feedstockDeliveries.facilityId, facilityId), eq(feedstockDeliveries.organizationId, ctx.organizationId)));
+    await tx.update(feedstocks).set({ archivedAt }).where(and(eq(feedstocks.facilityId, facilityId), eq(feedstocks.organizationId, ctx.organizationId)));
+    await tx.update(productionRuns).set({ archivedAt }).where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId)));
+    await tx.update(biocharProducts).set({ archivedAt }).where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId)));
+    await tx.update(orders).set({ archivedAt }).where(and(eq(orders.facilityId, facilityId), eq(orders.organizationId, ctx.organizationId)));
+    await tx.update(deliveries).set({ archivedAt }).where(and(eq(deliveries.facilityId, facilityId), eq(deliveries.organizationId, ctx.organizationId)));
+    await tx.update(creditBatches).set({ archivedAt }).where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId)));
+    await tx.update(stockpileEvents).set({ archivedAt }).where(and(eq(stockpileEvents.facilityId, facilityId), eq(stockpileEvents.organizationId, ctx.organizationId)));
+    await tx.update(powerProcurementEvidence).set({ archivedAt }).where(and(eq(powerProcurementEvidence.facilityId, facilityId), eq(powerProcurementEvidence.organizationId, ctx.organizationId)));
 
     return restored;
   });
@@ -892,18 +898,19 @@ export async function restoreFacility(
  * Check if a facility code is available
  */
 export async function isFacilityCodeAvailable(
-  userId: string,
+  ctx: OrgContext,
   code: string,
   excludeFacilityId?: string
 ): Promise<boolean> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [eq(facilities.code, code)];
+  const conditions: SQL[] = [eq(facilities.code, code), eq(facilities.organizationId, ctx.organizationId)];
 
   if (excludeFacilityId) {
     conditions.push(sql`${facilities.id} != ${excludeFacilityId}`);
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: facilities.id })
     .from(facilities)
@@ -916,13 +923,13 @@ export async function isFacilityCodeAvailable(
  * Get unique countries from all facilities
  * Useful for filter dropdowns
  */
-export async function getFacilityCountries(userId: string): Promise<string[]> {
-  requireAuth(userId);
+export async function getFacilityCountries(ctx: OrgContext): Promise<string[]> {
+  requireOrgScope(ctx);
 
   const results = await db
     .selectDistinct({ country: facilities.country })
     .from(facilities)
-    .where(isNull(facilities.archivedAt))
+    .where(and(eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)))
     .orderBy(asc(facilities.country));
 
   return results.map((r) => r.country);

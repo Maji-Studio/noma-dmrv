@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { getStorageLocationWithFacility } from "@/data-access/storage-locations";
@@ -20,6 +21,7 @@ async function createFixture(runId: string): Promise<FeedstockStockFixture> {
     const [facility] = await tx
       .insert(facilities)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `FAC-FS-STOCK-${runId}`,
         name: `Feedstock Stock Facility ${runId}`,
       })
@@ -28,6 +30,7 @@ async function createFixture(runId: string): Promise<FeedstockStockFixture> {
     const [feedstockType] = await tx
       .insert(feedstockTypes)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `FST-FS-STOCK-${runId}`,
         name: `Feedstock Stock Type ${runId}`,
         category: "forestry",
@@ -37,6 +40,7 @@ async function createFixture(runId: string): Promise<FeedstockStockFixture> {
     const [storageLocation] = await tx
       .insert(storageLocations)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `BIN-FS-STOCK-${runId}`,
         name: `Feedstock Stock Bin ${runId}`,
         type: "feedstock_bin",
@@ -49,6 +53,7 @@ async function createFixture(runId: string): Promise<FeedstockStockFixture> {
       .insert(feedstocks)
       .values([
         {
+          organizationId: TEST_ORG_ID,
           code: `FS-STOCK-COMPLETE-${runId}`,
           facilityId: facility.id,
           status: "complete",
@@ -59,6 +64,7 @@ async function createFixture(runId: string): Promise<FeedstockStockFixture> {
           storageLocationId: storageLocation.id,
         },
         {
+          organizationId: TEST_ORG_ID,
           code: `FS-STOCK-PENDING-${runId}`,
           facilityId: facility.id,
           status: "missing_data",
@@ -89,6 +95,9 @@ async function cleanupFixture(fixture: FeedstockStockFixture): Promise<void> {
   });
 }
 
+
+beforeAll(() => ensureTestOrg());
+
 describe("storage-location feedstock stock", () => {
   it("keeps pending feedstock mass out of current bin stock", async () => {
     const runId = crypto.randomUUID().slice(0, 8).toUpperCase();
@@ -96,7 +105,7 @@ describe("storage-location feedstock stock", () => {
 
     try {
       const storageLocation = await getStorageLocationWithFacility(
-        TEST_USER_ID,
+        makeTestOrgContext(TEST_USER_ID),
         fixture.storageLocationId,
       );
 
@@ -115,7 +124,7 @@ describe("storage-location feedstock stock", () => {
 
     try {
       const option = await getStorageLocationOptionById(
-        TEST_USER_ID,
+        makeTestOrgContext(TEST_USER_ID),
         fixture.storageLocationId,
       );
 

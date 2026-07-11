@@ -3,8 +3,9 @@
 // dashboard, New-Removal wizard) recomputes the same preview from member
 // applications + pooled batch chemistry. Split out of credit-batches.ts to
 // keep that file under the 1000-line cap; the public surface stays importable
+import type { OrgContext } from "@/lib/auth/server";
 // from "./credit-batches" via re-exports.
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { creditBatches, type CreditBatch } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
@@ -15,7 +16,7 @@ import {
   type DurabilityOption,
 } from "@/schemas/credit-batches";
 
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 import { getChainOfCustodyData } from "./chain-of-custody";
 import {
   getApplicationRollupsByBatchFromRuns,
@@ -80,13 +81,17 @@ export function extract1000YearBlueprintReplicates(
 }
 
 export async function getFacilityCertifierWithExecutor(
+  ctx: OrgContext,
   executor: DbTransaction | typeof db,
   facilityId: string
 ): Promise<CertifierProvider | null> {
   const [row] = await executor
     .select({ provider: certifierProjects.provider })
     .from(certifierProjects)
-    .where(eq(certifierProjects.facilityId, facilityId))
+    .where(and(
+      eq(certifierProjects.facilityId, facilityId),
+      eq(certifierProjects.organizationId, ctx.organizationId),
+    ))
     .orderBy(
       sql`case ${certifierProjects.provider} when 'isometric' then 0 when 'puro_earth' then 1 else 2 end`
     )
@@ -95,11 +100,11 @@ export async function getFacilityCertifierWithExecutor(
 }
 
 export async function getFacilityCertifier(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string
 ): Promise<CertifierProvider | null> {
-  requireAuth(userId);
-  return getFacilityCertifierWithExecutor(db, facilityId);
+  requireOrgScope(ctx);
+  return getFacilityCertifierWithExecutor(ctx, db, facilityId);
 }
 
 function unique(values: string[]): string[] {
@@ -107,7 +112,7 @@ function unique(values: string[]): string[] {
 }
 
 export async function buildCo2eStoredPreview(
-  userId: string,
+  ctx: OrgContext,
   // The durability tier is join-derived from the facility (ADR 0021), so it is
   // supplied alongside the raw batch row rather than read off it.
   batch: Pick<CreditBatch, "id" | "facilityId"> & {
@@ -115,7 +120,8 @@ export async function buildCo2eStoredPreview(
   },
   applicationIds: string[]
 ): Promise<CreditBatchCo2eStoredPreview> {
-  const provider = await getFacilityCertifier(userId, batch.facilityId);
+  requireOrgScope(ctx);
+  const provider = await getFacilityCertifier(ctx, batch.facilityId);
   if (provider !== "isometric") {
     return {
       provider,
@@ -147,8 +153,8 @@ export async function buildCo2eStoredPreview(
         soilTemperatureC: applications.soilTemperatureC,
       })
       .from(applications)
-      .where(inArray(applications.id, applicationIds)),
-    Promise.all(applicationIds.map((id) => getChainOfCustodyData(userId, id))),
+      .where(and(inArray(applications.id, applicationIds), eq(applications.organizationId, ctx.organizationId))),
+    Promise.all(applicationIds.map((id) => getChainOfCustodyData(ctx, id))),
   ]);
 
   const appById = new Map(applicationRows.map((app) => [app.id, app]));
@@ -159,7 +165,7 @@ export async function buildCo2eStoredPreview(
   // Chemistry at the CREDIT-BATCH grain (issue #309): the batch's POOLED
   // replicate means — the same figures the durability data plane submits —
   // instead of run-weighted means, which don't see batch-anchored samples.
-  const batchesWithSamples = await getCreditBatchesWithSamples(userId, [
+  const batchesWithSamples = await getCreditBatchesWithSamples(ctx, [
     batch.id,
   ]);
   const { weightedOrganicCarbonPercent, weightedHToCorgRatio } =
@@ -238,7 +244,7 @@ export async function buildCo2eStoredPreview(
 const PREVIEW_FANOUT_CONCURRENCY = 8;
 
 export async function getCo2eStoredPreviews(
-  userId: string,
+  ctx: OrgContext,
   batchIds: string[],
   options?: {
     // Reuse rollups the caller already computed (e.g. the New-Removal wizard
@@ -247,7 +253,7 @@ export async function getCo2eStoredPreviews(
     applicationRollups?: Record<string, BatchApplicationRollup>;
   }
 ): Promise<Record<string, CreditBatchCo2eStoredPreview>> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const ids = unique(batchIds);
   if (ids.length === 0) return {};
 
@@ -257,8 +263,8 @@ export async function getCo2eStoredPreviews(
       facilityDurabilityOption: facilities.durabilityOption,
     })
     .from(creditBatches)
-    .leftJoin(facilities, eq(creditBatches.facilityId, facilities.id))
-    .where(inArray(creditBatches.id, ids));
+    .leftJoin(facilities, and(eq(creditBatches.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .where(and(inArray(creditBatches.id, ids), eq(creditBatches.organizationId, ctx.organizationId)));
 
   // Re-attach the facility-derived tier onto each raw batch row (ADR 0021).
   const batches = batchRows.map((row) => ({
@@ -272,8 +278,8 @@ export async function getCo2eStoredPreviews(
   const rollupsByBatch =
     options?.applicationRollups ??
     (await getApplicationRollupsByBatchFromRuns(
-      userId,
-      await getProductionRunIdsByBatchId(allowedIds),
+      ctx,
+      await getProductionRunIdsByBatchId(ctx, allowedIds),
     ));
 
   // Bounded chunks (order-preserving) rather than one unbounded Promise.all
@@ -285,7 +291,7 @@ export async function getCo2eStoredPreviews(
         const applicationIds = rollupsByBatch[batch.id]?.applicationIds ?? [];
         return [
           batch.id,
-          await buildCo2eStoredPreview(userId, batch, applicationIds),
+          await buildCo2eStoredPreview(ctx, batch, applicationIds),
         ] as const;
       })
     );

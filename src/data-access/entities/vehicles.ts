@@ -2,15 +2,18 @@
  * Vehicle options for searchable entity selection.
  */
 
-import { ilike, or, eq, type SQL } from "drizzle-orm";
+import { and, ilike, or, eq, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { vehicles } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "../utils";
 
-export async function getVehicles(params: {
+export async function getVehicles(ctx: OrgContext, params: {
   search?: string;
   limit: number;
 }): Promise<EntityOption[]> {
+  requireOrgScope(ctx);
   const { search, limit } = params;
 
   let whereClause: SQL | undefined;
@@ -31,7 +34,7 @@ export async function getVehicles(params: {
       vehicleType: vehicles.vehicleType,
     })
     .from(vehicles)
-    .where(whereClause)
+    .where(and(eq(vehicles.organizationId, ctx.organizationId), whereClause))
     .limit(limit);
 
   return results.map((r) => ({
@@ -42,7 +45,8 @@ export async function getVehicles(params: {
   }));
 }
 
-export async function getVehicleById(id: string): Promise<EntityOption | null> {
+export async function getVehicleById(ctx: OrgContext, id: string): Promise<EntityOption | null> {
+  requireOrgScope(ctx);
   const [result] = await db
     .select({
       id: vehicles.id,
@@ -51,7 +55,7 @@ export async function getVehicleById(id: string): Promise<EntityOption | null> {
       vehicleType: vehicles.vehicleType,
     })
     .from(vehicles)
-    .where(eq(vehicles.id, id))
+    .where(and(eq(vehicles.id, id), eq(vehicles.organizationId, ctx.organizationId)))
     .limit(1);
 
   if (!result) return null;

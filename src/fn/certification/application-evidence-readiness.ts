@@ -1,3 +1,4 @@
+import type { OrgContext } from "@/lib/auth/server";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import {
   listDocumentsForEntityIds,
@@ -69,12 +70,12 @@ function isBoundaryLogbook(row: DocumentRow): boolean {
 }
 
 export async function buildApplicationEvidenceGaps(
-  userId: string,
+  orgCtx: OrgContext,
   lineages: ChainOfCustodyData[],
 ): Promise<string[]> {
   const applicationIds = lineages.map((lineage) => lineage.application.id);
   const documents = await listDocumentsForEntityIds(
-    userId,
+    orgCtx,
     APPLICATION_DOCUMENT_ENTITY_TYPE,
     applicationIds,
   );

@@ -92,7 +92,7 @@ function metadataRecord(value: unknown): Record<string, unknown> {
 export async function requestUpload(
   input: unknown
 ): Promise<ActionResult<RequestUploadResult>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     // Preserve historical "join all issues with ', '" formatting by parsing
     // explicitly and re-throwing as SafeError — withAction's default ZodError
     // path prefixes with "Validation error:" which would change the user-facing
@@ -117,18 +117,17 @@ export async function requestUpload(
       );
     }
     await assertCanManageDocumentEntity(
-      userId,
-      parsed.data.entityType,
+      ctx, parsed.data.entityType,
       parsed.data.entityId,
     );
 
     const provider = getStorageProvider();
-    const storageKey = buildStorageKey({
+    const storageKey = `org/${ctx.organizationId}/${buildStorageKey({
       entityType: parsed.data.entityType,
       entityId: parsed.data.entityId,
       documentType: docType,
       fileName: parsed.data.fileName,
-    });
+    })}`;
 
     const presign = await provider.createUploadUrl({
       key: storageKey,
@@ -147,7 +146,7 @@ export async function requestUpload(
         parsed.data.applicationLogbookEvidenceType,
     });
 
-    const row = await insertDocument(userId, {
+    const row = await insertDocument(ctx, {
       entityType: parsed.data.entityType,
       entityId: parsed.data.entityId,
       documentType: docType,
@@ -164,7 +163,7 @@ export async function requestUpload(
         : null,
       description: parsed.data.description ?? null,
       metadata,
-      createdBy: userId,
+      createdBy: ctx.userId,
     });
 
     return {
@@ -181,12 +180,12 @@ export async function requestUpload(
 export async function confirmUpload(
   input: unknown
 ): Promise<ActionResult<DocumentRow>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const { documentId } = confirmUploadSchema.parse(input);
 
-    const row = await getDocumentById(userId, documentId);
+    const row = await getDocumentById(ctx, documentId);
     if (!row) throw new SafeError("Document not found");
-    await assertCanManageDocumentEntity(userId, row.entityType, row.entityId);
+    await assertCanManageDocumentEntity(ctx, row.entityType, row.entityId);
     if (!row.storageKey) throw new SafeError("Document has no storage key");
     if (row.uploadStatus !== "pending") {
       throw new SafeError(`Document already in '${row.uploadStatus}' state`);
@@ -195,7 +194,7 @@ export async function confirmUpload(
     const provider = getStorageProvider();
     const head = await provider.headObject(row.storageKey);
     if (!head) {
-      await updateDocument(userId, row.id, { uploadStatus: "failed" });
+      await updateDocument(ctx, row.id, { uploadStatus: "failed" });
       throw new SafeError("Uploaded object not found in storage");
     }
 
@@ -204,7 +203,7 @@ export async function confirmUpload(
     if (head.size > cap) {
       await Promise.allSettled([
         provider.deleteObject(row.storageKey),
-        updateDocument(userId, row.id, { uploadStatus: "failed" }),
+        updateDocument(ctx, row.id, { uploadStatus: "failed" }),
       ]);
       throw new SafeError(
         `Object size ${head.size} exceeds ${cap}-byte cap for ${docType}`
@@ -213,14 +212,14 @@ export async function confirmUpload(
     if (!isAllowedMime(docType, head.contentType)) {
       await Promise.allSettled([
         provider.deleteObject(row.storageKey),
-        updateDocument(userId, row.id, { uploadStatus: "failed" }),
+        updateDocument(ctx, row.id, { uploadStatus: "failed" }),
       ]);
       throw new SafeError(
         `Object content-type ${head.contentType} not allowed for ${docType}`
       );
     }
 
-    const updated = await updateDocument(userId, row.id, {
+    const updated = await updateDocument(ctx, row.id, {
       uploadStatus: "uploaded",
       fileSizeBytes: head.size,
       mimeType: head.contentType,
@@ -233,10 +232,10 @@ export async function confirmUpload(
 export async function setDocumentVisibility(
   input: unknown
 ): Promise<ActionResult<DocumentRow>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const data = setVisibilitySchema.parse(input);
 
-    const updated = await updateDocument(userId, data.documentId, {
+    const updated = await updateDocument(ctx, data.documentId, {
       visibility: data.visibility,
     });
     if (!updated) throw new SafeError("Document not found");
@@ -247,12 +246,12 @@ export async function setDocumentVisibility(
 export async function updateApplicationEvidenceMetadata(
   input: unknown
 ): Promise<ActionResult<DocumentRow>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const data = updateApplicationEvidenceMetadataSchema.parse(input);
 
-    const row = await getDocumentById(userId, data.documentId);
+    const row = await getDocumentById(ctx, data.documentId);
     if (!row) throw new SafeError("Document not found");
-    await assertCanManageDocumentEntity(userId, row.entityType, row.entityId);
+    await assertCanManageDocumentEntity(ctx, row.entityType, row.entityId);
     if (row.entityType !== "application") {
       throw new SafeError("Evidence classification is only available for applications");
     }
@@ -277,7 +276,7 @@ export async function updateApplicationEvidenceMetadata(
       patch.logbookEvidenceType = data.applicationLogbookEvidenceType;
     }
 
-    const updated = await updateDocument(userId, row.id, {
+    const updated = await updateDocument(ctx, row.id, {
       metadata: {
         ...metadataRecord(row.metadata),
         ...patch,
@@ -291,18 +290,17 @@ export async function updateApplicationEvidenceMetadata(
 export async function deleteDocument(
   input: unknown
 ): Promise<ActionResult<{ id: string }>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const { documentId } = deleteDocumentSchema.parse(input);
 
-    const row = await getDocumentById(userId, documentId);
+    const row = await getDocumentById(ctx, documentId);
     if (!row) throw new SafeError("Document not found");
-    await assertCanManageDocumentEntity(userId, row.entityType, row.entityId);
+    await assertCanManageDocumentEntity(ctx, row.entityType, row.entityId);
 
     // Fast user-facing path; the FK-backed delete below remains the real race
     // guard in case a mirror appears after this check.
     const isometricMirror = await getDocumentUploadByDocument(
-      userId,
-      ISOMETRIC_PROVIDER,
+      ctx, ISOMETRIC_PROVIDER,
       row.id,
     );
     if (isometricMirror) {
@@ -313,11 +311,10 @@ export async function deleteDocument(
 
     let deleted: DocumentRow | null;
     try {
-      deleted = await deleteDocumentRow(userId, row.id);
+      deleted = await deleteDocumentRow(ctx, row.id);
     } catch (err) {
       const mirror = await getDocumentUploadByDocument(
-        userId,
-        ISOMETRIC_PROVIDER,
+        ctx, ISOMETRIC_PROVIDER,
         row.id,
       );
       if (mirror) {
@@ -340,7 +337,7 @@ export async function deleteDocument(
         });
         let restored = false;
         try {
-          await insertDocument(userId, deleted);
+          await insertDocument(ctx, deleted);
           restored = true;
         } catch (restoreErr) {
           console.error("Failed to restore document row after storage error", {
@@ -367,7 +364,7 @@ export async function getDocumentsForEntity(
   entityType: string,
   entityId: string
 ): Promise<ActionResult<DocumentRow[]>> {
-  return withAction((userId) =>
-    listDocumentsForEntity(userId, entityType, entityId)
+  return withAction((ctx) =>
+    listDocumentsForEntity(ctx, entityType, entityId)
   );
 }

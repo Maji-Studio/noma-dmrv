@@ -1,3 +1,4 @@
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Server-side enforcement of the "one formulation per product bin" rule.
  *
@@ -25,6 +26,7 @@ import {
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
 
+
 describe("createBiocharProduct — product bin ↔ formulation", () => {
   const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
   let facilityId: string;
@@ -39,16 +41,19 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
   const createdBinIds: string[] = [];
   const createdProductIds: string[] = [];
 
-  beforeAll(async () => {
+  beforeAll(() => ensureTestOrg());
+
+beforeAll(async () => {
     const [facility] = await db
       .insert(facilities)
-      .values({ code: `FAC-PBF-${tag}`, name: `PBF Facility ${tag}` })
+      .values({ organizationId: TEST_ORG_ID, code: `FAC-PBF-${tag}`, name: `PBF Facility ${tag}` })
       .returning({ id: facilities.id });
     facilityId = facility.id;
 
     const [reactor] = await db
       .insert(reactors)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `R-PBF-${tag}`,
         identifier: `PBF Reactor ${tag}`,
         facilityId,
@@ -60,6 +65,7 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
     const [run] = await db
       .insert(productionRuns)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `PR-PBF-${tag}`,
         facilityId,
         reactorId,
@@ -72,19 +78,20 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
 
     const [formulationA] = await db
       .insert(formulations)
-      .values({ code: `FM-PBF-A-${tag}`, name: `PBF Blend A ${tag}`, biocharRatio: 0.6 })
+      .values({ organizationId: TEST_ORG_ID, code: `FM-PBF-A-${tag}`, name: `PBF Blend A ${tag}`, biocharRatio: 0.6 })
       .returning({ id: formulations.id });
     formulationAId = formulationA.id;
 
     const [formulationB] = await db
       .insert(formulations)
-      .values({ code: `FM-PBF-B-${tag}`, name: `PBF Blend B ${tag}`, biocharRatio: 0.4 })
+      .values({ organizationId: TEST_ORG_ID, code: `FM-PBF-B-${tag}`, name: `PBF Blend B ${tag}`, biocharRatio: 0.4 })
       .returning({ id: formulations.id });
     formulationBId = formulationB.id;
 
     const [pyrolysisType] = await db
       .insert(feedstockTypes)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `FT-PBF-P-${tag}`,
         name: `PBF Pyrolysis Type ${tag}`,
         category: "forestry",
@@ -96,6 +103,7 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
     const [blendTypeA] = await db
       .insert(feedstockTypes)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `FT-PBF-BA-${tag}`,
         name: `PBF Blend Type A ${tag}`,
         category: "compost",
@@ -107,6 +115,7 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
     const [blendTypeB] = await db
       .insert(feedstockTypes)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `FT-PBF-BB-${tag}`,
         name: `PBF Blend Type B ${tag}`,
         category: "mineral",
@@ -118,6 +127,7 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
     const [formulationIngredientA] = await db
       .insert(formulationIngredients)
       .values({
+        organizationId: TEST_ORG_ID,
         formulationId: formulationAId,
         feedstockTypeId: blendTypeAId,
         ratio: 0.2,
@@ -186,6 +196,7 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
     const [bin] = await db
       .insert(storageLocations)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `BIN-PBF-${suffix}`,
         name: `PBF Bin ${tag} ${suffix}`,
         type: "product_bin",
@@ -202,6 +213,7 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
     const [bin] = await db
       .insert(storageLocations)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `BIN-PBF-FS-${suffix}`,
         name: `PBF Feedstock Bin ${tag} ${suffix}`,
         type: "feedstock_bin",
@@ -227,7 +239,7 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
   it("claims an unassigned bin for the product's formulation on first use", async () => {
     const binId = await makeProductBin(null);
 
-    const product = await createBiocharProduct(TEST_USER_ID, {
+    const product = await createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
       ...baseProductInput(),
       formulationId: formulationAId,
       storageLocationId: binId,
@@ -246,7 +258,7 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
     const binId = await makeProductBin(formulationBId); // reserved for B
 
     await expect(
-      createBiocharProduct(TEST_USER_ID, {
+      createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
         ...baseProductInput(),
         formulationId: formulationAId, // mismatched
         storageLocationId: binId,
@@ -257,7 +269,7 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
   it("allows a pure-biochar product in an unassigned bin and leaves it unclaimed", async () => {
     const binId = await makeProductBin(null);
 
-    const product = await createBiocharProduct(TEST_USER_ID, {
+    const product = await createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
       ...baseProductInput(),
       formulationId: null, // pure biochar
       storageLocationId: binId,
@@ -277,7 +289,7 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
     const pyrolysisBinId = await makeFeedstockBin(pyrolysisTypeId);
 
     await expect(
-      createBiocharProduct(TEST_USER_ID, {
+      createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
         ...baseProductInput(),
         formulationId: formulationAId,
         storageLocationId: productBinId,
@@ -303,7 +315,7 @@ describe("createBiocharProduct — product bin ↔ formulation", () => {
     const wrongBlendBinId = await makeFeedstockBin(blendTypeBId);
 
     await expect(
-      createBiocharProduct(TEST_USER_ID, {
+      createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
         ...baseProductInput(),
         formulationId: formulationAId,
         storageLocationId: productBinId,

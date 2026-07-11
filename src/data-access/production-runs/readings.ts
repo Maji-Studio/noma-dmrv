@@ -2,10 +2,11 @@
  * Production-run reading (time-series) operations.
  */
 
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { productionRuns, productionRunReadings } from "@/db/schema";
-import { requireAuth } from "../utils";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "../utils";
 import { SafeError } from "@/lib/errors";
 import type { ProductionRunReadingRecord } from "./types";
 
@@ -13,16 +14,16 @@ import type { ProductionRunReadingRecord } from "./types";
  * Get production run readings (time-series data)
  */
 export async function getProductionRunReadings(
-  userId: string,
+  ctx: OrgContext,
   productionRunId: string
 ): Promise<ProductionRunReadingRecord[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify run exists
   const [run] = await db
     .select({ id: productionRuns.id })
     .from(productionRuns)
-    .where(eq(productionRuns.id, productionRunId));
+    .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
 
   if (!run) {
     throw new SafeError("Production run not found");
@@ -31,7 +32,7 @@ export async function getProductionRunReadings(
   return db
     .select()
     .from(productionRunReadings)
-    .where(eq(productionRunReadings.productionRunId, productionRunId))
+    .where(and(eq(productionRunReadings.productionRunId, productionRunId), eq(productionRunReadings.organizationId, ctx.organizationId)))
     .orderBy(asc(productionRunReadings.timestamp));
 }
 
@@ -39,7 +40,7 @@ export async function getProductionRunReadings(
  * Add a reading to a production run
  */
 export async function addProductionRunReading(
-  userId: string,
+  ctx: OrgContext,
   data: {
     productionRunId: string;
     timestamp: Date;
@@ -48,13 +49,13 @@ export async function addProductionRunReading(
     gasFlowRate?: number | null;
   }
 ): Promise<ProductionRunReadingRecord> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify run exists
   const [run] = await db
     .select({ id: productionRuns.id })
     .from(productionRuns)
-    .where(eq(productionRuns.id, data.productionRunId));
+    .where(and(eq(productionRuns.id, data.productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
 
   if (!run) {
     throw new SafeError("Production run not found");
@@ -63,6 +64,7 @@ export async function addProductionRunReading(
   const [reading] = await db
     .insert(productionRunReadings)
     .values({
+      organizationId: ctx.organizationId,
       productionRunId: data.productionRunId,
       timestamp: data.timestamp,
       temperatureC: data.temperatureC ?? null,

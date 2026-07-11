@@ -23,7 +23,8 @@ import {
   type DeliveryStats,
 } from "@/data-access/deliveries";
 import { syncBiocharProductTransportLeg } from "@/data-access/transport-legs";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
+import type { OrgContext } from "@/lib/auth/server";
 import { logger } from "@/lib/log";
 import {
   createDeliverySchema,
@@ -51,7 +52,7 @@ function deliveryActionError(
 // any delivery write must resync the affected product(s). Reassignments and
 // deletes resync both the old and new product. Dedupes and skips nulls.
 async function resyncBiocharLegs(
-  userId: string,
+  ctx: OrgContext,
   biocharProductIds: Array<string | null | undefined>,
 ): Promise<void> {
   const ids = [
@@ -65,12 +66,12 @@ async function resyncBiocharLegs(
   // the idempotent upsert — so we log and move on rather than throw.
   try {
     await Promise.all(
-      ids.map((id) => syncBiocharProductTransportLeg(userId, id)),
+      ids.map((id) => syncBiocharProductTransportLeg(ctx, id)),
     );
   } catch (error) {
     logger.warn(
       {
-        userId,
+        userId: ctx.userId,
         biocharProductIds: ids,
         err: error instanceof Error ? error.message : String(error),
       },
@@ -90,15 +91,12 @@ export async function getDeliveriesFn(
   filters?: Partial<z.infer<typeof deliveryFilterSchema>>
 ): Promise<ActionResult<PaginatedDeliveries>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validatedFilters = filters
       ? deliveryFilterSchema.parse(filters)
       : undefined;
-    const deliveries = await getDeliveriesData(user.id, validatedFilters);
+    const deliveries = await getDeliveriesData(ctx, validatedFilters);
 
     return { success: true, data: deliveries };
   } catch (error) {
@@ -126,12 +124,9 @@ export async function getDeliveryByIdFn(
   deliveryId: string
 ): Promise<ActionResult<Delivery>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const delivery = await getDeliveryByIdData(user.id, deliveryId);
+    const delivery = await getDeliveryByIdData(ctx, deliveryId);
     return { success: true, data: delivery };
   } catch (error) {
     return {
@@ -152,12 +147,9 @@ export async function getDeliveryWithRelationsFn(
   deliveryId: string
 ): Promise<ActionResult<DeliveryDetail>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const delivery = await getDeliveryWithRelationsData(user.id, deliveryId);
+    const delivery = await getDeliveryWithRelationsData(ctx, deliveryId);
     return { success: true, data: delivery };
   } catch (error) {
     return {
@@ -178,12 +170,9 @@ export async function getDeliveryStatsFn(
   filters?: { facilityId?: string; fromDate?: Date; toDate?: Date }
 ): Promise<ActionResult<DeliveryStats>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const stats = await getDeliveryStatsData(user.id, filters);
+    const stats = await getDeliveryStatsData(ctx, filters);
     return { success: true, data: stats };
   } catch (error) {
     return {
@@ -214,12 +203,9 @@ export async function getDeliveriesForSelectFn(
   >
 > {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const deliveries = await getDeliveriesForSelectData(user.id, orderId);
+    const deliveries = await getDeliveriesForSelectData(ctx, orderId);
     return { success: true, data: deliveries };
   } catch (error) {
     return {
@@ -241,13 +227,10 @@ export async function checkDeliveryCodeFn(
   excludeDeliveryId?: string
 ): Promise<ActionResult<{ available: boolean }>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const available = await isDeliveryCodeAvailableData(
-      user.id,
+      ctx,
       code,
       excludeDeliveryId
     );
@@ -275,19 +258,17 @@ export async function createDeliveryFn(
   data: z.infer<typeof createDeliverySchema>
 ): Promise<ActionResult<Delivery>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const delivery = await withAutoCode(
+      ctx,
       "DL",
       deliveriesTable,
       deliveriesTable.code,
       data.code,
       async (code) => {
         const validated = createDeliverySchema.parse({ ...data, code });
-        return createDelivery(user.id, {
+        return createDelivery(ctx, {
           code,
           orderId: validated.orderId,
           facilityId: validated.facilityId,
@@ -310,7 +291,7 @@ export async function createDeliveryFn(
       }
     );
 
-    await resyncBiocharLegs(user.id, [delivery.biocharProductId]);
+    await resyncBiocharLegs(ctx, [delivery.biocharProductId]);
 
     return { success: true, data: delivery };
   } catch (error) {
@@ -342,17 +323,14 @@ export async function updateDeliveryFn(
   data: z.infer<typeof updateDeliverySchema>
 ): Promise<ActionResult<Delivery>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = updateDeliverySchema.parse(data);
 
     // Capture the prior product so a product reassignment resyncs both.
-    const previous = await getDeliveryByIdData(user.id, validated.deliveryId);
+    const previous = await getDeliveryByIdData(ctx, validated.deliveryId);
 
-    const delivery = await updateDelivery(user.id, validated.deliveryId, {
+    const delivery = await updateDelivery(ctx, validated.deliveryId, {
       code: validated.code,
       orderId: validated.orderId,
       facilityId: validated.facilityId,
@@ -373,7 +351,7 @@ export async function updateDeliveryFn(
       tripType: validated.tripType ?? undefined,
     });
 
-    await resyncBiocharLegs(user.id, [
+    await resyncBiocharLegs(ctx, [
       previous?.biocharProductId,
       delivery.biocharProductId,
     ]);
@@ -408,16 +386,13 @@ export async function deleteDeliveryFn(
   data: z.infer<typeof deleteDeliverySchema>
 ): Promise<ActionResult<void>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = deleteDeliverySchema.parse(data);
-    const previous = await getDeliveryByIdData(user.id, validated.deliveryId);
-    await deleteDelivery(user.id, validated.deliveryId);
+    const previous = await getDeliveryByIdData(ctx, validated.deliveryId);
+    await deleteDelivery(ctx, validated.deliveryId);
 
-    await resyncBiocharLegs(user.id, [previous?.biocharProductId]);
+    await resyncBiocharLegs(ctx, [previous?.biocharProductId]);
 
     return { success: true, data: undefined };
   } catch (error) {

@@ -1,5 +1,6 @@
 import * as crypto from "crypto";
 import { eq } from "drizzle-orm";
+import { DEC_ORG_ID } from "@/db/org-defaults";
 import { test, expect } from "./fixtures/auth-fixtures";
 import { createDbConnection } from "./fixtures/db";
 import { seedCreditBatch } from "./fixtures/seed-chain-data";
@@ -23,6 +24,7 @@ test.describe("credit batch facility scope", () => {
       const [otherFacility] = await db
         .insert(schema.facilities)
         .values({
+        organizationId: DEC_ORG_ID,
           code: `FAC-CB-SCOPE-${tag}`,
           name: `Credit Batch Scope Facility ${tag}`,
           country: "Tanzania",

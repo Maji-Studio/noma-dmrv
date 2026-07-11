@@ -1,10 +1,6 @@
 /**
  * OrganizationsAdmin — Platform Admin directory of all Organizations.
- * Enter any org (sets the session's active org), and create the first org.
- *
- * PR 1 isolation gate: creating a SECOND org is blocked server-side until
- * org-scoped domain data ships (multi-tenancy PR 2), because a second org would
- * otherwise see PR-1's still-shared data. The form reflects that here.
+ * Enter any org (sets the session's active org), and create organizations.
  */
 "use client";
 
@@ -39,8 +35,6 @@ export function OrganizationsAdmin() {
     reset,
     formState: { errors },
   } = useForm<CreateForm>({ resolver: zodResolver(createOrganizationSchema) });
-
-  const hasExistingOrg = (organizations?.length ?? 0) >= 1;
 
   async function onCreate(values: CreateForm) {
     try {
@@ -113,66 +107,58 @@ export function OrganizationsAdmin() {
 
       <section className="flex flex-col gap-16">
         <h2 className="title-heading-3">Create organization</h2>
-        {hasExistingOrg ? (
-          <p className="body-small text-[var(--color-text-secondary)] border border-dashed border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16">
-            Creating additional organizations is disabled until org-scoped data
-            ships (multi-tenancy PR 2). A second organization would otherwise see
-            the platform&apos;s still-shared data.
-          </p>
-        ) : (
-          <form
-            onSubmit={handleSubmit(onCreate)}
-            className="flex flex-col gap-16 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20"
+        <form
+          onSubmit={handleSubmit(onCreate)}
+          className="flex flex-col gap-16 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20"
+        >
+          <FormField
+            id="org-name"
+            label="Name"
+            error={errors.name?.message}
+            required
           >
-            <FormField
+            <FormInput
               id="org-name"
-              label="Name"
-              error={errors.name?.message}
-              required
-            >
-              <FormInput
-                id="org-name"
-                placeholder="Dark Earth Carbon"
-                {...register("name")}
-              />
-            </FormField>
-            <FormField
+              placeholder="Dark Earth Carbon"
+              {...register("name")}
+            />
+          </FormField>
+          <FormField
+            id="org-slug"
+            label="Slug"
+            error={errors.slug?.message}
+            required
+          >
+            <FormInput
               id="org-slug"
-              label="Slug"
-              error={errors.slug?.message}
-              required
-            >
-              <FormInput
-                id="org-slug"
-                placeholder="dark-earth-carbon"
-                {...register("slug")}
-              />
-            </FormField>
-            <FormField
+              placeholder="dark-earth-carbon"
+              {...register("slug")}
+            />
+          </FormField>
+          <FormField
+            id="org-owner-email"
+            label="Owner email"
+            error={errors.ownerEmail?.message}
+            helperText="Must be an existing user account; they become the org Owner."
+            required
+          >
+            <FormInput
               id="org-owner-email"
-              label="Owner email"
-              error={errors.ownerEmail?.message}
-              helperText="Must be an existing user account; they become the org Owner."
-              required
+              type="email"
+              placeholder="owner@example.com"
+              {...register("ownerEmail")}
+            />
+          </FormField>
+          <div>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={createOrg.isPending}
             >
-              <FormInput
-                id="org-owner-email"
-                type="email"
-                placeholder="owner@example.com"
-                {...register("ownerEmail")}
-              />
-            </FormField>
-            <div>
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={createOrg.isPending}
-              >
-                {createOrg.isPending ? "Creating…" : "Create organization"}
-              </Button>
-            </div>
-          </form>
-        )}
+              {createOrg.isPending ? "Creating…" : "Create organization"}
+            </Button>
+          </div>
+        </form>
       </section>
     </div>
   );

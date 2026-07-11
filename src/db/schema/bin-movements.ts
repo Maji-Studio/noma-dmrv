@@ -1,7 +1,7 @@
 import { check, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { storageLocations } from './facilities';
-import { users } from './auth';
+import { organizations, users } from './auth';
 import { binMovementLane, binMovementType } from './common';
 import { fraction, massKg } from './numeric-families';
 
@@ -18,6 +18,9 @@ export const binMovements = pgTable(
   'bin_movements',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
     storageLocationId: uuid('storage_location_id')
       .notNull()
       .references(() => storageLocations.id),
@@ -42,6 +45,7 @@ export const binMovements = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [
+    index('bin_movements_organization_id_idx').on(table.organizationId),
     index('bin_movements_storage_location_lane_idx').on(
       table.storageLocationId,
       table.lane

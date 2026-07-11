@@ -12,6 +12,7 @@
  * the next submit regenerates it. Each ledger skips itself cleanly when it has
  * nothing to evidence (no legs / no sampled batches / no soil reference).
  */
+import type { OrgContext } from "@/lib/auth/server";
 import type { Logger } from "@/lib/log";
 import type { RemovalSubmissionContext } from "./certify-context-core";
 import { ensureDurabilityEvidenceLedgerSourceFromContext } from "./durability-evidence-ledger";
@@ -23,14 +24,14 @@ const LEDGERS = [
 ] as const;
 
 export async function ensureEvidenceLedgersFromContext(
-  userId: string,
+  orgCtx: OrgContext,
   removalId: string,
   ctx: RemovalSubmissionContext,
   log: Logger,
 ): Promise<void> {
   for (const ledger of LEDGERS) {
     try {
-      const result = await ledger.run(userId, removalId, ctx);
+      const result = await ledger.run(orgCtx, removalId, ctx);
       log.info(
         { ledger: ledger.name, ledgerStatus: result.status },
         "evidence ledger ensured",

@@ -13,6 +13,7 @@
  * millions, and this keeps the module free of fragile SQL bucketing.
  */
 import { and, asc, desc, eq, gte, isNull, lt, ne, or } from "drizzle-orm";
+import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
   applications,
@@ -38,7 +39,7 @@ import {
   type DashboardNowItem,
   type DashboardProgressStage,
 } from "./dashboard-operations";
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 
 // Re-exported so components import every dashboard type from one module.
@@ -209,11 +210,11 @@ function sum(values: number[]): number {
 }
 
 export async function getDashboardOverview(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string,
   range: DashboardRange,
 ): Promise<DashboardOverview> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const bounds = resolveRange(range);
   // Fetch back to the previous-period start so delta needs no second query.
@@ -235,6 +236,7 @@ export async function getDashboardOverview(
         .from(productionRuns)
         .where(
           and(
+            eq(productionRuns.organizationId, ctx.organizationId),
             eq(productionRuns.facilityId, facilityId),
             isNull(productionRuns.archivedAt),
             ne(productionRuns.status, "void"),
@@ -252,6 +254,7 @@ export async function getDashboardOverview(
         .from(biocharProducts)
         .where(
           and(
+            eq(biocharProducts.organizationId, ctx.organizationId),
             eq(biocharProducts.facilityId, facilityId),
             isNull(biocharProducts.archivedAt),
             ne(biocharProducts.status, "draft"),
@@ -264,9 +267,10 @@ export async function getDashboardOverview(
           biocharAppliedDryTons: applications.biocharAppliedDryTons,
         })
         .from(applications)
-        .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+        .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
         .where(
           and(
+            eq(applications.organizationId, ctx.organizationId),
             eq(deliveries.facilityId, facilityId),
             isNull(deliveries.archivedAt),
             ...(fetchStart ? [gte(applications.applicationDate, fetchStart)] : []),
@@ -280,6 +284,7 @@ export async function getDashboardOverview(
         .from(creditBatches)
         .where(
           and(
+            eq(creditBatches.organizationId, ctx.organizationId),
             eq(creditBatches.facilityId, facilityId),
             isNull(creditBatches.archivedAt),
             ne(creditBatches.status, "rejected"),
@@ -296,17 +301,18 @@ export async function getDashboardOverview(
           deliveryDate: feedstocks.deliveryDate,
         })
         .from(feedstocks)
-        .innerJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
+        .innerJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
         .where(
           and(
+            eq(feedstocks.organizationId, ctx.organizationId),
             eq(feedstocks.facilityId, facilityId),
             isNull(feedstocks.archivedAt),
             ...(fetchStart ? [gte(feedstocks.deliveryDate, fetchStart)] : []),
           ),
         ),
     ]),
-    getAttentionItems(facilityId),
-    getDashboardOperations(userId, facilityId),
+    getAttentionItems(ctx, facilityId),
+    getDashboardOperations(ctx, facilityId),
   ]);
 
   // Derived CO₂e stored per batch (issue #285): the same preview figure the
@@ -315,7 +321,7 @@ export async function getDashboardOverview(
   // so the helper's internal PREVIEW_FANOUT_CONCURRENCY chunking is what
   // keeps the per-batch chain-of-custody walks from bursting the pool.
   const batchPreviews = await getCo2eStoredPreviews(
-    userId,
+    ctx,
     batchRows.map((row) => row.id),
   );
   const storedTonnesOf = (batchId: string): number | null =>
@@ -650,6 +656,7 @@ export async function getDashboardOverview(
  * underlying record is fixed (no independent lifecycle).
  */
 async function getAttentionItems(
+  ctx: OrgContext,
   facilityId: string,
 ): Promise<DashboardAttentionItem[]> {
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -661,6 +668,7 @@ async function getAttentionItems(
         .from(productionRuns)
         .where(
           and(
+            eq(productionRuns.organizationId, ctx.organizationId),
             eq(productionRuns.facilityId, facilityId),
             isNull(productionRuns.archivedAt),
             eq(productionRuns.status, "complete"),
@@ -677,6 +685,7 @@ async function getAttentionItems(
         .from(biocharProducts)
         .where(
           and(
+            eq(biocharProducts.organizationId, ctx.organizationId),
             eq(biocharProducts.facilityId, facilityId),
             isNull(biocharProducts.archivedAt),
             isNull(biocharProducts.linkedProductionRunId),
@@ -689,6 +698,7 @@ async function getAttentionItems(
         .from(feedstocks)
         .where(
           and(
+            eq(feedstocks.organizationId, ctx.organizationId),
             eq(feedstocks.facilityId, facilityId),
             isNull(feedstocks.archivedAt),
             eq(feedstocks.status, "missing_data"),
@@ -701,6 +711,7 @@ async function getAttentionItems(
         .from(deliveries)
         .where(
           and(
+            eq(deliveries.organizationId, ctx.organizationId),
             eq(deliveries.facilityId, facilityId),
             isNull(deliveries.archivedAt),
             eq(deliveries.status, "upcoming"),
@@ -713,6 +724,7 @@ async function getAttentionItems(
         .from(creditBatches)
         .where(
           and(
+            eq(creditBatches.organizationId, ctx.organizationId),
             eq(creditBatches.facilityId, facilityId),
             isNull(creditBatches.archivedAt),
             eq(creditBatches.status, "pending"),

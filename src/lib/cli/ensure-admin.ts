@@ -9,6 +9,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { config } from 'dotenv';
 import { Pool } from 'pg';
 import * as schema from '../../db/schema';
+import { DEC_ORG_ID, DEC_ORG_NAME, DEC_ORG_SLUG } from '../../db/org-defaults';
 import { hashPassword } from '../auth/hash-password';
 import { getPgPoolConfig } from '../pg-pool-config';
 
@@ -17,9 +18,6 @@ config({ path: '.env.local' });
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 
 // Fixed bootstrap identifiers so reseeds are stable across environments.
-const DEC_ORG_ID = 'org_dark_earth_carbon';
-const DEC_ORG_NAME = 'Dark Earth Carbon';
-const DEC_ORG_SLUG = 'dark-earth-carbon';
 // A dev teammate (org member, not admin) so member-management flows have a
 // second member to change roles on / remove during local testing.
 const TEAMMATE_EMAIL = 'teammate@darkearthcarbon.dev';

@@ -12,6 +12,7 @@
  * Facility-scoped and read-only.
  */
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
   applications,
@@ -20,7 +21,7 @@ import {
   feedstocks,
   transportLegs,
 } from "@/db/schema";
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 
 export type DashboardMapKind = "facility" | "application" | "feedstock";
 
@@ -95,6 +96,7 @@ function prettyStatus(status: string): string {
 
 /** Total stored road distance (km) per feedstock, summed across its legs. */
 async function loadFeedstockLegDistances(
+  ctx: OrgContext,
   facilityId: string,
 ): Promise<Map<string, number>> {
   const rows = await db
@@ -108,18 +110,19 @@ async function loadFeedstockLegDistances(
       and(
         eq(transportLegs.entityType, "feedstock"),
         eq(transportLegs.entityId, feedstocks.id),
+        eq(feedstocks.organizationId, ctx.organizationId),
       ),
     )
-    .where(and(eq(feedstocks.facilityId, facilityId), isNull(feedstocks.archivedAt)))
+    .where(and(eq(transportLegs.organizationId, ctx.organizationId), eq(feedstocks.facilityId, facilityId), isNull(feedstocks.archivedAt)))
     .groupBy(transportLegs.entityId);
   return new Map(rows.map((row) => [row.feedstockId, Number(row.distanceKm ?? 0)]));
 }
 
 export async function loadMapTrace(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string,
 ): Promise<{ points: DashboardMapPoint[]; edges: DashboardMapEdge[] }> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [facilityRows, applicationRows, feedstockRows, feedstockDistances] =
     await Promise.all([
@@ -132,7 +135,7 @@ export async function loadMapTrace(
           lng: facilities.gpsLongitude,
         })
         .from(facilities)
-        .where(eq(facilities.id, facilityId))
+        .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)))
         .limit(1),
       db
         .select({
@@ -143,8 +146,8 @@ export async function loadMapTrace(
           lng: applications.gpsLongitude,
         })
         .from(applications)
-        .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-        .where(and(eq(deliveries.facilityId, facilityId), isNull(deliveries.archivedAt)))
+        .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
+        .where(and(eq(applications.organizationId, ctx.organizationId), eq(deliveries.facilityId, facilityId), isNull(deliveries.archivedAt)))
         .orderBy(desc(applications.applicationDate))
         .limit(MAP_POINT_LIMIT),
       db
@@ -156,10 +159,10 @@ export async function loadMapTrace(
           lng: feedstocks.gpsLongitude,
         })
         .from(feedstocks)
-        .where(and(eq(feedstocks.facilityId, facilityId), isNull(feedstocks.archivedAt)))
+        .where(and(eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.facilityId, facilityId), isNull(feedstocks.archivedAt)))
         .orderBy(desc(feedstocks.deliveryDate))
         .limit(MAP_POINT_LIMIT),
-      loadFeedstockLegDistances(facilityId),
+      loadFeedstockLegDistances(ctx, facilityId),
     ]);
 
   const points: DashboardMapPoint[] = [];

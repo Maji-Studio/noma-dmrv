@@ -65,34 +65,34 @@ function unique(values: string[]): string[] {
 export async function loadGhgStatementBreakdown(
   ghgStatementId: string,
 ): Promise<ActionResult<GhgStatementBreakdownData>> {
-  return withAction(async (userId) => {
+  return withAction(async (orgCtx) => {
     const statement = await getCertifierGhgStatementById(
-      userId,
+      orgCtx,
       ghgStatementId,
     );
     if (!statement) throw new SafeError("GHG statement not found.");
 
-    const removals = await getRemovalsByGhgStatementId(userId, ghgStatementId);
+    const removals = await getRemovalsByGhgStatementId(orgCtx, ghgStatementId);
     const removalIds = removals.map((removal) => removal.id);
 
     // Member credit batches across every removal, flattened — the local
     // estimate sums the union, identical to the single-removal case.
     const batchLists = await Promise.all(
-      removalIds.map((id) => getCreditBatchesByRemovalId(userId, id)),
+      removalIds.map((id) => getCreditBatchesByRemovalId(orgCtx, id)),
     );
     const batches = batchLists.flat();
     const batchIds = batches.map((batch) => batch.id);
 
     const [previews, removalSubmissions, statementSubmission] =
       await Promise.all([
-        getCo2eStoredPreviews(userId, batchIds),
-        getLatestSubmissionsForEntities(userId, {
+        getCo2eStoredPreviews(orgCtx, batchIds),
+        getLatestSubmissionsForEntities(orgCtx, {
           provider: ISOMETRIC_PROVIDER,
           submissionType: REMOVAL_SUBMISSION_TYPE,
           localEntityType: REMOVAL_ENTITY_TYPE,
           localEntityIds: removalIds,
         }),
-        getLatestSubmission(userId, {
+        getLatestSubmission(orgCtx, {
           provider: ISOMETRIC_PROVIDER,
           submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
           localEntityType: GHG_STATEMENT_ENTITY_TYPE,

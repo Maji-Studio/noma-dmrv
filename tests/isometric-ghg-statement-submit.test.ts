@@ -26,6 +26,7 @@
  * terminal-state transition.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { makeTestOrgContext } from "./helpers/test-org";
 
 import type {
   CertificationSubmissionRow,
@@ -52,14 +53,12 @@ vi.mock("@/data-access/facilities", () => ({
   getFacilityById: vi.fn(),
 }));
 vi.mock("@/lib/auth/server", () => ({
-  getUser: vi.fn().mockResolvedValue({
-    id: "user-test-1",
-    email: "tester@example.com",
-    name: "Tester",
-    emailVerified: true,
-    role: "admin" as const,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+  requireOrgRole: vi.fn(),
+  requireOrgContext: vi.fn().mockResolvedValue({
+    userId: "user-test-1",
+    organizationId: "org_test_fixtures",
+    orgRole: "owner",
+    isPlatformAdmin: false,
   }),
 }));
 // `finalizeGhgStatement` uses `db.transaction(cb)` — fake it by invoking
@@ -245,15 +244,12 @@ beforeEach(() => {
 
   // vi.resetAllMocks() clears the .mockResolvedValue from the factory; re-set
   // a default admin user here so every withAction-wrapped path is authed.
-  vi.mocked(authServer.getUser).mockResolvedValue({
-    id: "user-test-1",
-    email: "tester@example.com",
-    name: "Tester",
-    emailVerified: true,
-    role: "admin" as const,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as never);
+  vi.mocked(authServer.requireOrgContext).mockResolvedValue({
+    userId: "user-test-1",
+    organizationId: "org_test_fixtures",
+    orgRole: "owner",
+    isPlatformAdmin: false,
+  });
 
   // Certifier-project mapping is shared across all paths.
   vi.mocked(ledger.getCertifierProjectByFacility).mockResolvedValue(
@@ -428,13 +424,13 @@ describe("createGhgStatementDraft — happy path", () => {
     // Removal membership reconciled from the server-side ghg_entry_ids; the
     // server-derived reporting window was persisted onto the local row.
     expect(ghgDA.reconcileRemovalMembership).toHaveBeenCalledWith(
-      "user-test-1",
+      makeTestOrgContext("user-test-1"),
       STATEMENT_ID,
       [EXTERNAL_REMOVAL_ID],
       expect.any(Object),
     );
     expect(ghgDA.updateGhgStatementReportingWindow).toHaveBeenCalledWith(
-      "user-test-1",
+      makeTestOrgContext("user-test-1"),
       STATEMENT_ID,
       { reportingPeriodStartOn: "2026-01-01" },
       expect.any(Object),
@@ -605,7 +601,7 @@ describe("submitGhgStatementToVerifier — happy path", () => {
 
     // The report document was attached against the ledger row.
     expect(ledger.attachReportDocument).toHaveBeenCalledWith(
-      "user-test-1",
+      makeTestOrgContext("user-test-1"),
       expect.objectContaining({
         submissionId: storedLedger[0].id,
         reportUrl: REPORT_URL,

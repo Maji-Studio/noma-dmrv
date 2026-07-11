@@ -7,6 +7,8 @@ import { db } from "@/db";
 import { productionRuns, facilities, storageLocations } from "@/db/schema";
 import { productionRunDateExpr } from "@/data-access/production-runs/date-expr";
 import type { EntityOption } from "@/components/forms/entity-select/types";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "../utils";
 
 // Deterministic integer formatting. Bare `Number.prototype.toLocaleString()`
 // follows the server's locale (thousands separator), so the label could differ
@@ -23,12 +25,13 @@ function formatRunDate(date: string | null, fallback: string): string {
   return date ?? fallback;
 }
 
-export async function getProductionRunsEntity(params: {
+export async function getProductionRunsEntity(ctx: OrgContext, params: {
   search?: string;
   facilityId?: string;
   status?: (typeof productionRuns.status.enumValues)[number];
   limit: number;
 }): Promise<EntityOption[]> {
+  requireOrgScope(ctx);
   const { search, facilityId, status, limit } = params;
 
   const conditions: SQL[] = [isNull(productionRuns.archivedAt)];
@@ -59,9 +62,21 @@ export async function getProductionRunsEntity(params: {
       biocharStorageName: storageLocations.name,
     })
     .from(productionRuns)
-    .leftJoin(facilities, eq(productionRuns.facilityId, facilities.id))
-    .leftJoin(storageLocations, eq(productionRuns.biocharStorageLocationId, storageLocations.id))
-    .where(whereClause)
+    .leftJoin(
+      facilities,
+      and(
+        eq(productionRuns.facilityId, facilities.id),
+        eq(facilities.organizationId, ctx.organizationId),
+      ),
+    )
+    .leftJoin(
+      storageLocations,
+      and(
+        eq(productionRuns.biocharStorageLocationId, storageLocations.id),
+        eq(storageLocations.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(and(eq(productionRuns.organizationId, ctx.organizationId), whereClause))
     .limit(limit);
 
   return results.map((r) => ({
@@ -76,7 +91,8 @@ export async function getProductionRunsEntity(params: {
   }));
 }
 
-export async function getProductionRunEntityById(id: string): Promise<EntityOption | null> {
+export async function getProductionRunEntityById(ctx: OrgContext, id: string): Promise<EntityOption | null> {
+  requireOrgScope(ctx);
   const [result] = await db
     .select({
       id: productionRuns.id,
@@ -88,9 +104,21 @@ export async function getProductionRunEntityById(id: string): Promise<EntityOpti
       biocharStorageName: storageLocations.name,
     })
     .from(productionRuns)
-    .leftJoin(facilities, eq(productionRuns.facilityId, facilities.id))
-    .leftJoin(storageLocations, eq(productionRuns.biocharStorageLocationId, storageLocations.id))
-    .where(eq(productionRuns.id, id))
+    .leftJoin(
+      facilities,
+      and(
+        eq(productionRuns.facilityId, facilities.id),
+        eq(facilities.organizationId, ctx.organizationId),
+      ),
+    )
+    .leftJoin(
+      storageLocations,
+      and(
+        eq(productionRuns.biocharStorageLocationId, storageLocations.id),
+        eq(storageLocations.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(and(eq(productionRuns.id, id), eq(productionRuns.organizationId, ctx.organizationId)))
     .limit(1);
 
   if (!result) return null;

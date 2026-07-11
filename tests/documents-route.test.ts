@@ -11,9 +11,10 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { makeTestOrgContext } from "./helpers/test-org";
 
 vi.mock("@/lib/auth/server", () => ({
-  getUser: vi.fn(),
+  getOrgContext: vi.fn(),
 }));
 
 vi.mock("@/data-access/documents", () => ({
@@ -21,7 +22,7 @@ vi.mock("@/data-access/documents", () => ({
   getPublicDocumentById: vi.fn(),
 }));
 
-import { getUser } from "@/lib/auth/server";
+import { getOrgContext } from "@/lib/auth/server";
 import { getDocumentById, getPublicDocumentById } from "@/data-access/documents";
 import { GET } from "@/app/api/documents/[id]/route";
 import { __setStorageProviderForTests } from "@/lib/storage";
@@ -54,6 +55,7 @@ const mockUser = {
   createdAt: new Date(),
   updatedAt: new Date(),
 };
+const TEST_CTX = makeTestOrgContext(mockUser.id);
 
 const docId = "11111111-2222-4333-8444-555555555555";
 
@@ -92,7 +94,7 @@ function makeCtx() {
 
 beforeEach(() => {
   __setStorageProviderForTests(new StubProvider());
-  vi.mocked(getUser).mockReset();
+  vi.mocked(getOrgContext).mockReset();
   vi.mocked(getDocumentById).mockReset();
   vi.mocked(getPublicDocumentById).mockReset();
 });
@@ -103,7 +105,7 @@ afterEach(() => {
 
 describe("GET /api/documents/[id]", () => {
   it("returns 404 when authed user requests missing document", async () => {
-    vi.mocked(getUser).mockResolvedValueOnce(mockUser);
+    vi.mocked(getOrgContext).mockResolvedValueOnce(TEST_CTX);
     vi.mocked(getDocumentById).mockResolvedValueOnce(null);
     const res = await GET(makeRequest(), makeCtx());
     expect(res.status).toBe(404);
@@ -118,14 +120,14 @@ describe("GET /api/documents/[id]", () => {
   });
 
   it("private + anon → 401", async () => {
-    vi.mocked(getUser).mockResolvedValueOnce(null);
+    vi.mocked(getOrgContext).mockResolvedValueOnce(null);
     vi.mocked(getPublicDocumentById).mockResolvedValueOnce(null);
     const res = await GET(makeRequest(), makeCtx());
     expect(res.status).toBe(401);
   });
 
   it("private + authed → 302 to signed URL", async () => {
-    vi.mocked(getUser).mockResolvedValueOnce(mockUser);
+    vi.mocked(getOrgContext).mockResolvedValueOnce(TEST_CTX);
     vi.mocked(getDocumentById).mockResolvedValueOnce({
       ...baseRow,
       visibility: "private",
@@ -136,7 +138,19 @@ describe("GET /api/documents/[id]", () => {
   });
 
   it("public + anon → 302 to signed URL (no auth required)", async () => {
-    vi.mocked(getUser).mockResolvedValueOnce(null);
+    vi.mocked(getOrgContext).mockResolvedValueOnce(null);
+    vi.mocked(getPublicDocumentById).mockResolvedValueOnce({
+      ...baseRow,
+      visibility: "public",
+    } as never);
+    const res = await GET(makeRequest(), makeCtx());
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(SIGNED_URL);
+  });
+
+  it("public + authed cross-org → 302 via public fallback", async () => {
+    vi.mocked(getOrgContext).mockResolvedValueOnce(TEST_CTX);
+    vi.mocked(getDocumentById).mockResolvedValueOnce(null);
     vi.mocked(getPublicDocumentById).mockResolvedValueOnce({
       ...baseRow,
       visibility: "public",
@@ -147,7 +161,7 @@ describe("GET /api/documents/[id]", () => {
   });
 
   it("uploadStatus=pending → 404 (refuses un-confirmed uploads)", async () => {
-    vi.mocked(getUser).mockResolvedValueOnce(mockUser);
+    vi.mocked(getOrgContext).mockResolvedValueOnce(TEST_CTX);
     vi.mocked(getDocumentById).mockResolvedValueOnce({
       ...baseRow,
       uploadStatus: "pending",
@@ -158,7 +172,7 @@ describe("GET /api/documents/[id]", () => {
   });
 
   it("legacy fileUrl on an allowlisted cloud host → 302 to that URL", async () => {
-    vi.mocked(getUser).mockResolvedValueOnce(mockUser);
+    vi.mocked(getOrgContext).mockResolvedValueOnce(TEST_CTX);
     vi.mocked(getDocumentById).mockResolvedValueOnce({
       ...baseRow,
       storageKey: null,
@@ -173,7 +187,7 @@ describe("GET /api/documents/[id]", () => {
   });
 
   it("legacy fileUrl on our own origin → 302 (same-origin allowed)", async () => {
-    vi.mocked(getUser).mockResolvedValueOnce(mockUser);
+    vi.mocked(getOrgContext).mockResolvedValueOnce(TEST_CTX);
     vi.mocked(getDocumentById).mockResolvedValueOnce({
       ...baseRow,
       storageKey: null,
@@ -188,7 +202,7 @@ describe("GET /api/documents/[id]", () => {
   });
 
   it("legacy fileUrl on a non-allowlisted host → 502 (fail-closed)", async () => {
-    vi.mocked(getUser).mockResolvedValueOnce(mockUser);
+    vi.mocked(getOrgContext).mockResolvedValueOnce(TEST_CTX);
     vi.mocked(getDocumentById).mockResolvedValueOnce({
       ...baseRow,
       storageKey: null,
@@ -202,7 +216,7 @@ describe("GET /api/documents/[id]", () => {
   it("legacy fileUrl on a broad provider host → 502 (narrowed from wildcard)", async () => {
     // maps.googleapis.com was allowed under the old broad `.googleapis.com`
     // family; the narrowed allowlist only permits `.storage.googleapis.com`.
-    vi.mocked(getUser).mockResolvedValueOnce(mockUser);
+    vi.mocked(getOrgContext).mockResolvedValueOnce(TEST_CTX);
     vi.mocked(getDocumentById).mockResolvedValueOnce({
       ...baseRow,
       storageKey: null,
@@ -214,7 +228,7 @@ describe("GET /api/documents/[id]", () => {
   });
 
   it("legacy fileUrl with embedded credentials → 500 (refused)", async () => {
-    vi.mocked(getUser).mockResolvedValueOnce(mockUser);
+    vi.mocked(getOrgContext).mockResolvedValueOnce(TEST_CTX);
     vi.mocked(getDocumentById).mockResolvedValueOnce({
       ...baseRow,
       storageKey: null,
@@ -226,14 +240,14 @@ describe("GET /api/documents/[id]", () => {
   });
 
   it("private legacy fileUrl + anon → 401 (gate applies to external URLs)", async () => {
-    vi.mocked(getUser).mockResolvedValueOnce(null);
+    vi.mocked(getOrgContext).mockResolvedValueOnce(null);
     vi.mocked(getPublicDocumentById).mockResolvedValueOnce(null);
     const res = await GET(makeRequest(), makeCtx());
     expect(res.status).toBe(401);
   });
 
   it("invariant violation (neither storageKey nor fileUrl) → 500", async () => {
-    vi.mocked(getUser).mockResolvedValueOnce(mockUser);
+    vi.mocked(getOrgContext).mockResolvedValueOnce(TEST_CTX);
     vi.mocked(getDocumentById).mockResolvedValueOnce({
       ...baseRow,
       storageKey: null,

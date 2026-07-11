@@ -32,7 +32,7 @@ export interface ProductionRunReadingsImportResult {
 export async function importProductionRunReadingsFromDocumentFn(
   input: unknown,
 ): Promise<ActionResult<ProductionRunReadingsImportResult>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const { documentId } = importProductionRunReadingsSchema.parse(input);
 
     // Persist the outcome onto the document so a failed import stays
@@ -44,7 +44,7 @@ export async function importProductionRunReadingsFromDocumentFn(
     // re-thrown so the operator still sees the error.
     try {
       const context = await getProductionRunReadingsImportContext(
-        userId,
+        ctx,
         documentId,
       );
       assertCsvDocument(context.fileName, context.mimeType);
@@ -68,7 +68,7 @@ export async function importProductionRunReadingsFromDocumentFn(
       }
 
       const { insertedRows, intraFileDuplicateRows } =
-        await insertProductionRunReadingsSkippingDuplicates(userId, {
+        await insertProductionRunReadingsSkippingDuplicates(ctx, {
           productionRunId: context.productionRunId,
           readings: parsed.readings,
         });
@@ -78,7 +78,7 @@ export async function importProductionRunReadingsFromDocumentFn(
       const duplicateRows =
         parsed.inWindowRows - insertedRows - intraFileDuplicateRows;
 
-      await recordReadingsImportOutcome(userId, documentId, {
+      await recordReadingsImportOutcome(ctx, documentId, {
         status: "succeeded",
         insertedRows,
         duplicateRows,
@@ -109,7 +109,7 @@ export async function importProductionRunReadingsFromDocumentFn(
       // or strand the document without its recoverable "failed" flag (#398):
       // record the outcome best-effort, then always re-throw the original error.
       try {
-        await recordReadingsImportOutcome(userId, documentId, {
+        await recordReadingsImportOutcome(ctx, documentId, {
           status: "failed",
           error: message,
         });

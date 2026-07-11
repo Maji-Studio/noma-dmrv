@@ -1,5 +1,6 @@
 "use server";
 
+import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
 import { acquireMirrorLock } from "@/lib/isometric/utils/source-lock";
 import {
@@ -133,10 +134,10 @@ function transportLegLabel(leg: TransportLeg): string {
 // | sample) and does NOT match the document entity-type strings — note
 // "biochar" here vs. "biochar_product" in the lineage. The returned candidates
 // carry `entityType: "transport_leg"` keyed on the *leg's* id; the downstream
-// `listDocumentsForEntity(userId, "transport_leg", legId)` then picks up the
+// `listDocumentsForEntity(orgCtx, "transport_leg", legId)` then picks up the
 // docs. Deduped by leg id so a leg reachable via two entities is listed once.
 async function collectTransportLegEntities(
-  userId: string,
+  orgCtx: OrgContext,
   ids: {
     feedstockIds: string[];
     biocharProductIds: string[];
@@ -144,9 +145,9 @@ async function collectTransportLegEntities(
   },
 ): Promise<CandidateLineageEntity[]> {
   const [feedstockLegs, biocharLegs, sampleLegs] = await Promise.all([
-    getTransportLegsForEntities(userId, "feedstock", ids.feedstockIds),
-    getTransportLegsForEntities(userId, "biochar", ids.biocharProductIds),
-    getTransportLegsForEntities(userId, "sample", ids.sampleIds),
+    getTransportLegsForEntities(orgCtx, "feedstock", ids.feedstockIds),
+    getTransportLegsForEntities(orgCtx, "biochar", ids.biocharProductIds),
+    getTransportLegsForEntities(orgCtx, "sample", ids.sampleIds),
   ]);
 
   const seen = new Set<string>();
@@ -168,13 +169,13 @@ async function collectTransportLegEntities(
 // (type, id). The labels feed into the panel UI so each candidate row says
 // "lab report — sample-2025-01-12.pdf (from production run XYZ)".
 async function collectLineageEntities(
-  userId: string,
+  orgCtx: OrgContext,
   memberBatchIds: string[],
 ): Promise<CandidateLineageEntity[]> {
   if (memberBatchIds.length === 0) return [];
 
   const batches = await Promise.all(
-    memberBatchIds.map((id) => getCreditBatchById(userId, id)),
+    memberBatchIds.map((id) => getCreditBatchById(orgCtx, id)),
   );
   const seen = new Map<string, CandidateLineageEntity>();
   const add = (e: CandidateLineageEntity) => {
@@ -191,14 +192,14 @@ async function collectLineageEntities(
     });
 
     const applicationsForRuns = await getApplicationsForRuns(
-      userId,
+      orgCtx,
       batch.productionRunIds,
     );
     const applicationIds = Array.from(
       new Set(applicationsForRuns.map((row) => row.applicationId)),
     );
     const lineages = await Promise.all(
-      applicationIds.map((aid) => getChainOfCustodyData(userId, aid)),
+      applicationIds.map((aid) => getChainOfCustodyData(orgCtx, aid)),
     );
 
     for (const lineage of lineages) {
@@ -252,7 +253,7 @@ async function collectLineageEntities(
     // Lab Samples by credit batch (ADR 0016) — the COA evidence walk. Keyed on
     // `samples.creditBatchId` so a commingled-batch sample with a null run link
     // still surfaces its COA as a Source candidate.
-    const batchSamples = await getSamplesByCreditBatchIds(userId, [batch.id]);
+    const batchSamples = await getSamplesByCreditBatchIds(orgCtx, [batch.id]);
     for (const sample of batchSamples) {
       add({
         entityType: "sample",
@@ -267,7 +268,7 @@ async function collectLineageEntities(
   const collected = Array.from(seen.values());
   const idsOfType = (t: LineageEntityType) =>
     collected.filter((e) => e.entityType === t).map((e) => e.entityId);
-  const legEntities = await collectTransportLegEntities(userId, {
+  const legEntities = await collectTransportLegEntities(orgCtx, {
     feedstockIds: idsOfType("feedstock"),
     biocharProductIds: idsOfType("biochar_product"),
     sampleIds: idsOfType("sample"),
@@ -278,27 +279,27 @@ async function collectLineageEntities(
 }
 
 async function loadCandidateDocumentsForRemovalInternal(
-  userId: string,
+  orgCtx: OrgContext,
   removalId: string,
 ): Promise<CandidateDocumentsForRemoval> {
-  const removal = await getCertifierRemovalById(userId, removalId);
+  const removal = await getCertifierRemovalById(orgCtx, removalId);
   if (!removal) throw new SafeError("Removal not found.");
 
   const mapping = await getCertifierProjectByFacility(
-    userId,
+    orgCtx,
     removal.facilityId,
     ISOMETRIC_PROVIDER,
   );
 
-  const batches = await getCreditBatchesByRemovalId(userId, removalId);
+  const batches = await getCreditBatchesByRemovalId(orgCtx, removalId);
   const lineageEntities = await collectLineageEntities(
-    userId,
+    orgCtx,
     batches.map((b) => b.id),
   );
 
   const docsLists = await Promise.all(
     lineageEntities.map((e) =>
-      listDocumentsForEntity(userId, e.entityType, e.entityId).then((rows) => ({
+      listDocumentsForEntity(orgCtx, e.entityType, e.entityId).then((rows) => ({
         entity: e,
         rows,
       })),
@@ -316,7 +317,7 @@ async function loadCandidateDocumentsForRemovalInternal(
 
   const documentIds = Array.from(seenDocs.keys());
   const mirrorRows = await listDocumentUploadsForDocuments(
-    userId,
+    orgCtx,
     ISOMETRIC_PROVIDER,
     documentIds,
   );
@@ -367,9 +368,9 @@ async function loadCandidateDocumentsForRemovalInternal(
 export async function loadCandidateDocumentsForRemoval(
   input: unknown,
 ): Promise<ActionResult<CandidateDocumentsForRemoval>> {
-  return withAction(async (userId) => {
+  return withAction(async (orgCtx) => {
     const parsed = loadCandidateDocumentsForRemovalSchema.parse(input);
-    return loadCandidateDocumentsForRemovalInternal(userId, parsed.removalId);
+    return loadCandidateDocumentsForRemovalInternal(orgCtx, parsed.removalId);
   });
 }
 
@@ -382,12 +383,12 @@ export async function loadCandidateDocumentsForRemoval(
 // Returns the loaded candidate set (mirror needs `hasMapping`); the matching
 // candidate itself is discarded — the check is side-effect-only.
 async function assertDocumentIsCandidateForRemoval(
-  userId: string,
+  orgCtx: OrgContext,
   removalId: string,
   documentId: string,
 ): Promise<CandidateDocumentsForRemoval> {
   const candidates = await loadCandidateDocumentsForRemovalInternal(
-    userId,
+    orgCtx,
     removalId,
   );
   const found = candidates.candidates.some((c) => c.document.id === documentId);
@@ -418,7 +419,7 @@ export interface MirrorResult {
 // "did we even try?" in production. Re-throws after recording so the action
 // still surfaces the error to the caller.
 async function withSyncEventOnFailure<T>(
-  userId: string,
+  orgCtx: OrgContext,
   args: {
     documentId: string;
     operation: string;
@@ -429,7 +430,7 @@ async function withSyncEventOnFailure<T>(
   try {
     return await fn();
   } catch (err) {
-    await appendSyncEventBestEffort(userId, {
+    await appendSyncEventBestEffort(orgCtx, {
       provider: ISOMETRIC_PROVIDER,
       entityType: "document",
       entityId: args.documentId,
@@ -444,20 +445,21 @@ async function withSyncEventOnFailure<T>(
 
 // Thin server-action wrapper: validates input and resolves the caller from the
 // session. The body lives in `mirrorDocumentToSourceForUser` so server-side
-// callers that already hold a userId (the submit pipeline, the transport
+// callers that already hold a orgCtx (the submit pipeline, the transport
 // evidence-ledger generator) can mirror without re-deriving the session.
 export async function mirrorDocumentToSource(
   input: unknown,
 ): Promise<ActionResult<MirrorResult>> {
-  return withAction((userId) =>
-    mirrorDocumentToSourceForUser(userId, mirrorDocumentToSourceSchema.parse(input)),
+  return withAction((orgCtx) =>
+    mirrorDocumentToSourceForUser(orgCtx, mirrorDocumentToSourceSchema.parse(input)),
   );
 }
 
 export async function mirrorDocumentToSourceForUser(
-  userId: string,
+  orgCtx: OrgContext,
   parsed: MirrorDocumentToSourceInput,
 ): Promise<MirrorResult> {
+    requireOrgRole(orgCtx, "admin");
     const { removalId, documentId, isPublic } = parsed;
 
     // Ownership + lineage scoping ───────────────────────────────────────
@@ -465,7 +467,7 @@ export async function mirrorDocumentToSourceForUser(
     // shows. Anchoring the mutation to the removal prevents an authenticated
     // caller from mirroring an arbitrary document UUID through this endpoint.
     const candidates = await assertDocumentIsCandidateForRemoval(
-      userId,
+      orgCtx,
       removalId,
       documentId,
     );
@@ -474,10 +476,10 @@ export async function mirrorDocumentToSourceForUser(
         "This facility isn't linked to an Isometric project. Link it in facility settings before mirroring sources.",
       );
     }
-    const removal = await getCertifierRemovalById(userId, removalId);
+    const removal = await getCertifierRemovalById(orgCtx, removalId);
     if (!removal) throw new SafeError("Removal not found.");
     const mapping = await getCertifierProjectByFacility(
-      userId,
+      orgCtx,
       removal.facilityId,
       ISOMETRIC_PROVIDER,
     );
@@ -489,7 +491,7 @@ export async function mirrorDocumentToSourceForUser(
     }
 
     // Pre-flight: document loadable + safe to upload ────────────────────
-    const document = await getDocumentById(userId, documentId);
+    const document = await getDocumentById(orgCtx, documentId);
     if (!document) throw new SafeError("Document not found.");
     if (!document.storageKey) {
       throw new SafeError(
@@ -541,7 +543,7 @@ export async function mirrorDocumentToSourceForUser(
 
       // Idempotency short-circuit (inside the lock) ─────────────────────
       const existingLocal = await getDocumentUploadByDocument(
-        userId,
+        orgCtx,
         ISOMETRIC_PROVIDER,
         documentId,
         tx,
@@ -567,7 +569,7 @@ export async function mirrorDocumentToSourceForUser(
 
       // Reconciliation: was a Source already created in a previous attempt?
       const remoteExisting = await withSyncEventOnFailure(
-        userId,
+        orgCtx,
         {
           documentId,
           operation: "source:lookup",
@@ -580,7 +582,7 @@ export async function mirrorDocumentToSourceForUser(
         sourceExternalId = remoteExisting.id;
         resolvedIsPublic = remoteExisting.is_public;
         const result = await withSyncEventOnFailure(
-          userId,
+          orgCtx,
           {
             documentId,
             operation: "source:create:reconciled",
@@ -598,7 +600,7 @@ export async function mirrorDocumentToSourceForUser(
         recoveredFlag = true;
       } else {
         const created = await withSyncEventOnFailure(
-          userId,
+          orgCtx,
           {
             documentId,
             operation: "source:create",
@@ -621,7 +623,7 @@ export async function mirrorDocumentToSourceForUser(
       // Upload bytes if a URL was returned ───────────────────────────────
       if (signedUploadUrl) {
         await withSyncEventOnFailure(
-          userId,
+          orgCtx,
           {
             documentId,
             operation: "source:upload",
@@ -636,7 +638,7 @@ export async function mirrorDocumentToSourceForUser(
 
       // Persist the local mapping ────────────────────────────────────────
       const metadata: DocumentUploadMetadata = {
-        mirroredBy: userId,
+        mirroredBy: orgCtx.userId,
         supplierRefId,
         contentLength: fileSizeBytes,
         contentType: mimeType,
@@ -646,7 +648,7 @@ export async function mirrorDocumentToSourceForUser(
           : {}),
       };
       const { row, inserted } = await insertOrGetDocumentUpload(
-        userId,
+        orgCtx,
         {
           documentId,
           provider: ISOMETRIC_PROVIDER,
@@ -664,7 +666,7 @@ export async function mirrorDocumentToSourceForUser(
       // externalDocumentId we just created; the sync_event lets an out-of-
       // band sweep reconcile rather than swallowing the leak.
       if (!inserted && row.externalDocumentId !== sourceExternalId) {
-        await appendSyncEventBestEffort(userId, {
+        await appendSyncEventBestEffort(orgCtx, {
           provider: ISOMETRIC_PROVIDER,
           entityType: "document",
           entityId: documentId,
@@ -679,7 +681,7 @@ export async function mirrorDocumentToSourceForUser(
             "Lost the mirror race; the Source created by this attempt is unreferenced on Isometric.",
         });
       } else {
-        await appendSyncEventBestEffort(userId, {
+        await appendSyncEventBestEffort(orgCtx, {
           provider: ISOMETRIC_PROVIDER,
           entityType: "document",
           entityId: documentId,
@@ -712,14 +714,15 @@ export async function mirrorDocumentToSourceForUser(
 export async function unlinkDocumentSource(
   input: unknown,
 ): Promise<ActionResult<{ unlinked: boolean }>> {
-  return withAction(async (userId) => {
+  return withAction(async (orgCtx) => {
+    requireOrgRole(orgCtx, "admin");
     const parsed = unlinkDocumentSourceSchema.parse(input);
 
     // Anchor the mutation to a specific removal so the document must belong
     // to that removal's lineage. Schema-level removalId is intent; this
     // check is the enforcement.
     await assertDocumentIsCandidateForRemoval(
-      userId,
+      orgCtx,
       parsed.removalId,
       parsed.documentId,
     );
@@ -735,7 +738,7 @@ export async function unlinkDocumentSource(
       await acquireMirrorLock(tx, parsed.documentId);
 
       const existing = await getDocumentUploadByDocument(
-        userId,
+        orgCtx,
         ISOMETRIC_PROVIDER,
         parsed.documentId,
         tx,
@@ -743,7 +746,7 @@ export async function unlinkDocumentSource(
       if (!existing) return { unlinked: false };
 
       const referenced = await isExternalSourceReferencedInSnapshots(
-        userId,
+        orgCtx,
         ISOMETRIC_PROVIDER,
         existing.externalDocumentId,
         tx,
@@ -755,7 +758,7 @@ export async function unlinkDocumentSource(
       }
 
       await deleteDocumentUploadByDocument(
-        userId,
+        orgCtx,
         ISOMETRIC_PROVIDER,
         parsed.documentId,
         tx,
@@ -767,7 +770,7 @@ export async function unlinkDocumentSource(
       // never aborts is cheap, and it guards against future submission
       // entry points that forget to take the lock.
       const stillReferenced = await isExternalSourceReferencedInSnapshots(
-        userId,
+        orgCtx,
         ISOMETRIC_PROVIDER,
         existing.externalDocumentId,
         tx,
@@ -778,7 +781,7 @@ export async function unlinkDocumentSource(
         );
       }
 
-      await appendSyncEventBestEffort(userId, {
+      await appendSyncEventBestEffort(orgCtx, {
         provider: ISOMETRIC_PROVIDER,
         entityType: "document",
         entityId: parsed.documentId,
@@ -796,13 +799,14 @@ export async function unlinkDocumentSource(
 export async function setDocumentSourceVisibility(
   input: unknown,
 ): Promise<ActionResult<{ isPublic: boolean }>> {
-  return withAction(async (userId) => {
+  return withAction(async (orgCtx) => {
+    requireOrgRole(orgCtx, "admin");
     const parsed = setDocumentSourceVisibilitySchema.parse(input);
 
     // Anchor the mutation to the removal so the document must belong to
     // that removal's lineage before any cross-system call is made.
     await assertDocumentIsCandidateForRemoval(
-      userId,
+      orgCtx,
       parsed.removalId,
       parsed.documentId,
     );
@@ -818,7 +822,7 @@ export async function setDocumentSourceVisibility(
       await acquireMirrorLock(tx, parsed.documentId);
 
       const existing = await getDocumentUploadByDocument(
-        userId,
+        orgCtx,
         ISOMETRIC_PROVIDER,
         parsed.documentId,
         tx,
@@ -835,7 +839,7 @@ export async function setDocumentSourceVisibility(
       // `{ __typename: "Undefined" }` leaves unchanged fields alone.
       const undefinedField = { __typename: "Undefined" as const };
       const updatedSource = await withSyncEventOnFailure(
-        userId,
+        orgCtx,
         {
           documentId: parsed.documentId,
           operation: "source:patch:visibility",
@@ -860,7 +864,7 @@ export async function setDocumentSourceVisibility(
       const remoteIsPublic = updatedSource.is_public;
 
       const existingMeta = (existing.metadata as DocumentUploadMetadata) ?? {
-        mirroredBy: userId,
+        mirroredBy: orgCtx.userId,
         supplierRefId: buildSourceSupplierRef(parsed.documentId),
         contentLength: 0,
         contentType: "",
@@ -870,9 +874,9 @@ export async function setDocumentSourceVisibility(
         ...existingMeta,
         isPublic: remoteIsPublic,
       };
-      await updateDocumentUploadMetadata(userId, existing.id, nextMeta, tx);
+      await updateDocumentUploadMetadata(orgCtx, existing.id, nextMeta, tx);
 
-      await appendSyncEventBestEffort(userId, {
+      await appendSyncEventBestEffort(orgCtx, {
         provider: ISOMETRIC_PROVIDER,
         entityType: "document",
         entityId: parsed.documentId,
@@ -900,7 +904,7 @@ export async function setDocumentSourceVisibility(
 // two concurrent submits from acquiring locks in different orders and
 // deadlocking each other.
 export async function collectCandidateDocumentIdsForRemoval(
-  userId: string,
+  orgCtx: OrgContext,
   args: {
     lineages: Array<{
       application: { id: string };
@@ -933,7 +937,7 @@ export async function collectCandidateDocumentIdsForRemoval(
   // NOT via `run.samples`, so a commingled-batch sample's COA still lands in the
   // candidate set. These ids also seed the sample-transport-leg walk below.
   const batchSamples = await getSamplesByCreditBatchIds(
-    userId,
+    orgCtx,
     args.memberBatchIds,
   );
   const sampleIds = batchSamples.map((s) => s.id);
@@ -944,7 +948,7 @@ export async function collectCandidateDocumentIdsForRemoval(
   // submit path mirror-locks and references those docs too. Reads via `db`
   // like the document walk below; the final sorted/deduped id list keeps the
   // candidate set deterministic and re-walkable inside the snapshot txn.
-  const legEntities = await collectTransportLegEntities(userId, {
+  const legEntities = await collectTransportLegEntities(orgCtx, {
     feedstockIds: args.lineages.flatMap((l) => l.feedstocks.map((f) => f.id)),
     biocharProductIds: args.lineages
       .map((l) => l.biocharProduct?.id)
@@ -957,7 +961,7 @@ export async function collectCandidateDocumentIdsForRemoval(
   if (entityList.length === 0) return [];
 
   const docsLists = await Promise.all(
-    entityList.map((e) => listDocumentsForEntity(userId, e.entityType, e.entityId)),
+    entityList.map((e) => listDocumentsForEntity(orgCtx, e.entityType, e.entityId)),
   );
   return Array.from(
     new Set(docsLists.flatMap((rows) => rows.map((r) => r.id))),
@@ -972,13 +976,13 @@ export async function collectCandidateDocumentIdsForRemoval(
 // we read it but before we persist the reference. Pass a `tx` from the
 // caller's transaction; defaults to `db` for non-locked callers.
 export async function resolveSourceIdsForRemoval(
-  userId: string,
+  orgCtx: OrgContext,
   args: { candidateDocumentIds: string[] },
   txOrDb?: DbTransaction,
 ): Promise<string[]> {
   if (args.candidateDocumentIds.length === 0) return [];
   const uploads = await listDocumentUploadsForDocuments(
-    userId,
+    orgCtx,
     ISOMETRIC_PROVIDER,
     args.candidateDocumentIds,
     txOrDb,

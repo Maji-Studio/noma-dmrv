@@ -4,12 +4,18 @@
  */
 
 import { db } from "@/db";
-import { getTableName, sql } from "drizzle-orm";
+import { and, eq, getTableName, sql } from "drizzle-orm";
 import type { PgTable, PgColumn } from "drizzle-orm/pg-core";
 import { isPgUniqueViolation } from "@/db/errors";
+import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { requireOrgScope } from "./utils";
 
 const MAX_RETRIES = 3;
+
+type OrgScopedCodeTable = PgTable & {
+  organizationId: PgColumn;
+};
 
 /** Two-digit current year for code generation (e.g. 2026 -> "26"). */
 function currentYearShort(): string {
@@ -28,10 +34,12 @@ function currentYearShort(): string {
  * @returns Next sequential code like "BP-26-001"
  */
 export async function generateNextCode(
+  ctx: OrgContext,
   prefix: string,
-  table: PgTable,
+  table: OrgScopedCodeTable,
   codeColumn: PgColumn
 ): Promise<string> {
+  requireOrgScope(ctx);
   const year = currentYearShort();
   const pattern = `${prefix}-${year}-%`;
 
@@ -47,7 +55,12 @@ export async function generateNextCode(
       ),
     })
     .from(table)
-    .where(sql`${codeColumn} like ${pattern}`);
+    .where(
+      and(
+        eq(table.organizationId, ctx.organizationId),
+        sql`${codeColumn} like ${pattern}`,
+      ),
+    );
 
   const maxSuffix = result[0]?.maxSuffix ?? null;
   const nextNumber = (maxSuffix ?? 0) + 1;
@@ -61,11 +74,13 @@ export async function generateNextCode(
  * Avoids the duplicate code bug when generating codes before a batch insert.
  */
 export async function generateNextCodes(
+  ctx: OrgContext,
   prefix: string,
-  table: PgTable,
+  table: OrgScopedCodeTable,
   codeColumn: PgColumn,
   count: number
 ): Promise<string[]> {
+  requireOrgScope(ctx);
   const year = currentYearShort();
   const pattern = `${prefix}-${year}-%`;
 
@@ -80,7 +95,12 @@ export async function generateNextCodes(
       ),
     })
     .from(table)
-    .where(sql`${codeColumn} like ${pattern}`);
+    .where(
+      and(
+        eq(table.organizationId, ctx.organizationId),
+        sql`${codeColumn} like ${pattern}`,
+      ),
+    );
 
   const maxSuffix = result[0]?.maxSuffix ?? null;
   const nextNumber = (maxSuffix ?? 0) + 1;
@@ -97,7 +117,7 @@ export async function generateNextCodes(
  * `facilities_code_unique`, `samples_sample_code_unique`).
  */
 function codeUniqueConstraintName(table: PgTable, codeColumn: PgColumn): string {
-  return `${getTableName(table)}_${codeColumn.name}_unique`;
+  return `${getTableName(table)}_organization_id_${codeColumn.name}_unique`;
 }
 
 /**
@@ -128,12 +148,14 @@ function isCodeUniqueViolation(
  * @returns The result from insertFn
  */
 export async function withAutoCode<T>(
+  ctx: OrgContext,
   prefix: string,
-  table: PgTable,
+  table: OrgScopedCodeTable,
   codeColumn: PgColumn,
   userCode: string | undefined | null,
   insertFn: (code: string) => Promise<T>
 ): Promise<T> {
+  requireOrgScope(ctx);
   // If user provided a code, use it directly with a friendly error on duplicates
   if (userCode) {
     try {
@@ -147,7 +169,7 @@ export async function withAutoCode<T>(
   }
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const code = await generateNextCode(prefix, table, codeColumn);
+    const code = await generateNextCode(ctx, prefix, table, codeColumn);
     try {
       return await insertFn(code);
     } catch (error) {

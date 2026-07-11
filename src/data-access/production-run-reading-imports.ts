@@ -3,7 +3,8 @@ import { db } from "@/db";
 import { documents, productionRunReadings, productionRuns } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
 import type { ReadingsCsvRow } from "@/lib/production-readings/readings-csv";
-import { requireAuth } from "./utils";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "./utils";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 
 export interface ProductionRunReadingsImportContext {
@@ -19,10 +20,10 @@ export interface ProductionRunReadingsImportContext {
 }
 
 export async function getProductionRunReadingsImportContext(
-  userId: string,
+  ctx: OrgContext,
   documentId: string,
 ): Promise<ProductionRunReadingsImportContext> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [row] = await db
     .select({
@@ -41,7 +42,7 @@ export async function getProductionRunReadingsImportContext(
     })
     .from(documents)
     .innerJoin(productionRuns, eq(documents.entityId, productionRuns.id))
-    .where(eq(documents.id, documentId));
+    .where(and(eq(documents.id, documentId), eq(documents.organizationId, ctx.organizationId), eq(productionRuns.organizationId, ctx.organizationId)));
 
   if (!row) throw new SafeError("Readings file not found");
   if (row.entityType !== "production_run" || row.documentType !== "sensor_data") {
@@ -86,18 +87,18 @@ export async function getProductionRunReadingsImportContext(
  * idempotent.
  */
 export async function insertProductionRunReadingsSkippingDuplicates(
-  userId: string,
+  ctx: OrgContext,
   args: {
     productionRunId: string;
     readings: ReadingsCsvRow[];
   },
 ): Promise<{ insertedRows: number; intraFileDuplicateRows: number }> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [run] = await db
     .select({ id: productionRuns.id })
     .from(productionRuns)
-    .where(eq(productionRuns.id, args.productionRunId));
+    .where(and(eq(productionRuns.id, args.productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
 
   if (!run) throw new SafeError("Production run not found");
 
@@ -119,6 +120,7 @@ export async function insertProductionRunReadingsSkippingDuplicates(
     .insert(productionRunReadings)
     .values(
       deduped.map((reading) => ({
+        organizationId: ctx.organizationId,
         productionRunId: args.productionRunId,
         timestamp: reading.timestamp,
         temperatureC: reading.temperatureC,
@@ -152,11 +154,11 @@ export interface ReadingsImportOutcome {
  * `metadata` so unrelated keys survive.
  */
 export async function recordReadingsImportOutcome(
-  userId: string,
+  ctx: OrgContext,
   documentId: string,
   outcome: ReadingsImportOutcome,
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const patch = {
     readingsImport: { ...outcome, at: new Date().toISOString() },
@@ -173,6 +175,7 @@ export async function recordReadingsImportOutcome(
     .where(
       and(
         eq(documents.id, documentId),
+        eq(documents.organizationId, ctx.organizationId),
         eq(documents.entityType, "production_run"),
         eq(documents.documentType, "sensor_data"),
       ),

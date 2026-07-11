@@ -1,3 +1,4 @@
+import { makeTestOrgContext } from "./helpers/test-org";
 /**
  * Auth Enforcement Tests — Entities & Quick-Add
  *
@@ -6,10 +7,13 @@
  * - fn: getUser() null → ActionResult { success: false, error: "Unauthorized" }
  */
 import { describe, it, expect, vi } from "vitest";
+import { SafeError } from "@/lib/errors";
 
-// Mock getUser for fn-layer tests (returns null = unauthenticated)
+// Mock the fn-layer organization context guard as unauthenticated.
 vi.mock("@/lib/auth/server", () => ({
-  getUser: vi.fn().mockResolvedValue(null),
+  requireOrgContext: vi
+    .fn()
+    .mockRejectedValue(new SafeError("Select an organization to continue.")),
 }));
 
 // ============================================
@@ -21,7 +25,7 @@ describe("data-access/entities: auth enforcement", () => {
     const { getEntities } = await import("@/data-access/entities");
 
     await expect(
-      getEntities("", { entityType: "facility" })
+      getEntities(makeTestOrgContext(""), { entityType: "facility" })
     ).rejects.toThrow("Unauthorized");
   });
 
@@ -29,7 +33,7 @@ describe("data-access/entities: auth enforcement", () => {
     const { getEntityById } = await import("@/data-access/entities");
 
     await expect(
-      getEntityById("", "facility", "some-id")
+      getEntityById(makeTestOrgContext(""), "facility", "some-id")
     ).rejects.toThrow("Unauthorized");
   });
 });
@@ -43,7 +47,7 @@ describe("data-access/quick-add: auth enforcement", () => {
     const { createDriver } = await import("@/data-access/quick-add");
 
     await expect(
-      createDriver("", { code: "DRV-001", name: "Test Driver" })
+      createDriver(makeTestOrgContext(""), { code: "DRV-001", name: "Test Driver" })
     ).rejects.toThrow("Unauthorized");
   });
 
@@ -51,7 +55,7 @@ describe("data-access/quick-add: auth enforcement", () => {
     const { createOperator } = await import("@/data-access/quick-add");
 
     await expect(
-      createOperator("", { name: "Test Operator" })
+      createOperator(makeTestOrgContext(""), { name: "Test Operator" })
     ).rejects.toThrow("Unauthorized");
   });
 
@@ -59,7 +63,7 @@ describe("data-access/quick-add: auth enforcement", () => {
     const { createVehicle } = await import("@/data-access/quick-add");
 
     await expect(
-      createVehicle("", {
+      createVehicle(makeTestOrgContext(""), {
         code: "VEH-001",
         name: "Test Vehicle",
         identifier: "ABC-123",
@@ -75,7 +79,7 @@ describe("data-access/quick-add: auth enforcement", () => {
     const { createFeedstockType } = await import("@/data-access/quick-add");
 
     await expect(
-      createFeedstockType("", {
+      createFeedstockType(makeTestOrgContext(""), {
         code: "FT-001",
         name: "Test Type",
         category: "biomass",
@@ -87,7 +91,7 @@ describe("data-access/quick-add: auth enforcement", () => {
     const { createStorageLocation } = await import("@/data-access/quick-add");
 
     await expect(
-      createStorageLocation("", {
+      createStorageLocation(makeTestOrgContext(""), {
         code: "FB-001",
         name: "Test Bin",
         type: "feedstock_bin",
@@ -106,13 +110,19 @@ describe("fn/entities: auth enforcement", () => {
     const { searchEntitiesFn } = await import("@/fn/entities");
     const result = await searchEntitiesFn({ entityType: "facility" });
 
-    expect(result).toEqual({ success: false, error: "Unauthorized" });
+    expect(result).toEqual({
+      success: false,
+      error: "Select an organization to continue.",
+    });
   });
 
   it("getEntityByIdFn returns Unauthorized when not logged in", async () => {
     const { getEntityByIdFn } = await import("@/fn/entities");
     const result = await getEntityByIdFn("facility", "some-id");
 
-    expect(result).toEqual({ success: false, error: "Unauthorized" });
+    expect(result).toEqual({
+      success: false,
+      error: "Select an organization to continue.",
+    });
   });
 });

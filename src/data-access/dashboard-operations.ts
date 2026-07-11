@@ -42,6 +42,7 @@ import {
   samples,
   transportLegs,
 } from "@/db/schema";
+import type { OrgContext } from "@/lib/auth/server";
 import {
   APPLICATION_BOUNDARY_LOGBOOK_CONDITIONAL_DOCUMENT_TYPE,
   APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES,
@@ -49,7 +50,7 @@ import {
   APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE,
   APPLICATION_VISUAL_EVIDENCE_ROLES,
 } from "@/lib/certification/application-evidence";
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { loadMapTrace } from "./dashboard-map-trace";
 import type {
@@ -164,7 +165,7 @@ function countByStatus(rows: StatusCount[], statuses: string[]): number {
     .reduce((acc, row) => acc + row.count, 0);
 }
 
-async function loadStatusCounts(facilityId: string) {
+async function loadStatusCounts(ctx: OrgContext, facilityId: string) {
   const [
     feedstockRows,
     productionRows,
@@ -176,38 +177,38 @@ async function loadStatusCounts(facilityId: string) {
     db
       .select({ status: feedstocks.status, count: count() })
       .from(feedstocks)
-      .where(and(eq(feedstocks.facilityId, facilityId), isNull(feedstocks.archivedAt)))
+      .where(and(eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.facilityId, facilityId), isNull(feedstocks.archivedAt)))
       .groupBy(feedstocks.status),
     db
       .select({ status: productionRuns.status, count: count() })
       .from(productionRuns)
       .where(
-        and(eq(productionRuns.facilityId, facilityId), isNull(productionRuns.archivedAt)),
+        and(eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.facilityId, facilityId), isNull(productionRuns.archivedAt)),
       )
       .groupBy(productionRuns.status),
     db
       .select({ status: biocharProducts.status, count: count() })
       .from(biocharProducts)
       .where(
-        and(eq(biocharProducts.facilityId, facilityId), isNull(biocharProducts.archivedAt)),
+        and(eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.facilityId, facilityId), isNull(biocharProducts.archivedAt)),
       )
       .groupBy(biocharProducts.status),
     db
       .select({ status: deliveries.status, count: count() })
       .from(deliveries)
-      .where(and(eq(deliveries.facilityId, facilityId), isNull(deliveries.archivedAt)))
+      .where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.facilityId, facilityId), isNull(deliveries.archivedAt)))
       .groupBy(deliveries.status),
     db
       .select({ status: applications.status, count: count() })
       .from(applications)
-      .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-      .where(and(eq(deliveries.facilityId, facilityId), isNull(deliveries.archivedAt)))
+      .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
+      .where(and(eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.facilityId, facilityId), isNull(deliveries.archivedAt)))
       .groupBy(applications.status),
     db
       .select({ status: creditBatches.status, count: count() })
       .from(creditBatches)
       .where(
-        and(eq(creditBatches.facilityId, facilityId), isNull(creditBatches.archivedAt)),
+        and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId), isNull(creditBatches.archivedAt)),
       )
       .groupBy(creditBatches.status),
   ]);
@@ -247,7 +248,7 @@ interface SubmissionProgressCounts {
 }
 
 /** Latest submission row per local entity (highest version wins). */
-function latestSubmission(submissionType: string, localEntityType: string) {
+function latestSubmission(ctx: OrgContext, submissionType: string, localEntityType: string) {
   return db
     .selectDistinctOn([certificationSubmissions.localEntityId], {
       localEntityId: certificationSubmissions.localEntityId,
@@ -263,6 +264,7 @@ function latestSubmission(submissionType: string, localEntityType: string) {
         eq(certificationSubmissions.provider, ISOMETRIC),
         eq(certificationSubmissions.submissionType, submissionType),
         eq(certificationSubmissions.localEntityType, localEntityType),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
       ),
     )
     .orderBy(
@@ -272,12 +274,13 @@ function latestSubmission(submissionType: string, localEntityType: string) {
 }
 
 async function loadSubmissionProgressCounts(
+  ctx: OrgContext,
   facilityId: string,
 ): Promise<SubmissionProgressCounts> {
-  const removalLatest = latestSubmission("removal", "removal").as(
+  const removalLatest = latestSubmission(ctx, "removal", "removal").as(
     "latest_removal_submission",
   );
-  const statementLatest = latestSubmission("ghg_statement", "ghgStatement").as(
+  const statementLatest = latestSubmission(ctx, "ghg_statement", "ghgStatement").as(
     "latest_statement_submission",
   );
 
@@ -289,7 +292,7 @@ async function loadSubmissionProgressCounts(
       })
       .from(certifierRemovals)
       .leftJoin(removalLatest, eq(removalLatest.localEntityId, certifierRemovals.id))
-      .where(eq(certifierRemovals.facilityId, facilityId)),
+      .where(and(eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.facilityId, facilityId))),
     db
       .select({
         total: sql<number>`count(${certifierGhgStatements.id})::int`,
@@ -300,7 +303,7 @@ async function loadSubmissionProgressCounts(
         statementLatest,
         eq(statementLatest.localEntityId, certifierGhgStatements.id),
       )
-      .where(eq(certifierGhgStatements.facilityId, facilityId)),
+      .where(and(eq(certifierGhgStatements.organizationId, ctx.organizationId), eq(certifierGhgStatements.facilityId, facilityId))),
   ]);
 
   return {
@@ -311,8 +314,8 @@ async function loadSubmissionProgressCounts(
   };
 }
 
-async function loadRemovalRows(facilityId: string): Promise<SubmissionRow[]> {
-  const latest = latestSubmission("removal", "removal").as("latest_submission");
+async function loadRemovalRows(ctx: OrgContext, facilityId: string): Promise<SubmissionRow[]> {
+  const latest = latestSubmission(ctx, "removal", "removal").as("latest_submission");
   const rows = await db
     .select({
       id: certifierRemovals.id,
@@ -324,7 +327,7 @@ async function loadRemovalRows(facilityId: string): Promise<SubmissionRow[]> {
     })
     .from(certifierRemovals)
     .leftJoin(latest, eq(latest.localEntityId, certifierRemovals.id))
-    .where(eq(certifierRemovals.facilityId, facilityId))
+    .where(and(eq(certifierRemovals.organizationId, ctx.organizationId), eq(certifierRemovals.facilityId, facilityId)))
     .orderBy(desc(certifierRemovals.createdAt))
     .limit(ROW_LIMIT);
 
@@ -338,8 +341,8 @@ async function loadRemovalRows(facilityId: string): Promise<SubmissionRow[]> {
   }));
 }
 
-async function loadStatementRows(facilityId: string): Promise<SubmissionRow[]> {
-  const latest = latestSubmission("ghg_statement", "ghgStatement").as(
+async function loadStatementRows(ctx: OrgContext, facilityId: string): Promise<SubmissionRow[]> {
+  const latest = latestSubmission(ctx, "ghg_statement", "ghgStatement").as(
     "latest_submission",
   );
   const rows = await db
@@ -353,7 +356,7 @@ async function loadStatementRows(facilityId: string): Promise<SubmissionRow[]> {
     })
     .from(certifierGhgStatements)
     .leftJoin(latest, eq(latest.localEntityId, certifierGhgStatements.id))
-    .where(eq(certifierGhgStatements.facilityId, facilityId))
+    .where(and(eq(certifierGhgStatements.organizationId, ctx.organizationId), eq(certifierGhgStatements.facilityId, facilityId)))
     .orderBy(desc(certifierGhgStatements.reportingPeriodEndOn))
     .limit(ROW_LIMIT);
 
@@ -377,7 +380,7 @@ interface RunRow {
   date: string;
 }
 
-async function loadRunningRuns(facilityId: string): Promise<RunRow[]> {
+async function loadRunningRuns(ctx: OrgContext, facilityId: string): Promise<RunRow[]> {
   return db
     .select({
       id: productionRuns.id,
@@ -387,6 +390,7 @@ async function loadRunningRuns(facilityId: string): Promise<RunRow[]> {
     .from(productionRuns)
     .where(
       and(
+        eq(productionRuns.organizationId, ctx.organizationId),
         eq(productionRuns.facilityId, facilityId),
         isNull(productionRuns.archivedAt),
         eq(productionRuns.status, "running"),
@@ -397,6 +401,7 @@ async function loadRunningRuns(facilityId: string): Promise<RunRow[]> {
 }
 
 async function loadRecentCompletedRuns(
+  ctx: OrgContext,
   facilityId: string,
   sinceDate: string,
 ): Promise<RunRow[]> {
@@ -409,6 +414,7 @@ async function loadRecentCompletedRuns(
     .from(productionRuns)
     .where(
       and(
+        eq(productionRuns.organizationId, ctx.organizationId),
         eq(productionRuns.facilityId, facilityId),
         isNull(productionRuns.archivedAt),
         eq(productionRuns.status, "complete"),
@@ -576,7 +582,7 @@ function buildProgress(args: {
 // Evidence — structural certification gaps
 // ============================================
 
-async function loadGpsGapCounts(facilityId: string) {
+async function loadGpsGapCounts(ctx: OrgContext, facilityId: string) {
   // Mirror `buildApplicationEvidenceGaps` (the certification submission gate) so
   // this dashboard count can't drift from what certification actually blocks on.
   // Visual evidence needs a geotagged photo for EVERY role (stockpile/spreading/
@@ -642,6 +648,7 @@ async function loadGpsGapCounts(facilityId: string) {
       .from(facilities)
       .where(
         and(
+          eq(facilities.organizationId, ctx.organizationId),
           eq(facilities.id, facilityId),
           or(isNull(facilities.gpsLatitude), isNull(facilities.gpsLongitude)),
         ),
@@ -651,6 +658,7 @@ async function loadGpsGapCounts(facilityId: string) {
       .from(feedstocks)
       .where(
         and(
+          eq(feedstocks.organizationId, ctx.organizationId),
           eq(feedstocks.facilityId, facilityId),
           isNull(feedstocks.archivedAt),
           or(isNull(feedstocks.gpsLatitude), isNull(feedstocks.gpsLongitude)),
@@ -659,9 +667,10 @@ async function loadGpsGapCounts(facilityId: string) {
     db
       .select({ count: count() })
       .from(applications)
-      .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+      .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
       .where(
         and(
+          eq(applications.organizationId, ctx.organizationId),
           eq(deliveries.facilityId, facilityId),
           isNull(deliveries.archivedAt),
           applicationEvidenceGap,
@@ -680,6 +689,7 @@ async function loadGpsGapCounts(facilityId: string) {
 // evidence" nudge is judged at the batch grain — a batch with zero pooled
 // samples has no chemistry behind its carbon figures.
 async function loadBatchesWithoutSamplesCount(
+  ctx: OrgContext,
   facilityId: string,
 ): Promise<number> {
   const sampleCounts = db
@@ -688,6 +698,7 @@ async function loadBatchesWithoutSamplesCount(
       sampleCount: sql<number>`count(*)::int`.as("sample_count"),
     })
     .from(samples)
+    .where(eq(samples.organizationId, ctx.organizationId))
     .groupBy(samples.creditBatchId)
     .as("sample_counts");
 
@@ -697,6 +708,7 @@ async function loadBatchesWithoutSamplesCount(
     .leftJoin(sampleCounts, eq(sampleCounts.creditBatchId, creditBatches.id))
     .where(
       and(
+        eq(creditBatches.organizationId, ctx.organizationId),
         eq(creditBatches.facilityId, facilityId),
         isNull(creditBatches.archivedAt),
         sql`coalesce(${sampleCounts.sampleCount}, 0) = 0`,
@@ -726,7 +738,7 @@ function transportGapSelect(facilityIdColumn: AnyColumn) {
   };
 }
 
-async function loadTransportGapTotals(facilityId: string) {
+async function loadTransportGapTotals(ctx: OrgContext, facilityId: string) {
   const [feedstockRows, biocharRows, sampleRows] = await Promise.all([
     db
       .select(transportGapSelect(feedstocks.facilityId))
@@ -738,7 +750,7 @@ async function loadTransportGapTotals(facilityId: string) {
           eq(transportLegs.entityId, feedstocks.id),
         ),
       )
-      .where(eq(feedstocks.facilityId, facilityId))
+      .where(and(eq(transportLegs.organizationId, ctx.organizationId), eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.facilityId, facilityId)))
       .groupBy(feedstocks.facilityId),
     db
       .select(transportGapSelect(biocharProducts.facilityId))
@@ -750,7 +762,7 @@ async function loadTransportGapTotals(facilityId: string) {
           eq(transportLegs.entityId, biocharProducts.id),
         ),
       )
-      .where(eq(biocharProducts.facilityId, facilityId))
+      .where(and(eq(transportLegs.organizationId, ctx.organizationId), eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.facilityId, facilityId)))
       .groupBy(biocharProducts.facilityId),
     // Sample legs scope via the credit batch's facility (issue #309); legacy
     // run-linked rows fall back to the run's facility.
@@ -764,12 +776,13 @@ async function loadTransportGapTotals(facilityId: string) {
           eq(transportLegs.entityId, samples.id),
         ),
       )
-      .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
-      .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
+      .leftJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
+      .leftJoin(productionRuns, and(eq(samples.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
       .where(
-        or(
-          eq(creditBatches.facilityId, facilityId),
-          eq(productionRuns.facilityId, facilityId),
+        and(
+          eq(transportLegs.organizationId, ctx.organizationId),
+          eq(samples.organizationId, ctx.organizationId),
+          or(eq(creditBatches.facilityId, facilityId), eq(productionRuns.facilityId, facilityId)),
         ),
       )
       .groupBy(creditBatches.facilityId),
@@ -837,10 +850,10 @@ function buildEvidence(args: {
 // ============================================
 
 export async function getDashboardOperations(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string,
 ): Promise<DashboardOperations> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const now = new Date();
   const completedSince = toDateOnly(
@@ -859,16 +872,16 @@ export async function getDashboardOperations(
     transportGaps,
     mapTrace,
   ] = await Promise.all([
-    loadStatusCounts(facilityId),
-    loadRunningRuns(facilityId),
-    loadRecentCompletedRuns(facilityId, completedSince),
-    loadRemovalRows(facilityId),
-    loadStatementRows(facilityId),
-    loadSubmissionProgressCounts(facilityId),
-    loadGpsGapCounts(facilityId),
-    loadBatchesWithoutSamplesCount(facilityId),
-    loadTransportGapTotals(facilityId),
-    loadMapTrace(userId, facilityId),
+    loadStatusCounts(ctx, facilityId),
+    loadRunningRuns(ctx, facilityId),
+    loadRecentCompletedRuns(ctx, facilityId, completedSince),
+    loadRemovalRows(ctx, facilityId),
+    loadStatementRows(ctx, facilityId),
+    loadSubmissionProgressCounts(ctx, facilityId),
+    loadGpsGapCounts(ctx, facilityId),
+    loadBatchesWithoutSamplesCount(ctx, facilityId),
+    loadTransportGapTotals(ctx, facilityId),
+    loadMapTrace(ctx, facilityId),
   ]);
 
   return {

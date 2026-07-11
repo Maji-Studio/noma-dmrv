@@ -6,12 +6,15 @@ import { and, ilike, or, eq, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { feedstockTypes } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "../utils";
 
-export async function getFeedstockTypes(params: {
+export async function getFeedstockTypes(ctx: OrgContext, params: {
   search?: string;
   usage?: "pyrolysis" | "blend";
   limit: number;
 }): Promise<EntityOption[]> {
+  requireOrgScope(ctx);
   const { search, usage, limit } = params;
 
   const conditions: SQL[] = [];
@@ -42,7 +45,7 @@ export async function getFeedstockTypes(params: {
       usage: feedstockTypes.usage,
     })
     .from(feedstockTypes)
-    .where(whereClause)
+    .where(and(eq(feedstockTypes.organizationId, ctx.organizationId), whereClause))
     .limit(limit);
 
   return results.map((r) => ({
@@ -53,7 +56,8 @@ export async function getFeedstockTypes(params: {
   }));
 }
 
-export async function getFeedstockTypeById(id: string): Promise<EntityOption | null> {
+export async function getFeedstockTypeById(ctx: OrgContext, id: string): Promise<EntityOption | null> {
+  requireOrgScope(ctx);
   const [result] = await db
     .select({
       id: feedstockTypes.id,
@@ -63,7 +67,7 @@ export async function getFeedstockTypeById(id: string): Promise<EntityOption | n
       usage: feedstockTypes.usage,
     })
     .from(feedstockTypes)
-    .where(eq(feedstockTypes.id, id))
+    .where(and(eq(feedstockTypes.id, id), eq(feedstockTypes.organizationId, ctx.organizationId)))
     .limit(1);
 
   if (!result) return null;

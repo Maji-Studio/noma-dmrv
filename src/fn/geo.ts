@@ -83,9 +83,9 @@ export async function routeGeometriesFn(
   input: RouteGeometriesRequest
 ): Promise<ActionResult<RouteGeometryByRequestId>> {
   return withAction(
-    async (userId) => {
+    async (ctx) => {
       const { legs } = routeGeometriesRequestSchema.parse(input);
-      return getRouteGeometries(userId, legs);
+      return getRouteGeometries(ctx, legs);
     },
     {
       rateLimit: GEO_ROUTE_GEOMETRY_RATE_LIMIT,

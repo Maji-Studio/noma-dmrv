@@ -30,18 +30,18 @@ export async function getTransportLegsForEntityFn(input: {
   entityType: TransportEntityType;
   entityId: string;
 }): Promise<ActionResult<TransportLeg[]>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const { entityType, entityId } = listInputSchema.parse(input);
-    return getTransportLegsForEntity(userId, entityType, entityId);
+    return getTransportLegsForEntity(ctx, entityType, entityId);
   });
 }
 
 export async function createTransportLegFn(
   input: CreateTransportLegData,
 ): Promise<ActionResult<TransportLeg>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const parsed = createTransportLegSchema.parse(input);
-    return createTransportLeg(userId, {
+    return createTransportLeg(ctx, {
       ...parsed,
       // Explicit/manual legs own their distance + provenance; a leg saved
       // without one was hand-typed.
@@ -53,9 +53,9 @@ export async function createTransportLegFn(
 export async function updateTransportLegFn(
   input: UpdateTransportLegData,
 ): Promise<ActionResult<TransportLeg>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const { id, ...rest } = updateTransportLegSchema.parse(input);
-    return updateTransportLeg(userId, id, {
+    return updateTransportLeg(ctx, id, {
       ...rest,
       distanceSource: resolveDistanceSource(rest.distanceKm, rest.distanceSource) ?? null,
     });
@@ -65,8 +65,8 @@ export async function updateTransportLegFn(
 export async function deleteTransportLegFn(input: {
   id: string;
 }): Promise<ActionResult<void>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const { id } = deleteTransportLegSchema.parse(input);
-    await deleteTransportLeg(userId, id);
+    await deleteTransportLeg(ctx, id);
   });
 }

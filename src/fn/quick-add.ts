@@ -39,11 +39,12 @@ import { withAction } from "./with-action";
 export async function createDriverFn(
   data: DriverQuickAddData
 ): Promise<ActionResult<EntityOption>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const parsed = driverQuickAddSchema.parse(data);
     return withAutoCode(
+      ctx,
       "DRV", drivers, drivers.code, undefined,
-      (code) => createDriver(userId, { ...parsed, code })
+      (code) => createDriver(ctx, { ...parsed, code })
     );
   }, { fallbackMessage: "Failed to create driver" });
 }
@@ -55,9 +56,9 @@ export async function createDriverFn(
 export async function createOperatorFn(
   data: OperatorQuickAddData
 ): Promise<ActionResult<EntityOption>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const parsed = operatorQuickAddSchema.parse(data);
-    return createOperator(userId, parsed);
+    return createOperator(ctx, parsed);
   }, { fallbackMessage: "Failed to create operator" });
 }
 
@@ -71,11 +72,12 @@ export async function createOperatorFn(
 export async function createVehicleFn(
   data: VehicleQuickAddData
 ): Promise<ActionResult<EntityOption>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const parsed = vehicleQuickAddSchema.parse(data);
     return withAutoCode(
+      ctx,
       "VEH", vehicles, vehicles.code, undefined,
-      (code) => createVehicle(userId, { ...parsed, code })
+      (code) => createVehicle(ctx, { ...parsed, code })
     );
   }, { fallbackMessage: "Failed to create vehicle" });
 }
@@ -90,11 +92,12 @@ export async function createVehicleFn(
 export async function createFeedstockTypeFn(
   data: FeedstockTypeQuickAddData
 ): Promise<ActionResult<EntityOption>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const parsed = feedstockTypeQuickAddSchema.parse(data);
     return withAutoCode(
+      ctx,
       "FT", feedstockTypes, feedstockTypes.code, undefined,
-      (code) => createFeedstockType(userId, { ...parsed, code })
+      (code) => createFeedstockType(ctx, { ...parsed, code })
     );
   }, { fallbackMessage: "Failed to create feedstock type" });
 }
@@ -109,7 +112,7 @@ export async function createFeedstockTypeFn(
 export async function createStorageLocationFn(
   data: StorageLocationQuickAddData
 ): Promise<ActionResult<EntityOption>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const parsed = storageLocationQuickAddSchema.parse(data);
 
     const prefixMap: Record<string, string> = {
@@ -120,8 +123,9 @@ export async function createStorageLocationFn(
     const prefix = prefixMap[parsed.type] ?? "PB";
 
     return withAutoCode(
+      ctx,
       prefix, storageLocations, storageLocations.code, undefined,
-      (code) => createStorageLocation(userId, { ...parsed, code })
+      (code) => createStorageLocation(ctx, { ...parsed, code })
     );
   }, { fallbackMessage: "Failed to create storage location" });
 }

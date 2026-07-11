@@ -1,4 +1,5 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
@@ -8,7 +9,7 @@ import type { Sample } from "@/db/schema";
 import type { SamplingMethod } from "@/lib/certification/sampling-requirements";
 import type { CreditBatchDurabilityInput } from "@/lib/isometric/utils/durability-aggregation";
 import { DURABILITY_TIER_FALLBACK } from "@/schemas/credit-batches";
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 
 /**
  * A credit batch's durability inputs as loaded from the DB: its lab Samples
@@ -40,10 +41,10 @@ export interface CreditBatchWithSamples extends CreditBatchDurabilityInput {
  * (ADR 0016 Phase 1 of this plan). Batches absent from the DB are omitted.
  */
 export async function getCreditBatchesWithSamples(
-  userId: string,
+  ctx: OrgContext,
   creditBatchIds: string[],
 ): Promise<CreditBatchWithSamples[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const ids = Array.from(new Set(creditBatchIds));
   if (ids.length === 0) return [];
 
@@ -57,8 +58,8 @@ export async function getCreditBatchesWithSamples(
       durabilityOption: facilities.durabilityOption,
     })
     .from(creditBatches)
-    .leftJoin(facilities, eq(creditBatches.facilityId, facilities.id))
-    .where(inArray(creditBatches.id, ids));
+    .leftJoin(facilities, and(eq(creditBatches.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .where(and(inArray(creditBatches.id, ids), eq(creditBatches.organizationId, ctx.organizationId)));
   if (batchRows.length === 0) return [];
 
   const processIds = Array.from(
@@ -76,7 +77,7 @@ export async function getCreditBatchesWithSamples(
             samplingMethod: productionProcesses.samplingMethod,
           })
           .from(productionProcesses)
-          .where(inArray(productionProcesses.id, processIds))
+          .where(and(inArray(productionProcesses.id, processIds), eq(productionProcesses.organizationId, ctx.organizationId)))
       : [];
   const samplingMethodByProcess = new Map<string, SamplingMethod>(
     processRows.map((p) => [p.id, p.samplingMethod as SamplingMethod]),
@@ -93,9 +94,12 @@ export async function getCreditBatchesWithSamples(
     .from(creditBatchProductionRuns)
     .innerJoin(
       productionRuns,
-      eq(creditBatchProductionRuns.productionRunId, productionRuns.id),
+      and(eq(creditBatchProductionRuns.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)),
     )
-    .where(inArray(creditBatchProductionRuns.creditBatchId, ids));
+    .where(and(
+      inArray(creditBatchProductionRuns.creditBatchId, ids),
+      eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
+    ));
 
   const runsByBatch = new Map<
     string,
@@ -120,7 +124,7 @@ export async function getCreditBatchesWithSamples(
   const sampleRows = await db
     .select()
     .from(samples)
-    .where(inArray(samples.creditBatchId, ids))
+    .where(and(inArray(samples.creditBatchId, ids), eq(samples.organizationId, ctx.organizationId)))
     .orderBy(asc(samples.id));
   const samplesByBatch = new Map<string, Sample[]>();
   for (const s of sampleRows) {
@@ -157,17 +161,17 @@ export interface CreditBatchSampleRef {
  * commingled-batch sample with a null run link. Returns one entry per sample.
  */
 export async function getSamplesByCreditBatchIds(
-  userId: string,
+  ctx: OrgContext,
   creditBatchIds: string[],
 ): Promise<CreditBatchSampleRef[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const ids = Array.from(new Set(creditBatchIds));
   if (ids.length === 0) return [];
 
   const rows = await db
     .select({ id: samples.id, creditBatchId: samples.creditBatchId })
     .from(samples)
-    .where(inArray(samples.creditBatchId, ids));
+    .where(and(inArray(samples.creditBatchId, ids), eq(samples.organizationId, ctx.organizationId)));
 
   return rows.flatMap((row) =>
     row.creditBatchId == null

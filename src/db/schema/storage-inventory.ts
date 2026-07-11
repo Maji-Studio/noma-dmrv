@@ -1,8 +1,9 @@
-import { type AnyPgColumn, check, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { type AnyPgColumn, check, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { biocharProducts } from './products';
 import { storageLocations } from './facilities';
 import { massKg } from './numeric-families';
+import { organizations } from './auth';
 
 // ============================================
 // Biochar Storage Inventory - Product batches in storage bins
@@ -16,7 +17,10 @@ export const biocharStorageInventory = pgTable(
   'biochar_storage_inventory',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    code: text('code').notNull().unique(), // e.g., "BSI-2025-001"
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    code: text('code').notNull(), // e.g., "BSI-2025-001"
     biocharProductId: uuid('biochar_product_id')
       .notNull()
       .references(() => biocharProducts.id),
@@ -35,6 +39,10 @@ export const biocharStorageInventory = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    unique('biochar_storage_inventory_organization_id_code_unique').on(
+      table.organizationId,
+      table.code
+    ),
     check(
       'biochar_storage_inventory_qty_remaining_non_negative',
       sql`${table.quantityKgRemaining} >= 0`

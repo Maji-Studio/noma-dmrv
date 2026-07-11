@@ -65,16 +65,16 @@ function unique(values: string[]): string[] {
 export async function loadRemovalBreakdown(
   removalId: string,
 ): Promise<ActionResult<RemovalBreakdownData>> {
-  return withAction(async (userId) => {
-    const removal = await getCertifierRemovalById(userId, removalId);
+  return withAction(async (orgCtx) => {
+    const removal = await getCertifierRemovalById(orgCtx, removalId);
     if (!removal) throw new SafeError("Removal not found.");
 
-    const batches = await getCreditBatchesByRemovalId(userId, removalId);
+    const batches = await getCreditBatchesByRemovalId(orgCtx, removalId);
     const batchIds = batches.map((batch) => batch.id);
 
     const [previews, submission] = await Promise.all([
-      getCo2eStoredPreviews(userId, batchIds),
-      getLatestSubmission(userId, {
+      getCo2eStoredPreviews(orgCtx, batchIds),
+      getLatestSubmission(orgCtx, {
         provider: ISOMETRIC_PROVIDER,
         submissionType: REMOVAL_SUBMISSION_TYPE,
         localEntityType: REMOVAL_ENTITY_TYPE,

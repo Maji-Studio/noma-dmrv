@@ -14,8 +14,10 @@ import { and, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { biocharProducts, customers, deliveries, orders } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "../utils";
 import { formatLocalDate } from "@/lib/date-utils";
-import { requireAuth } from "../utils";
+
 
 // Deterministic integer formatting — pin the locale so the label can't vary
 // with the server's locale (same rationale as production-runs.ts).
@@ -25,7 +27,8 @@ const INTEGER_FORMATTER = new Intl.NumberFormat("en-US", {
 
 // Total wet mass already allocated to each order by its (non-archived)
 // deliveries, whatever their status.
-const allocatedMassAggregate = db
+function buildAllocatedMassAggregate(ctx: OrgContext) {
+  return db
   .select({
     orderId: deliveries.orderId,
     totalDeliveredKg:
@@ -34,19 +37,29 @@ const allocatedMassAggregate = db
       ),
   })
   .from(deliveries)
-  .where(isNull(deliveries.archivedAt))
+  .where(
+    and(
+      eq(deliveries.organizationId, ctx.organizationId),
+      isNull(deliveries.archivedAt),
+    ),
+  )
   .groupBy(deliveries.orderId)
   .as("allocated_mass_agg");
+}
 
-const selection = {
-  id: orders.id,
-  code: orders.code,
-  orderDate: orders.orderDate,
-  quantityKg: orders.quantityKg,
-  customerName: customers.name,
-  biocharProductCode: biocharProducts.code,
-  totalDeliveredKg: sql<number>`COALESCE(${allocatedMassAggregate.totalDeliveredKg}, 0)`,
-};
+function buildSelection(
+  allocatedMassAggregate: ReturnType<typeof buildAllocatedMassAggregate>,
+) {
+  return {
+    id: orders.id,
+    code: orders.code,
+    orderDate: orders.orderDate,
+    quantityKg: orders.quantityKg,
+    customerName: customers.name,
+    biocharProductCode: biocharProducts.code,
+    totalDeliveredKg: sql<number>`COALESCE(${allocatedMassAggregate.totalDeliveredKg}, 0)`,
+  };
+}
 
 function toEntityOption(r: {
   id: string;
@@ -74,14 +87,16 @@ function toEntityOption(r: {
   };
 }
 
-export async function getOrdersEntity(params: {
-  userId: string;
+export async function getOrdersEntity(ctx: OrgContext, params: {
   search?: string;
   facilityId?: string;
   limit: number;
 }): Promise<EntityOption[]> {
-  const { userId, search, facilityId, limit } = params;
-  requireAuth(userId);
+  requireOrgScope(ctx);
+  const allocatedMassAggregate = buildAllocatedMassAggregate(ctx);
+  const selection = buildSelection(allocatedMassAggregate);
+  const { search, facilityId, limit } = params;
+  requireOrgScope(ctx);
 
   const conditions: SQL[] = [isNull(orders.archivedAt)];
 
@@ -105,10 +120,22 @@ export async function getOrdersEntity(params: {
   const results = await db
     .select(selection)
     .from(orders)
-    .leftJoin(customers, eq(orders.customerId, customers.id))
-    .leftJoin(biocharProducts, eq(orders.biocharProductId, biocharProducts.id))
+    .leftJoin(
+      customers,
+      and(
+        eq(orders.customerId, customers.id),
+        eq(customers.organizationId, ctx.organizationId),
+      ),
+    )
+    .leftJoin(
+      biocharProducts,
+      and(
+        eq(orders.biocharProductId, biocharProducts.id),
+        eq(biocharProducts.organizationId, ctx.organizationId),
+      ),
+    )
     .leftJoin(allocatedMassAggregate, eq(allocatedMassAggregate.orderId, orders.id))
-    .where(whereClause)
+    .where(and(eq(orders.organizationId, ctx.organizationId), whereClause))
     .orderBy(desc(orders.orderDate))
     .limit(limit);
 
@@ -116,17 +143,31 @@ export async function getOrdersEntity(params: {
 }
 
 export async function getOrderEntityById(
-  userId: string,
+  ctx: OrgContext,
   id: string
 ): Promise<EntityOption | null> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
+  const allocatedMassAggregate = buildAllocatedMassAggregate(ctx);
+  const selection = buildSelection(allocatedMassAggregate);
   const [result] = await db
     .select(selection)
     .from(orders)
-    .leftJoin(customers, eq(orders.customerId, customers.id))
-    .leftJoin(biocharProducts, eq(orders.biocharProductId, biocharProducts.id))
+    .leftJoin(
+      customers,
+      and(
+        eq(orders.customerId, customers.id),
+        eq(customers.organizationId, ctx.organizationId),
+      ),
+    )
+    .leftJoin(
+      biocharProducts,
+      and(
+        eq(orders.biocharProductId, biocharProducts.id),
+        eq(biocharProducts.organizationId, ctx.organizationId),
+      ),
+    )
     .leftJoin(allocatedMassAggregate, eq(allocatedMassAggregate.orderId, orders.id))
-    .where(eq(orders.id, id))
+    .where(and(eq(orders.id, id), eq(orders.organizationId, ctx.organizationId)))
     .limit(1);
 
   if (!result) return null;

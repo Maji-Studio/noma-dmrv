@@ -13,7 +13,8 @@ import {
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
-import { requireAuth } from "./utils";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "./utils";
 
 export type CertifierRemovalRow = typeof certifierRemovals.$inferSelect;
 type CreditBatchRow = typeof creditBatches.$inferSelect;
@@ -23,9 +24,11 @@ const ISOMETRIC = "isometric" as const;
 
 // A removal ledger row is keyed (provider, 'removal', 'removal', removalId).
 export async function removalHasBlockingSubmission(
+  ctx: OrgContext,
   executor: Tx | typeof db,
   removalId: string,
 ): Promise<boolean> {
+  requireOrgScope(ctx);
   const [row] = await executor
     .select({ id: certificationSubmissions.id })
     .from(certificationSubmissions)
@@ -36,6 +39,7 @@ export async function removalHasBlockingSubmission(
         eq(certificationSubmissions.localEntityType, "removal"),
         eq(certificationSubmissions.localEntityId, removalId),
         inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
       ),
     )
     .limit(1);
@@ -48,13 +52,15 @@ export async function removalHasBlockingSubmission(
 // removal with ledger history is kept: its row anchors a live Isometric
 // Removal even after its last credit batch leaves.
 export async function gcRemovalIfOrphaned(
+  ctx: OrgContext,
   tx: Tx,
   removalId: string,
 ): Promise<void> {
+  requireOrgScope(ctx);
   const [removal] = await tx
     .select({ id: certifierRemovals.id })
     .from(certifierRemovals)
-    .where(eq(certifierRemovals.id, removalId))
+    .where(and(eq(certifierRemovals.id, removalId), eq(certifierRemovals.organizationId, ctx.organizationId)))
     .for("update")
     .limit(1);
   if (!removal) return;
@@ -62,7 +68,7 @@ export async function gcRemovalIfOrphaned(
   const [remaining] = await tx
     .select({ id: creditBatches.id })
     .from(creditBatches)
-    .where(eq(creditBatches.removalId, removalId))
+    .where(and(eq(creditBatches.removalId, removalId), eq(creditBatches.organizationId, ctx.organizationId)))
     .limit(1);
   if (remaining) return;
 
@@ -73,37 +79,38 @@ export async function gcRemovalIfOrphaned(
       and(
         eq(certificationSubmissions.localEntityType, "removal"),
         eq(certificationSubmissions.localEntityId, removalId),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
       ),
     )
     .limit(1);
   if (anySubmission) return;
 
-  await tx.delete(certifierRemovals).where(eq(certifierRemovals.id, removalId));
+  await tx.delete(certifierRemovals).where(and(eq(certifierRemovals.id, removalId), eq(certifierRemovals.organizationId, ctx.organizationId)));
   logger.info({ removalId }, "orphan certifier removal deleted");
 }
 
 export async function getCertifierRemovalById(
-  userId: string,
+  ctx: OrgContext,
   id: string,
 ): Promise<CertifierRemovalRow | null> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const [row] = await db
     .select()
     .from(certifierRemovals)
-    .where(eq(certifierRemovals.id, id))
+    .where(and(eq(certifierRemovals.id, id), eq(certifierRemovals.organizationId, ctx.organizationId)))
     .limit(1);
   return row ?? null;
 }
 
 export async function listRemovalsForFacility(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string,
 ): Promise<CertifierRemovalRow[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   return db
     .select()
     .from(certifierRemovals)
-    .where(eq(certifierRemovals.facilityId, facilityId))
+    .where(and(eq(certifierRemovals.facilityId, facilityId), eq(certifierRemovals.organizationId, ctx.organizationId)))
     .orderBy(desc(certifierRemovals.createdAt));
 }
 
@@ -115,18 +122,18 @@ export type CreditBatchRowWithTier = CreditBatchRow & {
 };
 
 export async function getCreditBatchesByRemovalId(
-  userId: string,
+  ctx: OrgContext,
   removalId: string,
 ): Promise<CreditBatchRowWithTier[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const rows = await db
     .select({
       creditBatch: creditBatches,
       facilityDurabilityOption: facilities.durabilityOption,
     })
     .from(creditBatches)
-    .leftJoin(facilities, eq(creditBatches.facilityId, facilities.id))
-    .where(eq(creditBatches.removalId, removalId));
+    .leftJoin(facilities, and(eq(creditBatches.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .where(and(eq(creditBatches.removalId, removalId), eq(creditBatches.organizationId, ctx.organizationId)));
   return rows.map((row) => ({
     ...row.creditBatch,
     durabilityOption: row.facilityDurabilityOption ?? DURABILITY_TIER_FALLBACK,
@@ -150,10 +157,10 @@ export interface RemovalCreditBatchSummary {
 // removalId → summaries map ordered by batch code; removals with no batches
 // are simply absent.
 export async function getCreditBatchSummariesByRemovalIds(
-  userId: string,
+  ctx: OrgContext,
   removalIds: string[],
 ): Promise<Map<string, RemovalCreditBatchSummary[]>> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const result = new Map<string, RemovalCreditBatchSummary[]>();
   if (removalIds.length === 0) return result;
 
@@ -167,7 +174,7 @@ export async function getCreditBatchSummariesByRemovalIds(
       endDate: creditBatches.endDate,
     })
     .from(creditBatches)
-    .where(inArray(creditBatches.removalId, removalIds))
+    .where(and(inArray(creditBatches.removalId, removalIds), eq(creditBatches.organizationId, ctx.organizationId)))
     .orderBy(creditBatches.code);
 
   for (const row of rows) {
@@ -202,10 +209,10 @@ export interface UngroupedCreditBatchRow {
 // Credit batches in a facility not yet assigned to any removal — the pool the
 // Removals hub / New-Removal wizard offers when grouping batches into a removal.
 export async function listUngroupedCreditBatches(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string,
 ): Promise<UngroupedCreditBatchRow[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const rows = await db
     .select({
       id: creditBatches.id,
@@ -216,11 +223,12 @@ export async function listUngroupedCreditBatches(
       durabilityOption: facilities.durabilityOption,
     })
     .from(creditBatches)
-    .leftJoin(facilities, eq(creditBatches.facilityId, facilities.id))
+    .leftJoin(facilities, and(eq(creditBatches.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
     .where(
       and(
         eq(creditBatches.facilityId, facilityId),
         isNull(creditBatches.removalId),
+        eq(creditBatches.organizationId, ctx.organizationId),
       ),
     )
     .orderBy(desc(creditBatches.createdAt));
@@ -240,11 +248,11 @@ export async function listUngroupedCreditBatches(
 // across two removals or pull a batch into a foreign facility. Returns the new
 // removal id.
 export async function createRemovalWithCreditBatches(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string,
   creditBatchIds: string[],
 ): Promise<string> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const uniqueIds = Array.from(new Set(creditBatchIds));
   if (uniqueIds.length === 0) {
     throw new SafeError("Select at least one credit batch.");
@@ -258,7 +266,7 @@ export async function createRemovalWithCreditBatches(
         removalId: creditBatches.removalId,
       })
       .from(creditBatches)
-      .where(inArray(creditBatches.id, uniqueIds))
+      .where(and(inArray(creditBatches.id, uniqueIds), eq(creditBatches.organizationId, ctx.organizationId)))
       .orderBy(creditBatches.id)
       .for("update");
 
@@ -280,13 +288,13 @@ export async function createRemovalWithCreditBatches(
 
     const [removal] = await tx
       .insert(certifierRemovals)
-      .values({ facilityId })
+      .values({ facilityId, organizationId: ctx.organizationId })
       .returning({ id: certifierRemovals.id });
 
     await tx
       .update(creditBatches)
       .set({ removalId: removal.id, updatedAt: sql`now()` })
-      .where(inArray(creditBatches.id, uniqueIds));
+      .where(and(inArray(creditBatches.id, uniqueIds), eq(creditBatches.organizationId, ctx.organizationId)));
 
     return removal.id;
   });
@@ -294,11 +302,11 @@ export async function createRemovalWithCreditBatches(
 
 // Persists the derived reporting window after a successful submission.
 export async function updateRemovalDates(
-  userId: string,
+  ctx: OrgContext,
   removalId: string,
   args: { startedOn: string; completedOn: string },
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   await db
     .update(certifierRemovals)
     .set({
@@ -306,5 +314,5 @@ export async function updateRemovalDates(
       completedOn: args.completedOn,
       updatedAt: sql`now()`,
     })
-    .where(eq(certifierRemovals.id, removalId));
+    .where(and(eq(certifierRemovals.id, removalId), eq(certifierRemovals.organizationId, ctx.organizationId)));
 }

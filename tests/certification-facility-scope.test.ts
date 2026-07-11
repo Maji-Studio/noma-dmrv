@@ -1,3 +1,4 @@
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed regression tests for the resolved-facility scope on the
  * certification submit surface (issue #277).
@@ -18,7 +19,7 @@
  * Per ADR 0008 the guard resolves facility from the anchor row in real Postgres,
  * so these run DB-backed rather than against an in-memory fake.
  */
-import { afterAll, describe, expect, it } from "vitest";
+import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import {
   getLatestSubmissionsForEntities,
@@ -55,26 +56,27 @@ async function seedFixture(): Promise<ScopeFixture> {
   return db.transaction(async (tx) => {
     const [facilityA] = await tx
       .insert(facilities)
-      .values({ code: `FAC-SCP-A-${tag()}`, name: `Scope Facility A` })
+      .values({ organizationId: TEST_ORG_ID, code: `FAC-SCP-A-${tag()}`, name: `Scope Facility A` })
       .returning({ id: facilities.id });
     const [facilityB] = await tx
       .insert(facilities)
-      .values({ code: `FAC-SCP-B-${tag()}`, name: `Scope Facility B` })
+      .values({ organizationId: TEST_ORG_ID, code: `FAC-SCP-B-${tag()}`, name: `Scope Facility B` })
       .returning({ id: facilities.id });
 
     const [ghgStatementA] = await tx
       .insert(certifierGhgStatements)
-      .values({ facilityId: facilityA.id, reportingPeriodEndOn: "2026-06-30" })
+      .values({ organizationId: TEST_ORG_ID, facilityId: facilityA.id, reportingPeriodEndOn: "2026-06-30" })
       .returning({ id: certifierGhgStatements.id });
 
     const [removalA] = await tx
       .insert(certifierRemovals)
-      .values({ facilityId: facilityA.id })
+      .values({ organizationId: TEST_ORG_ID, facilityId: facilityA.id })
       .returning({ id: certifierRemovals.id });
 
     const [removalSubmissionA] = await tx
       .insert(certificationSubmissions)
       .values({
+        organizationId: TEST_ORG_ID,
         provider: PROVIDER,
         submissionType: "removal",
         localEntityType: "removal",
@@ -91,6 +93,7 @@ async function seedFixture(): Promise<ScopeFixture> {
     const [ghgSubmissionA] = await tx
       .insert(certificationSubmissions)
       .values({
+        organizationId: TEST_ORG_ID,
         provider: PROVIDER,
         submissionType: "ghg_statement",
         localEntityType: "ghgStatement",
@@ -109,6 +112,7 @@ async function seedFixture(): Promise<ScopeFixture> {
     const [orphanSubmission] = await tx
       .insert(certificationSubmissions)
       .values({
+        organizationId: TEST_ORG_ID,
         provider: PROVIDER,
         submissionType: "removal",
         localEntityType: "removal",
@@ -167,11 +171,14 @@ afterAll(async () => {
   }
 });
 
+
+beforeAll(() => ensureTestOrg());
+
 describe("certification submit surface — resolved-facility scope (#277)", () => {
   it("getSubmissionById rejects a removal submission scoped to the wrong facility", async () => {
     await withFixture(async (f) => {
       await expect(
-        getSubmissionById(USER_ID, f.removalSubmissionAId, f.facilityBId),
+        getSubmissionById(makeTestOrgContext(USER_ID), f.removalSubmissionAId, f.facilityBId),
       ).rejects.toThrow(NOT_IN_FACILITY);
     });
   });
@@ -179,7 +186,7 @@ describe("certification submit surface — resolved-facility scope (#277)", () =
   it("getSubmissionById returns the row when scoped to its own facility", async () => {
     await withFixture(async (f) => {
       const row = await getSubmissionById(
-        USER_ID,
+        makeTestOrgContext(USER_ID),
         f.removalSubmissionAId,
         f.facilityAId,
       );
@@ -189,7 +196,7 @@ describe("certification submit surface — resolved-facility scope (#277)", () =
 
   it("getSubmissionById stays unscoped (id-only) when no facility is supplied", async () => {
     await withFixture(async (f) => {
-      const row = await getSubmissionById(USER_ID, f.removalSubmissionAId);
+      const row = await getSubmissionById(makeTestOrgContext(USER_ID), f.removalSubmissionAId);
       expect(row?.id).toBe(f.removalSubmissionAId);
     });
   });
@@ -197,10 +204,10 @@ describe("certification submit surface — resolved-facility scope (#277)", () =
   it("getSubmissionById rejects a ghg-statement submission scoped to the wrong facility", async () => {
     await withFixture(async (f) => {
       await expect(
-        getSubmissionById(USER_ID, f.ghgSubmissionAId, f.facilityBId),
+        getSubmissionById(makeTestOrgContext(USER_ID), f.ghgSubmissionAId, f.facilityBId),
       ).rejects.toThrow(NOT_IN_FACILITY);
       const row = await getSubmissionById(
-        USER_ID,
+        makeTestOrgContext(USER_ID),
         f.ghgSubmissionAId,
         f.facilityAId,
       );
@@ -211,7 +218,7 @@ describe("certification submit surface — resolved-facility scope (#277)", () =
   it("getSubmissionById fails closed when the anchor row cannot be resolved", async () => {
     await withFixture(async (f) => {
       await expect(
-        getSubmissionById(USER_ID, f.orphanSubmissionId, f.facilityAId),
+        getSubmissionById(makeTestOrgContext(USER_ID), f.orphanSubmissionId, f.facilityAId),
       ).rejects.toThrow(NOT_IN_FACILITY);
     });
   });
@@ -225,9 +232,9 @@ describe("certification submit surface — resolved-facility scope (#277)", () =
         localEntityId: f.removalAId,
       };
       await expect(
-        getLatestSubmission(USER_ID, key, f.facilityBId),
+        getLatestSubmission(makeTestOrgContext(USER_ID), key, f.facilityBId),
       ).rejects.toThrow(NOT_IN_FACILITY);
-      const row = await getLatestSubmission(USER_ID, key, f.facilityAId);
+      const row = await getLatestSubmission(makeTestOrgContext(USER_ID), key, f.facilityAId);
       expect(row?.id).toBe(f.removalSubmissionAId);
     });
   });
@@ -241,13 +248,13 @@ describe("certification submit surface — resolved-facility scope (#277)", () =
         localEntityIds: [f.removalAId],
       };
       const wrong = await getLatestSubmissionsForEntities(
-        USER_ID,
+        makeTestOrgContext(USER_ID),
         key,
         f.facilityBId,
       );
       expect(wrong.has(f.removalAId)).toBe(false);
       const right = await getLatestSubmissionsForEntities(
-        USER_ID,
+        makeTestOrgContext(USER_ID),
         key,
         f.facilityAId,
       );

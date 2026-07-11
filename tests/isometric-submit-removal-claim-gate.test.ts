@@ -13,6 +13,7 @@ import {
   storedRows,
 } from "./fixtures/submit-removal-orchestrator";
 import { describe, expect, it, vi } from "vitest";
+import { makeTestOrgContext } from "./helpers/test-org";
 import * as ledger from "@/data-access/certification";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import { submitRemoval } from "@/fn/certification/submit-removal";
@@ -50,7 +51,7 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
     );
 
     await expect(
-      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+      submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
     ).rejects.toThrow(/already claimed/);
     // Failed closed — nothing was posted and no ledger row was claimed.
     expect(createDatapointFake).not.toHaveBeenCalled();
@@ -69,10 +70,10 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
       fakeExternalIds("rmv") as never,
     );
 
-    await submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID });
+    await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID });
 
     expect(ledger.markSubmissionSubmitted).toHaveBeenCalledWith(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       storedRows[0].id,
       expect.objectContaining({
         productionEmissionsClaim: {
@@ -94,7 +95,7 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
       fakeExternalIds("rmv") as never,
     );
 
-    await submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID });
+    await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID });
 
     // Second submit: the batch is now claimed by THIS removal (the first
     // submit stamped it) and the source mass changed → v=2 supersede. The
@@ -119,7 +120,7 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
     );
 
     const second = await submitRemoval({
-      userId: USER_ID,
+      orgCtx: makeTestOrgContext(USER_ID),
       removalId: REMOVAL_ID,
     });
 
@@ -155,7 +156,7 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
     );
 
     await expect(
-      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+      submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
     ).rejects.toThrow(/already claimed/);
     // Blocked AFTER the draft claim (the locked draft row exists, safe —
     // pre-flight re-fires on retry once the lock TTL passes) but BEFORE any
@@ -191,7 +192,7 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
     );
 
     await expect(
-      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+      submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
     ).rejects.toThrow(/membership or run lineage changed/);
     expect(createDatapointFake).not.toHaveBeenCalled();
     expect(createGhgEntryFake).not.toHaveBeenCalled();
@@ -214,14 +215,14 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
     );
 
     await expect(
-      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+      submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
     ).rejects.toThrow(/source data changed/i);
     expect(createDatapointFake).not.toHaveBeenCalled();
     expect(createGhgEntryFake).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(1);
     expect(storedRows[0].status).toBe("superseded");
     expect(ledger.retireStaleSubmissionDraft).toHaveBeenCalledWith(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       storedRows[0].id,
       expect.objectContaining({
         reason: expect.stringContaining("semantic payload drift"),
@@ -260,11 +261,11 @@ describe("submitRemoval — stale-revision resume gate (ADR 0020)", () => {
     );
 
     await expect(
-      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+      submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
     ).rejects.toThrow(/older accounting revision/);
     // Retired (terminal, non-blocking), nothing POSTed, nothing flipped.
     expect(ledger.retireStaleSubmissionDraft).toHaveBeenCalledWith(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       staleRow.id,
       expect.objectContaining({
         reason: expect.stringContaining("rev-obsolete"),
@@ -278,7 +279,7 @@ describe("submitRemoval — stale-revision resume gate (ADR 0020)", () => {
     // The retry does NOT resume the retired draft: it mints a fresh version
     // from live data under the current revision (no stuck-forever loop).
     const retried = await submitRemoval({
-      userId: USER_ID,
+      orgCtx: makeTestOrgContext(USER_ID),
       removalId: REMOVAL_ID,
     });
     expect(retried.version).toBe(2);

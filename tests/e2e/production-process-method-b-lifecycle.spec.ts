@@ -10,6 +10,7 @@
 import * as crypto from "crypto";
 import { eq } from "drizzle-orm";
 import * as schema from "../../src/db/schema";
+import { DEC_ORG_ID } from "../../src/db/org-defaults";
 import { expect, test } from "./fixtures/auth-fixtures";
 import { seedCertifierMapping } from "./fixtures/certification-helpers";
 import { createDbConnection } from "./fixtures/db";
@@ -122,6 +123,7 @@ function sampleRowsForMonths(input: {
   return input.months.flatMap((month, batchIndex) =>
     month.sampledOn.map((sampledOn, replicateIndex) => ({
       id: crypto.randomUUID(),
+      organizationId: DEC_ORG_ID,
       creditBatchId: input.batchIds[batchIndex],
       sampleCode: `E2E-MB-${input.tag}-${input.batchNumberOffset + batchIndex + 1}-S${replicateIndex + 1}`,
       samplingTime: new Date(sampledOn),
@@ -155,6 +157,7 @@ async function seedInitialThreeBatchBaseline(input: {
 
       await tx.insert(schema.productionProcesses).values({
         id: processId,
+        organizationId: DEC_ORG_ID,
         facilityId: input.facilityId,
         feedstockTypeId: input.feedstockTypeId,
         establishedAt: new Date("2025-10-01T00:00:00.000Z"),
@@ -163,6 +166,7 @@ async function seedInitialThreeBatchBaseline(input: {
       await tx.insert(schema.creditBatches).values(
         INITIAL_MONTHS.map((month, index) => ({
           id: batchIds[index],
+          organizationId: DEC_ORG_ID,
           code: `E2E-MB-${input.tag}-${index + 1}`,
           facilityId: input.facilityId,
           feedstockTypeId: input.feedstockTypeId,
@@ -201,6 +205,7 @@ async function addSevenFullySampledBatches(input: {
       await tx.insert(schema.creditBatches).values(
         ADDITIONAL_MONTHS.map((month, index) => ({
           id: batchIds[index],
+          organizationId: DEC_ORG_ID,
           code: `E2E-MB-${input.tag}-${INITIAL_MONTHS.length + index + 1}`,
           facilityId: input.facilityId,
           feedstockTypeId: input.feedstockTypeId,

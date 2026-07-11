@@ -24,7 +24,7 @@ import {
   type FacilityDetail,
   type FacilityArchiveImpact,
 } from "@/data-access/facilities";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import {
   archiveFacilitySchema,
   createFacilitySchema,
@@ -59,15 +59,12 @@ export async function getFacilitiesFn(
   filters?: Partial<z.infer<typeof facilityFilterSchema>>
 ): Promise<ActionResult<PaginatedFacilities>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validatedFilters = filters
       ? facilityFilterSchema.parse(filters)
       : undefined;
-    const facilities = await getFacilitiesData(user.id, validatedFilters);
+    const facilities = await getFacilitiesData(ctx, validatedFilters);
 
     return { success: true, data: facilities };
   } catch (error) {
@@ -95,12 +92,9 @@ export async function getFacilityByIdFn(
   facilityId: string
 ): Promise<ActionResult<Facility>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const facility = await getFacilityByIdData(user.id, facilityId);
+    const facility = await getFacilityByIdData(ctx, facilityId);
     return { success: true, data: facility };
   } catch (error) {
     return {
@@ -121,12 +115,9 @@ export async function getFacilityWithRelationsFn(
   facilityId: string
 ): Promise<ActionResult<FacilityDetail>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const facility = await getFacilityWithRelationsData(user.id, facilityId);
+    const facility = await getFacilityWithRelationsData(ctx, facilityId);
     return { success: true, data: facility };
   } catch (error) {
     return {
@@ -159,12 +150,9 @@ export async function getFacilityReactorsFn(
   >
 > {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const reactors = await getFacilityReactorsData(user.id, facilityId);
+    const reactors = await getFacilityReactorsData(ctx, facilityId);
     return { success: true, data: reactors };
   } catch (error) {
     return {
@@ -198,13 +186,10 @@ export async function getFacilityStorageLocationsFn(
   >
 > {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const storageLocations = await getFacilityStorageLocationsData(
-      user.id,
+      ctx,
       facilityId
     );
     return { success: true, data: storageLocations };
@@ -227,12 +212,9 @@ export async function getFacilityCountriesFn(): Promise<
   ActionResult<string[]>
 > {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const countries = await getFacilityCountriesData(user.id);
+    const countries = await getFacilityCountriesData(ctx);
     return { success: true, data: countries };
   } catch (error) {
     return {
@@ -254,13 +236,10 @@ export async function checkFacilityCodeFn(
   excludeFacilityId?: string
 ): Promise<ActionResult<{ available: boolean }>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const available = await isFacilityCodeAvailableData(
-      user.id,
+      ctx,
       code,
       excludeFacilityId
     );
@@ -288,20 +267,18 @@ export async function createFacilityFn(
   data: z.infer<typeof createFacilitySchema>
 ): Promise<ActionResult<Facility>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = createFacilitySchema.parse(data);
 
     const facility = await withAutoCode(
+      ctx,
       "FAC",
       facilitiesTable,
       facilitiesTable.code,
       undefined,
       (code) =>
-        createFacility(user.id, {
+        createFacility(ctx, {
           code,
           name: validated.name,
           country: validated.country,
@@ -346,14 +323,11 @@ export async function updateFacilityFn(
   data: z.infer<typeof updateFacilitySchema>
 ): Promise<ActionResult<Facility>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = updateFacilitySchema.parse(data);
 
-    const facility = await updateFacility(user.id, validated.facilityId, {
+    const facility = await updateFacility(ctx, validated.facilityId, {
       code: validated.code,
       name: validated.name,
       country: validated.country,
@@ -397,12 +371,9 @@ export async function getFacilityArchiveImpactFn(
   facilityId: string
 ): Promise<ActionResult<FacilityArchiveImpact>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const impact = await getFacilityArchiveImpact(user.id, facilityId);
+    const impact = await getFacilityArchiveImpact(ctx, facilityId);
     return { success: true, data: impact };
   } catch (error) {
     return {
@@ -423,13 +394,10 @@ export async function archiveFacilityFn(
   data: z.infer<typeof archiveFacilitySchema>
 ): Promise<ActionResult<Facility>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = archiveFacilitySchema.parse(data);
-    const facility = await archiveFacility(user.id, validated.facilityId);
+    const facility = await archiveFacility(ctx, validated.facilityId);
 
     return { success: true, data: facility };
   } catch (error) {
@@ -457,13 +425,10 @@ export async function restoreFacilityFn(
   data: z.infer<typeof restoreFacilitySchema>
 ): Promise<ActionResult<Facility>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = restoreFacilitySchema.parse(data);
-    const facility = await restoreFacility(user.id, validated.facilityId);
+    const facility = await restoreFacility(ctx, validated.facilityId);
 
     return { success: true, data: facility };
   } catch (error) {

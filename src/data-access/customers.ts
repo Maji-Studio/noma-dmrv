@@ -5,6 +5,7 @@
 
 import { and, asc, desc, eq, ilike, inArray, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
+import type { OrgContext } from "@/lib/auth/server";
 import {
   customers,
   customerLocations,
@@ -60,7 +61,7 @@ export interface CustomerLocationDetail extends CustomerLocation {
 // Auth Guards
 // ============================================
 
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { guardCustomerName } from "./unique-name-guards";
 
@@ -73,10 +74,10 @@ import { guardCustomerName } from "./unique-name-guards";
  * Supports search, crop type filter, sorting, and pagination
  */
 export async function getCustomers(
-  userId: string,
+  ctx: OrgContext,
   filters?: Partial<CustomerFilterData>
 ): Promise<PaginatedCustomers> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const {
     search,
@@ -88,7 +89,7 @@ export async function getCustomers(
   } = filters ?? {};
 
   // Build where conditions
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [eq(customers.organizationId, ctx.organizationId)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -119,6 +120,7 @@ export async function getCustomers(
   const orderFn = sortOrder === "desc" ? desc : asc;
 
   // Count total for pagination
+  // org-scope-ok: whereClause includes the active organization predicate.
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(customers)
@@ -132,6 +134,7 @@ export async function getCustomers(
   const customerList = await db
     .select({
       id: customers.id,
+      organizationId: customers.organizationId,
       code: customers.code,
       name: customers.name,
       cropType: customers.cropType,
@@ -158,7 +161,7 @@ export async function getCustomers(
             count: count(),
           })
           .from(customerLocations)
-          .where(inArray(customerLocations.customerId, customerIds))
+          .where(and(inArray(customerLocations.customerId, customerIds), eq(customerLocations.organizationId, ctx.organizationId)))
           .groupBy(customerLocations.customerId)
       : [];
 
@@ -187,15 +190,15 @@ export async function getCustomers(
  * Returns customer data without relations
  */
 export async function getCustomerById(
-  userId: string,
+  ctx: OrgContext,
   customerId: string
 ): Promise<Customer> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [customer] = await db
     .select()
     .from(customers)
-    .where(eq(customers.id, customerId));
+    .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)));
 
   if (!customer) {
     throw new SafeError("Customer not found");
@@ -209,16 +212,16 @@ export async function getCustomerById(
  * Includes locations
  */
 export async function getCustomerWithRelations(
-  userId: string,
+  ctx: OrgContext,
   customerId: string
 ): Promise<CustomerDetail> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Get customer
   const [customer] = await db
     .select()
     .from(customers)
-    .where(eq(customers.id, customerId));
+    .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)));
 
   if (!customer) {
     throw new SafeError("Customer not found");
@@ -241,7 +244,7 @@ export async function getCustomerWithRelations(
       updatedAt: customerLocations.updatedAt,
     })
     .from(customerLocations)
-    .where(eq(customerLocations.customerId, customerId))
+    .where(and(eq(customerLocations.customerId, customerId), eq(customerLocations.organizationId, ctx.organizationId)))
     .orderBy(sql`${customerLocations.name} asc nulls last`);
 
   return {
@@ -254,7 +257,7 @@ export async function getCustomerWithRelations(
  * Get locations associated with a customer
  */
 export async function getCustomerLocations(
-  userId: string,
+  ctx: OrgContext,
   customerId: string
 ): Promise<
   Array<{
@@ -273,13 +276,13 @@ export async function getCustomerLocations(
     updatedAt: Date;
   }>
 > {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify customer exists
   const [customer] = await db
     .select({ id: customers.id })
     .from(customers)
-    .where(eq(customers.id, customerId));
+    .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)));
 
   if (!customer) {
     throw new SafeError("Customer not found");
@@ -302,7 +305,7 @@ export async function getCustomerLocations(
       updatedAt: customerLocations.updatedAt,
     })
     .from(customerLocations)
-    .where(eq(customerLocations.customerId, customerId))
+    .where(and(eq(customerLocations.customerId, customerId), eq(customerLocations.organizationId, ctx.organizationId)))
     .orderBy(sql`${customerLocations.name} asc nulls last`);
 }
 
@@ -314,7 +317,7 @@ export async function getCustomerLocations(
  * Create a new customer
  */
 export async function createCustomer(
-  userId: string,
+  ctx: OrgContext,
   data: {
     code: string;
     name: string;
@@ -324,22 +327,23 @@ export async function createCustomer(
     contactPhone?: string | null;
   }
 ): Promise<Customer> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Check for duplicate code
   const [existing] = await db
     .select({ id: customers.id })
     .from(customers)
-    .where(eq(customers.code, data.code));
+    .where(and(eq(customers.code, data.code), eq(customers.organizationId, ctx.organizationId)));
 
   if (existing) {
     throw new SafeError("A customer with this code already exists");
   }
 
-  const [customer] = await guardCustomerName(data.name, () =>
+  const [customer] = await guardCustomerName(ctx, data.name, () =>
     db
       .insert(customers)
       .values({
+        organizationId: ctx.organizationId,
         code: data.code,
         name: data.name,
         cropType: data.cropType ?? null,
@@ -361,7 +365,7 @@ export async function createCustomer(
  * Update an existing customer
  */
 export async function updateCustomer(
-  userId: string,
+  ctx: OrgContext,
   customerId: string,
   data: {
     code?: string;
@@ -372,13 +376,13 @@ export async function updateCustomer(
     contactPhone?: string | null;
   }
 ): Promise<Customer> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify customer exists
   const [existing] = await db
     .select()
     .from(customers)
-    .where(eq(customers.id, customerId));
+    .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Customer not found");
@@ -389,7 +393,7 @@ export async function updateCustomer(
     const [duplicate] = await db
       .select({ id: customers.id })
       .from(customers)
-      .where(eq(customers.code, data.code));
+      .where(and(eq(customers.code, data.code), eq(customers.organizationId, ctx.organizationId)));
 
     if (duplicate) {
       throw new SafeError("A customer with this code already exists");
@@ -397,6 +401,7 @@ export async function updateCustomer(
   }
 
   const [updated] = await guardCustomerName(
+    ctx,
     data.name ?? existing.name,
     () =>
       db
@@ -405,7 +410,7 @@ export async function updateCustomer(
           ...data,
           updatedAt: new Date(),
         })
-        .where(eq(customers.id, customerId))
+        .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)))
         .returning()
   );
 
@@ -421,16 +426,16 @@ export async function updateCustomer(
  * Will fail if customer has associated locations
  */
 export async function deleteCustomer(
-  userId: string,
+  ctx: OrgContext,
   customerId: string
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify customer exists
   const [existing] = await db
     .select({ id: customers.id })
     .from(customers)
-    .where(eq(customers.id, customerId));
+    .where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Customer not found");
@@ -441,11 +446,11 @@ export async function deleteCustomer(
       db
         .select({ value: count() })
         .from(customerLocations)
-        .where(eq(customerLocations.customerId, customerId)),
+        .where(and(eq(customerLocations.customerId, customerId), eq(customerLocations.organizationId, ctx.organizationId))),
       db
         .select({ value: count() })
         .from(orders)
-        .where(eq(orders.customerId, customerId)),
+        .where(and(eq(orders.customerId, customerId), eq(orders.organizationId, ctx.organizationId))),
     ]);
 
   if (Number(orderCount) > 0) {
@@ -460,7 +465,7 @@ export async function deleteCustomer(
     );
   }
 
-  await db.delete(customers).where(eq(customers.id, customerId));
+  await db.delete(customers).where(and(eq(customers.id, customerId), eq(customers.organizationId, ctx.organizationId)));
 }
 
 // ============================================
@@ -471,15 +476,15 @@ export async function deleteCustomer(
  * Get a single customer location by ID
  */
 export async function getCustomerLocationById(
-  userId: string,
+  ctx: OrgContext,
   locationId: string
 ): Promise<CustomerLocation> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [location] = await db
     .select()
     .from(customerLocations)
-    .where(eq(customerLocations.id, locationId));
+    .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)));
 
   if (!location) {
     throw new SafeError("Customer location not found");
@@ -492,7 +497,7 @@ export async function getCustomerLocationById(
  * Create a new customer location
  */
 export async function createCustomerLocation(
-  userId: string,
+  ctx: OrgContext,
   data: {
     customerId: string;
     name: string;
@@ -508,13 +513,13 @@ export async function createCustomerLocation(
     isDefault?: boolean;
   }
 ): Promise<CustomerLocation> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify customer exists
   const [customer] = await db
     .select({ id: customers.id })
     .from(customers)
-    .where(eq(customers.id, data.customerId));
+    .where(and(eq(customers.id, data.customerId), eq(customers.organizationId, ctx.organizationId)));
 
   if (!customer) {
     throw new SafeError("Customer not found");
@@ -525,7 +530,7 @@ export async function createCustomerLocation(
     const [{ value: existingCount }] = await tx
       .select({ value: count() })
       .from(customerLocations)
-      .where(eq(customerLocations.customerId, data.customerId));
+      .where(and(eq(customerLocations.customerId, data.customerId), eq(customerLocations.organizationId, ctx.organizationId)));
     const makeDefault = data.isDefault === true || existingCount === 0;
 
     // Clear the prior default first so the partial unique index never sees two.
@@ -536,6 +541,7 @@ export async function createCustomerLocation(
         .where(
           and(
             eq(customerLocations.customerId, data.customerId),
+            eq(customerLocations.organizationId, ctx.organizationId),
             eq(customerLocations.isDefault, true)
           )
         );
@@ -544,6 +550,7 @@ export async function createCustomerLocation(
     const [location] = await tx
       .insert(customerLocations)
       .values({
+        organizationId: ctx.organizationId,
         customerId: data.customerId,
         name: data.name,
         country: data.country ?? 'UNKNOWN',
@@ -567,7 +574,7 @@ export async function createCustomerLocation(
  * Update a customer location
  */
 export async function updateCustomerLocation(
-  userId: string,
+  ctx: OrgContext,
   locationId: string,
   data: {
     name?: string;
@@ -583,13 +590,13 @@ export async function updateCustomerLocation(
     isDefault?: boolean;
   }
 ): Promise<CustomerLocation> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify location exists
   const [existing] = await db
     .select({ id: customerLocations.id, customerId: customerLocations.customerId })
     .from(customerLocations)
-    .where(eq(customerLocations.id, locationId));
+    .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Customer location not found");
@@ -633,6 +640,7 @@ export async function updateCustomerLocation(
         .where(
           and(
             eq(customerLocations.customerId, existing.customerId),
+            eq(customerLocations.organizationId, ctx.organizationId),
             eq(customerLocations.isDefault, true)
           )
         );
@@ -641,7 +649,7 @@ export async function updateCustomerLocation(
     const [updated] = await tx
       .update(customerLocations)
       .set(updateData)
-      .where(eq(customerLocations.id, locationId))
+      .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)))
       .returning();
 
     return updated;
@@ -652,22 +660,22 @@ export async function updateCustomerLocation(
  * Delete a customer location
  */
 export async function deleteCustomerLocation(
-  userId: string,
+  ctx: OrgContext,
   locationId: string
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify location exists
   const [existing] = await db
     .select({ id: customerLocations.id })
     .from(customerLocations)
-    .where(eq(customerLocations.id, locationId));
+    .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Customer location not found");
   }
 
-  await db.delete(customerLocations).where(eq(customerLocations.id, locationId));
+  await db.delete(customerLocations).where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)));
 }
 
 // ============================================
@@ -678,18 +686,19 @@ export async function deleteCustomerLocation(
  * Check if a customer code is available
  */
 export async function isCustomerCodeAvailable(
-  userId: string,
+  ctx: OrgContext,
   code: string,
   excludeCustomerId?: string
 ): Promise<boolean> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [eq(customers.code, code)];
+  const conditions: SQL[] = [eq(customers.code, code), eq(customers.organizationId, ctx.organizationId)];
 
   if (excludeCustomerId) {
     conditions.push(sql`${customers.id} != ${excludeCustomerId}`);
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: customers.id })
     .from(customers)
@@ -702,13 +711,13 @@ export async function isCustomerCodeAvailable(
  * Get unique crop types from all customers
  * Useful for filter dropdowns
  */
-export async function getCustomerCropTypes(userId: string): Promise<string[]> {
-  requireAuth(userId);
+export async function getCustomerCropTypes(ctx: OrgContext): Promise<string[]> {
+  requireOrgScope(ctx);
 
   const results = await db
     .selectDistinct({ cropType: customers.cropType })
     .from(customers)
-    .where(sql`${customers.cropType} IS NOT NULL AND ${customers.cropType} != ''`)
+    .where(and(eq(customers.organizationId, ctx.organizationId), sql`${customers.cropType} IS NOT NULL AND ${customers.cropType} != ''`))
     .orderBy(asc(customers.cropType));
 
   return results.map((r) => r.cropType!).filter(Boolean);

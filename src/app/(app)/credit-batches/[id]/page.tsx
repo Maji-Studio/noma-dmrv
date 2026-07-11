@@ -4,7 +4,7 @@
  * Protected by requireAuth guard in the (app) layout.
  */
 import { CreditBatchDetail } from "@/components/credit-batches";
-import { requireAuth } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { notFound, redirect } from "next/navigation";
 
@@ -42,9 +42,9 @@ export default async function CreditBatchDetailPage({
 }: CreditBatchDetailPageProps) {
   const { id } = await params;
   const sp = await searchParams;
-  const user = await requireAuth();
+  const ctx = await requireOrgContext();
 
-  const batch = await getCreditBatchById(user.id, id, { skipPreview: true });
+  const batch = await getCreditBatchById(ctx, id, { skipPreview: true });
 
   if (!batch) {
     notFound();

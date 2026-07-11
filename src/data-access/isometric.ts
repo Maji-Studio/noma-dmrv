@@ -2,7 +2,8 @@ import { and, count, eq, lt } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { creditBatches, productionProcesses, samples } from "@/db/schema";
 import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
-import { requireAuth } from "./utils";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "./utils";
 
 // Re-exported for existing consumers that import the threshold from this module.
 export { METHOD_B_MINIMUM_METHOD_A_SAMPLES };
@@ -22,10 +23,16 @@ export type MethodBEligibilitySummary = {
  * eventual Track-2 transactional backstop consume the same SQL definition.
  */
 export async function countEligibleSamplesByProcess(
+  ctx: OrgContext,
   executor: Executor,
   params: { facilityId: string; asOfDate?: Date },
 ): Promise<Map<string, number>> {
-  const conditions = [eq(creditBatches.facilityId, params.facilityId)];
+  requireOrgScope(ctx);
+  const conditions = [
+    eq(creditBatches.facilityId, params.facilityId),
+    eq(creditBatches.organizationId, ctx.organizationId),
+    eq(samples.organizationId, ctx.organizationId),
+  ];
   if (params.asOfDate) {
     conditions.push(lt(samples.samplingTime, params.asOfDate));
   }
@@ -69,22 +76,22 @@ export async function countEligibleSamplesByProcess(
  * estimate (Eq 4/5) — see CONTEXT.md "Eligible sample".
  */
 export async function getMethodBEligibilityByProcess(
-  userId: string,
+  ctx: OrgContext,
   params: {
     productionProcessId: string;
     asOfDate?: Date;
   }
 ): Promise<MethodBEligibilitySummary> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [process] = await db
     .select({ facilityId: productionProcesses.facilityId })
     .from(productionProcesses)
-    .where(eq(productionProcesses.id, params.productionProcessId))
+    .where(and(eq(productionProcesses.id, params.productionProcessId), eq(productionProcesses.organizationId, ctx.organizationId)))
     .limit(1);
 
   const countsByProcess = process
-    ? await countEligibleSamplesByProcess(db, {
+    ? await countEligibleSamplesByProcess(ctx, db, {
         facilityId: process.facilityId,
         asOfDate: params.asOfDate,
       })

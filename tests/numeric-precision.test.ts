@@ -1,3 +1,4 @@
+import { ensureTestOrg, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Issue #280 — credit-bearing values are exact numeric(p,s), not float4.
  *
@@ -6,7 +7,7 @@
  * written, still typed `number` (drizzle `mode: 'number'`). These tests fail
  * against the pre-#280 `real` columns.
  */
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { eq, TransactionRollbackError } from "drizzle-orm";
 import { db } from "@/db";
 import { applications } from "@/db/schema/application";
@@ -39,6 +40,9 @@ async function withRollback(run: (tx: Tx) => Promise<void>): Promise<void> {
   }
 }
 
+
+beforeAll(() => ensureTestOrg());
+
 describe("numeric precision round-trips (issue #280)", () => {
   it("stores biochar_storage_inventory.quantity_kg_stored exactly at gram resolution", async () => {
     const runId = crypto.randomUUID().slice(0, 8).toUpperCase();
@@ -46,12 +50,13 @@ describe("numeric precision round-trips (issue #280)", () => {
     await withRollback(async (tx) => {
       const [facility] = await tx
         .insert(facilities)
-        .values({ code: `FAC-NUM-${runId}`, name: `Numeric Facility ${runId}` })
+        .values({ organizationId: TEST_ORG_ID, code: `FAC-NUM-${runId}`, name: `Numeric Facility ${runId}` })
         .returning({ id: facilities.id });
 
       const [bin] = await tx
         .insert(storageLocations)
         .values({
+          organizationId: TEST_ORG_ID,
           code: `BIN-NUM-${runId}`,
           name: `Numeric Bin ${runId}`,
           type: "product_bin",
@@ -61,12 +66,13 @@ describe("numeric precision round-trips (issue #280)", () => {
 
       const [product] = await tx
         .insert(biocharProducts)
-        .values({ code: `BP-NUM-${runId}`, facilityId: facility.id })
+        .values({ organizationId: TEST_ORG_ID, code: `BP-NUM-${runId}`, facilityId: facility.id })
         .returning({ id: biocharProducts.id });
 
       const [inserted] = await tx
         .insert(biocharStorageInventory)
         .values({
+          organizationId: TEST_ORG_ID,
           code: `BSI-NUM-${runId}`,
           biocharProductId: product.id,
           storageLocationId: bin.id,
@@ -93,6 +99,7 @@ describe("numeric precision round-trips (issue #280)", () => {
       const [inserted] = await tx
         .insert(samples)
         .values({
+          organizationId: TEST_ORG_ID,
           sampleCode: `SMP-NUM-${runId}`,
           samplingTime: new Date(),
           totalCarbonPercent: 80,
@@ -118,6 +125,7 @@ describe("numeric precision round-trips (issue #280)", () => {
       const [facility] = await tx
         .insert(facilities)
         .values({
+          organizationId: TEST_ORG_ID,
           code: `FAC-NUM-AP-${runId}`,
           name: `Numeric App Facility ${runId}`,
         })
@@ -125,17 +133,18 @@ describe("numeric precision round-trips (issue #280)", () => {
 
       const [customer] = await tx
         .insert(customers)
-        .values({ code: `CU-NUM-${runId}`, name: `Numeric Customer ${runId}` })
+        .values({ organizationId: TEST_ORG_ID, code: `CU-NUM-${runId}`, name: `Numeric Customer ${runId}` })
         .returning({ id: customers.id });
 
       const [product] = await tx
         .insert(biocharProducts)
-        .values({ code: `BP-NUM-AP-${runId}`, facilityId: facility.id })
+        .values({ organizationId: TEST_ORG_ID, code: `BP-NUM-AP-${runId}`, facilityId: facility.id })
         .returning({ id: biocharProducts.id });
 
       const [order] = await tx
         .insert(orders)
         .values({
+          organizationId: TEST_ORG_ID,
           code: `OR-NUM-${runId}`,
           facilityId: facility.id,
           orderDate: new Date(),
@@ -149,6 +158,7 @@ describe("numeric precision round-trips (issue #280)", () => {
       const [delivery] = await tx
         .insert(deliveries)
         .values({
+          organizationId: TEST_ORG_ID,
           code: `DL-NUM-${runId}`,
           facilityId: facility.id,
           deliveryDate: new Date(),
@@ -159,6 +169,7 @@ describe("numeric precision round-trips (issue #280)", () => {
       const [inserted] = await tx
         .insert(applications)
         .values({
+          organizationId: TEST_ORG_ID,
           code: `AP-NUM-${runId}`,
           deliveryId: delivery.id,
           biocharAppliedTons: 1,

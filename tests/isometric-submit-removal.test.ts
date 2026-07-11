@@ -19,6 +19,7 @@
  * sandbox/production gating switch.
  */
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
+import { makeTestOrgContext } from "./helpers/test-org";
 import {
   CHANGED_BIOCHAR_MASS_KG,
   CREDIT_BATCH_ID,
@@ -65,7 +66,7 @@ describe("submitRemoval — happy path", () => {
       createGhgEntryFake as never,
     );
 
-    const result = await submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID });
+    const result = await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID });
 
     // Ledger transitioned draft → submitted; externalId matches the fake.
     expect(storedRows).toHaveLength(1);
@@ -122,7 +123,7 @@ describe("submitRemoval — happy path", () => {
     // carries the application date, keeping every period consumer (detail
     // sheet, GHG-statement partition, dashboard) on the §8.6.2 window.
     expect(removalsDA.updateRemovalDates).toHaveBeenCalledWith(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       REMOVAL_ID,
       { startedOn: "2026-01-01", completedOn: "2026-04-05" },
     );
@@ -139,7 +140,7 @@ describe("submitRemoval — happy path", () => {
       fakeExternalIds("rmv") as never,
     );
 
-    await submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID });
+    await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID });
 
     // Reset the HTTP spies — the second submit must not call them.
     vi.mocked(isometric.createDatapoint).mockClear();
@@ -156,7 +157,7 @@ describe("submitRemoval — happy path", () => {
     );
 
     const second = await submitRemoval({
-      userId: USER_ID,
+      orgCtx: makeTestOrgContext(USER_ID),
       removalId: REMOVAL_ID,
     });
 
@@ -175,7 +176,7 @@ describe("submitRemoval — happy path", () => {
     // record its production-emissions claim (the guarded UPDATE is
     // idempotent for the already-stamped common case).
     expect(ledger.stampProductionEmissionsClaim).toHaveBeenCalledWith(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       { removalId: REMOVAL_ID, creditBatchIds: [CREDIT_BATCH_ID] },
     );
   });
@@ -191,7 +192,7 @@ describe("submitRemoval — happy path", () => {
       fakeExternalIds("rmv") as never,
     );
 
-    await submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID });
+    await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID });
     const firstRowId = storedRows[0].id;
 
     // Second submit sees a changed run mass → a different payload hash →
@@ -201,7 +202,7 @@ describe("submitRemoval — happy path", () => {
     );
 
     const second = await submitRemoval({
-      userId: USER_ID,
+      orgCtx: makeTestOrgContext(USER_ID),
       removalId: REMOVAL_ID,
     });
 
@@ -260,7 +261,7 @@ describe("submitRemoval — durability sampling gates (D3)", () => {
     );
 
     await expect(
-      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+      submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
     ).rejects.toThrow(/sampling & eligibility/i);
     // Failed closed — nothing was posted and no ledger row was claimed.
     expect(createDatapointFake).not.toHaveBeenCalled();
@@ -279,7 +280,7 @@ describe("submitRemoval — durability sampling gates (D3)", () => {
     );
 
     await expect(
-      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+      submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
     ).rejects.toThrow(/replicate/i);
     // Failed closed — nothing was posted and no ledger row was claimed.
     expect(createDatapointFake).not.toHaveBeenCalled();
@@ -335,7 +336,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
       fakeExternalIds("rmv") as never,
     );
 
-    await submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID });
+    await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID });
 
     // completed_on = the LATEST application date across lineages; started_on
     // stays the production start.
@@ -343,7 +344,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
     expect(removalBody.started_on).toBe("2026-01-01");
     expect(removalBody.completed_on).toBe("2026-04-05");
     expect(removalsDA.updateRemovalDates).toHaveBeenCalledWith(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       REMOVAL_ID,
       { startedOn: "2026-01-01", completedOn: "2026-04-05" },
     );
@@ -381,7 +382,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
       fakeExternalIds("rmv") as never,
     );
 
-    await submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID });
+    await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID });
 
     const removalBody = vi.mocked(isometric.createGhgEntry).mock.calls[0][0];
     expect(removalBody.started_on).toBe("2026-01-01");
@@ -407,7 +408,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
     );
 
     await expect(
-      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+      submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
     ).rejects.toThrow(/correct the application date/i);
     // The guard names the offending application and runs BEFORE any registry
     // POST or ledger claim.
@@ -445,7 +446,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
     );
 
     await expect(
-      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+      submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
     ).rejects.toThrow(/APP-TEST-001.*2025-12-15/);
     // Fails closed before any registry POST or ledger claim.
     expect(createDatapointFake).not.toHaveBeenCalled();
@@ -466,7 +467,7 @@ describe("submitRemoval — durability measurement-samples gate (Phase 3, staged
     );
 
     await expect(
-      submitRemoval({ userId: USER_ID, removalId: REMOVAL_ID }),
+      submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
     ).rejects.toThrow(/staged but not yet live/i);
     // Gated before any aggregation/claim — nothing posted, no ledger row.
     expect(createDatapointFake).not.toHaveBeenCalled();
