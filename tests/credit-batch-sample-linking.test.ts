@@ -478,7 +478,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
   });
 
   it("createSample rejects a 1000-year batch sample missing s_fraction", async () => {
-    const action = createSample(TEST_USER_ID, {
+    const action = createSample(makeTestOrgContext(TEST_USER_ID), {
       sampleCode: `S-SL-NO-S-FRACTION-${Date.now()}`,
       creditBatchId: tier1000BatchId,
       samplingTime: new Date("2025-06-15T10:00:00Z"),
@@ -531,13 +531,13 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
   });
 
   it("updateSample persists a changed s_fraction", async () => {
-    const sample = await createSample(TEST_USER_ID, {
+    const sample = await createSample(makeTestOrgContext(TEST_USER_ID), {
       sampleCode: `S-SL-T-S-FRACTION-${Date.now()}`,
       creditBatchId: tier1000BatchId,
       ...completeEvidence(),
     });
     createdIds.samples.push(sample.id);
-    const updated = await updateSample(TEST_USER_ID, sample.id, {
+    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), sample.id, {
       sReflectanceFraction: 0.94,
     });
     expect(updated.sReflectanceFraction).toBe(0.94);

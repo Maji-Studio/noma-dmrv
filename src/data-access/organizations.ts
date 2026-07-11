@@ -6,7 +6,7 @@
  * Platform-Admin gate in this layer as well as in their `fn/` callers.
  */
 import { randomUUID } from "node:crypto";
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { invitations, members, organizations, users } from "@/db/schema";
 import { seedOrgDefaults } from "@/db/org-defaults";
