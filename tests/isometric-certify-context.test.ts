@@ -764,7 +764,7 @@ describe("requiredTransportCategories", () => {
     );
 
     expect(result.entityReadinessGaps).toEqual([
-      "Sample S-1: TGA non-reactive carbon data · R0 reflectance",
+      "Sample S-1: TGA non-reactive carbon data · R0 reflectance · R₀ readings at or above 2%",
     ]);
   });
 

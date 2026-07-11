@@ -239,6 +239,16 @@ export const CERTIFY_FIELD_REGISTRY: Record<
         label: "1000-year durability",
       },
     },
+    {
+      key: "sReflectanceFraction",
+      label: "R₀ readings at or above 2%",
+      kind: "entered",
+      condition: {
+        field: "durabilityOption",
+        equals: "1000_year",
+        label: "1000-year durability",
+      },
+    },
   ],
   feedstock: [
     {

@@ -80,6 +80,7 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
     submitGhgStatement: vi.fn(),
     resubmitGhgStatement: vi.fn(),
     reconcileGhgStatement: vi.fn(),
+    findDraftGhgStatementsByPeriod: vi.fn(),
   };
 });
 
@@ -381,6 +382,7 @@ beforeEach(() => {
 
   // Default Isometric HTTP — the per-test overrides extend these.
   vi.mocked(isometric.reconcileGhgStatement).mockResolvedValue({ found: false });
+  vi.mocked(isometric.findDraftGhgStatementsByPeriod).mockResolvedValue([]);
 });
 
 // ---------------------------------------------------------------------------
@@ -474,6 +476,30 @@ describe("createGhgStatementDraft — happy path", () => {
 });
 
 describe("createGhgStatementDraft — empty-statement guard (#245)", () => {
+  it("adopts one exact remote draft before POSTing even when a removal is still open locally", async () => {
+    const remote = makeRemoteStatement();
+    vi.mocked(isometric.findDraftGhgStatementsByPeriod).mockResolvedValue([
+      remote,
+    ]);
+    vi.mocked(isometric.reconcileGhgStatement).mockResolvedValue({
+      found: "single",
+      externalId: EXTERNAL_STATEMENT_ID,
+      status: "DRAFT",
+    });
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remote);
+
+    const result = await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      data: { externalId: EXTERNAL_STATEMENT_ID },
+    });
+    expect(isometric.createGhgStatement).not.toHaveBeenCalled();
+  });
+
   it("fail-closes before any local row or remote POST when no removals are open", async () => {
     vi.mocked(ghgDA.listOpenRemovalsForFacility).mockResolvedValue([]);
 

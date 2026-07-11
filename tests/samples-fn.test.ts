@@ -71,6 +71,16 @@ describe("createSampleFn", () => {
     expect(payload.creditBatchId).toBe(CREDIT_BATCH_ID);
   });
 
+  it("passes 1000-year s_fraction through to data-access", async () => {
+    await createSampleFn(baseSampleInput({
+      durabilityOption:"1000_year",
+      randomReflectanceR0Percent:2.8,
+      sReflectanceFraction:0.92,
+      residualCarbonPercent:65,
+    }));
+    expect(mockCreateSample.mock.calls[0][1].sReflectanceFraction).toBe(0.92);
+  });
+
   it("rejects a sample without a credit batch (issue #309: exactly one batch)", async () => {
     const { creditBatchId: _omitted, ...withoutBatch } = baseSampleInput();
     const result = await createSampleFn(

@@ -96,7 +96,10 @@ export class FakeIsometricRegistry {
   readonly ghgStatements: FakeGhgStatementRecord[] = [];
   readonly requests: LoggedRequest[] = [];
 
-  private readonly failures = new Map<string, FailureInjection[]>();
+  private readonly failures = new Map<
+    string,
+    Array<FailureInjection | null>
+  >();
   // External ids are unique table-wide per (provider, submissionType) in the
   // local ledger (`cert_submissions_external_unique`), and boundary-test rows
   // are only cleaned up afterAll — so ids must not repeat across registry
@@ -112,6 +115,15 @@ export class FakeIsometricRegistry {
   ): void {
     const queue = this.failures.get(route) ?? [];
     queue.push({ mode, status: opts.status, body: opts.body });
+    this.failures.set(route, queue);
+  }
+
+  /** Queue one successful request before a later injected failure. */
+  passNext(
+    route: `${"GET" | "POST" | "PATCH" | "DELETE"} /${string}`,
+  ): void {
+    const queue = this.failures.get(route) ?? [];
+    queue.push(null);
     this.failures.set(route, queue);
   }
 

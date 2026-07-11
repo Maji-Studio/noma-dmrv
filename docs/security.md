@@ -96,7 +96,9 @@ Inventory by group (app-validated in `src/config/env.ts`):
   `STORAGE_LOCAL_FS_ROOT`
 - **Isometric:** `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
   (both-or-neither), `ISOMETRIC_ENVIRONMENT`, `ISOMETRIC_UPLOAD_HOST_ALLOWLIST`,
-  `ISOMETRIC_STORAGE_REDIRECT_HOSTS` (document-redirect allowlist)
+  `ISOMETRIC_STORAGE_REDIRECT_HOSTS` (document-redirect allowlist),
+  `DURABILITY_MEASUREMENT_SAMPLES_LIVE` (sandbox-only opt-in; rejected in
+  production)
 - **Geo / maps** (all optional — graceful degradation): `OPENROUTESERVICE_API_KEY`
   (server-only geocode/routing), `NEXT_PUBLIC_MAPTILER_KEY` (public,
   domain-locked basemap key), `GEO_PROVIDER` (`ors` default; `stub` = hermetic
