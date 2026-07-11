@@ -4,6 +4,7 @@
  */
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
 import { eq } from "drizzle-orm";
 import { Resend } from "resend";
@@ -314,5 +315,6 @@ export const auth = betterAuth({
         }
       },
     }),
+    nextCookies(),
   ],
 });
