@@ -584,7 +584,7 @@ export async function deleteFeedstock(
       );
     }
 
-    await deleteTransportLegsForEntity(tx, "feedstock", feedstockId);
+    await deleteTransportLegsForEntity(ctx, tx, "feedstock", feedstockId);
     const result = await tx
       .delete(feedstocks)
       .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));

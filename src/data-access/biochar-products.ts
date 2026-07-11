@@ -909,7 +909,7 @@ export async function deleteBiocharProduct(
       );
     }
 
-    await deleteTransportLegsForEntity(tx, "biochar", productId);
+    await deleteTransportLegsForEntity(ctx, tx, "biochar", productId);
     await tx.delete(biocharProducts).where(and(eq(biocharProducts.id, productId), eq(biocharProducts.organizationId, ctx.organizationId)));
   });
 }
