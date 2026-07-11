@@ -37,6 +37,7 @@ let facilityId: string;
 let feedstockTypeId: string;
 
 const METHOD_B_UNLOCKED_AT = new Date("2026-02-01T00:00:00.000Z");
+const FAR_FUTURE_SAMPLING_TIME = new Date("2999-01-01T12:00:00.000Z");
 const METHOD_B_SAMPLE_WRITE_GUARDS_MIGRATION = resolve(
   process.cwd(),
   "drizzle/0062_process_method_b_sample_write_guards.sql",
@@ -292,10 +293,23 @@ describe("findOrCreateProductionProcess", () => {
       .returning({ id: samples.id });
     createdIds.samples.push(...insertedSamples.map((sample) => sample.id));
 
+    const [futureSample] = await db
+      .insert(samples)
+      .values({
+        organizationId: TEST_ORG_ID,
+        creditBatchId: sampledBatch.id,
+        sampleCode: `S-PROC-${runId}-FUTURE`,
+        samplingTime: FAR_FUTURE_SAMPLING_TIME,
+        totalCarbonPercent: 80,
+        organicCarbonPercent: 75,
+      })
+      .returning({ id: samples.id });
+    createdIds.samples.push(futureSample.id);
+
     const countsByProcess = await countEligibleSamplesByProcess(
       makeTestOrgContext(TEST_USER_ID),
       db,
-      { facilityId },
+      { facilityId, asOfDate: new Date() },
     );
     const summaries = await getProductionProcessSummariesByFacility(
       makeTestOrgContext(TEST_USER_ID),

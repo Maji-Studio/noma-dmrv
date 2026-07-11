@@ -46,6 +46,7 @@ export async function validateProcessSamplingMethodFn(
 
     const eligibility = await getMethodBEligibilityByProcess(orgCtx, {
       productionProcessId: validated.process_id,
+      asOfDate: new Date(),
     });
 
     const parsedWithEligibility = processSamplingMethodSchema.parse({
