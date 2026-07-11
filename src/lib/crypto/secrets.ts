@@ -13,6 +13,22 @@ const AUTH_TAG_LENGTH_BYTES = 16;
 const HEX_KEY_PATTERN = /^[0-9a-fA-F]{64}$/;
 const BASE64_KEY_PATTERN = /^[A-Za-z0-9+/]{43}=?$/;
 
+/**
+ * Validates a candidate `CREDENTIALS_ENCRYPTION_KEY`: a 32-byte key encoded as
+ * 64 hex characters or as base64. Shared with `@/config/env` so the env schema
+ * and the runtime decoder enforce identical rules from a single source.
+ */
+export function isValidCredentialsEncryptionKey(value: string): boolean {
+  if (HEX_KEY_PATTERN.test(value)) return true;
+  if (!BASE64_KEY_PATTERN.test(value)) return false;
+
+  const decoded = Buffer.from(value, "base64");
+  if (decoded.length !== KEY_LENGTH_BYTES) return false;
+  const normalizedInput = value.replace(/=+$/, "");
+  const normalizedDecoded = decoded.toString("base64").replace(/=+$/, "");
+  return normalizedDecoded === normalizedInput;
+}
+
 function decodeEncryptionKey(): Buffer {
   const configuredKey = process.env.CREDENTIALS_ENCRYPTION_KEY;
   if (!configuredKey) {
@@ -20,25 +36,13 @@ function decodeEncryptionKey(): Buffer {
       "CREDENTIALS_ENCRYPTION_KEY is required to encrypt or decrypt certifier credentials."
     );
   }
-
-  let key: Buffer;
-  if (HEX_KEY_PATTERN.test(configuredKey)) {
-    key = Buffer.from(configuredKey, "hex");
-  } else if (BASE64_KEY_PATTERN.test(configuredKey)) {
-    key = Buffer.from(configuredKey, "base64");
-    const normalizedInput = configuredKey.replace(/=+$/, "");
-    const normalizedDecoded = key.toString("base64").replace(/=+$/, "");
-    if (normalizedInput !== normalizedDecoded) {
-      throw malformedKeyError();
-    }
-  } else {
+  if (!isValidCredentialsEncryptionKey(configuredKey)) {
     throw malformedKeyError();
   }
-
-  if (key.length !== KEY_LENGTH_BYTES) {
-    throw malformedKeyError();
-  }
-  return key;
+  return Buffer.from(
+    configuredKey,
+    HEX_KEY_PATTERN.test(configuredKey) ? "hex" : "base64"
+  );
 }
 
 function malformedKeyError(): Error {
