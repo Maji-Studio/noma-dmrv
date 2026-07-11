@@ -280,8 +280,21 @@ describe("findOrCreateProductionProcess", () => {
       .returning({ id: samples.id });
     createdIds.samples.push(...insertedSamples.map((sample) => sample.id));
 
+    const [futureSample] = await db
+      .insert(samples)
+      .values({
+        creditBatchId: sampledBatch.id,
+        sampleCode: `S-PROC-${runId}-FUTURE`,
+        samplingTime: new Date("2999-01-01T12:00:00.000Z"),
+        totalCarbonPercent: 80,
+        organicCarbonPercent: 75,
+      })
+      .returning({ id: samples.id });
+    createdIds.samples.push(futureSample.id);
+
     const countsByProcess = await countEligibleSamplesByProcess(db, {
       facilityId,
+      asOfDate: new Date(),
     });
     const summaries = await getProductionProcessSummariesByFacility(
       TEST_USER_ID,

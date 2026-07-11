@@ -184,6 +184,9 @@ export async function getProductionProcessSummariesByFacility(
 
   const eligibleSamplesByProcess = await countEligibleSamplesByProcess(db, {
     facilityId,
+    // Match the transactional unlock guard: future-dated samples must not make
+    // the operator surface advertise an unlock that the mutation will reject.
+    asOfDate: new Date(),
   });
 
   // Per credit batch: its pooled replicate-sample count, grouped by process.
