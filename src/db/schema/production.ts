@@ -211,9 +211,9 @@ export const samples = pgTable('samples', {
   // Nullable — batch biochar can be commingled across runs. (Was the primary
   // link pre-0015; now secondary to creditBatchId.)
   productionRunId: uuid('production_run_id'),
-  // Globally unique (issue #395): DB-enforced so concurrent creates can't
-  // duplicate a code. Single-tenant today; #372 multi-tenancy may re-scope.
-  // Drizzle names the constraint `samples_sample_code_unique`.
+  // Unique per organization (issue #395, re-scoped for multi-tenancy #372):
+  // DB-enforced via `samples_organization_id_sample_code_unique` so concurrent
+  // creates can't duplicate a code within a tenant.
   sampleCode: text('sample_code').notNull(),
   samplingTime: timestamp('sampling_time').notNull(),
   weightGrams: real('weight_grams'),

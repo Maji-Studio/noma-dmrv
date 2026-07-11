@@ -134,6 +134,9 @@ export const certifierSensors = pgTable(
       .notNull()
       .references(() => organizations.id),
     provider: certifierProvider('provider').notNull().default('isometric'),
+    // Long-tail parent (plan §1.2): org integrity is app-enforced via
+    // assertSameOrg(ctx, reactors, …) in the certifier-sensors data access,
+    // not a composite FK (those are reserved for the seven hot-path parents).
     reactorId: uuid('reactor_id')
       .notNull()
       .references(() => reactors.id),

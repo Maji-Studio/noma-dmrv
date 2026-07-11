@@ -47,9 +47,8 @@ export const suppliers = pgTable(
       'suppliers_distance_to_facility_km_non_negative',
       sql`${table.distanceToFacilityKm} is null or ${table.distanceToFacilityKm} >= 0`
     ),
-    // Supplier name is globally unique, case- and whitespace-insensitive (issue
-    // #252). Global today; when multi-tenancy lands (ADR 0010) this joins
-    // organization_id. Reuse a retired name by renaming the old record.
+    // Supplier name is unique per organization, case- and whitespace-insensitive
+    // (issue #252, ADR 0010). Reuse a retired name by renaming the old record.
     uniqueIndex('suppliers_organization_id_name_unique').on(
       table.organizationId,
       sql`lower(trim(${table.name}))`
@@ -79,9 +78,8 @@ export const customers = pgTable(
   },
   (table) => [
     uniqueIndex('customers_organization_id_code_unique').on(table.organizationId, table.code),
-    // Customer name is globally unique, case- and whitespace-insensitive (issue
-    // #252). Global today; when multi-tenancy lands (ADR 0010) this joins
-    // organization_id. Reuse a retired name by renaming the old record.
+    // Customer name is unique per organization, case- and whitespace-insensitive
+    // (issue #252, ADR 0010). Reuse a retired name by renaming the old record.
     uniqueIndex('customers_organization_id_name_unique').on(
       table.organizationId,
       sql`lower(trim(${table.name}))`
