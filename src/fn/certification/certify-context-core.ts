@@ -47,6 +47,7 @@ import { SafeError } from "@/lib/errors";
 import {
   aggregateTransportMassDistance,
   collectTransportEntityIds,
+  getIsometricClientForOrg,
   listComponentBlueprints,
   listProjects,
   listGhgEntryTemplates,
@@ -451,9 +452,11 @@ export async function loadFacilityCertifierFacts(
     return { mapping: null, project: null, ...UNRESOLVED_FACILITY_FACTS };
   }
 
+  const client = await getIsometricClientForOrg(orgCtx.organizationId);
+
   const [projects, templates] = await Promise.all([
-    safeListIfConfigured(() => listProjects()),
-    safeListIfConfigured(() => listGhgEntryTemplates(mapping.externalProjectId)),
+    safeListIfConfigured(() => listProjects(client)),
+    safeListIfConfigured(() => listGhgEntryTemplates(client, mapping.externalProjectId)),
   ]);
   const project =
     projects.find((p) => p.id === mapping.externalProjectId) ?? null;
@@ -481,7 +484,7 @@ export async function loadFacilityCertifierFacts(
     ),
   );
   const allBlueprints = await safeListIfConfigured(() =>
-    listComponentBlueprints(),
+    listComponentBlueprints(client),
   );
   const blueprintByKey = new Map(allBlueprints.map((bp) => [bp.key, bp]));
   const blueprintsForTemplate: IsometricComponentBlueprint[] = [];

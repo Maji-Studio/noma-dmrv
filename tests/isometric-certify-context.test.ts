@@ -58,6 +58,7 @@ vi.mock("@/lib/isometric", async () => {
     await vi.importActual<typeof import("@/lib/isometric")>("@/lib/isometric");
   return {
     ...actual,
+    getIsometricClientForOrg: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
     listProjects: vi.fn(),
     listGhgEntryTemplates: vi.fn(),
     listComponentBlueprints: vi.fn(),

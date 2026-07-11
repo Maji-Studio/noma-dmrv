@@ -51,6 +51,11 @@ if (OPTED_IN && !SANDBOX_CONFIGURED) {
 
 const TEST_TIMEOUT_MS = 30_000;
 
+async function getEnvClient() {
+  const { getIsometricClientFromEnv } = await import("@/lib/isometric");
+  return getIsometricClientFromEnv();
+}
+
 describe.skipIf(!SANDBOX_CONFIGURED)(
   "Isometric sandbox read paths",
   () => {
@@ -58,7 +63,7 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
       "lists projects and includes the configured demo project",
       async () => {
         const { listProjects } = await import("@/lib/isometric");
-        const projects = await listProjects();
+        const projects = await listProjects(await getEnvClient());
         expect(projects.length).toBeGreaterThan(0);
         const demoId = process.env.ISOMETRIC_DEMO_PROJECT_ID as string;
         expect(projects.some((p) => p.id === demoId)).toBe(true);
@@ -71,7 +76,7 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
       async () => {
         const { listGhgEntryTemplates } = await import("@/lib/isometric");
         const demoId = process.env.ISOMETRIC_DEMO_PROJECT_ID as string;
-        const templates = await listGhgEntryTemplates(demoId);
+        const templates = await listGhgEntryTemplates(await getEnvClient(), demoId);
         expect(templates.length).toBeGreaterThan(0);
         for (const template of templates) {
           expect(typeof template.id).toBe("string");
@@ -86,11 +91,11 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
     it(
       "lists GHG entries via the renamed /ghg_entries route (rmv_ id shape preserved)",
       async () => {
-        const { isometric } = await import("@/lib/isometric");
+        const client = await getEnvClient();
         // Old Removals are the same resources, now retrievable via
         // /ghg_entries; their ids keep the rmv_ prefix after the rename.
         let count = 0;
-        for await (const entry of isometric.paginate<{ id: string }>(
+        for await (const entry of client.paginate<{ id: string }>(
           "/ghg_entries",
           { pageSize: 5 },
         )) {
@@ -113,7 +118,7 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
         const { findGhgEntryBySupplierRef } = await import("@/lib/isometric");
         const ref = process.env
           .ISOMETRIC_KNOWN_GHG_ENTRY_SUPPLIER_REF as string;
-        const entry = await findGhgEntryBySupplierRef(ref);
+        const entry = await findGhgEntryBySupplierRef(await getEnvClient(), ref);
         expect(entry).not.toBeNull();
         expect(entry?.id).toMatch(/^rmv_/);
       },
@@ -124,7 +129,7 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
       "lists component blueprints from the global catalog",
       async () => {
         const { listComponentBlueprints } = await import("@/lib/isometric");
-        const blueprints = await listComponentBlueprints();
+        const blueprints = await listComponentBlueprints(await getEnvClient());
         expect(blueprints.length).toBeGreaterThan(0);
         for (const blueprint of blueprints) {
           expect(typeof blueprint.key).toBe("string");
@@ -205,7 +210,7 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
         const { lookupInputMapping } = await import(
           "@/lib/isometric/transformers/datapoint"
         );
-        const templates = await listGhgEntryTemplates(PROJECT_ID);
+        const templates = await listGhgEntryTemplates(await getEnvClient(), PROJECT_ID);
         const template = pickTransportTemplate(templates);
         expect(
           template,
@@ -250,6 +255,7 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
         const { aggregateTransportMassDistance } = await import(
           "@/lib/isometric/utils/aggregation"
         );
+        const client = await getEnvClient();
 
         // Two feedstock legs: 60 km × 2 t + 40 km × 3 t = 240 t·km
         // (mass-weighted, same road factor → exact).
@@ -261,8 +267,8 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
         expect(agg.massDistanceTonneKm).toBe(240);
 
         const [templates, blueprints] = await Promise.all([
-          listGhgEntryTemplates(PROJECT_ID),
-          listComponentBlueprints(),
+          listGhgEntryTemplates(client, PROJECT_ID),
+          listComponentBlueprints(client),
         ]);
         const template = pickTransportTemplate(templates);
         expect(template, "transport template").toBeDefined();
@@ -297,7 +303,7 @@ describe.skipIf(!SANDBOX_CONFIGURED)(
         expect(body.quantity.magnitude).toBe(240);
         expect(body.quantity.unit).toBe("tonne * km");
 
-        const created = await createDatapoint(body);
+        const created = await createDatapoint(client, body);
         expect(created.id).toMatch(/^dtp_/);
       },
       TEST_TIMEOUT_MS,
@@ -324,7 +330,7 @@ describe.skipIf(!TELEMETRY_TEST_ENABLED)(
     it(
       "publishes a Parquet DataUploadSubmission and polls to a terminal status",
       async () => {
-        const { isometric } = await import("@/lib/isometric");
+        const client = await getEnvClient();
         const {
           createSensor,
           findSensorByReference,
@@ -354,9 +360,9 @@ describe.skipIf(!TELEMETRY_TEST_ENABLED)(
             reactorId,
             measurementProperty: prop,
           });
-          const existing = await findSensorByReference(reference);
+          const existing = await findSensorByReference(client, reference);
           if (!existing) {
-            await createSensor({
+            await createSensor(client, {
               facility_id: facilityId,
               measurement_property: prop,
               reference,
@@ -394,7 +400,7 @@ describe.skipIf(!TELEMETRY_TEST_ENABLED)(
         const parquetBytes = writeDataUploadParquet(aggregated);
         expect(parquetBytes.byteLength).toBeGreaterThan(0);
 
-        const fileUpload = await isometric.post<{
+        const fileUpload = await client.post<{
           id: string;
           upload_url: string;
         }>("/file-uploads", {
@@ -417,7 +423,7 @@ describe.skipIf(!TELEMETRY_TEST_ENABLED)(
         });
         expect(putRes.ok).toBe(true);
 
-        const submission = await isometric.post<{
+        const submission = await client.post<{
           id: string;
           status: string;
         }>("/data-upload-submissions", {
@@ -432,7 +438,7 @@ describe.skipIf(!TELEMETRY_TEST_ENABLED)(
         };
         for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt++) {
           await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-          terminal = await isometric.get<{
+          terminal = await client.get<{
             status: string;
             error_message?: string | null;
           }>(`/data-upload-submissions/${encodeURIComponent(submission.id)}`);

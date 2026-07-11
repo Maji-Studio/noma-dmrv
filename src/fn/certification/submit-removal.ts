@@ -19,11 +19,13 @@ import {
   buildRemovalSupplierRef,
   createDatapoint,
   createGhgEntry,
+  getIsometricClientForOrg,
   payloadHash,
   reconcileDatapoint,
   reconcileRemoval,
   type IsometricComponentBlueprint,
   type IsometricGhgEntryTemplate,
+  type IsometricClient,
 } from "@/lib/isometric";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
@@ -114,6 +116,7 @@ export async function submitRemoval(
   log.info("removal submit started");
 
   const ctx = await loadRemovalSubmissionContext(orgCtx, removalId);
+  const client = await getIsometricClientForOrg(orgCtx.organizationId);
   if (!ctx.mapping) {
     throw new SafeError("Link a facility to an Isometric project first.");
   }
@@ -450,6 +453,7 @@ export async function submitRemoval(
         ? readRemovalDurabilityMeasurementSamples(claimed.row)
         : null;
       return runRemovalSubmission({
+        client,
         orgCtx,
         removalId,
         row: claimed.row,
@@ -543,6 +547,7 @@ async function assertClaimedRemovalPayloadFresh(args: {
 }
 
 interface RunRemovalSubmissionArgs {
+  client: IsometricClient;
   orgCtx: OrgContext;
   removalId: string;
   row: CertificationSubmissionRow;
@@ -570,6 +575,7 @@ interface RunRemovalSubmissionArgs {
 }
 
 async function runRemovalSubmission({
+  client,
   orgCtx,
   removalId,
   row,
@@ -614,8 +620,8 @@ async function runRemovalSubmission({
       requestPayload: dp.body,
       supplierRefId,
       resumed,
-      create: () => createDatapoint(dp.body).then((d) => d.id),
-      reconcile: () => reconcileDatapoint({ supplierRefId }).then(supplierRefLookup),
+      create: () => createDatapoint(client, dp.body).then((d) => d.id),
+      reconcile: () => reconcileDatapoint(client, { supplierRefId }).then(supplierRefLookup),
       failureMessagePrefix: `Datapoint POST failed for "${dp.inputKey}"`,
       log,
     });
@@ -657,9 +663,9 @@ async function runRemovalSubmission({
     requestPayload: removalBody,
     supplierRefId: transport.removalSupplierRef,
     resumed,
-    create: () => createGhgEntry(removalBody).then((r) => r.id),
+    create: () => createGhgEntry(client, removalBody).then((r) => r.id),
     reconcile: () =>
-      reconcileRemoval({ supplierRefId: transport.removalSupplierRef }).then(
+      reconcileRemoval(client, { supplierRefId: transport.removalSupplierRef }).then(
         supplierRefLookup,
       ),
     failureMessagePrefix: "Removal POST failed",

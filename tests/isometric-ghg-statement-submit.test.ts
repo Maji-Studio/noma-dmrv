@@ -74,6 +74,7 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
   return {
     ...actual,
+    getIsometricClientForOrg: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
     createGhgStatement: vi.fn(),
     getGhgStatement: vi.fn(),
     submitGhgStatement: vi.fn(),
@@ -406,10 +407,13 @@ describe("createGhgStatementDraft — happy path", () => {
 
     // The remote POST was invoked with the period-first payload shape
     // Isometric requires (project_id + end_on only).
-    expect(isometric.createGhgStatement).toHaveBeenCalledExactlyOnceWith({
-      project_id: EXTERNAL_PROJECT_ID,
-      end_on: REPORTING_PERIOD_END,
-    });
+    expect(isometric.createGhgStatement).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Object),
+      {
+        project_id: EXTERNAL_PROJECT_ID,
+        end_on: REPORTING_PERIOD_END,
+      },
+    );
 
     // Ledger row transitioned draft → submitted carrying the external id.
     expect(storedLedger).toHaveLength(1);
@@ -595,6 +599,7 @@ describe("submitGhgStatementToVerifier — happy path", () => {
 
     // Submit body carries the operator-supplied report URL.
     expect(isometric.submitGhgStatement).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Object),
       EXTERNAL_STATEMENT_ID,
       { ghg_statement_report_url: REPORT_URL },
     );

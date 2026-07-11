@@ -13,6 +13,8 @@ import {
 import { requireAdminAction } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import {
+  getIsometricClientForOrg,
+  IsometricApiError,
   listProjects,
   listGhgEntryTemplates,
   type IsometricProject,
@@ -76,15 +78,17 @@ export async function loadFacilityCertifierMapping(
   facilityId: string,
 ): Promise<ActionResult<FacilityCertifierMapping>> {
   return withAction(async (orgCtx) => {
-    const [mapping, availableProjects, allLinkedFacilities] = await Promise.all([
+    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    const [mapping, projectCatalog, allLinkedFacilities] = await Promise.all([
       getCertifierProjectByFacility(orgCtx, facilityId, ISOMETRIC_PROVIDER),
-      safeListIfConfigured(() => listProjects()),
+      listProjectsWithConfiguration(client),
       listAllFacilitiesLinkedByProvider(orgCtx, ISOMETRIC_PROVIDER),
     ]);
+    const availableProjects = projectCatalog.projects;
 
     const availableTemplates = mapping
       ? await safeListIfConfigured(() =>
-          listGhgEntryTemplates(mapping.externalProjectId),
+          listGhgEntryTemplates(client, mapping.externalProjectId),
         )
       : [];
 
@@ -104,9 +108,22 @@ export async function loadFacilityCertifierMapping(
         linkedFacilities: hintsByProject.get(project.id) ?? [],
       })),
       isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
-      isConfigured: Boolean(env.ISOMETRIC_ACCESS_TOKEN),
+      isConfigured: projectCatalog.isConfigured,
     };
   });
+}
+
+async function listProjectsWithConfiguration(
+  client: import("@/lib/isometric").IsometricClient,
+): Promise<{ projects: IsometricProject[]; isConfigured: boolean }> {
+  try {
+    return { projects: await listProjects(client), isConfigured: true };
+  } catch (err) {
+    if (err instanceof IsometricApiError && err.code === "not_configured") {
+      return { projects: [], isConfigured: false };
+    }
+    throw err;
+  }
 }
 
 // Admin-only: this action rewires which Isometric project every future
@@ -129,12 +146,13 @@ export async function saveFacilityCertifierMapping(
       );
     }
 
-    const projects = await listProjects();
+    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    const projects = await listProjects(client);
     if (!projects.some((p) => p.id === parsed.externalProjectId)) {
       throw new SafeError("Selected project does not exist on Isometric.");
     }
     if (parsed.defaultRemovalTemplateId) {
-      const templates = await listGhgEntryTemplates(parsed.externalProjectId);
+      const templates = await listGhgEntryTemplates(client, parsed.externalProjectId);
       const selectedTemplate = templates.find(
         (t) => t.id === parsed.defaultRemovalTemplateId,
       );
@@ -177,8 +195,9 @@ export async function deleteFacilityCertifierMapping(
 export async function loadIsometricProjectTemplates(
   externalProjectId: string,
 ): Promise<ActionResult<IsometricGhgEntryTemplate[]>> {
-  return withAction(async () => {
-    return listGhgEntryTemplates(externalProjectId);
+  return withAction(async (orgCtx) => {
+    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    return listGhgEntryTemplates(client, externalProjectId);
   });
 }
 

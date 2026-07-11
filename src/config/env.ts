@@ -187,7 +187,7 @@ const envSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["ISOMETRIC_CLIENT_SECRET"],
       message:
-        "ISOMETRIC_CLIENT_SECRET and ISOMETRIC_ACCESS_TOKEN must either both be set or both be omitted",
+        "ISOMETRIC_CLIENT_SECRET and ISOMETRIC_ACCESS_TOKEN are seed/CI-only and must either both be set or both be omitted",
     });
   }
 
