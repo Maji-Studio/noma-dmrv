@@ -3,10 +3,11 @@
  * CRUD operations for incident reports associated with production runs
  */
 
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { incidentReports, operators, reactors, productionRuns } from "@/db/schema";
-import { requireAuth } from "./utils";
+import type { OrgContext } from "@/lib/auth/server";
+import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 
 export interface ProductionIncidentWithRelations {
@@ -46,32 +47,32 @@ const incidentSelect = {
 } as const;
 
 export async function getProductionIncidents(
-  userId: string,
+  ctx: OrgContext,
   productionRunId: string
 ): Promise<ProductionIncidentWithRelations[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   return db
     .select(incidentSelect)
     .from(incidentReports)
-    .leftJoin(operators, eq(incidentReports.operatorId, operators.id))
-    .leftJoin(reactors, eq(incidentReports.reactorId, reactors.id))
-    .where(eq(incidentReports.productionRunId, productionRunId))
+    .leftJoin(operators, and(eq(incidentReports.operatorId, operators.id), eq(operators.organizationId, ctx.organizationId)))
+    .leftJoin(reactors, and(eq(incidentReports.reactorId, reactors.id), eq(reactors.organizationId, ctx.organizationId)))
+    .where(and(eq(incidentReports.productionRunId, productionRunId), eq(incidentReports.organizationId, ctx.organizationId)))
     .orderBy(asc(incidentReports.incidentTime));
 }
 
 export async function getProductionIncidentById(
-  userId: string,
+  ctx: OrgContext,
   id: string
 ): Promise<ProductionIncidentWithRelations> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const rows = await db
     .select(incidentSelect)
     .from(incidentReports)
-    .leftJoin(operators, eq(incidentReports.operatorId, operators.id))
-    .leftJoin(reactors, eq(incidentReports.reactorId, reactors.id))
-    .where(eq(incidentReports.id, id));
+    .leftJoin(operators, and(eq(incidentReports.operatorId, operators.id), eq(operators.organizationId, ctx.organizationId)))
+    .leftJoin(reactors, and(eq(incidentReports.reactorId, reactors.id), eq(reactors.organizationId, ctx.organizationId)))
+    .where(and(eq(incidentReports.id, id), eq(incidentReports.organizationId, ctx.organizationId)));
 
   if (rows.length === 0) {
     throw new SafeError("Production incident not found");
@@ -81,7 +82,7 @@ export async function getProductionIncidentById(
 }
 
 export async function createProductionIncident(
-  userId: string,
+  ctx: OrgContext,
   data: {
     productionRunId: string;
     incidentTime: Date;
@@ -93,12 +94,15 @@ export async function createProductionIncident(
     notes?: string | null;
   }
 ): Promise<ProductionIncidentWithRelations> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
+
+  if (data.operatorId) await assertSameOrg(ctx, operators, data.operatorId);
+  if (data.reactorId) await assertSameOrg(ctx, reactors, data.reactorId);
 
   const [run] = await db
     .select({ id: productionRuns.id })
     .from(productionRuns)
-    .where(eq(productionRuns.id, data.productionRunId));
+    .where(and(eq(productionRuns.id, data.productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
 
   if (!run) {
     throw new SafeError("Production run not found");
@@ -107,6 +111,7 @@ export async function createProductionIncident(
   const [inserted] = await db
     .insert(incidentReports)
     .values({
+      organizationId: ctx.organizationId,
       productionRunId: data.productionRunId,
       incidentTime: data.incidentTime,
       incidentDate: data.incidentTime,
@@ -119,11 +124,11 @@ export async function createProductionIncident(
     })
     .returning({ id: incidentReports.id });
 
-  return getProductionIncidentById(userId, inserted.id);
+  return getProductionIncidentById(ctx, inserted.id);
 }
 
 export async function updateProductionIncident(
-  userId: string,
+  ctx: OrgContext,
   id: string,
   data: {
     incidentTime?: Date;
@@ -135,12 +140,15 @@ export async function updateProductionIncident(
     notes?: string | null;
   }
 ): Promise<ProductionIncidentWithRelations> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
+
+  if (data.operatorId) await assertSameOrg(ctx, operators, data.operatorId);
+  if (data.reactorId) await assertSameOrg(ctx, reactors, data.reactorId);
 
   const [existing] = await db
     .select({ id: incidentReports.id })
     .from(incidentReports)
-    .where(eq(incidentReports.id, id));
+    .where(and(eq(incidentReports.id, id), eq(incidentReports.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Production incident not found");
@@ -166,20 +174,20 @@ export async function updateProductionIncident(
   await db
     .update(incidentReports)
     .set(updateData)
-    .where(eq(incidentReports.id, id));
+    .where(and(eq(incidentReports.id, id), eq(incidentReports.organizationId, ctx.organizationId)));
 
-  return getProductionIncidentById(userId, id);
+  return getProductionIncidentById(ctx, id);
 }
 
 export async function deleteProductionIncident(
-  userId: string,
+  ctx: OrgContext,
   id: string
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const deleted = await db
     .delete(incidentReports)
-    .where(eq(incidentReports.id, id))
+    .where(and(eq(incidentReports.id, id), eq(incidentReports.organizationId, ctx.organizationId)))
     .returning({ id: incidentReports.id });
 
   if (deleted.length === 0) {

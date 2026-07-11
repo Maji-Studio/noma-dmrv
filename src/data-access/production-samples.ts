@@ -3,10 +3,11 @@
  * CRUD operations for in-process field measurements with auth guards
  */
 
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { productionSamples, operators } from "@/db/schema";
-import { requireAuth } from "./utils";
+import type { OrgContext } from "@/lib/auth/server";
+import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 
 // ============================================
@@ -63,16 +64,16 @@ const sampleSelect = {
  * Get all production samples for a specific production run
  */
 export async function getProductionSamples(
-  userId: string,
+  ctx: OrgContext,
   productionRunId: string
 ): Promise<ProductionSampleWithRelations[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   return db
     .select(sampleSelect)
     .from(productionSamples)
-    .leftJoin(operators, eq(productionSamples.sampledById, operators.id))
-    .where(eq(productionSamples.productionRunId, productionRunId))
+    .leftJoin(operators, and(eq(productionSamples.sampledById, operators.id), eq(operators.organizationId, ctx.organizationId)))
+    .where(and(eq(productionSamples.productionRunId, productionRunId), eq(productionSamples.organizationId, ctx.organizationId)))
     .orderBy(asc(productionSamples.timestamp));
 }
 
@@ -80,16 +81,16 @@ export async function getProductionSamples(
  * Get a single production sample by ID
  */
 export async function getProductionSampleById(
-  userId: string,
+  ctx: OrgContext,
   id: string
 ): Promise<ProductionSampleWithRelations> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const rows = await db
     .select(sampleSelect)
     .from(productionSamples)
-    .leftJoin(operators, eq(productionSamples.sampledById, operators.id))
-    .where(eq(productionSamples.id, id));
+    .leftJoin(operators, and(eq(productionSamples.sampledById, operators.id), eq(operators.organizationId, ctx.organizationId)))
+    .where(and(eq(productionSamples.id, id), eq(productionSamples.organizationId, ctx.organizationId)));
 
   if (rows.length === 0) {
     throw new SafeError("Production sample not found");
@@ -106,7 +107,7 @@ export async function getProductionSampleById(
  * Create a new production sample
  */
 export async function createProductionSample(
-  userId: string,
+  ctx: OrgContext,
   data: {
     productionRunId: string;
     sampleCode?: string | null;
@@ -123,11 +124,13 @@ export async function createProductionSample(
     notes?: string | null;
   }
 ): Promise<ProductionSampleWithRelations> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
+  if (data.sampledById) await assertSameOrg(ctx, operators, data.sampledById);
 
   const [inserted] = await db
     .insert(productionSamples)
     .values({
+      organizationId: ctx.organizationId,
       productionRunId: data.productionRunId,
       sampleCode: data.sampleCode ?? null,
       timestamp: data.timestamp,
@@ -144,7 +147,7 @@ export async function createProductionSample(
     })
     .returning({ id: productionSamples.id });
 
-  return getProductionSampleById(userId, inserted.id);
+  return getProductionSampleById(ctx, inserted.id);
 }
 
 // ============================================
@@ -155,7 +158,7 @@ export async function createProductionSample(
  * Update an existing production sample
  */
 export async function updateProductionSample(
-  userId: string,
+  ctx: OrgContext,
   id: string,
   data: {
     timestamp?: Date;
@@ -171,14 +174,15 @@ export async function updateProductionSample(
     notes?: string | null;
   }
 ): Promise<ProductionSampleWithRelations> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
+  if (data.sampledById) await assertSameOrg(ctx, operators, data.sampledById);
 
   await db
     .update(productionSamples)
     .set({ ...data, updatedAt: new Date() })
-    .where(eq(productionSamples.id, id));
+    .where(and(eq(productionSamples.id, id), eq(productionSamples.organizationId, ctx.organizationId)));
 
-  return getProductionSampleById(userId, id);
+  return getProductionSampleById(ctx, id);
 }
 
 // ============================================
@@ -189,14 +193,14 @@ export async function updateProductionSample(
  * Delete a production sample
  */
 export async function deleteProductionSample(
-  userId: string,
+  ctx: OrgContext,
   id: string
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const deleted = await db
     .delete(productionSamples)
-    .where(eq(productionSamples.id, id))
+    .where(and(eq(productionSamples.id, id), eq(productionSamples.organizationId, ctx.organizationId)))
     .returning({ id: productionSamples.id });
 
   if (deleted.length === 0) {

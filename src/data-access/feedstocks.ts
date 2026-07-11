@@ -18,7 +18,8 @@ import {
   productionRunFeedstocks,
 } from "@/db/schema";
 import type { FeedstockFilterData } from "@/schemas/feedstocks";
-import { requireAuth } from "./utils";
+import type { OrgContext } from "@/lib/auth/server";
+import { assertSameOrg, requireOrgScope } from "./utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { deriveTransportLeg, positiveOrNull } from "@/lib/calculations/transport-leg";
 import {
@@ -147,15 +148,15 @@ const feedstockSelectFields = {
   storageLocationCode: storageLocations.code,
 } as const;
 
-function feedstockBaseQuery() {
+function feedstockBaseQuery(ctx: OrgContext) {
   return db
     .select(feedstockSelectFields)
     .from(feedstocks)
-    .leftJoin(facilities, eq(feedstocks.facilityId, facilities.id))
-    .leftJoin(suppliers, eq(feedstocks.supplierId, suppliers.id))
-    .leftJoin(vehicles, eq(feedstocks.vehicleId, vehicles.id))
-    .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
-    .leftJoin(storageLocations, eq(feedstocks.storageLocationId, storageLocations.id));
+    .leftJoin(facilities, and(eq(feedstocks.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(suppliers, and(eq(feedstocks.supplierId, suppliers.id), eq(suppliers.organizationId, ctx.organizationId)))
+    .leftJoin(vehicles, and(eq(feedstocks.vehicleId, vehicles.id), eq(vehicles.organizationId, ctx.organizationId)))
+    .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
+    .leftJoin(storageLocations, and(eq(feedstocks.storageLocationId, storageLocations.id), eq(storageLocations.organizationId, ctx.organizationId)));
 }
 
 // ============================================
@@ -163,10 +164,10 @@ function feedstockBaseQuery() {
 // ============================================
 
 export async function getFeedstocks(
-  userId: string,
+  ctx: OrgContext,
   filters?: Partial<FeedstockFilterData>
 ): Promise<PaginatedFeedstocks> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const {
     search,
@@ -184,7 +185,10 @@ export async function getFeedstocks(
   } = filters ?? {};
 
   // Archived feedstocks (facility archive cascade) are hidden
-  const conditions: SQL[] = [isNull(feedstocks.archivedAt)];
+  const conditions: SQL[] = [
+    eq(feedstocks.organizationId, ctx.organizationId),
+    isNull(feedstocks.archivedAt),
+  ];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -231,16 +235,16 @@ export async function getFeedstocks(
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(feedstocks)
-    .leftJoin(suppliers, eq(feedstocks.supplierId, suppliers.id))
-    .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
-    .leftJoin(storageLocations, eq(feedstocks.storageLocationId, storageLocations.id))
+    .leftJoin(suppliers, and(eq(feedstocks.supplierId, suppliers.id), eq(suppliers.organizationId, ctx.organizationId)))
+    .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
+    .leftJoin(storageLocations, and(eq(feedstocks.storageLocationId, storageLocations.id), eq(storageLocations.organizationId, ctx.organizationId)))
     .where(whereClause);
 
   const total = Number(totalCount);
   const totalPages = Math.ceil(total / pageSize);
   const offset = (page - 1) * pageSize;
 
-  const items = await feedstockBaseQuery()
+  const items = await feedstockBaseQuery(ctx)
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
@@ -250,12 +254,12 @@ export async function getFeedstocks(
 }
 
 export async function getFeedstockById(
-  userId: string,
+  ctx: OrgContext,
   feedstockId: string
 ): Promise<FeedstockWithRelations> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const [item] = await feedstockBaseQuery().where(eq(feedstocks.id, feedstockId));
+  const [item] = await feedstockBaseQuery(ctx).where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
 
   if (!item) {
     throw new SafeError("Feedstock not found");
@@ -265,12 +269,15 @@ export async function getFeedstockById(
 }
 
 export async function getFeedstockStats(
-  userId: string,
+  ctx: OrgContext,
   facilityId?: string
 ): Promise<FeedstockStats> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [isNull(feedstocks.archivedAt)];
+  const conditions: SQL[] = [
+    eq(feedstocks.organizationId, ctx.organizationId),
+    isNull(feedstocks.archivedAt),
+  ];
   if (facilityId) conditions.push(eq(feedstocks.facilityId, facilityId));
   const whereClause = and(...conditions);
 
@@ -299,11 +306,19 @@ export async function getFeedstockStats(
 // ============================================
 
 export async function createFeedstock(
-  userId: string,
+  ctx: OrgContext,
   data: CreateFeedstockInput,
   codesFn: (count: number) => Promise<string[]>
 ): Promise<CreateFeedstockResult> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
+  await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId);
+  await assertSameOrg(ctx, suppliers, data.supplierId);
+  if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
+  await Promise.all(
+    data.allocations.map((allocation) =>
+      assertSameOrg(ctx, storageLocations, allocation.storageLocationId),
+    ),
+  );
 
   const allocatedTotalWetKg = data.allocations.reduce((sum, a) => sum + a.allocatedWetMassKg, 0);
   const deliveryGroupId = data.allocations.length > 1 ? crypto.randomUUID() : null;
@@ -312,7 +327,7 @@ export async function createFeedstock(
   const [feedstockType] = await db
     .select({ id: feedstockTypes.id })
     .from(feedstockTypes)
-    .where(eq(feedstockTypes.id, data.feedstockTypeId));
+    .where(and(eq(feedstockTypes.id, data.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
 
   if (!feedstockType) {
     throw new SafeError("Feedstock type not found");
@@ -328,7 +343,7 @@ export async function createFeedstock(
       facilityId: storageLocations.facilityId,
     })
     .from(storageLocations)
-    .where(inArray(storageLocations.id, binIds));
+    .where(and(inArray(storageLocations.id, binIds), eq(storageLocations.organizationId, ctx.organizationId)));
 
   const binMap = new Map(bins.map((b) => [b.id, b]));
   for (const allocation of data.allocations) {
@@ -368,6 +383,7 @@ export async function createFeedstock(
       const [feedstock] = await tx
         .insert(feedstocks)
         .values({
+          organizationId: ctx.organizationId,
           code: codes[i],
           facilityId: data.facilityId,
           status,
@@ -398,6 +414,7 @@ export async function createFeedstock(
         .where(
           and(
             eq(storageLocations.id, allocation.storageLocationId),
+            eq(storageLocations.organizationId, ctx.organizationId),
             sql`${storageLocations.feedstockTypeId} is null`
           )
         );
@@ -407,8 +424,8 @@ export async function createFeedstock(
   });
 
   // Fetch the created records with relations in one query
-  const items = await feedstockBaseQuery()
-    .where(inArray(feedstocks.id, createdFeedstocks));
+  const items = await feedstockBaseQuery(ctx)
+    .where(and(inArray(feedstocks.id, createdFeedstocks), eq(feedstocks.organizationId, ctx.organizationId)));
 
   // Generate warning if allocated wet mass > total delivery wet mass
   let warning: string | null = null;
@@ -424,7 +441,7 @@ export async function createFeedstock(
 // ============================================
 
 export async function updateFeedstock(
-  userId: string,
+  ctx: OrgContext,
   feedstockId: string,
   data: {
     facilityId?: string;
@@ -442,12 +459,16 @@ export async function updateFeedstock(
     notes?: string | null;
   }
 ): Promise<FeedstockWithRelations> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
+  if (data.supplierId) await assertSameOrg(ctx, suppliers, data.supplierId);
+  if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
+  if (data.feedstockTypeId) await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId);
+  if (data.storageLocationId) await assertSameOrg(ctx, storageLocations, data.storageLocationId);
 
   const [existing] = await db
     .select()
     .from(feedstocks)
-    .where(eq(feedstocks.id, feedstockId));
+    .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Feedstock not found");
@@ -463,7 +484,7 @@ export async function updateFeedstock(
     const [ft] = await db
       .select({ id: feedstockTypes.id })
       .from(feedstockTypes)
-      .where(eq(feedstockTypes.id, typeId));
+      .where(and(eq(feedstockTypes.id, typeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
 
     if (!ft) {
       throw new SafeError("Feedstock type not found");
@@ -477,7 +498,7 @@ export async function updateFeedstock(
           facilityId: storageLocations.facilityId,
         })
         .from(storageLocations)
-        .where(eq(storageLocations.id, binId));
+        .where(and(eq(storageLocations.id, binId), eq(storageLocations.organizationId, ctx.organizationId)));
 
       if (!bin) {
         throw new SafeError(`Storage bin not found: ${binId}`);
@@ -516,10 +537,10 @@ export async function updateFeedstock(
         status,
         updatedAt: new Date(),
       })
-      .where(eq(feedstocks.id, feedstockId));
+      .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
   });
 
-  return getFeedstockById(userId, feedstockId);
+  return getFeedstockById(ctx, feedstockId);
 }
 
 // ============================================
@@ -527,15 +548,15 @@ export async function updateFeedstock(
 // ============================================
 
 export async function deleteFeedstock(
-  userId: string,
+  ctx: OrgContext,
   feedstockId: string
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [existing] = await db
     .select({ id: feedstocks.id })
     .from(feedstocks)
-    .where(eq(feedstocks.id, feedstockId));
+    .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Feedstock not found");
@@ -552,7 +573,7 @@ export async function deleteFeedstock(
     const [usageCount] = await tx
       .select({ count: count() })
       .from(productionRunFeedstocks)
-      .where(eq(productionRunFeedstocks.feedstockId, feedstockId));
+      .where(and(eq(productionRunFeedstocks.feedstockId, feedstockId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
 
     if (Number(usageCount.count) > 0) {
       throw new SafeError(
@@ -563,7 +584,7 @@ export async function deleteFeedstock(
     await deleteTransportLegsForEntity(tx, "feedstock", feedstockId);
     const result = await tx
       .delete(feedstocks)
-      .where(eq(feedstocks.id, feedstockId));
+      .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
     if (result.rowCount === 0) {
       throw new SafeError("Feedstock not found");
     }
@@ -575,13 +596,16 @@ export async function deleteFeedstock(
 // ============================================
 
 export async function isFeedstockCodeAvailable(
-  userId: string,
+  ctx: OrgContext,
   code: string,
   excludeId?: string
 ): Promise<boolean> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [eq(feedstocks.code, code)];
+  const conditions: SQL[] = [
+    eq(feedstocks.organizationId, ctx.organizationId),
+    eq(feedstocks.code, code),
+  ];
   if (excludeId) {
     conditions.push(sql`${feedstocks.id} != ${excludeId}`);
   }
@@ -598,9 +622,9 @@ export async function isFeedstockCodeAvailable(
  * Get feedstock options for dropdowns (e.g., production run feedstock selection)
  */
 export async function getFeedstockOptions(
-  userId: string
+  ctx: OrgContext
 ): Promise<Array<{ id: string; code: string; massDryKg: number; feedstockTypeName: string | null }>> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   return db
     .select({
@@ -610,8 +634,8 @@ export async function getFeedstockOptions(
       feedstockTypeName: feedstockTypes.name,
     })
     .from(feedstocks)
-    .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
-    .where(isNull(feedstocks.archivedAt))
+    .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
+    .where(and(isNull(feedstocks.archivedAt), eq(feedstocks.organizationId, ctx.organizationId)))
     .orderBy(desc(feedstocks.createdAt));
 }
 
@@ -629,7 +653,7 @@ export async function getFeedstockOptions(
  * plan, decision 3). Call after every feedstock create/update.
  */
 export async function syncFeedstockTransportLeg(
-  userId: string,
+  ctx: OrgContext,
   feedstockId: string,
   distanceOverride?: {
     distanceKm?: number | null;
@@ -637,7 +661,7 @@ export async function syncFeedstockTransportLeg(
     tripType?: "return" | "one_way" | null;
   },
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [row] = await db
     .select({
@@ -659,17 +683,18 @@ export async function syncFeedstockTransportLeg(
       loadMassKg: feedstocks.massWetKg,
     })
     .from(feedstocks)
-    .leftJoin(suppliers, eq(feedstocks.supplierId, suppliers.id))
+    .leftJoin(suppliers, and(eq(feedstocks.supplierId, suppliers.id), eq(suppliers.organizationId, ctx.organizationId)))
     .leftJoin(
       supplierLocations,
       and(
         eq(supplierLocations.supplierId, suppliers.id),
         eq(supplierLocations.isDefault, true),
+        eq(supplierLocations.organizationId, ctx.organizationId),
       ),
     )
-    .leftJoin(facilities, eq(feedstocks.facilityId, facilities.id))
-    .leftJoin(vehicles, eq(feedstocks.vehicleId, vehicles.id))
-    .where(eq(feedstocks.id, feedstockId));
+    .leftJoin(facilities, and(eq(feedstocks.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(vehicles, and(eq(feedstocks.vehicleId, vehicles.id), eq(vehicles.organizationId, ctx.organizationId)))
+    .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
 
   if (!row) return;
 
@@ -708,7 +733,7 @@ export async function syncFeedstockTransportLeg(
     tripType: distanceOverride?.tripType,
   });
 
-  await replaceDerivedTransportLeg(userId, "feedstock", feedstockId, derived);
+  await replaceDerivedTransportLeg(ctx.userId, "feedstock", feedstockId, derived);
 }
 
 // ============================================

@@ -13,6 +13,8 @@ import { productionRuns } from "@/db/schema";
 import { formatLocalDate, formatLocalTime } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import type { DbTransaction } from "@/db";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "../utils";
 
 /** A reference to the run a candidate window collides with. */
 export interface RunConflict {
@@ -84,6 +86,7 @@ function overlapMessage(conflict: {
  * `selfId` on the edit path to exclude the run being edited.
  */
 export async function assertNoReactorRunOverlap(
+  ctx: OrgContext,
   tx: DbTransaction,
   params: {
     reactorId: string;
@@ -92,12 +95,14 @@ export async function assertNoReactorRunOverlap(
     selfId?: string;
   },
 ): Promise<void> {
+  requireOrgScope(ctx);
   const { reactorId, startTime, endTime, selfId } = params;
 
   // Serialize concurrent writers on this reactor for the rest of the tx.
   await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${reactorId}))`);
 
   const conditions: SQL[] = [
+    eq(productionRuns.organizationId, ctx.organizationId),
     eq(productionRuns.reactorId, reactorId),
     ne(productionRuns.status, "void"),
     isNull(productionRuns.archivedAt),

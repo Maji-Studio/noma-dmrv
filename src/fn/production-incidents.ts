@@ -13,7 +13,7 @@ import {
   deleteProductionIncident,
   type ProductionIncidentWithRelations,
 } from "@/data-access/production-incidents";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import {
   createProductionIncidentSchema,
   updateProductionIncidentSchema,
@@ -31,29 +31,18 @@ function logServerError(context: string, error: unknown): void {
   console.error(`[production-incidents] ${context}`, error);
 }
 
-async function requireAuth() {
-  const user = await getUser();
-  if (!user?.id) {
-    return null;
-  }
-  return user;
-}
-
 export async function getProductionIncidentsFn(
   productionRunId: string
 ): Promise<ActionResult<ProductionIncidentWithRelations[]>> {
   try {
-    const user = await requireAuth();
-    if (!user) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validatedProductionRunId = productionRunIdSchema.safeParse(productionRunId);
     if (!validatedProductionRunId.success) {
       return { success: false, error: "Invalid input" };
     }
 
-    const incidents = await getProductionIncidentsData(user.id, validatedProductionRunId.data);
+    const incidents = await getProductionIncidentsData(ctx, validatedProductionRunId.data);
     return { success: true, data: incidents };
   } catch (error) {
     logServerError("getProductionIncidentsFn failed", error);
@@ -68,14 +57,11 @@ export async function createProductionIncidentFn(
   data: z.infer<typeof createProductionIncidentSchema>
 ): Promise<ActionResult<ProductionIncidentWithRelations>> {
   try {
-    const user = await requireAuth();
-    if (!user) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = createProductionIncidentSchema.parse(data);
 
-    const incident = await createProductionIncident(user.id, {
+    const incident = await createProductionIncident(ctx, {
       productionRunId: validated.productionRunId,
       incidentTime:
         validated.incidentTime instanceof Date
@@ -109,15 +95,12 @@ export async function updateProductionIncidentFn(
   data: z.infer<typeof updateProductionIncidentSchema>
 ): Promise<ActionResult<ProductionIncidentWithRelations>> {
   try {
-    const user = await requireAuth();
-    if (!user) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = updateProductionIncidentSchema.parse(data);
 
     const incident = await updateProductionIncident(
-      user.id,
+      ctx,
       validated.productionIncidentId,
       {
         incidentTime:
@@ -153,13 +136,10 @@ export async function deleteProductionIncidentFn(
   data: z.infer<typeof deleteProductionIncidentSchema>
 ): Promise<ActionResult<void>> {
   try {
-    const user = await requireAuth();
-    if (!user) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = deleteProductionIncidentSchema.parse(data);
-    await deleteProductionIncident(user.id, validated.productionIncidentId);
+    await deleteProductionIncident(ctx, validated.productionIncidentId);
 
     return { success: true, data: undefined };
   } catch (error) {

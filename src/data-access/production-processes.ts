@@ -42,7 +42,8 @@ import type {
   UnlockMethodBInput,
 } from "@/schemas/production-process";
 import { countEligibleSamplesByProcess } from "./isometric";
-import { requireAuth } from "./utils";
+import type { OrgContext } from "@/lib/auth/server";
+import { assertSameOrg, requireOrgScope } from "./utils";
 
 type Executor = DbTransaction | typeof db;
 const PRODUCTION_PROCESS_CURRENT_LOCK_SCOPE = "production-process-current";
@@ -69,18 +70,19 @@ async function lockCurrentProductionProcess(
  * caller's tx keeps it atomic with the batch insert).
  */
 export async function findOrCreateProductionProcess(
-  userId: string,
+  ctx: OrgContext,
   params: { facilityId: string; feedstockTypeId: string },
   executor: Executor = db,
 ): Promise<ProductionProcess> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   if (executor === db) {
     return db.transaction((tx) =>
-      findOrCreateProductionProcess(userId, params, tx),
+      findOrCreateProductionProcess(ctx, params, tx),
     );
   }
 
+  await assertSameOrg(ctx, feedstockTypes, params.feedstockTypeId);
   await lockCurrentProductionProcess(executor, params);
 
   const [existing] = await executor
@@ -90,6 +92,7 @@ export async function findOrCreateProductionProcess(
       and(
         eq(productionProcesses.facilityId, params.facilityId),
         eq(productionProcesses.feedstockTypeId, params.feedstockTypeId),
+        eq(productionProcesses.organizationId, ctx.organizationId),
       ),
     )
     .orderBy(desc(productionProcesses.establishedAt))
@@ -100,6 +103,7 @@ export async function findOrCreateProductionProcess(
   const [created] = await executor
     .insert(productionProcesses)
     .values({
+      organizationId: ctx.organizationId,
       facilityId: params.facilityId,
       feedstockTypeId: params.feedstockTypeId,
     })
@@ -153,10 +157,10 @@ export interface ProductionProcessSummary {
 }
 
 export async function getProductionProcessSummariesByFacility(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string,
 ): Promise<ProductionProcessSummary[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const processRows = await db
     .select({
@@ -175,9 +179,12 @@ export async function getProductionProcessSummariesByFacility(
     .from(productionProcesses)
     .innerJoin(
       feedstockTypes,
-      eq(feedstockTypes.id, productionProcesses.feedstockTypeId),
+      and(
+        eq(feedstockTypes.id, productionProcesses.feedstockTypeId),
+        eq(feedstockTypes.organizationId, ctx.organizationId),
+      ),
     )
-    .where(eq(productionProcesses.facilityId, facilityId))
+    .where(and(eq(productionProcesses.facilityId, facilityId), eq(productionProcesses.organizationId, ctx.organizationId)))
     .orderBy(desc(productionProcesses.establishedAt));
 
   if (processRows.length === 0) return [];
@@ -196,8 +203,8 @@ export async function getProductionProcessSummariesByFacility(
       sampleCount: count(samples.id).mapWith(Number),
     })
     .from(creditBatches)
-    .leftJoin(samples, eq(samples.creditBatchId, creditBatches.id))
-    .where(eq(creditBatches.facilityId, facilityId))
+    .leftJoin(samples, and(eq(samples.creditBatchId, creditBatches.id), eq(samples.organizationId, ctx.organizationId)))
+    .where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId)))
     .groupBy(creditBatches.id);
 
   const batchesByProcess = new Map<
@@ -262,22 +269,21 @@ export async function getProductionProcessSummariesByFacility(
  * app gate. Idempotent only in the sense that a re-unlock of an
  * already-Method-B process is rejected, not silently re-stamped.
  *
- * Per-facility membership authz (`requireFacilityAccess`) lands with the
- * multi-tenancy work (ADR 0010); `requireAuth` matches every mutation in this
- * layer today. Facility managers may unlock (ADR 0017 D4); the guardrail is the
- * captured prerequisites, not a narrower role gate.
+ * Organization scope is enforced in this layer. Facility managers may unlock
+ * (ADR 0017 D4); the guardrail is the captured prerequisites, not a narrower
+ * role gate.
  */
 export async function unlockMethodBForProcess(
-  userId: string,
+  ctx: OrgContext,
   input: UnlockMethodBInput,
 ): Promise<ProductionProcess> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   return db.transaction(async (tx) => {
     const [process] = await tx
       .select()
       .from(productionProcesses)
-      .where(eq(productionProcesses.id, input.processId))
+      .where(and(eq(productionProcesses.id, input.processId), eq(productionProcesses.organizationId, ctx.organizationId)))
       .for("update")
       .limit(1);
 
@@ -324,7 +330,7 @@ export async function unlockMethodBForProcess(
         moisturePathway: input.moisturePathway,
         updatedAt: now,
       })
-      .where(eq(productionProcesses.id, input.processId))
+      .where(and(eq(productionProcesses.id, input.processId), eq(productionProcesses.organizationId, ctx.organizationId)))
       .returning();
 
     return updated;
@@ -347,6 +353,7 @@ export interface ProcessCarbonPreview {
  * (`filterEligibleSamples`) belongs to the engine/read path, not this loader.
  */
 async function loadProcessSamples(
+  ctx: OrgContext,
   productionProcessId: string,
 ): Promise<EligibleSampleDatum[]> {
   return db
@@ -356,8 +363,8 @@ async function loadProcessSamples(
       creditBatchId: samples.creditBatchId,
     })
     .from(samples)
-    .innerJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
-    .where(eq(creditBatches.productionProcessId, productionProcessId));
+    .innerJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
+    .where(and(eq(creditBatches.productionProcessId, productionProcessId), eq(samples.organizationId, ctx.organizationId)));
 }
 
 /**
@@ -369,14 +376,14 @@ async function loadProcessSamples(
  * number (D1) — this drives the operator preview only.
  */
 export async function getUnsampledCarbonPreviewForProcess(
-  userId: string,
+  ctx: OrgContext,
   productionProcessId: string,
   asOfDate?: Date,
 ): Promise<ProcessCarbonPreview> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const asOf = asOfDate ?? new Date();
-  const rows = await loadProcessSamples(productionProcessId);
+  const rows = await loadProcessSamples(ctx, productionProcessId);
   const preview = previewUnsampledCarbon(rows, { asOfDate: asOf });
 
   return {
@@ -403,11 +410,11 @@ export interface ProcessComplianceDriftResult {
  * — the registry is the detector of record (D6); noma never auto-acts.
  */
 export async function getProcessComplianceDrift(
-  userId: string,
+  ctx: OrgContext,
   productionProcessId: string,
   asOfDate?: Date,
 ): Promise<ProcessComplianceDriftResult> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const asOf = asOfDate ?? new Date();
   const cutoff = eligibleWindowCutoff(asOf);
@@ -415,7 +422,7 @@ export async function getProcessComplianceDrift(
   const [process] = await db
     .select({ samplingMethod: productionProcesses.samplingMethod })
     .from(productionProcesses)
-    .where(eq(productionProcesses.id, productionProcessId))
+    .where(and(eq(productionProcesses.id, productionProcessId), eq(productionProcesses.organizationId, ctx.organizationId)))
     .limit(1);
   if (!process) {
     throw new Error("Production process not found");
@@ -432,10 +439,10 @@ export async function getProcessComplianceDrift(
         sampleCount: count(samples.id).mapWith(Number),
       })
       .from(creditBatches)
-      .leftJoin(samples, eq(samples.creditBatchId, creditBatches.id))
-      .where(eq(creditBatches.productionProcessId, productionProcessId))
+      .leftJoin(samples, and(eq(samples.creditBatchId, creditBatches.id), eq(samples.organizationId, ctx.organizationId)))
+      .where(and(eq(creditBatches.productionProcessId, productionProcessId), eq(creditBatches.organizationId, ctx.organizationId)))
       .groupBy(creditBatches.id),
-    loadProcessSamples(productionProcessId),
+    loadProcessSamples(ctx, productionProcessId),
   ]);
 
   // Both windows use the SAME half-open `[cutoff, asOf)` boundary
@@ -482,10 +489,11 @@ export async function getProcessComplianceDrift(
  * longer receives new batches. Never auto-invoked.
  */
 export async function startNewProductionProcess(
-  userId: string,
+  ctx: OrgContext,
   params: { facilityId: string; feedstockTypeId: string; notes?: string | null },
 ): Promise<ProductionProcess> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
+  await assertSameOrg(ctx, feedstockTypes, params.feedstockTypeId);
 
   return db.transaction(async (tx) => {
     // Serialise against find-or-create for the same pair so a batch insert can't
@@ -495,6 +503,7 @@ export async function startNewProductionProcess(
     const [created] = await tx
       .insert(productionProcesses)
       .values({
+        organizationId: ctx.organizationId,
         facilityId: params.facilityId,
         feedstockTypeId: params.feedstockTypeId,
         notes: params.notes ?? null,

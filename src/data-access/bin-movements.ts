@@ -7,7 +7,7 @@
  * per-lane sums feed the storage-location derivation overlay.
  */
 
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   binMovements,
@@ -17,7 +17,8 @@ import {
 } from "@/db/schema";
 import type { BinMovementLane, BinMovementType } from "@/schemas/bin-movements";
 import { laneForStorageType } from "@/schemas/bin-movements";
-import { requireAuth } from "./utils";
+import type { OrgContext } from "@/lib/auth/server";
+import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 
 // ============================================
@@ -57,10 +58,10 @@ export interface CreateBinMovementInput {
  * into derived stock. Guarded because it is a data-access read.
  */
 export async function getBinMovementLaneSums(
-  userId: string,
+  ctx: OrgContext,
   storageLocationIds: string[]
 ): Promise<BinMovementLaneSum[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   if (storageLocationIds.length === 0) return [];
 
   const rows = await db
@@ -70,7 +71,7 @@ export async function getBinMovementLaneSums(
       totalDeltaKg: sql<number>`COALESCE(SUM(${binMovements.massDeltaKg}), 0)`,
     })
     .from(binMovements)
-    .where(inArray(binMovements.storageLocationId, storageLocationIds))
+    .where(and(inArray(binMovements.storageLocationId, storageLocationIds), eq(binMovements.organizationId, ctx.organizationId)))
     .groupBy(binMovements.storageLocationId, binMovements.lane);
 
   return rows.map((row) => ({
@@ -84,10 +85,10 @@ export async function getBinMovementLaneSums(
  * Full movement history for a bin, newest first — the verifier-facing audit log.
  */
 export async function getBinMovements(
-  userId: string,
+  ctx: OrgContext,
   storageLocationId: string
 ): Promise<BinMovementWithActor[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const rows = await db
     .select({
@@ -96,7 +97,7 @@ export async function getBinMovements(
     })
     .from(binMovements)
     .leftJoin(users, eq(binMovements.createdBy, users.id))
-    .where(eq(binMovements.storageLocationId, storageLocationId))
+    .where(and(eq(binMovements.storageLocationId, storageLocationId), eq(binMovements.organizationId, ctx.organizationId)))
     .orderBy(desc(binMovements.createdAt));
 
   return rows.map((row) => ({
@@ -110,15 +111,16 @@ export async function getBinMovements(
 // ============================================
 
 export async function createBinMovement(
-  userId: string,
+  ctx: OrgContext,
   input: CreateBinMovementInput
 ): Promise<BinMovement> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
+  await assertSameOrg(ctx, storageLocations, input.storageLocationId);
 
   const [location] = await db
     .select({ id: storageLocations.id, type: storageLocations.type })
     .from(storageLocations)
-    .where(eq(storageLocations.id, input.storageLocationId));
+    .where(and(eq(storageLocations.id, input.storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (!location) {
     throw new SafeError("Storage location not found");
@@ -139,12 +141,13 @@ export async function createBinMovement(
   const [movement] = await db
     .insert(binMovements)
     .values({
+      organizationId: ctx.organizationId,
       storageLocationId: input.storageLocationId,
       lane: input.lane,
       movementType: input.movementType,
       massDeltaKg: input.massDeltaKg,
       reason: input.reason,
-      createdBy: userId,
+      createdBy: ctx.userId,
       countedMassKg: input.countedMassKg ?? null,
       derivedMassKgAtTime: input.derivedMassKgAtTime ?? null,
       countedWetMassKg: input.countedWetMassKg ?? null,

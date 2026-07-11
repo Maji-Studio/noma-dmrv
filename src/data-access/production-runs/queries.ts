@@ -34,7 +34,8 @@ import {
   samples,
   type Sample,
 } from "@/db/schema";
-import { requireAuth } from "../utils";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "../utils";
 import { SafeError } from "@/lib/errors";
 import { productionRunDateExpr } from "./date-expr";
 import type { ProductionRunFilterData } from "@/schemas/production-runs";
@@ -52,10 +53,10 @@ import type {
  * Supports search, facility/reactor filter, date range, sorting, and pagination
  */
 export async function getProductionRuns(
-  userId: string,
+  ctx: OrgContext,
   filters?: Partial<ProductionRunFilterData>
 ): Promise<PaginatedProductionRuns> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const {
     search,
@@ -71,7 +72,10 @@ export async function getProductionRuns(
   } = filters ?? {};
 
   // Build where conditions — archived runs (facility archive cascade) are hidden
-  const conditions: SQL[] = [isNull(productionRuns.archivedAt)];
+  const conditions: SQL[] = [
+    eq(productionRuns.organizationId, ctx.organizationId),
+    isNull(productionRuns.archivedAt),
+  ];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -165,11 +169,11 @@ export async function getProductionRuns(
       feedstockStorageLocationCode: feedstockStorage.code,
     })
     .from(productionRuns)
-    .leftJoin(facilities, eq(productionRuns.facilityId, facilities.id))
-    .leftJoin(reactors, eq(productionRuns.reactorId, reactors.id))
-    .leftJoin(operators, eq(productionRuns.operatorId, operators.id))
-    .leftJoin(biocharStorage, eq(productionRuns.biocharStorageLocationId, biocharStorage.id))
-    .leftJoin(feedstockStorage, eq(productionRuns.feedstockStorageLocationId, feedstockStorage.id))
+    .leftJoin(facilities, and(eq(productionRuns.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(reactors, and(eq(productionRuns.reactorId, reactors.id), eq(reactors.organizationId, ctx.organizationId)))
+    .leftJoin(operators, and(eq(productionRuns.operatorId, operators.id), eq(operators.organizationId, ctx.organizationId)))
+    .leftJoin(biocharStorage, and(eq(productionRuns.biocharStorageLocationId, biocharStorage.id), eq(biocharStorage.organizationId, ctx.organizationId)))
+    .leftJoin(feedstockStorage, and(eq(productionRuns.feedstockStorageLocationId, feedstockStorage.id), eq(feedstockStorage.organizationId, ctx.organizationId)))
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
@@ -188,9 +192,9 @@ export async function getProductionRuns(
           feedstockTypeName: feedstockTypes.name,
         })
         .from(productionRunFeedstocks)
-        .leftJoin(feedstocks, eq(productionRunFeedstocks.feedstockId, feedstocks.id))
-        .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
-        .where(inArray(productionRunFeedstocks.productionRunId, runIds))
+        .leftJoin(feedstocks, and(eq(productionRunFeedstocks.feedstockId, feedstocks.id), eq(feedstocks.organizationId, ctx.organizationId)))
+        .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
+        .where(and(inArray(productionRunFeedstocks.productionRunId, runIds), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
     : [];
   const readingCountRows = runIds.length > 0
     ? await db
@@ -199,7 +203,7 @@ export async function getProductionRuns(
           readingCount: count(),
         })
         .from(productionRunReadings)
-        .where(inArray(productionRunReadings.productionRunId, runIds))
+        .where(and(inArray(productionRunReadings.productionRunId, runIds), eq(productionRunReadings.organizationId, ctx.organizationId)))
         .groupBy(productionRunReadings.productionRunId)
     : [];
 
@@ -242,6 +246,7 @@ export async function getProductionRuns(
  * Get feedstocks for a production run
  */
 async function getProductionRunFeedstocks(
+  ctx: OrgContext,
   productionRunId: string
 ): Promise<ProductionRunFeedstockWithDetails[]> {
   const result = await db
@@ -253,9 +258,9 @@ async function getProductionRunFeedstocks(
       feedstockTypeName: feedstockTypes.name,
     })
     .from(productionRunFeedstocks)
-    .leftJoin(feedstocks, eq(productionRunFeedstocks.feedstockId, feedstocks.id))
-    .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
-    .where(eq(productionRunFeedstocks.productionRunId, productionRunId));
+    .leftJoin(feedstocks, and(eq(productionRunFeedstocks.feedstockId, feedstocks.id), eq(feedstocks.organizationId, ctx.organizationId)))
+    .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
+    .where(and(eq(productionRunFeedstocks.productionRunId, productionRunId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
 
   return result;
 }
@@ -265,10 +270,10 @@ async function getProductionRunFeedstocks(
  * Returns run data with all relations
  */
 export async function getProductionRunById(
-  userId: string,
+  ctx: OrgContext,
   productionRunId: string
 ): Promise<ProductionRunWithRelations> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [run] = await db
     .select({
@@ -304,12 +309,13 @@ export async function getProductionRunById(
       operatorName: operators.name,
     })
     .from(productionRuns)
-    .leftJoin(facilities, eq(productionRuns.facilityId, facilities.id))
-    .leftJoin(reactors, eq(productionRuns.reactorId, reactors.id))
-    .leftJoin(operators, eq(productionRuns.operatorId, operators.id))
+    .leftJoin(facilities, and(eq(productionRuns.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(reactors, and(eq(productionRuns.reactorId, reactors.id), eq(reactors.organizationId, ctx.organizationId)))
+    .leftJoin(operators, and(eq(productionRuns.operatorId, operators.id), eq(operators.organizationId, ctx.organizationId)))
     .where(
       and(
         eq(productionRuns.id, productionRunId),
+        eq(productionRuns.organizationId, ctx.organizationId),
         isNull(productionRuns.archivedAt),
       ),
     );
@@ -325,25 +331,25 @@ export async function getProductionRunById(
     readingsCount,
   ] =
     await Promise.all([
-      getProductionRunFeedstocks(productionRunId),
+      getProductionRunFeedstocks(ctx, productionRunId),
       run.biocharStorageLocationId
         ? db
             .select({ code: storageLocations.code })
             .from(storageLocations)
-            .where(eq(storageLocations.id, run.biocharStorageLocationId))
+            .where(and(eq(storageLocations.id, run.biocharStorageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
             .then(([loc]) => loc?.code ?? null)
         : null,
       run.feedstockStorageLocationId
         ? db
             .select({ code: storageLocations.code })
             .from(storageLocations)
-            .where(eq(storageLocations.id, run.feedstockStorageLocationId))
+            .where(and(eq(storageLocations.id, run.feedstockStorageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
             .then(([loc]) => loc?.code ?? null)
         : null,
       db
         .select({ readingCount: count() })
         .from(productionRunReadings)
-        .where(eq(productionRunReadings.productionRunId, productionRunId))
+        .where(and(eq(productionRunReadings.productionRunId, productionRunId), eq(productionRunReadings.organizationId, ctx.organizationId)))
         .then(([row]) => Number(row?.readingCount) || 0),
     ]);
 
@@ -362,12 +368,15 @@ export async function getProductionRunById(
  * Returns aggregated stats for dashboard display
  */
 export async function getProductionRunStats(
-  userId: string,
+  ctx: OrgContext,
   facilityId?: string
 ): Promise<ProductionRunStats> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [isNull(productionRuns.archivedAt)];
+  const conditions: SQL[] = [
+    eq(productionRuns.organizationId, ctx.organizationId),
+    isNull(productionRuns.archivedAt),
+  ];
   if (facilityId) {
     conditions.push(eq(productionRuns.facilityId, facilityId));
   }
@@ -388,8 +397,8 @@ export async function getProductionRunStats(
       totalFeedstockKg: sum(productionRunFeedstocks.massUsedKg),
     })
     .from(productionRunFeedstocks)
-    .leftJoin(productionRuns, eq(productionRunFeedstocks.productionRunId, productionRuns.id))
-    .where(whereClause);
+    .leftJoin(productionRuns, and(eq(productionRunFeedstocks.productionRunId, productionRuns.id), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
+    .where(and(whereClause, eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
 
   // Get status counts in a single GROUP BY query
   const statusCounts = await db
@@ -420,10 +429,10 @@ export async function getProductionRunStats(
  * Aggregates in SQL so the totals are not capped by list pagination.
  */
 export async function getFacilityEnergyTotals(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string
 ): Promise<FacilityEnergyTotals> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [row] = await db
     .select({
@@ -434,7 +443,7 @@ export async function getFacilityEnergyTotals(
       preprocessingLitres: sum(productionRuns.preprocessingFuelLiters),
     })
     .from(productionRuns)
-    .where(and(eq(productionRuns.facilityId, facilityId), isNull(productionRuns.archivedAt)));
+    .where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId), isNull(productionRuns.archivedAt)));
 
   return {
     runCount: Number(row.runCount),
@@ -452,13 +461,16 @@ export async function getFacilityEnergyTotals(
  * Check if a production run code is available
  */
 export async function isProductionRunCodeAvailable(
-  userId: string,
+  ctx: OrgContext,
   code: string,
   excludeRunId?: string
 ): Promise<boolean> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [eq(productionRuns.code, code)];
+  const conditions: SQL[] = [
+    eq(productionRuns.organizationId, ctx.organizationId),
+    eq(productionRuns.code, code),
+  ];
 
   if (excludeRunId) {
     conditions.push(sql`${productionRuns.id} != ${excludeRunId}`);
@@ -477,25 +489,25 @@ export async function isProductionRunCodeAvailable(
 // which holds in-process proximate analysis. Runs missing from the lookup are
 // silently dropped; aggregation reports a per-run warning rather than failing.
 export async function getProductionRunsWithSamples(
-  userId: string,
+  ctx: OrgContext,
   runIds: string[]
 ): Promise<ProductionRunWithSamples[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   if (runIds.length === 0) return [];
 
   const runs = await db
     .select()
     .from(productionRuns)
-    .where(inArray(productionRuns.id, runIds));
+    .where(and(inArray(productionRuns.id, runIds), eq(productionRuns.organizationId, ctx.organizationId)));
   if (runs.length === 0) return [];
 
   const sampleRows = await db
     .select()
     .from(samples)
     .where(
-      inArray(
-        samples.productionRunId,
-        runs.map((r) => r.id)
+      and(
+        inArray(samples.productionRunId, runs.map((r) => r.id)),
+        eq(samples.organizationId, ctx.organizationId),
       )
     );
 
@@ -506,9 +518,9 @@ export async function getProductionRunsWithSamples(
     })
     .from(productionRunReadings)
     .where(
-      inArray(
-        productionRunReadings.productionRunId,
-        runs.map((r) => r.id),
+      and(
+        inArray(productionRunReadings.productionRunId, runs.map((r) => r.id)),
+        eq(productionRunReadings.organizationId, ctx.organizationId),
       ),
     )
     .groupBy(productionRunReadings.productionRunId);
@@ -542,9 +554,9 @@ export async function getProductionRunsWithSamples(
  * Returns minimal data needed for select inputs
  */
 export async function getProductionRunOptions(
-  userId: string
+  ctx: OrgContext
 ): Promise<Array<{ id: string; code: string; date: string; status: string }>> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   return db
     .select({
@@ -554,6 +566,6 @@ export async function getProductionRunOptions(
       status: productionRuns.status,
     })
     .from(productionRuns)
-    .where(isNull(productionRuns.archivedAt))
+    .where(and(isNull(productionRuns.archivedAt), eq(productionRuns.organizationId, ctx.organizationId)))
     .orderBy(desc(productionRuns.startTime));
 }
