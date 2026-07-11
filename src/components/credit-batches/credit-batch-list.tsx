@@ -134,15 +134,17 @@ export function CreditBatchList() {
     contextFacilityId ?? undefined,
     previewIds,
   );
-  const { data: certifierSummary } = useFacilityCertifierSummary(
-    contextFacilityId ?? "",
-    !!contextFacilityId,
-  );
+  const { data: certifierSummary, isLoading: certifierLoading } =
+    useFacilityCertifierSummary(contextFacilityId ?? "", !!contextFacilityId);
+  // `undefined` while the mapping is still loading (so cards don't flash "No
+  // certifier"), `null` once we know there is genuinely no mapping.
   const facilityCertifierLabel = certifierSummary?.mapping
     ? formatCertifierProvider(
         certifierSummary.mapping.provider as CertifierProvider,
       )
-    : null;
+    : certifierLoading
+      ? undefined
+      : null;
   const hydratedPaginatedItems = paginatedItems.map((batch) => {
     const preview = co2eStoredPreviews[batch.id];
     return preview
