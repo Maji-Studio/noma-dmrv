@@ -1,6 +1,6 @@
 import { relations, sql } from 'drizzle-orm';
 import { boolean, check, doublePrecision, index, pgTable, real, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
-import { users } from './auth';
+import { organizations, users } from './auth';
 import { distanceSource } from './common';
 
 // ============================================
@@ -11,8 +11,11 @@ export const suppliers = pgTable(
   'suppliers',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
     userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
-    code: text('code').notNull().unique(),
+    code: text('code').notNull(),
     name: text('name').notNull(),
     location: text('location'),
     gpsLatitude: doublePrecision('gps_latitude'),
@@ -31,6 +34,7 @@ export const suppliers = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    uniqueIndex('suppliers_organization_id_code_unique').on(table.organizationId, table.code),
     check(
       'suppliers_gps_latitude_range',
       sql`${table.gpsLatitude} is null or (${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90)`
@@ -46,7 +50,10 @@ export const suppliers = pgTable(
     // Supplier name is globally unique, case- and whitespace-insensitive (issue
     // #252). Global today; when multi-tenancy lands (ADR 0010) this joins
     // organization_id. Reuse a retired name by renaming the old record.
-    uniqueIndex('suppliers_name_unique').on(sql`lower(trim(${table.name}))`),
+    uniqueIndex('suppliers_organization_id_name_unique').on(
+      table.organizationId,
+      sql`lower(trim(${table.name}))`
+    ),
   ]
 );
 
@@ -58,7 +65,10 @@ export const customers = pgTable(
   'customers',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    code: text('code').notNull().unique(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    code: text('code').notNull(),
     name: text('name').notNull(),
     cropType: text('crop_type'), // e.g., "Coffee"
     address: text('address'),
@@ -68,10 +78,14 @@ export const customers = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    uniqueIndex('customers_organization_id_code_unique').on(table.organizationId, table.code),
     // Customer name is globally unique, case- and whitespace-insensitive (issue
     // #252). Global today; when multi-tenancy lands (ADR 0010) this joins
     // organization_id. Reuse a retired name by renaming the old record.
-    uniqueIndex('customers_name_unique').on(sql`lower(trim(${table.name}))`),
+    uniqueIndex('customers_organization_id_name_unique').on(
+      table.organizationId,
+      sql`lower(trim(${table.name}))`
+    ),
   ]
 );
 
@@ -83,6 +97,9 @@ export const customerLocations = pgTable(
   'customer_locations',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
     customerId: uuid('customer_id')
       .notNull()
       .references(() => customers.id),
@@ -109,6 +126,7 @@ export const customerLocations = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    index('customer_locations_organization_id_idx').on(table.organizationId),
     index('customer_locations_customer_id_idx').on(table.customerId),
     // One default location per customer (partial — only default rows are unique).
     uniqueIndex('customer_locations_one_default_per_customer')
@@ -141,6 +159,9 @@ export const supplierLocations = pgTable(
   'supplier_locations',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
     supplierId: uuid('supplier_id')
       .notNull()
       .references(() => suppliers.id),
@@ -163,6 +184,7 @@ export const supplierLocations = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    index('supplier_locations_organization_id_idx').on(table.organizationId),
     index('supplier_locations_supplier_id_idx').on(table.supplierId),
     // One default location per supplier (partial — only default rows are unique).
     uniqueIndex('supplier_locations_one_default_per_supplier')
@@ -189,13 +211,18 @@ export const supplierLocations = pgTable(
 
 export const drivers = pgTable('drivers', {
   id: uuid('id').primaryKey().defaultRandom(),
-  code: text('code').notNull().unique(),
+  organizationId: text('organization_id')
+    .notNull()
+    .references(() => organizations.id),
+  code: text('code').notNull(),
   name: text('name').notNull(),
   licenseNumber: text('license_number'),
   contactPhone: text('contact_phone'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (table) => [
+  uniqueIndex('drivers_organization_id_code_unique').on(table.organizationId, table.code),
+]);
 
 // ============================================
 // Operators - Production/reactor operators
@@ -203,12 +230,17 @@ export const drivers = pgTable('drivers', {
 
 export const operators = pgTable('operators', {
   id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: text('organization_id')
+    .notNull()
+    .references(() => organizations.id),
   name: text('name').notNull(),
   credentials: text('credentials'),
   contactPhone: text('contact_phone'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (table) => [
+  index('operators_organization_id_idx').on(table.organizationId),
+]);
 
 export const suppliersRelations = relations(suppliers, ({ many }) => ({
   locations: many(supplierLocations),

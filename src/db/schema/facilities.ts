@@ -1,6 +1,7 @@
 import { relations, sql } from 'drizzle-orm';
-import { check, doublePrecision, pgTable, text, timestamp, uniqueIndex, uuid, real, jsonb } from 'drizzle-orm/pg-core';
+import { check, doublePrecision, foreignKey, pgTable, text, timestamp, unique, uniqueIndex, uuid, real, jsonb } from 'drizzle-orm/pg-core';
 import { storageLocationType, durabilityOption } from './common';
+import { organizations } from './auth';
 
 // ============================================
 // Facilities - Production sites
@@ -10,7 +11,10 @@ export const facilities = pgTable(
   'facilities',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    code: text('code').notNull().unique(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    code: text('code').notNull(),
     name: text('name').notNull(),
     location: text('location'),
     gpsLatitude: doublePrecision('gps_latitude'),
@@ -40,6 +44,8 @@ export const facilities = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    unique('facilities_organization_id_code_unique').on(table.organizationId, table.code),
+    unique('facilities_id_organization_id_unique').on(table.id, table.organizationId),
     check(
       'facilities_gps_latitude_range',
       sql`${table.gpsLatitude} is null or (${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90)`
@@ -59,11 +65,13 @@ export const reactors = pgTable(
   'reactors',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    code: text('code').notNull().unique(), // e.g., "R-001"
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    code: text('code').notNull(), // e.g., "R-001"
     identifier: text('identifier').notNull(),
     facilityId: uuid('facility_id')
-      .notNull()
-      .references(() => facilities.id),
+      .notNull(),
     // Isometric Protocol: Reactor design requirements (Section 9.2)
     reactorType: text('reactor_type').notNull(), // fixed-bed, auger, rotary-kiln
     // NOTE: sampling_method moved OFF reactors onto production_processes (ADR
@@ -77,12 +85,18 @@ export const reactors = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    unique('reactors_organization_id_code_unique').on(table.organizationId, table.code),
+    foreignKey({
+      columns: [table.facilityId, table.organizationId],
+      foreignColumns: [facilities.id, facilities.organizationId],
+    }),
     // Human identifier is unique per facility, case- and whitespace-insensitive
     // (issue #252) — two indistinguishable reactors in one facility let an
     // operator attach a run to the wrong one. Decommission-and-reuse is handled
     // by renaming the retired reactor; archived rows still hold their identifier
     // so a restore can't collide (mirrors the code-reservation rule).
     uniqueIndex('reactors_facility_identifier_unique').on(
+      table.organizationId,
       table.facilityId,
       sql`lower(trim(${table.identifier}))`,
     ),
@@ -97,7 +111,10 @@ export const storageLocations = pgTable(
   'storage_locations',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    code: text('code').notNull().unique(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    code: text('code').notNull(),
     name: text('name').notNull(), // e.g., "Bin 7", "Feedstock Pile 002"
     type: storageLocationType('type').notNull(),
     capacityKg: real('capacity_kg'),
@@ -113,14 +130,18 @@ export const storageLocations = pgTable(
     // products.ts; enforced at the application layer (mirrors feedstockTypeId above).
     formulationId: uuid('formulation_id'),
     facilityId: uuid('facility_id')
-      .notNull()
-      .references(() => facilities.id),
+      .notNull(),
     // Stamped by the facility archive cascade; NULL = active
     archivedAt: timestamp('archived_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    unique('storage_locations_organization_id_code_unique').on(table.organizationId, table.code),
+    foreignKey({
+      columns: [table.facilityId, table.organizationId],
+      foreignColumns: [facilities.id, facilities.organizationId],
+    }),
     check(
       'storage_locations_formulation_product_bin_only',
       sql`${table.type} = 'product_bin' or ${table.formulationId} is null`
@@ -129,6 +150,7 @@ export const storageLocations = pgTable(
     // #252). Archived bins keep their name reserved so a facility restore can't
     // collide (mirrors the code-reservation rule).
     uniqueIndex('storage_locations_facility_name_unique').on(
+      table.organizationId,
       table.facilityId,
       sql`lower(trim(${table.name}))`,
     ),
