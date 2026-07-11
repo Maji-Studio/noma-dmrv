@@ -390,6 +390,7 @@ async function loadRunningRuns(ctx: OrgContext, facilityId: string): Promise<Run
     .from(productionRuns)
     .where(
       and(
+        eq(productionRuns.organizationId, ctx.organizationId),
         eq(productionRuns.facilityId, facilityId),
         isNull(productionRuns.archivedAt),
         eq(productionRuns.status, "running"),
@@ -413,6 +414,7 @@ async function loadRecentCompletedRuns(
     .from(productionRuns)
     .where(
       and(
+        eq(productionRuns.organizationId, ctx.organizationId),
         eq(productionRuns.facilityId, facilityId),
         isNull(productionRuns.archivedAt),
         eq(productionRuns.status, "complete"),

@@ -168,6 +168,7 @@ export async function getSuppliers(
   const orderFn = sortOrder === "desc" ? desc : asc;
 
   // Count total for pagination
+  // org-scope-ok: whereClause includes the active organization predicate.
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(suppliers)
@@ -548,6 +549,7 @@ export async function isSupplierCodeAvailable(
     conditions.push(sql`${suppliers.id} != ${excludeSupplierId}`);
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: suppliers.id })
     .from(suppliers)

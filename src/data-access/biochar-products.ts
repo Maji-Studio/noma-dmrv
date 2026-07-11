@@ -934,6 +934,7 @@ export async function isBiocharProductCodeAvailable(
     conditions.push(sql`${biocharProducts.id} != ${excludeProductId}`);
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: biocharProducts.id })
     .from(biocharProducts)

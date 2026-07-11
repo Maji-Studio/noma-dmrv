@@ -82,7 +82,7 @@ export async function findOrCreateProductionProcess(
     );
   }
 
-  await assertSameOrg(ctx, feedstockTypes, params.feedstockTypeId);
+  await assertSameOrg(ctx, feedstockTypes, params.feedstockTypeId, executor);
   await lockCurrentProductionProcess(executor, params);
 
   const [existing] = await executor

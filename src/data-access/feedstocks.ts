@@ -281,6 +281,7 @@ export async function getFeedstockStats(
   if (facilityId) conditions.push(eq(feedstocks.facilityId, facilityId));
   const whereClause = and(...conditions);
 
+  // org-scope-ok: whereClause includes the active organization predicate.
   const [stats] = await db
     .select({
       totalFeedstocks: count(),
@@ -612,6 +613,7 @@ export async function isFeedstockCodeAvailable(
     conditions.push(sql`${feedstocks.id} != ${excludeId}`);
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: feedstocks.id })
     .from(feedstocks)

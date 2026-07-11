@@ -142,6 +142,7 @@ export async function getFacilities(
   const orderFn = sortOrder === "desc" ? desc : asc;
 
   // Count total for pagination
+  // org-scope-ok: whereClause includes the active organization predicate.
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(facilities)
@@ -909,6 +910,7 @@ export async function isFacilityCodeAvailable(
     conditions.push(sql`${facilities.id} != ${excludeFacilityId}`);
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: facilities.id })
     .from(facilities)

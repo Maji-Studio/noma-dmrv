@@ -119,6 +119,7 @@ export async function getProductionRuns(
   const orderFn = sortOrder === "asc" ? asc : desc;
 
   // Count total for pagination
+  // org-scope-ok: whereClause includes the active organization predicate.
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(productionRuns)
@@ -383,6 +384,7 @@ export async function getProductionRunStats(
 
   const whereClause = and(...conditions);
 
+  // org-scope-ok: whereClause includes the active organization predicate.
   const [stats] = await db
     .select({
       totalRuns: count(),
@@ -401,6 +403,7 @@ export async function getProductionRunStats(
     .where(and(whereClause, eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
 
   // Get status counts in a single GROUP BY query
+  // org-scope-ok: whereClause includes the active organization predicate.
   const statusCounts = await db
     .select({
       status: productionRuns.status,
@@ -476,6 +479,7 @@ export async function isProductionRunCodeAvailable(
     conditions.push(sql`${productionRuns.id} != ${excludeRunId}`);
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: productionRuns.id })
     .from(productionRuns)

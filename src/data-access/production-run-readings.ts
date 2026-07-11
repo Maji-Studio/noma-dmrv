@@ -75,6 +75,7 @@ export async function getProductionRunReadingsList(
     conditions.push(eq(productionRuns.facilityId, facilityId));
   }
 
+  // org-scope-ok: conditions includes both joined organization predicates.
   return db
     .select(readingSelect)
     .from(productionRunReadings)

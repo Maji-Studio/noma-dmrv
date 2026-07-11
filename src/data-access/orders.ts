@@ -186,6 +186,7 @@ export async function getOrders(
 
   // Count total for pagination. Join the aggregate so a status filter resolves;
   // the grouped subquery is one row per order, so count() stays accurate.
+  // org-scope-ok: whereClause includes the active organization predicate.
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(orders)
@@ -711,6 +712,7 @@ export async function isOrderCodeAvailable(
     conditions.push(sql`${orders.id} != ${excludeOrderId}`);
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: orders.id })
     .from(orders)

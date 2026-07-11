@@ -110,6 +110,7 @@ export async function assertCanManageDocumentEntity(
       if (await hasDeliveryArchivedAtColumn()) {
         conditions.push(isNull(deliveries.archivedAt));
       }
+      // org-scope-ok: conditions includes the active organization predicate.
       const [row] = await db
         .select({ id: deliveries.id })
         .from(deliveries)
@@ -378,6 +379,7 @@ export async function getDocumentById(
 export async function getPublicDocumentById(
   id: string
 ): Promise<DocumentRow | null> {
+  // org-scope-ok: public document lookup intentionally crosses organizations.
   const [row] = await db
     .select()
     .from(documents)

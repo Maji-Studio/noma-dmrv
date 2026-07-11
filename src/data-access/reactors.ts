@@ -102,6 +102,7 @@ export async function getReactors(
   const orderFn = sortOrder === "desc" ? desc : asc;
 
   // Count total for pagination
+  // org-scope-ok: whereClause includes the active organization predicate.
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(reactors)
@@ -466,6 +467,7 @@ export async function isReactorCodeAvailable(
     conditions.push(sql`${reactors.id} != ${excludeReactorId}`);
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: reactors.id })
     .from(reactors)

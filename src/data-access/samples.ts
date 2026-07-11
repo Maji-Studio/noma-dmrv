@@ -890,6 +890,7 @@ export async function isSampleCodeAvailable(
     conditions.push(sql`${samples.id} != ${excludeSampleId}`);
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: samples.id })
     .from(samples)
@@ -943,6 +944,7 @@ export async function getSampleOptions(
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
+  // org-scope-ok: whereClause includes the active organization predicate.
   return db
     .select({
       id: samples.id,

@@ -7,6 +7,7 @@
  * through the browser UI.
  */
 import { and, eq, inArray } from "drizzle-orm";
+import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../../src/db/schema";
 import * as crypto from "crypto";
 import { createDbConnection } from "./db";
@@ -60,6 +61,7 @@ export async function seedChainData(
     await db.transaction(async (tx) => {
       // 1. Facility (needed by storage locations, biochar product, orders, etc.)
       await tx.insert(schema.facilities).values({
+        organizationId: DEC_ORG_ID,
         id: facilityId,
         code: `E2E-FAC-${testRunId}`,
         name: `E2E Seed Facility ${testRunId}`,
@@ -78,6 +80,7 @@ export async function seedChainData(
 
       // 2. Reactor (needs facility)
       await tx.insert(schema.reactors).values({
+        organizationId: DEC_ORG_ID,
         id: reactorId,
         code: `E2E-RCT-${testRunId}`,
         identifier: `E2E Seed Reactor ${testRunId}`,
@@ -87,6 +90,7 @@ export async function seedChainData(
 
       // 3. Supplier
       await tx.insert(schema.suppliers).values({
+        organizationId: DEC_ORG_ID,
         id: supplierId,
         code: `E2E-SUP-${testRunId}`,
         name: `E2E Seed Supplier ${testRunId}`,
@@ -96,6 +100,7 @@ export async function seedChainData(
 
       // 3. Feedstock Type
       await tx.insert(schema.feedstockTypes).values({
+        organizationId: DEC_ORG_ID,
         id: feedstockTypeId,
         code: `E2E-FST-${testRunId}`,
         name: `E2E Seed Feedstock Type ${testRunId}`,
@@ -104,6 +109,7 @@ export async function seedChainData(
 
       // 4. Customer
       await tx.insert(schema.customers).values({
+        organizationId: DEC_ORG_ID,
         id: customerId,
         code: `E2E-CUST-${testRunId}`,
         name: `E2E Seed Customer ${testRunId}`,
@@ -113,6 +119,7 @@ export async function seedChainData(
       // app derive a biochar distribution leg when a test records a delivery
       // to this location.
       await tx.insert(schema.customerLocations).values({
+        organizationId: DEC_ORG_ID,
         id: customerLocationId,
         customerId: customerId,
         name: `E2E Seed Location ${testRunId}`,
@@ -126,6 +133,7 @@ export async function seedChainData(
 
       // 6. Formulation
       await tx.insert(schema.formulations).values({
+        organizationId: DEC_ORG_ID,
         id: formulationId,
         code: `E2E-FORM-${testRunId}`,
         name: `E2E Seed Formulation ${testRunId}`,
@@ -134,6 +142,7 @@ export async function seedChainData(
 
       // 7. Storage Locations (need facility)
       await tx.insert(schema.storageLocations).values({
+        organizationId: DEC_ORG_ID,
         id: feedstockStorageId,
         code: `E2E-SL-FS-${testRunId}`,
         name: `E2E Feedstock Bin ${testRunId}`,
@@ -143,6 +152,7 @@ export async function seedChainData(
       });
 
       await tx.insert(schema.storageLocations).values({
+        organizationId: DEC_ORG_ID,
         id: biocharStorageId,
         code: `E2E-SL-BC-${testRunId}`,
         name: `E2E Biochar Pile ${testRunId}`,
@@ -155,6 +165,7 @@ export async function seedChainData(
       const expiresAt = new Date(productionDate);
       expiresAt.setFullYear(expiresAt.getFullYear() + 1);
       await tx.insert(schema.biocharProducts).values({
+        organizationId: DEC_ORG_ID,
         id: biocharProductId,
         code: `E2E-BP-${testRunId}`,
         facilityId: facilityId,
@@ -171,6 +182,7 @@ export async function seedChainData(
 
       // 9. Vehicle
       await tx.insert(schema.vehicles).values({
+        organizationId: DEC_ORG_ID,
         id: vehicleId,
         code: `E2E-VEH-${testRunId}`,
         name: `E2E Seed Vehicle ${testRunId}`,
@@ -184,6 +196,7 @@ export async function seedChainData(
       // 10. Feedstock Delivery (needs facility + supplier)
       const deliveryDate = new Date();
       await tx.insert(schema.feedstockDeliveries).values({
+        organizationId: DEC_ORG_ID,
         id: feedstockDeliveryId,
         code: `E2E-FSD-${testRunId}`,
         facilityId: facilityId,
@@ -194,6 +207,7 @@ export async function seedChainData(
 
       // 11. Feedstock (needs facility + delivery + type)
       await tx.insert(schema.feedstocks).values({
+        organizationId: DEC_ORG_ID,
         id: feedstockId,
         code: `E2E-FS-${testRunId}`,
         facilityId: facilityId,
@@ -259,12 +273,14 @@ export async function seedCreditBatch(
       .toISOString()
       .slice(0, 10);
     await db.insert(schema.productionProcesses).values({
+        organizationId: DEC_ORG_ID,
       id: productionProcessId,
       facilityId,
       feedstockTypeId,
     });
 
     await db.insert(schema.creditBatches).values({
+        organizationId: DEC_ORG_ID,
       id,
       code,
       facilityId,
@@ -318,6 +334,7 @@ export async function seedCreditBatchProductionLineage(
 
     await db.transaction(async (tx) => {
       await tx.insert(schema.productionRuns).values({
+        organizationId: DEC_ORG_ID,
         id: productionRunId,
         code: `${code}-PR1`,
         facilityId: data.facility.id,
@@ -332,11 +349,13 @@ export async function seedCreditBatchProductionLineage(
         .set({ linkedProductionRunId: productionRunId })
         .where(eq(schema.biocharProducts.id, data.biocharProduct.id));
       await tx.insert(schema.productionProcesses).values({
+        organizationId: DEC_ORG_ID,
         id: productionProcessId,
         facilityId: data.facility.id,
         feedstockTypeId: data.feedstockType.id,
       });
       await tx.insert(schema.creditBatches).values({
+        organizationId: DEC_ORG_ID,
         id: creditBatchId,
         code,
         facilityId: data.facility.id,
@@ -347,6 +366,7 @@ export async function seedCreditBatchProductionLineage(
         hToCorgRatio: SEEDED_H_TO_CORG_RATIO,
       });
       await tx.insert(schema.creditBatchProductionRuns).values({
+        organizationId: DEC_ORG_ID,
         creditBatchId,
         productionRunId,
       });
@@ -410,6 +430,7 @@ export async function seedDurabilityBatch(
       { suffix: "2", runId: run1Id, samplingTime: day1, hToC: 0.41, oToC: 0.13, totalC: 82, orgC: 80 },
       { suffix: "3", runId: run2Id, samplingTime: day2, hToC: 0.36, oToC: 0.11, totalC: 79, orgC: 77 },
     ].map((r) => ({
+      organizationId: DEC_ORG_ID,
       id: crypto.randomUUID(),
       sampleCode: `${code}-S${r.suffix}`,
       creditBatchId,
@@ -423,6 +444,7 @@ export async function seedDurabilityBatch(
 
     await db.transaction(async (tx) => {
       await tx.insert(schema.productionProcesses).values({
+        organizationId: DEC_ORG_ID,
         id: productionProcessId,
         facilityId,
         feedstockTypeId,
@@ -432,6 +454,7 @@ export async function seedDurabilityBatch(
       // distinct calendar days; give each a closed 6-hour window.
       await tx.insert(schema.productionRuns).values([
         {
+          organizationId: DEC_ORG_ID,
           id: run1Id,
           code: `${code}-PR1`,
           facilityId,
@@ -441,6 +464,7 @@ export async function seedDurabilityBatch(
           biocharDryMassKg: 1000,
         },
         {
+          organizationId: DEC_ORG_ID,
           id: run2Id,
           code: `${code}-PR2`,
           facilityId,
@@ -453,6 +477,7 @@ export async function seedDurabilityBatch(
       // Credit batch must exist before the samples — `samples.credit_batch_id`
       // FKs it (migration 0057). Mirrors `seedCreditBatch`'s 200-year shape.
       await tx.insert(schema.creditBatches).values({
+        organizationId: DEC_ORG_ID,
         id: creditBatchId,
         code,
         facilityId,
@@ -463,8 +488,8 @@ export async function seedDurabilityBatch(
         hToCorgRatio: SEEDED_H_TO_CORG_RATIO,
       });
       await tx.insert(schema.creditBatchProductionRuns).values([
-        { creditBatchId, productionRunId: run1Id },
-        { creditBatchId, productionRunId: run2Id },
+        { organizationId: DEC_ORG_ID, creditBatchId, productionRunId: run1Id },
+        { organizationId: DEC_ORG_ID, creditBatchId, productionRunId: run2Id },
       ]);
       await tx.insert(schema.samples).values(sampleRows);
     });

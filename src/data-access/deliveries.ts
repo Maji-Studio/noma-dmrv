@@ -261,6 +261,7 @@ export async function getDeliveries(
   const orderFn = sortOrder === "desc" ? desc : asc;
 
   // Count total for pagination
+  // org-scope-ok: whereClause includes the active organization predicate.
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(deliveries)
@@ -448,6 +449,7 @@ export async function getDeliveryStats(
   const whereClause = and(...conditions);
 
   // Get aggregate stats
+  // org-scope-ok: whereClause includes the active organization predicate.
   const [stats] = await db
     .select({
       totalDeliveries: count(),
@@ -458,6 +460,7 @@ export async function getDeliveryStats(
     .where(whereClause);
 
   // Get counts by status
+  // org-scope-ok: whereClause includes the active organization predicate.
   const statusCounts = await db
     .select({
       status: deliveries.status,
@@ -868,6 +871,7 @@ export async function isDeliveryCodeAvailable(
     conditions.push(sql`${deliveries.id} != ${excludeDeliveryId}`);
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: deliveries.id })
     .from(deliveries)

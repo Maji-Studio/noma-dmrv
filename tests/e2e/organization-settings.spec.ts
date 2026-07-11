@@ -1,5 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { test, expect } from "./fixtures/auth-fixtures";
+import { enterDefaultOrganization } from "./fixtures/organization-helpers";
 
 const ORGANIZATION_NAME = "Dark Earth Carbon";
 const INVITEE_EMAIL = "org-e2e-invitee@example.com";
@@ -8,27 +9,6 @@ function sectionWithHeading(page: Page, heading: string): Locator {
   return page.locator("section").filter({
     has: page.getByRole("heading", { name: heading, exact: true }),
   });
-}
-
-async function enterDefaultOrganization(page: Page): Promise<void> {
-  await page.goto("/admin/organizations");
-
-  const organizationsSection = sectionWithHeading(page, "Organizations");
-  const organization = organizationsSection
-    .getByRole("listitem")
-    .filter({ hasText: ORGANIZATION_NAME });
-
-  await expect(organization).toBeVisible();
-  const enterButton = organization.getByRole("button", { name: "Enter" });
-  const dashboardUrl = /\/dashboard(?:[/?#]|$)/;
-
-  await enterButton.click();
-  // Next dev can drop the first action after compiling a sibling route.
-  await page.waitForURL(dashboardUrl, { timeout: 5_000 }).catch(() => undefined);
-  if (!dashboardUrl.test(page.url())) {
-    await enterButton.click();
-  }
-  await expect(page).toHaveURL(dashboardUrl);
 }
 
 async function openOrganizationSettings(page: Page): Promise<void> {

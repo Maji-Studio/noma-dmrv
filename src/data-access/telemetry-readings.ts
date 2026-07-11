@@ -50,6 +50,7 @@ export async function listTelemetryReadingsForRuns(
     conditions.push(lte(productionRunReadings.timestamp, args.until));
   }
 
+  // org-scope-ok: conditions includes both joined organization predicates.
   const rows = await db
     .select({
       reactorId: productionRuns.reactorId,

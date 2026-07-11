@@ -911,6 +911,7 @@ export async function checkCreditBatchDateOverlap(
     conditions.push(sql`${creditBatches.id} != ${excludeId}`);
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [overlapping] = await db
     .select()
     .from(creditBatches)

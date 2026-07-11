@@ -521,6 +521,7 @@ export async function isFormulationCodeAvailable(
     conditions.push(sql`${formulations.id} != ${excludeFormulationId}`);
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: formulations.id })
     .from(formulations)

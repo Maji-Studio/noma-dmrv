@@ -22,14 +22,20 @@ export function requireOrgScope(ctx: OrgContext): void {
   }
 }
 
-/** Assert that a referenced domain row belongs to the active organization. */
+/**
+ * Assert that a referenced domain row belongs to the active organization.
+ * Callers inside a transaction MUST pass their `tx` as `executor` — reading
+ * through the global pool from inside a transaction starves the pool under
+ * parallel load (each open tx holds a connection while waiting for another).
+ */
 export async function assertSameOrg(
   ctx: OrgContext,
   table: OrgScopedTable,
   id: string,
+  executor: Pick<typeof db, "select"> = db,
 ): Promise<void> {
   requireOrgScope(ctx);
-  const [row] = await db
+  const [row] = await executor
     .select({ id: table.id })
     .from(table)
     .where(
