@@ -1,17 +1,15 @@
 /**
  * Heuristic guard against unscoped domain-table access in data-access modules.
  *
- * This is intentionally not a TypeScript parser. It finds db.select/insert/
+ * This is intentionally not a TypeScript parser. It finds db/tx select/insert/
  * update/delete chains through their terminating semicolon, identifies schema
  * table references, and requires organizationId to appear in domain chains.
- * Transaction-local `tx.` chains are skipped: transactions are only entered
- * through the surrounding guarded data-access function.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { extname, join, relative } from "node:path";
 
 const ROOT = process.cwd();
-const DATA_ACCESS_DIR = join(ROOT, "src/data-access");
+const SCANNED_DIRS = [join(ROOT, "src/data-access"), join(ROOT, "src/fn")];
 const SCHEMA_DIR = join(ROOT, "src/db/schema");
 const WAIVER = /\/\/\s*org-scope-ok:\s*\S/;
 
@@ -117,7 +115,8 @@ function referencedTables(chain: string): Set<string> {
 function inspectFile(file: string, domainTables: Set<string>): Violation[] {
   const source = readFileSync(file, "utf8");
   const violations: Violation[] = [];
-  const chainStart = /\bdb\s*\.\s*(?:select|insert|update|delete)\s*\(/g;
+  const chainStart =
+    /\b(?:db|tx)\s*\.\s*(select|insert|update|delete)\s*\(/g;
 
   for (const match of source.matchAll(chainStart)) {
     if (match.index === undefined) continue;
@@ -135,7 +134,16 @@ function inspectFile(file: string, domainTables: Set<string>): Violation[] {
     const tables = [...referencedTables(chain)].filter((table) =>
       domainTables.has(table),
     );
-    if (tables.length === 0 || chain.includes("organizationId")) continue;
+    const operation = match[1];
+    const whereStart = chain.search(/\.where\s*\(/);
+    const scopedPortion =
+      operation === "update" || operation === "delete"
+        ? whereStart === -1
+          ? ""
+          : chain.slice(whereStart)
+        : chain;
+    if (tables.length === 0 || scopedPortion.includes("organizationId"))
+      continue;
 
     violations.push({
       file: relative(ROOT, file),
@@ -148,8 +156,8 @@ function inspectFile(file: string, domainTables: Set<string>): Violation[] {
 }
 
 const domainTables = loadDomainTables();
-const violations = walkTsFiles(DATA_ACCESS_DIR).flatMap((file) =>
-  inspectFile(file, domainTables),
+const violations = SCANNED_DIRS.flatMap((directory) =>
+  walkTsFiles(directory).flatMap((file) => inspectFile(file, domainTables)),
 );
 
 if (violations.length > 0) {

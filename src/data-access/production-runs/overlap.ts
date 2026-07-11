@@ -131,6 +131,7 @@ export async function assertNoReactorRunOverlap(
 
   if (selfId) conditions.push(ne(productionRuns.id, selfId));
 
+  // org-scope-ok: conditions includes the active organization predicate.
   const [conflict] = await tx
     .select({
       id: productionRuns.id,

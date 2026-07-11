@@ -285,6 +285,7 @@ export async function upsertCertifierProject(
         }
       }
 
+      // org-scope-ok: values includes the active organization id.
       const [row] = await tx
         .insert(certifierProjects)
         .values(values)
