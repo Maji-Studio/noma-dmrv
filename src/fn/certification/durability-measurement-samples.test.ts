@@ -6,6 +6,7 @@ import {
   buildDurabilityMeasurementSampleSubmissions,
   DURABILITY_MEASUREMENT_SAMPLES_LIVE,
 } from "./durability-measurement-samples";
+import { normalizeMeasurementSamplesForHash } from "./durability-measurement-sample-snapshot";
 
 function sample(overrides: Partial<Sample>): Sample {
   return {
@@ -177,6 +178,38 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
       { qualifier: "inertinite_fraction", magnitude: 0.93, unit: "dimensionless" },
       { qualifier: null, magnitude: 1000, unit: "kg" },
     ]);
+  });
+
+  it("normalizes to an identical hash payload regardless of sample row order", () => {
+    // Postgres guarantees no row order without an ORDER BY, and replicate
+    // order flows into the body's `values` list — a reorder of unchanged rows
+    // must NOT flip the semantic change-detection hash.
+    const orderedSamples = [
+      sample({ id: "smp-1", totalCarbonPercent: 80, sReflectanceFraction: 0.91 }),
+      sample({ id: "smp-2", totalCarbonPercent: 82, sReflectanceFraction: 0.92 }),
+      sample({ id: "smp-3", totalCarbonPercent: 84, sReflectanceFraction: 0.93 }),
+    ];
+    const buildNormalized = (samples: Sample[]) =>
+      normalizeMeasurementSamplesForHash(
+        buildDurabilityMeasurementSampleSubmissions({
+          ...common,
+          facilityReferenceSoilTemperature: null,
+          batches: [
+            batch({
+              creditBatchId: "t",
+              creditBatchCode: "CB-T",
+              durabilityOption: "1000_year",
+              runs: [{ id: "run-t", code: "R-T", biocharDryMassKg: 1000 }],
+              samples,
+            }),
+          ],
+        }),
+      );
+
+    const forward = buildNormalized(orderedSamples);
+    const reversed = buildNormalized([...orderedSamples].reverse());
+
+    expect(JSON.stringify(reversed)).toBe(JSON.stringify(forward));
   });
 
   it("fails closed when a 1000-year batch has fewer than three complete replicates", () => {

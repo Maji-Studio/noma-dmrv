@@ -129,7 +129,16 @@ export function buildDurabilityMeasurementSampleSubmissions(
       samplingMethodByBatch.get(batch.creditBatchId) ?? "method_a";
     const sourceBatch = sourceBatchById.get(batch.creditBatchId);
     if (sourceBatch?.durabilityOption === "1000_year") {
-      const replicates = sourceBatch.samples.flatMap((sample) =>
+      // Replicate order flows verbatim into the submission body's `values`
+      // list and therefore into the semantic change-detection hash
+      // (`normalizeMeasurementSamplesForHash` only sorts across submissions,
+      // not within one body). Sort by sample id so this builder is a
+      // deterministic function of its inputs regardless of how the caller's
+      // DB read happened to order the rows.
+      const orderedSamples = [...sourceBatch.samples].sort((a, b) =>
+        String(a.id).localeCompare(String(b.id)),
+      );
+      const replicates = orderedSamples.flatMap((sample) =>
         sample.totalCarbonPercent == null || sample.sReflectanceFraction == null
           ? []
           : [
