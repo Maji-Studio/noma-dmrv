@@ -2,7 +2,9 @@ import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { certifierCredentials } from "@/db/schema/certification";
 import { requirePlatformAdmin } from "@/lib/auth/server";
+import type { OrgContext } from "@/lib/auth/server";
 import { decryptSecret, encryptSecret } from "@/lib/crypto/secrets";
+import { requireOrgScope } from "./utils";
 
 type CertifierCredentialRow = typeof certifierCredentials.$inferSelect;
 type CertifierProvider = CertifierCredentialRow["provider"];
@@ -91,6 +93,25 @@ export async function deleteCertifierCredentials(
         eq(certifierCredentials.provider, provider)
       )
     );
+}
+
+/** Secret-free organization-scoped readiness check for certification flows. */
+export async function hasCertifierCredentials(
+  ctx: OrgContext,
+  provider: CertifierProvider,
+): Promise<boolean> {
+  requireOrgScope(ctx);
+  const [row] = await db
+    .select({ organizationId: certifierCredentials.organizationId })
+    .from(certifierCredentials)
+    .where(
+      and(
+        eq(certifierCredentials.organizationId, ctx.organizationId),
+        eq(certifierCredentials.provider, provider),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
 }
 
 /**

@@ -41,6 +41,28 @@ export const createOrganizationSchema = z.object({
 });
 export type CreateOrganizationInput = z.infer<typeof createOrganizationSchema>;
 
+export const certifierCredentialsFormSchema = z.object({
+  accessToken: z.string().trim().min(1, "Access token is required."),
+  clientSecret: z.string().trim().min(1, "Client secret is required."),
+});
+export type CertifierCredentialsFormInput = z.infer<
+  typeof certifierCredentialsFormSchema
+>;
+
+const organizationIdSchema = z
+  .string()
+  .trim()
+  .min(1, "Organization id is required.");
+
+export const setOrgCertifierCredentialsSchema =
+  certifierCredentialsFormSchema.extend({
+    organizationId: organizationIdSchema,
+  });
+
+export const orgCertifierCredentialsTargetSchema = z.object({
+  organizationId: organizationIdSchema,
+});
+
 export const invitationIdSchema = z.object({
   invitationId: z.string().trim().min(1, "Invitation id is required."),
 });

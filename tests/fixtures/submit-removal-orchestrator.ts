@@ -372,6 +372,7 @@ export function makeContext(
   const batchesWithSamples = makeBatchesWithSamples(runs);
   return {
     facilityId: FACILITY_ID,
+    hasOrgCredentials: true,
     removalId: REMOVAL_ID,
     mapping: makeMapping(),
     project: { id: EXTERNAL_PROJECT_ID, name: "Test project" } as never,

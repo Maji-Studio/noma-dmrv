@@ -116,10 +116,15 @@ export async function submitRemoval(
   log.info("removal submit started");
 
   const ctx = await loadRemovalSubmissionContext(orgCtx, removalId);
-  const client = await getIsometricClientForOrg(orgCtx.organizationId);
   if (!ctx.mapping) {
     throw new SafeError("Link a facility to an Isometric project first.");
   }
+  if (!ctx.hasOrgCredentials) {
+    throw new SafeError(
+      "Configure organization Isometric credentials before submitting.",
+    );
+  }
+  const client = await getIsometricClientForOrg(orgCtx.organizationId);
   if (ctx.missingDefaultTemplateId) {
     throw new SafeError(
       "The facility's default removal template was not found in Certify. Refresh the link in facility settings.",

@@ -46,6 +46,8 @@ export interface RemovalReadinessFacts {
   lockInFlight: boolean;
   /** The facility is linked to an Isometric project. */
   hasMapping: boolean;
+  /** The organization has encrypted Isometric credentials configured. */
+  hasOrgCredentials: boolean;
   /** The facility's default removal template resolved on Isometric. */
   hasDefaultTemplate: boolean;
   /** Set when a configured template id no longer exists on Isometric. */
@@ -75,6 +77,9 @@ export interface RemovalReadiness {
 }
 
 const NOT_LINKED_REASON = "Facility not linked to an Isometric project";
+const NO_ORG_CREDENTIALS_REASON =
+  "Organization Isometric credentials are not configured";
+const ORG_CREDENTIALS_LABEL = "Organization Isometric credentials present";
 const TRANSPORT_COVERAGE_LABEL = "Transport coverage complete";
 const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_REASON_PREVIEW_LIMIT = 3;
@@ -169,6 +174,10 @@ export function deriveRemovalReadiness(
     return { state: "blocked", reasons: [NOT_LINKED_REASON] };
   }
 
+  if (!facts.hasOrgCredentials) {
+    return { state: "blocked", reasons: [NO_ORG_CREDENTIALS_REASON] };
+  }
+
   const reasons: string[] = [];
 
   const templateReason = templateBlockerReason(facts);
@@ -219,6 +228,7 @@ export type PreflightCheckStatus =
 export interface PreflightCheck {
   key:
     | "mapping"
+    | "credentials"
     | "template"
     | "transport"
     | "production"
@@ -271,7 +281,9 @@ export function buildRemovalPreflightChecklist(
   facts: RemovalReadinessFacts,
 ): PreflightCheck[] {
   const linked = facts.hasMapping;
-  const templateClean = templateResolvesCleanly(facts);
+  const credentialsConfigured = facts.hasOrgCredentials;
+  const templateClean =
+    credentialsConfigured && templateResolvesCleanly(facts);
 
   const transport = ((): PreflightCheckBase => {
     if (!linked || !templateClean) {
@@ -330,10 +342,31 @@ export function buildRemovalPreflightChecklist(
       detail: linked ? undefined : NOT_LINKED_REASON,
     },
     {
+      key: "credentials",
+      label: ORG_CREDENTIALS_LABEL,
+      status: !linked
+        ? "skipped"
+        : credentialsConfigured
+          ? "met"
+          : "unmet",
+      detail:
+        linked && !credentialsConfigured
+          ? NO_ORG_CREDENTIALS_REASON
+          : undefined,
+    },
+    {
       key: "template",
       label: "Removal template resolved",
-      status: !linked ? "skipped" : templateClean ? "met" : "unmet",
-      detail: !linked ? undefined : (templateBlockerReason(facts) ?? undefined),
+      status:
+        !linked || !credentialsConfigured
+          ? "skipped"
+          : templateClean
+            ? "met"
+            : "unmet",
+      detail:
+        !linked || !credentialsConfigured
+          ? undefined
+          : (templateBlockerReason(facts) ?? undefined),
     },
     transport,
     {
@@ -380,6 +413,7 @@ const TRANSPORT_UNIFORMITY_LABEL = "Transport legs aggregate cleanly";
 
 export type RemovalRequirementKey =
   | "mapping"
+  | "credentials"
   | "template"
   | "transportUniformity"
   | "entityReadiness"
@@ -438,7 +472,9 @@ export function buildRemovalRequirementsChecklist(
   facts: RemovalReadinessFacts,
 ): RemovalRequirementCheck[] {
   const linked = facts.hasMapping;
-  const templateClean = templateResolvesCleanly(facts);
+  const credentialsConfigured = facts.hasOrgCredentials;
+  const templateClean =
+    credentialsConfigured && templateResolvesCleanly(facts);
 
   const uniformity = ((): RemovalRequirementCheckBase => {
     // Uniformity is only meaningful once the template chain resolves and legs
@@ -513,10 +549,31 @@ export function buildRemovalRequirementsChecklist(
       detail: linked ? undefined : NOT_LINKED_REASON,
     },
     {
+      key: "credentials",
+      label: ORG_CREDENTIALS_LABEL,
+      status: !linked
+        ? "skipped"
+        : credentialsConfigured
+          ? "met"
+          : "unmet",
+      detail:
+        linked && !credentialsConfigured
+          ? NO_ORG_CREDENTIALS_REASON
+          : undefined,
+    },
+    {
       key: "template",
       label: "Removal template resolved",
-      status: !linked ? "skipped" : templateClean ? "met" : "unmet",
-      detail: !linked ? undefined : (templateBlockerReason(facts) ?? undefined),
+      status:
+        !linked || !credentialsConfigured
+          ? "skipped"
+          : templateClean
+            ? "met"
+            : "unmet",
+      detail:
+        !linked || !credentialsConfigured
+          ? undefined
+          : (templateBlockerReason(facts) ?? undefined),
     },
     uniformity,
     entityReadiness,
