@@ -5,6 +5,7 @@
 "use client";
 
 import { createAuthClient } from "better-auth/react";
+import { organizationClient } from "better-auth/client/plugins";
 
 /** Abort the password-reset request if it hangs longer than this (ms). */
 const PASSWORD_RESET_TIMEOUT_MS = 10000;
@@ -30,6 +31,7 @@ function resolveAuthBaseURL(): string {
 
 export const authClient = createAuthClient({
   baseURL: resolveAuthBaseURL(),
+  plugins: [organizationClient()],
 });
 
 export interface AuthResult<T = void> {

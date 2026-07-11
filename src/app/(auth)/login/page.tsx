@@ -2,6 +2,7 @@
  * Login page
  * Handles user authentication via Better Auth
  */
+import { Suspense } from "react";
 import { LoginForm } from "@/components/auth";
 
 export default function LoginPage() {
@@ -15,7 +16,9 @@ export default function LoginPage() {
       </div>
 
       <div className="bg-[var(--color-background-white)] rounded-none border border-[var(--color-border-primary)] p-32 shadow-sm">
-        <LoginForm />
+        <Suspense>
+          <LoginForm />
+        </Suspense>
       </div>
     </div>
   );

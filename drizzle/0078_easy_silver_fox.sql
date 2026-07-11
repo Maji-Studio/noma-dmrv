@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "invitations_org_email_pending_unique" ON "invitations" USING btree ("organization_id",lower("email")) WHERE "invitations"."status" = 'pending';
