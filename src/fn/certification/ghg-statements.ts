@@ -708,6 +708,7 @@ export async function refreshGhgStatementStatus(
   submissionId: string,
 ): Promise<ActionResult<GhgStatement>> {
   return withAction(async (orgCtx) => {
+    requireOrgRole(orgCtx, "admin");
     const submission = await getSubmissionById(orgCtx, submissionId);
     if (
       !submission ||

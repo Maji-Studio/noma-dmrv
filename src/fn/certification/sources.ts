@@ -715,6 +715,7 @@ export async function unlinkDocumentSource(
   input: unknown,
 ): Promise<ActionResult<{ unlinked: boolean }>> {
   return withAction(async (orgCtx) => {
+    requireOrgRole(orgCtx, "admin");
     const parsed = unlinkDocumentSourceSchema.parse(input);
 
     // Anchor the mutation to a specific removal so the document must belong
