@@ -20,6 +20,7 @@ const testEnvDefaults: Record<string, string> = {
   RESEND_FROM_EMAIL: "",
   ALLOW_SELF_SIGNUP: "false",
   ADMIN_EMAIL: "admin@example.com",
+  CREDENTIALS_ENCRYPTION_KEY: "00".repeat(32),
   STORAGE_PROVIDER: "local-fs",
   STORAGE_SIGNING_SECRET: "test-signing-secret-32-chars-minimum-length",
   STORAGE_LOCAL_FS_ROOT: ".storage-test",

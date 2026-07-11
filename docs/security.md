@@ -95,7 +95,9 @@ Inventory by group (app-validated in `src/config/env.ts`):
   `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_SIGNING_SECRET`,
   `STORAGE_LOCAL_FS_ROOT`
 - **Isometric:** `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
-  (both-or-neither), `ISOMETRIC_ENVIRONMENT`, `ISOMETRIC_UPLOAD_HOST_ALLOWLIST`,
+  (both-or-neither), `CREDENTIALS_ENCRYPTION_KEY` (optional at boot; required
+  when storing or reading per-organization registry credentials),
+  `ISOMETRIC_ENVIRONMENT`, `ISOMETRIC_UPLOAD_HOST_ALLOWLIST`,
   `ISOMETRIC_STORAGE_REDIRECT_HOSTS` (document-redirect allowlist),
   `DURABILITY_MEASUREMENT_SAMPLES_LIVE` (sandbox-only opt-in; rejected in
   production)

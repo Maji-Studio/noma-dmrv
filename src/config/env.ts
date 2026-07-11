@@ -4,6 +4,22 @@ const emptyToUndefined = (value: unknown) =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
 
 const LOCAL_APP_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+const CREDENTIALS_KEY_BYTES = 32;
+const CREDENTIALS_KEY_HEX_PATTERN = /^[0-9a-fA-F]{64}$/;
+const CREDENTIALS_KEY_BASE64_PATTERN = /^[A-Za-z0-9+/]{43}=?$/;
+
+function isCredentialsEncryptionKey(value: string): boolean {
+  if (CREDENTIALS_KEY_HEX_PATTERN.test(value)) return true;
+  if (!CREDENTIALS_KEY_BASE64_PATTERN.test(value)) return false;
+
+  const decoded = Buffer.from(value, "base64");
+  const normalizedInput = value.replace(/=+$/, "");
+  const normalizedDecoded = decoded.toString("base64").replace(/=+$/, "");
+  return (
+    decoded.length === CREDENTIALS_KEY_BYTES &&
+    normalizedDecoded === normalizedInput
+  );
+}
 
 function isLocalAppUrl(value: string): boolean {
   try {
@@ -70,6 +86,16 @@ const envSchema = z.object({
   ISOMETRIC_ACCESS_TOKEN: z.preprocess(
     emptyToUndefined,
     z.string().min(1).optional()
+  ),
+  CREDENTIALS_ENCRYPTION_KEY: z.preprocess(
+    emptyToUndefined,
+    z
+      .string()
+      .refine(isCredentialsEncryptionKey, {
+        message:
+          "CREDENTIALS_ENCRYPTION_KEY must be a 32-byte key encoded as 64 hexadecimal characters or base64",
+      })
+      .optional()
   ),
   ISOMETRIC_ENVIRONMENT: z
     .enum(["sandbox", "production"])
