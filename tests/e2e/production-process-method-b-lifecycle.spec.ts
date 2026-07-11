@@ -357,6 +357,11 @@ test.describe("production-process Method-B lifecycle", () => {
         .click();
 
       await expect(page.getByText("Started a new production process")).toBeVisible();
+      // The Method-B detail slide-over must close after the reset, otherwise the
+      // fresh Method A assertions can pass with it left open behind them.
+      await expect(
+        page.getByText("Synthetic QA PDD §6.2 plan v1"),
+      ).toBeHidden();
       const freshMethodARow = page.getByRole("button", {
         name: /0 \/ 30 eligible samples/i,
       });
