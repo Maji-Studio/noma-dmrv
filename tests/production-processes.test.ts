@@ -36,6 +36,7 @@ let facilityId: string;
 let feedstockTypeId: string;
 
 const METHOD_B_UNLOCKED_AT = new Date("2026-02-01T00:00:00.000Z");
+const FAR_FUTURE_SAMPLING_TIME = new Date("2999-01-01T12:00:00.000Z");
 const METHOD_B_SAMPLE_WRITE_GUARDS_MIGRATION = resolve(
   process.cwd(),
   "drizzle/0062_process_method_b_sample_write_guards.sql",
@@ -285,7 +286,7 @@ describe("findOrCreateProductionProcess", () => {
       .values({
         creditBatchId: sampledBatch.id,
         sampleCode: `S-PROC-${runId}-FUTURE`,
-        samplingTime: new Date("2999-01-01T12:00:00.000Z"),
+        samplingTime: FAR_FUTURE_SAMPLING_TIME,
         totalCarbonPercent: 80,
         organicCarbonPercent: 75,
       })
