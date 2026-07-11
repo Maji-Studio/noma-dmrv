@@ -69,6 +69,7 @@ export interface SampleWithRelations {
 
   // 1000-year durability
   randomReflectanceR0Percent: number | null;
+  sReflectanceFraction: number | null;
   r0MeasurementCount: number | null;
   r0AnalysisDate: string | null;
   r0HistogramFileUrl: string | null;
@@ -255,6 +256,7 @@ export async function getSamples(
       hToCOrgRatio: samples.hToCOrgRatio,
       oToCOrgRatio: samples.oToCOrgRatio,
       randomReflectanceR0Percent: samples.randomReflectanceR0Percent,
+      sReflectanceFraction: samples.sReflectanceFraction,
       r0MeasurementCount: samples.r0MeasurementCount,
       reactiveCarbonPercent: samples.reactiveCarbonPercent,
       residualCarbonPercent: samples.residualCarbonPercent,
@@ -353,6 +355,7 @@ export async function getSampleById(
       hToCOrgRatio: samples.hToCOrgRatio,
       oToCOrgRatio: samples.oToCOrgRatio,
       randomReflectanceR0Percent: samples.randomReflectanceR0Percent,
+      sReflectanceFraction: samples.sReflectanceFraction,
       r0MeasurementCount: samples.r0MeasurementCount,
       reactiveCarbonPercent: samples.reactiveCarbonPercent,
       residualCarbonPercent: samples.residualCarbonPercent,
@@ -483,6 +486,7 @@ async function requireBatchTierEvidence(
   creditBatchId: string,
   values: {
     randomReflectanceR0Percent: number | null;
+    sReflectanceFraction: number | null;
     reactiveCarbonPercent: number | null;
     residualCarbonPercent: number | null;
   },
@@ -511,6 +515,11 @@ async function requireBatchTierEvidence(
   ) {
     throw new SafeError(
       "TGA non-reactive carbon data is required for a sample on a 1000-year credit batch",
+    );
+  }
+  if (values.sReflectanceFraction == null) {
+    throw new SafeError(
+      "R₀ readings at or above 2% are required for a sample on a 1000-year credit batch",
     );
   }
 }
@@ -548,6 +557,7 @@ export async function createSample(
     hToCOrgRatio?: number | null;
     oToCOrgRatio?: number | null;
     randomReflectanceR0Percent?: number | null;
+    sReflectanceFraction?: number | null;
     r0MeasurementCount?: number | null;
     r0AnalysisDate?: Date | null;
     r0HistogramFileUrl?: string | null;
@@ -579,6 +589,7 @@ export async function createSample(
     // inside the transaction so the write sees the same tier as the check.
     await requireBatchTierEvidence(tx, data.creditBatchId, {
       randomReflectanceR0Percent: data.randomReflectanceR0Percent ?? null,
+      sReflectanceFraction: data.sReflectanceFraction ?? null,
       reactiveCarbonPercent: data.reactiveCarbonPercent ?? null,
       residualCarbonPercent: data.residualCarbonPercent ?? null,
     });
@@ -611,6 +622,7 @@ export async function createSample(
         hToCOrgRatio: data.hToCOrgRatio ?? null,
         oToCOrgRatio: data.oToCOrgRatio ?? null,
         randomReflectanceR0Percent: data.randomReflectanceR0Percent ?? null,
+        sReflectanceFraction: data.sReflectanceFraction ?? null,
         r0MeasurementCount: data.r0MeasurementCount ?? null,
         r0AnalysisDate: data.r0AnalysisDate
           ? data.r0AnalysisDate.toISOString().split("T")[0]
@@ -669,6 +681,7 @@ export async function updateSample(
     hToCOrgRatio?: number | null;
     oToCOrgRatio?: number | null;
     randomReflectanceR0Percent?: number | null;
+    sReflectanceFraction?: number | null;
     r0MeasurementCount?: number | null;
     r0AnalysisDate?: Date | null;
     r0HistogramFileUrl?: string | null;
@@ -731,6 +744,7 @@ export async function updateSample(
   if (data.hToCOrgRatio !== undefined) updateData.hToCOrgRatio = data.hToCOrgRatio;
   if (data.oToCOrgRatio !== undefined) updateData.oToCOrgRatio = data.oToCOrgRatio;
   if (data.randomReflectanceR0Percent !== undefined) updateData.randomReflectanceR0Percent = data.randomReflectanceR0Percent;
+  if (data.sReflectanceFraction !== undefined) updateData.sReflectanceFraction = data.sReflectanceFraction;
   if (data.r0MeasurementCount !== undefined) updateData.r0MeasurementCount = data.r0MeasurementCount;
   if (data.r0AnalysisDate !== undefined) {
     updateData.r0AnalysisDate = data.r0AnalysisDate
@@ -786,6 +800,10 @@ export async function updateSample(
           data.randomReflectanceR0Percent !== undefined
             ? data.randomReflectanceR0Percent
             : existing.randomReflectanceR0Percent,
+        sReflectanceFraction:
+          data.sReflectanceFraction !== undefined
+            ? data.sReflectanceFraction
+            : existing.sReflectanceFraction,
         reactiveCarbonPercent:
           data.reactiveCarbonPercent !== undefined
             ? data.reactiveCarbonPercent

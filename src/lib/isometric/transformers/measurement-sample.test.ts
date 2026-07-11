@@ -326,6 +326,10 @@ describe("build1000YearSequestrationSample (⚠️ sandbox-gated blueprint, ADR 
     // Per-replicate values are submitted RAW — the registry computes the
     // −binomial-SE durable fraction from the full list (no local reduction).
     expect(sFraction.map((v) => v.value.magnitude)).toEqual([0.92, 0.9, 0.93]);
+    expect(sFraction[0].measurement_property).toEqual({
+      quantity_kind: "dimensionless_ratio",
+      qualifier: "inertinite_fraction",
+    });
     expect(carbon[0].value.unit).toBe(CARBON_CONTENTS_UNIT);
     expect(sFraction[0].value.unit).toBe(S_FRACTION_UNIT);
     expect(mass[0].value.magnitude).toBe(8000);

@@ -6,6 +6,7 @@ import {
   buildDurabilityMeasurementSampleSubmissions,
   DURABILITY_MEASUREMENT_SAMPLES_LIVE,
 } from "./durability-measurement-samples";
+import { normalizeMeasurementSamplesForHash } from "./durability-measurement-sample-snapshot";
 
 function sample(overrides: Partial<Sample>): Sample {
   return {
@@ -138,18 +139,130 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
     ).toThrow(/only valid under Method B/);
   });
 
-  it("fails closed for a 1000-year batch (builder not yet wired — issue #348)", () => {
+  it("emits the full per-replicate 1000-year payload without a soil sample", () => {
+    const thousandYearBatch = batch({
+      creditBatchId: "t",
+      creditBatchCode: "CB-T",
+      durabilityOption: "1000_year",
+      runs: [{ id: "run-t", code: "R-T", biocharDryMassKg: 1000 }],
+      samples: [
+        sample({ totalCarbonPercent: 80, sReflectanceFraction: 0.91 }),
+        sample({ totalCarbonPercent: 82, sReflectanceFraction: 0.92 }),
+        sample({ totalCarbonPercent: 84, sReflectanceFraction: 0.93 }),
+      ],
+    });
+
+    const submissions = buildDurabilityMeasurementSampleSubmissions({
+      ...common,
+      facilityReferenceSoilTemperature: null,
+      batches: [thousandYearBatch],
+    });
+
+    expect(submissions).toHaveLength(1);
+    expect(submissions[0].operationKey).toBe("pb:t");
+    expect(submissions[0].body.measurement_type).toBe(
+      "biochar_production_batch",
+    );
+    expect(
+      submissions[0].body.values.map((value) => ({
+        qualifier: value.measurement_property.qualifier,
+        magnitude: value.value.magnitude,
+        unit: value.value.unit,
+      })),
+    ).toEqual([
+      { qualifier: "total_carbon", magnitude: 0.8, unit: "dimensionless" },
+      { qualifier: "inertinite_fraction", magnitude: 0.91, unit: "dimensionless" },
+      { qualifier: "total_carbon", magnitude: 0.82, unit: "dimensionless" },
+      { qualifier: "inertinite_fraction", magnitude: 0.92, unit: "dimensionless" },
+      { qualifier: "total_carbon", magnitude: 0.84, unit: "dimensionless" },
+      { qualifier: "inertinite_fraction", magnitude: 0.93, unit: "dimensionless" },
+      { qualifier: null, magnitude: 1000, unit: "kg" },
+    ]);
+  });
+
+  it("normalizes to an identical hash payload regardless of sample row order", () => {
+    // Postgres guarantees no row order without an ORDER BY, and replicate
+    // order flows into the body's `values` list — a reorder of unchanged rows
+    // must NOT flip the semantic change-detection hash.
+    const orderedSamples = [
+      sample({ id: "smp-1", totalCarbonPercent: 80, sReflectanceFraction: 0.91 }),
+      sample({ id: "smp-2", totalCarbonPercent: 82, sReflectanceFraction: 0.92 }),
+      sample({ id: "smp-3", totalCarbonPercent: 84, sReflectanceFraction: 0.93 }),
+    ];
+    const buildNormalized = (samples: Sample[]) =>
+      normalizeMeasurementSamplesForHash(
+        buildDurabilityMeasurementSampleSubmissions({
+          ...common,
+          facilityReferenceSoilTemperature: null,
+          batches: [
+            batch({
+              creditBatchId: "t",
+              creditBatchCode: "CB-T",
+              durabilityOption: "1000_year",
+              runs: [{ id: "run-t", code: "R-T", biocharDryMassKg: 1000 }],
+              samples,
+            }),
+          ],
+        }),
+      );
+
+    const forward = buildNormalized(orderedSamples);
+    const reversed = buildNormalized([...orderedSamples].reverse());
+
+    expect(JSON.stringify(reversed)).toBe(JSON.stringify(forward));
+  });
+
+  it("fails closed when a 1000-year batch has fewer than three complete replicates", () => {
     expect(() =>
       buildDurabilityMeasurementSampleSubmissions({
         ...common,
+        facilityReferenceSoilTemperature: null,
         batches: [
-          {
-            ...sampledBatch("t", "CB-T"),
+          batch({
+            creditBatchId: "t-short",
+            creditBatchCode: "CB-T-SHORT",
             durabilityOption: "1000_year",
-          },
+            runs: [{ id: "run-t", code: "R-T", biocharDryMassKg: 1000 }],
+            samples: [
+              sample({ totalCarbonPercent: 80, sReflectanceFraction: 0.91 }),
+              sample({ totalCarbonPercent: 82, sReflectanceFraction: 0.92 }),
+            ],
+          }),
         ],
       }),
-    ).toThrow(/1000-year durability tier/);
+    ).toThrow(/2 complete 1000-year replicate/);
+  });
+
+  it("fails closed instead of silently dropping an incomplete 1000-year sample", () => {
+    expect(() =>
+      buildDurabilityMeasurementSampleSubmissions({
+        ...common,
+        facilityReferenceSoilTemperature: null,
+        batches: [
+          batch({
+            creditBatchId: "t-partial",
+            creditBatchCode: "CB-T-PARTIAL",
+            durabilityOption: "1000_year",
+            runs: [{ id: "run-t", code: "R-T", biocharDryMassKg: 1000 }],
+            samples: [
+              sample({ totalCarbonPercent: 80, sReflectanceFraction: 0.91 }),
+              sample({ totalCarbonPercent: 82, sReflectanceFraction: 0.92 }),
+              sample({ totalCarbonPercent: 84, sReflectanceFraction: null }),
+            ],
+          }),
+        ],
+      }),
+    ).toThrow(/1 sample.*missing total carbon or the R₀/);
+  });
+
+  it("still fails closed when a 200-year batch has no soil reference", () => {
+    expect(() =>
+      buildDurabilityMeasurementSampleSubmissions({
+        ...common,
+        facilityReferenceSoilTemperature: null,
+        batches: [sampledBatch("a", "CB-A")],
+      }),
+    ).toThrow(/soil temperature is required for 200-year/);
   });
 
   it("scales product mass by the per-run applied attribution", () => {

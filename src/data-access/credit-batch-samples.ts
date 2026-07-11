@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
@@ -113,11 +113,15 @@ export async function getCreditBatchesWithSamples(
 
   // Samples pooled by credit batch — the key re-grain. Skips the null-run filter
   // `getProductionRunsWithSamples` applies, so commingled-batch chemistry is
-  // visible to the durability surfaces again.
+  // visible to the durability surfaces again. Ordered by id: Postgres gives no
+  // row order without one, and the 1000-year submission body (and thus its
+  // change-detection hash) carries per-replicate values in this order — an
+  // unordered read could flip the hash for unchanged rows.
   const sampleRows = await db
     .select()
     .from(samples)
-    .where(inArray(samples.creditBatchId, ids));
+    .where(inArray(samples.creditBatchId, ids))
+    .orderBy(asc(samples.id));
   const samplesByBatch = new Map<string, Sample[]>();
   for (const s of sampleRows) {
     if (s.creditBatchId == null) continue;

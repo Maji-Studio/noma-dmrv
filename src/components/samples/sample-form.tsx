@@ -32,7 +32,7 @@ import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 import { useEffect, useId } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FlaskIcon, FireIcon, AtomIcon, ScalesIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon, LeafIcon } from "@phosphor-icons/react/dist/ssr";
+import { FlaskIcon, FireIcon, AtomIcon, ScalesIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, makeCertFieldStatus } from "@/components/forms";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import {
@@ -44,6 +44,7 @@ import {
 } from "@/schemas/samples";
 import { SampleEligibilityAdvisory } from "./sample-eligibility-advisory";
 import { SampleBatchProgress } from "./sample-batch-progress";
+import { SampleNutrientFields } from "./sample-nutrient-fields";
 import {
   SampleEvidenceSection,
   SampleTransportSection,
@@ -118,6 +119,7 @@ export function SampleForm({
       oToCOrgRatio: sample?.oToCOrgRatio ?? undefined,
       durabilityOption: sample?.durabilityOption ?? "200_year",
       randomReflectanceR0Percent: sample?.randomReflectanceR0Percent ?? undefined,
+      sReflectanceFraction: sample?.sReflectanceFraction ?? undefined,
       r0MeasurementCount: sample?.r0MeasurementCount ?? undefined,
       r0AnalysisDate: sample?.r0AnalysisDate ?? "",
       r0HistogramFileUrl: sample?.r0HistogramFileUrl ?? "",
@@ -180,6 +182,7 @@ export function SampleForm({
   useEffect(() => {
     if (watchedDurabilityOption === "200_year") {
       setValue("randomReflectanceR0Percent", undefined);
+      setValue("sReflectanceFraction", undefined);
       setValue("r0MeasurementCount", undefined);
       setValue("r0AnalysisDate", "");
       setValue("r0HistogramFileUrl", "");
@@ -776,7 +779,7 @@ export function SampleForm({
             <FormSection
               title="1000-Year Durability · R₀ Reflectance"
               icon={<EyeIcon size={14} weight="bold" />}
-              fields={["randomReflectanceR0Percent", "r0MeasurementCount", "r0AnalysisDate"]}
+              fields={["randomReflectanceR0Percent", "sReflectanceFraction", "r0MeasurementCount", "r0AnalysisDate"]}
             >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                   <FormField
@@ -796,6 +799,40 @@ export function SampleForm({
                       {...register("randomReflectanceR0Percent", {
                         setValueAs: numericValue,
                       })}
+                    />
+                  </FormField>
+
+                  <FormField
+                    id="sReflectanceFraction"
+                    label="R₀ Readings at or above 2% (%)"
+                    helperText="Share of ISO 7404-5 reflectance readings meeting the 1000-year threshold."
+                    error={errors.sReflectanceFraction?.message}
+                    certifyRequired={isSampleCertifyField("sReflectanceFraction")}
+                    certifyStatus={certStatus("sReflectanceFraction")}
+                  >
+                    <Controller
+                      name="sReflectanceFraction"
+                      control={control}
+                      render={({ field }) => (
+                        <FormInput
+                          id="sReflectanceFraction"
+                          name={field.name}
+                          ref={field.ref}
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          placeholder="e.g., 92"
+                          disabled={isSubmitting}
+                          error={!!errors.sReflectanceFraction}
+                          value={typeof field.value === "number" ? field.value * 100 : ""}
+                          onBlur={field.onBlur}
+                          onChange={(event) => {
+                            const percentage = numericValue(event.target.value);
+                            field.onChange(percentage == null ? percentage : percentage / 100);
+                          }}
+                        />
+                      )}
                     />
                   </FormField>
 
@@ -902,122 +939,16 @@ export function SampleForm({
           </>
         )}
 
-        {/* ── Nutrient Claims ── */}
-        <FormSection
-          title="Nutrient Claims"
-          icon={<LeafIcon size={14} weight="bold" />}
-          fields={["phosphorusPercent", "potassiumPercent", "magnesiumPercent", "calciumPercent", "ironPercent"]}
-        >
-              <label
-                htmlFor="nutrientClaimEnabled"
-                className="flex items-center gap-12 cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  id="nutrientClaimEnabled"
-                  className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
-                  disabled={isSubmitting}
-                  {...register("nutrientClaimEnabled")}
-                />
-                <span className="body-medium text-[var(--color-text-primary)]">
-                  Enable nutrient claims
-                </span>
-              </label>
-
-              {watchedNutrientClaimEnabled && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20 pt-8">
-                  <FormField
-                    id="phosphorusPercent"
-                    label="Phosphorus (%)"
-                    error={errors.phosphorusPercent?.message}
-                  >
-                    <FormInput
-                      id="phosphorusPercent"
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g., 0.5"
-                      disabled={isSubmitting}
-                      error={!!errors.phosphorusPercent}
-                      {...register("phosphorusPercent", {
-                        setValueAs: numericValue,
-                      })}
-                    />
-                  </FormField>
-
-                  <FormField
-                    id="potassiumPercent"
-                    label="Potassium (%)"
-                    error={errors.potassiumPercent?.message}
-                  >
-                    <FormInput
-                      id="potassiumPercent"
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g., 1.2"
-                      disabled={isSubmitting}
-                      error={!!errors.potassiumPercent}
-                      {...register("potassiumPercent", {
-                        setValueAs: numericValue,
-                      })}
-                    />
-                  </FormField>
-
-                  <FormField
-                    id="magnesiumPercent"
-                    label="Magnesium (%)"
-                    error={errors.magnesiumPercent?.message}
-                  >
-                    <FormInput
-                      id="magnesiumPercent"
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g., 0.3"
-                      disabled={isSubmitting}
-                      error={!!errors.magnesiumPercent}
-                      {...register("magnesiumPercent", {
-                        setValueAs: numericValue,
-                      })}
-                    />
-                  </FormField>
-
-                  <FormField
-                    id="calciumPercent"
-                    label="Calcium (%)"
-                    error={errors.calciumPercent?.message}
-                  >
-                    <FormInput
-                      id="calciumPercent"
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g., 2.0"
-                      disabled={isSubmitting}
-                      error={!!errors.calciumPercent}
-                      {...register("calciumPercent", {
-                        setValueAs: numericValue,
-                      })}
-                    />
-                  </FormField>
-
-                  <FormField
-                    id="ironPercent"
-                    label="Iron (%)"
-                    error={errors.ironPercent?.message}
-                  >
-                    <FormInput
-                      id="ironPercent"
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g., 0.1"
-                      disabled={isSubmitting}
-                      error={!!errors.ironPercent}
-                      {...register("ironPercent", {
-                        setValueAs: numericValue,
-                      })}
-                    />
-                  </FormField>
-                </div>
-              )}
-        </FormSection>
+        <SampleNutrientFields
+          enabled={watchedNutrientClaimEnabled}
+          isSubmitting={isSubmitting}
+          enabledRegistration={register("nutrientClaimEnabled")}
+          phosphorus={{ registration: register("phosphorusPercent", { setValueAs: numericValue }), error: errors.phosphorusPercent?.message }}
+          potassium={{ registration: register("potassiumPercent", { setValueAs: numericValue }), error: errors.potassiumPercent?.message }}
+          magnesium={{ registration: register("magnesiumPercent", { setValueAs: numericValue }), error: errors.magnesiumPercent?.message }}
+          calcium={{ registration: register("calciumPercent", { setValueAs: numericValue }), error: errors.calciumPercent?.message }}
+          iron={{ registration: register("ironPercent", { setValueAs: numericValue }), error: errors.ironPercent?.message }}
+        />
 
       </form>
 

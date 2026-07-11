@@ -43,6 +43,7 @@ import { logger } from "@/lib/log";
 import {
   createGhgStatement,
   describeIsometricApiError,
+  findDraftGhgStatementsByPeriod,
   getGhgStatement,
   IsometricApiError,
   payloadHash,
@@ -258,7 +259,21 @@ export async function createGhgStatementDraft(
       parsed.reportingPeriodEndOn,
     );
     const expected: ExpectedRemoval[] = [];
+    let knownRemoteDraft = false;
     if (!periodAlreadyExists) {
+      // Reconcile an exact out-of-band draft before considering a POST. Do
+      // this even when local removals still appear open: Isometric may already
+      // have linked some or all of them, and POSTing would create a duplicate
+      // period before the normal recovery lookup gets a chance to run.
+      const remoteDrafts = await findDraftGhgStatementsByPeriod(
+        project.externalProjectId,
+        parsed.reportingPeriodEndOn,
+      );
+      if (remoteDrafts.length > 1) {
+        throw new SafeError(MULTIPLE_DRAFTS_MESSAGE);
+      }
+      knownRemoteDraft = remoteDrafts.length === 1;
+
       const derivedStart = derivePeriodStart(
         parsed.reportingPeriodEndOn,
         existingEnds,
@@ -278,7 +293,7 @@ export async function createGhgStatementDraft(
           expected.push({ localId: removal.id, externalId });
         }
       }
-      if (expected.length === 0) {
+      if (expected.length === 0 && !knownRemoteDraft) {
         throw new SafeError(
           "This reporting period has no submitted removals yet — a statement now would be empty. Submit a removal first, or pick a period end that includes one.",
         );
@@ -347,7 +362,7 @@ export async function createGhgStatementDraft(
           userId,
           statement,
           row: claimed.row,
-          resumed: claimed.resumed,
+          resumed: claimed.resumed || knownRemoteDraft,
           externalProjectId: project.externalProjectId,
           endOn: parsed.reportingPeriodEndOn,
           submissionAttemptId,

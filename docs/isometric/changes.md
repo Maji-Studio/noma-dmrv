@@ -13,6 +13,35 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-07-10 (1000-year sandbox submission verified end to end)
+
+The 1000-year removal path has now passed a live Isometric sandbox submission
+with three raw lab replicates. The sandbox accepted `carbon_contents` as
+`mass_fraction_dry_basis/total_carbon` and `s_fraction` as
+`dimensionless_ratio/inertinite_fraction`, both with dimensionless 0–1 values.
+The removal was created successfully and its GHG Statement membership was
+reconciled from Isometric.
+
+- `samples.s_reflectance_fraction` is captured in the lab-sample form as a
+  percentage and stored/submitted as a 0–1 fraction. Server-side validation and
+  certification readiness require it for 1000-year samples.
+- The sandbox-only `DURABILITY_MEASUREMENT_SAMPLES_LIVE` environment opt-in now
+  drives the versioned measurement-sample snapshot and POST. Enabling it against
+  production is rejected at boot.
+- 1000-year submission fails closed unless every sample in the batch carries
+  total carbon plus `s_fraction` and at least three complete replicates exist.
+- The local readiness preview derives paired R0/non-reactive-carbon statistics
+  from sample replicates, accepts reactive carbon by deriving its residual
+  complement, and never mixes partial sample statistics with legacy batch
+  aggregates.
+- A facility soil-temperature reference is no longer required for a 1000-year
+  snapshot; it remains mandatory for 200-year durability samples.
+- GHG Statement creation adopts one exact pre-existing Isometric draft before
+  attempting a POST and remains fail-closed when multiple matching drafts exist.
+
+This validates sandbox wire compatibility only. Production remains gated, and
+the 200-year H/C binding and unit questions below remain open.
+
 ## 2026-07-04 (durability tier facility-scoped + 1000-year submission path — ADR 0021, issue #358)
 
 The durability tier (200-year vs 1000-year) is now **declared once per facility
@@ -50,7 +79,8 @@ DEC (Moshi) reseeds as a 1000-year facility.
   sandbox confirm.
 - **s_fraction data model.** New nullable `samples.s_reflectance_fraction` — the
   per-sample proportion (0–1) of R₀ readings ≥ 2% (ISO 7404-5 inertinite fraction).
-  Seeded on the 1000-year replicates. Form capture deferred to #348.
+  Seeded on the 1000-year replicates. Form capture landed in the 2026-07-10
+  sandbox-verification change above.
 - **Still needs Isometric staff sign-off** (does not block the gated plumbing):
   Eq.6-vs-blueprint governance for the durable fraction; total-vs-organic carbon for
   `carbon_contents`; cross-entry shared-datapoint uncertainty; the empirical sandbox

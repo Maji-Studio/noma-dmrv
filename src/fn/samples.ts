@@ -256,6 +256,7 @@ export async function createSampleFn(
       hToCOrgRatio: validated.hToCOrgRatio ?? null,
       oToCOrgRatio: validated.oToCOrgRatio ?? null,
       randomReflectanceR0Percent: validated.randomReflectanceR0Percent ?? null,
+      sReflectanceFraction: validated.sReflectanceFraction ?? null,
       r0MeasurementCount: validated.r0MeasurementCount ?? null,
       r0AnalysisDate: validated.r0AnalysisDate
         ? validated.r0AnalysisDate instanceof Date
@@ -353,6 +354,7 @@ export async function updateSampleFn(
       hToCOrgRatio: validated.hToCOrgRatio,
       oToCOrgRatio: validated.oToCOrgRatio,
       randomReflectanceR0Percent: validated.randomReflectanceR0Percent,
+      sReflectanceFraction: validated.sReflectanceFraction,
       r0MeasurementCount: validated.r0MeasurementCount,
       r0AnalysisDate: validated.r0AnalysisDate
         ? validated.r0AnalysisDate instanceof Date

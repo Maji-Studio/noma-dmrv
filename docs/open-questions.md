@@ -372,9 +372,10 @@ they don't churn a freshly-introduced surface mid-review:
   after the operator runs the confirms** — at the same cutover, delete the stale
   `carbon_rich_substance_sequestration` `INPUT_MAPPING` entry (see the Phase 3 note).
 
-- **1000-year extension (2026-07-04, ADR 0021).** The durability tier is now
+- **1000-year extension (2026-07-04, verified in sandbox 2026-07-10, ADR 0021).** The durability tier is now
   facility-scoped; DEC (Moshi) is 1000-year. The recognition + guard plumbing for
-  the **1000-year** submission path is built (still behind the same
+  the **1000-year** submission path is built and has passed an end-to-end
+  sandbox removal submit (still behind the sandbox-only
   `DURABILITY_MEASUREMENT_SAMPLES_LIVE` flag):
   - `biochar_sequestration_1000_year` is in `SEQUESTRATION_BLUEPRINT_KEYS`;
     `resolveTemplateInputs` skips the whole sequestration **family**
@@ -383,17 +384,16 @@ they don't churn a freshly-introduced surface mid-review:
   - `submitRemoval` now validates the template's sequestration blueprint against
     the facility tier (`expectedSequestrationBlueprintKeys`) and fails closed early
     on a mismatch (200-year facility with a 1000-year template, or vice versa).
-  - `build1000YearSequestrationSample` builds the blueprint inputs
+  - `build1000YearSequestrationSample` builds and submits the blueprint inputs
     (per-replicate `carbon_contents` + `s_fraction` LISTS + `product_mass` SCALAR,
-    NO local mean/−SE/cap — the registry reduces). It is unit-tested but **not yet
-    wired into the (blocked) submit path** — the exact datapoint↔list-input binding
-    is the remaining sandbox confirm, mirroring the 200-year confirms below.
+    NO local mean/−SE/cap — the registry reduces). The sandbox accepted the
+    versioned measurement sample and created the removal.
   - **s_fraction data model:** stored per Sample as
     `samples.s_reflectance_fraction` (the ISO 7404-5 inertinite fraction —
-    proportion of that sample's R₀ readings ≥ 2%). **Open Isometric confirm:**
-    whether the registry wants this computed proportion or the raw R₀ reading set;
-    and whether `carbon_contents` is total (blueprint) vs. organic carbon. Sample
-    **form capture** of `s_reflectance_fraction` is a follow-up (issue #348).
+    proportion of that sample's R₀ readings ≥ 2%). The form now captures it as a
+    percentage and stores/submits 0–1. Sandbox validation accepted
+    `dimensionless_ratio/inertinite_fraction`; `carbon_contents` was accepted as
+    total carbon with `mass_fraction_dry_basis/total_carbon`.
 
 - **Grill-with-docs resolution (2026-06-19).** The Tier-1 wiring plan was stress-tested
   against ADR 0013 / ADR 0016 and the authoritative protocol (biochar 1.2 §8.3.1; soil module

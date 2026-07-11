@@ -26,6 +26,8 @@ import { getCreditBatchesWithSamples } from "./credit-batch-samples";
 import {
   SOIL_STORAGE_MODULE_VERSION,
   computeApplicationCo2eStored,
+  computeApplicationCo2eStoredBlueprint1000,
+  type Blueprint1000YearReplicate,
 } from "@/lib/calculations/biochar-removal";
 import { weightedBatchChemistry } from "@/lib/isometric/utils/durability-aggregation";
 
@@ -50,6 +52,31 @@ export interface CreditBatchCo2eStoredPreview {
   applicationResults: ApplicationCo2eStoredPreview[];
   missingInputs: string[];
   warnings: string[];
+}
+
+/**
+ * Extract a 1000-year batch's COMPLETE blueprint replicates from its lab
+ * Samples — total carbon + s_fraction, the exact inputs the live
+ * `biochar_sequestration_1000_year` blueprint scores. The both-values filter
+ * mirrors `buildDurabilityMeasurementSampleSubmissions` so the preview can
+ * never see a different replicate set than the submission for the same batch.
+ */
+export function extract1000YearBlueprintReplicates(
+  samples: Array<{
+    totalCarbonPercent: number | null;
+    sReflectanceFraction: number | null;
+  }>,
+): Blueprint1000YearReplicate[] {
+  return samples.flatMap((sample) =>
+    sample.totalCarbonPercent == null || sample.sReflectanceFraction == null
+      ? []
+      : [
+          {
+            totalCarbonPercent: sample.totalCarbonPercent,
+            sReflectanceFraction: sample.sReflectanceFraction,
+          },
+        ],
+  );
 }
 
 export async function getFacilityCertifierWithExecutor(
@@ -83,15 +110,9 @@ export async function buildCo2eStoredPreview(
   userId: string,
   // The durability tier is join-derived from the facility (ADR 0021), so it is
   // supplied alongside the raw batch row rather than read off it.
-  batch: Pick<
-    CreditBatch,
-    | "id"
-    | "facilityId"
-    | "meanRandomReflectancePercent"
-    | "stdRandomReflectance"
-    | "meanNonReactiveCarbonPercent"
-    | "stdNonReactiveCarbonPercent"
-  > & { durabilityOption: DurabilityOption },
+  batch: Pick<CreditBatch, "id" | "facilityId"> & {
+    durabilityOption: DurabilityOption;
+  },
   applicationIds: string[]
 ): Promise<CreditBatchCo2eStoredPreview> {
   const provider = await getFacilityCertifier(userId, batch.facilityId);
@@ -143,25 +164,39 @@ export async function buildCo2eStoredPreview(
   ]);
   const { weightedOrganicCarbonPercent, weightedHToCorgRatio } =
     weightedBatchChemistry(batchesWithSamples);
+  // 1000-year previews compute from the SAME blueprint inputs the registry
+  // scores (per-replicate total carbon + s_fraction — see
+  // `build1000YearSequestrationSample`), NOT module Eq.6 over the legacy batch
+  // petrography columns: Eq.6 is a different formula from the live blueprint,
+  // and those columns are never populated (issue #375 — do not "fix" the
+  // preview by filling them). Sample-derived only: missing or incomplete
+  // (< 3 complete replicates) evidence degrades to the null-co2e /
+  // missingInputs gap contract inside the compute — never to Eq.6.
+  const thousandYearReplicates =
+    batch.durabilityOption === "1000_year"
+      ? extract1000YearBlueprintReplicates(batchesWithSamples[0]?.samples ?? [])
+      : [];
 
-  // The engine branches on durabilityOption: "1000_year" consumes the batch's
-  // stored petrography/TGA columns (Eq.6, issue #142); the default 200-year
-  // path uses per-application soil temperature + pooled H/C_org (Eq.3). An
-  // unpopulated 1000-year batch degrades to the same missingInputs /
-  // co2eStoredTonnes: null gap contract as 200-year gaps.
+  // The preview branches on durabilityOption: "1000_year" runs the Certify
+  // blueprint parity math over the batch's pooled replicates; the default
+  // 200-year path uses per-application soil temperature + pooled H/C_org
+  // (Eq.3). Both degrade to the same missingInputs / co2eStoredTonnes: null
+  // gap contract.
   const applicationResults = applicationIds.map((applicationId) => {
     const app = appById.get(applicationId);
-    const result = computeApplicationCo2eStored({
-      durabilityOption: batch.durabilityOption,
-      dryMassTonnes: app?.biocharAppliedDryTons ?? null,
-      soilTemperatureC: app?.soilTemperatureC ?? null,
-      hToCorgRatio: weightedHToCorgRatio,
-      organicCarbonPercent: weightedOrganicCarbonPercent,
-      meanRandomReflectancePercent: batch.meanRandomReflectancePercent,
-      stdRandomReflectance: batch.stdRandomReflectance,
-      meanNonReactiveCarbonPercent: batch.meanNonReactiveCarbonPercent,
-      stdNonReactiveCarbonPercent: batch.stdNonReactiveCarbonPercent,
-    });
+    const result =
+      batch.durabilityOption === "1000_year"
+        ? computeApplicationCo2eStoredBlueprint1000({
+            dryMassTonnes: app?.biocharAppliedDryTons ?? null,
+            replicates: thousandYearReplicates,
+          })
+        : computeApplicationCo2eStored({
+            durabilityOption: batch.durabilityOption,
+            dryMassTonnes: app?.biocharAppliedDryTons ?? null,
+            soilTemperatureC: app?.soilTemperatureC ?? null,
+            hToCorgRatio: weightedHToCorgRatio,
+            organicCarbonPercent: weightedOrganicCarbonPercent,
+          });
 
     return {
       applicationId,
