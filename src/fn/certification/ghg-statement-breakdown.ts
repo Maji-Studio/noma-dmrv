@@ -15,7 +15,11 @@ import {
 } from "@/lib/certification/ghg-statement-breakdown";
 import type { RemovalCarbonBreakdown } from "@/lib/certification/removal-breakdown";
 import { SafeError } from "@/lib/errors";
-import { getGhgEntry, getGhgStatement } from "@/lib/isometric";
+import {
+  getGhgEntry,
+  getGhgStatement,
+  getIsometricClientForOrg,
+} from "@/lib/isometric";
 import {
   GHG_STATEMENT_ENTITY_TYPE,
   GHG_STATEMENT_SUBMISSION_TYPE,
@@ -66,6 +70,7 @@ export async function loadGhgStatementBreakdown(
   ghgStatementId: string,
 ): Promise<ActionResult<GhgStatementBreakdownData>> {
   return withAction(async (orgCtx) => {
+    const client = await getIsometricClientForOrg(orgCtx.organizationId);
     const statement = await getCertifierGhgStatementById(
       orgCtx,
       ghgStatementId,
@@ -107,7 +112,7 @@ export async function loadGhgStatementBreakdown(
       .map((id) => removalSubmissions.get(id)?.externalId)
       .filter((value): value is string => Boolean(value));
     const fetchedEntries = await Promise.all(
-      entryExternalIds.map((id) => getGhgEntry(id).catch(() => null)),
+      entryExternalIds.map((id) => getGhgEntry(client, id).catch(() => null)),
     );
     const presentEntries = fetchedEntries.filter(
       (entry): entry is NonNullable<typeof entry> => entry !== null,
@@ -127,7 +132,7 @@ export async function loadGhgStatementBreakdown(
     // statement rather than summing per-entry allocations.
     const externalId = statementSubmission?.externalId ?? null;
     const remote = externalId
-      ? await getGhgStatement(externalId).catch(() => null)
+      ? await getGhgStatement(client, externalId).catch(() => null)
       : null;
     const creditAllocation = remote?.credit_allocation
       ? {

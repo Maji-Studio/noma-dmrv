@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isValidCredentialsEncryptionKey } from "@/lib/crypto/secrets";
 
 const emptyToUndefined = (value: unknown) =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
@@ -70,6 +71,16 @@ const envSchema = z.object({
   ISOMETRIC_ACCESS_TOKEN: z.preprocess(
     emptyToUndefined,
     z.string().min(1).optional()
+  ),
+  CREDENTIALS_ENCRYPTION_KEY: z.preprocess(
+    emptyToUndefined,
+    z
+      .string()
+      .refine(isValidCredentialsEncryptionKey, {
+        message:
+          "CREDENTIALS_ENCRYPTION_KEY must be a 32-byte key encoded as 64 hexadecimal characters or base64",
+      })
+      .optional()
   ),
   ISOMETRIC_ENVIRONMENT: z
     .enum(["sandbox", "production"])
@@ -161,7 +172,7 @@ const envSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["ISOMETRIC_CLIENT_SECRET"],
       message:
-        "ISOMETRIC_CLIENT_SECRET and ISOMETRIC_ACCESS_TOKEN must either both be set or both be omitted",
+        "ISOMETRIC_CLIENT_SECRET and ISOMETRIC_ACCESS_TOKEN are seed/CI-only and must either both be set or both be omitted",
     });
   }
 
@@ -211,6 +222,20 @@ const envSchema = z.object({
       path: ["GEO_PROVIDER"],
       message:
         "GEO_PROVIDER must not be 'stub' in production — stub adapters return fixture distances.",
+    });
+  }
+
+  // Production fail-closed: certifier-credential encryption must be possible
+  // from boot, not discovered broken on the first credential write/read. CI is
+  // carved out for the same hermetic-production-bundle reason as GEO_PROVIDER;
+  // real deployments must carry the key (docs/security.md - sourced from the
+  // staging/production 1Password items).
+  if (data.NODE_ENV === "production" && !isCI && !data.CREDENTIALS_ENCRYPTION_KEY) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["CREDENTIALS_ENCRYPTION_KEY"],
+      message:
+        "CREDENTIALS_ENCRYPTION_KEY is required in production - per-org certifier credentials cannot be encrypted or decrypted without it.",
     });
   }
 

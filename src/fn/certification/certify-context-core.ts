@@ -1,5 +1,6 @@
 import type { OrgContext } from "@/lib/auth/server";
 import { env } from "@/config/env";
+import { hasCertifierCredentials } from "@/data-access/certifier-credentials";
 import {
   getCertifierProjectByFacility,
   type CertificationSubmissionRow,
@@ -47,6 +48,7 @@ import { SafeError } from "@/lib/errors";
 import {
   aggregateTransportMassDistance,
   collectTransportEntityIds,
+  getIsometricClientForOrg,
   listComponentBlueprints,
   listProjects,
   listGhgEntryTemplates,
@@ -127,6 +129,7 @@ type DurabilityOption = "200_year" | "1000_year";
 // UI-facing removal context — the lean payload React Query caches.
 export interface RemovalCertifyContext {
   facilityId: string;
+  hasOrgCredentials: boolean;
   // Null when the credit batch is not yet grouped into a removal (a 1:1
   // removal is created lazily on first submit).
   removalId: string | null;
@@ -409,6 +412,7 @@ export async function resolveScopeForRemoval(
 // resolves them ONCE and feeds them to every removal's `buildRemovalContext`
 // instead of re-pulling the same template/blueprint data per row.
 export interface FacilityCertifierFacts {
+  hasOrgCredentials: boolean;
   mapping: CertifierProjectRow | null;
   project: IsometricProject | null;
   defaultTemplate: IsometricGhgEntryTemplate | null;
@@ -418,12 +422,10 @@ export interface FacilityCertifierFacts {
   requiredTransportCategories: TransportCategory[];
 }
 
-// Facility facts before any mapping resolves — also the shape every
-// not-fully-configured short-circuit carries (the template-dependent fields
-// stay empty).
+// Template-dependent fields shared by each unresolved short-circuit.
 const UNRESOLVED_FACILITY_FACTS: Omit<
   FacilityCertifierFacts,
-  "mapping" | "project"
+  "hasOrgCredentials" | "mapping" | "project"
 > = {
   defaultTemplate: null,
   missingDefaultTemplateId: null,
@@ -432,40 +434,41 @@ const UNRESOLVED_FACILITY_FACTS: Omit<
   requiredTransportCategories: [],
 };
 
-// Resolves the facility-scoped certifier facts: the Isometric mapping and, when
-// it resolves cleanly, the project / default template / referenced component
-// blueprints + the template's required transport categories. Short-circuits the
-// same way the single-pass builder did — no mapping skips every remote list; no
-// default template skips the blueprint catalog — so the remote-call fan-out per
-// facility is unchanged.
+// Resolves the mapping, credentials, remote project/template, and referenced
+// blueprints once per facility. Unresolved prerequisites skip downstream calls.
 export async function loadFacilityCertifierFacts(
   orgCtx: OrgContext,
   facilityId: string,
 ): Promise<FacilityCertifierFacts> {
-  const mapping = await getCertifierProjectByFacility(
-    orgCtx,
-    facilityId,
-    ISOMETRIC_PROVIDER,
-  );
+  const [mapping, hasOrgCredentials] = await Promise.all([
+    getCertifierProjectByFacility(orgCtx, facilityId, ISOMETRIC_PROVIDER),
+    hasCertifierCredentials(orgCtx, ISOMETRIC_PROVIDER),
+  ]);
   if (!mapping) {
-    return { mapping: null, project: null, ...UNRESOLVED_FACILITY_FACTS };
+    return { hasOrgCredentials, mapping: null, project: null, ...UNRESOLVED_FACILITY_FACTS };
+  }
+  if (!hasOrgCredentials) {
+    return { hasOrgCredentials: false, mapping, project: null, ...UNRESOLVED_FACILITY_FACTS };
   }
 
+  const client = await getIsometricClientForOrg(orgCtx.organizationId);
+
   const [projects, templates] = await Promise.all([
-    safeListIfConfigured(() => listProjects()),
-    safeListIfConfigured(() => listGhgEntryTemplates(mapping.externalProjectId)),
+    safeListIfConfigured(() => listProjects(client)),
+    safeListIfConfigured(() => listGhgEntryTemplates(client, mapping.externalProjectId)),
   ]);
   const project =
     projects.find((p) => p.id === mapping.externalProjectId) ?? null;
 
   if (!mapping.defaultRemovalTemplateId) {
-    return { mapping, project, ...UNRESOLVED_FACILITY_FACTS };
+    return { hasOrgCredentials, mapping, project, ...UNRESOLVED_FACILITY_FACTS };
   }
 
   const defaultTemplate =
     templates.find((t) => t.id === mapping.defaultRemovalTemplateId) ?? null;
   if (!defaultTemplate) {
     return {
+      hasOrgCredentials,
       mapping,
       project,
       ...UNRESOLVED_FACILITY_FACTS,
@@ -481,7 +484,7 @@ export async function loadFacilityCertifierFacts(
     ),
   );
   const allBlueprints = await safeListIfConfigured(() =>
-    listComponentBlueprints(),
+    listComponentBlueprints(client),
   );
   const blueprintByKey = new Map(allBlueprints.map((bp) => [bp.key, bp]));
   const blueprintsForTemplate: IsometricComponentBlueprint[] = [];
@@ -493,6 +496,7 @@ export async function loadFacilityCertifierFacts(
   }
 
   return {
+    hasOrgCredentials,
     mapping,
     project,
     defaultTemplate,
@@ -774,6 +778,7 @@ function projectUiContext(
 ): RemovalCertifyContext {
   return {
     facilityId: ctx.facilityId,
+    hasOrgCredentials: ctx.hasOrgCredentials,
     removalId: ctx.removalId,
     mapping: ctx.mapping,
     project: ctx.project,

@@ -4,6 +4,7 @@ import {
   getCertifierProjectByFacility,
   type CertifierProjectRow,
 } from "@/data-access/certification";
+import { hasCertifierCredentials } from "@/data-access/certifier-credentials";
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
@@ -33,6 +34,10 @@ vi.mock("@/data-access/certification", () => ({
   getCertifierProjectByFacility: vi.fn(),
 }));
 
+vi.mock("@/data-access/certifier-credentials", () => ({
+  hasCertifierCredentials: vi.fn(),
+}));
+
 vi.mock("@/data-access/chain-of-custody", () => ({
   getChainOfCustodyData: vi.fn(),
 }));
@@ -58,6 +63,7 @@ vi.mock("@/lib/isometric", async () => {
     await vi.importActual<typeof import("@/lib/isometric")>("@/lib/isometric");
   return {
     ...actual,
+    getIsometricClientForOrg: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
     listProjects: vi.fn(),
     listGhgEntryTemplates: vi.fn(),
     listComponentBlueprints: vi.fn(),
@@ -67,6 +73,7 @@ vi.mock("@/lib/isometric", async () => {
 const mockedGetCreditBatch = vi.mocked(getCreditBatchById);
 const mockedGetApplicationsForRuns = vi.mocked(getApplicationsForRuns);
 const mockedGetMapping = vi.mocked(getCertifierProjectByFacility);
+const mockedHasCredentials = vi.mocked(hasCertifierCredentials);
 const mockedGetLineage = vi.mocked(getChainOfCustodyData);
 const mockedGetRuns = vi.mocked(getProductionRunsWithSamples);
 const mockedGetBatchesWithSamples = vi.mocked(getCreditBatchesWithSamples);
@@ -143,6 +150,7 @@ function blueprint(key: string): IsometricComponentBlueprint {
 describe("loadCertifyContextForCreditBatchForUser", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mockedHasCredentials.mockResolvedValue(true);
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       code: "CB-1",
@@ -185,6 +193,26 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(mockedListTemplates).not.toHaveBeenCalled();
     expect(mockedListBlueprints).not.toHaveBeenCalled();
     expect(mockedGetLegs).not.toHaveBeenCalled();
+  });
+
+  it("reports missing organization credentials and skips remote calls", async () => {
+    mockedGetMapping.mockResolvedValue(mapping());
+    mockedHasCredentials.mockResolvedValue(false);
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      makeTestOrgContext(USER_ID),
+      CREDIT_BATCH_ID,
+    );
+
+    expect(result).toMatchObject({
+      hasOrgCredentials: false,
+      mapping: { externalProjectId: EXTERNAL_PROJECT_ID },
+      project: null,
+      defaultTemplate: null,
+    });
+    expect(mockedListProjects).not.toHaveBeenCalled();
+    expect(mockedListTemplates).not.toHaveBeenCalled();
+    expect(mockedListBlueprints).not.toHaveBeenCalled();
   });
 
   it("returns linked-no-default shape when defaultRemovalTemplateId is null", async () => {
@@ -555,6 +583,7 @@ function transportTemplate(
 describe("requiredTransportCategories", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mockedHasCredentials.mockResolvedValue(true);
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       code: "CB-1",

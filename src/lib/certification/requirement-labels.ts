@@ -31,6 +31,7 @@ export type CertRequirementKey =
   | "transportUniformity"
   | "entityReadiness"
   | "mapping"
+  | "credentials"
   | "template"
   | "durability";
 
@@ -81,6 +82,11 @@ export const CERT_REQUIREMENT_META: Record<
     requirementLabel: "Facility linked to a registry project",
     whyDetail:
       "Removals are submitted into an Isometric project. Until this facility is linked to one in certification settings there is no registry destination, so nothing downstream can be evaluated.",
+  },
+  credentials: {
+    requirementLabel: "Organization Isometric credentials",
+    whyDetail:
+      "Each organization uses its own encrypted Isometric access token and client secret. A Platform Admin must configure them before the organization can read from or submit to the registry.",
   },
   template: {
     requirementLabel: "Removal template resolved",

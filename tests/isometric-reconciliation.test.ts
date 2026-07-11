@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { GhgStatement } from "@/lib/isometric";
+import type { GhgStatement, IsometricClient } from "@/lib/isometric";
 import {
   reconcileDatapoint,
   reconcileGhgStatement,
@@ -23,6 +23,7 @@ vi.mock("@/lib/isometric/ghg-statements", () => ({
 const mockedFindDatapoint = vi.mocked(findDatapointBySupplierRef);
 const mockedFindRemoval = vi.mocked(findGhgEntryBySupplierRef);
 const mockedFindGhg = vi.mocked(findDraftGhgStatementsByPeriod);
+const client = {} as IsometricClient;
 
 describe("Isometric reconciliation helpers", () => {
   beforeEach(() => {
@@ -35,7 +36,7 @@ describe("Isometric reconciliation helpers", () => {
     >);
 
     await expect(
-      reconcileDatapoint({ supplierRefId: "nm-rmv-1-dp-a-v1" }),
+      reconcileDatapoint(client, { supplierRefId: "nm-rmv-1-dp-a-v1" }),
     ).resolves.toEqual({ found: true, externalId: "dpt_123" });
   });
 
@@ -43,7 +44,7 @@ describe("Isometric reconciliation helpers", () => {
     mockedFindRemoval.mockResolvedValue(null);
 
     await expect(
-      reconcileRemoval({ supplierRefId: "nm-rmv-1-removal-v1" }),
+      reconcileRemoval(client, { supplierRefId: "nm-rmv-1-removal-v1" }),
     ).resolves.toEqual({ found: false });
   });
 
@@ -54,7 +55,7 @@ describe("Isometric reconciliation helpers", () => {
     ]);
 
     await expect(
-      reconcileGhgStatement({ projectId: "prj_1", endOn: "2026-05-05" }),
+      reconcileGhgStatement(client, { projectId: "prj_1", endOn: "2026-05-05" }),
     ).resolves.toEqual({ found: "multiple", ids: ["ggs_1", "ggs_2"] });
   });
 });

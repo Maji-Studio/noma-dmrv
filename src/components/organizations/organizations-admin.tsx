@@ -19,6 +19,7 @@ import {
   useEnterOrganization,
 } from "@/hooks/use-organizations";
 import { createOrganizationSchema } from "@/schemas/organizations";
+import { OrganizationCertifierCredentials } from "./organization-certifier-credentials";
 
 type CreateForm = z.infer<typeof createOrganizationSchema>;
 
@@ -79,26 +80,32 @@ export function OrganizationsAdmin() {
             {organizations.map((org) => (
               <li
                 key={org.id}
-                className="flex flex-wrap items-center justify-between gap-12 border-b border-[var(--color-border-tertiary)] px-16 py-12 last:border-b-0"
+                className="flex flex-col border-b border-[var(--color-border-tertiary)] last:border-b-0"
               >
-                <div className="flex min-w-0 flex-col">
-                  <span className="body-small font-medium text-[var(--color-text-primary)] truncate">
-                    {org.name}
-                  </span>
-                  <span className="body-caption text-[var(--color-text-secondary)] truncate">
-                    {org.slug} · {org.memberCount} member
-                    {org.memberCount === 1 ? "" : "s"}
-                  </span>
+                <div className="flex flex-wrap items-center justify-between gap-12 px-16 py-12">
+                  <div className="flex min-w-0 flex-col">
+                    <span className="body-small font-medium text-[var(--color-text-primary)] truncate">
+                      {org.name}
+                    </span>
+                    <span className="body-caption text-[var(--color-text-secondary)] truncate">
+                      {org.slug} · {org.memberCount} member
+                      {org.memberCount === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="weak"
+                    size="small"
+                    onClick={() => enterOrg(org.id)}
+                    disabled={enteringId === org.id}
+                  >
+                    {enteringId === org.id ? "Entering…" : "Enter"}
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  variant="weak"
-                  size="small"
-                  onClick={() => enterOrg(org.id)}
-                  disabled={enteringId === org.id}
-                >
-                  {enteringId === org.id ? "Entering…" : "Enter"}
-                </Button>
+                <OrganizationCertifierCredentials
+                  organizationId={org.id}
+                  organizationName={org.name}
+                />
               </li>
             ))}
           </ul>
