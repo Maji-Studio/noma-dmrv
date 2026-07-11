@@ -1,6 +1,7 @@
 import {
   check,
   date,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -19,15 +20,18 @@ import {
 } from './common';
 import { facilities, reactors } from './facilities';
 import { documents } from './documentation';
+import { organizations } from './auth';
 
 // Provider-level project registration for a facility.
 export const certifierProjects = pgTable(
   'certifier_projects',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    facilityId: uuid('facility_id')
+    organizationId: text('organization_id')
       .notNull()
-      .references(() => facilities.id),
+      .references(() => organizations.id),
+    facilityId: uuid('facility_id')
+      .notNull(),
     provider: certifierProvider('provider').notNull().default('isometric'),
     externalProjectId: text('external_project_id').notNull(),
     protocolSlug: text('protocol_slug').notNull().default('biochar'),
@@ -74,6 +78,15 @@ export const certifierProjects = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    index('certifier_projects_organization_id_idx').on(table.organizationId),
+    unique('certifier_projects_id_organization_id_unique').on(
+      table.id,
+      table.organizationId
+    ),
+    foreignKey({
+      columns: [table.facilityId, table.organizationId],
+      foreignColumns: [facilities.id, facilities.organizationId],
+    }),
     // One facility submits to at most one project per provider. The previous
     // (provider, externalProjectId) unique constraint was dropped: real
     // operators commonly register multiple physical sites under one registry
@@ -117,7 +130,13 @@ export const certifierSensors = pgTable(
   'certifier_sensors',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
     provider: certifierProvider('provider').notNull().default('isometric'),
+    // Long-tail parent (plan §1.2): org integrity is app-enforced via
+    // assertSameOrg(ctx, reactors, …) in the certifier-sensors data access,
+    // not a composite FK (those are reserved for the seven hot-path parents).
     reactorId: uuid('reactor_id')
       .notNull()
       .references(() => reactors.id),
@@ -129,6 +148,7 @@ export const certifierSensors = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    index('certifier_sensors_organization_id_idx').on(table.organizationId),
     unique('certifier_sensors_provider_reactor_property_unique').on(
       table.provider,
       table.reactorId,
@@ -154,9 +174,11 @@ export const certifierGhgStatements = pgTable(
   'certifier_ghg_statements',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    facilityId: uuid('facility_id')
+    organizationId: text('organization_id')
       .notNull()
-      .references(() => facilities.id),
+      .references(() => organizations.id),
+    facilityId: uuid('facility_id')
+      .notNull(),
     provider: certifierProvider('provider').notNull().default('isometric'),
     // Operator-chosen reporting-period end — the only date Isometric's create
     // API accepts. YYYY-MM-DD.
@@ -169,6 +191,11 @@ export const certifierGhgStatements = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    index('certifier_ghg_statements_organization_id_idx').on(table.organizationId),
+    foreignKey({
+      columns: [table.facilityId, table.organizationId],
+      foreignColumns: [facilities.id, facilities.organizationId],
+    }),
     // One GHG statement per facility + reporting-period end. The local
     // statement id anchors the submission-claim machinery, so a stable id
     // per (provider, facility, period) lets a double-click / two-tab race
@@ -192,9 +219,11 @@ export const certifierRemovals = pgTable(
   'certifier_removals',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    facilityId: uuid('facility_id')
+    organizationId: text('organization_id')
       .notNull()
-      .references(() => facilities.id),
+      .references(() => organizations.id),
+    facilityId: uuid('facility_id')
+      .notNull(),
     provider: certifierProvider('provider').notNull().default('isometric'),
     // Reporting window, derived from the aggregated member production runs at
     // submit time. Null until the first submission writes them.
@@ -211,6 +240,11 @@ export const certifierRemovals = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    index('certifier_removals_organization_id_idx').on(table.organizationId),
+    foreignKey({
+      columns: [table.facilityId, table.organizationId],
+      foreignColumns: [facilities.id, facilities.organizationId],
+    }),
     // Indexes the FK for getRemovalsByGhgStatementId / listOpenRemovalsForFacility
     // lookups and keeps FK-constraint checks fast — Postgres does not
     // auto-index foreign keys.
@@ -233,6 +267,9 @@ export const certificationSubmissions = pgTable(
   'certification_submissions',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
     provider: certifierProvider('provider').notNull().default('isometric'),
     submissionType: text('submission_type').notNull(),
     localEntityType: text('local_entity_type').notNull(),
@@ -250,6 +287,7 @@ export const certificationSubmissions = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    index('certification_submissions_organization_id_idx').on(table.organizationId),
     unique('cert_submissions_entity_version_unique').on(
       table.provider,
       table.submissionType,
@@ -269,6 +307,9 @@ export const certifierDocumentUploads = pgTable(
   'certifier_document_uploads',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
     documentId: uuid('document_id')
       .notNull()
       .references(() => documents.id),
@@ -279,6 +320,7 @@ export const certifierDocumentUploads = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    index('certifier_document_uploads_organization_id_idx').on(table.organizationId),
     unique('cert_doc_uploads_provider_document_unique').on(
       table.provider,
       table.documentId
@@ -292,6 +334,9 @@ export const certifierDocumentUploads = pgTable(
 
 export const certifierSyncEvents = pgTable('certifier_sync_events', {
   id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: text('organization_id')
+    .notNull()
+    .references(() => organizations.id),
   provider: certifierProvider('provider').notNull().default('isometric'),
   entityType: text('entity_type').notNull(),
   entityId: uuid('entity_id').notNull(),
@@ -302,4 +347,6 @@ export const certifierSyncEvents = pgTable('certifier_sync_events', {
   errorMessage: text('error_message'),
   attemptedAt: timestamp('attempted_at').defaultNow().notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table) => [
+  index('certifier_sync_events_organization_id_idx').on(table.organizationId),
+]);

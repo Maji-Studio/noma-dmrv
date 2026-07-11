@@ -29,6 +29,8 @@ import {
   orders,
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "./utils";
 
 /** Any Drizzle client that can run reads — the live `db` or a transaction. */
 type DbReader = Pick<typeof db, "select">;
@@ -80,12 +82,14 @@ function isOverdraw(requestedKg: number, availableKg: number): boolean {
  * `excludeRunId` drops one run's consumption (its allocation is being replaced).
  */
 async function deriveFeedstockAvailableKg(
+  ctx: OrgContext,
   tx: DbReader,
   storageLocationId: string,
   excludeRunId?: string,
 ): Promise<number> {
   const consumptionConditions = [
     eq(productionRuns.feedstockStorageLocationId, storageLocationId),
+    eq(productionRuns.organizationId, ctx.organizationId),
   ];
   if (excludeRunId) {
     consumptionConditions.push(ne(productionRuns.id, excludeRunId));
@@ -97,7 +101,7 @@ async function deriveFeedstockAvailableKg(
         total: sql<number>`COALESCE(SUM(${feedstocks.massDryKg}) FILTER (WHERE ${feedstocks.status} = 'complete'), 0)`,
       })
       .from(feedstocks)
-      .where(eq(feedstocks.storageLocationId, storageLocationId)),
+      .where(and(eq(feedstocks.storageLocationId, storageLocationId), eq(feedstocks.organizationId, ctx.organizationId))),
     tx
       .select({
         total: sql<number>`COALESCE(SUM(${productionRunFeedstocks.massUsedKg}), 0)`,
@@ -105,7 +109,7 @@ async function deriveFeedstockAvailableKg(
       .from(productionRuns)
       .leftJoin(
         productionRunFeedstocks,
-        eq(productionRunFeedstocks.productionRunId, productionRuns.id),
+        and(eq(productionRunFeedstocks.productionRunId, productionRuns.id), eq(productionRunFeedstocks.organizationId, ctx.organizationId)),
       )
       .where(and(...consumptionConditions)),
     tx
@@ -117,6 +121,7 @@ async function deriveFeedstockAvailableKg(
         and(
           eq(binMovements.storageLocationId, storageLocationId),
           eq(binMovements.lane, "feedstock"),
+          eq(binMovements.organizationId, ctx.organizationId),
         ),
       ),
   ]);
@@ -129,6 +134,7 @@ async function deriveFeedstockAvailableKg(
  * on-hand dry stock. Call inside the run's transaction, before allocating.
  */
 export async function assertFeedstockDrawWithinStock(
+  ctx: OrgContext,
   tx: DbReader,
   params: {
     storageLocationId: string;
@@ -136,7 +142,9 @@ export async function assertFeedstockDrawWithinStock(
     excludeRunId?: string;
   },
 ): Promise<void> {
+  requireOrgScope(ctx);
   const available = await deriveFeedstockAvailableKg(
+    ctx,
     tx,
     params.storageLocationId,
     params.excludeRunId,
@@ -152,12 +160,14 @@ export async function assertFeedstockDrawWithinStock(
  * `excludeProductId` drops one product's allocation (its mass is being replaced).
  */
 async function deriveBiocharAvailableKg(
+  ctx: OrgContext,
   tx: DbReader,
   biocharStorageLocationId: string,
   excludeProductId?: string,
 ): Promise<number> {
   const allocationConditions = [
     eq(productionRuns.biocharStorageLocationId, biocharStorageLocationId),
+    eq(productionRuns.organizationId, ctx.organizationId),
   ];
   if (excludeProductId) {
     allocationConditions.push(ne(biocharProducts.id, excludeProductId));
@@ -169,9 +179,10 @@ async function deriveBiocharAvailableKg(
         total: sql<number>`COALESCE(SUM(${productionRuns.biocharOutputKg}), 0)`,
       })
       .from(productionRuns)
-      .where(
+      .where(and(
         eq(productionRuns.biocharStorageLocationId, biocharStorageLocationId),
-      ),
+        eq(productionRuns.organizationId, ctx.organizationId),
+      )),
     tx
       .select({
         total: sql<number>`COALESCE(SUM(COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)), 0)`,
@@ -179,9 +190,9 @@ async function deriveBiocharAvailableKg(
       .from(productionRuns)
       .innerJoin(
         biocharProducts,
-        eq(biocharProducts.linkedProductionRunId, productionRuns.id),
+        and(eq(biocharProducts.linkedProductionRunId, productionRuns.id), eq(biocharProducts.organizationId, ctx.organizationId)),
       )
-      .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
+      .leftJoin(formulations, and(eq(biocharProducts.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
       .where(and(...allocationConditions)),
     tx
       .select({
@@ -192,6 +203,7 @@ async function deriveBiocharAvailableKg(
         and(
           eq(binMovements.storageLocationId, biocharStorageLocationId),
           eq(binMovements.lane, "biochar"),
+          eq(binMovements.organizationId, ctx.organizationId),
         ),
       ),
   ]);
@@ -207,6 +219,7 @@ async function deriveBiocharAvailableKg(
  * transaction, before inserting/updating.
  */
 export async function assertBiocharDrawWithinStock(
+  ctx: OrgContext,
   tx: DbReader,
   params: {
     biocharStorageLocationId: string;
@@ -214,7 +227,9 @@ export async function assertBiocharDrawWithinStock(
     excludeProductId?: string;
   },
 ): Promise<void> {
+  requireOrgScope(ctx);
   const available = await deriveBiocharAvailableKg(
+    ctx,
     tx,
     params.biocharStorageLocationId,
     params.excludeProductId,
@@ -232,6 +247,7 @@ export async function assertBiocharDrawWithinStock(
  * Call inside the delivery's transaction, before writing.
  */
 export async function assertBiocharProductDrawWithinStock(
+  ctx: OrgContext,
   tx: DbReader,
   params: {
     biocharProductId: string;
@@ -239,8 +255,10 @@ export async function assertBiocharProductDrawWithinStock(
     excludeDeliveryId?: string;
   },
 ): Promise<void> {
+  requireOrgScope(ctx);
   const deliveredConditions = [
     eq(deliveries.status, "delivered"),
+    eq(deliveries.organizationId, ctx.organizationId),
     sql`COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId}) = ${params.biocharProductId}`,
   ];
   if (params.excludeDeliveryId) {
@@ -251,13 +269,13 @@ export async function assertBiocharProductDrawWithinStock(
     tx
       .select({ code: biocharProducts.code, massKg: biocharProducts.massKg })
       .from(biocharProducts)
-      .where(eq(biocharProducts.id, params.biocharProductId)),
+      .where(and(eq(biocharProducts.id, params.biocharProductId), eq(biocharProducts.organizationId, ctx.organizationId))),
     tx
       .select({
         total: sql<number>`COALESCE(SUM(${deliveries.deliveredWetMassKg}), 0)`,
       })
       .from(deliveries)
-      .innerJoin(orders, eq(deliveries.orderId, orders.id))
+      .innerJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
       .where(and(...deliveredConditions)),
   ]);
 

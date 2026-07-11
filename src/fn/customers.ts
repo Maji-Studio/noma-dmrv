@@ -26,7 +26,7 @@ import {
   type CustomerDetail,
 } from "@/data-access/customers";
 import { syncBiocharLegsForCustomerLocation } from "@/data-access/transport-legs";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import { logger } from "@/lib/log";
 import {
   createCustomerSchema,
@@ -64,15 +64,12 @@ export async function getCustomersFn(
   filters?: Partial<z.infer<typeof customerFilterSchema>>
 ): Promise<ActionResult<PaginatedCustomers>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validatedFilters = filters
       ? customerFilterSchema.parse(filters)
       : undefined;
-    const customers = await getCustomersData(user.id, validatedFilters);
+    const customers = await getCustomersData(ctx, validatedFilters);
 
     return { success: true, data: customers };
   } catch (error) {
@@ -100,12 +97,9 @@ export async function getCustomerByIdFn(
   customerId: string
 ): Promise<ActionResult<Customer>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const customer = await getCustomerByIdData(user.id, customerId);
+    const customer = await getCustomerByIdData(ctx, customerId);
     return { success: true, data: customer };
   } catch (error) {
     return {
@@ -126,12 +120,9 @@ export async function getCustomerWithRelationsFn(
   customerId: string
 ): Promise<ActionResult<CustomerDetail>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const customer = await getCustomerWithRelationsData(user.id, customerId);
+    const customer = await getCustomerWithRelationsData(ctx, customerId);
     return { success: true, data: customer };
   } catch (error) {
     return {
@@ -170,12 +161,9 @@ export async function getCustomerLocationsFn(
   >
 > {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const locations = await getCustomerLocationsData(user.id, customerId);
+    const locations = await getCustomerLocationsData(ctx, customerId);
     return { success: true, data: locations };
   } catch (error) {
     return {
@@ -196,12 +184,9 @@ export async function getCustomerCropTypesFn(): Promise<
   ActionResult<string[]>
 > {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const cropTypes = await getCustomerCropTypesData(user.id);
+    const cropTypes = await getCustomerCropTypesData(ctx);
     return { success: true, data: cropTypes };
   } catch (error) {
     return {
@@ -223,13 +208,10 @@ export async function checkCustomerCodeFn(
   excludeCustomerId?: string
 ): Promise<ActionResult<{ available: boolean }>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const available = await isCustomerCodeAvailableData(
-      user.id,
+      ctx,
       code,
       excludeCustomerId
     );
@@ -257,20 +239,18 @@ export async function createCustomerFn(
   data: z.infer<typeof createCustomerSchema>
 ): Promise<ActionResult<Customer>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = createCustomerSchema.parse(data);
 
     const customer = await withAutoCode(
+      ctx,
       "CUS",
       customers,
       customers.code,
       undefined,
       (code) =>
-        createCustomer(user.id, {
+        createCustomer(ctx, {
           code,
           name: validated.name,
           cropType: validated.cropType || null,
@@ -310,14 +290,11 @@ export async function updateCustomerFn(
   data: z.infer<typeof updateCustomerSchema>
 ): Promise<ActionResult<Customer>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = updateCustomerSchema.parse(data);
 
-    const customer = await updateCustomer(user.id, validated.customerId, {
+    const customer = await updateCustomer(ctx, validated.customerId, {
       code: validated.code,
       name: validated.name,
       cropType: validated.cropType,
@@ -356,13 +333,10 @@ export async function deleteCustomerFn(
   data: z.infer<typeof deleteCustomerSchema>
 ): Promise<ActionResult<void>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = deleteCustomerSchema.parse(data);
-    await deleteCustomer(user.id, validated.customerId);
+    await deleteCustomer(ctx, validated.customerId);
 
     return { success: true, data: undefined };
   } catch (error) {
@@ -394,12 +368,9 @@ export async function getCustomerLocationByIdFn(
   locationId: string
 ): Promise<ActionResult<CustomerLocation>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const location = await getCustomerLocationByIdData(user.id, locationId);
+    const location = await getCustomerLocationByIdData(ctx, locationId);
     return { success: true, data: location };
   } catch (error) {
     return {
@@ -420,14 +391,11 @@ export async function createCustomerLocationFn(
   data: z.infer<typeof createCustomerLocationSchema>
 ): Promise<ActionResult<CustomerLocation>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = createCustomerLocationSchema.parse(data);
 
-    const location = await createCustomerLocation(user.id, {
+    const location = await createCustomerLocation(ctx, {
       customerId: validated.customerId,
       name: validated.name,
       country: validated.country,
@@ -471,14 +439,11 @@ export async function updateCustomerLocationFn(
   data: z.infer<typeof updateCustomerLocationSchema>
 ): Promise<ActionResult<CustomerLocation>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = updateCustomerLocationSchema.parse(data);
 
-    const location = await updateCustomerLocation(user.id, validated.locationId, {
+    const location = await updateCustomerLocation(ctx, validated.locationId, {
       name: validated.name,
       country: validated.country,
       stateRegion: validated.stateRegion || null,
@@ -499,11 +464,11 @@ export async function updateCustomerLocationFn(
     // of every product delivered here. Best-effort — a stale leg self-heals on
     // the next delivery write and must not fail the location update.
     try {
-      await syncBiocharLegsForCustomerLocation(user.id, validated.locationId);
+      await syncBiocharLegsForCustomerLocation(ctx, validated.locationId);
     } catch (error) {
       logger.warn(
         {
-          userId: user.id,
+          userId: ctx.userId,
           customerLocationId: validated.locationId,
           err: error instanceof Error ? error.message : String(error),
         },
@@ -537,13 +502,10 @@ export async function deleteCustomerLocationFn(
   data: z.infer<typeof deleteCustomerLocationSchema>
 ): Promise<ActionResult<void>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = deleteCustomerLocationSchema.parse(data);
-    await deleteCustomerLocation(user.id, validated.locationId);
+    await deleteCustomerLocation(ctx, validated.locationId);
 
     return { success: true, data: undefined };
   } catch (error) {

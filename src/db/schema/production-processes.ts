@@ -1,8 +1,9 @@
-import { check, index, integer, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { check, foreignKey, index, integer, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { moisturePathway, samplingMethod } from './common';
 import { facilities } from './facilities';
 import { feedstockTypes } from './feedstock';
+import { organizations } from './auth';
 
 // ============================================
 // Production Processes - Sampling-regime campaigns
@@ -32,9 +33,11 @@ export const productionProcesses = pgTable(
   'production_processes',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    facilityId: uuid('facility_id')
+    organizationId: text('organization_id')
       .notNull()
-      .references(() => facilities.id),
+      .references(() => organizations.id),
+    facilityId: uuid('facility_id')
+      .notNull(),
     feedstockTypeId: uuid('feedstock_type_id')
       .notNull()
       .references(() => feedstockTypes.id),
@@ -85,6 +88,11 @@ export const productionProcesses = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    index('production_processes_organization_id_idx').on(table.organizationId),
+    foreignKey({
+      columns: [table.facilityId, table.organizationId],
+      foreignColumns: [facilities.id, facilities.organizationId],
+    }),
     // Lets credit_batches enforce that its productionProcessId belongs to the
     // same facility/feedstock pair as the batch itself.
     unique('production_processes_id_facility_feedstock_unique').on(

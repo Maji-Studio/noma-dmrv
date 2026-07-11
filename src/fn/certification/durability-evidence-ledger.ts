@@ -15,9 +15,10 @@
  * to a member credit batch so the candidate-document walk mirrors its Source into
  * the removal's `source_ids`. Best-effort at the submit call site.
  *
- * Server-internal core (no "use server" — takes an explicit `userId`, called from
+ * Server-internal core (no "use server" — takes an explicit `orgCtx`, called from
  * the submit pipeline which already resolved the caller).
  */
+import type { OrgContext } from "@/lib/auth/server";
 import { getFacilityById } from "@/data-access/facilities";
 import { buildDurabilityLedgerModel } from "@/lib/certification/evidence-ledger/durability-build-model";
 import { renderDurabilityLedgerPdf } from "@/lib/certification/evidence-ledger/durability-pdf";
@@ -44,11 +45,11 @@ import {
  * load.
  */
 export async function ensureDurabilityEvidenceLedgerSource(
-  userId: string,
+  orgCtx: OrgContext,
   removalId: string,
 ): Promise<EnsureLedgerResult> {
-  const ctx = await loadRemovalSubmissionContext(userId, removalId);
-  return ensureDurabilityEvidenceLedgerSourceFromContext(userId, removalId, ctx);
+  const ctx = await loadRemovalSubmissionContext(orgCtx, removalId);
+  return ensureDurabilityEvidenceLedgerSourceFromContext(orgCtx, removalId, ctx);
 }
 
 /**
@@ -58,7 +59,7 @@ export async function ensureDurabilityEvidenceLedgerSource(
  * should block submission.
  */
 export async function ensureDurabilityEvidenceLedgerSourceFromContext(
-  userId: string,
+  orgCtx: OrgContext,
   removalId: string,
   ctx: RemovalSubmissionContext,
 ): Promise<EnsureLedgerResult> {
@@ -79,7 +80,7 @@ export async function ensureDurabilityEvidenceLedgerSourceFromContext(
     return { status: "skipped", reason: "no-soil-reference" };
   }
 
-  const facility = await getFacilityById(userId, ctx.facilityId);
+  const facility = await getFacilityById(orgCtx, ctx.facilityId);
   const memberBatchCodes =
     ctx.memberBatches.map((b) => b.code).join(" · ") || null;
 
@@ -99,7 +100,7 @@ export async function ensureDurabilityEvidenceLedgerSourceFromContext(
     contentHash: stableLedgerContentHash(model),
   };
 
-  return ensureLedgerSource(userId, {
+  return ensureLedgerSource(orgCtx, {
     kind: DURABILITY_EVIDENCE_LEDGER_KIND,
     removalId,
     facilityId: ctx.facilityId,

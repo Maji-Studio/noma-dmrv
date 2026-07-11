@@ -2,6 +2,8 @@ import { relations, sql } from 'drizzle-orm';
 import {
   check,
   date,
+  foreignKey,
+  index,
   pgTable,
   text,
   timestamp,
@@ -9,6 +11,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { facilities } from './facilities';
+import { organizations } from './auth';
 
 // ============================================
 // Stockpile Events - Compliance/duration tracking for stockpiling controls
@@ -21,9 +24,11 @@ export const stockpileEvents = pgTable(
   'stockpile_events',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    facilityId: uuid('facility_id')
+    organizationId: text('organization_id')
       .notNull()
-      .references(() => facilities.id),
+      .references(() => organizations.id),
+    facilityId: uuid('facility_id')
+      .notNull(),
     materialType: text('material_type').notNull(), // biochar | feedstock
     materialId: uuid('material_id').notNull(),
     startedAt: timestamp('started_at').notNull(),
@@ -39,6 +44,11 @@ export const stockpileEvents = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    index('stockpile_events_organization_id_idx').on(table.organizationId),
+    foreignKey({
+      columns: [table.facilityId, table.organizationId],
+      foreignColumns: [facilities.id, facilities.organizationId],
+    }),
     check(
       'stockpile_events_dates_check',
       sql`${table.endedAt} is null or ${table.endedAt} > ${table.startedAt}`
@@ -71,9 +81,11 @@ export const powerProcurementEvidence = pgTable(
   'power_procurement_evidence',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    facilityId: uuid('facility_id')
+    organizationId: text('organization_id')
       .notNull()
-      .references(() => facilities.id),
+      .references(() => organizations.id),
+    facilityId: uuid('facility_id')
+      .notNull(),
     periodStart: date('period_start').notNull(),
     periodEnd: date('period_end').notNull(),
     contractType: text('contract_type'), // PPA | EAC | direct | grid
@@ -91,6 +103,11 @@ export const powerProcurementEvidence = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    index('power_procurement_evidence_organization_id_idx').on(table.organizationId),
+    foreignKey({
+      columns: [table.facilityId, table.organizationId],
+      foreignColumns: [facilities.id, facilities.organizationId],
+    }),
     unique('power_procurement_evidence_facility_period_unique').on(
       table.facilityId,
       table.periodStart,

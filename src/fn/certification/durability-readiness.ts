@@ -1,3 +1,4 @@
+import type { OrgContext } from "@/lib/auth/server";
 import {
   getCreditBatchesWithSamples,
   type CreditBatchWithSamples,
@@ -29,11 +30,11 @@ export interface DurabilityBatchData extends DurabilityGateResult {
  * and the §8.3.1 distribution warnings. Keeps `certify-context-core` lean.
  */
 export async function loadDurabilityBatchData(
-  userId: string,
+  orgCtx: OrgContext,
   memberBatchIds: string[],
   appliedRunIds: ReadonlySet<string>,
 ): Promise<DurabilityBatchData> {
-  const loaded = await getCreditBatchesWithSamples(userId, memberBatchIds);
+  const loaded = await getCreditBatchesWithSamples(orgCtx, memberBatchIds);
   const batchesWithSamples = loaded.map((batch) => ({
     ...batch,
     runs: batch.runs.filter((run) => appliedRunIds.has(run.id)),

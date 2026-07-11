@@ -19,7 +19,7 @@ import {
   type FormulationWithIngredients,
   type PaginatedFormulations,
 } from "@/data-access/formulations";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import {
   createFormulationSchema,
   deleteFormulationSchema,
@@ -51,15 +51,12 @@ export async function getFormulationsFn(
   filters?: Partial<z.infer<typeof formulationFilterSchema>>
 ): Promise<ActionResult<PaginatedFormulations>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validatedFilters = filters
       ? formulationFilterSchema.parse(filters)
       : undefined;
-    const formulations = await getFormulationsData(user.id, validatedFilters);
+    const formulations = await getFormulationsData(ctx, validatedFilters);
 
     return { success: true, data: formulations };
   } catch (error) {
@@ -87,12 +84,9 @@ export async function getFormulationByIdFn(
   formulationId: string
 ): Promise<ActionResult<FormulationWithIngredients>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const formulation = await getFormulationByIdData(user.id, formulationId);
+    const formulation = await getFormulationByIdData(ctx, formulationId);
     return { success: true, data: formulation };
   } catch (error) {
     return {
@@ -113,12 +107,9 @@ export async function getFormulationOptionsFn(): Promise<
   ActionResult<Array<{ id: string; code: string; name: string }>>
 > {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const options = await getFormulationOptionsData(user.id);
+    const options = await getFormulationOptionsData(ctx);
     return { success: true, data: options };
   } catch (error) {
     return {
@@ -140,13 +131,10 @@ export async function checkFormulationCodeFn(
   excludeFormulationId?: string
 ): Promise<ActionResult<{ available: boolean }>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const available = await isFormulationCodeAvailableData(
-      user.id,
+      ctx,
       code,
       excludeFormulationId
     );
@@ -174,20 +162,18 @@ export async function createFormulationFn(
   data: z.infer<typeof createFormulationSchema>
 ): Promise<ActionResult<FormulationWithIngredients>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = createFormulationSchema.parse(data);
 
     const formulation = await withAutoCode(
+      ctx,
       "BCF",
       formulations,
       formulations.code,
       undefined,
       (code) =>
-        createFormulation(user.id, {
+        createFormulation(ctx, {
           code,
           name: validated.name,
           biocharRatio: validated.biocharRatio ?? null,
@@ -229,14 +215,11 @@ export async function updateFormulationFn(
   data: z.infer<typeof updateFormulationSchema>
 ): Promise<ActionResult<FormulationWithIngredients>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = updateFormulationSchema.parse(data);
 
-    const formulation = await updateFormulation(user.id, validated.formulationId, {
+    const formulation = await updateFormulation(ctx, validated.formulationId, {
       code: validated.code,
       name: validated.name,
       biocharRatio: validated.biocharRatio,
@@ -277,13 +260,10 @@ export async function deleteFormulationFn(
   data: z.infer<typeof deleteFormulationSchema>
 ): Promise<ActionResult<void>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = deleteFormulationSchema.parse(data);
-    await deleteFormulation(user.id, validated.formulationId);
+    await deleteFormulation(ctx, validated.formulationId);
 
     return { success: true, data: undefined };
   } catch (error) {

@@ -1,3 +1,4 @@
+import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { markSubmissionRejected } from "@/data-access/certification";
 import { SafeError } from "@/lib/errors";
 import { logger, type Logger } from "@/lib/log";
@@ -67,7 +68,7 @@ export interface RegistryCreateResult {
 }
 
 export interface PerformRegistryCreateArgs {
-  userId: string;
+  orgCtx: OrgContext;
   /** Sync-event identity (certifier_sync_events.entity_type / entity_id). */
   entityType: string;
   entityId: string;
@@ -95,6 +96,7 @@ const AMBIGUOUS_FALLBACK_MESSAGE =
 export async function performRegistryCreate(
   args: PerformRegistryCreateArgs,
 ): Promise<RegistryCreateResult> {
+  requireOrgRole(args.orgCtx, "admin");
   const log = args.log ?? logger;
 
   if (args.resumed) {
@@ -105,7 +107,7 @@ export async function performRegistryCreate(
   try {
     const externalId = await args.create();
     await appendSyncEventBestEffort(
-      args.userId,
+      args.orgCtx,
       {
         provider: ISOMETRIC_PROVIDER,
         entityType: args.entityType,
@@ -151,7 +153,7 @@ export async function performRegistryCreate(
         ? sanitizeIsometricErrorBody(err.body)
         : undefined;
     await appendSyncEventBestEffort(
-      args.userId,
+      args.orgCtx,
       {
         provider: ISOMETRIC_PROVIDER,
         entityType: args.entityType,
@@ -167,7 +169,7 @@ export async function performRegistryCreate(
       },
       { submissionId: args.submissionRowId },
     );
-    await markSubmissionRejected(args.userId, args.submissionRowId, {
+    await markSubmissionRejected(args.orgCtx, args.submissionRowId, {
       errorMessage: message,
     });
     throw new SafeError(`${args.failureMessagePrefix}: ${message}`);
@@ -185,14 +187,14 @@ async function reconcileToResult(
 
   if (lookup.found === "multiple") {
     const message = args.ambiguousMessage ?? AMBIGUOUS_FALLBACK_MESSAGE;
-    await markSubmissionRejected(args.userId, args.submissionRowId, {
+    await markSubmissionRejected(args.orgCtx, args.submissionRowId, {
       errorMessage: message,
     });
     throw new SafeError(message);
   }
 
   await appendSyncEventBestEffort(
-    args.userId,
+    args.orgCtx,
     {
       provider: ISOMETRIC_PROVIDER,
       entityType: args.entityType,

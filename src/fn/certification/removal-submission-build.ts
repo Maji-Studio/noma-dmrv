@@ -1,3 +1,4 @@
+import type { OrgContext } from "@/lib/auth/server";
 import { appliedBiocharFraction } from "@/lib/certification/mass-accounting";
 import { SafeError } from "@/lib/errors";
 import {
@@ -56,7 +57,7 @@ export interface RemovalSubmissionBuild {
 }
 
 export async function buildRemovalSubmissionBuild(args: {
-  userId: string;
+  orgCtx: OrgContext;
   removalId: string;
   ctx: RemovalSubmissionContext;
   defaultTemplate: IsometricGhgEntryTemplate;
@@ -68,7 +69,7 @@ export async function buildRemovalSubmissionBuild(args: {
   sourceIds?: string[];
 }): Promise<RemovalSubmissionBuild> {
   const {
-    userId,
+    orgCtx,
     removalId,
     ctx,
     defaultTemplate,
@@ -146,7 +147,7 @@ export async function buildRemovalSubmissionBuild(args: {
   }
 
   const candidateDocumentIds = await collectCandidateDocumentIdsForRemoval(
-    userId,
+    orgCtx,
     {
       lineages: ctx.lineages,
       memberBatchIds: ctx.memberBatches.map((b) => b.id),
@@ -154,7 +155,7 @@ export async function buildRemovalSubmissionBuild(args: {
   );
   const sourceIds =
     args.sourceIds ??
-    (await resolveSourceIdsForRemoval(userId, { candidateDocumentIds }));
+    (await resolveSourceIdsForRemoval(orgCtx, { candidateDocumentIds }));
 
   const { monitored, fixed, datapointBodyByKey } = resolveTemplateInputs({
     template: defaultTemplate,

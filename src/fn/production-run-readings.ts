@@ -13,7 +13,7 @@ import {
   deleteAllProductionRunReadings as deleteAllData,
   type ProductionRunReadingWithRelations,
 } from "@/data-access/production-run-readings";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import {
   deleteAllProductionRunReadingsSchema,
   productionRunReadingListFiltersSchema,
@@ -25,17 +25,14 @@ export async function getProductionRunReadingsListFn(
   facilityId?: string
 ): Promise<ActionResult<ProductionRunReadingWithRelations[]>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const filters = productionRunReadingListFiltersSchema.parse({
       productionRunId,
       facilityId,
     });
 
-    const readings = await getListData(user.id, filters.productionRunId, filters.facilityId);
+    const readings = await getListData(ctx, filters.productionRunId, filters.facilityId);
     return { success: true, data: readings };
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -57,13 +54,10 @@ export async function deleteAllProductionRunReadingsFn(
   data: z.infer<typeof deleteAllProductionRunReadingsSchema>
 ): Promise<ActionResult<{ deletedCount: number }>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = deleteAllProductionRunReadingsSchema.parse(data);
-    const deletedCount = await deleteAllData(user.id, validated.productionRunId);
+    const deletedCount = await deleteAllData(ctx, validated.productionRunId);
 
     return { success: true, data: { deletedCount } };
   } catch (error) {

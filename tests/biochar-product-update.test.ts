@@ -3,14 +3,11 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const mockUpdateBiocharProduct = vi.fn();
 
 vi.mock("@/lib/auth/server", () => ({
-  getUser: vi.fn().mockResolvedValue({
-    id: "user-123",
-    email: "test@example.com",
-    name: "Test",
-    emailVerified: true,
-    role: "admin" as const,
-    createdAt: new Date("2025-01-01"),
-    updatedAt: new Date("2025-01-01"),
+  requireOrgContext: vi.fn().mockResolvedValue({
+    userId: "user-123",
+    organizationId: "org_test_fixtures",
+    orgRole: "owner",
+    isPlatformAdmin: false,
   }),
 }));
 

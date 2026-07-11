@@ -9,6 +9,7 @@
  * explicit geo contract the Carbon Viewer map consumes (plan decision 6).
  */
 import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
   applications,
@@ -20,7 +21,7 @@ import {
   transportLegs,
 } from "@/db/schema";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 import {
   getChainOfCustodyData,
   type ChainOfCustodyData,
@@ -114,22 +115,23 @@ interface GpsPair {
 }
 
 export async function getChainOfCustodyGeoData(
-  userId: string,
+  ctx: OrgContext,
   applicationId: string
 ): Promise<ChainOfCustodyGeoData> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const chain = await getChainOfCustodyData(userId, applicationId);
+  const chain = await getChainOfCustodyData(ctx, applicationId);
   const feedstockIds = chain.feedstocks.map((feedstock) => feedstock.id);
 
   const [facilityGps, applicationGps, feedstockGpsById, feedstockLegs] = await Promise.all([
-    getFacilityGps(chain.facility.id),
-    getApplicationGps(chain.application.id),
-    getFeedstockGps(feedstockIds),
-    getFeedstockLegs(feedstockIds),
+    getFacilityGps(ctx, chain.facility.id),
+    getApplicationGps(ctx, chain.application.id),
+    getFeedstockGps(ctx, feedstockIds),
+    getFeedstockLegs(ctx, feedstockIds),
   ]);
   const outboundLegs = chain.biocharProduct
     ? await getApplicationBiocharLeg({
+        ctx,
         applicationId: chain.application.id,
         deliveryId: chain.delivery.id,
         biocharProductId: chain.biocharProduct.id,
@@ -320,25 +322,25 @@ function idPrefix(kind: ChainGeoNodeKind): string {
   }
 }
 
-async function getFacilityGps(facilityId: string): Promise<GpsPair> {
+async function getFacilityGps(ctx: OrgContext, facilityId: string): Promise<GpsPair> {
   const [row] = await db
     .select({ lat: facilities.gpsLatitude, lng: facilities.gpsLongitude })
     .from(facilities)
-    .where(eq(facilities.id, facilityId))
+    .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)))
     .limit(1);
   return row ?? { lat: null, lng: null };
 }
 
-async function getApplicationGps(applicationId: string): Promise<GpsPair> {
+async function getApplicationGps(ctx: OrgContext, applicationId: string): Promise<GpsPair> {
   const [row] = await db
     .select({ lat: applications.gpsLatitude, lng: applications.gpsLongitude })
     .from(applications)
-    .where(eq(applications.id, applicationId))
+    .where(and(eq(applications.id, applicationId), eq(applications.organizationId, ctx.organizationId)))
     .limit(1);
   return row ?? { lat: null, lng: null };
 }
 
-async function getFeedstockGps(feedstockIds: string[]): Promise<Map<string, GpsPair>> {
+async function getFeedstockGps(ctx: OrgContext, feedstockIds: string[]): Promise<Map<string, GpsPair>> {
   if (feedstockIds.length === 0) {
     return new Map();
   }
@@ -349,7 +351,7 @@ async function getFeedstockGps(feedstockIds: string[]): Promise<Map<string, GpsP
       lng: feedstocks.gpsLongitude,
     })
     .from(feedstocks)
-    .where(inArray(feedstocks.id, feedstockIds));
+    .where(and(inArray(feedstocks.id, feedstockIds), eq(feedstocks.organizationId, ctx.organizationId)));
   return new Map(rows.map((row) => [row.id, { lat: row.lat, lng: row.lng }]));
 }
 
@@ -358,6 +360,7 @@ function positiveOrNull(value: number | null): number | null {
 }
 
 async function getFeedstockLegs(
+  ctx: OrgContext,
   feedstockIds: string[],
 ): Promise<ChainGeoLeg[]> {
   const conditions: SQL[] = [];
@@ -390,7 +393,7 @@ async function getFeedstockLegs(
       loadMassKg: transportLegs.loadMassKg,
     })
     .from(transportLegs)
-    .where(or(...conditions));
+    .where(and(eq(transportLegs.organizationId, ctx.organizationId), or(...conditions)));
 
   return rows.map((row) => ({
     ...row,
@@ -403,12 +406,14 @@ async function getFeedstockLegs(
 }
 
 async function getApplicationBiocharLeg({
+  ctx,
   applicationId,
   deliveryId,
   biocharProductId,
   facilityName,
   facilityGps,
 }: {
+  ctx: OrgContext;
   applicationId: string;
   deliveryId: string;
   biocharProductId: string;
@@ -427,15 +432,12 @@ async function getApplicationBiocharLeg({
       locationGpsLongitude: customerLocations.gpsLongitude,
     })
     .from(deliveries)
-    .leftJoin(orders, eq(deliveries.orderId, orders.id))
+    .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
     .leftJoin(
       customerLocations,
-      eq(
-        customerLocations.id,
-        sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
-      ),
+      and(eq(customerLocations.id, sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`), eq(customerLocations.organizationId, ctx.organizationId)),
     )
-    .where(eq(deliveries.id, deliveryId))
+    .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)))
     .limit(1);
 
   if (!row) return [];

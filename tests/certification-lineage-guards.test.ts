@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import {
   createApplication,
@@ -73,12 +74,13 @@ async function createLineageFixture(
   return db.transaction(async (tx) => {
     const [facility] = await tx
       .insert(facilities)
-      .values({ code: `FAC-CLG-${tag}`, name: `CLG Facility ${tag}` })
+      .values({ organizationId: TEST_ORG_ID, code: `FAC-CLG-${tag}`, name: `CLG Facility ${tag}` })
       .returning({ id: facilities.id });
 
     const [reactor] = await tx
       .insert(reactors)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `RX-CLG-${tag}`,
         identifier: `CLG Reactor ${tag}`,
         facilityId: facility.id,
@@ -89,6 +91,7 @@ async function createLineageFixture(
     const [feedstockType] = await tx
       .insert(feedstockTypes)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `FT-CLG-${tag}`,
         name: `CLG Feedstock ${tag}`,
         category: "forestry",
@@ -99,6 +102,7 @@ async function createLineageFixture(
     const [feedstock] = await tx
       .insert(feedstocks)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `FS-CLG-${tag}`,
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
@@ -111,6 +115,7 @@ async function createLineageFixture(
     const [productionProcess] = await tx
       .insert(productionProcesses)
       .values({
+        organizationId: TEST_ORG_ID,
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
       })
@@ -119,6 +124,7 @@ async function createLineageFixture(
     const [productionRun] = await tx
       .insert(productionRuns)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `PR-CLG-${tag}`,
         facilityId: facility.id,
         startTime: new Date("2026-06-13T08:00:00Z"),
@@ -134,6 +140,7 @@ async function createLineageFixture(
       .returning({ id: productionRuns.id });
 
     await tx.insert(productionRunFeedstocks).values({
+      organizationId: TEST_ORG_ID,
       productionRunId: productionRun.id,
       feedstockId: feedstock.id,
       massUsedKg: 900,
@@ -142,6 +149,7 @@ async function createLineageFixture(
     const [sample] = await tx
       .insert(samples)
       .values({
+        organizationId: TEST_ORG_ID,
         productionRunId: productionRun.id,
         sampleCode: `S-CLG-${tag}`,
         samplingTime: new Date("2026-06-13T10:00:00Z"),
@@ -153,6 +161,7 @@ async function createLineageFixture(
     const [product] = await tx
       .insert(biocharProducts)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `BP-CLG-${tag}`,
         facilityId: facility.id,
         linkedProductionRunId: productionRun.id,
@@ -164,12 +173,13 @@ async function createLineageFixture(
 
     const [customer] = await tx
       .insert(customers)
-      .values({ code: `CU-CLG-${tag}`, name: `CLG Customer ${tag}` })
+      .values({ organizationId: TEST_ORG_ID, code: `CU-CLG-${tag}`, name: `CLG Customer ${tag}` })
       .returning({ id: customers.id });
 
     const [order] = await tx
       .insert(orders)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `OR-CLG-${tag}`,
         facilityId: facility.id,
         customerId: customer.id,
@@ -183,6 +193,7 @@ async function createLineageFixture(
     const [delivery] = await tx
       .insert(deliveries)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `DL-CLG-${tag}`,
         facilityId: facility.id,
         orderId: order.id,
@@ -197,6 +208,7 @@ async function createLineageFixture(
     const [application] = await tx
       .insert(applications)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `AP-CLG-${tag}`,
         deliveryId: delivery.id,
         applicationDate: new Date("2026-06-16T00:00:00Z"),
@@ -210,6 +222,7 @@ async function createLineageFixture(
       const [ghgStatement] = await tx
         .insert(certifierGhgStatements)
         .values({
+          organizationId: TEST_ORG_ID,
           facilityId: facility.id,
           reportingPeriodEndOn: "2026-06-30",
         })
@@ -219,12 +232,13 @@ async function createLineageFixture(
 
     const [removal] = await tx
       .insert(certifierRemovals)
-      .values({ facilityId: facility.id, ghgStatementId })
+      .values({ organizationId: TEST_ORG_ID, facilityId: facility.id, ghgStatementId })
       .returning({ id: certifierRemovals.id });
 
     const [batch] = await tx
       .insert(creditBatches)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `CB-CLG-${tag}`,
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
@@ -238,12 +252,14 @@ async function createLineageFixture(
       .returning({ id: creditBatches.id });
 
     await tx.insert(creditBatchProductionRuns).values({
+      organizationId: TEST_ORG_ID,
       creditBatchId: batch.id,
       productionRunId: productionRun.id,
     });
 
     if (blockingVia !== "none") {
       await tx.insert(certificationSubmissions).values({
+        organizationId: TEST_ORG_ID,
         provider: "isometric",
         submissionType:
           blockingVia === "ghgStatement" ? "ghg_statement" : "removal",
@@ -341,11 +357,14 @@ async function withFixture<T>(
   }
 }
 
+
+beforeAll(() => ensureTestOrg());
+
 describe("certification lineage guards", () => {
   it("allows production run edits while the lineage has no submitted certification artifact", async () => {
     await withFixture(async (fixture) => {
       const updated = await updateProductionRun(
-        TEST_USER_ID,
+        makeTestOrgContext(TEST_USER_ID),
         fixture.productionRunId,
         {
           feedstockWetMassKg: 1_100,
@@ -358,7 +377,7 @@ describe("certification lineage guards", () => {
 
   it("allows application edits while the lineage has no submitted certification artifact", async () => {
     await withFixture(async (fixture) => {
-      const updated = await updateApplication(TEST_USER_ID, fixture.applicationId, {
+      const updated = await updateApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, {
         fieldIdentifier: "editable-field",
       });
 
@@ -369,7 +388,7 @@ describe("certification lineage guards", () => {
   it("rejects production run dry-mass edits once a linked removal is submitted", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        updateProductionRun(TEST_USER_ID, fixture.productionRunId, {
+        updateProductionRun(makeTestOrgContext(TEST_USER_ID), fixture.productionRunId, {
           feedstockWetMassKg: 1_100,
         }),
       ).rejects.toThrow(LOCKED_COPY);
@@ -379,7 +398,7 @@ describe("certification lineage guards", () => {
   it("rejects production run deletion once linked to a submitted removal", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        deleteProductionRun(TEST_USER_ID, fixture.productionRunId),
+        deleteProductionRun(makeTestOrgContext(TEST_USER_ID), fixture.productionRunId),
       ).rejects.toThrow(LOCKED_COPY);
     });
   });
@@ -387,7 +406,7 @@ describe("certification lineage guards", () => {
   it("rejects sample edits once the sample supports a submitted removal", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        updateSample(TEST_USER_ID, fixture.sampleId, {
+        updateSample(makeTestOrgContext(TEST_USER_ID), fixture.sampleId, {
           organicCarbonPercent: 79,
         }),
       ).rejects.toThrow(LOCKED_COPY);
@@ -397,7 +416,7 @@ describe("certification lineage guards", () => {
   it("rejects deleting upstream sample evidence for a submitted removal", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        deleteSample(TEST_USER_ID, fixture.sampleId),
+        deleteSample(makeTestOrgContext(TEST_USER_ID), fixture.sampleId),
       ).rejects.toThrow(LOCKED_COPY);
     });
   });
@@ -405,7 +424,7 @@ describe("certification lineage guards", () => {
   it("rejects delivery edits once the removal is verifier-bound through a GHG statement", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        updateDelivery(TEST_USER_ID, fixture.deliveryId, {
+        updateDelivery(makeTestOrgContext(TEST_USER_ID), fixture.deliveryId, {
           deliveredWetMassKg: 301,
         }),
       ).rejects.toThrow(LOCKED_COPY);
@@ -415,7 +434,7 @@ describe("certification lineage guards", () => {
   it("rejects biochar product edits once linked to a submitted removal", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        updateBiocharProduct(TEST_USER_ID, fixture.productId, {
+        updateBiocharProduct(makeTestOrgContext(TEST_USER_ID), fixture.productId, {
           massKg: 301,
         }),
       ).rejects.toThrow(LOCKED_COPY);
@@ -430,6 +449,7 @@ describe("certification lineage guards", () => {
       const [bin] = await db
         .insert(storageLocations)
         .values({
+          organizationId: TEST_ORG_ID,
           code: `SL-CLG-${tag}`,
           name: `CLG Product Bin ${tag}`,
           type: "product_bin",
@@ -439,7 +459,7 @@ describe("certification lineage guards", () => {
 
       try {
         await expect(
-          createBiocharProduct(TEST_USER_ID, {
+          createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
             code: `BP-LOCKED-${tag}`,
             facilityId: fixture.facilityId,
             linkedProductionRunId: fixture.productionRunId,
@@ -467,7 +487,7 @@ describe("certification lineage guards", () => {
   it("rejects feedstock edits once consumed by a submitted removal lineage", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        updateFeedstock(TEST_USER_ID, fixture.feedstockId, {
+        updateFeedstock(makeTestOrgContext(TEST_USER_ID), fixture.feedstockId, {
           massDryKg: 901,
         }),
       ).rejects.toThrow(LOCKED_COPY);
@@ -477,7 +497,7 @@ describe("certification lineage guards", () => {
   it("rejects order edits once linked to a submitted removal lineage", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        updateOrder(TEST_USER_ID, fixture.orderId, {
+        updateOrder(makeTestOrgContext(TEST_USER_ID), fixture.orderId, {
           quantityKg: 301,
         }),
       ).rejects.toThrow(LOCKED_COPY);
@@ -487,7 +507,7 @@ describe("certification lineage guards", () => {
   it("rejects new applications on a submitted delivery lineage", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        createApplication(TEST_USER_ID, {
+        createApplication(makeTestOrgContext(TEST_USER_ID), {
           code: `AP-LOCKED-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
           deliveryId: fixture.deliveryId,
           applicationDate: new Date("2026-06-17T00:00:00Z"),
@@ -501,7 +521,7 @@ describe("certification lineage guards", () => {
   it("rejects application edits once linked to a submitted removal", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        updateApplication(TEST_USER_ID, fixture.applicationId, {
+        updateApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId, {
           fieldIdentifier: "locked-field",
         }),
       ).rejects.toThrow(LOCKED_COPY);
@@ -511,7 +531,7 @@ describe("certification lineage guards", () => {
   it("rejects deleting applications from a submitted removal", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        deleteApplication(TEST_USER_ID, fixture.applicationId),
+        deleteApplication(makeTestOrgContext(TEST_USER_ID), fixture.applicationId),
       ).rejects.toThrow(LOCKED_COPY);
     });
   });
@@ -519,7 +539,7 @@ describe("certification lineage guards", () => {
   it("rejects credit batch edits once its removal is submitted", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        updateCreditBatch(TEST_USER_ID, fixture.batchId, {
+        updateCreditBatch(makeTestOrgContext(TEST_USER_ID), fixture.batchId, {
           siteManagementNotes: "locked notes",
         }),
       ).rejects.toThrow(LOCKED_COPY);
@@ -529,7 +549,7 @@ describe("certification lineage guards", () => {
   it("rejects credit batch deletion once its removal is verifier-bound through a GHG statement", async () => {
     await withFixture(async (fixture) => {
       await expect(
-        deleteCreditBatch(TEST_USER_ID, fixture.batchId),
+        deleteCreditBatch(makeTestOrgContext(TEST_USER_ID), fixture.batchId),
       ).rejects.toThrow(LOCKED_COPY);
     }, "ghgStatement");
   });

@@ -59,9 +59,9 @@ export interface FacilityCertifierSummary {
 export async function loadFacilityCertifierSummary(
   facilityId: string,
 ): Promise<ActionResult<FacilityCertifierSummary>> {
-  return withAction(async (userId) => {
+  return withAction(async (orgCtx) => {
     const mapping = await getCertifierProjectByFacility(
-      userId,
+      orgCtx,
       facilityId,
       ISOMETRIC_PROVIDER,
     );
@@ -75,11 +75,11 @@ export async function loadFacilityCertifierSummary(
 export async function loadFacilityCertifierMapping(
   facilityId: string,
 ): Promise<ActionResult<FacilityCertifierMapping>> {
-  return withAction(async (userId) => {
+  return withAction(async (orgCtx) => {
     const [mapping, availableProjects, allLinkedFacilities] = await Promise.all([
-      getCertifierProjectByFacility(userId, facilityId, ISOMETRIC_PROVIDER),
+      getCertifierProjectByFacility(orgCtx, facilityId, ISOMETRIC_PROVIDER),
       safeListIfConfigured(() => listProjects()),
-      listAllFacilitiesLinkedByProvider(userId, ISOMETRIC_PROVIDER),
+      listAllFacilitiesLinkedByProvider(orgCtx, ISOMETRIC_PROVIDER),
     ]);
 
     const availableTemplates = mapping
@@ -116,7 +116,7 @@ export async function loadFacilityCertifierMapping(
 export async function saveFacilityCertifierMapping(
   input: SaveMappingInput,
 ): Promise<ActionResult<CertifierProjectRow>> {
-  return withAction(async (userId) => {
+  return withAction(async (orgCtx) => {
     await requireAdminAction();
     const parsed = saveMappingSchema.parse(input);
 
@@ -152,7 +152,7 @@ export async function saveFacilityCertifierMapping(
       }
     }
 
-    return upsertCertifierProject(userId, {
+    return upsertCertifierProject(orgCtx, {
       facilityId: parsed.facilityId,
       provider: ISOMETRIC_PROVIDER,
       externalProjectId: parsed.externalProjectId,
@@ -168,9 +168,9 @@ export async function saveFacilityCertifierMapping(
 export async function deleteFacilityCertifierMapping(
   facilityId: string,
 ): Promise<ActionResult<void>> {
-  return withAction(async (userId) => {
+  return withAction(async (orgCtx) => {
     await requireAdminAction();
-    await deleteCertifierProject(userId, facilityId, ISOMETRIC_PROVIDER);
+    await deleteCertifierProject(orgCtx, facilityId, ISOMETRIC_PROVIDER);
   });
 }
 
@@ -189,10 +189,10 @@ export async function loadIsometricProjectTemplates(
 export async function saveFacilityEmissionConfig(
   input: FacilityEmissionConfigFormData,
 ): Promise<ActionResult<CertifierProjectRow>> {
-  return withAction(async (userId) => {
+  return withAction(async (orgCtx) => {
     await requireAdminAction();
     const parsed = facilityEmissionConfigSchema.parse(input);
-    return updateFacilityEmissionConfig(userId, {
+    return updateFacilityEmissionConfig(orgCtx, {
       facilityId: parsed.facilityId,
       provider: ISOMETRIC_PROVIDER,
       gensetEnergyYieldKwhPerLitre: parsed.gensetEnergyYieldKwhPerLitre ?? null,
