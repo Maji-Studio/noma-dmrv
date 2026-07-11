@@ -18,6 +18,8 @@ import {
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "./utils";
 
 export type CertifiedLineageEntityType =
   | "creditBatch"
@@ -77,7 +79,11 @@ function targetCondition(target: CertifiedLineageTarget): SQL {
   }
 }
 
-function lineageQuery(tx: DbTransaction, target: CertifiedLineageTarget) {
+function lineageQuery(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  target: CertifiedLineageTarget,
+) {
   return tx
     .selectDistinct({
       removalId: certifierRemovals.id,
@@ -88,42 +94,48 @@ function lineageQuery(tx: DbTransaction, target: CertifiedLineageTarget) {
     .from(creditBatches)
     .innerJoin(
       creditBatchProductionRuns,
-      eq(creditBatchProductionRuns.creditBatchId, creditBatches.id),
+      and(eq(creditBatchProductionRuns.creditBatchId, creditBatches.id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)),
     )
     .innerJoin(
       productionRuns,
-      eq(productionRuns.id, creditBatchProductionRuns.productionRunId),
+      and(eq(productionRuns.id, creditBatchProductionRuns.productionRunId), eq(productionRuns.organizationId, ctx.organizationId)),
     )
     .leftJoin(
       productionRunFeedstocks,
-      eq(productionRunFeedstocks.productionRunId, productionRuns.id),
+      and(eq(productionRunFeedstocks.productionRunId, productionRuns.id), eq(productionRunFeedstocks.organizationId, ctx.organizationId)),
     )
-    .leftJoin(feedstocks, eq(feedstocks.id, productionRunFeedstocks.feedstockId))
+    .leftJoin(feedstocks, and(eq(feedstocks.id, productionRunFeedstocks.feedstockId), eq(feedstocks.organizationId, ctx.organizationId)))
     // A Sample anchors on the credit batch (issue #309); the run link is legacy
     // provenance only, kept as a fallback so pre-re-grain rows stay guarded.
     .leftJoin(
       samples,
-      or(
-        eq(samples.creditBatchId, creditBatches.id),
-        eq(samples.productionRunId, productionRuns.id),
-      )!,
+      and(
+        or(
+          eq(samples.creditBatchId, creditBatches.id),
+          eq(samples.productionRunId, productionRuns.id),
+        )!,
+        eq(samples.organizationId, ctx.organizationId),
+      ),
     )
     .leftJoin(
       biocharProducts,
-      eq(biocharProducts.linkedProductionRunId, productionRuns.id),
+      and(eq(biocharProducts.linkedProductionRunId, productionRuns.id), eq(biocharProducts.organizationId, ctx.organizationId)),
     )
-    .leftJoin(orders, eq(orders.biocharProductId, biocharProducts.id))
+    .leftJoin(orders, and(eq(orders.biocharProductId, biocharProducts.id), eq(orders.organizationId, ctx.organizationId)))
     .leftJoin(
       deliveries,
-      or(
-        eq(deliveries.biocharProductId, biocharProducts.id),
-        eq(deliveries.orderId, orders.id),
-      )!,
+      and(
+        or(
+          eq(deliveries.biocharProductId, biocharProducts.id),
+          eq(deliveries.orderId, orders.id),
+        )!,
+        eq(deliveries.organizationId, ctx.organizationId),
+      ),
     )
-    .leftJoin(applications, eq(applications.deliveryId, deliveries.id))
+    .leftJoin(applications, and(eq(applications.deliveryId, deliveries.id), eq(applications.organizationId, ctx.organizationId)))
     .innerJoin(
       certifierRemovals,
-      eq(certifierRemovals.id, creditBatches.removalId),
+      and(eq(certifierRemovals.id, creditBatches.removalId), eq(certifierRemovals.organizationId, ctx.organizationId)),
     )
     .leftJoin(
       removalSubmission,
@@ -136,6 +148,7 @@ function lineageQuery(tx: DbTransaction, target: CertifiedLineageTarget) {
         ),
         eq(removalSubmission.localEntityId, certifierRemovals.id),
         inArray(removalSubmission.status, BLOCKING_SUBMISSION_STATUSES),
+        eq(removalSubmission.organizationId, ctx.organizationId),
       ),
     )
     .leftJoin(
@@ -146,9 +159,10 @@ function lineageQuery(tx: DbTransaction, target: CertifiedLineageTarget) {
         eq(ghgStatementSubmission.submissionType, "ghg_statement"),
         eq(ghgStatementSubmission.localEntityId, certifierRemovals.ghgStatementId),
         inArray(ghgStatementSubmission.status, BLOCKING_SUBMISSION_STATUSES),
+        eq(ghgStatementSubmission.organizationId, ctx.organizationId),
       ),
     )
-    .where(targetCondition(target));
+    .where(and(eq(creditBatches.organizationId, ctx.organizationId), targetCondition(target)));
 }
 
 /**
@@ -157,11 +171,13 @@ function lineageQuery(tx: DbTransaction, target: CertifiedLineageTarget) {
  * instead of trusting UI context or stale denormalized membership.
  */
 export async function assertCanMutateCertifiedLineage(
+  ctx: OrgContext,
   tx: DbTransaction,
   target: CertifiedLineageTarget,
   mutation: "create" | "update" | "delete",
 ): Promise<void> {
-  const lineage = await lineageQuery(tx, target);
+  requireOrgScope(ctx);
+  const lineage = await lineageQuery(ctx, tx, target);
   await acquireCertificationArtifactLocksSorted(tx, [
     ...lineage.map((row) => ({
       provider: "isometric",
@@ -177,7 +193,7 @@ export async function assertCanMutateCertifiedLineage(
       })),
   ]);
 
-  const hit = (await lineageQuery(tx, target)).find(
+  const hit = (await lineageQuery(ctx, tx, target)).find(
     (row) => row.removalSubmissionId || row.ghgStatementSubmissionId,
   );
 

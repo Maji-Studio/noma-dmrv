@@ -24,8 +24,8 @@ import { withAction } from "../with-action";
 export async function loadCreditBatchDurabilitySummary(
   creditBatchId: string,
 ): Promise<ActionResult<DurabilityBatchSummary | null>> {
-  return withAction(async (userId) => {
-    const batches = await getCreditBatchesWithSamples(userId, [creditBatchId]);
+  return withAction(async (orgCtx) => {
+    const batches = await getCreditBatchesWithSamples(orgCtx, [creditBatchId]);
     const [summary] = buildDurabilityBatchSummaries(batches);
     return summary ?? null;
   });

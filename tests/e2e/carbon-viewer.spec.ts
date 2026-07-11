@@ -17,6 +17,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { Page } from "@playwright/test";
 import { Pool } from "pg";
+import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../src/db/schema";
 import { test, expect, type SeededChainData } from "./fixtures";
 
@@ -106,6 +107,7 @@ async function seedGeoLineage(
       }
 
       await tx.insert(schema.productionRuns).values({
+        organizationId: DEC_ORG_ID,
         id: ids.productionRun,
         code: codes.productionRun,
         facilityId: seededData.facility.id,
@@ -121,6 +123,7 @@ async function seedGeoLineage(
       });
 
       await tx.insert(schema.productionRunFeedstocks).values({
+        organizationId: DEC_ORG_ID,
         id: ids.productionRunFeedstock,
         productionRunId: ids.productionRun,
         feedstockId: seededData.feedstock.id,
@@ -137,6 +140,7 @@ async function seedGeoLineage(
         .where(eq(schema.biocharProducts.id, seededData.biocharProduct.id));
 
       await tx.insert(schema.orders).values({
+        organizationId: DEC_ORG_ID,
         id: ids.order,
         code: codes.order,
         facilityId: seededData.facility.id,
@@ -149,6 +153,7 @@ async function seedGeoLineage(
       });
 
       await tx.insert(schema.deliveries).values({
+        organizationId: DEC_ORG_ID,
         id: ids.delivery,
         code: codes.delivery,
         facilityId: seededData.facility.id,
@@ -162,6 +167,7 @@ async function seedGeoLineage(
       });
 
       await tx.insert(schema.applications).values({
+        organizationId: DEC_ORG_ID,
         id: ids.application,
         code: codes.application,
         deliveryId: ids.delivery,
@@ -177,6 +183,7 @@ async function seedGeoLineage(
       if (withGeo) {
         await tx.insert(schema.transportLegs).values([
           {
+            organizationId: DEC_ORG_ID,
             id: ids.inboundLeg,
             entityType: "feedstock",
             entityId: seededData.feedstock.id,
@@ -193,6 +200,7 @@ async function seedGeoLineage(
             isDerived: true,
           },
           {
+            organizationId: DEC_ORG_ID,
             id: ids.outboundLeg,
             entityType: "biochar",
             entityId: seededData.biocharProduct.id,

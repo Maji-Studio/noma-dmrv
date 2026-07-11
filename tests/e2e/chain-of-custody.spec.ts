@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { Page } from "@playwright/test";
 import { Pool } from "pg";
+import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../src/db/schema";
 import { test, expect, type SeededChainData } from "./fixtures";
 
@@ -44,6 +45,7 @@ async function seedApplicationLineage(seededData: SeededChainData) {
   try {
     await db.transaction(async (tx) => {
       await tx.insert(schema.productionRuns).values({
+        organizationId: DEC_ORG_ID,
         id: ids.productionRun,
         code: codes.productionRun,
         facilityId: seededData.facility.id,
@@ -59,6 +61,7 @@ async function seedApplicationLineage(seededData: SeededChainData) {
       });
 
       await tx.insert(schema.productionRunFeedstocks).values({
+        organizationId: DEC_ORG_ID,
         id: ids.productionRunFeedstock,
         productionRunId: ids.productionRun,
         feedstockId: seededData.feedstock.id,
@@ -75,6 +78,7 @@ async function seedApplicationLineage(seededData: SeededChainData) {
         .where(eq(schema.biocharProducts.id, seededData.biocharProduct.id));
 
       await tx.insert(schema.orders).values({
+        organizationId: DEC_ORG_ID,
         id: ids.order,
         code: codes.order,
         facilityId: seededData.facility.id,
@@ -87,6 +91,7 @@ async function seedApplicationLineage(seededData: SeededChainData) {
       });
 
       await tx.insert(schema.deliveries).values({
+        organizationId: DEC_ORG_ID,
         id: ids.delivery,
         code: codes.delivery,
         facilityId: seededData.facility.id,
@@ -100,6 +105,7 @@ async function seedApplicationLineage(seededData: SeededChainData) {
       });
 
       await tx.insert(schema.applications).values({
+        organizationId: DEC_ORG_ID,
         id: ids.application,
         code: codes.application,
         deliveryId: ids.delivery,
@@ -179,6 +185,7 @@ async function seedBatchChain(seededData: SeededChainData) {
   try {
     await db.transaction(async (tx) => {
       await tx.insert(schema.productionRuns).values({
+        organizationId: DEC_ORG_ID,
         id: ids.productionRun,
         code: codes.productionRun,
         facilityId: seededData.facility.id,
@@ -196,6 +203,7 @@ async function seedBatchChain(seededData: SeededChainData) {
       // 900 kg eligible + 100 kg ineligible allocations; the run's recorded
       // 1000 kg input stays authoritative for the Sankey's feedstock column.
       await tx.insert(schema.feedstocks).values({
+        organizationId: DEC_ORG_ID,
         id: ids.ineligibleFeedstock,
         code: codes.ineligibleFeedstock,
         facilityId: seededData.facility.id,
@@ -206,12 +214,14 @@ async function seedBatchChain(seededData: SeededChainData) {
       });
       await tx.insert(schema.productionRunFeedstocks).values([
         {
+          organizationId: DEC_ORG_ID,
           id: crypto.randomUUID(),
           productionRunId: ids.productionRun,
           feedstockId: seededData.feedstock.id,
           massUsedKg: 900,
         },
         {
+          organizationId: DEC_ORG_ID,
           id: crypto.randomUUID(),
           productionRunId: ids.productionRun,
           feedstockId: ids.ineligibleFeedstock,
@@ -248,6 +258,7 @@ async function seedBatchChain(seededData: SeededChainData) {
       ];
       for (const member of memberChains) {
         await tx.insert(schema.orders).values({
+        organizationId: DEC_ORG_ID,
           id: member.orderId,
           code: `E2E-BOR-${member.day}-${suffix}`,
           facilityId: seededData.facility.id,
@@ -259,6 +270,7 @@ async function seedBatchChain(seededData: SeededChainData) {
           packaging: "loose",
         });
         await tx.insert(schema.deliveries).values({
+        organizationId: DEC_ORG_ID,
           id: member.deliveryId,
           code: `E2E-BDL-${member.day}-${suffix}`,
           facilityId: seededData.facility.id,
@@ -271,6 +283,7 @@ async function seedBatchChain(seededData: SeededChainData) {
           moistureContentPercent: 6.5,
         });
         await tx.insert(schema.applications).values({
+        organizationId: DEC_ORG_ID,
           id: member.applicationId,
           code: member.applicationCode,
           deliveryId: member.deliveryId,
@@ -283,12 +296,14 @@ async function seedBatchChain(seededData: SeededChainData) {
       }
 
       await tx.insert(schema.productionProcesses).values({
+        organizationId: DEC_ORG_ID,
         id: ids.productionProcess,
         facilityId: seededData.facility.id,
         feedstockTypeId: seededData.feedstockType.id,
       });
 
       await tx.insert(schema.creditBatches).values({
+        organizationId: DEC_ORG_ID,
         id: ids.creditBatch,
         code: codes.creditBatch,
         facilityId: seededData.facility.id,
@@ -301,12 +316,14 @@ async function seedBatchChain(seededData: SeededChainData) {
         hToCorgRatio: 0.4,
       });
       await tx.insert(schema.creditBatchProductionRuns).values({
+        organizationId: DEC_ORG_ID,
         creditBatchId: ids.creditBatch,
         productionRunId: ids.productionRun,
       });
 
       // Trail evidence: a document on delivery A and a production-run sample.
       await tx.insert(schema.documents).values({
+        organizationId: DEC_ORG_ID,
         id: ids.document,
         entityType: "delivery",
         entityId: ids.deliveryA,
@@ -315,6 +332,7 @@ async function seedBatchChain(seededData: SeededChainData) {
         fileUrl: "https://example.com/e2e-delivery-receipt.pdf",
       });
       await tx.insert(schema.productionSamples).values({
+        organizationId: DEC_ORG_ID,
         id: ids.productionSample,
         productionRunId: ids.productionRun,
         sampleCode: codes.productionSample,

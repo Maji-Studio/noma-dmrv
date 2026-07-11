@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { TEST_ORG_ID } from "../../../../tests/helpers/test-org";
 
 import type { TransportLeg } from "@/db/schema";
 import { aggregateTransportMassDistance } from "./aggregation";
@@ -8,6 +9,7 @@ function leg(
   overrides: Partial<TransportLeg> = {},
 ): TransportLeg {
   return {
+    organizationId: TEST_ORG_ID,
     id,
     entityType: "feedstock",
     entityId: `00000000-0000-0000-0000-0000000000${id.slice(-2)}`,

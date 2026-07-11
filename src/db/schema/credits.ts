@@ -21,6 +21,7 @@ import { productionProcesses } from './production-processes';
 import { applications } from './application';
 import { productionRuns } from './production';
 import { certifierRemovals } from './certification';
+import { organizations } from './auth';
 
 // ============================================
 // Credit Batches - Carbon credit batches for registry
@@ -31,10 +32,12 @@ export const creditBatches = pgTable(
   'credit_batches',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    code: text('code').notNull().unique(), // e.g., "CB-2025-043"
-    facilityId: uuid('facility_id')
+    organizationId: text('organization_id')
       .notNull()
-      .references(() => facilities.id),
+      .references(() => organizations.id),
+    code: text('code').notNull(), // e.g., "CB-2025-043"
+    facilityId: uuid('facility_id')
+      .notNull(),
     // --- Production-batch identity (ADR 0016) ---
     // The credit batch IS the Isometric protocol production batch: ONE
     // feedstock, facility-scoped, <=1 month under Isometric. feedstockTypeId is
@@ -147,6 +150,18 @@ export const creditBatches = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    unique('credit_batches_organization_id_code_unique').on(
+      table.organizationId,
+      table.code
+    ),
+    unique('credit_batches_id_organization_id_unique').on(
+      table.id,
+      table.organizationId
+    ),
+    foreignKey({
+      columns: [table.facilityId, table.organizationId],
+      foreignColumns: [facilities.id, facilities.organizationId],
+    }),
     check(
       'credit_batches_certifier_is_isometric',
       sql`${table.certifier} is null or ${table.certifier} = 'isometric'`
@@ -193,15 +208,27 @@ export const creditBatchApplications = pgTable(
   'credit_batch_applications',
   {
     id: uuid('id').notNull().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
     creditBatchId: uuid('credit_batch_id')
-      .notNull()
-      .references(() => creditBatches.id),
+      .notNull(),
     applicationId: uuid('application_id')
-      .notNull()
-      .references(() => applications.id),
+      .notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
-  (table) => [primaryKey({ columns: [table.creditBatchId, table.applicationId] })]
+  (table) => [
+    primaryKey({ columns: [table.creditBatchId, table.applicationId] }),
+    index('credit_batch_applications_organization_id_idx').on(table.organizationId),
+    foreignKey({
+      columns: [table.creditBatchId, table.organizationId],
+      foreignColumns: [creditBatches.id, creditBatches.organizationId],
+    }),
+    foreignKey({
+      columns: [table.applicationId, table.organizationId],
+      foreignColumns: [applications.id, applications.organizationId],
+    }),
+  ]
 );
 
 // ============================================
@@ -213,17 +240,27 @@ export const creditBatchApplications = pgTable(
 export const creditBatchProductionRuns = pgTable(
   'credit_batch_production_runs',
   {
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
     creditBatchId: uuid('credit_batch_id')
-      .notNull()
-      .references(() => creditBatches.id),
+      .notNull(),
     productionRunId: uuid('production_run_id')
-      .notNull()
-      .references(() => productionRuns.id),
+      .notNull(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.creditBatchId, table.productionRunId] }),
     unique('credit_batch_production_runs_run_unique').on(table.productionRunId),
+    index('credit_batch_production_runs_organization_id_idx').on(table.organizationId),
+    foreignKey({
+      columns: [table.creditBatchId, table.organizationId],
+      foreignColumns: [creditBatches.id, creditBatches.organizationId],
+    }),
+    foreignKey({
+      columns: [table.productionRunId, table.organizationId],
+      foreignColumns: [productionRuns.id, productionRuns.organizationId],
+    }),
   ]
 );
 

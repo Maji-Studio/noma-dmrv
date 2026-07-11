@@ -6,12 +6,15 @@ import { ilike, eq, and, isNull, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { feedstocks, feedstockTypes } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "../utils";
 
-export async function getFeedstocks(params: {
+export async function getFeedstocks(ctx: OrgContext, params: {
   search?: string;
   facilityId?: string;
   limit: number;
 }): Promise<EntityOption[]> {
+  requireOrgScope(ctx);
   const { search, facilityId, limit } = params;
 
   const conditions: SQL[] = [isNull(feedstocks.archivedAt)];
@@ -35,8 +38,14 @@ export async function getFeedstocks(params: {
       feedstockTypeName: feedstockTypes.name,
     })
     .from(feedstocks)
-    .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
-    .where(whereClause)
+    .leftJoin(
+      feedstockTypes,
+      and(
+        eq(feedstocks.feedstockTypeId, feedstockTypes.id),
+        eq(feedstockTypes.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(and(eq(feedstocks.organizationId, ctx.organizationId), whereClause))
     .limit(limit);
 
   return results.map((r) => ({
@@ -48,7 +57,8 @@ export async function getFeedstocks(params: {
   }));
 }
 
-export async function getFeedstockById(id: string): Promise<EntityOption | null> {
+export async function getFeedstockById(ctx: OrgContext, id: string): Promise<EntityOption | null> {
+  requireOrgScope(ctx);
   const [result] = await db
     .select({
       id: feedstocks.id,
@@ -57,8 +67,14 @@ export async function getFeedstockById(id: string): Promise<EntityOption | null>
       feedstockTypeName: feedstockTypes.name,
     })
     .from(feedstocks)
-    .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
-    .where(eq(feedstocks.id, id))
+    .leftJoin(
+      feedstockTypes,
+      and(
+        eq(feedstocks.feedstockTypeId, feedstockTypes.id),
+        eq(feedstockTypes.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(and(eq(feedstocks.id, id), eq(feedstocks.organizationId, ctx.organizationId)))
     .limit(1);
 
   if (!result) return null;

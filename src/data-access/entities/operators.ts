@@ -2,15 +2,18 @@
  * Operator options for searchable entity selection.
  */
 
-import { ilike, eq, type SQL } from "drizzle-orm";
+import { and, ilike, eq, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { operators } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "../utils";
 
-export async function getOperators(params: {
+export async function getOperators(ctx: OrgContext, params: {
   search?: string;
   limit: number;
 }): Promise<EntityOption[]> {
+  requireOrgScope(ctx);
   const { search, limit } = params;
 
   let whereClause: SQL | undefined;
@@ -26,7 +29,7 @@ export async function getOperators(params: {
       credentials: operators.credentials,
     })
     .from(operators)
-    .where(whereClause)
+    .where(and(eq(operators.organizationId, ctx.organizationId), whereClause))
     .limit(limit);
 
   return results.map((r) => ({
@@ -37,7 +40,8 @@ export async function getOperators(params: {
   }));
 }
 
-export async function getOperatorById(id: string): Promise<EntityOption | null> {
+export async function getOperatorById(ctx: OrgContext, id: string): Promise<EntityOption | null> {
+  requireOrgScope(ctx);
   const [result] = await db
     .select({
       id: operators.id,
@@ -45,7 +49,7 @@ export async function getOperatorById(id: string): Promise<EntityOption | null> 
       credentials: operators.credentials,
     })
     .from(operators)
-    .where(eq(operators.id, id))
+    .where(and(eq(operators.id, id), eq(operators.organizationId, ctx.organizationId)))
     .limit(1);
 
   if (!result) return null;

@@ -1,3 +1,4 @@
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Production Process Data Access Tests
  *
@@ -66,6 +67,7 @@ async function createMethodBProcessWithBaseline(tag: string): Promise<{
   const [process] = await db
     .insert(productionProcesses)
     .values({
+      organizationId: TEST_ORG_ID,
       facilityId,
       feedstockTypeId,
       establishedAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -75,6 +77,7 @@ async function createMethodBProcessWithBaseline(tag: string): Promise<{
   const [batch] = await db
     .insert(creditBatches)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `CB-PROC-MB-${suffix}`,
       facilityId,
       feedstockTypeId,
@@ -90,6 +93,7 @@ async function createMethodBProcessWithBaseline(tag: string): Promise<{
     .insert(samples)
     .values(
       Array.from({ length: 30 }, (_, index) => ({
+        organizationId: TEST_ORG_ID,
         creditBatchId: batch.id,
         sampleCode: `S-PROC-MB-${suffix}-${index}`,
         samplingTime: new Date(`2026-01-${String(index + 1).padStart(2, "0")}T12:00:00.000Z`),
@@ -115,6 +119,8 @@ async function createMethodBProcessWithBaseline(tag: string): Promise<{
   return { processId: process.id, batchId: batch.id, sampleIds };
 }
 
+beforeAll(() => ensureTestOrg());
+
 beforeAll(async () => {
   await applyMethodBSampleWriteGuards();
 
@@ -122,7 +128,7 @@ beforeAll(async () => {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ name: `Process Test Facility ${runId}`, code: `FAC-PROC-${runId}` })
+    .values({ organizationId: TEST_ORG_ID, name: `Process Test Facility ${runId}`, code: `FAC-PROC-${runId}` })
     .returning({ id: facilities.id });
   facilityId = facility.id;
   createdIds.facilities.push(facility.id);
@@ -130,6 +136,7 @@ beforeAll(async () => {
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      organizationId: TEST_ORG_ID,
       name: `Process Test Feedstock ${runId}`,
       code: `FT-PROC-${runId}`,
       category: "forestry",
@@ -177,9 +184,10 @@ afterAll(async () => {
   });
 });
 
+
 describe("findOrCreateProductionProcess", () => {
   it("creates a Method A process when none exists for the pair", async () => {
-    const process = await findOrCreateProductionProcess(TEST_USER_ID, {
+    const process = await findOrCreateProductionProcess(makeTestOrgContext(TEST_USER_ID), {
       facilityId,
       feedstockTypeId,
     });
@@ -192,11 +200,11 @@ describe("findOrCreateProductionProcess", () => {
   });
 
   it("is idempotent — a second call returns the same process, not a duplicate", async () => {
-    const first = await findOrCreateProductionProcess(TEST_USER_ID, {
+    const first = await findOrCreateProductionProcess(makeTestOrgContext(TEST_USER_ID), {
       facilityId,
       feedstockTypeId,
     });
-    const second = await findOrCreateProductionProcess(TEST_USER_ID, {
+    const second = await findOrCreateProductionProcess(makeTestOrgContext(TEST_USER_ID), {
       facilityId,
       feedstockTypeId,
     });
@@ -216,13 +224,14 @@ describe("findOrCreateProductionProcess", () => {
     const [newer] = await db
       .insert(productionProcesses)
       .values({
+        organizationId: TEST_ORG_ID,
         facilityId,
         feedstockTypeId,
         establishedAt: new Date("2999-01-01T00:00:00.000Z"),
       })
       .returning({ id: productionProcesses.id });
 
-    const resolved = await findOrCreateProductionProcess(TEST_USER_ID, {
+    const resolved = await findOrCreateProductionProcess(makeTestOrgContext(TEST_USER_ID), {
       facilityId,
       feedstockTypeId,
     });
@@ -232,13 +241,13 @@ describe("findOrCreateProductionProcess", () => {
 
   it("rejects an unauthenticated user", async () => {
     await expect(
-      findOrCreateProductionProcess("", { facilityId, feedstockTypeId }),
+      findOrCreateProductionProcess(makeTestOrgContext(""), { facilityId, feedstockTypeId }),
     ).rejects.toThrow(/unauthorized/i);
   });
 
   it("uses the canonical process sample count in the summary surface", async () => {
     const runId = Date.now().toString(36);
-    const process = await findOrCreateProductionProcess(TEST_USER_ID, {
+    const process = await findOrCreateProductionProcess(makeTestOrgContext(TEST_USER_ID), {
       facilityId,
       feedstockTypeId,
     });
@@ -246,6 +255,7 @@ describe("findOrCreateProductionProcess", () => {
       .insert(creditBatches)
       .values([
         {
+          organizationId: TEST_ORG_ID,
           code: `CB-PROC-SAMPLED-${runId}`,
           facilityId,
           feedstockTypeId,
@@ -255,6 +265,7 @@ describe("findOrCreateProductionProcess", () => {
           certifier: "isometric",
         },
         {
+          organizationId: TEST_ORG_ID,
           code: `CB-PROC-UNSAMPLED-${runId}`,
           facilityId,
           feedstockTypeId,
@@ -271,6 +282,7 @@ describe("findOrCreateProductionProcess", () => {
       .insert(samples)
       .values(
         [0, 1, 2].map((index) => ({
+          organizationId: TEST_ORG_ID,
           creditBatchId: sampledBatch.id,
           sampleCode: `S-PROC-${runId}-${index}`,
           samplingTime: new Date(`2026-01-0${index + 1}T12:00:00.000Z`),
@@ -284,6 +296,7 @@ describe("findOrCreateProductionProcess", () => {
     const [futureSample] = await db
       .insert(samples)
       .values({
+        organizationId: TEST_ORG_ID,
         creditBatchId: sampledBatch.id,
         sampleCode: `S-PROC-${runId}-FUTURE`,
         samplingTime: FAR_FUTURE_SAMPLING_TIME,
@@ -293,12 +306,13 @@ describe("findOrCreateProductionProcess", () => {
       .returning({ id: samples.id });
     createdIds.samples.push(futureSample.id);
 
-    const countsByProcess = await countEligibleSamplesByProcess(db, {
-      facilityId,
-      asOfDate: new Date(),
-    });
+    const countsByProcess = await countEligibleSamplesByProcess(
+      makeTestOrgContext(TEST_USER_ID),
+      db,
+      { facilityId, asOfDate: new Date() },
+    );
     const summaries = await getProductionProcessSummariesByFacility(
-      TEST_USER_ID,
+      makeTestOrgContext(TEST_USER_ID),
       facilityId,
     );
     const summary = summaries.find((item) => item.id === process.id);
@@ -347,6 +361,7 @@ describe("findOrCreateProductionProcess", () => {
     const [targetProcess] = await db
       .insert(productionProcesses)
       .values({
+        organizationId: TEST_ORG_ID,
         facilityId,
         feedstockTypeId,
         establishedAt: new Date("2026-03-01T00:00:00.000Z"),

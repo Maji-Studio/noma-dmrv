@@ -7,9 +7,11 @@
  * or filesystem is touched.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SafeError } from "@/lib/errors";
+import { makeTestOrgContext } from "./helpers/test-org";
 
 vi.mock("@/lib/auth/server", () => ({
-  getUser: vi.fn(),
+  requireOrgContext: vi.fn(),
 }));
 
 vi.mock("@/data-access/documents", () => ({
@@ -21,7 +23,7 @@ vi.mock("@/data-access/documents", () => ({
   listDocumentsForEntity: vi.fn(),
 }));
 
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import {
   insertDocument,
   getDocumentById,
@@ -49,6 +51,7 @@ const mockUser = {
   createdAt: new Date(),
   updatedAt: new Date(),
 };
+const TEST_CTX = makeTestOrgContext(mockUser.id);
 
 class FakeProvider implements StorageProvider {
   readonly name = "local-fs" as const;
@@ -95,7 +98,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   provider = new FakeProvider();
   __setStorageProviderForTests(provider);
-  vi.mocked(getUser).mockResolvedValue(mockUser);
+  vi.mocked(requireOrgContext).mockResolvedValue(TEST_CTX);
 });
 
 afterEach(() => {
@@ -131,9 +134,14 @@ const productionRunCsvInput = {
 
 describe("requestUpload", () => {
   it("returns Unauthorized when user is not signed in", async () => {
-    vi.mocked(getUser).mockResolvedValueOnce(null);
+    vi.mocked(requireOrgContext).mockRejectedValueOnce(
+      new SafeError("Select an organization to continue."),
+    );
     const result = await requestUpload(baseInput);
-    expect(result).toEqual({ success: false, error: "Unauthorized" });
+    expect(result).toEqual({
+      success: false,
+      error: "Select an organization to continue.",
+    });
     expect(insertDocument).not.toHaveBeenCalled();
   });
 
@@ -173,10 +181,12 @@ describe("requestUpload", () => {
     if (result.success) {
       expect(result.data.documentId).toBe("11111111-2222-4333-8444-555555555555");
       expect(result.data.uploadUrl).toMatch(/^https:\/\/fake\.test\//);
-      expect(result.data.storageKey).toMatch(/^sample\/.*\/lab_report\//);
+      expect(result.data.storageKey).toMatch(
+        /^org\/org_test_fixtures\/sample\/.*\/lab_report\//,
+      );
     }
     expect(insertDocument).toHaveBeenCalledWith(
-      mockUser.id,
+      TEST_CTX,
       expect.objectContaining({
         entityType: "sample",
         documentType: "lab_report",
@@ -197,12 +207,12 @@ describe("requestUpload", () => {
 
     expect(result.success).toBe(true);
     expect(assertCanManageDocumentEntity).toHaveBeenCalledWith(
-      mockUser.id,
+      TEST_CTX,
       "production_run",
       productionRunCsvInput.entityId,
     );
     expect(insertDocument).toHaveBeenCalledWith(
-      mockUser.id,
+      TEST_CTX,
       expect.objectContaining({
         entityType: "production_run",
         documentType: "sensor_data",
@@ -221,7 +231,7 @@ describe("requestUpload", () => {
 
     expect(result.success).toBe(true);
     expect(insertDocument).toHaveBeenCalledWith(
-      mockUser.id,
+      TEST_CTX,
       expect.objectContaining({
         entityType: "application",
         documentType: "photo",
@@ -263,7 +273,7 @@ describe("confirmUpload", () => {
 
     expect(result.success).toBe(true);
     expect(updateDocument).toHaveBeenCalledWith(
-      mockUser.id,
+      TEST_CTX,
       pendingRow.id,
       expect.objectContaining({
         uploadStatus: "uploaded",
@@ -291,7 +301,7 @@ describe("confirmUpload", () => {
     }
     expect(provider.deleted).toContain(pendingRow.storageKey);
     expect(updateDocument).toHaveBeenCalledWith(
-      mockUser.id,
+      TEST_CTX,
       pendingRow.id,
       { uploadStatus: "failed" }
     );
@@ -344,9 +354,14 @@ describe("confirmUpload", () => {
   });
 
   it("returns Unauthorized when user is not signed in", async () => {
-    vi.mocked(getUser).mockResolvedValueOnce(null);
+    vi.mocked(requireOrgContext).mockRejectedValueOnce(
+      new SafeError("Select an organization to continue."),
+    );
     const result = await confirmUpload({ documentId: pendingRow.id });
-    expect(result).toEqual({ success: false, error: "Unauthorized" });
+    expect(result).toEqual({
+      success: false,
+      error: "Select an organization to continue.",
+    });
   });
 });
 
@@ -393,12 +408,12 @@ describe("updateApplicationEvidenceMetadata", () => {
 
     expect(result.success).toBe(true);
     expect(assertCanManageDocumentEntity).toHaveBeenCalledWith(
-      mockUser.id,
+      TEST_CTX,
       "application",
       uploadedApplicationPhoto.entityId,
     );
     expect(updateDocument).toHaveBeenCalledWith(
-      mockUser.id,
+      TEST_CTX,
       uploadedApplicationPhoto.id,
       {
         metadata: {
@@ -447,7 +462,7 @@ describe("updateApplicationEvidenceMetadata", () => {
 
     expect(result.success).toBe(true);
     expect(updateDocument).toHaveBeenCalledWith(
-      mockUser.id,
+      TEST_CTX,
       uploadedApplicationPdf.id,
       {
         metadata: {

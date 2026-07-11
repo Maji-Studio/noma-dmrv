@@ -11,6 +11,7 @@
  */
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
+import type { OrgContext } from "@/lib/auth/server";
 import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
 import { feedstocks } from "@/db/schema/feedstock";
 import { productionRuns, productionRunFeedstocks } from "@/db/schema/production";
@@ -23,6 +24,7 @@ import { SafeError } from "@/lib/errors";
  * facility and production window, and are not already assigned elsewhere.
  */
 export async function validateProductionRunIds(
+  ctx: OrgContext,
   tx: DbTransaction,
   productionRunIds: string[],
   facilityId: string,
@@ -46,7 +48,7 @@ export async function validateProductionRunIds(
       date: productionRunDateExpr(),
     })
     .from(productionRuns)
-    .where(inArray(productionRuns.id, productionRunIds));
+    .where(and(inArray(productionRuns.id, productionRunIds), eq(productionRuns.organizationId, ctx.organizationId)));
 
   if (rows.length !== productionRunIds.length) {
     const found = new Set(rows.map((r) => r.id));
@@ -79,6 +81,7 @@ export async function validateProductionRunIds(
 
   const assignmentConditions = [
     inArray(creditBatchProductionRuns.productionRunId, productionRunIds),
+    eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
   ];
   if (excludeCreditBatchId) {
     assignmentConditions.push(
@@ -94,7 +97,7 @@ export async function validateProductionRunIds(
     .from(creditBatchProductionRuns)
     .innerJoin(
       creditBatches,
-      eq(creditBatchProductionRuns.creditBatchId, creditBatches.id),
+      and(eq(creditBatchProductionRuns.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)),
     )
     .where(and(...assignmentConditions));
 
@@ -115,6 +118,7 @@ export async function validateProductionRunIds(
  * populates `credit_batches.feedstockTypeId` and keys the production process.
  */
 export async function resolveSingleFeedstockType(
+  ctx: OrgContext,
   tx: DbTransaction,
   productionRunIds: string[],
 ): Promise<string> {
@@ -133,9 +137,12 @@ export async function resolveSingleFeedstockType(
     .from(productionRunFeedstocks)
     .innerJoin(
       feedstocks,
-      eq(productionRunFeedstocks.feedstockId, feedstocks.id),
+      and(eq(productionRunFeedstocks.feedstockId, feedstocks.id), eq(feedstocks.organizationId, ctx.organizationId)),
     )
-    .where(inArray(productionRunFeedstocks.productionRunId, uniqueRunIds));
+    .where(and(
+      inArray(productionRunFeedstocks.productionRunId, uniqueRunIds),
+      eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+    ));
 
   const mappedRunIds = new Set(
     rows
@@ -183,11 +190,12 @@ export async function resolveSingleFeedstockType(
  * process/Method-A-B context up front.
  */
 export async function assertDeclaredFeedstockType(
+  ctx: OrgContext,
   tx: DbTransaction,
   productionRunIds: string[],
   declaredFeedstockTypeId: string,
 ): Promise<void> {
-  const resolved = await resolveSingleFeedstockType(tx, productionRunIds);
+  const resolved = await resolveSingleFeedstockType(ctx, tx, productionRunIds);
   if (resolved !== declaredFeedstockTypeId) {
     throw new SafeError(
       `The selected production runs are a different feedstock than the one chosen for this batch. ` +

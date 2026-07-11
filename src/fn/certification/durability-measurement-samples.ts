@@ -1,7 +1,7 @@
 /**
  * 200-year durability measurement-samples submission step (Tier-1 Phase 3).
  *
- * Server-internal core (no "use server" — it takes an explicit `userId` and runs
+ * Server-internal core (no "use server" — it takes an explicit `orgCtx` and runs
  * inside the submit pipeline, which already resolved the caller). For each member
  * credit batch it POSTs one `biochar_production_batch` measurement sample (H/C +
  * total/inorganic carbon + product mass, each value a per-batch mean ± std-dev),
@@ -23,6 +23,7 @@
  * reconcile by supplier-ref lookup → audit event / ledger-reject), idempotent on
  * the versioned supplier reference, mirroring the datapoint/removal/sensor flows.
  */
+import type { OrgContext } from "@/lib/auth/server";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import { env } from "@/config/env";
 import type { Logger } from "@/lib/log";
@@ -244,7 +245,7 @@ export function buildDurabilityMeasurementSampleSubmissions(
 }
 
 export interface SubmitDurabilityMeasurementSamplesArgs {
-  userId: string;
+  orgCtx: OrgContext;
   removalId: string;
   /** Ledger row claimed for this attempt — rejected on unrecoverable failure. */
   submissionRowId: string;
@@ -267,7 +268,7 @@ export async function submitDurabilityMeasurementSamples(
   let submitted = 0;
   for (const submission of args.submissions) {
     await performRegistryCreate({
-      userId: args.userId,
+      orgCtx: args.orgCtx,
       entityType: REMOVAL_ENTITY_TYPE,
       entityId: args.removalId,
       submissionRowId: args.submissionRowId,

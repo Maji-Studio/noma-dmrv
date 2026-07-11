@@ -5,14 +5,11 @@ const mockGetSampleById = vi.fn();
 const mockWithAutoCode = vi.fn();
 
 vi.mock("@/lib/auth/server", () => ({
-  getUser: vi.fn().mockResolvedValue({
-    id: "user-123",
-    email: "test@example.com",
-    name: "Test",
-    emailVerified: true,
-    role: "admin" as const,
-    createdAt: new Date("2025-01-01"),
-    updatedAt: new Date("2025-01-01"),
+  requireOrgContext: vi.fn().mockResolvedValue({
+    userId: "user-123",
+    organizationId: "org_test_fixtures",
+    orgRole: "owner",
+    isPlatformAdmin: false,
   }),
 }));
 
@@ -54,6 +51,7 @@ describe("createSampleFn", () => {
     mockWithAutoCode.mockReset();
     mockWithAutoCode.mockImplementation(
       async (
+        _ctx: unknown,
         _prefix: unknown,
         _table: unknown,
         _column: unknown,

@@ -1,3 +1,4 @@
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed concurrency tests for DB-enforced sample_code uniqueness
  * (issue #395). The `samples_sample_code_unique` index is the sole
@@ -50,12 +51,13 @@ function createConcurrentSample(
   userCode: string | undefined,
 ): Promise<{ id: string; sampleCode: string }> {
   return withAutoCode(
+    makeTestOrgContext(TEST_USER_ID),
     "SAM",
     samples,
     samples.sampleCode,
     userCode,
     async (sampleCode) => {
-      const sample = await createSample(TEST_USER_ID, {
+      const sample = await createSample(makeTestOrgContext(TEST_USER_ID), {
         sampleCode,
         creditBatchId: batchId,
         samplingTime: new Date("2025-06-15T10:00:00Z"),
@@ -68,12 +70,15 @@ function createConcurrentSample(
   );
 }
 
+beforeAll(() => ensureTestOrg());
+
 beforeAll(async () => {
   const suffix = Date.now().toString(36);
 
   const [facility] = await db
     .insert(facilities)
     .values({
+      organizationId: TEST_ORG_ID,
       name: `Sample-Code Facility ${suffix}`,
       code: `FAC-SC-${suffix}`,
       durabilityOption: "200_year",
@@ -84,6 +89,7 @@ beforeAll(async () => {
   const [reactor] = await db
     .insert(reactors)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `RE-SC-${suffix}`,
       facilityId: facility.id,
       identifier: "Sample-Code Reactor",
@@ -95,6 +101,7 @@ beforeAll(async () => {
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      organizationId: TEST_ORG_ID,
       name: `Sample-Code Woodchips ${suffix}`,
       code: `FT-SC-${suffix}`,
       category: "forestry",
@@ -105,6 +112,7 @@ beforeAll(async () => {
   const [feedstock] = await db
     .insert(feedstocks)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `FS-SC-${suffix}`,
       facilityId: facility.id,
       feedstockTypeId: feedstockType.id,
@@ -116,6 +124,7 @@ beforeAll(async () => {
   const [run] = await db
     .insert(productionRuns)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `PR-SC-${suffix}`,
       facilityId: facility.id,
       reactorId: reactor.id,
@@ -127,12 +136,13 @@ beforeAll(async () => {
   createdIds.productionRuns.push(run.id);
 
   await db.insert(productionRunFeedstocks).values({
+    organizationId: TEST_ORG_ID,
     productionRunId: run.id,
     feedstockId: feedstock.id,
     massUsedKg: 400,
   });
 
-  const batch = await createCreditBatch(TEST_USER_ID, {
+  const batch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
     code: `CB-SC-${suffix}`,
     facilityId: facility.id,
     productionRunIds: [run.id],
@@ -200,6 +210,7 @@ afterAll(async () => {
     }
   });
 });
+
 
 describe("sample_code uniqueness is DB-enforced (issue #395)", () => {
   it("two concurrent creates with the same explicit code → one success, one safe duplicate error", async () => {

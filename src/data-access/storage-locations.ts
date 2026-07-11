@@ -5,6 +5,7 @@
 
 import { and, asc, desc, eq, ilike, isNull, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
+import type { OrgContext } from "@/lib/auth/server";
 import {
   storageLocations,
   facilities,
@@ -22,7 +23,7 @@ import {
   type StorageLocationFilterData,
   type StorageLocationType,
 } from "@/schemas/storage-locations";
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { guardStorageLocationName } from "./unique-name-guards";
 import { enrichStorageLocationRows } from "./storage-location-enrichment";
@@ -48,10 +49,10 @@ export type {
  * Supports search, facility filter, type filter, sorting, and pagination
  */
 export async function getStorageLocations(
-  userId: string,
+  ctx: OrgContext,
   filters?: Partial<StorageLocationFilterData>
 ): Promise<PaginatedStorageLocations> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const {
     search,
@@ -64,7 +65,7 @@ export async function getStorageLocations(
   } = filters ?? {};
 
   // Build where conditions — archived bins (facility archive cascade) are hidden
-  const conditions: SQL[] = [isNull(storageLocations.archivedAt)];
+  const conditions: SQL[] = [eq(storageLocations.organizationId, ctx.organizationId), isNull(storageLocations.archivedAt)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -99,6 +100,7 @@ export async function getStorageLocations(
   const orderFn = sortOrder === "desc" ? desc : asc;
 
   // Count total for pagination
+  // org-scope-ok: whereClause includes the active organization predicate.
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(storageLocations)
@@ -112,6 +114,7 @@ export async function getStorageLocations(
   const storageLocationList = await db
     .select({
       id: storageLocations.id,
+      organizationId: storageLocations.organizationId,
       code: storageLocations.code,
       name: storageLocations.name,
       type: storageLocations.type,
@@ -129,13 +132,19 @@ export async function getStorageLocations(
       facilityName: facilities.name,
     })
     .from(storageLocations)
-    .leftJoin(facilities, eq(storageLocations.facilityId, facilities.id))
+    .leftJoin(
+      facilities,
+      and(
+        eq(storageLocations.facilityId, facilities.id),
+        eq(facilities.organizationId, ctx.organizationId),
+      ),
+    )
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
     .offset(offset);
 
-  const items = await enrichStorageLocationRows(userId, storageLocationList);
+  const items = await enrichStorageLocationRows(ctx, storageLocationList);
 
   return {
     items,
@@ -151,15 +160,15 @@ export async function getStorageLocations(
  * Returns storage location data without relations
  */
 export async function getStorageLocationById(
-  userId: string,
+  ctx: OrgContext,
   storageLocationId: string
 ): Promise<StorageLocation> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [storageLocation] = await db
     .select()
     .from(storageLocations)
-    .where(eq(storageLocations.id, storageLocationId));
+    .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (!storageLocation) {
     throw new SafeError("Storage location not found");
@@ -172,14 +181,15 @@ export async function getStorageLocationById(
  * Get a single storage location by ID with facility info
  */
 export async function getStorageLocationWithFacility(
-  userId: string,
+  ctx: OrgContext,
   storageLocationId: string
 ): Promise<StorageLocationWithFacility> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [result] = await db
     .select({
       id: storageLocations.id,
+      organizationId: storageLocations.organizationId,
       code: storageLocations.code,
       name: storageLocations.name,
       type: storageLocations.type,
@@ -197,14 +207,20 @@ export async function getStorageLocationWithFacility(
       facilityName: facilities.name,
     })
     .from(storageLocations)
-    .leftJoin(facilities, eq(storageLocations.facilityId, facilities.id))
-    .where(eq(storageLocations.id, storageLocationId));
+    .leftJoin(
+      facilities,
+      and(
+        eq(storageLocations.facilityId, facilities.id),
+        eq(facilities.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (!result) {
     throw new SafeError("Storage location not found");
   }
 
-  const [enriched] = await enrichStorageLocationRows(userId, [result]);
+  const [enriched] = await enrichStorageLocationRows(ctx, [result]);
 
   return enriched;
 }
@@ -213,16 +229,16 @@ export async function getStorageLocationWithFacility(
  * Get storage locations by facility ID
  */
 export async function getStorageLocationsByFacility(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string
 ): Promise<StorageLocation[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify facility exists
   const [facility] = await db
     .select({ id: facilities.id })
     .from(facilities)
-    .where(eq(facilities.id, facilityId));
+    .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
 
   if (!facility) {
     throw new SafeError("Facility not found");
@@ -231,7 +247,7 @@ export async function getStorageLocationsByFacility(
   return db
     .select()
     .from(storageLocations)
-    .where(and(eq(storageLocations.facilityId, facilityId), isNull(storageLocations.archivedAt)))
+    .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId), isNull(storageLocations.archivedAt)))
     .orderBy(asc(storageLocations.code));
 }
 
@@ -243,7 +259,7 @@ export async function getStorageLocationsByFacility(
  * Create a new storage location
  */
 export async function createStorageLocation(
-  userId: string,
+  ctx: OrgContext,
   data: {
     code: string;
     name: string;
@@ -257,13 +273,13 @@ export async function createStorageLocation(
     supplierReferenceId?: string | null;
   }
 ): Promise<StorageLocation> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify facility exists and is active (no new children under an archived parent)
   const [facility] = await db
     .select({ id: facilities.id })
     .from(facilities)
-    .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
+    .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)));
 
   if (!facility) {
     throw new SafeError("Facility not found or archived");
@@ -273,7 +289,7 @@ export async function createStorageLocation(
   const [existing] = await db
     .select({ id: storageLocations.id })
     .from(storageLocations)
-    .where(eq(storageLocations.code, data.code));
+    .where(and(eq(storageLocations.code, data.code), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (existing) {
     throw new SafeError("A storage location with this code already exists");
@@ -283,7 +299,7 @@ export async function createStorageLocation(
     const [feedstockType] = await db
       .select({ id: feedstockTypes.id })
       .from(feedstockTypes)
-      .where(eq(feedstockTypes.id, data.feedstockTypeId));
+      .where(and(eq(feedstockTypes.id, data.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
 
     if (!feedstockType) {
       throw new SafeError("Feedstock type not found");
@@ -305,17 +321,18 @@ export async function createStorageLocation(
     const [formulation] = await db
       .select({ id: formulations.id })
       .from(formulations)
-      .where(eq(formulations.id, formulationId));
+      .where(and(eq(formulations.id, formulationId), eq(formulations.organizationId, ctx.organizationId)));
 
     if (!formulation) {
       throw new SafeError("Formulation not found");
     }
   }
 
-  const [storageLocation] = await guardStorageLocationName(data.name, () =>
+  const [storageLocation] = await guardStorageLocationName(ctx, data.name, () =>
     db
       .insert(storageLocations)
       .values({
+        organizationId: ctx.organizationId,
         code: data.code,
         name: data.name,
         type: data.type,
@@ -344,7 +361,7 @@ export async function createStorageLocation(
  * Update an existing storage location
  */
 export async function updateStorageLocation(
-  userId: string,
+  ctx: OrgContext,
   storageLocationId: string,
   data: {
     code?: string;
@@ -359,13 +376,13 @@ export async function updateStorageLocation(
     supplierReferenceId?: string | null;
   }
 ): Promise<StorageLocation> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify storage location exists
   const [existing] = await db
     .select()
     .from(storageLocations)
-    .where(eq(storageLocations.id, storageLocationId));
+    .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Storage location not found");
@@ -376,7 +393,7 @@ export async function updateStorageLocation(
     const [duplicate] = await db
       .select({ id: storageLocations.id })
       .from(storageLocations)
-      .where(eq(storageLocations.code, data.code));
+      .where(and(eq(storageLocations.code, data.code), eq(storageLocations.organizationId, ctx.organizationId)));
 
     if (duplicate) {
       throw new SafeError("A storage location with this code already exists");
@@ -388,7 +405,7 @@ export async function updateStorageLocation(
     const [facility] = await db
       .select({ id: facilities.id })
       .from(facilities)
-      .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
+      .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)));
 
     if (!facility) {
       throw new SafeError("Facility not found or archived");
@@ -399,7 +416,7 @@ export async function updateStorageLocation(
     const [feedstockType] = await db
       .select({ id: feedstockTypes.id })
       .from(feedstockTypes)
-      .where(eq(feedstockTypes.id, data.feedstockTypeId));
+      .where(and(eq(feedstockTypes.id, data.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
 
     if (!feedstockType) {
       throw new SafeError("Feedstock type not found");
@@ -443,7 +460,7 @@ export async function updateStorageLocation(
     const [formulation] = await db
       .select({ id: formulations.id })
       .from(formulations)
-      .where(eq(formulations.id, normalizedFormulationId));
+      .where(and(eq(formulations.id, normalizedFormulationId), eq(formulations.organizationId, ctx.organizationId)));
 
     if (!formulation) {
       throw new SafeError("Formulation not found");
@@ -461,6 +478,7 @@ export async function updateStorageLocation(
       .where(
         and(
           eq(biocharProducts.storageLocationId, storageLocationId),
+          eq(biocharProducts.organizationId, ctx.organizationId),
           sql`${biocharProducts.formulationId} IS DISTINCT FROM ${normalizedFormulationId}`
         )
       )
@@ -478,6 +496,7 @@ export async function updateStorageLocation(
   delete dataWithoutNormalized.feedstockTypeId;
   // A rename OR a facility move can collide with the per-facility name index.
   const [updated] = await guardStorageLocationName(
+    ctx,
     data.name ?? existing.name,
     () =>
       db
@@ -488,7 +507,7 @@ export async function updateStorageLocation(
           formulationId: normalizedFormulationId,
           updatedAt: new Date(),
         })
-        .where(eq(storageLocations.id, storageLocationId))
+        .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
         .returning()
   );
 
@@ -504,16 +523,16 @@ export async function updateStorageLocation(
  * Note: May fail if storage location has associated records (check in caller)
  */
 export async function deleteStorageLocation(
-  userId: string,
+  ctx: OrgContext,
   storageLocationId: string
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify storage location exists
   const [existing] = await db
     .select({ id: storageLocations.id })
     .from(storageLocations)
-    .where(eq(storageLocations.id, storageLocationId));
+    .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Storage location not found");
@@ -530,27 +549,27 @@ export async function deleteStorageLocation(
     db
       .select({ value: count() })
       .from(feedstocks)
-      .where(eq(feedstocks.storageLocationId, storageLocationId)),
+      .where(and(eq(feedstocks.storageLocationId, storageLocationId), eq(feedstocks.organizationId, ctx.organizationId))),
     db
       .select({ value: count() })
       .from(productionRuns)
-      .where(eq(productionRuns.feedstockStorageLocationId, storageLocationId)),
+      .where(and(eq(productionRuns.feedstockStorageLocationId, storageLocationId), eq(productionRuns.organizationId, ctx.organizationId))),
     db
       .select({ value: count() })
       .from(productionRuns)
-      .where(eq(productionRuns.biocharStorageLocationId, storageLocationId)),
+      .where(and(eq(productionRuns.biocharStorageLocationId, storageLocationId), eq(productionRuns.organizationId, ctx.organizationId))),
     db
       .select({ value: count() })
       .from(biocharProducts)
-      .where(eq(biocharProducts.storageLocationId, storageLocationId)),
+      .where(and(eq(biocharProducts.storageLocationId, storageLocationId), eq(biocharProducts.organizationId, ctx.organizationId))),
     db
       .select({ value: count() })
       .from(deliveries)
-      .where(eq(deliveries.storageLocationId, storageLocationId)),
+      .where(and(eq(deliveries.storageLocationId, storageLocationId), eq(deliveries.organizationId, ctx.organizationId))),
     db
       .select({ value: count() })
       .from(biocharStorageInventory)
-      .where(eq(biocharStorageInventory.storageLocationId, storageLocationId)),
+      .where(and(eq(biocharStorageInventory.storageLocationId, storageLocationId), eq(biocharStorageInventory.organizationId, ctx.organizationId))),
   ]);
 
   const blockers = [
@@ -570,7 +589,7 @@ export async function deleteStorageLocation(
 
   await db
     .delete(storageLocations)
-    .where(eq(storageLocations.id, storageLocationId));
+    .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 }
 
 // ============================================
@@ -581,13 +600,13 @@ export async function deleteStorageLocation(
  * Check if a storage location code is available
  */
 export async function isStorageLocationCodeAvailable(
-  userId: string,
+  ctx: OrgContext,
   code: string,
   excludeStorageLocationId?: string
 ): Promise<boolean> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [eq(storageLocations.code, code)];
+  const conditions: SQL[] = [eq(storageLocations.code, code), eq(storageLocations.organizationId, ctx.organizationId)];
 
   if (excludeStorageLocationId) {
     conditions.push(
@@ -595,6 +614,7 @@ export async function isStorageLocationCodeAvailable(
     );
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: storageLocations.id })
     .from(storageLocations)
@@ -607,14 +627,14 @@ export async function isStorageLocationCodeAvailable(
  * Get unique storage types used across all storage locations
  */
 export async function getStorageLocationTypes(
-  userId: string
+  ctx: OrgContext
 ): Promise<string[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const results = await db
     .selectDistinct({ type: storageLocations.type })
     .from(storageLocations)
-    .where(isNull(storageLocations.archivedAt))
+    .where(and(eq(storageLocations.organizationId, ctx.organizationId), isNull(storageLocations.archivedAt)))
     .orderBy(asc(storageLocations.type));
 
   return results.map((r) => r.type);

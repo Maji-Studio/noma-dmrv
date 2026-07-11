@@ -6,13 +6,14 @@
  * it, and hands a `LedgerArtifactSpec` to `ensureLedgerSource`, which owns the
  * reuse/render/store/mirror/retire choreography common to both evidence ledgers.
  *
- * Server-internal core (no "use server" — it takes an explicit `userId` and is
+ * Server-internal core (no "use server" — it takes an explicit `orgCtx` and is
  * called from the submit pipeline, which already resolved the caller). On every
  * Submit/Resubmit, `ensureTransportEvidenceLedgerSource` regenerates the ledger
  * from the removal's live transport legs, stores it, attaches it as a private
  * document on a member credit batch, and mirrors it to an Isometric Source so it
  * rides into the removal's `source_ids`.
  */
+import type { OrgContext } from "@/lib/auth/server";
 import { getFacilityById } from "@/data-access/facilities";
 import { appliedBiocharFraction } from "@/lib/certification/mass-accounting";
 import { buildLedgerModel } from "@/lib/certification/evidence-ledger/build-model";
@@ -42,11 +43,11 @@ export type { EnsureLedgerResult } from "./evidence-ledger-core";
  * `ensureTransportEvidenceLedgerSourceFromContext` to avoid a second load.
  */
 export async function ensureTransportEvidenceLedgerSource(
-  userId: string,
+  orgCtx: OrgContext,
   removalId: string,
 ): Promise<EnsureLedgerResult> {
-  const ctx = await loadRemovalSubmissionContext(userId, removalId);
-  return ensureTransportEvidenceLedgerSourceFromContext(userId, removalId, ctx);
+  const ctx = await loadRemovalSubmissionContext(orgCtx, removalId);
+  return ensureTransportEvidenceLedgerSourceFromContext(orgCtx, removalId, ctx);
 }
 
 /**
@@ -56,7 +57,7 @@ export async function ensureTransportEvidenceLedgerSource(
  * should block submission.
  */
 export async function ensureTransportEvidenceLedgerSourceFromContext(
-  userId: string,
+  orgCtx: OrgContext,
   removalId: string,
   ctx: RemovalSubmissionContext,
 ): Promise<EnsureLedgerResult> {
@@ -71,7 +72,7 @@ export async function ensureTransportEvidenceLedgerSourceFromContext(
     return { status: "skipped", reason: "no-batches" };
   }
 
-  const facility = await getFacilityById(userId, ctx.facilityId);
+  const facility = await getFacilityById(orgCtx, ctx.facilityId);
   const memberBatchCodes =
     ctx.memberBatches.map((b) => b.code).join(" · ") || null;
 
@@ -93,7 +94,7 @@ export async function ensureTransportEvidenceLedgerSourceFromContext(
     contentHash: stableLedgerContentHash(model),
   };
 
-  return ensureLedgerSource(userId, {
+  return ensureLedgerSource(orgCtx, {
     kind: TRANSPORT_EVIDENCE_LEDGER_KIND,
     removalId,
     facilityId: ctx.facilityId,

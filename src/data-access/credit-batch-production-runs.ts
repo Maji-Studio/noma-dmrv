@@ -1,4 +1,5 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import type { OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
 import { applications } from "@/db/schema/application";
 import { creditBatchProductionRuns } from "@/db/schema/credits";
@@ -6,7 +7,7 @@ import { deliveries, orders } from "@/db/schema/logistics";
 import { biocharProducts } from "@/db/schema/products";
 import { SafeError } from "@/lib/errors";
 
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 
 export interface ApplicationForRun {
   applicationId: string;
@@ -25,9 +26,11 @@ function unique(values: string[]): string[] {
 }
 
 export async function getProductionRunIdsByBatchId(
+  ctx: OrgContext,
   batchIds: string[],
   executor: DbTransaction | typeof db = db,
 ): Promise<Record<string, string[]>> {
+  requireOrgScope(ctx);
   const ids = unique(batchIds);
   if (ids.length === 0) return {};
 
@@ -37,7 +40,10 @@ export async function getProductionRunIdsByBatchId(
       productionRunId: creditBatchProductionRuns.productionRunId,
     })
     .from(creditBatchProductionRuns)
-    .where(inArray(creditBatchProductionRuns.creditBatchId, ids));
+    .where(and(
+      inArray(creditBatchProductionRuns.creditBatchId, ids),
+      eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
+    ));
 
   return rows.reduce(
     (acc, row) => {
@@ -50,6 +56,7 @@ export async function getProductionRunIdsByBatchId(
 }
 
 async function getApplicationsForRunsWithExecutor(
+  ctx: OrgContext,
   executor: DbTransaction | typeof db,
   runIds: string[],
 ): Promise<ApplicationForRun[]> {
@@ -63,13 +70,19 @@ async function getApplicationsForRunsWithExecutor(
       biocharAppliedTons: applications.biocharAppliedTons,
     })
     .from(applications)
-    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-    .leftJoin(orders, eq(deliveries.orderId, orders.id))
+    .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
+    .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
     .innerJoin(
       biocharProducts,
-      sql`${biocharProducts.id} = coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+      and(
+        sql`${biocharProducts.id} = coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+        eq(biocharProducts.organizationId, ctx.organizationId),
+      ),
     )
-    .where(inArray(biocharProducts.linkedProductionRunId, ids));
+    .where(and(
+      inArray(biocharProducts.linkedProductionRunId, ids),
+      eq(applications.organizationId, ctx.organizationId),
+    ));
 
   const runIdsByApplicationId = new Map<string, Set<string>>();
   for (const row of rows) {
@@ -102,11 +115,11 @@ async function getApplicationsForRunsWithExecutor(
 }
 
 export async function getApplicationsForRuns(
-  userId: string,
+  ctx: OrgContext,
   runIds: string[],
 ): Promise<ApplicationForRun[]> {
-  requireAuth(userId);
-  return getApplicationsForRunsWithExecutor(db, runIds);
+  requireOrgScope(ctx);
+  return getApplicationsForRunsWithExecutor(ctx, db, runIds);
 }
 
 /**
@@ -153,11 +166,12 @@ export function summarizeApplicationsForBatches(
 }
 
 export async function getApplicationRollupsByBatchFromRuns(
-  userId: string,
+  ctx: OrgContext,
   productionRunIdsByBatchId: Record<string, string[]>,
 ): Promise<Record<string, BatchApplicationRollup>> {
+  requireOrgScope(ctx);
   const runIds = unique(Object.values(productionRunIdsByBatchId).flat());
-  const applicationsForRuns = await getApplicationsForRuns(userId, runIds);
+  const applicationsForRuns = await getApplicationsForRuns(ctx, runIds);
   return summarizeApplicationsForBatches(
     applicationsForRuns,
     productionRunIdsByBatchId,
@@ -169,10 +183,10 @@ export async function getApplicationRollupsByBatchFromRuns(
  * resolves the run membership first, then rolls up member applications.
  */
 export async function getApplicationRollupsByBatchIds(
-  userId: string,
+  ctx: OrgContext,
   batchIds: string[],
 ): Promise<Record<string, BatchApplicationRollup>> {
-  requireAuth(userId);
-  const productionRunIdsByBatchId = await getProductionRunIdsByBatchId(batchIds);
-  return getApplicationRollupsByBatchFromRuns(userId, productionRunIdsByBatchId);
+  requireOrgScope(ctx);
+  const productionRunIdsByBatchId = await getProductionRunIdsByBatchId(ctx, batchIds);
+  return getApplicationRollupsByBatchFromRuns(ctx, productionRunIdsByBatchId);
 }

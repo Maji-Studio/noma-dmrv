@@ -6,6 +6,8 @@ import { ilike, or, eq, and, isNull, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { applications, deliveries, facilities } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "../utils";
 
 interface ApplicationOptionRow {
   id: string;
@@ -41,11 +43,12 @@ function toApplicationOption(result: ApplicationOptionRow): EntityOption {
   };
 }
 
-export async function getApplicationsEntity(params: {
+export async function getApplicationsEntity(ctx: OrgContext, params: {
   search?: string;
   facilityId?: string;
   limit: number;
 }): Promise<EntityOption[]> {
+  requireOrgScope(ctx);
   const { search, facilityId, limit } = params;
 
   // Applications carry no archived_at — hide them via their archived delivery
@@ -80,15 +83,28 @@ export async function getApplicationsEntity(params: {
       facilityName: facilities.name,
     })
     .from(applications)
-    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-    .innerJoin(facilities, eq(deliveries.facilityId, facilities.id))
-    .where(whereClause)
+    .innerJoin(
+      deliveries,
+      and(
+        eq(applications.deliveryId, deliveries.id),
+        eq(deliveries.organizationId, ctx.organizationId),
+      ),
+    )
+    .innerJoin(
+      facilities,
+      and(
+        eq(deliveries.facilityId, facilities.id),
+        eq(facilities.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(and(eq(applications.organizationId, ctx.organizationId), whereClause))
     .limit(limit);
 
   return results.map(toApplicationOption);
 }
 
-export async function getApplicationEntityById(id: string): Promise<EntityOption | null> {
+export async function getApplicationEntityById(ctx: OrgContext, id: string): Promise<EntityOption | null> {
+  requireOrgScope(ctx);
   const [result] = await db
     .select({
       id: applications.id,
@@ -100,9 +116,21 @@ export async function getApplicationEntityById(id: string): Promise<EntityOption
       facilityName: facilities.name,
     })
     .from(applications)
-    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-    .innerJoin(facilities, eq(deliveries.facilityId, facilities.id))
-    .where(eq(applications.id, id))
+    .innerJoin(
+      deliveries,
+      and(
+        eq(applications.deliveryId, deliveries.id),
+        eq(deliveries.organizationId, ctx.organizationId),
+      ),
+    )
+    .innerJoin(
+      facilities,
+      and(
+        eq(deliveries.facilityId, facilities.id),
+        eq(facilities.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)))
     .limit(1);
 
   if (!result) return null;

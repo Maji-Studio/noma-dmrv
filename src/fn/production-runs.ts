@@ -6,7 +6,7 @@
  */
 
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { productionRuns, storageLocations } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
 import { db } from "@/db";
@@ -29,7 +29,7 @@ import {
   type FacilityEnergyTotals,
   type ProductionRunReadingRecord,
 } from "@/data-access/production-runs";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import { toLoggedActionError } from "./action-errors";
 import {
   createProductionRunSchema,
@@ -62,15 +62,12 @@ export async function getProductionRunsFn(
   filters?: Partial<z.infer<typeof productionRunFilterSchema>>
 ): Promise<ActionResult<PaginatedProductionRuns>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validatedFilters = filters
       ? productionRunFilterSchema.parse(filters)
       : undefined;
-    const runs = await getProductionRunsData(user.id, validatedFilters);
+    const runs = await getProductionRunsData(ctx, validatedFilters);
 
     return { success: true, data: runs };
   } catch (error) {
@@ -98,12 +95,9 @@ export async function getProductionRunByIdFn(
   productionRunId: string
 ): Promise<ActionResult<ProductionRunWithRelations>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const run = await getProductionRunByIdData(user.id, productionRunId);
+    const run = await getProductionRunByIdData(ctx, productionRunId);
     return { success: true, data: run };
   } catch (error) {
     return {
@@ -127,10 +121,7 @@ export async function getProductionRunBiocharPreviewFn(
   }>
 > {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const [run] = await db
       .select({
@@ -139,8 +130,8 @@ export async function getProductionRunBiocharPreviewFn(
         biocharStorageLocationCode: storageLocations.code,
       })
       .from(productionRuns)
-      .leftJoin(storageLocations, eq(productionRuns.biocharStorageLocationId, storageLocations.id))
-      .where(eq(productionRuns.id, productionRunId))
+      .leftJoin(storageLocations, and(eq(productionRuns.biocharStorageLocationId, storageLocations.id), eq(storageLocations.organizationId, ctx.organizationId)))
+      .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)))
       .limit(1);
 
     if (!run) {
@@ -167,12 +158,9 @@ export async function getProductionRunStatsFn(
   facilityId?: string
 ): Promise<ActionResult<ProductionRunStats>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const stats = await getProductionRunStatsData(user.id, facilityId);
+    const stats = await getProductionRunStatsData(ctx, facilityId);
     return { success: true, data: stats };
   } catch (error) {
     return {
@@ -193,12 +181,9 @@ export async function getFacilityEnergyTotalsFn(
   facilityId: string
 ): Promise<ActionResult<FacilityEnergyTotals>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const totals = await getFacilityEnergyTotalsData(user.id, facilityId);
+    const totals = await getFacilityEnergyTotalsData(ctx, facilityId);
     return { success: true, data: totals };
   } catch (error) {
     return {
@@ -219,12 +204,9 @@ export async function getProductionRunReadingsFn(
   productionRunId: string
 ): Promise<ActionResult<ProductionRunReadingRecord[]>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const readings = await getProductionRunReadingsData(user.id, productionRunId);
+    const readings = await getProductionRunReadingsData(ctx, productionRunId);
     return { success: true, data: readings };
   } catch (error) {
     return {
@@ -246,13 +228,10 @@ export async function checkProductionRunCodeFn(
   excludeRunId?: string
 ): Promise<ActionResult<{ available: boolean }>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const available = await isProductionRunCodeAvailableData(
-      user.id,
+      ctx,
       code,
       excludeRunId
     );
@@ -280,20 +259,18 @@ export async function createProductionRunFn(
   data: z.infer<typeof createProductionRunSchema>
 ): Promise<ActionResult<ProductionRunWithRelations>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = createProductionRunSchema.parse(data);
 
     const run = await withAutoCode(
+      ctx,
       "PR",
       productionRuns,
       productionRuns.code,
       undefined,
       (code) =>
-        createProductionRun(user.id, {
+        createProductionRun(ctx, {
           code,
           facilityId: validated.facilityId,
           reactorId: validated.reactorId,
@@ -347,14 +324,11 @@ export async function addProductionRunReadingFn(
   data: z.infer<typeof productionRunReadingSchema>
 ): Promise<ActionResult<ProductionRunReadingRecord>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = productionRunReadingSchema.parse(data);
 
-    const reading = await addProductionRunReadingData(user.id, {
+    const reading = await addProductionRunReadingData(ctx, {
       productionRunId: validated.productionRunId,
       timestamp: validated.timestamp instanceof Date ? validated.timestamp : new Date(validated.timestamp),
       temperatureC: validated.temperatureC ?? null,
@@ -392,14 +366,11 @@ export async function updateProductionRunFn(
   data: z.infer<typeof updateProductionRunSchema>
 ): Promise<ActionResult<ProductionRunWithRelations>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = updateProductionRunSchema.parse(data);
 
-    const run = await updateProductionRun(user.id, validated.productionRunId, {
+    const run = await updateProductionRun(ctx, validated.productionRunId, {
       code: validated.code,
       facilityId: validated.facilityId,
       reactorId: validated.reactorId,
@@ -462,13 +433,10 @@ export async function deleteProductionRunFn(
   data: z.infer<typeof deleteProductionRunSchema>
 ): Promise<ActionResult<void>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = deleteProductionRunSchema.parse(data);
-    await deleteProductionRun(user.id, validated.productionRunId);
+    await deleteProductionRun(ctx, validated.productionRunId);
 
     return { success: true, data: undefined };
   } catch (error) {

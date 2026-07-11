@@ -26,8 +26,8 @@ import { withAction } from "./with-action";
 export async function getProductionProcessSummariesByFacilityFn(
   facilityId: string,
 ): Promise<ActionResult<ProductionProcessSummary[]>> {
-  return withAction((userId) =>
-    getProductionProcessSummariesByFacility(userId, facilityId),
+  return withAction((ctx) =>
+    getProductionProcessSummariesByFacility(ctx, facilityId),
   );
 }
 
@@ -40,8 +40,8 @@ export async function getProductionProcessSummariesByFacilityFn(
 export async function unlockMethodBFn(
   input: unknown,
 ): Promise<ActionResult<ProductionProcess>> {
-  return withAction((userId) =>
-    unlockMethodBForProcess(userId, unlockMethodBSchema.parse(input)),
+  return withAction((ctx) =>
+    unlockMethodBForProcess(ctx, unlockMethodBSchema.parse(input)),
   );
 }
 
@@ -55,9 +55,9 @@ export async function getUnsampledCarbonPreviewFn(
   productionProcessId: string,
   asOfDateIso?: string,
 ): Promise<ActionResult<ProcessCarbonPreview>> {
-  return withAction((userId) =>
+  return withAction((ctx) =>
     getUnsampledCarbonPreviewForProcess(
-      userId,
+      ctx,
       productionProcessId,
       asOfDateIso ? new Date(asOfDateIso) : undefined,
     ),
@@ -72,9 +72,9 @@ export async function getProcessComplianceDriftFn(
   productionProcessId: string,
   asOfDateIso?: string,
 ): Promise<ActionResult<ProcessComplianceDriftResult>> {
-  return withAction((userId) =>
+  return withAction((ctx) =>
     getProcessComplianceDrift(
-      userId,
+      ctx,
       productionProcessId,
       asOfDateIso ? new Date(asOfDateIso) : undefined,
     ),
@@ -89,7 +89,7 @@ export async function getProcessComplianceDriftFn(
 export async function startNewProductionProcessFn(
   input: unknown,
 ): Promise<ActionResult<ProductionProcess>> {
-  return withAction((userId) =>
-    startNewProductionProcess(userId, startNewProcessSchema.parse(input)),
+  return withAction((ctx) =>
+    startNewProductionProcess(ctx, startNewProcessSchema.parse(input)),
   );
 }

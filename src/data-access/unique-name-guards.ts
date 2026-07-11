@@ -7,7 +7,9 @@
  */
 
 import { isPgUniqueViolation } from "@/db/errors";
+import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { requireOrgScope } from "./utils";
 
 /**
  * Run `fn`; if it fails with the named unique-index violation (23505), rethrow
@@ -16,11 +18,13 @@ import { SafeError } from "@/lib/errors";
  * unchanged, so matching the *specific* constraint is essential.
  */
 async function withUniqueNameGuard<T>(
+  ctx: OrgContext,
   constraint: string,
   name: string,
   message: (trimmedName: string) => string,
   fn: () => Promise<T>
 ): Promise<T> {
+  requireOrgScope(ctx);
   try {
     return await fn();
   } catch (err) {
@@ -33,10 +37,12 @@ async function withUniqueNameGuard<T>(
 
 /** Reactor identifier — unique per facility. */
 export const guardReactorIdentifier = <T>(
+  ctx: OrgContext,
   identifier: string,
   fn: () => Promise<T>
 ) =>
   withUniqueNameGuard(
+    ctx,
     "reactors_facility_identifier_unique",
     identifier,
     (n) =>
@@ -45,8 +51,13 @@ export const guardReactorIdentifier = <T>(
   );
 
 /** Storage-bin name — unique per facility. */
-export const guardStorageLocationName = <T>(name: string, fn: () => Promise<T>) =>
+export const guardStorageLocationName = <T>(
+  ctx: OrgContext,
+  name: string,
+  fn: () => Promise<T>,
+) =>
   withUniqueNameGuard(
+    ctx,
     "storage_locations_facility_name_unique",
     name,
     (n) =>
@@ -54,20 +65,30 @@ export const guardStorageLocationName = <T>(name: string, fn: () => Promise<T>) 
     fn
   );
 
-/** Supplier name — globally unique. */
-export const guardSupplierName = <T>(name: string, fn: () => Promise<T>) =>
+/** Supplier name — unique within an organization. */
+export const guardSupplierName = <T>(
+  ctx: OrgContext,
+  name: string,
+  fn: () => Promise<T>,
+) =>
   withUniqueNameGuard(
-    "suppliers_name_unique",
+    ctx,
+    "suppliers_organization_id_name_unique",
     name,
     (n) =>
       `A supplier named "${n}" already exists. Rename the existing supplier to reuse this name.`,
     fn
   );
 
-/** Customer name — globally unique. */
-export const guardCustomerName = <T>(name: string, fn: () => Promise<T>) =>
+/** Customer name — unique within an organization. */
+export const guardCustomerName = <T>(
+  ctx: OrgContext,
+  name: string,
+  fn: () => Promise<T>,
+) =>
   withUniqueNameGuard(
-    "customers_name_unique",
+    ctx,
+    "customers_organization_id_name_unique",
     name,
     (n) =>
       `A customer named "${n}" already exists. Rename the existing customer to reuse this name.`,

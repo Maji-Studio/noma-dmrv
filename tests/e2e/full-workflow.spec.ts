@@ -19,6 +19,7 @@
  */
 import { test, expect } from "@playwright/test";
 import { eq } from "drizzle-orm";
+import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../src/db/schema";
 import * as crypto from "crypto";
 import { createDbConnection } from "./fixtures/db";
@@ -104,6 +105,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 1. Create Facility (infrastructure foundation)
     await tx.insert(schema.facilities).values({
+        organizationId: DEC_ORG_ID,
       id: ids.facility,
       code: codes.facility,
       name: `E2E Test Facility ${testRunId}`,
@@ -114,6 +116,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 2. Create Reactor (linked to facility)
     await tx.insert(schema.reactors).values({
+        organizationId: DEC_ORG_ID,
       id: ids.reactor,
       code: codes.reactor,
       identifier: `Reactor-${testRunId}`,
@@ -124,6 +127,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 3. Create Storage Location for feedstock (linked to facility)
     await tx.insert(schema.storageLocations).values({
+        organizationId: DEC_ORG_ID,
       id: ids.storageLocation,
       code: codes.storageLocation,
       name: `Feedstock Storage ${testRunId}`,
@@ -135,6 +139,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 4. Create Storage Location for biochar (linked to facility)
     await tx.insert(schema.storageLocations).values({
+        organizationId: DEC_ORG_ID,
       id: ids.biocharStorageLocation,
       code: codes.biocharStorageLocation,
       name: `Biochar Storage ${testRunId}`,
@@ -145,6 +150,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 5. Create Supplier
     await tx.insert(schema.suppliers).values({
+        organizationId: DEC_ORG_ID,
       id: ids.supplier,
       code: codes.supplier,
       name: `E2E Test Supplier ${testRunId}`,
@@ -153,6 +159,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 6. Create Feedstock Type
     await tx.insert(schema.feedstockTypes).values({
+        organizationId: DEC_ORG_ID,
       id: ids.feedstockType,
       code: codes.feedstockType,
       name: `E2E Hardwood Chips ${testRunId}`,
@@ -161,6 +168,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 7. Create Vehicle for deliveries
     await tx.insert(schema.vehicles).values({
+        organizationId: DEC_ORG_ID,
       id: ids.vehicle,
       code: `E2E-VEH-${testRunId}`,
       name: `E2E Test Vehicle ${testRunId}`,
@@ -173,6 +181,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 8. Create Feedstock Delivery (links supplier, facility, feedstock type)
     await tx.insert(schema.feedstockDeliveries).values({
+        organizationId: DEC_ORG_ID,
       id: ids.feedstockDelivery,
       code: codes.feedstockDelivery,
       facilityId: ids.facility,
@@ -186,6 +195,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 9. Create Feedstock (from delivery)
     await tx.insert(schema.feedstocks).values({
+        organizationId: DEC_ORG_ID,
       id: ids.feedstock,
       code: `E2E-FS-${testRunId}`,
       facilityId: ids.facility,
@@ -201,6 +211,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
     // 10. Create Production Run (links reactor, facility)
     const today = new Date().toISOString().split("T")[0];
     await tx.insert(schema.productionRuns).values({
+        organizationId: DEC_ORG_ID,
       id: ids.productionRun,
       code: codes.productionRun,
       facilityId: ids.facility,
@@ -215,6 +226,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 11. Link feedstock to production run
     await tx.insert(schema.productionRunFeedstocks).values({
+        organizationId: DEC_ORG_ID,
       id: crypto.randomUUID(),
       productionRunId: ids.productionRun,
       feedstockId: ids.feedstock,
@@ -223,6 +235,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 12. Create Sample (from production run)
     await tx.insert(schema.samples).values({
+        organizationId: DEC_ORG_ID,
       id: ids.sample,
       productionRunId: ids.productionRun,
       sampleCode: codes.sample,
@@ -233,6 +246,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 13. Create Formulation
     await tx.insert(schema.formulations).values({
+        organizationId: DEC_ORG_ID,
       id: ids.formulation,
       code: codes.formulation,
       name: `E2E Test Formulation ${testRunId}`,
@@ -241,6 +255,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 14. Create Biochar Product (links formulation, production run, storage)
     await tx.insert(schema.biocharProducts).values({
+        organizationId: DEC_ORG_ID,
       id: ids.biocharProduct,
       code: codes.biocharProduct,
       facilityId: ids.facility,
@@ -254,6 +269,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 15. Create Customer
     await tx.insert(schema.customers).values({
+        organizationId: DEC_ORG_ID,
       id: ids.customer,
       code: codes.customer,
       name: `E2E Test Customer ${testRunId}`,
@@ -262,6 +278,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 16. Create Customer Location
     await tx.insert(schema.customerLocations).values({
+        organizationId: DEC_ORG_ID,
       id: ids.customerLocation,
       customerId: ids.customer,
       name: `Farm Location ${testRunId}`,
@@ -271,6 +288,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 17. Create Order (links customer, customer location, biochar product)
     await tx.insert(schema.orders).values({
+        organizationId: DEC_ORG_ID,
       id: ids.order,
       code: codes.order,
       facilityId: ids.facility,
@@ -284,6 +302,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 18. Create Delivery (links order, biochar product, storage)
     await tx.insert(schema.deliveries).values({
+        organizationId: DEC_ORG_ID,
       id: ids.delivery,
       code: codes.delivery,
       facilityId: ids.facility,
@@ -300,6 +319,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 19. Create Application (links delivery)
     await tx.insert(schema.applications).values({
+        organizationId: DEC_ORG_ID,
       id: ids.application,
       code: codes.application,
       deliveryId: ids.delivery,
@@ -316,6 +336,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
     });
 
     await tx.insert(schema.productionProcesses).values({
+        organizationId: DEC_ORG_ID,
       id: ids.productionProcess,
       facilityId: ids.facility,
       feedstockTypeId: ids.feedstockType,
@@ -323,6 +344,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 20. Create Credit Batch (links facility, single feedstock per ADR 0016)
     await tx.insert(schema.creditBatches).values({
+        organizationId: DEC_ORG_ID,
       id: ids.creditBatch,
       code: codes.creditBatch,
       facilityId: ids.facility,
@@ -336,6 +358,7 @@ async function createFullWorkflowData(): Promise<TestWorkflowData> {
 
     // 21. Link production run to credit batch
     await tx.insert(schema.creditBatchProductionRuns).values({
+        organizationId: DEC_ORG_ID,
       creditBatchId: ids.creditBatch,
       productionRunId: ids.productionRun,
     });

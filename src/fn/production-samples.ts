@@ -15,7 +15,7 @@ import {
   deleteProductionSample,
   type ProductionSampleWithRelations,
 } from "@/data-access/production-samples";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import {
   createProductionSampleSchema,
   updateProductionSampleSchema,
@@ -33,14 +33,6 @@ function logServerError(context: string, error: unknown): void {
   console.error(`[production-samples] ${context}`, error);
 }
 
-async function requireAuth() {
-  const user = await getUser();
-  if (!user?.id) {
-    return null;
-  }
-  return user;
-}
-
 // ============================================
 // List Operations
 // ============================================
@@ -52,17 +44,14 @@ export async function getProductionSamplesFn(
   productionRunId: string
 ): Promise<ActionResult<ProductionSampleWithRelations[]>> {
   try {
-    const user = await requireAuth();
-    if (!user) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validatedProductionRunId = productionRunIdSchema.safeParse(productionRunId);
     if (!validatedProductionRunId.success) {
       return { success: false, error: "Invalid input" };
     }
 
-    const samples = await getProductionSamplesData(user.id, validatedProductionRunId.data);
+    const samples = await getProductionSamplesData(ctx, validatedProductionRunId.data);
     return { success: true, data: samples };
   } catch (error) {
     logServerError("getProductionSamplesFn failed", error);
@@ -84,20 +73,18 @@ export async function createProductionSampleFn(
   data: z.infer<typeof createProductionSampleSchema>
 ): Promise<ActionResult<ProductionSampleWithRelations>> {
   try {
-    const user = await requireAuth();
-    if (!user) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = createProductionSampleSchema.parse(data);
 
     const sample = await withAutoCode(
+      ctx,
       "PS",
       productionSamples,
       productionSamples.sampleCode,
       undefined,
       async (sampleCode) => {
-        return createProductionSample(user.id, {
+        return createProductionSample(ctx, {
           sampleCode,
           productionRunId: validated.productionRunId,
           timestamp: new Date(validated.timestamp),
@@ -142,15 +129,12 @@ export async function updateProductionSampleFn(
   data: z.infer<typeof updateProductionSampleSchema>
 ): Promise<ActionResult<ProductionSampleWithRelations>> {
   try {
-    const user = await requireAuth();
-    if (!user) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = updateProductionSampleSchema.parse(data);
 
     const sample = await updateProductionSample(
-      user.id,
+      ctx,
       validated.productionSampleId,
       {
         timestamp: new Date(validated.timestamp),
@@ -194,13 +178,10 @@ export async function deleteProductionSampleFn(
   data: z.infer<typeof deleteProductionSampleSchema>
 ): Promise<ActionResult<void>> {
   try {
-    const user = await requireAuth();
-    if (!user) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = deleteProductionSampleSchema.parse(data);
-    await deleteProductionSample(user.id, validated.productionSampleId);
+    await deleteProductionSample(ctx, validated.productionSampleId);
 
     return { success: true, data: undefined };
   } catch (error) {

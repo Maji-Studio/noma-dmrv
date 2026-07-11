@@ -11,10 +11,7 @@
  * `findSensorByReference` recovers from this by claiming the existing
  * remote sensor instead.
  *
- * No facility-membership model in noma today — `requireAuth` is the
- * only auth guard, matching every other certifier accessor (see
- * `docs/open-questions.md` → `auth/facility-scoping`). The reactor FK
- * is the natural authorization anchor when that model lands.
+ * Organization ownership is enforced on both reactor and sensor rows.
  */
 
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -22,6 +19,7 @@ import { db } from "@/db";
 import { certifierSensors } from "@/db/schema/certification";
 import { reactors } from "@/db/schema/facilities";
 import { SafeError } from "@/lib/errors";
+import type { OrgContext } from "@/lib/auth/server";
 import {
   buildSensorReference,
   createSensor,
@@ -33,7 +31,7 @@ import {
   encodeMeasurementProperty,
   type IsometricMeasurementProperty,
 } from "@/lib/isometric/utils/measurement-property";
-import { requireAuth } from "./utils";
+import { assertSameOrg, requireOrgScope } from "./utils";
 
 export type CertifierSensorRow = typeof certifierSensors.$inferSelect;
 
@@ -54,10 +52,10 @@ export interface EnsureSensorInput {
  * INSERTs once.
  */
 export async function ensureSensorForReactor(
-  userId: string,
+  ctx: OrgContext,
   input: EnsureSensorInput,
 ): Promise<CertifierSensorRow> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const provider = input.provider ?? "isometric";
   const measurementKey = encodeMeasurementProperty(input.measurementProperty);
 
@@ -69,6 +67,7 @@ export async function ensureSensorForReactor(
         eq(certifierSensors.provider, provider),
         eq(certifierSensors.reactorId, input.reactorId),
         eq(certifierSensors.measurementProperty, measurementKey),
+        eq(certifierSensors.organizationId, ctx.organizationId),
       ),
     )
     .limit(1);
@@ -79,14 +78,7 @@ export async function ensureSensorForReactor(
   // Reactor must exist — the FK would catch this on INSERT, but we
   // want a SafeError instead of an opaque 23503 surfaced through
   // withAction.
-  const [reactor] = await db
-    .select({ id: reactors.id })
-    .from(reactors)
-    .where(eq(reactors.id, input.reactorId))
-    .limit(1);
-  if (!reactor) {
-    throw new SafeError(`Reactor ${input.reactorId} not found.`);
-  }
+  await assertSameOrg(ctx, reactors, input.reactorId);
 
   const reference = buildSensorReference({
     reactorId: input.reactorId,
@@ -116,6 +108,7 @@ export async function ensureSensorForReactor(
   const [row] = await db
     .insert(certifierSensors)
     .values({
+      organizationId: ctx.organizationId,
       provider,
       reactorId: input.reactorId,
       measurementProperty: measurementKey,
@@ -145,11 +138,11 @@ export async function ensureSensorForReactor(
 }
 
 export async function listSensorsForReactors(
-  userId: string,
+  ctx: OrgContext,
   reactorIds: string[],
   provider: CertifierProvider = "isometric",
 ): Promise<CertifierSensorRow[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   if (reactorIds.length === 0) return [];
   return db
     .select()
@@ -158,6 +151,7 @@ export async function listSensorsForReactors(
       and(
         eq(certifierSensors.provider, provider),
         inArray(certifierSensors.reactorId, reactorIds),
+        eq(certifierSensors.organizationId, ctx.organizationId),
       ),
     );
 }

@@ -5,7 +5,7 @@ import {
   getDashboardOverview,
   type DashboardOverview,
 } from "@/data-access/dashboard-overview";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import type { ActionResult } from "@/types/actions";
 import { toLoggedActionError } from "./action-errors";
 
@@ -24,15 +24,12 @@ export async function getDashboardOverviewFn(
   input: GetDashboardOverviewInput,
 ): Promise<ActionResult<DashboardOverview>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = getDashboardOverviewSchema.parse(input);
 
     const overview = await getDashboardOverview(
-      user.id,
+      ctx,
       validated.facilityId,
       validated.range,
     );

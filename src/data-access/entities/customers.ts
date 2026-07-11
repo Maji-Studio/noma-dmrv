@@ -2,15 +2,18 @@
  * Customer options for searchable entity selection.
  */
 
-import { ilike, or, eq, type SQL } from "drizzle-orm";
+import { and, ilike, or, eq, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { customers } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "../utils";
 
-export async function getCustomers(params: {
+export async function getCustomers(ctx: OrgContext, params: {
   search?: string;
   limit: number;
 }): Promise<EntityOption[]> {
+  requireOrgScope(ctx);
   const { search, limit } = params;
 
   let whereClause: SQL | undefined;
@@ -31,7 +34,7 @@ export async function getCustomers(params: {
       cropType: customers.cropType,
     })
     .from(customers)
-    .where(whereClause)
+    .where(and(eq(customers.organizationId, ctx.organizationId), whereClause))
     .limit(limit);
 
   return results.map((r) => ({
@@ -42,7 +45,8 @@ export async function getCustomers(params: {
   }));
 }
 
-export async function getCustomerById(id: string): Promise<EntityOption | null> {
+export async function getCustomerById(ctx: OrgContext, id: string): Promise<EntityOption | null> {
+  requireOrgScope(ctx);
   const [result] = await db
     .select({
       id: customers.id,
@@ -51,7 +55,7 @@ export async function getCustomerById(id: string): Promise<EntityOption | null> 
       cropType: customers.cropType,
     })
     .from(customers)
-    .where(eq(customers.id, id))
+    .where(and(eq(customers.id, id), eq(customers.organizationId, ctx.organizationId)))
     .limit(1);
 
   if (!result) return null;
