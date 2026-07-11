@@ -4,10 +4,27 @@
  */
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { nextCookies } from "better-auth/next-js";
+import { organization } from "better-auth/plugins";
+import { count, eq } from "drizzle-orm";
 import { Resend } from "resend";
 import { env } from "@/config/env";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
+
+/** Pending invitations expire after 7 days. */
+const INVITATION_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
+const SINGLE_ORGANIZATION_COUNT = 1;
+
+/**
+ * Build the URL an invitee follows to accept an org invitation. The invitation
+ * id is the only token; the accept page (src/app/(auth)/accept-invitation)
+ * establishes the session and calls the plugin's accept endpoint.
+ */
+function buildInvitationAcceptUrl(invitationId: string): string {
+  const base = env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+  return `${base}/accept-invitation/${invitationId}`;
+}
 
 const hasEmailConfig = Boolean(env.RESEND_API_KEY && env.RESEND_FROM_EMAIL);
 const resend = hasEmailConfig ? new Resend(env.RESEND_API_KEY) : null;
@@ -25,6 +42,18 @@ function sanitizeAuthUrl(url: string) {
     const base = url.split("?")[0];
     return base || "<invalid-url>";
   }
+}
+
+// User-controlled values (profile name, organization name) are interpolated
+// into email HTML; escape them so a crafted name can't inject markup into
+// what email clients render.
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function logAuthEmailFallback(args: {
@@ -113,6 +142,9 @@ export const auth = betterAuth({
       session: schema.sessions,
       account: schema.accounts,
       verification: schema.verifications,
+      organization: schema.organizations,
+      member: schema.members,
+      invitation: schema.invitations,
     },
   }),
   user: {
@@ -143,7 +175,7 @@ export const auth = betterAuth({
           subject: "Reset your password",
           url,
           html: `
-            <p>Hello ${user.name || "there"},</p>
+            <p>Hello ${escapeHtml(user.name || "there")},</p>
             <p>You requested to reset your password. Click the link below to continue:</p>
             <p><a href="${url}">Reset Password</a></p>
             <p>This link will expire in 24 hours.</p>
@@ -173,7 +205,7 @@ export const auth = betterAuth({
           url,
           subject: "Verify your email",
           html: `
-            <p>Hello ${user.name || "there"},</p>
+            <p>Hello ${escapeHtml(user.name || "there")},</p>
             <p>Please verify your email address by clicking the link below:</p>
             <p><a href="${url}">Verify Email</a></p>
             <p>This link will expire in 24 hours.</p>
@@ -211,4 +243,109 @@ export const auth = betterAuth({
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.NEXT_PUBLIC_APP_URL,
   trustedOrigins: buildTrustedOrigins(),
+  databaseHooks: {
+    session: {
+      create: {
+        // On sign-in, auto-select the active organization for a sole member,
+        // or for a Platform Admin when the PR-1 gate permits only one org.
+        before: async (session) => {
+          const memberships = await db
+            .select({ organizationId: schema.members.organizationId })
+            .from(schema.members)
+            .where(eq(schema.members.userId, session.userId))
+            .limit(2);
+          if (memberships.length === 1) {
+            return {
+              data: {
+                ...session,
+                activeOrganizationId: memberships[0].organizationId,
+              },
+            };
+          }
+          if (memberships.length === 0) {
+            const [user] = await db
+              .select({ role: schema.users.role })
+              .from(schema.users)
+              .where(eq(schema.users.id, session.userId))
+              .limit(1);
+            if (user?.role === "admin") {
+              const [organizationCount] = await db
+                .select({ value: count() })
+                .from(schema.organizations);
+              if (
+                Number(organizationCount?.value ?? 0) ===
+                SINGLE_ORGANIZATION_COUNT
+              ) {
+                const [organizationRow] = await db
+                  .select({ id: schema.organizations.id })
+                  .from(schema.organizations)
+                  .limit(1);
+                if (organizationRow) {
+                  // Coupled to MAX_ORGANIZATIONS_UNTIL_PR2 in data-access:
+                  // revisit when PR 2 allows a second org, because "the only
+                  // org" immediately stops being a safe Platform Admin default.
+                  return {
+                    data: {
+                      ...session,
+                      activeOrganizationId: organizationRow.id,
+                    },
+                  };
+                }
+              }
+            }
+          }
+          return { data: session };
+        },
+      },
+    },
+  },
+  plugins: [
+    organization({
+      // Self-serve org creation is disabled: Organizations are created only by
+      // Platform Admins via the guarded `createOrganizationAction` server
+      // action (which also stamps the creator's chosen Owner, not the admin).
+      allowUserToCreateOrganization: false,
+      invitationExpiresIn: INVITATION_EXPIRES_IN_SECONDS,
+      // Re-inviting the same email cancels the stale pending invite so the
+      // pending list never shows duplicates.
+      cancelPendingInvitationsOnReInvite: true,
+      sendInvitationEmail: async (data) => {
+        const acceptUrl = buildInvitationAcceptUrl(data.id);
+        // The UI also surfaces a copyable accept link from the invite action,
+        // so email is best-effort. Never log the invitee email (PII) — log the
+        // invitation and organization ids only.
+        if (!resend || !env.RESEND_FROM_EMAIL) {
+          console.warn(
+            `[auth:org-invite] RESEND_* not configured; using copyable-link fallback. invitationId=${data.id} organizationId=${data.organization.id}`
+          );
+          if (!isProduction) {
+            console.warn(`[auth:org-invite] acceptUrl=${acceptUrl}`);
+          }
+          return;
+        }
+        try {
+          await resend.emails.send({
+            from: env.RESEND_FROM_EMAIL,
+            to: data.email,
+            subject: `You're invited to join ${data.organization.name}`,
+            html: `
+              <p>Hello,</p>
+              <p>You've been invited to join <strong>${escapeHtml(data.organization.name)}</strong> as ${escapeHtml(data.role)}.</p>
+              <p><a href="${acceptUrl}">Accept invitation</a></p>
+              <p>This invitation expires in 7 days.</p>
+            `,
+          });
+        } catch (error) {
+          console.error("Failed to send org invitation email:", {
+            invitationId: data.id,
+            organizationId: data.organization.id,
+            from: env.RESEND_FROM_EMAIL,
+            error,
+          });
+          // Swallow — the copyable link in the UI is the reliable path.
+        }
+      },
+    }),
+    nextCookies(),
+  ],
 });

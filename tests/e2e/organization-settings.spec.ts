@@ -1,0 +1,164 @@
+import type { Locator, Page } from "@playwright/test";
+import { test, expect } from "./fixtures/auth-fixtures";
+
+const ORGANIZATION_NAME = "Dark Earth Carbon";
+const INVITEE_EMAIL = "org-e2e-invitee@example.com";
+
+function sectionWithHeading(page: Page, heading: string): Locator {
+  return page.locator("section").filter({
+    has: page.getByRole("heading", { name: heading, exact: true }),
+  });
+}
+
+async function enterDefaultOrganization(page: Page): Promise<void> {
+  await page.goto("/admin/organizations");
+
+  const organizationsSection = sectionWithHeading(page, "Organizations");
+  const organization = organizationsSection
+    .getByRole("listitem")
+    .filter({ hasText: ORGANIZATION_NAME });
+
+  await expect(organization).toBeVisible();
+  const enterButton = organization.getByRole("button", { name: "Enter" });
+  const dashboardUrl = /\/dashboard(?:[/?#]|$)/;
+
+  await enterButton.click();
+  // Next dev can drop the first action after compiling a sibling route.
+  await page.waitForURL(dashboardUrl, { timeout: 5_000 }).catch(() => undefined);
+  if (!dashboardUrl.test(page.url())) {
+    await enterButton.click();
+  }
+  await expect(page).toHaveURL(dashboardUrl);
+}
+
+async function openOrganizationSettings(page: Page): Promise<void> {
+  await enterDefaultOrganization(page);
+  await page.goto("/settings/organization");
+  // First render may hit a dev-server compile of this route; allow extra time.
+  await expect(
+    page.getByRole("heading", { name: "Organization", exact: true }),
+  ).toBeVisible({ timeout: 30_000 });
+  await page.waitForLoadState("networkidle");
+}
+
+async function revokeInviteIfPresent(
+  page: Page,
+  pendingSection: Locator,
+): Promise<void> {
+  const invitation = pendingSection
+    .getByRole("listitem")
+    .filter({ hasText: INVITEE_EMAIL })
+    .first();
+
+  if ((await invitation.count()) === 0) {
+    return;
+  }
+
+  await invitation.getByRole("button", { name: "Revoke" }).click();
+  const dialog = page.getByRole("dialog", { name: "Revoke invitation" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(invitation).toHaveCount(0);
+}
+
+test.describe("Organization foundation UI", () => {
+  test("organization settings renders members and an empty invitation state", async ({
+    adminPage,
+  }) => {
+    const page = adminPage;
+    await openOrganizationSettings(page);
+
+    const membersSection = sectionWithHeading(page, "Members");
+    const memberRows = membersSection.getByRole("listitem");
+    const ownerRoleSelect = membersSection
+      .locator('select[aria-label^="Role for "]')
+      .filter({ has: page.locator('option[value="owner"]:checked') });
+
+    await expect(memberRows.first()).toBeVisible();
+    await expect(ownerRoleSelect.first()).toHaveValue("owner");
+
+    const pendingSection = sectionWithHeading(page, "Pending invitations");
+    await revokeInviteIfPresent(page, pendingSection);
+    await expect(
+      pendingSection.getByText("No pending invitations", { exact: true }),
+    ).toBeVisible();
+  });
+
+  test("invites a member, exposes the accept link, and revokes the invitation", async ({
+    adminPage,
+  }) => {
+    const page = adminPage;
+    await openOrganizationSettings(page);
+
+    const pendingSection = sectionWithHeading(page, "Pending invitations");
+    await revokeInviteIfPresent(page, pendingSection);
+
+    const inviteSection = sectionWithHeading(page, "Invite a member");
+    await inviteSection.getByLabel("Email").fill(INVITEE_EMAIL);
+    await inviteSection.getByLabel("Role").selectOption("member");
+    await inviteSection
+      .getByRole("button", { name: "Send invitation" })
+      .click();
+
+    const shareLinkInput = inviteSection
+      .getByText("Share this link with the invitee", { exact: true })
+      .locator("..")
+      .getByRole("textbox");
+    const pendingInvitation = pendingSection
+      .getByRole("listitem")
+      .filter({ hasText: INVITEE_EMAIL });
+
+    try {
+      await expect(shareLinkInput).toBeVisible();
+      await expect(shareLinkInput).toHaveValue(
+        /^https?:\/\/.+\/accept-invitation\/.+/,
+      );
+      await expect(pendingInvitation).toBeVisible();
+      // Role text is lowercase in the DOM; the uppercase styling is CSS-only.
+      await expect(pendingInvitation).toContainText(/member/i);
+    } finally {
+      await page.waitForLoadState("networkidle");
+      await revokeInviteIfPresent(page, pendingSection);
+    }
+
+    await expect(pendingInvitation).toHaveCount(0);
+  });
+
+  test("admin directory lists the seeded organization and enters its dashboard", async ({
+    adminPage,
+  }) => {
+    const page = adminPage;
+    await page.goto("/admin/organizations");
+
+    const organizationsSection = sectionWithHeading(page, "Organizations");
+    const organization = organizationsSection
+      .getByRole("listitem")
+      .filter({ hasText: ORGANIZATION_NAME });
+    await expect(organization).toBeVisible();
+    await expect(organization).toContainText(/\d+ members?/);
+
+    const createSection = sectionWithHeading(page, "Create organization");
+    await expect(createSection).toContainText(
+      "disabled until org-scoped data ships",
+    );
+
+    await organization.getByRole("button", { name: "Enter" }).click();
+    await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
+  });
+
+  test("platform admin sees the active organization in the sidebar switcher", async ({
+    adminPage,
+  }) => {
+    const page = adminPage;
+    await enterDefaultOrganization(page);
+
+    const sidebar = page.getByRole("complementary");
+    const orgSwitcher = sidebar
+      .locator('button[aria-haspopup="listbox"]')
+      .filter({ hasText: ORGANIZATION_NAME });
+
+    await expect(orgSwitcher).toBeVisible();
+    await expect(orgSwitcher).toHaveText(ORGANIZATION_NAME);
+  });
+});
