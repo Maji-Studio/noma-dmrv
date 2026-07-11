@@ -101,6 +101,47 @@ function findChainEnd(source: string, start: number): number {
   return source.length;
 }
 
+/**
+ * Extract the balanced-parentheses argument lists of every `.where(...)` call in
+ * a chain. A trailing `.returning({ organizationId: ... })` after `.where(...)`
+ * must NOT count toward org-scoping, so we look only inside each where-call's own
+ * argument list rather than slicing to the chain's end.
+ */
+function whereArgumentLists(chain: string): string[] {
+  const lists: string[] = [];
+  const whereCall = /\.where\s*\(/g;
+
+  for (const match of chain.matchAll(whereCall)) {
+    if (match.index === undefined) continue;
+    const open = match.index + match[0].length - 1;
+    let depth = 0;
+    let quote: "'" | '"' | "`" | null = null;
+    let escaped = false;
+    for (let index = open; index < chain.length; index += 1) {
+      const char = chain[index];
+      if (quote) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === quote) quote = null;
+        continue;
+      }
+      if (char === "'" || char === '"' || char === "`") {
+        quote = char;
+      } else if (char === "(") {
+        depth += 1;
+      } else if (char === ")") {
+        depth -= 1;
+        if (depth === 0) {
+          lists.push(chain.slice(open + 1, index));
+          break;
+        }
+      }
+    }
+  }
+
+  return lists;
+}
+
 function referencedTables(chain: string): Set<string> {
   const tables = new Set<string>();
   const tableCall =
@@ -135,15 +176,13 @@ function inspectFile(file: string, domainTables: Set<string>): Violation[] {
       domainTables.has(table),
     );
     const operation = match[1];
-    const whereStart = chain.search(/\.where\s*\(/);
-    const scopedPortion =
+    const scoped =
       operation === "update" || operation === "delete"
-        ? whereStart === -1
-          ? ""
-          : chain.slice(whereStart)
-        : chain;
-    if (tables.length === 0 || scopedPortion.includes("organizationId"))
-      continue;
+        ? whereArgumentLists(chain).some((args) =>
+            args.includes("organizationId"),
+          )
+        : chain.includes("organizationId");
+    if (tables.length === 0 || scoped) continue;
 
     violations.push({
       file: relative(ROOT, file),
