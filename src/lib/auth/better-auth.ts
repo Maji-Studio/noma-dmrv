@@ -6,7 +6,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { Resend } from "resend";
 import { env } from "@/config/env";
 import { db } from "@/db";
@@ -14,6 +14,7 @@ import * as schema from "@/db/schema";
 
 /** Pending invitations expire after 7 days. */
 const INVITATION_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
+const SINGLE_ORGANIZATION_COUNT = 1;
 
 /**
  * Build the URL an invitee follows to accept an org invitation. The invitation
@@ -245,10 +246,8 @@ export const auth = betterAuth({
   databaseHooks: {
     session: {
       create: {
-        // On sign-in, auto-select the active organization when the user has
-        // exactly one membership. Multi-org users and Platform Admins (who
-        // have no memberships) land with no active org and pick one in the
-        // org switcher. Keeps single-org UX free of any tenancy chrome.
+        // On sign-in, auto-select the active organization for a sole member,
+        // or for a Platform Admin when the PR-1 gate permits only one org.
         before: async (session) => {
           const memberships = await db
             .select({ organizationId: schema.members.organizationId })
@@ -262,6 +261,38 @@ export const auth = betterAuth({
                 activeOrganizationId: memberships[0].organizationId,
               },
             };
+          }
+          if (memberships.length === 0) {
+            const [user] = await db
+              .select({ role: schema.users.role })
+              .from(schema.users)
+              .where(eq(schema.users.id, session.userId))
+              .limit(1);
+            if (user?.role === "admin") {
+              const [organizationCount] = await db
+                .select({ value: count() })
+                .from(schema.organizations);
+              if (
+                Number(organizationCount?.value ?? 0) ===
+                SINGLE_ORGANIZATION_COUNT
+              ) {
+                const [organizationRow] = await db
+                  .select({ id: schema.organizations.id })
+                  .from(schema.organizations)
+                  .limit(1);
+                if (organizationRow) {
+                  // Coupled to MAX_ORGANIZATIONS_UNTIL_PR2 in data-access:
+                  // revisit when PR 2 allows a second org, because "the only
+                  // org" immediately stops being a safe Platform Admin default.
+                  return {
+                    data: {
+                      ...session,
+                      activeOrganizationId: organizationRow.id,
+                    },
+                  };
+                }
+              }
+            }
           }
           return { data: session };
         },

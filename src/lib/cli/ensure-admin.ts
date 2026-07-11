@@ -26,8 +26,8 @@ const TEAMMATE_EMAIL = 'teammate@darkearthcarbon.dev';
 const TEAMMATE_NAME = 'Dev Teammate';
 
 /**
- * Ensure the default organization exists, the admin owns it, and a dev teammate
- * is a member. Idempotent: safe to re-run on every `db:reset`.
+ * Ensure the default organization exists, the Platform Admin has no member
+ * row, and a dev teammate owns it. Idempotent on every `db:reset`.
  */
 async function ensureOrgFoundation(
   db: Db,
@@ -40,18 +40,17 @@ async function ensureOrgFoundation(
     .values({ id: DEC_ORG_ID, name: DEC_ORG_NAME, slug: DEC_ORG_SLUG })
     .onConflictDoNothing({ target: schema.organizations.id });
 
-  // 2. Admin as Owner member (unique on org+user).
+  // 2. Heal older seeds: Platform Admin authority comes from users.role only.
   await db
-    .insert(schema.members)
-    .values({
-      id: crypto.randomUUID(),
-      organizationId: DEC_ORG_ID,
-      userId: adminUserId,
-      role: 'owner',
-    })
-    .onConflictDoNothing();
+    .delete(schema.members)
+    .where(
+      and(
+        eq(schema.members.organizationId, DEC_ORG_ID),
+        eq(schema.members.userId, adminUserId)
+      )
+    );
 
-  // 3. Dev teammate user + credential + member.
+  // 3. Dev teammate user + credential + Owner membership.
   let [teammate] = await db
     .select({ id: schema.users.id })
     .from(schema.users)
@@ -82,7 +81,7 @@ async function ensureOrgFoundation(
   }
 
   const [teammateMembership] = await db
-    .select({ id: schema.members.id })
+    .select({ id: schema.members.id, role: schema.members.role })
     .from(schema.members)
     .where(
       and(
@@ -96,11 +95,16 @@ async function ensureOrgFoundation(
       id: crypto.randomUUID(),
       organizationId: DEC_ORG_ID,
       userId: teammate.id,
-      role: 'member',
+      role: 'owner',
     });
+  } else if (teammateMembership.role !== 'owner') {
+    await db
+      .update(schema.members)
+      .set({ role: 'owner' })
+      .where(eq(schema.members.id, teammateMembership.id));
   }
 
-  console.log(`Ensured organization "${DEC_ORG_NAME}" with admin owner`);
+  console.log(`Ensured organization "${DEC_ORG_NAME}" with teammate owner`);
 }
 
 async function ensureAdmin() {
