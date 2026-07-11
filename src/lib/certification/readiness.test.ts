@@ -30,6 +30,7 @@ function ready(
     local: null,
     lockInFlight: false,
     hasMapping: true,
+    hasOrgCredentials: true,
     hasDefaultTemplate: true,
     missingDefaultTemplateId: null,
     unresolvedBlueprintKeys: [],
@@ -111,6 +112,14 @@ describe("deriveRemovalReadiness — blocked: linkage & template", () => {
       }),
     );
     expect(r.reasons).toHaveLength(1);
+  });
+
+  it("blocks when organization Isometric credentials are absent", () => {
+    const r = deriveRemovalReadiness(ready({ hasOrgCredentials: false }));
+    expect(r).toEqual({
+      state: "blocked",
+      reasons: ["Organization Isometric credentials are not configured"],
+    });
   });
 
   it("blocks when no default template is selected", () => {
@@ -271,10 +280,11 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
 });
 
 describe("buildRemovalPreflightChecklist", () => {
-  it("returns the six checks in a stable order", () => {
+  it("returns the seven checks in a stable order", () => {
     const checks = buildRemovalPreflightChecklist(ready());
     expect(checks.map((c) => c.key)).toEqual([
       "mapping",
+      "credentials",
       "template",
       "transport",
       "production",
@@ -314,6 +324,15 @@ describe("buildRemovalPreflightChecklist", () => {
       }),
     );
     expect(checkFor(checks, "template").status).toBe("unmet");
+    expect(checkFor(checks, "transport").status).toBe("skipped");
+  });
+
+  it("flags missing organization credentials and skips registry-dependent checks", () => {
+    const checks = buildRemovalPreflightChecklist(
+      ready({ hasOrgCredentials: false }),
+    );
+    expect(checkFor(checks, "credentials").status).toBe("unmet");
+    expect(checkFor(checks, "template").status).toBe("skipped");
     expect(checkFor(checks, "transport").status).toBe("skipped");
   });
 
@@ -425,6 +444,7 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
     const checks = buildRemovalRequirementsChecklist(ready());
     expect(checks.map((c) => c.key)).toEqual([
       "mapping",
+      "credentials",
       "template",
       "transportUniformity",
       "entityReadiness",

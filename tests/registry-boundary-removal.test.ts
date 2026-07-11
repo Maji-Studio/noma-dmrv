@@ -373,6 +373,7 @@ function makeContext(
   };
   return {
     facilityId: fixture.facilityId,
+    hasOrgCredentials: true,
     removalId: fixture.removalId,
     mapping: makeMapping(fixture),
     project: { id: fixture.externalProjectId, name: "Boundary project" } as never,

@@ -22,6 +22,27 @@ import { facilities, reactors } from './facilities';
 import { documents } from './documentation';
 import { organizations } from './auth';
 
+export const certifierCredentials = pgTable(
+  'certifier_credentials',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    provider: certifierProvider('provider').notNull(),
+    accessTokenEncrypted: text('access_token_encrypted').notNull(),
+    clientSecretEncrypted: text('client_secret_encrypted').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    unique('certifier_credentials_organization_id_provider_unique').on(
+      table.organizationId,
+      table.provider
+    ),
+  ]
+);
+
 // Provider-level project registration for a facility.
 export const certifierProjects = pgTable(
   'certifier_projects',

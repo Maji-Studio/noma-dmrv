@@ -36,6 +36,7 @@ import {
   buildSourceSupplierRef,
   createSource,
   findSourceBySupplierRef,
+  getIsometricClientForOrg,
   patchSource,
   requestSignedUploadUrl,
 } from "@/lib/isometric";
@@ -489,6 +490,7 @@ export async function mirrorDocumentToSourceForUser(
         "This facility isn't linked to an Isometric project. Link it in facility settings before mirroring sources.",
       );
     }
+    const client = await getIsometricClientForOrg(orgCtx.organizationId);
 
     // Pre-flight: document loadable + safe to upload ────────────────────
     const document = await getDocumentById(orgCtx, documentId);
@@ -560,11 +562,8 @@ export async function mirrorDocumentToSourceForUser(
       let sourceExternalId: string;
       let signedUploadUrl: string | null = null;
       let recoveredFlag = false;
-      // Resolved visibility persisted into local metadata. For a fresh
-      // create, the caller's `isPublic` is authoritative. For reconciliation
-      // we trust the remote Source's `is_public` — the previous attempt may
-      // have created it with a different value, and Isometric is the
-      // registry of record.
+      // Fresh creates use the requested visibility; reconciliation trusts the
+      // remote Source because Isometric is the registry of record.
       let resolvedIsPublic = isPublic;
 
       // Reconciliation: was a Source already created in a previous attempt?
@@ -575,7 +574,7 @@ export async function mirrorDocumentToSourceForUser(
           operation: "source:lookup",
           requestPayload: { supplierRefId, phase: "lookup" },
         },
-        () => findSourceBySupplierRef(supplierRefId),
+        () => findSourceBySupplierRef(client, supplierRefId),
       );
 
       if (remoteExisting) {
@@ -589,7 +588,7 @@ export async function mirrorDocumentToSourceForUser(
             requestPayload: { supplierRefId, externalId: remoteExisting.id },
           },
           () =>
-            requestSignedUploadUrl(remoteExisting.id, {
+            requestSignedUploadUrl(client, remoteExisting.id, {
               content_length: fileSizeBytes,
               content_type: mimeType,
             }),
@@ -608,6 +607,7 @@ export async function mirrorDocumentToSourceForUser(
           },
           () =>
             createSource(
+              client,
               buildSourceRequestBody({
                 externalProjectId: mapping.externalProjectId,
                 document,
@@ -802,6 +802,7 @@ export async function setDocumentSourceVisibility(
   return withAction(async (orgCtx) => {
     requireOrgRole(orgCtx, "admin");
     const parsed = setDocumentSourceVisibilitySchema.parse(input);
+    const client = await getIsometricClientForOrg(orgCtx.organizationId);
 
     // Anchor the mutation to the removal so the document must belong to
     // that removal's lineage before any cross-system call is made.
@@ -849,7 +850,7 @@ export async function setDocumentSourceVisibility(
           },
         },
         () =>
-          patchSource(existing.externalDocumentId, {
+          patchSource(client, existing.externalDocumentId, {
             description: undefinedField,
             display_name: undefinedField,
             is_public: parsed.isPublic,

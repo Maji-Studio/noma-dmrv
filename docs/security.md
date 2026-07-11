@@ -95,7 +95,10 @@ Inventory by group (app-validated in `src/config/env.ts`):
   `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_SIGNING_SECRET`,
   `STORAGE_LOCAL_FS_ROOT`
 - **Isometric:** `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
-  (both-or-neither), `ISOMETRIC_ENVIRONMENT`, `ISOMETRIC_UPLOAD_HOST_ALLOWLIST`,
+  (both-or-neither; seed and dedicated CI health inputs only),
+  `CREDENTIALS_ENCRYPTION_KEY` (optional at boot; required when storing or
+  reading per-organization registry credentials),
+  `ISOMETRIC_ENVIRONMENT`, `ISOMETRIC_UPLOAD_HOST_ALLOWLIST`,
   `ISOMETRIC_STORAGE_REDIRECT_HOSTS` (document-redirect allowlist),
   `DURABILITY_MEASUREMENT_SAMPLES_LIVE` (sandbox-only opt-in; rejected in
   production)
@@ -139,6 +142,30 @@ Three consumers read those items:
   Production and the staging item into Vercel Preview. Vercel Development is not
   synced.
 - **GitHub Actions** — `e2e.yml`, `isometric-health.yml`, and `migrate.yml` resolve `op://` references via `1password/load-secrets-action`, authenticating with a single repo secret **`OP_SERVICE_ACCOUNT_TOKEN`** — a read-only 1Password Service Account scoped to the `Environment Variables` vault. It replaces all per-secret Actions secrets; `CLAUDE_CODE_OAUTH_TOKEN` is the only other one. Staging jobs read the staging item, production jobs the production item. The e2e/health load steps are gated on `OP_SERVICE_ACCOUNT_TOKEN != ''` so fork PRs (which can't read secrets) skip cleanly.
+
+### Per-organization Isometric credentials
+
+Runtime registry credentials are stored per organization in
+`certifier_credentials`. The access token and client secret are encrypted at
+rest with AES-256-GCM using `CREDENTIALS_ENCRYPTION_KEY`; only masked status
+(configured, access-token last four characters, and update time) may cross a
+server-action boundary. Platform Admins manage these write-only values from the
+organization admin area. Certification readiness and live submission fail
+closed when the active organization has no credential row.
+
+`CREDENTIALS_ENCRYPTION_KEY` is a server-only 32-byte hex or base64 key sourced
+from 1Password. **Open deployment step:** the user deploying this batch must add
+the field to both `noma-dmrv env staging` and `noma-dmrv env production`, then
+run the normal Vercel environment sync. Keep the same key while stored rows
+exist; rotating it requires re-encrypting or replacing every organization's
+credentials.
+
+`ISOMETRIC_ACCESS_TOKEN` and `ISOMETRIC_CLIENT_SECRET` are no longer runtime app
+credentials. They remain seed/CI-only: `db:ensure-admin` uses the pair to seed
+the default organization's encrypted row when all three values (including the
+encryption key) are present. The read-only `isometric-health.yml` workflow uses
+its dedicated pair directly through `getIsometricClientFromEnv`; it has no app
+database and intentionally receives no `CREDENTIALS_ENCRYPTION_KEY`.
 
 Notes:
 

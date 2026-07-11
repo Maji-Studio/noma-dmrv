@@ -1,6 +1,7 @@
 "use server";
 
 import { env } from "@/config/env";
+import { getCertifierCredentialsStatus } from "@/data-access/certifier-credentials";
 import { requireAdminAction } from "@/lib/auth/server";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
@@ -37,13 +38,15 @@ function describeAllowlist(raw: string | undefined): AllowlistStatus {
 export async function loadCertificationHealth(): Promise<
   ActionResult<CertificationHealth>
 > {
-  return withAction(async () => {
+  return withAction(async (orgCtx) => {
     await requireAdminAction();
+    const credentials = await getCertifierCredentialsStatus(
+      orgCtx.organizationId,
+      "isometric",
+    );
     return {
       environment: env.ISOMETRIC_ENVIRONMENT,
-      credentialsConfigured: Boolean(
-        env.ISOMETRIC_ACCESS_TOKEN && env.ISOMETRIC_CLIENT_SECRET,
-      ),
+      credentialsConfigured: credentials.configured,
       uploadAllowlist: describeAllowlist(env.ISOMETRIC_UPLOAD_HOST_ALLOWLIST),
       redirectAllowlist: describeAllowlist(env.ISOMETRIC_STORAGE_REDIRECT_HOSTS),
     };

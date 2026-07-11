@@ -45,6 +45,7 @@ import {
   createGhgStatement,
   describeIsometricApiError,
   findDraftGhgStatementsByPeriod,
+  getIsometricClientForOrg,
   getGhgStatement,
   IsometricApiError,
   payloadHash,
@@ -54,6 +55,7 @@ import {
   submitGhgStatement,
   type GhgStatement,
   type GhgStatementStatus,
+  type IsometricClient,
 } from "@/lib/isometric";
 import {
   expectedButExcludedWarnings,
@@ -190,6 +192,7 @@ export async function createGhgStatementDraft(
 ): Promise<ActionResult<CreateGhgStatementResult>> {
   return withAction(async (orgCtx) => {
     requireOrgRole(orgCtx, "admin");
+    const client = await getIsometricClientForOrg(orgCtx.organizationId);
     const parsed = createGhgStatementSchema.parse(input);
     assertProductionConfirmed(parsed.confirmProduction);
 
@@ -268,6 +271,7 @@ export async function createGhgStatementDraft(
       // have linked some or all of them, and POSTing would create a duplicate
       // period before the normal recovery lookup gets a chance to run.
       const remoteDrafts = await findDraftGhgStatementsByPeriod(
+        client,
         project.externalProjectId,
         parsed.reportingPeriodEndOn,
       );
@@ -361,6 +365,7 @@ export async function createGhgStatementDraft(
         };
       case "claimed":
         return createGhgStatementRemote({
+          client,
           orgCtx,
           statement,
           row: claimed.row,
@@ -374,12 +379,10 @@ export async function createGhgStatementDraft(
   }, { rateLimit: submitRateLimit("cert:create-ghg-statement") });
 }
 
-// POSTs the statement to Isometric through the shared create-or-reconcile
-// choreography: a network failure may surface after the registry already
-// created the draft, so on error (or on a resumed draft, before POSTing) it
-// is looked up by (project, end_on). A period holding multiple drafts is
-// ambiguous — the row is rejected with MULTIPLE_DRAFTS_MESSAGE.
+// Creates or reconciles a remote draft by (project, end_on). Multiple remote
+// drafts are ambiguous and reject the local row with MULTIPLE_DRAFTS_MESSAGE.
 async function createGhgStatementRemote(args: {
+  client: IsometricClient;
   orgCtx: OrgContext;
   statement: CertifierGhgStatementRow;
   row: CertificationSubmissionRow;
@@ -392,6 +395,7 @@ async function createGhgStatementRemote(args: {
   expected: ExpectedRemoval[];
 }): Promise<CreateGhgStatementResult> {
   const {
+    client,
     orgCtx,
     statement,
     row,
@@ -411,9 +415,9 @@ async function createGhgStatementRemote(args: {
     operation: "ghg_statement:create",
     requestPayload,
     resumed,
-    create: () => createGhgStatement(requestPayload).then((r) => r.id),
+    create: () => createGhgStatement(client, requestPayload).then((r) => r.id),
     reconcile: () =>
-      reconcileGhgStatement({ projectId: externalProjectId, endOn }).then(
+      reconcileGhgStatement(client, { projectId: externalProjectId, endOn }).then(
         ghgStatementLookup,
       ),
     ambiguousMessage: MULTIPLE_DRAFTS_MESSAGE,
@@ -425,24 +429,21 @@ async function createGhgStatementRemote(args: {
     }),
   });
 
-  return finalizeGhgStatement({ orgCtx, statement, row, externalId, expected });
+  return finalizeGhgStatement({ client, orgCtx, statement, row, externalId, expected });
 }
 
-// Shared tail for the fresh-create and reconciled-create paths (the audit
-// event for either is recorded by performRegistryCreate). The remote create
-// has already succeeded, so the external id is persisted standalone first —
-// losing it would let a retry POST a duplicate statement. The post-create
-// reconciliation (removal membership, server-derived reporting window,
-// ledger state) then commits in one transaction so a partial failure cannot
-// leave the statement half-reconciled.
+// Shared tail for fresh and reconciled creates. Persist the external id before
+// reconciling membership, reporting window, and ledger state transactionally;
+// losing it would let a retry POST a duplicate statement.
 async function finalizeGhgStatement(args: {
+  client: IsometricClient;
   orgCtx: OrgContext;
   statement: CertifierGhgStatementRow;
   row: CertificationSubmissionRow;
   externalId: string;
   expected: ExpectedRemoval[];
 }): Promise<CreateGhgStatementResult> {
-  const { orgCtx, statement, row, externalId, expected } = args;
+  const { client, orgCtx, statement, row, externalId, expected } = args;
 
   await markSubmissionSubmitted(orgCtx, row.id, {
     externalId,
@@ -452,7 +453,7 @@ async function finalizeGhgStatement(args: {
   // Re-fetch outside any transaction — the create response carries neither
   // the linked removal set nor the server-derived reporting-period start,
   // and a DB transaction must never be held open across network I/O.
-  const remote = await getGhgStatement(externalId).catch(() => null);
+  const remote = await getGhgStatement(client, externalId).catch(() => null);
   if (!remote) {
     await updateSubmissionMetadata(orgCtx, row.id, {
       [SUBMISSION_METADATA_KEYS.remoteStatus]: "DRAFT",
@@ -507,6 +508,7 @@ export async function submitGhgStatementToVerifier(
 ): Promise<ActionResult<SubmitGhgStatementResult>> {
   return withAction(async (orgCtx) => {
     requireOrgRole(orgCtx, "admin");
+    const client = await getIsometricClientForOrg(orgCtx.organizationId);
     const parsed = submitGhgStatementDialogSchema.parse(input);
     assertProductionConfirmed(parsed.confirmProduction);
 
@@ -545,7 +547,7 @@ export async function submitGhgStatementToVerifier(
 
     const [facility, remoteBefore] = await Promise.all([
       getFacilityById(orgCtx, statement.facilityId),
-      getGhgStatement(submission.externalId).catch(() => null),
+      getGhgStatement(client, submission.externalId).catch(() => null),
     ]);
 
     // Empty-statement backstop (#245). Never send a statement with nothing to
@@ -600,11 +602,11 @@ export async function submitGhgStatementToVerifier(
     try {
       remoteAfter =
         submitMode === "resubmit"
-          ? await resubmitGhgStatement(submission.externalId, {
+          ? await resubmitGhgStatement(client, submission.externalId, {
               ghg_statement_report_url: parsed.reportUrl,
               summary_of_changes: parsed.summaryOfChanges?.trim() ?? "",
             })
-          : await submitGhgStatement(submission.externalId, {
+          : await submitGhgStatement(client, submission.externalId, {
               ghg_statement_report_url: parsed.reportUrl,
             });
     } catch (err) {
@@ -628,7 +630,7 @@ export async function submitGhgStatementToVerifier(
         },
         "ghg statement submit failed; attempting reconciliation",
       );
-      const after = await getGhgStatement(submission.externalId).catch(
+      const after = await getGhgStatement(client, submission.externalId).catch(
         () => null,
       );
       const submitApplied = remoteBefore
@@ -709,6 +711,7 @@ export async function refreshGhgStatementStatus(
 ): Promise<ActionResult<GhgStatement>> {
   return withAction(async (orgCtx) => {
     requireOrgRole(orgCtx, "admin");
+    const client = await getIsometricClientForOrg(orgCtx.organizationId);
     const submission = await getSubmissionById(orgCtx, submissionId);
     if (
       !submission ||
@@ -753,7 +756,7 @@ export async function refreshGhgStatementStatus(
         "This GHG statement version has been superseded. Refresh the page to see the latest one.",
       );
     }
-    const remote = await getGhgStatement(submission.externalId);
+    const remote = await getGhgStatement(client, submission.externalId);
     await applyGhgRemoteState(orgCtx, submission, remote);
     await reconcileRemovalMembership(
       orgCtx,
@@ -771,6 +774,7 @@ export async function loadGhgStatementState(
   ghgStatementId: string,
 ): Promise<ActionResult<GhgStatementState>> {
   return withAction(async (orgCtx) => {
+    const client = await getIsometricClientForOrg(orgCtx.organizationId);
     const statement = await getCertifierGhgStatementById(
       orgCtx,
       ghgStatementId,
@@ -812,7 +816,7 @@ export async function loadGhgStatementState(
     }));
 
     const remote = statementSubmission?.externalId
-      ? await getGhgStatement(statementSubmission.externalId).catch(() => null)
+      ? await getGhgStatement(client, statementSubmission.externalId).catch(() => null)
       : null;
 
     return {

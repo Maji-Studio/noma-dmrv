@@ -12,7 +12,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { isometric, paginateAll } from "./client";
+import type { IsometricClient } from "./client";
 import type { components } from "./generated/certify";
 
 export type IsometricMeasurementSample = components["schemas"]["MeasurementSample"];
@@ -60,18 +60,20 @@ function shortHash(input: string, length: number): string {
 }
 
 export async function createMeasurementSample(
+  client: IsometricClient,
   body: CreateMeasurementSampleRequest,
 ): Promise<IsometricMeasurementSample> {
-  return isometric.post<IsometricMeasurementSample>(
+  return client.post<IsometricMeasurementSample>(
     "/measurement_samples",
     body,
   );
 }
 
 export async function getMeasurementSampleById(
+  client: IsometricClient,
   id: string,
 ): Promise<IsometricMeasurementSample> {
-  return isometric.get<IsometricMeasurementSample>(
+  return client.get<IsometricMeasurementSample>(
     `/measurement_samples/${encodeURIComponent(id)}`,
   );
 }
@@ -83,9 +85,10 @@ export async function getMeasurementSampleById(
  * filters client-side. Returns the match or null.
  */
 export async function findMeasurementSampleBySupplierRef(
+  client: IsometricClient,
   supplierReferenceId: string,
 ): Promise<IsometricMeasurementSample | null> {
-  const matches = await paginateAll<IsometricMeasurementSample>(
+  const matches = await client.paginateAll<IsometricMeasurementSample>(
     "/measurement_samples",
   );
   return (

@@ -4,7 +4,7 @@
  * is org-scoped. Creates the user if missing, or updates the password hash if it
  * already exists. Does NOT seed any domain-entity data — use `pnpm db:seed`.
  */
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { config } from 'dotenv';
 import { Pool } from 'pg';
@@ -12,6 +12,7 @@ import * as schema from '../../db/schema';
 import { DEC_ORG_ID, DEC_ORG_NAME, DEC_ORG_SLUG } from '../../db/org-defaults';
 import { hashPassword } from '../auth/hash-password';
 import { getPgPoolConfig } from '../pg-pool-config';
+import { encryptSecret } from '../crypto/secrets';
 
 config({ path: '.env.local' });
 
@@ -105,6 +106,39 @@ async function ensureOrgFoundation(
   console.log(`Ensured organization "${DEC_ORG_NAME}" with teammate owner`);
 }
 
+async function ensureIsometricCredentials(db: Db): Promise<void> {
+  const accessToken = process.env.ISOMETRIC_ACCESS_TOKEN;
+  const clientSecret = process.env.ISOMETRIC_CLIENT_SECRET;
+  const encryptionKey = process.env.CREDENTIALS_ENCRYPTION_KEY;
+  if (!accessToken || !clientSecret || !encryptionKey) {
+    console.log('Isometric credentials configured=false');
+    return;
+  }
+
+  const accessTokenEncrypted = encryptSecret(accessToken);
+  const clientSecretEncrypted = encryptSecret(clientSecret);
+  await db
+    .insert(schema.certifierCredentials)
+    .values({
+      organizationId: DEC_ORG_ID,
+      provider: 'isometric',
+      accessTokenEncrypted,
+      clientSecretEncrypted,
+    })
+    .onConflictDoUpdate({
+      target: [
+        schema.certifierCredentials.organizationId,
+        schema.certifierCredentials.provider,
+      ],
+      set: {
+        accessTokenEncrypted,
+        clientSecretEncrypted,
+        updatedAt: sql`now()`,
+      },
+    });
+  console.log('Isometric credentials configured=true');
+}
+
 async function ensureAdmin() {
   const adminEmail = process.env.ADMIN_EMAIL;
   if (!adminEmail) {
@@ -184,6 +218,7 @@ async function ensureAdmin() {
     }
 
     await ensureOrgFoundation(db, adminUserId, passwordHash);
+    await ensureIsometricCredentials(db);
   } finally {
     await pool.end();
   }

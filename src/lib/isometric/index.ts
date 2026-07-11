@@ -1,9 +1,8 @@
 export {
-  isometric,
-  isometricRequest,
-  paginate,
-  paginateAll,
+  getIsometricClientForOrg,
+  getIsometricClientFromEnv,
   IsometricApiError,
+  type IsometricClient,
   type IsometricRequestOptions,
   type PaginateOptions,
   type IsometricEnvironment,

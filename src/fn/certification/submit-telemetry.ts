@@ -27,9 +27,10 @@ import {
 import { listTelemetryReadingsForRuns } from "@/data-access/telemetry-readings";
 import { SafeError } from "@/lib/errors";
 import {
-  isometric,
+  getIsometricClientForOrg,
   IsometricApiError,
   payloadHash,
+  type IsometricClient,
 } from "@/lib/isometric";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import {
@@ -104,6 +105,7 @@ export async function submitTelemetry(
   args: SubmitTelemetryArgs,
 ): Promise<SubmitTelemetryResult> {
   assertProductionConfirmed(args.confirmProduction);
+  const client = await getIsometricClientForOrg(orgCtx.organizationId);
 
   const ctx = await loadRemovalSubmissionContext(orgCtx, args.removalId);
   if (!ctx.mapping) {
@@ -278,7 +280,7 @@ export async function submitTelemetry(
     case "invalid-changed-hash":
       throw new SafeError("Unexpected submission state for this removal.");
     case "return-existing": {
-      const status = await refreshStatus(orgCtx, latest!, claim.externalId);
+      const status = await refreshStatus(client, orgCtx, latest!, claim.externalId);
       return {
         removalId: args.removalId,
         dataUploadSubmissionId: claim.externalId,
@@ -289,6 +291,7 @@ export async function submitTelemetry(
     }
     case "resume-poll-existing": {
       const status = await refreshStatus(
+        client,
         orgCtx,
         latest!,
         claim.dataUploadSubmissionId,
@@ -326,7 +329,7 @@ export async function submitTelemetry(
         uploadUrl: requireUploadUrl(row),
         bytes: parquetBytes,
       });
-      const submissionId = await postDataUploadSubmission({
+      const submissionId = await postDataUploadSubmission(client, {
         externalFacilityId,
         fileUploadId: claim.fileUploadId,
       });
@@ -385,7 +388,7 @@ export async function submitTelemetry(
         const parquetBytes = writeDataUploadParquet(aggregated);
 
         // Step 1.
-        const fileUpload = await isometric.post<FileUploadResponse>(
+        const fileUpload = await client.post<FileUploadResponse>(
           "/file-uploads",
           {
             content_length: parquetBytes.byteLength,
@@ -411,7 +414,7 @@ export async function submitTelemetry(
         });
 
         // Step 3.
-        const submission = await postDataUploadSubmission({
+        const submission = await postDataUploadSubmission(client, {
           externalFacilityId,
           fileUploadId: fileUpload.id,
         });
@@ -512,11 +515,12 @@ async function journalStep(
 }
 
 async function refreshStatus(
+  client: IsometricClient,
   orgCtx: OrgContext,
   row: CertificationSubmissionRow,
   dataUploadSubmissionId: string,
 ): Promise<DataUploadSubmission> {
-  const status = await isometric.get<DataUploadSubmission>(
+  const status = await client.get<DataUploadSubmission>(
     `/data-upload-submissions/${encodeURIComponent(dataUploadSubmissionId)}`,
   );
   await updateSubmissionMetadata(orgCtx, row.id, {
@@ -526,11 +530,11 @@ async function refreshStatus(
   return status;
 }
 
-async function postDataUploadSubmission(args: {
+async function postDataUploadSubmission(client: IsometricClient, args: {
   externalFacilityId: string;
   fileUploadId: string;
 }): Promise<DataUploadSubmission> {
-  return isometric.post<DataUploadSubmission>("/data-upload-submissions", {
+  return client.post<DataUploadSubmission>("/data-upload-submissions", {
     facility_id: args.externalFacilityId,
     file_upload_id: args.fileUploadId,
     submission_type: "biochar_pyrolysis_reactor_facility_time_series",
@@ -630,6 +634,7 @@ export async function loadTelemetrySubmissionState(
   } | null>
 > {
   return withAction(async (orgCtx) => {
+    const client = await getIsometricClientForOrg(orgCtx.organizationId);
     const latest = await getLatestSubmission(orgCtx, {
       provider: ISOMETRIC_PROVIDER,
       submissionType: DATA_UPLOAD_SUBMISSION_TYPE,
@@ -639,7 +644,7 @@ export async function loadTelemetrySubmissionState(
     if (!latest) return null;
     const externalId = latest.externalId;
     const remote = externalId
-      ? await isometric
+      ? await client
           .get<DataUploadSubmission>(
             `/data-upload-submissions/${encodeURIComponent(externalId)}`,
           )

@@ -42,6 +42,7 @@ RESEND_FROM_EMAIL="op://Environment Variables/noma-dmrv env local/RESEND_FROM_EM
 # -----------------------------------------------------------------------------
 # Isometric (sandbox)
 # -----------------------------------------------------------------------------
+CREDENTIALS_ENCRYPTION_KEY="op://Environment Variables/noma-dmrv env local/CREDENTIALS_ENCRYPTION_KEY"
 ISOMETRIC_CLIENT_SECRET="op://Environment Variables/noma-dmrv env local/ISOMETRIC_CLIENT_SECRET"
 ISOMETRIC_ACCESS_TOKEN="op://Environment Variables/noma-dmrv env local/ISOMETRIC_ACCESS_TOKEN"
 ISOMETRIC_ENVIRONMENT="op://Environment Variables/noma-dmrv env local/ISOMETRIC_ENVIRONMENT"

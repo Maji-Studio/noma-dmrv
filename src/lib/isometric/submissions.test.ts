@@ -10,7 +10,14 @@ vi.mock("@/config/env", () => ({
     ISOMETRIC_ENVIRONMENT: "sandbox",
   },
 }));
+vi.mock("@/data-access/certifier-credentials", () => ({
+  getDecryptedCertifierCredentials: vi.fn().mockResolvedValue(null),
+}));
 
+import {
+  getIsometricClientForOrg,
+  getIsometricClientFromEnv,
+} from "./client";
 import { findGhgEntryBySupplierRef } from "./submissions";
 
 afterEach(() => {
@@ -42,7 +49,10 @@ describe("findGhgEntryBySupplierRef — wire contract (post-2026-06-04 rename)",
   it("GETs /ghg_entries with the supplier_reference_id query param", async () => {
     const fetchMock = stubPaginatedFetch([{ id: "rmv_known_1" }]);
 
-    const result = await findGhgEntryBySupplierRef("nm-rmv-abc-removal-v1");
+    const result = await findGhgEntryBySupplierRef(
+      getIsometricClientFromEnv(),
+      "nm-rmv-abc-removal-v1",
+    );
 
     expect(result).toEqual({ id: "rmv_known_1" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -63,8 +73,21 @@ describe("findGhgEntryBySupplierRef — wire contract (post-2026-06-04 rename)",
   it("returns null when no GHG entry matches the supplier reference", async () => {
     stubPaginatedFetch([]);
 
-    const result = await findGhgEntryBySupplierRef("nm-rmv-missing-removal-v1");
+    const result = await findGhgEntryBySupplierRef(
+      getIsometricClientFromEnv(),
+      "nm-rmv-missing-removal-v1",
+    );
 
     expect(result).toBeNull();
+  });
+});
+
+describe("getIsometricClientForOrg", () => {
+  it("preserves not_configured degradation when the organization has no credentials", async () => {
+    const client = await getIsometricClientForOrg("org-unconfigured");
+
+    await expect(client.get("/projects")).rejects.toMatchObject({
+      code: "not_configured",
+    });
   });
 });

@@ -34,6 +34,7 @@
  * Grow it per-test, never speculatively.
  */
 import type {
+  IsometricClient,
   IsometricRequestOptions,
   PaginateOptions,
 } from "@/lib/isometric/client";
@@ -329,8 +330,7 @@ function requireActive(): FakeIsometricRegistry {
 
 /**
  * Builds the replacement for `@/lib/isometric/client`. Everything except the
- * transport (isometricRequest / isometric / paginate / paginateAll) is the
- * actual module, so IsometricApiError stays the real class.
+ * credential factories are replaced; IsometricApiError stays the real class.
  */
 export function createFakeClientModule(actual: ClientModule): ClientModule {
   const request = <T = unknown>(
@@ -371,12 +371,8 @@ export function createFakeClientModule(actual: ClientModule): ClientModule {
     return out;
   }
 
-  return {
-    ...actual,
-    isometricRequest: request,
-    paginate,
-    paginateAll,
-    isometric: {
+  const client: IsometricClient = {
+      request: request as IsometricClient["request"],
       get: <T = unknown>(path: string, options?: IsometricRequestOptions) =>
         request<T>("GET", path, options),
       post: <T = unknown>(
@@ -393,7 +389,12 @@ export function createFakeClientModule(actual: ClientModule): ClientModule {
         request<T>("DELETE", path, options),
       paginate,
       paginateAll,
-    },
+  };
+
+  return {
+    ...actual,
+    getIsometricClientForOrg: async () => client,
+    getIsometricClientFromEnv: () => client,
   };
 }
 

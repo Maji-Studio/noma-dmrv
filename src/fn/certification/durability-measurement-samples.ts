@@ -27,6 +27,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import { env } from "@/config/env";
 import type { Logger } from "@/lib/log";
+import { getIsometricClientForOrg } from "@/lib/isometric/client";
 import {
   buildMeasurementSampleReference,
   createMeasurementSample,
@@ -265,6 +266,7 @@ export interface SubmitDurabilityMeasurementSamplesArgs {
 export async function submitDurabilityMeasurementSamples(
   args: SubmitDurabilityMeasurementSamplesArgs,
 ): Promise<{ submitted: number }> {
+  const client = await getIsometricClientForOrg(args.orgCtx.organizationId);
   let submitted = 0;
   for (const submission of args.submissions) {
     await performRegistryCreate({
@@ -276,9 +278,9 @@ export async function submitDurabilityMeasurementSamples(
       requestPayload: submission.body,
       supplierRefId: submission.supplierRefId,
       resumed: args.resumed,
-      create: () => createMeasurementSample(submission.body).then((m) => m.id),
+      create: () => createMeasurementSample(client, submission.body).then((m) => m.id),
       reconcile: () =>
-        findMeasurementSampleBySupplierRef(submission.supplierRefId).then((m) =>
+        findMeasurementSampleBySupplierRef(client, submission.supplierRefId).then((m) =>
           supplierRefLookup(
             m ? { found: true, externalId: m.id } : { found: false },
           ),

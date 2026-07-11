@@ -20,6 +20,7 @@ import { certifierSensors } from "@/db/schema/certification";
 import { reactors } from "@/db/schema/facilities";
 import { SafeError } from "@/lib/errors";
 import type { OrgContext } from "@/lib/auth/server";
+import { getIsometricClientForOrg } from "@/lib/isometric/client";
 import {
   buildSensorReference,
   createSensor,
@@ -84,12 +85,13 @@ export async function ensureSensorForReactor(
     reactorId: input.reactorId,
     measurementProperty: input.measurementProperty,
   });
+  const client = await getIsometricClientForOrg(ctx.organizationId);
 
   // Reconciliation FIRST — if a prior partial run created the Sensor
   // remotely but lost the local row (sandbox reset, crash before
   // INSERT), a fresh POST would mint a second sensor with the same
   // reference. Claim the existing remote first.
-  let sensor: IsometricSensor | null = await findSensorByReference(reference);
+  let sensor: IsometricSensor | null = await findSensorByReference(client, reference);
   if (sensor) {
     if (sensor.units !== input.units) {
       throw new SafeError(
@@ -97,7 +99,7 @@ export async function ensureSensorForReactor(
       );
     }
   } else {
-    sensor = await createSensor({
+    sensor = await createSensor(client, {
       facility_id: input.externalFacilityId,
       measurement_property: input.measurementProperty,
       reference,

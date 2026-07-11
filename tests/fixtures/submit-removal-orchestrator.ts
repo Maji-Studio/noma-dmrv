@@ -48,6 +48,7 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
   return {
     ...actual,
+    getIsometricClientForOrg: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
     createDatapoint: vi.fn(),
     createGhgEntry: vi.fn(),
     reconcileDatapoint: vi.fn(),
@@ -371,6 +372,7 @@ export function makeContext(
   const batchesWithSamples = makeBatchesWithSamples(runs);
   return {
     facilityId: FACILITY_ID,
+    hasOrgCredentials: true,
     removalId: REMOVAL_ID,
     mapping: makeMapping(),
     project: { id: EXTERNAL_PROJECT_ID, name: "Test project" } as never,

@@ -131,6 +131,10 @@ accept the generated link, then their membership controls available orgs and
 role. Email delivery is best-effort, with a copyable accept link available to
 the inviter. Auth flows must not log names or email addresses; use stable IDs.
 
+Registry credentials are owned per organization and managed only by Platform
+Admins; organization members can use them through scoped certification flows
+but cannot read or replace the stored secrets.
+
 ## Notes
 
 - `ADMIN_PASSWORD` is required by `pnpm db:reset` / `ensure-admin.ts`.

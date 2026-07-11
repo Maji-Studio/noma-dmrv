@@ -7,6 +7,9 @@ name: Isometric API health
 # (projects, removal templates for the demo project, component blueprints).
 # No writes. No noma DB. No app boot.
 #
+# This workflow intentionally uses its dedicated environment credential pair
+# through getIsometricClientFromEnv; it does not read per-organization DB rows
+# and therefore does not need CREDENTIALS_ENCRYPTION_KEY.
 # Secrets come from 1Password via the "Load Isometric secrets" step below:
 #   op://Environment Variables/noma-dmrv env staging/{ISOMETRIC_CLIENT_SECRET,
 #   ISOMETRIC_ACCESS_TOKEN, ISOMETRIC_DEMO_PROJECT_ID}

@@ -6,7 +6,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { isometric, paginateAll } from "./client";
+import type { IsometricClient } from "./client";
 import type { components } from "./generated/certify";
 import {
   encodeMeasurementProperty,
@@ -41,13 +41,14 @@ export function buildSensorReference(args: {
 }
 
 export async function createSensor(
+  client: IsometricClient,
   body: CreateSensorRequest,
 ): Promise<IsometricSensor> {
-  return isometric.post<IsometricSensor>("/sensors", body);
+  return client.post<IsometricSensor>("/sensors", body);
 }
 
-export async function getSensorById(id: string): Promise<IsometricSensor> {
-  return isometric.get<IsometricSensor>(`/sensors/${encodeURIComponent(id)}`);
+export async function getSensorById(client: IsometricClient, id: string): Promise<IsometricSensor> {
+  return client.get<IsometricSensor>(`/sensors/${encodeURIComponent(id)}`);
 }
 
 /**
@@ -57,9 +58,10 @@ export async function getSensorById(id: string): Promise<IsometricSensor> {
  * guarantee a single result.
  */
 export async function findSensorByReference(
+  client: IsometricClient,
   reference: string,
 ): Promise<IsometricSensor | null> {
-  const matches = await paginateAll<IsometricSensor>("/sensors", {
+  const matches = await client.paginateAll<IsometricSensor>("/sensors", {
     query: { reference },
     pageSize: 10,
   });

@@ -16,7 +16,7 @@ import {
   type ConservativeSoilTemperature,
 } from "@/lib/isometric/utils/durability-aggregation";
 import { SafeError } from "@/lib/errors";
-import { getGhgEntry } from "@/lib/isometric";
+import { getGhgEntry, getIsometricClientForOrg } from "@/lib/isometric";
 import {
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
@@ -66,6 +66,7 @@ export async function loadRemovalBreakdown(
   removalId: string,
 ): Promise<ActionResult<RemovalBreakdownData>> {
   return withAction(async (orgCtx) => {
+    const client = await getIsometricClientForOrg(orgCtx.organizationId);
     const removal = await getCertifierRemovalById(orgCtx, removalId);
     if (!removal) throw new SafeError("Removal not found.");
 
@@ -84,7 +85,7 @@ export async function loadRemovalBreakdown(
 
     const externalId = submission?.externalId ?? null;
     const ghgEntry = externalId
-      ? await getGhgEntry(externalId).catch(() => null)
+      ? await getGhgEntry(client, externalId).catch(() => null)
       : null;
 
     // Conservative soil-temperature estimate across the removal's application

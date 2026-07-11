@@ -1,4 +1,4 @@
-import { isometric } from "./client";
+import type { IsometricClient } from "./client";
 import type { components } from "./generated/certify";
 
 export type CreateGhgStatementRequest =
@@ -12,34 +12,38 @@ export type GhgStatementStatus =
   components["schemas"]["GhgStatementStatus"];
 
 export function createGhgStatement(
+  client: IsometricClient,
   body: CreateGhgStatementRequest,
 ): Promise<GhgStatement> {
-  return isometric.post<GhgStatement>("/ghg_statements", body);
+  return client.post<GhgStatement>("/ghg_statements", body);
 }
 
-export function getGhgStatement(id: string): Promise<GhgStatement> {
-  return isometric.get<GhgStatement>(`/ghg_statements/${id}`);
+export function getGhgStatement(client: IsometricClient, id: string): Promise<GhgStatement> {
+  return client.get<GhgStatement>(`/ghg_statements/${id}`);
 }
 
 export function submitGhgStatement(
+  client: IsometricClient,
   id: string,
   body: SubmitGhgStatementRequest,
 ): Promise<GhgStatement> {
-  return isometric.post<GhgStatement>(`/ghg_statements/${id}/submit`, body);
+  return client.post<GhgStatement>(`/ghg_statements/${id}/submit`, body);
 }
 
 export function resubmitGhgStatement(
+  client: IsometricClient,
   id: string,
   body: ResubmitGhgStatementRequest,
 ): Promise<GhgStatement> {
-  return isometric.post<GhgStatement>(`/ghg_statements/${id}/submit`, body);
+  return client.post<GhgStatement>(`/ghg_statements/${id}/submit`, body);
 }
 
 export async function findDraftGhgStatementsByPeriod(
+  client: IsometricClient,
   projectId: string,
   endOn: string,
 ): Promise<GhgStatement[]> {
-  const statements = await isometric.paginateAll<GhgStatement>(
+  const statements = await client.paginateAll<GhgStatement>(
     "/ghg_statements",
     { pageSize: 50 },
   );

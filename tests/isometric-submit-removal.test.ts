@@ -89,7 +89,7 @@ describe("submitRemoval — happy path", () => {
     // unit/quantity-kind mapping. Per `INPUT_MAPPING` for
     // co2-stored/carbon_rich_substance_sequestration/product_mass. Read
     // through the mocked module so vitest preserves the upstream call type.
-    const datapointBody = vi.mocked(isometric.createDatapoint).mock.calls[0][0];
+    const datapointBody = vi.mocked(isometric.createDatapoint).mock.calls[0][1];
     expect(datapointBody).toMatchObject({
       project_id: EXTERNAL_PROJECT_ID,
       type: "REPORTED",
@@ -100,7 +100,7 @@ describe("submitRemoval — happy path", () => {
     // Removal payload wires the datapoint id back onto the component. The
     // window ends at the application date (§8.6.2, issue #320), not the
     // production end (2026-01-31).
-    const removalBody = vi.mocked(isometric.createGhgEntry).mock.calls[0][0];
+    const removalBody = vi.mocked(isometric.createGhgEntry).mock.calls[0][1];
     expect(removalBody).toMatchObject({
       project_id: EXTERNAL_PROJECT_ID,
       ghg_entry_template_id: TEMPLATE_ID,
@@ -223,7 +223,7 @@ describe("submitRemoval — happy path", () => {
     // The v=2 datapoint payload reflects the new mass.
     const datapointCalls = vi.mocked(isometric.createDatapoint).mock.calls;
     expect(datapointCalls).toHaveLength(2);
-    expect(datapointCalls[1][0].quantity).toEqual({
+    expect(datapointCalls[1][1].quantity).toEqual({
       magnitude: CHANGED_BIOCHAR_MASS_KG,
       unit: "kg",
     });
@@ -340,7 +340,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
 
     // completed_on = the LATEST application date across lineages; started_on
     // stays the production start.
-    const removalBody = vi.mocked(isometric.createGhgEntry).mock.calls[0][0];
+    const removalBody = vi.mocked(isometric.createGhgEntry).mock.calls[0][1];
     expect(removalBody.started_on).toBe("2026-01-01");
     expect(removalBody.completed_on).toBe("2026-04-05");
     expect(removalsDA.updateRemovalDates).toHaveBeenCalledWith(
@@ -384,7 +384,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
 
     await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID });
 
-    const removalBody = vi.mocked(isometric.createGhgEntry).mock.calls[0][0];
+    const removalBody = vi.mocked(isometric.createGhgEntry).mock.calls[0][1];
     expect(removalBody.started_on).toBe("2026-01-01");
     expect(removalBody.completed_on).toBe("2026-01-01");
   });
