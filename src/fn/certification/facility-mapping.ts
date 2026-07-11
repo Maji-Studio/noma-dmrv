@@ -147,7 +147,17 @@ export async function saveFacilityCertifierMapping(
     }
 
     const client = await getIsometricClientForOrg(orgCtx.organizationId);
-    const projects = await listProjects(client);
+    let projects;
+    try {
+      projects = await listProjects(client);
+    } catch (error) {
+      if (error instanceof IsometricApiError && error.code === "not_configured") {
+        throw new SafeError(
+          "Configure this organization's Isometric credentials before mapping a facility.",
+        );
+      }
+      throw error;
+    }
     if (!projects.some((p) => p.id === parsed.externalProjectId)) {
       throw new SafeError("Selected project does not exist on Isometric.");
     }

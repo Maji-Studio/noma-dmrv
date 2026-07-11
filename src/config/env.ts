@@ -240,6 +240,20 @@ const envSchema = z.object({
     });
   }
 
+  // Production fail-closed: certifier-credential encryption must be possible
+  // from boot, not discovered broken on the first credential write/read. CI is
+  // carved out for the same hermetic-production-bundle reason as GEO_PROVIDER;
+  // real deployments must carry the key (docs/security.md - sourced from the
+  // staging/production 1Password items).
+  if (data.NODE_ENV === "production" && !isCI && !data.CREDENTIALS_ENCRYPTION_KEY) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["CREDENTIALS_ENCRYPTION_KEY"],
+      message:
+        "CREDENTIALS_ENCRYPTION_KEY is required in production - per-org certifier credentials cannot be encrypted or decrypted without it.",
+    });
+  }
+
   const allowsCiLocalFsStorage =
     isCI &&
     data.STORAGE_PROVIDER === "local-fs" &&
