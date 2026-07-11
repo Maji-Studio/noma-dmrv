@@ -1,4 +1,5 @@
 import { and, desc, eq, getTableColumns, inArray, isNull, sql } from "drizzle-orm";
+import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
   applications,
@@ -23,7 +24,7 @@ import {
   DOCUMENT_ENTITY_TYPES,
   type DocumentEntityType,
 } from "@/schemas/documents";
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 
 /**
  * Hard cap on documents returned for a single entity. This is a guardrail
@@ -85,11 +86,11 @@ async function hasDeliveryArchivedAtColumn(): Promise<boolean> {
 }
 
 export async function assertCanManageDocumentEntity(
-  userId: string,
+  ctx: OrgContext,
   entityType: string,
   entityId: string
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   if (!isDocumentEntityType(entityType)) {
     throw new SafeError("Unsupported document entity type");
@@ -100,12 +101,12 @@ export async function assertCanManageDocumentEntity(
       const [row] = await db
         .select({ id: samples.id })
         .from(samples)
-        .where(eq(samples.id, entityId));
+        .where(and(eq(samples.id, entityId), eq(samples.organizationId, ctx.organizationId)));
       if (!row) throw entityMissingError(entityType);
       return;
     }
     case "delivery": {
-      const conditions = [eq(deliveries.id, entityId)];
+      const conditions = [eq(deliveries.id, entityId), eq(deliveries.organizationId, ctx.organizationId)];
       if (await hasDeliveryArchivedAtColumn()) {
         conditions.push(isNull(deliveries.archivedAt));
       }
@@ -123,6 +124,7 @@ export async function assertCanManageDocumentEntity(
         .where(
           and(
             eq(productionRuns.id, entityId),
+            eq(productionRuns.organizationId, ctx.organizationId),
             isNull(productionRuns.archivedAt)
           )
         );
@@ -133,7 +135,7 @@ export async function assertCanManageDocumentEntity(
       const [row] = await db
         .select({ id: incidentReports.id })
         .from(incidentReports)
-        .where(eq(incidentReports.id, entityId));
+        .where(and(eq(incidentReports.id, entityId), eq(incidentReports.organizationId, ctx.organizationId)));
       if (!row) throw entityMissingError(entityType);
       return;
     }
@@ -141,7 +143,7 @@ export async function assertCanManageDocumentEntity(
       const [row] = await db
         .select({ id: productionSamples.id })
         .from(productionSamples)
-        .where(eq(productionSamples.id, entityId));
+        .where(and(eq(productionSamples.id, entityId), eq(productionSamples.organizationId, ctx.organizationId)));
       if (!row) throw entityMissingError(entityType);
       return;
     }
@@ -152,6 +154,7 @@ export async function assertCanManageDocumentEntity(
         .where(
           and(
             eq(biocharProducts.id, entityId),
+            eq(biocharProducts.organizationId, ctx.organizationId),
             isNull(biocharProducts.archivedAt)
           )
         );
@@ -162,7 +165,7 @@ export async function assertCanManageDocumentEntity(
       const [row] = await db
         .select({ id: feedstocks.id })
         .from(feedstocks)
-        .where(and(eq(feedstocks.id, entityId), isNull(feedstocks.archivedAt)));
+        .where(and(eq(feedstocks.id, entityId), eq(feedstocks.organizationId, ctx.organizationId), isNull(feedstocks.archivedAt)));
       if (!row) throw entityMissingError(entityType);
       return;
     }
@@ -173,6 +176,7 @@ export async function assertCanManageDocumentEntity(
         .where(
           and(
             eq(feedstockDeliveries.id, entityId),
+            eq(feedstockDeliveries.organizationId, ctx.organizationId),
             isNull(feedstockDeliveries.archivedAt)
           )
         );
@@ -183,7 +187,7 @@ export async function assertCanManageDocumentEntity(
       const [row] = await db
         .select({ id: applications.id })
         .from(applications)
-        .where(eq(applications.id, entityId));
+        .where(and(eq(applications.id, entityId), eq(applications.organizationId, ctx.organizationId)));
       if (!row) throw entityMissingError(entityType);
       return;
     }
@@ -192,7 +196,7 @@ export async function assertCanManageDocumentEntity(
         .select({ id: creditBatches.id })
         .from(creditBatches)
         .where(
-          and(eq(creditBatches.id, entityId), isNull(creditBatches.archivedAt))
+          and(eq(creditBatches.id, entityId), eq(creditBatches.organizationId, ctx.organizationId), isNull(creditBatches.archivedAt))
         );
       if (!row) throw entityMissingError(entityType);
       return;
@@ -201,7 +205,7 @@ export async function assertCanManageDocumentEntity(
       const [row] = await db
         .select({ id: facilities.id })
         .from(facilities)
-        .where(and(eq(facilities.id, entityId), isNull(facilities.archivedAt)));
+        .where(and(eq(facilities.id, entityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)));
       if (!row) throw entityMissingError(entityType);
       return;
     }
@@ -209,7 +213,7 @@ export async function assertCanManageDocumentEntity(
       const [row] = await db
         .select({ id: reactors.id })
         .from(reactors)
-        .where(and(eq(reactors.id, entityId), isNull(reactors.archivedAt)));
+        .where(and(eq(reactors.id, entityId), eq(reactors.organizationId, ctx.organizationId), isNull(reactors.archivedAt)));
       if (!row) throw entityMissingError(entityType);
       return;
     }
@@ -217,7 +221,7 @@ export async function assertCanManageDocumentEntity(
       const [row] = await db
         .select({ id: orders.id })
         .from(orders)
-        .where(and(eq(orders.id, entityId), isNull(orders.archivedAt)));
+        .where(and(eq(orders.id, entityId), eq(orders.organizationId, ctx.organizationId), isNull(orders.archivedAt)));
       if (!row) throw entityMissingError(entityType);
       return;
     }
@@ -225,7 +229,7 @@ export async function assertCanManageDocumentEntity(
       const [row] = await db
         .select({ id: transportLegs.id })
         .from(transportLegs)
-        .where(eq(transportLegs.id, entityId));
+        .where(and(eq(transportLegs.id, entityId), eq(transportLegs.organizationId, ctx.organizationId)));
       if (!row) throw entityMissingError(entityType);
       return;
     }
@@ -233,12 +237,13 @@ export async function assertCanManageDocumentEntity(
 }
 
 async function assertRemovalExistsForDocumentLookup(
+  ctx: OrgContext,
   removalId: string
 ): Promise<void> {
   const [row] = await db
     .select({ id: certifierRemovals.id })
     .from(certifierRemovals)
-    .where(eq(certifierRemovals.id, removalId))
+    .where(and(eq(certifierRemovals.id, removalId), eq(certifierRemovals.organizationId, ctx.organizationId)))
     .limit(1);
 
   if (!row) {
@@ -247,32 +252,32 @@ async function assertRemovalExistsForDocumentLookup(
 }
 
 export async function listDocumentsForEntity(
-  userId: string,
+  ctx: OrgContext,
   entityType: string,
   entityId: string
 ): Promise<DocumentRow[]> {
-  requireAuth(userId);
-  await assertCanManageDocumentEntity(userId, entityType, entityId);
+  requireOrgScope(ctx);
+  await assertCanManageDocumentEntity(ctx, entityType, entityId);
   return db
     .select()
     .from(documents)
     .where(
-      and(eq(documents.entityType, entityType), eq(documents.entityId, entityId))
+      and(eq(documents.organizationId, ctx.organizationId), eq(documents.entityType, entityType), eq(documents.entityId, entityId))
     )
     .orderBy(desc(documents.createdAt))
     .limit(MAX_DOCUMENTS_PER_ENTITY);
 }
 
 export async function listDocumentsForEntityIds(
-  userId: string,
+  ctx: OrgContext,
   entityType: string,
   entityIds: string[],
 ): Promise<DocumentRow[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   if (entityIds.length === 0) return [];
   await Promise.all(
     entityIds.map((entityId) =>
-      assertCanManageDocumentEntity(userId, entityType, entityId)
+      assertCanManageDocumentEntity(ctx, entityType, entityId)
     )
   );
 
@@ -289,6 +294,7 @@ export async function listDocumentsForEntityIds(
       and(
         eq(documents.entityType, entityType),
         inArray(documents.entityId, entityIds),
+        eq(documents.organizationId, ctx.organizationId),
       ),
     )
     .as("ranked_documents");
@@ -296,6 +302,7 @@ export async function listDocumentsForEntityIds(
   return db
     .select({
       id: rankedDocuments.id,
+      organizationId: rankedDocuments.organizationId,
       entityType: rankedDocuments.entityType,
       entityId: rankedDocuments.entityId,
       documentType: rankedDocuments.documentType,
@@ -332,18 +339,19 @@ export async function listDocumentsForEntityIds(
  * auto-generated ledger document domain instead of matching metadata alone.
  */
 export async function listDocumentsByKindForRemoval(
-  userId: string,
+  ctx: OrgContext,
   kind: string,
   removalId: string
 ): Promise<DocumentRow[]> {
-  requireAuth(userId);
-  await assertRemovalExistsForDocumentLookup(removalId);
+  requireOrgScope(ctx);
+  await assertRemovalExistsForDocumentLookup(ctx, removalId);
   return db
     .select()
     .from(documents)
     .where(
       and(
         eq(documents.entityType, TRANSPORT_LEDGER_DOCUMENT_ENTITY_TYPE),
+        eq(documents.organizationId, ctx.organizationId),
         eq(documents.documentType, TRANSPORT_LEDGER_DOCUMENT_TYPE),
         sql`${documents.metadata} ->> 'kind' = ${kind}`,
         sql`${documents.metadata} ->> 'removalId' = ${removalId}`
@@ -354,11 +362,11 @@ export async function listDocumentsByKindForRemoval(
 }
 
 export async function getDocumentById(
-  userId: string,
+  ctx: OrgContext,
   id: string
 ): Promise<DocumentRow | null> {
-  requireAuth(userId);
-  const [row] = await db.select().from(documents).where(eq(documents.id, id));
+  requireOrgScope(ctx);
+  const [row] = await db.select().from(documents).where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)));
   return row ?? null;
 }
 
@@ -378,36 +386,36 @@ export async function getPublicDocumentById(
 }
 
 export async function insertDocument(
-  userId: string,
-  input: NewDocumentRow
+  ctx: OrgContext,
+  input: Omit<NewDocumentRow, "organizationId">
 ): Promise<DocumentRow> {
-  requireAuth(userId);
-  const [row] = await db.insert(documents).values(input).returning();
+  requireOrgScope(ctx);
+  const [row] = await db.insert(documents).values({ ...input, organizationId: ctx.organizationId }).returning();
   return row;
 }
 
 export async function updateDocument(
-  userId: string,
+  ctx: OrgContext,
   id: string,
-  patch: Partial<NewDocumentRow>
+  patch: Partial<Omit<NewDocumentRow, "organizationId">>
 ): Promise<DocumentRow | null> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const [row] = await db
     .update(documents)
     .set({ ...patch, updatedAt: new Date() })
-    .where(eq(documents.id, id))
+    .where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)))
     .returning();
   return row ?? null;
 }
 
 export async function deleteDocumentRow(
-  userId: string,
+  ctx: OrgContext,
   id: string
 ): Promise<DocumentRow | null> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const [row] = await db
     .delete(documents)
-    .where(eq(documents.id, id))
+    .where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)))
     .returning();
   return row ?? null;
 }

@@ -28,9 +28,9 @@ export async function getChainOfCustodyFn(
   applicationId: string
 ): Promise<ActionResult<ChainOfCustodyData>> {
   return withAction(
-    async (userId) => {
+    async (ctx) => {
       const validatedApplicationId = applicationIdSchema.parse(applicationId);
-      return getChainOfCustodyData(userId, validatedApplicationId);
+      return getChainOfCustodyData(ctx, validatedApplicationId);
     },
     {
       zodErrorPrefix: "Invalid application ID",
@@ -43,9 +43,9 @@ export async function getChainOfCustodyGeoFn(
   applicationId: string
 ): Promise<ActionResult<ChainOfCustodyGeoData>> {
   return withAction(
-    async (userId) => {
+    async (ctx) => {
       const validatedApplicationId = applicationIdSchema.parse(applicationId);
-      return getChainOfCustodyGeoData(userId, validatedApplicationId);
+      return getChainOfCustodyGeoData(ctx, validatedApplicationId);
     },
     {
       zodErrorPrefix: "Invalid application ID",
@@ -58,9 +58,9 @@ export async function getCreditBatchChainFn(
   creditBatchId: string
 ): Promise<ActionResult<CreditBatchChainData>> {
   return withAction(
-    async (userId) => {
+    async (ctx) => {
       const validatedId = creditBatchIdSchema.parse(creditBatchId);
-      return getCreditBatchChainData(userId, validatedId);
+      return getCreditBatchChainData(ctx, validatedId);
     },
     {
       zodErrorPrefix: "Invalid credit batch ID",
@@ -73,9 +73,9 @@ export async function getCreditBatchChainGeoFn(
   creditBatchId: string
 ): Promise<ActionResult<ChainOfCustodyGeoData>> {
   return withAction(
-    async (userId) => {
+    async (ctx) => {
       const validatedId = creditBatchIdSchema.parse(creditBatchId);
-      return getCreditBatchChainGeoData(userId, validatedId);
+      return getCreditBatchChainGeoData(ctx, validatedId);
     },
     {
       zodErrorPrefix: "Invalid credit batch ID",
@@ -88,9 +88,9 @@ export async function getApplicationTrailFn(
   applicationId: string
 ): Promise<ActionResult<ApplicationTrailEvidence>> {
   return withAction(
-    async (userId) => {
+    async (ctx) => {
       const validatedApplicationId = applicationIdSchema.parse(applicationId);
-      return getApplicationTrailEvidence(userId, validatedApplicationId);
+      return getApplicationTrailEvidence(ctx, validatedApplicationId);
     },
     {
       zodErrorPrefix: "Invalid application ID",

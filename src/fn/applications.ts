@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { ActionResult } from "@/types/actions";
 import { type Application, applications } from "@/db/schema/application";
 import { withAutoCode } from "@/data-access/code-generator";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import {
   getApplications as getApplicationsData,
   getApplicationById,
@@ -46,13 +46,10 @@ export async function getApplicationsFn(
   options?: { page?: number; pageSize?: number; facilityId?: string }
 ): Promise<ActionResult<{ items: ApplicationListItem[]; total: number; page: number; pageSize: number; totalPages: number }>> {
   try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validatedOptions = getApplicationsOptionsSchema.parse(options);
-    const result = await getApplicationsData(user.id, validatedOptions);
+    const result = await getApplicationsData(ctx, validatedOptions);
     return { success: true, data: result };
   } catch (error) {
     return {
@@ -70,15 +67,12 @@ export async function getApplicationDeliveryOptionsFn(
   facilityId?: string
 ): Promise<ActionResult<Awaited<ReturnType<typeof getApplicationDeliveryOptionsData>>>> {
   try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validatedFacilityId = facilityId
       ? z.string().uuid().parse(facilityId)
       : undefined;
-    const deliveries = await getApplicationDeliveryOptionsData(user.id, validatedFacilityId);
+    const deliveries = await getApplicationDeliveryOptionsData(ctx, validatedFacilityId);
     return { success: true, data: deliveries };
   } catch (error) {
     return {
@@ -99,12 +93,9 @@ export async function getApplicationByIdFn(
   id: string
 ): Promise<ActionResult<Application>> {
   try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const application = await getApplicationById(user.id, id);
+    const application = await getApplicationById(ctx, id);
     if (!application) {
       return { success: false, error: "Application not found" };
     }
@@ -129,19 +120,17 @@ export async function createApplicationFn(
   data: z.infer<typeof createApplicationSchema>
 ): Promise<ActionResult<Application>> {
   try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = createApplicationSchema.parse(data);
 
     const application = await withAutoCode(
+      ctx,
       "AP",
       applications,
       applications.code,
       undefined,
-      (code) => createApplicationData(user.id, { ...validated, code })
+      (code) => createApplicationData(ctx, { ...validated, code })
     );
 
     return { success: true, data: application };
@@ -170,23 +159,20 @@ export async function updateApplicationFn(
   data: z.infer<typeof updateApplicationSchema>
 ): Promise<ActionResult<Application>> {
   try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = updateApplicationSchema.parse(data);
     const { applicationId, ...updateData } = validated;
 
     // Check application exists
-    const existing = await getApplicationById(user.id, applicationId);
+    const existing = await getApplicationById(ctx, applicationId);
     if (!existing) {
       return { success: false, error: "Application not found" };
     }
 
     // Check for duplicate code if code is being updated
     if (updateData.code && updateData.code !== existing.code) {
-      const codeExists = await applicationCodeExists(user.id, updateData.code, applicationId);
+      const codeExists = await applicationCodeExists(ctx, updateData.code, applicationId);
       if (codeExists) {
         return {
           success: false,
@@ -195,7 +181,7 @@ export async function updateApplicationFn(
       }
     }
 
-    const application = await updateApplicationData(user.id, applicationId, updateData);
+    const application = await updateApplicationData(ctx, applicationId, updateData);
     return { success: true, data: application };
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -222,20 +208,17 @@ export async function deleteApplicationFn(
   data: z.infer<typeof deleteApplicationSchema>
 ): Promise<ActionResult<void>> {
   try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = deleteApplicationSchema.parse(data);
 
     // Check application exists
-    const existing = await getApplicationById(user.id, validated.applicationId);
+    const existing = await getApplicationById(ctx, validated.applicationId);
     if (!existing) {
       return { success: false, error: "Application not found" };
     }
 
-    await deleteApplicationData(user.id, validated.applicationId);
+    await deleteApplicationData(ctx, validated.applicationId);
     return { success: true, data: undefined };
   } catch (error) {
     if (error instanceof z.ZodError) {

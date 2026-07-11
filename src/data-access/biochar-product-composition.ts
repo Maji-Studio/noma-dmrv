@@ -8,8 +8,9 @@
  * to keep that file under the 1000-line cap.
  */
 
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
+import type { OrgContext } from "@/lib/auth/server";
 import {
   formulationIngredients,
   storageLocations,
@@ -57,6 +58,7 @@ function getCompositionIngredientRefs(
 }
 
 export async function validateCompositionIngredientBins(
+  ctx: OrgContext,
   tx: Pick<typeof db, "select">,
   composition: Record<string, unknown> | null | undefined,
   formulationId: string | null,
@@ -78,7 +80,10 @@ export async function validateCompositionIngredientBins(
         feedstockTypeId: formulationIngredients.feedstockTypeId,
       })
       .from(formulationIngredients)
-      .where(inArray(formulationIngredients.id, ingredientIds));
+      .where(and(
+        inArray(formulationIngredients.id, ingredientIds),
+        eq(formulationIngredients.organizationId, ctx.organizationId),
+      ));
     const ingredientById = new Map(
       ingredientRows.map((row) => [row.id, row]),
     );
@@ -144,8 +149,14 @@ export async function validateCompositionIngredientBins(
       feedstockTypeUsage: feedstockTypes.usage,
     })
     .from(storageLocations)
-    .leftJoin(feedstockTypes, eq(storageLocations.feedstockTypeId, feedstockTypes.id))
-    .where(inArray(storageLocations.id, storageLocationIds));
+    .leftJoin(feedstockTypes, and(
+      eq(storageLocations.feedstockTypeId, feedstockTypes.id),
+      eq(feedstockTypes.organizationId, ctx.organizationId),
+    ))
+    .where(and(
+      inArray(storageLocations.id, storageLocationIds),
+      eq(storageLocations.organizationId, ctx.organizationId),
+    ));
 
   if (bins.length !== storageLocationIds.length) {
     throw new SafeError("Feedstock bin not found");

@@ -13,6 +13,7 @@
  * `use-chain-graph.ts`) so the Trail cross-links with every other reading.
  */
 import { and, desc, eq, inArray, or, type SQL } from "drizzle-orm";
+import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import { documents } from "@/db/schema";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
@@ -20,7 +21,7 @@ import type { DocumentEntityType } from "@/schemas/documents";
 import { getChainOfCustodyData } from "./chain-of-custody";
 import { getProductionSamples } from "./production-samples";
 import { getTransportLegsForEntities } from "./transport-legs";
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 
 /**
  * Hard cap across one application's full evidence sweep — a guardrail against
@@ -78,6 +79,7 @@ type DocumentRowLean = TrailDocument & {
 };
 
 async function listDocumentsForScopes(
+  ctx: OrgContext,
   scopes: DocumentScope[],
 ): Promise<DocumentRowLean[]> {
   const conditions: SQL[] = [];
@@ -104,7 +106,7 @@ async function listDocumentsForScopes(
       createdAt: documents.createdAt,
     })
     .from(documents)
-    .where(and(eq(documents.uploadStatus, "uploaded"), or(...conditions)))
+    .where(and(eq(documents.organizationId, ctx.organizationId), eq(documents.uploadStatus, "uploaded"), or(...conditions)))
     .orderBy(desc(documents.createdAt))
     .limit(MAX_TRAIL_DOCUMENTS);
 }
@@ -121,31 +123,31 @@ function toTrailDocument(row: DocumentRowLean): TrailDocument {
 }
 
 export async function getApplicationTrailEvidence(
-  userId: string,
+  ctx: OrgContext,
   applicationId: string,
 ): Promise<ApplicationTrailEvidence> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const chain = await getChainOfCustodyData(userId, applicationId);
+  const chain = await getChainOfCustodyData(ctx, applicationId);
 
   const feedstockIds = chain.feedstocks.map((feedstock) => feedstock.id);
   const productionRunId = chain.productionRun?.id ?? null;
   const biocharProductId = chain.biocharProduct?.id ?? null;
 
   const [feedstockLegs, biocharLegs, samples] = await Promise.all([
-    getTransportLegsForEntities(userId, "feedstock", feedstockIds),
+    getTransportLegsForEntities(ctx, "feedstock", feedstockIds),
     getTransportLegsForEntities(
-      userId,
+      ctx,
       "biochar",
       biocharProductId ? [biocharProductId] : [],
     ),
     productionRunId
-      ? getProductionSamples(userId, productionRunId)
+      ? getProductionSamples(ctx, productionRunId)
       : Promise.resolve([]),
   ]);
 
   const allLegs = [...feedstockLegs, ...biocharLegs];
-  const documentRows = await listDocumentsForScopes([
+  const documentRows = await listDocumentsForScopes(ctx, [
     { entityType: "feedstock", entityIds: feedstockIds },
     {
       entityType: "production_run",

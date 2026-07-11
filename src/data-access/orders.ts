@@ -4,6 +4,7 @@
  */
 
 import { and, asc, desc, eq, gte, ilike, isNull, lte, sql, SQL, count } from "drizzle-orm";
+import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
   orders,
@@ -79,7 +80,7 @@ export interface OrderDetail extends Order {
 // Auth Guards
 // ============================================
 
-import { requireAuth } from "./utils";
+import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 
@@ -92,10 +93,10 @@ import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards"
  * Supports search, facility filter, customer filter, status filter, sorting, and pagination
  */
 export async function getOrders(
-  userId: string,
+  ctx: OrgContext,
   filters?: Partial<OrderFilterData>
 ): Promise<PaginatedOrders> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const {
     search,
@@ -122,7 +123,10 @@ export async function getOrders(
         ),
     })
     .from(deliveries)
-    .where(isNull(deliveries.archivedAt))
+    .where(and(
+      isNull(deliveries.archivedAt),
+      eq(deliveries.organizationId, ctx.organizationId),
+    ))
     .groupBy(deliveries.orderId)
     .as("delivery_agg");
 
@@ -137,7 +141,10 @@ export async function getOrders(
   `;
 
   // Build where conditions — archived orders (facility archive cascade) are hidden
-  const conditions: SQL[] = [isNull(orders.archivedAt)];
+  const conditions: SQL[] = [
+    eq(orders.organizationId, ctx.organizationId),
+    isNull(orders.archivedAt),
+  ];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -193,6 +200,7 @@ export async function getOrders(
   const orderList = await db
     .select({
       id: orders.id,
+      organizationId: orders.organizationId,
       code: orders.code,
       facilityId: orders.facilityId,
       customerId: orders.customerId,
@@ -214,10 +222,10 @@ export async function getOrders(
       deliveredCount: sql<number>`coalesce(${deliveryAgg.delivered}, 0)`,
     })
     .from(orders)
-    .leftJoin(facilities, eq(orders.facilityId, facilities.id))
-    .leftJoin(customers, eq(orders.customerId, customers.id))
-    .leftJoin(customerLocations, eq(orders.customerLocationId, customerLocations.id))
-    .leftJoin(biocharProducts, eq(orders.biocharProductId, biocharProducts.id))
+    .leftJoin(facilities, and(eq(orders.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(customers, and(eq(orders.customerId, customers.id), eq(customers.organizationId, ctx.organizationId)))
+    .leftJoin(customerLocations, and(eq(orders.customerLocationId, customerLocations.id), eq(customerLocations.organizationId, ctx.organizationId)))
+    .leftJoin(biocharProducts, and(eq(orders.biocharProductId, biocharProducts.id), eq(biocharProducts.organizationId, ctx.organizationId)))
     .leftJoin(deliveryAgg, eq(orders.id, deliveryAgg.orderId))
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
@@ -249,15 +257,15 @@ export async function getOrders(
  * Get a single order by ID
  */
 export async function getOrderById(
-  userId: string,
+  ctx: OrgContext,
   orderId: string
 ): Promise<Order> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [order] = await db
     .select()
     .from(orders)
-    .where(eq(orders.id, orderId));
+    .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
 
   if (!order) {
     throw new SafeError("Order not found");
@@ -270,15 +278,16 @@ export async function getOrderById(
  * Get a single order with all its relationships
  */
 export async function getOrderWithRelations(
-  userId: string,
+  ctx: OrgContext,
   orderId: string
 ): Promise<OrderDetail> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Get order with related data
   const [orderRow] = await db
     .select({
       id: orders.id,
+      organizationId: orders.organizationId,
       code: orders.code,
       facilityId: orders.facilityId,
       customerId: orders.customerId,
@@ -300,11 +309,11 @@ export async function getOrderWithRelations(
       biocharProductCode: biocharProducts.code,
     })
     .from(orders)
-    .leftJoin(facilities, eq(orders.facilityId, facilities.id))
-    .leftJoin(customers, eq(orders.customerId, customers.id))
-    .leftJoin(customerLocations, eq(orders.customerLocationId, customerLocations.id))
-    .leftJoin(biocharProducts, eq(orders.biocharProductId, biocharProducts.id))
-    .where(eq(orders.id, orderId));
+    .leftJoin(facilities, and(eq(orders.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(customers, and(eq(orders.customerId, customers.id), eq(customers.organizationId, ctx.organizationId)))
+    .leftJoin(customerLocations, and(eq(orders.customerLocationId, customerLocations.id), eq(customerLocations.organizationId, ctx.organizationId)))
+    .leftJoin(biocharProducts, and(eq(orders.biocharProductId, biocharProducts.id), eq(biocharProducts.organizationId, ctx.organizationId)))
+    .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
 
   if (!orderRow) {
     throw new SafeError("Order not found");
@@ -321,11 +330,12 @@ export async function getOrderWithRelations(
       massDryKg: deliveries.massDryKg,
     })
     .from(deliveries)
-    .where(eq(deliveries.orderId, orderId))
+    .where(and(eq(deliveries.orderId, orderId), eq(deliveries.organizationId, ctx.organizationId)))
     .orderBy(desc(deliveries.deliveryDate));
 
   return {
     id: orderRow.id,
+    organizationId: orderRow.organizationId,
     code: orderRow.code,
     facilityId: orderRow.facilityId,
     customerId: orderRow.customerId,
@@ -373,7 +383,7 @@ export async function getOrderWithRelations(
  * Get orders for dropdown selection
  */
 export async function getOrdersForSelect(
-  userId: string,
+  ctx: OrgContext,
   facilityId?: string
 ): Promise<
   Array<{
@@ -394,9 +404,9 @@ export async function getOrdersForSelect(
     destinationDistanceSource: DistanceSourceValue | null;
   }>
 > {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [isNull(orders.archivedAt)];
+  const conditions: SQL[] = [eq(orders.organizationId, ctx.organizationId), isNull(orders.archivedAt)];
   if (facilityId) {
     conditions.push(eq(orders.facilityId, facilityId));
   }
@@ -417,9 +427,9 @@ export async function getOrdersForSelect(
       destinationDistanceSource: customerLocations.distanceSource,
     })
     .from(orders)
-    .leftJoin(customers, eq(orders.customerId, customers.id))
-    .leftJoin(biocharProducts, eq(orders.biocharProductId, biocharProducts.id))
-    .leftJoin(customerLocations, eq(orders.customerLocationId, customerLocations.id))
+    .leftJoin(customers, and(eq(orders.customerId, customers.id), eq(customers.organizationId, ctx.organizationId)))
+    .leftJoin(biocharProducts, and(eq(orders.biocharProductId, biocharProducts.id), eq(biocharProducts.organizationId, ctx.organizationId)))
+    .leftJoin(customerLocations, and(eq(orders.customerLocationId, customerLocations.id), eq(customerLocations.organizationId, ctx.organizationId)))
     .where(whereClause)
     .orderBy(desc(orders.orderDate));
 }
@@ -429,6 +439,7 @@ export async function getOrdersForSelect(
 // ============================================
 
 async function validateCustomerLocationBelongsToCustomer(
+  ctx: OrgContext,
   customerId: string,
   customerLocationId: string | null | undefined
 ): Promise<void> {
@@ -437,7 +448,10 @@ async function validateCustomerLocationBelongsToCustomer(
   const [location] = await db
     .select({ customerId: customerLocations.customerId })
     .from(customerLocations)
-    .where(eq(customerLocations.id, customerLocationId));
+    .where(and(
+      eq(customerLocations.id, customerLocationId),
+      eq(customerLocations.organizationId, ctx.organizationId),
+    ));
 
   if (!location) {
     throw new SafeError("Customer location not found");
@@ -452,7 +466,7 @@ async function validateCustomerLocationBelongsToCustomer(
  * Create a new order
  */
 export async function createOrder(
-  userId: string,
+  ctx: OrgContext,
   data: {
     code: string;
     facilityId: string;
@@ -466,13 +480,13 @@ export async function createOrder(
     currency?: string;
   }
 ): Promise<Order> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Check for duplicate code
   const [existing] = await db
     .select({ id: orders.id })
     .from(orders)
-    .where(eq(orders.code, data.code));
+    .where(and(eq(orders.code, data.code), eq(orders.organizationId, ctx.organizationId)));
 
   if (existing) {
     throw new SafeError("An order with this code already exists");
@@ -481,7 +495,7 @@ export async function createOrder(
   const [product] = await db
     .select({ facilityId: biocharProducts.facilityId })
     .from(biocharProducts)
-    .where(eq(biocharProducts.id, data.biocharProductId));
+    .where(and(eq(biocharProducts.id, data.biocharProductId), eq(biocharProducts.organizationId, ctx.organizationId)));
 
   if (!product) {
     throw new SafeError("Biochar product not found");
@@ -491,7 +505,9 @@ export async function createOrder(
     throw new SafeError("Biochar product belongs to a different facility");
   }
 
+  await assertSameOrg(ctx, customers, data.customerId);
   await validateCustomerLocationBelongsToCustomer(
+    ctx,
     data.customerId,
     data.customerLocationId
   );
@@ -500,6 +516,7 @@ export async function createOrder(
     const [order] = await db
       .insert(orders)
       .values({
+        organizationId: ctx.organizationId,
         code: data.code,
         facilityId: data.facilityId,
         customerId: data.customerId,
@@ -530,7 +547,7 @@ export async function createOrder(
  * Update an existing order
  */
 export async function updateOrder(
-  userId: string,
+  ctx: OrgContext,
   orderId: string,
   data: {
     code?: string;
@@ -545,13 +562,13 @@ export async function updateOrder(
     currency?: string;
   }
 ): Promise<Order> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify order exists
   const [existing] = await db
     .select()
     .from(orders)
-    .where(eq(orders.id, orderId));
+    .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Order not found");
@@ -562,7 +579,7 @@ export async function updateOrder(
     const [duplicate] = await db
       .select({ id: orders.id })
       .from(orders)
-      .where(eq(orders.code, data.code));
+      .where(and(eq(orders.code, data.code), eq(orders.organizationId, ctx.organizationId)));
 
     if (duplicate) {
       throw new SafeError("An order with this code already exists");
@@ -584,7 +601,7 @@ export async function updateOrder(
     const [product] = await db
       .select({ facilityId: biocharProducts.facilityId })
       .from(biocharProducts)
-      .where(eq(biocharProducts.id, effectiveProductId));
+      .where(and(eq(biocharProducts.id, effectiveProductId), eq(biocharProducts.organizationId, ctx.organizationId)));
 
     if (!product) {
       throw new SafeError("Biochar product not found");
@@ -596,7 +613,9 @@ export async function updateOrder(
   }
 
   if (data.customerId !== undefined || data.customerLocationId !== undefined) {
+    await assertSameOrg(ctx, customers, effectiveCustomerId);
     await validateCustomerLocationBelongsToCustomer(
+      ctx,
       effectiveCustomerId,
       effectiveCustomerLocationId
     );
@@ -615,7 +634,7 @@ export async function updateOrder(
         ...data,
         updatedAt: new Date(),
       })
-      .where(eq(orders.id, orderId))
+      .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)))
       .returning();
     return row;
   });
@@ -632,16 +651,16 @@ export async function updateOrder(
  * Will fail if order has associated deliveries
  */
 export async function deleteOrder(
-  userId: string,
+  ctx: OrgContext,
   orderId: string
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify order exists
   const [existing] = await db
     .select({ id: orders.id })
     .from(orders)
-    .where(eq(orders.id, orderId));
+    .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Order not found");
@@ -658,7 +677,7 @@ export async function deleteOrder(
     const [deliveryCount] = await tx
       .select({ count: count() })
       .from(deliveries)
-      .where(eq(deliveries.orderId, orderId));
+      .where(and(eq(deliveries.orderId, orderId), eq(deliveries.organizationId, ctx.organizationId)));
 
     if (Number(deliveryCount.count) > 0) {
       throw new SafeError(
@@ -666,7 +685,7 @@ export async function deleteOrder(
       );
     }
 
-    await tx.delete(orders).where(eq(orders.id, orderId));
+    await tx.delete(orders).where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
   });
 }
 
@@ -678,13 +697,13 @@ export async function deleteOrder(
  * Check if an order code is available
  */
 export async function isOrderCodeAvailable(
-  userId: string,
+  ctx: OrgContext,
   code: string,
   excludeOrderId?: string
 ): Promise<boolean> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [eq(orders.code, code)];
+  const conditions: SQL[] = [eq(orders.organizationId, ctx.organizationId), eq(orders.code, code)];
 
   if (excludeOrderId) {
     conditions.push(sql`${orders.id} != ${excludeOrderId}`);

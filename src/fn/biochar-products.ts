@@ -18,7 +18,7 @@ import {
   type PaginatedBiocharProducts,
   type BiocharProductWithRelations,
 } from "@/data-access/biochar-products";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import {
   createBiocharProductSchema,
   deleteBiocharProductSchema,
@@ -53,15 +53,12 @@ export async function getBiocharProductsFn(
   filters?: Partial<z.infer<typeof biocharProductFilterSchema>>
 ): Promise<ActionResult<PaginatedBiocharProducts>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validatedFilters = filters
       ? biocharProductFilterSchema.parse(filters)
       : undefined;
-    const products = await getBiocharProductsData(user.id, validatedFilters);
+    const products = await getBiocharProductsData(ctx, validatedFilters);
 
     return { success: true, data: products };
   } catch (error) {
@@ -89,12 +86,9 @@ export async function getBiocharProductByIdFn(
   productId: string
 ): Promise<ActionResult<BiocharProductWithRelations>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const product = await getBiocharProductByIdData(user.id, productId);
+    const product = await getBiocharProductByIdData(ctx, productId);
     return { success: true, data: product };
   } catch (error) {
     return {
@@ -115,12 +109,9 @@ export async function getBiocharProductOptionsFn(): Promise<
   ActionResult<Array<{ id: string; code: string }>>
 > {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const options = await getBiocharProductOptionsData(user.id);
+    const options = await getBiocharProductOptionsData(ctx);
     return { success: true, data: options };
   } catch (error) {
     return {
@@ -142,13 +133,10 @@ export async function checkBiocharProductCodeFn(
   excludeProductId?: string
 ): Promise<ActionResult<{ available: boolean }>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const available = await isBiocharProductCodeAvailableData(
-      user.id,
+      ctx,
       code,
       excludeProductId
     );
@@ -176,22 +164,20 @@ export async function createBiocharProductFn(
   data: z.infer<typeof createBiocharProductSchema>
 ): Promise<ActionResult<BiocharProduct>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = createBiocharProductSchema.parse(data);
 
     const composition = toCompositionJsonb(validated.ingredientBins, { mode: "create" });
 
     const product = await withAutoCode(
+      ctx,
       "BP",
       biocharProducts,
       biocharProducts.code,
       undefined,
       (code) =>
-        createBiocharProduct(user.id, {
+        createBiocharProduct(ctx, {
           code,
           facilityId: validated.facilityId,
           formulationId: validated.formulationId ?? null,
@@ -236,16 +222,13 @@ export async function updateBiocharProductFn(
   data: z.infer<typeof updateBiocharProductSchema>
 ): Promise<ActionResult<BiocharProduct>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = updateBiocharProductSchema.parse(data);
 
     const composition = toCompositionJsonb(validated.ingredientBins, { mode: "update" });
 
-    const product = await updateBiocharProduct(user.id, validated.productId, {
+    const product = await updateBiocharProduct(ctx, validated.productId, {
       code: validated.code,
       facilityId: validated.facilityId,
       formulationId: validated.formulationId,
@@ -289,13 +272,10 @@ export async function deleteBiocharProductFn(
   data: z.infer<typeof deleteBiocharProductSchema>
 ): Promise<ActionResult<void>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = deleteBiocharProductSchema.parse(data);
-    await deleteBiocharProduct(user.id, validated.productId);
+    await deleteBiocharProduct(ctx, validated.productId);
 
     return { success: true, data: undefined };
   } catch (error) {

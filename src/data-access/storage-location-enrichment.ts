@@ -361,7 +361,7 @@ export async function enrichStorageLocationRows(
           WHERE storage_location_id IS NOT NULL
           ORDER BY storage_location_id, created_at DESC
         `),
-        getBinMovementLaneSums(ctx.userId, storageLocationIds),
+        getBinMovementLaneSums(ctx, storageLocationIds),
       ])
     : [
         [],

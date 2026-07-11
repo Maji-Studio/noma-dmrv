@@ -4,6 +4,7 @@
  */
 
 import { and, asc, desc, eq, ilike, inArray, or, sql, SQL, count } from "drizzle-orm";
+import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
   feedstockTypes,
@@ -50,10 +51,10 @@ export type IngredientInput = {
 // Auth Guards
 // ============================================
 
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 
-async function assertBlendFeedstockTypes(ingredients?: IngredientInput[]) {
+async function assertBlendFeedstockTypes(ctx: OrgContext, ingredients?: IngredientInput[]) {
   const feedstockTypeIds = [
     ...new Set((ingredients ?? []).map((ingredient) => ingredient.feedstockTypeId)),
   ];
@@ -65,7 +66,10 @@ async function assertBlendFeedstockTypes(ingredients?: IngredientInput[]) {
       usage: feedstockTypes.usage,
     })
     .from(feedstockTypes)
-    .where(inArray(feedstockTypes.id, feedstockTypeIds));
+    .where(and(
+      inArray(feedstockTypes.id, feedstockTypeIds),
+      eq(feedstockTypes.organizationId, ctx.organizationId),
+    ));
 
   if (rows.length !== feedstockTypeIds.length) {
     const returnedIds = new Set(rows.map((row) => row.id));
@@ -102,10 +106,10 @@ function assertRatioSumWithinBounds(
  * Includes ingredient data for each formulation
  */
 export async function getFormulations(
-  userId: string,
+  ctx: OrgContext,
   filters?: Partial<FormulationFilterData>
 ): Promise<PaginatedFormulations> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const {
     search,
@@ -116,7 +120,7 @@ export async function getFormulations(
   } = filters ?? {};
 
   // Build where conditions
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [eq(formulations.organizationId, ctx.organizationId)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -157,6 +161,7 @@ export async function getFormulations(
       offset,
       with: {
         ingredients: {
+          where: eq(formulationIngredients.organizationId, ctx.organizationId),
           orderBy: [asc(formulationIngredients.sortOrder)],
           with: {
             feedstockType: true,
@@ -182,15 +187,19 @@ export async function getFormulations(
  * Get a single formulation by ID with ingredients
  */
 export async function getFormulationById(
-  userId: string,
+  ctx: OrgContext,
   formulationId: string
 ): Promise<FormulationWithIngredients> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const formulation = await db.query.formulations.findFirst({
-    where: eq(formulations.id, formulationId),
+    where: and(
+      eq(formulations.id, formulationId),
+      eq(formulations.organizationId, ctx.organizationId),
+    ),
     with: {
       ingredients: {
+        where: eq(formulationIngredients.organizationId, ctx.organizationId),
         orderBy: [asc(formulationIngredients.sortOrder)],
         with: {
           feedstockType: true,
@@ -214,7 +223,7 @@ export async function getFormulationById(
  * Create a new formulation with optional ingredients (transactional)
  */
 export async function createFormulation(
-  userId: string,
+  ctx: OrgContext,
   data: {
     code: string;
     name: string;
@@ -223,25 +232,29 @@ export async function createFormulation(
     ingredients?: IngredientInput[];
   }
 ): Promise<FormulationWithIngredients> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Check for duplicate code
   const [existing] = await db
     .select({ id: formulations.id })
     .from(formulations)
-    .where(eq(formulations.code, data.code));
+    .where(and(
+      eq(formulations.code, data.code),
+      eq(formulations.organizationId, ctx.organizationId),
+    ));
 
   if (existing) {
     throw new SafeError("A formulation with this code already exists");
   }
 
-  await assertBlendFeedstockTypes(data.ingredients);
+  await assertBlendFeedstockTypes(ctx, data.ingredients);
   assertRatioSumWithinBounds(data.biocharRatio, data.ingredients);
 
   return db.transaction(async (tx) => {
     const [formulation] = await tx
       .insert(formulations)
       .values({
+        organizationId: ctx.organizationId,
         code: data.code,
         name: data.name,
         biocharRatio: data.biocharRatio ?? null,
@@ -256,6 +269,7 @@ export async function createFormulation(
         .insert(formulationIngredients)
         .values(
           data.ingredients.map((ing, index) => ({
+            organizationId: ctx.organizationId,
             formulationId: formulation.id,
             feedstockTypeId: ing.feedstockTypeId,
             ratio: ing.ratio ?? null,
@@ -264,7 +278,10 @@ export async function createFormulation(
         );
 
       ingredients = await tx.query.formulationIngredients.findMany({
-        where: eq(formulationIngredients.formulationId, formulation.id),
+        where: and(
+          eq(formulationIngredients.formulationId, formulation.id),
+          eq(formulationIngredients.organizationId, ctx.organizationId),
+        ),
         orderBy: [asc(formulationIngredients.sortOrder)],
         with: {
           feedstockType: true,
@@ -284,7 +301,7 @@ export async function createFormulation(
  * Update an existing formulation with ingredients (transactional delete-and-reinsert)
  */
 export async function updateFormulation(
-  userId: string,
+  ctx: OrgContext,
   formulationId: string,
   data: {
     code?: string;
@@ -294,13 +311,16 @@ export async function updateFormulation(
     ingredients?: IngredientInput[];
   }
 ): Promise<FormulationWithIngredients> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify formulation exists
   const [existing] = await db
     .select()
     .from(formulations)
-    .where(eq(formulations.id, formulationId));
+    .where(and(
+      eq(formulations.id, formulationId),
+      eq(formulations.organizationId, ctx.organizationId),
+    ));
 
   if (!existing) {
     throw new SafeError("Formulation not found");
@@ -311,14 +331,17 @@ export async function updateFormulation(
     const [duplicate] = await db
       .select({ id: formulations.id })
       .from(formulations)
-      .where(eq(formulations.code, data.code));
+      .where(and(
+        eq(formulations.code, data.code),
+        eq(formulations.organizationId, ctx.organizationId),
+      ));
 
     if (duplicate) {
       throw new SafeError("A formulation with this code already exists");
     }
   }
 
-  await assertBlendFeedstockTypes(data.ingredients);
+  await assertBlendFeedstockTypes(ctx, data.ingredients);
 
   // Separate ingredients from formulation fields
   const { ingredients: ingredientData, ...formulationFields } = data;
@@ -331,7 +354,10 @@ export async function updateFormulation(
     const [locked] = await tx
       .select()
       .from(formulations)
-      .where(eq(formulations.id, formulationId))
+      .where(and(
+        eq(formulations.id, formulationId),
+        eq(formulations.organizationId, ctx.organizationId),
+      ))
       .for("update");
 
     if (!locked) {
@@ -349,7 +375,10 @@ export async function updateFormulation(
         : await tx
             .select({ ratio: formulationIngredients.ratio })
             .from(formulationIngredients)
-            .where(eq(formulationIngredients.formulationId, formulationId));
+            .where(and(
+              eq(formulationIngredients.formulationId, formulationId),
+              eq(formulationIngredients.organizationId, ctx.organizationId),
+            ));
     assertRatioSumWithinBounds(effectiveBiocharRatio, effectiveIngredients);
 
     const [updated] = await tx
@@ -358,7 +387,10 @@ export async function updateFormulation(
         ...formulationFields,
         updatedAt: new Date(),
       })
-      .where(eq(formulations.id, formulationId))
+      .where(and(
+        eq(formulations.id, formulationId),
+        eq(formulations.organizationId, ctx.organizationId),
+      ))
       .returning();
 
     let ingredients: FormulationIngredientWithFeedstockType[] = [];
@@ -367,13 +399,17 @@ export async function updateFormulation(
     if (ingredientData !== undefined) {
       await tx
         .delete(formulationIngredients)
-        .where(eq(formulationIngredients.formulationId, formulationId));
+        .where(and(
+          eq(formulationIngredients.formulationId, formulationId),
+          eq(formulationIngredients.organizationId, ctx.organizationId),
+        ));
 
       if (ingredientData.length > 0) {
         await tx
           .insert(formulationIngredients)
           .values(
             ingredientData.map((ing, index) => ({
+              organizationId: ctx.organizationId,
               formulationId: formulationId,
               feedstockTypeId: ing.feedstockTypeId,
               ratio: ing.ratio ?? null,
@@ -383,7 +419,10 @@ export async function updateFormulation(
       }
 
       ingredients = await tx.query.formulationIngredients.findMany({
-        where: eq(formulationIngredients.formulationId, formulationId),
+        where: and(
+          eq(formulationIngredients.formulationId, formulationId),
+          eq(formulationIngredients.organizationId, ctx.organizationId),
+        ),
         orderBy: [asc(formulationIngredients.sortOrder)],
         with: {
           feedstockType: true,
@@ -392,7 +431,10 @@ export async function updateFormulation(
     } else {
       // If ingredients not provided, fetch existing ones
       ingredients = await tx.query.formulationIngredients.findMany({
-        where: eq(formulationIngredients.formulationId, formulationId),
+        where: and(
+          eq(formulationIngredients.formulationId, formulationId),
+          eq(formulationIngredients.organizationId, ctx.organizationId),
+        ),
         orderBy: [asc(formulationIngredients.sortOrder)],
         with: {
           feedstockType: true,
@@ -413,24 +455,24 @@ export async function updateFormulation(
  * Will fail if formulation has associated biochar products
  */
 export async function deleteFormulation(
-  userId: string,
+  ctx: OrgContext,
   formulationId: string
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [existingResult, productCountResult, binCountResult] = await Promise.all([
     db
       .select({ id: formulations.id })
       .from(formulations)
-      .where(eq(formulations.id, formulationId)),
+      .where(and(eq(formulations.id, formulationId), eq(formulations.organizationId, ctx.organizationId))),
     db
       .select({ count: count() })
       .from(biocharProducts)
-      .where(eq(biocharProducts.formulationId, formulationId)),
+      .where(and(eq(biocharProducts.formulationId, formulationId), eq(biocharProducts.organizationId, ctx.organizationId))),
     db
       .select({ count: count() })
       .from(storageLocations)
-      .where(eq(storageLocations.formulationId, formulationId)),
+      .where(and(eq(storageLocations.formulationId, formulationId), eq(storageLocations.organizationId, ctx.organizationId))),
   ]);
 
   if (existingResult.length === 0) {
@@ -450,7 +492,10 @@ export async function deleteFormulation(
   }
 
   // Ingredients cascade-delete via FK onDelete: 'cascade'
-  await db.delete(formulations).where(eq(formulations.id, formulationId));
+  await db.delete(formulations).where(and(
+    eq(formulations.id, formulationId),
+    eq(formulations.organizationId, ctx.organizationId),
+  ));
 }
 
 // ============================================
@@ -461,13 +506,16 @@ export async function deleteFormulation(
  * Check if a formulation code is available
  */
 export async function isFormulationCodeAvailable(
-  userId: string,
+  ctx: OrgContext,
   code: string,
   excludeFormulationId?: string
 ): Promise<boolean> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [eq(formulations.code, code)];
+  const conditions: SQL[] = [
+    eq(formulations.organizationId, ctx.organizationId),
+    eq(formulations.code, code),
+  ];
 
   if (excludeFormulationId) {
     conditions.push(sql`${formulations.id} != ${excludeFormulationId}`);
@@ -485,9 +533,9 @@ export async function isFormulationCodeAvailable(
  * Get formulation options for dropdowns
  */
 export async function getFormulationOptions(
-  userId: string
+  ctx: OrgContext
 ): Promise<Array<{ id: string; code: string; name: string }>> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   return db
     .select({
@@ -496,5 +544,6 @@ export async function getFormulationOptions(
       name: formulations.name,
     })
     .from(formulations)
+    .where(eq(formulations.organizationId, ctx.organizationId))
     .orderBy(asc(formulations.name));
 }
