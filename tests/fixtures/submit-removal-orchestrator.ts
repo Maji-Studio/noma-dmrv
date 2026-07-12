@@ -24,6 +24,7 @@ vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-removals");
 vi.mock("@/fn/certification/certify-context-core");
+vi.mock("@/fn/certification/ensure-evidence-ledgers");
 // Phase 3.5: submitRemoval now resolves mirrored Source IDs before
 // hashing. The default-empty mock keeps the pre-Phase-3.5 assertions
 // (`source_ids: []` on every Datapoint) valid; specific Phase 3.5 tests
@@ -83,6 +84,7 @@ import * as ledgerClaim from "@/data-access/certification-submissions";
 import * as removalsDA from "@/data-access/certifier-removals";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as durabilitySamples from "@/fn/certification/durability-measurement-samples";
+import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
 import * as isometric from "@/lib/isometric";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { makeClaimSubmissionDraftFake } from "./fake-claim";
@@ -93,6 +95,7 @@ export {
   removalsDA,
   certifyContext,
   durabilitySamples,
+  evidenceLedgers,
   isometric,
   submitRemoval,
 };
@@ -443,6 +446,7 @@ export function makeContext(
       warnings: [],
     },
     ...overrides,
+    entityReadinessGaps: overrides.entityReadinessGaps ?? [],
   };
 }
 
@@ -583,6 +587,9 @@ beforeEach(() => {
   vi.mocked(ledger.appendSyncEvent).mockResolvedValue(undefined as never);
   vi.mocked(removalsDA.updateRemovalDates).mockResolvedValue(
     undefined as never,
+  );
+  vi.mocked(evidenceLedgers.ensureEvidenceLedgersFromContext).mockResolvedValue(
+    undefined,
   );
   // §8.6.2 fresh-read re-assert (production-claim-gate): after the draft
   // claim, submitRemoval re-reads the removal scope (claims + lineage

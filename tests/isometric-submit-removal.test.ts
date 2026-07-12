@@ -45,12 +45,40 @@ import * as ledger from "@/data-access/certification";
 import * as removalsDA from "@/data-access/certifier-removals";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as durabilitySamples from "@/fn/certification/durability-measurement-samples";
+import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import * as isometric from "@/lib/isometric";
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+describe("submitRemoval — entity readiness gate", () => {
+  it("blocks before submit-phase side effects", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(ORIGINAL_BIOCHAR_MASS_KG, {
+        entityReadinessGaps: [
+          "Application APP-TEST-001: Upload the application logbook",
+        ],
+      }),
+    );
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow(/entity certification readiness/i);
+
+    expect(
+      evidenceLedgers.ensureEvidenceLedgersFromContext,
+    ).not.toHaveBeenCalled();
+    // Context loading is mocked above. The gate prevents the separate client
+    // construction used by the mutation phase.
+    expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
+  });
+});
 
 describe("submitRemoval — happy path", () => {
   it("inserts a v=1 draft, POSTs one datapoint + the removal, then marks the ledger submitted", async () => {

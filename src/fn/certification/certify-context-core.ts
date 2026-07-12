@@ -155,14 +155,15 @@ export interface RemovalCertifyContext {
   // bucket on health and readiness surfaces.
   productionReadinessGap: ProductionReadinessGap | null;
   // Compact labels from the per-entity certifier-readiness layer. The raw
-  // entity rows stay server-side; Review/pre-flight only needs gap labels.
-  entityReadinessGaps?: string[];
+  // entity rows stay server-side; Review/pre-flight only needs gap labels. The
+  // submit pipeline gates on this same list, so [] means entity-ready.
+  entityReadinessGaps: string[];
   // Fail-closed durability sampling/eligibility blockers (D3) — the EXACT list
   // the submit pipeline blocks on, so readiness predicts the gate. [] ⇒ ready.
   durabilityGateBlockers: string[];
   // Non-blocking submission advisories — e.g. recorded startup/plant diesel the
   // active template has no component to carry (ADR 0015). Unlike
-  // durabilityGateBlockers / entityReadinessGaps these do NOT gate submission;
+  // durabilityGateBlockers / entityReadinessGaps, these do NOT gate submission;
   // they tell the operator a recorded value will not be submitted.
   submissionWarnings: string[];
   // Focused run aggregation (run count, total biochar output, applied dry kg)

@@ -24,6 +24,7 @@ import { certificationDetailField } from "@/lib/certification/certify-field-regi
 import { formatSafeDate, formatMass } from "@/lib/format-utils";
 import { FeedstockForm } from "./feedstock-form";
 import {
+  TransportEvidencePanel,
   TransportLegsSummary,
 } from "@/components/transport-legs";
 import {
@@ -499,10 +500,16 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         ] : undefined}
         viewModeChildren={
           sideSheetMode === "view" && sideSheetEntity ? (
-            <TransportLegsSummary
-              entityType="feedstock"
-              entityId={sideSheetEntity.id}
-            />
+            <>
+              <TransportLegsSummary
+                entityType="feedstock"
+                entityId={sideSheetEntity.id}
+              />
+              <TransportEvidencePanel
+                entityType="feedstock"
+                entityId={sideSheetEntity.id}
+              />
+            </>
           ) : null
         }
       >

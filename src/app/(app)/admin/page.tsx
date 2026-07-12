@@ -42,11 +42,11 @@ const ADMIN_TILES: AdminTile[] = [
     accent: "var(--clr-orange)",
   },
   {
-    href: "/admin/users",
+    href: "/settings/organization",
     icon: UsersIcon,
-    title: "Users",
+    title: "Organization members",
     description:
-      "Invite and manage the people with access to the MRV system.",
+      "Invite teammates and manage roles for the active organization.",
     accent: "var(--clr-purple)",
   },
 ];

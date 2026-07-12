@@ -151,6 +151,7 @@ interface CandidateRowProps {
 function CandidateRow({ removalId, candidate }: CandidateRowProps) {
   const { document, lineageEntity, mirror } = candidate;
   const isMirrored = !!mirror;
+  const isMirrorable = !!document.storageKey;
   const remoteIsPublic = mirror?.isPublic ?? false;
   const [isPublic, setIsPublic] = useState(remoteIsPublic);
   // Sync local toggle when the candidate query refetches with a different
@@ -305,7 +306,7 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
               Unlink
             </Button>
           </>
-        ) : (
+        ) : isMirrorable ? (
           <Button
             variant="primary"
             size="small"
@@ -321,6 +322,15 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
               <CloudIcon size={ICON_SIZE} weight="bold" />
             )}
             Mirror
+          </Button>
+        ) : (
+          <Button
+            variant="default"
+            size="small"
+            disabled
+            title="Legacy URL-only document. Re-upload through noma before mirroring."
+          >
+            Re-upload required
           </Button>
         )}
       </div>

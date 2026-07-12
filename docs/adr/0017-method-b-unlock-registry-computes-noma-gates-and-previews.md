@@ -8,6 +8,12 @@ Status: accepted (2026-06-20)
 > Method-A behaviour; this ADR activates **Method B**. Stays inside **ADR 0013**'s boundary (noma
 > submits raw inputs; the registry derives the credited number). Implementation record:
 > [`docs/archive/2026-06-20-method-b-unlock.md`](../archive/2026-06-20-method-b-unlock.md).
+>
+> **Amendment (2026-07-12 — effective regime boundary):** a credit batch keeps the sampling
+> regime in force when its production period begins. Unlocking Method B applies only to batches
+> whose production period starts after `method_b_unlocked_at`; it never reclassifies an
+> in-progress or historical Method-A batch. The boundary is batch start, not batch end, because
+> the sampling plan must be known before production begins.
 
 ## Context
 
@@ -45,6 +51,10 @@ would re-open 0013 and re-create the audit-defeating posture it exists to remove
    prerequisites a sample count cannot infer**: the Isometric-agreed baseline number (≥ 30,
    default 30), a random-sampling-plan reference, and the moisture pathway. The seam is a *timestamp*
    precisely because the switch carries state.
+
+   The timestamp is also the effective regime boundary. A credit batch whose production period
+   began before the unlock remains Method A, including a batch still in progress when the unlock
+   occurs. Only batches beginning after the timestamp use Method B.
 
 3. **Facility managers may unlock** (not super-admin only). The guardrail is the mandatory
    prerequisite capture plus a persistent, protocol-cited **explanation surface** shown when

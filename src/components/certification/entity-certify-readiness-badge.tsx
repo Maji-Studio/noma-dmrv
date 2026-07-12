@@ -7,6 +7,10 @@ import type { EntityCertifyReadiness } from "@/lib/certification/entity-readines
 
 interface EntityCertifyReadinessBadgeProps {
   readiness: EntityCertifyReadiness;
+  /** Override the ready-state pill when the evaluated scope is narrower than certification. */
+  readyLabel?: string;
+  /** Accessible/tooltip scope for incomplete gaps. Defaults to certification. */
+  readinessNoun?: string;
 }
 
 /**
@@ -21,6 +25,8 @@ interface EntityCertifyReadinessBadgeProps {
  */
 export function EntityCertifyReadinessBadge({
   readiness,
+  readyLabel,
+  readinessNoun = "certification",
 }: EntityCertifyReadinessBadgeProps) {
   const ready = readiness.state === "ready";
   const gapCount = readiness.gaps.length;
@@ -28,6 +34,7 @@ export function EntityCertifyReadinessBadge({
   const pill = ready ? (
     <StatusBadge
       status="ready"
+      label={readyLabel}
       icon={<CheckCircleIcon size={14} weight="fill" />}
     />
   ) : (
@@ -40,20 +47,35 @@ export function EntityCertifyReadinessBadge({
 
   if (ready) {
     return (
-      <span aria-label="Ready for certification" className="inline-flex">
+      <span
+        aria-label={readyLabel ?? "Ready for certification"}
+        className="inline-flex"
+      >
         {pill}
       </span>
     );
   }
 
+  const incompleteLabel =
+    readinessNoun === "certification"
+      ? "Incomplete for certification"
+      : `Incomplete ${readinessNoun}`;
+
   return (
-    <Tooltip content={<ReadinessGapList readiness={readiness} />}>
+    <Tooltip
+      content={
+        <ReadinessGapList
+          readiness={readiness}
+          readinessNoun={readinessNoun}
+        />
+      }
+    >
       <button
         type="button"
         // The pill lives inside clickable table rows / detail sheets; this
         // trigger only reveals the gap list, so swallow the click.
         onClick={(e) => e.stopPropagation()}
-        aria-label={`Incomplete for certification with ${gapCount} gap${
+        aria-label={`${incompleteLabel} with ${gapCount} gap${
           gapCount === 1 ? "" : "s"
         } — activate to see what's missing`}
         className="inline-flex cursor-help rounded-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] focus-visible:ring-offset-1"
@@ -72,12 +94,18 @@ export function EntityCertifyReadinessBadge({
  */
 function ReadinessGapList({
   readiness,
+  readinessNoun,
 }: {
   readiness: EntityCertifyReadiness;
+  readinessNoun: string;
 }) {
   return (
     <div className="flex flex-col gap-4 text-left">
-      <span className="font-medium">Still needed to certify</span>
+      <span className="font-medium">
+        {readinessNoun === "certification"
+          ? "Still needed to certify"
+          : `Still needed for ${readinessNoun}`}
+      </span>
       <ul className="flex flex-col gap-2">
         {readiness.gaps.map((gap) => (
           <li key={gap.key} className="flex items-start gap-6">

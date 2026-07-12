@@ -116,10 +116,12 @@ function createColumns(
     },
     {
       id: "certifyReadiness",
-      header: "Certification",
+      header: "Chemistry",
       cell: ({ row }) => (
         <EntityCertifyReadinessBadge
           readiness={deriveEntityCertifyReadiness("sample", row.original)}
+          readyLabel="Chemistry complete"
+          readinessNoun="sample chemistry"
         />
       ),
     },
@@ -461,13 +463,15 @@ export function SampleList() {
               { label: "Credit Batch", value: displaySideSheet.entity.creditBatchCode },
               { label: "Facility", value: displaySideSheet.entity.facilityName },
               {
-                label: "Certification",
+                label: "Sample chemistry",
                 value: (
                   <EntityCertifyReadinessBadge
                     readiness={deriveEntityCertifyReadiness(
                       "sample",
                       displaySideSheet.entity,
                     )}
+                    readyLabel="Chemistry complete"
+                    readinessNoun="sample chemistry"
                   />
                 ),
               },
