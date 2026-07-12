@@ -10,6 +10,26 @@ import { buildRemovalSubmissionBuild } from "./removal-submission-build";
 import * as sources from "./sources";
 
 describe("buildRemovalSubmissionBuild", () => {
+  it("fails closed when entity certification readiness was not evaluated", async () => {
+    const ctx = {} as RemovalSubmissionContext;
+
+    await expect(
+      buildRemovalSubmissionBuild({
+        orgCtx: {} as never,
+        removalId: "rem-test-missing-readiness",
+        ctx,
+        defaultTemplate: {} as never,
+        blueprintsByKey: new Map(),
+        externalProjectId: "prj-test-missing-readiness",
+        allowPeriodInputStub: false,
+        hasDurabilityComponents: false,
+      }),
+    ).rejects.toThrow(/readiness was not evaluated/i);
+
+    expect(sources.collectCandidateDocumentIdsForRemoval).not.toHaveBeenCalled();
+    expect(sources.resolveSourceIdsForRemoval).not.toHaveBeenCalled();
+  });
+
   it("blocks entity certification gaps before preparing registry inputs", async () => {
     const ctx = {
       entityReadinessGaps: [

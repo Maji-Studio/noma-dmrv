@@ -446,6 +446,7 @@ export function makeContext(
       warnings: [],
     },
     ...overrides,
+    entityReadinessGaps: overrides.entityReadinessGaps ?? [],
   };
 }
 

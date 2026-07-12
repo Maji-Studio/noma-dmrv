@@ -5,6 +5,9 @@
 
 // SQLSTATE for unique_violation.
 const PG_UNIQUE_VIOLATION = "23505";
+// SQLSTATE for check_violation, including explicit RAISE ... ERRCODE calls in
+// migration-owned invariant triggers.
+const PG_CHECK_VIOLATION = "23514";
 
 // Guard against a pathological/cyclic `.cause` chain.
 const MAX_CAUSE_DEPTH = 5;
@@ -27,6 +30,38 @@ export function isPgUniqueViolation(err: unknown, constraint: string): boolean {
     if (typeof current === "object") {
       const e = current as { code?: unknown; constraint?: unknown; cause?: unknown };
       if (e.code === PG_UNIQUE_VIOLATION && e.constraint === constraint) {
+        return true;
+      }
+      current = e.cause;
+    } else {
+      break;
+    }
+  }
+  return false;
+}
+
+/**
+ * True when `err` is a Postgres check violation whose driver message contains
+ * the supplied invariant-specific fragment. The message match keeps a caller
+ * from relabeling unrelated 23514 failures as the same operator error.
+ */
+export function isPgCheckViolation(
+  err: unknown,
+  messageFragment: string,
+): boolean {
+  let current: unknown = err;
+  for (let depth = 0; current != null && depth < MAX_CAUSE_DEPTH; depth++) {
+    if (typeof current === "object") {
+      const e = current as {
+        code?: unknown;
+        message?: unknown;
+        cause?: unknown;
+      };
+      if (
+        e.code === PG_CHECK_VIOLATION &&
+        typeof e.message === "string" &&
+        e.message.includes(messageFragment)
+      ) {
         return true;
       }
       current = e.cause;

@@ -59,7 +59,12 @@ export interface RemovalSubmissionBuild {
 export function assertEntityReadinessGapsResolved(
   entityReadinessGaps: string[] | undefined,
 ): void {
-  if (!entityReadinessGaps || entityReadinessGaps.length === 0) return;
+  if (!entityReadinessGaps) {
+    throw new SafeError(
+      "Removal submission blocked - entity certification readiness was not evaluated.",
+    );
+  }
+  if (entityReadinessGaps.length === 0) return;
 
   throw new SafeError(
     `Removal submission blocked - entity certification readiness:\n${entityReadinessGaps.join("\n")}`,

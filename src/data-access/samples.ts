@@ -118,25 +118,31 @@ export interface SampleStats {
 
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
-import { isPgUniqueViolation } from "@/db/errors";
+import { isPgCheckViolation, isPgUniqueViolation } from "@/db/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 
 // DB-enforced sample-code uniqueness (issue #395). Drizzle names the
 // `.unique()` on `samples.sampleCode` this constraint.
 const SAMPLE_CODE_UNIQUE_CONSTRAINT = "samples_organization_id_sample_code_unique";
+const METHOD_B_BASELINE_VIOLATION_FRAGMENT =
+  "cannot use Method B: requires >= 30 prior Method A samples";
+const METHOD_B_BASELINE_FLOOR_MESSAGE =
+  "This change would reduce the Method B baseline below 30 eligible samples. Keep at least 30 eligible pre-unlock samples, or start a new production process.";
 
 /**
- * Run `fn`; map a user-supplied duplicate sample_code (23505 on the unique
- * index) to a friendly SafeError instead of a raw driver error. Only the
- * *update* path needs this — the create path routes its code through
- * `withAutoCode`, which owns the same friendly mapping (and auto-code retry).
+ * Run a sample update/delete and translate invariant-specific Postgres errors
+ * into operator-facing SafeErrors. Create routes code uniqueness through
+ * `withAutoCode`; the Method-B trigger can reject updates and deletes.
  */
-async function guardSampleCode<T>(fn: () => Promise<T>): Promise<T> {
+async function guardSampleMutation<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (err) {
     if (isPgUniqueViolation(err, SAMPLE_CODE_UNIQUE_CONSTRAINT)) {
       throw new SafeError("A sample with this code already exists");
+    }
+    if (isPgCheckViolation(err, METHOD_B_BASELINE_VIOLATION_FRAGMENT)) {
+      throw new SafeError(METHOD_B_BASELINE_FLOOR_MESSAGE);
     }
     throw err;
   }
@@ -718,7 +724,7 @@ export async function updateSample(
 
   // Sample-code uniqueness is DB-enforced (issue #395). No racy pre-check —
   // a user-supplied duplicate is mapped to a friendly SafeError by the
-  // `guardSampleCode` wrapper around the write below.
+  // `guardSampleMutation` wrapper around the write below.
 
   // Build update data
   const updateData: Record<string, unknown> = {
@@ -774,7 +780,7 @@ export async function updateSample(
   if (data.calciumPercent !== undefined) updateData.calciumPercent = data.calciumPercent;
   if (data.ironPercent !== undefined) updateData.ironPercent = data.ironPercent;
 
-  await guardSampleCode(() => db.transaction(async (tx) => {
+  await guardSampleMutation(() => db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
@@ -854,7 +860,7 @@ export async function deleteSample(
     throw new SafeError("Sample not found");
   }
 
-  await db.transaction(async (tx) => {
+  await guardSampleMutation(() => db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
@@ -864,7 +870,7 @@ export async function deleteSample(
 
     await deleteTransportLegsForEntity(ctx, tx, "sample", sampleId);
     await tx.delete(samples).where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
-  });
+  }));
 }
 
 // ============================================

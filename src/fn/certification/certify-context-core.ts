@@ -157,7 +157,7 @@ export interface RemovalCertifyContext {
   // Compact labels from the per-entity certifier-readiness layer. The raw
   // entity rows stay server-side; Review/pre-flight only needs gap labels. The
   // submit pipeline gates on this same list, so [] means entity-ready.
-  entityReadinessGaps?: string[];
+  entityReadinessGaps: string[];
   // Fail-closed durability sampling/eligibility blockers (D3) — the EXACT list
   // the submit pipeline blocks on, so readiness predicts the gate. [] ⇒ ready.
   durabilityGateBlockers: string[];

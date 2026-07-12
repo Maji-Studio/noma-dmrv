@@ -182,3 +182,90 @@ Local computer-use artifacts (intentionally not committed):
   Targeted lint on the changed code has zero errors and only the two unchanged
   `delivery-list.tsx` hook-dependency warnings (plus two ignored Markdown-file
   notices when docs are included on the command line).
+
+## `origin/staging` sideways-regression addendum
+
+This addendum records the follow-on edge-case run requested against a fresh
+`origin/staging`. The working branch started at `d46ed46`, which remains the
+current remote staging tip. Open PR #432 (`4e590c7`) was the only directly useful
+branch and was fast-forwarded locally before further work; its evidence/source,
+security, and cold-start fixes are therefore part of this result. The older
+branches behind PRs #427–#431 were already ancestors of staging and were not
+merged again.
+
+The database was reset before the browser work. No new registry mutation was
+sent. The tracked regression uses a local projection for its high-volume seam:
+12 monthly credit batches → 12 Removal/GHG-entry rows → 12 independent monthly
+GHG Statement rows. That is intentionally the user's sideways variant, not a
+replacement for the normal annual shape (12 monthly batches → 12 Removals → one
+annual Statement), which the prior live readback already proved.
+
+### Rewritten regression coverage
+
+`tests/e2e/production-process-method-b-lifecycle.spec.ts` now covers:
+
+- July 2025 through June 2026, with five completed production runs every month
+  on days 3, 9, 15, 21, and 27;
+- three independent credit-batch samples on distinct days, with realistic
+  seven-, eight-, and nine-day laboratory-analysis delays and complete
+  1000-year R₀/carbon inputs;
+- 9/30 locked, a future-dated sample excluded at 29/30, then unlock at exactly
+  30 eligible pre-unlock samples;
+- a browser delete attempt that proves the database preserves the 30-sample
+  floor and now returns an actionable operator message;
+- a deliberately unsampled twelfth month, the 12 → 12 → 12 relational mapping,
+  twelve visible statement records with one linked Removal each, and the return
+  to a new Method-A process while the historical Method-B process remains;
+- cleanup of the synthetic projection and registry mapping in nested `finally`
+  blocks, with the global E2E sweep as the second cleanup boundary.
+
+Samples created by the rewritten fixture attach only to their credit batch.
+Their distinct dates prove distribution; no new `production_run_id` is written,
+because that column is legacy provenance and the current domain grain is the
+commingled credit batch.
+
+The statement/Removal portion is explicitly a UI and relational projection. It
+does not claim that the current submit pipeline can legitimately certify the
+two unsampled Method-B months: the P0 unsampled 1000-year and cadence blockers in
+the main ledger remain fail-closed. Encoding fake readiness to make those rows
+submit would have hidden the issue the sideways test is meant to expose.
+
+### Additional findings
+
+| Area | Severity | Finding | Decision / status |
+| --- | --- | --- | --- |
+| Final readiness boundary | P0 | The merged PR made `entityReadinessGaps` optional and treated `undefined` like an evaluated empty result. A caller or stale fixture could therefore bypass the intended backstop. | Fixed: the context field is required, `undefined` fails closed before source preparation or registry effects, and all orchestrator/boundary fixtures state `[]` explicitly. |
+| Method-B sample mutation message | P1 | Deleting the thirtieth pre-unlock sample correctly failed in Postgres, but surfaced a generic error. | Fixed narrowly by recognizing only SQLSTATE `23514` plus the Method-B invariant fragment and returning a specific floor explanation. |
+| Method-B “lock” semantics | P1 | The database does not make all baseline evidence immutable. It preserves a count floor of 30: eligible chemistry edits and surplus-sample deletion can still succeed. Calling this a fully locked baseline was misleading. | Copy/test names now say baseline floor. True immutable evidence history remains a product/audit decision related to #200/#391; no migration was added. |
+| Future-dated evidence | P1 | A syntactically valid year-2999 sample must not unlock Method B. | Regression proves it remains excluded at 29/30; the next in-period sample alone enables unlock. |
+| Monthly statement variant | P1 | Twelve independent statements can render and map one-to-one, but raw local projection bypasses readiness and is not proof of twelve valid registry submissions. | Covered honestly as a local projection. The previous read-only registry proof of 12 Removals in one annual Statement remains the authoritative live result. |
+| Source/evidence automation | P1 | The rewritten high-volume spec does not repeat 30+ file uploads or mirror Sources; putting that serial workflow into the Method lifecycle spec would make it slow and conflate two failure domains. | Reused the merged computer-use proof: 17/17 managed UI uploads (four feedstock, four delivery, three COAs, six sample-transport files), 19 Removal candidates, and two legacy `Re-upload required` rows. Focused source/transport tests remain green. |
+| Missing credit-batch ID | P2 | `/credit-batches/__missing__` reaches an error boundary/500 rather than a designed not-found result. | Reproduced on the reset database; deferred as a focused route-validation fix. |
+| Missing supplier/customer IDs | P2 | Missing detail IDs retry for roughly seven seconds and then show a generic error instead of a prompt not-found state. | Reproduced; the large stale detail-route branch was not merged wholesale. |
+| Empty-state duplication | P3 | Applications and Production Processes can repeat the select-facility empty-state wording. | Cosmetic; recorded and deferred. |
+
+The refreshed GitHub survey still shows PR #432 as the only open PR. Existing
+issues #417, #278, #200/#391, #246, #420, #380, #325, #329, #423, #190, #192,
+and #317 overlap the known protocol, evidence, concurrency, and operator-flow
+work. There is still no dedicated issue for retroactive method classification
+or the missing lower/distribution bound on Method-B baseline evidence. No new
+issues were filed from this QA run without stakeholder confirmation of those
+product/protocol decisions.
+
+### Addendum verification
+
+- Final focused Chromium E2E: 1/1 passed in 13.1 seconds after a reset-local run.
+- The browser assertions cover 9 → 29 → 30, Method-B declaration, baseline-floor
+  deletion feedback, twelve visible monthly Statements, and retained historical
+  Method B after starting fresh Method A.
+- Targeted TypeScript and ESLint passed; the widened focused Vitest set passed
+  10 files / 46 tests, followed by the final E2E run above.
+- Reset-state computer use rechecked the merged reactor/admin/quick-add fixes.
+  Core routes had no 5xx failures; the missing-ID probes above are retained as
+  findings.
+- Codex CLI computer use was initially unavailable due to its usage window. A
+  later retry authenticated and inspected the artifacts but its report writer
+  entered a self-wait loop, so it was stopped. The completed signed-in
+  cold-start inspection therefore uses the in-app Browser and the focused
+  lifecycle uses local Playwright/Chromium. Both are computer-driven UI checks;
+  no result is inferred from database state alone where the UI seam matters.
