@@ -103,7 +103,9 @@ async function ensureOrgFoundation(
       .where(eq(schema.members.id, teammateMembership.id));
   }
 
-  console.log(`Ensured organization "${DEC_ORG_NAME}" with teammate owner`);
+  console.log(
+    `Ensured organization organizationId=${DEC_ORG_ID} with teammate owner`,
+  );
 }
 
 async function ensureIsometricCredentials(db: Db): Promise<void> {
@@ -194,7 +196,7 @@ async function ensureAdmin() {
           password: passwordHash,
         });
       }
-      console.log(`Updated admin credentials for ${adminEmail}`);
+      console.log(`Updated admin credentials userId=${adminUserId}`);
     } else {
       // Create user + credential account in a transaction
       adminUserId = crypto.randomUUID();
@@ -214,7 +216,7 @@ async function ensureAdmin() {
           password: passwordHash,
         });
       });
-      console.log(`Created admin user ${adminEmail}`);
+      console.log(`Created admin user userId=${adminUserId}`);
     }
 
     await ensureOrgFoundation(db, adminUserId, passwordHash);

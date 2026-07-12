@@ -25,7 +25,7 @@ import {
 import { DEFAULT_TRIP_TYPE, TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import type { TransportLeg } from "@/db/schema";
-import { TransportLegDocuments } from "./transport-leg-documents";
+import { TransportEvidenceDocuments } from "./transport-evidence-documents";
 
 interface TransportLegFormProps {
   /** When provided, the form edits this leg; otherwise it creates a new one. */
@@ -298,7 +298,10 @@ export function TransportLegForm({
           weigh-scale ticket.
         </p>
         {isEditMode && leg ? (
-          <TransportLegDocuments legId={leg.id} />
+          <TransportEvidenceDocuments
+            entityType="transport_leg"
+            entityId={leg.id}
+          />
         ) : (
           <p className="body-small text-[var(--color-text-tertiary)] border border-dashed border-[var(--color-border-secondary)] px-12 py-16">
             Save the leg first, then re-open it to attach the bill of lading and

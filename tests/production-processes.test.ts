@@ -22,6 +22,7 @@ import {
   findOrCreateProductionProcess,
   getProductionProcessSummariesByFacility,
 } from "@/data-access/production-processes";
+import { deleteSample } from "@/data-access/samples";
 import { countEligibleSamplesByProcess } from "@/data-access/isometric";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
@@ -331,6 +332,23 @@ describe("findOrCreateProductionProcess", () => {
     await expect(
       db.delete(samples).where(eq(samples.id, fixture.sampleIds[0])),
     ).rejects.toThrow(/Failed query/i);
+
+    const [sample] = await db
+      .select({ id: samples.id })
+      .from(samples)
+      .where(eq(samples.id, fixture.sampleIds[0]));
+    expect(sample?.id).toBe(fixture.sampleIds[0]);
+  });
+
+  it("explains the Method-B baseline floor when an operator deletes a sample", async () => {
+    const fixture = await createMethodBProcessWithBaseline("delete-friendly");
+
+    await expect(
+      deleteSample(
+        makeTestOrgContext(TEST_USER_ID),
+        fixture.sampleIds[0],
+      ),
+    ).rejects.toThrow(/reduce the Method B baseline below 30/i);
 
     const [sample] = await db
       .select({ id: samples.id })

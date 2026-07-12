@@ -116,8 +116,10 @@ jobs:
           DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
           EOF
 
+      # Migrations, not `drizzle-kit push`: hand-written trigger migrations
+      # are invisible to push, and specs assert on DB-enforced behavior.
       - name: Apply schema
-        run: pnpm drizzle-kit push --force
+        run: pnpm db:migrate
 
       - name: Ensure admin, default organization, and Isometric credentials
         run: pnpm db:ensure-admin

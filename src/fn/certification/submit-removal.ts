@@ -57,7 +57,10 @@ import {
   type RemovalTransportSnapshot,
 } from "./removal-snapshot-readers";
 import { readRemovalReportingWindow } from "./removal-reporting-window";
-import { buildRemovalSubmissionBuild } from "./removal-submission-build";
+import {
+  assertEntityReadinessGapsResolved,
+  buildRemovalSubmissionBuild,
+} from "./removal-submission-build";
 import { performRegistryCreate, supplierRefLookup } from "./registry-create";
 import { resolveSourceIdsForRemoval } from "./sources";
 import {
@@ -124,6 +127,12 @@ export async function submitRemoval(
       "Configure organization Isometric credentials before submitting.",
     );
   }
+  // Fail before the submit-phase client, evidence-ledger generation/mirroring,
+  // local ledger claims, or registry writes. Context loading may already make
+  // read-only registry calls to resolve the configured project and template.
+  // The build layer repeats this assertion as a defensive seam for callers that
+  // prepare a submission outside this orchestrator.
+  assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
   const client = await getIsometricClientForOrg(orgCtx.organizationId);
   if (ctx.missingDefaultTemplateId) {
     throw new SafeError(
