@@ -1809,3 +1809,18 @@ Lint tooling (Biome 2 / oxlint vs ESLint 9), Vitest 4 browser mode, Playwright
 1.58+ features (test agents, trace tooling), OpenAPI contract testing for the
 Isometric client, Renovate vs Dependabot, pnpm supply-chain guidance updates —
 the research sweep produced no adversarially-verified claims in these areas.
+
+### Entity deletes orphan polymorphic documents — opened 2026-07-12
+
+- No `delete*` function in `src/data-access/` cleans up rows in the
+  polymorphic `documents` table (entityType/entityId, no FK). E.g.
+  `deleteFeedstock` and `deleteDelivery` hard-delete the parent without
+  touching its documents; `assertCanManageDocumentEntity` then throws its
+  entity-missing error for the orphan, so the document row and its storage
+  object become unlistable and undeletable — permanently leaked. Systemic
+  across every document-bearing entity; surfaced by the PR #432 review panel
+  and verified as pre-existing (not a #432 regression).
+- **Resolve via:** shared `deleteDocumentsForEntity(ctx, tx, entityType,
+  entityId)` helper mirroring `deleteTransportLegsForEntity`, called from
+  every entity delete in the same transaction, plus storage-object cleanup
+  and a delete-parent-with-documents regression test (M).
