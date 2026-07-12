@@ -138,6 +138,12 @@ Generated SQL lives in `drizzle/`; metadata snapshots live in `drizzle/meta/`.
 - Destructive operations (reset + seed staging, reset staging empty, reset production) are never automatic — they run only via manual `workflow_dispatch` with a typed confirmation phrase.
 - Database credentials come from 1Password via `load-secrets-action` (see `docs/security.md`).
 
+### PR migration gate
+
+`.github/workflows/migration-gate.yml` builds the pull request's base-branch schema in a throwaway PostgreSQL database, seeds it with the canonical base-state data, then applies the merge candidate's new migrations and verifies the resulting schema. This catches data-versus-constraint conflicts reproduced by `src/db/seed-data.ts`; it cannot prove compatibility with every row in staging or production, where real data can differ from the canonical seed.
+
+Migrations that add `ADD CONSTRAINT`, `CREATE UNIQUE INDEX`, or `SET NOT NULL` to an existing table must repair conflicting rows in the same migration before enforcing the new rule. Use `drizzle/0079_volatile_plazm.sql` as the reference pattern: add the column nullable, `UPDATE` existing rows, then `SET NOT NULL`; similarly, backfill or deduplicate existing data before adding constraints or unique indexes.
+
 ### Migration files are immutable once applied
 
 **Never edit a migration file after it has been applied to any database** (staging, production, or a teammate's). `drizzle-kit migrate` tracks applied migrations by journal order/timestamp, not file content, so an edited migration is silently skipped on databases that already ran the original — CI reports "migrations applied successfully" while the new DDL never executes, and the drift only surfaces in the `db:verify-schema` step. If more schema changes are needed after a migration has been merged or applied, generate a new migration with `pnpm db:generate`. To repair drift that already happened, write a new migration with guarded DDL (`IF NOT EXISTS` / existence checks) so it is a no-op on databases that already have the objects.
