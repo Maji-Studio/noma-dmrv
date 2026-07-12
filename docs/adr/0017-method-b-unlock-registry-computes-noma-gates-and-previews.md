@@ -15,12 +15,15 @@ Status: accepted (2026-06-20)
 > in-progress or historical Method-A batch. The boundary is batch start, not batch end, because
 > the sampling plan must be known before production begins.
 >
-> **Amendment (2026-07-12 — submitted-evidence lock):** subject to the existing ≥30 baseline
-> floor and normal validation, ordinary sample corrections remain directly editable until a
-> submitted Removal/GHG Entry depends on the sample. Submission locks every contributing sample
-> version, including a borrowed historical sample whose own credit batch or Removal is still draft.
-> The lock follows certification dependency, not sample ownership; subsequent changes require a
-> correction or supersession path rather than mutation of evidence already used by a submitted claim.
+> **Amendment (2026-07-12 — submitted-evidence lock, target contract):** subject to the existing
+> ≥30 baseline floor and normal validation, ordinary sample corrections remain directly editable
+> until a submitted Removal/GHG Entry depends on the sample. Submission locks every contributing
+> sample version, including a borrowed historical sample whose own credit batch or Removal is still
+> draft. The lock follows certification dependency, not sample ownership; subsequent changes require
+> a correction or supersession path rather than mutation of evidence already used by a submitted
+> claim. This amendment records the decided contract only — the evidence-snapshot enforcement that
+> implements the borrowed-sample lock is **not yet built** (deferred under `docs/open-questions.md`
+> and #200/#391).
 >
 > **Amendment (2026-07-12 — process start):** `established_at` is the operator-entered date when
 > the production process actually began operating, not database-row creation time. Back-entering a
@@ -112,9 +115,10 @@ would re-open 0013 and re-create the audit-defeating posture it exists to remove
   current Isometric registry contract.
 - noma may show a non-authoritative Method-B preview, but credited Eq 4/5 and winsorisation remain
   registry-derived per ADR 0013.
-- A submitted unsampled Removal dependency-locks its contributing sample versions. Method-B unlock
-  alone does not freeze ordinary corrections, although the ≥30 baseline-floor invariant remains;
-  an unclaimed sample has no submission lock.
+- A submitted unsampled Removal dependency-locks its contributing sample versions (target
+  contract — enforcement pending per the 2026-07-12 amendment). Method-B unlock alone does not
+  freeze ordinary corrections, although the ≥30 baseline-floor invariant remains; an unclaimed
+  sample has no submission lock.
 - **Glossary:** `CONTEXT.md` distinguishes **Method-B baseline** (the ≥30-sample unlock
   prerequisite), **Eligible sample** (the trailing-6-mo process pool), and **Method-B evidence
   snapshot** (the sample versions used by a submitted unsampled Removal).
