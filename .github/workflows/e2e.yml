@@ -116,8 +116,11 @@ jobs:
           STORAGE_SIGNING_SECRET=${STORAGE_SIGNING_SECRET}
           EOF
 
+      # Migrations, not `drizzle-kit push`: hand-written trigger migrations
+      # (e.g. the Method B baseline-floor guards) are invisible to push, and
+      # e2e specs assert on that DB-enforced behavior. Matches local db:reset.
       - name: Apply schema
-        run: pnpm drizzle-kit push --force
+        run: pnpm db:migrate
 
       # Seeds the bootstrap admin plus the default "Dark Earth Carbon"
       # organization (idempotent) — organization-settings.spec.ts asserts
