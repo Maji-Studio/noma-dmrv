@@ -75,23 +75,29 @@ const test = base.extend<{ facilityLessPage: Page }>({
 
       await provide(page);
     } finally {
-      await context?.close();
-      await db.transaction(async (tx) => {
-        await tx
-          .delete(schema.sessions)
-          .where(eq(schema.sessions.userId, ids.user));
-        await tx
-          .delete(schema.members)
-          .where(eq(schema.members.id, ids.member));
-        await tx
-          .delete(schema.accounts)
-          .where(eq(schema.accounts.id, ids.account));
-        await tx.delete(schema.users).where(eq(schema.users.id, ids.user));
-        await tx
-          .delete(schema.organizations)
-          .where(eq(schema.organizations.id, ids.organization));
-      });
-      await pool.end();
+      try {
+        await context?.close();
+      } finally {
+        try {
+          await db.transaction(async (tx) => {
+            await tx
+              .delete(schema.sessions)
+              .where(eq(schema.sessions.userId, ids.user));
+            await tx
+              .delete(schema.members)
+              .where(eq(schema.members.id, ids.member));
+            await tx
+              .delete(schema.accounts)
+              .where(eq(schema.accounts.id, ids.account));
+            await tx.delete(schema.users).where(eq(schema.users.id, ids.user));
+            await tx
+              .delete(schema.organizations)
+              .where(eq(schema.organizations.id, ids.organization));
+          });
+        } finally {
+          await pool.end();
+        }
+      }
     }
   },
 });
