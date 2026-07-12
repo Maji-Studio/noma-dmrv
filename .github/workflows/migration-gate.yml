@@ -9,6 +9,12 @@ on:
       # Seed changes alter the canonical fixture used by future gates. This run
       # still uses the base copy, so candidate seed edits cannot mask a conflict.
       - "src/db/seed-data.ts"
+      # Runtime inputs of the gate itself: edits to the workflow or the CLI
+      # scripts it invokes should exercise the gate. ensure-admin runs from the
+      # base checkout, so its inclusion only proves the pipeline still passes.
+      - ".github/workflows/migration-gate.yml"
+      - "src/lib/cli/ensure-admin.ts"
+      - "src/lib/cli/verify-db-schema.ts"
   workflow_dispatch:
 
 permissions:
