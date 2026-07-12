@@ -318,19 +318,11 @@ guard. Pure starter-template residue; the app is facility-scoped.
   production-process history rule, not just the removal member-batch subset. The
   live submission gate should either load the full process batch window or accept
   an explicit process-level cadence fact.
-- **Resolved locally by the 2026-07-12 edge-case grill (implementation still
-  open; see ADR 0017 amendments):**
-  - A credit batch keeps the Method A/B regime in force at the start of its
-    production period. A later unlock never reclassifies an in-progress or
-    historical batch.
-  - `production_processes.established_at` means the operator-entered real
-    operational start, not row creation time. Earlier samples never count toward
-    the ≥30 baseline or eligible pool.
-  - The ≥30 baseline-floor invariant remains, but Method-B unlock alone does
-    not freeze ordinary sample corrections. Once a submitted Removal/GHG Entry
-    depends on a sample, submission locks that contributing version even when
-    its own batch remains draft. Enforcing borrowed-sample dependencies requires
-    a local evidence snapshot/claim and relates to #200/#391.
+- **Decided 2026-07-12 (regime boundary, `established_at` semantics,
+  submitted-evidence lock):** recorded as ADR 0017 amendments; verification
+  narrative in `docs/archive/qa/2026-07-12-final-12-month-followup.md`. The
+  evidence-snapshot enforcement for the submitted-evidence lock is still
+  unbuilt and relates to #200/#391.
 - **Still requires Isometric confirmation before the 1000-year unsampled route
   is built or enabled:** the exact `_unsampled` registry wire contract. The
   working product expectation is to reuse the trailing eligible historical
