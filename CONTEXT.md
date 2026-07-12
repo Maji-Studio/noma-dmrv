@@ -138,8 +138,12 @@ batches** belong to one production process; it **spans reactors**
 change, a pyrolysis-condition change, or a flagged carbon-content
 deviation starts a **new** production process. It owns the
 **Method A / Method B** regime and, under Isometric, the ≥30-sample
-baseline that unlocks Method B. _Avoid_: keying it to a reactor or to a
-single credit batch; "campaign", "production line" as separate terms.
+baseline that unlocks Method B. Its established date is the
+operator-entered date on which this process actually began operating,
+not the date its database row was created; samples before that date never
+count toward its baseline. _Avoid_: keying it to a reactor or to a single
+credit batch; using record-creation time as the process start; "campaign",
+"production line" as separate terms.
 
 **Method A / Method B**:
 The two biochar **sampling-frequency** regimes (Isometric Biochar
@@ -157,6 +161,17 @@ _Avoid_: declaring the method per reactor; the production run as the
 sampling unit; treating Method A/B as durability methods;
 "representative method"; retroactively applying Method B.
 
+**Method-B baseline**:
+The ≥30 qualifying Method-A **Samples** from one **production process**
+that permit its deliberate Method-B unlock. They must be dated on or after
+the process's operational established date and before its unlock. This is an
+unlock prerequisite, not the rolling 6-month population used to estimate a
+particular unsampled batch. The baseline-floor invariant may prevent deleting,
+moving, or redating a sample even before submission; it does not make ordinary
+draft corrections immutable. _Avoid_: calling the rolling eligible pool the
+baseline; counting rows from before the process began; treating unlock as a
+certification submission.
+
 **Eligible sample**:
 A **Sample** counted toward a **production process**'s Method-B
 conservative estimate: one taken within the **6 months before** the
@@ -168,6 +183,19 @@ the rolling 6-month eligible window with the lifetime ≥30-sample baseline
 that unlocks Method B (a process can be unlocked yet hold few *eligible*
 samples); scoping eligibility to a reactor or facility rather than the
 production process.
+
+**Method-B evidence snapshot**:
+The immutable representations of the **eligible samples** used by a submitted unsampled
+Method-B **Removal** (the registry's GHG Entry). Subject to the Method-B
+baseline floor and normal validation, ordinary sample corrections remain
+editable while no submitted Removal depends on them. Submission
+dependency-locks every contributing sample version, even when the sample's
+own credit batch or Removal remains draft; later changes require a
+correction/supersession path rather than an in-place edit. _Avoid_: locking
+every baseline sample merely because Method B was unlocked; checking only
+whether the sample's own batch has been submitted; treating a mutable sample
+ID alone as the evidence version (the snapshot needs an audit revision or a
+canonical content snapshot/hash).
 
 **Durability tier**:
 The crediting time horizon a **facility** certifies its biochar against.

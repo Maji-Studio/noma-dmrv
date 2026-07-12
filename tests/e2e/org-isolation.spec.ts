@@ -136,7 +136,35 @@ test("organization domain data is isolated across lists, record URLs, and picker
 
   const response = await orgB.page.goto(`/credit-batches/${orgABatch.id}`);
   expect(response?.status()).toBe(404);
+  await expect(
+    orgB.page.getByRole("heading", {
+      name: "Credit batch not found",
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(orgB.page.getByText(orgABatch.code, { exact: true })).toHaveCount(0);
+
+  const supplierResponse = await orgB.page.goto(
+    `/suppliers/${seededData.supplier.id}`,
+  );
+  expect(supplierResponse?.status()).toBe(404);
+  await expect(
+    orgB.page.getByRole("heading", { name: "Supplier not found", exact: true }),
+  ).toBeVisible();
+  await expect(
+    orgB.page.getByText(seededData.supplier.name, { exact: true }),
+  ).toHaveCount(0);
+
+  const customerResponse = await orgB.page.goto(
+    `/customers/${seededData.customer.id}`,
+  );
+  expect(customerResponse?.status()).toBe(404);
+  await expect(
+    orgB.page.getByRole("heading", { name: "Customer not found", exact: true }),
+  ).toBeVisible();
+  await expect(
+    orgB.page.getByText(seededData.customer.name, { exact: true }),
+  ).toHaveCount(0);
 
   await orgB.page.goto(`/feedstocks?facility=${orgB.facility.id}`);
   await orgB.page.getByRole("button", { name: "New Feedstock" }).click();
