@@ -138,5 +138,6 @@ but cannot read or replace the stored secrets.
 ## Notes
 
 - `ADMIN_PASSWORD` is required by `pnpm db:reset` / `ensure-admin.ts`.
-- `/admin/users` is intentionally still a scaffold for invite/user-management workflow work.
+- `/admin/users` redirects to `/settings/organization`, the existing member and
+  invitation management surface for the active organization.
 - Do not log PII from auth flows; log stable IDs such as `userId`.

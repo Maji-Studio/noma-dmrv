@@ -440,12 +440,6 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 const { facilityId, selectedFacility, facilities, setFacilityId } = useFacilityContext();
 ```
 
-## What Is Intentionally Scaffolded
-
-- Admin user invitation UI (`/admin/users`) is a scaffold.
-
-These are intentionally marked so future work can extend them without hidden assumptions.
-
 ## Caching Best Practices
 
 **General Rules:**

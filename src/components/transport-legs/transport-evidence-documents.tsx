@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { FileIcon, TrashIcon, ArrowSquareOutIcon } from "@phosphor-icons/react";
+import {
+  ArrowSquareOutIcon,
+  FileIcon,
+  TrashIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { FormField } from "@/components/forms/form-field";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
@@ -16,10 +20,13 @@ import {
 } from "@/hooks/use-documents";
 import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
 
-const ENTITY_TYPE: DocumentEntityType = "transport_leg";
+type TransportEvidenceEntityType = Extract<
+  DocumentEntityType,
+  "feedstock" | "delivery" | "transport_leg"
+>;
 
-// Transportation v1.1 §6 verification evidence — the two source documents the
-// protocol calls for on a distance-based leg.
+// The two transportation-evidence document types currently modelled by noma.
+// This is not an exhaustive statement of the protocol's evidence requirements.
 const EVIDENCE_FIELDS: { documentType: DocumentType; label: string }[] = [
   { documentType: "bill_of_lading", label: "Bill of lading" },
   { documentType: "weighbridge_ticket", label: "Weigh-scale ticket" },
@@ -30,23 +37,26 @@ const DOC_TYPE_LABELS: Record<string, string> = {
   weighbridge_ticket: "Weigh-scale ticket",
 };
 
-interface TransportLegDocumentsProps {
-  legId: string;
+interface TransportEvidenceDocumentsProps {
+  entityType: TransportEvidenceEntityType;
+  entityId: string;
 }
 
 /**
- * Evidence upload + list for a saved transport leg. Files attach to the leg via
- * the polymorphic documents layer (entityType "transport_leg"); the upload only
- * works once the leg exists, which is why the create form defers it ("attachable
- * later").
+ * Transport evidence upload + list for a stable lineage entity or a saved
+ * manual transport leg. The document layer keeps the same evidence controls
+ * across all three supported owners.
  */
-export function TransportLegDocuments({ legId }: TransportLegDocumentsProps) {
+export function TransportEvidenceDocuments({
+  entityType,
+  entityId,
+}: TransportEvidenceDocumentsProps) {
   const toast = useToast();
   const { data: docs, isLoading, error } = useDocumentsForEntity(
-    ENTITY_TYPE,
-    legId,
+    entityType,
+    entityId,
   );
-  const invalidateKey = documentKeys.forEntity(ENTITY_TYPE, legId);
+  const invalidateKey = documentKeys.forEntity(entityType, entityId);
   const deleteMutation = useDeleteDocument(invalidateKey);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -133,14 +143,18 @@ export function TransportLegDocuments({ legId }: TransportLegDocumentsProps) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
         {EVIDENCE_FIELDS.map(({ documentType, label }) => (
-          <FormField key={documentType} id={`leg-${legId}-${documentType}`} label={label}>
+          <FormField
+            key={documentType}
+            id={`transport-evidence-${entityId}-${documentType}`}
+            label={label}
+          >
             <FormFileUpload
-              id={`leg-${legId}-${documentType}`}
+              id={`transport-evidence-${entityId}-${documentType}`}
               accept="image/*,.pdf"
               multiple={false}
               maxSizeMb={25}
-              entityType={ENTITY_TYPE}
-              entityId={legId}
+              entityType={entityType}
+              entityId={entityId}
               documentType={documentType}
               onUploaded={() => {
                 setUploadError(null);
@@ -165,5 +179,40 @@ export function TransportLegDocuments({ legId }: TransportLegDocumentsProps) {
         isPending={deleteMutation.isPending}
       />
     </div>
+  );
+}
+
+interface TransportEvidencePanelProps {
+  entityType: Exclude<TransportEvidenceEntityType, "transport_leg">;
+  entityId: string;
+}
+
+/**
+ * Attachment-only evidence surface for auto-derived transport. Documents stay
+ * on the stable parent entity, so a leg recalculation cannot orphan them.
+ */
+export function TransportEvidencePanel({
+  entityType,
+  entityId,
+}: TransportEvidencePanelProps) {
+  return (
+    <section className="space-y-16 border-t border-[var(--color-border-tertiary)] pt-16">
+      <div className="space-y-6">
+        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+          Transport evidence
+        </h3>
+        <p className="body-small text-[var(--color-text-secondary)]">
+          Attach the bill of lading and weigh-scale ticket used to support this
+          journey. Uploaded files become Source candidates; mirror them from the
+          Removal&apos;s Supporting Sources panel before submission. These are the
+          document types currently supported here; the active module may require
+          additional journey evidence.
+        </p>
+      </div>
+      <TransportEvidenceDocuments
+        entityType={entityType}
+        entityId={entityId}
+      />
+    </section>
   );
 }

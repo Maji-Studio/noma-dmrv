@@ -19,6 +19,7 @@ import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { DeliveryForm } from "./delivery-form";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
+import { TransportEvidencePanel } from "@/components/transport-legs";
 import {
   useCreateDelivery,
   useDeleteDelivery,
@@ -434,6 +435,14 @@ export function DeliveryList() {
                 },
               ]
             : undefined
+        }
+        viewModeChildren={
+          sideSheetMode === "view" && sideSheetEntity ? (
+            <TransportEvidencePanel
+              entityType="delivery"
+              entityId={sideSheetEntity.id}
+            />
+          ) : null
         }
       >
         {formError && <ServerError message={formError} />}

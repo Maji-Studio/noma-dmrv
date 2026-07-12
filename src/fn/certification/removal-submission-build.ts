@@ -56,6 +56,16 @@ export interface RemovalSubmissionBuild {
   memberCreditBatchIds: string[];
 }
 
+export function assertEntityReadinessGapsResolved(
+  entityReadinessGaps: string[] | undefined,
+): void {
+  if (!entityReadinessGaps || entityReadinessGaps.length === 0) return;
+
+  throw new SafeError(
+    `Removal submission blocked - entity certification readiness:\n${entityReadinessGaps.join("\n")}`,
+  );
+}
+
 export async function buildRemovalSubmissionBuild(args: {
   orgCtx: OrgContext;
   removalId: string;
@@ -79,6 +89,8 @@ export async function buildRemovalSubmissionBuild(args: {
     hasDurabilityComponents,
     log,
   } = args;
+
+  assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
 
   const lineageWarnings: string[] = [];
   for (const lineage of ctx.lineages) {

@@ -18,6 +18,7 @@ import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { SelectFacilityEmptyState } from "@/components/navigation";
 import { ReactorForm } from "./reactor-form";
 import {
   useCreateReactor,
@@ -195,6 +196,19 @@ export function ReactorList() {
   const reactors = reactorsData?.items ?? [];
   const totalReactors = reactorsData?.total ?? 0;
   const totalThroughputTph = reactors.reduce((sum, r) => sum + (r.nominalThroughputTph || 0), 0);
+
+  if (!contextFacilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader
+          area="infrastructure"
+          title="Reactors"
+          subtitle="Pyrolysis equipment and facility capacity"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its reactors." />
+      </div>
+    );
+  }
 
   if (fetchError) {
     return (
