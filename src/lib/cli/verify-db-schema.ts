@@ -139,10 +139,6 @@ function normalizeConstraintName(name: string): string {
   return name.slice(0, POSTGRES_MAX_IDENTIFIER_LENGTH);
 }
 
-function isGeneratedNotNullCheck(name: string): boolean {
-  return /^\d+_\d+_\d+_not_null$/.test(name);
-}
-
 async function verifySchema(): Promise<void> {
   if (!process.env.DATABASE_URL) {
     console.error('ERROR: DATABASE_URL environment variable is not set');
@@ -182,13 +178,20 @@ async function verifySchema(): Promise<void> {
       [schemaNames]
     );
 
+    // Query pg_constraint for contype 'c' (genuine CHECK constraints) instead
+    // of information_schema, which per the SQL standard also surfaces NOT NULL
+    // as CHECK rows. PostgreSQL 18 stores NOT NULL in pg_constraint as
+    // contype 'n' with semantic names (<table>_<column>_not_null), so a
+    // name-pattern filter alone no longer excludes them.
     const liveChecksResult = await pool.query<LiveCheckRow>(
       `
-        select tc.table_schema, tc.table_name, tc.constraint_name
-        from information_schema.table_constraints tc
-        where tc.constraint_type = 'CHECK'
-          and tc.table_schema = any($1::text[])
-        order by tc.table_schema, tc.table_name, tc.constraint_name
+        select n.nspname as table_schema, rel.relname as table_name, c.conname as constraint_name
+        from pg_constraint c
+        join pg_class rel on rel.oid = c.conrelid
+        join pg_namespace n on n.oid = rel.relnamespace
+        where c.contype = 'c'
+          and n.nspname = any($1::text[])
+        order by table_schema, table_name, constraint_name
       `,
       [schemaNames]
     );
@@ -214,10 +217,6 @@ async function verifySchema(): Promise<void> {
     const liveChecks = new Map<string, Set<string>>();
 
     for (const row of liveChecksResult.rows) {
-      if (isGeneratedNotNullCheck(row.constraint_name)) {
-        continue;
-      }
-
       const tableKey = `${row.table_schema}.${row.table_name}`;
       const checks = liveChecks.get(tableKey) ?? new Set<string>();
       checks.add(row.constraint_name);
