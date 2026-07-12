@@ -149,11 +149,13 @@ production run. *Method A* characterises **every** credit batch; *Method
 B* is a reduced cadence (≥1 sampled batch per 10) permitted only after a
 production process has accumulated a ≥30-sample Method-A baseline, after
 which the registry estimates each unsampled batch conservatively from
-that process's samples in the prior 6 months. These name a *sampling*
+that process's samples in the prior 6 months. A credit batch's regime is
+fixed when its production period begins: a later Method-B unlock never
+reclassifies an in-progress or historical batch. These name a *sampling*
 cadence only — they do **not** name any durability or persistence model.
 _Avoid_: declaring the method per reactor; the production run as the
 sampling unit; treating Method A/B as durability methods;
-"representative method".
+"representative method"; retroactively applying Method B.
 
 **Eligible sample**:
 A **Sample** counted toward a **production process**'s Method-B
