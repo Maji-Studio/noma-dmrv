@@ -318,6 +318,30 @@ guard. Pure starter-template residue; the app is facility-scoped.
   production-process history rule, not just the removal member-batch subset. The
   live submission gate should either load the full process batch window or accept
   an explicit process-level cadence fact.
+- **Resolved locally by the 2026-07-12 edge-case grill (implementation still
+  open; see ADR 0017 amendments):**
+  - A credit batch keeps the Method A/B regime in force at the start of its
+    production period. A later unlock never reclassifies an in-progress or
+    historical batch.
+  - `production_processes.established_at` means the operator-entered real
+    operational start, not row creation time. Earlier samples never count toward
+    the ≥30 baseline or eligible pool.
+  - The ≥30 baseline-floor invariant remains, but Method-B unlock alone does
+    not freeze ordinary sample corrections. Once a submitted Removal/GHG Entry
+    depends on a sample, submission locks that contributing version even when
+    its own batch remains draft. Enforcing borrowed-sample dependencies requires
+    a local evidence snapshot/claim and relates to #200/#391.
+- **Still requires Isometric confirmation before the 1000-year unsampled route
+  is built or enabled:** the exact `_unsampled` registry wire contract. The
+  working product expectation is to reuse the trailing eligible historical
+  sample pool/average rather than require three new 1000-year replicates for
+  every unsampled batch, but noma must not invent the submitted representation.
+- **Still requires protocol confirmation:** whether independent/distributed
+  sampling is a hard eligibility gate or remains an operator warning. Synthetic
+  same-day rows must not be treated as proof in QA either way.
+- **Version dependency:** ADR 0017 cites biochar protocol 1.3 while the local
+  project pin remains 1.2; coordinate the migration decision and template
+  re-authoring under #278 before encoding more credit-bearing Method-B logic.
 - **Why it matters:** DEC runs Method A everywhere today, so Track 2 does not
   block current operation; do not enable Method B until the activation path and
   submission gate are process-grain end to end.

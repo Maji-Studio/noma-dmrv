@@ -20,6 +20,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { InfoHint } from "@/components/ui/tooltip";
 import { ServerError } from "@/components/forms";
+import { SelectFacilityEmptyState } from "@/components/navigation";
 import {
   METHOD_B_MINIMUM_METHOD_A_SAMPLES,
   METHOD_B_SAMPLING_CADENCE_BATCHES,
@@ -188,6 +189,19 @@ export function ProductionProcessList() {
     (p) => p.samplingMethod === "method_a" && p.meetsBaseline,
   ).length;
 
+  if (!facilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader
+          area="certification"
+          title="Production Processes"
+          subtitle="Per-feedstock sampling campaigns — Method A/B regime, baseline progress, and cadence"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its production processes." />
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="container-max py-32">
@@ -240,12 +254,8 @@ export function ProductionProcessList() {
           <EmptyState
             padding="md"
             icon={<FlowArrowIcon size={48} />}
-            title={facilityId ? "No production processes yet" : "Select a facility"}
-            description={
-              facilityId
-                ? "A production process is created automatically when you build a credit batch for a feedstock."
-                : "Choose a facility from the sidebar to view its production processes."
-            }
+            title="No production processes yet"
+            description="A production process is created automatically when you build a credit batch for a feedstock."
           />
         }
       >
