@@ -13,6 +13,7 @@ import { ensureDurabilityEvidenceLedgerSourceFromContext } from "@/fn/certificat
 import { ensureTransportEvidenceLedgerSourceFromContext } from "@/fn/certification/evidence-ledger";
 import { ensureEvidenceLedgersFromContext } from "@/fn/certification/ensure-evidence-ledgers";
 import { EvidenceLedgerRetirementError } from "@/fn/certification/evidence-ledger-core";
+import { SafeError } from "@/lib/errors";
 
 const orgCtx = makeTestOrgContext("user-1");
 const ctx = {} as RemovalSubmissionContext;
@@ -43,6 +44,10 @@ describe("ensureEvidenceLedgersFromContext", () => {
     await expect(
       ensureEvidenceLedgersFromContext(orgCtx, "removal-1", ctx, log as never),
     ).rejects.toBe(failure);
+    expect(failure).toBeInstanceOf(SafeError);
+    expect(failure.message).toBe(
+      "Unable to retire stale certification evidence. Please retry the submission.",
+    );
     expect(log.warn).not.toHaveBeenCalled();
   });
 

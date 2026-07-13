@@ -96,6 +96,7 @@ import { renderEvidenceLedgerPdf } from "@/lib/certification/evidence-ledger/pdf
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { mirrorDocumentToSourceForUser } from "@/fn/certification/sources";
 import { ensureTransportEvidenceLedgerSourceFromContext } from "@/fn/certification/evidence-ledger";
+import { EvidenceLedgerRetirementError } from "@/fn/certification/evidence-ledger-core";
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 function leg(distanceKm: number, loadMassKg: number): TransportLeg {
@@ -312,6 +313,50 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
       "doc-old",
     );
     expect(deleteDocumentRow).toHaveBeenCalledWith(makeTestOrgContext(USER), "doc-old");
+  });
+
+  it("fails closed when an empty-ledger retirement cannot remove the stale mapping", async () => {
+    vi.mocked(listDocumentsByKindForRemoval).mockResolvedValue([
+      {
+        id: "doc-old",
+        storageKey: "transport-evidence/old.pdf",
+        metadata: { kind: "transport_evidence_ledger", removalId: REMOVAL },
+      } as never,
+    ]);
+    vi.mocked(deleteDocumentUploadByDocument).mockRejectedValue(
+      new Error("delete failed"),
+    );
+
+    await expect(
+      ensureTransportEvidenceLedgerSourceFromContext(
+        makeTestOrgContext(USER),
+        REMOVAL,
+        ctx({ legs: { feedstock: [], biochar: [], sample: [] } }),
+      ),
+    ).rejects.toBeInstanceOf(EvidenceLedgerRetirementError);
+    expect(deleteDocumentRow).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when cleanup after a generation failure cannot retire stale evidence", async () => {
+    vi.mocked(listDocumentsByKindForRemoval).mockResolvedValue([
+      {
+        id: "doc-old",
+        storageKey: "transport-evidence/old.pdf",
+        metadata: { kind: "transport_evidence_ledger", removalId: REMOVAL },
+      } as never,
+    ]);
+    vi.mocked(renderEvidenceLedgerPdf).mockRejectedValue(new Error("render failed"));
+    vi.mocked(deleteDocumentUploadByDocument).mockRejectedValue(
+      new Error("delete failed"),
+    );
+
+    await expect(
+      ensureTransportEvidenceLedgerSourceFromContext(
+        makeTestOrgContext(USER),
+        REMOVAL,
+        ctx(),
+      ),
+    ).rejects.toBeInstanceOf(EvidenceLedgerRetirementError);
   });
 
   it("skips entirely when the facility has no Isometric project", async () => {

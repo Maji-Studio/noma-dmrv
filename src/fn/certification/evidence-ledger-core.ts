@@ -36,6 +36,7 @@ import {
 } from "@/data-access/documents";
 import { db } from "@/db";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
+import { SafeError } from "@/lib/errors";
 import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
 import type { logger } from "@/lib/log";
 import { getStorageProvider } from "@/lib/storage";
@@ -91,10 +92,17 @@ export interface RetireLedgerSourcesSpec {
 }
 
 /** Retirement must complete before a now-inapplicable ledger can be ignored. */
-export class EvidenceLedgerRetirementError extends Error {
+export class EvidenceLedgerRetirementError extends SafeError {
+  override readonly cause: unknown;
+  readonly ledgerKind: string;
+
   constructor(kind: string, cause: unknown) {
-    super(`Failed to retire inapplicable ${kind}`, { cause });
+    super(
+      "Unable to retire stale certification evidence. Please retry the submission.",
+    );
     this.name = "EvidenceLedgerRetirementError";
+    this.ledgerKind = kind;
+    this.cause = cause;
   }
 }
 
@@ -133,6 +141,18 @@ async function withRemovalLedgerSerialization<T>(
   });
 }
 
+async function listLedgerPriors(
+  orgCtx: OrgContext,
+  kind: string,
+  removalId: string,
+): Promise<DocumentRow[]> {
+  try {
+    return await listDocumentsByKindForRemoval(orgCtx, kind, removalId);
+  } catch (err) {
+    throw new EvidenceLedgerRetirementError(kind, err);
+  }
+}
+
 /**
  * Generate (or reuse) one ledger artifact and mirror it to an Isometric Source.
  * Idempotent on `spec.contentHash`; supersedes any prior ledger of the same kind
@@ -145,16 +165,12 @@ export async function ensureLedgerSource(
   spec: LedgerArtifactSpec,
 ): Promise<EnsureLedgerResult> {
   return withRemovalLedgerSerialization(spec.removalId, async () => {
-    const priors = await listDocumentsByKindForRemoval(
-      orgCtx,
-      spec.kind,
-      spec.removalId,
-    );
+    const priors = await listLedgerPriors(orgCtx, spec.kind, spec.removalId);
 
     if (spec.isEmpty) {
       // Nothing to evidence — drop any stale ledger so it stops riding into
       // source_ids, then skip.
-      await retireSupersededLedgers(orgCtx, priors, null, spec.log);
+      await retireSupersededLedgers(orgCtx, priors, null, spec.kind, spec.log);
       return { status: "skipped", reason: spec.emptyReason };
     }
 
@@ -169,7 +185,13 @@ export async function ensureLedgerSource(
         sameContent.id,
       );
       if (upload) {
-        await retireSupersededLedgers(orgCtx, priors, sameContent, spec.log);
+        await retireSupersededLedgers(
+          orgCtx,
+          priors,
+          sameContent,
+          spec.kind,
+          spec.log,
+        );
         spec.log.info({ documentId: sameContent.id }, "reused evidence ledger");
         return {
           status: "reused",
@@ -222,7 +244,13 @@ export async function ensureLedgerSource(
       });
 
       // Supersede: retire every prior ledger now that the current one is mirrored.
-      await retireSupersededLedgers(orgCtx, priors, doc, spec.log);
+      await retireSupersededLedgers(
+        orgCtx,
+        priors,
+        doc,
+        spec.kind,
+        spec.log,
+      );
       spec.log.info(
         { documentId: doc.id, retired: priors.length },
         "generated evidence ledger",
@@ -235,19 +263,28 @@ export async function ensureLedgerSource(
         contentHash: spec.contentHash,
       };
     } catch (err) {
+      if (err instanceof EvidenceLedgerRetirementError) throw err;
       // Drop the stale priors so they can't masquerade as current evidence;
-      // best-effort so a retirement hiccup doesn't mask the original failure.
-      await retireSupersededLedgers(orgCtx, priors, null, spec.log).catch(
-        (retireErr) => {
-          spec.log.warn(
-            {
-              errorName:
-                retireErr instanceof Error ? retireErr.name : typeof retireErr,
-            },
-            "failed to retire stale ledgers after generation error",
-          );
-        },
-      );
+      // a failed retirement takes precedence because submission must not carry
+      // a stale Source after the ordinary render/storage/mirror failure.
+      try {
+        await retireSupersededLedgers(
+          orgCtx,
+          priors,
+          null,
+          spec.kind,
+          spec.log,
+        );
+      } catch (retireErr) {
+        spec.log.warn(
+          {
+            errorName:
+              retireErr instanceof Error ? retireErr.name : typeof retireErr,
+          },
+          "failed to retire stale ledgers after generation error",
+        );
+        throw retireErr;
+      }
       throw err;
     }
   });
@@ -265,15 +302,18 @@ export async function retireLedgerSources(
 ): Promise<EnsureLedgerResult> {
   try {
     return await withRemovalLedgerSerialization(spec.removalId, async () => {
-      const priors = await listDocumentsByKindForRemoval(
+      const priors = await listLedgerPriors(orgCtx, spec.kind, spec.removalId);
+      await retireSupersededLedgers(
         orgCtx,
+        priors,
+        null,
         spec.kind,
-        spec.removalId,
+        spec.log,
       );
-      await retireSupersededLedgers(orgCtx, priors, null, spec.log);
       return { status: "skipped", reason: spec.reason };
     });
   } catch (err) {
+    if (err instanceof EvidenceLedgerRetirementError) throw err;
     throw new EvidenceLedgerRetirementError(spec.kind, err);
   }
 }
@@ -288,30 +328,35 @@ async function retireSupersededLedgers(
   orgCtx: OrgContext,
   priors: DocumentRow[],
   keep: DocumentRow | null,
+  kind: string,
   log: LedgerLog,
 ): Promise<void> {
   const stale = priors.filter((p) => p.id !== keep?.id);
   if (stale.length === 0) return;
 
-  const provider = getStorageProvider();
-  await Promise.all(
-    stale.map(async (doc) => {
-      await deleteDocumentUploadByDocument(orgCtx, ISOMETRIC_PROVIDER, doc.id);
-      await deleteDocumentRow(orgCtx, doc.id);
-      if (doc.storageKey && doc.storageKey !== keep?.storageKey) {
-        // Orphaned bytes are harmless (the row + mapping are gone, so it can
-        // never re-enter source_ids); a delete failure must not fail the submit.
-        await provider.deleteObject(doc.storageKey).catch((err) => {
-          log.warn(
-            {
-              documentId: doc.id,
-              errorName: err instanceof Error ? err.name : typeof err,
-            },
-            "failed to delete retired ledger object",
-          );
-        });
-      }
-    }),
-  );
+  try {
+    const provider = getStorageProvider();
+    await Promise.all(
+      stale.map(async (doc) => {
+        await deleteDocumentUploadByDocument(orgCtx, ISOMETRIC_PROVIDER, doc.id);
+        await deleteDocumentRow(orgCtx, doc.id);
+        if (doc.storageKey && doc.storageKey !== keep?.storageKey) {
+          // Orphaned bytes are harmless (the row + mapping are gone, so it can
+          // never re-enter source_ids); a delete failure must not fail the submit.
+          await provider.deleteObject(doc.storageKey).catch((err) => {
+            log.warn(
+              {
+                documentId: doc.id,
+                errorName: err instanceof Error ? err.name : typeof err,
+              },
+              "failed to delete retired ledger object",
+            );
+          });
+        }
+      }),
+    );
+  } catch (err) {
+    throw new EvidenceLedgerRetirementError(kind, err);
+  }
   log.info({ retired: stale.length }, "retired prior evidence ledgers");
 }
