@@ -416,8 +416,27 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
   // keeps the default emphasized footer treatment.
   const operandRow = { backgroundColor: C.sea };
   const stackedRow = { borderTopWidth: 1, borderTopColor: C.ink12 };
+  const displayedRowSumTkm = cat.legs.reduce((sum, leg) => sum + leg.tkm, 0);
+  const roundingRows =
+    cat.roundingAdjustmentTkm == null
+      ? []
+      : [
+          footRow(
+            `Displayed row sum — ${cat.key} · ${cat.legs.length} legs`,
+            nf2(displayedRowSumTkm),
+            "t·km",
+            operandRow,
+          ),
+          footRow(
+            "Rounding adjustment — canonical unrounded leg sum",
+            nf2(cat.roundingAdjustmentTkm),
+            "t·km",
+            { ...operandRow, ...stackedRow },
+          ),
+        ];
   const foot = cat.scaling
     ? v({}, {},
+        ...roundingRows,
         footRow(
           `Leg sum — ${cat.key} · ${cat.legs.length} legs`,
           nf2(cat.scaling.rawSubtotalTkm),
@@ -437,11 +456,21 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
           stackedRow,
         ),
       )
-    : footRow(
-        `Subtotal — ${cat.key} · ${cat.legs.length} legs`,
-        nf2(cat.subtotalTkm),
-        "t·km",
-      );
+    : roundingRows.length > 0
+      ? v({}, {},
+          ...roundingRows,
+          footRow(
+            `Subtotal — ${cat.key} · submitted scalar`,
+            nf2(cat.subtotalTkm),
+            "t·km",
+            stackedRow,
+          ),
+        )
+      : footRow(
+          `Subtotal — ${cat.key} · ${cat.legs.length} legs`,
+          nf2(cat.subtotalTkm),
+          "t·km",
+        );
   return v(styles.section, {}, header, v(styles.table, {}, th, ...rows, foot));
 }
 

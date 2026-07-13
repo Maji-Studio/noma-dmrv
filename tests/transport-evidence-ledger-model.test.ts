@@ -98,7 +98,9 @@ describe("buildLedgerModel", () => {
     const samp = model.categories.find((c) => c.key === "sample")!;
     expect(feed.legs.map((l) => l.tkm)).toEqual([0.01, 0.01]);
     expect(feed.subtotalTkm).toBe(0.01);
+    expect(feed.roundingAdjustmentTkm).toBe(-0.01);
     expect(bio.subtotalTkm).toBe(64);
+    expect(bio.roundingAdjustmentTkm).toBeUndefined();
     expect(samp.subtotalTkm).toBe(0.41);
     expect(model.totalTkm).toBe(0.01 + 64 + 0.41);
     expect(model.totalLegs).toBe(4);

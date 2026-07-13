@@ -238,6 +238,29 @@ export async function submitRemoval(
     expectedDefaultRemovalTemplateId: ctx.mapping.defaultRemovalTemplateId,
   };
 
+  // ADR 0005 escape hatch: in SANDBOX, a Removal Template that still declares a
+  // period-input tuple (e.g. pyrolyzer_direct concentration) emits a
+  // 0-magnitude stub instead of failing closed, so the pipeline can be
+  // exercised before the real LCA value lands. Production NEVER stubs — 0 is an
+  // over-claim for these positive emissions. See docs/open-questions.md.
+  const allowPeriodInputStub = env.ISOMETRIC_ENVIRONMENT === "sandbox";
+
+  // Run the complete aggregation, durability, transport, reporting-window,
+  // and template-input validation before generating or mirroring evidence.
+  // Supplying an explicit empty Source set keeps this preflight free of the
+  // candidate-document walk; its build output is intentionally discarded.
+  await buildRemovalSubmissionBuild({
+    orgCtx,
+    removalId,
+    ctx,
+    defaultTemplate,
+    blueprintsByKey,
+    externalProjectId,
+    allowPeriodInputStub,
+    hasDurabilityComponents,
+    sourceIds: [],
+  });
+
   // Regenerate every Source-mirrored evidence ledger (transport mass·distance +
   // 200-year durability) from the live context and mirror them BEFORE candidate
   // documents are collected, so the current ledgers ride into source_ids on this
@@ -247,13 +270,6 @@ export async function submitRemoval(
   // content (an unchanged resubmit is a no-op); each ledger self-skips when it
   // has nothing to evidence.
   await ensureEvidenceLedgersFromContext(orgCtx, removalId, ctx, log);
-
-  // ADR 0005 escape hatch: in SANDBOX, a Removal Template that still declares a
-  // period-input tuple (e.g. pyrolyzer_direct concentration) emits a
-  // 0-magnitude stub instead of failing closed, so the pipeline can be
-  // exercised before the real LCA value lands. Production NEVER stubs — 0 is an
-  // over-claim for these positive emissions. See docs/open-questions.md.
-  const allowPeriodInputStub = env.ISOMETRIC_ENVIRONMENT === "sandbox";
 
   const initialBuild = await buildRemovalSubmissionBuild({
     orgCtx,

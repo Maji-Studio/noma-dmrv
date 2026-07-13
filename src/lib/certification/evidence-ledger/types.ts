@@ -86,6 +86,12 @@ export interface LedgerCategory {
    */
   subtotalTkm: number;
   /**
+   * Difference between the sum of 2dp display rows and the canonical raw-sum
+   * subtotal. Present only when non-zero so the PDF can reconcile visibly
+   * without changing the canonical scalar or overstating per-leg precision.
+   */
+  roundingAdjustmentTkm?: number;
+  /**
    * Present only for the biochar (DELIVERY-bucket) category of a
    * partially-applied removal (§8.6.2, ADR 0020). Omitted — not null — at
    * full application, so fully-applied ledgers keep a stable content hash.

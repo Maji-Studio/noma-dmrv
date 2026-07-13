@@ -83,6 +83,13 @@ export interface LedgerArtifactSpec {
   log: LedgerLog;
 }
 
+export interface RetireLedgerSourcesSpec {
+  kind: string;
+  removalId: string;
+  reason: string;
+  log: LedgerLog;
+}
+
 /** Pin the render timestamp to a constant so identical models hash identically. */
 export function stableLedgerContentHash<M extends { generatedAtIso: string }>(
   model: M,
@@ -235,6 +242,27 @@ export async function ensureLedgerSource(
       );
       throw err;
     }
+  });
+}
+
+/**
+ * Retire every current ledger of one kind when the artifact no longer applies.
+ * Kept as a first-class operation because some applicability checks (for
+ * example durability tier and soil-reference presence) happen before a model
+ * can be built and therefore cannot use `LedgerArtifactSpec.isEmpty`.
+ */
+export async function retireLedgerSources(
+  orgCtx: OrgContext,
+  spec: RetireLedgerSourcesSpec,
+): Promise<EnsureLedgerResult> {
+  return withRemovalLedgerSerialization(spec.removalId, async () => {
+    const priors = await listDocumentsByKindForRemoval(
+      orgCtx,
+      spec.kind,
+      spec.removalId,
+    );
+    await retireSupersededLedgers(orgCtx, priors, null, spec.log);
+    return { status: "skipped", reason: spec.reason };
   });
 }
 
