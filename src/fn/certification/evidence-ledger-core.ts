@@ -90,6 +90,14 @@ export interface RetireLedgerSourcesSpec {
   log: LedgerLog;
 }
 
+/** Retirement must complete before a now-inapplicable ledger can be ignored. */
+export class EvidenceLedgerRetirementError extends Error {
+  constructor(kind: string, cause: unknown) {
+    super(`Failed to retire inapplicable ${kind}`, { cause });
+    this.name = "EvidenceLedgerRetirementError";
+  }
+}
+
 /** Pin the render timestamp to a constant so identical models hash identically. */
 export function stableLedgerContentHash<M extends { generatedAtIso: string }>(
   model: M,
@@ -255,15 +263,19 @@ export async function retireLedgerSources(
   orgCtx: OrgContext,
   spec: RetireLedgerSourcesSpec,
 ): Promise<EnsureLedgerResult> {
-  return withRemovalLedgerSerialization(spec.removalId, async () => {
-    const priors = await listDocumentsByKindForRemoval(
-      orgCtx,
-      spec.kind,
-      spec.removalId,
-    );
-    await retireSupersededLedgers(orgCtx, priors, null, spec.log);
-    return { status: "skipped", reason: spec.reason };
-  });
+  try {
+    return await withRemovalLedgerSerialization(spec.removalId, async () => {
+      const priors = await listDocumentsByKindForRemoval(
+        orgCtx,
+        spec.kind,
+        spec.removalId,
+      );
+      await retireSupersededLedgers(orgCtx, priors, null, spec.log);
+      return { status: "skipped", reason: spec.reason };
+    });
+  } catch (err) {
+    throw new EvidenceLedgerRetirementError(spec.kind, err);
+  }
 }
 
 /**
