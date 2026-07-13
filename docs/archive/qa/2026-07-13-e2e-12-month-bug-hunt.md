@@ -83,7 +83,7 @@ Browser console warnings/errors after the cold sweep: 0.
 
 1. Run the same flow in an isolated QA database so 12-month records can remain
    visible for manual browser inspection after fixture creation.
-2. At 30/30, correct chemistry without reducing eligibility, then redated the
+2. At 30/30, correct chemistry without reducing eligibility, then redate the
    same sample below the established-date bound; verify ordinary correction is
    allowed but qualification-breaking edits roll back.
 3. Back-enter a batch dated before a newer production process was established;
