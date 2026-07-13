@@ -72,10 +72,11 @@ pnpm test:e2e tests/e2e/production-process-method-b-lifecycle.spec.ts --project=
 pnpm test --run src/fn/certification/durability-measurement-samples.test.ts src/components/certification/sources-panel.test.tsx tests/isometric-transport-leg-sources.test.ts tests/isometric-sources-mirror-flow.test.ts tests/sample-1000-year-schema.test.ts
 pnpm exec vitest run src/components/credit-batches/feedstock-process-chip.test.tsx src/lib/certification/sampling-requirements.test.ts src/lib/certification/durability-submission-gates.test.ts tests/production-processes.test.ts src/fn/certification/durability-measurement-samples.test.ts src/lib/certification/durability-batch-summary.test.ts src/lib/certification/evidence-ledger/durability-build-model.test.ts src/lib/isometric/utils/durability-aggregation.test.ts src/components/production-processes/production-process-list.test.tsx tests/facilities-durability-guard.test.ts
 pnpm typecheck
-pnpm lint <touched files>
 ```
 
-All commands passed (108 focused tests plus the 1-test Chromium lifecycle E2E).
+A touched-file lint also passed; the exact invocation was not retained. The
+executable commands above passed (108 focused tests plus the 1-test Chromium
+lifecycle E2E).
 Browser console warnings/errors after the cold sweep: 0.
 
 ## Next bug-hunt scenarios
