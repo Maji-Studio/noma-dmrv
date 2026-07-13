@@ -158,6 +158,24 @@ describe("ensureDurabilityEvidenceLedgerSourceFromContext", () => {
     );
   });
 
+  it("retires stale durability evidence when there are no sampled batches", async () => {
+    const ctx = context({ durabilityOption: "200_year", hasSoilReference: true });
+    ctx.batchesWithSamples = [];
+
+    const result = await ensureDurabilityEvidenceLedgerSourceFromContext(
+      makeTestOrgContext(USER),
+      REMOVAL,
+      ctx,
+    );
+
+    expect(result).toEqual({ status: "skipped", reason: "no-samples" });
+    expect(renderDurabilityLedgerPdf).not.toHaveBeenCalled();
+    expect(deleteDocumentRow).toHaveBeenCalledWith(
+      makeTestOrgContext(USER),
+      "doc-old",
+    );
+  });
+
   it("retires stale durability evidence when the soil reference is absent", async () => {
     const result = await ensureDurabilityEvidenceLedgerSourceFromContext(
       makeTestOrgContext(USER),
