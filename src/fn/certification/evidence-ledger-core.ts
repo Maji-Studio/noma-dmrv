@@ -94,15 +94,17 @@ export interface RetireLedgerSourcesSpec {
 /** Retirement must complete before a now-inapplicable ledger can be ignored. */
 export class EvidenceLedgerRetirementError extends SafeError {
   override readonly cause: unknown;
+  readonly generationCause?: unknown;
   readonly ledgerKind: string;
 
-  constructor(kind: string, cause: unknown) {
+  constructor(kind: string, cause: unknown, generationCause?: unknown) {
     super(
       "Unable to retire stale certification evidence. Please retry the submission.",
     );
     this.name = "EvidenceLedgerRetirementError";
     this.ledgerKind = kind;
     this.cause = cause;
+    this.generationCause = generationCause;
   }
 }
 
@@ -127,18 +129,37 @@ function docContentHash(doc: DocumentRow): string | null {
  */
 async function withRemovalLedgerSerialization<T>(
   removalId: string,
+  kind: string,
   fn: () => Promise<T>,
 ): Promise<T> {
-  return db.transaction(async (tx) => {
-    await acquireCertificationArtifactLocksSorted(tx, [
-      {
-        provider: ISOMETRIC_PROVIDER,
-        localEntityType: "removal",
-        localEntityId: removalId,
-      },
-    ]);
-    return fn();
-  });
+  let operationFailed = false;
+  let operationError: unknown;
+  try {
+    return await db.transaction(async (tx) => {
+      try {
+        await acquireCertificationArtifactLocksSorted(tx, [
+          {
+            provider: ISOMETRIC_PROVIDER,
+            localEntityType: "removal",
+            localEntityId: removalId,
+          },
+        ]);
+      } catch (err) {
+        throw new EvidenceLedgerRetirementError(kind, err);
+      }
+      try {
+        return await fn();
+      } catch (err) {
+        operationFailed = true;
+        operationError = err;
+        throw err;
+      }
+    });
+  } catch (err) {
+    if (err instanceof EvidenceLedgerRetirementError) throw err;
+    if (operationFailed) throw operationError;
+    throw new EvidenceLedgerRetirementError(kind, err);
+  }
 }
 
 async function listLedgerPriors(
@@ -148,6 +169,22 @@ async function listLedgerPriors(
 ): Promise<DocumentRow[]> {
   try {
     return await listDocumentsByKindForRemoval(orgCtx, kind, removalId);
+  } catch (err) {
+    throw new EvidenceLedgerRetirementError(kind, err);
+  }
+}
+
+async function getLedgerUpload(
+  orgCtx: OrgContext,
+  kind: string,
+  documentId: string,
+) {
+  try {
+    return await getDocumentUploadByDocument(
+      orgCtx,
+      ISOMETRIC_PROVIDER,
+      documentId,
+    );
   } catch (err) {
     throw new EvidenceLedgerRetirementError(kind, err);
   }
@@ -164,7 +201,7 @@ export async function ensureLedgerSource(
   orgCtx: OrgContext,
   spec: LedgerArtifactSpec,
 ): Promise<EnsureLedgerResult> {
-  return withRemovalLedgerSerialization(spec.removalId, async () => {
+  return withRemovalLedgerSerialization(spec.removalId, spec.kind, async () => {
     const priors = await listLedgerPriors(orgCtx, spec.kind, spec.removalId);
 
     if (spec.isEmpty) {
@@ -179,11 +216,7 @@ export async function ensureLedgerSource(
       (p) => docContentHash(p) === spec.contentHash,
     );
     if (sameContent) {
-      const upload = await getDocumentUploadByDocument(
-        orgCtx,
-        ISOMETRIC_PROVIDER,
-        sameContent.id,
-      );
+      const upload = await getLedgerUpload(orgCtx, spec.kind, sameContent.id);
       if (upload) {
         await retireSupersededLedgers(
           orgCtx,
@@ -276,14 +309,23 @@ export async function ensureLedgerSource(
           spec.log,
         );
       } catch (retireErr) {
+        const retirementCause =
+          retireErr instanceof EvidenceLedgerRetirementError
+            ? retireErr.cause
+            : retireErr;
         spec.log.warn(
           {
-            errorName:
+            generationErrorName: err instanceof Error ? err.name : typeof err,
+            retirementErrorName:
               retireErr instanceof Error ? retireErr.name : typeof retireErr,
           },
-          "failed to retire stale ledgers after generation error",
+          "evidence ledger generation and stale retirement both failed",
         );
-        throw retireErr;
+        throw new EvidenceLedgerRetirementError(
+          spec.kind,
+          retirementCause,
+          err,
+        );
       }
       throw err;
     }
@@ -301,17 +343,25 @@ export async function retireLedgerSources(
   spec: RetireLedgerSourcesSpec,
 ): Promise<EnsureLedgerResult> {
   try {
-    return await withRemovalLedgerSerialization(spec.removalId, async () => {
-      const priors = await listLedgerPriors(orgCtx, spec.kind, spec.removalId);
-      await retireSupersededLedgers(
-        orgCtx,
-        priors,
-        null,
-        spec.kind,
-        spec.log,
-      );
-      return { status: "skipped", reason: spec.reason };
-    });
+    return await withRemovalLedgerSerialization(
+      spec.removalId,
+      spec.kind,
+      async () => {
+        const priors = await listLedgerPriors(
+          orgCtx,
+          spec.kind,
+          spec.removalId,
+        );
+        await retireSupersededLedgers(
+          orgCtx,
+          priors,
+          null,
+          spec.kind,
+          spec.log,
+        );
+        return { status: "skipped", reason: spec.reason };
+      },
+    );
   } catch (err) {
     if (err instanceof EvidenceLedgerRetirementError) throw err;
     throw new EvidenceLedgerRetirementError(spec.kind, err);

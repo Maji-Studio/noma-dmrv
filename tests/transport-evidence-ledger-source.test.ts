@@ -148,6 +148,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(listDocumentsByKindForRemoval).mockResolvedValue([]);
   vi.mocked(getDocumentUploadByDocument).mockResolvedValue(null);
+  vi.mocked(deleteDocumentUploadByDocument).mockResolvedValue(undefined);
+  vi.mocked(renderEvidenceLedgerPdf).mockResolvedValue(Buffer.from("%PDF-fake"));
+  vi.mocked(acquireCertificationArtifactLocksSorted).mockResolvedValue(undefined);
   vi.mocked(insertDocument).mockImplementation(
     async (_ctx, row: Record<string, unknown>) =>
       ({ ...row, id: "doc-new" }) as never,
@@ -338,6 +341,8 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
   });
 
   it("fails closed when cleanup after a generation failure cannot retire stale evidence", async () => {
+    const generationFailure = new Error("render failed");
+    const retirementFailure = new Error("delete failed");
     vi.mocked(listDocumentsByKindForRemoval).mockResolvedValue([
       {
         id: "doc-old",
@@ -345,9 +350,66 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
         metadata: { kind: "transport_evidence_ledger", removalId: REMOVAL },
       } as never,
     ]);
-    vi.mocked(renderEvidenceLedgerPdf).mockRejectedValue(new Error("render failed"));
+    vi.mocked(renderEvidenceLedgerPdf).mockRejectedValue(generationFailure);
     vi.mocked(deleteDocumentUploadByDocument).mockRejectedValue(
-      new Error("delete failed"),
+      retirementFailure,
+    );
+
+    const promise = ensureTransportEvidenceLedgerSourceFromContext(
+      makeTestOrgContext(USER),
+      REMOVAL,
+      ctx(),
+    );
+    await expect(promise).rejects.toMatchObject({
+      cause: retirementFailure,
+      generationCause: generationFailure,
+    });
+  });
+
+  it("fails closed when the serialization transaction cannot start", async () => {
+    ledgerDbMocks.transaction.mockRejectedValueOnce(
+      new Error("transaction failed"),
+    );
+
+    await expect(
+      ensureTransportEvidenceLedgerSourceFromContext(
+        makeTestOrgContext(USER),
+        REMOVAL,
+        ctx(),
+      ),
+    ).rejects.toBeInstanceOf(EvidenceLedgerRetirementError);
+  });
+
+  it("fails closed when the advisory lock cannot be acquired", async () => {
+    vi.mocked(acquireCertificationArtifactLocksSorted).mockRejectedValueOnce(
+      new Error("lock failed"),
+    );
+
+    await expect(
+      ensureTransportEvidenceLedgerSourceFromContext(
+        makeTestOrgContext(USER),
+        REMOVAL,
+        ctx(),
+      ),
+    ).rejects.toBeInstanceOf(EvidenceLedgerRetirementError);
+  });
+
+  it("fails closed when an existing ledger upload cannot be inspected", async () => {
+    const created = await ensureTransportEvidenceLedgerSourceFromContext(
+      makeTestOrgContext(USER),
+      REMOVAL,
+      ctx(),
+    );
+    const hash = (created as { contentHash: string }).contentHash;
+    vi.clearAllMocks();
+    vi.mocked(listDocumentsByKindForRemoval).mockResolvedValue([
+      {
+        id: "doc-prior",
+        metadata: { contentHash: hash },
+      } as never,
+    ]);
+    vi.mocked(getDocumentUploadByDocument).mockRejectedValue(
+      new Error("lookup failed"),
     );
 
     await expect(
