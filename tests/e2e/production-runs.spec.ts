@@ -377,10 +377,10 @@ test.describe("Production Run end-time clear (#413)", () => {
     await expect(dialog.locator('input[name="endDate"]')).toHaveValue("2027-06-05");
     await expect(dialog.locator('input[name="endTime"]')).toHaveValue("12:00");
 
-    // Explicitly clear the end time. A complete run requires an end, so the
-    // operator also moves the run back to Running as part of reopening it.
-    await page.selectOption('select[name="status"]', "running");
+    // Explicitly clear the end time. Reopening a completed run also moves it
+    // back to Running so the form remains internally consistent and saveable.
     await dialog.getByRole("button", { name: /clear end time/i }).click();
+    await expect(dialog.locator('select[name="status"]')).toHaveValue("running");
     await expect(dialog.locator('input[name="endDate"]')).toHaveValue("");
     await expect(dialog.locator('input[name="endTime"]')).toHaveValue("");
     await saveEdit(page);

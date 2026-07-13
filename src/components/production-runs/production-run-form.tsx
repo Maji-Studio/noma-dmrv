@@ -289,6 +289,7 @@ export function ProductionRunForm({
     handleSubmit,
     control,
     setValue,
+    getValues,
     setError,
     clearErrors,
     formState: { errors, dirtyFields },
@@ -527,6 +528,9 @@ export function ProductionRunForm({
                   size="small"
                   disabled={isSubmitting}
                   onClick={() => {
+                    if (getValues("status") === "complete") {
+                      setValue("status", "running", SET_VALUE_OPTS);
+                    }
                     setValue("endDate", "", SET_VALUE_OPTS);
                     setValue("endTime", "", SET_VALUE_OPTS);
                     clearErrors("endTime");
