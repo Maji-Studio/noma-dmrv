@@ -128,43 +128,72 @@ test.describe("Production Run + Sample UI CRUD", () => {
   });
 });
 
-test.describe("Production Run reactor time-window overlap (#259)", () => {
-  const overlapText = /overlaps run|unfinished run/i;
+// Shared helpers for the time-window specs below (#259 overlap guard and
+// #413 end-time clear both drive the run form through the same flows).
+const overlapText = /overlaps run|unfinished run/i;
 
-  async function openRunForm(
-    page: Page,
-    seededData: SeededChainData,
-    window: {
-      startDate: string;
-      startTime: string;
-      endDate?: string;
-      endTime?: string;
-      status?: string;
-    },
-  ) {
-    await page.goto(`/production-runs?facility=${seededData.facility.id}`);
-    await page.getByRole("button", { name: "New Production Run" }).click();
-    await waitForSideSheet(page);
-    await page.selectOption('select[name="status"]', window.status ?? "running");
-    await selectEntity(
-      page,
-      "Reactor",
-      seededData.reactor.id,
-      seededData.reactor.identifier,
-    );
-    await page.fill('input[name="startDate"]', window.startDate);
-    await page.fill('input[name="startTime"]', window.startTime);
-    if (window.endDate) await page.fill('input[name="endDate"]', window.endDate);
-    if (window.endTime) await page.fill('input[name="endTime"]', window.endTime);
-  }
+async function openRunForm(
+  page: Page,
+  seededData: SeededChainData,
+  window: {
+    startDate: string;
+    startTime: string;
+    endDate?: string;
+    endTime?: string;
+    status?: string;
+  },
+) {
+  await page.goto(`/production-runs?facility=${seededData.facility.id}`);
+  await page.getByRole("button", { name: "New Production Run" }).click();
+  await waitForSideSheet(page);
+  await page.selectOption('select[name="status"]', window.status ?? "running");
+  await selectEntity(
+    page,
+    "Reactor",
+    seededData.reactor.id,
+    seededData.reactor.identifier,
+  );
+  await page.fill('input[name="startDate"]', window.startDate);
+  await page.fill('input[name="startTime"]', window.startTime);
+  if (window.endDate) await page.fill('input[name="endDate"]', window.endDate);
+  if (window.endTime) await page.fill('input[name="endTime"]', window.endTime);
+}
 
-  async function submitCreate(page: Page) {
+async function submitCreate(page: Page) {
+  await page
+    .locator('[role="dialog"]')
+    .locator('button:has-text("Create Production Run")')
+    .click();
+}
+
+async function editFirstRow(page: Page) {
+  // Edit via the row overflow menu (openEdit — it does NOT set the deep-link
+  // focus that would re-open a view sheet after save, so the sheet closes
+  // cleanly). A post-save list refetch can re-render the row and detach the
+  // menu's "Edit" item mid-click, so retry the open→Edit sequence instead of
+  // waiting for network idle (CI dev servers may never settle within budget).
+  await expect(async () => {
     await page
-      .locator('[role="dialog"]')
-      .locator('button:has-text("Create Production Run")')
-      .click();
-  }
+      .locator("tbody tr")
+      .first()
+      .getByRole("button", { name: /Actions for/ })
+      .click({ timeout: 5000 });
+    await page.getByRole("menuitem", { name: "Edit" }).click({ timeout: 5000 });
+  }).toPass({ timeout: 30000 });
+  await waitForSideSheet(page);
+  await expect(
+    page.locator('[role="dialog"] input[name="startTime"]'),
+  ).toBeVisible();
+}
 
+async function saveEdit(page: Page) {
+  await page
+    .locator('[role="dialog"]')
+    .locator('button:has-text("Save Changes")')
+    .click();
+}
+
+test.describe("Production Run reactor time-window overlap (#259)", () => {
   test("rejects a duplicate start on the same reactor", async ({
     adminPage: page,
     seededData,
@@ -266,33 +295,6 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
     await waitForSideSheetClose(page);
   });
 
-  async function editFirstRow(page: Page) {
-    // Edit via the row overflow menu (openEdit — it does NOT set the deep-link
-    // focus that would re-open a view sheet after save, so the sheet closes
-    // cleanly). A post-save list refetch can re-render the row and detach the
-    // menu's "Edit" item mid-click, so retry the open→Edit sequence instead of
-    // waiting for network idle (CI dev servers may never settle within budget).
-    await expect(async () => {
-      await page
-        .locator("tbody tr")
-        .first()
-        .getByRole("button", { name: /Actions for/ })
-        .click({ timeout: 5000 });
-      await page.getByRole("menuitem", { name: "Edit" }).click({ timeout: 5000 });
-    }).toPass({ timeout: 30000 });
-    await waitForSideSheet(page);
-    await expect(
-      page.locator('[role="dialog"] input[name="startTime"]'),
-    ).toBeVisible();
-  }
-
-  async function saveEdit(page: Page) {
-    await page
-      .locator('[role="dialog"]')
-      .locator('button:has-text("Save Changes")')
-      .click();
-  }
-
   test("edit into a conflict is rejected; a non-time edit still saves", async ({
     adminPage: page,
     seededData,
@@ -341,5 +343,84 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
     await page.fill('input[name="feedstockMoisturePercent"]', "18");
     await saveEdit(page);
     await waitForSideSheetClose(page);
+  });
+});
+
+test.describe("Production Run end-time clear (#413)", () => {
+  test("explicit clear reopens the run; untouched end fields stay unchanged", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    const dialog = page.locator('[role="dialog"]');
+
+    // A finished run: 2027-06-05 08:00–12:00, marked complete.
+    await openRunForm(page, seededData, {
+      startDate: "2027-06-05",
+      startTime: "08:00",
+      endDate: "2027-06-05",
+      endTime: "12:00",
+      status: "complete",
+    });
+    await submitCreate(page);
+    await waitForSideSheetClose(page);
+
+    // No-op guard: edit only a non-time field. Blank-or-untouched end fields
+    // must mean "unchanged", never "clear".
+    await editFirstRow(page);
+    await page.fill('input[name="feedstockMoisturePercent"]', "18");
+    await saveEdit(page);
+    await waitForSideSheetClose(page);
+
+    // The saved end time survived the non-time edit.
+    await page.reload();
+    await editFirstRow(page);
+    await expect(dialog.locator('input[name="endDate"]')).toHaveValue("2027-06-05");
+    await expect(dialog.locator('input[name="endTime"]')).toHaveValue("12:00");
+
+    // Explicitly clear the end time. Reopening a completed run also moves it
+    // back to Running so the form remains internally consistent and saveable.
+    await dialog.getByRole("button", { name: /clear end time/i }).click();
+    await expect(dialog.locator('select[name="status"]')).toHaveValue("running");
+    await expect(dialog.locator('input[name="endDate"]')).toHaveValue("");
+    await expect(dialog.locator('input[name="endTime"]')).toHaveValue("");
+    await saveEdit(page);
+    await waitForSideSheetClose(page);
+
+    // The clear persisted: the edit form now shows no end date/time.
+    await page.reload();
+    await editFirstRow(page);
+    await expect(dialog.locator('input[name="endDate"]')).toHaveValue("");
+    await expect(dialog.locator('input[name="endTime"]')).toHaveValue("");
+
+    // Server-side proof the run is truly open again: an open run occupies
+    // [start, ∞) on its reactor, so a later same-day run must now be rejected
+    // by the overlap guard. (Had the end time survived as 12:00 — or been
+    // mangled into some bogus date — this 14:00–15:00 window would save fine.)
+    await openRunForm(page, seededData, {
+      startDate: "2027-06-05",
+      startTime: "14:00",
+      endDate: "2027-06-05",
+      endTime: "15:00",
+      status: "complete",
+    });
+    await submitCreate(page);
+    await expect(dialog.getByText(overlapText)).toBeVisible({ timeout: 10000 });
+  });
+
+  test("create form has no clear-end-time control", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await page.goto(`/production-runs?facility=${seededData.facility.id}`);
+    await page.getByRole("button", { name: "New Production Run" }).click();
+    await waitForSideSheet(page);
+
+    const dialog = page.locator('[role="dialog"]');
+    await expect(dialog.locator('input[name="endTime"]')).toBeVisible();
+    // The explicit clear affordance is an edit-mode concept (blank end fields
+    // on create already mean "no end yet"); it must not leak into create.
+    await expect(
+      dialog.getByRole("button", { name: /clear end time/i }),
+    ).toHaveCount(0);
   });
 });

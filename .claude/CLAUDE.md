@@ -73,7 +73,7 @@ Rankings below are **higher = better**. Cost reflects what I actually pay (gpt-5
 
 - **Prefer gpt-5.6-sol over opus-4.8 most of the time** — it's quite powerful and effectively free; reach for opus-4.8 mainly when the work must run as a native Claude subagent/Workflow agent or when taste matters.
 - Bulk/mechanical (clear-spec implementation, data analysis, migrations) → **gpt-5.6-sol**.
-- User-facing (UI, copy, API design) needs **taste ≥ 7**.
+- User-facing (UI, copy, API design) needs **taste ≥ 7**. Utilize frontend-design skill
 - Reviews of plans/implementations → **fable-5 or gpt-5.6-sol**, optionally opus-4.8 as an extra independent perspective.
 - **Never use Haiku.** Subagents/Workflow agents run on **sonnet or opus — never inherit Fable**. Batch items to keep agent counts low.
 

@@ -56,7 +56,7 @@ export interface BatchGateFacts {
    * batch id (its own singleton group).
    */
   productionProcessId: string | null;
-  /** The batch's process's CURRENT sampling method (D6 — derived, never stored). */
+  /** The batch's effective sampling method at its immutable start boundary. */
   samplingMethod: SamplingMethod;
   /** Per-replicate stability ratios, pooled across the batch's member runs/days. */
   replicates: ReplicateRatios[];
@@ -205,11 +205,10 @@ export function evaluateDurabilitySubmissionGates(
   // (d) Method B cadence — across a production process's batch set, ≥ ceil(N /
   // cadence) batches must be sampled (§8.3.1.2). Method A's per-batch obligation
   // is covered by (b); Method B's 1-in-10 cadence is a cross-batch property, so
-  // group by production process (every batch of a process shares its single
-  // derived method) and block when the sampled count falls short — otherwise an
-  // all-unsampled Method B removal would read as ready. Method B is an inert seam
-  // today (DEC runs Method A everywhere); the path is kept correct for the
-  // deferred unlock.
+  // group by production process, then judge only that process's effective
+  // Method-B-era batches. A removal may contain pre-unlock Method A history and
+  // later Method B batches from the same process; the earlier batches must not
+  // satisfy or suppress the post-unlock cadence.
   const batchesByProcess = new Map<string, BatchGateFacts[]>();
   for (const batch of batches) {
     const key = batch.productionProcessId ?? batch.creditBatchId;
@@ -218,10 +217,13 @@ export function evaluateDurabilitySubmissionGates(
     else batchesByProcess.set(key, [batch]);
   }
   for (const processBatches of batchesByProcess.values()) {
-    if (processBatches[0].samplingMethod !== "method_b") continue;
+    const methodBBatches = processBatches.filter(
+      (batch) => batch.samplingMethod === "method_b",
+    );
+    if (methodBBatches.length === 0) continue;
     const requirement = deriveSamplingRequirement(
       "method_b",
-      processBatches.map((batch) => ({
+      methodBBatches.map((batch) => ({
         batchId: batch.creditBatchId,
         batchCode: batch.creditBatchCode,
         sampleCount: batch.replicates.length,

@@ -22,7 +22,7 @@ import {
   METHOD_B_SAMPLING_CADENCE_BATCHES,
 } from "@/config/certification";
 import { MOISTURE_PATHWAY_LABELS } from "@/schemas/production-process";
-import { formatLocalDate } from "@/lib/date-utils";
+import { formatLocalDate, formatUtcDate } from "@/lib/date-utils";
 import type { ProductionProcessSummary } from "@/data-access/production-processes";
 import { MethodPill } from "./method-pill";
 import { MethodBExplainer } from "./method-b-explainer";
@@ -118,7 +118,7 @@ export function ProcessDetailPanel({
                   <DetailRow>
                     <DetailField
                       label="Method B unlocked"
-                      value={formatLocalDate(process.methodBUnlockedAt)}
+                      value={formatUtcDate(process.methodBUnlockedAt)}
                     />
                   </DetailRow>
                 )}

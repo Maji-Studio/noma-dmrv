@@ -1,17 +1,15 @@
 /**
- * Method-driven sampling-requirement engine — the single pure decision behind
- * "given a production PROCESS's CURRENT sampling method and its credit batches,
- * how many must be sampled, and is the requirement met?" (decision D6).
+ * Method-driven sampling-requirement engine — the pure decisions behind a
+ * credit batch's effective Method A/B regime and the resulting process cadence.
  *
  * Grain (ADR 0016 / ADR 0017): the sampling unit is the CREDIT BATCH — the
  * protocol production batch — never the production run. A credit batch's
  * `sampleCount` is its POOLED replicate count across its member runs/days.
  *
- * The requirement is DERIVED, never stored: it is computed from the process's
- * live `samplingMethod` at readiness/submission time, so flipping the method
- * auto-readjusts what's required. Callers pass only the batches that are still
- * in scope (not yet frozen into a submitted removal); this module judges the
- * set it is given.
+ * The requirement is DERIVED, never stored. A process unlock does not rewrite
+ * history: batches starting before or on the unlock date remain Method A; only
+ * later batches use Method B (ADR 0017). Callers pass batches from one effective
+ * regime that are still in scope; this module judges the set it is given.
  *
  * ─── AUTHORITATIVE SOURCE (pinned, see docs/isometric/versions.json) ─────────
  *   Biochar Protocol 1.2 (tag 1.2.0)
@@ -32,6 +30,47 @@ import { METHOD_B_SAMPLING_CADENCE_BATCHES } from "@/config/certification";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 
 export type SamplingMethod = "method_a" | "method_b";
+
+/**
+ * Resolve the immutable sampling regime for one batch from its process state.
+ * Credit-batch starts are date-only while the unlock is a timestamp, so a batch
+ * starting on the unlock calendar date remains Method A. Invalid or incomplete
+ * transition data fails closed to Method A.
+ */
+export function deriveBatchSamplingMethod(params: {
+  processMethod: SamplingMethod;
+  methodBUnlockedAt: Date | string | null;
+  batchStartDate: Date | string;
+}): SamplingMethod {
+  if (params.processMethod !== "method_b" || params.methodBUnlockedAt == null) {
+    return "method_a";
+  }
+
+  const batchStartDate = toIsoDate(params.batchStartDate);
+  const unlockDate = toIsoDate(params.methodBUnlockedAt);
+  if (batchStartDate == null || unlockDate == null) return "method_a";
+
+  return batchStartDate > unlockDate ? "method_b" : "method_a";
+}
+
+function toIsoDate(value: Date | string): string | null {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.toISOString().slice(0, 10);
+  }
+
+  const dateOnlyMatch = /^(\d{4}-\d{2}-\d{2})(?:T|$)/.exec(value);
+  if (dateOnlyMatch) {
+    const dateOnly = dateOnlyMatch[1];
+    const parsedDateOnly = new Date(`${dateOnly}T00:00:00.000Z`);
+    return !Number.isNaN(parsedDateOnly.getTime()) &&
+      parsedDateOnly.toISOString().slice(0, 10) === dateOnly
+      ? dateOnly
+      : null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
+}
 
 /** One in-scope credit batch and how many replicate samples it pools. */
 export interface BatchSampling {
@@ -63,8 +102,8 @@ export interface SamplingRequirement {
 }
 
 /**
- * Derive the sampling requirement for a process's in-scope credit batches under
- * its current method. Pure over its inputs — no I/O, no DB types.
+ * Derive the sampling requirement for one effective regime's in-scope credit
+ * batches. Pure over its inputs — no I/O, no DB types.
  */
 export function deriveSamplingRequirement(
   method: SamplingMethod,
