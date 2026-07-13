@@ -58,8 +58,9 @@ would re-open 0013 and re-create the audit-defeating posture it exists to remove
    eligible-sample pool. noma's role for Method B is **gating + submission routing + a labelled,
    non-authoritative preview** — never credit-bearing math. The borrow-pool granularity question is
    **dissolved**: the protocol fixes the pool at the **production process**, and noma never asserts a
-   pooling choice for crediting. At submission, noma records the contributing eligible sample
-   versions so the evidence dependency can be enforced and audited.
+   pooling choice for crediting. At submission, noma is to record the contributing eligible sample
+   versions so the evidence dependency can be enforced and audited (target contract — not yet
+   built; see the 2026-07-12 submitted-evidence-lock amendment).
 
 2. **Unlock is eligible-then-act, not auto-flip.** At ≥ 30 qualifying Method-A baseline samples
    (counted in the process since its operator-entered operational `established_at`) a process
