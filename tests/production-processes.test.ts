@@ -22,7 +22,7 @@ import {
   findOrCreateProductionProcess,
   getProductionProcessSummariesByFacility,
 } from "@/data-access/production-processes";
-import { deleteSample } from "@/data-access/samples";
+import { deleteSample, updateSample } from "@/data-access/samples";
 import { countEligibleSamplesByProcess } from "@/data-access/isometric";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
@@ -38,6 +38,12 @@ let facilityId: string;
 let feedstockTypeId: string;
 
 const METHOD_B_UNLOCKED_AT = new Date("2026-02-01T00:00:00.000Z");
+const POST_UNLOCK_SAMPLING_TIME = new Date("2026-02-02T12:00:00.000Z");
+const METHOD_B_RANDOM_REFLECTANCE_R0_PERCENT = 2.5;
+const METHOD_B_S_REFLECTANCE_FRACTION = 0.8;
+const METHOD_B_RESIDUAL_CARBON_PERCENT = 70;
+const CORRECTED_LAB_NAME = "QA corrected laboratory";
+const CORRECTED_TOTAL_CARBON_PERCENT = 81;
 const FAR_FUTURE_SAMPLING_TIME = new Date("2999-01-01T12:00:00.000Z");
 const METHOD_B_SAMPLE_WRITE_GUARDS_MIGRATION = resolve(
   process.cwd(),
@@ -100,6 +106,9 @@ async function createMethodBProcessWithBaseline(tag: string): Promise<{
         samplingTime: new Date(`2026-01-${String(index + 1).padStart(2, "0")}T12:00:00.000Z`),
         totalCarbonPercent: 80,
         organicCarbonPercent: 75,
+        randomReflectanceR0Percent: METHOD_B_RANDOM_REFLECTANCE_R0_PERCENT,
+        sReflectanceFraction: METHOD_B_S_REFLECTANCE_FRACTION,
+        residualCarbonPercent: METHOD_B_RESIDUAL_CARBON_PERCENT,
       })),
     )
     .returning({ id: samples.id });
@@ -355,6 +364,53 @@ describe("findOrCreateProductionProcess", () => {
       .from(samples)
       .where(eq(samples.id, fixture.sampleIds[0]));
     expect(sample?.id).toBe(fixture.sampleIds[0]);
+  });
+
+  it("rolls back a sample update that would break the Method-B baseline floor", async () => {
+    const fixture = await createMethodBProcessWithBaseline("update-friendly");
+    const sampleId = fixture.sampleIds[0];
+    const [before] = await db
+      .select({
+        samplingTime: samples.samplingTime,
+        labName: samples.labName,
+        totalCarbonPercent: samples.totalCarbonPercent,
+      })
+      .from(samples)
+      .where(eq(samples.id, sampleId));
+
+    await expect(
+      updateSample(makeTestOrgContext(TEST_USER_ID), sampleId, {
+        samplingTime: POST_UNLOCK_SAMPLING_TIME,
+      }),
+    ).rejects.toThrow(/reduce the Method B baseline below 30/i);
+
+    const [after] = await db
+      .select({
+        samplingTime: samples.samplingTime,
+        labName: samples.labName,
+        totalCarbonPercent: samples.totalCarbonPercent,
+      })
+      .from(samples)
+      .where(eq(samples.id, sampleId));
+    expect(after).toEqual(before);
+  });
+
+  it("allows ordinary corrections to an unsubmitted Method-B baseline sample", async () => {
+    const fixture = await createMethodBProcessWithBaseline("update-correction");
+
+    const updated = await updateSample(
+      makeTestOrgContext(TEST_USER_ID),
+      fixture.sampleIds[0],
+      {
+        labName: CORRECTED_LAB_NAME,
+        totalCarbonPercent: CORRECTED_TOTAL_CARBON_PERCENT,
+      },
+    );
+
+    expect(updated.labName).toBe(CORRECTED_LAB_NAME);
+    expect(Number(updated.totalCarbonPercent)).toBe(
+      CORRECTED_TOTAL_CARBON_PERCENT,
+    );
   });
 
   it("blocks clearing a pre-unlock sample's credit-batch link from a Method-B process", async () => {

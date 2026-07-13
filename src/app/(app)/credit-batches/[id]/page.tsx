@@ -7,6 +7,7 @@ import { CreditBatchDetail } from "@/components/credit-batches";
 import { requireOrgContext } from "@/lib/auth/server";
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { notFound, redirect } from "next/navigation";
+import { z } from "zod";
 
 interface CreditBatchDetailPageProps {
   params: Promise<{ id: string }>;
@@ -42,6 +43,11 @@ export default async function CreditBatchDetailPage({
 }: CreditBatchDetailPageProps) {
   const { id } = await params;
   const sp = await searchParams;
+
+  if (!z.uuid().safeParse(id).success) {
+    notFound();
+  }
+
   const ctx = await requireOrgContext();
 
   const batch = await getCreditBatchById(ctx, id, { skipPreview: true });
