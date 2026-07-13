@@ -2,6 +2,7 @@ name: PR migration gate
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
     paths:
       - "src/db/schema/**"
       - "drizzle/**"
@@ -19,6 +20,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 # Cancel superseded checks for the same pull request or manually selected ref.
 concurrency:
@@ -52,13 +54,32 @@ jobs:
       ADMIN_EMAIL: migration-gate-admin@ci.local
 
     steps:
-      # Pull requests start from their immutable base SHA. Manual runs compare
-      # the selected ref against staging, which makes feature-branch dispatches
-      # useful while keeping the baseline predictable.
-      - name: Checkout base revision
+      # A maintainer may mark exactly one staging→main promotion as the first
+      # production deployment. That mode validates the full migration chain on
+      # an empty database instead of inventing legacy production rows from the
+      # main-branch demo seed. Every later promotion keeps the seeded-upgrade
+      # gate. The label is explicit and auditable on the promotion PR.
+      - name: Determine migration mode
+        id: migration-mode
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" && "$BASE_REF" == "main" && "$LABELS_JSON" == *'"first-production-deployment"'* ]]; then
+            echo "fresh_database=true" >> "$GITHUB_OUTPUT"
+            echo "Migration mode: fresh production database"
+          else
+            echo "fresh_database=false" >> "$GITHUB_OUTPUT"
+            echo "Migration mode: seeded base upgrade"
+          fi
+
+      # Seeded upgrades start from the immutable base SHA. A labeled first
+      # deployment starts from the candidate so its complete migration chain is
+      # what gets applied to the empty database.
+      - name: Checkout initial revision
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || 'staging' }}
+          ref: ${{ steps.migration-mode.outputs.fresh_database == 'true' && github.ref || github.event_name == 'pull_request' && github.event.pull_request.base.sha || 'staging' }}
           persist-credentials: false
           fetch-depth: 0
 
@@ -73,7 +94,7 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install base dependencies
+      - name: Install initial dependencies
         run: pnpm install --frozen-lockfile
 
       # Match the E2E bootstrap convention: the synthetic admin's password is
@@ -85,12 +106,15 @@ jobs:
       # database missed 0074's CHECK failure because only legacy data violated
       # it; the base seed reproduced the conflicting rows.
       - name: Apply base migrations
+        if: steps.migration-mode.outputs.fresh_database != 'true'
         run: pnpm db:migrate
 
       - name: Ensure base admin and organization
+        if: steps.migration-mode.outputs.fresh_database != 'true'
         run: pnpm db:ensure-admin
 
       - name: Seed base data
+        if: steps.migration-mode.outputs.fresh_database != 'true'
         run: pnpm db:seed
 
       # github.ref is GitHub's prospective merge ref for pull requests, so this
@@ -108,7 +132,7 @@ jobs:
       - name: Install candidate dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Apply candidate migrations to seeded base
+      - name: Apply candidate migrations
         run: pnpm db:migrate
 
       - name: Verify candidate schema

@@ -1,8 +1,8 @@
 /**
  * Ensures the admin user exists with a valid credential account, plus a default
- * "Dark Earth Carbon" organization so local/dev flows keep working once the app
- * is org-scoped. Creates the user if missing, or updates the password hash if it
- * already exists. Does NOT seed any domain-entity data — use `pnpm db:seed`.
+ * "Dark Earth Carbon" organization so org-scoped flows have a bootstrap target.
+ * Creates the user if missing, or updates the password hash if it already exists.
+ * Does NOT seed any domain-entity data — use `pnpm db:seed`.
  */
 import { and, eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -25,8 +25,10 @@ const TEAMMATE_EMAIL = 'teammate@darkearthcarbon.dev';
 const TEAMMATE_NAME = 'Dev Teammate';
 
 /**
- * Ensure the default organization exists, the Platform Admin has no member
- * row, and a dev teammate owns it. Idempotent on every `db:reset`.
+ * Ensure the default organization exists and the Platform Admin has no member
+ * row. Local/test resets also create a dev teammate Owner; production never
+ * creates shared credentials and relies on the Platform Admin invitation flow
+ * to add the first real Owner.
  */
 async function ensureOrgFoundation(
   db: Db,
@@ -48,6 +50,13 @@ async function ensureOrgFoundation(
         eq(schema.members.userId, adminUserId)
       )
     );
+
+  if (process.env.NODE_ENV === 'production') {
+    console.log(
+      `Skipping dev teammate in production organizationId=${DEC_ORG_ID}`,
+    );
+    return;
+  }
 
   // 3. Dev teammate user + credential + Owner membership.
   let [teammate] = await db

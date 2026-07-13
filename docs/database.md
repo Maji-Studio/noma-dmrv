@@ -144,6 +144,14 @@ Generated SQL lives in `drizzle/`; metadata snapshots live in `drizzle/meta/`.
 
 Migrations that add `ADD CONSTRAINT`, `CREATE UNIQUE INDEX`, or `SET NOT NULL` to an existing table must repair conflicting rows in the same migration before enforcing the new rule. Use `drizzle/0079_volatile_plazm.sql` as the reference pattern: add the column nullable, `UPDATE` existing rows, then `SET NOT NULL`; similarly, backfill or deduplicate existing data before adding constraints or unique indexes.
 
+The one exception is the repository's first production deployment, when no
+production database or legacy rows exist. A maintainer may label that single
+`staging` → `main` promotion `first-production-deployment`; the gate then applies
+the candidate's complete migration chain to an empty throwaway database and
+verifies the result. Adding or removing the label reruns the check. Never reuse
+the label after production has been initialized—later promotions must exercise
+the normal seeded-base upgrade path.
+
 ### Migration files are immutable once applied
 
 **Never edit a migration file after it has been applied to any database** (staging, production, or a teammate's). `drizzle-kit migrate` tracks applied migrations by journal order/timestamp, not file content, so an edited migration is silently skipped on databases that already ran the original — CI reports "migrations applied successfully" while the new DDL never executes, and the drift only surfaces in the `db:verify-schema` step. If more schema changes are needed after a migration has been merged or applied, generate a new migration with `pnpm db:generate`. To repair drift that already happened, write a new migration with guarded DDL (`IF NOT EXISTS` / existence checks) so it is a no-op on databases that already have the objects.

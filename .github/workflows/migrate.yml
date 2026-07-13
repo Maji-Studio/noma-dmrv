@@ -7,6 +7,8 @@ on:
       - "src/db/schema/**"
       - "drizzle/**"
       - "drizzle.config.ts"
+      - ".github/workflows/migrate.yml"
+      - "src/lib/cli/ensure-admin.ts"
   workflow_dispatch:
     inputs:
       action:
@@ -128,13 +130,18 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Load production database secret from 1Password
+      - name: Load production bootstrap secrets from 1Password
         uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
         with:
           export-env: true
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env production/DATABASE_URL
+          ADMIN_EMAIL: op://Environment Variables/noma-dmrv env production/ADMIN_EMAIL
+          ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env production/ADMIN_PASSWORD
+          CREDENTIALS_ENCRYPTION_KEY: op://Environment Variables/noma-dmrv env production/CREDENTIALS_ENCRYPTION_KEY
+          ISOMETRIC_ACCESS_TOKEN: op://Environment Variables/noma-dmrv env production/ISOMETRIC_ACCESS_TOKEN
+          ISOMETRIC_CLIENT_SECRET: op://Environment Variables/noma-dmrv env production/ISOMETRIC_CLIENT_SECRET
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
@@ -159,6 +166,11 @@ jobs:
 
       - name: Run database migrations
         run: pnpm db:migrate
+
+      - name: Bootstrap production admin, organization, and registry credentials
+        env:
+          NODE_ENV: production
+        run: pnpm db:ensure-admin
 
       - name: Verify production schema matches Drizzle definitions
         run: pnpm db:verify-schema
@@ -285,6 +297,9 @@ jobs:
           DATABASE_URL: op://Environment Variables/noma-dmrv env production/DATABASE_URL
           ADMIN_EMAIL: op://Environment Variables/noma-dmrv env production/ADMIN_EMAIL
           ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env production/ADMIN_PASSWORD
+          CREDENTIALS_ENCRYPTION_KEY: op://Environment Variables/noma-dmrv env production/CREDENTIALS_ENCRYPTION_KEY
+          ISOMETRIC_ACCESS_TOKEN: op://Environment Variables/noma-dmrv env production/ISOMETRIC_ACCESS_TOKEN
+          ISOMETRIC_CLIENT_SECRET: op://Environment Variables/noma-dmrv env production/ISOMETRIC_CLIENT_SECRET
 
       - name: Setup pnpm
         uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
@@ -305,6 +320,8 @@ jobs:
           node -e "const url = new URL(process.env.DATABASE_URL); console.log(`Database target: host=${url.hostname} port=${url.port || '5432'} user=${decodeURIComponent(url.username)} db=${url.pathname.slice(1)} sslmode=${url.searchParams.get('sslmode') ?? 'not set'}`)"
 
       - name: Reset production database from tracked migrations
+        env:
+          NODE_ENV: production
         run: |
           pnpm db:reset
           pnpm db:verify-schema

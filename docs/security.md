@@ -167,6 +167,15 @@ encryption key) are present. The read-only `isometric-health.yml` workflow uses
 its dedicated pair directly through `getIsometricClientFromEnv`; it has no app
 database and intentionally receives no `CREDENTIALS_ENCRYPTION_KEY`.
 
+On every production schema deployment, the database workflow loads the
+production admin and Isometric bootstrap fields, applies migrations, then runs
+`db:ensure-admin` with `NODE_ENV=production`. This initializes a fresh database
+with the Platform Admin, default organization, and encrypted per-organization
+registry credentials, while explicitly skipping the shared local/test teammate.
+The Platform Admin must use the organization invitation flow to add the first
+real Owner. Missing production bootstrap fields fail the 1Password load step
+instead of deploying an unusable registry configuration.
+
 Notes:
 
 - Rotating a secret = edit the 1Password item. No GitHub or Vercel change needed.
