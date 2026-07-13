@@ -372,6 +372,7 @@ test.describe("Production Run end-time clear (#413)", () => {
     await waitForSideSheetClose(page);
 
     // The saved end time survived the non-time edit.
+    await page.reload();
     await editFirstRow(page);
     await expect(dialog.locator('input[name="endDate"]')).toHaveValue("2027-06-05");
     await expect(dialog.locator('input[name="endTime"]')).toHaveValue("12:00");
@@ -386,6 +387,7 @@ test.describe("Production Run end-time clear (#413)", () => {
     await waitForSideSheetClose(page);
 
     // The clear persisted: the edit form now shows no end date/time.
+    await page.reload();
     await editFirstRow(page);
     await expect(dialog.locator('input[name="endDate"]')).toHaveValue("");
     await expect(dialog.locator('input[name="endTime"]')).toHaveValue("");
