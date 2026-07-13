@@ -322,8 +322,6 @@ export function ProductionRunForm({
   const watchedDestBinId = useWatch({ control, name: "biocharStorageLocationId" });
   const watchedBiocharKg = useWatch({ control, name: "biocharOutputKg" });
   const watchedBiocharMoisture = useWatch({ control, name: "biocharMoisturePercent" });
-  const watchedEndDate = useWatch({ control, name: "endDate" });
-  const watchedEndTime = useWatch({ control, name: "endTime" });
 
   // Entity lookups for flow preview labels
   const { data: selectedReactor } = useEntityById("reactor", watchedReactorId || undefined);
@@ -522,7 +520,7 @@ export function ProductionRunForm({
                 error={!!errors.endTime}
                 {...register("endTime", { onChange: () => setEndTimeCleared(false) })}
               />
-              {isEditMode && (watchedEndDate || watchedEndTime) && (
+              {isEditMode && productionRun?.endTime != null && (
                 <Button
                   type="button"
                   variant="noOutline"
