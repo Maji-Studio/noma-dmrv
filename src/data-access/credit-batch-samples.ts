@@ -6,7 +6,10 @@ import { facilities } from "@/db/schema/facilities";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { productionRuns, samples } from "@/db/schema/production";
 import type { Sample } from "@/db/schema";
-import type { SamplingMethod } from "@/lib/certification/sampling-requirements";
+import {
+  deriveBatchSamplingMethod,
+  type SamplingMethod,
+} from "@/lib/certification/sampling-requirements";
 import type { CreditBatchDurabilityInput } from "@/lib/isometric/utils/durability-aggregation";
 import { DURABILITY_TIER_FALLBACK } from "@/schemas/credit-batches";
 import { requireOrgScope } from "./utils";
@@ -24,7 +27,7 @@ export interface CreditBatchWithSamples extends CreditBatchDurabilityInput {
   runs: Array<{ id: string; code: string; biocharDryMassKg: number | null }>;
   /** The (facility, feedstock) process this batch belongs to; null = unfound. */
   productionProcessId: string | null;
-  /** The batch's process's CURRENT sampling method (default Method A). */
+  /** The batch's effective sampling method at its immutable start boundary. */
   samplingMethod: SamplingMethod;
   /** Operator-declared `credit_batches.h_to_c_org_ratio` (advisory; reconciled). */
   declaredHToCorgRatio: number | null;
@@ -52,6 +55,7 @@ export async function getCreditBatchesWithSamples(
     .select({
       id: creditBatches.id,
       code: creditBatches.code,
+      startDate: creditBatches.startDate,
       productionProcessId: creditBatches.productionProcessId,
       declaredHToCorgRatio: creditBatches.hToCorgRatio,
       // Tier is inherited from the facility (ADR 0021), not a batch column.
@@ -75,12 +79,22 @@ export async function getCreditBatchesWithSamples(
           .select({
             id: productionProcesses.id,
             samplingMethod: productionProcesses.samplingMethod,
+            methodBUnlockedAt: productionProcesses.methodBUnlockedAt,
           })
           .from(productionProcesses)
           .where(and(inArray(productionProcesses.id, processIds), eq(productionProcesses.organizationId, ctx.organizationId)))
       : [];
-  const samplingMethodByProcess = new Map<string, SamplingMethod>(
-    processRows.map((p) => [p.id, p.samplingMethod as SamplingMethod]),
+  const samplingRegimeByProcess = new Map<
+    string,
+    { samplingMethod: SamplingMethod; methodBUnlockedAt: Date | null }
+  >(
+    processRows.map((p) => [
+      p.id,
+      {
+        samplingMethod: p.samplingMethod as SamplingMethod,
+        methodBUnlockedAt: p.methodBUnlockedAt,
+      },
+    ]),
   );
 
   // Member runs per batch (id + code + dry mass) via the join table.
@@ -138,9 +152,16 @@ export async function getCreditBatchesWithSamples(
     creditBatchId: batch.id,
     creditBatchCode: batch.code,
     productionProcessId: batch.productionProcessId,
-    samplingMethod: batch.productionProcessId
-      ? samplingMethodByProcess.get(batch.productionProcessId) ?? "method_a"
-      : "method_a",
+    samplingMethod: (() => {
+      if (batch.productionProcessId == null) return "method_a";
+      const regime = samplingRegimeByProcess.get(batch.productionProcessId);
+      if (regime == null) return "method_a";
+      return deriveBatchSamplingMethod({
+        processMethod: regime.samplingMethod,
+        methodBUnlockedAt: regime.methodBUnlockedAt,
+        batchStartDate: batch.startDate,
+      });
+    })(),
     declaredHToCorgRatio: batch.declaredHToCorgRatio,
     durabilityOption: batch.durabilityOption ?? DURABILITY_TIER_FALLBACK,
     runs: runsByBatch.get(batch.id) ?? [],

@@ -2,7 +2,8 @@
  * FeedstockProcessChip
  *
  * Shows the production process a declared feedstock type resolves to, and its
- * current sampling method (Method A/B) + progress toward the Method-B baseline.
+ * effective sampling method (Method A/B) for the entered batch start date plus
+ * progress toward the Method-B baseline.
  * The process (keyed by facility + feedstock type) carries the method, cadence,
  * and borrow pool (ADR 0016/0017), so picking the feedstock surfaces the
  * durability method up front — before any run is assigned. A brand-new
@@ -12,13 +13,16 @@
 
 import { useProductionProcessesByFacility } from "@/hooks/use-production-processes";
 import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
+import { deriveBatchSamplingMethod } from "@/lib/certification/sampling-requirements";
 
 export function FeedstockProcessChip({
   facilityId,
   feedstockTypeId,
+  batchStartDate,
 }: {
   facilityId?: string;
   feedstockTypeId?: string;
+  batchStartDate?: string | Date;
 }) {
   const { data: processes } = useProductionProcessesByFacility(
     facilityId || undefined,
@@ -29,19 +33,31 @@ export function FeedstockProcessChip({
   const process = processes?.find(
     (candidate) => candidate.feedstockTypeId === feedstockTypeId,
   );
-  const isMethodB = process?.samplingMethod === "method_b";
+  const effectiveMethod =
+    process && batchStartDate
+      ? deriveBatchSamplingMethod({
+          processMethod: process.samplingMethod,
+          methodBUnlockedAt: process.methodBUnlockedAt,
+          batchStartDate,
+        })
+      : process?.samplingMethod ?? "method_a";
+  const isMethodB = effectiveMethod === "method_b";
+  const isHistoricalMethodA =
+    process?.samplingMethod === "method_b" && effectiveMethod === "method_a";
   const count = process?.eligibleSampleCount ?? 0;
   const target = process?.baselineTarget ?? METHOD_B_MINIMUM_METHOD_A_SAMPLES;
   const meetsBaseline = process?.meetsBaseline ?? false;
   const progress = target > 0 ? Math.min(1, count / target) : 0;
 
-  const detail = isMethodB
-    ? "Measured durability — Method B is unlocked for this process."
-    : !process
-      ? `New production process — 0/${target} eligible samples toward Method B.`
-      : meetsBaseline
-        ? `${count}/${target} eligible samples — ready to unlock Method B.`
-        : `${count}/${target} eligible samples toward Method B.`;
+  const detail = isHistoricalMethodA
+    ? "Historical batch — Method A applies because its start date is on or before the Method B unlock date."
+    : isMethodB
+      ? "Measured durability — Method B is unlocked for this process."
+      : !process
+        ? `New production process — 0/${target} eligible samples toward Method B.`
+        : meetsBaseline
+          ? `${count}/${target} eligible samples — ready to unlock Method B.`
+          : `${count}/${target} eligible samples toward Method B.`;
 
   return (
     <div className="flex flex-col gap-8 mt-8 p-12 border border-[var(--color-border-tertiary)] bg-[var(--color-background-sunken)]">
