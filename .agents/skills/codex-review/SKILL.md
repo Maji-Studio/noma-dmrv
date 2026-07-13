@@ -25,6 +25,33 @@ output is **evidence, not authority**.
   review directly with Claude's own review process.
 - Codex output is evidence. Verify important claims against the code before repeating them.
 
+## Overproduction review lens
+
+5.6-sol implementations can overproduce: when requirements or access are missing, the model
+may force progress by inventing behavior or coding around the gap; it may also overengineer a
+small change or create more tests than the risk warrants. Every custom review prompt must ask
+the reviewer to inspect the target code for these failure modes:
+
+- **Forced implementation:** Did the code guess a product decision, external-system behavior,
+  credential-dependent result, or unavailable artifact that should instead have triggered a
+  question or an access request? Flag the unsupported assumption and identify what evidence or
+  decision was needed.
+- **Excess scope:** Does the diff implement behavior beyond the stated requirement, including
+  speculative future needs or unrelated cleanup?
+- **Overengineering:** Could existing project patterns or a materially smaller change satisfy
+  the same requirement? Flag new abstractions, configuration, dependencies, fallback paths,
+  defensive branches, and generalization only when they add concrete maintenance cost,
+  duplication, or behavior risk without a current need.
+- **Test inflation:** Do added tests duplicate coverage, assert implementation details, exhaust
+  low-value permutations, or require disproportionate setup and maintenance? Preserve tests
+  that cover meaningful behavior, regressions, security boundaries, or risky edge cases.
+- **Proportionality:** Consider the implementation and its tests together. Prefer the smallest
+  code and test surface that fully meets the requirement and repository standards; simplicity
+  must not remove necessary correctness, security, authorization, or regression coverage.
+
+Do not manufacture a finding merely because an alternative is shorter. Require a concrete
+scope, maintenance, or correctness cost, and suggest the smallest safe simplification.
+
 ## Workflow
 
 ### 1. Identify the review target
@@ -85,10 +112,25 @@ branch staging (git diff staging...HEAD).` or `Target: all uncommitted changes.`
 ```text
 Target: <the exact diff to review>
 
-Review these changes for bugs, regressions, missing tests, security issues, and requirement
-mismatches. Prioritize findings over summary. For each finding include: severity, file and
-line reference, concrete failure mode, and suggested fix direction. Do not edit files. If
-there are no substantive findings, say so and name any residual test gaps.
+Review these changes for bugs, regressions, security issues, requirement mismatches, meaningful
+test gaps, and overproduction in the submitted code. Prioritize findings over summary. For
+each finding include: severity, file and line reference, concrete failure mode or maintenance
+cost, and the smallest safe fix direction.
+
+Specifically audit whether the implementation forced progress through a missing requirement,
+product decision, credential, external system, or unavailable artifact by guessing behavior or
+coding a workaround where the author should have asked a question or obtained access. Also
+look for excess scope, speculative generalization, unnecessary abstractions, configuration,
+dependencies, fallback paths, defensive branches, or unrelated cleanup. Review added tests for
+duplicate coverage, implementation-detail assertions, low-value permutation matrices, and
+disproportionate setup or maintenance cost. Prefer the smallest code and test surface that
+fully meets the current requirement, while preserving necessary correctness, security,
+authorization, and regression coverage.
+
+This is a read-only review: do not edit files. Do not manufacture simplicity findings merely
+because another solution is shorter; identify a concrete scope, maintenance, or correctness
+cost. If the change is correct and proportionate, say so and name only material residual risks
+or test gaps.
 ```
 
 Repo context worth adding when relevant: pnpm-only; layered architecture
