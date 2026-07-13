@@ -191,7 +191,9 @@ baseline floor and normal validation, ordinary sample corrections remain
 editable while no submitted Removal depends on them. Submission
 dependency-locks every contributing sample version, even when the sample's
 own credit batch or Removal remains draft; later changes require a
-correction/supersession path rather than an in-place edit. _Avoid_: locking
+correction/supersession path rather than an in-place edit. This lock is a
+decided target contract — its enforcement is not yet built (ADR 0017
+amendment, 2026-07-12). _Avoid_: locking
 every baseline sample merely because Method B was unlocked; checking only
 whether the sample's own batch has been submitted; treating a mutable sample
 ID alone as the evidence version (the snapshot needs an audit revision or a
