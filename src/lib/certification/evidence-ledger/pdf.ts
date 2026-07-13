@@ -500,7 +500,7 @@ function apparatus(model: LedgerModel): ReactElement {
     legendRow("Map · manual", "Routed estimate, entered for this leg."),
     legendRow("t·km", "tonne·kilometre = distance (km) × load (t)."),
   );
-  return v(styles.apparatus, {}, note, legend);
+  return v(styles.apparatus, { wrap: false }, note, legend);
 }
 
 function footer(model: LedgerModel): ReactElement {
