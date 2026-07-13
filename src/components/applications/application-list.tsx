@@ -16,6 +16,7 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
+import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { ApplicationForm } from "./application-form";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
@@ -293,6 +294,19 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const hasActiveFilters = !!statusFilter || !!evidenceFilter;
   const clearFilters = () => { setStatusFilter(""); setEvidenceFilter(""); };
 
+  if (!contextFacilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader
+          area="distribution"
+          title="Applications"
+          subtitle="Field applications of biochar to soil"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its applications." />
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="container-max py-32">
@@ -323,12 +337,10 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         title="Applications"
         subtitle="Field applications of biochar to soil"
         actions={
-          contextFacilityId ? (
-            <Button variant="primary" onClick={openCreate}>
-              <PlusIcon size={18} weight="bold" />
-              New Application
-            </Button>
-          ) : undefined
+          <Button variant="primary" onClick={openCreate}>
+            <PlusIcon size={18} weight="bold" />
+            New Application
+          </Button>
         }
       />
 
@@ -365,21 +377,17 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             padding="md"
             icon={<MapPinIcon size={48} />}
             title={
-              !contextFacilityId
-                ? "Select a facility"
-                : hasActiveFilters
-                  ? "No applications match"
-                  : "No applications yet"
+              hasActiveFilters
+                ? "No applications match"
+                : "No applications yet"
             }
             description={
-              !contextFacilityId
-                ? "Choose a facility from the sidebar to view applications"
-                : hasActiveFilters
-                  ? "Try adjusting or clearing the filters."
-                  : "Create your first field application to get started"
+              hasActiveFilters
+                ? "Try adjusting or clearing the filters."
+                : "Create your first field application to get started"
             }
             action={
-              contextFacilityId && !hasActiveFilters ? (
+              !hasActiveFilters ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={18} weight="bold" />
                   New Application
