@@ -70,6 +70,8 @@ export interface LedgerCategoryScaling {
   rawSubtotalTkm: number;
   /** Applied-biochar share, clamped into [0, 1]. */
   appliedFraction: number;
+  /** Adjustment from displayed operands to the canonical submitted scalar. */
+  displayAdjustmentTkm?: number;
 }
 
 export interface LedgerCategory {
@@ -85,12 +87,12 @@ export interface LedgerCategory {
    * PDF shows that arithmetic explicitly so per-leg rows still reconcile.
    */
   subtotalTkm: number;
-  /** Sum of the rendered 2dp leg values, normalized to 2dp in the model. */
-  displayedRowSumTkm: number;
+  /** Sum of rendered 2dp leg values; present only when reconciliation is needed. */
+  displayedRowSumTkm?: number;
   /**
-   * Difference between the sum of 2dp display rows and the canonical raw-sum
-   * subtotal. Present only when non-zero so the PDF can reconcile visibly
-   * without changing the canonical scalar or overstating per-leg precision.
+   * Adjustment added to the sum of 2dp display rows to reach the canonical
+   * raw-sum subtotal. Present only when non-zero so the PDF can reconcile
+   * visibly without changing the canonical scalar or overstating precision.
    */
   roundingAdjustmentTkm?: number;
   /**

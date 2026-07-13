@@ -417,7 +417,7 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
   const operandRow = { backgroundColor: C.sea };
   const stackedRow = { borderTopWidth: 1, borderTopColor: C.ink12 };
   const roundingRows =
-    cat.roundingAdjustmentTkm == null
+    cat.roundingAdjustmentTkm == null || cat.displayedRowSumTkm == null
       ? []
       : [
           footRow(
@@ -427,7 +427,7 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
             operandRow,
           ),
           footRow(
-            "Rounding adjustment — canonical unrounded leg sum",
+            "Rounding adjustment — displayed rows to canonical sum",
             nf2(cat.roundingAdjustmentTkm),
             "t·km",
             { ...operandRow, ...stackedRow },
@@ -448,6 +448,16 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
           null,
           { ...operandRow, ...stackedRow },
         ),
+        ...(cat.scaling.displayAdjustmentTkm == null
+          ? []
+          : [
+              footRow(
+                "Scaling adjustment — displayed operands to canonical scalar",
+                nf2(cat.scaling.displayAdjustmentTkm),
+                "t·km",
+                { ...operandRow, ...stackedRow },
+              ),
+            ]),
         footRow(
           `Subtotal — ${cat.key} · submitted scalar`,
           nf2(cat.subtotalTkm),

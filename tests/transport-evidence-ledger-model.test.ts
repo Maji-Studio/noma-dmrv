@@ -101,6 +101,8 @@ describe("buildLedgerModel", () => {
     expect(feed.subtotalTkm).toBe(0.01);
     expect(feed.roundingAdjustmentTkm).toBe(-0.01);
     expect(bio.subtotalTkm).toBe(64);
+    // Omit reconciliation-only state so unaffected ledger content hashes stay stable.
+    expect("displayedRowSumTkm" in bio).toBe(false);
     expect(bio.roundingAdjustmentTkm).toBeUndefined();
     expect(samp.subtotalTkm).toBe(0.41);
     expect(model.totalTkm).toBe(0.01 + 64 + 0.41);
@@ -232,6 +234,25 @@ describe("buildLedgerModel", () => {
       expect(bio.scaling).toEqual({ rawSubtotalTkm: 10, appliedFraction: 0.4 });
       // The grand total sums the RECONCILED subtotals (matches submission).
       expect(model.totalTkm).toBe(50 + 4 + 10);
+    });
+
+    it("reconciles displayed scaling operands to the canonical unrounded scalar", () => {
+      const model = buildLedgerModel({
+        ...META,
+        legsByCategory: {
+          ...emptyCategories(),
+          biochar: [leg({ distanceKm: 10.005, loadMassKg: 1000 })],
+        },
+        appliedBiocharFraction: 0.5,
+      });
+      const bio = model.categories.find((c) => c.key === "biochar")!;
+
+      expect(bio.subtotalTkm).toBe(5);
+      expect(bio.scaling).toEqual({
+        rawSubtotalTkm: 10.01,
+        appliedFraction: 0.5,
+        displayAdjustmentTkm: -0.01,
+      });
     });
 
     it("omits scaling and keeps the raw biochar subtotal at full application", () => {

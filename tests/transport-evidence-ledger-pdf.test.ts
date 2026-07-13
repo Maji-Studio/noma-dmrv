@@ -52,13 +52,21 @@ describe("renderEvidenceLedgerPdf", () => {
         feedstock: Array.from({ length: MULTIPAGE_LEG_COUNT }, (_, index) =>
           leg(index + 1),
         ),
-        biochar: [],
+        biochar: [
+          {
+            ...leg(100),
+            entityType: "biochar",
+            distanceKm: 10.005,
+            loadMassKg: 1000,
+          },
+        ],
         sample: [],
       },
       memberBatchCodes: "CB-26-001",
       facilityName: "Dark Earth Hub",
       externalProjectId: "prj_TEST",
       generatedAtIso: "2026-07-13T00:00:00.000Z",
+      appliedBiocharFraction: 0.5,
     });
 
     expect(model.categories[0].roundingAdjustmentTkm).not.toBeUndefined();
@@ -67,6 +75,7 @@ describe("renderEvidenceLedgerPdf", () => {
     const extractedText = pages.join(" ").replace(/\s+/g, " ");
     expect(extractedText).toContain("D I S P L A Y E D R O W S U M");
     expect(extractedText).toContain("R O U N D I N G A D J U S T M E N T");
+    expect(extractedText).toContain("S C A L I N G A D J U S T M E N T");
 
     const apparatusPage = pages.find(
       (text) =>

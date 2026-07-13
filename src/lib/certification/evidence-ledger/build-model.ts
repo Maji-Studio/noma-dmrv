@@ -64,6 +64,7 @@ const CATEGORY_META: Record<
 };
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
+const round4 = (n: number): number => Math.round(n * 10_000) / 10_000;
 
 function geoOf(lat: number | null, lng: number | null): string | null {
   if (lat == null || lng == null) return null;
@@ -141,8 +142,9 @@ function buildCategory(
     name: meta.name,
     tag: meta.tag,
     legs: builtLegs,
-    displayedRowSumTkm,
-    ...(roundingAdjustmentTkm !== 0 ? { roundingAdjustmentTkm } : {}),
+    ...(roundingAdjustmentTkm !== 0
+      ? { displayedRowSumTkm, roundingAdjustmentTkm }
+      : {}),
   };
 
   // Mirror the submit pipeline exactly: `enrichWithTransportLegs` scales the
@@ -153,12 +155,20 @@ function buildCategory(
   if (appliedFraction == null || fraction >= 1) {
     return { ...base, subtotalTkm: canonicalRawSubtotalTkm };
   }
+  const subtotalTkm = round2(rawTkm * fraction);
+  const displayedScaledSubtotalTkm = round2(
+    canonicalRawSubtotalTkm * round4(fraction),
+  );
+  const displayAdjustmentTkm = round2(
+    subtotalTkm - displayedScaledSubtotalTkm,
+  );
   return {
     ...base,
-    subtotalTkm: round2(rawTkm * fraction),
+    subtotalTkm,
     scaling: {
       rawSubtotalTkm: canonicalRawSubtotalTkm,
       appliedFraction: fraction,
+      ...(displayAdjustmentTkm !== 0 ? { displayAdjustmentTkm } : {}),
     },
   };
 }
