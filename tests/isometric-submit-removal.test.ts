@@ -78,6 +78,28 @@ describe("submitRemoval — entity readiness gate", () => {
     expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
   });
+
+  it("blocks durability gaps before generating evidence ledgers", async () => {
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
+      makeContext(ORIGINAL_BIOCHAR_MASS_KG, {
+        durabilityGateBlockers: [
+          "Credit batch CB-TEST-001 has 2 replicate(s); at least 3 are required.",
+        ],
+      }),
+    );
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow(/sampling & eligibility/i);
+
+    expect(
+      evidenceLedgers.ensureEvidenceLedgersFromContext,
+    ).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
+  });
 });
 
 describe("submitRemoval — happy path", () => {

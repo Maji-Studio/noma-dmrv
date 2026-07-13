@@ -163,13 +163,15 @@ export async function buildRemovalSubmissionBuild(args: {
     );
   }
 
-  const candidateDocumentIds = await collectCandidateDocumentIdsForRemoval(
-    orgCtx,
-    {
-      lineages: ctx.lineages,
-      memberBatchIds: ctx.memberBatches.map((b) => b.id),
-    },
-  );
+  // A caller-supplied Source set makes this a side-effect-free preflight or a
+  // locked rebuild. Skip the document walk in that case; the caller already
+  // owns the authoritative IDs and does not consume `candidateDocumentIds`.
+  const candidateDocumentIds = args.sourceIds
+    ? []
+    : await collectCandidateDocumentIdsForRemoval(orgCtx, {
+        lineages: ctx.lineages,
+        memberBatchIds: ctx.memberBatches.map((b) => b.id),
+      });
   const sourceIds =
     args.sourceIds ??
     (await resolveSourceIdsForRemoval(orgCtx, { candidateDocumentIds }));

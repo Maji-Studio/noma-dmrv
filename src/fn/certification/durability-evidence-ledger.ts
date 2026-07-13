@@ -33,6 +33,7 @@ import {
 } from "./certify-context-core";
 import {
   ensureLedgerSource,
+  retireLedgerSources,
   stableLedgerContentHash,
   type EnsureLedgerResult,
 } from "./evidence-ledger-core";
@@ -73,11 +74,39 @@ export async function ensureDurabilityEvidenceLedgerSourceFromContext(
     // No credit batch to attach the document to.
     return { status: "skipped", reason: "no-batches" };
   }
+  if (ctx.batchesWithSamples.length === 0) {
+    return retireLedgerSources(orgCtx, {
+      kind: DURABILITY_EVIDENCE_LEDGER_KIND,
+      removalId,
+      reason: "no-samples",
+      log,
+    });
+  }
+  if (
+    ctx.batchesWithSamples.some(
+      (batch) => batch.durabilityOption !== "200_year",
+    )
+  ) {
+    // This artifact explains the H/C_org + soil-temperature 200-year method.
+    // A facility has one inherited tier (ADR 0021), so any non-200-year member
+    // means the artifact does not apply and any prior 200-year Source is stale.
+    return retireLedgerSources(orgCtx, {
+      kind: DURABILITY_EVIDENCE_LEDGER_KIND,
+      removalId,
+      reason: "not-200-year",
+      log,
+    });
+  }
   if (!ctx.facilityReferenceSoilTemperature) {
     // A 200-year durability ledger needs the facility soil reference (the gate
-    // blocks submission when it's unset; here it just means there's nothing to
-    // evidence yet — e.g. a non-durability removal).
-    return { status: "skipped", reason: "no-soil-reference" };
+    // blocks submission when it's unset). Retire any previously valid ledger so
+    // the stale Source cannot re-enter a later submission.
+    return retireLedgerSources(orgCtx, {
+      kind: DURABILITY_EVIDENCE_LEDGER_KIND,
+      removalId,
+      reason: "no-soil-reference",
+      log,
+    });
   }
 
   const facility = await getFacilityById(orgCtx, ctx.facilityId);
