@@ -64,6 +64,9 @@ describe("renderEvidenceLedgerPdf", () => {
     expect(model.categories[0].roundingAdjustmentTkm).not.toBeUndefined();
     const pages = await pageTexts(await renderEvidenceLedgerPdf(model));
     expect(pages.length).toBeGreaterThan(1);
+    const extractedText = pages.join(" ").replace(/\s+/g, " ");
+    expect(extractedText).toContain("D I S P L A Y E D R O W S U M");
+    expect(extractedText).toContain("R O U N D I N G A D J U S T M E N T");
 
     const apparatusPage = pages.find(
       (text) =>
