@@ -1,5 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const unlockState = vi.hoisted(() => ({
+  value: null as Date | null,
+}));
 
 vi.mock("@/hooks/use-production-processes", () => ({
   useProductionProcessesByFacility: () => ({
@@ -8,7 +12,7 @@ vi.mock("@/hooks/use-production-processes", () => ({
         id: "process-1",
         feedstockTypeId: "feedstock-1",
         samplingMethod: "method_b",
-        methodBUnlockedAt: new Date("2026-02-01T12:00:00.000Z"),
+        methodBUnlockedAt: unlockState.value,
         eligibleSampleCount: 30,
         baselineTarget: 30,
         meetsBaseline: true,
@@ -18,6 +22,10 @@ vi.mock("@/hooks/use-production-processes", () => ({
 }));
 
 import { FeedstockProcessChip } from "./feedstock-process-chip";
+
+beforeEach(() => {
+  unlockState.value = new Date("2026-02-01T12:00:00.000Z");
+});
 
 function render(batchStartDate: string): string {
   return renderToStaticMarkup(
@@ -44,4 +52,17 @@ describe("FeedstockProcessChip historical Method-B boundary", () => {
     expect(html).toContain("Method B");
     expect(html).not.toContain("Historical batch");
   });
+
+  it.each([null, new Date(Number.NaN)])(
+    "does not label an incomplete transition as historical",
+    (methodBUnlockedAt) => {
+      unlockState.value = methodBUnlockedAt;
+
+      const html = render("2026-01-31");
+
+      expect(html).toContain("Method A");
+      expect(html).toContain("transition data is incomplete");
+      expect(html).not.toContain("Historical batch");
+    },
+  );
 });

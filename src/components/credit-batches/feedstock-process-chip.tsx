@@ -42,8 +42,18 @@ export function FeedstockProcessChip({
         })
       : process?.samplingMethod ?? "method_a";
   const isMethodB = effectiveMethod === "method_b";
+  const hasValidTransitionBoundary =
+    isValidDateValue(batchStartDate) &&
+    isValidDateValue(process?.methodBUnlockedAt);
   const isHistoricalMethodA =
-    process?.samplingMethod === "method_b" && effectiveMethod === "method_a";
+    process?.samplingMethod === "method_b" &&
+    effectiveMethod === "method_a" &&
+    hasValidTransitionBoundary;
+  const hasIncompleteTransition =
+    process?.samplingMethod === "method_b" &&
+    effectiveMethod === "method_a" &&
+    batchStartDate != null &&
+    !hasValidTransitionBoundary;
   const count = process?.eligibleSampleCount ?? 0;
   const target = process?.baselineTarget ?? METHOD_B_MINIMUM_METHOD_A_SAMPLES;
   const meetsBaseline = process?.meetsBaseline ?? false;
@@ -51,13 +61,15 @@ export function FeedstockProcessChip({
 
   const detail = isHistoricalMethodA
     ? "Historical batch — Method A applies because its start date is on or before the Method B unlock date."
-    : isMethodB
-      ? "Measured durability — Method B is unlocked for this process."
-      : !process
-        ? `New production process — 0/${target} eligible samples toward Method B.`
-        : meetsBaseline
-          ? `${count}/${target} eligible samples — ready to unlock Method B.`
-          : `${count}/${target} eligible samples toward Method B.`;
+    : hasIncompleteTransition
+      ? "Method B transition data is incomplete — Method A applies until the batch boundary can be verified."
+      : isMethodB
+        ? "Measured durability — Method B is unlocked for this process."
+        : !process
+          ? `New production process — 0/${target} eligible samples toward Method B.`
+          : meetsBaseline
+            ? `${count}/${target} eligible samples — ready to unlock Method B.`
+            : `${count}/${target} eligible samples toward Method B.`;
 
   return (
     <div className="flex flex-col gap-8 mt-8 p-12 border border-[var(--color-border-tertiary)] bg-[var(--color-background-sunken)]">
@@ -92,4 +104,10 @@ export function FeedstockProcessChip({
       )}
     </div>
   );
+}
+
+function isValidDateValue(value: string | Date | null | undefined): boolean {
+  if (value == null) return false;
+  const date = value instanceof Date ? value : new Date(value);
+  return !Number.isNaN(date.getTime());
 }
