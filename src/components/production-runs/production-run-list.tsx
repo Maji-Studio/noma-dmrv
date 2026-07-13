@@ -44,7 +44,7 @@ import { certificationDetailField } from "@/lib/certification/certify-field-regi
 import { formatSafeDate } from "@/lib/format-utils";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
-import { ProductionRunForm } from "./production-run-form";
+import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
 import { ProductionIncidentTable } from "./production-incident-table";
 import { ProductionSampleTable } from "./production-sample-table";
 import {
@@ -240,10 +240,10 @@ export function ProductionRunList() {
     toast.success(`${message}. Still needed to certify: ${gapLabels}${suffix}`);
   };
 
-  const handleCreate = async (data: ProductionRunFormData) => {
+  const handleCreate = async (data: ProductionRunSubmitData) => {
     setCreateError(null);
     try {
-      const run = await createRun.mutateAsync(data);
+      const run = await createRun.mutateAsync(data as ProductionRunFormData);
       setSideSheet(null);
       showSavedToast("Production run created successfully", run);
     } catch (error) {
@@ -254,7 +254,7 @@ export function ProductionRunList() {
     }
   };
 
-  const handleUpdate = async (data: ProductionRunFormData) => {
+  const handleUpdate = async (data: ProductionRunSubmitData) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     try {
@@ -266,11 +266,13 @@ export function ProductionRunList() {
         productionRunId: sideSheet.entity.id,
         startTime: startTime instanceof Date ? startTime : new Date(startTime),
         endTime:
-          endTime === undefined
-            ? undefined
-            : endTime instanceof Date
-              ? endTime
-              : new Date(endTime),
+          endTime === null
+            ? null
+            : endTime === undefined
+              ? undefined
+              : endTime instanceof Date
+                ? endTime
+                : new Date(endTime),
       });
       setSideSheet(null);
       showSavedToast("Production run updated successfully", run);
