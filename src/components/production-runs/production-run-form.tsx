@@ -291,7 +291,7 @@ export function ProductionRunForm({
     setValue,
     setError,
     clearErrors,
-    formState: { errors },
+    formState: { errors, dirtyFields },
   } = useForm({
     resolver: zodResolver(productionRunFormSchema),
     // onTouched so the spine markers can turn red on blur, not just on submit.
@@ -387,13 +387,17 @@ export function ProductionRunForm({
         ? data.endDate
         : formatLocalDate(data.endDate as Date)
       : startDateStr;
+    // Three-state end time: explicit clear → null; a touched (dirty) value →
+    // that Date; anything else (untouched, whether pre-filled or blank) →
+    // undefined = "unchanged", so a no-op edit never rewrites the stored end.
+    const endTouched = !!dirtyFields.endDate || !!dirtyFields.endTime;
     const combined: ProductionRunSubmitData = {
       ...data,
       startTime: combineDateAndTime(startDateStr, data.startTime as string),
-      endTime: data.endTime
-        ? combineDateAndTime(endDateStr, data.endTime as string)
-        : endTimeCleared
-          ? null
+      endTime: endTimeCleared
+        ? null
+        : data.endTime && endTouched
+          ? combineDateAndTime(endDateStr, data.endTime as string)
           : undefined,
     };
 
