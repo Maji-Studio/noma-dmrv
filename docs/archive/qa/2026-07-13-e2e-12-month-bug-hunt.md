@@ -23,7 +23,7 @@ that needs administrator review. Registry-dependent claims remain unverified.
 - Empty start: 24 primary routes rendered without a crash, console warning, or
   console error.
 - 12-month lifecycle regression: 1/1 Chromium test passed.
-- Source and 1000-year focused tests: 5 files / 22 tests passed.
+- Source and 1000-year-focused tests: 5 files / 22 tests passed.
 - The 12-month fixture models five completed runs per month on days 3, 9, 15,
   21, and 27; samples use distinct dates and 7–9 day analysis delays.
 - Method-B behavior passed at 9/30 locked, future evidence excluded at 29/30,
