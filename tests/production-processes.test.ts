@@ -20,8 +20,10 @@ import { productionProcesses } from "@/db/schema/production-processes";
 import { creditBatches, samples } from "@/db/schema";
 import {
   findOrCreateProductionProcess,
+  getProcessComplianceDrift,
   getProductionProcessSummariesByFacility,
 } from "@/data-access/production-processes";
+import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { deleteSample, updateSample } from "@/data-access/samples";
 import { countEligibleSamplesByProcess } from "@/data-access/isometric";
 
@@ -411,6 +413,68 @@ describe("findOrCreateProductionProcess", () => {
     expect(Number(updated.totalCarbonPercent)).toBe(
       CORRECTED_TOTAL_CARBON_PERCENT,
     );
+  });
+
+  it("keeps pre-unlock batches on Method A after their process unlocks Method B", async () => {
+    const fixture = await createMethodBProcessWithBaseline("effective-method");
+    const suffix = Date.now().toString(36);
+    const [sameDayBatch, postUnlockBatch] = await db
+      .insert(creditBatches)
+      .values([
+        {
+          organizationId: TEST_ORG_ID,
+          code: `CB-PROC-MB-SAME-DAY-${suffix}`,
+          facilityId,
+          feedstockTypeId,
+          productionProcessId: fixture.processId,
+          startDate: "2026-02-01",
+          endDate: "2026-02-01",
+          certifier: "isometric",
+        },
+        {
+          organizationId: TEST_ORG_ID,
+          code: `CB-PROC-MB-POST-${suffix}`,
+          facilityId,
+          feedstockTypeId,
+          productionProcessId: fixture.processId,
+          startDate: "2026-02-02",
+          endDate: "2026-02-28",
+          certifier: "isometric",
+        },
+      ])
+      .returning({ id: creditBatches.id });
+    createdIds.creditBatches.push(sameDayBatch.id, postUnlockBatch.id);
+
+    const loaded = await getCreditBatchesWithSamples(
+      makeTestOrgContext(TEST_USER_ID),
+      [fixture.batchId, sameDayBatch.id, postUnlockBatch.id],
+    );
+    const methodsByBatch = new Map(
+      loaded.map((batch) => [batch.creditBatchId, batch.samplingMethod]),
+    );
+
+    expect(methodsByBatch.get(fixture.batchId)).toBe("method_a");
+    expect(methodsByBatch.get(sameDayBatch.id)).toBe("method_a");
+    expect(methodsByBatch.get(postUnlockBatch.id)).toBe("method_b");
+
+    const summaries = await getProductionProcessSummariesByFacility(
+      makeTestOrgContext(TEST_USER_ID),
+      facilityId,
+    );
+    const summary = summaries.find((item) => item.id === fixture.processId);
+    expect(summary?.totalBatches).toBe(1);
+    expect(summary?.sampledBatches).toBe(0);
+    expect(summary?.requiredSampledBatches).toBe(1);
+    expect(summary?.cadenceMet).toBe(false);
+
+    const compliance = await getProcessComplianceDrift(
+      makeTestOrgContext(TEST_USER_ID),
+      fixture.processId,
+      new Date("2026-03-01T00:00:00.000Z"),
+    );
+    expect(compliance.drift.missedSamplings.totalBatches).toBe(1);
+    expect(compliance.drift.missedSamplings.sampledBatches).toBe(0);
+    expect(compliance.drift.missedSamplings.requiredSampledBatches).toBe(1);
   });
 
   it("blocks clearing a pre-unlock sample's credit-batch link from a Method-B process", async () => {
