@@ -30,19 +30,24 @@ function leg(index: number): TransportLeg {
 }
 
 async function pageTexts(pdfBytes: Buffer): Promise<string[]> {
-  const pdf = await getDocument({
+  const loadingTask = getDocument({
     data: new Uint8Array(pdfBytes),
     verbosity: 0,
-  }).promise;
-  return Promise.all(
-    Array.from({ length: pdf.numPages }, async (_, index) => {
-      const page = await pdf.getPage(index + 1);
-      const content = await page.getTextContent();
-      return content.items
-        .flatMap((item) => ("str" in item ? [item.str] : []))
-        .join(" ");
-    }),
-  );
+  });
+  const pdf = await loadingTask.promise;
+  try {
+    return await Promise.all(
+      Array.from({ length: pdf.numPages }, async (_, index) => {
+        const page = await pdf.getPage(index + 1);
+        const content = await page.getTextContent();
+        return content.items
+          .flatMap((item) => ("str" in item ? [item.str] : []))
+          .join(" ");
+      }),
+    );
+  } finally {
+    await loadingTask.destroy();
+  }
 }
 
 describe("renderEvidenceLedgerPdf", () => {
@@ -73,9 +78,10 @@ describe("renderEvidenceLedgerPdf", () => {
     const pages = await pageTexts(await renderEvidenceLedgerPdf(model));
     expect(pages.length).toBeGreaterThan(1);
     const extractedText = pages.join(" ").replace(/\s+/g, " ");
-    expect(extractedText).toContain("D I S P L A Y E D R O W S U M");
-    expect(extractedText).toContain("R O U N D I N G A D J U S T M E N T");
-    expect(extractedText).toContain("S C A L I N G A D J U S T M E N T");
+    const compactText = extractedText.replace(/\s+/g, "");
+    expect(compactText).toContain("DISPLAYEDROWSUM");
+    expect(compactText).toContain("ROUNDINGADJUSTMENT");
+    expect(compactText).toContain("SCALINGADJUSTMENT");
 
     const apparatusPage = pages.find(
       (text) =>
