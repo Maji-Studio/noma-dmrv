@@ -88,6 +88,34 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
     ).toBe(true);
   });
 
+  it("enforces Method B cadence only across post-unlock Method B batches in a mixed process history", () => {
+    const historicalMethodA = gateBatch({
+      creditBatchId: "historical-a",
+      creditBatchCode: "CB-HISTORICAL-A",
+      samplingMethod: "method_a",
+      replicates: eligibleTriplet,
+    });
+    const postUnlockMethodB = gateBatch({
+      creditBatchId: "post-unlock-b",
+      creditBatchCode: "CB-POST-UNLOCK-B",
+      samplingMethod: "method_b",
+      replicates: [],
+    });
+
+    for (const batches of [
+      [historicalMethodA, postUnlockMethodB],
+      [postUnlockMethodB, historicalMethodA],
+    ]) {
+      const r = evaluateDurabilitySubmissionGates(batches);
+      expect(r.ok).toBe(false);
+      expect(
+        r.blockers.some(
+          (b) => /method b/i.test(b) && /sample 1 more/i.test(b),
+        ),
+      ).toBe(true);
+    }
+  });
+
   it("blocks a sampled batch with fewer than 3 replicates (gate c)", () => {
     const r = evaluateDurabilitySubmissionGates([
       gateBatch({ replicates: eligibleTriplet.slice(0, 2) }),

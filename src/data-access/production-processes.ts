@@ -21,6 +21,7 @@ import {
   PROCESS_ROLLING_WINDOW_MONTHS,
 } from "@/config/certification";
 import {
+  deriveBatchSamplingMethod,
   deriveSamplingRequirement,
   type BatchSampling,
   type SamplingMethod,
@@ -119,10 +120,11 @@ export async function findOrCreateProductionProcess(
  * `established_at`), and its cadence status under that method.
  *
  * The baseline counter uses the same process-grained count as
- * `getMethodBEligibilityByProcess`. Cadence here is a lifetime operator view over
- * the facility's process history; removal-specific submission gates can evaluate
- * a narrower in-scope batch set. This is where Track 2's unlock CTA and Method-B
- * signals attach.
+ * `getMethodBEligibilityByProcess`. Cadence is limited to the process's current
+ * effective regime, so a Method-B unlock never reclassifies earlier Method-A
+ * batches; removal-specific submission gates still enforce those historical
+ * batches' individual obligations. This is where Track 2's unlock CTA and
+ * Method-B signals attach.
  */
 export interface ProductionProcessSummary {
   id: string;
@@ -152,7 +154,7 @@ export interface ProductionProcessSummary {
   sampledBatches: number;
   requiredSampledBatches: number;
   cadenceShortfall: number;
-  /** True when the current method's sampling cadence is satisfied. */
+  /** True when the current regime's sampling cadence is satisfied. */
   cadenceMet: boolean;
 }
 
@@ -203,6 +205,7 @@ export async function getProductionProcessSummariesByFacility(
       productionProcessId: creditBatches.productionProcessId,
       batchId: creditBatches.id,
       batchCode: creditBatches.code,
+      startDate: creditBatches.startDate,
       sampleCount: count(samples.id).mapWith(Number),
     })
     .from(creditBatches)
@@ -212,20 +215,28 @@ export async function getProductionProcessSummariesByFacility(
 
   const batchesByProcess = new Map<
     string,
-    { batchId: string; batchCode: string; sampleCount: number }[]
+    { batchId: string; batchCode: string; startDate: string; sampleCount: number }[]
   >();
   for (const row of batchRows) {
     const list = batchesByProcess.get(row.productionProcessId) ?? [];
     list.push({
       batchId: row.batchId,
       batchCode: row.batchCode,
+      startDate: row.startDate,
       sampleCount: row.sampleCount,
     });
     batchesByProcess.set(row.productionProcessId, list);
   }
 
   return processRows.map((process) => {
-    const batches = batchesByProcess.get(process.id) ?? [];
+    const batches = (batchesByProcess.get(process.id) ?? []).filter(
+      (batch) =>
+        deriveBatchSamplingMethod({
+          processMethod: process.samplingMethod,
+          methodBUnlockedAt: process.methodBUnlockedAt,
+          batchStartDate: batch.startDate,
+        }) === process.samplingMethod,
+    );
     const eligibleSampleCount = eligibleSamplesByProcess.get(process.id) ?? 0;
     const requirement = deriveSamplingRequirement(
       process.samplingMethod,
@@ -423,7 +434,10 @@ export async function getProcessComplianceDrift(
   const cutoff = eligibleWindowCutoff(asOf);
 
   const [process] = await db
-    .select({ samplingMethod: productionProcesses.samplingMethod })
+    .select({
+      samplingMethod: productionProcesses.samplingMethod,
+      methodBUnlockedAt: productionProcesses.methodBUnlockedAt,
+    })
     .from(productionProcesses)
     .where(and(eq(productionProcesses.id, productionProcessId), eq(productionProcesses.organizationId, ctx.organizationId)))
     .limit(1);
@@ -438,6 +452,7 @@ export async function getProcessComplianceDrift(
       .select({
         batchId: creditBatches.id,
         batchCode: creditBatches.code,
+        startDate: creditBatches.startDate,
         endDate: creditBatches.endDate,
         sampleCount: count(samples.id).mapWith(Number),
       })
@@ -453,7 +468,15 @@ export async function getProcessComplianceDrift(
   // can't drift to different conventions. `endDate` is a date string; a few
   // hours' UTC offset is immaterial for a 6-month window comparison.
   const batchesInWindow: BatchSampling[] = batchRows
-    .filter((b) => isWithinEligibleWindow(new Date(b.endDate), asOf, cutoff))
+    .filter(
+      (batch) =>
+        isWithinEligibleWindow(new Date(batch.endDate), asOf, cutoff) &&
+        deriveBatchSamplingMethod({
+          processMethod: process.samplingMethod,
+          methodBUnlockedAt: process.methodBUnlockedAt,
+          batchStartDate: batch.startDate,
+        }) === process.samplingMethod,
+    )
     .map((b) => ({
       batchId: b.batchId,
       batchCode: b.batchCode,
