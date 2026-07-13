@@ -17,7 +17,7 @@
  */
 
 import { and, eq, ne, sql } from "drizzle-orm";
-import type { db } from "@/db";
+import type { db, DbTransaction } from "@/db";
 import {
   feedstocks,
   productionRuns,
@@ -30,6 +30,7 @@ import {
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
 import type { OrgContext } from "@/lib/auth/server";
+import type { BinMovementLane } from "@/schemas/bin-movements";
 import { requireOrgScope } from "./utils";
 
 /** Any Drizzle client that can run reads — the live `db` or a transaction. */
@@ -41,6 +42,22 @@ type DbReader = Pick<typeof db, "select">;
  * beyond this slack is a real over-draw.
  */
 const STOCK_OVERDRAW_EPSILON_KG = 1e-6;
+
+/**
+ * Serialize every stock read-modify-write for one physical bin. All withdrawal
+ * guards and reconciliation movements use this same key, so a stock-take can
+ * never race a run, product allocation, delivery, loss, or another stock-take.
+ */
+export async function lockBinStock(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  storageLocationId: string,
+): Promise<void> {
+  requireOrgScope(ctx);
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${ctx.organizationId}), hashtext(${storageLocationId}))`,
+  );
+}
 
 /**
  * Round a kilogram figure for operator-facing copy (whole kg, grouped).
@@ -129,13 +146,90 @@ async function deriveFeedstockAvailableKg(
   return Number(intake.total) - Number(consumed.total) + Number(movement.total);
 }
 
+async function deriveProductAvailableKg(
+  ctx: OrgContext,
+  tx: DbReader,
+  storageLocationId: string,
+): Promise<number> {
+  const [[product], [delivered], [movement]] = await Promise.all([
+    tx
+      .select({
+        total: sql<number>`COALESCE(SUM(${biocharProducts.massKg}), 0)`,
+      })
+      .from(biocharProducts)
+      .where(
+        and(
+          eq(biocharProducts.storageLocationId, storageLocationId),
+          eq(biocharProducts.organizationId, ctx.organizationId),
+        ),
+      ),
+    tx
+      .select({
+        total: sql<number>`COALESCE(SUM(${deliveries.deliveredWetMassKg}), 0)`,
+      })
+      .from(deliveries)
+      .innerJoin(
+        orders,
+        and(
+          eq(deliveries.orderId, orders.id),
+          eq(orders.organizationId, ctx.organizationId),
+        ),
+      )
+      .innerJoin(
+        biocharProducts,
+        and(
+          sql`${biocharProducts.id} = COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+          eq(biocharProducts.organizationId, ctx.organizationId),
+        ),
+      )
+      .where(
+        and(
+          eq(deliveries.status, "delivered"),
+          eq(deliveries.organizationId, ctx.organizationId),
+          eq(biocharProducts.storageLocationId, storageLocationId),
+        ),
+      ),
+    tx
+      .select({
+        total: sql<number>`COALESCE(SUM(${binMovements.massDeltaKg}), 0)`,
+      })
+      .from(binMovements)
+      .where(
+        and(
+          eq(binMovements.storageLocationId, storageLocationId),
+          eq(binMovements.lane, "product"),
+          eq(binMovements.organizationId, ctx.organizationId),
+        ),
+      ),
+  ]);
+
+  return Number(product.total) - Number(delivered.total) + Number(movement.total);
+}
+
+/** Derive one bin lane while the caller holds that bin's transaction lock. */
+export async function deriveBinLaneAvailableKg(
+  ctx: OrgContext,
+  tx: DbReader,
+  storageLocationId: string,
+  lane: BinMovementLane,
+): Promise<number> {
+  requireOrgScope(ctx);
+  if (lane === "feedstock") {
+    return deriveFeedstockAvailableKg(ctx, tx, storageLocationId);
+  }
+  if (lane === "biochar") {
+    return deriveBiocharAvailableKg(ctx, tx, storageLocationId);
+  }
+  return deriveProductAvailableKg(ctx, tx, storageLocationId);
+}
+
 /**
  * Hard-block a production-run feedstock draw that exceeds the bin's derived
  * on-hand dry stock. Call inside the run's transaction, before allocating.
  */
 export async function assertFeedstockDrawWithinStock(
   ctx: OrgContext,
-  tx: DbReader,
+  tx: DbTransaction,
   params: {
     storageLocationId: string;
     requestedDryKg: number;
@@ -143,6 +237,7 @@ export async function assertFeedstockDrawWithinStock(
   },
 ): Promise<void> {
   requireOrgScope(ctx);
+  await lockBinStock(ctx, tx, params.storageLocationId);
   const available = await deriveFeedstockAvailableKg(
     ctx,
     tx,
@@ -220,7 +315,7 @@ async function deriveBiocharAvailableKg(
  */
 export async function assertBiocharDrawWithinStock(
   ctx: OrgContext,
-  tx: DbReader,
+  tx: DbTransaction,
   params: {
     biocharStorageLocationId: string;
     requestedBiocharKg: number;
@@ -228,6 +323,7 @@ export async function assertBiocharDrawWithinStock(
   },
 ): Promise<void> {
   requireOrgScope(ctx);
+  await lockBinStock(ctx, tx, params.biocharStorageLocationId);
   const available = await deriveBiocharAvailableKg(
     ctx,
     tx,
@@ -248,7 +344,7 @@ export async function assertBiocharDrawWithinStock(
  */
 export async function assertBiocharProductDrawWithinStock(
   ctx: OrgContext,
-  tx: DbReader,
+  tx: DbTransaction,
   params: {
     biocharProductId: string;
     requestedWetKg: number;
@@ -265,19 +361,42 @@ export async function assertBiocharProductDrawWithinStock(
     deliveredConditions.push(ne(deliveries.id, params.excludeDeliveryId));
   }
 
-  const [[product], [delivered]] = await Promise.all([
-    tx
-      .select({ code: biocharProducts.code, massKg: biocharProducts.massKg })
-      .from(biocharProducts)
-      .where(and(eq(biocharProducts.id, params.biocharProductId), eq(biocharProducts.organizationId, ctx.organizationId))),
-    tx
-      .select({
-        total: sql<number>`COALESCE(SUM(${deliveries.deliveredWetMassKg}), 0)`,
-      })
-      .from(deliveries)
-      .innerJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
-      .where(and(...deliveredConditions)),
-  ]);
+  const [product] = await tx
+    .select({
+      code: biocharProducts.code,
+      massKg: biocharProducts.massKg,
+      storageLocationId: biocharProducts.storageLocationId,
+    })
+    .from(biocharProducts)
+    .where(
+      and(
+        eq(biocharProducts.id, params.biocharProductId),
+        eq(biocharProducts.organizationId, ctx.organizationId),
+      ),
+    );
+
+  // Products normally belong to a bin, which shares the lock with stock-takes.
+  // Fall back to the product id so two deliveries still serialize if an older
+  // or partially configured product has no storage location.
+  await lockBinStock(
+    ctx,
+    tx,
+    product?.storageLocationId ?? params.biocharProductId,
+  );
+
+  const [delivered] = await tx
+    .select({
+      total: sql<number>`COALESCE(SUM(${deliveries.deliveredWetMassKg}), 0)`,
+    })
+    .from(deliveries)
+    .innerJoin(
+      orders,
+      and(
+        eq(deliveries.orderId, orders.id),
+        eq(orders.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(and(...deliveredConditions));
 
   const available = Number(product?.massKg ?? 0) - Number(delivered.total);
   if (isOverdraw(params.requestedWetKg, available)) {
