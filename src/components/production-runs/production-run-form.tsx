@@ -15,8 +15,9 @@ import Link from "next/link";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
-import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, FileCsvIcon } from "@phosphor-icons/react/dist/ssr";
+import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, FileCsvIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, DryMassInput, FormActions, FormSection, FormSpine, SectionLabel, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { Button } from "@/components/ui";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { FormSelect } from "@/components/forms/form-select";
 import {
@@ -219,11 +220,15 @@ function ProcessFlowPreview({
 // Component
 // ============================================
 
+export type ProductionRunSubmitData = Omit<ProductionRunFormData, "endTime"> & {
+  endTime?: ProductionRunFormData["endTime"] | null;
+};
+
 interface ProductionRunFormProps {
   /** Existing production run data for editing (undefined for create mode) */
   productionRun?: ProductionRunWithRelations;
   /** Form submission handler */
-  onSubmit: (data: ProductionRunFormData) => Promise<void> | void;
+  onSubmit: (data: ProductionRunSubmitData) => Promise<void> | void;
   /** Cancel button handler */
   onCancel?: () => void;
   /** Whether the form is currently submitting */
@@ -284,9 +289,10 @@ export function ProductionRunForm({
     handleSubmit,
     control,
     setValue,
+    getValues,
     setError,
     clearErrors,
-    formState: { errors },
+    formState: { errors, dirtyFields },
   } = useForm({
     resolver: zodResolver(productionRunFormSchema),
     // onTouched so the spine markers can turn red on blur, not just on submit.
@@ -296,6 +302,7 @@ export function ProductionRunForm({
 
   // The run this run's window overlaps, if the server rejected the save (#259).
   const [overlapConflict, setOverlapConflict] = useState<RunConflict | null>(null);
+  const [endTimeCleared, setEndTimeCleared] = useState(false);
 
   // CERT chips reflect the saved record (frozen), neutral while creating.
   const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
@@ -379,17 +386,25 @@ export function ProductionRunForm({
         ? data.endDate
         : formatLocalDate(data.endDate as Date)
       : startDateStr;
-    const combined = {
+    // Three-state end time: explicit clear → null; a touched (dirty) value →
+    // that Date; anything else (untouched, whether pre-filled or blank) →
+    // undefined = "unchanged", so a no-op edit never rewrites the stored end.
+    const endTouched = !!dirtyFields.endDate || !!dirtyFields.endTime;
+    const combined: ProductionRunSubmitData = {
       ...data,
       startTime: combineDateAndTime(startDateStr, data.startTime as string),
-      endTime: data.endTime ? combineDateAndTime(endDateStr, data.endTime as string) : undefined,
+      endTime: endTimeCleared
+        ? null
+        : data.endTime && endTouched
+          ? combineDateAndTime(endDateStr, data.endTime as string)
+          : undefined,
     };
 
     // Clear any prior overlap state before re-submitting.
     setOverlapConflict(null);
     clearErrors("startTime");
     try {
-      await onSubmit(combined as ProductionRunFormData);
+      await onSubmit(combined);
     } catch (error) {
       const conflict = getRunConflict(error);
       if (conflict) {
@@ -488,17 +503,45 @@ export function ProductionRunForm({
             error={errors.endDate?.message}
             helperText="Leave the end blank until the run finishes. For an overnight run, set the next day."
           >
-            <FormInput id="endDate" type="date" disabled={isSubmitting} error={!!errors.endDate} {...register("endDate")} />
+            <FormInput
+              id="endDate"
+              type="date"
+              disabled={isSubmitting}
+              error={!!errors.endDate}
+              {...register("endDate", { onChange: () => setEndTimeCleared(false) })}
+            />
           </FormField>
 
           <FormField id="endTime" label="End Time" error={errors.endTime?.message}>
-            <FormInput
-              id="endTime"
-              type="time"
-              disabled={isSubmitting}
-              error={!!errors.endTime}
-              {...register("endTime")}
-            />
+            <div className="flex items-center gap-8">
+              <FormInput
+                id="endTime"
+                type="time"
+                disabled={isSubmitting}
+                error={!!errors.endTime}
+                {...register("endTime", { onChange: () => setEndTimeCleared(false) })}
+              />
+              {isEditMode && productionRun?.endTime != null && (
+                <Button
+                  type="button"
+                  variant="noOutline"
+                  size="small"
+                  disabled={isSubmitting}
+                  onClick={() => {
+                    if (getValues("status") === "complete") {
+                      setValue("status", "running", SET_VALUE_OPTS);
+                    }
+                    setValue("endDate", "", SET_VALUE_OPTS);
+                    setValue("endTime", "", SET_VALUE_OPTS);
+                    clearErrors("endTime");
+                    setEndTimeCleared(true);
+                  }}
+                >
+                  <XIcon size={16} weight="bold" />
+                  Clear end time
+                </Button>
+              )}
+            </div>
           </FormField>
         </div>
 
