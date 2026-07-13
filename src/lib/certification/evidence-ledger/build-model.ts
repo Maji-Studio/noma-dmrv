@@ -141,6 +141,7 @@ function buildCategory(
     name: meta.name,
     tag: meta.tag,
     legs: builtLegs,
+    displayedRowSumTkm,
     ...(roundingAdjustmentTkm !== 0 ? { roundingAdjustmentTkm } : {}),
   };
 

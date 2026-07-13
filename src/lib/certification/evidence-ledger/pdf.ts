@@ -416,14 +416,13 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
   // keeps the default emphasized footer treatment.
   const operandRow = { backgroundColor: C.sea };
   const stackedRow = { borderTopWidth: 1, borderTopColor: C.ink12 };
-  const displayedRowSumTkm = cat.legs.reduce((sum, leg) => sum + leg.tkm, 0);
   const roundingRows =
     cat.roundingAdjustmentTkm == null
       ? []
       : [
           footRow(
             `Displayed row sum — ${cat.key} · ${cat.legs.length} legs`,
-            nf2(displayedRowSumTkm),
+            nf2(cat.displayedRowSumTkm),
             "t·km",
             operandRow,
           ),
