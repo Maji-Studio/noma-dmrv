@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   binMovements,
@@ -10,11 +10,15 @@ import {
   feedstocks,
   feedstockTypes,
   orders,
+  productionRunFeedstocks,
+  productionRuns,
+  reactors,
   storageLocations,
   users,
 } from "@/db/schema";
 import { getStorageLocationWithFacility } from "@/data-access/storage-locations";
 import { createDelivery } from "@/data-access/deliveries";
+import { createProductionRun } from "@/data-access/production-runs";
 import {
   ensureTestOrg,
   makeTestOrgContext,
@@ -22,6 +26,9 @@ import {
 } from "./helpers/test-org";
 
 const TEST_USER_ID = "test-user-bin-reconciliation";
+const INITIAL_FEEDSTOCK_DRY_MASS_KG = 100;
+const RECOUNTED_FEEDSTOCK_DRY_MASS_KG = 10;
+const CONCURRENCY_BARRIER_TIMEOUT_MS = 5_000;
 
 vi.mock("@/lib/auth/server", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/auth/server")>();
@@ -206,6 +213,193 @@ describe("bin reconciliation integrity", () => {
       await db
         .delete(feedstockTypes)
         .where(eq(feedstockTypes.id, feedstockType.id));
+      await db.delete(facilities).where(eq(facilities.id, facility.id));
+    }
+  });
+
+  it("serializes a stock-take against a concurrent production-run feedstock draw", async () => {
+    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const runCode = `PR-TAKE-RUN-${tag}`;
+    const [facility] = await db
+      .insert(facilities)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FAC-TAKE-RUN-${tag}`,
+        name: `Stock Take Run Facility ${tag}`,
+      })
+      .returning({ id: facilities.id });
+    const [reactor] = await db
+      .insert(reactors)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        code: `R-TAKE-RUN-${tag}`,
+        identifier: `Stock Take Run Reactor ${tag}`,
+        reactorType: "auger",
+      })
+      .returning({ id: reactors.id });
+    const [feedstockType] = await db
+      .insert(feedstockTypes)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FT-TAKE-RUN-${tag}`,
+        name: `Stock Take Run Feedstock ${tag}`,
+        category: "forestry",
+        usage: "pyrolysis",
+      })
+      .returning({ id: feedstockTypes.id });
+    const [bin] = await db
+      .insert(storageLocations)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        feedstockTypeId: feedstockType.id,
+        code: `BIN-TAKE-RUN-${tag}`,
+        name: `Stock Take Run Bin ${tag}`,
+        type: "feedstock_bin",
+      })
+      .returning({ id: storageLocations.id });
+    const [feedstock] = await db
+      .insert(feedstocks)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        feedstockTypeId: feedstockType.id,
+        storageLocationId: bin.id,
+        code: `FS-TAKE-RUN-${tag}`,
+        status: "complete",
+        massDryKg: INITIAL_FEEDSTOCK_DRY_MASS_KG,
+        massWetKg: INITIAL_FEEDSTOCK_DRY_MASS_KG,
+        moistureContentPercent: 0,
+      })
+      .returning({ id: feedstocks.id });
+
+    let releaseWriteBarrier = () => {};
+    let writeBarrierTransaction: Promise<void> | undefined;
+    let concurrentResults:
+      | Promise<
+          [
+            PromiseSettledResult<Awaited<ReturnType<typeof recordStockTakeFn>>>,
+            PromiseSettledResult<Awaited<ReturnType<typeof createProductionRun>>>,
+          ]
+        >
+      | undefined;
+
+    try {
+      let signalWriteBarrierReady = () => {};
+      const writeBarrierReady = new Promise<void>((resolve) => {
+        signalWriteBarrierReady = resolve;
+      });
+      const releaseWriteBarrierPromise = new Promise<void>((resolve) => {
+        releaseWriteBarrier = resolve;
+      });
+      writeBarrierTransaction = db.transaction(async (tx) => {
+        await tx.execute(
+          sql`lock table ${binMovements}, ${productionRunFeedstocks} in share mode`,
+        );
+        signalWriteBarrierReady();
+        await releaseWriteBarrierPromise;
+      });
+      await writeBarrierReady;
+
+      concurrentResults = Promise.allSettled([
+        recordStockTakeFn({
+          storageLocationId: bin.id,
+          lane: "feedstock",
+          countedMassKg: RECOUNTED_FEEDSTOCK_DRY_MASS_KG,
+          reason: "Concurrent stock-take against production run",
+        }),
+        createProductionRun(ctx, {
+          code: runCode,
+          facilityId: facility.id,
+          reactorId: reactor.id,
+          status: "complete",
+          startTime: new Date("2026-07-03T08:00:00Z"),
+          endTime: new Date("2026-07-03T10:00:00Z"),
+          feedstockWetMassKg: INITIAL_FEEDSTOCK_DRY_MASS_KG,
+          feedstockMoisturePercent: 0,
+          feedstockStorageLocationId: bin.id,
+        }),
+      ]);
+
+      await expect
+        .poll(
+          async () => {
+            const waitState = await db.execute<{ ready: boolean }>(sql`
+              with blocked_writers as (
+                select pid, relation
+                from pg_locks
+                where not granted
+                  and mode = 'RowExclusiveLock'
+                  and relation in (
+                    'bin_movements'::regclass,
+                    'production_run_feedstocks'::regclass
+                  )
+              )
+              select
+                (
+                  (select count(distinct relation) from blocked_writers) = 2
+                  or exists (
+                    select 1
+                    from pg_locks waiting
+                    join pg_locks held
+                      on held.locktype = waiting.locktype
+                     and held.database is not distinct from waiting.database
+                     and held.classid is not distinct from waiting.classid
+                     and held.objid is not distinct from waiting.objid
+                     and held.objsubid is not distinct from waiting.objsubid
+                    join blocked_writers on blocked_writers.pid = held.pid
+                    where waiting.locktype = 'advisory'
+                      and not waiting.granted
+                      and held.granted
+                  )
+                ) as ready
+            `);
+            return waitState.rows[0]?.ready ?? false;
+          },
+          { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS },
+        )
+        .toBe(true);
+
+      releaseWriteBarrier();
+      await writeBarrierTransaction;
+      const [stockTakeResult, productionRunResult] = await concurrentResults;
+
+      expect(stockTakeResult.status).toBe("fulfilled");
+      if (stockTakeResult.status === "fulfilled") {
+        expect(stockTakeResult.value.success).toBe(true);
+      }
+
+      const runSucceeded = productionRunResult.status === "fulfilled";
+      const runRejectedAsOverdraw =
+        productionRunResult.status === "rejected" &&
+        productionRunResult.reason instanceof Error &&
+        productionRunResult.reason.message.includes("Not enough feedstock in this bin");
+      expect(runSucceeded).not.toBe(runRejectedAsOverdraw);
+
+      const enriched = await getStorageLocationWithFacility(ctx, bin.id);
+      expect(enriched.feedstockInventory.currentDryMassKg).toBe(
+        RECOUNTED_FEEDSTOCK_DRY_MASS_KG,
+      );
+      expect(enriched.feedstockInventory.currentDryMassKg).toBeGreaterThanOrEqual(0);
+    } finally {
+      releaseWriteBarrier();
+      await writeBarrierTransaction?.catch(() => undefined);
+      await concurrentResults?.catch(() => undefined);
+      await db
+        .delete(productionRunFeedstocks)
+        .where(eq(productionRunFeedstocks.feedstockId, feedstock.id));
+      await db.delete(productionRuns).where(eq(productionRuns.code, runCode));
+      await db
+        .delete(binMovements)
+        .where(eq(binMovements.storageLocationId, bin.id));
+      await db.delete(feedstocks).where(eq(feedstocks.id, feedstock.id));
+      await db.delete(storageLocations).where(eq(storageLocations.id, bin.id));
+      await db
+        .delete(feedstockTypes)
+        .where(eq(feedstockTypes.id, feedstockType.id));
+      await db.delete(reactors).where(eq(reactors.id, reactor.id));
       await db.delete(facilities).where(eq(facilities.id, facility.id));
     }
   });
