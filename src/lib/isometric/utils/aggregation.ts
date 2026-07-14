@@ -1,4 +1,6 @@
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
+import { SafeError } from "@/lib/errors";
+import { roundTripDistanceFactor } from "@/schemas/trip-type";
 import type { ProductionRun, Sample, TransportLeg } from "@/db/schema";
 
 export type ProductionRunWithSamples = ProductionRun & {
@@ -164,12 +166,20 @@ export function aggregateTransportMassDistance(
     };
   }
 
-  // Σⱼ(distⱼ_km × massⱼ_tonnes). One mass-distance scalar per category — the
-  // single SCALAR the blueprint expects (there is no LIST-shaped transport
-  // input in the Certify catalog).
+  // Σⱼ(round-trip-factorⱼ × distⱼ_km × massⱼ_tonnes). One mass-distance scalar
+  // per category — the single SCALAR the blueprint expects (there is no
+  // LIST-shaped transport input in the Certify catalog). Per issue #316 (§4.2
+  // ruling, resolved 2026-07-09, interpretation (a)): a `return` leg counts the
+  // full round-trip distance (×2 of the stored one-way distance) against the
+  // outbound load mass; a `one_way` leg (evidenced onward destination) counts
+  // the one-way distance only. The stored `distanceKm` stays one-way; the ×2
+  // lives here, not in the leg.
   let massDistanceTonneKm = 0;
   for (const leg of legs) {
-    massDistanceTonneKm += leg.distanceKm * kgToTonnes(leg.loadMassKg as number);
+    massDistanceTonneKm +=
+      roundTripDistanceFactor(leg.tripType) *
+      leg.distanceKm *
+      kgToTonnes(leg.loadMassKg as number);
   }
   return { massDistanceTonneKm, warning: null };
 }
@@ -209,9 +219,19 @@ export function aggregateProductionRuns(
   let totalGensetDieselLitres = 0;
   let totalElectricityKwh = 0;
   let earliestStartTime = runs[0].startTime;
-  let latestEndTime = runs[0].endTime;
+  // Narrowed to a concrete Date by the open-run guard in the loop below.
+  let latestEndTime: Date | null = null;
 
   for (const run of runs) {
+    // A run reaching aggregation must be closed — its window feeds the telemetry
+    // period and emission accounting. An open run (NULL end) is a data error
+    // here; fail loudly naming the run rather than substitute a time (#259).
+    if (run.endTime == null) {
+      throw new SafeError(
+        `Run ${run.code} has no end time yet — complete the run before it can be certified`,
+      );
+    }
+    const runEndTime = run.endTime;
     const factor = clampFactor(attributionByRunId?.get(run.id));
     // STORED bucket: only the applied share is credited (ex-post, unchanged).
     totalBiocharDryMassKg += nz(run.biocharDryMassKg) * factor;
@@ -227,7 +247,7 @@ export function aggregateProductionRuns(
       nz(run.dieselGensetLiters) + nz(run.preprocessingFuelLiters);
     totalElectricityKwh += nz(run.electricityKwh);
     if (run.startTime < earliestStartTime) earliestStartTime = run.startTime;
-    if (run.endTime > latestEndTime) latestEndTime = run.endTime;
+    if (latestEndTime == null || runEndTime > latestEndTime) latestEndTime = runEndTime;
 
     if (run.biocharDryMassKg == null) {
       warnings.push(`Run ${run.code}: missing biocharDryMassKg`);
@@ -236,6 +256,13 @@ export function aggregateProductionRuns(
     // wrongly block a valid Method B unsampled run. Sampling sufficiency is now
     // judged method-aware by `evaluateDurabilitySubmissionGates` (D3) in
     // submit-removal.ts; this aggregation stays method-agnostic.
+  }
+
+  // Unreachable — the loop runs at least once (runs is non-empty) and each
+  // iteration either throws on a null end or sets latestEndTime — but it narrows
+  // the type for the `latestEndTime: Date` field below.
+  if (latestEndTime == null) {
+    throw new SafeError("aggregateProductionRuns: no closed runs to aggregate");
   }
 
   return {

@@ -1,3 +1,4 @@
+import { DEC_ORG_ID } from "@/db/org-defaults";
 /**
  * Shared fixtures for the Certification workspace E2E specs
  * (`certification-workspace.spec.ts`, `certification-review-flow.spec.ts`).
@@ -82,6 +83,7 @@ export async function seedCertifierMapping(
   const { db, pool } = createDbConnection();
   try {
     await db.insert(schema.certifierProjects).values({
+      organizationId: DEC_ORG_ID,
       facilityId,
       provider: "isometric",
       externalProjectId: opts.externalProjectId,
@@ -236,25 +238,27 @@ export async function seedGroupedRemovalWithChain(
   try {
     await db.transaction(async (tx) => {
       await tx.insert(schema.productionRuns).values({
+        organizationId: DEC_ORG_ID,
         id: id.productionRun,
         code: `E2E-PRD-${testRunId}`,
         facilityId: refs.facilityId,
-        date: today,
         reactorId: refs.reactorId,
         status: "complete",
         startTime: new Date(),
-        endTime: new Date(),
+        endTime: new Date(Date.now() + 4 * 60 * 60 * 1000),
         biocharOutputKg: BIOCHAR_OUTPUT_KG,
         biocharStorageLocationId: refs.biocharStorageLocationId,
         feedstockStorageLocationId: refs.feedstockStorageLocationId,
       });
       await tx.insert(schema.productionRunFeedstocks).values({
+        organizationId: DEC_ORG_ID,
         id: id.productionRunFeedstock,
         productionRunId: id.productionRun,
         feedstockId: refs.feedstockId,
         massUsedKg: 400,
       });
       await tx.insert(schema.biocharProducts).values({
+        organizationId: DEC_ORG_ID,
         id: id.biocharProduct,
         code: `E2E-BP-RVW-${testRunId}`,
         facilityId: refs.facilityId,
@@ -266,6 +270,7 @@ export async function seedGroupedRemovalWithChain(
         massKg: BIOCHAR_OUTPUT_KG,
       });
       await tx.insert(schema.orders).values({
+        organizationId: DEC_ORG_ID,
         id: id.order,
         code: `E2E-ORD-${testRunId}`,
         facilityId: refs.facilityId,
@@ -277,6 +282,7 @@ export async function seedGroupedRemovalWithChain(
         packaging: "bagged",
       });
       await tx.insert(schema.deliveries).values({
+        organizationId: DEC_ORG_ID,
         id: id.delivery,
         code: `E2E-DEL-${testRunId}`,
         facilityId: refs.facilityId,
@@ -291,6 +297,7 @@ export async function seedGroupedRemovalWithChain(
         vehicleId: refs.vehicleId,
       });
       await tx.insert(schema.applications).values({
+        organizationId: DEC_ORG_ID,
         id: id.application,
         code: `E2E-APP-${testRunId}`,
         deliveryId: id.delivery,
@@ -317,17 +324,20 @@ export async function seedGroupedRemovalWithChain(
         );
       }
       await tx.insert(schema.productionProcesses).values({
+        organizationId: DEC_ORG_ID,
         id: id.productionProcess,
         facilityId: refs.facilityId,
         feedstockTypeId: feedstockRow.feedstockTypeId,
       });
       // Group: a Removal ledger row + the credit batch pointing at it.
       await tx.insert(schema.certifierRemovals).values({
+        organizationId: DEC_ORG_ID,
         id: id.removal,
         facilityId: refs.facilityId,
         provider: "isometric",
       });
       await tx.insert(schema.creditBatches).values({
+        organizationId: DEC_ORG_ID,
         id: id.creditBatch,
         code: creditBatchCode,
         facilityId: refs.facilityId,
@@ -341,6 +351,7 @@ export async function seedGroupedRemovalWithChain(
         removalId: id.removal,
       });
       await tx.insert(schema.creditBatchProductionRuns).values({
+        organizationId: DEC_ORG_ID,
         creditBatchId: id.creditBatch,
         productionRunId: id.productionRun,
       });
@@ -466,11 +477,13 @@ export async function seedUngroupedIncompleteBatch(
   try {
     await db.transaction(async (tx) => {
       await tx.insert(schema.productionProcesses).values({
+        organizationId: DEC_ORG_ID,
         id: id.productionProcess,
         facilityId: refs.facilityId,
         feedstockTypeId: refs.feedstockTypeId,
       });
       await tx.insert(schema.creditBatches).values({
+        organizationId: DEC_ORG_ID,
         id: id.creditBatch,
         code,
         facilityId: refs.facilityId,
@@ -596,6 +609,7 @@ export async function seedUngroupedReadyBatchWithChain(
     entityType: "feedstock" | "biochar" | "sample",
     entityId: string,
   ) => ({
+    organizationId: DEC_ORG_ID,
     id: legId,
     entityType,
     entityId,
@@ -610,14 +624,14 @@ export async function seedUngroupedReadyBatchWithChain(
   try {
     await db.transaction(async (tx) => {
       await tx.insert(schema.productionRuns).values({
+        organizationId: DEC_ORG_ID,
         id: id.productionRun,
         code: `E2E-PRD-RDY-${testRunId}`,
         facilityId: refs.facilityId,
-        date: today,
         reactorId: refs.reactorId,
         status: "complete",
         startTime: new Date(),
-        endTime: new Date(),
+        endTime: new Date(Date.now() + 4 * 60 * 60 * 1000),
         biocharOutputKg: READY_BIOCHAR_OUTPUT_KG,
         biocharMoisturePercent: READY_BIOCHAR_MOISTURE_PCT,
         biocharDryMassKg: READY_BIOCHAR_DRY_MASS_KG,
@@ -632,6 +646,7 @@ export async function seedUngroupedReadyBatchWithChain(
         feedstockStorageLocationId: refs.feedstockStorageLocationId,
       });
       await tx.insert(schema.productionRunReadings).values({
+        organizationId: DEC_ORG_ID,
         id: id.productionRunReading,
         productionRunId: id.productionRun,
         timestamp: new Date(),
@@ -640,6 +655,7 @@ export async function seedUngroupedReadyBatchWithChain(
         gasFlowRate: 0,
       });
       await tx.insert(schema.productionRunFeedstocks).values({
+        organizationId: DEC_ORG_ID,
         id: id.productionRunFeedstock,
         productionRunId: id.productionRun,
         feedstockId: refs.feedstockId,
@@ -648,6 +664,7 @@ export async function seedUngroupedReadyBatchWithChain(
       // Lab-grade sample carrying the carbon content + H:Corg the CO₂e preview
       // aggregates over (not the credit batch's own hToCorgRatio column).
       await tx.insert(schema.samples).values({
+        organizationId: DEC_ORG_ID,
         id: id.sample,
         productionRunId: id.productionRun,
         sampleCode: `E2E-SMP-${testRunId}`,
@@ -657,6 +674,7 @@ export async function seedUngroupedReadyBatchWithChain(
         hToCOrgRatio: SAMPLE_H_TO_CORG_RATIO,
       });
       await tx.insert(schema.biocharProducts).values({
+        organizationId: DEC_ORG_ID,
         id: id.biocharProduct,
         code: `E2E-BP-RDY-${testRunId}`,
         facilityId: refs.facilityId,
@@ -668,6 +686,7 @@ export async function seedUngroupedReadyBatchWithChain(
         massKg: READY_BIOCHAR_OUTPUT_KG,
       });
       await tx.insert(schema.orders).values({
+        organizationId: DEC_ORG_ID,
         id: id.order,
         code: `E2E-ORD-RDY-${testRunId}`,
         facilityId: refs.facilityId,
@@ -679,6 +698,7 @@ export async function seedUngroupedReadyBatchWithChain(
         packaging: "bagged",
       });
       await tx.insert(schema.deliveries).values({
+        organizationId: DEC_ORG_ID,
         id: id.delivery,
         code: `E2E-DEL-RDY-${testRunId}`,
         facilityId: refs.facilityId,
@@ -693,6 +713,7 @@ export async function seedUngroupedReadyBatchWithChain(
         vehicleId: refs.vehicleId,
       });
       await tx.insert(schema.applications).values({
+        organizationId: DEC_ORG_ID,
         id: id.application,
         code: `E2E-APP-RDY-${testRunId}`,
         deliveryId: id.delivery,
@@ -709,6 +730,7 @@ export async function seedUngroupedReadyBatchWithChain(
       });
       const applicationEvidenceDocuments: (typeof schema.documents.$inferInsert)[] =
         READY_APPLICATION_EVIDENCE_ROLES.map((role, index) => ({
+          organizationId: DEC_ORG_ID,
           id: id.applicationDocuments[index],
           entityType: "application",
           entityId: id.application,
@@ -736,12 +758,14 @@ export async function seedUngroupedReadyBatchWithChain(
         );
       }
       await tx.insert(schema.productionProcesses).values({
+        organizationId: DEC_ORG_ID,
         id: id.productionProcess,
         facilityId: refs.facilityId,
         feedstockTypeId: feedstockRow.feedstockTypeId,
       });
       // Ungrouped: no certifier_removals row, no removalId on the batch.
       await tx.insert(schema.creditBatches).values({
+        organizationId: DEC_ORG_ID,
         id: id.creditBatch,
         code: creditBatchCode,
         facilityId: refs.facilityId,
@@ -754,6 +778,7 @@ export async function seedUngroupedReadyBatchWithChain(
         hToCorgRatio: CREDIT_BATCH_H_TO_CORG_RATIO,
       });
       await tx.insert(schema.creditBatchProductionRuns).values({
+        organizationId: DEC_ORG_ID,
         creditBatchId: id.creditBatch,
         productionRunId: id.productionRun,
       });

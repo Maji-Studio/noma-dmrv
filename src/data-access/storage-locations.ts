@@ -3,21 +3,19 @@
  * CRUD operations for storage locations with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, isNull, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
+import type { OrgContext } from "@/lib/auth/server";
 import {
   storageLocations,
   facilities,
   feedstocks,
   feedstockTypes,
   productionRuns,
-  productionRunFeedstocks,
   biocharProducts,
   biocharStorageInventory,
   formulations,
   deliveries,
-  orders,
-  applications,
   type StorageLocation,
 } from "@/db/schema";
 import {
@@ -25,393 +23,22 @@ import {
   type StorageLocationFilterData,
   type StorageLocationType,
 } from "@/schemas/storage-locations";
-
-// ============================================
-// Types
-// ============================================
-
-export interface StorageLocationLastActivity {
-  type: "in" | "out";
-  date: Date;
-  massKg: number;
-  label: string;
-}
-
-export interface StorageLocationWithFacility extends StorageLocation {
-  facilityCode: string;
-  facilityName: string;
-  feedstockInventory: {
-    batchCount: number;
-    pendingBatchCount: number;
-    feedstockTypes: string[];
-    currentDryMassKg: number;
-    pendingDryMassKg: number;
-    estimatedWetMassKg: number | null;
-    estimatedMoisturePercent: number | null;
-  };
-  biocharInventory: {
-    productionRunCount: number;
-    currentMassKg: number;
-    allocatedToProductsKg: number;
-    downstreamFormulations: string[];
-  };
-  productInventory: {
-    batchCount: number;
-    currentMassKg: number;
-    biocharEquivalentKg: number;
-    formulationNames: string[];
-    appliedApplicationCount: number;
-    appliedDryMassKg: number;
-    lastAppliedAt: Date | null;
-  };
-  lastActivity: StorageLocationLastActivity | null;
-}
-
-export interface PaginatedStorageLocations {
-  items: StorageLocationWithFacility[];
-  total: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-}
-
-// ============================================
-// Auth Guards
-// ============================================
-
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { guardStorageLocationName } from "./unique-name-guards";
+import { enrichStorageLocationRows } from "./storage-location-enrichment";
+import type {
+  StorageLocationWithFacility,
+  PaginatedStorageLocations,
+  StorageLocationLastActivity,
+} from "./storage-location-enrichment";
 
-type BaseStorageLocationRow = {
-  id: string;
-  code: string;
-  name: string;
-  type: StorageLocation["type"];
-  capacityKg: number | null;
-  storageMethod: string | null;
-  storageDescription: string | null;
-  supplierReferenceId: string | null;
-  feedstockTypeId: string | null;
-  formulationId: string | null;
-  facilityId: string;
-  archivedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-  facilityCode: string | null;
-  facilityName: string | null;
+// Re-exported so existing importers (hooks, fn) keep their import paths.
+export type {
+  StorageLocationWithFacility,
+  PaginatedStorageLocations,
+  StorageLocationLastActivity,
 };
-
-function splitAggregateLabels(value: string | null): string[] {
-  if (!value) return [];
-  return value
-    .split(",")
-    .map((label) => label.trim())
-    .filter(Boolean);
-}
-
-async function enrichStorageLocationRows(
-  rows: BaseStorageLocationRow[]
-): Promise<StorageLocationWithFacility[]> {
-  const storageLocationIds = rows.map((row) => row.id);
-  const storageLocationIdsSql = sql.join(
-    storageLocationIds.map((id) => sql`${id}`),
-    sql`, `
-  );
-
-  // Run all enrichment queries in parallel
-  const [
-    feedstockInventoryRows,
-    feedstockConsumptionRows,
-    biocharOutputRows,
-    biocharAllocationRows,
-    productInventoryRows,
-    productApplicationRows,
-    lastActivityRows,
-  ] = storageLocationIds.length > 0
-    ? await Promise.all([
-        db
-          .select({
-            storageLocationId: feedstocks.storageLocationId,
-            batchCount: sql<number>`count(*) filter (where ${feedstocks.status} = 'complete')`,
-            pendingBatchCount: sql<number>`count(*) filter (where ${feedstocks.status} = 'missing_data')`,
-            feedstockTypes: sql<string | null>`
-              string_agg(DISTINCT ${feedstockTypes.name}, ', ' ORDER BY ${feedstockTypes.name})
-            `,
-            totalDryKg: sql<number>`
-              COALESCE(SUM(${feedstocks.massDryKg}) filter (where ${feedstocks.status} = 'complete'), 0)
-            `,
-            totalWetKg: sql<number>`
-              COALESCE(SUM(${feedstocks.massWetKg}) filter (where ${feedstocks.status} = 'complete'), 0)
-            `,
-            pendingDryKg: sql<number>`
-              COALESCE(SUM(${feedstocks.massDryKg}) filter (where ${feedstocks.status} = 'missing_data'), 0)
-            `,
-          })
-          .from(feedstocks)
-          .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
-          .where(inArray(feedstocks.storageLocationId, storageLocationIds))
-          .groupBy(feedstocks.storageLocationId),
-        db
-          .select({
-            storageLocationId: productionRuns.feedstockStorageLocationId,
-            consumedDryKg: sql<number>`COALESCE(SUM(${productionRunFeedstocks.massUsedKg}), 0)`,
-          })
-          .from(productionRuns)
-          .leftJoin(
-            productionRunFeedstocks,
-            eq(productionRunFeedstocks.productionRunId, productionRuns.id)
-          )
-          .where(inArray(productionRuns.feedstockStorageLocationId, storageLocationIds))
-          .groupBy(productionRuns.feedstockStorageLocationId),
-        db
-          .select({
-            storageLocationId: productionRuns.biocharStorageLocationId,
-            productionRunCount: count(),
-            producedKg: sql<number>`COALESCE(SUM(${productionRuns.biocharOutputKg}), 0)`,
-          })
-          .from(productionRuns)
-          .where(inArray(productionRuns.biocharStorageLocationId, storageLocationIds))
-          .groupBy(productionRuns.biocharStorageLocationId),
-        db
-          .select({
-            storageLocationId: productionRuns.biocharStorageLocationId,
-            allocatedKg: sql<number>`
-              COALESCE(
-                SUM(
-                  COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)
-                ),
-                0
-              )
-            `,
-            downstreamFormulations: sql<string | null>`
-              string_agg(DISTINCT ${formulations.name}, ', ' ORDER BY ${formulations.name})
-            `,
-          })
-          .from(productionRuns)
-          .innerJoin(
-            biocharProducts,
-            eq(biocharProducts.linkedProductionRunId, productionRuns.id)
-          )
-          .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
-          .where(inArray(productionRuns.biocharStorageLocationId, storageLocationIds))
-          .groupBy(productionRuns.biocharStorageLocationId),
-        db
-          .select({
-            storageLocationId: biocharProducts.storageLocationId,
-            batchCount: count(),
-            currentMassKg: sql<number>`COALESCE(SUM(${biocharProducts.massKg}), 0)`,
-            biocharEquivalentKg: sql<number>`
-              COALESCE(
-                SUM(
-                  COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)
-                ),
-                0
-              )
-            `,
-            formulationNames: sql<string | null>`
-              string_agg(DISTINCT ${formulations.name}, ', ' ORDER BY ${formulations.name})
-            `,
-          })
-          .from(biocharProducts)
-          .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
-          .where(inArray(biocharProducts.storageLocationId, storageLocationIds))
-          .groupBy(biocharProducts.storageLocationId),
-        db
-          .select({
-            storageLocationId: sql<string>`
-              COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId})
-            `,
-            appliedApplicationCount: count(),
-            appliedDryMassKg: sql<number>`
-              COALESCE(
-                SUM(
-                  COALESCE(${applications.biocharAppliedDryTons}, 0) * 1000
-                ),
-                0
-              )
-            `,
-            lastAppliedAt: sql<Date | null>`MAX(${applications.applicationDate})`,
-          })
-          .from(applications)
-          .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-          .leftJoin(orders, eq(deliveries.orderId, orders.id))
-          .leftJoin(
-            biocharProducts,
-            sql`${biocharProducts.id} = COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId})`
-          )
-          .where(
-            and(
-              eq(applications.status, "applied"),
-              sql`COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId}) IS NOT NULL`,
-              sql`COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId}) IN (${storageLocationIdsSql})`
-            )
-          )
-          .groupBy(
-            sql`COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId})`
-          ),
-        db.execute<{
-          storage_location_id: string;
-          activity_type: "in" | "out";
-          activity_date: Date;
-          mass_kg: number | null;
-          label: string;
-        }>(sql`
-          WITH events AS (
-            SELECT storage_location_id, 'in' as activity_type, created_at, mass_dry_kg as mass_kg, code as label
-            FROM feedstocks WHERE storage_location_id IN (${storageLocationIdsSql})
-            UNION ALL
-            SELECT
-              pr.feedstock_storage_location_id,
-              'out',
-              pr.created_at,
-              COALESCE(SUM(prf.mass_used_kg), pr.feedstock_mass_dry_kg, 0) as mass_kg,
-              pr.code
-            FROM production_runs pr
-            LEFT JOIN production_run_feedstocks prf ON prf.production_run_id = pr.id
-            WHERE pr.feedstock_storage_location_id IN (${storageLocationIdsSql})
-            GROUP BY
-              pr.id,
-              pr.feedstock_storage_location_id,
-              pr.created_at,
-              pr.feedstock_mass_dry_kg,
-              pr.code
-            UNION ALL
-            SELECT biochar_storage_location_id, 'in', created_at, biochar_output_kg, code
-            FROM production_runs WHERE biochar_storage_location_id IN (${storageLocationIdsSql})
-            UNION ALL
-            SELECT pr.biochar_storage_location_id, 'out', bp.created_at, bp.mass_kg * COALESCE(f.biochar_ratio, 1), bp.code
-            FROM biochar_products bp
-            JOIN production_runs pr ON bp.linked_production_run_id = pr.id
-            LEFT JOIN formulations f ON bp.formulation_id = f.id
-            WHERE pr.biochar_storage_location_id IN (${storageLocationIdsSql})
-            UNION ALL
-            SELECT storage_location_id, 'in', created_at, mass_kg, code
-            FROM biochar_products WHERE storage_location_id IN (${storageLocationIdsSql})
-          )
-          SELECT DISTINCT ON (storage_location_id)
-            storage_location_id, activity_type, created_at as activity_date, mass_kg, label
-          FROM events
-          WHERE storage_location_id IS NOT NULL
-          ORDER BY storage_location_id, created_at DESC
-        `),
-      ])
-    : [
-        [],
-        [],
-        [],
-        [],
-        [],
-        [],
-        {
-          rows: [] as Array<{
-            storage_location_id: string;
-            activity_type: "in" | "out";
-            activity_date: Date;
-            mass_kg: number | null;
-            label: string;
-          }>,
-        },
-      ];
-
-  const lastActivityMap = new Map(
-    lastActivityRows.rows.map((row) => [
-      row.storage_location_id,
-      {
-        type: row.activity_type,
-        date: new Date(row.activity_date),
-        massKg: Number(row.mass_kg ?? 0),
-        label: row.label,
-      },
-    ])
-  );
-
-  const feedstockInventoryMap = new Map(
-    feedstockInventoryRows.map((row) => [row.storageLocationId ?? "", row])
-  );
-  const feedstockConsumptionMap = new Map(
-    feedstockConsumptionRows.map((row) => [row.storageLocationId ?? "", row])
-  );
-  const biocharOutputMap = new Map(
-    biocharOutputRows.map((row) => [row.storageLocationId ?? "", row])
-  );
-  const biocharAllocationMap = new Map(
-    biocharAllocationRows.map((row) => [row.storageLocationId ?? "", row])
-  );
-  const productInventoryMap = new Map(
-    productInventoryRows.map((row) => [row.storageLocationId ?? "", row])
-  );
-  const productApplicationMap = new Map(
-    productApplicationRows
-      .filter((row) => row.storageLocationId != null)
-      .map((row) => [row.storageLocationId, row])
-  );
-
-  return rows.map((row) => {
-    const feedstockInventoryRow = feedstockInventoryMap.get(row.id);
-    const feedstockConsumptionRow = feedstockConsumptionMap.get(row.id);
-    const totalDryKg = Number(feedstockInventoryRow?.totalDryKg ?? 0);
-    const totalWetKg = Number(feedstockInventoryRow?.totalWetKg ?? 0);
-    const pendingDryKg = Number(feedstockInventoryRow?.pendingDryKg ?? 0);
-    const consumedDryKg = Number(feedstockConsumptionRow?.consumedDryKg ?? 0);
-    const currentDryMassKg = Math.max(0, totalDryKg - consumedDryKg);
-    const moistureRatio =
-      totalWetKg > 0 && totalDryKg >= 0
-        ? Math.max(0, Math.min(1, (totalWetKg - totalDryKg) / totalWetKg))
-        : null;
-    const estimatedWetMassKg =
-      moistureRatio != null && moistureRatio < 1
-        ? currentDryMassKg / (1 - moistureRatio)
-        : null;
-
-    const biocharOutputRow = biocharOutputMap.get(row.id);
-    const biocharAllocationRow = biocharAllocationMap.get(row.id);
-    const producedKg = Number(biocharOutputRow?.producedKg ?? 0);
-    const allocatedKg = Number(biocharAllocationRow?.allocatedKg ?? 0);
-
-    const productInventoryRow = productInventoryMap.get(row.id);
-    const productApplicationRow = productApplicationMap.get(row.id);
-
-    return {
-      ...row,
-      facilityCode: row.facilityCode ?? "",
-      facilityName: row.facilityName ?? "",
-      feedstockInventory: {
-        batchCount: Number(feedstockInventoryRow?.batchCount ?? 0),
-        pendingBatchCount: Number(feedstockInventoryRow?.pendingBatchCount ?? 0),
-        feedstockTypes: splitAggregateLabels(feedstockInventoryRow?.feedstockTypes ?? null),
-        currentDryMassKg,
-        pendingDryMassKg: pendingDryKg,
-        estimatedWetMassKg,
-        estimatedMoisturePercent:
-          moistureRatio != null ? moistureRatio * 100 : null,
-      },
-      biocharInventory: {
-        productionRunCount: Number(biocharOutputRow?.productionRunCount ?? 0),
-        currentMassKg: Math.max(0, producedKg - allocatedKg),
-        allocatedToProductsKg: allocatedKg,
-        downstreamFormulations: splitAggregateLabels(
-          biocharAllocationRow?.downstreamFormulations ?? null
-        ),
-      },
-      productInventory: {
-        batchCount: Number(productInventoryRow?.batchCount ?? 0),
-        currentMassKg: Number(productInventoryRow?.currentMassKg ?? 0),
-        biocharEquivalentKg: Number(productInventoryRow?.biocharEquivalentKg ?? 0),
-        formulationNames: splitAggregateLabels(
-          productInventoryRow?.formulationNames ?? null
-        ),
-        appliedApplicationCount: Number(
-          productApplicationRow?.appliedApplicationCount ?? 0
-        ),
-        appliedDryMassKg: Number(productApplicationRow?.appliedDryMassKg ?? 0),
-        lastAppliedAt: productApplicationRow?.lastAppliedAt
-          ? new Date(productApplicationRow.lastAppliedAt)
-          : null,
-      },
-      lastActivity: lastActivityMap.get(row.id) ?? null,
-    };
-  });
-}
 
 // ============================================
 // Read Operations
@@ -422,10 +49,10 @@ async function enrichStorageLocationRows(
  * Supports search, facility filter, type filter, sorting, and pagination
  */
 export async function getStorageLocations(
-  userId: string,
+  ctx: OrgContext,
   filters?: Partial<StorageLocationFilterData>
 ): Promise<PaginatedStorageLocations> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const {
     search,
@@ -438,7 +65,7 @@ export async function getStorageLocations(
   } = filters ?? {};
 
   // Build where conditions — archived bins (facility archive cascade) are hidden
-  const conditions: SQL[] = [isNull(storageLocations.archivedAt)];
+  const conditions: SQL[] = [eq(storageLocations.organizationId, ctx.organizationId), isNull(storageLocations.archivedAt)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -473,6 +100,7 @@ export async function getStorageLocations(
   const orderFn = sortOrder === "desc" ? desc : asc;
 
   // Count total for pagination
+  // org-scope-ok: whereClause includes the active organization predicate.
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(storageLocations)
@@ -486,6 +114,7 @@ export async function getStorageLocations(
   const storageLocationList = await db
     .select({
       id: storageLocations.id,
+      organizationId: storageLocations.organizationId,
       code: storageLocations.code,
       name: storageLocations.name,
       type: storageLocations.type,
@@ -503,13 +132,19 @@ export async function getStorageLocations(
       facilityName: facilities.name,
     })
     .from(storageLocations)
-    .leftJoin(facilities, eq(storageLocations.facilityId, facilities.id))
+    .leftJoin(
+      facilities,
+      and(
+        eq(storageLocations.facilityId, facilities.id),
+        eq(facilities.organizationId, ctx.organizationId),
+      ),
+    )
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
     .offset(offset);
 
-  const items = await enrichStorageLocationRows(storageLocationList);
+  const items = await enrichStorageLocationRows(ctx, storageLocationList);
 
   return {
     items,
@@ -525,15 +160,15 @@ export async function getStorageLocations(
  * Returns storage location data without relations
  */
 export async function getStorageLocationById(
-  userId: string,
+  ctx: OrgContext,
   storageLocationId: string
 ): Promise<StorageLocation> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [storageLocation] = await db
     .select()
     .from(storageLocations)
-    .where(eq(storageLocations.id, storageLocationId));
+    .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (!storageLocation) {
     throw new SafeError("Storage location not found");
@@ -546,14 +181,15 @@ export async function getStorageLocationById(
  * Get a single storage location by ID with facility info
  */
 export async function getStorageLocationWithFacility(
-  userId: string,
+  ctx: OrgContext,
   storageLocationId: string
 ): Promise<StorageLocationWithFacility> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [result] = await db
     .select({
       id: storageLocations.id,
+      organizationId: storageLocations.organizationId,
       code: storageLocations.code,
       name: storageLocations.name,
       type: storageLocations.type,
@@ -571,14 +207,20 @@ export async function getStorageLocationWithFacility(
       facilityName: facilities.name,
     })
     .from(storageLocations)
-    .leftJoin(facilities, eq(storageLocations.facilityId, facilities.id))
-    .where(eq(storageLocations.id, storageLocationId));
+    .leftJoin(
+      facilities,
+      and(
+        eq(storageLocations.facilityId, facilities.id),
+        eq(facilities.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (!result) {
     throw new SafeError("Storage location not found");
   }
 
-  const [enriched] = await enrichStorageLocationRows([result]);
+  const [enriched] = await enrichStorageLocationRows(ctx, [result]);
 
   return enriched;
 }
@@ -587,16 +229,16 @@ export async function getStorageLocationWithFacility(
  * Get storage locations by facility ID
  */
 export async function getStorageLocationsByFacility(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string
 ): Promise<StorageLocation[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify facility exists
   const [facility] = await db
     .select({ id: facilities.id })
     .from(facilities)
-    .where(eq(facilities.id, facilityId));
+    .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
 
   if (!facility) {
     throw new SafeError("Facility not found");
@@ -605,7 +247,7 @@ export async function getStorageLocationsByFacility(
   return db
     .select()
     .from(storageLocations)
-    .where(and(eq(storageLocations.facilityId, facilityId), isNull(storageLocations.archivedAt)))
+    .where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId), isNull(storageLocations.archivedAt)))
     .orderBy(asc(storageLocations.code));
 }
 
@@ -617,7 +259,7 @@ export async function getStorageLocationsByFacility(
  * Create a new storage location
  */
 export async function createStorageLocation(
-  userId: string,
+  ctx: OrgContext,
   data: {
     code: string;
     name: string;
@@ -631,13 +273,13 @@ export async function createStorageLocation(
     supplierReferenceId?: string | null;
   }
 ): Promise<StorageLocation> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify facility exists and is active (no new children under an archived parent)
   const [facility] = await db
     .select({ id: facilities.id })
     .from(facilities)
-    .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
+    .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)));
 
   if (!facility) {
     throw new SafeError("Facility not found or archived");
@@ -647,7 +289,7 @@ export async function createStorageLocation(
   const [existing] = await db
     .select({ id: storageLocations.id })
     .from(storageLocations)
-    .where(eq(storageLocations.code, data.code));
+    .where(and(eq(storageLocations.code, data.code), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (existing) {
     throw new SafeError("A storage location with this code already exists");
@@ -657,7 +299,7 @@ export async function createStorageLocation(
     const [feedstockType] = await db
       .select({ id: feedstockTypes.id })
       .from(feedstockTypes)
-      .where(eq(feedstockTypes.id, data.feedstockTypeId));
+      .where(and(eq(feedstockTypes.id, data.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
 
     if (!feedstockType) {
       throw new SafeError("Feedstock type not found");
@@ -679,31 +321,34 @@ export async function createStorageLocation(
     const [formulation] = await db
       .select({ id: formulations.id })
       .from(formulations)
-      .where(eq(formulations.id, formulationId));
+      .where(and(eq(formulations.id, formulationId), eq(formulations.organizationId, ctx.organizationId)));
 
     if (!formulation) {
       throw new SafeError("Formulation not found");
     }
   }
 
-  const [storageLocation] = await db
-    .insert(storageLocations)
-    .values({
-      code: data.code,
-      name: data.name,
-      type: data.type,
-      facilityId: data.facilityId,
-      capacityKg: data.capacityKg ?? null,
-      // Only meaningful on feedstock bins, like formulationId below.
-      feedstockTypeId: isFeedstockBinType(data.type)
-        ? data.feedstockTypeId ?? null
-        : null,
-      formulationId,
-      storageMethod: data.storageMethod ?? null,
-      storageDescription: data.storageDescription ?? null,
-      supplierReferenceId: data.supplierReferenceId ?? null,
-    })
-    .returning();
+  const [storageLocation] = await guardStorageLocationName(ctx, data.name, () =>
+    db
+      .insert(storageLocations)
+      .values({
+        organizationId: ctx.organizationId,
+        code: data.code,
+        name: data.name,
+        type: data.type,
+        facilityId: data.facilityId,
+        capacityKg: data.capacityKg ?? null,
+        // Only meaningful on feedstock bins, like formulationId below.
+        feedstockTypeId: isFeedstockBinType(data.type)
+          ? data.feedstockTypeId ?? null
+          : null,
+        formulationId,
+        storageMethod: data.storageMethod ?? null,
+        storageDescription: data.storageDescription ?? null,
+        supplierReferenceId: data.supplierReferenceId ?? null,
+      })
+      .returning()
+  );
 
   return storageLocation;
 }
@@ -716,7 +361,7 @@ export async function createStorageLocation(
  * Update an existing storage location
  */
 export async function updateStorageLocation(
-  userId: string,
+  ctx: OrgContext,
   storageLocationId: string,
   data: {
     code?: string;
@@ -731,13 +376,13 @@ export async function updateStorageLocation(
     supplierReferenceId?: string | null;
   }
 ): Promise<StorageLocation> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify storage location exists
   const [existing] = await db
     .select()
     .from(storageLocations)
-    .where(eq(storageLocations.id, storageLocationId));
+    .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Storage location not found");
@@ -748,7 +393,7 @@ export async function updateStorageLocation(
     const [duplicate] = await db
       .select({ id: storageLocations.id })
       .from(storageLocations)
-      .where(eq(storageLocations.code, data.code));
+      .where(and(eq(storageLocations.code, data.code), eq(storageLocations.organizationId, ctx.organizationId)));
 
     if (duplicate) {
       throw new SafeError("A storage location with this code already exists");
@@ -760,7 +405,7 @@ export async function updateStorageLocation(
     const [facility] = await db
       .select({ id: facilities.id })
       .from(facilities)
-      .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
+      .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)));
 
     if (!facility) {
       throw new SafeError("Facility not found or archived");
@@ -771,7 +416,7 @@ export async function updateStorageLocation(
     const [feedstockType] = await db
       .select({ id: feedstockTypes.id })
       .from(feedstockTypes)
-      .where(eq(feedstockTypes.id, data.feedstockTypeId));
+      .where(and(eq(feedstockTypes.id, data.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
 
     if (!feedstockType) {
       throw new SafeError("Feedstock type not found");
@@ -815,7 +460,7 @@ export async function updateStorageLocation(
     const [formulation] = await db
       .select({ id: formulations.id })
       .from(formulations)
-      .where(eq(formulations.id, normalizedFormulationId));
+      .where(and(eq(formulations.id, normalizedFormulationId), eq(formulations.organizationId, ctx.organizationId)));
 
     if (!formulation) {
       throw new SafeError("Formulation not found");
@@ -833,6 +478,7 @@ export async function updateStorageLocation(
       .where(
         and(
           eq(biocharProducts.storageLocationId, storageLocationId),
+          eq(biocharProducts.organizationId, ctx.organizationId),
           sql`${biocharProducts.formulationId} IS DISTINCT FROM ${normalizedFormulationId}`
         )
       )
@@ -848,16 +494,22 @@ export async function updateStorageLocation(
   const dataWithoutNormalized = { ...data };
   delete dataWithoutNormalized.formulationId;
   delete dataWithoutNormalized.feedstockTypeId;
-  const [updated] = await db
-    .update(storageLocations)
-    .set({
-      ...dataWithoutNormalized,
-      feedstockTypeId: normalizedFeedstockTypeId,
-      formulationId: normalizedFormulationId,
-      updatedAt: new Date(),
-    })
-    .where(eq(storageLocations.id, storageLocationId))
-    .returning();
+  // A rename OR a facility move can collide with the per-facility name index.
+  const [updated] = await guardStorageLocationName(
+    ctx,
+    data.name ?? existing.name,
+    () =>
+      db
+        .update(storageLocations)
+        .set({
+          ...dataWithoutNormalized,
+          feedstockTypeId: normalizedFeedstockTypeId,
+          formulationId: normalizedFormulationId,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
+        .returning()
+  );
 
   return updated;
 }
@@ -871,16 +523,16 @@ export async function updateStorageLocation(
  * Note: May fail if storage location has associated records (check in caller)
  */
 export async function deleteStorageLocation(
-  userId: string,
+  ctx: OrgContext,
   storageLocationId: string
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify storage location exists
   const [existing] = await db
     .select({ id: storageLocations.id })
     .from(storageLocations)
-    .where(eq(storageLocations.id, storageLocationId));
+    .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Storage location not found");
@@ -897,27 +549,27 @@ export async function deleteStorageLocation(
     db
       .select({ value: count() })
       .from(feedstocks)
-      .where(eq(feedstocks.storageLocationId, storageLocationId)),
+      .where(and(eq(feedstocks.storageLocationId, storageLocationId), eq(feedstocks.organizationId, ctx.organizationId))),
     db
       .select({ value: count() })
       .from(productionRuns)
-      .where(eq(productionRuns.feedstockStorageLocationId, storageLocationId)),
+      .where(and(eq(productionRuns.feedstockStorageLocationId, storageLocationId), eq(productionRuns.organizationId, ctx.organizationId))),
     db
       .select({ value: count() })
       .from(productionRuns)
-      .where(eq(productionRuns.biocharStorageLocationId, storageLocationId)),
+      .where(and(eq(productionRuns.biocharStorageLocationId, storageLocationId), eq(productionRuns.organizationId, ctx.organizationId))),
     db
       .select({ value: count() })
       .from(biocharProducts)
-      .where(eq(biocharProducts.storageLocationId, storageLocationId)),
+      .where(and(eq(biocharProducts.storageLocationId, storageLocationId), eq(biocharProducts.organizationId, ctx.organizationId))),
     db
       .select({ value: count() })
       .from(deliveries)
-      .where(eq(deliveries.storageLocationId, storageLocationId)),
+      .where(and(eq(deliveries.storageLocationId, storageLocationId), eq(deliveries.organizationId, ctx.organizationId))),
     db
       .select({ value: count() })
       .from(biocharStorageInventory)
-      .where(eq(biocharStorageInventory.storageLocationId, storageLocationId)),
+      .where(and(eq(biocharStorageInventory.storageLocationId, storageLocationId), eq(biocharStorageInventory.organizationId, ctx.organizationId))),
   ]);
 
   const blockers = [
@@ -937,7 +589,7 @@ export async function deleteStorageLocation(
 
   await db
     .delete(storageLocations)
-    .where(eq(storageLocations.id, storageLocationId));
+    .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 }
 
 // ============================================
@@ -948,13 +600,13 @@ export async function deleteStorageLocation(
  * Check if a storage location code is available
  */
 export async function isStorageLocationCodeAvailable(
-  userId: string,
+  ctx: OrgContext,
   code: string,
   excludeStorageLocationId?: string
 ): Promise<boolean> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [eq(storageLocations.code, code)];
+  const conditions: SQL[] = [eq(storageLocations.code, code), eq(storageLocations.organizationId, ctx.organizationId)];
 
   if (excludeStorageLocationId) {
     conditions.push(
@@ -962,6 +614,7 @@ export async function isStorageLocationCodeAvailable(
     );
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: storageLocations.id })
     .from(storageLocations)
@@ -974,14 +627,14 @@ export async function isStorageLocationCodeAvailable(
  * Get unique storage types used across all storage locations
  */
 export async function getStorageLocationTypes(
-  userId: string
+  ctx: OrgContext
 ): Promise<string[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const results = await db
     .selectDistinct({ type: storageLocations.type })
     .from(storageLocations)
-    .where(isNull(storageLocations.archivedAt))
+    .where(and(eq(storageLocations.organizationId, ctx.organizationId), isNull(storageLocations.archivedAt)))
     .orderBy(asc(storageLocations.type));
 
   return results.map((r) => r.type);

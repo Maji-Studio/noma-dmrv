@@ -5,6 +5,7 @@
 
 import { and, asc, desc, eq, ilike, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
+import type { OrgContext } from "@/lib/auth/server";
 import { suppliers, supplierLocations, feedstocks, type Supplier, type SupplierLocation } from "@/db/schema";
 import type { SupplierFilterData } from "@/schemas/suppliers";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
@@ -55,22 +56,27 @@ export interface PaginatedSuppliers {
 // Auth Guards
 // ============================================
 
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { guardSupplierName } from "./unique-name-guards";
 
-// Single-org / shared-data model: all authenticated users share the same
-// supplier records, so these guards verify existence only (not per-user
-// ownership). `suppliers.userId` is retained for create-time attribution.
+// Supplier records are organization-owned. `suppliers.userId` is retained for
+// create-time attribution.
 async function ensureSupplierExists(
-  userId: string,
+  ctx: OrgContext,
   supplierId: string
 ): Promise<{ id: string }> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [supplier] = await db
     .select({ id: suppliers.id })
     .from(suppliers)
-    .where(eq(suppliers.id, supplierId));
+    .where(
+      and(
+        eq(suppliers.id, supplierId),
+        eq(suppliers.organizationId, ctx.organizationId),
+      ),
+    );
 
   if (!supplier) {
     throw new SafeError("Supplier not found");
@@ -80,10 +86,10 @@ async function ensureSupplierExists(
 }
 
 async function ensureSupplierLocationExists(
-  userId: string,
+  ctx: OrgContext,
   locationId: string
 ): Promise<{ id: string; supplierId: string }> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [location] = await db
     .select({
@@ -91,7 +97,12 @@ async function ensureSupplierLocationExists(
       supplierId: supplierLocations.supplierId,
     })
     .from(supplierLocations)
-    .where(eq(supplierLocations.id, locationId));
+    .where(
+      and(
+        eq(supplierLocations.id, locationId),
+        eq(supplierLocations.organizationId, ctx.organizationId),
+      ),
+    );
 
   if (!location) {
     throw new SafeError("Supplier location not found");
@@ -109,10 +120,10 @@ async function ensureSupplierLocationExists(
  * Supports search, location filter, sorting, and pagination
  */
 export async function getSuppliers(
-  userId: string,
+  ctx: OrgContext,
   filters?: Partial<SupplierFilterData>
 ): Promise<PaginatedSuppliers> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const {
     search,
@@ -123,8 +134,9 @@ export async function getSuppliers(
     sortOrder = "asc",
   } = filters ?? {};
 
-  // Build where conditions — shared-data model, no per-user scoping
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [
+    eq(suppliers.organizationId, ctx.organizationId),
+  ];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -156,6 +168,7 @@ export async function getSuppliers(
   const orderFn = sortOrder === "desc" ? desc : asc;
 
   // Count total for pagination
+  // org-scope-ok: whereClause includes the active organization predicate.
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(suppliers)
@@ -169,6 +182,7 @@ export async function getSuppliers(
   const supplierList = await db
     .select({
       id: suppliers.id,
+      organizationId: suppliers.organizationId,
       userId: suppliers.userId,
       code: suppliers.code,
       name: suppliers.name,
@@ -210,15 +224,20 @@ export async function getSuppliers(
  * Returns supplier data without relations
  */
 export async function getSupplierById(
-  userId: string,
+  ctx: OrgContext,
   supplierId: string
 ): Promise<Supplier> {
-  await ensureSupplierExists(userId, supplierId);
+  await ensureSupplierExists(ctx, supplierId);
 
   const [supplier] = await db
     .select()
     .from(suppliers)
-    .where(eq(suppliers.id, supplierId));
+    .where(
+      and(
+        eq(suppliers.id, supplierId),
+        eq(suppliers.organizationId, ctx.organizationId),
+      ),
+    );
 
   if (!supplier) {
     throw new SafeError("Supplier not found");
@@ -235,16 +254,21 @@ export async function getSupplierById(
  * Create a new supplier
  */
 export async function createSupplier(
-  userId: string,
+  ctx: OrgContext,
   data: SupplierCreateFields
 ): Promise<Supplier> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Check for duplicate code
   const [existing] = await db
     .select({ id: suppliers.id })
     .from(suppliers)
-    .where(eq(suppliers.code, data.code));
+    .where(
+      and(
+        eq(suppliers.code, data.code),
+        eq(suppliers.organizationId, ctx.organizationId),
+      ),
+    );
 
   if (existing) {
     throw new SafeError("A supplier with this code already exists");
@@ -254,33 +278,36 @@ export async function createSupplier(
   // insert-time unique violation (a concurrent auto-code collision) is left to
   // propagate raw so withAutoCode can detect and retry it — catching it here as
   // a SafeError would mask the signal it matches on. Mirrors createFacility.
-  const [supplier] = await db
-    .insert(suppliers)
-    .values({
-      userId,
-      code: data.code,
-      name: data.name,
-      location: data.location ?? null,
-      gpsLatitude: data.gpsLatitude ?? null,
-      gpsLongitude: data.gpsLongitude ?? null,
-      address: data.address ?? null,
-      contactName: data.contactName ?? null,
-      contactEmail: data.contactEmail ?? null,
-      contactPhone: data.contactPhone ?? null,
-      sourceRegion: data.sourceRegion ?? null,
-      distanceToFacilityKm: data.distanceToFacilityKm ?? null,
-      distanceSource: data.distanceSource ?? null,
-    })
-    .returning();
+  const [supplier] = await guardSupplierName(ctx, data.name, () =>
+    db
+      .insert(suppliers)
+      .values({
+        organizationId: ctx.organizationId,
+        userId: ctx.userId,
+        code: data.code,
+        name: data.name,
+        location: data.location ?? null,
+        gpsLatitude: data.gpsLatitude ?? null,
+        gpsLongitude: data.gpsLongitude ?? null,
+        address: data.address ?? null,
+        contactName: data.contactName ?? null,
+        contactEmail: data.contactEmail ?? null,
+        contactPhone: data.contactPhone ?? null,
+        sourceRegion: data.sourceRegion ?? null,
+        distanceToFacilityKm: data.distanceToFacilityKm ?? null,
+        distanceSource: data.distanceSource ?? null,
+      })
+      .returning()
+  );
 
   return supplier;
 }
 
 export async function createSupplierWithLocations(
-  userId: string,
+  ctx: OrgContext,
   data: SupplierCreateFields & { locations: SupplierLocationCreateFields[] }
 ): Promise<Supplier> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   if (data.locations.length === 0) {
     throw new SafeError("At least one location is required");
@@ -290,11 +317,17 @@ export async function createSupplierWithLocations(
   // in-transaction pre-check covers an already-committed duplicate code; an
   // insert-time unique violation (concurrent auto-code collision) propagates
   // raw so withAutoCode can detect and retry it. Mirrors createFacility.
-  return db.transaction(async (tx) => {
+  return guardSupplierName(ctx, data.name, () =>
+    db.transaction(async (tx) => {
     const [existing] = await tx
       .select({ id: suppliers.id })
       .from(suppliers)
-      .where(eq(suppliers.code, data.code));
+      .where(
+        and(
+          eq(suppliers.code, data.code),
+          eq(suppliers.organizationId, ctx.organizationId),
+        ),
+      );
 
     if (existing) {
       throw new SafeError("A supplier with this code already exists");
@@ -303,7 +336,8 @@ export async function createSupplierWithLocations(
     const [supplier] = await tx
       .insert(suppliers)
       .values({
-        userId,
+        organizationId: ctx.organizationId,
+        userId: ctx.userId,
         code: data.code,
         name: data.name,
         location: data.location ?? null,
@@ -326,6 +360,7 @@ export async function createSupplierWithLocations(
 
     await tx.insert(supplierLocations).values(
       data.locations.map((location, index) => ({
+        organizationId: ctx.organizationId,
         supplierId: supplier.id,
         name: location.name ?? null,
         country: location.country,
@@ -341,7 +376,8 @@ export async function createSupplierWithLocations(
     );
 
     return supplier;
-  });
+    })
+  );
 }
 
 // ============================================
@@ -352,7 +388,7 @@ export async function createSupplierWithLocations(
  * Update an existing supplier
  */
 export async function updateSupplier(
-  userId: string,
+  ctx: OrgContext,
   supplierId: string,
   data: {
     code?: string;
@@ -369,13 +405,18 @@ export async function updateSupplier(
     distanceSource?: "map_estimate" | "manual" | "document" | null;
   }
 ): Promise<Supplier> {
-  await ensureSupplierExists(userId, supplierId);
+  await ensureSupplierExists(ctx, supplierId);
 
   // Verify supplier exists
   const [existing] = await db
     .select()
     .from(suppliers)
-    .where(eq(suppliers.id, supplierId));
+    .where(
+      and(
+        eq(suppliers.id, supplierId),
+        eq(suppliers.organizationId, ctx.organizationId),
+      ),
+    );
 
   if (!existing) {
     throw new SafeError("Supplier not found");
@@ -386,21 +427,36 @@ export async function updateSupplier(
     const [duplicate] = await db
       .select({ id: suppliers.id })
       .from(suppliers)
-      .where(eq(suppliers.code, data.code));
+      .where(
+        and(
+          eq(suppliers.code, data.code),
+          eq(suppliers.organizationId, ctx.organizationId),
+        ),
+      );
 
     if (duplicate) {
       throw new SafeError("A supplier with this code already exists");
     }
   }
 
-  const [updated] = await db
-    .update(suppliers)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
-    .where(eq(suppliers.id, supplierId))
-    .returning();
+  const [updated] = await guardSupplierName(
+    ctx,
+    data.name ?? existing.name,
+    () =>
+      db
+        .update(suppliers)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(suppliers.id, supplierId),
+            eq(suppliers.organizationId, ctx.organizationId),
+          ),
+        )
+        .returning()
+  );
 
   if (!updated) {
     throw new SafeError("Supplier not found");
@@ -418,16 +474,21 @@ export async function updateSupplier(
  * Will fail if supplier has associated feedstocks
  */
 export async function deleteSupplier(
-  userId: string,
+  ctx: OrgContext,
   supplierId: string
 ): Promise<void> {
-  await ensureSupplierExists(userId, supplierId);
+  await ensureSupplierExists(ctx, supplierId);
 
   // Verify supplier exists
   const [existing] = await db
     .select({ id: suppliers.id })
     .from(suppliers)
-    .where(eq(suppliers.id, supplierId));
+    .where(
+      and(
+        eq(suppliers.id, supplierId),
+        eq(suppliers.organizationId, ctx.organizationId),
+      ),
+    );
 
   if (!existing) {
     throw new SafeError("Supplier not found");
@@ -436,7 +497,12 @@ export async function deleteSupplier(
   const [feedstockCount] = await db
     .select({ count: count() })
     .from(feedstocks)
-    .where(eq(feedstocks.supplierId, supplierId));
+    .where(
+      and(
+        eq(feedstocks.supplierId, supplierId),
+        eq(feedstocks.organizationId, ctx.organizationId),
+      ),
+    );
 
   if (Number(feedstockCount.count) > 0) {
     throw new SafeError(
@@ -445,9 +511,19 @@ export async function deleteSupplier(
   }
 
   // Delete supplier locations first (FK constraint)
-  await db.delete(supplierLocations).where(eq(supplierLocations.supplierId, supplierId));
+  await db.delete(supplierLocations).where(
+    and(
+      eq(supplierLocations.supplierId, supplierId),
+      eq(supplierLocations.organizationId, ctx.organizationId),
+    ),
+  );
 
-  await db.delete(suppliers).where(eq(suppliers.id, supplierId));
+  await db.delete(suppliers).where(
+    and(
+      eq(suppliers.id, supplierId),
+      eq(suppliers.organizationId, ctx.organizationId),
+    ),
+  );
 }
 
 // ============================================
@@ -458,18 +534,22 @@ export async function deleteSupplier(
  * Check if a supplier code is available
  */
 export async function isSupplierCodeAvailable(
-  userId: string,
+  ctx: OrgContext,
   code: string,
   excludeSupplierId?: string
 ): Promise<boolean> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [eq(suppliers.code, code)];
+  const conditions: SQL[] = [
+    eq(suppliers.code, code),
+    eq(suppliers.organizationId, ctx.organizationId),
+  ];
 
   if (excludeSupplierId) {
     conditions.push(sql`${suppliers.id} != ${excludeSupplierId}`);
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: suppliers.id })
     .from(suppliers)
@@ -482,13 +562,18 @@ export async function isSupplierCodeAvailable(
  * Get unique locations from all suppliers
  * Useful for filter dropdowns
  */
-export async function getSupplierLocations(userId: string): Promise<string[]> {
-  requireAuth(userId);
+export async function getSupplierLocations(ctx: OrgContext): Promise<string[]> {
+  requireOrgScope(ctx);
 
   const results = await db
     .selectDistinct({ location: suppliers.location })
     .from(suppliers)
-    .where(sql`${suppliers.location} IS NOT NULL AND ${suppliers.location} != ''`)
+    .where(
+      and(
+        eq(suppliers.organizationId, ctx.organizationId),
+        sql`${suppliers.location} IS NOT NULL AND ${suppliers.location} != ''`,
+      ),
+    )
     .orderBy(asc(suppliers.location));
 
   return results.map((r) => r.location!).filter(Boolean);
@@ -499,9 +584,9 @@ export async function getSupplierLocations(userId: string): Promise<string[]> {
  * Returns minimal data needed for select inputs
  */
 export async function getSupplierOptions(
-  userId: string
+  ctx: OrgContext
 ): Promise<Array<{ id: string; code: string; name: string }>> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   return db
     .select({
@@ -510,6 +595,7 @@ export async function getSupplierOptions(
       name: suppliers.name,
     })
     .from(suppliers)
+    .where(eq(suppliers.organizationId, ctx.organizationId))
     .orderBy(asc(suppliers.name));
 }
 
@@ -518,30 +604,40 @@ export async function getSupplierOptions(
 // ============================================
 
 export async function getSupplierLocationsBySupplier(
-  userId: string,
+  ctx: OrgContext,
   supplierId: string
 ): Promise<SupplierLocation[]> {
-  requireAuth(userId);
-  await ensureSupplierExists(userId, supplierId);
+  requireOrgScope(ctx);
+  await ensureSupplierExists(ctx, supplierId);
 
   return db
     .select()
     .from(supplierLocations)
-    .where(eq(supplierLocations.supplierId, supplierId))
+    .where(
+      and(
+        eq(supplierLocations.supplierId, supplierId),
+        eq(supplierLocations.organizationId, ctx.organizationId),
+      ),
+    )
     .orderBy(asc(supplierLocations.country));
 }
 
 export async function getSupplierLocationById(
-  userId: string,
+  ctx: OrgContext,
   locationId: string
 ): Promise<SupplierLocation> {
-  requireAuth(userId);
-  await ensureSupplierLocationExists(userId, locationId);
+  requireOrgScope(ctx);
+  await ensureSupplierLocationExists(ctx, locationId);
 
   const [location] = await db
     .select()
     .from(supplierLocations)
-    .where(eq(supplierLocations.id, locationId));
+    .where(
+      and(
+        eq(supplierLocations.id, locationId),
+        eq(supplierLocations.organizationId, ctx.organizationId),
+      ),
+    );
 
   if (!location) {
     throw new SafeError("Supplier location not found");
@@ -551,7 +647,7 @@ export async function getSupplierLocationById(
 }
 
 export async function createSupplierLocation(
-  userId: string,
+  ctx: OrgContext,
   data: {
     supplierId: string;
     name?: string | null;
@@ -566,15 +662,20 @@ export async function createSupplierLocation(
     isDefault?: boolean;
   }
 ): Promise<SupplierLocation> {
-  requireAuth(userId);
-  await ensureSupplierExists(userId, data.supplierId);
+  requireOrgScope(ctx);
+  await ensureSupplierExists(ctx, data.supplierId);
 
   return db.transaction(async (tx) => {
     // The supplier's first location is always its default.
     const [{ value: existingCount }] = await tx
       .select({ value: count() })
       .from(supplierLocations)
-      .where(eq(supplierLocations.supplierId, data.supplierId));
+      .where(
+        and(
+          eq(supplierLocations.supplierId, data.supplierId),
+          eq(supplierLocations.organizationId, ctx.organizationId),
+        ),
+      );
     const makeDefault = data.isDefault === true || existingCount === 0;
 
     // Clear the prior default first so the partial unique index never sees two.
@@ -585,6 +686,7 @@ export async function createSupplierLocation(
         .where(
           and(
             eq(supplierLocations.supplierId, data.supplierId),
+            eq(supplierLocations.organizationId, ctx.organizationId),
             eq(supplierLocations.isDefault, true)
           )
         );
@@ -593,6 +695,7 @@ export async function createSupplierLocation(
     const [location] = await tx
       .insert(supplierLocations)
       .values({
+        organizationId: ctx.organizationId,
         supplierId: data.supplierId,
         name: data.name ?? null,
         country: data.country,
@@ -612,7 +715,7 @@ export async function createSupplierLocation(
 }
 
 export async function updateSupplierLocation(
-  userId: string,
+  ctx: OrgContext,
   locationId: string,
   data: {
     name?: string | null;
@@ -627,8 +730,8 @@ export async function updateSupplierLocation(
     isDefault?: boolean;
   }
 ): Promise<SupplierLocation> {
-  requireAuth(userId);
-  const { supplierId } = await ensureSupplierLocationExists(userId, locationId);
+  requireOrgScope(ctx);
+  const { supplierId } = await ensureSupplierLocationExists(ctx, locationId);
 
   return db.transaction(async (tx) => {
     // Promoting this location to default demotes the supplier's current default.
@@ -639,6 +742,7 @@ export async function updateSupplierLocation(
         .where(
           and(
             eq(supplierLocations.supplierId, supplierId),
+            eq(supplierLocations.organizationId, ctx.organizationId),
             eq(supplierLocations.isDefault, true)
           )
         );
@@ -650,7 +754,12 @@ export async function updateSupplierLocation(
         ...data,
         updatedAt: new Date(),
       })
-      .where(eq(supplierLocations.id, locationId))
+      .where(
+        and(
+          eq(supplierLocations.id, locationId),
+          eq(supplierLocations.organizationId, ctx.organizationId),
+        ),
+      )
       .returning();
 
     if (!updated) {
@@ -662,13 +771,21 @@ export async function updateSupplierLocation(
 }
 
 export async function deleteSupplierLocation(
-  userId: string,
+  ctx: OrgContext,
   locationId: string
 ): Promise<void> {
-  requireAuth(userId);
-  await ensureSupplierLocationExists(userId, locationId);
+  requireOrgScope(ctx);
+  await ensureSupplierLocationExists(ctx, locationId);
 
-  const deleted = await db.delete(supplierLocations).where(eq(supplierLocations.id, locationId)).returning({ id: supplierLocations.id });
+  const deleted = await db
+    .delete(supplierLocations)
+    .where(
+      and(
+        eq(supplierLocations.id, locationId),
+        eq(supplierLocations.organizationId, ctx.organizationId),
+      ),
+    )
+    .returning({ id: supplierLocations.id });
 
   if (deleted.length === 0) {
     throw new SafeError("Supplier location not found");

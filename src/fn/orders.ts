@@ -40,11 +40,11 @@ import { withAction } from "./with-action";
 export async function getOrdersFn(
   filters?: Partial<z.infer<typeof orderFilterSchema>>
 ): Promise<ActionResult<PaginatedOrders>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const validatedFilters = filters
       ? orderFilterSchema.parse(filters)
       : undefined;
-    return getOrdersData(userId, validatedFilters);
+    return getOrdersData(ctx, validatedFilters);
   }, { zodErrorPrefix: "Invalid filter parameters", fallbackMessage: "Failed to load orders" });
 }
 
@@ -61,9 +61,9 @@ const orderCodeSchema = z.string().min(ORDER_CODE_MIN_LENGTH, "Order code is req
 export async function getOrderByIdFn(
   orderId: string
 ): Promise<ActionResult<Order>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const validatedId = orderIdSchema.parse(orderId);
-    return getOrderByIdData(userId, validatedId);
+    return getOrderByIdData(ctx, validatedId);
   }, { fallbackMessage: "Failed to load order" });
 }
 
@@ -73,9 +73,9 @@ export async function getOrderByIdFn(
 export async function getOrderWithRelationsFn(
   orderId: string
 ): Promise<ActionResult<OrderDetail>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const validatedId = orderIdSchema.parse(orderId);
-    return getOrderWithRelationsData(userId, validatedId);
+    return getOrderWithRelationsData(ctx, validatedId);
   }, { fallbackMessage: "Failed to load order details" });
 }
 
@@ -100,11 +100,11 @@ export async function getOrdersForSelectFn(
     }>
   >
 > {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const validatedFacilityId = facilityId
       ? facilityIdSchema.parse(facilityId)
       : undefined;
-    return getOrdersForSelectData(userId, validatedFacilityId);
+    return getOrdersForSelectData(ctx, validatedFacilityId);
   }, { fallbackMessage: "Failed to load orders for select" });
 }
 
@@ -115,12 +115,12 @@ export async function checkOrderCodeFn(
   code: string,
   excludeOrderId?: string
 ): Promise<ActionResult<{ available: boolean }>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const validatedCode = orderCodeSchema.parse(code);
     const validatedExcludeId = excludeOrderId
       ? orderIdSchema.parse(excludeOrderId)
       : undefined;
-    const available = await isOrderCodeAvailableData(userId, validatedCode, validatedExcludeId);
+    const available = await isOrderCodeAvailableData(ctx, validatedCode, validatedExcludeId);
     return { available };
   }, { fallbackMessage: "Failed to check order code" });
 }
@@ -135,16 +135,17 @@ export async function checkOrderCodeFn(
 export async function createOrderFn(
   data: z.infer<typeof createOrderSchema>
 ): Promise<ActionResult<Order>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const validated = createOrderSchema.parse(data);
 
     return withAutoCode(
+      ctx,
       "OR",
       orders,
       orders.code,
       undefined,
       (code) =>
-        createOrder(userId, {
+        createOrder(ctx, {
           code,
           facilityId: validated.facilityId,
           customerId: validated.customerId,
@@ -170,10 +171,10 @@ export async function createOrderFn(
 export async function updateOrderFn(
   data: z.infer<typeof updateOrderSchema>
 ): Promise<ActionResult<Order>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const validated = updateOrderSchema.parse(data);
 
-    return updateOrder(userId, validated.orderId, {
+    return updateOrder(ctx, validated.orderId, {
       code: validated.code,
       facilityId: validated.facilityId,
       customerId: validated.customerId,
@@ -198,8 +199,8 @@ export async function updateOrderFn(
 export async function deleteOrderFn(
   data: z.infer<typeof deleteOrderSchema>
 ): Promise<ActionResult<void>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const validated = deleteOrderSchema.parse(data);
-    await deleteOrder(userId, validated.orderId);
+    await deleteOrder(ctx, validated.orderId);
   }, { fallbackMessage: "Failed to delete order" });
 }

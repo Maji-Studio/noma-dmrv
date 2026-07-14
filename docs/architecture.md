@@ -22,6 +22,75 @@ Rules:
 - Server actions validate with Zod.
 - Data-access functions enforce authorization checks.
 
+## Key Patterns
+
+Cross-cutting conventions every layer relies on. Form-specific detail lives in
+`docs/forms.md`; this section keeps the contracts.
+
+### ActionResult — every server function returns this
+
+Standard server-action return type, defined in `src/types/actions.ts`:
+
+```typescript
+type ActionResult<T> = { success: true; data: T } | { success: false; error: string };
+```
+
+### Auth guards — never skip
+
+Every `data-access/` function calls an auth guard before touching the database
+(`requireAuth()` lives in `src/data-access/utils.ts`):
+
+```typescript
+export async function createItem(userId: string, data: CreateItem) {
+  requireAuth(userId); // throws if userId is falsy
+  // safe to proceed
+}
+```
+
+### Facility context
+
+Pages in `(app)` are facility-scoped: forms receive `facilityId` from context and
+**never ask the user to pick a facility in a form**. Full details in the
+[Facility Context](#facility-context) section below.
+
+### Quick-Add — inline creation of prerequisite entities
+
+Lets a form create a missing prerequisite entity without leaving the page.
+
+- Schemas in `src/schemas/quick-add.ts` (minimal required fields only).
+- After create, call `seedEntityCache()` from
+  `@/components/forms/entity-select/cache-utils` to populate the dropdown.
+- `useOpenCreateIntent()` opens create dialogs from `?create=true` deep links.
+
+### Cascading / dependent selects
+
+`FormEntitySelect` auto-clears when parent values change via `dependsOn` (a single
+value or an array):
+
+```typescript
+<FormEntitySelect filterBy={{ feedstockTypeId, facilityId }} dependsOn={[feedstockTypeId, facilityId]} />
+```
+
+The underlying `useClearOnDependencyChange` hook is standalone. See `docs/forms.md`.
+
+### Structured logging — `@/lib/log` (server-only)
+
+```typescript
+import { logger } from "@/lib/log";
+logger.info({ userId, removalId }, "submission accepted");
+const log = logger.child({ requestId });   // bindings merged into every record
+```
+
+- **Server-only by contract** — import only from `fn/`, `data-access/`, and the
+  isometric client boundary. Never from a client component.
+- Emits newline-delimited JSON; level via `LOG_LEVEL`.
+- Redacts `email`/`token`/`secret`/`authorization`-type keys at any depth — but
+  still pass IDs, not PII (the redaction is a backstop, not a license).
+- `logger.child(bindings)` returns a logger whose bindings are merged into every
+  record it emits.
+- In-house (~50 lines) instead of pino due to a Turbopack/Vercel runtime bug; see
+  the file header for the rationale.
+
 ## Routing Model
 
 - `src/app/(auth)/*`: public auth pages.
@@ -67,6 +136,12 @@ This app uses **Next.js 16's `proxy.ts`** instead of traditional `middleware.ts`
 - React Query provider is mounted once in `src/app/layout.tsx`.
 - Feature hooks in `src/hooks/` call server actions and invalidate cache keys.
 - Facility-scoped query keys include the active `facilityId` when the resource is facility-specific.
+- **Query keys**: `["resource", facilityId, ...specifics]`; invalidate related
+  queries after every mutation.
+- **Stale time**: 30s for current data, 5m for historical.
+- **Always check `src/hooks/` first** — every entity has a hook file
+  (`use-facilities.ts`, …). Never write an inline `useQuery` when a hook already
+  covers the server action; doing so duplicates keys and risks staleTime drift.
 
 ### Caching Strategy
 
@@ -277,6 +352,17 @@ Facility-scoped operations dashboard at `/dashboard`.
   UI -> hooks -> fn -> data-access -> db flow and are facility-scoped at the
   data-access layer.
 
+## Production Run Extensions
+
+The production-run detail page hosts three child entities:
+
+- **Readings** — time-series telemetry (see Production Run Readings Import below).
+- **Samples** — in-process measurements with file upload.
+- **Incidents** — exceptions carrying a severity and corrective actions.
+
+Components live in `src/components/production-run-readings/` and
+`src/components/production-runs/`.
+
 ## Production Run Readings Import
 
 Production-run telemetry is document-backed and imported from a canonical CSV.
@@ -354,12 +440,6 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 const { facilityId, selectedFacility, facilities, setFacilityId } = useFacilityContext();
 ```
 
-## What Is Intentionally Scaffolded
-
-- Admin user invitation UI (`/admin/users`) is a scaffold.
-
-These are intentionally marked so future work can extend them without hidden assumptions.
-
 ## Caching Best Practices
 
 **General Rules:**
@@ -396,3 +476,19 @@ Cross-cutting code is extracted to shared modules to avoid duplication:
 | `src/types/actions.ts` | `ActionResult<T>` — standard server action return type |
 
 When adding new entities, import from these shared modules instead of re-declaring locally.
+
+## CI/CD
+
+GitHub Actions workflows and repo automation:
+
+| Workflow / config | Purpose |
+|-------------------|---------|
+| `migrate.yml` | Auto-migrates on schema push to `main`/`staging`; manual reset/seed via `workflow_dispatch` |
+| `claude.yml` | AI PR review |
+| `e2e.yml` | Playwright end-to-end tests |
+| `isometric-health.yml` | Daily read-only Isometric sandbox ping |
+| `.coderabbit.yaml` | Auto-review on `main`/`staging` |
+
+CI secrets come from 1Password via `1password/load-secrets-action` plus the
+`OP_SERVICE_ACCOUNT_TOKEN` repo secret; only `CLAUDE_CODE_OAUTH_TOKEN` remains a
+plain Actions secret. See `docs/security.md` → Secrets Management.

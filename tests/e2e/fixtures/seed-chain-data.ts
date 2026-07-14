@@ -7,6 +7,7 @@
  * through the browser UI.
  */
 import { and, eq, inArray } from "drizzle-orm";
+import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../../src/db/schema";
 import * as crypto from "crypto";
 import { createDbConnection } from "./db";
@@ -14,6 +15,7 @@ import { createDbConnection } from "./db";
 const SEEDED_CREDIT_BATCH_CODE_PREFIX = "E2E-CB";
 const SEEDED_CREDIT_BATCH_DURATION_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const MS_PER_HOUR = 60 * 60 * 1000;
 const SEEDED_H_TO_CORG_RATIO = 0.4;
 
 export interface SeededChainData {
@@ -59,6 +61,7 @@ export async function seedChainData(
     await db.transaction(async (tx) => {
       // 1. Facility (needed by storage locations, biochar product, orders, etc.)
       await tx.insert(schema.facilities).values({
+        organizationId: DEC_ORG_ID,
         id: facilityId,
         code: `E2E-FAC-${testRunId}`,
         name: `E2E Seed Facility ${testRunId}`,
@@ -77,6 +80,7 @@ export async function seedChainData(
 
       // 2. Reactor (needs facility)
       await tx.insert(schema.reactors).values({
+        organizationId: DEC_ORG_ID,
         id: reactorId,
         code: `E2E-RCT-${testRunId}`,
         identifier: `E2E Seed Reactor ${testRunId}`,
@@ -86,6 +90,7 @@ export async function seedChainData(
 
       // 3. Supplier
       await tx.insert(schema.suppliers).values({
+        organizationId: DEC_ORG_ID,
         id: supplierId,
         code: `E2E-SUP-${testRunId}`,
         name: `E2E Seed Supplier ${testRunId}`,
@@ -95,6 +100,7 @@ export async function seedChainData(
 
       // 3. Feedstock Type
       await tx.insert(schema.feedstockTypes).values({
+        organizationId: DEC_ORG_ID,
         id: feedstockTypeId,
         code: `E2E-FST-${testRunId}`,
         name: `E2E Seed Feedstock Type ${testRunId}`,
@@ -103,6 +109,7 @@ export async function seedChainData(
 
       // 4. Customer
       await tx.insert(schema.customers).values({
+        organizationId: DEC_ORG_ID,
         id: customerId,
         code: `E2E-CUST-${testRunId}`,
         name: `E2E Seed Customer ${testRunId}`,
@@ -112,6 +119,7 @@ export async function seedChainData(
       // app derive a biochar distribution leg when a test records a delivery
       // to this location.
       await tx.insert(schema.customerLocations).values({
+        organizationId: DEC_ORG_ID,
         id: customerLocationId,
         customerId: customerId,
         name: `E2E Seed Location ${testRunId}`,
@@ -125,6 +133,7 @@ export async function seedChainData(
 
       // 6. Formulation
       await tx.insert(schema.formulations).values({
+        organizationId: DEC_ORG_ID,
         id: formulationId,
         code: `E2E-FORM-${testRunId}`,
         name: `E2E Seed Formulation ${testRunId}`,
@@ -133,6 +142,7 @@ export async function seedChainData(
 
       // 7. Storage Locations (need facility)
       await tx.insert(schema.storageLocations).values({
+        organizationId: DEC_ORG_ID,
         id: feedstockStorageId,
         code: `E2E-SL-FS-${testRunId}`,
         name: `E2E Feedstock Bin ${testRunId}`,
@@ -142,6 +152,7 @@ export async function seedChainData(
       });
 
       await tx.insert(schema.storageLocations).values({
+        organizationId: DEC_ORG_ID,
         id: biocharStorageId,
         code: `E2E-SL-BC-${testRunId}`,
         name: `E2E Biochar Pile ${testRunId}`,
@@ -154,18 +165,24 @@ export async function seedChainData(
       const expiresAt = new Date(productionDate);
       expiresAt.setFullYear(expiresAt.getFullYear() + 1);
       await tx.insert(schema.biocharProducts).values({
+        organizationId: DEC_ORG_ID,
         id: biocharProductId,
         code: `E2E-BP-${testRunId}`,
         facilityId: facilityId,
         formulationId: formulationId,
         status: "ready",
-        massKg: 500,
+        // Holds enough biochar to cover the delivery masses specs draw against
+        // it (up to 10 t): the bin over-draw block (#116) rejects a delivered
+        // draw exceeding the batch's on-hand mass, so the seeded batch must be
+        // internally consistent with what the chain ships out of it.
+        massKg: 100000,
         productionDate,
         expiresAt,
       });
 
       // 9. Vehicle
       await tx.insert(schema.vehicles).values({
+        organizationId: DEC_ORG_ID,
         id: vehicleId,
         code: `E2E-VEH-${testRunId}`,
         name: `E2E Seed Vehicle ${testRunId}`,
@@ -179,6 +196,7 @@ export async function seedChainData(
       // 10. Feedstock Delivery (needs facility + supplier)
       const deliveryDate = new Date();
       await tx.insert(schema.feedstockDeliveries).values({
+        organizationId: DEC_ORG_ID,
         id: feedstockDeliveryId,
         code: `E2E-FSD-${testRunId}`,
         facilityId: facilityId,
@@ -189,6 +207,7 @@ export async function seedChainData(
 
       // 11. Feedstock (needs facility + delivery + type)
       await tx.insert(schema.feedstocks).values({
+        organizationId: DEC_ORG_ID,
         id: feedstockId,
         code: `E2E-FS-${testRunId}`,
         facilityId: facilityId,
@@ -198,6 +217,11 @@ export async function seedChainData(
         supplierId: supplierId,
         // Material fields
         feedstockTypeId: feedstockTypeId,
+        // 'complete' so the batch counts as confirmed on-hand stock: the bin
+        // over-draw guard (#116) measures draws against complete-batch stock,
+        // matching the derived figure shown on the bin card. A 'missing_data'
+        // batch is "pending completion" and excluded from drawable stock.
+        status: "complete",
         massDryKg: 100,
         massWetKg: 120,
         moistureContentPercent: 16.7,
@@ -249,12 +273,14 @@ export async function seedCreditBatch(
       .toISOString()
       .slice(0, 10);
     await db.insert(schema.productionProcesses).values({
+        organizationId: DEC_ORG_ID,
       id: productionProcessId,
       facilityId,
       feedstockTypeId,
     });
 
     await db.insert(schema.creditBatches).values({
+        organizationId: DEC_ORG_ID,
       id,
       code,
       facilityId,
@@ -271,6 +297,82 @@ export async function seedCreditBatch(
       hToCorgRatio: SEEDED_H_TO_CORG_RATIO,
     });
     return { id, code };
+  } finally {
+    await pool.end();
+  }
+}
+
+const SEEDED_INVALIDATION_BATCH_CODE_PREFIX = "E2E-INV";
+
+/**
+ * Seed a credit batch backed by a "complete" production run whose biochar
+ * product is linked as the run's output (issue #396). Applications created
+ * through the UI against a delivery of that biochar product roll up into the
+ * batch's derived `appliedWeightTons` (credit-batch-production-runs.ts), so
+ * this lineage lets a spec assert the credit-batches view reflects an
+ * application create/update/delete without a page reload. Only the
+ * production/credit-batch side is seeded directly — the UI has no fast path
+ * to a "complete" run — the application itself is created through the form.
+ */
+export async function seedCreditBatchProductionLineage(
+  data: SeededChainData,
+  testRunId: string,
+): Promise<{ creditBatchId: string; creditBatchCode: string }> {
+  const { db, pool } = createDbConnection();
+  try {
+    const creditBatchId = crypto.randomUUID();
+    const productionProcessId = crypto.randomUUID();
+    const productionRunId = crypto.randomUUID();
+    const code = `${SEEDED_INVALIDATION_BATCH_CODE_PREFIX}-${testRunId}`;
+    const now = new Date();
+    const start = now.toISOString().slice(0, 10);
+    const end = new Date(
+      now.getTime() + SEEDED_CREDIT_BATCH_DURATION_DAYS * MS_PER_DAY,
+    )
+      .toISOString()
+      .slice(0, 10);
+
+    await db.transaction(async (tx) => {
+      await tx.insert(schema.productionRuns).values({
+        organizationId: DEC_ORG_ID,
+        id: productionRunId,
+        code: `${code}-PR1`,
+        facilityId: data.facility.id,
+        reactorId: data.reactor.id,
+        status: "complete",
+        startTime: now,
+        endTime: new Date(now.getTime() + 6 * MS_PER_HOUR),
+        biocharDryMassKg: 10000,
+      });
+      await tx
+        .update(schema.biocharProducts)
+        .set({ linkedProductionRunId: productionRunId })
+        .where(eq(schema.biocharProducts.id, data.biocharProduct.id));
+      await tx.insert(schema.productionProcesses).values({
+        organizationId: DEC_ORG_ID,
+        id: productionProcessId,
+        facilityId: data.facility.id,
+        feedstockTypeId: data.feedstockType.id,
+      });
+      await tx.insert(schema.creditBatches).values({
+        organizationId: DEC_ORG_ID,
+        id: creditBatchId,
+        code,
+        facilityId: data.facility.id,
+        feedstockTypeId: data.feedstockType.id,
+        productionProcessId,
+        startDate: start,
+        endDate: end,
+        hToCorgRatio: SEEDED_H_TO_CORG_RATIO,
+      });
+      await tx.insert(schema.creditBatchProductionRuns).values({
+        organizationId: DEC_ORG_ID,
+        creditBatchId,
+        productionRunId,
+      });
+    });
+
+    return { creditBatchId, creditBatchCode: code };
   } finally {
     await pool.end();
   }
@@ -328,6 +430,7 @@ export async function seedDurabilityBatch(
       { suffix: "2", runId: run1Id, samplingTime: day1, hToC: 0.41, oToC: 0.13, totalC: 82, orgC: 80 },
       { suffix: "3", runId: run2Id, samplingTime: day2, hToC: 0.36, oToC: 0.11, totalC: 79, orgC: 77 },
     ].map((r) => ({
+      organizationId: DEC_ORG_ID,
       id: crypto.randomUUID(),
       sampleCode: `${code}-S${r.suffix}`,
       creditBatchId,
@@ -341,31 +444,40 @@ export async function seedDurabilityBatch(
 
     await db.transaction(async (tx) => {
       await tx.insert(schema.productionProcesses).values({
+        organizationId: DEC_ORG_ID,
         id: productionProcessId,
         facilityId,
         feedstockTypeId,
       });
+      // Both runs share one reactor, so each needs a distinct start instant to
+      // satisfy the (reactor, start_time) unique index (#259). day1/day2 are
+      // distinct calendar days; give each a closed 6-hour window.
       await tx.insert(schema.productionRuns).values([
         {
+          organizationId: DEC_ORG_ID,
           id: run1Id,
           code: `${code}-PR1`,
           facilityId,
           reactorId,
-          date: dateStr(day1),
+          startTime: day1,
+          endTime: new Date(day1.getTime() + 6 * MS_PER_HOUR),
           biocharDryMassKg: 1000,
         },
         {
+          organizationId: DEC_ORG_ID,
           id: run2Id,
           code: `${code}-PR2`,
           facilityId,
           reactorId,
-          date: dateStr(day2),
+          startTime: day2,
+          endTime: new Date(day2.getTime() + 6 * MS_PER_HOUR),
           biocharDryMassKg: 1000,
         },
       ]);
       // Credit batch must exist before the samples — `samples.credit_batch_id`
       // FKs it (migration 0057). Mirrors `seedCreditBatch`'s 200-year shape.
       await tx.insert(schema.creditBatches).values({
+        organizationId: DEC_ORG_ID,
         id: creditBatchId,
         code,
         facilityId,
@@ -376,8 +488,8 @@ export async function seedDurabilityBatch(
         hToCorgRatio: SEEDED_H_TO_CORG_RATIO,
       });
       await tx.insert(schema.creditBatchProductionRuns).values([
-        { creditBatchId, productionRunId: run1Id },
-        { creditBatchId, productionRunId: run2Id },
+        { organizationId: DEC_ORG_ID, creditBatchId, productionRunId: run1Id },
+        { organizationId: DEC_ORG_ID, creditBatchId, productionRunId: run2Id },
       ]);
       await tx.insert(schema.samples).values(sampleRows);
     });

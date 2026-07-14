@@ -485,8 +485,8 @@ function apparatus(): ReactElement {
   const note = v(styles.noteCol, {},
     t(styles.noteH, "Method note"),
     t(styles.noteBody,
-      "Each credit batch is characterised by at least 3 independent lab replicates distributed across " +
-      "distinct production runs/days (§8.3.1). This sheet reconciles those raw replicate values " +
+      "Protocol §8.3.1 calls for at least 3 independent lab replicates distributed across distinct " +
+      "production runs/days. This sheet reports the recorded replicate count and distribution, and reconciles the raw values " +
       "into the per-batch mean ± standard deviation submitted as the batch's measurement sample, " +
       "and records the §3 Table 2 permanence verdict (molar H/C_org < 0.5 AND O/C_org < 0.2) judged " +
       "on the pooled mean. The lab's own certificate of analysis remains attached as a Source on the " +

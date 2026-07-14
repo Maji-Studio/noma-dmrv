@@ -3,7 +3,8 @@
  * CRUD operations for deliveries with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, gte, ilike, isNull, lte, sql, SQL, count, sum } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, sql, SQL, count, sum } from "drizzle-orm";
+import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
   deliveries,
@@ -79,9 +80,15 @@ export interface DeliveryStats {
 // Auth Guards
 // ============================================
 
-import { requireAuth } from "./utils";
+import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import {
+  deliveryDrawsStock,
+  lockCreateDeliveryStock,
+  lockDeleteDeliveryStock,
+  lockDeliveryUpdateStock,
+} from "./delivery-stock-locks";
 
 // ============================================
 // Read Operations
@@ -91,6 +98,7 @@ type DeliveryColumnAvailability = {
   distanceKmOverride: boolean;
   distanceSource: boolean;
   distanceNote: boolean;
+  tripType: boolean;
   archivedAt: boolean;
 };
 
@@ -108,6 +116,7 @@ async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAvailabili
             'distance_km_override',
             'distance_source',
             'distance_note',
+            'trip_type',
             'archived_at'
           )
       `)
@@ -118,6 +127,7 @@ async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAvailabili
           distanceKmOverride: columns.has("distance_km_override"),
           distanceSource: columns.has("distance_source"),
           distanceNote: columns.has("distance_note"),
+          tripType: columns.has("trip_type"),
           archivedAt: columns.has("archived_at"),
         };
       });
@@ -129,6 +139,7 @@ async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAvailabili
 function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
   return {
     id: deliveries.id,
+    organizationId: deliveries.organizationId,
     code: deliveries.code,
     facilityId: deliveries.facilityId,
     orderId: deliveries.orderId,
@@ -152,6 +163,9 @@ function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
     distanceNote: columns.distanceNote
       ? deliveries.distanceNote
       : sql<string | null>`null`.as("distance_note"),
+    tripType: columns.tripType
+      ? deliveries.tripType
+      : sql<"return" | "one_way">`'return'`.as("trip_type"),
     driverId: deliveries.driverId,
     vehicleId: deliveries.vehicleId,
     archivedAt: columns.archivedAt
@@ -171,10 +185,10 @@ function activeDeliveriesCondition(columns: DeliveryColumnAvailability): SQL[] {
  * Get all deliveries with pagination and filtering
  */
 export async function getDeliveries(
-  userId: string,
+  ctx: OrgContext,
   filters?: Partial<DeliveryFilterData>
 ): Promise<PaginatedDeliveries> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const deliveryColumns = await getDeliveryColumnAvailability();
 
   const {
@@ -191,7 +205,10 @@ export async function getDeliveries(
   } = filters ?? {};
 
   // Build where conditions — archived deliveries (facility archive cascade) are hidden
-  const conditions: SQL[] = [...activeDeliveriesCondition(deliveryColumns)];
+  const conditions: SQL[] = [
+    eq(deliveries.organizationId, ctx.organizationId),
+    ...activeDeliveriesCondition(deliveryColumns),
+  ];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -234,6 +251,7 @@ export async function getDeliveries(
   const orderFn = sortOrder === "desc" ? desc : asc;
 
   // Count total for pagination
+  // org-scope-ok: whereClause includes the active organization predicate.
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(deliveries)
@@ -255,12 +273,12 @@ export async function getDeliveries(
       vehicleName: vehicles.name,
     })
     .from(deliveries)
-    .leftJoin(orders, eq(deliveries.orderId, orders.id))
-    .leftJoin(facilities, eq(deliveries.facilityId, facilities.id))
-    .leftJoin(customers, eq(orders.customerId, customers.id))
-    .leftJoin(biocharProducts, eq(deliveries.biocharProductId, biocharProducts.id))
-    .leftJoin(drivers, eq(deliveries.driverId, drivers.id))
-    .leftJoin(vehicles, eq(deliveries.vehicleId, vehicles.id))
+    .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
+    .leftJoin(facilities, and(eq(deliveries.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(customers, and(eq(orders.customerId, customers.id), eq(customers.organizationId, ctx.organizationId)))
+    .leftJoin(biocharProducts, and(eq(deliveries.biocharProductId, biocharProducts.id), eq(biocharProducts.organizationId, ctx.organizationId)))
+    .leftJoin(drivers, and(eq(deliveries.driverId, drivers.id), eq(drivers.organizationId, ctx.organizationId)))
+    .leftJoin(vehicles, and(eq(deliveries.vehicleId, vehicles.id), eq(vehicles.organizationId, ctx.organizationId)))
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
@@ -279,16 +297,16 @@ export async function getDeliveries(
  * Get a single delivery by ID
  */
 export async function getDeliveryById(
-  userId: string,
+  ctx: OrgContext,
   deliveryId: string
 ): Promise<Delivery> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const deliveryColumns = await getDeliveryColumnAvailability();
 
   const [delivery] = await db
     .select(getDeliveryBaseSelection(deliveryColumns))
     .from(deliveries)
-    .where(eq(deliveries.id, deliveryId));
+    .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
 
   if (!delivery) {
     throw new SafeError("Delivery not found");
@@ -301,10 +319,10 @@ export async function getDeliveryById(
  * Get a single delivery with all its relationships
  */
 export async function getDeliveryWithRelations(
-  userId: string,
+  ctx: OrgContext,
   deliveryId: string
 ): Promise<DeliveryDetail> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const deliveryColumns = await getDeliveryColumnAvailability();
 
   // Get delivery with related data
@@ -322,12 +340,12 @@ export async function getDeliveryWithRelations(
       vehicleIdentifier: vehicles.identifier,
     })
     .from(deliveries)
-    .leftJoin(orders, eq(deliveries.orderId, orders.id))
-    .leftJoin(facilities, eq(deliveries.facilityId, facilities.id))
-    .leftJoin(biocharProducts, eq(deliveries.biocharProductId, biocharProducts.id))
-    .leftJoin(drivers, eq(deliveries.driverId, drivers.id))
-    .leftJoin(vehicles, eq(deliveries.vehicleId, vehicles.id))
-    .where(eq(deliveries.id, deliveryId));
+    .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
+    .leftJoin(facilities, and(eq(deliveries.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(biocharProducts, and(eq(deliveries.biocharProductId, biocharProducts.id), eq(biocharProducts.organizationId, ctx.organizationId)))
+    .leftJoin(drivers, and(eq(deliveries.driverId, drivers.id), eq(drivers.organizationId, ctx.organizationId)))
+    .leftJoin(vehicles, and(eq(deliveries.vehicleId, vehicles.id), eq(vehicles.organizationId, ctx.organizationId)))
+    .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
 
   if (!deliveryRow) {
     throw new SafeError("Delivery not found");
@@ -335,6 +353,7 @@ export async function getDeliveryWithRelations(
 
   return {
     id: deliveryRow.id,
+    organizationId: deliveryRow.organizationId,
     code: deliveryRow.code,
     facilityId: deliveryRow.facilityId,
     orderId: deliveryRow.orderId,
@@ -350,6 +369,7 @@ export async function getDeliveryWithRelations(
     distanceKmOverride: deliveryRow.distanceKmOverride,
     distanceSource: deliveryRow.distanceSource,
     distanceNote: deliveryRow.distanceNote,
+    tripType: deliveryRow.tripType,
     driverId: deliveryRow.driverId,
     vehicleId: deliveryRow.vehicleId,
     archivedAt: deliveryRow.archivedAt,
@@ -396,13 +416,13 @@ export async function getDeliveryWithRelations(
  * Get delivery statistics
  */
 export async function getDeliveryStats(
-  userId: string,
+  ctx: OrgContext,
   filters?: { facilityId?: string; fromDate?: Date; toDate?: Date }
 ): Promise<DeliveryStats> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const deliveryColumns = await getDeliveryColumnAvailability();
 
-  const conditions: SQL[] = [...activeDeliveriesCondition(deliveryColumns)];
+  const conditions: SQL[] = [eq(deliveries.organizationId, ctx.organizationId), ...activeDeliveriesCondition(deliveryColumns)];
 
   if (filters?.facilityId) {
     conditions.push(eq(deliveries.facilityId, filters.facilityId));
@@ -419,6 +439,7 @@ export async function getDeliveryStats(
   const whereClause = and(...conditions);
 
   // Get aggregate stats
+  // org-scope-ok: whereClause includes the active organization predicate.
   const [stats] = await db
     .select({
       totalDeliveries: count(),
@@ -429,6 +450,7 @@ export async function getDeliveryStats(
     .where(whereClause);
 
   // Get counts by status
+  // org-scope-ok: whereClause includes the active organization predicate.
   const statusCounts = await db
     .select({
       status: deliveries.status,
@@ -455,13 +477,13 @@ export async function getDeliveryStats(
  * Get deliveries for dropdown selection
  */
 export async function getDeliveriesForSelect(
-  userId: string,
+  ctx: OrgContext,
   orderId?: string
 ): Promise<Array<{ id: string; code: string; deliveryDate: Date; status: string; orderCode: string | null }>> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const deliveryColumns = await getDeliveryColumnAvailability();
 
-  const conditions: SQL[] = [...activeDeliveriesCondition(deliveryColumns)];
+  const conditions: SQL[] = [eq(deliveries.organizationId, ctx.organizationId), ...activeDeliveriesCondition(deliveryColumns)];
   if (orderId) {
     conditions.push(eq(deliveries.orderId, orderId));
   }
@@ -477,7 +499,7 @@ export async function getDeliveriesForSelect(
       orderCode: orders.code,
     })
     .from(deliveries)
-    .leftJoin(orders, eq(deliveries.orderId, orders.id))
+    .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
     .where(whereClause)
     .orderBy(desc(deliveries.deliveryDate));
 }
@@ -490,7 +512,7 @@ export async function getDeliveriesForSelect(
  * Create a new delivery
  */
 export async function createDelivery(
-  userId: string,
+  ctx: OrgContext,
   data: {
     code: string;
     orderId: string;
@@ -506,9 +528,10 @@ export async function createDelivery(
     distanceKmOverride?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
     distanceNote?: string | null;
+    tripType?: "return" | "one_way" | null;
   }
 ): Promise<Delivery> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const deliveryColumns = await getDeliveryColumnAvailability();
 
   // Validate massDryKg <= deliveredWetMassKg
@@ -524,7 +547,7 @@ export async function createDelivery(
   const [existing] = await db
     .select({ id: deliveries.id })
     .from(deliveries)
-    .where(eq(deliveries.code, data.code));
+    .where(and(eq(deliveries.code, data.code), eq(deliveries.organizationId, ctx.organizationId)));
 
   if (existing) {
     throw new SafeError("A delivery with this code already exists");
@@ -534,7 +557,7 @@ export async function createDelivery(
   const [order] = await db
     .select({ id: orders.id, facilityId: orders.facilityId, biocharProductId: orders.biocharProductId })
     .from(orders)
-    .where(eq(orders.id, data.orderId));
+    .where(and(eq(orders.id, data.orderId), eq(orders.organizationId, ctx.organizationId)));
 
   if (!order) {
     throw new SafeError("Order not found");
@@ -549,7 +572,7 @@ export async function createDelivery(
     const [product] = await db
       .select({ facilityId: biocharProducts.facilityId })
       .from(biocharProducts)
-      .where(eq(biocharProducts.id, effectiveBiocharProductId));
+      .where(and(eq(biocharProducts.id, effectiveBiocharProductId), eq(biocharProducts.organizationId, ctx.organizationId)));
 
     if (!product) {
       throw new SafeError("Biochar product not found");
@@ -560,31 +583,54 @@ export async function createDelivery(
     }
   }
 
-  const [delivery] = await db
-    .insert(deliveries)
-    .values({
-      code: data.code,
-      orderId: data.orderId,
-      facilityId: data.facilityId,
-      deliveryDate: data.deliveryDate,
-      biocharProductId: effectiveBiocharProductId ?? null,
-      driverId: data.driverId ?? null,
-      vehicleId: data.vehicleId ?? null,
-      status: data.status ?? "upcoming",
-      deliveredWetMassKg: data.deliveredWetMassKg ?? null,
-      massDryKg: data.massDryKg ?? null,
-      moistureContentPercent: data.moistureContentPercent ?? null,
-      ...(deliveryColumns.distanceKmOverride
-        ? { distanceKmOverride: data.distanceKmOverride ?? null }
-        : {}),
-      ...(deliveryColumns.distanceSource
-        ? { distanceSource: data.distanceSource ?? null }
-        : {}),
-      ...(deliveryColumns.distanceNote
-        ? { distanceNote: data.distanceNote ?? null }
-        : {}),
-    })
-    .returning(getDeliveryBaseSelection(deliveryColumns));
+  const effectiveStatus = data.status ?? "upcoming";
+  if (data.driverId) await assertSameOrg(ctx, drivers, data.driverId);
+  if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
+
+  const delivery = await db.transaction(async (tx) => {
+    // Hard-block shipping more than the product batch physically holds (#116).
+    if (
+      effectiveBiocharProductId &&
+      deliveryDrawsStock(effectiveStatus, data.deliveredWetMassKg)
+    ) {
+      await lockCreateDeliveryStock(ctx, tx, {
+        biocharProductId: effectiveBiocharProductId,
+        requestedWetKg: data.deliveredWetMassKg,
+      });
+    }
+
+    const [row] = await tx
+      .insert(deliveries)
+      .values({
+        organizationId: ctx.organizationId,
+        code: data.code,
+        orderId: data.orderId,
+        facilityId: data.facilityId,
+        deliveryDate: data.deliveryDate,
+        biocharProductId: effectiveBiocharProductId ?? null,
+        driverId: data.driverId ?? null,
+        vehicleId: data.vehicleId ?? null,
+        status: effectiveStatus,
+        deliveredWetMassKg: data.deliveredWetMassKg ?? null,
+        massDryKg: data.massDryKg ?? null,
+        moistureContentPercent: data.moistureContentPercent ?? null,
+        ...(deliveryColumns.distanceKmOverride
+          ? { distanceKmOverride: data.distanceKmOverride ?? null }
+          : {}),
+        ...(deliveryColumns.distanceSource
+          ? { distanceSource: data.distanceSource ?? null }
+          : {}),
+        ...(deliveryColumns.distanceNote
+          ? { distanceNote: data.distanceNote ?? null }
+          : {}),
+        ...(deliveryColumns.tripType && data.tripType != null
+          ? { tripType: data.tripType }
+          : {}),
+      })
+      .returning(getDeliveryBaseSelection(deliveryColumns));
+
+    return row;
+  });
 
   return delivery;
 }
@@ -597,7 +643,7 @@ export async function createDelivery(
  * Update an existing delivery
  */
 export async function updateDelivery(
-  userId: string,
+  ctx: OrgContext,
   deliveryId: string,
   data: {
     code?: string;
@@ -614,16 +660,17 @@ export async function updateDelivery(
     distanceKmOverride?: number | null;
     distanceSource?: "map_estimate" | "manual" | "document" | null;
     distanceNote?: string | null;
+    tripType?: "return" | "one_way" | null;
   }
 ): Promise<Delivery> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const deliveryColumns = await getDeliveryColumnAvailability();
 
   // Verify delivery exists
   const [existing] = await db
     .select(getDeliveryBaseSelection(deliveryColumns))
     .from(deliveries)
-    .where(eq(deliveries.id, deliveryId));
+    .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Delivery not found");
@@ -650,7 +697,7 @@ export async function updateDelivery(
     const [duplicate] = await db
       .select({ id: deliveries.id })
       .from(deliveries)
-      .where(eq(deliveries.code, data.code));
+      .where(and(eq(deliveries.code, data.code), eq(deliveries.organizationId, ctx.organizationId)));
 
     if (duplicate) {
       throw new SafeError("A delivery with this code already exists");
@@ -659,31 +706,43 @@ export async function updateDelivery(
 
   const effectiveFacilityId = data.facilityId ?? existing.facilityId;
   const effectiveOrderId = data.orderId ?? existing.orderId;
+  const orderIds = [...new Set([existing.orderId, effectiveOrderId])];
+  const orderRows = await db
+    .select({
+      id: orders.id,
+      facilityId: orders.facilityId,
+      biocharProductId: orders.biocharProductId,
+    })
+    .from(orders)
+    .where(and(
+      inArray(orders.id, orderIds),
+      eq(orders.organizationId, ctx.organizationId),
+    ));
+  const effectiveOrder = orderRows.find((order) => order.id === effectiveOrderId);
+
+  if (!effectiveOrder) {
+    throw new SafeError("Order not found");
+  }
 
   if (data.facilityId !== undefined || data.orderId !== undefined) {
-    const [order] = await db
-      .select({ facilityId: orders.facilityId })
-      .from(orders)
-      .where(eq(orders.id, effectiveOrderId));
-
-    if (!order) {
-      throw new SafeError("Order not found");
-    }
-
-    if (order.facilityId !== effectiveFacilityId) {
+    if (effectiveOrder.facilityId !== effectiveFacilityId) {
       throw new SafeError("Order belongs to a different facility");
     }
   }
 
-  const effectiveBiocharProductId = data.biocharProductId ?? existing.biocharProductId;
+  const effectiveBiocharProductId = data.biocharProductId !== undefined
+    ? data.biocharProductId ?? effectiveOrder.biocharProductId
+    : existing.biocharProductId ?? effectiveOrder.biocharProductId;
   if (
     effectiveBiocharProductId &&
-    (data.facilityId !== undefined || data.biocharProductId !== undefined)
+    (data.facilityId !== undefined ||
+      data.biocharProductId !== undefined ||
+      data.orderId !== undefined)
   ) {
     const [product] = await db
       .select({ facilityId: biocharProducts.facilityId })
       .from(biocharProducts)
-      .where(eq(biocharProducts.id, effectiveBiocharProductId));
+      .where(and(eq(biocharProducts.id, effectiveBiocharProductId), eq(biocharProducts.organizationId, ctx.organizationId)));
 
     if (!product) {
       throw new SafeError("Biochar product not found");
@@ -694,12 +753,21 @@ export async function updateDelivery(
     }
   }
 
+  if (data.driverId) await assertSameOrg(ctx, drivers, data.driverId);
+  if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
+
   const updated = await db.transaction(async (tx) => {
+    // Certified-lineage precedence: a verifier-bound delivery may not be edited
+    // at all, so that refusal has to reach the operator ahead of any stock
+    // complaint about an edit they were never allowed to make.
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "delivery", entityId: deliveryId },
       "update",
     );
+
+    await lockDeliveryUpdateStock(ctx, tx, deliveryId, data);
 
     const [row] = await tx
       .update(deliveries)
@@ -714,9 +782,14 @@ export async function updateDelivery(
         ...(deliveryColumns.distanceNote
           ? {}
           : { distanceNote: undefined }),
+        // Null/absent tripType leaves the stored value untouched (Drizzle drops
+        // undefined keys); strip entirely when the column is not yet migrated.
+        ...(deliveryColumns.tripType && data.tripType != null
+          ? { tripType: data.tripType }
+          : { tripType: undefined }),
         updatedAt: new Date(),
       })
-      .where(eq(deliveries.id, deliveryId))
+      .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)))
       .returning(getDeliveryBaseSelection(deliveryColumns));
 
     return row;
@@ -733,32 +806,27 @@ export async function updateDelivery(
  * Delete a delivery
  */
 export async function deleteDelivery(
-  userId: string,
+  ctx: OrgContext,
   deliveryId: string
 ): Promise<void> {
-  requireAuth(userId);
-
-  // Verify delivery exists
-  const [existing] = await db
-    .select({ id: deliveries.id })
-    .from(deliveries)
-    .where(eq(deliveries.id, deliveryId));
-
-  if (!existing) {
-    throw new SafeError("Delivery not found");
-  }
+  requireOrgScope(ctx);
 
   await db.transaction(async (tx) => {
+    // Same precedence as updateDelivery: refuse the locked-lineage delete before
+    // taking stock locks or complaining about stock.
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "delivery", entityId: deliveryId },
       "delete",
     );
 
+    await lockDeleteDeliveryStock(ctx, tx, deliveryId);
+
     const [{ value: applicationCount }] = await tx
       .select({ value: count() })
       .from(applications)
-      .where(eq(applications.deliveryId, deliveryId));
+      .where(and(eq(applications.deliveryId, deliveryId), eq(applications.organizationId, ctx.organizationId)));
 
     if (Number(applicationCount) > 0) {
       throw new SafeError(
@@ -766,7 +834,7 @@ export async function deleteDelivery(
       );
     }
 
-    await tx.delete(deliveries).where(eq(deliveries.id, deliveryId));
+    await tx.delete(deliveries).where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
   });
 }
 
@@ -778,18 +846,19 @@ export async function deleteDelivery(
  * Check if a delivery code is available
  */
 export async function isDeliveryCodeAvailable(
-  userId: string,
+  ctx: OrgContext,
   code: string,
   excludeDeliveryId?: string
 ): Promise<boolean> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [eq(deliveries.code, code)];
+  const conditions: SQL[] = [eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.code, code)];
 
   if (excludeDeliveryId) {
     conditions.push(sql`${deliveries.id} != ${excludeDeliveryId}`);
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: deliveries.id })
     .from(deliveries)

@@ -6,11 +6,20 @@
 
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { drivers, operators, vehicles, feedstockTypes, storageLocations } from "@/db/schema";
+import type { OrgContext } from "@/lib/auth/server";
+import {
+  drivers,
+  operators,
+  vehicles,
+  feedstockTypes,
+  formulations,
+  storageLocations,
+} from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { StorageLocationType } from "@/schemas/storage-locations";
-import { requireAuth } from "./utils";
+import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { guardStorageLocationName } from "./unique-name-guards";
 
 // ============================================
 // Driver Quick Add
@@ -27,14 +36,19 @@ export interface CreateDriverData {
  * Create a new driver with minimal required fields
  * Returns EntityOption for immediate use in select dropdowns
  */
-export async function createDriver(userId: string, data: CreateDriverData): Promise<EntityOption> {
-  requireAuth(userId);
+export async function createDriver(ctx: OrgContext, data: CreateDriverData): Promise<EntityOption> {
+  requireOrgScope(ctx);
 
   // Check for duplicate code
   const [existing] = await db
     .select({ id: drivers.id })
     .from(drivers)
-    .where(eq(drivers.code, data.code));
+    .where(
+      and(
+        eq(drivers.code, data.code),
+        eq(drivers.organizationId, ctx.organizationId),
+      ),
+    );
 
   if (existing) {
     throw new SafeError("A driver with this code already exists");
@@ -44,6 +58,7 @@ export async function createDriver(userId: string, data: CreateDriverData): Prom
     const [driver] = await db
       .insert(drivers)
       .values({
+        organizationId: ctx.organizationId,
         code: data.code,
         name: data.name,
         licenseNumber: data.licenseNumber ?? null,
@@ -76,15 +91,16 @@ export interface CreateOperatorData {
 }
 
 export async function createOperator(
-  userId: string,
+  ctx: OrgContext,
   data: CreateOperatorData
 ): Promise<EntityOption> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   try {
     const [operator] = await db
       .insert(operators)
       .values({
+        organizationId: ctx.organizationId,
         name: data.name,
         credentials: data.credentials ?? null,
         contactPhone: data.contactPhone ?? null,
@@ -125,14 +141,19 @@ export interface CreateVehicleData {
  * Create a new vehicle with required fields
  * Returns EntityOption for immediate use in select dropdowns
  */
-export async function createVehicle(userId: string, data: CreateVehicleData): Promise<EntityOption> {
-  requireAuth(userId);
+export async function createVehicle(ctx: OrgContext, data: CreateVehicleData): Promise<EntityOption> {
+  requireOrgScope(ctx);
 
   // Check for duplicate code
   const [existingCode] = await db
     .select({ id: vehicles.id })
     .from(vehicles)
-    .where(eq(vehicles.code, data.code));
+    .where(
+      and(
+        eq(vehicles.code, data.code),
+        eq(vehicles.organizationId, ctx.organizationId),
+      ),
+    );
 
   if (existingCode) {
     throw new SafeError("A vehicle with this code already exists");
@@ -142,7 +163,12 @@ export async function createVehicle(userId: string, data: CreateVehicleData): Pr
   const [existingName] = await db
     .select({ id: vehicles.id })
     .from(vehicles)
-    .where(eq(vehicles.name, data.name));
+    .where(
+      and(
+        eq(vehicles.name, data.name),
+        eq(vehicles.organizationId, ctx.organizationId),
+      ),
+    );
 
   if (existingName) {
     throw new SafeError("A vehicle with this name already exists");
@@ -152,6 +178,7 @@ export async function createVehicle(userId: string, data: CreateVehicleData): Pr
     const [vehicle] = await db
       .insert(vehicles)
       .values({
+        organizationId: ctx.organizationId,
         code: data.code,
         name: data.name,
         identifier: data.identifier,
@@ -194,10 +221,10 @@ export interface CreateFeedstockTypeData {
  * Returns EntityOption for immediate use in select dropdowns
  */
 export async function createFeedstockType(
-  userId: string,
+  ctx: OrgContext,
   data: CreateFeedstockTypeData
 ): Promise<EntityOption> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const name = data.name.trim();
   const usage = data.usage ?? "pyrolysis";
 
@@ -205,7 +232,12 @@ export async function createFeedstockType(
   const [existingCode] = await db
     .select({ id: feedstockTypes.id })
     .from(feedstockTypes)
-    .where(eq(feedstockTypes.code, data.code));
+    .where(
+      and(
+        eq(feedstockTypes.code, data.code),
+        eq(feedstockTypes.organizationId, ctx.organizationId),
+      ),
+    );
 
   if (existingCode) {
     throw new SafeError("A feedstock type with this code already exists");
@@ -215,7 +247,13 @@ export async function createFeedstockType(
   const [existingName] = await db
     .select({ id: feedstockTypes.id })
     .from(feedstockTypes)
-    .where(and(eq(feedstockTypes.name, name), eq(feedstockTypes.usage, usage)));
+    .where(
+      and(
+        eq(feedstockTypes.name, name),
+        eq(feedstockTypes.usage, usage),
+        eq(feedstockTypes.organizationId, ctx.organizationId),
+      ),
+    );
 
   if (existingName) {
     throw new SafeError("A feedstock type with this name and usage already exists");
@@ -225,6 +263,7 @@ export async function createFeedstockType(
     const [feedstockType] = await db
       .insert(feedstockTypes)
       .values({
+        organizationId: ctx.organizationId,
         code: data.code,
         name,
         category: data.category,
@@ -267,34 +306,49 @@ export interface CreateStorageLocationData {
  * Returns EntityOption for immediate use in select dropdowns
  */
 export async function createStorageLocation(
-  userId: string,
+  ctx: OrgContext,
   data: CreateStorageLocationData
 ): Promise<EntityOption> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Check for duplicate code
   const [existingCode] = await db
     .select({ id: storageLocations.id })
     .from(storageLocations)
-    .where(eq(storageLocations.code, data.code));
+    .where(
+      and(
+        eq(storageLocations.code, data.code),
+        eq(storageLocations.organizationId, ctx.organizationId),
+      ),
+    );
 
   if (existingCode) {
     throw new SafeError("A storage location with this code already exists");
   }
 
+  if (data.feedstockTypeId) {
+    await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId);
+  }
+  if (data.formulationId) {
+    await assertSameOrg(ctx, formulations, data.formulationId);
+  }
+
   try {
-    const [location] = await db
-      .insert(storageLocations)
-      .values({
-        code: data.code,
-        name: data.name,
-        type: data.type,
-        facilityId: data.facilityId,
-        capacityKg: data.capacityKg ?? null,
-        feedstockTypeId: data.feedstockTypeId ?? null,
-        formulationId: data.formulationId ?? null,
-      })
-      .returning();
+    const [location] = await guardStorageLocationName(ctx, data.name, () =>
+      db
+        .insert(storageLocations)
+        .values({
+          organizationId: ctx.organizationId,
+          code: data.code,
+          name: data.name,
+          type: data.type,
+          facilityId: data.facilityId,
+          capacityKg: data.capacityKg ?? null,
+          feedstockTypeId: data.feedstockTypeId ?? null,
+          formulationId: data.formulationId ?? null,
+        })
+        .returning(),
+    );
 
     return {
       id: location.id,

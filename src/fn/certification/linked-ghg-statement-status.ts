@@ -1,3 +1,4 @@
+import type { OrgContext } from "@/lib/auth/server";
 import { getLatestSubmission } from "@/data-access/certification-submissions";
 import type { CertifierRemovalRow } from "@/data-access/certifier-removals";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
@@ -19,13 +20,13 @@ export interface LinkedGhgStatementStatus {
 }
 
 export async function loadLinkedGhgStatementStatus(
-  userId: string,
+  orgCtx: OrgContext,
   removal: CertifierRemovalRow | null,
 ): Promise<LinkedGhgStatementStatus | null> {
   const ghgStatementId = removal?.ghgStatementId ?? null;
   if (!ghgStatementId) return null;
 
-  const latest = await getLatestSubmission(userId, {
+  const latest = await getLatestSubmission(orgCtx, {
     provider: ISOMETRIC_PROVIDER,
     submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
     localEntityType: GHG_STATEMENT_ENTITY_TYPE,

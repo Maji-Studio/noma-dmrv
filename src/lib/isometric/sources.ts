@@ -1,4 +1,4 @@
-import { isometric, IsometricApiError } from "./client";
+import { IsometricApiError, type IsometricClient } from "./client";
 import type { components } from "./generated/certify";
 
 export type CreateDocumentSourceRequest =
@@ -13,9 +13,10 @@ export type PatchSourceRequest = components["schemas"]["PatchSourceRequest"];
 const SUPPLIER_REF_LOOKUP_PAGE_SIZE = 1;
 
 export function createSource(
+  client: IsometricClient,
   body: CreateDocumentSourceRequest,
 ): Promise<CreateSourceResponse> {
-  return isometric.post<CreateSourceResponse>("/sources", body);
+  return client.post<CreateSourceResponse>("/sources", body);
 }
 
 // Reconciliation entry: when a previous mirror attempt POSTed /sources but
@@ -34,11 +35,12 @@ export interface SignedUploadUrlResult {
 }
 
 export async function requestSignedUploadUrl(
+  client: IsometricClient,
   sourceId: string,
   body: SignedUploadUrlRequest,
 ): Promise<SignedUploadUrlResult> {
   try {
-    const uploadUrl = await isometric.post<string>(
+    const uploadUrl = await client.post<string>(
       `/sources/${sourceId}/signed_upload_url`,
       body,
     );
@@ -52,9 +54,10 @@ export async function requestSignedUploadUrl(
 }
 
 export async function findSourceBySupplierRef(
+  client: IsometricClient,
   ref: string,
 ): Promise<Source | null> {
-  for await (const node of isometric.paginate<Source>("/sources", {
+  for await (const node of client.paginate<Source>("/sources", {
     query: { supplier_reference_id: ref },
     pageSize: SUPPLIER_REF_LOOKUP_PAGE_SIZE,
   })) {
@@ -64,10 +67,11 @@ export async function findSourceBySupplierRef(
 }
 
 export function patchSource(
+  client: IsometricClient,
   sourceId: string,
   body: PatchSourceRequest,
 ): Promise<Source> {
-  return isometric.patch<Source>(`/sources/${sourceId}`, body);
+  return client.patch<Source>(`/sources/${sourceId}`, body);
 }
 
 // DELETE /sources/{id} intentionally not exported in Phase 3.5.

@@ -9,12 +9,50 @@ import {
   emptyToNull,
   MASS_INPUT_MAX_KG,
   MASS_MAX_KG_MESSAGE,
+  optionalDateOnly,
   optionalPercent,
   PG_INTEGER_MAX,
   requiredDateOnly,
   toIntOrNull,
   toNumberOrNull,
 } from "./helpers";
+
+// ============================================
+// Time-window helpers (start/end date + time pairs)
+// ============================================
+
+const TIME_ONLY_RE = /^\d{2}:\d{2}$/;
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Resolve a calendar-date value + a time value into a single instant, robust to
+ * either shape the schema produces: on the client the date field has been
+ * transformed to a `Date` (local midnight) and the time is an "HH:MM" string;
+ * on server re-validation the time is already a combined `Date`. Returns null
+ * when either part is missing/malformed (the field-level validators surface the
+ * specific error).
+ */
+function resolveInstant(dateVal: unknown, timeVal: unknown): Date | null {
+  if (timeVal instanceof Date) return timeVal;
+  if (typeof timeVal !== "string" || !TIME_ONLY_RE.test(timeVal)) return null;
+
+  let base: Date | null = null;
+  if (dateVal instanceof Date) {
+    base = dateVal;
+  } else if (typeof dateVal === "string" && DATE_ONLY_RE.test(dateVal)) {
+    const [y, m, d] = dateVal.split("-").map(Number);
+    base = new Date(y, m - 1, d);
+  }
+  if (!base) return null;
+
+  const [hh, mm] = timeVal.split(":").map(Number);
+  return new Date(base.getFullYear(), base.getMonth(), base.getDate(), hh, mm);
+}
+
+/** Whether an end-time value is actually present (Date or non-empty "HH:MM"). */
+function hasEndTime(value: unknown): boolean {
+  return value instanceof Date || (typeof value === "string" && value !== "");
+}
 
 // ============================================
 // Constants and Enums
@@ -43,18 +81,23 @@ export type ProductionRunStatus = (typeof productionRunStatuses)[number];
 export const productionRunFormSchema = z.object({
   // Required fields
   facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
-  date: requiredDateOnly,
   reactorId: z.string().min(1, "Please select a reactor").uuid("Please select a valid reactor"),
 
   // Status
   status: z.enum(productionRunStatuses).default("draft"),
 
-  // Timing — accepts Date objects (from submit handler) or time strings "HH:MM" (from form)
+  // Timing — explicit date + time pairs. The run's start (date + time) is
+  // required; the end pair is optional (a blank end = the run has not finished
+  // yet). `endDate` defaults to `startDate` when only an end time is entered;
+  // an overnight run sets `endDate` to the next day (no implicit day rollover).
+  startDate: requiredDateOnly,
+  endDate: optionalDateOnly,
+  // Time values accept "HH:MM" strings (from the form) or Date objects (server
+  // re-validation of an already-combined instant).
   startTime: z.union([
     z.date(),
     z.string().min(1, "Please enter a start time").transform((val, ctx) => {
-      // Accept "HH:MM" time-only strings (passed through as-is for combine in submit handler)
-      if (/^\d{2}:\d{2}$/.test(val)) return val;
+      if (TIME_ONLY_RE.test(val)) return val;
       const date = new Date(val);
       if (isNaN(date.getTime())) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid start time" });
@@ -70,7 +113,7 @@ export const productionRunFormSchema = z.object({
     .optional()
     .transform((val, ctx) => {
       if (val === undefined || val === null || val === "") return undefined;
-      if (typeof val === "string" && /^\d{2}:\d{2}$/.test(val)) return val;
+      if (typeof val === "string" && TIME_ONLY_RE.test(val)) return val;
       if (typeof val === "string") {
         const date = new Date(val);
         if (isNaN(date.getTime())) {
@@ -104,7 +147,33 @@ export const productionRunFormSchema = z.object({
   biocharMoisturePercent: optionalPercent,
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-});
+})
+  .superRefine((data, ctx) => {
+    const start = resolveInstant(data.startDate, data.startTime);
+    const endPresent = hasEndTime(data.endTime);
+
+    if (endPresent) {
+      const endDateVal = data.endDate ?? data.startDate;
+      const end = resolveInstant(endDateVal, data.endTime);
+      if (start && end && end.getTime() <= start.getTime()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["endTime"],
+          message: "End must be after start — check the end date for overnight runs.",
+        });
+      }
+    }
+
+    // A run cannot be marked Complete without an end time (a complete run has
+    // finished). Mirrors the server-side data-access guard.
+    if (data.status === "complete" && !endPresent) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["endTime"],
+        message: "A complete run needs an end date and time.",
+      });
+    }
+  });
 
 // ============================================
 // Server Action Schemas
@@ -128,7 +197,6 @@ export const updateProductionRunSchema = z.object({
     .regex(/^[A-Z0-9-]+$/)
     .optional(),
   facilityId: z.string().uuid().optional(),
-  date: requiredDateOnly.optional(),
   reactorId: z.string().uuid().optional(),
   status: z.enum(productionRunStatuses).optional(),
   startTime: z.union([
@@ -142,8 +210,11 @@ export const updateProductionRunSchema = z.object({
       return date;
     }),
   ]).optional(),
+  // Nullable: an explicit null clears the end time (reopens the run). Undefined
+  // leaves it unchanged.
   endTime: z.union([
     z.date(),
+    z.null(),
     z.string().transform((val, ctx) => {
       const date = new Date(val);
       if (isNaN(date.getTime())) {

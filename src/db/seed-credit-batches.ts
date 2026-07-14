@@ -20,6 +20,7 @@ type CreditBatchSeedTimestamps = {
 
 export async function seedProductionProcessesAndCreditBatches(
   tx: DbTransaction,
+  organizationId: string,
   ids: CreditBatchSeedIds,
   demoTimestamps: CreditBatchSeedTimestamps,
 ) {
@@ -29,12 +30,14 @@ export async function seedProductionProcessesAndCreditBatches(
   console.log("Creating production processes...");
   await tx.insert(schema.productionProcesses).values([
     {
+      organizationId,
       id: ids.processMoshiWoodchips,
       facilityId: ids.facilityMoshi,
       feedstockTypeId: ids.feedstockWoodchips,
       establishedAt: demoTimestamps.facilitySetup,
     },
     {
+      organizationId,
       id: ids.processMoshiCoffee,
       facilityId: ids.facilityMoshi,
       feedstockTypeId: ids.feedstockCoffeeHusk,
@@ -45,6 +48,7 @@ export async function seedProductionProcessesAndCreditBatches(
   console.log("Creating credit batches...");
   await tx.insert(schema.creditBatches).values([
     {
+      organizationId,
       id: ids.creditBatch1,
       code: "CB-26-001",
       facilityId: ids.facilityMoshi,
@@ -74,6 +78,7 @@ export async function seedProductionProcessesAndCreditBatches(
       mixingTimelineDays: 2,
     },
     {
+      organizationId,
       id: ids.creditBatch2,
       code: "CB-26-002",
       facilityId: ids.facilityMoshi,
@@ -98,14 +103,17 @@ export async function seedProductionProcessesAndCreditBatches(
   console.log("Creating credit batch production-run membership...");
   await tx.insert(schema.creditBatchProductionRuns).values([
     {
+      organizationId,
       creditBatchId: ids.creditBatch1,
       productionRunId: ids.productionRun1,
     },
     {
+      organizationId,
       creditBatchId: ids.creditBatch1,
       productionRunId: ids.productionRun3,
     },
     {
+      organizationId,
       creditBatchId: ids.creditBatch2,
       productionRunId: ids.productionRun2,
     },

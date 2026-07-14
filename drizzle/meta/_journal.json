@@ -498,6 +498,76 @@
       "when": 1783175990649,
       "tag": "0070_facility_scoped_durability_evidence_triggers",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1783602416044,
+      "tag": "0071_noisy_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1783610963729,
+      "tag": "0072_superb_zzzax",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1783612218526,
+      "tag": "0073_marvelous_human_cannonball",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1783612589696,
+      "tag": "0074_nostalgic_magus",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1783613816848,
+      "tag": "0075_solid_master_chief",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1783669184018,
+      "tag": "0076_charming_blizzard",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1783693787728,
+      "tag": "0077_supreme_roulette",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1783706417301,
+      "tag": "0078_easy_silver_fox",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1783754696178,
+      "tag": "0079_volatile_plazm",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1783771984215,
+      "tag": "0080_woozy_george_stacy",
+      "breakpoints": true
     }
   ]
 }

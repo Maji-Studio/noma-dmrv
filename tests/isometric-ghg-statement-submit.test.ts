@@ -26,6 +26,7 @@
  * terminal-state transition.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { makeTestOrgContext } from "./helpers/test-org";
 
 import type {
   CertificationSubmissionRow,
@@ -52,14 +53,12 @@ vi.mock("@/data-access/facilities", () => ({
   getFacilityById: vi.fn(),
 }));
 vi.mock("@/lib/auth/server", () => ({
-  getUser: vi.fn().mockResolvedValue({
-    id: "user-test-1",
-    email: "tester@example.com",
-    name: "Tester",
-    emailVerified: true,
-    role: "admin" as const,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+  requireOrgRole: vi.fn(),
+  requireOrgContext: vi.fn().mockResolvedValue({
+    userId: "user-test-1",
+    organizationId: "org_test_fixtures",
+    orgRole: "owner",
+    isPlatformAdmin: false,
   }),
 }));
 // `finalizeGhgStatement` uses `db.transaction(cb)` — fake it by invoking
@@ -75,11 +74,13 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
   return {
     ...actual,
+    getIsometricClientForOrg: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
     createGhgStatement: vi.fn(),
     getGhgStatement: vi.fn(),
     submitGhgStatement: vi.fn(),
     resubmitGhgStatement: vi.fn(),
     reconcileGhgStatement: vi.fn(),
+    findDraftGhgStatementsByPeriod: vi.fn(),
   };
 });
 
@@ -244,15 +245,12 @@ beforeEach(() => {
 
   // vi.resetAllMocks() clears the .mockResolvedValue from the factory; re-set
   // a default admin user here so every withAction-wrapped path is authed.
-  vi.mocked(authServer.getUser).mockResolvedValue({
-    id: "user-test-1",
-    email: "tester@example.com",
-    name: "Tester",
-    emailVerified: true,
-    role: "admin" as const,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as never);
+  vi.mocked(authServer.requireOrgContext).mockResolvedValue({
+    userId: "user-test-1",
+    organizationId: "org_test_fixtures",
+    orgRole: "owner",
+    isPlatformAdmin: false,
+  });
 
   // Certifier-project mapping is shared across all paths.
   vi.mocked(ledger.getCertifierProjectByFacility).mockResolvedValue(
@@ -381,6 +379,7 @@ beforeEach(() => {
 
   // Default Isometric HTTP — the per-test overrides extend these.
   vi.mocked(isometric.reconcileGhgStatement).mockResolvedValue({ found: false });
+  vi.mocked(isometric.findDraftGhgStatementsByPeriod).mockResolvedValue([]);
 });
 
 // ---------------------------------------------------------------------------
@@ -408,10 +407,13 @@ describe("createGhgStatementDraft — happy path", () => {
 
     // The remote POST was invoked with the period-first payload shape
     // Isometric requires (project_id + end_on only).
-    expect(isometric.createGhgStatement).toHaveBeenCalledExactlyOnceWith({
-      project_id: EXTERNAL_PROJECT_ID,
-      end_on: REPORTING_PERIOD_END,
-    });
+    expect(isometric.createGhgStatement).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Object),
+      {
+        project_id: EXTERNAL_PROJECT_ID,
+        end_on: REPORTING_PERIOD_END,
+      },
+    );
 
     // Ledger row transitioned draft → submitted carrying the external id.
     expect(storedLedger).toHaveLength(1);
@@ -426,13 +428,13 @@ describe("createGhgStatementDraft — happy path", () => {
     // Removal membership reconciled from the server-side ghg_entry_ids; the
     // server-derived reporting window was persisted onto the local row.
     expect(ghgDA.reconcileRemovalMembership).toHaveBeenCalledWith(
-      "user-test-1",
+      makeTestOrgContext("user-test-1"),
       STATEMENT_ID,
       [EXTERNAL_REMOVAL_ID],
       expect.any(Object),
     );
     expect(ghgDA.updateGhgStatementReportingWindow).toHaveBeenCalledWith(
-      "user-test-1",
+      makeTestOrgContext("user-test-1"),
       STATEMENT_ID,
       { reportingPeriodStartOn: "2026-01-01" },
       expect.any(Object),
@@ -474,6 +476,30 @@ describe("createGhgStatementDraft — happy path", () => {
 });
 
 describe("createGhgStatementDraft — empty-statement guard (#245)", () => {
+  it("adopts one exact remote draft before POSTing even when a removal is still open locally", async () => {
+    const remote = makeRemoteStatement();
+    vi.mocked(isometric.findDraftGhgStatementsByPeriod).mockResolvedValue([
+      remote,
+    ]);
+    vi.mocked(isometric.reconcileGhgStatement).mockResolvedValue({
+      found: "single",
+      externalId: EXTERNAL_STATEMENT_ID,
+      status: "DRAFT",
+    });
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remote);
+
+    const result = await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      data: { externalId: EXTERNAL_STATEMENT_ID },
+    });
+    expect(isometric.createGhgStatement).not.toHaveBeenCalled();
+  });
+
   it("fail-closes before any local row or remote POST when no removals are open", async () => {
     vi.mocked(ghgDA.listOpenRemovalsForFacility).mockResolvedValue([]);
 
@@ -573,13 +599,14 @@ describe("submitGhgStatementToVerifier — happy path", () => {
 
     // Submit body carries the operator-supplied report URL.
     expect(isometric.submitGhgStatement).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Object),
       EXTERNAL_STATEMENT_ID,
       { ghg_statement_report_url: REPORT_URL },
     );
 
     // The report document was attached against the ledger row.
     expect(ledger.attachReportDocument).toHaveBeenCalledWith(
-      "user-test-1",
+      makeTestOrgContext("user-test-1"),
       expect.objectContaining({
         submissionId: storedLedger[0].id,
         reportUrl: REPORT_URL,

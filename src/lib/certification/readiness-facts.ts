@@ -23,6 +23,7 @@ export function toRemovalReadinessFacts(
   return {
     local: ctx.latestSubmission?.status ?? null,
     lockInFlight,
+    hasOrgCredentials: ctx.hasOrgCredentials,
     hasMapping: !!ctx.mapping,
     hasDefaultTemplate: !!ctx.defaultTemplate,
     missingDefaultTemplateId: ctx.missingDefaultTemplateId,

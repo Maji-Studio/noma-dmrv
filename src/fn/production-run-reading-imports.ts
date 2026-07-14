@@ -2,10 +2,12 @@
 
 import { getStorageProvider } from "@/lib/storage";
 import { SafeError } from "@/lib/errors";
+import { logger, sanitizeErrorMessage } from "@/lib/log";
 import { parseReadingsCsv } from "@/lib/production-readings/readings-csv";
 import {
   getProductionRunReadingsImportContext,
-  replaceProductionRunReadingsInWindow,
+  insertProductionRunReadingsSkippingDuplicates,
+  recordReadingsImportOutcome,
 } from "@/data-access/production-run-reading-imports";
 import { importProductionRunReadingsSchema } from "@/schemas/production-run-reading-imports";
 import type { ActionResult } from "@/types/actions";
@@ -21,53 +23,104 @@ export interface ProductionRunReadingsImportResult {
   droppedRows: number;
   skippedRows: number;
   invalidRequiredRows: number;
+  /** In-window rows skipped because that (run, timestamp) was already imported. */
+  duplicateRows: number;
+  /** In-window rows collapsed because the file repeated a timestamp. */
+  intraFileDuplicateRows: number;
 }
 
 export async function importProductionRunReadingsFromDocumentFn(
   input: unknown,
 ): Promise<ActionResult<ProductionRunReadingsImportResult>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const { documentId } = importProductionRunReadingsSchema.parse(input);
-    const context = await getProductionRunReadingsImportContext(
-      userId,
-      documentId,
-    );
-    assertCsvDocument(context.fileName, context.mimeType);
 
-    const csvText = await readManagedDocumentText(context.storageKey);
-    const parsed = parseReadingsForImport({
-      csvText,
-      runWindowStart: context.runWindowStart,
-      runWindowEnd: context.runWindowEnd,
-    });
-
-    if (!parsed.replacementWindow) {
-      // Nothing landed inside the run window. Fail loudly instead of returning
-      // a green "Imported 0 readings" toast, so a wrong or out-of-window file
-      // is obvious and existing readings are known to be untouched.
-      throw new SafeError(
-        parsed.parsedRows > 0
-          ? `None of the ${parsed.parsedRows} timestamped row(s) fall within this run's time window. Check the file covers the run period, or adjust the run's start and end times.`
-          : "No timestamped readings were found in this file. Check it is a canonical readings CSV with a timestamp_utc column and one row per reading.",
+    // Persist the outcome onto the document so a failed import stays
+    // recoverable from the UI (#398): only documents whose prior import failed
+    // get a re-import affordance. Context validation runs inside this path too,
+    // so a recoverable context failure (e.g. the run has no end time yet)
+    // records `failed` and surfaces the re-import action once the operator
+    // fixes the run. Any failure past this point is recorded as failed, then
+    // re-thrown so the operator still sees the error.
+    try {
+      const context = await getProductionRunReadingsImportContext(
+        ctx,
+        documentId,
       );
+      assertCsvDocument(context.fileName, context.mimeType);
+
+      const csvText = await readManagedDocumentText(context.storageKey);
+      const parsed = parseReadingsForImport({
+        csvText,
+        runWindowStart: context.runWindowStart,
+        runWindowEnd: context.runWindowEnd,
+      });
+
+      if (parsed.inWindowRows === 0) {
+        // Nothing landed inside the run window. Fail loudly instead of
+        // returning a green "Imported 0 readings" toast, so a wrong or
+        // out-of-window file is obvious and existing readings are untouched.
+        throw new SafeError(
+          parsed.parsedRows > 0
+            ? `None of the ${parsed.parsedRows} timestamped row(s) fall within this run's time window. Check the file covers the run period, or adjust the run's start and end times.`
+            : "No timestamped readings were found in this file. Check it is a canonical readings CSV with a timestamp_utc column and one row per reading.",
+        );
+      }
+
+      const { insertedRows, intraFileDuplicateRows } =
+        await insertProductionRunReadingsSkippingDuplicates(ctx, {
+          productionRunId: context.productionRunId,
+          readings: parsed.readings,
+        });
+      // In-window rows that were neither newly inserted nor collapsed as an
+      // intra-file duplicate timestamp were already present from a prior
+      // import — the visible signal that a re-run is idempotent.
+      const duplicateRows =
+        parsed.inWindowRows - insertedRows - intraFileDuplicateRows;
+
+      await recordReadingsImportOutcome(ctx, documentId, {
+        status: "succeeded",
+        insertedRows,
+        duplicateRows,
+      });
+
+      return {
+        productionRunId: context.productionRunId,
+        insertedRows,
+        parsedRows: parsed.parsedRows,
+        inWindowRows: parsed.inWindowRows,
+        droppedRows: parsed.droppedRows,
+        skippedRows: parsed.skippedRows,
+        invalidRequiredRows: parsed.invalidRequiredRows,
+        duplicateRows,
+        intraFileDuplicateRows,
+      };
+    } catch (error) {
+      // Persist only operator-safe text: document metadata is API-readable, so
+      // it follows the toActionError rule — SafeError messages verbatim,
+      // anything else (e.g. a Drizzle/Postgres failure whose message embeds
+      // query text) collapses to a generic message. withAction already logs
+      // the original error server-side.
+      const message =
+        error instanceof SafeError
+          ? error.message
+          : "Failed to import readings";
+      // Never let a failure to persist the outcome mask the real import error
+      // or strand the document without its recoverable "failed" flag (#398):
+      // record the outcome best-effort, then always re-throw the original error.
+      try {
+        await recordReadingsImportOutcome(ctx, documentId, {
+          status: "failed",
+          error: message,
+        });
+      } catch (recordError) {
+        logger.error(
+          { documentId, error: sanitizeErrorMessage(recordError) },
+          "Failed to record readings import outcome",
+        );
+      }
+      throw error;
     }
-
-    const insertedRows = await replaceProductionRunReadingsInWindow(userId, {
-      productionRunId: context.productionRunId,
-      windowStart: parsed.replacementWindow.start,
-      windowEnd: parsed.replacementWindow.end,
-      readings: parsed.readings,
-    });
-
-    return {
-      productionRunId: context.productionRunId,
-      insertedRows,
-      parsedRows: parsed.parsedRows,
-      inWindowRows: parsed.inWindowRows,
-      droppedRows: parsed.droppedRows,
-      skippedRows: parsed.skippedRows,
-      invalidRequiredRows: parsed.invalidRequiredRows,
-    };
   });
 }
 

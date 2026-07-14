@@ -14,7 +14,8 @@ import { db } from "@/db";
 import { geoRouteCache } from "@/db/schema";
 import { isRoutingConfigured, routeGeometry, type GeoPoint, type RouteGeometry } from "@/lib/geo";
 import { logger } from "@/lib/log";
-import { requireAuth } from "./utils";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "./utils";
 
 const log = logger.child({ mod: "geo-route-cache" });
 
@@ -53,10 +54,13 @@ function keyString(key: CacheKey): string {
 }
 
 export async function getRouteGeometries(
-  userId: string,
+  ctx: OrgContext,
   requests: RouteGeometryRequest[]
 ): Promise<RouteGeometryByRequestId> {
-  requireAuth(userId);
+  // Authenticated + org-scoped caller required, but the cache itself stays
+  // GLOBAL (no organizationId column): it stores public road geometry keyed by
+  // rounded coordinates, never tenant data (ADR 0010 exclusion).
+  requireOrgScope(ctx);
 
   const result: RouteGeometryByRequestId = {};
   if (requests.length === 0) {

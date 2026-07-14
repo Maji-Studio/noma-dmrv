@@ -56,12 +56,18 @@ jobs:
       # schema's "no stub in production" safeguard carves out CI for exactly
       # this build (src/config/env.ts).
       GEO_PROVIDER: stub
+      # Bootstrap admin for db:ensure-admin, which also seeds the default
+      # "Dark Earth Carbon" organization that the org e2e specs rely on. The
+      # password is generated per run (ephemeral, CI-only, never a real secret).
+      ADMIN_EMAIL: e2e-admin@e2e.local
       PLAYWRIGHT_WORKERS: "2"
       PLAYWRIGHT_RETRIES: "1"
 
     steps:
       - name: Generate ephemeral auth secret
-        run: echo "BETTER_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+        run: |
+          echo "BETTER_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "ADMIN_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
 
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -110,8 +116,17 @@ jobs:
           STORAGE_SIGNING_SECRET=${STORAGE_SIGNING_SECRET}
           EOF
 
+      # Migrations, not `drizzle-kit push`: hand-written trigger migrations
+      # (e.g. the Method B baseline-floor guards) are invisible to push, and
+      # e2e specs assert on that DB-enforced behavior. Matches local db:reset.
       - name: Apply schema
-        run: pnpm drizzle-kit push --force
+        run: pnpm db:migrate
+
+      # Seeds the bootstrap admin plus the default "Dark Earth Carbon"
+      # organization (idempotent) — organization-settings.spec.ts asserts
+      # against that org, matching the local db:reset flow.
+      - name: Ensure admin user and default organization
+        run: pnpm db:ensure-admin
 
       # @live specs (real Isometric sandbox) are excluded here and covered by
       # the nightly e2e-live.yml workflow.

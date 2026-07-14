@@ -55,14 +55,9 @@ interface IsometricCredentials {
   baseUrl: string;
 }
 
-function getCredentials(): IsometricCredentials {
+function getCredentialsFromEnv(): IsometricCredentials | null {
   if (!env.ISOMETRIC_CLIENT_SECRET || !env.ISOMETRIC_ACCESS_TOKEN) {
-    throw new IsometricApiError(
-      "Isometric API not configured: set ISOMETRIC_CLIENT_SECRET and ISOMETRIC_ACCESS_TOKEN",
-      undefined,
-      undefined,
-      "not_configured"
-    );
+    return null;
   }
   return {
     clientSecret: env.ISOMETRIC_CLIENT_SECRET,
@@ -120,12 +115,21 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-export async function isometricRequest<T = unknown>(
+async function isometricRequest<T = unknown>(
+  credentials: IsometricCredentials | null,
   method: "GET" | "POST" | "PATCH" | "DELETE" | "PUT",
   path: string,
   options: IsometricRequestOptions = {}
 ): Promise<T> {
-  const { clientSecret, accessToken, baseUrl } = getCredentials();
+  if (!credentials) {
+    throw new IsometricApiError(
+      "Isometric API not configured for this organization",
+      undefined,
+      undefined,
+      "not_configured"
+    );
+  }
+  const { clientSecret, accessToken, baseUrl } = credentials;
   const url = buildUrl(baseUrl, path, options.query);
 
   const headers: Record<string, string> = {
@@ -279,14 +283,15 @@ export interface PaginateOptions extends IsometricRequestOptions {
   pageSize?: number;
 }
 
-export async function* paginate<T>(
+async function* paginate<T>(
+  credentials: IsometricCredentials | null,
   path: string,
   options: PaginateOptions = {}
 ): AsyncGenerator<T> {
   const { pageSize = 50, query, ...rest } = options;
   let after: string | undefined;
   while (true) {
-    const page = await isometricRequest<Paginated<T>>("GET", path, {
+    const page = await isometricRequest<Paginated<T>>(credentials, "GET", path, {
       ...rest,
       query: { ...query, first: pageSize, after },
     });
@@ -296,33 +301,91 @@ export async function* paginate<T>(
   }
 }
 
-export async function paginateAll<T>(
+async function paginateAll<T>(
+  credentials: IsometricCredentials | null,
   path: string,
   options: PaginateOptions = {}
 ): Promise<T[]> {
   const out: T[] = [];
-  for await (const node of paginate<T>(path, options)) out.push(node);
+  for await (const node of paginate<T>(credentials, path, options)) out.push(node);
   return out;
 }
 
-export const isometric = {
-  get: <T = unknown>(path: string, options?: IsometricRequestOptions) =>
-    isometricRequest<T>("GET", path, options),
+export interface IsometricClient {
+  request: <T = unknown>(
+    method: "GET" | "POST" | "PATCH" | "DELETE" | "PUT",
+    path: string,
+    options?: IsometricRequestOptions
+  ) => Promise<T>;
+  get: <T = unknown>(path: string, options?: IsometricRequestOptions) => Promise<T>;
   post: <T = unknown>(
     path: string,
     body?: unknown,
     options?: IsometricRequestOptions
-  ) => isometricRequest<T>("POST", path, { ...options, body }),
+  ) => Promise<T>;
   patch: <T = unknown>(
     path: string,
     body?: unknown,
     options?: IsometricRequestOptions
-  ) => isometricRequest<T>("PATCH", path, { ...options, body }),
-  delete: <T = unknown>(path: string, options?: IsometricRequestOptions) =>
-    isometricRequest<T>("DELETE", path, options),
-  paginate,
-  paginateAll,
-};
+  ) => Promise<T>;
+  delete: <T = unknown>(path: string, options?: IsometricRequestOptions) => Promise<T>;
+  paginate: <T>(path: string, options?: PaginateOptions) => AsyncGenerator<T>;
+  paginateAll: <T>(path: string, options?: PaginateOptions) => Promise<T[]>;
+}
+
+function createIsometricClient(
+  credentials: IsometricCredentials | null
+): IsometricClient {
+  const request: IsometricClient["request"] = (method, path, options) =>
+    isometricRequest(credentials, method, path, options);
+
+  return {
+    request,
+    get: <T = unknown>(path: string, options?: IsometricRequestOptions) =>
+      request<T>("GET", path, options),
+    post: <T = unknown>(
+      path: string,
+      body?: unknown,
+      options?: IsometricRequestOptions
+    ) => request<T>("POST", path, { ...options, body }),
+    patch: <T = unknown>(
+      path: string,
+      body?: unknown,
+      options?: IsometricRequestOptions
+    ) => request<T>("PATCH", path, { ...options, body }),
+    delete: <T = unknown>(path: string, options?: IsometricRequestOptions) =>
+      request<T>("DELETE", path, options),
+    paginate: <T>(path: string, options?: PaginateOptions) =>
+      paginate<T>(credentials, path, options),
+    paginateAll: <T>(path: string, options?: PaginateOptions) =>
+      paginateAll<T>(credentials, path, options),
+  };
+}
+
+export async function getIsometricClientForOrg(
+  organizationId: string
+): Promise<IsometricClient> {
+  const { getDecryptedCertifierCredentials } = await import(
+    "@/data-access/certifier-credentials"
+  );
+  const credentials = await getDecryptedCertifierCredentials(
+    organizationId,
+    "isometric"
+  );
+  return createIsometricClient(
+    credentials
+      ? { ...credentials, baseUrl: BASE_URLS[env.ISOMETRIC_ENVIRONMENT] }
+      : null
+  );
+}
+
+/**
+ * Environment credential escape hatch for scripts and dedicated health checks.
+ * Application code must use getIsometricClientForOrg instead.
+ */
+export function getIsometricClientFromEnv(): IsometricClient {
+  return createIsometricClient(getCredentialsFromEnv());
+}
 
 export type IsometricEnvironment = (typeof BASE_URLS) extends Record<
   infer K,

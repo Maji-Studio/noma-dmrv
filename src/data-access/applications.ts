@@ -1,4 +1,5 @@
 import { desc, eq, count, sum, ne, and, isNull, SQL, sql } from "drizzle-orm";
+import type { OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
 import {
   applications,
@@ -6,6 +7,7 @@ import {
   type Application,
 } from "@/db/schema/application";
 import { certifierProjects } from "@/db/schema/certification";
+import { facilities } from "@/db/schema/facilities";
 import {
   creditBatches,
   creditBatchApplications,
@@ -24,7 +26,7 @@ import type {
 } from "@/schemas/applications";
 import type { DeliveryStatus } from "@/schemas/deliveries";
 
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 
@@ -63,6 +65,7 @@ function optionalText(value: string | null | undefined): string | null {
 }
 
 async function getDeliveryMoistureContentPercent(
+  ctx: OrgContext,
   deliveryId: string,
   txOrDb: DbTransaction | typeof db = db,
 ): Promise<number | null> {
@@ -71,7 +74,7 @@ async function getDeliveryMoistureContentPercent(
       moistureContentPercent: deliveries.moistureContentPercent,
     })
     .from(deliveries)
-    .where(eq(deliveries.id, deliveryId));
+    .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
 
   if (!delivery) {
     throw new SafeError("Delivery not found");
@@ -81,6 +84,7 @@ async function getDeliveryMoistureContentPercent(
 }
 
 async function getDeliveryCapacityAndApplied(
+  ctx: OrgContext,
   deliveryId: string,
   excludeApplicationId?: string,
   txOrDb: DbTransaction | typeof db = db,
@@ -88,7 +92,7 @@ async function getDeliveryCapacityAndApplied(
   const deliveryQuery = txOrDb
     .select({ deliveredWetMassKg: deliveries.deliveredWetMassKg })
     .from(deliveries)
-    .where(eq(deliveries.id, deliveryId));
+    .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
 
   const [delivery] = await (txOrDb === db
     ? deliveryQuery
@@ -96,9 +100,11 @@ async function getDeliveryCapacityAndApplied(
 
   if (!delivery) throw new SafeError("Delivery not found");
 
-  const conditions = excludeApplicationId
-    ? and(eq(applications.deliveryId, deliveryId), ne(applications.id, excludeApplicationId))
-    : eq(applications.deliveryId, deliveryId);
+  const conditions = and(
+    eq(applications.organizationId, ctx.organizationId),
+    eq(applications.deliveryId, deliveryId),
+    excludeApplicationId ? ne(applications.id, excludeApplicationId) : undefined,
+  );
 
   const [{ total }] = await txOrDb
     .select({ total: sum(applications.biocharAppliedTons) })
@@ -118,6 +124,7 @@ async function getDeliveryCapacityAndApplied(
  * separate delivered-at column.
  */
 async function assertDeliveryAcceptsApplication(
+  ctx: OrgContext,
   deliveryId: string,
   applicationDate: Date,
   txOrDb: DbTransaction | typeof db = db,
@@ -129,7 +136,7 @@ async function assertDeliveryAcceptsApplication(
       deliveryDate: deliveries.deliveryDate,
     })
     .from(deliveries)
-    .where(eq(deliveries.id, deliveryId));
+    .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
 
   // Lock the row inside a transaction (mirrors getDeliveryCapacityAndApplied)
   // so a concurrent delivered→upcoming flip can't slip past the guard.
@@ -161,6 +168,7 @@ async function assertDeliveryAcceptsApplication(
 }
 
 async function getLinkedCreditBatches(
+  ctx: OrgContext,
   tx: DbTransaction,
   applicationId: string,
 ): Promise<
@@ -177,30 +185,34 @@ async function getLinkedCreditBatches(
       status: creditBatches.status,
     })
     .from(applications)
-    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-    .leftJoin(orders, eq(deliveries.orderId, orders.id))
+    .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
+    .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
     .innerJoin(
       biocharProducts,
-      sql`${biocharProducts.id} = coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+      and(
+        sql`${biocharProducts.id} = coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+        eq(biocharProducts.organizationId, ctx.organizationId),
+      ),
     )
     .innerJoin(
       creditBatchProductionRuns,
-      eq(
-        creditBatchProductionRuns.productionRunId,
-        biocharProducts.linkedProductionRunId,
+      and(
+        eq(creditBatchProductionRuns.productionRunId, biocharProducts.linkedProductionRunId),
+        eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
       ),
     )
     .innerJoin(
       creditBatches,
-      eq(creditBatchProductionRuns.creditBatchId, creditBatches.id),
+      and(eq(creditBatchProductionRuns.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)),
     )
-    .where(eq(applications.id, applicationId))
+    .where(and(eq(applications.id, applicationId), eq(applications.organizationId, ctx.organizationId)))
     .for("update", { of: creditBatches });
 
   return rows;
 }
 
 async function resolveApplicationDryMassTons(
+  ctx: OrgContext,
   input: {
     deliveryId: string;
     biocharAppliedTons: number;
@@ -213,7 +225,7 @@ async function resolveApplicationDryMassTons(
     return input.biocharAppliedDryTons;
   }
 
-  const moistureContentPercent = await getDeliveryMoistureContentPercent(input.deliveryId, txOrDb);
+  const moistureContentPercent = await getDeliveryMoistureContentPercent(ctx, input.deliveryId, txOrDb);
 
   if (moistureContentPercent != null) {
     return kgToTonnes(
@@ -242,19 +254,29 @@ async function resolveApplicationDryMassTons(
 export interface ApplicationListItem extends Application {
   customerName: string | null;
   locationName: string | null;
+  /**
+   * Facility durability tier (ADR 0021), join-derived via the delivery's
+   * facility. Drives tier-aware certify readiness — soil temperature is a
+   * 200-year-only input, so its gap is scoped to 200-year facilities
+   * (certify-field-registry.ts → application.soilTemperatureC condition).
+   */
+  durabilityOption: "200_year" | "1000_year";
 }
 
 export async function getApplications(
-  userId: string,
+  ctx: OrgContext,
   options?: { page?: number; pageSize?: number; facilityId?: string }
 ): Promise<{ items: ApplicationListItem[]; total: number; page: number; pageSize: number; totalPages: number }> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const page = options?.page ?? 1;
   const pageSize = options?.pageSize ?? DEFAULT_PAGE_SIZE;
   const offset = (page - 1) * pageSize;
   // Applications carry no archived_at — hide them via their archived delivery
-  const conditions: SQL[] = [isNull(deliveries.archivedAt)];
+  const conditions: SQL[] = [
+    eq(applications.organizationId, ctx.organizationId),
+    isNull(deliveries.archivedAt),
+  ];
 
   if (options?.facilityId) {
     conditions.push(eq(deliveries.facilityId, options.facilityId));
@@ -265,7 +287,7 @@ export async function getApplications(
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(applications)
-    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
+    .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
     .where(whereClause);
 
   const total = Number(totalCount);
@@ -273,6 +295,7 @@ export async function getApplications(
   const items = await db
     .select({
       id: applications.id,
+      organizationId: applications.organizationId,
       code: applications.code,
       status: applications.status,
       applicationDate: applications.applicationDate,
@@ -294,11 +317,13 @@ export async function getApplications(
       updatedAt: applications.updatedAt,
       customerName: customers.name,
       locationName: customerLocations.name,
+      durabilityOption: facilities.durabilityOption,
     })
     .from(applications)
-    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-    .leftJoin(orders, eq(deliveries.orderId, orders.id))
-    .leftJoin(customers, eq(orders.customerId, customers.id))
+    .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
+    .innerJoin(facilities, and(eq(facilities.id, deliveries.facilityId), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
+    .leftJoin(customers, and(eq(orders.customerId, customers.id), eq(customers.organizationId, ctx.organizationId)))
     .leftJoin(
       customerLocations,
       eq(
@@ -321,12 +346,12 @@ export async function getApplications(
 }
 
 export async function getApplicationDeliveryOptions(
-  userId: string,
+  ctx: OrgContext,
   facilityId?: string,
 ): Promise<ApplicationDeliveryOptionData[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [isNull(deliveries.archivedAt)];
+  const conditions: SQL[] = [eq(deliveries.organizationId, ctx.organizationId), isNull(deliveries.archivedAt)];
   if (facilityId) {
     conditions.push(eq(deliveries.facilityId, facilityId));
   }
@@ -353,12 +378,12 @@ export async function getApplicationDeliveryOptions(
         destinationGpsLongitude: customerLocations.gpsLongitude,
       })
       .from(deliveries)
-      .leftJoin(orders, eq(deliveries.orderId, orders.id))
+      .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
       .leftJoin(
         customerLocations,
-        eq(
-          customerLocations.id,
-          sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+        and(
+          eq(customerLocations.id, sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`),
+          eq(customerLocations.organizationId, ctx.organizationId),
         ),
       )
       .leftJoin(
@@ -366,10 +391,11 @@ export async function getApplicationDeliveryOptions(
         and(
           eq(certifierProjects.facilityId, deliveries.facilityId),
           eq(certifierProjects.provider, "isometric"),
+          eq(certifierProjects.organizationId, ctx.organizationId),
         ),
       )
-      .leftJoin(biocharProducts, eq(deliveries.biocharProductId, biocharProducts.id))
-      .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
+      .leftJoin(biocharProducts, and(eq(deliveries.biocharProductId, biocharProducts.id), eq(biocharProducts.organizationId, ctx.organizationId)))
+      .leftJoin(formulations, and(eq(biocharProducts.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
       .where(whereClause)
       .orderBy(desc(deliveries.deliveryDate)),
     db
@@ -378,8 +404,8 @@ export async function getApplicationDeliveryOptions(
         totalAppliedKg: sql<number>`coalesce(sum(${applications.biocharAppliedTons}) * ${KG_PER_TONNE}, 0)`,
       })
       .from(applications)
-      .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-      .where(whereClause)
+      .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
+      .where(and(whereClause, eq(applications.organizationId, ctx.organizationId)))
       .groupBy(applications.deliveryId),
   ]);
 
@@ -409,10 +435,10 @@ export interface CreditBatchApplicationOption {
  * never returns every application in the system.
  */
 export async function getCreditBatchApplicationOptions(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string,
 ): Promise<CreditBatchApplicationOption[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   return db
     .select({
       id: applications.id,
@@ -423,32 +449,32 @@ export async function getCreditBatchApplicationOptions(
       facilityId: deliveries.facilityId,
     })
     .from(applications)
-    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-    .where(and(eq(deliveries.facilityId, facilityId), isNull(deliveries.archivedAt)))
+    .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
+    .where(and(eq(applications.organizationId, ctx.organizationId), eq(deliveries.facilityId, facilityId), isNull(deliveries.archivedAt)))
     .orderBy(desc(applications.applicationDate));
 }
 
 /**
  * Get application by ID
  */
-export async function getApplicationById(userId: string, id: string): Promise<Application | null> {
-  requireAuth(userId);
+export async function getApplicationById(ctx: OrgContext, id: string): Promise<Application | null> {
+  requireOrgScope(ctx);
   const [application] = await db
     .select()
     .from(applications)
-    .where(eq(applications.id, id));
+    .where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)));
   return application ?? null;
 }
 
 /**
  * Get application by code
  */
-export async function getApplicationByCode(userId: string, code: string): Promise<Application | null> {
-  requireAuth(userId);
+export async function getApplicationByCode(ctx: OrgContext, code: string): Promise<Application | null> {
+  requireOrgScope(ctx);
   const [application] = await db
     .select()
     .from(applications)
-    .where(eq(applications.code, code));
+    .where(and(eq(applications.code, code), eq(applications.organizationId, ctx.organizationId)));
   return application ?? null;
 }
 
@@ -456,14 +482,14 @@ export async function getApplicationByCode(userId: string, code: string): Promis
  * Get applications by delivery ID
  */
 export async function getApplicationsByDeliveryId(
-  userId: string,
+  ctx: OrgContext,
   deliveryId: string
 ): Promise<Application[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   return db
     .select()
     .from(applications)
-    .where(eq(applications.deliveryId, deliveryId))
+    .where(and(eq(applications.deliveryId, deliveryId), eq(applications.organizationId, ctx.organizationId)))
     .orderBy(desc(applications.applicationDate));
 }
 
@@ -471,13 +497,14 @@ export async function getApplicationsByDeliveryId(
  * Create a new application
  */
 export async function createApplication(
-  userId: string,
+  ctx: OrgContext,
   data: CreateApplicationInput & { code: string }
 ): Promise<Application> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   return db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "delivery", entityId: data.deliveryId },
       "create",
@@ -485,13 +512,13 @@ export async function createApplication(
 
     // Before the capacity check — upcoming deliveries carry no delivered
     // mass, so checkDeliveryCapacity skips and would silently accept them.
-    await assertDeliveryAcceptsApplication(data.deliveryId, data.applicationDate, tx);
+    await assertDeliveryAcceptsApplication(ctx, data.deliveryId, data.applicationDate, tx);
 
-    const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(data.deliveryId, undefined, tx);
+    const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(ctx, data.deliveryId, undefined, tx);
     const check = checkDeliveryCapacity({ capacityKg, alreadyAppliedTons, requestedTons: data.biocharAppliedTons });
     if (!check.ok) throw new SafeError(check.errorMessage!);
 
-    const biocharAppliedDryTons = await resolveApplicationDryMassTons({
+    const biocharAppliedDryTons = await resolveApplicationDryMassTons(ctx, {
       deliveryId: data.deliveryId,
       biocharAppliedTons: data.biocharAppliedTons,
       biocharAppliedDryTons: data.biocharAppliedDryTons,
@@ -500,6 +527,7 @@ export async function createApplication(
     const [application] = await tx
       .insert(applications)
       .values({
+        organizationId: ctx.organizationId,
         code: data.code,
         status: "applied",
         applicationDate: data.applicationDate,
@@ -527,17 +555,17 @@ export async function createApplication(
  * Update an application
  */
 export async function updateApplication(
-  userId: string,
+  ctx: OrgContext,
   id: string,
   data: Omit<UpdateApplicationData, "applicationId">
 ): Promise<Application> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   return db.transaction(async (tx) => {
     const [existingApplication] = await tx
       .select()
       .from(applications)
-      .where(eq(applications.id, id))
+      .where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)))
       .for("update");
 
     if (!existingApplication) {
@@ -545,6 +573,7 @@ export async function updateApplication(
     }
 
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "application", entityId: id },
       "update",
@@ -562,6 +591,7 @@ export async function updateApplication(
       data.deliveryId !== existingApplication.deliveryId
     ) {
       await assertCanMutateCertifiedLineage(
+        ctx,
         tx,
         { entityType: "delivery", entityId: data.deliveryId },
         "update",
@@ -570,6 +600,7 @@ export async function updateApplication(
 
     if (data.deliveryId !== undefined || data.applicationDate !== undefined) {
       await assertDeliveryAcceptsApplication(
+        ctx,
         effectiveDeliveryId,
         data.applicationDate ?? existingApplication.applicationDate,
         tx,
@@ -577,7 +608,7 @@ export async function updateApplication(
     }
 
     if (data.deliveryId !== undefined || data.biocharAppliedTons !== undefined) {
-      const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(effectiveDeliveryId, id, tx);
+      const { capacityKg, alreadyAppliedTons } = await getDeliveryCapacityAndApplied(ctx, effectiveDeliveryId, id, tx);
       const check = checkDeliveryCapacity({
         capacityKg,
         alreadyAppliedTons,
@@ -592,7 +623,7 @@ export async function updateApplication(
       data.biocharAppliedDryTons !== undefined;
 
     if (shouldRecalculateDryMass) {
-      updateData.biocharAppliedDryTons = await resolveApplicationDryMassTons({
+      updateData.biocharAppliedDryTons = await resolveApplicationDryMassTons(ctx, {
         deliveryId: effectiveDeliveryId,
         biocharAppliedTons: effectiveAppliedTons,
         biocharAppliedDryTons: data.biocharAppliedDryTons,
@@ -621,7 +652,7 @@ export async function updateApplication(
     const [application] = await tx
       .update(applications)
       .set(updateData)
-      .where(eq(applications.id, id))
+      .where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)))
       .returning();
 
     return application;
@@ -631,26 +662,27 @@ export async function updateApplication(
 /**
  * Delete an application
  */
-export async function deleteApplication(userId: string, id: string): Promise<void> {
-  requireAuth(userId);
+export async function deleteApplication(ctx: OrgContext, id: string): Promise<void> {
+  requireOrgScope(ctx);
 
   await db.transaction(async (tx) => {
     const [existing] = await tx
       .select({ id: applications.id })
       .from(applications)
-      .where(eq(applications.id, id));
+      .where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)));
 
     if (!existing) {
       throw new SafeError("Application not found");
     }
 
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "application", entityId: id },
       "delete",
     );
 
-    const linkedCreditBatches = await getLinkedCreditBatches(tx, id);
+    const linkedCreditBatches = await getLinkedCreditBatches(ctx, tx, id);
     const blockingBatches = linkedCreditBatches.filter((batch) =>
       IMMUTABLE_CREDIT_BATCH_STATUSES.has(batch.status),
     );
@@ -664,13 +696,13 @@ export async function deleteApplication(userId: string, id: string): Promise<voi
 
     await tx
       .delete(creditBatchApplications)
-      .where(eq(creditBatchApplications.applicationId, id));
+      .where(and(eq(creditBatchApplications.applicationId, id), eq(creditBatchApplications.organizationId, ctx.organizationId)));
 
     await tx
       .delete(soilTemperatureMeasurements)
-      .where(eq(soilTemperatureMeasurements.applicationId, id));
+      .where(and(eq(soilTemperatureMeasurements.applicationId, id), eq(soilTemperatureMeasurements.organizationId, ctx.organizationId)));
 
-    await tx.delete(applications).where(eq(applications.id, id));
+    await tx.delete(applications).where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)));
     // Batch aggregates (applied weight, CO2e stored) are derived on read
     // (issue #285) — no write-back sync is needed after removing a member.
   });
@@ -680,11 +712,12 @@ export async function deleteApplication(userId: string, id: string): Promise<voi
  * Check if application code exists
  */
 export async function applicationCodeExists(
-  userId: string,
+  ctx: OrgContext,
   code: string,
   excludeId?: string
 ): Promise<boolean> {
-  const existing = await getApplicationByCode(userId, code);
+  requireOrgScope(ctx);
+  const existing = await getApplicationByCode(ctx, code);
   if (!existing) return false;
   if (excludeId && existing.id === excludeId) return false;
   return true;

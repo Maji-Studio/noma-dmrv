@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { TEST_ORG_ID } from "./helpers/test-org";
 import type { TransportLeg } from "@/db/schema";
 import {
   aggregateTransportMassDistance,
@@ -14,6 +15,7 @@ import {
 // `mass_distance × factor` equals the per-leg sum (Transportation v1.1 §5).
 function leg(distanceKm: number, loadMassKg: number | null): TransportLeg {
   return {
+    organizationId: TEST_ORG_ID,
     id: "tl_" + distanceKm + "_" + (loadMassKg ?? "null"),
     entityType: "biochar",
     entityId: "ent_test",
@@ -29,6 +31,10 @@ function leg(distanceKm: number, loadMassKg: number | null): TransportLeg {
     vehicleType: null,
     modelYear: null,
     loadMassKg,
+    // These cases assert the raw per-leg sum, so the builder pins `one_way`
+    // (no ×2). The round-trip multiplier (#316) is covered in
+    // src/lib/isometric/utils/aggregation.test.ts.
+    tripType: "one_way",
     calculationMethodType: "distance_based",
     isDerived: false,
     billOfLading: null,

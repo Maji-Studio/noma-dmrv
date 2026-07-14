@@ -15,9 +15,10 @@
  * to a member credit batch so the candidate-document walk mirrors its Source into
  * the removal's `source_ids`. Best-effort at the submit call site.
  *
- * Server-internal core (no "use server" — takes an explicit `userId`, called from
+ * Server-internal core (no "use server" — takes an explicit `orgCtx`, called from
  * the submit pipeline which already resolved the caller).
  */
+import type { OrgContext } from "@/lib/auth/server";
 import { getFacilityById } from "@/data-access/facilities";
 import { buildDurabilityLedgerModel } from "@/lib/certification/evidence-ledger/durability-build-model";
 import { renderDurabilityLedgerPdf } from "@/lib/certification/evidence-ledger/durability-pdf";
@@ -32,6 +33,7 @@ import {
 } from "./certify-context-core";
 import {
   ensureLedgerSource,
+  retireLedgerSources,
   stableLedgerContentHash,
   type EnsureLedgerResult,
 } from "./evidence-ledger-core";
@@ -44,11 +46,11 @@ import {
  * load.
  */
 export async function ensureDurabilityEvidenceLedgerSource(
-  userId: string,
+  orgCtx: OrgContext,
   removalId: string,
 ): Promise<EnsureLedgerResult> {
-  const ctx = await loadRemovalSubmissionContext(userId, removalId);
-  return ensureDurabilityEvidenceLedgerSourceFromContext(userId, removalId, ctx);
+  const ctx = await loadRemovalSubmissionContext(orgCtx, removalId);
+  return ensureDurabilityEvidenceLedgerSourceFromContext(orgCtx, removalId, ctx);
 }
 
 /**
@@ -58,7 +60,7 @@ export async function ensureDurabilityEvidenceLedgerSource(
  * should block submission.
  */
 export async function ensureDurabilityEvidenceLedgerSourceFromContext(
-  userId: string,
+  orgCtx: OrgContext,
   removalId: string,
   ctx: RemovalSubmissionContext,
 ): Promise<EnsureLedgerResult> {
@@ -72,14 +74,42 @@ export async function ensureDurabilityEvidenceLedgerSourceFromContext(
     // No credit batch to attach the document to.
     return { status: "skipped", reason: "no-batches" };
   }
+  if (ctx.batchesWithSamples.length === 0) {
+    return retireLedgerSources(orgCtx, {
+      kind: DURABILITY_EVIDENCE_LEDGER_KIND,
+      removalId,
+      reason: "no-samples",
+      log,
+    });
+  }
+  if (
+    ctx.batchesWithSamples.some(
+      (batch) => batch.durabilityOption !== "200_year",
+    )
+  ) {
+    // This artifact explains the H/C_org + soil-temperature 200-year method.
+    // A facility has one inherited tier (ADR 0021), so any non-200-year member
+    // means the artifact does not apply and any prior 200-year Source is stale.
+    return retireLedgerSources(orgCtx, {
+      kind: DURABILITY_EVIDENCE_LEDGER_KIND,
+      removalId,
+      reason: "not-200-year",
+      log,
+    });
+  }
   if (!ctx.facilityReferenceSoilTemperature) {
     // A 200-year durability ledger needs the facility soil reference (the gate
-    // blocks submission when it's unset; here it just means there's nothing to
-    // evidence yet — e.g. a non-durability removal).
-    return { status: "skipped", reason: "no-soil-reference" };
+    // blocks submission when it's unset). Retire any previously valid ledger so
+    // the stale Source cannot re-enter a later submission.
+    return retireLedgerSources(orgCtx, {
+      kind: DURABILITY_EVIDENCE_LEDGER_KIND,
+      removalId,
+      reason: "no-soil-reference",
+      log,
+    });
   }
 
-  const facility = await getFacilityById(userId, ctx.facilityId);
+  const facility = await getFacilityById(orgCtx, ctx.facilityId);
   const memberBatchCodes =
     ctx.memberBatches.map((b) => b.code).join(" · ") || null;
 
@@ -99,7 +129,7 @@ export async function ensureDurabilityEvidenceLedgerSourceFromContext(
     contentHash: stableLedgerContentHash(model),
   };
 
-  return ensureLedgerSource(userId, {
+  return ensureLedgerSource(orgCtx, {
     kind: DURABILITY_EVIDENCE_LEDGER_KIND,
     removalId,
     facilityId: ctx.facilityId,

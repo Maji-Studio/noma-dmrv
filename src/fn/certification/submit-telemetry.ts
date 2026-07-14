@@ -1,5 +1,6 @@
 "use server";
 
+import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { z } from "zod";
 import { createHash } from "node:crypto";
 import {
@@ -26,9 +27,10 @@ import {
 import { listTelemetryReadingsForRuns } from "@/data-access/telemetry-readings";
 import { SafeError } from "@/lib/errors";
 import {
-  isometric,
+  getIsometricClientForOrg,
   IsometricApiError,
   payloadHash,
+  type IsometricClient,
 } from "@/lib/isometric";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import {
@@ -85,7 +87,10 @@ export interface SubmitTelemetryResult {
 export async function submitTelemetryAction(
   args: SubmitTelemetryArgs,
 ): Promise<ActionResult<SubmitTelemetryResult>> {
-  return withAction((userId) => submitTelemetry(userId, args), {
+  return withAction((orgCtx) => {
+    requireOrgRole(orgCtx, "admin");
+    return submitTelemetry(orgCtx, args);
+  }, {
     rateLimit: submitRateLimit("cert:submit-telemetry"),
   });
 }
@@ -96,12 +101,13 @@ export async function submitTelemetryAction(
 // payloadSnapshot step-by-step so a within-action crash can resolve
 // without minting a duplicate Isometric resource (§3, §4).
 export async function submitTelemetry(
-  userId: string,
+  orgCtx: OrgContext,
   args: SubmitTelemetryArgs,
 ): Promise<SubmitTelemetryResult> {
   assertProductionConfirmed(args.confirmProduction);
+  const client = await getIsometricClientForOrg(orgCtx.organizationId);
 
-  const ctx = await loadRemovalSubmissionContext(userId, args.removalId);
+  const ctx = await loadRemovalSubmissionContext(orgCtx, args.removalId);
   if (!ctx.mapping) {
     throw new SafeError("Link a facility to an Isometric project first.");
   }
@@ -129,19 +135,27 @@ export async function submitTelemetry(
   };
 
   // ADR 0006 - pure clock window on production_run_readings.timestamp;
-  // derived from the runs the removal aggregates.
+  // derived from the runs the removal aggregates. Every run must be closed —
+  // an open run (NULL end) has no window to publish, so fail loudly (#259).
+  const openRun = ctx.runs.find((r) => r.endTime == null);
+  if (openRun) {
+    throw new SafeError(
+      `Run ${openRun.code} has no end time yet — complete the run before publishing telemetry`,
+    );
+  }
+  const endTimes = ctx.runs
+    .map((r) => r.endTime)
+    .filter((d): d is Date => d != null);
   const windowStart = new Date(
     Math.min(...ctx.runs.map((r) => r.startTime.getTime())),
   );
-  const windowEnd = new Date(
-    Math.max(...ctx.runs.map((r) => r.endTime.getTime())),
-  );
+  const windowEnd = new Date(Math.max(...endTimes.map((d) => d.getTime())));
 
   // Ensure a sensor mapping exists per (reactor x channel).
   const reactorIds = [...new Set(ctx.runs.map((r) => r.reactorId))];
   for (const reactorId of reactorIds) {
     for (const channel of DEFAULT_DATA_UPLOAD_CHANNELS) {
-      await ensureSensorForReactor(userId, {
+      await ensureSensorForReactor(orgCtx, {
         reactorId,
         measurementProperty: decodeMeasurementProperty(
           channel.measurementProperty,
@@ -151,9 +165,9 @@ export async function submitTelemetry(
       });
     }
   }
-  const sensorRows = await listSensorsForReactors(userId, reactorIds);
+  const sensorRows = await listSensorsForReactors(orgCtx, reactorIds);
 
-  const readings = await listTelemetryReadingsForRuns(userId, {
+  const readings = await listTelemetryReadingsForRuns(orgCtx, {
     productionRunIds: ctx.runs.map((r) => r.id),
     since: windowStart,
     until: windowEnd,
@@ -229,12 +243,21 @@ export async function submitTelemetry(
   };
   const semanticHash = payloadHash(semanticPayload);
 
-  const latest = await getLatestSubmission(userId, {
-    provider: ISOMETRIC_PROVIDER,
-    submissionType: DATA_UPLOAD_SUBMISSION_TYPE,
-    localEntityType: DATA_UPLOAD_ENTITY_TYPE,
-    localEntityId: args.removalId,
-  });
+  // Facility-scoped to the removal's own facility (issue #277). ctx.facilityId
+  // is server-derived from this same args.removalId, so the scope is
+  // lineage-consistency (fail-closed if the removal anchor is dangling), not a
+  // cross-facility authorization check — that would need an independent caller
+  // facility, deferred to #372. Left wired so the guard activates once one exists.
+  const latest = await getLatestSubmission(
+    orgCtx,
+    {
+      provider: ISOMETRIC_PROVIDER,
+      submissionType: DATA_UPLOAD_SUBMISSION_TYPE,
+      localEntityType: DATA_UPLOAD_ENTITY_TYPE,
+      localEntityId: args.removalId,
+    },
+    ctx.facilityId,
+  );
   const dataUploadResume = latest ? readResumeSnapshot(latest) : undefined;
   const claim = decideSubmissionClaim({
     latest,
@@ -257,7 +280,7 @@ export async function submitTelemetry(
     case "invalid-changed-hash":
       throw new SafeError("Unexpected submission state for this removal.");
     case "return-existing": {
-      const status = await refreshStatus(userId, latest!, claim.externalId);
+      const status = await refreshStatus(client, orgCtx, latest!, claim.externalId);
       return {
         removalId: args.removalId,
         dataUploadSubmissionId: claim.externalId,
@@ -268,20 +291,21 @@ export async function submitTelemetry(
     }
     case "resume-poll-existing": {
       const status = await refreshStatus(
-        userId,
+        client,
+        orgCtx,
         latest!,
         claim.dataUploadSubmissionId,
       );
       if (status.status === "completed") {
-        await markSubmissionSubmitted(userId, claim.resumeRowId, {
+        await markSubmissionSubmitted(orgCtx, claim.resumeRowId, {
           externalId: claim.dataUploadSubmissionId,
         });
-        await setSubmissionTerminalStatus(userId, claim.resumeRowId, {
+        await setSubmissionTerminalStatus(orgCtx, claim.resumeRowId, {
           status: "accepted",
           metadataPatch: { remoteStatus: "completed" },
         });
       } else if (status.status === "failed") {
-        await markSubmissionRejected(userId, claim.resumeRowId, {
+        await markSubmissionRejected(orgCtx, claim.resumeRowId, {
           errorMessage: status.error_message ?? "Isometric processing failed",
         });
       }
@@ -295,7 +319,7 @@ export async function submitTelemetry(
     }
     case "resume-re-put": {
       const row = await resetSubmissionToDraftWithMappingLock(
-        userId,
+        orgCtx,
         claim.resumeRowId,
         mappingGuard,
         LOCK_TTL_MS,
@@ -305,19 +329,19 @@ export async function submitTelemetry(
         uploadUrl: requireUploadUrl(row),
         bytes: parquetBytes,
       });
-      const submissionId = await postDataUploadSubmission({
+      const submissionId = await postDataUploadSubmission(client, {
         externalFacilityId,
         fileUploadId: claim.fileUploadId,
       });
-      await journalStep(userId, row.id, {
+      await journalStep(orgCtx, row.id, {
         dataUploadSubmissionId: submissionId.id,
         parquetBytesSha256: sha256(parquetBytes),
         parquetBytesLength: parquetBytes.byteLength,
       });
-      await markSubmissionSubmitted(userId, row.id, {
+      await markSubmissionSubmitted(orgCtx, row.id, {
         externalId: submissionId.id,
       });
-      await appendSyncEventBestEffort(userId, {
+      await appendSyncEventBestEffort(orgCtx, {
         provider: ISOMETRIC_PROVIDER,
         entityType: DATA_UPLOAD_ENTITY_TYPE,
         entityId: args.removalId,
@@ -338,13 +362,13 @@ export async function submitTelemetry(
       const row =
         claim.kind === "resume"
           ? await resetSubmissionToDraftWithMappingLock(
-              userId,
+              orgCtx,
               claim.resumeRowId,
               mappingGuard,
               LOCK_TTL_MS,
             )
           : await insertDraftSubmissionWithMappingLock(
-              userId,
+              orgCtx,
               {
                 provider: ISOMETRIC_PROVIDER,
                 submissionType: DATA_UPLOAD_SUBMISSION_TYPE,
@@ -364,7 +388,7 @@ export async function submitTelemetry(
         const parquetBytes = writeDataUploadParquet(aggregated);
 
         // Step 1.
-        const fileUpload = await isometric.post<FileUploadResponse>(
+        const fileUpload = await client.post<FileUploadResponse>(
           "/file-uploads",
           {
             content_length: parquetBytes.byteLength,
@@ -373,7 +397,7 @@ export async function submitTelemetry(
           },
         );
         const uploadUrlExpiresAt = parseSignedUrlExpiry(fileUpload.upload_url);
-        await journalStep(userId, row.id, {
+        await journalStep(orgCtx, row.id, {
           fileUploadId: fileUpload.id,
           uploadUrl: fileUpload.upload_url,
           uploadUrlExpiresAt: uploadUrlExpiresAt?.toISOString() ?? null,
@@ -384,27 +408,27 @@ export async function submitTelemetry(
           uploadUrl: fileUpload.upload_url,
           bytes: parquetBytes,
         });
-        await journalStep(userId, row.id, {
+        await journalStep(orgCtx, row.id, {
           parquetBytesSha256: sha256(parquetBytes),
           parquetBytesLength: parquetBytes.byteLength,
         });
 
         // Step 3.
-        const submission = await postDataUploadSubmission({
+        const submission = await postDataUploadSubmission(client, {
           externalFacilityId,
           fileUploadId: fileUpload.id,
         });
-        await journalStep(userId, row.id, {
+        await journalStep(orgCtx, row.id, {
           dataUploadSubmissionId: submission.id,
         });
-        await markSubmissionSubmitted(userId, row.id, {
+        await markSubmissionSubmitted(orgCtx, row.id, {
           externalId: submission.id,
           supersedePreviousId:
             claim.kind === "create-new-version"
               ? claim.supersedePreviousId
               : null,
         });
-        await appendSyncEventBestEffort(userId, {
+        await appendSyncEventBestEffort(orgCtx, {
           provider: ISOMETRIC_PROVIDER,
           entityType: DATA_UPLOAD_ENTITY_TYPE,
           entityId: args.removalId,
@@ -426,7 +450,7 @@ export async function submitTelemetry(
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        await appendSyncEventBestEffort(userId, {
+        await appendSyncEventBestEffort(orgCtx, {
           provider: ISOMETRIC_PROVIDER,
           entityType: DATA_UPLOAD_ENTITY_TYPE,
           entityId: args.removalId,
@@ -434,7 +458,7 @@ export async function submitTelemetry(
           status: "failed",
           errorMessage: message,
         });
-        await markSubmissionRejected(userId, row.id, { errorMessage: message });
+        await markSubmissionRejected(orgCtx, row.id, { errorMessage: message });
         throw new SafeError(`Telemetry submission failed: ${message}`);
       }
     }
@@ -483,33 +507,34 @@ function readResumeSnapshot(
 // id and mint a duplicate. `appendSubmissionJournal` deep-merges, so each step
 // adds its keys without clobbering earlier ones.
 async function journalStep(
-  userId: string,
+  orgCtx: OrgContext,
   submissionId: string,
   patch: Record<string, unknown>,
 ): Promise<void> {
-  await appendSubmissionJournal(userId, submissionId, patch);
+  await appendSubmissionJournal(orgCtx, submissionId, patch);
 }
 
 async function refreshStatus(
-  userId: string,
+  client: IsometricClient,
+  orgCtx: OrgContext,
   row: CertificationSubmissionRow,
   dataUploadSubmissionId: string,
 ): Promise<DataUploadSubmission> {
-  const status = await isometric.get<DataUploadSubmission>(
+  const status = await client.get<DataUploadSubmission>(
     `/data-upload-submissions/${encodeURIComponent(dataUploadSubmissionId)}`,
   );
-  await updateSubmissionMetadata(userId, row.id, {
+  await updateSubmissionMetadata(orgCtx, row.id, {
     remoteStatus: status.status,
     lastError: status.error_message ?? null,
   });
   return status;
 }
 
-async function postDataUploadSubmission(args: {
+async function postDataUploadSubmission(client: IsometricClient, args: {
   externalFacilityId: string;
   fileUploadId: string;
 }): Promise<DataUploadSubmission> {
-  return isometric.post<DataUploadSubmission>("/data-upload-submissions", {
+  return client.post<DataUploadSubmission>("/data-upload-submissions", {
     facility_id: args.externalFacilityId,
     file_upload_id: args.fileUploadId,
     submission_type: "biochar_pyrolysis_reactor_facility_time_series",
@@ -608,8 +633,9 @@ export async function loadTelemetrySubmissionState(
     latestStatus: DataUploadSubmission | null;
   } | null>
 > {
-  return withAction(async (userId) => {
-    const latest = await getLatestSubmission(userId, {
+  return withAction(async (orgCtx) => {
+    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    const latest = await getLatestSubmission(orgCtx, {
       provider: ISOMETRIC_PROVIDER,
       submissionType: DATA_UPLOAD_SUBMISSION_TYPE,
       localEntityType: DATA_UPLOAD_ENTITY_TYPE,
@@ -618,7 +644,7 @@ export async function loadTelemetrySubmissionState(
     if (!latest) return null;
     const externalId = latest.externalId;
     const remote = externalId
-      ? await isometric
+      ? await client
           .get<DataUploadSubmission>(
             `/data-upload-submissions/${encodeURIComponent(externalId)}`,
           )

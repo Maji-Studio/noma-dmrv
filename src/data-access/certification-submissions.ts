@@ -20,19 +20,25 @@ import { db, type DbTransaction } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
 import {
   certificationSubmissions,
+  certifierGhgStatements,
   certifierProjects,
+  certifierRemovals,
 } from "@/db/schema/certification";
 import { SafeError } from "@/lib/errors";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { logger } from "@/lib/log";
 import { acquireMirrorLocksSorted } from "@/lib/isometric/utils/source-lock";
+import type { OrgContext } from "@/lib/auth/server";
 import {
   decideSubmissionClaim,
   type SubmissionClaimPolicy,
 } from "@/lib/isometric/utils/submission-claim";
-import type { CertificationSubmissionRow } from "./certification";
-import { requireAuth } from "./utils";
+import {
+  assertSubmissionInFacility,
+  type CertificationSubmissionRow,
+} from "./certification";
+import { assertSameOrg, requireOrgScope } from "./utils";
 
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
 
@@ -135,13 +141,14 @@ export interface ClaimSubmissionDraftArgs<H> {
  * a raw unique-constraint error.
  */
 export async function claimSubmissionDraft<H>(
-  userId: string,
+  ctx: OrgContext,
   args: ClaimSubmissionDraftArgs<H>,
 ): Promise<ClaimOutcome> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
+  await assertSubmissionAnchorSameOrg(ctx, args.key);
 
   const tentativeHash = args.hashOf(args.tentativeInputs);
-  const latest = await getLatestSubmissionWithExecutor(db, args.key);
+  const latest = await getLatestSubmissionWithExecutor(ctx, db, args.key);
   const tentative = decideSubmissionClaim({
     latest,
     payloadHash: tentativeHash,
@@ -164,14 +171,14 @@ export async function claimSubmissionDraft<H>(
         version: tentative.version,
       };
     case "resume":
-      return resumeDraft(args, tentativeHash);
+      return resumeDraft(ctx, args, tentativeHash);
     case "resume-poll-existing":
     case "resume-re-put":
       // Only reachable when `dataUploadResume` is passed to the pure core,
       // which this module never does (telemetry is deferred — see plan).
       throw new Error(`Unreachable claim kind: ${tentative.kind}`);
     case "create-new-version":
-      return createDraft(args);
+      return createDraft(ctx, args);
   }
 }
 
@@ -186,14 +193,15 @@ export async function claimSubmissionDraft<H>(
 // is still genuinely resumable. Without it the broad CAS predicate
 // (`status != draft`) could revert a freshly `submitted`/`accepted` row.
 async function resumeDraft<H>(
+  ctx: OrgContext,
   args: ClaimSubmissionDraftArgs<H>,
   tentativeHash: string,
 ): Promise<ClaimOutcome> {
   return db.transaction(async (tx) => {
-    await lockAndVerifyMapping(tx, args.guard);
+    await lockAndVerifyMapping(ctx, tx, args.guard);
     await lockSubmissionArtifact(tx, args.key);
 
-    const latest = await getLatestSubmissionWithExecutor(tx, args.key);
+    const latest = await getLatestSubmissionWithExecutor(ctx, tx, args.key);
     const decided = decideSubmissionClaim({
       latest,
       payloadHash: tentativeHash,
@@ -232,6 +240,7 @@ async function resumeDraft<H>(
 
     const row = await resetSubmissionToDraftCas(
       tx,
+      ctx,
       decided.resumeRowId,
       LOCK_TTL_MS,
     );
@@ -247,11 +256,12 @@ async function resumeDraft<H>(
 }
 
 async function createDraft<H>(
+  ctx: OrgContext,
   args: ClaimSubmissionDraftArgs<H>,
 ): Promise<ClaimOutcome> {
   try {
     return await db.transaction(async (tx): Promise<ClaimOutcome> => {
-      await lockAndVerifyMapping(tx, args.guard);
+      await lockAndVerifyMapping(ctx, tx, args.guard);
       await lockSubmissionArtifact(tx, args.key);
       if (args.mirrorDocumentIds && args.mirrorDocumentIds.length > 0) {
         await acquireMirrorLocksSorted(tx, args.mirrorDocumentIds);
@@ -266,7 +276,7 @@ async function createDraft<H>(
       // visible by the time the mapping lock is acquired (READ COMMITTED),
       // so a duplicate attempt resolves here instead of dying on the
       // unique constraint below.
-      const lockedLatest = await getLatestSubmissionWithExecutor(tx, args.key);
+      const lockedLatest = await getLatestSubmissionWithExecutor(ctx, tx, args.key);
       const locked = decideSubmissionClaim({
         latest: lockedLatest,
         payloadHash: finalHash,
@@ -315,7 +325,7 @@ async function createDraft<H>(
         supersedePreviousId: locked.supersedePreviousId,
         reason,
       });
-      const row = await insertDraftSubmissionRow(tx, {
+      const row = await insertDraftSubmissionRow(ctx, tx, {
         ...args.key,
         version: locked.nextVersion,
         payloadSnapshot: snapshot.payloadSnapshot,
@@ -354,14 +364,23 @@ async function createDraft<H>(
 // =====================================================================
 
 export async function getLatestSubmission(
-  userId: string,
+  ctx: OrgContext,
   key: SubmissionKey,
+  // Defence-in-depth facility scope (issue #277). When set, the resolved row's
+  // anchor entity must live in this facility, else SafeError — the caller is
+  // acting within one facility and must not receive another's ledger row.
+  expectedFacilityId?: string,
 ): Promise<CertificationSubmissionRow | null> {
-  requireAuth(userId);
-  return getLatestSubmissionWithExecutor(db, key);
+  requireOrgScope(ctx);
+  const row = await getLatestSubmissionWithExecutor(ctx, db, key);
+  if (row && expectedFacilityId !== undefined) {
+    await assertSubmissionInFacility(ctx, db, row, expectedFacilityId);
+  }
+  return row;
 }
 
 async function getLatestSubmissionWithExecutor(
+  ctx: OrgContext,
   executor: DbTransaction | typeof db,
   key: SubmissionKey,
 ): Promise<CertificationSubmissionRow | null> {
@@ -374,6 +393,7 @@ async function getLatestSubmissionWithExecutor(
         eq(certificationSubmissions.submissionType, key.submissionType),
         eq(certificationSubmissions.localEntityType, key.localEntityType),
         eq(certificationSubmissions.localEntityId, key.localEntityId),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
       ),
     )
     .orderBy(desc(certificationSubmissions.version))
@@ -395,6 +415,7 @@ async function getLatestSubmissionWithExecutor(
 // deadlock with admin flows that touch certifier_projects and
 // certifier_document_uploads in the opposite order.
 async function lockAndVerifyMapping(
+  ctx: OrgContext,
   executor: DbTransaction,
   guard: MappingClaimGuard,
 ): Promise<void> {
@@ -409,6 +430,7 @@ async function lockAndVerifyMapping(
       and(
         eq(certifierProjects.facilityId, guard.facilityId),
         eq(certifierProjects.provider, guard.provider),
+        eq(certifierProjects.organizationId, ctx.organizationId),
       ),
     )
     .for("update")
@@ -455,18 +477,31 @@ async function lockSubmissionArtifact(
   ]);
 }
 
+async function assertSubmissionAnchorSameOrg(
+  ctx: OrgContext,
+  key: Pick<SubmissionKey, "localEntityType" | "localEntityId">,
+): Promise<void> {
+  if (key.localEntityType === "removal") {
+    await assertSameOrg(ctx, certifierRemovals, key.localEntityId);
+  } else if (key.localEntityType === "ghgStatement") {
+    await assertSameOrg(ctx, certifierGhgStatements, key.localEntityId);
+  }
+}
+
 // =====================================================================
 // Draft insert / reset primitives
 // =====================================================================
 
 // Single source of truth for the draft-insert row shape.
 async function insertDraftSubmissionRow(
+  ctx: OrgContext,
   tx: DbTransaction,
   input: InsertDraftSubmissionInput,
 ): Promise<CertificationSubmissionRow> {
   const [row] = await tx
     .insert(certificationSubmissions)
     .values({
+      organizationId: ctx.organizationId,
       provider: input.provider,
       submissionType: input.submissionType,
       localEntityType: input.localEntityType,
@@ -489,6 +524,7 @@ async function insertDraftSubmissionRow(
 // registry.
 async function resetSubmissionToDraftCas(
   tx: DbTransaction,
+  ctx: OrgContext,
   id: string,
   lockTtlMs: number,
 ): Promise<CertificationSubmissionRow | null> {
@@ -503,6 +539,7 @@ async function resetSubmissionToDraftCas(
     .where(
       and(
         eq(certificationSubmissions.id, id),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
         or(
           ne(certificationSubmissions.status, "draft"),
           isNull(certificationSubmissions.lockedAt),
@@ -553,29 +590,30 @@ async function withUniqueViolationGuard<T>(fn: () => Promise<T>): Promise<T> {
 // TODO(telemetry-migration): module-private once submit-telemetry adopts
 // claimSubmissionDraft — do not add importers.
 export async function insertDraftSubmissionWithMappingLock(
-  userId: string,
+  ctx: OrgContext,
   input: InsertDraftSubmissionInput,
   guard: MappingClaimGuard,
 ): Promise<CertificationSubmissionRow> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
+  await assertSubmissionAnchorSameOrg(ctx, input);
   return db.transaction(async (tx) => {
-    await lockAndVerifyMapping(tx, guard);
+    await lockAndVerifyMapping(ctx, tx, guard);
     await lockSubmissionArtifact(tx, input);
-    return withUniqueViolationGuard(() => insertDraftSubmissionRow(tx, input));
+    return withUniqueViolationGuard(() => insertDraftSubmissionRow(ctx, tx, input));
   });
 }
 
 // TODO(telemetry-migration): module-private once submit-telemetry adopts
 // claimSubmissionDraft — do not add importers.
 export async function resetSubmissionToDraftWithMappingLock(
-  userId: string,
+  ctx: OrgContext,
   id: string,
   guard: MappingClaimGuard,
   lockTtlMs: number,
 ): Promise<CertificationSubmissionRow> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   return db.transaction(async (tx) => {
-    await lockAndVerifyMapping(tx, guard);
+    await lockAndVerifyMapping(ctx, tx, guard);
     const [rowToReset] = await tx
       .select({
         provider: certificationSubmissions.provider,
@@ -583,11 +621,11 @@ export async function resetSubmissionToDraftWithMappingLock(
         localEntityId: certificationSubmissions.localEntityId,
       })
       .from(certificationSubmissions)
-      .where(eq(certificationSubmissions.id, id))
+      .where(and(eq(certificationSubmissions.id, id), eq(certificationSubmissions.organizationId, ctx.organizationId)))
       .limit(1);
     if (!rowToReset) throw new SafeError("Submission not found");
     await lockSubmissionArtifact(tx, rowToReset);
-    const row = await resetSubmissionToDraftCas(tx, id, lockTtlMs);
+    const row = await resetSubmissionToDraftCas(tx, ctx, id, lockTtlMs);
     if (!row) throw new SafeError("Submission already in progress");
     return row;
   });

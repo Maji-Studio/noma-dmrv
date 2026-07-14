@@ -1,4 +1,4 @@
-import { check, doublePrecision, pgTable, text, timestamp, uuid, real, date } from "drizzle-orm/pg-core";
+import { check, doublePrecision, foreignKey, index, pgTable, text, timestamp, unique, uuid, real, date } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import {
   applicationEvidenceMethod,
@@ -8,6 +8,7 @@ import {
 } from "./common";
 import { deliveries } from "./logistics";
 import { tonnes } from "./numeric-families";
+import { organizations } from "./auth";
 
 // ============================================
 // Applications - Field application of biochar to soil
@@ -19,15 +20,17 @@ export const applications = pgTable(
   "applications",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    code: text("code").notNull().unique(), // e.g., "AP-2025-043"
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id),
+    code: text("code").notNull(), // e.g., "AP-2025-043"
     applicationDate: timestamp("application_date").defaultNow().notNull(),
     status: applicationStatus("status").default("applied").notNull(),
 
     // --- Linked Records ---
     // Facility is derivable via delivery.facility_id (chain of custody)
     deliveryId: uuid("delivery_id")
-      .notNull()
-      .references(() => deliveries.id),
+      .notNull(),
 
     // --- Application Details (Isometric: Soil Storage Module) ---
     biocharAppliedTons: tonnes("biochar_applied_tons").notNull(),
@@ -67,6 +70,12 @@ export const applications = pgTable(
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => [
+    unique("applications_organization_id_code_unique").on(table.organizationId, table.code),
+    unique("applications_id_organization_id_unique").on(table.id, table.organizationId),
+    foreignKey({
+      columns: [table.deliveryId, table.organizationId],
+      foreignColumns: [deliveries.id, deliveries.organizationId],
+    }),
     check(
       "applications_gps_latitude_range",
       sql`${table.gpsLatitude} is null or (${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90)`,
@@ -95,9 +104,11 @@ export const soilTemperatureMeasurements = pgTable(
   "soil_temperature_measurements",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    applicationId: uuid("application_id")
+    organizationId: text("organization_id")
       .notNull()
-      .references(() => applications.id),
+      .references(() => organizations.id),
+    applicationId: uuid("application_id")
+      .notNull(),
 
     measurementDate: date("measurement_date").notNull(),
     temperatureC: real("temperature_c").notNull(),
@@ -116,6 +127,11 @@ export const soilTemperatureMeasurements = pgTable(
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => [
+    index("soil_temperature_measurements_organization_id_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.applicationId, table.organizationId],
+      foreignColumns: [applications.id, applications.organizationId],
+    }),
     check(
       "soil_temperature_measurements_gps_latitude_range",
       sql`${table.gpsLatitude} is null or (${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90)`,

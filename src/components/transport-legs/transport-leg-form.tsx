@@ -22,9 +22,10 @@ import {
   DISTANCE_SOURCE_LABELS,
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
+import { DEFAULT_TRIP_TYPE, TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import type { TransportLeg } from "@/db/schema";
-import { TransportLegDocuments } from "./transport-leg-documents";
+import { TransportEvidenceDocuments } from "./transport-evidence-documents";
 
 interface TransportLegFormProps {
   /** When provided, the form edits this leg; otherwise it creates a new one. */
@@ -58,6 +59,7 @@ function legToFormDefaults(leg: TransportLeg | null | undefined) {
     vehicleType: leg?.vehicleType ?? "",
     modelYear: leg?.modelYear ?? null,
     loadMassKg: leg?.loadMassKg ?? null,
+    tripType: leg?.tripType ?? DEFAULT_TRIP_TYPE,
     calculationMethodType: "distance_based" as const,
     billOfLading: leg?.billOfLading ?? "",
     weighScaleTicketRef: leg?.weighScaleTicketRef ?? "",
@@ -243,6 +245,20 @@ export function TransportLegForm({
             />
           </FormField>
           <FormField
+            id="tripType"
+            label="Trip type"
+            error={errors.tripType?.message}
+            helperText="Return doubles the distance (vehicle returns empty). Choose One-way only with an evidenced onward destination."
+          >
+            <FormSelect
+              id="tripType"
+              options={TRIP_TYPE_OPTIONS}
+              disabled={isSubmitting}
+              error={!!errors.tripType}
+              {...register("tripType")}
+            />
+          </FormField>
+          <FormField
             id="loadMassKg"
             label="Load mass (kg)"
             required
@@ -282,7 +298,10 @@ export function TransportLegForm({
           weigh-scale ticket.
         </p>
         {isEditMode && leg ? (
-          <TransportLegDocuments legId={leg.id} />
+          <TransportEvidenceDocuments
+            entityType="transport_leg"
+            entityId={leg.id}
+          />
         ) : (
           <p className="body-small text-[var(--color-text-tertiary)] border border-dashed border-[var(--color-border-secondary)] px-12 py-16">
             Save the leg first, then re-open it to attach the bill of lading and

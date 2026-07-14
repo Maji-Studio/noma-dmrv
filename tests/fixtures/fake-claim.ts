@@ -18,6 +18,7 @@ import type {
   InsertDraftSubmissionInput,
   SubmissionKey,
 } from "@/data-access/certification-submissions";
+import type { OrgContext } from "@/lib/auth/server";
 
 export interface FakeLedgerStore {
   latest: (key: SubmissionKey) => CertificationSubmissionRow | null;
@@ -27,7 +28,7 @@ export interface FakeLedgerStore {
 
 export function makeClaimSubmissionDraftFake(store: FakeLedgerStore) {
   return async <H>(
-    _userId: string,
+    _ctx: OrgContext,
     args: ClaimSubmissionDraftArgs<H>,
   ): Promise<ClaimOutcome> => {
     const payloadHash = args.hashOf(args.tentativeInputs);

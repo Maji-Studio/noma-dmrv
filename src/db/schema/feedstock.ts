@@ -1,11 +1,12 @@
 import { relations, sql } from 'drizzle-orm';
-import { check, doublePrecision, pgTable, text, timestamp, uuid, unique } from 'drizzle-orm/pg-core';
+import { check, doublePrecision, foreignKey, pgTable, text, timestamp, uuid, unique } from 'drizzle-orm/pg-core';
 import { feedstockEligibilityStatus, feedstockStatus, feedstockTypeUsage } from './common';
 import { massKg, percent, tonnes } from './numeric-families';
 import { facilities, storageLocations } from './facilities';
 import { suppliers } from './parties';
 import { vehicles } from './logistics';
 import type { InferSelectModel } from 'drizzle-orm';
+import { organizations } from './auth';
 
 // ============================================
 // Feedstock Deliveries - Incoming biomass shipments
@@ -16,10 +17,12 @@ export const feedstockDeliveries = pgTable(
   'feedstock_deliveries',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    code: text('code').notNull().unique(), // e.g., "FD-2025-001"
-    facilityId: uuid('facility_id')
+    organizationId: text('organization_id')
       .notNull()
-      .references(() => facilities.id),
+      .references(() => organizations.id),
+    code: text('code').notNull(), // e.g., "FD-2025-001"
+    facilityId: uuid('facility_id')
+      .notNull(),
     status: feedstockStatus('status').default('missing_data').notNull(),
 
     // --- Delivery Details ---
@@ -48,6 +51,11 @@ export const feedstockDeliveries = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    unique('feedstock_deliveries_organization_id_code_unique').on(table.organizationId, table.code),
+    foreignKey({
+      columns: [table.facilityId, table.organizationId],
+      foreignColumns: [facilities.id, facilities.organizationId],
+    }),
     check(
       'feedstock_deliveries_gps_latitude_range',
       sql`${table.gpsLatitude} is null or (${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90)`
@@ -67,7 +75,10 @@ export const feedstockTypes = pgTable(
   'feedstock_types',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    code: text('code').notNull().unique(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    code: text('code').notNull(),
     name: text('name').notNull(), // e.g., "Mixed Wood Chips", "Hardwood"
     category: text('category').notNull(), // forestry | agricultural | industrial | municipal | invasive
     usage: feedstockTypeUsage('usage').notNull().default('pyrolysis'),
@@ -78,7 +89,12 @@ export const feedstockTypes = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
-    unique('feedstock_types_name_usage_unique').on(table.name, table.usage),
+    unique('feedstock_types_organization_id_code_unique').on(table.organizationId, table.code),
+    unique('feedstock_types_organization_id_name_usage_unique').on(
+      table.organizationId,
+      table.name,
+      table.usage
+    ),
   ]
 );
 
@@ -91,10 +107,12 @@ export const feedstocks = pgTable(
   'feedstocks',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    code: text('code').notNull().unique(), // e.g., "FI-2025-001"
-    facilityId: uuid('facility_id')
+    organizationId: text('organization_id')
       .notNull()
-      .references(() => facilities.id),
+      .references(() => organizations.id),
+    code: text('code').notNull(), // e.g., "FI-2025-001"
+    facilityId: uuid('facility_id')
+      .notNull(),
     status: feedstockStatus('status').default('missing_data').notNull(),
 
     // --- Delivery Reference (nullable for migration; will be dropped in Phase 2) ---
@@ -149,6 +167,11 @@ export const feedstocks = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    unique('feedstocks_organization_id_code_unique').on(table.organizationId, table.code),
+    foreignKey({
+      columns: [table.facilityId, table.organizationId],
+      foreignColumns: [facilities.id, facilities.organizationId],
+    }),
     check(
       'feedstocks_mass_dry_non_negative',
       sql`${table.massDryKg} >= 0`

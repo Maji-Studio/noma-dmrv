@@ -1,3 +1,4 @@
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed tests for the durability-tier edit guard on `updateFacility`.
  *
@@ -61,6 +62,7 @@ async function setupFacility(
   const [facility] = await db
     .insert(facilities)
     .values({
+      organizationId: TEST_ORG_ID,
       name: `Durability-Guard ${tag} ${runId}`,
       code: `FAC-DG-${tag}-${runId}`,
       durabilityOption,
@@ -71,6 +73,7 @@ async function setupFacility(
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      organizationId: TEST_ORG_ID,
       name: `Durability-Guard Woodchips ${tag} ${runId}`,
       code: `FT-DG-${tag}-${runId}`,
       category: "forestry",
@@ -80,7 +83,7 @@ async function setupFacility(
 
   const [process] = await db
     .insert(productionProcesses)
-    .values({ facilityId: facility.id, feedstockTypeId: feedstockType.id })
+    .values({ organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id })
     .returning({ id: productionProcesses.id });
   createdIds.productionProcesses.push(process.id);
 
@@ -101,6 +104,7 @@ async function insertBatch(
   const [batch] = await db
     .insert(creditBatches)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `CB-DG-${runId}-${seq}`,
       facilityId: chain.facilityId,
       feedstockTypeId: chain.feedstockTypeId,
@@ -128,13 +132,14 @@ async function insertBlockingRemoval(
 ): Promise<void> {
   const [removal] = await db
     .insert(certifierRemovals)
-    .values({ facilityId: chain.facilityId })
+    .values({ organizationId: TEST_ORG_ID, facilityId: chain.facilityId })
     .returning({ id: certifierRemovals.id });
   createdIds.certifierRemovals.push(removal.id);
 
   const [submission] = await db
     .insert(certificationSubmissions)
     .values({
+      organizationId: TEST_ORG_ID,
       submissionType: "removal",
       localEntityType: "removal",
       localEntityId: removal.id,
@@ -151,6 +156,8 @@ async function tierOf(facilityId: string): Promise<string> {
     .where(inArray(facilities.id, [facilityId]));
   return row.durabilityOption;
 }
+
+beforeAll(() => ensureTestOrg());
 
 beforeAll(async () => {
   // env defaults are applied by tests/setup.ts; nothing else to prepare.
@@ -183,6 +190,7 @@ afterAll(async () => {
   }
 });
 
+
 describe("updateFacility durability-tier guard", () => {
   // Both locking statuses must be exercised — a regression that dropped one from
   // the lock set would otherwise pass while only `issued` is tested.
@@ -192,7 +200,7 @@ describe("updateFacility durability-tier guard", () => {
       await insertBatch(chain, status);
 
       await expect(
-        updateFacility(TEST_USER_ID, chain.facilityId, {
+        updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, {
           durabilityOption: "1000_year",
         }),
       ).rejects.toBeInstanceOf(SafeError);
@@ -211,7 +219,7 @@ describe("updateFacility durability-tier guard", () => {
     await insertBlockingRemoval(chain, "submitted");
 
     await expect(
-      updateFacility(TEST_USER_ID, chain.facilityId, {
+      updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, {
         durabilityOption: "1000_year",
       }),
     ).rejects.toBeInstanceOf(SafeError);
@@ -226,7 +234,7 @@ describe("updateFacility durability-tier guard", () => {
     await insertBatch(chain, "pending");
     await insertBatch(chain, "issued", /* archived */ true);
 
-    const updated = await updateFacility(TEST_USER_ID, chain.facilityId, {
+    const updated = await updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, {
       durabilityOption: "1000_year",
     });
 
@@ -238,7 +246,7 @@ describe("updateFacility durability-tier guard", () => {
     await insertBatch(chain, "verified");
 
     // Same tier passed through + an unrelated field change must still succeed.
-    const updated = await updateFacility(TEST_USER_ID, chain.facilityId, {
+    const updated = await updateFacility(makeTestOrgContext(TEST_USER_ID), chain.facilityId, {
       durabilityOption: "200_year",
       contactEmail: "ops@example.com",
     });

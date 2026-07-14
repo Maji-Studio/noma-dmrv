@@ -4,6 +4,7 @@
 // a facility-membership model lands.
 
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import type { OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
 import {
   biocharProducts,
@@ -33,7 +34,7 @@ import {
   assertCanMutateCertifiedLineage,
   type CertifiedLineageEntityType,
 } from "./certification-lineage-guards";
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 
 export type TransportEntityType = TransportEntityTypeValue;
 
@@ -55,6 +56,7 @@ const CERTIFIED_LINEAGE_TARGET: Record<
 // sample resolves indirectly via `production_runs.facility_id`; others have
 // a direct `facility_id` column.
 async function resolveEntityFacility(
+  ctx: OrgContext,
   entityType: TransportEntityType,
   entityId: string,
 ): Promise<{ facilityId: string }> {
@@ -62,7 +64,7 @@ async function resolveEntityFacility(
     const [row] = await db
       .select({ facilityId: feedstocks.facilityId })
       .from(feedstocks)
-      .where(eq(feedstocks.id, entityId));
+      .where(and(eq(feedstocks.id, entityId), eq(feedstocks.organizationId, ctx.organizationId)));
     if (!row) throw new SafeError(`${ENTITY_LABEL[entityType]} not found`);
     return { facilityId: row.facilityId };
   }
@@ -71,7 +73,7 @@ async function resolveEntityFacility(
     const [row] = await db
       .select({ facilityId: biocharProducts.facilityId })
       .from(biocharProducts)
-      .where(eq(biocharProducts.id, entityId));
+      .where(and(eq(biocharProducts.id, entityId), eq(biocharProducts.organizationId, ctx.organizationId)));
     if (!row) throw new SafeError(`${ENTITY_LABEL[entityType]} not found`);
     return { facilityId: row.facilityId };
   }
@@ -84,9 +86,9 @@ async function resolveEntityFacility(
       runFacilityId: productionRuns.facilityId,
     })
     .from(samples)
-    .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
-    .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
-    .where(eq(samples.id, entityId));
+    .leftJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
+    .leftJoin(productionRuns, and(eq(samples.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
+    .where(and(eq(samples.id, entityId), eq(samples.organizationId, ctx.organizationId)));
   if (!row) throw new SafeError(`${ENTITY_LABEL[entityType]} not found`);
   const facilityId = row.batchFacilityId ?? row.runFacilityId;
   if (!facilityId) {
@@ -100,12 +102,12 @@ async function resolveEntityFacility(
 // ============================================
 
 export async function getTransportLegsForEntity(
-  userId: string,
+  ctx: OrgContext,
   entityType: TransportEntityType,
   entityId: string,
 ): Promise<TransportLeg[]> {
-  requireAuth(userId);
-  await resolveEntityFacility(entityType, entityId);
+  requireOrgScope(ctx);
+  await resolveEntityFacility(ctx, entityType, entityId);
 
   return db
     .select()
@@ -114,6 +116,7 @@ export async function getTransportLegsForEntity(
       and(
         eq(transportLegs.entityType, entityType),
         eq(transportLegs.entityId, entityId),
+        eq(transportLegs.organizationId, ctx.organizationId),
       ),
     )
     .orderBy(asc(transportLegs.createdAt));
@@ -123,11 +126,11 @@ export async function getTransportLegsForEntity(
 // Certify-Panel coverage loader) walk the credit-batch lineage and have
 // already validated parent access upstream.
 export async function getTransportLegsForEntities(
-  userId: string,
+  ctx: OrgContext,
   entityType: TransportEntityType,
   entityIds: string[],
 ): Promise<TransportLeg[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   if (entityIds.length === 0) return [];
 
   return db
@@ -137,24 +140,25 @@ export async function getTransportLegsForEntities(
       and(
         eq(transportLegs.entityType, entityType),
         inArray(transportLegs.entityId, entityIds),
+        eq(transportLegs.organizationId, ctx.organizationId),
       ),
     )
     .orderBy(asc(transportLegs.createdAt));
 }
 
 export async function getTransportLegById(
-  userId: string,
+  ctx: OrgContext,
   id: string,
 ): Promise<TransportLeg | null> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [row] = await db
     .select()
     .from(transportLegs)
-    .where(eq(transportLegs.id, id));
+    .where(and(eq(transportLegs.id, id), eq(transportLegs.organizationId, ctx.organizationId)));
 
   if (!row) return null;
-  await resolveEntityFacility(row.entityType, row.entityId);
+  await resolveEntityFacility(ctx, row.entityType, row.entityId);
   return row;
 }
 
@@ -164,21 +168,22 @@ export async function getTransportLegById(
 
 export type CreateTransportLegInput = Omit<
   NewTransportLeg,
-  "id" | "createdAt" | "updatedAt"
+  "id" | "organizationId" | "createdAt" | "updatedAt"
 > & {
   entityType: TransportEntityType;
 };
 
 export async function createTransportLeg(
-  userId: string,
+  ctx: OrgContext,
   input: CreateTransportLegInput,
 ): Promise<TransportLeg> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  await resolveEntityFacility(input.entityType, input.entityId);
+  await resolveEntityFacility(ctx, input.entityType, input.entityId);
 
   const [row] = await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       {
         entityType: CERTIFIED_LINEAGE_TARGET[input.entityType],
@@ -191,6 +196,7 @@ export async function createTransportLeg(
       .insert(transportLegs)
       .values({
         ...input,
+        organizationId: ctx.organizationId,
         entityType: input.entityType,
       })
       .returning();
@@ -204,27 +210,28 @@ export async function createTransportLeg(
 }
 
 export type UpdateTransportLegInput = Partial<
-  Omit<NewTransportLeg, "id" | "createdAt" | "updatedAt" | "entityType" | "entityId">
+  Omit<NewTransportLeg, "id" | "organizationId" | "createdAt" | "updatedAt" | "entityType" | "entityId">
 >;
 
 export async function updateTransportLeg(
-  userId: string,
+  ctx: OrgContext,
   id: string,
   input: UpdateTransportLegInput,
 ): Promise<TransportLeg> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [existing] = await db
     .select({ entityType: transportLegs.entityType, entityId: transportLegs.entityId })
     .from(transportLegs)
-    .where(eq(transportLegs.id, id));
+    .where(and(eq(transportLegs.id, id), eq(transportLegs.organizationId, ctx.organizationId)));
   if (!existing) {
     throw new SafeError("Transport leg not found");
   }
-  await resolveEntityFacility(existing.entityType, existing.entityId);
+  await resolveEntityFacility(ctx, existing.entityType, existing.entityId);
 
   const [row] = await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       {
         entityType: CERTIFIED_LINEAGE_TARGET[existing.entityType],
@@ -236,7 +243,7 @@ export async function updateTransportLeg(
     return tx
       .update(transportLegs)
       .set({ ...input, updatedAt: new Date() })
-      .where(eq(transportLegs.id, id))
+      .where(and(eq(transportLegs.id, id), eq(transportLegs.organizationId, ctx.organizationId)))
       .returning();
   });
 
@@ -248,22 +255,23 @@ export async function updateTransportLeg(
 }
 
 export async function deleteTransportLeg(
-  userId: string,
+  ctx: OrgContext,
   id: string,
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [existing] = await db
     .select({ entityType: transportLegs.entityType, entityId: transportLegs.entityId })
     .from(transportLegs)
-    .where(eq(transportLegs.id, id));
+    .where(and(eq(transportLegs.id, id), eq(transportLegs.organizationId, ctx.organizationId)));
   if (!existing) {
     throw new SafeError("Transport leg not found");
   }
-  await resolveEntityFacility(existing.entityType, existing.entityId);
+  await resolveEntityFacility(ctx, existing.entityType, existing.entityId);
 
   const result = await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       {
         entityType: CERTIFIED_LINEAGE_TARGET[existing.entityType],
@@ -274,7 +282,7 @@ export async function deleteTransportLeg(
 
     return tx
       .delete(transportLegs)
-      .where(eq(transportLegs.id, id))
+      .where(and(eq(transportLegs.id, id), eq(transportLegs.organizationId, ctx.organizationId)))
       .returning({ id: transportLegs.id });
   });
 
@@ -287,16 +295,19 @@ export async function deleteTransportLeg(
 // polymorphic, so PostgreSQL cannot enforce FK cascades for feedstocks,
 // biochar products, or samples.
 export async function deleteTransportLegsForEntity(
+  ctx: OrgContext,
   tx: DbTransaction,
   entityType: TransportEntityType,
   entityId: string,
 ): Promise<void> {
+  requireOrgScope(ctx);
   await tx
     .delete(transportLegs)
     .where(
       and(
         eq(transportLegs.entityType, entityType),
         eq(transportLegs.entityId, entityId),
+        eq(transportLegs.organizationId, ctx.organizationId),
       ),
     );
 }
@@ -311,13 +322,13 @@ export async function deleteTransportLegsForEntity(
 // leg for the entity, then insert the new one when it has the hard requirements
 // (distance + load mass). Manual legs remain untouched.
 export async function replaceDerivedTransportLeg(
-  userId: string,
+  ctx: OrgContext,
   entityType: "feedstock" | "biochar",
   entityId: string,
   derived: DerivedTransportLeg,
 ): Promise<void> {
-  requireAuth(userId);
-  await resolveEntityFacility(entityType, entityId);
+  requireOrgScope(ctx);
+  await resolveEntityFacility(ctx, entityType, entityId);
 
   // No persistable derivation → clear any stale derived leg.
   if (!isDerivedLegPersistable(derived)) {
@@ -328,6 +339,7 @@ export async function replaceDerivedTransportLeg(
           eq(transportLegs.entityType, entityType),
           eq(transportLegs.entityId, entityId),
           eq(transportLegs.isDerived, true),
+          eq(transportLegs.organizationId, ctx.organizationId),
         ),
       );
     return;
@@ -352,11 +364,12 @@ export async function replaceDerivedTransportLeg(
     vehicleType: derived.vehicleType,
     modelYear: derived.modelYear,
     loadMassKg: derived.loadMassKg as number,
+    tripType: derived.tripType,
   };
 
   await db
     .insert(transportLegs)
-    .values({ entityType, entityId, isDerived: true, ...fields })
+    .values({ organizationId: ctx.organizationId, entityType, entityId, isDerived: true, ...fields })
     .onConflictDoUpdate({
       target: [transportLegs.entityType, transportLegs.entityId],
       targetWhere: sql`${transportLegs.isDerived} = true`,
@@ -382,10 +395,10 @@ export async function replaceDerivedTransportLeg(
  * after every delivery create/update/delete. Manual legs are untouched.
  */
 export async function syncBiocharProductTransportLeg(
-  userId: string,
+  ctx: OrgContext,
   biocharProductId: string,
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [facility] = await db
     .select({
@@ -394,8 +407,8 @@ export async function syncBiocharProductTransportLeg(
       gpsLongitude: facilities.gpsLongitude,
     })
     .from(biocharProducts)
-    .innerJoin(facilities, eq(biocharProducts.facilityId, facilities.id))
-    .where(eq(biocharProducts.id, biocharProductId));
+    .innerJoin(facilities, and(eq(biocharProducts.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .where(and(eq(biocharProducts.id, biocharProductId), eq(biocharProducts.organizationId, ctx.organizationId)));
 
   if (!facility) {
     // Polymorphic entity_id is not FK-constrained, so a missing facility means
@@ -416,6 +429,7 @@ export async function syncBiocharProductTransportLeg(
       loadMassKg: deliveries.deliveredWetMassKg,
       deliveryDistanceKmOverride: deliveries.distanceKmOverride,
       deliveryDistanceSource: deliveries.distanceSource,
+      deliveryTripType: deliveries.tripType,
       locationDistanceKm: customerLocations.distanceFromFacilityKm,
       locationDistanceSource: customerLocations.distanceSource,
       locationName: customerLocations.name,
@@ -423,15 +437,15 @@ export async function syncBiocharProductTransportLeg(
       locationGpsLongitude: customerLocations.gpsLongitude,
     })
     .from(deliveries)
-    .leftJoin(orders, eq(deliveries.orderId, orders.id))
+    .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
     .leftJoin(
       customerLocations,
-      eq(
-        customerLocations.id,
-        sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+      and(
+        eq(customerLocations.id, sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`),
+        eq(customerLocations.organizationId, ctx.organizationId),
       ),
     )
-    .where(eq(deliveries.biocharProductId, biocharProductId));
+    .where(and(eq(deliveries.biocharProductId, biocharProductId), eq(deliveries.organizationId, ctx.organizationId)));
 
   // Per delivery: its own distance override (+ source) beats the destination
   // location's stored distance (+ source) — map-integration plan, decision 3.
@@ -448,6 +462,7 @@ export async function syncBiocharProductTransportLeg(
         locationName: row.locationName,
         locationGpsLatitude: row.locationGpsLatitude,
         locationGpsLongitude: row.locationGpsLongitude,
+        tripType: row.deliveryTripType,
       };
     }),
   );
@@ -467,11 +482,12 @@ export async function syncBiocharProductTransportLeg(
     loadMassKg: agg.totalMassKg > 0 ? agg.totalMassKg : null,
     storedDistanceKm: agg.weightedDistanceKm,
     storedDistanceSource: agg.distanceSource,
+    tripType: agg.tripType,
   });
 
   // When no delivery qualifies, `derived` is not persistable and the replace
   // clears any stale derived leg.
-  await replaceDerivedTransportLeg(userId, "biochar", biocharProductId, derived);
+  await replaceDerivedTransportLeg(ctx, "biochar", biocharProductId, derived);
 }
 
 /**
@@ -481,21 +497,21 @@ export async function syncBiocharProductTransportLeg(
  * recompute the affected products' legs. Call after a customer-location update.
  */
 export async function syncBiocharLegsForCustomerLocation(
-  userId: string,
+  ctx: OrgContext,
   customerLocationId: string,
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Match deliveries whose resolved destination is this location — either the
   // delivery's own override or, in the common flow, its order's location.
   const rows = await db
     .selectDistinct({ biocharProductId: deliveries.biocharProductId })
     .from(deliveries)
-    .leftJoin(orders, eq(deliveries.orderId, orders.id))
+    .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
     .where(
-      eq(
-        sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
-        customerLocationId,
+      and(
+        eq(sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`, customerLocationId),
+        eq(deliveries.organizationId, ctx.organizationId),
       ),
     );
 
@@ -504,6 +520,6 @@ export async function syncBiocharLegsForCustomerLocation(
     .filter((id): id is string => Boolean(id));
 
   await Promise.all(
-    productIds.map((id) => syncBiocharProductTransportLeg(userId, id)),
+    productIds.map((id) => syncBiocharProductTransportLeg(ctx, id)),
   );
 }

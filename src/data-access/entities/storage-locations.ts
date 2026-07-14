@@ -18,12 +18,13 @@ import {
   formulations,
 } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
+import type { OrgContext } from "@/lib/auth/server";
 import {
   formatStorageLocationType,
   type StorageLocationType,
 } from "@/schemas/storage-locations";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
-import { requireAuth } from "../utils";
+import { requireOrgScope } from "../utils";
 
 function formatStorageLocationSubtitle(
   type: string,
@@ -97,7 +98,8 @@ function formatFeedstockTypeUsage(usage: string): string {
 
 const heldFeedstockTypes = alias(feedstockTypes, "held_feedstock_types");
 
-const feedstockInventoryAggregate = db
+function buildInventoryAggregates(ctx: OrgContext) {
+  const feedstockInventoryAggregate = db
   .select({
     storageLocationId: feedstocks.storageLocationId,
     feedstockTypeName: sql<string | null>`string_agg(DISTINCT ${feedstockTypes.name}, ', ' ORDER BY ${feedstockTypes.name})`.as("feedstock_type_name"),
@@ -109,11 +111,18 @@ const feedstockInventoryAggregate = db
     `.as("pending_stored_kg"),
   })
   .from(feedstocks)
-  .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
+  .leftJoin(
+    feedstockTypes,
+    and(
+      eq(feedstocks.feedstockTypeId, feedstockTypes.id),
+      eq(feedstockTypes.organizationId, ctx.organizationId),
+    ),
+  )
+  .where(eq(feedstocks.organizationId, ctx.organizationId))
   .groupBy(feedstocks.storageLocationId)
   .as("feedstock_inventory_agg");
 
-const productionRunConsumptionAggregate = db
+  const productionRunConsumptionAggregate = db
   .select({
     storageLocationId: productionRuns.feedstockStorageLocationId,
     totalConsumedKg: sql<number>`COALESCE(SUM(${productionRunFeedstocks.massUsedKg}), 0)`.as("total_consumed_kg"),
@@ -121,21 +130,26 @@ const productionRunConsumptionAggregate = db
   .from(productionRuns)
   .leftJoin(
     productionRunFeedstocks,
-    eq(productionRunFeedstocks.productionRunId, productionRuns.id)
+    and(
+      eq(productionRunFeedstocks.productionRunId, productionRuns.id),
+      eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+    ),
   )
+  .where(eq(productionRuns.organizationId, ctx.organizationId))
   .groupBy(productionRuns.feedstockStorageLocationId)
   .as("production_run_consumption_agg");
 
-const biocharOutputAggregate = db
+  const biocharOutputAggregate = db
   .select({
     storageLocationId: productionRuns.biocharStorageLocationId,
     totalProducedKg: sql<number>`COALESCE(SUM(${productionRuns.biocharOutputKg}), 0)`.as("total_produced_kg"),
   })
   .from(productionRuns)
+  .where(eq(productionRuns.organizationId, ctx.organizationId))
   .groupBy(productionRuns.biocharStorageLocationId)
   .as("biochar_output_agg");
 
-const biocharAllocationAggregate = db
+  const biocharAllocationAggregate = db
   .select({
     storageLocationId: productionRuns.biocharStorageLocationId,
     totalAllocatedKg: sql<number>`
@@ -150,13 +164,23 @@ const biocharAllocationAggregate = db
   .from(productionRuns)
   .innerJoin(
     biocharProducts,
-    eq(biocharProducts.linkedProductionRunId, productionRuns.id)
+    and(
+      eq(biocharProducts.linkedProductionRunId, productionRuns.id),
+      eq(biocharProducts.organizationId, ctx.organizationId),
+    ),
   )
-  .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
+  .leftJoin(
+    formulations,
+    and(
+      eq(biocharProducts.formulationId, formulations.id),
+      eq(formulations.organizationId, ctx.organizationId),
+    ),
+  )
+  .where(eq(productionRuns.organizationId, ctx.organizationId))
   .groupBy(productionRuns.biocharStorageLocationId)
   .as("biochar_allocation_agg");
 
-const productInventoryAggregate = db
+  const productInventoryAggregate = db
   .select({
     storageLocationId: biocharProducts.storageLocationId,
     totalProductKg: sql<number>`COALESCE(SUM(${biocharProducts.massKg}), 0)`.as("total_product_kg"),
@@ -170,12 +194,27 @@ const productInventoryAggregate = db
     `.as("biochar_equivalent_kg"),
   })
   .from(biocharProducts)
-  .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
+  .leftJoin(
+    formulations,
+    and(
+      eq(biocharProducts.formulationId, formulations.id),
+      eq(formulations.organizationId, ctx.organizationId),
+    ),
+  )
+  .where(eq(biocharProducts.organizationId, ctx.organizationId))
   .groupBy(biocharProducts.storageLocationId)
   .as("product_inventory_agg");
 
-export async function getStorageLocations(params: {
-  userId: string;
+  return {
+    feedstockInventoryAggregate,
+    productionRunConsumptionAggregate,
+    biocharOutputAggregate,
+    biocharAllocationAggregate,
+    productInventoryAggregate,
+  };
+}
+
+export async function getStorageLocations(ctx: OrgContext, params: {
   search?: string;
   facilityId?: string;
   type?: StorageLocationType | StorageLocationType[];
@@ -187,11 +226,22 @@ export async function getStorageLocations(params: {
   pureProductOnly?: boolean;
   limit: number;
 }): Promise<EntityOption[]> {
-  const { userId, search, facilityId, type, feedstockTypeId, feedstockTypeUsage, formulationId, pureProductOnly, limit } =
+  const { search, facilityId, type, feedstockTypeId, feedstockTypeUsage, formulationId, pureProductOnly, limit } =
     params;
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [isNull(storageLocations.archivedAt)];
+  const {
+    feedstockInventoryAggregate,
+    productionRunConsumptionAggregate,
+    biocharOutputAggregate,
+    biocharAllocationAggregate,
+    productInventoryAggregate,
+  } = buildInventoryAggregates(ctx);
+
+  const conditions: SQL[] = [
+    eq(storageLocations.organizationId, ctx.organizationId),
+    isNull(storageLocations.archivedAt),
+  ];
 
   if (facilityId) {
     conditions.push(eq(storageLocations.facilityId, facilityId));
@@ -283,8 +333,20 @@ export async function getStorageLocations(params: {
       biocharEquivalentKg: sql<number>`COALESCE(${productInventoryAggregate.biocharEquivalentKg}, 0)`,
     })
     .from(storageLocations)
-    .leftJoin(heldFeedstockTypes, eq(storageLocations.feedstockTypeId, heldFeedstockTypes.id))
-    .leftJoin(formulations, eq(storageLocations.formulationId, formulations.id))
+    .leftJoin(
+      heldFeedstockTypes,
+      and(
+        eq(storageLocations.feedstockTypeId, heldFeedstockTypes.id),
+        eq(heldFeedstockTypes.organizationId, ctx.organizationId),
+      ),
+    )
+    .leftJoin(
+      formulations,
+      and(
+        eq(storageLocations.formulationId, formulations.id),
+        eq(formulations.organizationId, ctx.organizationId),
+      ),
+    )
     .leftJoin(
       feedstockInventoryAggregate,
       eq(storageLocations.id, feedstockInventoryAggregate.storageLocationId)
@@ -330,10 +392,18 @@ export async function getStorageLocations(params: {
 }
 
 export async function getStorageLocationById(
-  userId: string,
+  ctx: OrgContext,
   id: string
 ): Promise<EntityOption | null> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
+
+  const {
+    feedstockInventoryAggregate,
+    productionRunConsumptionAggregate,
+    biocharOutputAggregate,
+    biocharAllocationAggregate,
+    productInventoryAggregate,
+  } = buildInventoryAggregates(ctx);
 
   const [result] = await db
     .select({
@@ -354,8 +424,20 @@ export async function getStorageLocationById(
       biocharEquivalentKg: sql<number>`COALESCE(${productInventoryAggregate.biocharEquivalentKg}, 0)`,
     })
     .from(storageLocations)
-    .leftJoin(heldFeedstockTypes, eq(storageLocations.feedstockTypeId, heldFeedstockTypes.id))
-    .leftJoin(formulations, eq(storageLocations.formulationId, formulations.id))
+    .leftJoin(
+      heldFeedstockTypes,
+      and(
+        eq(storageLocations.feedstockTypeId, heldFeedstockTypes.id),
+        eq(heldFeedstockTypes.organizationId, ctx.organizationId),
+      ),
+    )
+    .leftJoin(
+      formulations,
+      and(
+        eq(storageLocations.formulationId, formulations.id),
+        eq(formulations.organizationId, ctx.organizationId),
+      ),
+    )
     .leftJoin(
       feedstockInventoryAggregate,
       eq(storageLocations.id, feedstockInventoryAggregate.storageLocationId)
@@ -376,7 +458,12 @@ export async function getStorageLocationById(
       productInventoryAggregate,
       eq(storageLocations.id, productInventoryAggregate.storageLocationId)
     )
-    .where(eq(storageLocations.id, id))
+    .where(
+      and(
+        eq(storageLocations.id, id),
+        eq(storageLocations.organizationId, ctx.organizationId),
+      ),
+    )
     .limit(1);
 
   if (!result) return null;

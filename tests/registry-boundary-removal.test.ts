@@ -1,3 +1,8 @@
+import {
+  ensureTestOrg,
+  makeTestOrgContext,
+  TEST_ORG_ID,
+} from "./helpers/test-org";
 /**
  * Boundary tests for the Removal submit pipeline against the fake registry
  * (reliability-track Phase 3).
@@ -31,7 +36,7 @@
  * Requires a real Postgres (`.env.test`), like
  * tests/certification-submissions.test.ts.
  */
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
@@ -155,10 +160,11 @@ async function createFixture(): Promise<Fixture> {
   const externalProjectId = `prj_boundary_${runId}`;
   const [facility] = await db
     .insert(facilities)
-    .values({ name: `Boundary Facility ${runId}`, code: `FAC-BD-${runId}` })
+    .values({ organizationId: TEST_ORG_ID, name: `Boundary Facility ${runId}`, code: `FAC-BD-${runId}` })
     .returning({ id: facilities.id });
   createdFacilityIds.push(facility.id);
   await db.insert(certifierProjects).values({
+    organizationId: TEST_ORG_ID,
     facilityId: facility.id,
     provider: "isometric",
     externalProjectId,
@@ -166,7 +172,7 @@ async function createFixture(): Promise<Fixture> {
   });
   const [removal] = await db
     .insert(certifierRemovals)
-    .values({ facilityId: facility.id, provider: "isometric" })
+    .values({ organizationId: TEST_ORG_ID, facilityId: facility.id, provider: "isometric" })
     .returning({ id: certifierRemovals.id });
   createdRemovalIds.push(removal.id);
   // A real member credit batch (with its FK chain): the §8.6.2 claim stamp
@@ -175,6 +181,7 @@ async function createFixture(): Promise<Fixture> {
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `FT-BD-${runId}`,
       name: `Boundary Feedstock ${runId}`,
       category: "forestry",
@@ -184,11 +191,12 @@ async function createFixture(): Promise<Fixture> {
   createdFeedstockTypeIds.push(feedstockType.id);
   const [productionProcess] = await db
     .insert(productionProcesses)
-    .values({ facilityId: facility.id, feedstockTypeId: feedstockType.id })
+    .values({ organizationId: TEST_ORG_ID, facilityId: facility.id, feedstockTypeId: feedstockType.id })
     .returning({ id: productionProcesses.id });
   const [batch] = await db
     .insert(creditBatches)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `CB-BD-${runId}`,
       facilityId: facility.id,
       feedstockTypeId: feedstockType.id,
@@ -365,6 +373,7 @@ function makeContext(
   };
   return {
     facilityId: fixture.facilityId,
+    hasOrgCredentials: true,
     removalId: fixture.removalId,
     mapping: makeMapping(fixture),
     project: { id: fixture.externalProjectId, name: "Boundary project" } as never,
@@ -380,6 +389,7 @@ function makeContext(
     },
     requiredTransportCategories: [],
     hasSubmittableRuns: true,
+    entityReadinessGaps: [],
     // Eligible run, ≥3 in-spec replicates → no D3 blockers (mirrors what
     // buildRemovalContext would precompute; submitRemoval blocks on this field).
     durabilityGateBlockers: [],
@@ -533,6 +543,9 @@ beforeEach(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
+
+beforeAll(() => ensureTestOrg());
+
 describe("submitRemoval boundary — datapoint orphan (test 1)", () => {
   it("resume reconciles the dropped datapoint by supplier ref and POSTs only the remaining ones", async () => {
     const fixture = await createFixture();
@@ -546,7 +559,7 @@ describe("submitRemoval boundary — datapoint orphan (test 1)", () => {
     });
 
     await expect(
-      submitRemoval({ userId: USER_ID, removalId: fixture.removalId }),
+      submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: fixture.removalId }),
     ).rejects.toBeInstanceOf(IsometricApiError);
 
     // The registry committed the first datapoint despite the client-visible
@@ -566,7 +579,7 @@ describe("submitRemoval boundary — datapoint orphan (test 1)", () => {
     setContext(fixture);
 
     const result = await submitRemoval({
-      userId: USER_ID,
+      orgCtx: makeTestOrgContext(USER_ID),
       removalId: fixture.removalId,
     });
 
@@ -622,7 +635,7 @@ describe("submitRemoval boundary — removal orphan (test 2)", () => {
     });
 
     await expect(
-      submitRemoval({ userId: USER_ID, removalId: fixture.removalId }),
+      submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: fixture.removalId }),
     ).rejects.toBeInstanceOf(IsometricApiError);
 
     // Both datapoints and the removal are committed server-side; only the
@@ -637,7 +650,7 @@ describe("submitRemoval boundary — removal orphan (test 2)", () => {
     setContext(fixture);
 
     const result = await submitRemoval({
-      userId: USER_ID,
+      orgCtx: makeTestOrgContext(USER_ID),
       removalId: fixture.removalId,
     });
 
@@ -670,7 +683,7 @@ describe("submitRemoval boundary — removal orphan (test 2)", () => {
     });
 
     await expect(
-      submitRemoval({ userId: USER_ID, removalId: fixture.removalId }),
+      submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: fixture.removalId }),
     ).rejects.toBeInstanceOf(IsometricApiError);
     const postsAfterFirstAttempt =
       registry.requestCount("POST", "/datapoints") +
@@ -698,7 +711,7 @@ describe("submitRemoval boundary — removal orphan (test 2)", () => {
     setContext(fixture);
 
     await expect(
-      submitRemoval({ userId: USER_ID, removalId: fixture.removalId }),
+      submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: fixture.removalId }),
     ).rejects.toThrowError(
       new SafeError(
         "Stale submission cannot be resumed because its fixed-input snapshot does not match the current schema.",
@@ -720,7 +733,7 @@ describe("submitRemoval boundary — removal orphan (test 2)", () => {
     registry.failNext("POST /ghg_entries", "drop-after-commit");
 
     const result = await submitRemoval({
-      userId: USER_ID,
+      orgCtx: makeTestOrgContext(USER_ID),
       removalId: fixture.removalId,
     });
 
@@ -755,7 +768,7 @@ describe("submitRemoval boundary — rejected create (test 4)", () => {
     });
 
     await expect(
-      submitRemoval({ userId: USER_ID, removalId: fixture.removalId }),
+      submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: fixture.removalId }),
     ).rejects.toThrowError(SafeError);
 
     // The registry never created the removal, and the lookup confirmed it.
@@ -795,14 +808,14 @@ describe("submitRemoval boundary — hash supersede (test 5)", () => {
     setContext(fixture, ORIGINAL_BIOCHAR_MASS_KG);
 
     const first = await submitRemoval({
-      userId: USER_ID,
+      orgCtx: makeTestOrgContext(USER_ID),
       removalId: fixture.removalId,
     });
     expect(first.version).toBe(1);
 
     setContext(fixture, CHANGED_BIOCHAR_MASS_KG);
     const second = await submitRemoval({
-      userId: USER_ID,
+      orgCtx: makeTestOrgContext(USER_ID),
       removalId: fixture.removalId,
     });
     expect(second.version).toBe(2);

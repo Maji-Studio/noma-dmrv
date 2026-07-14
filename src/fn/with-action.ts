@@ -1,7 +1,8 @@
 "use server";
 
 import { z } from "zod";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
+import type { OrgContext } from "@/lib/auth/server";
 import { toActionError } from "@/lib/errors";
 import { checkRateLimit } from "@/lib/rate-limit/in-memory";
 import type { ActionResult } from "@/types/actions";
@@ -25,7 +26,7 @@ interface WithActionOptions {
  * Does NOT handle field mapping, withAutoCode, or other entity-specific logic.
  */
 export async function withAction<T>(
-  fn: (userId: string) => Promise<T>,
+  fn: (ctx: OrgContext) => Promise<T>,
   options?: WithActionOptions
 ): Promise<ActionResult<T>> {
   const {
@@ -35,13 +36,10 @@ export async function withAction<T>(
   } = options ?? {};
 
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
     if (rateLimit) {
       const verdict = checkRateLimit({
-        key: `${rateLimit.key}:${user.id}`,
+        key: `${rateLimit.key}:${ctx.userId}`,
         max: rateLimit.max,
         windowMs: rateLimit.windowMs,
       });
@@ -52,7 +50,7 @@ export async function withAction<T>(
         };
       }
     }
-    const data = await fn(user.id);
+    const data = await fn(ctx);
     return { success: true, data };
   } catch (error) {
     if (error instanceof z.ZodError) {

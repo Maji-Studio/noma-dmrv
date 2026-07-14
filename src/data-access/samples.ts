@@ -17,6 +17,7 @@ import {
 } from "@/db/schema";
 import type { SampleFilterData } from "@/schemas/samples";
 import { deleteTransportLegsForEntity } from "./transport-legs";
+import type { OrgContext } from "@/lib/auth/server";
 
 // ============================================
 // Types
@@ -69,6 +70,7 @@ export interface SampleWithRelations {
 
   // 1000-year durability
   randomReflectanceR0Percent: number | null;
+  sReflectanceFraction: number | null;
   r0MeasurementCount: number | null;
   r0AnalysisDate: string | null;
   r0HistogramFileUrl: string | null;
@@ -114,9 +116,37 @@ export interface SampleStats {
 // Auth Guards
 // ============================================
 
-import { requireAuth } from "./utils";
+import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { isPgCheckViolation, isPgUniqueViolation } from "@/db/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+
+// DB-enforced sample-code uniqueness (issue #395). Drizzle names the
+// `.unique()` on `samples.sampleCode` this constraint.
+const SAMPLE_CODE_UNIQUE_CONSTRAINT = "samples_organization_id_sample_code_unique";
+const METHOD_B_BASELINE_VIOLATION_FRAGMENT =
+  "cannot use Method B: requires >= 30 prior Method A samples";
+const METHOD_B_BASELINE_FLOOR_MESSAGE =
+  "This change would reduce the Method B baseline below 30 eligible samples. A Method B production process must keep at least 30 eligible pre-unlock samples.";
+
+/**
+ * Run a sample update/delete and translate invariant-specific Postgres errors
+ * into operator-facing SafeErrors. Create routes code uniqueness through
+ * `withAutoCode`; the Method-B trigger can reject updates and deletes.
+ */
+async function guardSampleMutation<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (isPgUniqueViolation(err, SAMPLE_CODE_UNIQUE_CONSTRAINT)) {
+      throw new SafeError("A sample with this code already exists");
+    }
+    if (isPgCheckViolation(err, METHOD_B_BASELINE_VIOLATION_FRAGMENT)) {
+      throw new SafeError(METHOD_B_BASELINE_FLOOR_MESSAGE);
+    }
+    throw err;
+  }
+}
 
 const runFacilities = alias(facilities, "sample_run_facilities");
 const batchFacilities = alias(facilities, "sample_batch_facilities");
@@ -130,10 +160,10 @@ const batchFacilities = alias(facilities, "sample_batch_facilities");
  * Supports search, credit batch filter, durability option, date range, sorting, and pagination
  */
 export async function getSamples(
-  userId: string,
+  ctx: OrgContext,
   filters?: Partial<SampleFilterData>
 ): Promise<PaginatedSamples> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const {
     search,
@@ -149,7 +179,7 @@ export async function getSamples(
   } = filters ?? {};
 
   // Build where conditions
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [eq(samples.organizationId, ctx.organizationId)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -197,8 +227,8 @@ export async function getSamples(
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(samples)
-    .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
-    .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
+    .leftJoin(productionRuns, and(eq(samples.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
+    .leftJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
     .where(whereClause);
 
   const total = Number(totalCount);
@@ -233,6 +263,7 @@ export async function getSamples(
       hToCOrgRatio: samples.hToCOrgRatio,
       oToCOrgRatio: samples.oToCOrgRatio,
       randomReflectanceR0Percent: samples.randomReflectanceR0Percent,
+      sReflectanceFraction: samples.sReflectanceFraction,
       r0MeasurementCount: samples.r0MeasurementCount,
       reactiveCarbonPercent: samples.reactiveCarbonPercent,
       residualCarbonPercent: samples.residualCarbonPercent,
@@ -253,10 +284,10 @@ export async function getSamples(
       facilityName: sql<string | null>`coalesce(${batchFacilities.name}, ${runFacilities.name})`,
     })
     .from(samples)
-    .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
-    .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
-    .leftJoin(runFacilities, eq(productionRuns.facilityId, runFacilities.id))
-    .leftJoin(batchFacilities, eq(creditBatches.facilityId, batchFacilities.id))
+    .leftJoin(productionRuns, and(eq(samples.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
+    .leftJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
+    .leftJoin(runFacilities, and(eq(productionRuns.facilityId, runFacilities.id), eq(runFacilities.organizationId, ctx.organizationId)))
+    .leftJoin(batchFacilities, and(eq(creditBatches.facilityId, batchFacilities.id), eq(batchFacilities.organizationId, ctx.organizationId)))
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
@@ -299,10 +330,10 @@ export async function getSamples(
  * Returns sample data with all relations
  */
 export async function getSampleById(
-  userId: string,
+  ctx: OrgContext,
   sampleId: string
 ): Promise<SampleWithRelations> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [sample] = await db
     .select({
@@ -331,6 +362,7 @@ export async function getSampleById(
       hToCOrgRatio: samples.hToCOrgRatio,
       oToCOrgRatio: samples.oToCOrgRatio,
       randomReflectanceR0Percent: samples.randomReflectanceR0Percent,
+      sReflectanceFraction: samples.sReflectanceFraction,
       r0MeasurementCount: samples.r0MeasurementCount,
       reactiveCarbonPercent: samples.reactiveCarbonPercent,
       residualCarbonPercent: samples.residualCarbonPercent,
@@ -351,11 +383,11 @@ export async function getSampleById(
       facilityName: sql<string | null>`coalesce(${batchFacilities.name}, ${runFacilities.name})`,
     })
     .from(samples)
-    .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
-    .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
-    .leftJoin(runFacilities, eq(productionRuns.facilityId, runFacilities.id))
-    .leftJoin(batchFacilities, eq(creditBatches.facilityId, batchFacilities.id))
-    .where(eq(samples.id, sampleId));
+    .leftJoin(productionRuns, and(eq(samples.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
+    .leftJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
+    .leftJoin(runFacilities, and(eq(productionRuns.facilityId, runFacilities.id), eq(runFacilities.organizationId, ctx.organizationId)))
+    .leftJoin(batchFacilities, and(eq(creditBatches.facilityId, batchFacilities.id), eq(batchFacilities.organizationId, ctx.organizationId)))
+    .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
 
   if (!sample) {
     throw new SafeError("Sample not found");
@@ -384,13 +416,13 @@ export async function getSampleById(
  * Returns aggregated stats for dashboard display
  */
 export async function getSampleStats(
-  userId: string,
+  ctx: OrgContext,
   creditBatchId?: string,
   facilityId?: string,
 ): Promise<SampleStats> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [eq(samples.organizationId, ctx.organizationId)];
   if (creditBatchId) {
     conditions.push(eq(samples.creditBatchId, creditBatchId));
   }
@@ -412,8 +444,8 @@ export async function getSampleStats(
       avgOrganicCarbonPercent: avg(samples.organicCarbonPercent),
     })
     .from(samples)
-    .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
-    .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
+    .leftJoin(productionRuns, and(eq(samples.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
+    .leftJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
     .where(whereClause);
 
   // Count 1000-year samples — the tier is inherited from the batch's facility
@@ -425,9 +457,9 @@ export async function getSampleStats(
   const [samples1000Year] = await db
     .select({ count: count() })
     .from(samples)
-    .leftJoin(productionRuns, eq(samples.productionRunId, productionRuns.id))
-    .leftJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
-    .leftJoin(batchFacilities, eq(creditBatches.facilityId, batchFacilities.id))
+    .leftJoin(productionRuns, and(eq(samples.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
+    .leftJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
+    .leftJoin(batchFacilities, and(eq(creditBatches.facilityId, batchFacilities.id), eq(batchFacilities.organizationId, ctx.organizationId)))
     .where(whereClause ? and(whereClause, is1000Year) : is1000Year);
 
   const total = Number(stats.totalSamples);
@@ -457,10 +489,12 @@ export async function getSampleStats(
 // caller's transaction so the tier can't be promoted to 1000-year between the
 // check and the sample write.
 async function requireBatchTierEvidence(
+  ctx: OrgContext,
   tx: DbTransaction,
   creditBatchId: string,
   values: {
     randomReflectanceR0Percent: number | null;
+    sReflectanceFraction: number | null;
     reactiveCarbonPercent: number | null;
     residualCarbonPercent: number | null;
   },
@@ -469,8 +503,8 @@ async function requireBatchTierEvidence(
   const [creditBatch] = await tx
     .select({ durabilityOption: facilities.durabilityOption })
     .from(creditBatches)
-    .leftJoin(facilities, eq(creditBatches.facilityId, facilities.id))
-    .where(eq(creditBatches.id, creditBatchId));
+    .leftJoin(facilities, and(eq(creditBatches.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .where(and(eq(creditBatches.id, creditBatchId), eq(creditBatches.organizationId, ctx.organizationId)));
 
   if (!creditBatch) {
     throw new SafeError("Credit batch not found");
@@ -491,13 +525,18 @@ async function requireBatchTierEvidence(
       "TGA non-reactive carbon data is required for a sample on a 1000-year credit batch",
     );
   }
+  if (values.sReflectanceFraction == null) {
+    throw new SafeError(
+      "R₀ readings at or above 2% are required for a sample on a 1000-year credit batch",
+    );
+  }
 }
 
 /**
  * Create a new sample
  */
 export async function createSample(
-  userId: string,
+  ctx: OrgContext,
   data: {
     sampleCode: string;
     // The credit batch (protocol production batch) this replicate
@@ -526,6 +565,7 @@ export async function createSample(
     hToCOrgRatio?: number | null;
     oToCOrgRatio?: number | null;
     randomReflectanceR0Percent?: number | null;
+    sReflectanceFraction?: number | null;
     r0MeasurementCount?: number | null;
     r0AnalysisDate?: Date | null;
     r0HistogramFileUrl?: string | null;
@@ -540,21 +580,15 @@ export async function createSample(
     ironPercent?: number | null;
   }
 ): Promise<SampleWithRelations> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
+  await assertSameOrg(ctx, creditBatches, data.creditBatchId);
 
-  // Check for duplicate code
-  const [existing] = await db
-    .select({ id: samples.id })
-    .from(samples)
-    .where(eq(samples.sampleCode, data.sampleCode));
-
-  if (existing) {
-    throw new SafeError("A sample with this code already exists");
-  }
-
-  // Create sample
+  // Sample-code uniqueness is DB-enforced (issue #395: `samples_sample_code_unique`).
+  // No racy pre-check — a colliding auto-generated code is retried by
+  // `withAutoCode`; a user-supplied duplicate surfaces via that same guard.
   const sample = await db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "creditBatch", entityId: data.creditBatchId },
       "create",
@@ -563,8 +597,9 @@ export async function createSample(
     // Verify the batch exists and enforce its declared tier's evidence
     // requirements (tier read from the batch, never from the client) —
     // inside the transaction so the write sees the same tier as the check.
-    await requireBatchTierEvidence(tx, data.creditBatchId, {
+    await requireBatchTierEvidence(ctx, tx, data.creditBatchId, {
       randomReflectanceR0Percent: data.randomReflectanceR0Percent ?? null,
+      sReflectanceFraction: data.sReflectanceFraction ?? null,
       reactiveCarbonPercent: data.reactiveCarbonPercent ?? null,
       residualCarbonPercent: data.residualCarbonPercent ?? null,
     });
@@ -572,6 +607,7 @@ export async function createSample(
     const [created] = await tx
       .insert(samples)
       .values({
+        organizationId: ctx.organizationId,
         sampleCode: data.sampleCode,
         creditBatchId: data.creditBatchId,
         samplingTime: data.samplingTime,
@@ -597,6 +633,7 @@ export async function createSample(
         hToCOrgRatio: data.hToCOrgRatio ?? null,
         oToCOrgRatio: data.oToCOrgRatio ?? null,
         randomReflectanceR0Percent: data.randomReflectanceR0Percent ?? null,
+        sReflectanceFraction: data.sReflectanceFraction ?? null,
         r0MeasurementCount: data.r0MeasurementCount ?? null,
         r0AnalysisDate: data.r0AnalysisDate
           ? data.r0AnalysisDate.toISOString().split("T")[0]
@@ -618,7 +655,7 @@ export async function createSample(
     return created;
   });
 
-  return getSampleById(userId, sample.id);
+  return getSampleById(ctx, sample.id);
 }
 
 // ============================================
@@ -629,7 +666,7 @@ export async function createSample(
  * Update an existing sample
  */
 export async function updateSample(
-  userId: string,
+  ctx: OrgContext,
   sampleId: string,
   data: {
     sampleCode?: string;
@@ -655,6 +692,7 @@ export async function updateSample(
     hToCOrgRatio?: number | null;
     oToCOrgRatio?: number | null;
     randomReflectanceR0Percent?: number | null;
+    sReflectanceFraction?: number | null;
     r0MeasurementCount?: number | null;
     r0AnalysisDate?: Date | null;
     r0HistogramFileUrl?: string | null;
@@ -669,29 +707,24 @@ export async function updateSample(
     ironPercent?: number | null;
   }
 ): Promise<SampleWithRelations> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
+  if (data.creditBatchId) {
+    await assertSameOrg(ctx, creditBatches, data.creditBatchId);
+  }
 
   // Verify sample exists
   const [existing] = await db
     .select()
     .from(samples)
-    .where(eq(samples.id, sampleId));
+    .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Sample not found");
   }
 
-  // If code is being changed, check for duplicates
-  if (data.sampleCode && data.sampleCode !== existing.sampleCode) {
-    const [duplicate] = await db
-      .select({ id: samples.id })
-      .from(samples)
-      .where(eq(samples.sampleCode, data.sampleCode));
-
-    if (duplicate) {
-      throw new SafeError("A sample with this code already exists");
-    }
-  }
+  // Sample-code uniqueness is DB-enforced (issue #395). No racy pre-check —
+  // a user-supplied duplicate is mapped to a friendly SafeError by the
+  // `guardSampleMutation` wrapper around the write below.
 
   // Build update data
   const updateData: Record<string, unknown> = {
@@ -725,6 +758,7 @@ export async function updateSample(
   if (data.hToCOrgRatio !== undefined) updateData.hToCOrgRatio = data.hToCOrgRatio;
   if (data.oToCOrgRatio !== undefined) updateData.oToCOrgRatio = data.oToCOrgRatio;
   if (data.randomReflectanceR0Percent !== undefined) updateData.randomReflectanceR0Percent = data.randomReflectanceR0Percent;
+  if (data.sReflectanceFraction !== undefined) updateData.sReflectanceFraction = data.sReflectanceFraction;
   if (data.r0MeasurementCount !== undefined) updateData.r0MeasurementCount = data.r0MeasurementCount;
   if (data.r0AnalysisDate !== undefined) {
     updateData.r0AnalysisDate = data.r0AnalysisDate
@@ -746,8 +780,9 @@ export async function updateSample(
   if (data.calciumPercent !== undefined) updateData.calciumPercent = data.calciumPercent;
   if (data.ironPercent !== undefined) updateData.ironPercent = data.ironPercent;
 
-  await db.transaction(async (tx) => {
+  await guardSampleMutation(() => db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "sample", entityId: sampleId },
       "update",
@@ -760,6 +795,7 @@ export async function updateSample(
       data.creditBatchId !== existing.creditBatchId
     ) {
       await assertCanMutateCertifiedLineage(
+        ctx,
         tx,
         { entityType: "creditBatch", entityId: data.creditBatchId },
         "update",
@@ -775,11 +811,15 @@ export async function updateSample(
     const effectiveCreditBatchId =
       data.creditBatchId ?? existing.creditBatchId;
     if (effectiveCreditBatchId) {
-      await requireBatchTierEvidence(tx, effectiveCreditBatchId, {
+      await requireBatchTierEvidence(ctx, tx, effectiveCreditBatchId, {
         randomReflectanceR0Percent:
           data.randomReflectanceR0Percent !== undefined
             ? data.randomReflectanceR0Percent
             : existing.randomReflectanceR0Percent,
+        sReflectanceFraction:
+          data.sReflectanceFraction !== undefined
+            ? data.sReflectanceFraction
+            : existing.sReflectanceFraction,
         reactiveCarbonPercent:
           data.reactiveCarbonPercent !== undefined
             ? data.reactiveCarbonPercent
@@ -791,10 +831,10 @@ export async function updateSample(
       });
     }
 
-    await tx.update(samples).set(updateData).where(eq(samples.id, sampleId));
-  });
+    await tx.update(samples).set(updateData).where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
+  }));
 
-  return getSampleById(userId, sampleId);
+  return getSampleById(ctx, sampleId);
 }
 
 // ============================================
@@ -805,31 +845,32 @@ export async function updateSample(
  * Delete a sample
  */
 export async function deleteSample(
-  userId: string,
+  ctx: OrgContext,
   sampleId: string
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify sample exists
   const [existing] = await db
     .select({ id: samples.id })
     .from(samples)
-    .where(eq(samples.id, sampleId));
+    .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Sample not found");
   }
 
-  await db.transaction(async (tx) => {
+  await guardSampleMutation(() => db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "sample", entityId: sampleId },
       "delete",
     );
 
-    await deleteTransportLegsForEntity(tx, "sample", sampleId);
-    await tx.delete(samples).where(eq(samples.id, sampleId));
-  });
+    await deleteTransportLegsForEntity(ctx, tx, "sample", sampleId);
+    await tx.delete(samples).where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
+  }));
 }
 
 // ============================================
@@ -840,18 +881,22 @@ export async function deleteSample(
  * Check if a sample code is available
  */
 export async function isSampleCodeAvailable(
-  userId: string,
+  ctx: OrgContext,
   code: string,
   excludeSampleId?: string
 ): Promise<boolean> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [eq(samples.sampleCode, code)];
+  const conditions: SQL[] = [
+    eq(samples.organizationId, ctx.organizationId),
+    eq(samples.sampleCode, code),
+  ];
 
   if (excludeSampleId) {
     conditions.push(sql`${samples.id} != ${excludeSampleId}`);
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: samples.id })
     .from(samples)
@@ -864,8 +909,8 @@ export async function isSampleCodeAvailable(
  * Generate next sample code
  * Returns the next available code in format S-YYYY-XXX
  */
-export async function generateNextSampleCode(userId: string): Promise<string> {
-  requireAuth(userId);
+export async function generateNextSampleCode(ctx: OrgContext): Promise<string> {
+  requireOrgScope(ctx);
 
   const year = new Date().getFullYear();
   const prefix = `S-${year}-`;
@@ -873,7 +918,7 @@ export async function generateNextSampleCode(userId: string): Promise<string> {
   const [lastSample] = await db
     .select({ sampleCode: samples.sampleCode })
     .from(samples)
-    .where(ilike(samples.sampleCode, `${prefix}%`))
+    .where(and(eq(samples.organizationId, ctx.organizationId), ilike(samples.sampleCode, `${prefix}%`)))
     .orderBy(desc(samples.sampleCode))
     .limit(1);
 
@@ -893,18 +938,19 @@ export async function generateNextSampleCode(userId: string): Promise<string> {
  * Returns minimal data needed for select inputs
  */
 export async function getSampleOptions(
-  userId: string,
+  ctx: OrgContext,
   creditBatchId?: string
 ): Promise<Array<{ id: string; sampleCode: string; samplingTime: Date }>> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [eq(samples.organizationId, ctx.organizationId)];
   if (creditBatchId) {
     conditions.push(eq(samples.creditBatchId, creditBatchId));
   }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
+  // org-scope-ok: whereClause includes the active organization predicate.
   return db
     .select({
       id: samples.id,

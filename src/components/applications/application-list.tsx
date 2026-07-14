@@ -16,6 +16,7 @@ import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui"
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
+import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { ApplicationForm } from "./application-form";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
@@ -176,7 +177,13 @@ interface ApplicationListProps {
 }
 
 export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
-  const { facilityId: contextFacilityId } = useFacilityContext();
+  const { facilityId: contextFacilityId, selectedFacility } = useFacilityContext();
+  // Facility durability tier (ADR 0021). Soil temperature is a 200-year-only
+  // input, so the form section and detail row are hidden under 1000-year.
+  // Fall back to 200-year while facility context resolves: showing the field
+  // for a 1000-year facility is recoverable; hiding it for a 200-year one
+  // suppresses a required protocol input.
+  const durabilityOption = selectedFacility?.durabilityOption ?? "200_year";
 
   // Side sheet state
   const [sideSheet, setSideSheet] = useState<{
@@ -287,6 +294,19 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const hasActiveFilters = !!statusFilter || !!evidenceFilter;
   const clearFilters = () => { setStatusFilter(""); setEvidenceFilter(""); };
 
+  if (!contextFacilityId) {
+    return (
+      <div className="container-max page-shell">
+        <PageHeader
+          area="distribution"
+          title="Applications"
+          subtitle="Field applications of biochar to soil"
+        />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to view its applications." />
+      </div>
+    );
+  }
+
   if (error) {
     return (
       <div className="container-max py-32">
@@ -317,12 +337,10 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         title="Applications"
         subtitle="Field applications of biochar to soil"
         actions={
-          contextFacilityId ? (
-            <Button variant="primary" onClick={openCreate}>
-              <PlusIcon size={18} weight="bold" />
-              New Application
-            </Button>
-          ) : undefined
+          <Button variant="primary" onClick={openCreate}>
+            <PlusIcon size={18} weight="bold" />
+            New Application
+          </Button>
         }
       />
 
@@ -359,21 +377,17 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             padding="md"
             icon={<MapPinIcon size={48} />}
             title={
-              !contextFacilityId
-                ? "Select a facility"
-                : hasActiveFilters
-                  ? "No applications match"
-                  : "No applications yet"
+              hasActiveFilters
+                ? "No applications match"
+                : "No applications yet"
             }
             description={
-              !contextFacilityId
-                ? "Choose a facility from the sidebar to view applications"
-                : hasActiveFilters
-                  ? "Try adjusting or clearing the filters."
-                  : "Create your first field application to get started"
+              hasActiveFilters
+                ? "Try adjusting or clearing the filters."
+                : "Create your first field application to get started"
             }
             action={
-              contextFacilityId && !hasActiveFilters ? (
+              !hasActiveFilters ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={18} weight="bold" />
                   New Application
@@ -510,13 +524,25 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                   (sideSheetEntity.evidenceMethod ?? "visual") as ApplicationEvidenceMethod,
                 ),
               },
-              {
-                label: "Soil Temperature",
-                ...certificationDetailField("application", "soilTemperatureC"),
-                value: sideSheetEntity.soilTemperatureC != null
-                  ? `${sideSheetEntity.soilTemperatureC} °C`
-                  : null,
-              },
+              // Soil temperature is a 200-year-only durable-fraction input —
+              // hidden under 1000-year (ADR 0021). The tier prefers the row's
+              // own join-derived value, falling back to the active facility.
+              ...((sideSheetEntity.durabilityOption ?? durabilityOption) ===
+              "1000_year"
+                ? []
+                : [
+                    {
+                      label: "Soil Temperature",
+                      ...certificationDetailField(
+                        "application",
+                        "soilTemperatureC",
+                      ),
+                      value:
+                        sideSheetEntity.soilTemperatureC != null
+                          ? `${sideSheetEntity.soilTemperatureC} °C`
+                          : null,
+                    },
+                  ]),
               { label: "Crop Type", value: sideSheetEntity.cropType },
               { label: "Field Identifier", value: sideSheetEntity.fieldIdentifier },
             ],
@@ -528,6 +554,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           key={sideSheetEntity?.id ?? "create"}
           application={sideSheetEntity ?? undefined}
           deliveries={deliveryOptions}
+          durabilityOption={durabilityOption}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
           isSubmitting={createApplication.isPending || updateApplication.isPending}

@@ -1,3 +1,4 @@
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Production Process Data Access Tests
  *
@@ -19,8 +20,11 @@ import { productionProcesses } from "@/db/schema/production-processes";
 import { creditBatches, samples } from "@/db/schema";
 import {
   findOrCreateProductionProcess,
+  getProcessComplianceDrift,
   getProductionProcessSummariesByFacility,
 } from "@/data-access/production-processes";
+import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
+import { deleteSample, updateSample } from "@/data-access/samples";
 import { countEligibleSamplesByProcess } from "@/data-access/isometric";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
@@ -36,6 +40,13 @@ let facilityId: string;
 let feedstockTypeId: string;
 
 const METHOD_B_UNLOCKED_AT = new Date("2026-02-01T00:00:00.000Z");
+const POST_UNLOCK_SAMPLING_TIME = new Date("2026-02-02T12:00:00.000Z");
+const METHOD_B_RANDOM_REFLECTANCE_R0_PERCENT = 2.5;
+const METHOD_B_S_REFLECTANCE_FRACTION = 0.8;
+const METHOD_B_RESIDUAL_CARBON_PERCENT = 70;
+const CORRECTED_LAB_NAME = "QA corrected laboratory";
+const CORRECTED_TOTAL_CARBON_PERCENT = 81;
+const FAR_FUTURE_SAMPLING_TIME = new Date("2999-01-01T12:00:00.000Z");
 const METHOD_B_SAMPLE_WRITE_GUARDS_MIGRATION = resolve(
   process.cwd(),
   "drizzle/0062_process_method_b_sample_write_guards.sql",
@@ -65,6 +76,7 @@ async function createMethodBProcessWithBaseline(tag: string): Promise<{
   const [process] = await db
     .insert(productionProcesses)
     .values({
+      organizationId: TEST_ORG_ID,
       facilityId,
       feedstockTypeId,
       establishedAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -74,6 +86,7 @@ async function createMethodBProcessWithBaseline(tag: string): Promise<{
   const [batch] = await db
     .insert(creditBatches)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `CB-PROC-MB-${suffix}`,
       facilityId,
       feedstockTypeId,
@@ -89,11 +102,15 @@ async function createMethodBProcessWithBaseline(tag: string): Promise<{
     .insert(samples)
     .values(
       Array.from({ length: 30 }, (_, index) => ({
+        organizationId: TEST_ORG_ID,
         creditBatchId: batch.id,
         sampleCode: `S-PROC-MB-${suffix}-${index}`,
         samplingTime: new Date(`2026-01-${String(index + 1).padStart(2, "0")}T12:00:00.000Z`),
         totalCarbonPercent: 80,
         organicCarbonPercent: 75,
+        randomReflectanceR0Percent: METHOD_B_RANDOM_REFLECTANCE_R0_PERCENT,
+        sReflectanceFraction: METHOD_B_S_REFLECTANCE_FRACTION,
+        residualCarbonPercent: METHOD_B_RESIDUAL_CARBON_PERCENT,
       })),
     )
     .returning({ id: samples.id });
@@ -114,6 +131,8 @@ async function createMethodBProcessWithBaseline(tag: string): Promise<{
   return { processId: process.id, batchId: batch.id, sampleIds };
 }
 
+beforeAll(() => ensureTestOrg());
+
 beforeAll(async () => {
   await applyMethodBSampleWriteGuards();
 
@@ -121,7 +140,7 @@ beforeAll(async () => {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ name: `Process Test Facility ${runId}`, code: `FAC-PROC-${runId}` })
+    .values({ organizationId: TEST_ORG_ID, name: `Process Test Facility ${runId}`, code: `FAC-PROC-${runId}` })
     .returning({ id: facilities.id });
   facilityId = facility.id;
   createdIds.facilities.push(facility.id);
@@ -129,6 +148,7 @@ beforeAll(async () => {
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      organizationId: TEST_ORG_ID,
       name: `Process Test Feedstock ${runId}`,
       code: `FT-PROC-${runId}`,
       category: "forestry",
@@ -176,9 +196,10 @@ afterAll(async () => {
   });
 });
 
+
 describe("findOrCreateProductionProcess", () => {
   it("creates a Method A process when none exists for the pair", async () => {
-    const process = await findOrCreateProductionProcess(TEST_USER_ID, {
+    const process = await findOrCreateProductionProcess(makeTestOrgContext(TEST_USER_ID), {
       facilityId,
       feedstockTypeId,
     });
@@ -191,11 +212,11 @@ describe("findOrCreateProductionProcess", () => {
   });
 
   it("is idempotent — a second call returns the same process, not a duplicate", async () => {
-    const first = await findOrCreateProductionProcess(TEST_USER_ID, {
+    const first = await findOrCreateProductionProcess(makeTestOrgContext(TEST_USER_ID), {
       facilityId,
       feedstockTypeId,
     });
-    const second = await findOrCreateProductionProcess(TEST_USER_ID, {
+    const second = await findOrCreateProductionProcess(makeTestOrgContext(TEST_USER_ID), {
       facilityId,
       feedstockTypeId,
     });
@@ -215,13 +236,14 @@ describe("findOrCreateProductionProcess", () => {
     const [newer] = await db
       .insert(productionProcesses)
       .values({
+        organizationId: TEST_ORG_ID,
         facilityId,
         feedstockTypeId,
         establishedAt: new Date("2999-01-01T00:00:00.000Z"),
       })
       .returning({ id: productionProcesses.id });
 
-    const resolved = await findOrCreateProductionProcess(TEST_USER_ID, {
+    const resolved = await findOrCreateProductionProcess(makeTestOrgContext(TEST_USER_ID), {
       facilityId,
       feedstockTypeId,
     });
@@ -231,13 +253,13 @@ describe("findOrCreateProductionProcess", () => {
 
   it("rejects an unauthenticated user", async () => {
     await expect(
-      findOrCreateProductionProcess("", { facilityId, feedstockTypeId }),
+      findOrCreateProductionProcess(makeTestOrgContext(""), { facilityId, feedstockTypeId }),
     ).rejects.toThrow(/unauthorized/i);
   });
 
   it("uses the canonical process sample count in the summary surface", async () => {
     const runId = Date.now().toString(36);
-    const process = await findOrCreateProductionProcess(TEST_USER_ID, {
+    const process = await findOrCreateProductionProcess(makeTestOrgContext(TEST_USER_ID), {
       facilityId,
       feedstockTypeId,
     });
@@ -245,6 +267,7 @@ describe("findOrCreateProductionProcess", () => {
       .insert(creditBatches)
       .values([
         {
+          organizationId: TEST_ORG_ID,
           code: `CB-PROC-SAMPLED-${runId}`,
           facilityId,
           feedstockTypeId,
@@ -254,6 +277,7 @@ describe("findOrCreateProductionProcess", () => {
           certifier: "isometric",
         },
         {
+          organizationId: TEST_ORG_ID,
           code: `CB-PROC-UNSAMPLED-${runId}`,
           facilityId,
           feedstockTypeId,
@@ -270,6 +294,7 @@ describe("findOrCreateProductionProcess", () => {
       .insert(samples)
       .values(
         [0, 1, 2].map((index) => ({
+          organizationId: TEST_ORG_ID,
           creditBatchId: sampledBatch.id,
           sampleCode: `S-PROC-${runId}-${index}`,
           samplingTime: new Date(`2026-01-0${index + 1}T12:00:00.000Z`),
@@ -280,11 +305,26 @@ describe("findOrCreateProductionProcess", () => {
       .returning({ id: samples.id });
     createdIds.samples.push(...insertedSamples.map((sample) => sample.id));
 
-    const countsByProcess = await countEligibleSamplesByProcess(db, {
-      facilityId,
-    });
+    const [futureSample] = await db
+      .insert(samples)
+      .values({
+        organizationId: TEST_ORG_ID,
+        creditBatchId: sampledBatch.id,
+        sampleCode: `S-PROC-${runId}-FUTURE`,
+        samplingTime: FAR_FUTURE_SAMPLING_TIME,
+        totalCarbonPercent: 80,
+        organicCarbonPercent: 75,
+      })
+      .returning({ id: samples.id });
+    createdIds.samples.push(futureSample.id);
+
+    const countsByProcess = await countEligibleSamplesByProcess(
+      makeTestOrgContext(TEST_USER_ID),
+      db,
+      { facilityId, asOfDate: new Date() },
+    );
     const summaries = await getProductionProcessSummariesByFacility(
-      TEST_USER_ID,
+      makeTestOrgContext(TEST_USER_ID),
       facilityId,
     );
     const summary = summaries.find((item) => item.id === process.id);
@@ -311,6 +351,132 @@ describe("findOrCreateProductionProcess", () => {
     expect(sample?.id).toBe(fixture.sampleIds[0]);
   });
 
+  it("explains the Method-B baseline floor when an operator deletes a sample", async () => {
+    const fixture = await createMethodBProcessWithBaseline("delete-friendly");
+
+    await expect(
+      deleteSample(
+        makeTestOrgContext(TEST_USER_ID),
+        fixture.sampleIds[0],
+      ),
+    ).rejects.toThrow(/reduce the Method B baseline below 30/i);
+
+    const [sample] = await db
+      .select({ id: samples.id })
+      .from(samples)
+      .where(eq(samples.id, fixture.sampleIds[0]));
+    expect(sample?.id).toBe(fixture.sampleIds[0]);
+  });
+
+  it("rolls back a sample update that would break the Method-B baseline floor", async () => {
+    const fixture = await createMethodBProcessWithBaseline("update-friendly");
+    const sampleId = fixture.sampleIds[0];
+    const [before] = await db
+      .select({
+        samplingTime: samples.samplingTime,
+        labName: samples.labName,
+        totalCarbonPercent: samples.totalCarbonPercent,
+      })
+      .from(samples)
+      .where(eq(samples.id, sampleId));
+
+    await expect(
+      updateSample(makeTestOrgContext(TEST_USER_ID), sampleId, {
+        samplingTime: POST_UNLOCK_SAMPLING_TIME,
+      }),
+    ).rejects.toThrow(/reduce the Method B baseline below 30/i);
+
+    const [after] = await db
+      .select({
+        samplingTime: samples.samplingTime,
+        labName: samples.labName,
+        totalCarbonPercent: samples.totalCarbonPercent,
+      })
+      .from(samples)
+      .where(eq(samples.id, sampleId));
+    expect(after).toEqual(before);
+  });
+
+  it("allows ordinary corrections to an unsubmitted Method-B baseline sample", async () => {
+    const fixture = await createMethodBProcessWithBaseline("update-correction");
+
+    const updated = await updateSample(
+      makeTestOrgContext(TEST_USER_ID),
+      fixture.sampleIds[0],
+      {
+        labName: CORRECTED_LAB_NAME,
+        totalCarbonPercent: CORRECTED_TOTAL_CARBON_PERCENT,
+      },
+    );
+
+    expect(updated.labName).toBe(CORRECTED_LAB_NAME);
+    expect(Number(updated.totalCarbonPercent)).toBe(
+      CORRECTED_TOTAL_CARBON_PERCENT,
+    );
+  });
+
+  it("keeps pre-unlock batches on Method A after their process unlocks Method B", async () => {
+    const fixture = await createMethodBProcessWithBaseline("effective-method");
+    const suffix = Date.now().toString(36);
+    const [sameDayBatch, postUnlockBatch] = await db
+      .insert(creditBatches)
+      .values([
+        {
+          organizationId: TEST_ORG_ID,
+          code: `CB-PROC-MB-SAME-DAY-${suffix}`,
+          facilityId,
+          feedstockTypeId,
+          productionProcessId: fixture.processId,
+          startDate: "2026-02-01",
+          endDate: "2026-02-01",
+          certifier: "isometric",
+        },
+        {
+          organizationId: TEST_ORG_ID,
+          code: `CB-PROC-MB-POST-${suffix}`,
+          facilityId,
+          feedstockTypeId,
+          productionProcessId: fixture.processId,
+          startDate: "2026-02-02",
+          endDate: "2026-02-28",
+          certifier: "isometric",
+        },
+      ])
+      .returning({ id: creditBatches.id });
+    createdIds.creditBatches.push(sameDayBatch.id, postUnlockBatch.id);
+
+    const loaded = await getCreditBatchesWithSamples(
+      makeTestOrgContext(TEST_USER_ID),
+      [fixture.batchId, sameDayBatch.id, postUnlockBatch.id],
+    );
+    const methodsByBatch = new Map(
+      loaded.map((batch) => [batch.creditBatchId, batch.samplingMethod]),
+    );
+
+    expect(methodsByBatch.get(fixture.batchId)).toBe("method_a");
+    expect(methodsByBatch.get(sameDayBatch.id)).toBe("method_a");
+    expect(methodsByBatch.get(postUnlockBatch.id)).toBe("method_b");
+
+    const summaries = await getProductionProcessSummariesByFacility(
+      makeTestOrgContext(TEST_USER_ID),
+      facilityId,
+    );
+    const summary = summaries.find((item) => item.id === fixture.processId);
+    expect(summary?.totalBatches).toBe(1);
+    expect(summary?.sampledBatches).toBe(0);
+    expect(summary?.requiredSampledBatches).toBe(1);
+    expect(summary?.cadenceMet).toBe(false);
+
+    const compliance = await getProcessComplianceDrift(
+      makeTestOrgContext(TEST_USER_ID),
+      fixture.processId,
+      new Date("2026-03-01T00:00:00.000Z"),
+    );
+    expect(compliance.drift.missedSamplings.totalBatches).toBe(1);
+    expect(compliance.drift.missedSamplings.sampledBatches).toBe(0);
+    expect(compliance.drift.missedSamplings.requiredSampledBatches).toBe(1);
+  });
+
   it("blocks clearing a pre-unlock sample's credit-batch link from a Method-B process", async () => {
     const fixture = await createMethodBProcessWithBaseline("unlink");
 
@@ -333,6 +499,7 @@ describe("findOrCreateProductionProcess", () => {
     const [targetProcess] = await db
       .insert(productionProcesses)
       .values({
+        organizationId: TEST_ORG_ID,
         facilityId,
         feedstockTypeId,
         establishedAt: new Date("2026-03-01T00:00:00.000Z"),

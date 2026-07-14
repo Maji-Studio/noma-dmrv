@@ -7,6 +7,7 @@ import {
   updateApplicationFn,
   deleteApplicationFn,
 } from "@/fn/applications";
+import { creditBatchKeys } from "@/hooks/use-credit-batches";
 import type { ApplicationFormData, UpdateApplicationData } from "@/schemas/applications";
 
 /**
@@ -93,6 +94,10 @@ export function useCreateApplication() {
       queryClient.invalidateQueries({
         queryKey: [...applicationKeys.all, "deliveryOptions"],
       });
+      // A new application can join a credit batch's roll-up; the batch
+      // membership isn't known here, so invalidate the whole credit-batch
+      // scope rather than guessing a single detail key.
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.all });
     },
   });
 }
@@ -115,6 +120,10 @@ export function useUpdateApplication() {
           queryKey: applicationKeys.detail(result.data.id),
         });
       }
+      // Application edits (e.g. applied mass) shift the owning credit
+      // batch's derived figures; batch membership isn't known here, so
+      // invalidate the whole credit-batch scope rather than guessing.
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.all });
     },
   });
 }
@@ -133,6 +142,10 @@ export function useDeleteApplication() {
       queryClient.invalidateQueries({
         queryKey: [...applicationKeys.all, "deliveryOptions"],
       });
+      // Deleting an application removes it from any credit batch roll-up
+      // it belonged to; batch membership isn't known here, so invalidate
+      // the whole credit-batch scope rather than guessing.
+      queryClient.invalidateQueries({ queryKey: creditBatchKeys.all });
     },
   });
 }

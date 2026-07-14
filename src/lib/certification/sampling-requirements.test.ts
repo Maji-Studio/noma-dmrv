@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  deriveBatchSamplingMethod,
   deriveSamplingRequirement,
   type BatchSampling,
 } from "./sampling-requirements";
@@ -11,6 +12,54 @@ function batches(...sampleCounts: number[]): BatchSampling[] {
     sampleCount,
   }));
 }
+
+describe("deriveBatchSamplingMethod — immutable unlock boundary", () => {
+  const unlock = new Date("2026-02-01T12:00:00.000Z");
+
+  it.each([
+    ["before", "2026-01-31", "method_a"],
+    ["same date", "2026-02-01", "method_a"],
+    ["after", "2026-02-02", "method_b"],
+  ] as const)("keeps a batch starting %s in its effective regime", (_, batchStartDate, expected) => {
+    expect(
+      deriveBatchSamplingMethod({
+        processMethod: "method_b",
+        methodBUnlockedAt: unlock,
+        batchStartDate,
+      }),
+    ).toBe(expected);
+  });
+
+  it("fails closed to Method A when the unlock timestamp is absent", () => {
+    expect(
+      deriveBatchSamplingMethod({
+        processMethod: "method_b",
+        methodBUnlockedAt: null,
+        batchStartDate: "2026-02-02",
+      }),
+    ).toBe("method_a");
+  });
+
+  it("keeps a Method A process on Method A even if stale unlock data exists", () => {
+    expect(
+      deriveBatchSamplingMethod({
+        processMethod: "method_a",
+        methodBUnlockedAt: unlock,
+        batchStartDate: "2026-02-02",
+      }),
+    ).toBe("method_a");
+  });
+
+  it("fails closed to Method A for an invalid batch start date", () => {
+    expect(
+      deriveBatchSamplingMethod({
+        processMethod: "method_b",
+        methodBUnlockedAt: unlock,
+        batchStartDate: "not-a-date",
+      }),
+    ).toBe("method_a");
+  });
+});
 
 describe("deriveSamplingRequirement — Method A (every batch, §8.3)", () => {
   it("requires every batch sampled and reports the unsampled ones", () => {

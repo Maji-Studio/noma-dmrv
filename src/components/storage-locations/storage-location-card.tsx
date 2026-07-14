@@ -2,6 +2,7 @@
 
 import {
   ArrowDownIcon,
+  ArrowsClockwiseIcon,
   ArrowUpIcon,
   CheckCircleIcon,
   PencilSimpleIcon,
@@ -14,6 +15,7 @@ import {
   binAccentStyle,
   binCapacityPercent,
   binCurrentMassKg,
+  binNeedsReconciliation,
 } from "./bin-display";
 
 interface StorageLocationCardProps {
@@ -21,6 +23,7 @@ interface StorageLocationCardProps {
   onView: (storageLocation: StorageLocationWithFacility) => void;
   onEdit: (storageLocation: StorageLocationWithFacility) => void;
   onDelete: (storageLocationId: string) => void;
+  onReconcile: (storageLocation: StorageLocationWithFacility) => void;
 }
 
 function formatTimeAgo(date: Date) {
@@ -53,10 +56,12 @@ export function StorageLocationCard({
   onView,
   onEdit,
   onDelete,
+  onReconcile,
 }: StorageLocationCardProps) {
   const currentMassKg = binCurrentMassKg(storageLocation);
   const capacityPercent = binCapacityPercent(storageLocation);
-  const isEmpty = currentMassKg <= 0;
+  const needsReconciliation = binNeedsReconciliation(storageLocation);
+  const isEmpty = currentMassKg === 0;
   const hasCapacity = storageLocation.capacityKg != null && storageLocation.capacityKg > 0;
   const { lastActivity } = storageLocation;
   const contents = contentsLabel(storageLocation);
@@ -105,9 +110,11 @@ export function StorageLocationCard({
         <div className="flex items-baseline justify-between gap-8">
           <span
             className={`title-heading-2 ${
-              isEmpty
-                ? "text-[var(--color-text-tertiary)]"
-                : "text-[var(--color-text-primary)]"
+              needsReconciliation
+                ? "text-[var(--color-signal-red)]"
+                : isEmpty
+                  ? "text-[var(--color-text-tertiary)]"
+                  : "text-[var(--color-text-primary)]"
             }`}
           >
             {isEmpty ? "Empty" : formatMass(currentMassKg)}
@@ -145,6 +152,22 @@ export function StorageLocationCard({
           </p>
         )}
 
+        {/* Needs-reconciliation alert — negative derived stock (issue #194).
+            Deep-links straight to the reconcile sheet. */}
+        {needsReconciliation && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onReconcile(storageLocation);
+            }}
+            className="flex items-center gap-4 self-start body-caption font-medium text-[var(--color-signal-red)] underline decoration-dotted underline-offset-2 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+          >
+            <WarningIcon size={12} weight="fill" />
+            Needs reconciliation
+          </button>
+        )}
+
         {/* Signals */}
         {storageLocation.type === "feedstock_bin" &&
           storageLocation.feedstockInventory.pendingDryMassKg > 0 && (
@@ -175,6 +198,15 @@ export function StorageLocationCard({
         className="flex items-center justify-end gap-4 border-t border-[var(--color-border-tertiary)] px-12 py-8"
         onClick={(e) => e.stopPropagation()}
       >
+        <button
+          type="button"
+          onClick={() => onReconcile(storageLocation)}
+          className="inline-flex h-32 w-32 items-center justify-center border border-[var(--color-border-tertiary)] text-[var(--color-text-tertiary)] transition-colors hover:border-[var(--bin-accent)] hover:text-[var(--bin-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+          aria-label={`Reconcile ${storageLocation.name}`}
+          title="Reconcile stock"
+        >
+          <ArrowsClockwiseIcon size={15} />
+        </button>
         <button
           type="button"
           onClick={() => onEdit(storageLocation)}

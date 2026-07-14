@@ -14,13 +14,16 @@ import {
   documentVisibility,
   documentUploadStatus,
 } from './common';
-import { users } from './auth';
+import { organizations, users } from './auth';
 
 // Optional file-based evidence linked via polymorphic entity references.
 export const documents = pgTable(
   'documents',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
     entityType: text('entity_type').notNull(),
     entityId: uuid('entity_id').notNull(),
     documentType: documentationType('document_type').notNull(),
@@ -56,6 +59,7 @@ export const documents = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    index('documents_organization_id_idx').on(table.organizationId),
     // Every row must point to something: a storage object OR an external URL.
     check(
       'documents_resolvable',

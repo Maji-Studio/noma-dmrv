@@ -1,3 +1,4 @@
+import { DEC_ORG_ID } from "@/db/org-defaults";
 /**
  * Test Data Helpers
  *
@@ -105,6 +106,7 @@ export async function createTestFacility(
     };
 
     await db.insert(schema.facilities).values({
+      organizationId: DEC_ORG_ID,
       id: facility.id,
       code: facility.code,
       name: facility.name,
@@ -170,6 +172,7 @@ export async function createTestStorageLocation(
     };
 
     await db.insert(schema.storageLocations).values({
+      organizationId: DEC_ORG_ID,
       id: location.id,
       code: location.code,
       name: location.name,
@@ -220,6 +223,7 @@ export async function createTestSupplier(
     };
 
     await db.insert(schema.suppliers).values({
+      organizationId: DEC_ORG_ID,
       id: supplier.id,
       code: supplier.code,
       name: supplier.name,
@@ -267,6 +271,7 @@ export async function createTestFormulation(
     };
 
     await db.insert(schema.formulations).values({
+      organizationId: DEC_ORG_ID,
       id: formulation.id,
       code: formulation.code,
       name: formulation.name,
@@ -316,6 +321,7 @@ export async function createTestBiocharProduct(
     };
 
     await db.insert(schema.biocharProducts).values({
+      organizationId: DEC_ORG_ID,
       id: product.id,
       code: product.code,
       facilityId: product.facilityId,
@@ -366,6 +372,7 @@ export async function createTestApplication(
     };
 
     await db.insert(schema.applications).values({
+      organizationId: DEC_ORG_ID,
       id: application.id,
       code: application.code,
       deliveryId: application.deliveryId,

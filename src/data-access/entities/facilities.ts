@@ -6,11 +6,14 @@ import { ilike, or, eq, and, isNull, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { facilities } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "../utils";
 
-export async function getFacilities(params: {
+export async function getFacilities(ctx: OrgContext, params: {
   search?: string;
   limit: number;
 }): Promise<EntityOption[]> {
+  requireOrgScope(ctx);
   const { search, limit } = params;
 
   const conditions: SQL[] = [isNull(facilities.archivedAt)];
@@ -34,7 +37,7 @@ export async function getFacilities(params: {
       location: facilities.location,
     })
     .from(facilities)
-    .where(whereClause)
+    .where(and(eq(facilities.organizationId, ctx.organizationId), whereClause))
     .limit(limit);
 
   return results.map((r) => ({
@@ -45,7 +48,8 @@ export async function getFacilities(params: {
   }));
 }
 
-export async function getFacilityById(id: string): Promise<EntityOption | null> {
+export async function getFacilityById(ctx: OrgContext, id: string): Promise<EntityOption | null> {
+  requireOrgScope(ctx);
   const [result] = await db
     .select({
       id: facilities.id,
@@ -54,7 +58,7 @@ export async function getFacilityById(id: string): Promise<EntityOption | null> 
       location: facilities.location,
     })
     .from(facilities)
-    .where(eq(facilities.id, id))
+    .where(and(eq(facilities.id, id), eq(facilities.organizationId, ctx.organizationId)))
     .limit(1);
 
   if (!result) return null;
