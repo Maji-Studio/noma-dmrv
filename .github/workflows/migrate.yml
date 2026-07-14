@@ -9,6 +9,7 @@ on:
       - "drizzle.config.ts"
       - ".github/workflows/migrate.yml"
       - "src/lib/cli/ensure-admin.ts"
+      - "src/lib/cli/ensure-admin-core.ts"
   workflow_dispatch:
     inputs:
       action:
@@ -18,13 +19,14 @@ on:
         options:
           - reset-seed-staging
           - reset-empty-staging
+          - bootstrap-production
           - reset-production
       authorized:
         description: "Check only after explicit approval to wipe production"
         required: false
         type: boolean
       confirmation:
-        description: "Type RESET AND SEED STAGING, RESET STAGING (EMPTY), or RESET PRODUCTION to confirm"
+        description: "Type RESET AND SEED STAGING, RESET STAGING (EMPTY), BOOTSTRAP PRODUCTION, or RESET PRODUCTION to confirm"
         required: true
         type: string
 
@@ -130,6 +132,57 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Load production database secret from 1Password
+        uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          DATABASE_URL: op://Environment Variables/noma-dmrv env production/DATABASE_URL
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck application
+        run: pnpm typecheck
+
+      - name: Log production database target
+        run: |
+          node -e "const url = new URL(process.env.DATABASE_URL); console.log(`Database target: host=${url.hostname} port=${url.port || '5432'} user=${decodeURIComponent(url.username)} db=${url.pathname.slice(1)} sslmode=${url.searchParams.get('sslmode') ?? 'not set'}`)"
+
+      - name: Run database migrations
+        run: pnpm db:migrate
+
+      - name: Verify production schema matches Drizzle definitions
+        run: pnpm db:verify-schema
+
+  # ── One-time manual production bootstrap ──────────────────────────────────────────
+  bootstrap-production:
+    runs-on: ubuntu-latest
+    environment: production
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      github.event.inputs.action == 'bootstrap-production' &&
+      github.event.inputs.confirmation == 'BOOTSTRAP PRODUCTION'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
       - name: Load production bootstrap secrets from 1Password
         uses: 1password/load-secrets-action@581a835fb51b8e7ec56b71cf2ffddd7e68bb25e0 # v2
         with:
@@ -157,23 +210,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck application
-        run: pnpm typecheck
-
       - name: Log production database target
         run: |
           node -e "const url = new URL(process.env.DATABASE_URL); console.log(`Database target: host=${url.hostname} port=${url.port || '5432'} user=${decodeURIComponent(url.username)} db=${url.pathname.slice(1)} sslmode=${url.searchParams.get('sslmode') ?? 'not set'}`)"
-
-      - name: Run database migrations
-        run: pnpm db:migrate
 
       - name: Bootstrap production admin, organization, and registry credentials
         env:
           NODE_ENV: production
         run: pnpm db:ensure-admin
-
-      - name: Verify production schema matches Drizzle definitions
-        run: pnpm db:verify-schema
 
   # ── Manual reset + seed: staging ───────────────────────────────────────
   reset-seed-staging:
