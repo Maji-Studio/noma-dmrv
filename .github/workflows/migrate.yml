@@ -212,6 +212,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Typecheck application
+        run: pnpm typecheck
+
       - name: Log production database target
         run: |
           node -e "const url = new URL(process.env.DATABASE_URL); console.log(`Database target: host=${url.hostname} port=${url.port || '5432'} user=${decodeURIComponent(url.username)} db=${url.pathname.slice(1)} sslmode=${url.searchParams.get('sslmode') ?? 'not set'}`)"
