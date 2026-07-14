@@ -8,6 +8,13 @@ import { and, eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { config } from 'dotenv';
 import { Pool } from 'pg';
+// Better Auth's own hasher, imported from `better-auth/crypto` rather than from
+// our configured `auth` instance: it is the same default scrypt implementation
+// (we register no custom `password.hash`), so the hashes stay byte-compatible,
+// but it does not drag `@/config/env` — and therefore the whole validated server
+// env — into this CLI. `db:ensure-admin` runs as a bare tsx script with no
+// NODE_ENV set, so importing the app env schema here fails validation outright.
+import { hashPassword } from 'better-auth/crypto';
 import * as schema from '../../db/schema';
 import { DEC_ORG_ID, DEC_ORG_NAME, DEC_ORG_SLUG } from '../../db/org-defaults';
 import { getPgPoolConfig } from '../pg-pool-config';
@@ -162,9 +169,7 @@ async function ensureAdmin() {
   const db = drizzle(pool, { schema });
 
   try {
-    // Load auth only after dotenv has populated process.env for this CLI.
-    const { auth } = await import('../auth/better-auth');
-    const passwordHash = await (await auth.$context).password.hash(adminPassword);
+    const passwordHash = await hashPassword(adminPassword);
 
     // Check if user exists
     const [existing] = await db
