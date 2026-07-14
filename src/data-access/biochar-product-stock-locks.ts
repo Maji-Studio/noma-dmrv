@@ -1,13 +1,25 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import {
+  biocharProducts,
   formulations,
   productionRuns,
   type BiocharProduct,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import { assertBiocharDrawWithinStock } from "./bin-stock-guards";
-import { lockBinStocks } from "./lock-bin-stocks";
+import { SafeError } from "@/lib/errors";
+import {
+  assertBiocharDrawWithinStock,
+  deriveBiocharProductDeliveredKg,
+  deriveProductAvailableKg,
+  formatKg,
+  isOverdraw,
+  overdrawError,
+} from "./bin-stock-guards";
+import {
+  assertStockLockSnapshot,
+  lockBinStocks,
+} from "./lock-bin-stocks";
 
 interface BiocharProductStockUpdate {
   facilityId?: string;
@@ -28,6 +40,16 @@ type LockedBiocharProduct = Pick<
   | "composition"
 >;
 
+interface SourceRunSnapshot {
+  id: string;
+  storageLocationId: string | null;
+}
+
+export interface BiocharProductUpdateLockPreparation {
+  product: LockedBiocharProduct;
+  sourceRuns: SourceRunSnapshot[];
+}
+
 export interface BiocharProductStockState {
   transactionFacilityId: string;
   transactionFormulationId: string | null;
@@ -45,6 +67,33 @@ export function biocharEquivalentKg(
   return (massKg ?? 0) * (biocharRatio ?? 1);
 }
 
+function deriveBiocharProductStockState(
+  product: LockedBiocharProduct,
+  data: BiocharProductStockUpdate,
+): BiocharProductStockState {
+  return {
+    transactionFacilityId: data.facilityId ?? product.facilityId,
+    transactionFormulationId:
+      data.formulationId !== undefined
+        ? data.formulationId
+        : product.formulationId,
+    transactionLinkedRunId:
+      data.linkedProductionRunId !== undefined
+        ? data.linkedProductionRunId
+        : product.linkedProductionRunId,
+    transactionStorageId:
+      data.storageLocationId !== undefined
+        ? data.storageLocationId
+        : product.storageLocationId,
+    transactionMassKg:
+      data.massKg !== undefined ? data.massKg : product.massKg,
+    transactionComposition:
+      data.composition !== undefined
+        ? data.composition
+        : (product.composition as Record<string, unknown> | null),
+  };
+}
+
 /**
  * Derive the stock-sensitive update state and take every advisory bin lock in
  * one sorted batch before the caller locks a destination storage row.
@@ -52,34 +101,14 @@ export function biocharEquivalentKg(
 export async function lockBiocharProductUpdateStock(
   ctx: OrgContext,
   tx: DbTransaction,
-  locked: LockedBiocharProduct,
+  product: LockedBiocharProduct,
   data: BiocharProductStockUpdate,
-): Promise<BiocharProductStockState> {
-  const state: BiocharProductStockState = {
-    transactionFacilityId: data.facilityId ?? locked.facilityId,
-    transactionFormulationId:
-      data.formulationId !== undefined
-        ? data.formulationId
-        : locked.formulationId,
-    transactionLinkedRunId:
-      data.linkedProductionRunId !== undefined
-        ? data.linkedProductionRunId
-        : locked.linkedProductionRunId,
-    transactionStorageId:
-      data.storageLocationId !== undefined
-        ? data.storageLocationId
-        : locked.storageLocationId,
-    transactionMassKg:
-      data.massKg !== undefined ? data.massKg : locked.massKg,
-    transactionComposition:
-      data.composition !== undefined
-        ? data.composition
-        : (locked.composition as Record<string, unknown> | null),
-  };
+): Promise<BiocharProductUpdateLockPreparation> {
+  const state = deriveBiocharProductStockState(product, data);
   const productBinStockChanged =
-    (data.massKg !== undefined && data.massKg !== locked.massKg) ||
+    (data.massKg !== undefined && data.massKg !== product.massKg) ||
     (data.storageLocationId !== undefined &&
-      data.storageLocationId !== locked.storageLocationId);
+      data.storageLocationId !== product.storageLocationId);
   // Mirror the defined-ness condition in assertBiocharProductUpdateDraw. Any
   // source-bin advisory lock that assert can take must already be in this batch.
   const biocharAllocationInputsPresent =
@@ -87,13 +116,53 @@ export async function lockBiocharProductUpdateStock(
     data.formulationId !== undefined ||
     data.linkedProductionRunId !== undefined;
   const sourceRunIds = [...new Set(
-    [locked.linkedProductionRunId, state.transactionLinkedRunId].filter(
+    [product.linkedProductionRunId, state.transactionLinkedRunId].filter(
       (id): id is string => id != null,
     ),
   )];
   const sourceBins = biocharAllocationInputsPresent && sourceRunIds.length > 0
     ? await tx
-        .select({ storageLocationId: productionRuns.biocharStorageLocationId })
+        .select({
+          id: productionRuns.id,
+          storageLocationId: productionRuns.biocharStorageLocationId,
+        })
+        .from(productionRuns)
+        .where(and(
+          inArray(productionRuns.id, sourceRunIds),
+          eq(productionRuns.organizationId, ctx.organizationId),
+        ))
+        .orderBy(productionRuns.id)
+    : [];
+
+  await lockBinStocks(ctx, tx, [
+    ...(productBinStockChanged
+      ? [product.storageLocationId, state.transactionStorageId]
+      : []),
+    ...sourceBins.map((row) => row.storageLocationId),
+  ]);
+  return { product, sourceRuns: sourceBins };
+}
+
+/** Lock dependency rows after the bin batch and reject a stale discovery read. */
+export async function lockBiocharProductUpdateRows(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  locked: LockedBiocharProduct,
+  data: BiocharProductStockUpdate,
+  preparation: BiocharProductUpdateLockPreparation,
+): Promise<BiocharProductStockState> {
+  assertStockLockSnapshot(
+    locked.storageLocationId === preparation.product.storageLocationId &&
+      locked.linkedProductionRunId === preparation.product.linkedProductionRunId,
+  );
+
+  const sourceRunIds = preparation.sourceRuns.map((run) => run.id);
+  const lockedSourceRuns = sourceRunIds.length > 0
+    ? await tx
+        .select({
+          id: productionRuns.id,
+          storageLocationId: productionRuns.biocharStorageLocationId,
+        })
         .from(productionRuns)
         .where(and(
           inArray(productionRuns.id, sourceRunIds),
@@ -103,13 +172,17 @@ export async function lockBiocharProductUpdateStock(
         .for("update")
     : [];
 
-  await lockBinStocks(ctx, tx, [
-    ...(productBinStockChanged
-      ? [locked.storageLocationId, state.transactionStorageId]
-      : []),
-    ...sourceBins.map((row) => row.storageLocationId),
-  ]);
-  return state;
+  assertStockLockSnapshot(
+    lockedSourceRuns.length === preparation.sourceRuns.length &&
+      lockedSourceRuns.every((lockedRun) => {
+        const snapshot = preparation.sourceRuns.find(
+          (run) => run.id === lockedRun.id,
+        );
+        return snapshot?.storageLocationId === lockedRun.storageLocationId;
+      }),
+  );
+
+  return deriveBiocharProductStockState(locked, data);
 }
 
 /** Re-check a changed product allocation while the source-bin lock is held. */
@@ -158,22 +231,112 @@ export async function assertBiocharProductUpdateDraw(
     biocharStorageLocationId: effectiveRun.biocharStorageLocationId,
     requestedBiocharKg,
     excludeProductId: productId,
+    binLockAlreadyHeld: true,
   });
+}
+
+/** Reject a mass correction that would overdraw the product batch or its bin. */
+export async function assertBiocharProductMassReductionWithinStock(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  productId: string,
+  locked: Pick<BiocharProduct, "code" | "massKg" | "storageLocationId">,
+  data: Pick<BiocharProductStockUpdate, "massKg">,
+): Promise<void> {
+  const previousMassKg = locked.massKg ?? 0;
+  const transactionMassKg = data.massKg ?? 0;
+  if (
+    data.massKg === undefined ||
+    transactionMassKg >= previousMassKg
+  ) {
+    return;
+  }
+
+  const deliveredKg = await deriveBiocharProductDeliveredKg(
+    ctx,
+    tx,
+    productId,
+  );
+  if (isOverdraw(deliveredKg, transactionMassKg)) {
+    throw new SafeError(
+      `Cannot reduce product ${locked.code} to ${formatKg(
+        transactionMassKg,
+      )}: ${formatKg(deliveredKg)} has already been delivered. Correct the deliveries before lowering the product mass.`,
+    );
+  }
+
+  if (!locked.storageLocationId) return;
+
+  const availableKg = await deriveProductAvailableKg(
+    ctx,
+    tx,
+    locked.storageLocationId,
+  );
+  const reductionKg = previousMassKg - transactionMassKg;
+  if (isOverdraw(reductionKg, availableKg)) {
+    throw overdrawError("product", availableKg, reductionKg);
+  }
 }
 
 export async function lockDeleteBiocharProductStock(
   ctx: OrgContext,
   tx: DbTransaction,
-  locked: Pick<
-    BiocharProduct,
-    "massKg" | "linkedProductionRunId" | "storageLocationId"
-  >,
-): Promise<void> {
-  if ((locked.massKg ?? 0) <= 0) return;
+  productId: string,
+): Promise<BiocharProduct> {
+  const [snapshot] = await tx
+    .select()
+    .from(biocharProducts)
+    .where(and(
+      eq(biocharProducts.id, productId),
+      eq(biocharProducts.organizationId, ctx.organizationId),
+    ));
 
-  const [sourceRun] = locked.linkedProductionRunId
+  if (!snapshot) {
+    throw new SafeError("Biochar product not found");
+  }
+
+  const [sourceRunSnapshot] = snapshot.linkedProductionRunId
     ? await tx
         .select({
+          id: productionRuns.id,
+          storageLocationId: productionRuns.biocharStorageLocationId,
+        })
+        .from(productionRuns)
+        .where(and(
+          eq(productionRuns.id, snapshot.linkedProductionRunId),
+          eq(productionRuns.organizationId, ctx.organizationId),
+        ))
+    : [];
+
+  if ((snapshot.massKg ?? 0) > 0) {
+    await lockBinStocks(ctx, tx, [
+      snapshot.storageLocationId,
+      sourceRunSnapshot?.storageLocationId,
+    ]);
+  }
+
+  const [locked] = await tx
+    .select()
+    .from(biocharProducts)
+    .where(and(
+      eq(biocharProducts.id, productId),
+      eq(biocharProducts.organizationId, ctx.organizationId),
+    ))
+    .for("update");
+
+  if (!locked) {
+    throw new SafeError("Biochar product not found");
+  }
+  assertStockLockSnapshot(
+    locked.massKg === snapshot.massKg &&
+      locked.storageLocationId === snapshot.storageLocationId &&
+      locked.linkedProductionRunId === snapshot.linkedProductionRunId,
+  );
+
+  const [lockedSourceRun] = locked.linkedProductionRunId
+    ? await tx
+        .select({
+          id: productionRuns.id,
           storageLocationId: productionRuns.biocharStorageLocationId,
         })
         .from(productionRuns)
@@ -183,8 +346,10 @@ export async function lockDeleteBiocharProductStock(
         ))
         .for("update")
     : [];
-  await lockBinStocks(ctx, tx, [
-    locked.storageLocationId,
-    sourceRun?.storageLocationId,
-  ]);
+  assertStockLockSnapshot(
+    lockedSourceRun?.id === sourceRunSnapshot?.id &&
+      lockedSourceRun?.storageLocationId === sourceRunSnapshot?.storageLocationId,
+  );
+
+  return locked;
 }

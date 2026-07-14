@@ -82,8 +82,10 @@ import { validateCompositionIngredientBins } from "./biochar-product-composition
 import { assertBiocharDrawWithinStock } from "./bin-stock-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
 import {
+  assertBiocharProductMassReductionWithinStock,
   assertBiocharProductUpdateDraw,
   biocharEquivalentKg,
+  lockBiocharProductUpdateRows,
   lockBiocharProductUpdateStock,
   lockDeleteBiocharProductStock,
 } from "./biochar-product-stock-locks";
@@ -753,6 +755,13 @@ export async function updateBiocharProduct(
   // all atomically. Locking the bin row serializes concurrent placements so two
   // products with different formulations can't strand a mismatch in one bin.
   const updated = await db.transaction(async (tx) => {
+    const stockPreparation = await lockBiocharProductUpdateStock(
+      ctx,
+      tx,
+      existing,
+      data,
+    );
+
     const [locked] = await tx
       .select()
       .from(biocharProducts)
@@ -773,6 +782,13 @@ export async function updateBiocharProduct(
       "update",
     );
 
+    const stockState = await lockBiocharProductUpdateRows(
+      ctx,
+      tx,
+      locked,
+      data,
+      stockPreparation,
+    );
     const {
       transactionFacilityId,
       transactionFormulationId,
@@ -780,7 +796,15 @@ export async function updateBiocharProduct(
       transactionStorageId,
       transactionMassKg,
       transactionComposition,
-    } = await lockBiocharProductUpdateStock(ctx, tx, locked, data);
+    } = stockState;
+
+    await assertBiocharProductMassReductionWithinStock(
+      ctx,
+      tx,
+      productId,
+      locked,
+      data,
+    );
 
     let claimBinFormulationId: string | null = null;
 
@@ -877,41 +901,8 @@ export async function deleteBiocharProduct(
 ): Promise<void> {
   requireOrgScope(ctx);
 
-  // Verify product exists
-  const [existing] = await db
-    .select({
-      id: biocharProducts.id,
-      massKg: biocharProducts.massKg,
-      storageLocationId: biocharProducts.storageLocationId,
-      biocharStorageLocationId: productionRuns.biocharStorageLocationId,
-    })
-    .from(biocharProducts)
-    .leftJoin(
-      productionRuns,
-      and(
-        eq(biocharProducts.linkedProductionRunId, productionRuns.id),
-        eq(productionRuns.organizationId, ctx.organizationId),
-      ),
-    )
-    .where(and(eq(biocharProducts.id, productId), eq(biocharProducts.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Biochar product not found");
-  }
-
   await db.transaction(async (tx) => {
-    const [locked] = await tx
-      .select()
-      .from(biocharProducts)
-      .where(and(
-        eq(biocharProducts.id, productId),
-        eq(biocharProducts.organizationId, ctx.organizationId),
-      ))
-      .for("update");
-
-    if (!locked) {
-      throw new SafeError("Biochar product not found");
-    }
+    await lockDeleteBiocharProductStock(ctx, tx, productId);
 
     await assertCanMutateCertifiedLineage(
       ctx,
@@ -919,8 +910,6 @@ export async function deleteBiocharProduct(
       { entityType: "biocharProduct", entityId: productId },
       "delete",
     );
-
-    await lockDeleteBiocharProductStock(ctx, tx, locked);
 
     const [orderCount] = await tx
       .select({ count: count() })

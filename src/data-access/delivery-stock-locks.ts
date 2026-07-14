@@ -1,10 +1,13 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
-import { biocharProducts, orders } from "@/db/schema";
+import { biocharProducts, deliveries, orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import { assertBiocharProductDrawWithinStock } from "./bin-stock-guards";
-import { lockBinStocks } from "./lock-bin-stocks";
+import {
+  assertStockLockSnapshot,
+  lockBinStocks,
+} from "./lock-bin-stocks";
 
 interface DeliveryStockState {
   orderId: string;
@@ -40,6 +43,24 @@ export async function lockCreateDeliveryStock(
     requestedWetKg: number;
   },
 ): Promise<void> {
+  const [productSnapshot] = await tx
+    .select({
+      id: biocharProducts.id,
+      storageLocationId: biocharProducts.storageLocationId,
+    })
+    .from(biocharProducts)
+    .where(and(
+      eq(biocharProducts.id, params.biocharProductId),
+      eq(biocharProducts.organizationId, ctx.organizationId),
+    ));
+
+  if (!productSnapshot) {
+    throw new SafeError("Biochar product not found");
+  }
+
+  await lockBinStocks(ctx, tx, [
+    productSnapshot.storageLocationId ?? productSnapshot.id,
+  ]);
   const [lockedProduct] = await tx
     .select({
       id: biocharProducts.id,
@@ -51,37 +72,131 @@ export async function lockCreateDeliveryStock(
       eq(biocharProducts.organizationId, ctx.organizationId),
     ))
     .for("update");
-
-  if (!lockedProduct) {
-    throw new SafeError("Biochar product not found");
-  }
-
-  await lockBinStocks(ctx, tx, [
-    lockedProduct.storageLocationId ?? lockedProduct.id,
-  ]);
+  assertStockLockSnapshot(
+    lockedProduct?.id === productSnapshot.id &&
+      lockedProduct?.storageLocationId === productSnapshot.storageLocationId,
+  );
   await assertBiocharProductDrawWithinStock(ctx, tx, {
     biocharProductId: params.biocharProductId,
     requestedWetKg: params.requestedWetKg,
+    binLockAlreadyHeld: true,
   });
 }
 
-/**
- * Lock and validate every stock lane affected by a delivery update.
- * The delivery row is already locked by the caller. Referenced order and product
- * rows are locked in ID order before the single sorted advisory-bin batch.
- */
+/** Lock the bin batch first, then rows, and validate a delivery update. */
 export async function lockDeliveryUpdateStock(
   ctx: OrgContext,
   tx: DbTransaction,
   deliveryId: string,
-  locked: DeliveryStockState,
   data: DeliveryStockUpdate,
-): Promise<void> {
-  const transactionOrderId = data.orderId ?? locked.orderId;
+): Promise<DeliveryStockState & { id: string }> {
+  const [snapshot] = await tx
+    .select({
+      id: deliveries.id,
+      orderId: deliveries.orderId,
+      biocharProductId: deliveries.biocharProductId,
+      status: deliveries.status,
+      deliveredWetMassKg: deliveries.deliveredWetMassKg,
+    })
+    .from(deliveries)
+    .where(and(
+      eq(deliveries.id, deliveryId),
+      eq(deliveries.organizationId, ctx.organizationId),
+    ));
+  if (!snapshot) {
+    throw new SafeError("Delivery not found");
+  }
+
+  const transactionOrderId = data.orderId ?? snapshot.orderId;
   const transactionOrderIds = [...new Set([
-    locked.orderId,
+    snapshot.orderId,
     transactionOrderId,
   ])];
+  const orderSnapshots = await tx
+    .select({
+      id: orders.id,
+      biocharProductId: orders.biocharProductId,
+    })
+    .from(orders)
+    .where(and(
+      inArray(orders.id, transactionOrderIds),
+      eq(orders.organizationId, ctx.organizationId),
+    ));
+  const snapshotOrder = orderSnapshots.find(
+    (order) => order.id === snapshot.orderId,
+  );
+  const transactionOrderSnapshot = orderSnapshots.find(
+    (order) => order.id === transactionOrderId,
+  );
+
+  if (!transactionOrderSnapshot) {
+    throw new SafeError("Order not found");
+  }
+
+  const snapshotProductId =
+    snapshot.biocharProductId ?? snapshotOrder?.biocharProductId ?? null;
+  const transactionProductSnapshotId = data.biocharProductId !== undefined
+    ? data.biocharProductId ?? transactionOrderSnapshot.biocharProductId
+    : snapshot.biocharProductId ?? transactionOrderSnapshot.biocharProductId;
+  const transactionStatus = data.status ?? snapshot.status;
+  const transactionWetMass = data.deliveredWetMassKg !== undefined
+    ? data.deliveredWetMassKg
+    : snapshot.deliveredWetMassKg;
+  const stockDerivationChanged =
+    transactionStatus !== snapshot.status ||
+    transactionWetMass !== snapshot.deliveredWetMassKg ||
+    transactionProductSnapshotId !== snapshotProductId;
+
+  const productIds = [...new Set(
+    [snapshotProductId, transactionProductSnapshotId].filter(
+      (id): id is string => id != null,
+    ),
+  )];
+  const productSnapshots = stockDerivationChanged && productIds.length > 0
+    ? await tx
+        .select({
+          id: biocharProducts.id,
+          storageLocationId: biocharProducts.storageLocationId,
+        })
+        .from(biocharProducts)
+        .where(and(
+          inArray(biocharProducts.id, productIds),
+          eq(biocharProducts.organizationId, ctx.organizationId),
+        ))
+        .orderBy(biocharProducts.id)
+    : [];
+  await lockBinStocks(
+    ctx,
+    tx,
+    productSnapshots.map((product) => product.storageLocationId ?? product.id),
+  );
+
+  const [locked] = await tx
+    .select({
+      id: deliveries.id,
+      orderId: deliveries.orderId,
+      biocharProductId: deliveries.biocharProductId,
+      status: deliveries.status,
+      deliveredWetMassKg: deliveries.deliveredWetMassKg,
+    })
+    .from(deliveries)
+    .where(and(
+      eq(deliveries.id, deliveryId),
+      eq(deliveries.organizationId, ctx.organizationId),
+    ))
+    .for("update");
+  if (!locked) {
+    throw new SafeError("Delivery not found");
+  }
+  assertStockLockSnapshot(
+    locked.orderId === snapshot.orderId &&
+      locked.biocharProductId === snapshot.biocharProductId &&
+      locked.status === snapshot.status &&
+      locked.deliveredWetMassKg === snapshot.deliveredWetMassKg,
+  );
+
+  if (!stockDerivationChanged) return locked;
+
   const transactionOrders = await tx
     .select({
       id: orders.id,
@@ -94,38 +209,26 @@ export async function lockDeliveryUpdateStock(
     ))
     .orderBy(orders.id)
     .for("update");
-  const lockedOrder = transactionOrders.find(
-    (order) => order.id === locked.orderId,
+  assertStockLockSnapshot(
+    transactionOrders.length === orderSnapshots.length &&
+      transactionOrders.every((lockedOrder) => {
+        const orderSnapshot = orderSnapshots.find(
+          (order) => order.id === lockedOrder.id,
+        );
+        return orderSnapshot?.biocharProductId === lockedOrder.biocharProductId;
+      }),
   );
+
   const transactionOrder = transactionOrders.find(
     (order) => order.id === transactionOrderId,
   );
-
   if (!transactionOrder) {
     throw new SafeError("Order not found");
   }
-
-  const lockedProductId =
-    locked.biocharProductId ?? lockedOrder?.biocharProductId ?? null;
   const transactionProductId = data.biocharProductId !== undefined
     ? data.biocharProductId ?? transactionOrder.biocharProductId
     : locked.biocharProductId ?? transactionOrder.biocharProductId;
-  const transactionStatus = data.status ?? locked.status;
-  const transactionWetMass = data.deliveredWetMassKg !== undefined
-    ? data.deliveredWetMassKg
-    : locked.deliveredWetMassKg;
-  const stockDerivationChanged =
-    transactionStatus !== locked.status ||
-    transactionWetMass !== locked.deliveredWetMassKg ||
-    transactionProductId !== lockedProductId;
 
-  if (!stockDerivationChanged) return;
-
-  const productIds = [...new Set(
-    [lockedProductId, transactionProductId].filter(
-      (id): id is string => id != null,
-    ),
-  )];
   const productBins = productIds.length > 0
     ? await tx
         .select({
@@ -140,10 +243,15 @@ export async function lockDeliveryUpdateStock(
         .orderBy(biocharProducts.id)
         .for("update")
     : [];
-  await lockBinStocks(
-    ctx,
-    tx,
-    productBins.map((product) => product.storageLocationId ?? product.id),
+  assertStockLockSnapshot(
+    productBins.length === productSnapshots.length &&
+      productBins.every((lockedProduct) => {
+        const productSnapshot = productSnapshots.find(
+          (product) => product.id === lockedProduct.id,
+        );
+        return productSnapshot?.storageLocationId ===
+          lockedProduct.storageLocationId;
+      }),
   );
 
   if (
@@ -154,22 +262,102 @@ export async function lockDeliveryUpdateStock(
       biocharProductId: transactionProductId,
       requestedWetKg: transactionWetMass,
       excludeDeliveryId: deliveryId,
+      binLockAlreadyHeld: true,
     });
   }
+
+  return locked;
 }
 
 export async function lockDeleteDeliveryStock(
   ctx: OrgContext,
   tx: DbTransaction,
-  locked: DeliveryStockState,
-): Promise<void> {
+  deliveryId: string,
+): Promise<DeliveryStockState & { id: string }> {
+  const [snapshot] = await tx
+    .select({
+      id: deliveries.id,
+      orderId: deliveries.orderId,
+      biocharProductId: deliveries.biocharProductId,
+      status: deliveries.status,
+      deliveredWetMassKg: deliveries.deliveredWetMassKg,
+    })
+    .from(deliveries)
+    .where(and(
+      eq(deliveries.id, deliveryId),
+      eq(deliveries.organizationId, ctx.organizationId),
+    ));
+
+  if (!snapshot) {
+    throw new SafeError("Delivery not found");
+  }
+
+  const [orderSnapshot] = await tx
+    .select({ biocharProductId: orders.biocharProductId })
+    .from(orders)
+    .where(and(
+      eq(orders.id, snapshot.orderId),
+      eq(orders.organizationId, ctx.organizationId),
+    ));
+  const snapshotProductId =
+    snapshot.biocharProductId ?? orderSnapshot?.biocharProductId ?? null;
+  const [productSnapshot] =
+    snapshotProductId &&
+    deliveryDrawsStock(snapshot.status, snapshot.deliveredWetMassKg)
+      ? await tx
+          .select({
+            id: biocharProducts.id,
+            storageLocationId: biocharProducts.storageLocationId,
+          })
+          .from(biocharProducts)
+          .where(and(
+            eq(biocharProducts.id, snapshotProductId),
+            eq(biocharProducts.organizationId, ctx.organizationId),
+          ))
+      : [];
+
+  await lockBinStocks(ctx, tx, [
+    productSnapshot?.storageLocationId ?? productSnapshot?.id,
+  ]);
+
+  const [locked] = await tx
+    .select({
+      id: deliveries.id,
+      orderId: deliveries.orderId,
+      biocharProductId: deliveries.biocharProductId,
+      status: deliveries.status,
+      deliveredWetMassKg: deliveries.deliveredWetMassKg,
+    })
+    .from(deliveries)
+    .where(and(
+      eq(deliveries.id, deliveryId),
+      eq(deliveries.organizationId, ctx.organizationId),
+    ))
+    .for("update");
+
+  if (!locked) {
+    throw new SafeError("Delivery not found");
+  }
+  assertStockLockSnapshot(
+    locked.orderId === snapshot.orderId &&
+      locked.biocharProductId === snapshot.biocharProductId &&
+      locked.status === snapshot.status &&
+      locked.deliveredWetMassKg === snapshot.deliveredWetMassKg,
+  );
+
   const [lockedOrder] = await tx
     .select({ biocharProductId: orders.biocharProductId })
     .from(orders)
     .where(and(
       eq(orders.id, locked.orderId),
       eq(orders.organizationId, ctx.organizationId),
-    ));
+    ))
+    .for("update");
+  if (locked.biocharProductId === null) {
+    assertStockLockSnapshot(
+      lockedOrder?.biocharProductId === orderSnapshot?.biocharProductId,
+    );
+  }
   const lockedProductId =
     locked.biocharProductId ?? lockedOrder?.biocharProductId ?? null;
 
@@ -177,7 +365,7 @@ export async function lockDeleteDeliveryStock(
     !lockedProductId ||
     !deliveryDrawsStock(locked.status, locked.deliveredWetMassKg)
   ) {
-    return;
+    return locked;
   }
 
   const [product] = await tx
@@ -191,7 +379,10 @@ export async function lockDeleteDeliveryStock(
       eq(biocharProducts.organizationId, ctx.organizationId),
     ))
     .for("update");
-  await lockBinStocks(ctx, tx, [
-    product?.storageLocationId ?? product?.id,
-  ]);
+  assertStockLockSnapshot(
+    product?.id === productSnapshot?.id &&
+      product?.storageLocationId === productSnapshot?.storageLocationId,
+  );
+
+  return locked;
 }

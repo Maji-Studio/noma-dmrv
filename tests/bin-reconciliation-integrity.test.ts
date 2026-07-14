@@ -882,8 +882,15 @@ describe("bin reconciliation integrity", () => {
 
       releaseOrderUpdate();
       await orderUpdateTransaction;
+      // The delivery is refused, not silently mis-attributed — that is the
+      // invariant. It surfaces as the snapshot-retry error rather than a
+      // specific over-draw figure because the global lock order forbids holding
+      // a row lock while discovering which bin to lock: the bins are chosen from
+      // an unlocked read, locked, then re-checked, and the concurrent re-point
+      // invalidates that snapshot. Re-deriving instead would mean drawing
+      // against a bin this transaction never locked.
       await expect(deliveryUpdatePromise).rejects.toThrow(
-        "only 50 kg remain undelivered",
+        "Stock changed while this operation was being prepared",
       );
 
       const [unchanged] = await db

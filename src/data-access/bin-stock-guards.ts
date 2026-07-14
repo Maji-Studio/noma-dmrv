@@ -64,7 +64,7 @@ export async function lockBinStock(
  * Sub-kilogram magnitudes keep one decimal — whole-kg rounding would collapse
  * them to "0 kg" and drop the sign of a small negative deficit (#116).
  */
-function formatKg(kg: number): string {
+export function formatKg(kg: number): string {
   if (kg !== 0 && Math.abs(kg) < 1) return `${kg.toFixed(1)} kg`;
   return `${Math.round(kg).toLocaleString()} kg`;
 }
@@ -75,7 +75,7 @@ function formatKg(kg: number): string {
  * The available quantity is shown as derived — no zero-clamp — so an already
  * over-drawn bin surfaces its true (negative) deficit for reconciliation (#116).
  */
-function overdrawError(
+export function overdrawError(
   material: string,
   availableKg: number,
   requestedKg: number,
@@ -89,7 +89,7 @@ function overdrawError(
 }
 
 /** True when `requestedKg` exceeds `availableKg` beyond the FP slack. */
-function isOverdraw(requestedKg: number, availableKg: number): boolean {
+export function isOverdraw(requestedKg: number, availableKg: number): boolean {
   return requestedKg - availableKg > STOCK_OVERDRAW_EPSILON_KG;
 }
 
@@ -146,7 +146,7 @@ async function deriveFeedstockAvailableKg(
   return Number(intake.total) - Number(consumed.total) + Number(movement.total);
 }
 
-async function deriveProductAvailableKg(
+export async function deriveProductAvailableKg(
   ctx: OrgContext,
   tx: DbReader,
   storageLocationId: string,
@@ -238,10 +238,13 @@ export async function assertFeedstockDrawWithinStock(
     storageLocationId: string;
     requestedDryKg: number;
     excludeRunId?: string;
+    binLockAlreadyHeld?: boolean;
   },
 ): Promise<void> {
   requireOrgScope(ctx);
-  await lockBinStock(ctx, tx, params.storageLocationId);
+  if (!params.binLockAlreadyHeld) {
+    await lockBinStock(ctx, tx, params.storageLocationId);
+  }
   const available = await deriveFeedstockAvailableKg(
     ctx,
     tx,
@@ -258,7 +261,7 @@ export async function assertFeedstockDrawWithinStock(
  * run output − biochar-equivalent allocated to products + reconciliation deltas.
  * `excludeProductId` drops one product's allocation (its mass is being replaced).
  */
-async function deriveBiocharAvailableKg(
+export async function deriveBiocharAvailableKg(
   ctx: OrgContext,
   tx: DbReader,
   biocharStorageLocationId: string,
@@ -324,10 +327,13 @@ export async function assertBiocharDrawWithinStock(
     biocharStorageLocationId: string;
     requestedBiocharKg: number;
     excludeProductId?: string;
+    binLockAlreadyHeld?: boolean;
   },
 ): Promise<void> {
   requireOrgScope(ctx);
-  await lockBinStock(ctx, tx, params.biocharStorageLocationId);
+  if (!params.binLockAlreadyHeld) {
+    await lockBinStock(ctx, tx, params.biocharStorageLocationId);
+  }
   const available = await deriveBiocharAvailableKg(
     ctx,
     tx,
@@ -353,18 +359,11 @@ export async function assertBiocharProductDrawWithinStock(
     biocharProductId: string;
     requestedWetKg: number;
     excludeDeliveryId?: string;
+    skipBinLane?: boolean;
+    binLockAlreadyHeld?: boolean;
   },
 ): Promise<void> {
   requireOrgScope(ctx);
-  const deliveredConditions = [
-    eq(deliveries.status, "delivered"),
-    eq(deliveries.organizationId, ctx.organizationId),
-    sql`COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId}) = ${params.biocharProductId}`,
-  ];
-  if (params.excludeDeliveryId) {
-    deliveredConditions.push(ne(deliveries.id, params.excludeDeliveryId));
-  }
-
   const [product] = await tx
     .select({
       code: biocharProducts.code,
@@ -382,11 +381,63 @@ export async function assertBiocharProductDrawWithinStock(
   // Products normally belong to a bin, which shares the lock with stock-takes.
   // Fall back to the product id so two deliveries still serialize if an older
   // or partially configured product has no storage location.
-  await lockBinStock(
+  if (!params.binLockAlreadyHeld) {
+    await lockBinStock(
+      ctx,
+      tx,
+      product?.storageLocationId ?? params.biocharProductId,
+    );
+  }
+
+  const deliveredKg = await deriveBiocharProductDeliveredKg(
     ctx,
     tx,
-    product?.storageLocationId ?? params.biocharProductId,
+    params.biocharProductId,
+    params.excludeDeliveryId,
   );
+  const batchAvailable = Number(product?.massKg ?? 0) - deliveredKg;
+  if (isOverdraw(params.requestedWetKg, batchAvailable)) {
+    // Batch-specific copy: a delivery over-draw is against the product batch's
+    // remaining wet mass, not a bin lane, so the #194 bin reconcile workflow is
+    // the wrong lever — point the operator at the source bin or the product.
+    throw new SafeError(
+      `Cannot deliver ${formatKg(params.requestedWetKg)} from product ${
+        product?.code ?? "this batch"
+      }: only ${formatKg(
+        batchAvailable,
+      )} remain undelivered. Reconcile the source bin or adjust the product before delivering.`,
+    );
+  }
+
+  if (product?.storageLocationId && !params.skipBinLane) {
+    const binAvailable = await deriveProductAvailableKg(
+      ctx,
+      tx,
+      product.storageLocationId,
+      params.excludeDeliveryId,
+    );
+    if (isOverdraw(params.requestedWetKg, binAvailable)) {
+      throw overdrawError("product", binAvailable, params.requestedWetKg);
+    }
+  }
+}
+
+/** Wet mass already shipped from one product batch. */
+export async function deriveBiocharProductDeliveredKg(
+  ctx: OrgContext,
+  tx: DbReader,
+  biocharProductId: string,
+  excludeDeliveryId?: string,
+): Promise<number> {
+  requireOrgScope(ctx);
+  const deliveredConditions = [
+    eq(deliveries.status, "delivered"),
+    eq(deliveries.organizationId, ctx.organizationId),
+    sql`COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId}) = ${biocharProductId}`,
+  ];
+  if (excludeDeliveryId) {
+    deliveredConditions.push(ne(deliveries.id, excludeDeliveryId));
+  }
 
   const [delivered] = await tx
     .select({
@@ -402,29 +453,5 @@ export async function assertBiocharProductDrawWithinStock(
     )
     .where(and(...deliveredConditions));
 
-  const batchAvailable = Number(product?.massKg ?? 0) - Number(delivered.total);
-  if (isOverdraw(params.requestedWetKg, batchAvailable)) {
-    // Batch-specific copy: a delivery over-draw is against the product batch's
-    // remaining wet mass, not a bin lane, so the #194 bin reconcile workflow is
-    // the wrong lever — point the operator at the source bin or the product.
-    throw new SafeError(
-      `Cannot deliver ${formatKg(params.requestedWetKg)} from product ${
-        product?.code ?? "this batch"
-      }: only ${formatKg(
-        batchAvailable,
-      )} remain undelivered. Reconcile the source bin or adjust the product before delivering.`,
-    );
-  }
-
-  if (product?.storageLocationId) {
-    const binAvailable = await deriveProductAvailableKg(
-      ctx,
-      tx,
-      product.storageLocationId,
-      params.excludeDeliveryId,
-    );
-    if (isOverdraw(params.requestedWetKg, binAvailable)) {
-      throw overdrawError("product", binAvailable, params.requestedWetKg);
-    }
-  }
+  return Number(delivered.total);
 }

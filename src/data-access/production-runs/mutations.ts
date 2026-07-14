@@ -27,6 +27,12 @@ import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards
 import { assertFeedstockDrawWithinStock } from "../bin-stock-guards";
 import { lockBinStocks } from "../lock-bin-stocks";
 import {
+  assertProductionRunStockSnapshot,
+  assertProductionRunBiocharStockNotOverdrawn,
+  deriveProductionRunBiocharStockState,
+  lockProductionRunUpdateStock,
+} from "../production-run-stock-locks";
+import {
   assertNoReactorRunOverlap,
   isReactorStartUniqueViolation,
 } from "./overlap";
@@ -450,6 +456,8 @@ export async function updateProductionRun(
     data.feedstockMoisturePercent !== undefined;
   try {
     await db.transaction(async (tx) => {
+    await lockProductionRunUpdateStock(ctx, tx, existing, data);
+
     const [locked] = await tx
       .select()
       .from(productionRuns)
@@ -462,6 +470,7 @@ export async function updateProductionRun(
     if (!locked) {
       throw new SafeError("Production run not found");
     }
+    assertProductionRunStockSnapshot(existing, locked, data);
 
     await assertCanMutateCertifiedLineage(
       ctx,
@@ -494,14 +503,12 @@ export async function updateProductionRun(
       (data.biocharStorageLocationId !== undefined &&
         data.biocharStorageLocationId !== locked.biocharStorageLocationId);
 
-    await lockBinStocks(ctx, tx, [
-      ...(feedstockFieldsChanged
-        ? [locked.feedstockStorageLocationId, effectiveFeedstockStorageId]
-        : []),
-      ...(biocharStockChanged
-        ? [locked.biocharStorageLocationId, effectiveBiocharStorageId]
-        : []),
-    ]);
+    const biocharStockState = biocharStockChanged
+      ? await deriveProductionRunBiocharStockState(ctx, tx, [
+          locked.biocharStorageLocationId,
+          effectiveBiocharStorageId,
+        ])
+      : [];
 
     if (
       effectiveFeedstockStorageId &&
@@ -554,6 +561,12 @@ export async function updateProductionRun(
       .set(transactionUpdateData)
       .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
 
+    await assertProductionRunBiocharStockNotOverdrawn(
+      ctx,
+      tx,
+      biocharStockState,
+    );
+
     // Re-allocate feedstock M:M when feedstock fields change
     if (feedstockFieldsChanged) {
       await tx
@@ -572,6 +585,7 @@ export async function updateProductionRun(
           storageLocationId: effectiveFeedstockStorageId,
           requestedDryKg: dryMassKg,
           excludeRunId: productionRunId,
+          binLockAlreadyHeld: true,
         });
         const allocated = await allocateFeedstockMass(ctx, effectiveFeedstockStorageId, dryMassKg, tx);
         await tx.insert(productionRunFeedstocks).values(

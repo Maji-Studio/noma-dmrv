@@ -3,7 +3,7 @@
  * CRUD operations for orders with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, gt, gte, ilike, inArray, isNull, lte, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, isNull, lte, sql, SQL, count } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
@@ -83,8 +83,10 @@ export interface OrderDetail extends Order {
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
-import { assertBiocharProductDrawWithinStock } from "./bin-stock-guards";
-import { lockBinStocks } from "./lock-bin-stocks";
+import {
+  assertOrderProductRepointWithinStock,
+  lockOrderProductRepointBins,
+} from "./order-stock-locks";
 
 // ============================================
 // Read Operations
@@ -625,6 +627,15 @@ export async function updateOrder(
   }
 
   const updated = await db.transaction(async (tx) => {
+    const repointPreparation = data.biocharProductId !== undefined
+      ? await lockOrderProductRepointBins(
+          ctx,
+          tx,
+          orderId,
+          data.biocharProductId,
+        )
+      : null;
+
     const [locked] = await tx
       .select()
       .from(orders)
@@ -647,50 +658,16 @@ export async function updateOrder(
 
     if (
       data.biocharProductId !== undefined &&
-      data.biocharProductId !== locked.biocharProductId
+      repointPreparation
     ) {
-      const [inheritedDraw] = await tx
-        .select({
-          total: sql<number>`COALESCE(SUM(${deliveries.deliveredWetMassKg}), 0)`,
-        })
-        .from(deliveries)
-        .where(and(
-          eq(deliveries.orderId, orderId),
-          eq(deliveries.organizationId, ctx.organizationId),
-          eq(deliveries.status, "delivered"),
-          isNull(deliveries.biocharProductId),
-          gt(deliveries.deliveredWetMassKg, 0),
-        ));
-      const inheritedDrawKg = Number(inheritedDraw.total);
-
-      if (inheritedDrawKg > 0) {
-        const productBins = await tx
-          .select({
-            id: biocharProducts.id,
-            storageLocationId: biocharProducts.storageLocationId,
-          })
-          .from(biocharProducts)
-          .where(and(
-            inArray(biocharProducts.id, [
-              locked.biocharProductId,
-              data.biocharProductId,
-            ]),
-            eq(biocharProducts.organizationId, ctx.organizationId),
-          ))
-          .orderBy(biocharProducts.id)
-          .for("update");
-        await lockBinStocks(
-          ctx,
-          tx,
-          productBins.map(
-            (product) => product.storageLocationId ?? product.id,
-          ),
-        );
-        await assertBiocharProductDrawWithinStock(ctx, tx, {
-          biocharProductId: data.biocharProductId,
-          requestedWetKg: inheritedDrawKg,
-        });
-      }
+      await assertOrderProductRepointWithinStock(
+        ctx,
+        tx,
+        orderId,
+        locked.biocharProductId,
+        data.biocharProductId,
+        repointPreparation,
+      );
     }
 
     const [row] = await tx

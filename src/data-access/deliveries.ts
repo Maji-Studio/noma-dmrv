@@ -757,19 +757,9 @@ export async function updateDelivery(
   if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
 
   const updated = await db.transaction(async (tx) => {
-    const [locked] = await tx
-      .select(getDeliveryBaseSelection(deliveryColumns))
-      .from(deliveries)
-      .where(and(
-        eq(deliveries.id, deliveryId),
-        eq(deliveries.organizationId, ctx.organizationId),
-      ))
-      .for("update");
-
-    if (!locked) {
-      throw new SafeError("Delivery not found");
-    }
-
+    // Certified-lineage precedence: a verifier-bound delivery may not be edited
+    // at all, so that refusal has to reach the operator ahead of any stock
+    // complaint about an edit they were never allowed to make.
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
@@ -777,7 +767,7 @@ export async function updateDelivery(
       "update",
     );
 
-    await lockDeliveryUpdateStock(ctx, tx, deliveryId, locked, data);
+    await lockDeliveryUpdateStock(ctx, tx, deliveryId, data);
 
     const [row] = await tx
       .update(deliveries)
@@ -821,54 +811,17 @@ export async function deleteDelivery(
 ): Promise<void> {
   requireOrgScope(ctx);
 
-  // Verify delivery exists
-  const [existing] = await db
-    .select({
-      id: deliveries.id,
-      status: deliveries.status,
-      deliveredWetMassKg: deliveries.deliveredWetMassKg,
-      biocharProductId: sql<string | null>`COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
-    })
-    .from(deliveries)
-    .leftJoin(
-      orders,
-      and(
-        eq(deliveries.orderId, orders.id),
-        eq(orders.organizationId, ctx.organizationId),
-      ),
-    )
-    .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Delivery not found");
-  }
-
   await db.transaction(async (tx) => {
-    const [locked] = await tx
-      .select({
-        id: deliveries.id,
-        orderId: deliveries.orderId,
-        status: deliveries.status,
-        deliveredWetMassKg: deliveries.deliveredWetMassKg,
-        biocharProductId: deliveries.biocharProductId,
-      })
-      .from(deliveries)
-      .where(and(
-        eq(deliveries.id, deliveryId),
-        eq(deliveries.organizationId, ctx.organizationId),
-      ))
-      .for("update");
-
-    if (!locked) {
-      throw new SafeError("Delivery not found");
-    }
-
+    // Same precedence as updateDelivery: refuse the locked-lineage delete before
+    // taking stock locks or complaining about stock.
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
       { entityType: "delivery", entityId: deliveryId },
       "delete",
     );
+
+    await lockDeleteDeliveryStock(ctx, tx, deliveryId);
 
     const [{ value: applicationCount }] = await tx
       .select({ value: count() })
@@ -880,8 +833,6 @@ export async function deleteDelivery(
         "Cannot delete delivery with applications. Remove the applications first."
       );
     }
-
-    await lockDeleteDeliveryStock(ctx, tx, locked);
 
     await tx.delete(deliveries).where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
   });

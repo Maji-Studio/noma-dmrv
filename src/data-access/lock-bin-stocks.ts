@@ -1,6 +1,10 @@
 import type { DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
+import { SafeError } from "@/lib/errors";
 import { lockBinStock } from "./bin-stock-guards";
+
+const STOCK_LOCK_RETRY_MESSAGE =
+  "Stock changed while this operation was being prepared. Refresh and retry.";
 
 export async function lockBinStocks(
   ctx: OrgContext,
@@ -13,5 +17,12 @@ export async function lockBinStocks(
 
   for (const storageLocationId of sortedIds) {
     await lockBinStock(ctx, tx, storageLocationId);
+  }
+}
+
+/** Abort when a pre-lock discovery read no longer matches the locked rows. */
+export function assertStockLockSnapshot(condition: boolean): void {
+  if (!condition) {
+    throw new SafeError(STOCK_LOCK_RETRY_MESSAGE);
   }
 }
