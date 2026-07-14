@@ -144,20 +144,23 @@ Generated SQL lives in `drizzle/`; metadata snapshots live in `drizzle/meta/`.
 
 Migrations that add `ADD CONSTRAINT`, `CREATE UNIQUE INDEX`, or `SET NOT NULL` to an existing table must repair conflicting rows in the same migration before enforcing the new rule. Use `drizzle/0079_volatile_plazm.sql` as the reference pattern: add the column nullable, `UPDATE` existing rows, then `SET NOT NULL`; similarly, backfill or deduplicate existing data before adding constraints or unique indexes.
 
-The one exception is the repository's first production deployment, when no
-production database or legacy rows exist. That single `staging` → `main`
-promotion may be labelled `first-production-deployment`; the gate then applies
-the candidate's complete migration chain to an empty throwaway database and
-executes the production admin/organization/credential bootstrap before verifying
-the result.
+The repository's first production deployment is a different shape: no production
+database or legacy rows exist, so the real operation is "apply the whole chain to
+an empty database, then bootstrap the admin/organization/credentials". The seeded
+gate above never exercises that path.
 
-The fresh path is **one-time and fail-closed**. It requires all of: a
-`staging` → `main` pull request, the label, and the tracked tripwire
-`.github/first-production-deployment.marker` present at the PR's base commit and
-deleted by the PR itself. If the label is applied without those conditions the
-gate fails the job — it never silently downgrades to the seeded path. Once the
-promotion merges, the marker is gone from `main`, so no later PR can re-enter the
-fresh path and every subsequent promotion exercises the seeded-base upgrade.
+A `staging` → `main` promotion labelled `first-production-deployment` therefore
+runs a **second, additional** job, `fresh-database-gate`: it applies the complete
+migration chain to an empty throwaway database, runs the production bootstrap
+(twice, to prove idempotence), and verifies the schema. Both jobs are required,
+so the promotion cannot merge unless the seeded gate *and* the fresh gate are
+green.
+
+The fresh job is **additive, never a substitute** — this is the safety property.
+It cannot skip, weaken, or downgrade the seeded gate, so re-using the label on a
+later promotion is merely redundant work rather than a silent loss of coverage.
+That is why no one-time tripwire is needed: there is nothing to protect against.
+The label is also ignored unless the PR is genuinely `staging` → `main`.
 
 ### Migration files are immutable once applied
 

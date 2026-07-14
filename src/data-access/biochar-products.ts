@@ -801,18 +801,23 @@ export async function updateBiocharProduct(
       (data.massKg !== undefined && data.massKg !== locked.massKg) ||
       (data.storageLocationId !== undefined &&
         data.storageLocationId !== locked.storageLocationId);
-    const biocharAllocationChanged =
-      (data.massKg !== undefined && data.massKg !== locked.massKg) ||
-      (data.formulationId !== undefined &&
-        data.formulationId !== locked.formulationId) ||
-      (data.linkedProductionRunId !== undefined &&
-        data.linkedProductionRunId !== locked.linkedProductionRunId);
+    // Must mirror the *defined-ness* condition guarding assertBiocharDrawWithinStock
+    // below, not a value-inequality one. The assert acquires the source run's
+    // biochar-bin lock itself, so any input it fires on must already be in the
+    // single sorted lockBinStocks batch — otherwise a payload that re-sends an
+    // unchanged massKg while moving storageLocationId would take that lock
+    // *after* the product bins, inverting acquisition order against
+    // createBiocharProduct and deadlocking (40P01).
+    const biocharAllocationInputsPresent =
+      data.massKg !== undefined ||
+      data.formulationId !== undefined ||
+      data.linkedProductionRunId !== undefined;
     const sourceRunIds = [...new Set(
       [locked.linkedProductionRunId, transactionLinkedRunId].filter(
         (id): id is string => id != null,
       ),
     )];
-    const sourceBins = biocharAllocationChanged && sourceRunIds.length > 0
+    const sourceBins = biocharAllocationInputsPresent && sourceRunIds.length > 0
       ? await tx
           .select({ storageLocationId: productionRuns.biocharStorageLocationId })
           .from(productionRuns)

@@ -1,3 +1,0 @@
-# This file is the one-time tripwire for the fresh-production migration gate.
-# The single staging→main promotion labeled `first-production-deployment` must delete it in the same PR.
-# Once merged, the marker is gone from main and the fresh path can never be entered again.

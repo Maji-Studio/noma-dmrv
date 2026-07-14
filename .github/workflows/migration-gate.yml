@@ -11,10 +11,8 @@ on:
       # still uses the base copy, so candidate seed edits cannot mask a conflict.
       - "src/db/seed-data.ts"
       # Runtime inputs of the gate itself: edits to the workflow or the CLI
-      # scripts it invokes should exercise the gate. Seeded upgrades run the
-      # base copy of ensure-admin; the one-time fresh path runs the candidate.
+      # scripts it invokes should exercise the gate.
       - ".github/workflows/migration-gate.yml"
-      - ".github/first-production-deployment.marker"
       - "src/lib/cli/ensure-admin.ts"
       - "src/lib/cli/ensure-admin-core.ts"
       - "src/lib/cli/verify-db-schema.ts"
@@ -61,67 +59,14 @@ jobs:
       ISOMETRIC_CLIENT_SECRET: migration-gate-client-secret
 
     steps:
-      # Mode detection needs both the prospective merge tree and the PR base
-      # commit. Keep this checkout separate from the initial/candidate checkouts
-      # below, which still prepare the database from their respective revisions.
-      - name: Checkout migration-mode candidate
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          ref: ${{ github.ref }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      # Fresh mode is a one-time, fail-closed path. The promotion PR must be a
-      # labeled staging→main PR whose base still contains the tracked tripwire
-      # and whose merge candidate deletes it. Once merged, main no longer has
-      # the marker, so a later labeled PR cannot re-enter this path.
-      - name: Determine migration mode
-        id: migration-mode
-        env:
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_REF: ${{ github.event.pull_request.head.ref }}
-          LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-        run: |
-          MARKER=.github/first-production-deployment.marker
-
-          if [[ "$LABELS_JSON" != *'"first-production-deployment"'* ]]; then
-            echo "fresh_database=false" >> "$GITHUB_OUTPUT"
-            echo "Migration mode: seeded base upgrade"
-            exit 0
-          fi
-
-          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
-            echo "ERROR: first-production-deployment requires a pull_request event" >&2
-            exit 1
-          fi
-          if [[ "$BASE_REF" != "main" ]]; then
-            echo "ERROR: first-production-deployment requires base branch main (found: $BASE_REF)" >&2
-            exit 1
-          fi
-          if [[ "$HEAD_REF" != "staging" ]]; then
-            echo "ERROR: first-production-deployment requires head branch staging (found: $HEAD_REF)" >&2
-            exit 1
-          fi
-          if ! git cat-file -e "$BASE_SHA:$MARKER" 2>/dev/null; then
-            echo "ERROR: first-production-deployment requires $MARKER at the PR base SHA" >&2
-            exit 1
-          fi
-          if test -f "$MARKER" || git ls-files --error-unmatch "$MARKER" >/dev/null 2>&1; then
-            echo "ERROR: first-production-deployment must delete $MARKER in the merge candidate" >&2
-            exit 1
-          fi
-
-          echo "fresh_database=true" >> "$GITHUB_OUTPUT"
-          echo "Migration mode: fresh production database"
-
-      # Seeded upgrades start from the immutable base SHA. A labeled first
-      # deployment starts from the candidate so its complete migration chain is
-      # what gets applied to the empty database.
+      # Always start from the immutable base SHA: the gate's whole purpose is to
+      # apply the candidate's migrations on top of real pre-existing rows. The
+      # first-production (empty-database) case is validated ADDITIVELY by the
+      # fresh-database-gate job below, never by weakening this one.
       - name: Checkout initial revision
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ steps.migration-mode.outputs.fresh_database == 'true' && github.ref || github.event_name == 'pull_request' && github.event.pull_request.base.sha || 'staging' }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || 'staging' }}
           persist-credentials: false
           fetch-depth: 0
 
@@ -148,15 +93,12 @@ jobs:
       # database missed 0074's CHECK failure because only legacy data violated
       # it; the base seed reproduced the conflicting rows.
       - name: Apply base migrations
-        if: steps.migration-mode.outputs.fresh_database != 'true'
         run: pnpm db:migrate
 
       - name: Ensure base admin and organization
-        if: steps.migration-mode.outputs.fresh_database != 'true'
         run: pnpm db:ensure-admin
 
       - name: Seed base data
-        if: steps.migration-mode.outputs.fresh_database != 'true'
         run: pnpm db:seed
 
       # github.ref is GitHub's prospective merge ref for pull requests, so this
@@ -177,11 +119,91 @@ jobs:
       - name: Apply candidate migrations
         run: pnpm db:migrate
 
-      - name: Exercise fresh production bootstrap
-        if: steps.migration-mode.outputs.fresh_database == 'true'
+      - name: Verify candidate schema
+        run: pnpm db:verify-schema
+
+  # The first production deployment applies the whole migration chain to an
+  # EMPTY database and then bootstraps the admin/org — a path the seeded gate
+  # above never exercises. This job validates it additively: it can only add
+  # coverage, never skip the seeded gate, so re-using the label on a later
+  # promotion is harmless rather than a silent downgrade. Both jobs are
+  # required, so the promotion cannot merge unless both are green.
+  fresh-database-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.ref == 'staging' &&
+      contains(github.event.pull_request.labels.*.name, 'first-production-deployment')
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: noma_dmrv_fresh_gate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Runner-local and disposable; this job never loads repository secrets.
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/noma_dmrv_fresh_gate
+      ADMIN_EMAIL: fresh-gate-admin@ci.local
+      # Quoted: unquoted, YAML parses an all-digit scalar as the integer 0, and
+      # the key must reach the process as 64 hex characters.
+      CREDENTIALS_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      ISOMETRIC_ACCESS_TOKEN: fresh-gate-access-token
+      ISOMETRIC_CLIENT_SECRET: fresh-gate-client-secret
+
+    steps:
+      # github.ref is the prospective merge ref, so this tests what will land.
+      - name: Checkout merge candidate
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.ref }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate ephemeral admin password
+        run: echo "ADMIN_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+
+      # The whole chain, against an empty database — what production will do.
+      - name: Apply full migration chain to an empty database
+        run: pnpm db:migrate
+
+      # Exercises the real production bootstrap guards (existing-credential
+      # skip, mandatory registry secrets, no dev teammate).
+      - name: Exercise production bootstrap
         env:
           NODE_ENV: production
         run: pnpm db:ensure-admin
 
-      - name: Verify candidate schema
+      # Re-running must be a no-op, not an overwrite or a crash.
+      - name: Re-run bootstrap to prove it is idempotent
+        env:
+          NODE_ENV: production
+        run: pnpm db:ensure-admin
+
+      - name: Verify schema
         run: pnpm db:verify-schema
