@@ -3,7 +3,7 @@
  * CRUD operations for deliveries with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, gte, ilike, isNull, lte, sql, SQL, count, sum } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, sql, SQL, count, sum } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
@@ -83,22 +83,12 @@ export interface DeliveryStats {
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
-import { assertBiocharProductDrawWithinStock } from "./bin-stock-guards";
-
-/**
- * A delivery physically leaves the bin only once it is `delivered` — an
- * `upcoming` delivery has not drawn stock yet, so it is not over-draw checked.
- */
-function deliveryDrawsStock(
-  status: string | null | undefined,
-  deliveredWetMassKg: number | null | undefined,
-): deliveredWetMassKg is number {
-  return (
-    status === "delivered" &&
-    deliveredWetMassKg != null &&
-    deliveredWetMassKg > 0
-  );
-}
+import {
+  deliveryDrawsStock,
+  lockCreateDeliveryStock,
+  lockDeleteDeliveryStock,
+  lockDeliveryUpdateStock,
+} from "./delivery-stock-locks";
 
 // ============================================
 // Read Operations
@@ -603,7 +593,7 @@ export async function createDelivery(
       effectiveBiocharProductId &&
       deliveryDrawsStock(effectiveStatus, data.deliveredWetMassKg)
     ) {
-      await assertBiocharProductDrawWithinStock(ctx, tx, {
+      await lockCreateDeliveryStock(ctx, tx, {
         biocharProductId: effectiveBiocharProductId,
         requestedWetKg: data.deliveredWetMassKg,
       });
@@ -716,26 +706,38 @@ export async function updateDelivery(
 
   const effectiveFacilityId = data.facilityId ?? existing.facilityId;
   const effectiveOrderId = data.orderId ?? existing.orderId;
+  const orderIds = [...new Set([existing.orderId, effectiveOrderId])];
+  const orderRows = await db
+    .select({
+      id: orders.id,
+      facilityId: orders.facilityId,
+      biocharProductId: orders.biocharProductId,
+    })
+    .from(orders)
+    .where(and(
+      inArray(orders.id, orderIds),
+      eq(orders.organizationId, ctx.organizationId),
+    ));
+  const effectiveOrder = orderRows.find((order) => order.id === effectiveOrderId);
+
+  if (!effectiveOrder) {
+    throw new SafeError("Order not found");
+  }
 
   if (data.facilityId !== undefined || data.orderId !== undefined) {
-    const [order] = await db
-      .select({ facilityId: orders.facilityId })
-      .from(orders)
-      .where(and(eq(orders.id, effectiveOrderId), eq(orders.organizationId, ctx.organizationId)));
-
-    if (!order) {
-      throw new SafeError("Order not found");
-    }
-
-    if (order.facilityId !== effectiveFacilityId) {
+    if (effectiveOrder.facilityId !== effectiveFacilityId) {
       throw new SafeError("Order belongs to a different facility");
     }
   }
 
-  const effectiveBiocharProductId = data.biocharProductId ?? existing.biocharProductId;
+  const effectiveBiocharProductId = data.biocharProductId !== undefined
+    ? data.biocharProductId ?? effectiveOrder.biocharProductId
+    : existing.biocharProductId ?? effectiveOrder.biocharProductId;
   if (
     effectiveBiocharProductId &&
-    (data.facilityId !== undefined || data.biocharProductId !== undefined)
+    (data.facilityId !== undefined ||
+      data.biocharProductId !== undefined ||
+      data.orderId !== undefined)
   ) {
     const [product] = await db
       .select({ facilityId: biocharProducts.facilityId })
@@ -751,11 +753,13 @@ export async function updateDelivery(
     }
   }
 
-  const effectiveStatus = data.status ?? existing.status;
   if (data.driverId) await assertSameOrg(ctx, drivers, data.driverId);
   if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
 
   const updated = await db.transaction(async (tx) => {
+    // Certified-lineage precedence: a verifier-bound delivery may not be edited
+    // at all, so that refusal has to reach the operator ahead of any stock
+    // complaint about an edit they were never allowed to make.
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
@@ -763,18 +767,7 @@ export async function updateDelivery(
       "update",
     );
 
-    // Hard-block shipping more than the product batch holds (#116). Exclude this
-    // delivery so its own prior draw isn't counted against the replacement.
-    if (
-      effectiveBiocharProductId &&
-      deliveryDrawsStock(effectiveStatus, finalWetMass)
-    ) {
-      await assertBiocharProductDrawWithinStock(ctx, tx, {
-        biocharProductId: effectiveBiocharProductId,
-        requestedWetKg: finalWetMass,
-        excludeDeliveryId: deliveryId,
-      });
-    }
+    await lockDeliveryUpdateStock(ctx, tx, deliveryId, data);
 
     const [row] = await tx
       .update(deliveries)
@@ -818,23 +811,17 @@ export async function deleteDelivery(
 ): Promise<void> {
   requireOrgScope(ctx);
 
-  // Verify delivery exists
-  const [existing] = await db
-    .select({ id: deliveries.id })
-    .from(deliveries)
-    .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Delivery not found");
-  }
-
   await db.transaction(async (tx) => {
+    // Same precedence as updateDelivery: refuse the locked-lineage delete before
+    // taking stock locks or complaining about stock.
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
       { entityType: "delivery", entityId: deliveryId },
       "delete",
     );
+
+    await lockDeleteDeliveryStock(ctx, tx, deliveryId);
 
     const [{ value: applicationCount }] = await tx
       .select({ value: count() })

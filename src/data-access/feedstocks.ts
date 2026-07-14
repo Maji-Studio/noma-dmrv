@@ -28,6 +28,7 @@ import {
 } from "./transport-legs";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { lockBinStocks } from "./lock-bin-stocks";
 
 const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin"] as const;
 
@@ -368,8 +369,14 @@ export async function createFeedstock(
   }
 
   const codes = await codesFn(data.allocations.length);
+  const stockBinIds = data.allocations
+    .filter((allocation) =>
+      deriveMassDryKg(allocation.allocatedWetMassKg, data.moisturePercent) > 0
+    )
+    .map((allocation) => allocation.storageLocationId);
 
   const createdFeedstocks = await db.transaction(async (tx) => {
+    await lockBinStocks(ctx, tx, stockBinIds);
     const results: string[] = [];
 
     for (let i = 0; i < data.allocations.length; i++) {
@@ -521,16 +528,44 @@ export async function updateFeedstock(
     }
   }
 
-  const mergedData = { ...existing, ...data };
-  const status = determineFeedstockStatus(mergedData);
-
   await db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select()
+      .from(feedstocks)
+      .where(and(
+        eq(feedstocks.id, feedstockId),
+        eq(feedstocks.organizationId, ctx.organizationId),
+      ))
+      .for("update");
+
+    if (!locked) {
+      throw new SafeError("Feedstock not found");
+    }
+
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
       { entityType: "feedstock", entityId: feedstockId },
       "update",
     );
+
+    const status = determineFeedstockStatus({ ...locked, ...data });
+    const effectiveStorageLocationId =
+      data.storageLocationId !== undefined
+        ? data.storageLocationId
+        : locked.storageLocationId;
+    const stockDerivationChanged =
+      status !== locked.status ||
+      (data.massDryKg !== undefined && data.massDryKg !== locked.massDryKg) ||
+      (data.storageLocationId !== undefined &&
+        data.storageLocationId !== locked.storageLocationId);
+
+    if (stockDerivationChanged) {
+      await lockBinStocks(ctx, tx, [
+        locked.storageLocationId,
+        effectiveStorageLocationId,
+      ]);
+    }
 
     await tx
       .update(feedstocks)
@@ -556,7 +591,11 @@ export async function deleteFeedstock(
   requireOrgScope(ctx);
 
   const [existing] = await db
-    .select({ id: feedstocks.id })
+    .select({
+      id: feedstocks.id,
+      status: feedstocks.status,
+      storageLocationId: feedstocks.storageLocationId,
+    })
     .from(feedstocks)
     .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
 
@@ -565,6 +604,23 @@ export async function deleteFeedstock(
   }
 
   await db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select({
+        id: feedstocks.id,
+        status: feedstocks.status,
+        storageLocationId: feedstocks.storageLocationId,
+      })
+      .from(feedstocks)
+      .where(and(
+        eq(feedstocks.id, feedstockId),
+        eq(feedstocks.organizationId, ctx.organizationId),
+      ))
+      .for("update");
+
+    if (!locked) {
+      throw new SafeError("Feedstock not found");
+    }
+
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
@@ -582,6 +638,10 @@ export async function deleteFeedstock(
       throw new SafeError(
         "Cannot delete feedstock that is used in production runs. Remove production run associations first."
       );
+    }
+
+    if (locked.status === "complete") {
+      await lockBinStocks(ctx, tx, [locked.storageLocationId]);
     }
 
     await deleteTransportLegsForEntity(ctx, tx, "feedstock", feedstockId);
