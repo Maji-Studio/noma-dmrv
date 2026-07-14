@@ -83,23 +83,12 @@ export interface DeliveryStats {
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
-import { assertBiocharProductDrawWithinStock } from "./bin-stock-guards";
-import { lockBinStocks } from "./lock-bin-stocks";
-
-/**
- * A delivery physically leaves the bin only once it is `delivered` — an
- * `upcoming` delivery has not drawn stock yet, so it is not over-draw checked.
- */
-function deliveryDrawsStock(
-  status: string | null | undefined,
-  deliveredWetMassKg: number | null | undefined,
-): deliveredWetMassKg is number {
-  return (
-    status === "delivered" &&
-    deliveredWetMassKg != null &&
-    deliveredWetMassKg > 0
-  );
-}
+import {
+  deliveryDrawsStock,
+  lockCreateDeliveryStock,
+  lockDeleteDeliveryStock,
+  lockDeliveryUpdateStock,
+} from "./delivery-stock-locks";
 
 // ============================================
 // Read Operations
@@ -604,26 +593,7 @@ export async function createDelivery(
       effectiveBiocharProductId &&
       deliveryDrawsStock(effectiveStatus, data.deliveredWetMassKg)
     ) {
-      const [lockedProduct] = await tx
-        .select({
-          id: biocharProducts.id,
-          storageLocationId: biocharProducts.storageLocationId,
-        })
-        .from(biocharProducts)
-        .where(and(
-          eq(biocharProducts.id, effectiveBiocharProductId),
-          eq(biocharProducts.organizationId, ctx.organizationId),
-        ))
-        .for("update");
-
-      if (!lockedProduct) {
-        throw new SafeError("Biochar product not found");
-      }
-
-      await lockBinStocks(ctx, tx, [
-        lockedProduct.storageLocationId ?? lockedProduct.id,
-      ]);
-      await assertBiocharProductDrawWithinStock(ctx, tx, {
+      await lockCreateDeliveryStock(ctx, tx, {
         biocharProductId: effectiveBiocharProductId,
         requestedWetKg: data.deliveredWetMassKg,
       });
@@ -807,87 +777,7 @@ export async function updateDelivery(
       "update",
     );
 
-    const transactionOrderId = data.orderId ?? locked.orderId;
-    const transactionOrderIds = [...new Set([
-      locked.orderId,
-      transactionOrderId,
-    ])];
-    const transactionOrders = await tx
-      .select({
-        id: orders.id,
-        biocharProductId: orders.biocharProductId,
-      })
-      .from(orders)
-      .where(and(
-        inArray(orders.id, transactionOrderIds),
-        eq(orders.organizationId, ctx.organizationId),
-      ));
-    const lockedOrder = transactionOrders.find(
-      (order) => order.id === locked.orderId,
-    );
-    const transactionOrder = transactionOrders.find(
-      (order) => order.id === transactionOrderId,
-    );
-
-    if (!transactionOrder) {
-      throw new SafeError("Order not found");
-    }
-
-    const lockedProductId =
-      locked.biocharProductId ?? lockedOrder?.biocharProductId ?? null;
-    const transactionProductId = data.biocharProductId !== undefined
-      ? data.biocharProductId ?? transactionOrder.biocharProductId
-      : locked.biocharProductId ?? transactionOrder.biocharProductId;
-    const transactionStatus = data.status ?? locked.status;
-    const transactionWetMass = data.deliveredWetMassKg !== undefined
-      ? data.deliveredWetMassKg
-      : locked.deliveredWetMassKg;
-    const stockDerivationChanged =
-      transactionStatus !== locked.status ||
-      transactionWetMass !== locked.deliveredWetMassKg ||
-      transactionProductId !== lockedProductId;
-
-    if (stockDerivationChanged) {
-      const productIds = [...new Set(
-        [lockedProductId, transactionProductId].filter(
-          (id): id is string => id != null,
-        ),
-      )];
-      const productBins = productIds.length > 0
-        ? await tx
-            .select({
-              id: biocharProducts.id,
-              storageLocationId: biocharProducts.storageLocationId,
-            })
-            .from(biocharProducts)
-            .where(and(
-              inArray(biocharProducts.id, productIds),
-              eq(biocharProducts.organizationId, ctx.organizationId),
-            ))
-            .orderBy(biocharProducts.id)
-            .for("update")
-        : [];
-      await lockBinStocks(
-        ctx,
-        tx,
-        productBins.map(
-          (product) => product.storageLocationId ?? product.id,
-        ),
-      );
-
-      // Hard-block shipping more than the product batch holds (#116). Exclude
-      // this delivery so its prior draw isn't counted against the replacement.
-      if (
-        transactionProductId &&
-        deliveryDrawsStock(transactionStatus, transactionWetMass)
-      ) {
-        await assertBiocharProductDrawWithinStock(ctx, tx, {
-          biocharProductId: transactionProductId,
-          requestedWetKg: transactionWetMass,
-          excludeDeliveryId: deliveryId,
-        });
-      }
-    }
+    await lockDeliveryUpdateStock(ctx, tx, deliveryId, locked, data);
 
     const [row] = await tx
       .update(deliveries)
@@ -991,35 +881,7 @@ export async function deleteDelivery(
       );
     }
 
-    const [lockedOrder] = await tx
-      .select({ biocharProductId: orders.biocharProductId })
-      .from(orders)
-      .where(and(
-        eq(orders.id, locked.orderId),
-        eq(orders.organizationId, ctx.organizationId),
-      ));
-    const lockedProductId =
-      locked.biocharProductId ?? lockedOrder?.biocharProductId ?? null;
-
-    if (
-      lockedProductId &&
-      deliveryDrawsStock(locked.status, locked.deliveredWetMassKg)
-    ) {
-      const [product] = await tx
-        .select({
-          id: biocharProducts.id,
-          storageLocationId: biocharProducts.storageLocationId,
-        })
-        .from(biocharProducts)
-        .where(and(
-          eq(biocharProducts.id, lockedProductId),
-          eq(biocharProducts.organizationId, ctx.organizationId),
-        ))
-        .for("update");
-      await lockBinStocks(ctx, tx, [
-        product?.storageLocationId ?? product?.id,
-      ]);
-    }
+    await lockDeleteDeliveryStock(ctx, tx, locked);
 
     await tx.delete(deliveries).where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
   });

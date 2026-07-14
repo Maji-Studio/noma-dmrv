@@ -17,7 +17,9 @@ import {
   users,
 } from "@/db/schema";
 import { getStorageLocationWithFacility } from "@/data-access/storage-locations";
-import { createDelivery } from "@/data-access/deliveries";
+import { createBiocharProduct } from "@/data-access/biochar-products";
+import { createDelivery, updateDelivery } from "@/data-access/deliveries";
+import { updateOrder } from "@/data-access/orders";
 import { createProductionRun } from "@/data-access/production-runs";
 import {
   ensureTestOrg,
@@ -521,6 +523,382 @@ describe("bin reconciliation integrity", () => {
       await db.delete(orders).where(eq(orders.id, order.id));
       await db.delete(biocharProducts).where(eq(biocharProducts.id, product.id));
       await db.delete(storageLocations).where(eq(storageLocations.id, bin.id));
+      await db.delete(customers).where(eq(customers.id, customer.id));
+      await db.delete(facilities).where(eq(facilities.id, facility.id));
+    }
+  });
+
+  it("takes the source advisory lock before the destination row lock for a zero-mass product", async () => {
+    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const productCode = `BP-ZERO-LOCK-${tag}`;
+    const [facility] = await db
+      .insert(facilities)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FAC-ZERO-LOCK-${tag}`,
+        name: `Zero Lock Facility ${tag}`,
+      })
+      .returning({ id: facilities.id });
+    const [reactor] = await db
+      .insert(reactors)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        code: `R-ZERO-LOCK-${tag}`,
+        identifier: `Zero Lock Reactor ${tag}`,
+        reactorType: "auger",
+      })
+      .returning({ id: reactors.id });
+    const [sourceBin] = await db
+      .insert(storageLocations)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        code: `BIN-ZERO-SOURCE-${tag}`,
+        name: `Zero Source Bin ${tag}`,
+        type: "biochar_bin",
+      })
+      .returning({ id: storageLocations.id });
+    const [destinationBin] = await db
+      .insert(storageLocations)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        code: `BIN-ZERO-DEST-${tag}`,
+        name: `Zero Destination Bin ${tag}`,
+        type: "product_bin",
+      })
+      .returning({ id: storageLocations.id });
+    const [run] = await db
+      .insert(productionRuns)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        reactorId: reactor.id,
+        code: `PR-ZERO-LOCK-${tag}`,
+        status: "complete",
+        startTime: new Date("2026-07-04T08:00:00Z"),
+        endTime: new Date("2026-07-04T10:00:00Z"),
+        biocharOutputKg: 0,
+        biocharStorageLocationId: sourceBin.id,
+      })
+      .returning({ id: productionRuns.id });
+
+    let releaseSourceLock = () => {};
+    let sourceLockTransaction: Promise<void> | undefined;
+    let createPromise: ReturnType<typeof createBiocharProduct> | undefined;
+
+    try {
+      let signalSourceLockReady = () => {};
+      const sourceLockReady = new Promise<void>((resolve) => {
+        signalSourceLockReady = resolve;
+      });
+      const releaseSourceLockPromise = new Promise<void>((resolve) => {
+        releaseSourceLock = resolve;
+      });
+      let sourceLockBackendPid = 0;
+      sourceLockTransaction = db.transaction(async (tx) => {
+        await tx.execute(sql`
+          select pg_advisory_xact_lock(
+            hashtext(${TEST_ORG_ID}),
+            hashtext(${sourceBin.id})
+          )
+        `);
+        const backend = await tx.execute<{ pid: number }>(
+          sql`select pg_backend_pid() as pid`,
+        );
+        sourceLockBackendPid = backend.rows[0]?.pid ?? 0;
+        signalSourceLockReady();
+        await releaseSourceLockPromise;
+      });
+      await sourceLockReady;
+
+      createPromise = createBiocharProduct(ctx, {
+        code: productCode,
+        facilityId: facility.id,
+        linkedProductionRunId: run.id,
+        storageLocationId: destinationBin.id,
+        massKg: 0,
+        moistureContentPercent: 0,
+        waterAddedKg: 0,
+      });
+
+      await expect.poll(async () => {
+        const result = await db.execute<{ waiting: boolean }>(sql`
+          select exists (
+            select 1
+            from pg_locks waiting
+            join pg_locks held
+              on held.locktype = waiting.locktype
+             and held.database is not distinct from waiting.database
+             and held.classid is not distinct from waiting.classid
+             and held.objid is not distinct from waiting.objid
+             and held.objsubid is not distinct from waiting.objsubid
+            where waiting.locktype = 'advisory'
+              and not waiting.granted
+              and held.granted
+              and held.pid = ${sourceLockBackendPid}
+          ) as waiting
+        `);
+        return result.rows[0]?.waiting ?? false;
+      }, { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS }).toBe(true);
+
+      await expect(db.transaction(async (tx) => {
+        await tx.execute(sql`
+          select ${storageLocations.id}
+          from ${storageLocations}
+          where ${storageLocations.id} = ${destinationBin.id}
+          for update nowait
+        `);
+      })).resolves.toBeUndefined();
+
+      releaseSourceLock();
+      await sourceLockTransaction;
+      await expect(createPromise).resolves.toMatchObject({ massKg: 0 });
+    } finally {
+      releaseSourceLock();
+      await sourceLockTransaction?.catch(() => undefined);
+      await createPromise?.catch(() => undefined);
+      await db.delete(biocharProducts).where(eq(biocharProducts.code, productCode));
+      await db.delete(productionRuns).where(eq(productionRuns.id, run.id));
+      await db.delete(storageLocations).where(eq(storageLocations.id, destinationBin.id));
+      await db.delete(storageLocations).where(eq(storageLocations.id, sourceBin.id));
+      await db.delete(reactors).where(eq(reactors.id, reactor.id));
+      await db.delete(facilities).where(eq(facilities.id, facility.id));
+    }
+  });
+
+  it("rejects reassigning an order when inherited delivered mass overdraws the new product", async () => {
+    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const [facility] = await db
+      .insert(facilities)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FAC-ORDER-DRAW-${tag}`,
+        name: `Order Draw Facility ${tag}`,
+      })
+      .returning({ id: facilities.id });
+    const [oldBin, newBin] = await db
+      .insert(storageLocations)
+      .values([
+        {
+          organizationId: TEST_ORG_ID,
+          facilityId: facility.id,
+          code: `BIN-ORDER-OLD-${tag}`,
+          name: `Order Old Bin ${tag}`,
+          type: "product_bin" as const,
+        },
+        {
+          organizationId: TEST_ORG_ID,
+          facilityId: facility.id,
+          code: `BIN-ORDER-NEW-${tag}`,
+          name: `Order New Bin ${tag}`,
+          type: "product_bin" as const,
+        },
+      ])
+      .returning({ id: storageLocations.id });
+    const [oldProduct, newProduct] = await db
+      .insert(biocharProducts)
+      .values([
+        {
+          organizationId: TEST_ORG_ID,
+          facilityId: facility.id,
+          storageLocationId: oldBin.id,
+          code: `BP-ORDER-OLD-${tag}`,
+          massKg: 100,
+        },
+        {
+          organizationId: TEST_ORG_ID,
+          facilityId: facility.id,
+          storageLocationId: newBin.id,
+          code: `BP-ORDER-NEW-${tag}`,
+          massKg: 50,
+        },
+      ])
+      .returning({ id: biocharProducts.id });
+    const [customer] = await db
+      .insert(customers)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `CU-ORDER-DRAW-${tag}`,
+        name: `Order Draw Customer ${tag}`,
+      })
+      .returning({ id: customers.id });
+    const [order] = await db
+      .insert(orders)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        biocharProductId: oldProduct.id,
+        customerId: customer.id,
+        code: `OR-ORDER-DRAW-${tag}`,
+        orderDate: new Date("2026-07-05T00:00:00Z"),
+        quantityKg: 60,
+        packaging: "bagged",
+      })
+      .returning({ id: orders.id });
+    const [delivery] = await db
+      .insert(deliveries)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        orderId: order.id,
+        biocharProductId: null,
+        code: `DL-ORDER-DRAW-${tag}`,
+        deliveryDate: new Date("2026-07-06T00:00:00Z"),
+        status: "delivered",
+        deliveredWetMassKg: 60,
+      })
+      .returning({ id: deliveries.id });
+
+    try {
+      await expect(
+        updateOrder(ctx, order.id, { biocharProductId: newProduct.id }),
+      ).rejects.toThrow("only 50 kg remain undelivered");
+
+      const [unchanged] = await db
+        .select({ biocharProductId: orders.biocharProductId })
+        .from(orders)
+        .where(eq(orders.id, order.id));
+      expect(unchanged.biocharProductId).toBe(oldProduct.id);
+    } finally {
+      await db.delete(deliveries).where(eq(deliveries.id, delivery.id));
+      await db.delete(orders).where(eq(orders.id, order.id));
+      await db.delete(biocharProducts).where(eq(biocharProducts.id, oldProduct.id));
+      await db.delete(biocharProducts).where(eq(biocharProducts.id, newProduct.id));
+      await db.delete(storageLocations).where(eq(storageLocations.id, oldBin.id));
+      await db.delete(storageLocations).where(eq(storageLocations.id, newBin.id));
+      await db.delete(customers).where(eq(customers.id, customer.id));
+      await db.delete(facilities).where(eq(facilities.id, facility.id));
+    }
+  });
+
+  it("locks the inherited order before validating a delivery stock transition", async () => {
+    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const [facility] = await db
+      .insert(facilities)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FAC-DEL-ORDER-LOCK-${tag}`,
+        name: `Delivery Order Lock Facility ${tag}`,
+      })
+      .returning({ id: facilities.id });
+    const [oldProduct, newProduct] = await db
+      .insert(biocharProducts)
+      .values([
+        {
+          organizationId: TEST_ORG_ID,
+          facilityId: facility.id,
+          code: `BP-DEL-ORDER-OLD-${tag}`,
+          massKg: 100,
+        },
+        {
+          organizationId: TEST_ORG_ID,
+          facilityId: facility.id,
+          code: `BP-DEL-ORDER-NEW-${tag}`,
+          massKg: 50,
+        },
+      ])
+      .returning({ id: biocharProducts.id });
+    const [customer] = await db
+      .insert(customers)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `CU-DEL-ORDER-LOCK-${tag}`,
+        name: `Delivery Order Lock Customer ${tag}`,
+      })
+      .returning({ id: customers.id });
+    const [order] = await db
+      .insert(orders)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        biocharProductId: oldProduct.id,
+        customerId: customer.id,
+        code: `OR-DEL-ORDER-LOCK-${tag}`,
+        orderDate: new Date("2026-07-07T00:00:00Z"),
+        quantityKg: 60,
+        packaging: "bagged",
+      })
+      .returning({ id: orders.id });
+    const [delivery] = await db
+      .insert(deliveries)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        orderId: order.id,
+        biocharProductId: null,
+        code: `DL-DEL-ORDER-LOCK-${tag}`,
+        deliveryDate: new Date("2026-07-08T00:00:00Z"),
+        status: "upcoming",
+        deliveredWetMassKg: 60,
+      })
+      .returning({ id: deliveries.id });
+
+    let releaseOrderUpdate = () => {};
+    let orderUpdateTransaction: Promise<void> | undefined;
+    let deliveryUpdatePromise: ReturnType<typeof updateDelivery> | undefined;
+
+    try {
+      let signalOrderUpdateReady = () => {};
+      const orderUpdateReady = new Promise<void>((resolve) => {
+        signalOrderUpdateReady = resolve;
+      });
+      const releaseOrderUpdatePromise = new Promise<void>((resolve) => {
+        releaseOrderUpdate = resolve;
+      });
+      let orderUpdateBackendPid = 0;
+      orderUpdateTransaction = db.transaction(async (tx) => {
+        await tx
+          .update(orders)
+          .set({ biocharProductId: newProduct.id })
+          .where(eq(orders.id, order.id));
+        const backend = await tx.execute<{ pid: number }>(
+          sql`select pg_backend_pid() as pid`,
+        );
+        orderUpdateBackendPid = backend.rows[0]?.pid ?? 0;
+        signalOrderUpdateReady();
+        await releaseOrderUpdatePromise;
+      });
+      await orderUpdateReady;
+
+      deliveryUpdatePromise = updateDelivery(ctx, delivery.id, {
+        status: "delivered",
+      });
+
+      await expect.poll(async () => {
+        const result = await db.execute<{ waiting: boolean }>(sql`
+          select exists (
+            select 1
+            from pg_stat_activity
+            where ${orderUpdateBackendPid} = any(pg_blocking_pids(pid))
+          ) as waiting
+        `);
+        return result.rows[0]?.waiting ?? false;
+      }, { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS }).toBe(true);
+
+      releaseOrderUpdate();
+      await orderUpdateTransaction;
+      await expect(deliveryUpdatePromise).rejects.toThrow(
+        "only 50 kg remain undelivered",
+      );
+
+      const [unchanged] = await db
+        .select({ status: deliveries.status })
+        .from(deliveries)
+        .where(eq(deliveries.id, delivery.id));
+      expect(unchanged.status).toBe("upcoming");
+    } finally {
+      releaseOrderUpdate();
+      await orderUpdateTransaction?.catch(() => undefined);
+      await deliveryUpdatePromise?.catch(() => undefined);
+      await db.delete(deliveries).where(eq(deliveries.id, delivery.id));
+      await db.delete(orders).where(eq(orders.id, order.id));
+      await db.delete(biocharProducts).where(eq(biocharProducts.id, oldProduct.id));
+      await db.delete(biocharProducts).where(eq(biocharProducts.id, newProduct.id));
       await db.delete(customers).where(eq(customers.id, customer.id));
       await db.delete(facilities).where(eq(facilities.id, facility.id));
     }

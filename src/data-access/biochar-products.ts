@@ -3,7 +3,7 @@
  * CRUD operations for biochar products with auth guards, pagination, filtering, and relations
  */
 
-import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, isNull, or, sql, SQL, count } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
@@ -81,18 +81,12 @@ import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards"
 import { validateCompositionIngredientBins } from "./biochar-product-composition";
 import { assertBiocharDrawWithinStock } from "./bin-stock-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
-
-/**
- * Biochar-equivalent mass a product draws from its source biochar bin: its wet
- * mass scaled by the formulation's biochar ratio (1 for pure biochar). Mirrors
- * the allocation term in the biochar-bin stock derivation.
- */
-function biocharEquivalentKg(
-  massKg: number | null,
-  biocharRatio: number | null,
-): number {
-  return (massKg ?? 0) * (biocharRatio ?? 1);
-}
+import {
+  assertBiocharProductUpdateDraw,
+  biocharEquivalentKg,
+  lockBiocharProductUpdateStock,
+  lockDeleteBiocharProductStock,
+} from "./biochar-product-stock-locks";
 
 // ============================================
 // Biochar Product Read Operations
@@ -520,9 +514,10 @@ export async function createBiocharProduct(
     await lockBinStocks(
       ctx,
       tx,
-      (data.massKg ?? 0) > 0
-        ? [destinationBinId, lockedRun.biocharStorageLocationId]
-        : [],
+      [
+        (data.massKg ?? 0) > 0 ? destinationBinId : null,
+        lockedRun.biocharStorageLocationId,
+      ],
     );
 
     await validateCompositionIngredientBins(
@@ -778,63 +773,14 @@ export async function updateBiocharProduct(
       "update",
     );
 
-    const transactionFacilityId = data.facilityId ?? locked.facilityId;
-    const transactionFormulationId =
-      data.formulationId !== undefined
-        ? data.formulationId
-        : locked.formulationId;
-    const transactionLinkedRunId =
-      data.linkedProductionRunId !== undefined
-        ? data.linkedProductionRunId
-        : locked.linkedProductionRunId;
-    const transactionStorageId =
-      data.storageLocationId !== undefined
-        ? data.storageLocationId
-        : locked.storageLocationId;
-    const transactionMassKg =
-      data.massKg !== undefined ? data.massKg : locked.massKg;
-    const transactionComposition =
-      data.composition !== undefined
-        ? data.composition
-        : (locked.composition as Record<string, unknown> | null);
-    const productBinStockChanged =
-      (data.massKg !== undefined && data.massKg !== locked.massKg) ||
-      (data.storageLocationId !== undefined &&
-        data.storageLocationId !== locked.storageLocationId);
-    // Must mirror the *defined-ness* condition guarding assertBiocharDrawWithinStock
-    // below, not a value-inequality one. The assert acquires the source run's
-    // biochar-bin lock itself, so any input it fires on must already be in the
-    // single sorted lockBinStocks batch — otherwise a payload that re-sends an
-    // unchanged massKg while moving storageLocationId would take that lock
-    // *after* the product bins, inverting acquisition order against
-    // createBiocharProduct and deadlocking (40P01).
-    const biocharAllocationInputsPresent =
-      data.massKg !== undefined ||
-      data.formulationId !== undefined ||
-      data.linkedProductionRunId !== undefined;
-    const sourceRunIds = [...new Set(
-      [locked.linkedProductionRunId, transactionLinkedRunId].filter(
-        (id): id is string => id != null,
-      ),
-    )];
-    const sourceBins = biocharAllocationInputsPresent && sourceRunIds.length > 0
-      ? await tx
-          .select({ storageLocationId: productionRuns.biocharStorageLocationId })
-          .from(productionRuns)
-          .where(and(
-            inArray(productionRuns.id, sourceRunIds),
-            eq(productionRuns.organizationId, ctx.organizationId),
-          ))
-          .orderBy(productionRuns.id)
-          .for("update")
-      : [];
-
-    await lockBinStocks(ctx, tx, [
-      ...(productBinStockChanged
-        ? [locked.storageLocationId, transactionStorageId]
-        : []),
-      ...sourceBins.map((row) => row.storageLocationId),
-    ]);
+    const {
+      transactionFacilityId,
+      transactionFormulationId,
+      transactionLinkedRunId,
+      transactionStorageId,
+      transactionMassKg,
+      transactionComposition,
+    } = await lockBiocharProductUpdateStock(ctx, tx, locked, data);
 
     let claimBinFormulationId: string | null = null;
 
@@ -884,40 +830,14 @@ export async function updateBiocharProduct(
       }
     }
 
-    // Re-check the biochar over-draw whenever the draw's inputs move — wet mass,
-    // formulation ratio, or the source run (its biochar bin) (#116). Exclude this
-    // product so its own prior allocation isn't double-counted against itself.
-    if (
-      (data.massKg !== undefined ||
-        data.formulationId !== undefined ||
-        data.linkedProductionRunId !== undefined) &&
-      transactionLinkedRunId &&
-      transactionMassKg != null
-    ) {
-      const [effectiveRun] = await tx
-        .select({
-          biocharStorageLocationId: productionRuns.biocharStorageLocationId,
-        })
-        .from(productionRuns)
-        .where(and(eq(productionRuns.id, transactionLinkedRunId), eq(productionRuns.organizationId, ctx.organizationId)));
-
-      if (effectiveRun?.biocharStorageLocationId) {
-        const [ratioRow] = transactionFormulationId
-          ? await tx
-              .select({ biocharRatio: formulations.biocharRatio })
-              .from(formulations)
-              .where(and(eq(formulations.id, transactionFormulationId), eq(formulations.organizationId, ctx.organizationId)))
-          : [];
-        await assertBiocharDrawWithinStock(ctx, tx, {
-          biocharStorageLocationId: effectiveRun.biocharStorageLocationId,
-          requestedBiocharKg: biocharEquivalentKg(
-            transactionMassKg,
-            ratioRow?.biocharRatio ?? null,
-          ),
-          excludeProductId: productId,
-        });
-      }
-    }
+    await assertBiocharProductUpdateDraw(ctx, tx, productId, data, {
+      transactionFacilityId,
+      transactionFormulationId,
+      transactionLinkedRunId,
+      transactionStorageId,
+      transactionMassKg,
+      transactionComposition,
+    });
 
     const [row] = await tx
       .update(biocharProducts)
@@ -1000,24 +920,7 @@ export async function deleteBiocharProduct(
       "delete",
     );
 
-    if ((locked.massKg ?? 0) > 0) {
-      const [sourceRun] = locked.linkedProductionRunId
-        ? await tx
-            .select({
-              storageLocationId: productionRuns.biocharStorageLocationId,
-            })
-            .from(productionRuns)
-            .where(and(
-              eq(productionRuns.id, locked.linkedProductionRunId),
-              eq(productionRuns.organizationId, ctx.organizationId),
-            ))
-            .for("update")
-        : [];
-      await lockBinStocks(ctx, tx, [
-        locked.storageLocationId,
-        sourceRun?.storageLocationId,
-      ]);
-    }
+    await lockDeleteBiocharProductStock(ctx, tx, locked);
 
     const [orderCount] = await tx
       .select({ count: count() })

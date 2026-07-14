@@ -83,6 +83,7 @@ export interface OrderDetail extends Order {
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { assertBiocharProductDrawWithinStock } from "./bin-stock-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
 
 // ============================================
@@ -648,8 +649,10 @@ export async function updateOrder(
       data.biocharProductId !== undefined &&
       data.biocharProductId !== locked.biocharProductId
     ) {
-      const [affectedDelivery] = await tx
-        .select({ id: deliveries.id })
+      const [inheritedDraw] = await tx
+        .select({
+          total: sql<number>`COALESCE(SUM(${deliveries.deliveredWetMassKg}), 0)`,
+        })
         .from(deliveries)
         .where(and(
           eq(deliveries.orderId, orderId),
@@ -657,10 +660,10 @@ export async function updateOrder(
           eq(deliveries.status, "delivered"),
           isNull(deliveries.biocharProductId),
           gt(deliveries.deliveredWetMassKg, 0),
-        ))
-        .limit(1);
+        ));
+      const inheritedDrawKg = Number(inheritedDraw.total);
 
-      if (affectedDelivery) {
+      if (inheritedDrawKg > 0) {
         const productBins = await tx
           .select({
             id: biocharProducts.id,
@@ -683,6 +686,10 @@ export async function updateOrder(
             (product) => product.storageLocationId ?? product.id,
           ),
         );
+        await assertBiocharProductDrawWithinStock(ctx, tx, {
+          biocharProductId: data.biocharProductId,
+          requestedWetKg: inheritedDrawKg,
+        });
       }
     }
 

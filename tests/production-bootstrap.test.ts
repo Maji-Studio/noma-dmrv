@@ -7,11 +7,17 @@ import {
   ensureAdminUser,
   ensureIsometricCredentials,
   ensureOrgFoundation,
+  resolveBootstrapMode,
+  type EnsureAdminDb,
 } from "@/lib/cli/ensure-admin-core";
 
 const TEAMMATE_EMAIL = "teammate@darkearthcarbon.dev";
 const CREDENTIAL_PROVIDER = "credential";
 const TEST_PASSWORD_HASH = "production-bootstrap-test-hash";
+const LOCAL_DATABASE_URL = "postgresql://user:password@localhost:5433/test";
+const IPV4_LOCAL_DATABASE_URL = "postgresql://user:password@127.0.0.1:5433/test";
+const IPV6_LOCAL_DATABASE_URL = "postgresql://user:password@[::1]:5433/test";
+const REMOTE_DATABASE_URL = "postgresql://user:password@db.example.invalid/test";
 
 interface FoundationSnapshot {
   organizationExisted: boolean;
@@ -104,6 +110,59 @@ async function credentialPassword(userId: string): Promise<string | null> {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+});
+
+describe("bootstrap environment classification", () => {
+  it.each([
+    LOCAL_DATABASE_URL,
+    IPV4_LOCAL_DATABASE_URL,
+    IPV6_LOCAL_DATABASE_URL,
+  ])("allows development bootstrap for local database target %s", (databaseUrl) => {
+    expect(resolveBootstrapMode({
+      NODE_ENV: "test",
+      DATABASE_URL: databaseUrl,
+    })).toBe("development");
+  });
+
+  it("uses production protections when NODE_ENV is production", () => {
+    expect(resolveBootstrapMode({
+      NODE_ENV: "production",
+      DATABASE_URL: REMOTE_DATABASE_URL,
+    })).toBe("production");
+  });
+
+  it("refuses development semantics for a non-local target by default", () => {
+    expect(() => resolveBootstrapMode({
+      NODE_ENV: "development",
+      DATABASE_URL: REMOTE_DATABASE_URL,
+    })).toThrow("Refusing development bootstrap against a non-local database");
+  });
+
+  it("allows an explicit non-local development override", () => {
+    expect(resolveBootstrapMode({
+      NODE_ENV: "development",
+      DATABASE_URL: REMOTE_DATABASE_URL,
+      ALLOW_DEV_BOOTSTRAP: "1",
+    })).toBe("development");
+  });
+
+  it("refuses before creating an admin credential on a non-local target", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("DATABASE_URL", REMOTE_DATABASE_URL);
+    const databaseAccessTrap = new Proxy({} as EnsureAdminDb, {
+      get() {
+        throw new Error("Database was accessed before bootstrap classification");
+      },
+    });
+
+    await expect(
+      ensureAdminUser(
+        databaseAccessTrap,
+        "refused-bootstrap@example.test",
+        TEST_PASSWORD_HASH,
+      ),
+    ).rejects.toThrow("Refusing development bootstrap against a non-local database");
+  });
 });
 
 describe("production organization foundation", () => {
