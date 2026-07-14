@@ -145,12 +145,19 @@ Generated SQL lives in `drizzle/`; metadata snapshots live in `drizzle/meta/`.
 Migrations that add `ADD CONSTRAINT`, `CREATE UNIQUE INDEX`, or `SET NOT NULL` to an existing table must repair conflicting rows in the same migration before enforcing the new rule. Use `drizzle/0079_volatile_plazm.sql` as the reference pattern: add the column nullable, `UPDATE` existing rows, then `SET NOT NULL`; similarly, backfill or deduplicate existing data before adding constraints or unique indexes.
 
 The one exception is the repository's first production deployment, when no
-production database or legacy rows exist. A maintainer may label that single
-`staging` → `main` promotion `first-production-deployment`; the gate then applies
+production database or legacy rows exist. That single `staging` → `main`
+promotion may be labelled `first-production-deployment`; the gate then applies
 the candidate's complete migration chain to an empty throwaway database and
-verifies the result. Adding or removing the label reruns the check. Never reuse
-the label after production has been initialized—later promotions must exercise
-the normal seeded-base upgrade path.
+executes the production admin/organization/credential bootstrap before verifying
+the result.
+
+The fresh path is **one-time and fail-closed**. It requires all of: a
+`staging` → `main` pull request, the label, and the tracked tripwire
+`.github/first-production-deployment.marker` present at the PR's base commit and
+deleted by the PR itself. If the label is applied without those conditions the
+gate fails the job — it never silently downgrades to the seeded path. Once the
+promotion merges, the marker is gone from `main`, so no later PR can re-enter the
+fresh path and every subsequent promotion exercises the seeded-base upgrade.
 
 ### Migration files are immutable once applied
 
