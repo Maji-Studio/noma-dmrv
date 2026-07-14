@@ -89,9 +89,12 @@ jobs:
       - name: Generate ephemeral admin password
         run: echo "ADMIN_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
 
-      # Build and seed the exact base state before introducing PR code. A fresh
-      # database missed 0074's CHECK failure because only legacy data violated
-      # it; the base seed reproduced the conflicting rows.
+      # Build the exact base state before introducing PR code. Normal PRs also
+      # seed it so legacy fixture conflicts remain visible. The one-time first
+      # production promotion skips that obsolete demo data: main's pre-0074
+      # seed relies on database timestamp defaults and creates duplicate active
+      # run starts, while production is empty and is exercised independently by
+      # fresh-database-gate below.
       - name: Apply base migrations
         run: pnpm db:migrate
 
@@ -99,6 +102,9 @@ jobs:
         run: pnpm db:ensure-admin
 
       - name: Seed base data
+        if: >-
+          github.event_name != 'pull_request' ||
+          !contains(github.event.pull_request.labels.*.name, 'first-production-deployment')
         run: pnpm db:seed
 
       # github.ref is GitHub's prospective merge ref for pull requests, so this
