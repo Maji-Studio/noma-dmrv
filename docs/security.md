@@ -167,6 +167,26 @@ encryption key) are present. The read-only `isometric-health.yml` workflow uses
 its dedicated pair directly through `getIsometricClientFromEnv`; it has no app
 database and intentionally receives no `CREDENTIALS_ENCRYPTION_KEY`.
 
+The production bootstrap is a **manual, one-off job**, not part of the automatic
+deployment path. Pushes to `main` run `migrate-production`, which loads only
+`DATABASE_URL` — schema migrations never depend on the admin/registry fields, so
+a renamed 1Password field cannot block them. To initialize a fresh production
+database, dispatch `migrate.yml` on `main` with action `bootstrap-production` and
+the confirmation phrase `BOOTSTRAP PRODUCTION`. That job loads the admin and
+Isometric bootstrap fields and runs `db:ensure-admin` with `NODE_ENV=production`,
+creating the Platform Admin, the default organization, and the encrypted
+per-organization registry credentials, while explicitly skipping the shared
+local/test teammate.
+
+The bootstrap is idempotent and never clobbers live state: in production it
+leaves an existing admin credential account's password untouched and inserts
+registry credentials only when none exist, so operator rotations survive. It
+fails loudly instead of silently degrading — a missing or blank
+`ISOMETRIC_ACCESS_TOKEN`, `ISOMETRIC_CLIENT_SECRET`, or
+`CREDENTIALS_ENCRYPTION_KEY` throws rather than exiting 0 with no credential row.
+The Platform Admin must use the organization invitation flow to add the first
+real Owner.
+
 Notes:
 
 - Rotating a secret = edit the 1Password item. No GitHub or Vercel change needed.

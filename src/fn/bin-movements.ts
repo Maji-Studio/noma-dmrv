@@ -16,16 +16,13 @@ import { requireOrgContext } from "@/lib/auth/server";
 import {
   createBinMovement,
   getBinMovements as getBinMovementsData,
+  recordStockTakeMovement,
   type BinMovementWithActor,
 } from "@/data-access/bin-movements";
-import { getStorageLocationWithFacility as getStorageLocationWithFacilityData } from "@/data-access/storage-locations";
-import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import type { BinMovement } from "@/db/schema";
 import {
   recordLossSchema,
   recordStockTakeSchema,
-  laneForStorageType,
-  type BinMovementLane,
 } from "@/schemas/bin-movements";
 import type { ActionResult } from "@/types/actions";
 import { toLoggedActionError } from "./action-errors";
@@ -39,16 +36,6 @@ function binMovementActionError(
     message: "bin movement action failed",
     context: { op },
   });
-}
-
-/** Current derived on-hand mass for a bin's lane (movement-inclusive). */
-function laneDerivedMassKg(
-  entity: StorageLocationWithFacility,
-  lane: BinMovementLane
-): number {
-  if (lane === "feedstock") return entity.feedstockInventory.currentDryMassKg;
-  if (lane === "biochar") return entity.biocharInventory.currentMassKg;
-  return entity.productInventory.currentMassKg;
 }
 
 // ============================================
@@ -86,20 +73,6 @@ export async function recordStockTakeFn(
 
     const validated = recordStockTakeSchema.parse(data);
 
-    // Recompute derived stock server-side so the delta reflects the latest
-    // state (including prior movements), not whatever the client last saw.
-    const entity = await getStorageLocationWithFacilityData(
-      ctx,
-      validated.storageLocationId
-    );
-    if (laneForStorageType(entity.type) !== validated.lane) {
-      return {
-        success: false,
-        error: "This lane does not match the bin's material type",
-      };
-    }
-
-    const derivedMassKgAtTime = laneDerivedMassKg(entity, validated.lane);
     // Recompute the dry count server-side from the wet count + snapshot ratio so
     // a stale/tampered client can't submit a dry value inconsistent with its own
     // provenance. A direct dry count (no wet provenance) passes through as-is.
@@ -107,16 +80,11 @@ export async function recordStockTakeFn(
       validated.countedWetMassKg != null && validated.moistureRatioUsed != null
         ? validated.countedWetMassKg * (1 - validated.moistureRatioUsed)
         : validated.countedMassKg;
-    const massDeltaKg = countedMassKg - derivedMassKgAtTime;
-
-    const movement = await createBinMovement(ctx, {
+    const movement = await recordStockTakeMovement(ctx, {
       storageLocationId: validated.storageLocationId,
       lane: validated.lane,
-      movementType: "adjustment",
-      massDeltaKg,
       reason: validated.reason,
       countedMassKg,
-      derivedMassKgAtTime,
       countedWetMassKg: validated.countedWetMassKg ?? null,
       moistureRatioUsed: validated.moistureRatioUsed ?? null,
     });

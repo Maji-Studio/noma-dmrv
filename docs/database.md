@@ -144,6 +144,24 @@ Generated SQL lives in `drizzle/`; metadata snapshots live in `drizzle/meta/`.
 
 Migrations that add `ADD CONSTRAINT`, `CREATE UNIQUE INDEX`, or `SET NOT NULL` to an existing table must repair conflicting rows in the same migration before enforcing the new rule. Use `drizzle/0079_volatile_plazm.sql` as the reference pattern: add the column nullable, `UPDATE` existing rows, then `SET NOT NULL`; similarly, backfill or deduplicate existing data before adding constraints or unique indexes.
 
+The repository's first production deployment is a different shape: no production
+database or legacy rows exist, so the real operation is "apply the whole chain to
+an empty database, then bootstrap the admin/organization/credentials". The seeded
+gate above never exercises that path.
+
+A `staging` → `main` promotion labelled `first-production-deployment` therefore
+runs a **second, additional** job, `fresh-database-gate`: it applies the complete
+migration chain to an empty throwaway database, runs the production bootstrap
+(twice, to prove idempotence), and verifies the schema. Both jobs are required,
+so the promotion cannot merge unless the seeded gate *and* the fresh gate are
+green.
+
+The fresh job is **additive, never a substitute** — this is the safety property.
+It cannot skip, weaken, or downgrade the seeded gate, so re-using the label on a
+later promotion is merely redundant work rather than a silent loss of coverage.
+That is why no one-time tripwire is needed: there is nothing to protect against.
+The label is also ignored unless the PR is genuinely `staging` → `main`.
+
 ### Migration files are immutable once applied
 
 **Never edit a migration file after it has been applied to any database** (staging, production, or a teammate's). `drizzle-kit migrate` tracks applied migrations by journal order/timestamp, not file content, so an edited migration is silently skipped on databases that already ran the original — CI reports "migrations applied successfully" while the new DDL never executes, and the drift only surfaces in the `db:verify-schema` step. If more schema changes are needed after a migration has been merged or applied, generate a new migration with `pnpm db:generate`. To repair drift that already happened, write a new migration with guarded DDL (`IF NOT EXISTS` / existence checks) so it is a no-op on databases that already have the objects.
