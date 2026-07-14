@@ -20,6 +20,11 @@ import type { StorageLocationType } from "@/schemas/storage-locations";
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { guardStorageLocationName } from "./unique-name-guards";
+import { isPgUniqueViolation } from "@/db/errors";
+
+const VEHICLE_NAME_CONSTRAINT = "vehicles_organization_id_name_unique";
+const FEEDSTOCK_TYPE_NAME_USAGE_CONSTRAINT =
+  "feedstock_types_organization_id_name_usage_unique";
 
 // ============================================
 // Driver Quick Add
@@ -39,45 +44,23 @@ export interface CreateDriverData {
 export async function createDriver(ctx: OrgContext, data: CreateDriverData): Promise<EntityOption> {
   requireOrgScope(ctx);
 
-  // Check for duplicate code
-  const [existing] = await db
-    .select({ id: drivers.id })
-    .from(drivers)
-    .where(
-      and(
-        eq(drivers.code, data.code),
-        eq(drivers.organizationId, ctx.organizationId),
-      ),
-    );
+  const [driver] = await db
+    .insert(drivers)
+    .values({
+      organizationId: ctx.organizationId,
+      code: data.code,
+      name: data.name,
+      licenseNumber: data.licenseNumber ?? null,
+      contactPhone: data.contactPhone ?? null,
+    })
+    .returning();
 
-  if (existing) {
-    throw new SafeError("A driver with this code already exists");
-  }
-
-  try {
-    const [driver] = await db
-      .insert(drivers)
-      .values({
-        organizationId: ctx.organizationId,
-        code: data.code,
-        name: data.name,
-        licenseNumber: data.licenseNumber ?? null,
-        contactPhone: data.contactPhone ?? null,
-      })
-      .returning();
-
-    return {
-      id: driver.id,
-      code: driver.code,
-      name: driver.name,
-      subtitle: driver.licenseNumber ?? undefined,
-    };
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("unique")) {
-      throw new SafeError("A driver with this code already exists");
-    }
-    throw error;
-  }
+  return {
+    id: driver.id,
+    code: driver.code,
+    name: driver.name,
+    subtitle: driver.licenseNumber ?? undefined,
+  };
 }
 
 // ============================================
@@ -144,21 +127,6 @@ export interface CreateVehicleData {
 export async function createVehicle(ctx: OrgContext, data: CreateVehicleData): Promise<EntityOption> {
   requireOrgScope(ctx);
 
-  // Check for duplicate code
-  const [existingCode] = await db
-    .select({ id: vehicles.id })
-    .from(vehicles)
-    .where(
-      and(
-        eq(vehicles.code, data.code),
-        eq(vehicles.organizationId, ctx.organizationId),
-      ),
-    );
-
-  if (existingCode) {
-    throw new SafeError("A vehicle with this code already exists");
-  }
-
   // Check for duplicate name (unique constraint)
   const [existingName] = await db
     .select({ id: vehicles.id })
@@ -196,7 +164,7 @@ export async function createVehicle(ctx: OrgContext, data: CreateVehicleData): P
       subtitle: vehicle.vehicleType,
     };
   } catch (error) {
-    if (error instanceof Error && error.message.includes("unique")) {
+    if (isPgUniqueViolation(error, VEHICLE_NAME_CONSTRAINT)) {
       throw new SafeError("A vehicle with this code or name already exists");
     }
     throw error;
@@ -227,21 +195,6 @@ export async function createFeedstockType(
   requireOrgScope(ctx);
   const name = data.name.trim();
   const usage = data.usage ?? "pyrolysis";
-
-  // Check for duplicate code
-  const [existingCode] = await db
-    .select({ id: feedstockTypes.id })
-    .from(feedstockTypes)
-    .where(
-      and(
-        eq(feedstockTypes.code, data.code),
-        eq(feedstockTypes.organizationId, ctx.organizationId),
-      ),
-    );
-
-  if (existingCode) {
-    throw new SafeError("A feedstock type with this code already exists");
-  }
 
   // Check for duplicate name + usage (unique constraint)
   const [existingName] = await db
@@ -280,7 +233,7 @@ export async function createFeedstockType(
       subtitle: `${feedstockType.category} · ${feedstockType.usage}`,
     };
   } catch (error) {
-    if (error instanceof Error && error.message.includes("unique")) {
+    if (isPgUniqueViolation(error, FEEDSTOCK_TYPE_NAME_USAGE_CONSTRAINT)) {
       throw new SafeError("A feedstock type with this code or name and usage already exists");
     }
     throw error;
@@ -311,21 +264,6 @@ export async function createStorageLocation(
 ): Promise<EntityOption> {
   requireOrgScope(ctx);
 
-  // Check for duplicate code
-  const [existingCode] = await db
-    .select({ id: storageLocations.id })
-    .from(storageLocations)
-    .where(
-      and(
-        eq(storageLocations.code, data.code),
-        eq(storageLocations.organizationId, ctx.organizationId),
-      ),
-    );
-
-  if (existingCode) {
-    throw new SafeError("A storage location with this code already exists");
-  }
-
   if (data.feedstockTypeId) {
     await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId);
   }
@@ -333,33 +271,26 @@ export async function createStorageLocation(
     await assertSameOrg(ctx, formulations, data.formulationId);
   }
 
-  try {
-    const [location] = await guardStorageLocationName(ctx, data.name, () =>
-      db
-        .insert(storageLocations)
-        .values({
-          organizationId: ctx.organizationId,
-          code: data.code,
-          name: data.name,
-          type: data.type,
-          facilityId: data.facilityId,
-          capacityKg: data.capacityKg ?? null,
-          feedstockTypeId: data.feedstockTypeId ?? null,
-          formulationId: data.formulationId ?? null,
-        })
-        .returning(),
-    );
+  const [location] = await guardStorageLocationName(ctx, data.name, () =>
+    db
+      .insert(storageLocations)
+      .values({
+        organizationId: ctx.organizationId,
+        code: data.code,
+        name: data.name,
+        type: data.type,
+        facilityId: data.facilityId,
+        capacityKg: data.capacityKg ?? null,
+        feedstockTypeId: data.feedstockTypeId ?? null,
+        formulationId: data.formulationId ?? null,
+      })
+      .returning(),
+  );
 
-    return {
-      id: location.id,
-      code: location.code,
-      name: location.name,
-      subtitle: location.type.replace(/_/g, " "),
-    };
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("unique")) {
-      throw new SafeError("A storage location with this code already exists");
-    }
-    throw error;
-  }
+  return {
+    id: location.id,
+    code: location.code,
+    name: location.name,
+    subtitle: location.type.replace(/_/g, " "),
+  };
 }

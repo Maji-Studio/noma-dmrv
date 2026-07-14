@@ -7,7 +7,10 @@
 
 import { z } from "zod";
 import { type Delivery, deliveries as deliveriesTable } from "@/db/schema";
-import { withAutoCode } from "@/data-access/code-generator";
+import {
+  CODE_CONFLICT_MESSAGES,
+  withAutoCode,
+} from "@/data-access/code-generator";
 import {
   createDelivery,
   deleteDelivery,
@@ -288,7 +291,8 @@ export async function createDeliveryFn(
           distanceNote: validated.distanceNote || null,
           tripType: validated.tripType ?? undefined,
         });
-      }
+      },
+      CODE_CONFLICT_MESSAGES.delivery,
     );
 
     await resyncBiocharLegs(ctx, [delivery.biocharProductId]);

@@ -7,7 +7,10 @@
 
 import { z } from "zod";
 import { type Customer, type CustomerLocation, customers } from "@/db/schema";
-import { withAutoCode } from "@/data-access/code-generator";
+import {
+  CODE_CONFLICT_MESSAGES,
+  withAutoCode,
+} from "@/data-access/code-generator";
 import {
   createCustomer,
   deleteCustomer,
@@ -257,7 +260,8 @@ export async function createCustomerFn(
           address: validated.address || null,
           contactEmail: validated.contactEmail || null,
           contactPhone: validated.contactPhone || null,
-        })
+        }),
+      CODE_CONFLICT_MESSAGES.customer,
     );
 
     return { success: true, data: customer };

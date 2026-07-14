@@ -8,7 +8,10 @@
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { productionRuns, storageLocations } from "@/db/schema";
-import { withAutoCode } from "@/data-access/code-generator";
+import {
+  CODE_CONFLICT_MESSAGES,
+  withAutoCode,
+} from "@/data-access/code-generator";
 import { db } from "@/db";
 import {
   createProductionRun,
@@ -292,7 +295,8 @@ export async function createProductionRunFn(
           biocharMoisturePercent: validated.biocharMoisturePercent ?? null,
           biocharStorageLocationId: validated.biocharStorageLocationId || null,
           feedstockStorageLocationId: validated.feedstockStorageLocationId || null,
-        })
+        }),
+      CODE_CONFLICT_MESSAGES.productionRun,
     );
 
     return { success: true, data: run };

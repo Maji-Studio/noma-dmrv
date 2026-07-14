@@ -483,16 +483,6 @@ export async function createOrder(
 ): Promise<Order> {
   requireOrgScope(ctx);
 
-  // Check for duplicate code
-  const [existing] = await db
-    .select({ id: orders.id })
-    .from(orders)
-    .where(and(eq(orders.code, data.code), eq(orders.organizationId, ctx.organizationId)));
-
-  if (existing) {
-    throw new SafeError("An order with this code already exists");
-  }
-
   const [product] = await db
     .select({ facilityId: biocharProducts.facilityId })
     .from(biocharProducts)
@@ -513,31 +503,24 @@ export async function createOrder(
     data.customerLocationId
   );
 
-  try {
-    const [order] = await db
-      .insert(orders)
-      .values({
-        organizationId: ctx.organizationId,
-        code: data.code,
-        facilityId: data.facilityId,
-        customerId: data.customerId,
-        customerLocationId: data.customerLocationId,
-        biocharProductId: data.biocharProductId,
-        orderDate: data.orderDate,
-        quantityKg: data.quantityKg,
-        packaging: data.packaging,
-        value: data.value ?? null,
-        currency: data.currency ?? "TZS",
-      })
-      .returning();
+  const [order] = await db
+    .insert(orders)
+    .values({
+      organizationId: ctx.organizationId,
+      code: data.code,
+      facilityId: data.facilityId,
+      customerId: data.customerId,
+      customerLocationId: data.customerLocationId,
+      biocharProductId: data.biocharProductId,
+      orderDate: data.orderDate,
+      quantityKg: data.quantityKg,
+      packaging: data.packaging,
+      value: data.value ?? null,
+      currency: data.currency ?? "TZS",
+    })
+    .returning();
 
-    return order;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("unique")) {
-      throw new SafeError("An order with this code already exists");
-    }
-    throw error;
-  }
+  return order;
 }
 
 // ============================================

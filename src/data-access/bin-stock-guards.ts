@@ -17,7 +17,7 @@
  */
 
 import { and, eq, ne, sql } from "drizzle-orm";
-import type { db } from "@/db";
+import type { db, DbTransaction } from "@/db";
 import {
   feedstocks,
   productionRuns,
@@ -34,6 +34,14 @@ import { requireOrgScope } from "./utils";
 
 /** Any Drizzle client that can run reads — the live `db` or a transaction. */
 type DbReader = Pick<typeof db, "select">;
+
+/** Serialize stock guards with the write they protect for one stock resource. */
+async function lockStockResource(
+  tx: DbTransaction,
+  resourceId: string,
+): Promise<void> {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${resourceId}))`);
+}
 
 /**
  * Floating-point slack (kg). Derived stock is a sum of floating-point masses, so
@@ -135,7 +143,7 @@ async function deriveFeedstockAvailableKg(
  */
 export async function assertFeedstockDrawWithinStock(
   ctx: OrgContext,
-  tx: DbReader,
+  tx: DbTransaction,
   params: {
     storageLocationId: string;
     requestedDryKg: number;
@@ -143,6 +151,7 @@ export async function assertFeedstockDrawWithinStock(
   },
 ): Promise<void> {
   requireOrgScope(ctx);
+  await lockStockResource(tx, params.storageLocationId);
   const available = await deriveFeedstockAvailableKg(
     ctx,
     tx,
@@ -220,7 +229,7 @@ async function deriveBiocharAvailableKg(
  */
 export async function assertBiocharDrawWithinStock(
   ctx: OrgContext,
-  tx: DbReader,
+  tx: DbTransaction,
   params: {
     biocharStorageLocationId: string;
     requestedBiocharKg: number;
@@ -228,6 +237,7 @@ export async function assertBiocharDrawWithinStock(
   },
 ): Promise<void> {
   requireOrgScope(ctx);
+  await lockStockResource(tx, params.biocharStorageLocationId);
   const available = await deriveBiocharAvailableKg(
     ctx,
     tx,
@@ -248,7 +258,7 @@ export async function assertBiocharDrawWithinStock(
  */
 export async function assertBiocharProductDrawWithinStock(
   ctx: OrgContext,
-  tx: DbReader,
+  tx: DbTransaction,
   params: {
     biocharProductId: string;
     requestedWetKg: number;
@@ -256,6 +266,7 @@ export async function assertBiocharProductDrawWithinStock(
   },
 ): Promise<void> {
   requireOrgScope(ctx);
+  await lockStockResource(tx, params.biocharProductId);
   const deliveredConditions = [
     eq(deliveries.status, "delivered"),
     eq(deliveries.organizationId, ctx.organizationId),

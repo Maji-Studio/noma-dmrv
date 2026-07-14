@@ -12,7 +12,10 @@ import {
   createStorageLocation,
 } from "@/data-access/quick-add";
 import { drivers, vehicles, feedstockTypes, storageLocations } from "@/db/schema";
-import { withAutoCode } from "@/data-access/code-generator";
+import {
+  CODE_CONFLICT_MESSAGES,
+  withAutoCode,
+} from "@/data-access/code-generator";
 import {
   driverQuickAddSchema,
   operatorQuickAddSchema,
@@ -44,7 +47,8 @@ export async function createDriverFn(
     return withAutoCode(
       ctx,
       "DRV", drivers, drivers.code, undefined,
-      (code) => createDriver(ctx, { ...parsed, code })
+      (code) => createDriver(ctx, { ...parsed, code }),
+      CODE_CONFLICT_MESSAGES.driver,
     );
   }, { fallbackMessage: "Failed to create driver" });
 }
@@ -77,7 +81,8 @@ export async function createVehicleFn(
     return withAutoCode(
       ctx,
       "VEH", vehicles, vehicles.code, undefined,
-      (code) => createVehicle(ctx, { ...parsed, code })
+      (code) => createVehicle(ctx, { ...parsed, code }),
+      CODE_CONFLICT_MESSAGES.vehicle,
     );
   }, { fallbackMessage: "Failed to create vehicle" });
 }
@@ -97,7 +102,8 @@ export async function createFeedstockTypeFn(
     return withAutoCode(
       ctx,
       "FT", feedstockTypes, feedstockTypes.code, undefined,
-      (code) => createFeedstockType(ctx, { ...parsed, code })
+      (code) => createFeedstockType(ctx, { ...parsed, code }),
+      CODE_CONFLICT_MESSAGES.feedstockType,
     );
   }, { fallbackMessage: "Failed to create feedstock type" });
 }
@@ -125,7 +131,8 @@ export async function createStorageLocationFn(
     return withAutoCode(
       ctx,
       prefix, storageLocations, storageLocations.code, undefined,
-      (code) => createStorageLocation(ctx, { ...parsed, code })
+      (code) => createStorageLocation(ctx, { ...parsed, code }),
+      CODE_CONFLICT_MESSAGES.storageLocation,
     );
   }, { fallbackMessage: "Failed to create storage location" });
 }

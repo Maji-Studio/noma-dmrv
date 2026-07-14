@@ -553,16 +553,6 @@ export async function createDelivery(
     throw new SafeError("Dry mass must be less than or equal to wet mass");
   }
 
-  // Check for duplicate code
-  const [existing] = await db
-    .select({ id: deliveries.id })
-    .from(deliveries)
-    .where(and(eq(deliveries.code, data.code), eq(deliveries.organizationId, ctx.organizationId)));
-
-  if (existing) {
-    throw new SafeError("A delivery with this code already exists");
-  }
-
   // Verify order exists
   const [order] = await db
     .select({ id: orders.id, facilityId: orders.facilityId, biocharProductId: orders.biocharProductId })

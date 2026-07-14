@@ -234,19 +234,6 @@ export async function createFormulation(
 ): Promise<FormulationWithIngredients> {
   requireOrgScope(ctx);
 
-  // Check for duplicate code
-  const [existing] = await db
-    .select({ id: formulations.id })
-    .from(formulations)
-    .where(and(
-      eq(formulations.code, data.code),
-      eq(formulations.organizationId, ctx.organizationId),
-    ));
-
-  if (existing) {
-    throw new SafeError("A formulation with this code already exists");
-  }
-
   await assertBlendFeedstockTypes(ctx, data.ingredients);
   assertRatioSumWithinBounds(data.biocharRatio, data.ingredients);
 

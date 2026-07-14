@@ -329,16 +329,6 @@ export async function createCustomer(
 ): Promise<Customer> {
   requireOrgScope(ctx);
 
-  // Check for duplicate code
-  const [existing] = await db
-    .select({ id: customers.id })
-    .from(customers)
-    .where(and(eq(customers.code, data.code), eq(customers.organizationId, ctx.organizationId)));
-
-  if (existing) {
-    throw new SafeError("A customer with this code already exists");
-  }
-
   const [customer] = await guardCustomerName(ctx, data.name, () =>
     db
       .insert(customers)

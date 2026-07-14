@@ -10,6 +10,7 @@
 
 import { and, eq, gt, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { productionRuns } from "@/db/schema";
+import { isPgUniqueViolation } from "@/db/errors";
 import { formatLocalDate, formatLocalTime } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import type { DbTransaction } from "@/db";
@@ -159,8 +160,8 @@ export async function assertNoReactorRunOverlap(
  * friendly overlap message instead of leaking a raw constraint error.
  */
 export function isReactorStartUniqueViolation(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    error.message.includes("production_runs_reactor_start_unique_idx")
+  return isPgUniqueViolation(
+    error,
+    "production_runs_reactor_start_unique_idx",
   );
 }

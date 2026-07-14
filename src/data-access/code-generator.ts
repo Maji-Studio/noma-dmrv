@@ -13,6 +13,22 @@ import { requireOrgScope } from "./utils";
 
 const MAX_RETRIES = 3;
 
+export const CODE_CONFLICT_MESSAGES = {
+  biocharProduct: "A biochar product with this code already exists",
+  customer: "A customer with this code already exists",
+  delivery: "A delivery with this code already exists",
+  driver: "A driver with this code already exists",
+  facility: "A facility with this code already exists",
+  feedstockType: "A feedstock type with this code already exists",
+  formulation: "A formulation with this code already exists",
+  order: "An order with this code already exists",
+  productionRun: "A production run with this code already exists",
+  reactor: "A reactor with this code already exists",
+  storageLocation: "A storage location with this code already exists",
+  supplier: "A supplier with this code already exists",
+  vehicle: "A vehicle with this code already exists",
+} as const;
+
 type OrgScopedCodeTable = PgTable & {
   organizationId: PgColumn;
 };
@@ -135,6 +151,34 @@ function isCodeUniqueViolation(
   return isPgUniqueViolation(error, codeUniqueConstraintName(table, codeColumn));
 }
 
+function duplicateCodeError(code: string, message?: string): SafeError {
+  return new SafeError(
+    message ?? `Code "${code}" already exists. Please use a different code.`,
+  );
+}
+
+/**
+ * Translate this table's org-scoped code constraint on direct write paths.
+ * Auto-code creates use `withAutoCode` instead so generated-code races retry.
+ */
+export async function withUniqueCodeGuard<T>(
+  ctx: OrgContext,
+  table: OrgScopedCodeTable,
+  codeColumn: PgColumn,
+  message: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  requireOrgScope(ctx);
+  try {
+    return await fn();
+  } catch (error) {
+    if (isCodeUniqueViolation(error, table, codeColumn)) {
+      throw new SafeError(message);
+    }
+    throw error;
+  }
+}
+
 /**
  * Execute an insert operation with auto-generated code, retrying on
  * duplicate code collisions. This handles the race condition where
@@ -145,6 +189,7 @@ function isCodeUniqueViolation(
  * @param codeColumn - The code column on the table
  * @param userCode - User-provided code (empty/undefined = auto-generate)
  * @param insertFn - Callback that performs the insert with the given code
+ * @param duplicateMessage - Existing entity-specific duplicate-code copy
  * @returns The result from insertFn
  */
 export async function withAutoCode<T>(
@@ -153,7 +198,8 @@ export async function withAutoCode<T>(
   table: OrgScopedCodeTable,
   codeColumn: PgColumn,
   userCode: string | undefined | null,
-  insertFn: (code: string) => Promise<T>
+  insertFn: (code: string) => Promise<T>,
+  duplicateMessage?: string,
 ): Promise<T> {
   requireOrgScope(ctx);
   // If user provided a code, use it directly with a friendly error on duplicates
@@ -162,7 +208,7 @@ export async function withAutoCode<T>(
       return await insertFn(userCode);
     } catch (error) {
       if (isCodeUniqueViolation(error, table, codeColumn)) {
-        throw new SafeError(`Code "${userCode}" already exists. Please use a different code.`);
+        throw duplicateCodeError(userCode, duplicateMessage);
       }
       throw error;
     }
@@ -173,10 +219,13 @@ export async function withAutoCode<T>(
     try {
       return await insertFn(code);
     } catch (error) {
-      if (isCodeUniqueViolation(error, table, codeColumn) && attempt < MAX_RETRIES - 1) {
-        // Brief pause before retry to let the other transaction commit
-        await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
-        continue;
+      if (isCodeUniqueViolation(error, table, codeColumn)) {
+        if (attempt < MAX_RETRIES - 1) {
+          // Brief pause before retry to let the other transaction commit
+          await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+          continue;
+        }
+        throw duplicateCodeError(code, duplicateMessage);
       }
       throw error;
     }
