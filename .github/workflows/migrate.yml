@@ -10,6 +10,8 @@ on:
       - ".github/workflows/migrate.yml"
       - "src/lib/cli/ensure-admin.ts"
       - "src/lib/cli/ensure-admin-core.ts"
+      # Direct, barrel-free runtime dependency of the ensure-admin CLI.
+      - "src/lib/log/sanitize.ts"
   workflow_dispatch:
     inputs:
       action:
