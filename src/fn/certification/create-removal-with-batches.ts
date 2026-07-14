@@ -28,7 +28,7 @@ import {
 export async function createRemovalWithBatchesAction(
   input: CreateRemovalWithBatchesInput,
 ): Promise<ActionResult<{ removalId: string }>> {
-  return withAction(async (userId) => {
+  return withAction(async (orgCtx) => {
     const { facilityId, creditBatchIds } =
       createRemovalWithBatchesSchema.parse(input);
     const uniqueIds = Array.from(new Set(creditBatchIds));
@@ -42,7 +42,7 @@ export async function createRemovalWithBatchesAction(
     // Every selected batch shares one facility, so resolve the facility's
     // certifier facts (incl. its Isometric registry calls) ONCE and reuse them
     // across the per-batch re-validation instead of re-fetching per batch.
-    const facilityFacts = await loadFacilityCertifierFacts(userId, facilityId);
+    const facilityFacts = await loadFacilityCertifierFacts(orgCtx, facilityId);
 
     // Re-validate per batch against the live context — never trust the client's
     // gate. Each ungrouped batch resolves a 1:1 scope, so `ctx.facilityId` /
@@ -50,7 +50,7 @@ export async function createRemovalWithBatchesAction(
     // classifier also confirms same-facility + ungrouped.
     for (const batchId of uniqueIds) {
       const ctx = await buildCreditBatchContextWithFacts(
-        userId,
+        orgCtx,
         batchId,
         facilityFacts,
       );
@@ -75,7 +75,7 @@ export async function createRemovalWithBatchesAction(
     }
 
     const removalId = await createRemovalWithCreditBatches(
-      userId,
+      orgCtx,
       facilityId,
       uniqueIds,
     );

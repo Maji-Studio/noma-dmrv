@@ -403,7 +403,9 @@ export const CARBON_CONTENTS_MEASUREMENT_PROPERTY: IsometricMeasurementProperty 
  * the sample's R₀ readings ≥ 2%). The 1000-year `s_fraction` list input.
  */
 export const S_FRACTION_MEASUREMENT_PROPERTY: IsometricMeasurementProperty = {
-  quantity_kind: "dimensionless",
+  // Confirmed against the Isometric sandbox measurement-sample validator.
+  // The value remains a 0–1 fraction in a dimensionless unit.
+  quantity_kind: "dimensionless_ratio",
   qualifier: "inertinite_fraction",
 };
 

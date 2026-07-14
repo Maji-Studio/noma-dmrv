@@ -3,15 +3,18 @@ import {
   boolean,
   check,
   doublePrecision,
+  foreignKey,
   index,
   integer,
   pgTable,
   real,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { organizations } from './auth';
 import {
   deliveryStatus,
   distanceSource,
@@ -19,6 +22,7 @@ import {
   packagingType,
   transportEntityType,
   transportMethod,
+  transportTripType,
 } from './common';
 import { facilities, storageLocations } from './facilities';
 import { massKg, percent } from './numeric-families';
@@ -32,8 +36,11 @@ import { biocharStorageInventory } from './storage-inventory';
 
 export const vehicles = pgTable('vehicles', {
   id: uuid('id').primaryKey().defaultRandom(),
-  code: text('code').notNull().unique(),
-  name: text('name').notNull().unique(), // e.g., "Truck 1", "Truck 2", "Truck 3"
+  organizationId: text('organization_id')
+    .notNull()
+    .references(() => organizations.id),
+  code: text('code').notNull(),
+  name: text('name').notNull(), // e.g., "Truck 1", "Truck 2", "Truck 3"
   // Operational/audit metadata — not consumed by the certified transport calc
   // (distance-based, Eq. 3). Optional so a vehicle can be recorded with just a
   // name + type. See vehicleType note below.
@@ -46,7 +53,10 @@ export const vehicles = pgTable('vehicles', {
   modelYear: integer('model_year'), // factor-uniformity hedge, not submitted
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (table) => [
+  unique('vehicles_organization_id_code_unique').on(table.organizationId, table.code),
+  unique('vehicles_organization_id_name_unique').on(table.organizationId, table.name),
+]);
 
 // ============================================
 // Orders - Customer orders for biochar products
@@ -54,10 +64,12 @@ export const vehicles = pgTable('vehicles', {
 
 export const orders = pgTable('orders', {
   id: uuid('id').primaryKey().defaultRandom(),
-  code: text('code').notNull().unique(), // e.g., "OR-2025-043"
-  facilityId: uuid('facility_id')
+  organizationId: text('organization_id')
     .notNull()
-    .references(() => facilities.id),
+    .references(() => organizations.id),
+  code: text('code').notNull(), // e.g., "OR-2025-043"
+  facilityId: uuid('facility_id')
+    .notNull(),
   orderDate: timestamp('order_date').notNull(),
 
   // --- Customer Details ---
@@ -80,7 +92,14 @@ export const orders = pgTable('orders', {
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (table) => [
+  unique('orders_organization_id_code_unique').on(table.organizationId, table.code),
+  unique('orders_id_organization_id_unique').on(table.id, table.organizationId),
+  foreignKey({
+    columns: [table.facilityId, table.organizationId],
+    foreignColumns: [facilities.id, facilities.organizationId],
+  }),
+]);
 
 // ============================================
 // Deliveries - Delivery of biochar products
@@ -91,17 +110,18 @@ export const deliveries = pgTable(
   'deliveries',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    code: text('code').notNull().unique(), // e.g., "DL-2025-043"
-    facilityId: uuid('facility_id')
+    organizationId: text('organization_id')
       .notNull()
-      .references(() => facilities.id),
+      .references(() => organizations.id),
+    code: text('code').notNull(), // e.g., "DL-2025-043"
+    facilityId: uuid('facility_id')
+      .notNull(),
     deliveryDate: timestamp('delivery_date').notNull(),
     status: deliveryStatus('status').default('upcoming').notNull(),
 
     // --- Linked Order ---
     orderId: uuid('order_id')
-      .notNull()
-      .references(() => orders.id),
+      .notNull(),
 
     // Optional override when delivery destination differs from order destination.
     customerLocationId: uuid('customer_location_id').references(
@@ -116,6 +136,10 @@ export const deliveries = pgTable(
     // Provenance of distanceKmOverride (null when no override stored).
     distanceSource: distanceSource('distance_source'),
     distanceNote: text('distance_note'),
+    // Round-trip vs one-way accounting for the distribution transport leg
+    // (issue #316, §4.2). `return` (default) doubles the one-way distance at
+    // aggregation; `one_way` requires an evidenced onward destination.
+    tripType: transportTripType('trip_type').notNull().default('return'),
 
     // --- Product Batch ---
     biocharProductId: uuid('biochar_product_id').references(
@@ -144,6 +168,16 @@ export const deliveries = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    unique('deliveries_organization_id_code_unique').on(table.organizationId, table.code),
+    unique('deliveries_id_organization_id_unique').on(table.id, table.organizationId),
+    foreignKey({
+      columns: [table.facilityId, table.organizationId],
+      foreignColumns: [facilities.id, facilities.organizationId],
+    }),
+    foreignKey({
+      columns: [table.orderId, table.organizationId],
+      foreignColumns: [orders.id, orders.organizationId],
+    }),
     check(
       'deliveries_mass_dry_non_negative',
       sql`${table.massDryKg} is null or ${table.massDryKg} >= 0`
@@ -172,6 +206,9 @@ export const transportLegs = pgTable(
   'transport_legs',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
 
     // Polymorphic reference to the entity being transported.
     entityType: transportEntityType('entity_type').notNull(), // feedstock | biochar | sample | delivery
@@ -199,6 +236,12 @@ export const transportLegs = pgTable(
     // --- Load Details (Isometric: Distance-Based Method, Eq. 3 — W_j, the cargo mass) ---
     loadMassKg: massKg('load_mass_kg'),
 
+    // Round-trip vs one-way accounting (issue #316, §4.2 ruling). The stored
+    // distanceKm stays ONE-WAY per leg; `return` (default, conservative) applies
+    // the ×2 multiplier in `aggregateTransportMassDistance`, `one_way` (evidenced
+    // onward destination) does not. Orthogonal to distanceSource / isDerived.
+    tripType: transportTripType('trip_type').notNull().default('return'),
+
     // --- Method (distance-based only — see ADR/changes; the emission factor
     // lives in the Isometric component blueprint, NOT here: we submit distance +
     // mass and Certify computes `distance × Σmass × factor`). ---
@@ -216,6 +259,7 @@ export const transportLegs = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    index('transport_legs_organization_id_idx').on(table.organizationId),
     check(
       'transport_legs_origin_gps_latitude_range',
       sql`${table.originGpsLatitude} is null or (${table.originGpsLatitude} >= -90 and ${table.originGpsLatitude} <= 90)`

@@ -1,3 +1,4 @@
+import { makeTestOrgContext } from "./helpers/test-org";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { listDocumentsForEntityIds } from "@/data-access/documents";
@@ -58,7 +59,7 @@ describe("buildApplicationEvidenceGaps", () => {
       } as never,
     ]);
 
-    const gaps = await buildApplicationEvidenceGaps(USER_ID, [
+    const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
       lineage({ evidenceMethod: "visual" }),
     ]);
 
@@ -80,7 +81,7 @@ describe("buildApplicationEvidenceGaps", () => {
       } as never,
     ]);
 
-    const gaps = await buildApplicationEvidenceGaps(USER_ID, [
+    const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
       lineage({ evidenceMethod: "visual" }),
     ]);
 
@@ -116,7 +117,7 @@ describe("buildApplicationEvidenceGaps", () => {
       },
     ] as never);
 
-    const gaps = await buildApplicationEvidenceGaps(USER_ID, [
+    const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
       lineage({ evidenceMethod: "visual" }),
     ]);
 
@@ -126,7 +127,7 @@ describe("buildApplicationEvidenceGaps", () => {
   it("flags boundary applications missing boundary reference and logbook", async () => {
     mockedListDocuments.mockResolvedValue([]);
 
-    const gaps = await buildApplicationEvidenceGaps(USER_ID, [
+    const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
       lineage({ evidenceMethod: "boundary", gisBoundaryReference: null }),
     ]);
 
@@ -147,7 +148,7 @@ describe("buildApplicationEvidenceGaps", () => {
       } as never,
     ]);
 
-    const gaps = await buildApplicationEvidenceGaps(USER_ID, [
+    const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
       lineage({
         evidenceMethod: "boundary",
         gisBoundaryReference: "field-boundary-1",
@@ -168,7 +169,7 @@ describe("buildApplicationEvidenceGaps", () => {
       } as never,
     ]);
 
-    const gaps = await buildApplicationEvidenceGaps(USER_ID, [
+    const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
       lineage({ evidenceMethod: "boundary", gisBoundaryReference: "   " }),
     ]);
 
@@ -186,7 +187,7 @@ describe("buildApplicationEvidenceGaps", () => {
       } as never,
     ]);
 
-    const gaps = await buildApplicationEvidenceGaps(USER_ID, [
+    const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
       lineage({
         evidenceMethod: "boundary",
         gisBoundaryReference: "field-boundary-1",
@@ -207,7 +208,7 @@ describe("buildApplicationEvidenceGaps", () => {
       } as never,
     ]);
 
-    const gaps = await buildApplicationEvidenceGaps(USER_ID, [
+    const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
       lineage({
         evidenceMethod: "boundary",
         gisBoundaryReference: "field-boundary-1",
@@ -220,7 +221,7 @@ describe("buildApplicationEvidenceGaps", () => {
   it("reports no gaps for applications with no evidence method selected", async () => {
     mockedListDocuments.mockResolvedValue([]);
 
-    const gaps = await buildApplicationEvidenceGaps(USER_ID, [
+    const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
       lineage({ evidenceMethod: undefined }),
     ]);
 
@@ -264,7 +265,7 @@ describe("evidence-gap document-type taxonomy parity", () => {
         } as never,
       ]);
 
-      const gaps = await buildApplicationEvidenceGaps(USER_ID, [
+      const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
         lineage({
           evidenceMethod: "boundary",
           gisBoundaryReference: "field-boundary-1",

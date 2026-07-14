@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
+import { beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { deleteApplication } from "@/data-access/applications";
@@ -38,12 +39,12 @@ interface DeleteFixture {
 async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
   const [customer] = await db
     .insert(customers)
-    .values({ name: `Delete Test Customer ${runId}`, code: `CU-DEL-${runId}` })
+    .values({ organizationId: TEST_ORG_ID, name: `Delete Test Customer ${runId}`, code: `CU-DEL-${runId}` })
     .returning({ id: customers.id });
 
   const [formulation] = await db
     .insert(formulations)
-    .values({ name: `Delete Test Formulation ${runId}`, code: `FM-DEL-${runId}` })
+    .values({ organizationId: TEST_ORG_ID, name: `Delete Test Formulation ${runId}`, code: `FM-DEL-${runId}` })
     .returning({ id: formulations.id });
 
   // ADR 0016: a credit batch is single-feedstock (NOT NULL feedstockTypeId), so
@@ -52,6 +53,7 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      organizationId: TEST_ORG_ID,
       name: `Delete Test Feedstock ${runId}`,
       code: `FT-DEL-${runId}`,
       category: "forestry",
@@ -60,12 +62,13 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
 
   const [facility] = await db
     .insert(facilities)
-    .values({ name: `Delete Test Facility ${runId}`, code: `FAC-DEL-${runId}` })
+    .values({ organizationId: TEST_ORG_ID, name: `Delete Test Facility ${runId}`, code: `FAC-DEL-${runId}` })
     .returning({ id: facilities.id });
 
   const [productionProcess] = await db
     .insert(productionProcesses)
     .values({
+      organizationId: TEST_ORG_ID,
       facilityId: facility.id,
       feedstockTypeId: feedstockType.id,
     })
@@ -74,6 +77,7 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
   const [reactor] = await db
     .insert(reactors)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `RE-DEL-${runId}`,
       facilityId: facility.id,
       identifier: `Delete Test Reactor ${runId}`,
@@ -84,10 +88,10 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
   const [productionRun] = await db
     .insert(productionRuns)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `PR-DEL-${runId}`,
       facilityId: facility.id,
       reactorId: reactor.id,
-      date: "2025-06-15",
       startTime: new Date("2025-06-15T08:00:00Z"),
       endTime: new Date("2025-06-15T12:00:00Z"),
       biocharDryMassKg: 10_000,
@@ -97,6 +101,7 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
   const [product] = await db
     .insert(biocharProducts)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `BP-DEL-${runId}`,
       facilityId: facility.id,
       formulationId: formulation.id,
@@ -107,6 +112,7 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
   const [order] = await db
     .insert(orders)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `OR-DEL-${runId}`,
       facilityId: facility.id,
       biocharProductId: product.id,
@@ -120,6 +126,7 @@ async function createDeleteFixture(runId: string): Promise<DeleteFixture> {
   const [delivery] = await db
     .insert(deliveries)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `DL-DEL-${runId}`,
       facilityId: facility.id,
       orderId: order.id,
@@ -202,6 +209,7 @@ async function createApplicationRecord(
   const [application] = await db
     .insert(applications)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `AP-DEL-${suffix}`,
       deliveryId: fixture.deliveryId,
       applicationDate: new Date("2025-06-15"),
@@ -222,6 +230,7 @@ async function createMeasurementRecord(
   const [measurement] = await db
     .insert(soilTemperatureMeasurements)
     .values({
+      organizationId: TEST_ORG_ID,
       applicationId,
       measurementDate: "2025-06-15",
       temperatureC: 24,
@@ -243,6 +252,7 @@ async function createCreditBatchRecord(
   const [creditBatch] = await db
     .insert(creditBatches)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `CB-DEL-${runId}-${status.toUpperCase()}`,
       facilityId: fixture.facilityId,
       feedstockTypeId: fixture.feedstockTypeId,
@@ -259,12 +269,16 @@ async function createCreditBatchRecord(
   fixture.batchIds.push(creditBatch.id);
 
   await db.insert(creditBatchProductionRuns).values({
+    organizationId: TEST_ORG_ID,
     creditBatchId: creditBatch.id,
     productionRunId: fixture.productionRunId,
   });
 
   return creditBatch.id;
 }
+
+
+beforeAll(() => ensureTestOrg());
 
 describe("deleteApplication", () => {
   it("shrinks the derived applied weight after removing a linked application", async () => {
@@ -294,12 +308,12 @@ describe("deleteApplication", () => {
 
       // Derived on read (issue #285): Σ member applications' applied tons —
       // no stored column, so nothing can go stale.
-      const batchBefore = await getCreditBatchById(TEST_USER_ID, creditBatchId, {
+      const batchBefore = await getCreditBatchById(makeTestOrgContext(TEST_USER_ID), creditBatchId, {
         skipPreview: true,
       });
       expect(batchBefore?.appliedWeightTons).toBe(7);
 
-      await deleteApplication(TEST_USER_ID, deletedApplicationId);
+      await deleteApplication(makeTestOrgContext(TEST_USER_ID), deletedApplicationId);
       fixture.applicationIds = fixture.applicationIds.filter((id) => id !== deletedApplicationId);
       fixture.measurementIds = [];
 
@@ -324,7 +338,7 @@ describe("deleteApplication", () => {
 
       // The derived figure reflects the remaining member application with no
       // write-back to the batch row.
-      const batchAfter = await getCreditBatchById(TEST_USER_ID, creditBatchId, {
+      const batchAfter = await getCreditBatchById(makeTestOrgContext(TEST_USER_ID), creditBatchId, {
         skipPreview: true,
       });
       expect(batchAfter?.appliedWeightTons).toBe(2);
@@ -351,7 +365,7 @@ describe("deleteApplication", () => {
       });
 
       await expect(
-        deleteApplication(TEST_USER_ID, applicationId),
+        deleteApplication(makeTestOrgContext(TEST_USER_ID), applicationId),
       ).rejects.toThrow("Cannot delete application linked to verified or issued credit batches");
 
       const [applicationStillPresent] = await db

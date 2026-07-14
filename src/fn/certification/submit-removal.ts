@@ -1,3 +1,4 @@
+import type { OrgContext } from "@/lib/auth/server";
 import {
   markSubmissionSubmitted,
   retireStaleSubmissionDraft,
@@ -18,11 +19,13 @@ import {
   buildRemovalSupplierRef,
   createDatapoint,
   createGhgEntry,
+  getIsometricClientForOrg,
   payloadHash,
   reconcileDatapoint,
   reconcileRemoval,
   type IsometricComponentBlueprint,
   type IsometricGhgEntryTemplate,
+  type IsometricClient,
 } from "@/lib/isometric";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
@@ -54,7 +57,10 @@ import {
   type RemovalTransportSnapshot,
 } from "./removal-snapshot-readers";
 import { readRemovalReportingWindow } from "./removal-reporting-window";
-import { buildRemovalSubmissionBuild } from "./removal-submission-build";
+import {
+  assertEntityReadinessGapsResolved,
+  buildRemovalSubmissionBuild,
+} from "./removal-submission-build";
 import { performRegistryCreate, supplierRefLookup } from "./registry-create";
 import { resolveSourceIdsForRemoval } from "./sources";
 import {
@@ -79,7 +85,7 @@ const REMOVAL_CLAIM_BLOCKED_MESSAGES: Record<ClaimBlockedReason, string> = {
 };
 
 export interface SubmitRemovalArgs {
-  userId: string;
+  orgCtx: OrgContext;
   removalId: string;
   confirmProduction?: boolean;
 }
@@ -100,7 +106,7 @@ export interface RemovalSubmissionResult {
 export async function submitRemoval(
   args: SubmitRemovalArgs,
 ): Promise<RemovalSubmissionResult> {
-  const { userId, removalId, confirmProduction } = args;
+  const { orgCtx, removalId, confirmProduction } = args;
 
   // Per-attempt correlation id so the start breadcrumb, boundary logs, and any
   // best-effort warnings for one submit can be tied together in an aggregator.
@@ -112,10 +118,22 @@ export async function submitRemoval(
   });
   log.info("removal submit started");
 
-  const ctx = await loadRemovalSubmissionContext(userId, removalId);
+  const ctx = await loadRemovalSubmissionContext(orgCtx, removalId);
   if (!ctx.mapping) {
     throw new SafeError("Link a facility to an Isometric project first.");
   }
+  if (!ctx.hasOrgCredentials) {
+    throw new SafeError(
+      "Configure organization Isometric credentials before submitting.",
+    );
+  }
+  // Fail before the submit-phase client, evidence-ledger generation/mirroring,
+  // local ledger claims, or registry writes. Context loading may already make
+  // read-only registry calls to resolve the configured project and template.
+  // The build layer repeats this assertion as a defensive seam for callers that
+  // prepare a submission outside this orchestrator.
+  assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
+  const client = await getIsometricClientForOrg(orgCtx.organizationId);
   if (ctx.missingDefaultTemplateId) {
     throw new SafeError(
       "The facility's default removal template was not found in Certify. Refresh the link in facility settings.",
@@ -220,6 +238,29 @@ export async function submitRemoval(
     expectedDefaultRemovalTemplateId: ctx.mapping.defaultRemovalTemplateId,
   };
 
+  // ADR 0005 escape hatch: in SANDBOX, a Removal Template that still declares a
+  // period-input tuple (e.g. pyrolyzer_direct concentration) emits a
+  // 0-magnitude stub instead of failing closed, so the pipeline can be
+  // exercised before the real LCA value lands. Production NEVER stubs — 0 is an
+  // over-claim for these positive emissions. See docs/open-questions.md.
+  const allowPeriodInputStub = env.ISOMETRIC_ENVIRONMENT === "sandbox";
+
+  // Run the complete aggregation, durability, transport, reporting-window,
+  // and template-input validation before generating or mirroring evidence.
+  // Supplying an explicit empty Source set keeps this preflight free of the
+  // candidate-document walk; its build output is intentionally discarded.
+  await buildRemovalSubmissionBuild({
+    orgCtx,
+    removalId,
+    ctx,
+    defaultTemplate,
+    blueprintsByKey,
+    externalProjectId,
+    allowPeriodInputStub,
+    hasDurabilityComponents,
+    sourceIds: [],
+  });
+
   // Regenerate every Source-mirrored evidence ledger (transport mass·distance +
   // 200-year durability) from the live context and mirror them BEFORE candidate
   // documents are collected, so the current ledgers ride into source_ids on this
@@ -228,17 +269,10 @@ export async function submitRemoval(
   // documents under a per-removal artifact lock. Best-effort and idempotent on
   // content (an unchanged resubmit is a no-op); each ledger self-skips when it
   // has nothing to evidence.
-  await ensureEvidenceLedgersFromContext(userId, removalId, ctx, log);
-
-  // ADR 0005 escape hatch: in SANDBOX, a Removal Template that still declares a
-  // period-input tuple (e.g. pyrolyzer_direct concentration) emits a
-  // 0-magnitude stub instead of failing closed, so the pipeline can be
-  // exercised before the real LCA value lands. Production NEVER stubs — 0 is an
-  // over-claim for these positive emissions. See docs/open-questions.md.
-  const allowPeriodInputStub = env.ISOMETRIC_ENVIRONMENT === "sandbox";
+  await ensureEvidenceLedgersFromContext(orgCtx, removalId, ctx, log);
 
   const initialBuild = await buildRemovalSubmissionBuild({
-    userId,
+    orgCtx,
     removalId,
     ctx,
     defaultTemplate,
@@ -268,7 +302,7 @@ export async function submitRemoval(
   // per-(provider, documentId) advisory locks). Without it, a concurrent
   // unlink could delete a mapping between the unlocked source-id read above
   // and the snapshot insert, orphaning the audit-trail reference.
-  const claimed = await claimSubmissionDraft(userId, {
+  const claimed = await claimSubmissionDraft(orgCtx, {
     key: {
       provider: ISOMETRIC_PROVIDER,
       submissionType: REMOVAL_SUBMISSION_TYPE,
@@ -291,7 +325,7 @@ export async function submitRemoval(
       // case: it matches the tentative set and everything built above
       // remains valid; the rare path rebuilds the template inputs once.
       const lockedSourceIds = await resolveSourceIdsForRemoval(
-        userId,
+        orgCtx,
         { candidateDocumentIds },
         tx,
       );
@@ -301,7 +335,7 @@ export async function submitRemoval(
       if (!sourceIdsChanged) return tentative;
 
       const finalBuild = await buildRemovalSubmissionBuild({
-        userId,
+        orgCtx,
         removalId,
         ctx,
         defaultTemplate,
@@ -391,7 +425,7 @@ export async function submitRemoval(
       // membership, so the live member set equals the submitted payload's.
       // The pre-flight gate above already asserted no foreign claims; a
       // raced foreign claim trips the stamp's rowcount backstop loudly.
-      await stampProductionEmissionsClaim(userId, {
+      await stampProductionEmissionsClaim(orgCtx, {
         removalId,
         creditBatchIds: memberCreditBatchIds,
       });
@@ -405,7 +439,7 @@ export async function submitRemoval(
       // built under an older INPUT_MAPPING revision — retire it and fail
       // closed instead (see production-claim-gate.ts).
       if (claimed.resumed) {
-        await assertResumedSnapshotRevisionCurrent(userId, claimed.row);
+        await assertResumedSnapshotRevisionCurrent(orgCtx, claimed.row);
       }
       // §8.6.2 fresh-read re-assert (issue #349, ADR 0020): the blocking
       // draft row now exists, so membership is frozen — a foreign claim OR a
@@ -414,12 +448,12 @@ export async function submitRemoval(
       // shipping a stale payload and tripping the claim-stamp backstop after
       // the POSTs. See production-claim-gate.ts.
       await assertProductionClaimGateFresh(
-        userId,
+        orgCtx,
         removalId,
         ctx.memberBatchClaims,
       );
       await assertClaimedRemovalPayloadFresh({
-        userId,
+        orgCtx,
         removalId,
         row: claimed.row,
         allowPeriodInputStub,
@@ -449,7 +483,8 @@ export async function submitRemoval(
         ? readRemovalDurabilityMeasurementSamples(claimed.row)
         : null;
       return runRemovalSubmission({
-        userId,
+        client,
+        orgCtx,
         removalId,
         row: claimed.row,
         transport,
@@ -475,14 +510,14 @@ export async function submitRemoval(
 }
 
 async function assertClaimedRemovalPayloadFresh(args: {
-  userId: string;
+  orgCtx: OrgContext;
   removalId: string;
   row: CertificationSubmissionRow;
   allowPeriodInputStub: boolean;
 }): Promise<void> {
-  const { userId, removalId, row, allowPeriodInputStub } = args;
+  const { orgCtx, removalId, row, allowPeriodInputStub } = args;
 
-  const freshCtx = await loadRemovalSubmissionContext(userId, removalId);
+  const freshCtx = await loadRemovalSubmissionContext(orgCtx, removalId);
   if (
     !freshCtx.mapping ||
     freshCtx.missingDefaultTemplateId ||
@@ -491,7 +526,7 @@ async function assertClaimedRemovalPayloadFresh(args: {
     freshCtx.unresolvedBlueprintKeys.length > 0 ||
     freshCtx.defaultTemplate.groups.length === 0
   ) {
-    await retireStaleSubmissionDraft(userId, row.id, {
+    await retireStaleSubmissionDraft(orgCtx, row.id, {
       reason: "semantic payload rebuild failed after draft claim",
     });
     throw new SafeError(
@@ -502,7 +537,7 @@ async function assertClaimedRemovalPayloadFresh(args: {
     group.components.some((c) => isSequestrationBlueprintKey(c.blueprint_key)),
   );
   if (freshHasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
-    await retireStaleSubmissionDraft(userId, row.id, {
+    await retireStaleSubmissionDraft(orgCtx, row.id, {
       reason: "durability measurement-sample gate changed after draft claim",
     });
     throw new SafeError(
@@ -513,7 +548,7 @@ async function assertClaimedRemovalPayloadFresh(args: {
   let freshBuild: Awaited<ReturnType<typeof buildRemovalSubmissionBuild>>;
   try {
     freshBuild = await buildRemovalSubmissionBuild({
-      userId,
+      orgCtx,
       removalId,
       ctx: freshCtx,
       defaultTemplate: freshCtx.defaultTemplate,
@@ -525,7 +560,7 @@ async function assertClaimedRemovalPayloadFresh(args: {
       hasDurabilityComponents: freshHasDurabilityComponents,
     });
   } catch (err) {
-    await retireStaleSubmissionDraft(userId, row.id, {
+    await retireStaleSubmissionDraft(orgCtx, row.id, {
       reason: "semantic payload rebuild failed after draft claim",
     });
     throw err;
@@ -533,7 +568,7 @@ async function assertClaimedRemovalPayloadFresh(args: {
   const freshHash = payloadHash(freshBuild.semanticPayload);
   if (freshHash === row.payloadHash) return;
 
-  await retireStaleSubmissionDraft(userId, row.id, {
+  await retireStaleSubmissionDraft(orgCtx, row.id, {
     reason: `semantic payload drift: snapshot ${String(row.payloadHash)} != current ${freshHash}`,
   });
   throw new SafeError(
@@ -542,7 +577,8 @@ async function assertClaimedRemovalPayloadFresh(args: {
 }
 
 interface RunRemovalSubmissionArgs {
-  userId: string;
+  client: IsometricClient;
+  orgCtx: OrgContext;
   removalId: string;
   row: CertificationSubmissionRow;
   transport: RemovalTransportSnapshot;
@@ -569,7 +605,8 @@ interface RunRemovalSubmissionArgs {
 }
 
 async function runRemovalSubmission({
-  userId,
+  client,
+  orgCtx,
   removalId,
   row,
   transport,
@@ -605,7 +642,7 @@ async function runRemovalSubmission({
   for (const dp of transport.datapointBodies) {
     const supplierRefId = dp.body.supplier_reference_id;
     const { externalId } = await performRegistryCreate({
-      userId,
+      orgCtx,
       entityType: REMOVAL_ENTITY_TYPE,
       entityId: removalId,
       submissionRowId: row.id,
@@ -613,8 +650,8 @@ async function runRemovalSubmission({
       requestPayload: dp.body,
       supplierRefId,
       resumed,
-      create: () => createDatapoint(dp.body).then((d) => d.id),
-      reconcile: () => reconcileDatapoint({ supplierRefId }).then(supplierRefLookup),
+      create: () => createDatapoint(client, dp.body).then((d) => d.id),
+      reconcile: () => reconcileDatapoint(client, { supplierRefId }).then(supplierRefLookup),
       failureMessagePrefix: `Datapoint POST failed for "${dp.inputKey}"`,
       log,
     });
@@ -629,7 +666,7 @@ async function runRemovalSubmission({
   // so a future caller can't accidentally fire the staged path.
   if (durabilityMeasurementSubmissions && DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
     const { submitted } = await submitDurabilityMeasurementSamples({
-      userId,
+      orgCtx,
       removalId,
       submissionRowId: row.id,
       resumed,
@@ -648,7 +685,7 @@ async function runRemovalSubmission({
     supplierRefId: transport.removalSupplierRef,
   });
   const { externalId: externalRemovalId } = await performRegistryCreate({
-    userId,
+    orgCtx,
     entityType: REMOVAL_ENTITY_TYPE,
     entityId: removalId,
     submissionRowId: row.id,
@@ -656,16 +693,16 @@ async function runRemovalSubmission({
     requestPayload: removalBody,
     supplierRefId: transport.removalSupplierRef,
     resumed,
-    create: () => createGhgEntry(removalBody).then((r) => r.id),
+    create: () => createGhgEntry(client, removalBody).then((r) => r.id),
     reconcile: () =>
-      reconcileRemoval({ supplierRefId: transport.removalSupplierRef }).then(
+      reconcileRemoval(client, { supplierRefId: transport.removalSupplierRef }).then(
         supplierRefLookup,
       ),
     failureMessagePrefix: "Removal POST failed",
     log,
   });
 
-  await markSubmissionSubmitted(userId, row.id, {
+  await markSubmissionSubmitted(orgCtx, row.id, {
     externalId: externalRemovalId,
     supersedePreviousId,
     // §8.6.2 (issue #349, ADR 0020): stamp the production-bucket claim onto
@@ -676,7 +713,7 @@ async function runRemovalSubmission({
   // Persist the derived reporting window onto the removal row (best-effort —
   // a failure here doesn't unwind a successful submission).
   try {
-    await updateRemovalDates(userId, removalId, {
+    await updateRemovalDates(orgCtx, removalId, {
       startedOn: formatUtcDate(effectiveWindow.startedOn),
       completedOn: formatUtcDate(effectiveWindow.completedOn),
     });
@@ -689,7 +726,7 @@ async function runRemovalSubmission({
 
   if (resumed) {
     await appendSyncEventBestEffort(
-      userId,
+      orgCtx,
       {
         provider: ISOMETRIC_PROVIDER,
         entityType: REMOVAL_ENTITY_TYPE,

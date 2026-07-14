@@ -1,14 +1,18 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { productionRuns, samples } from "@/db/schema/production";
 import type { Sample } from "@/db/schema";
-import type { SamplingMethod } from "@/lib/certification/sampling-requirements";
+import {
+  deriveBatchSamplingMethod,
+  type SamplingMethod,
+} from "@/lib/certification/sampling-requirements";
 import type { CreditBatchDurabilityInput } from "@/lib/isometric/utils/durability-aggregation";
 import { DURABILITY_TIER_FALLBACK } from "@/schemas/credit-batches";
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 
 /**
  * A credit batch's durability inputs as loaded from the DB: its lab Samples
@@ -23,7 +27,7 @@ export interface CreditBatchWithSamples extends CreditBatchDurabilityInput {
   runs: Array<{ id: string; code: string; biocharDryMassKg: number | null }>;
   /** The (facility, feedstock) process this batch belongs to; null = unfound. */
   productionProcessId: string | null;
-  /** The batch's process's CURRENT sampling method (default Method A). */
+  /** The batch's effective sampling method at its immutable start boundary. */
   samplingMethod: SamplingMethod;
   /** Operator-declared `credit_batches.h_to_c_org_ratio` (advisory; reconciled). */
   declaredHToCorgRatio: number | null;
@@ -40,10 +44,10 @@ export interface CreditBatchWithSamples extends CreditBatchDurabilityInput {
  * (ADR 0016 Phase 1 of this plan). Batches absent from the DB are omitted.
  */
 export async function getCreditBatchesWithSamples(
-  userId: string,
+  ctx: OrgContext,
   creditBatchIds: string[],
 ): Promise<CreditBatchWithSamples[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const ids = Array.from(new Set(creditBatchIds));
   if (ids.length === 0) return [];
 
@@ -51,14 +55,15 @@ export async function getCreditBatchesWithSamples(
     .select({
       id: creditBatches.id,
       code: creditBatches.code,
+      startDate: creditBatches.startDate,
       productionProcessId: creditBatches.productionProcessId,
       declaredHToCorgRatio: creditBatches.hToCorgRatio,
       // Tier is inherited from the facility (ADR 0021), not a batch column.
       durabilityOption: facilities.durabilityOption,
     })
     .from(creditBatches)
-    .leftJoin(facilities, eq(creditBatches.facilityId, facilities.id))
-    .where(inArray(creditBatches.id, ids));
+    .leftJoin(facilities, and(eq(creditBatches.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .where(and(inArray(creditBatches.id, ids), eq(creditBatches.organizationId, ctx.organizationId)));
   if (batchRows.length === 0) return [];
 
   const processIds = Array.from(
@@ -74,12 +79,22 @@ export async function getCreditBatchesWithSamples(
           .select({
             id: productionProcesses.id,
             samplingMethod: productionProcesses.samplingMethod,
+            methodBUnlockedAt: productionProcesses.methodBUnlockedAt,
           })
           .from(productionProcesses)
-          .where(inArray(productionProcesses.id, processIds))
+          .where(and(inArray(productionProcesses.id, processIds), eq(productionProcesses.organizationId, ctx.organizationId)))
       : [];
-  const samplingMethodByProcess = new Map<string, SamplingMethod>(
-    processRows.map((p) => [p.id, p.samplingMethod as SamplingMethod]),
+  const samplingRegimeByProcess = new Map<
+    string,
+    { samplingMethod: SamplingMethod; methodBUnlockedAt: Date | null }
+  >(
+    processRows.map((p) => [
+      p.id,
+      {
+        samplingMethod: p.samplingMethod as SamplingMethod,
+        methodBUnlockedAt: p.methodBUnlockedAt,
+      },
+    ]),
   );
 
   // Member runs per batch (id + code + dry mass) via the join table.
@@ -93,9 +108,12 @@ export async function getCreditBatchesWithSamples(
     .from(creditBatchProductionRuns)
     .innerJoin(
       productionRuns,
-      eq(creditBatchProductionRuns.productionRunId, productionRuns.id),
+      and(eq(creditBatchProductionRuns.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)),
     )
-    .where(inArray(creditBatchProductionRuns.creditBatchId, ids));
+    .where(and(
+      inArray(creditBatchProductionRuns.creditBatchId, ids),
+      eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
+    ));
 
   const runsByBatch = new Map<
     string,
@@ -113,11 +131,15 @@ export async function getCreditBatchesWithSamples(
 
   // Samples pooled by credit batch — the key re-grain. Skips the null-run filter
   // `getProductionRunsWithSamples` applies, so commingled-batch chemistry is
-  // visible to the durability surfaces again.
+  // visible to the durability surfaces again. Ordered by id: Postgres gives no
+  // row order without one, and the 1000-year submission body (and thus its
+  // change-detection hash) carries per-replicate values in this order — an
+  // unordered read could flip the hash for unchanged rows.
   const sampleRows = await db
     .select()
     .from(samples)
-    .where(inArray(samples.creditBatchId, ids));
+    .where(and(inArray(samples.creditBatchId, ids), eq(samples.organizationId, ctx.organizationId)))
+    .orderBy(asc(samples.id));
   const samplesByBatch = new Map<string, Sample[]>();
   for (const s of sampleRows) {
     if (s.creditBatchId == null) continue;
@@ -130,9 +152,16 @@ export async function getCreditBatchesWithSamples(
     creditBatchId: batch.id,
     creditBatchCode: batch.code,
     productionProcessId: batch.productionProcessId,
-    samplingMethod: batch.productionProcessId
-      ? samplingMethodByProcess.get(batch.productionProcessId) ?? "method_a"
-      : "method_a",
+    samplingMethod: (() => {
+      if (batch.productionProcessId == null) return "method_a";
+      const regime = samplingRegimeByProcess.get(batch.productionProcessId);
+      if (regime == null) return "method_a";
+      return deriveBatchSamplingMethod({
+        processMethod: regime.samplingMethod,
+        methodBUnlockedAt: regime.methodBUnlockedAt,
+        batchStartDate: batch.startDate,
+      });
+    })(),
     declaredHToCorgRatio: batch.declaredHToCorgRatio,
     durabilityOption: batch.durabilityOption ?? DURABILITY_TIER_FALLBACK,
     runs: runsByBatch.get(batch.id) ?? [],
@@ -153,17 +182,17 @@ export interface CreditBatchSampleRef {
  * commingled-batch sample with a null run link. Returns one entry per sample.
  */
 export async function getSamplesByCreditBatchIds(
-  userId: string,
+  ctx: OrgContext,
   creditBatchIds: string[],
 ): Promise<CreditBatchSampleRef[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const ids = Array.from(new Set(creditBatchIds));
   if (ids.length === 0) return [];
 
   const rows = await db
     .select({ id: samples.id, creditBatchId: samples.creditBatchId })
     .from(samples)
-    .where(inArray(samples.creditBatchId, ids));
+    .where(and(inArray(samples.creditBatchId, ids), eq(samples.organizationId, ctx.organizationId)));
 
   return rows.flatMap((row) =>
     row.creditBatchId == null

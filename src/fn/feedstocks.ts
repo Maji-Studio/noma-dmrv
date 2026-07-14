@@ -23,7 +23,7 @@ import {
   type FeedstockStats,
   type CreateFeedstockResult,
 } from "@/data-access/feedstocks";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext, type OrgContext } from "@/lib/auth/server";
 import { logger } from "@/lib/log";
 import {
   createFeedstockSchema,
@@ -53,18 +53,18 @@ function feedstockActionError(
 // persisted on the feedstock row, so a swallowed failure loses it until the
 // next edit — log the override so the value is recoverable.
 async function syncFeedstockLegsBestEffort(
-  userId: string,
+  ctx: OrgContext,
   feedstockIds: string[],
   override: NonNullable<Parameters<typeof syncFeedstockTransportLeg>[2]>,
 ): Promise<void> {
   const results = await Promise.allSettled(
-    feedstockIds.map((id) => syncFeedstockTransportLeg(userId, id, override)),
+    feedstockIds.map((id) => syncFeedstockTransportLeg(ctx, id, override)),
   );
   results.forEach((result, index) => {
     if (result.status !== "rejected") return;
     logger.warn(
       {
-        userId,
+        userId: ctx.userId,
         feedstockId: feedstockIds[index],
         distanceKmOverride: override.distanceKm ?? null,
         distanceSourceOverride: override.distanceSource ?? null,
@@ -86,13 +86,12 @@ export async function getFeedstocksFn(
   filters?: Partial<z.infer<typeof feedstockFilterSchema>>
 ): Promise<ActionResult<PaginatedFeedstocks>> {
   try {
-    const user = await getUser();
-    if (!user?.id) return { success: false, error: "Unauthorized" };
+    const ctx = await requireOrgContext();
 
     const validatedFilters = filters
       ? feedstockFilterSchema.parse(filters)
       : undefined;
-    const data = await getFeedstocksData(user.id, validatedFilters);
+    const data = await getFeedstocksData(ctx, validatedFilters);
 
     return { success: true, data };
   } catch (error) {
@@ -117,10 +116,9 @@ export async function getFeedstockByIdFn(
   feedstockId: string
 ): Promise<ActionResult<FeedstockWithRelations>> {
   try {
-    const user = await getUser();
-    if (!user?.id) return { success: false, error: "Unauthorized" };
+    const ctx = await requireOrgContext();
 
-    const data = await getFeedstockByIdData(user.id, feedstockId);
+    const data = await getFeedstockByIdData(ctx, feedstockId);
     return { success: true, data };
   } catch (error) {
     return {
@@ -138,10 +136,9 @@ export async function getFeedstockStatsFn(
   facilityId?: string
 ): Promise<ActionResult<FeedstockStats>> {
   try {
-    const user = await getUser();
-    if (!user?.id) return { success: false, error: "Unauthorized" };
+    const ctx = await requireOrgContext();
 
-    const data = await getFeedstockStatsData(user.id, facilityId);
+    const data = await getFeedstockStatsData(ctx, facilityId);
     return { success: true, data };
   } catch (error) {
     return {
@@ -159,10 +156,9 @@ export async function getFeedstockOptionsFn(): Promise<
   ActionResult<Array<{ id: string; code: string; massDryKg: number; feedstockTypeName: string | null }>>
 > {
   try {
-    const user = await getUser();
-    if (!user?.id) return { success: false, error: "Unauthorized" };
+    const ctx = await requireOrgContext();
 
-    const data = await getFeedstockOptionsData(user.id);
+    const data = await getFeedstockOptionsData(ctx);
     return { success: true, data };
   } catch (error) {
     return {
@@ -181,10 +177,9 @@ export async function checkFeedstockCodeFn(
   excludeId?: string
 ): Promise<ActionResult<boolean>> {
   try {
-    const user = await getUser();
-    if (!user?.id) return { success: false, error: "Unauthorized" };
+    const ctx = await requireOrgContext();
 
-    const available = await isFeedstockCodeAvailableData(user.id, code, excludeId);
+    const available = await isFeedstockCodeAvailableData(ctx, code, excludeId);
     return { success: true, data: available };
   } catch (error) {
     return {
@@ -206,21 +201,20 @@ export async function createFeedstockFn(
   input: z.infer<typeof createFeedstockSchema>
 ): Promise<ActionResult<CreateFeedstockResult>> {
   try {
-    const user = await getUser();
-    if (!user?.id) return { success: false, error: "Unauthorized" };
+    const ctx = await requireOrgContext();
 
     const data = createFeedstockSchema.parse(input);
 
     // Generate sequential codes for each allocation in one batch
     const codesFn = (count: number) =>
-      generateNextCodes("FS", feedstocksTable, feedstocksTable.code, count);
+      generateNextCodes(ctx, "FS", feedstocksTable, feedstocksTable.code, count);
 
-    const result = await createFeedstock(user.id, data, codesFn);
+    const result = await createFeedstock(ctx, data, codesFn);
 
     // Auto-derive the transport leg for each created feedstock (split deliveries
     // produce one feedstock row per bin; each gets its own leg, mass-weighted).
     await syncFeedstockLegsBestEffort(
-      user.id,
+      ctx,
       result.feedstocks.map((feedstock) => feedstock.id),
       {
         distanceKm: data.transportDistanceKm,
@@ -228,6 +222,7 @@ export async function createFeedstockFn(
           data.transportDistanceKm,
           data.transportDistanceSource,
         ),
+        tripType: data.transportTripType ?? undefined,
       },
     );
 
@@ -258,21 +253,26 @@ export async function updateFeedstockFn(
   input: z.infer<typeof updateFeedstockSchema>
 ): Promise<ActionResult<FeedstockWithRelations>> {
   try {
-    const user = await getUser();
-    if (!user?.id) return { success: false, error: "Unauthorized" };
+    const ctx = await requireOrgContext();
 
     // transportDistanceKm/-Source are not feedstock columns — they drive the
     // derived transport leg, so strip them before the feedstock update spread.
-    const { feedstockId, transportDistanceKm, transportDistanceSource, ...updateData } =
-      updateFeedstockSchema.parse(input);
-    const data = await updateFeedstock(user.id, feedstockId, updateData);
+    const {
+      feedstockId,
+      transportDistanceKm,
+      transportDistanceSource,
+      transportTripType,
+      ...updateData
+    } = updateFeedstockSchema.parse(input);
+    const data = await updateFeedstock(ctx, feedstockId, updateData);
 
-    await syncFeedstockLegsBestEffort(user.id, [feedstockId], {
+    await syncFeedstockLegsBestEffort(ctx, [feedstockId], {
       distanceKm: transportDistanceKm,
       distanceSource: resolveDistanceSource(
         transportDistanceKm,
         transportDistanceSource,
       ),
+      tripType: transportTripType ?? undefined,
     });
 
     return { success: true, data };
@@ -302,11 +302,10 @@ export async function deleteFeedstockFn(
   input: z.infer<typeof deleteFeedstockSchema>
 ): Promise<ActionResult<void>> {
   try {
-    const user = await getUser();
-    if (!user?.id) return { success: false, error: "Unauthorized" };
+    const ctx = await requireOrgContext();
 
     const { feedstockId } = deleteFeedstockSchema.parse(input);
-    await deleteFeedstock(user.id, feedstockId);
+    await deleteFeedstock(ctx, feedstockId);
 
     return { success: true, data: undefined };
   } catch (error) {

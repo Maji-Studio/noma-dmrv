@@ -35,7 +35,10 @@ import {
   useUpdateCreditBatch,
   useDeleteCreditBatch,
 } from "@/hooks/use-credit-batches";
-import { useCreditBatchHealthSummaries } from "@/hooks/use-certification";
+import {
+  useCreditBatchHealthSummaries,
+  useFacilityCertifierSummary,
+} from "@/hooks/use-certification";
 import type { CreditBatchFormData } from "@/schemas/credit-batches";
 import {
   creditBatchStatuses,
@@ -131,6 +134,17 @@ export function CreditBatchList() {
     contextFacilityId ?? undefined,
     previewIds,
   );
+  const { data: certifierSummary, isLoading: certifierLoading } =
+    useFacilityCertifierSummary(contextFacilityId ?? "", !!contextFacilityId);
+  // `undefined` while the mapping is still loading (so cards don't flash "No
+  // certifier"), `null` once we know there is genuinely no mapping.
+  const facilityCertifierLabel = certifierSummary?.mapping
+    ? formatCertifierProvider(
+        certifierSummary.mapping.provider as CertifierProvider,
+      )
+    : certifierLoading
+      ? undefined
+      : null;
   const hydratedPaginatedItems = paginatedItems.map((batch) => {
     const preview = co2eStoredPreviews[batch.id];
     return preview
@@ -294,11 +308,7 @@ export function CreditBatchList() {
             },
             {
               label: "Certification",
-              value: sideSheetEntity.certifier
-                ? formatCertifierProvider(
-                    sideSheetEntity.certifier as CertifierProvider
-                  )
-                : null,
+              value: facilityCertifierLabel,
             },
           ],
         },
@@ -500,6 +510,7 @@ export function CreditBatchList() {
               <CreditBatchCard
                 key={batch.id}
                 creditBatch={batch}
+                certifierLabel={facilityCertifierLabel}
                 health={batchHealthSummaries[batch.id]}
                 onView={openView}
                 onEdit={openEdit}

@@ -1,3 +1,4 @@
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * DB-backed tests for the credit-batch ↔ lab-sample linking write paths.
  * Since issue #309 a Sample anchors on ONE credit batch directly — the batch's
@@ -81,7 +82,7 @@ async function makeSample(
   creditBatchId: string,
   code: string,
 ): Promise<string> {
-  const sample = await createSample(TEST_USER_ID, {
+  const sample = await createSample(makeTestOrgContext(TEST_USER_ID), {
     sampleCode: code,
     creditBatchId,
     samplingTime: new Date("2025-06-15T10:00:00Z"),
@@ -104,6 +105,7 @@ async function insertLegacySample(
   const [row] = await db
     .insert(samples)
     .values({
+      organizationId: TEST_ORG_ID,
       sampleCode: code,
       productionRunId,
       creditBatchId,
@@ -124,12 +126,15 @@ async function batchIdOfSample(sampleId: string): Promise<string | null> {
   return row?.creditBatchId ?? null;
 }
 
+beforeAll(() => ensureTestOrg());
+
 beforeAll(async () => {
   const runId = Date.now().toString(36);
 
   const [facility] = await db
     .insert(facilities)
     .values({
+      organizationId: TEST_ORG_ID,
       name: `Sample-Link Facility ${runId}`,
       code: `FAC-SL-${runId}`,
       // Explicit 200-year: the base/derive/move tests create samples without R₀,
@@ -143,6 +148,7 @@ beforeAll(async () => {
   const [reactor] = await db
     .insert(reactors)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `RE-SL-${runId}`,
       facilityId,
       identifier: "Sample-Link Reactor",
@@ -154,6 +160,7 @@ beforeAll(async () => {
   const [feedstockType] = await db
     .insert(feedstockTypes)
     .values({
+      organizationId: TEST_ORG_ID,
       name: `Sample-Link Woodchips ${runId}`,
       code: `FT-SL-${runId}`,
       category: "forestry",
@@ -165,6 +172,7 @@ beforeAll(async () => {
   const [feedstock] = await db
     .insert(feedstocks)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `FS-SL-${runId}`,
       facilityId,
       feedstockTypeId: feedstockType.id,
@@ -186,10 +194,10 @@ beforeAll(async () => {
         "moveB",
         "tierFrom",
       ].map((tag, i) => ({
+        organizationId: TEST_ORG_ID,
         code: `PR-SL-${tag}-${runId}`,
         facilityId,
         reactorId: reactor.id,
-        date: `2025-06-1${i}`,
         startTime: new Date(`2025-06-1${i}T08:00:00Z`),
         endTime: new Date(`2025-06-1${i}T12:00:00Z`),
         biocharDryMassKg: 4000,
@@ -211,6 +219,7 @@ beforeAll(async () => {
   // Every run needs a single-feedstock link for createCreditBatch's derivation.
   await db.insert(productionRunFeedstocks).values(
     createdIds.productionRuns.map((productionRunId) => ({
+      organizationId: TEST_ORG_ID,
       productionRunId,
       feedstockId: feedstock.id,
       massUsedKg: 400,
@@ -275,9 +284,10 @@ afterAll(async () => {
   });
 });
 
+
 describe("Sample side — anchor directly on the credit batch (issue #309)", () => {
   it("createSample links the sample to the given batch, with no run link", async () => {
-    const batch = await createCreditBatch(TEST_USER_ID, {
+    const batch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
       ...baseBatchData,
       code: `CB-SL-DERIVE-${Date.now().toString(36)}`,
       facilityId,
@@ -297,7 +307,7 @@ describe("Sample side — anchor directly on the credit batch (issue #309)", () 
 
   it("createSample rejects an unknown credit batch", async () => {
     await expect(
-      createSample(TEST_USER_ID, {
+      createSample(makeTestOrgContext(TEST_USER_ID), {
         sampleCode: `S-SL-NOBATCH-${Date.now()}`,
         creditBatchId: "00000000-0000-4000-8000-000000000000",
         samplingTime: new Date("2025-06-15T10:00:00Z"),
@@ -308,7 +318,7 @@ describe("Sample side — anchor directly on the credit batch (issue #309)", () 
   });
 
   it("updateSample moves the sample to another batch", async () => {
-    const batchA = await createCreditBatch(TEST_USER_ID, {
+    const batchA = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
       ...baseBatchData,
       code: `CB-SL-MOVE-A-${Date.now().toString(36)}`,
       facilityId,
@@ -319,7 +329,7 @@ describe("Sample side — anchor directly on the credit batch (issue #309)", () 
     const sampleId = await makeSample(batchA.id, `S-SL-MOVE-${Date.now()}`);
     expect(await batchIdOfSample(sampleId)).toBe(batchA.id);
 
-    const batchB = await createCreditBatch(TEST_USER_ID, {
+    const batchB = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
       ...baseBatchData,
       code: `CB-SL-MOVE-B-${Date.now().toString(36)}`,
       facilityId,
@@ -327,7 +337,7 @@ describe("Sample side — anchor directly on the credit batch (issue #309)", () 
     });
     createdIds.creditBatches.push(batchB.id);
 
-    await updateSample(TEST_USER_ID, sampleId, { creditBatchId: batchB.id });
+    await updateSample(makeTestOrgContext(TEST_USER_ID), sampleId, { creditBatchId: batchB.id });
     expect(await batchIdOfSample(sampleId)).toBe(batchB.id);
   });
 });
@@ -345,6 +355,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     const [tier1000Facility] = await db
       .insert(facilities)
       .values({
+        organizationId: TEST_ORG_ID,
         name: `Sample-Link 1000yr Facility ${suffix}`,
         code: `FAC-SL-K-${suffix}`,
         durabilityOption: "1000_year",
@@ -355,6 +366,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     const [tier1000Reactor] = await db
       .insert(reactors)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `RE-SL-K-${suffix}`,
         facilityId: tier1000Facility.id,
         identifier: "Sample-Link 1000yr Reactor",
@@ -366,6 +378,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     const [tier1000Feedstock] = await db
       .insert(feedstocks)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `FS-SL-K-${suffix}`,
         facilityId: tier1000Facility.id,
         feedstockTypeId: baseBatchData.feedstockTypeId,
@@ -377,10 +390,10 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     const [kRun] = await db
       .insert(productionRuns)
       .values({
+        organizationId: TEST_ORG_ID,
         code: `PR-SL-k-tier1000-${suffix}`,
         facilityId: tier1000Facility.id,
         reactorId: tier1000Reactor.id,
-        date: "2025-06-20",
         startTime: new Date("2025-06-20T08:00:00Z"),
         endTime: new Date("2025-06-20T12:00:00Z"),
         biocharDryMassKg: 4000,
@@ -388,12 +401,13 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
       .returning({ id: productionRuns.id });
     createdIds.productionRuns.push(kRun.id);
     await db.insert(productionRunFeedstocks).values({
+      organizationId: TEST_ORG_ID,
       productionRunId: kRun.id,
       feedstockId: tier1000Feedstock.id,
       massUsedKg: 400,
     });
 
-    const tier1000Batch = await createCreditBatch(TEST_USER_ID, {
+    const tier1000Batch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
       ...baseBatchData,
       code: `CB-SL-T1000-${suffix}`,
       facilityId: tier1000Facility.id,
@@ -405,7 +419,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     // The "move from" batch is 200-year — created on the MAIN facility so an
     // evidence-less sample can be created on it before the move-onto-1000-year
     // update is rejected.
-    const fromBatch = await createCreditBatch(TEST_USER_ID, {
+    const fromBatch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
       ...baseBatchData,
       code: `CB-SL-TFROM-${suffix}`,
       facilityId,
@@ -422,13 +436,14 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
       totalCarbonPercent: 80,
       organicCarbonPercent: 78,
       randomReflectanceR0Percent: 2.1,
+      sReflectanceFraction: 0.92,
       residualCarbonPercent: 65,
     };
   }
 
   it("createSample rejects a 1000-year batch sample missing R₀ — regardless of the client-sent tier", async () => {
     await expect(
-      createSample(TEST_USER_ID, {
+      createSample(makeTestOrgContext(TEST_USER_ID), {
         sampleCode: `S-SL-NO-R0-${Date.now()}`,
         creditBatchId: tier1000BatchId,
         samplingTime: new Date("2025-06-15T10:00:00Z"),
@@ -440,7 +455,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
 
   it("createSample rejects a 1000-year batch sample with R₀ but no TGA data", async () => {
     await expect(
-      createSample(TEST_USER_ID, {
+      createSample(makeTestOrgContext(TEST_USER_ID), {
         sampleCode: `S-SL-NO-TGA-${Date.now()}`,
         creditBatchId: tier1000BatchId,
         samplingTime: new Date("2025-06-15T10:00:00Z"),
@@ -452,25 +467,42 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
   });
 
   it("createSample accepts a 1000-year batch sample carrying R₀ + TGA evidence", async () => {
-    const sample = await createSample(TEST_USER_ID, {
+    const sample = await createSample(makeTestOrgContext(TEST_USER_ID), {
       sampleCode: `S-SL-T1000-OK-${Date.now()}`,
       creditBatchId: tier1000BatchId,
       ...completeEvidence(),
     });
     createdIds.samples.push(sample.id);
     expect(await batchIdOfSample(sample.id)).toBe(tier1000BatchId);
+    expect(sample.sReflectanceFraction).toBe(0.92);
+  });
+
+  it("createSample rejects a 1000-year batch sample missing s_fraction", async () => {
+    const action = createSample(makeTestOrgContext(TEST_USER_ID), {
+      sampleCode: `S-SL-NO-S-FRACTION-${Date.now()}`,
+      creditBatchId: tier1000BatchId,
+      samplingTime: new Date("2025-06-15T10:00:00Z"),
+      totalCarbonPercent: 80,
+      organicCarbonPercent: 78,
+      randomReflectanceR0Percent: 2.1,
+      residualCarbonPercent: 65,
+    }).then((sample) => {
+      createdIds.samples.push(sample.id);
+      return sample;
+    });
+    await expect(action).rejects.toThrow(/R₀ readings.*2%/);
   });
 
   it("updateSample rejects moving an evidence-less sample onto a 1000-year batch", async () => {
     const sampleId = await makeSample(fromBatchId, `S-SL-TMOVE-${Date.now()}`);
     await expect(
-      updateSample(TEST_USER_ID, sampleId, { creditBatchId: tier1000BatchId }),
+      updateSample(makeTestOrgContext(TEST_USER_ID), sampleId, { creditBatchId: tier1000BatchId }),
     ).rejects.toThrow(/R₀ reflectance is required/);
     expect(await batchIdOfSample(sampleId)).toBe(fromBatchId);
   });
 
   it("updateSample rejects nulling out R₀ in place on a 1000-year batch sample", async () => {
-    const sample = await createSample(TEST_USER_ID, {
+    const sample = await createSample(makeTestOrgContext(TEST_USER_ID), {
       sampleCode: `S-SL-TNULL-${Date.now()}`,
       creditBatchId: tier1000BatchId,
       ...completeEvidence(),
@@ -478,24 +510,37 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     createdIds.samples.push(sample.id);
 
     await expect(
-      updateSample(TEST_USER_ID, sample.id, {
+      updateSample(makeTestOrgContext(TEST_USER_ID), sample.id, {
         randomReflectanceR0Percent: null,
       }),
     ).rejects.toThrow(/R₀ reflectance is required/);
   });
 
   it("updateSample still allows unrelated edits on a compliant 1000-year batch sample", async () => {
-    const sample = await createSample(TEST_USER_ID, {
+    const sample = await createSample(makeTestOrgContext(TEST_USER_ID), {
       sampleCode: `S-SL-TEDIT-${Date.now()}`,
       creditBatchId: tier1000BatchId,
       ...completeEvidence(),
     });
     createdIds.samples.push(sample.id);
 
-    const updated = await updateSample(TEST_USER_ID, sample.id, {
+    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), sample.id, {
       labName: "Tier Lab",
     });
     expect(updated.labName).toBe("Tier Lab");
+  });
+
+  it("updateSample persists a changed s_fraction", async () => {
+    const sample = await createSample(makeTestOrgContext(TEST_USER_ID), {
+      sampleCode: `S-SL-T-S-FRACTION-${Date.now()}`,
+      creditBatchId: tier1000BatchId,
+      ...completeEvidence(),
+    });
+    createdIds.samples.push(sample.id);
+    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), sample.id, {
+      sReflectanceFraction: 0.94,
+    });
+    expect(updated.sReflectanceFraction).toBe(0.94);
   });
 });
 
@@ -508,7 +553,7 @@ describe("Batch side — back-fill and re-point LEGACY run-linked samples", () =
     );
     expect(await batchIdOfSample(sampleId)).toBeNull();
 
-    const batch = await createCreditBatch(TEST_USER_ID, {
+    const batch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
       ...baseBatchData,
       code: `CB-SL-BACKFILL-${Date.now().toString(36)}`,
       facilityId,
@@ -521,7 +566,7 @@ describe("Batch side — back-fill and re-point LEGACY run-linked samples", () =
   });
 
   it("updateCreditBatch unlinks a removed run's legacy sample and links an added run's", async () => {
-    const batch = await createCreditBatch(TEST_USER_ID, {
+    const batch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
       ...baseBatchData,
       code: `CB-SL-REPOINT-${Date.now().toString(36)}`,
       facilityId,
@@ -546,7 +591,7 @@ describe("Batch side — back-fill and re-point LEGACY run-linked samples", () =
     expect(await batchIdOfSample(sampleC)).toBeNull();
 
     // Drop runReB, add runReC.
-    await updateCreditBatch(TEST_USER_ID, batch.id, {
+    await updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, {
       productionRunIds: [runReA, runReC],
     });
 

@@ -41,7 +41,7 @@ const DEMO_EXTERNAL_PROJECT_ID = "prj_1K5F2F6SN1S0ZKDQ";
 async function main(): Promise<void> {
   // Defer imports until env is loaded so env.ts validation sees the values.
   const {
-    isometric,
+    getIsometricClientFromEnv,
     IsometricApiError,
     createDatapoint,
     patchDatapoint,
@@ -49,6 +49,7 @@ async function main(): Promise<void> {
     listGhgEntryTemplates,
     listComponentBlueprints,
   } = await import("../src/lib/isometric");
+  const isometric = getIsometricClientFromEnv();
   const { lookupInputMapping } = await import(
     "../src/lib/isometric/transformers/datapoint"
   );
@@ -102,8 +103,8 @@ async function main(): Promise<void> {
         `Inspecting default removal templates on demo project ${demoExternalProjectId} (read-only)…\n`,
       );
       const [templates, blueprints] = await Promise.all([
-        listGhgEntryTemplates(demoExternalProjectId),
-        listComponentBlueprints(),
+        listGhgEntryTemplates(isometric, demoExternalProjectId),
+        listComponentBlueprints(isometric),
       ]);
       const blueprintByKey = new Map(blueprints.map((bp) => [bp.key, bp]));
 
@@ -226,7 +227,7 @@ async function main(): Promise<void> {
       console.log(
         `Posting Datapoint with empty source_ids to demo project ${demoExternalProjectId} (ref=${supplierRefId})…`,
       );
-      const created = await createDatapoint({
+      const created = await createDatapoint(isometric, {
         description: "Smoke test: source_ids=[] acceptance",
         display_name: `smoke ${supplierRefId}`,
         project_id: demoExternalProjectId,
@@ -244,8 +245,8 @@ async function main(): Promise<void> {
         `Bootstrapping fixed-input constants on template ${bootstrapTemplateId!} (project ${demoExternalProjectId})…\n`,
       );
       const [templates, blueprints] = await Promise.all([
-        listGhgEntryTemplates(demoExternalProjectId),
-        listComponentBlueprints(),
+        listGhgEntryTemplates(isometric, demoExternalProjectId),
+        listComponentBlueprints(isometric),
       ]);
       const blueprintByKey = new Map(blueprints.map((bp) => [bp.key, bp]));
       const template = templates.find((t) => t.id === bootstrapTemplateId);
@@ -347,7 +348,7 @@ async function main(): Promise<void> {
             // already exists, reuse it. PATCH magnitude/unit if they drifted
             // (catches the case where the curated default changed after the
             // first bootstrap run).
-            const existing = await findDatapointBySupplierRef(supplierRef);
+            const existing = await findDatapointBySupplierRef(isometric, supplierRef);
             if (existing) {
               const existingMagnitude = existing.quantity?.magnitude;
               const existingUnit = existing.quantity?.unit;
@@ -356,7 +357,7 @@ async function main(): Promise<void> {
                 existingUnit !== unit;
               if (needsPatch) {
                 const undef = { __typename: "Undefined" as const };
-                const patched = await patchDatapoint(existing.id, {
+                const patched = await patchDatapoint(isometric, existing.id, {
                   quantity: { magnitude: defaults.magnitude, unit },
                   description: undef,
                   display_name: undef,
@@ -388,7 +389,7 @@ async function main(): Promise<void> {
               continue;
             }
 
-            const created = await createDatapoint({
+            const created = await createDatapoint(isometric, {
               description: `${defaults.description} — ${defaults.citation}`,
               display_name: `${component.display_name} — ${rtcInput.input_key}`,
               project_id: demoExternalProjectId,

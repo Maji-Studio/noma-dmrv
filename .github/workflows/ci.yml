@@ -73,6 +73,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Org-scoping check
+        run: pnpm check:org-scoping
+
       - name: Apply schema
         run: pnpm drizzle-kit push --force
 

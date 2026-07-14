@@ -402,6 +402,7 @@ export function CreditBatchForm({
           <FeedstockProcessChip
             facilityId={effectiveFacilityId || undefined}
             feedstockTypeId={declaredFeedstockTypeId || undefined}
+            batchStartDate={startDate ?? undefined}
           />
         </div>
 

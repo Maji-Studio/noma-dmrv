@@ -4,7 +4,7 @@ import {
   getDocumentById,
   getPublicDocumentById,
 } from "@/data-access/documents";
-import { getUser } from "@/lib/auth/server";
+import { getOrgContext } from "@/lib/auth/server";
 import { getStorageProvider } from "@/lib/storage";
 import { isAllowedRedirectHost } from "@/lib/documents/redirect-allowlist";
 
@@ -22,13 +22,15 @@ export async function GET(
     return new NextResponse("Bad Request", { status: 400 });
   }
 
-  const user = await getUser();
-  const row = user?.id
-    ? await getDocumentById(user.id, id)
-    : await getPublicDocumentById(id);
+  // Prefer the active organization's document, then allow the same public
+  // cross-organization fallback available to signed-out or org-less callers.
+  const orgCtx = await getOrgContext();
+  const row =
+    (orgCtx ? await getDocumentById(orgCtx, id) : null) ??
+    (await getPublicDocumentById(id));
   if (!row) {
-    return new NextResponse(user?.id ? "Not Found" : "Unauthorized", {
-      status: user?.id ? 404 : 401,
+    return new NextResponse(orgCtx ? "Not Found" : "Unauthorized", {
+      status: orgCtx ? 404 : 401,
     });
   }
 

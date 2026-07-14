@@ -1,3 +1,4 @@
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Credit Batch Production-Run Validation Tests
  *
@@ -62,6 +63,8 @@ let multiFeedstockRunInFacilityA: { id: string };
 let noFeedstockRunInFacilityA: { id: string };
 let mismatchedFeedstockRunInFacilityA: { id: string };
 
+beforeAll(() => ensureTestOrg());
+
 beforeAll(async () => {
   // Per-run suffix to avoid uniqueness collisions across parallel runs
   const runId = Date.now().toString(36);
@@ -69,24 +72,24 @@ beforeAll(async () => {
   // Create shared prerequisites
   const [customer] = await db
     .insert(customers)
-    .values({ name: "Test Customer VAL", code: `CU-VAL-${runId}` })
+    .values({ organizationId: TEST_ORG_ID, name: "Test Customer VAL", code: `CU-VAL-${runId}` })
     .returning({ id: customers.id });
   createdIds.customers.push(customer.id);
 
   const [formulation] = await db
     .insert(formulations)
-    .values({ name: "Raw Biochar VAL", code: `FM-VAL-${runId}` })
+    .values({ organizationId: TEST_ORG_ID, name: "Raw Biochar VAL", code: `FM-VAL-${runId}` })
     .returning({ id: formulations.id });
   createdIds.formulations.push(formulation.id);
 
   // Create two facilities
   const [fA] = await db
     .insert(facilities)
-    .values({ name: "Test Facility A", code: `TFA-VAL-${runId}` })
+    .values({ organizationId: TEST_ORG_ID, name: "Test Facility A", code: `TFA-VAL-${runId}` })
     .returning({ id: facilities.id });
   const [fB] = await db
     .insert(facilities)
-    .values({ name: "Test Facility B", code: `TFB-VAL-${runId}` })
+    .values({ organizationId: TEST_ORG_ID, name: "Test Facility B", code: `TFB-VAL-${runId}` })
     .returning({ id: facilities.id });
   facilityA = fA;
   facilityB = fB;
@@ -95,6 +98,7 @@ beforeAll(async () => {
   const [reactorA] = await db
     .insert(reactors)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `RE-VAL-A-${runId}`,
       facilityId: facilityA.id,
       identifier: "Validation Reactor A",
@@ -104,6 +108,7 @@ beforeAll(async () => {
   const [reactorB] = await db
     .insert(reactors)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `RE-VAL-B-${runId}`,
       facilityId: facilityB.id,
       identifier: "Validation Reactor B",
@@ -116,88 +121,88 @@ beforeAll(async () => {
     .insert(productionRuns)
     .values([
       {
+        organizationId: TEST_ORG_ID,
         code: `PR-VAL-A1-${runId}`,
         facilityId: facilityA.id,
         reactorId: reactorA.id,
-        date: "2025-06-15",
         startTime: new Date("2025-06-15T08:00:00Z"),
         endTime: new Date("2025-06-15T12:00:00Z"),
         biocharDryMassKg: 4500,
       },
       {
+        organizationId: TEST_ORG_ID,
         code: `PR-VAL-A2-${runId}`,
         facilityId: facilityA.id,
         reactorId: reactorA.id,
-        date: "2025-06-16",
         startTime: new Date("2025-06-16T08:00:00Z"),
         endTime: new Date("2025-06-16T12:00:00Z"),
         biocharDryMassKg: 4200,
       },
       {
+        organizationId: TEST_ORG_ID,
         code: `PR-VAL-A3-${runId}`,
         facilityId: facilityA.id,
         reactorId: reactorA.id,
-        date: "2025-06-17",
         startTime: new Date("2025-06-17T08:00:00Z"),
         endTime: new Date("2025-06-17T12:00:00Z"),
         biocharDryMassKg: 4100,
       },
       {
+        organizationId: TEST_ORG_ID,
         code: `PR-VAL-A4-${runId}`,
         facilityId: facilityA.id,
         reactorId: reactorA.id,
-        date: "2025-06-18",
         startTime: new Date("2025-06-18T08:00:00Z"),
         endTime: new Date("2025-06-18T12:00:00Z"),
         biocharDryMassKg: 4000,
       },
       {
+        organizationId: TEST_ORG_ID,
         code: `PR-VAL-A5-${runId}`,
         facilityId: facilityA.id,
         reactorId: reactorA.id,
-        date: "2025-07-15",
         startTime: new Date("2025-07-15T08:00:00Z"),
         endTime: new Date("2025-07-15T12:00:00Z"),
         biocharDryMassKg: 3900,
       },
       {
+        organizationId: TEST_ORG_ID,
         code: `PR-VAL-B1-${runId}`,
         facilityId: facilityB.id,
         reactorId: reactorB.id,
-        date: "2025-06-15",
         startTime: new Date("2025-06-15T08:00:00Z"),
         endTime: new Date("2025-06-15T12:00:00Z"),
         biocharDryMassKg: 4300,
       },
       {
+        organizationId: TEST_ORG_ID,
         // ADR 0016: a run blending two feedstock types — a credit batch built
         // from it must be rejected (one feedstock per protocol production batch).
         code: `PR-VAL-A6-${runId}`,
         facilityId: facilityA.id,
         reactorId: reactorA.id,
-        date: "2025-06-20",
         startTime: new Date("2025-06-20T08:00:00Z"),
         endTime: new Date("2025-06-20T12:00:00Z"),
         biocharDryMassKg: 3800,
       },
       {
+        organizationId: TEST_ORG_ID,
         // A run with no linked feedstock — derivation must throw loudly.
         code: `PR-VAL-A7-${runId}`,
         facilityId: facilityA.id,
         reactorId: reactorA.id,
-        date: "2025-06-19",
         startTime: new Date("2025-06-19T08:00:00Z"),
         endTime: new Date("2025-06-19T12:00:00Z"),
         biocharDryMassKg: 3700,
       },
       {
+        organizationId: TEST_ORG_ID,
         // ADR 0016 amendment: a run whose SINGLE feedstock is valid but differs
         // from the type declared on the batch. The equality guard must reject
         // it so the declaration can never drift from the actual runs.
         code: `PR-VAL-A8-${runId}`,
         facilityId: facilityA.id,
         reactorId: reactorA.id,
-        date: "2025-06-21",
         startTime: new Date("2025-06-21T08:00:00Z"),
         endTime: new Date("2025-06-21T12:00:00Z"),
         biocharDryMassKg: 3600,
@@ -224,6 +229,7 @@ beforeAll(async () => {
   const [primaryType] = await db
     .insert(feedstockTypes)
     .values({
+      organizationId: TEST_ORG_ID,
       name: `Validation Woodchips ${runId}`,
       code: `FT-VAL-W-${runId}`,
       category: "forestry",
@@ -232,6 +238,7 @@ beforeAll(async () => {
   const [secondaryType] = await db
     .insert(feedstockTypes)
     .values({
+      organizationId: TEST_ORG_ID,
       name: `Validation Coffee Husk ${runId}`,
       code: `FT-VAL-C-${runId}`,
       category: "agricultural",
@@ -243,6 +250,7 @@ beforeAll(async () => {
   const [feedstockAPrimary] = await db
     .insert(feedstocks)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `FS-VAL-A-W-${runId}`,
       facilityId: facilityA.id,
       feedstockTypeId: primaryType.id,
@@ -252,6 +260,7 @@ beforeAll(async () => {
   const [feedstockASecondary] = await db
     .insert(feedstocks)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `FS-VAL-A-C-${runId}`,
       facilityId: facilityA.id,
       feedstockTypeId: secondaryType.id,
@@ -261,6 +270,7 @@ beforeAll(async () => {
   const [feedstockBPrimary] = await db
     .insert(feedstocks)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `FS-VAL-B-W-${runId}`,
       facilityId: facilityB.id,
       feedstockTypeId: primaryType.id,
@@ -277,23 +287,24 @@ beforeAll(async () => {
   // primary feedstock; the facility-B run to its own primary feedstock; and the
   // A6 run to BOTH types so it resolves to two feedstocks.
   await db.insert(productionRunFeedstocks).values([
-    { productionRunId: runInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
-    { productionRunId: secondRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
-    { productionRunId: thirdRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
-    { productionRunId: assignedGuardRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
-    { productionRunId: outOfWindowRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
-    { productionRunId: runInFacilityB.id, feedstockId: feedstockBPrimary.id, massUsedKg: 400 },
-    { productionRunId: multiFeedstockRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 250 },
-    { productionRunId: multiFeedstockRunInFacilityA.id, feedstockId: feedstockASecondary.id, massUsedKg: 150 },
+    { organizationId: TEST_ORG_ID, productionRunId: runInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
+    { organizationId: TEST_ORG_ID, productionRunId: secondRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
+    { organizationId: TEST_ORG_ID, productionRunId: thirdRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
+    { organizationId: TEST_ORG_ID, productionRunId: assignedGuardRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
+    { organizationId: TEST_ORG_ID, productionRunId: outOfWindowRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
+    { organizationId: TEST_ORG_ID, productionRunId: runInFacilityB.id, feedstockId: feedstockBPrimary.id, massUsedKg: 400 },
+    { organizationId: TEST_ORG_ID, productionRunId: multiFeedstockRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 250 },
+    { organizationId: TEST_ORG_ID, productionRunId: multiFeedstockRunInFacilityA.id, feedstockId: feedstockASecondary.id, massUsedKg: 150 },
     // A8 uses ONLY the secondary type — a single, valid feedstock that differs
     // from the primary type the batch will declare (equality-guard fixture).
-    { productionRunId: mismatchedFeedstockRunInFacilityA.id, feedstockId: feedstockASecondary.id, massUsedKg: 400 },
+    { organizationId: TEST_ORG_ID, productionRunId: mismatchedFeedstockRunInFacilityA.id, feedstockId: feedstockASecondary.id, massUsedKg: 400 },
   ]);
 
   // Create biochar products (needs formulation)
   const [productA] = await db
     .insert(biocharProducts)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `BP-VAL-A-${runId}`,
       facilityId: facilityA.id,
       formulationId: formulation.id,
@@ -303,6 +314,7 @@ beforeAll(async () => {
   const [productB] = await db
     .insert(biocharProducts)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `BP-VAL-B-${runId}`,
       facilityId: facilityB.id,
       formulationId: formulation.id,
@@ -315,6 +327,7 @@ beforeAll(async () => {
   const [orderA] = await db
     .insert(orders)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `OR-VAL-A-${runId}`,
       facilityId: facilityA.id,
       biocharProductId: productA.id,
@@ -327,6 +340,7 @@ beforeAll(async () => {
   const [orderB] = await db
     .insert(orders)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `OR-VAL-B-${runId}`,
       facilityId: facilityB.id,
       biocharProductId: productB.id,
@@ -342,6 +356,7 @@ beforeAll(async () => {
   const [deliveryA] = await db
     .insert(deliveries)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `DL-VAL-A-${runId}`,
       facilityId: facilityA.id,
       orderId: orderA.id,
@@ -351,6 +366,7 @@ beforeAll(async () => {
   const [deliveryB] = await db
     .insert(deliveries)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `DL-VAL-B-${runId}`,
       facilityId: facilityB.id,
       orderId: orderB.id,
@@ -363,6 +379,7 @@ beforeAll(async () => {
   const [aA] = await db
     .insert(applications)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `AP-VAL-A-${runId}`,
       deliveryId: deliveryA.id,
       applicationDate: new Date("2025-06-15"),
@@ -373,6 +390,7 @@ beforeAll(async () => {
   const [aB] = await db
     .insert(applications)
     .values({
+      organizationId: TEST_ORG_ID,
       code: `AP-VAL-B-${runId}`,
       deliveryId: deliveryB.id,
       applicationDate: new Date("2025-06-15"),
@@ -470,6 +488,7 @@ afterAll(async () => {
   });
 });
 
+
 describe("Credit Batch Production-Run Validation", () => {
   const baseBatchData = {
     startDate: new Date("2025-06-01"),
@@ -489,7 +508,7 @@ describe("Credit Batch Production-Run Validation", () => {
   it("rejects missing production run IDs", async () => {
     const fakeId = "00000000-0000-0000-0000-000000000999";
     await expect(
-      createCreditBatch(TEST_USER_ID, {
+      createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
         ...baseBatchData,
         code: "CB-VAL-MISSING",
         facilityId: facilityA.id,
@@ -500,7 +519,7 @@ describe("Credit Batch Production-Run Validation", () => {
 
   it("rejects cross-facility production run IDs", async () => {
     await expect(
-      createCreditBatch(TEST_USER_ID, {
+      createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
         ...baseBatchData,
         code: "CB-VAL-XFAC",
         facilityId: facilityA.id,
@@ -511,7 +530,7 @@ describe("Credit Batch Production-Run Validation", () => {
 
   it("rejects duplicate production run IDs", async () => {
     await expect(
-      createCreditBatch(TEST_USER_ID, {
+      createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
         ...baseBatchData,
         code: "CB-VAL-DUP",
         facilityId: facilityA.id,
@@ -522,7 +541,7 @@ describe("Credit Batch Production-Run Validation", () => {
 
   it("rejects production runs outside the batch production window", async () => {
     await expect(
-      createCreditBatch(TEST_USER_ID, {
+      createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
         ...baseBatchData,
         code: "CB-VAL-WINDOW",
         facilityId: facilityA.id,
@@ -532,7 +551,7 @@ describe("Credit Batch Production-Run Validation", () => {
   });
 
   it("accepts valid same-facility runs matching the declared feedstock", async () => {
-    const result = await createCreditBatch(TEST_USER_ID, {
+    const result = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
       ...baseBatchData,
       code: "CB-VAL-OK",
       facilityId: facilityA.id,
@@ -551,7 +570,7 @@ describe("Credit Batch Production-Run Validation", () => {
 
   it("rejects a batch whose runs blend more than one feedstock type", async () => {
     await expect(
-      createCreditBatch(TEST_USER_ID, {
+      createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
         ...baseBatchData,
         code: "CB-VAL-MULTI",
         facilityId: facilityA.id,
@@ -562,7 +581,7 @@ describe("Credit Batch Production-Run Validation", () => {
 
   it("rejects a batch whose run has no linked feedstock", async () => {
     await expect(
-      createCreditBatch(TEST_USER_ID, {
+      createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
         ...baseBatchData,
         code: "CB-VAL-NOFEED",
         facilityId: facilityA.id,
@@ -577,7 +596,7 @@ describe("Credit Batch Production-Run Validation", () => {
     // amendment) must reject it — a declared type that doesn't match the member
     // runs can never be silently accepted.
     await expect(
-      createCreditBatch(TEST_USER_ID, {
+      createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
         ...baseBatchData,
         code: "CB-VAL-MISMATCH",
         facilityId: facilityA.id,
@@ -588,7 +607,7 @@ describe("Credit Batch Production-Run Validation", () => {
 
   it("rejects facility change when existing linked production runs belong to old facility", async () => {
     // Create a valid batch for facility A
-    const batch = await createCreditBatch(TEST_USER_ID, {
+    const batch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
       ...baseBatchData,
       code: "CB-VAL-FCHG",
       facilityId: facilityA.id,
@@ -599,14 +618,14 @@ describe("Credit Batch Production-Run Validation", () => {
     // Try to change facilityId to B without updating productionRunIds.
     // Existing membership points to facility A runs — should fail against facility B.
     await expect(
-      updateCreditBatch(TEST_USER_ID, batch.id, {
+      updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, {
         facilityId: facilityB.id,
       })
     ).rejects.toThrow("do not belong to the selected facility");
   });
 
   it("rejects a production run that is already assigned to another batch", async () => {
-    const firstBatch = await createCreditBatch(TEST_USER_ID, {
+    const firstBatch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
       ...baseBatchData,
       code: "CB-VAL-ASSIGNED-1",
       facilityId: facilityA.id,
@@ -615,7 +634,7 @@ describe("Credit Batch Production-Run Validation", () => {
     createdIds.creditBatches.push(firstBatch.id);
 
     await expect(
-      createCreditBatch(TEST_USER_ID, {
+      createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
         ...baseBatchData,
         code: "CB-VAL-ASSIGNED-2",
         facilityId: facilityA.id,
@@ -626,7 +645,7 @@ describe("Credit Batch Production-Run Validation", () => {
 
   it("rejects cross-facility production run IDs on update", async () => {
     // Create a valid batch for facility A.
-    const batch = await createCreditBatch(TEST_USER_ID, {
+    const batch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
       ...baseBatchData,
       code: "CB-VAL-XUPD",
       facilityId: facilityA.id,
@@ -636,7 +655,7 @@ describe("Credit Batch Production-Run Validation", () => {
 
     // Try to update with a production run from facility B.
     await expect(
-      updateCreditBatch(TEST_USER_ID, batch.id, {
+      updateCreditBatch(makeTestOrgContext(TEST_USER_ID), batch.id, {
         productionRunIds: [runInFacilityB.id],
       })
     ).rejects.toThrow("do not belong to the selected facility");

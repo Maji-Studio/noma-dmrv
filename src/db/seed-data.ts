@@ -7,7 +7,7 @@
  *
  * Usage: pnpm tsx src/db/seed-data.ts
  */
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { config } from 'dotenv';
 import { Pool } from 'pg';
@@ -19,11 +19,22 @@ import {
   buildSoilTemperatureMeasurements,
 } from './seed-certification-evidence';
 import { seedProductionProcessesAndCreditBatches } from './seed-credit-batches';
+import {
+  DEC_ORG_ID,
+  DEC_ORG_NAME,
+  DEC_ORG_SLUG,
+  STARTER_FEEDSTOCK_TYPES,
+} from './org-defaults';
 
 config({ path: '.env.local' });
 
 // Helper to generate deterministic UUIDs for demo data
 const demoId = (n: number) => `de000000-0000-4000-a000-${n.toString().padStart(12, '0')}`;
+
+const withBootstrapOrg = <T extends { organizationId: string }>(
+  rows: Omit<T, 'organizationId'>[],
+): T[] =>
+  rows.map((row) => ({ ...row, organizationId: DEC_ORG_ID }) as T);
 
 // Demo data codes
 const demoCodes = {
@@ -235,11 +246,21 @@ async function seedDemoData() {
   try {
     console.log('Starting demo data seed...');
 
+    await db
+      .insert(schema.organizations)
+      .values({ id: DEC_ORG_ID, name: DEC_ORG_NAME, slug: DEC_ORG_SLUG })
+      .onConflictDoNothing({ target: schema.organizations.id });
+
     // Check if demo data already exists
     const [existingFacility] = await db
       .select({ id: schema.facilities.id })
       .from(schema.facilities)
-      .where(eq(schema.facilities.code, demoCodes.facilityMoshi))
+      .where(
+        and(
+          eq(schema.facilities.code, demoCodes.facilityMoshi),
+          eq(schema.facilities.organizationId, DEC_ORG_ID),
+        ),
+      )
       .limit(1);
 
     if (existingFacility) {
@@ -253,7 +274,7 @@ async function seedDemoData() {
       // ============================================================
 
       console.log('Creating facilities...');
-      await tx.insert(schema.facilities).values([
+      await tx.insert(schema.facilities).values(withBootstrapOrg<typeof schema.facilities.$inferInsert>([
         {
           id: ids.facilityMoshi,
           code: demoCodes.facilityMoshi,
@@ -270,10 +291,10 @@ async function seedDemoData() {
           // the tier is inherited by every batch and sample here.
           durabilityOption: '1000_year',
         },
-      ]);
+      ]));
 
       console.log('Creating reactors...');
-      await tx.insert(schema.reactors).values([
+      await tx.insert(schema.reactors).values(withBootstrapOrg<typeof schema.reactors.$inferInsert>([
         {
           id: ids.reactorMoshi1,
           code: demoCodes.reactorMoshi1,
@@ -300,10 +321,10 @@ async function seedDemoData() {
             yearInstalled: 2025,
           },
         },
-      ]);
+      ]));
 
       console.log('Creating storage locations...');
-      await tx.insert(schema.storageLocations).values([
+      await tx.insert(schema.storageLocations).values(withBootstrapOrg<typeof schema.storageLocations.$inferInsert>([
         {
           id: ids.storageFeedMoshi,
           code: demoCodes.storageFeedMoshi,
@@ -370,14 +391,14 @@ async function seedDemoData() {
           facilityId: ids.facilityMoshi,
           formulationId: ids.formulationOrganic,
         },
-      ]);
+      ]));
 
       // ============================================================
       // PARTIES: Suppliers, Customers, Drivers, Operators
       // ============================================================
 
       console.log('Creating suppliers...');
-      await tx.insert(schema.suppliers).values([
+      await tx.insert(schema.suppliers).values(withBootstrapOrg<typeof schema.suppliers.$inferInsert>([
         {
           id: ids.supplierKili,
           code: demoCodes.supplierKili,
@@ -423,10 +444,10 @@ async function seedDemoData() {
           distanceToFacilityKm: 92,
           distanceSource: 'map_estimate',
         },
-      ]);
+      ]));
 
       console.log('Creating customers...');
-      await tx.insert(schema.customers).values([
+      await tx.insert(schema.customers).values(withBootstrapOrg<typeof schema.customers.$inferInsert>([
         {
           id: ids.customerCoffee,
           code: demoCodes.customerCoffee,
@@ -454,10 +475,10 @@ async function seedDemoData() {
           contactEmail: 'orders@kikuletwa-horticulture.tz',
           contactPhone: '+255700300003',
         },
-      ]);
+      ]));
 
       console.log('Creating customer locations...');
-      await tx.insert(schema.customerLocations).values([
+      await tx.insert(schema.customerLocations).values(withBootstrapOrg<typeof schema.customerLocations.$inferInsert>([
         {
           id: ids.locationCoffeeNorth,
           customerId: ids.customerCoffee,
@@ -502,10 +523,10 @@ async function seedDemoData() {
           defaultSoilTemperatureC: 22.8,
           isDefault: true,
         },
-      ]);
+      ]));
 
       console.log('Creating drivers and operators...');
-      await tx.insert(schema.drivers).values([
+      await tx.insert(schema.drivers).values(withBootstrapOrg<typeof schema.drivers.$inferInsert>([
         {
           id: ids.driverJackson,
           code: 'DRV-26-001',
@@ -520,9 +541,9 @@ async function seedDemoData() {
           licenseNumber: 'TZ-C-88754',
           contactPhone: '+255700400002',
         },
-      ]);
+      ]));
 
-      await tx.insert(schema.operators).values([
+      await tx.insert(schema.operators).values(withBootstrapOrg<typeof schema.operators.$inferInsert>([
         {
           id: ids.operatorNeema,
           name: 'Neema Kweka',
@@ -535,9 +556,9 @@ async function seedDemoData() {
           credentials: 'Certified Pyrolysis Operator Level 3, Safety Lead',
           contactPhone: '+255700500002',
         },
-      ]);
+      ]));
 
-      await tx.insert(schema.vehicles).values([
+      await tx.insert(schema.vehicles).values(withBootstrapOrg<typeof schema.vehicles.$inferInsert>([
         {
           id: ids.vehicleTruck1,
           code: 'VEH-26-001',
@@ -558,90 +579,34 @@ async function seedDemoData() {
           fuelConsumptionLPerKm: 0.25,
           modelYear: 2023,
         },
-      ]);
+      ]));
 
       // ============================================================
       // FEEDSTOCK: Types, Deliveries, Feedstocks
       // ============================================================
 
       console.log('Creating feedstock types...');
-      await tx.insert(schema.feedstockTypes).values([
-        {
-          id: ids.feedstockWoodchips,
-          code: 'FT-26-001',
-          name: 'Mixed Hardwood Chips',
-          category: 'forestry',
-          usage: 'pyrolysis',
-          description: 'Pruned branches and sawmill residues from local forestry operations',
-        },
-        {
-          id: ids.feedstockCoffeeHusk,
-          code: 'FT-26-002',
-          name: 'Arabica Coffee Husk',
-          category: 'agricultural',
-          usage: 'pyrolysis',
-          description: 'Coffee processing residue from wet mills',
-        },
-        {
-          id: ids.feedstockRiceHusk,
-          code: 'FT-26-003',
-          name: 'Rice Husk',
-          category: 'agricultural',
-          usage: 'pyrolysis',
-          description: 'Rice milling byproduct with high silica content',
-        },
-        {
-          id: ids.feedstockCoconut,
-          code: 'FT-26-004',
-          name: 'Coconut Shell',
-          category: 'agricultural',
-          usage: 'pyrolysis',
-          description: 'Coconut processing waste shells',
-        },
-        {
-          id: ids.feedstockCowCompost,
-          code: 'FT-26-005',
-          name: 'Cow Manure Compost',
-          category: 'compost',
-          usage: 'blend',
-          description: 'Matured cow manure compost used as a blend material',
-        },
-        {
-          id: ids.feedstockGreenCompost,
-          code: 'FT-26-006',
-          name: 'Green Waste Compost',
-          category: 'compost',
-          usage: 'blend',
-          description: 'Screened green waste compost used as a blend material',
-        },
-        {
-          id: ids.feedstockRockDust,
-          code: 'FT-26-007',
-          name: 'Rock Dust',
-          category: 'mineral',
-          usage: 'blend',
-          description: 'Fine mineral amendment for premium blends',
-        },
-        {
-          id: ids.feedstockVermicompost,
-          code: 'FT-26-008',
-          name: 'Vermicompost',
-          category: 'compost',
-          usage: 'blend',
-          description: 'Certified vermicompost for organic blends',
-        },
-        {
-          id: ids.feedstockAgriculturalLime,
-          code: 'FT-26-009',
-          name: 'Agricultural Lime',
-          category: 'lime',
-          usage: 'blend',
-          description: 'Agricultural lime used to adjust blend pH',
-        },
-      ]);
+      const starterFeedstockTypeIds = [
+        ids.feedstockWoodchips,
+        ids.feedstockCoffeeHusk,
+        ids.feedstockRiceHusk,
+        ids.feedstockCoconut,
+        ids.feedstockCowCompost,
+        ids.feedstockGreenCompost,
+        ids.feedstockRockDust,
+        ids.feedstockVermicompost,
+        ids.feedstockAgriculturalLime,
+      ];
+      await tx.insert(schema.feedstockTypes).values(
+        STARTER_FEEDSTOCK_TYPES.map((feedstockType, index) => ({
+          ...feedstockType,
+          id: starterFeedstockTypeIds[index],
+          organizationId: DEC_ORG_ID,
+        })),
+      );
 
       console.log('Creating feedstock deliveries...');
-      await tx.insert(schema.feedstockDeliveries).values([
+      await tx.insert(schema.feedstockDeliveries).values(withBootstrapOrg<typeof schema.feedstockDeliveries.$inferInsert>([
         {
           id: ids.deliveryFeed1,
           code: 'FD-26-001',
@@ -687,10 +652,10 @@ async function seedDemoData() {
           moisturePercent: 18,
           notes: 'Mixed Grevillea and eucalyptus branch chips',
         },
-      ]);
+      ]));
 
       console.log('Creating feedstocks...');
-      await tx.insert(schema.feedstocks).values([
+      await tx.insert(schema.feedstocks).values(withBootstrapOrg<typeof schema.feedstocks.$inferInsert>([
         {
           id: ids.feedstock1,
           code: 'FS-26-001',
@@ -757,19 +722,18 @@ async function seedDemoData() {
           baselineDescription: 'Mixed branch chips would normally be left in seasonal piles before partial composting.',
           eligibilityStatus: 'eligible',
         },
-      ]);
+      ]));
 
       // ============================================================
       // PRODUCTION: Runs, Samples
       // ============================================================
 
       console.log('Creating production runs...');
-      await tx.insert(schema.productionRuns).values([
+      await tx.insert(schema.productionRuns).values(withBootstrapOrg<typeof schema.productionRuns.$inferInsert>([
         {
           id: ids.productionRun1,
           code: 'PR-26-001',
           facilityId: ids.facilityMoshi,
-          date: '2026-05-13',
           status: 'complete',
           startTime: demoTimestamps.run1Start,
           endTime: demoTimestamps.run1End,
@@ -796,7 +760,6 @@ async function seedDemoData() {
           id: ids.productionRun2,
           code: 'PR-26-002',
           facilityId: ids.facilityMoshi,
-          date: '2026-05-15',
           status: 'complete',
           startTime: demoTimestamps.run2Start,
           endTime: demoTimestamps.run2End,
@@ -823,7 +786,6 @@ async function seedDemoData() {
           id: ids.productionRun3,
           code: 'PR-26-003',
           facilityId: ids.facilityMoshi,
-          date: '2026-05-17',
           status: 'complete',
           startTime: demoTimestamps.run3Start,
           endTime: demoTimestamps.run3End,
@@ -846,10 +808,10 @@ async function seedDemoData() {
           feedstockMoisturePercent: 18,
           feedstockMassDryKg: 2460,
         },
-      ]);
+      ]));
 
       console.log('Creating production run feedstock links...');
-      await tx.insert(schema.productionRunFeedstocks).values([
+      await tx.insert(schema.productionRunFeedstocks).values(withBootstrapOrg<typeof schema.productionRunFeedstocks.$inferInsert>([
         {
           id: ids.prodFeedLink1,
           productionRunId: ids.productionRun1,
@@ -868,7 +830,7 @@ async function seedDemoData() {
           feedstockId: ids.feedstock3,
           massUsedKg: 3000,
         },
-      ]);
+      ]));
 
       const productionRunReadingRows = buildProductionRunReadings([
         {
@@ -907,7 +869,7 @@ async function seedDemoData() {
           gasStartRate: 0.145,
           gasPeakRate: 0.255,
         },
-      ]);
+      ], DEC_ORG_ID);
 
       console.log(`Creating ${productionRunReadingRows.length} production run readings...`);
       await tx.insert(schema.productionRunReadings).values(productionRunReadingRows);
@@ -916,7 +878,12 @@ async function seedDemoData() {
       // (the samples.credit_batch_id FK, added in migration 0057). The shared
       // `seedProductionProcessesAndCreditBatches` builds them; it is invoked here
       // — before samples — rather than after applications.
-      await seedProductionProcessesAndCreditBatches(tx, ids, demoTimestamps);
+      await seedProductionProcessesAndCreditBatches(
+        tx,
+        DEC_ORG_ID,
+        ids,
+        demoTimestamps,
+      );
 
       // Each sampled credit batch pools >=3 replicates with a complete
       // H/C_org + O/C_org pair (durability gate, module §8.3.1 / §3 Table 2).
@@ -927,7 +894,7 @@ async function seedDemoData() {
       // consumes. Molar ratios are consistent with the elemental percentages
       // (H/C_org = (H/1)/(C_org/12), O/C_org = (O/16)/(C_org/12)).
       console.log('Creating samples...');
-      await tx.insert(schema.samples).values([
+      await tx.insert(schema.samples).values(withBootstrapOrg<typeof schema.samples.$inferInsert>([
         // --- Credit batch 1 (1000-year, woodchips): runs 1 + 3, 3 replicates ---
         {
           id: ids.sample1,
@@ -1104,14 +1071,14 @@ async function seedDemoData() {
           r0AnalysisDate: '2026-05-24',
           tgaAnalysisDate: '2026-05-24',
         },
-      ]);
+      ]));
 
       // ============================================================
       // PRODUCTS: Formulations, Biochar Products
       // ============================================================
 
       console.log('Creating formulations...');
-      await tx.insert(schema.formulations).values([
+      await tx.insert(schema.formulations).values(withBootstrapOrg<typeof schema.formulations.$inferInsert>([
         {
           id: ids.formulationStandard,
           code: 'BCF-26-001',
@@ -1133,10 +1100,10 @@ async function seedDemoData() {
           biocharRatio: 0.5,
           description: 'Organic-certified blend with verified compost',
         },
-      ]);
+      ]));
 
       // Seed formulation ingredients
-      await tx.insert(schema.formulationIngredients).values([
+      await tx.insert(schema.formulationIngredients).values(withBootstrapOrg<typeof schema.formulationIngredients.$inferInsert>([
         // Standard Biochar Blend: 60% cow manure compost
         {
           formulationId: ids.formulationStandard,
@@ -1170,10 +1137,10 @@ async function seedDemoData() {
           ratio: 0.1,
           sortOrder: 1,
         },
-      ]);
+      ]));
 
       console.log('Creating biochar products...');
-      await tx.insert(schema.biocharProducts).values([
+      await tx.insert(schema.biocharProducts).values(withBootstrapOrg<typeof schema.biocharProducts.$inferInsert>([
         {
           id: ids.biocharProduct1,
           code: 'BP-26-001',
@@ -1216,7 +1183,7 @@ async function seedDemoData() {
           storageLocationId: ids.storageProdOrganic,
           expiresAt: new Date('2027-05-18T10:00:00.000Z'),
         },
-      ]);
+      ]));
 
       // ============================================================
       // TRANSPORT LEGS (Isometric Transportation Module v1.1)
@@ -1237,7 +1204,7 @@ async function seedDemoData() {
       // ============================================================
 
       console.log('Creating transport legs...');
-      await tx.insert(schema.transportLegs).values([
+      await tx.insert(schema.transportLegs).values(withBootstrapOrg<typeof schema.transportLegs.$inferInsert>([
         // --- Feedstock (derived): supplier -> Moshi facility ---
         {
           id: ids.transportLegFeedstock1,
@@ -1429,14 +1396,14 @@ async function seedDemoData() {
           loadMassKg: 5,
           calculationMethodType: 'distance_based',
         },
-      ]);
+      ]));
 
       // ============================================================
       // LOGISTICS: Orders, Deliveries
       // ============================================================
 
       console.log('Creating orders...');
-      await tx.insert(schema.orders).values([
+      await tx.insert(schema.orders).values(withBootstrapOrg<typeof schema.orders.$inferInsert>([
         {
           id: ids.order1,
           code: 'OR-26-001',
@@ -1473,10 +1440,10 @@ async function seedDemoData() {
           packaging: 'bagged',
           value: 1350000,
         },
-      ]);
+      ]));
 
       console.log('Creating deliveries...');
-      await tx.insert(schema.deliveries).values([
+      await tx.insert(schema.deliveries).values(withBootstrapOrg<typeof schema.deliveries.$inferInsert>([
         {
           id: ids.delivery1,
           code: 'DL-26-001',
@@ -1525,14 +1492,14 @@ async function seedDemoData() {
           driverId: ids.driverJackson,
           vehicleId: ids.vehicleTruck1,
         },
-      ]);
+      ]));
 
       // ============================================================
       // APPLICATIONS & CREDITS
       // ============================================================
 
       console.log('Creating applications...');
-      await tx.insert(schema.applications).values([
+      await tx.insert(schema.applications).values(withBootstrapOrg<typeof schema.applications.$inferInsert>([
         {
           id: ids.application1,
           code: 'AP-26-001',
@@ -1593,7 +1560,7 @@ async function seedDemoData() {
           soilTemperatureSource: 'baseline',
           soilTemperatureC: 25.2,
         },
-      ]);
+      ]));
 
       const soilTemperatureRows = buildSoilTemperatureMeasurements([
         {
@@ -1623,7 +1590,7 @@ async function seedDemoData() {
           gpsLongitude: 37.198,
           fieldIdentifier: 'MACHAME-S-8',
         },
-      ]);
+      ], DEC_ORG_ID);
 
       console.log(`Creating ${soilTemperatureRows.length} soil temperature measurements...`);
       await tx.insert(schema.soilTemperatureMeasurements).values(soilTemperatureRows);
@@ -1661,7 +1628,7 @@ async function seedDemoData() {
             fileName: 'AP-26-003-boundary-logbook.pdf',
             fileSizeBytes: 176_640,
           },
-        ])
+        ], DEC_ORG_ID)
       );
 
       // Links the Moshi facility to the Isometric sandbox project +
@@ -1669,7 +1636,7 @@ async function seedDemoData() {
       // config seeded from the Sifuri Halisi LCA. The Isometric facility
       // id stays operator-managed because it must come from Certify UI.
       console.log('Creating Isometric certifier project (Moshi)...');
-      await tx.insert(schema.certifierProjects).values([
+      await tx.insert(schema.certifierProjects).values(withBootstrapOrg<typeof schema.certifierProjects.$inferInsert>([
         {
           facilityId: ids.facilityMoshi,
           externalProjectId: 'prj_1K9YJ33RKSBX9FFF',
@@ -1680,7 +1647,7 @@ async function seedDemoData() {
           defaultSoilTemperatureSource:
             'Lembrechts et al. 2022 SoilTemp, 0–5 cm, Kilimanjaro region (annual mean)',
         },
-      ]);
+      ]));
 
       // ============================================================
       // EXTRA STORAGE BINS (Moshi) — exercises the storage flow board at
@@ -1726,6 +1693,7 @@ async function seedDemoData() {
       ];
 
       const extraBins = extraBinSpecs.map(([type, capacityBasisKg, , name], i) => ({
+        organizationId: DEC_ORG_ID,
         id: demoId(extraBinBase + i),
         code: `SL-26-${900 + i}`,
         name,
@@ -1758,6 +1726,7 @@ async function seedDemoData() {
           const moistureContentPercent = 15;
           const moistureFactor = 1 - moistureContentPercent / 100;
           extraFeedstocks.push({
+            organizationId: DEC_ORG_ID,
             id: demoId(extraBinBase + 100 + i),
             code: `FI-26-${900 + i}`,
             facilityId: ids.facilityMoshi,
@@ -1769,18 +1738,27 @@ async function seedDemoData() {
             storageLocationId: binId,
           });
         } else if (type === 'biochar_bin') {
+          // All extra runs share one reactor, so their windows must not
+          // overlap (#259: unique start per reactor AND no window overlap).
+          // Stagger starts by 6 hours per bin index — each closed 4-hour
+          // window then has a 2-hour gap before the next run.
+          const runStart = new Date(Date.UTC(2026, 4, 20, i * 6, 0, 0));
+          const runEnd = new Date(runStart.getTime() + 4 * 60 * 60 * 1000);
           extraRuns.push({
+            organizationId: DEC_ORG_ID,
             id: demoId(extraBinBase + 200 + i),
             code: `PR-26-${900 + i}`,
             facilityId: ids.facilityMoshi,
-            date: '2026-05-20',
             status: 'complete',
+            startTime: runStart,
+            endTime: runEnd,
             reactorId: ids.reactorMoshi1,
             biocharStorageLocationId: binId,
             biocharOutputKg: massKg,
           });
         } else {
           extraProducts.push({
+            organizationId: DEC_ORG_ID,
             id: demoId(extraBinBase + 300 + i),
             code: `BP-26-${900 + i}`,
             facilityId: ids.facilityMoshi,

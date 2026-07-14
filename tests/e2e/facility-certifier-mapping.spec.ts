@@ -28,6 +28,7 @@ loadEnv({ path: ".env.local", override: false });
 
 import * as crypto from "crypto";
 import { and, eq } from "drizzle-orm";
+import { DEC_ORG_ID } from "@/db/org-defaults";
 import {
   createTestFacility,
   deleteTestFacility,
@@ -69,6 +70,7 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
       await db.transaction(async (tx) => {
         await tx.insert(schema.certifierProjects).values([
           {
+            organizationId: DEC_ORG_ID,
             facilityId: facilityF1.id,
             provider: "isometric",
             externalProjectId: sharedProjectId,
@@ -77,6 +79,7 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
             defaultRemovalTemplateId: null,
           },
           {
+            organizationId: DEC_ORG_ID,
             facilityId: facilityF2.id,
             provider: "isometric",
             externalProjectId: sharedProjectId,
@@ -137,6 +140,7 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
     try {
       await db.transaction(async (tx) => {
         await tx.insert(schema.certifierProjects).values({
+        organizationId: DEC_ORG_ID,
           facilityId: facility.id,
           provider: "isometric",
           externalProjectId: sandboxProjectId,
@@ -150,11 +154,13 @@ test.describe("Facility ↔ Isometric project mapping", { tag: "@live" }, () => 
         // creditBatch-keyed shape no longer blocks (ADR 0003/0004), so seed
         // the current shape directly.
         await tx.insert(schema.certifierRemovals).values({
+        organizationId: DEC_ORG_ID,
           id: removalId,
           facilityId: facility.id,
           provider: "isometric",
         });
         await tx.insert(schema.certificationSubmissions).values({
+        organizationId: DEC_ORG_ID,
           id: submissionId,
           provider: "isometric",
           submissionType: "removal",

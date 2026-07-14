@@ -1,0 +1,2 @@
+DROP INDEX "production_run_readings_run_timestamp_idx";--> statement-breakpoint
+CREATE UNIQUE INDEX "production_run_readings_run_timestamp_uq" ON "production_run_readings" USING btree ("production_run_id","timestamp");

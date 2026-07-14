@@ -2,15 +2,18 @@
  * Supplier options for searchable entity selection.
  */
 
-import { ilike, or, eq, type SQL } from "drizzle-orm";
+import { and, ilike, or, eq, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { suppliers } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "../utils";
 
-export async function getSuppliers(params: {
+export async function getSuppliers(ctx: OrgContext, params: {
   search?: string;
   limit: number;
 }): Promise<EntityOption[]> {
+  requireOrgScope(ctx);
   const { search, limit } = params;
 
   let whereClause: SQL | undefined;
@@ -31,7 +34,7 @@ export async function getSuppliers(params: {
       location: suppliers.location,
     })
     .from(suppliers)
-    .where(whereClause)
+    .where(and(eq(suppliers.organizationId, ctx.organizationId), whereClause))
     .limit(limit);
 
   return results.map((r) => ({
@@ -42,7 +45,8 @@ export async function getSuppliers(params: {
   }));
 }
 
-export async function getSupplierById(id: string): Promise<EntityOption | null> {
+export async function getSupplierById(ctx: OrgContext, id: string): Promise<EntityOption | null> {
+  requireOrgScope(ctx);
   const [result] = await db
     .select({
       id: suppliers.id,
@@ -51,7 +55,7 @@ export async function getSupplierById(id: string): Promise<EntityOption | null> 
       location: suppliers.location,
     })
     .from(suppliers)
-    .where(eq(suppliers.id, id))
+    .where(and(eq(suppliers.id, id), eq(suppliers.organizationId, ctx.organizationId)))
     .limit(1);
 
   if (!result) return null;

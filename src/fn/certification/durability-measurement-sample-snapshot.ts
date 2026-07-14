@@ -13,7 +13,7 @@ export interface DurabilityMeasurementSampleClaimArgs {
   externalProjectId: string;
   batches: CreditBatchWithSamples[];
   attributionByRunId: Map<string, number>;
-  facilityReferenceSoilTemperature: FacilityReferenceSoilTemperature;
+  facilityReferenceSoilTemperature: FacilityReferenceSoilTemperature | null;
   measuredAt: string;
 }
 

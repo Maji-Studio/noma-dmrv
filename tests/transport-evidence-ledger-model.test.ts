@@ -29,6 +29,10 @@ function leg(overrides: Partial<TransportLeg>): TransportLeg {
     vehicleType: "Heavy truck",
     modelYear: null,
     loadMassKg: 1000,
+    // These cases assert exact one-way t·km reconciliation, so the builder pins
+    // `one_way` (no ×2). The round-trip doubling (#316) is covered by its own
+    // case below and in the aggregation unit tests.
+    tripType: "one_way",
     calculationMethodType: "distance_based",
     isDerived: false,
     ...overrides,
@@ -61,6 +65,22 @@ describe("buildLedgerModel", () => {
     );
   });
 
+  it("doubles a Return leg's distance and t·km, reconciling to the subtotal (#316)", () => {
+    const model = buildLedgerModel({
+      ...META,
+      legsByCategory: {
+        ...emptyCategories(),
+        feedstock: [leg({ distanceKm: 34, loadMassKg: 4500, tripType: "return" })],
+      },
+    });
+    const cat = model.categories.find((c) => c.key === "feedstock")!;
+    // Round trip: distance shown as 68 (34 × 2), t·km = 68 × 4.5 = 306.
+    expect(cat.legs[0].distanceKm).toBe(68);
+    expect(cat.legs[0].roundTrip).toBe(true);
+    expect(cat.legs[0].tkm).toBe(306);
+    expect(cat.subtotalTkm).toBe(306);
+  });
+
   it("sets subtotal from the canonical raw-sum scalar, not Σ rounded rows", () => {
     const model = buildLedgerModel({
       ...META,
@@ -77,8 +97,13 @@ describe("buildLedgerModel", () => {
     const bio = model.categories.find((c) => c.key === "biochar")!;
     const samp = model.categories.find((c) => c.key === "sample")!;
     expect(feed.legs.map((l) => l.tkm)).toEqual([0.01, 0.01]);
+    expect(feed.displayedRowSumTkm).toBe(0.02);
     expect(feed.subtotalTkm).toBe(0.01);
+    expect(feed.roundingAdjustmentTkm).toBe(-0.01);
     expect(bio.subtotalTkm).toBe(64);
+    // Omit reconciliation-only state so unaffected ledger content hashes stay stable.
+    expect("displayedRowSumTkm" in bio).toBe(false);
+    expect(bio.roundingAdjustmentTkm).toBeUndefined();
     expect(samp.subtotalTkm).toBe(0.41);
     expect(model.totalTkm).toBe(0.01 + 64 + 0.41);
     expect(model.totalLegs).toBe(4);
@@ -209,6 +234,25 @@ describe("buildLedgerModel", () => {
       expect(bio.scaling).toEqual({ rawSubtotalTkm: 10, appliedFraction: 0.4 });
       // The grand total sums the RECONCILED subtotals (matches submission).
       expect(model.totalTkm).toBe(50 + 4 + 10);
+    });
+
+    it("reconciles displayed scaling operands to the canonical unrounded scalar", () => {
+      const model = buildLedgerModel({
+        ...META,
+        legsByCategory: {
+          ...emptyCategories(),
+          biochar: [leg({ distanceKm: 10.005, loadMassKg: 1000 })],
+        },
+        appliedBiocharFraction: 0.5,
+      });
+      const bio = model.categories.find((c) => c.key === "biochar")!;
+
+      expect(bio.subtotalTkm).toBe(5);
+      expect(bio.scaling).toEqual({
+        rawSubtotalTkm: 10.01,
+        appliedFraction: 0.5,
+        displayAdjustmentTkm: -0.01,
+      });
     });
 
     it("omits scaling and keeps the raw biochar subtotal at full application", () => {

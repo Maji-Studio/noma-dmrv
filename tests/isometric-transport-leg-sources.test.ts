@@ -1,3 +1,4 @@
+import { makeTestOrgContext } from "./helpers/test-org";
 /**
  * Transport-leg evidence → Sources.
  *
@@ -42,6 +43,8 @@ const SAMPLE_LEG_ID = "80000000-0000-4000-8000-000000000002";
 const BIOCHAR_LEG_DOC_ID = "90000000-0000-4000-8000-000000000001";
 const SAMPLE_LEG_DOC_ID = "90000000-0000-4000-8000-000000000002";
 const BIOCHAR_DIRECT_DOC_ID = "90000000-0000-4000-8000-000000000003";
+const FEEDSTOCK_DIRECT_DOC_ID = "90000000-0000-4000-8000-000000000004";
+const DELIVERY_DIRECT_DOC_ID = "90000000-0000-4000-8000-000000000005";
 
 import * as transportLegsDA from "@/data-access/transport-legs";
 import * as documentsDA from "@/data-access/documents";
@@ -104,8 +107,8 @@ beforeEach(() => {
     },
   );
 
-  // Docs: one on each leg, plus a control doc directly on the biochar product
-  // to prove the existing walk still works alongside the new leg branch.
+  // Docs: one on each leg plus direct parent evidence. Feedstock and delivery
+  // are the stable owners used by the attachment-only UI for auto-derived legs.
   vi.mocked(documentsDA.listDocumentsForEntity).mockImplementation(
     async (_userId, entityType, entityId) => {
       if (entityType === "transport_leg" && entityId === BIOCHAR_LEG_ID) {
@@ -117,25 +120,33 @@ beforeEach(() => {
       if (entityType === "biochar_product" && entityId === BIOCHAR_ID) {
         return [{ id: BIOCHAR_DIRECT_DOC_ID }] as never;
       }
+      if (entityType === "feedstock" && entityId === FEEDSTOCK_ID) {
+        return [{ id: FEEDSTOCK_DIRECT_DOC_ID }] as never;
+      }
+      if (entityType === "delivery" && entityId === DELIVERY_ID) {
+        return [{ id: DELIVERY_DIRECT_DOC_ID }] as never;
+      }
       return [] as never;
     },
   );
 });
 
 describe("collectCandidateDocumentIdsForRemoval — transport-leg evidence", () => {
-  it("includes bill-of-lading docs uploaded against biochar + sample legs", async () => {
-    const ids = await collectCandidateDocumentIdsForRemoval(USER_ID, lineageArgs);
+  it("includes transport evidence from explicit legs and stable parent records", async () => {
+    const ids = await collectCandidateDocumentIdsForRemoval(makeTestOrgContext(USER_ID), lineageArgs);
 
     expect(ids).toContain(BIOCHAR_LEG_DOC_ID);
     expect(ids).toContain(SAMPLE_LEG_DOC_ID);
-    // The pre-existing chain walk is untouched — direct biochar docs still in.
+    expect(ids).toContain(FEEDSTOCK_DIRECT_DOC_ID);
+    expect(ids).toContain(DELIVERY_DIRECT_DOC_ID);
+    // The pre-existing chain walk is untouched — direct biochar docs stay in.
     expect(ids).toContain(BIOCHAR_DIRECT_DOC_ID);
     // Deterministic: sorted + deduped.
     expect(ids).toStrictEqual([...ids].sort());
   });
 
   it("resolves legs for the feedstock / biochar / sample entities in the lineage", async () => {
-    await collectCandidateDocumentIdsForRemoval(USER_ID, lineageArgs);
+    await collectCandidateDocumentIdsForRemoval(makeTestOrgContext(USER_ID), lineageArgs);
 
     const calls = vi.mocked(transportLegsDA.getTransportLegsForEntities).mock
       .calls;
@@ -164,7 +175,7 @@ describe("collectCandidateDocumentIdsForRemoval — transport-leg evidence", () 
     };
 
     const ids = await collectCandidateDocumentIdsForRemoval(
-      USER_ID,
+      makeTestOrgContext(USER_ID),
       sharedBiocharArgs,
     );
 
@@ -175,7 +186,7 @@ describe("collectCandidateDocumentIdsForRemoval — transport-leg evidence", () 
     vi.mocked(documentsDA.listDocumentsForEntity).mockResolvedValue(
       [] as never,
     );
-    const ids = await collectCandidateDocumentIdsForRemoval(USER_ID, lineageArgs);
+    const ids = await collectCandidateDocumentIdsForRemoval(makeTestOrgContext(USER_ID), lineageArgs);
     expect(ids).toStrictEqual([]);
   });
 });
@@ -189,7 +200,7 @@ describe("resolveSourceIdsForRemoval — leg doc → Source id", () => {
       },
     ] as never);
 
-    const sourceIds = await resolveSourceIdsForRemoval(USER_ID, {
+    const sourceIds = await resolveSourceIdsForRemoval(makeTestOrgContext(USER_ID), {
       candidateDocumentIds: [BIOCHAR_LEG_DOC_ID],
     });
 

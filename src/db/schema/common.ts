@@ -56,6 +56,23 @@ export const feedstockTypeUsage = pgEnum('feedstock_type_usage', [
   'blend',
 ]);
 
+// Material lane a bin-reconciliation movement applies to. Mirrors the three
+// storage-location types (feedstock_bin / biochar_bin / product_bin) but named
+// for the material so the movement ledger reads on its own.
+export const binMovementLane = pgEnum('bin_movement_lane', [
+  'feedstock',
+  'biochar',
+  'product',
+]);
+
+// Kind of reconciliation movement. `adjustment` = stock-take correction (the
+// count didn't match), `loss` = a documented write-off (spoilage, spillage,
+// failed run). Extensible later for `transfer` (#34).
+export const binMovementType = pgEnum('bin_movement_type', [
+  'adjustment',
+  'loss',
+]);
+
 export const packagingType = pgEnum('packaging_type', ['loose', 'bagged']);
 
 export const applicationMethod = pgEnum('application_method', [
@@ -168,6 +185,17 @@ export const distanceSource = pgEnum('distance_source', [
   'map_estimate', // CALC'd via OpenRouteService road routing
   'manual', // hand-typed by the operator
   'document', // backed by a bill of lading / weigh ticket
+]);
+
+// Transport trip type (Isometric GHG Accounting Module v1.1, "Transportation
+// Emissions" — Distance-Based Method). `return` = full round trip assumed
+// (vehicle returns empty / next destination unknown — the conservative
+// protocol default); `one_way` = evidenced onward destination, distance
+// counted one-way only. Drives the ×2 round-trip multiplier at the
+// mass-distance aggregation seam (issue #316). Orthogonal to distanceSource.
+export const transportTripType = pgEnum('transport_trip_type', [
+  'return',
+  'one_way',
 ]);
 
 // Emissions calculation method (Transportation Emissions Accounting Module v1.1)

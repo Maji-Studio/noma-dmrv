@@ -1,5 +1,5 @@
 import { logger } from "@/lib/log";
-import { paginateAll } from "./client";
+import type { IsometricClient } from "./client";
 import type { components } from "./generated/certify";
 
 const log = logger.child({ mod: "isometric" });
@@ -12,14 +12,15 @@ export type IsometricComponentBlueprint =
 export type IsometricComponent = components["schemas"]["Component"];
 export type IsometricComponentScope = components["schemas"]["ComponentScope"];
 
-export function listProjects(): Promise<IsometricProject[]> {
-  return paginateAll<IsometricProject>("/projects");
+export function listProjects(client: IsometricClient): Promise<IsometricProject[]> {
+  return client.paginateAll<IsometricProject>("/projects");
 }
 
 export async function listGhgEntryTemplates(
+  client: IsometricClient,
   externalProjectId: string,
 ): Promise<IsometricGhgEntryTemplate[]> {
-  const templates = await paginateAll<IsometricGhgEntryTemplate>(
+  const templates = await client.paginateAll<IsometricGhgEntryTemplate>(
     `/projects/${encodeURIComponent(externalProjectId)}/ghg_entry_templates`,
   );
   // We only produce biochar REMOVAL credits. The renamed GHG-entry surface
@@ -36,8 +37,8 @@ export async function listGhgEntryTemplates(
   return templates;
 }
 
-export function listComponentBlueprints(): Promise<IsometricComponentBlueprint[]> {
-  return paginateAll<IsometricComponentBlueprint>("/component_blueprints");
+export function listComponentBlueprints(client: IsometricClient): Promise<IsometricComponentBlueprint[]> {
+  return client.paginateAll<IsometricComponentBlueprint>("/component_blueprints");
 }
 
 // Lists Components attached to a Project / GHG Statement / GHG Entry, filtered
@@ -57,9 +58,10 @@ export interface ListComponentsArgs {
 }
 
 export function listComponents(
+  client: IsometricClient,
   args: ListComponentsArgs = {},
 ): Promise<IsometricComponent[]> {
-  return paginateAll<IsometricComponent>("/components", {
+  return client.paginateAll<IsometricComponent>("/components", {
     query: {
       project_id: args.projectId,
       scope: args.scope,

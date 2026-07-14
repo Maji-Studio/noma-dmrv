@@ -8,6 +8,27 @@ Status: accepted (2026-06-20)
 > Method-A behaviour; this ADR activates **Method B**. Stays inside **ADR 0013**'s boundary (noma
 > submits raw inputs; the registry derives the credited number). Implementation record:
 > [`docs/archive/2026-06-20-method-b-unlock.md`](../archive/2026-06-20-method-b-unlock.md).
+>
+> **Amendment (2026-07-12 — effective regime boundary):** a credit batch keeps the sampling
+> regime in force when its production period begins. Unlocking Method B applies only to batches
+> whose production period starts after `method_b_unlocked_at`; it never reclassifies an
+> in-progress or historical Method-A batch. The boundary is batch start, not batch end, because
+> the sampling plan must be known before production begins.
+>
+> **Amendment (2026-07-12 — submitted-evidence lock, target contract):** subject to the existing
+> ≥30 baseline floor and normal validation, ordinary sample corrections remain directly editable
+> until a submitted Removal/GHG Entry depends on the sample. Submission locks every contributing
+> sample version, including a borrowed historical sample whose own credit batch or Removal is still
+> draft. The lock follows certification dependency, not sample ownership; subsequent changes require
+> a correction or supersession path rather than mutation of evidence already used by a submitted
+> claim. This amendment records the decided contract only — the evidence-snapshot enforcement that
+> implements the borrowed-sample lock is **not yet built** (deferred under `docs/open-questions.md`
+> and #200/#391).
+>
+> **Amendment (2026-07-12 — process start):** `established_at` is the operator-entered date when
+> the production process actually began operating, not database-row creation time. Back-entering a
+> historical process is valid, but samples dated before its operational start never count toward the
+> ≥30-sample Method-A baseline or its Method-B eligible pool.
 
 ## Context
 
@@ -37,14 +58,22 @@ would re-open 0013 and re-create the audit-defeating posture it exists to remove
    eligible-sample pool. noma's role for Method B is **gating + submission routing + a labelled,
    non-authoritative preview** — never credit-bearing math. The borrow-pool granularity question is
    **dissolved**: the protocol fixes the pool at the **production process**, and noma never asserts a
-   pooling choice for crediting.
+   pooling choice for crediting. At submission, noma is to record the contributing eligible sample
+   versions so the evidence dependency can be enforced and audited (target contract — not yet
+   built; see the 2026-07-12 submitted-evidence-lock amendment).
 
-2. **Unlock is eligible-then-act, not auto-flip.** At ≥ 30 eligible samples (counted in the process
-   since `established_at`) a process surfaces as *eligible*. A deliberate **unlock action** flips
+2. **Unlock is eligible-then-act, not auto-flip.** At ≥ 30 qualifying Method-A baseline samples
+   (counted in the process since its operator-entered operational `established_at`) a process
+   surfaces as *eligible for unlock*; samples before that lower bound are excluded even when the
+   process was back-entered later. A deliberate **unlock action** flips
    `sampling_method → method_b`, stamps `method_b_unlocked_at`, and **captures three protocol
    prerequisites a sample count cannot infer**: the Isometric-agreed baseline number (≥ 30,
    default 30), a random-sampling-plan reference, and the moisture pathway. The seam is a *timestamp*
    precisely because the switch carries state.
+
+   The timestamp is also the effective regime boundary. A credit batch whose production period
+   began before the unlock remains Method A, including a batch still in progress when the unlock
+   occurs. Only batches beginning after the timestamp use Method B.
 
 3. **Facility managers may unlock** (not super-admin only). The guardrail is the mandatory
    prerequisite capture plus a persistent, protocol-cited **explanation surface** shown when
@@ -87,8 +116,13 @@ would re-open 0013 and re-create the audit-defeating posture it exists to remove
   current Isometric registry contract.
 - noma may show a non-authoritative Method-B preview, but credited Eq 4/5 and winsorisation remain
   registry-derived per ADR 0013.
-- **Glossary:** `CONTEXT.md` gains **Eligible sample** (the trailing-6-mo process pool, distinct from
-  the lifetime ≥ 30 baseline).
+- A submitted unsampled Removal dependency-locks its contributing sample versions (target
+  contract — enforcement pending per the 2026-07-12 amendment). Method-B unlock alone does not
+  freeze ordinary corrections, although the ≥30 baseline-floor invariant remains; an unclaimed
+  sample has no submission lock.
+- **Glossary:** `CONTEXT.md` distinguishes **Method-B baseline** (the ≥30-sample unlock
+  prerequisite), **Eligible sample** (the trailing-6-mo process pool), and **Method-B evidence
+  snapshot** (the sample versions used by a submitted unsampled Removal).
 
 All Isometric protocol references are non-authoritative summaries of text verified 2026-06-20;
 re-verify against <https://registry.isometric.com/protocol/biochar/1.3> before encoding credit logic.

@@ -35,6 +35,9 @@ const CARBON_INPUT_LABELS: Record<string, string> = {
   dryMassTonnes: "Applied biochar dry mass",
   soilTemperatureC: "Soil temperature",
   hToCorgRatio: "H:Corg ratio",
+  // 1000-year blueprint-parity preview gap: < 3 complete (total carbon +
+  // s_fraction) replicates — see computeApplicationCo2eStoredBlueprint1000.
+  thousandYearReplicates: "Complete 1000-year sample replicates",
   // 1000-year (Eq.6) petrography/TGA gaps — issue #142.
   meanRandomReflectancePercent: "Mean random reflectance (R₀)",
   stdRandomReflectance: "Std dev of R₀",

@@ -32,17 +32,19 @@ import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 import { useEffect, useId } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FlaskIcon, FireIcon, AtomIcon, ScalesIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon, LeafIcon } from "@phosphor-icons/react/dist/ssr";
+import { FlaskIcon, FireIcon, AtomIcon, ScalesIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, makeCertFieldStatus } from "@/components/forms";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import {
   sampleFormSchema,
   calculateHToCOrgRatio,
+  calculateOToCOrgRatio,
   formatDurabilityOption,
   type SampleFormData,
 } from "@/schemas/samples";
 import { SampleEligibilityAdvisory } from "./sample-eligibility-advisory";
 import { SampleBatchProgress } from "./sample-batch-progress";
+import { SampleNutrientFields } from "./sample-nutrient-fields";
 import {
   SampleEvidenceSection,
   SampleTransportSection,
@@ -117,6 +119,7 @@ export function SampleForm({
       oToCOrgRatio: sample?.oToCOrgRatio ?? undefined,
       durabilityOption: sample?.durabilityOption ?? "200_year",
       randomReflectanceR0Percent: sample?.randomReflectanceR0Percent ?? undefined,
+      sReflectanceFraction: sample?.sReflectanceFraction ?? undefined,
       r0MeasurementCount: sample?.r0MeasurementCount ?? undefined,
       r0AnalysisDate: sample?.r0AnalysisDate ?? "",
       r0HistogramFileUrl: sample?.r0HistogramFileUrl ?? "",
@@ -154,7 +157,9 @@ export function SampleForm({
   const watchedCreditBatchId = watch("creditBatchId");
   const watchedDurabilityOption = watch("durabilityOption");
   const watchedHydrogenPercent = watch("totalHydrogenPercent");
+  const watchedOxygenPercent = watch("totalOxygenPercent");
   const watchedOrganicCarbonPercent = watch("organicCarbonPercent");
+  const watchedOToCOrgRatio = watch("oToCOrgRatio");
   const watchedNutrientClaimEnabled = watch("nutrientClaimEnabled");
 
   // The durability tier is NOT selected on the sample — it's the credit batch's
@@ -177,6 +182,7 @@ export function SampleForm({
   useEffect(() => {
     if (watchedDurabilityOption === "200_year") {
       setValue("randomReflectanceR0Percent", undefined);
+      setValue("sReflectanceFraction", undefined);
       setValue("r0MeasurementCount", undefined);
       setValue("r0AnalysisDate", "");
       setValue("r0HistogramFileUrl", "");
@@ -206,12 +212,79 @@ export function SampleForm({
     watchedOrganicCarbonPercent as number | null
   );
 
+  // Derive O:C org from O% and C_org% so the universal eligibility gate
+  // (O/C_org < 0.2) survives when the manual O:Corg input is left blank —
+  // relevant under 1000-year where the ratios sit behind a collapsed
+  // disclosure. A manually-entered O:Corg still wins.
+  const calculatedOToCRatio = calculateOToCOrgRatio(
+    watchedOxygenPercent as number | null,
+    watchedOrganicCarbonPercent as number | null
+  );
+  const resolvedOToCRatio =
+    (watchedOToCOrgRatio as number | null | undefined) ?? calculatedOToCRatio;
+
+  const is1000Year = watchedDurabilityOption === "1000_year";
+
+  // The H:Corg / O:Corg input pair. Rendered inline under 200-year (H:Corg
+  // drives durability) and inside an optional disclosure under 1000-year.
+  const stabilityRatioFields = (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
+      <FormField
+        id="hToCOrgRatio"
+        label="H:C org Ratio"
+        error={errors.hToCOrgRatio?.message}
+        helperText="Auto-calculated from H% and C_org%"
+        certifyRequired={isSampleCertifyField("hToCOrgRatio")}
+        certifyStatus={certStatus("hToCOrgRatio")}
+      >
+        <FormInput
+          id="hToCOrgRatio"
+          type="number"
+          step="0.0001"
+          placeholder="Auto-calculated"
+          disabled
+          readOnly
+          value={calculatedHToCRatio !== null ? calculatedHToCRatio.toFixed(4) : ""}
+          error={!!errors.hToCOrgRatio}
+        />
+      </FormField>
+
+      <FormField
+        id="oToCOrgRatio"
+        label="O:C org Ratio"
+        error={errors.oToCOrgRatio?.message}
+        helperText="Enter to override, or leave blank to derive from O% and C_org%"
+      >
+        <FormInput
+          id="oToCOrgRatio"
+          type="number"
+          step="0.0001"
+          placeholder={
+            calculatedOToCRatio !== null
+              ? calculatedOToCRatio.toFixed(4)
+              : "e.g., 0.15"
+          }
+          disabled={isSubmitting}
+          error={!!errors.oToCOrgRatio}
+          {...register("oToCOrgRatio", {
+            setValueAs: numericValue,
+          })}
+        />
+      </FormField>
+    </div>
+  );
+
   const defaultSubmitLabel = isEditMode ? "Update Sample" : "Create Sample";
 
   const handleFormSubmit = handleSubmit((data) => {
     // Inject calculated H:C ratio at submit time
     if (calculatedHToCRatio !== null) {
       data.hToCOrgRatio = parseFloat(calculatedHToCRatio.toFixed(4));
+    }
+    // Fall back to the derived O:Corg when no manual value was entered, so the
+    // O/C_org eligibility gate has an input even under 1000-year.
+    if (data.oToCOrgRatio == null && calculatedOToCRatio !== null) {
+      data.oToCOrgRatio = parseFloat(calculatedOToCRatio.toFixed(4));
     }
     onSubmit(data as unknown as SampleFormData);
   });
@@ -391,7 +464,7 @@ export function SampleForm({
                   id="organicCarbonPercent"
                   label="Organic Carbon (%)"
                   error={errors.organicCarbonPercent?.message}
-                  helperText="Used to estimate biochar durability."
+                  helperText="Basis for the H:Corg / O:Corg eligibility ratios and durable-carbon accounting (both tiers)."
                   required
                   certifyRequired={isSampleCertifyField("organicCarbonPercent")}
                   certifyStatus={certStatus("organicCarbonPercent")}
@@ -670,49 +743,33 @@ export function SampleForm({
                   : "The durability tier is inherited from the selected credit batch."}
               </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
-                <FormField
-                  id="hToCOrgRatio"
-                  label="H:C org Ratio"
-                  error={errors.hToCOrgRatio?.message}
-                  helperText="Auto-calculated from H% and C_org%"
-                  certifyRequired={isSampleCertifyField("hToCOrgRatio")}
-                  certifyStatus={certStatus("hToCOrgRatio")}
-                >
-                  <FormInput
-                    id="hToCOrgRatio"
-                    type="number"
-                    step="0.0001"
-                    placeholder="Auto-calculated"
-                    disabled
-                    readOnly
-                    value={calculatedHToCRatio !== null ? calculatedHToCRatio.toFixed(4) : ""}
-                    error={!!errors.hToCOrgRatio}
-                  />
-                </FormField>
-
-                <FormField
-                  id="oToCOrgRatio"
-                  label="O:C org Ratio"
-                  error={errors.oToCOrgRatio?.message}
-                >
-                  <FormInput
-                    id="oToCOrgRatio"
-                    type="number"
-                    step="0.0001"
-                    placeholder="e.g., 0.15"
-                    disabled={isSubmitting}
-                    error={!!errors.oToCOrgRatio}
-                    {...register("oToCOrgRatio", {
-                      setValueAs: numericValue,
-                    })}
-                  />
-                </FormField>
-              </div>
+              {/* Under 1000-year, durability is measured by R₀ + TGA (below), so
+                  the H:Corg/O:Corg ratios move behind an optional disclosure —
+                  they're kept only for the universal eligibility gate
+                  (H/C_org < 0.5, O/C_org < 0.2), not the durability estimate.
+                  Under 200-year they stay in view (H:Corg drives durability). */}
+              {is1000Year ? (
+                <details className="border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)]">
+                  <summary className="cursor-pointer px-12 py-8 body-small font-medium text-[var(--color-text-primary)] marker:text-[var(--color-text-tertiary)]">
+                    Eligibility ratios (H:Corg, O:Corg) — optional
+                  </summary>
+                  <div className="flex flex-col gap-16 border-t border-[var(--color-border-tertiary)] p-12">
+                    <p className="body-caption text-[var(--color-text-tertiary)]">
+                      Not used for the 1000-year durability estimate. Kept for the
+                      universal eligibility check (H/C_org &lt; 0.5, O/C_org &lt;
+                      0.2). H:Corg auto-calculates from H% and C_org%; O:Corg
+                      derives from O% and C_org% unless you enter it.
+                    </p>
+                    {stabilityRatioFields}
+                  </div>
+                </details>
+              ) : (
+                stabilityRatioFields
+              )}
 
               <SampleEligibilityAdvisory
                 hToCOrgRatio={calculatedHToCRatio}
-                oToCOrgRatio={watch("oToCOrgRatio") as number | null | undefined}
+                oToCOrgRatio={resolvedOToCRatio}
               />
         </FormSection>
 
@@ -722,7 +779,7 @@ export function SampleForm({
             <FormSection
               title="1000-Year Durability · R₀ Reflectance"
               icon={<EyeIcon size={14} weight="bold" />}
-              fields={["randomReflectanceR0Percent", "r0MeasurementCount", "r0AnalysisDate"]}
+              fields={["randomReflectanceR0Percent", "sReflectanceFraction", "r0MeasurementCount", "r0AnalysisDate"]}
             >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                   <FormField
@@ -742,6 +799,40 @@ export function SampleForm({
                       {...register("randomReflectanceR0Percent", {
                         setValueAs: numericValue,
                       })}
+                    />
+                  </FormField>
+
+                  <FormField
+                    id="sReflectanceFraction"
+                    label="R₀ Readings at or above 2% (%)"
+                    helperText="Share of ISO 7404-5 reflectance readings meeting the 1000-year threshold."
+                    error={errors.sReflectanceFraction?.message}
+                    certifyRequired={isSampleCertifyField("sReflectanceFraction")}
+                    certifyStatus={certStatus("sReflectanceFraction")}
+                  >
+                    <Controller
+                      name="sReflectanceFraction"
+                      control={control}
+                      render={({ field }) => (
+                        <FormInput
+                          id="sReflectanceFraction"
+                          name={field.name}
+                          ref={field.ref}
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          placeholder="e.g., 92"
+                          disabled={isSubmitting}
+                          error={!!errors.sReflectanceFraction}
+                          value={typeof field.value === "number" ? field.value * 100 : ""}
+                          onBlur={field.onBlur}
+                          onChange={(event) => {
+                            const percentage = numericValue(event.target.value);
+                            field.onChange(percentage == null ? percentage : percentage / 100);
+                          }}
+                        />
+                      )}
                     />
                   </FormField>
 
@@ -848,122 +939,16 @@ export function SampleForm({
           </>
         )}
 
-        {/* ── Nutrient Claims ── */}
-        <FormSection
-          title="Nutrient Claims"
-          icon={<LeafIcon size={14} weight="bold" />}
-          fields={["phosphorusPercent", "potassiumPercent", "magnesiumPercent", "calciumPercent", "ironPercent"]}
-        >
-              <label
-                htmlFor="nutrientClaimEnabled"
-                className="flex items-center gap-12 cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  id="nutrientClaimEnabled"
-                  className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
-                  disabled={isSubmitting}
-                  {...register("nutrientClaimEnabled")}
-                />
-                <span className="body-medium text-[var(--color-text-primary)]">
-                  Enable nutrient claims
-                </span>
-              </label>
-
-              {watchedNutrientClaimEnabled && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20 pt-8">
-                  <FormField
-                    id="phosphorusPercent"
-                    label="Phosphorus (%)"
-                    error={errors.phosphorusPercent?.message}
-                  >
-                    <FormInput
-                      id="phosphorusPercent"
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g., 0.5"
-                      disabled={isSubmitting}
-                      error={!!errors.phosphorusPercent}
-                      {...register("phosphorusPercent", {
-                        setValueAs: numericValue,
-                      })}
-                    />
-                  </FormField>
-
-                  <FormField
-                    id="potassiumPercent"
-                    label="Potassium (%)"
-                    error={errors.potassiumPercent?.message}
-                  >
-                    <FormInput
-                      id="potassiumPercent"
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g., 1.2"
-                      disabled={isSubmitting}
-                      error={!!errors.potassiumPercent}
-                      {...register("potassiumPercent", {
-                        setValueAs: numericValue,
-                      })}
-                    />
-                  </FormField>
-
-                  <FormField
-                    id="magnesiumPercent"
-                    label="Magnesium (%)"
-                    error={errors.magnesiumPercent?.message}
-                  >
-                    <FormInput
-                      id="magnesiumPercent"
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g., 0.3"
-                      disabled={isSubmitting}
-                      error={!!errors.magnesiumPercent}
-                      {...register("magnesiumPercent", {
-                        setValueAs: numericValue,
-                      })}
-                    />
-                  </FormField>
-
-                  <FormField
-                    id="calciumPercent"
-                    label="Calcium (%)"
-                    error={errors.calciumPercent?.message}
-                  >
-                    <FormInput
-                      id="calciumPercent"
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g., 2.0"
-                      disabled={isSubmitting}
-                      error={!!errors.calciumPercent}
-                      {...register("calciumPercent", {
-                        setValueAs: numericValue,
-                      })}
-                    />
-                  </FormField>
-
-                  <FormField
-                    id="ironPercent"
-                    label="Iron (%)"
-                    error={errors.ironPercent?.message}
-                  >
-                    <FormInput
-                      id="ironPercent"
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g., 0.1"
-                      disabled={isSubmitting}
-                      error={!!errors.ironPercent}
-                      {...register("ironPercent", {
-                        setValueAs: numericValue,
-                      })}
-                    />
-                  </FormField>
-                </div>
-              )}
-        </FormSection>
+        <SampleNutrientFields
+          enabled={watchedNutrientClaimEnabled}
+          isSubmitting={isSubmitting}
+          enabledRegistration={register("nutrientClaimEnabled")}
+          phosphorus={{ registration: register("phosphorusPercent", { setValueAs: numericValue }), error: errors.phosphorusPercent?.message }}
+          potassium={{ registration: register("potassiumPercent", { setValueAs: numericValue }), error: errors.potassiumPercent?.message }}
+          magnesium={{ registration: register("magnesiumPercent", { setValueAs: numericValue }), error: errors.magnesiumPercent?.message }}
+          calcium={{ registration: register("calciumPercent", { setValueAs: numericValue }), error: errors.calciumPercent?.message }}
+          iron={{ registration: register("ironPercent", { setValueAs: numericValue }), error: errors.ironPercent?.message }}
+        />
 
       </form>
 

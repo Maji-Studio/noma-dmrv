@@ -1,4 +1,6 @@
+import type { OrgContext } from "@/lib/auth/server";
 import { env } from "@/config/env";
+import { hasCertifierCredentials } from "@/data-access/certifier-credentials";
 import {
   getCertifierProjectByFacility,
   type CertificationSubmissionRow,
@@ -46,6 +48,7 @@ import { SafeError } from "@/lib/errors";
 import {
   aggregateTransportMassDistance,
   collectTransportEntityIds,
+  getIsometricClientForOrg,
   listComponentBlueprints,
   listProjects,
   listGhgEntryTemplates,
@@ -126,6 +129,7 @@ type DurabilityOption = "200_year" | "1000_year";
 // UI-facing removal context — the lean payload React Query caches.
 export interface RemovalCertifyContext {
   facilityId: string;
+  hasOrgCredentials: boolean;
   // Null when the credit batch is not yet grouped into a removal (a 1:1
   // removal is created lazily on first submit).
   removalId: string | null;
@@ -151,14 +155,15 @@ export interface RemovalCertifyContext {
   // bucket on health and readiness surfaces.
   productionReadinessGap: ProductionReadinessGap | null;
   // Compact labels from the per-entity certifier-readiness layer. The raw
-  // entity rows stay server-side; Review/pre-flight only needs gap labels.
-  entityReadinessGaps?: string[];
+  // entity rows stay server-side; Review/pre-flight only needs gap labels. The
+  // submit pipeline gates on this same list, so [] means entity-ready.
+  entityReadinessGaps: string[];
   // Fail-closed durability sampling/eligibility blockers (D3) — the EXACT list
   // the submit pipeline blocks on, so readiness predicts the gate. [] ⇒ ready.
   durabilityGateBlockers: string[];
   // Non-blocking submission advisories — e.g. recorded startup/plant diesel the
   // active template has no component to carry (ADR 0015). Unlike
-  // durabilityGateBlockers / entityReadinessGaps these do NOT gate submission;
+  // durabilityGateBlockers / entityReadinessGaps, these do NOT gate submission;
   // they tell the operator a recorded value will not be submitted.
   submissionWarnings: string[];
   // Focused run aggregation (run count, total biochar output, applied dry kg)
@@ -308,11 +313,11 @@ interface RemovalScope {
 }
 
 async function getApplicationIdsForProductionRuns(
-  userId: string,
+  orgCtx: OrgContext,
   productionRunIds: string[],
 ): Promise<string[]> {
   const applicationsForRuns = await getApplicationsForRuns(
-    userId,
+    orgCtx,
     productionRunIds,
   );
   return Array.from(new Set(applicationsForRuns.map((row) => row.applicationId)));
@@ -322,15 +327,15 @@ async function getApplicationIdsForProductionRuns(
 // grouped, the scope is every member of that removal; otherwise it is the
 // batch alone (a 1:1 removal that will be created lazily on submit).
 async function resolveScopeForCreditBatch(
-  userId: string,
+  orgCtx: OrgContext,
   creditBatchId: string,
 ): Promise<RemovalScope> {
-  const batch = await getCreditBatchById(userId, creditBatchId);
+  const batch = await getCreditBatchById(orgCtx, creditBatchId);
   if (!batch) throw new SafeError("Credit batch not found");
 
   if (!batch.removalId) {
     const applicationIds = await getApplicationIdsForProductionRuns(
-      userId,
+      orgCtx,
       batch.productionRunIds,
     );
     return {
@@ -351,24 +356,24 @@ async function resolveScopeForCreditBatch(
       ],
     };
   }
-  return resolveScopeForRemoval(userId, batch.removalId);
+  return resolveScopeForRemoval(orgCtx, batch.removalId);
 }
 
 // Resolves the removal scope from a removal id — every member credit batch.
 export async function resolveScopeForRemoval(
-  userId: string,
+  orgCtx: OrgContext,
   removalId: string,
   options?: { skipPreview?: boolean },
 ): Promise<RemovalScope> {
-  const removal = await getCertifierRemovalById(userId, removalId);
+  const removal = await getCertifierRemovalById(orgCtx, removalId);
   if (!removal) throw new SafeError("Removal not found");
 
-  const batches = await getCreditBatchesByRemovalId(userId, removalId);
+  const batches = await getCreditBatchesByRemovalId(orgCtx, removalId);
   const memberBatches = await Promise.all(
     batches.map(async (b) => {
       const full = options?.skipPreview
-        ? await getCreditBatchById(userId, b.id, { skipPreview: true })
-        : await getCreditBatchById(userId, b.id);
+        ? await getCreditBatchById(orgCtx, b.id, { skipPreview: true })
+        : await getCreditBatchById(orgCtx, b.id);
       // Fail fast rather than emitting a member batch with missing run-derived
       // applications / preview — partial data here silently understates a
       // removal's scope downstream.
@@ -378,7 +383,7 @@ export async function resolveScopeForRemoval(
         );
       }
       const applicationIds = await getApplicationIdsForProductionRuns(
-        userId,
+        orgCtx,
         full.productionRunIds,
       );
       return {
@@ -408,6 +413,7 @@ export async function resolveScopeForRemoval(
 // resolves them ONCE and feeds them to every removal's `buildRemovalContext`
 // instead of re-pulling the same template/blueprint data per row.
 export interface FacilityCertifierFacts {
+  hasOrgCredentials: boolean;
   mapping: CertifierProjectRow | null;
   project: IsometricProject | null;
   defaultTemplate: IsometricGhgEntryTemplate | null;
@@ -417,12 +423,10 @@ export interface FacilityCertifierFacts {
   requiredTransportCategories: TransportCategory[];
 }
 
-// Facility facts before any mapping resolves — also the shape every
-// not-fully-configured short-circuit carries (the template-dependent fields
-// stay empty).
+// Template-dependent fields shared by each unresolved short-circuit.
 const UNRESOLVED_FACILITY_FACTS: Omit<
   FacilityCertifierFacts,
-  "mapping" | "project"
+  "hasOrgCredentials" | "mapping" | "project"
 > = {
   defaultTemplate: null,
   missingDefaultTemplateId: null,
@@ -431,40 +435,41 @@ const UNRESOLVED_FACILITY_FACTS: Omit<
   requiredTransportCategories: [],
 };
 
-// Resolves the facility-scoped certifier facts: the Isometric mapping and, when
-// it resolves cleanly, the project / default template / referenced component
-// blueprints + the template's required transport categories. Short-circuits the
-// same way the single-pass builder did — no mapping skips every remote list; no
-// default template skips the blueprint catalog — so the remote-call fan-out per
-// facility is unchanged.
+// Resolves the mapping, credentials, remote project/template, and referenced
+// blueprints once per facility. Unresolved prerequisites skip downstream calls.
 export async function loadFacilityCertifierFacts(
-  userId: string,
+  orgCtx: OrgContext,
   facilityId: string,
 ): Promise<FacilityCertifierFacts> {
-  const mapping = await getCertifierProjectByFacility(
-    userId,
-    facilityId,
-    ISOMETRIC_PROVIDER,
-  );
+  const [mapping, hasOrgCredentials] = await Promise.all([
+    getCertifierProjectByFacility(orgCtx, facilityId, ISOMETRIC_PROVIDER),
+    hasCertifierCredentials(orgCtx, ISOMETRIC_PROVIDER),
+  ]);
   if (!mapping) {
-    return { mapping: null, project: null, ...UNRESOLVED_FACILITY_FACTS };
+    return { hasOrgCredentials, mapping: null, project: null, ...UNRESOLVED_FACILITY_FACTS };
+  }
+  if (!hasOrgCredentials) {
+    return { hasOrgCredentials: false, mapping, project: null, ...UNRESOLVED_FACILITY_FACTS };
   }
 
+  const client = await getIsometricClientForOrg(orgCtx.organizationId);
+
   const [projects, templates] = await Promise.all([
-    safeListIfConfigured(() => listProjects()),
-    safeListIfConfigured(() => listGhgEntryTemplates(mapping.externalProjectId)),
+    safeListIfConfigured(() => listProjects(client)),
+    safeListIfConfigured(() => listGhgEntryTemplates(client, mapping.externalProjectId)),
   ]);
   const project =
     projects.find((p) => p.id === mapping.externalProjectId) ?? null;
 
   if (!mapping.defaultRemovalTemplateId) {
-    return { mapping, project, ...UNRESOLVED_FACILITY_FACTS };
+    return { hasOrgCredentials, mapping, project, ...UNRESOLVED_FACILITY_FACTS };
   }
 
   const defaultTemplate =
     templates.find((t) => t.id === mapping.defaultRemovalTemplateId) ?? null;
   if (!defaultTemplate) {
     return {
+      hasOrgCredentials,
       mapping,
       project,
       ...UNRESOLVED_FACILITY_FACTS,
@@ -480,7 +485,7 @@ export async function loadFacilityCertifierFacts(
     ),
   );
   const allBlueprints = await safeListIfConfigured(() =>
-    listComponentBlueprints(),
+    listComponentBlueprints(client),
   );
   const blueprintByKey = new Map(allBlueprints.map((bp) => [bp.key, bp]));
   const blueprintsForTemplate: IsometricComponentBlueprint[] = [];
@@ -492,6 +497,7 @@ export async function loadFacilityCertifierFacts(
   }
 
   return {
+    hasOrgCredentials,
     mapping,
     project,
     defaultTemplate,
@@ -552,7 +558,7 @@ function productionReadinessGapFromLineages(
 // removal-level half — submission status, member-batch lineage, the deduped
 // production-run union, transport coverage, and mass accounting.
 export async function buildRemovalContext(
-  userId: string,
+  orgCtx: OrgContext,
   scope: RemovalScope,
   facilityFacts: FacilityCertifierFacts,
 ): Promise<RemovalSubmissionContext> {
@@ -579,14 +585,14 @@ export async function buildRemovalContext(
   // carries the real values rather than a placeholder.
   const [latestSubmission, linkedGhgStatement] = await Promise.all([
     scope.removalId
-      ? getLatestSubmission(userId, {
+      ? getLatestSubmission(orgCtx, {
           provider: ISOMETRIC_PROVIDER,
           submissionType: REMOVAL_SUBMISSION_TYPE,
           localEntityType: REMOVAL_ENTITY_TYPE,
           localEntityId: scope.removalId,
         })
       : Promise.resolve(null),
-    loadLinkedGhgStatementStatus(userId, scope.removal),
+    loadLinkedGhgStatementStatus(orgCtx, scope.removal),
   ]);
 
   // Walk every member batch's production-run applications into one deduped run union.
@@ -634,7 +640,7 @@ export async function buildRemovalContext(
   }
 
   const lineages = await Promise.all(
-    applicationIds.map((id) => getChainOfCustodyData(userId, id)),
+    applicationIds.map((id) => getChainOfCustodyData(orgCtx, id)),
   );
   const runIds = Array.from(
     new Set(
@@ -645,7 +651,7 @@ export async function buildRemovalContext(
   );
   const runs =
     runIds.length > 0
-      ? await getProductionRunsWithSamples(userId, runIds)
+      ? await getProductionRunsWithSamples(orgCtx, runIds)
       : [];
   const productionReadinessGap = productionReadinessGapFromLineages(lineages);
 
@@ -662,13 +668,13 @@ export async function buildRemovalContext(
     blockers: durabilityBatchBlockers,
     warnings: durabilityWarnings,
   } = await loadDurabilityBatchData(
-    userId,
+    orgCtx,
     scope.memberBatches.map((b) => b.id),
     new Set(runIds),
   );
 
   const entityIds = collectTransportEntityIds(lineages, batchesWithSamples);
-  const transportLegs = await loadTransportLegsByCategory(userId, entityIds);
+  const transportLegs = await loadTransportLegsByCategory(orgCtx, entityIds);
   const transportCoverage = buildCoverage(transportLegs, entityIds);
   const entityReadinessGaps = [
     ...buildEntityReadinessGaps(
@@ -677,7 +683,7 @@ export async function buildRemovalContext(
       transportLegs,
       facilityFacts.requiredTransportCategories,
     ),
-    ...(await buildApplicationEvidenceGaps(userId, lineages)),
+    ...(await buildApplicationEvidenceGaps(orgCtx, lineages)),
   ];
   // One mass-accounting walk: the per-run attribution the submit pipeline
   // scopes by AND the Review-flow summary, so the two can never diverge.
@@ -757,15 +763,15 @@ export async function buildRemovalContext(
 // composes; the Overview queue reuses `buildRemovalContext` with facility facts
 // loaded once across all of a facility's removals.
 export async function loadRemovalSubmissionContext(
-  userId: string,
+  orgCtx: OrgContext,
   removalId: string,
 ): Promise<RemovalSubmissionContext> {
-  const scope = await resolveScopeForRemoval(userId, removalId);
+  const scope = await resolveScopeForRemoval(orgCtx, removalId);
   const facilityFacts = await loadFacilityCertifierFacts(
-    userId,
+    orgCtx,
     scope.facilityId,
   );
-  return buildRemovalContext(userId, scope, facilityFacts);
+  return buildRemovalContext(orgCtx, scope, facilityFacts);
 }
 
 function projectUiContext(
@@ -773,6 +779,7 @@ function projectUiContext(
 ): RemovalCertifyContext {
   return {
     facilityId: ctx.facilityId,
+    hasOrgCredentials: ctx.hasOrgCredentials,
     removalId: ctx.removalId,
     mapping: ctx.mapping,
     project: ctx.project,
@@ -802,32 +809,32 @@ function projectUiContext(
 export async function loadRemovalCertifyContext(
   removalId: string,
 ): Promise<ActionResult<RemovalCertifyContext>> {
-  return withAction(async (userId) =>
-    projectUiContext(await loadRemovalSubmissionContext(userId, removalId)),
+  return withAction(async (orgCtx) =>
+    projectUiContext(await loadRemovalSubmissionContext(orgCtx, removalId)),
   );
 }
 
 // UI context for the credit-batch Certify panel. Resolves the removal the
 // batch belongs to (or a 1:1 preview when it is not yet grouped).
 export async function loadCertifyContextForCreditBatchForUser(
-  userId: string,
+  orgCtx: OrgContext,
   creditBatchId: string,
 ): Promise<RemovalCertifyContext> {
-  const scope = await resolveScopeForCreditBatch(userId, creditBatchId);
+  const scope = await resolveScopeForCreditBatch(orgCtx, creditBatchId);
   const facilityFacts = await loadFacilityCertifierFacts(
-    userId,
+    orgCtx,
     scope.facilityId,
   );
   return projectUiContext(
-    await buildRemovalContext(userId, scope, facilityFacts),
+    await buildRemovalContext(orgCtx, scope, facilityFacts),
   );
 }
 
 export async function loadCertifyContextForCreditBatch(
   creditBatchId: string,
 ): Promise<ActionResult<RemovalCertifyContext>> {
-  return withAction(async (userId) =>
-    loadCertifyContextForCreditBatchForUser(userId, creditBatchId),
+  return withAction(async (orgCtx) =>
+    loadCertifyContextForCreditBatchForUser(orgCtx, creditBatchId),
   );
 }
 
@@ -840,13 +847,13 @@ export async function loadCertifyContextForCreditBatch(
 // per-batch scope; the facts only feed health-relevant fields the caller reads
 // after confirming the batch belongs to that facility.
 export async function buildCreditBatchContextWithFacts(
-  userId: string,
+  orgCtx: OrgContext,
   creditBatchId: string,
   facilityFacts: FacilityCertifierFacts,
 ): Promise<RemovalCertifyContext> {
-  const scope = await resolveScopeForCreditBatch(userId, creditBatchId);
+  const scope = await resolveScopeForCreditBatch(orgCtx, creditBatchId);
   return projectUiContext(
-    await buildRemovalContext(userId, scope, facilityFacts),
+    await buildRemovalContext(orgCtx, scope, facilityFacts),
   );
 }
 
@@ -870,10 +877,10 @@ export interface RemovalsHubData {
 export async function loadRemovalsForFacility(
   facilityId: string,
 ): Promise<ActionResult<RemovalsHubData>> {
-  return withAction(async (userId) => {
+  return withAction(async (orgCtx) => {
     const [removalRows, ungroupedBatches] = await Promise.all([
-      listRemovalsForFacility(userId, facilityId),
-      listUngroupedCreditBatches(userId, facilityId),
+      listRemovalsForFacility(orgCtx, facilityId),
+      listUngroupedCreditBatches(orgCtx, facilityId),
     ]);
     // Bounded chunks (order-preserving) rather than one unbounded Promise.all
     // over every removal — see FANOUT_CONCURRENCY.
@@ -882,8 +889,8 @@ export async function loadRemovalsForFacility(
       const chunk = await Promise.all(
         removalRows.slice(i, i + FANOUT_CONCURRENCY).map(async (removal) => {
           const [batches, latestSubmission] = await Promise.all([
-            getCreditBatchesByRemovalId(userId, removal.id),
-            getLatestSubmission(userId, {
+            getCreditBatchesByRemovalId(orgCtx, removal.id),
+            getLatestSubmission(orgCtx, {
               provider: ISOMETRIC_PROVIDER,
               submissionType: REMOVAL_SUBMISSION_TYPE,
               localEntityType: REMOVAL_ENTITY_TYPE,
@@ -939,9 +946,9 @@ export interface SelectableBatchesData {
 export async function loadSelectableBatchesForFacility(
   facilityId: string,
 ): Promise<ActionResult<SelectableBatchesData>> {
-  return withAction(async (userId) => {
-    const facilityFacts = await loadFacilityCertifierFacts(userId, facilityId);
-    const ungrouped = await listUngroupedCreditBatches(userId, facilityId);
+  return withAction(async (orgCtx) => {
+    const facilityFacts = await loadFacilityCertifierFacts(orgCtx, facilityId);
+    const ungrouped = await listUngroupedCreditBatches(orgCtx, facilityId);
     const ungroupedIds = ungrouped.map((row) => row.id);
     // Derived per-batch figures (issue #285): applied weight from member
     // applications, stored CO₂e from the same preview the batch page shows.
@@ -949,10 +956,10 @@ export async function loadSelectableBatchesForFacility(
     // otherwise re-walk the same run membership internally. The preview's own
     // per-batch fan-out is bounded inside getCo2eStoredPreviews.
     const applicationRollups = await getApplicationRollupsByBatchIds(
-      userId,
+      orgCtx,
       ungroupedIds,
     );
-    const co2ePreviews = await getCo2eStoredPreviews(userId, ungroupedIds, {
+    const co2ePreviews = await getCo2eStoredPreviews(orgCtx, ungroupedIds, {
       applicationRollups,
     });
     // Bounded chunks (order-preserving) rather than one unbounded Promise.all
@@ -961,9 +968,9 @@ export async function loadSelectableBatchesForFacility(
     for (let i = 0; i < ungrouped.length; i += FANOUT_CONCURRENCY) {
       const chunk = await Promise.all(
         ungrouped.slice(i, i + FANOUT_CONCURRENCY).map(async (row) => {
-          const scope = await resolveScopeForCreditBatch(userId, row.id);
+          const scope = await resolveScopeForCreditBatch(orgCtx, row.id);
           const ctx = projectUiContext(
-            await buildRemovalContext(userId, scope, facilityFacts),
+            await buildRemovalContext(orgCtx, scope, facilityFacts),
           );
           return {
             ...row,

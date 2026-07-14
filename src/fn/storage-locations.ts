@@ -20,7 +20,7 @@ import {
   type PaginatedStorageLocations,
   type StorageLocationWithFacility,
 } from "@/data-access/storage-locations";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import {
   createStorageLocationSchema,
   deleteStorageLocationSchema,
@@ -52,16 +52,13 @@ export async function getStorageLocationsFn(
   filters?: Partial<z.infer<typeof storageLocationFilterSchema>>
 ): Promise<ActionResult<PaginatedStorageLocations>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validatedFilters = filters
       ? storageLocationFilterSchema.parse(filters)
       : undefined;
     const storageLocations = await getStorageLocationsData(
-      user.id,
+      ctx,
       validatedFilters
     );
 
@@ -91,13 +88,10 @@ export async function getStorageLocationByIdFn(
   storageLocationId: string
 ): Promise<ActionResult<StorageLocation>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const storageLocation = await getStorageLocationByIdData(
-      user.id,
+      ctx,
       storageLocationId
     );
     return { success: true, data: storageLocation };
@@ -120,13 +114,10 @@ export async function getStorageLocationWithFacilityFn(
   storageLocationId: string
 ): Promise<ActionResult<StorageLocationWithFacility>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const storageLocation = await getStorageLocationWithFacilityData(
-      user.id,
+      ctx,
       storageLocationId
     );
     return { success: true, data: storageLocation };
@@ -149,13 +140,10 @@ export async function getStorageLocationsByFacilityFn(
   facilityId: string
 ): Promise<ActionResult<StorageLocation[]>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const storageLocations = await getStorageLocationsByFacilityData(
-      user.id,
+      ctx,
       facilityId
     );
     return { success: true, data: storageLocations };
@@ -179,13 +167,10 @@ export async function checkStorageLocationCodeFn(
   excludeStorageLocationId?: string
 ): Promise<ActionResult<{ available: boolean }>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const available = await isStorageLocationCodeAvailableData(
-      user.id,
+      ctx,
       code,
       excludeStorageLocationId
     );
@@ -213,20 +198,18 @@ export async function createStorageLocationFn(
   data: z.infer<typeof createStorageLocationSchema>
 ): Promise<ActionResult<StorageLocation>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = createStorageLocationSchema.parse(data);
 
     const storageLocation = await withAutoCode(
+      ctx,
       "SL",
       storageLocations,
       storageLocations.code,
       undefined,
       (code) =>
-        createStorageLocation(user.id, {
+        createStorageLocation(ctx, {
           code,
           name: validated.name,
           type: validated.type,
@@ -269,15 +252,12 @@ export async function updateStorageLocationFn(
   data: z.infer<typeof updateStorageLocationSchema>
 ): Promise<ActionResult<StorageLocation>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = updateStorageLocationSchema.parse(data);
 
     const storageLocation = await updateStorageLocation(
-      user.id,
+      ctx,
       validated.storageLocationId,
       {
         code: validated.code,
@@ -323,13 +303,10 @@ export async function deleteStorageLocationFn(
   data: z.infer<typeof deleteStorageLocationSchema>
 ): Promise<ActionResult<void>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = deleteStorageLocationSchema.parse(data);
-    await deleteStorageLocation(user.id, validated.storageLocationId);
+    await deleteStorageLocation(ctx, validated.storageLocationId);
 
     return { success: true, data: undefined };
   } catch (error) {

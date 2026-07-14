@@ -66,6 +66,10 @@ function fixLinkFor(
         label: "Open settings",
         href: certificationSettingsHref(facilityId),
       };
+    case "credentials":
+      // Only a Platform Admin can manage organization credentials, so an
+      // operator-facing wizard must not link to an inaccessible admin route.
+      return null;
     case "transportUniformity":
       return {
         label: "Review transport",

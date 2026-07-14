@@ -39,9 +39,9 @@ const searchEntitiesSchema = z.object({
 export async function searchEntitiesFn(
   params: unknown
 ): Promise<ActionResult<EntityOption[]>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const validated = searchEntitiesSchema.parse(params);
-    return getEntities(userId, validated);
+    return getEntities(ctx, validated);
   }, { zodErrorPrefix: "Invalid search parameters", fallbackMessage: "Failed to search entities" });
 }
 
@@ -52,9 +52,9 @@ export async function getEntityByIdFn(
   entityType: unknown,
   id: unknown
 ): Promise<ActionResult<EntityOption | null>> {
-  return withAction(async (userId) => {
+  return withAction(async (ctx) => {
     const validatedType = entityTypeSchema.parse(entityType);
     const validatedId = z.string().uuid().parse(id);
-    return getEntityById(userId, validatedType, validatedId);
+    return getEntityById(ctx, validatedType, validatedId);
   }, { zodErrorPrefix: "Invalid entity parameters", fallbackMessage: "Failed to fetch entity" });
 }

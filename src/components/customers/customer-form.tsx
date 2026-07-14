@@ -546,11 +546,12 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
       <div className="flex flex-col gap-6">
         <div className="flex items-center gap-6">
           <label htmlFor="pending-loc-distance" className="label-medium">
-            Distance from facility (km)
+            One-way distance from facility (per leg, km)
           </label>
           <InfoHint side="top" label="More about distance from facility">
-            Road distance from the facility to the site. Used for the biochar
-            distribution transport leg in certification.
+            One-way road distance from the facility to the site. Used for the
+            biochar distribution transport leg in certification; return trips are
+            doubled at emissions time (set the trip type on each delivery).
           </InfoHint>
         </div>
         <input

@@ -2,7 +2,8 @@
  * Chain of custody data access
  * Resolves the upstream lineage for a single application back to its feedstocks.
  */
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
   applications,
@@ -19,7 +20,8 @@ import {
   reactors,
   suppliers,
 } from "@/db/schema";
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
+import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
 
 export interface ChainFacility {
@@ -127,10 +129,10 @@ export interface ChainOfCustodyData {
 }
 
 export async function getChainOfCustodyData(
-  userId: string,
+  ctx: OrgContext,
   applicationId: string
 ): Promise<ChainOfCustodyData> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [applicationRow] = await db
     .select({
@@ -159,10 +161,10 @@ export async function getChainOfCustodyData(
       facilityName: facilities.name,
     })
     .from(applications)
-    .innerJoin(deliveries, eq(applications.deliveryId, deliveries.id))
-    .leftJoin(orders, eq(deliveries.orderId, orders.id))
-    .innerJoin(facilities, eq(deliveries.facilityId, facilities.id))
-    .where(eq(applications.id, applicationId))
+    .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
+    .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
+    .innerJoin(facilities, and(eq(deliveries.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .where(and(eq(applications.id, applicationId), eq(applications.organizationId, ctx.organizationId)))
     .limit(1);
 
   if (!applicationRow) {
@@ -174,7 +176,7 @@ export async function getChainOfCustodyData(
     applicationRow.deliveryBiocharProductId ?? applicationRow.orderBiocharProductId;
 
   const biocharProduct = biocharProductId
-    ? await getBiocharProductLineage(biocharProductId)
+    ? await getBiocharProductLineage(ctx, biocharProductId)
     : null;
 
   if (!biocharProductId) {
@@ -184,7 +186,7 @@ export async function getChainOfCustodyData(
   }
 
   const productionRun = biocharProduct?.linkedProductionRunId
-    ? await getProductionRunLineage(biocharProduct.linkedProductionRunId)
+    ? await getProductionRunLineage(ctx, biocharProduct.linkedProductionRunId)
     : null;
 
   if (biocharProduct && !biocharProduct.linkedProductionRunId) {
@@ -195,8 +197,8 @@ export async function getChainOfCustodyData(
 
   const [reactor, feedstocksForRun] = productionRun
     ? await Promise.all([
-        getReactorLineageForRun(productionRun.id),
-        getFeedstocksForRun(productionRun.id),
+        getReactorLineageForRun(ctx, productionRun.id),
+        getFeedstocksForRun(ctx, productionRun.id),
       ])
     : [null, []];
 
@@ -250,6 +252,7 @@ export async function getChainOfCustodyData(
 }
 
 async function getBiocharProductLineage(
+  ctx: OrgContext,
   biocharProductId: string
 ): Promise<ChainBiocharProductLineage | null> {
   const [product] = await db
@@ -264,8 +267,8 @@ async function getBiocharProductLineage(
       linkedProductionRunId: biocharProducts.linkedProductionRunId,
     })
     .from(biocharProducts)
-    .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
-    .where(eq(biocharProducts.id, biocharProductId))
+    .leftJoin(formulations, and(eq(biocharProducts.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
+    .where(and(eq(biocharProducts.id, biocharProductId), eq(biocharProducts.organizationId, ctx.organizationId)))
     .limit(1);
 
   if (!product) {
@@ -279,6 +282,7 @@ async function getBiocharProductLineage(
 }
 
 async function getProductionRunLineage(
+  ctx: OrgContext,
   productionRunId: string
 ): Promise<ChainProductionRunLineage | null> {
   const [productionRun] = await db
@@ -286,12 +290,12 @@ async function getProductionRunLineage(
       id: productionRuns.id,
       code: productionRuns.code,
       status: productionRuns.status,
-      date: productionRuns.date,
+      date: productionRunDateExpr(),
       biocharDryMassKg: productionRuns.biocharDryMassKg,
       feedstockMassDryKg: productionRuns.feedstockMassDryKg,
     })
     .from(productionRuns)
-    .where(eq(productionRuns.id, productionRunId))
+    .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)))
     .limit(1);
 
   if (!productionRun) {
@@ -305,6 +309,7 @@ async function getProductionRunLineage(
 }
 
 async function getReactorLineageForRun(
+  ctx: OrgContext,
   productionRunId: string
 ): Promise<ChainReactorLineage | null> {
   const [reactor] = await db
@@ -315,8 +320,8 @@ async function getReactorLineageForRun(
       reactorType: reactors.reactorType,
     })
     .from(productionRuns)
-    .innerJoin(reactors, eq(productionRuns.reactorId, reactors.id))
-    .where(eq(productionRuns.id, productionRunId))
+    .innerJoin(reactors, and(eq(productionRuns.reactorId, reactors.id), eq(reactors.organizationId, ctx.organizationId)))
+    .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)))
     .limit(1);
 
   if (!reactor) {
@@ -330,6 +335,7 @@ async function getReactorLineageForRun(
 }
 
 async function getFeedstocksForRun(
+  ctx: OrgContext,
   productionRunId: string
 ): Promise<ChainFeedstockLineage[]> {
   const rows = await db
@@ -346,11 +352,11 @@ async function getFeedstocksForRun(
       feedstockDeliveryCode: feedstockDeliveries.code,
     })
     .from(productionRunFeedstocks)
-    .innerJoin(feedstocks, eq(productionRunFeedstocks.feedstockId, feedstocks.id))
-    .leftJoin(feedstockDeliveries, eq(feedstocks.feedstockDeliveryId, feedstockDeliveries.id))
-    .leftJoin(suppliers, eq(feedstocks.supplierId, suppliers.id))
-    .leftJoin(feedstockTypes, eq(feedstocks.feedstockTypeId, feedstockTypes.id))
-    .where(eq(productionRunFeedstocks.productionRunId, productionRunId));
+    .innerJoin(feedstocks, and(eq(productionRunFeedstocks.feedstockId, feedstocks.id), eq(feedstocks.organizationId, ctx.organizationId)))
+    .leftJoin(feedstockDeliveries, and(eq(feedstocks.feedstockDeliveryId, feedstockDeliveries.id), eq(feedstockDeliveries.organizationId, ctx.organizationId)))
+    .leftJoin(suppliers, and(eq(feedstocks.supplierId, suppliers.id), eq(suppliers.organizationId, ctx.organizationId)))
+    .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
+    .where(and(eq(productionRunFeedstocks.productionRunId, productionRunId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
 
   return rows.map((row) => ({
     ...row,

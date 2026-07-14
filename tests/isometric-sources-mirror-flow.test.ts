@@ -20,9 +20,16 @@
  * real with data-access / storage / isometric-client boundaries faked.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { makeTestOrgContext } from "./helpers/test-org";
 
 vi.mock("@/lib/auth/server", () => ({
-  getUser: vi.fn(async () => ({ id: USER_ID })),
+  requireOrgRole: vi.fn(),
+  requireOrgContext: vi.fn(async () => ({
+    userId: USER_ID,
+    organizationId: "org_test_fixtures",
+    orgRole: "owner",
+    isPlatformAdmin: false,
+  })),
 }));
 vi.mock("@/data-access/certification");
 vi.mock("@/data-access/certifier-removals");
@@ -66,6 +73,7 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
   return {
     ...actual,
+    getIsometricClientForOrg: vi.fn(async () => ({} as import("@/lib/isometric").IsometricClient)),
     findSourceBySupplierRef: vi.fn(),
     requestSignedUploadUrl: vi.fn(),
     createSource: vi.fn(),
@@ -251,7 +259,7 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       expect(putCalls).toHaveLength(1);
       // We persisted the local mapping with the remote source id.
       expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
-        USER_ID,
+        makeTestOrgContext(USER_ID),
         expect.objectContaining({
           externalDocumentId: EXISTING_SOURCE_ID,
           metadata: expect.objectContaining({
@@ -302,7 +310,7 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       expect(fetchSpy).not.toHaveBeenCalled();
       // Local mapping persisted against the existing remote source.
       expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
-        USER_ID,
+        makeTestOrgContext(USER_ID),
         expect.objectContaining({
           externalDocumentId: EXISTING_SOURCE_ID,
         }),
@@ -343,7 +351,7 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       // Result echoes the remote, not the request.
       expect(result.data.isPublic).toBe(true);
       expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
-        USER_ID,
+        makeTestOrgContext(USER_ID),
         expect.objectContaining({
           metadata: expect.objectContaining({ isPublic: true }),
         }),

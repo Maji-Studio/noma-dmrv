@@ -12,7 +12,8 @@
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { db } from "@/db";
 import { productionRunReadings, productionRuns } from "@/db/schema/production";
-import { requireAuth } from "./utils";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "./utils";
 
 export interface TelemetryReadingRow {
   reactorId: string;
@@ -31,14 +32,16 @@ export interface ListReadingsArgs {
 }
 
 export async function listTelemetryReadingsForRuns(
-  userId: string,
+  ctx: OrgContext,
   args: ListReadingsArgs,
 ): Promise<TelemetryReadingRow[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   if (args.productionRunIds.length === 0) return [];
 
   const conditions = [
     inArray(productionRunReadings.productionRunId, args.productionRunIds),
+    eq(productionRunReadings.organizationId, ctx.organizationId),
+    eq(productionRuns.organizationId, ctx.organizationId),
   ];
   if (args.since) {
     conditions.push(gte(productionRunReadings.timestamp, args.since));
@@ -47,6 +50,7 @@ export async function listTelemetryReadingsForRuns(
     conditions.push(lte(productionRunReadings.timestamp, args.until));
   }
 
+  // org-scope-ok: conditions includes both joined organization predicates.
   const rows = await db
     .select({
       reactorId: productionRuns.reactorId,

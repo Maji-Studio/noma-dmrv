@@ -9,7 +9,8 @@
  * `buildBatchSankey` builder; the geo roll-up merges the per-application
  * Phase 2 geo payloads so the Carbon Transit map renders unchanged.
  */
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import { facilities } from "@/db/schema";
 import {
@@ -30,7 +31,7 @@ import {
 } from "./chain-of-custody-geo";
 import { getCreditBatchById } from "./credit-batches";
 import { getApplicationsForRuns } from "./credit-batch-production-runs";
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 
 export interface CreditBatchChainBatch {
   id: string;
@@ -61,11 +62,11 @@ interface ResolvedBatchScope {
 }
 
 async function getApplicationIdsForBatchRuns(
-  userId: string,
+  ctx: OrgContext,
   productionRunIds: string[],
 ): Promise<string[]> {
   const applicationsForRuns = await getApplicationsForRuns(
-    userId,
+    ctx,
     productionRunIds,
   );
   return Array.from(new Set(applicationsForRuns.map((row) => row.applicationId)));
@@ -75,10 +76,10 @@ async function getApplicationIdsForBatchRuns(
 // co2eStored preview is skipped: this page reads recorded masses, not the
 // certification preview math.
 async function resolveBatchScope(
-  userId: string,
+  ctx: OrgContext,
   creditBatchId: string,
 ): Promise<ResolvedBatchScope> {
-  const batch = await getCreditBatchById(userId, creditBatchId, {
+  const batch = await getCreditBatchById(ctx, creditBatchId, {
     skipPreview: true,
   });
   if (!batch) {
@@ -86,13 +87,13 @@ async function resolveBatchScope(
   }
 
   const applicationIds = await getApplicationIdsForBatchRuns(
-    userId,
+    ctx,
     batch.productionRunIds,
   );
   const lineages = await Promise.all(
     applicationIds.map(async (applicationId) => ({
       applicationId,
-      chain: await getChainOfCustodyData(userId, applicationId),
+      chain: await getChainOfCustodyData(ctx, applicationId),
     })),
   );
   return { batch, applicationIds, lineages };
@@ -111,12 +112,12 @@ function mergeLineageWarnings(lineages: CreditBatchChainLineage[]): string[] {
 }
 
 export async function getCreditBatchChainData(
-  userId: string,
+  ctx: OrgContext,
   creditBatchId: string,
 ): Promise<CreditBatchChainData> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const { batch, lineages } = await resolveBatchScope(userId, creditBatchId);
+  const { batch, lineages } = await resolveBatchScope(ctx, creditBatchId);
 
   const warnings = mergeLineageWarnings(lineages);
   if (lineages.length === 0) {
@@ -134,7 +135,7 @@ export async function getCreditBatchChainData(
       endDate: batch.endDate,
     },
     facility:
-      lineages[0]?.chain.facility ?? (await getFacilityIdentity(batch.facilityId)),
+      lineages[0]?.chain.facility ?? (await getFacilityIdentity(ctx, batch.facilityId)),
     lineages,
     sankey,
     warnings,
@@ -148,24 +149,24 @@ export async function getCreditBatchChainData(
  * the batch exactly like a single application.
  */
 export async function getCreditBatchChainGeoData(
-  userId: string,
+  ctx: OrgContext,
   creditBatchId: string,
 ): Promise<ChainOfCustodyGeoData> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const { batch, applicationIds } = await resolveBatchScope(
-    userId,
+    ctx,
     creditBatchId,
   );
 
   const payloads = await Promise.all(
     applicationIds.map((applicationId) =>
-      getChainOfCustodyGeoData(userId, applicationId),
+      getChainOfCustodyGeoData(ctx, applicationId),
     ),
   );
 
   if (payloads.length === 0) {
-    const facility = await getFacilityGeoIdentity(batch.facilityId);
+    const facility = await getFacilityGeoIdentity(ctx, batch.facilityId);
     return {
       facility,
       nodes: [],
@@ -197,7 +198,7 @@ export async function getCreditBatchChainGeoData(
   };
 }
 
-async function getFacilityIdentity(facilityId: string): Promise<ChainFacility> {
+async function getFacilityIdentity(ctx: OrgContext, facilityId: string): Promise<ChainFacility> {
   const [row] = await db
     .select({
       id: facilities.id,
@@ -205,7 +206,7 @@ async function getFacilityIdentity(facilityId: string): Promise<ChainFacility> {
       name: facilities.name,
     })
     .from(facilities)
-    .where(eq(facilities.id, facilityId))
+    .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)))
     .limit(1);
   if (!row) {
     throw new SafeError("Facility not found for credit batch");
@@ -214,6 +215,7 @@ async function getFacilityIdentity(facilityId: string): Promise<ChainFacility> {
 }
 
 async function getFacilityGeoIdentity(
+  ctx: OrgContext,
   facilityId: string,
 ): Promise<ChainOfCustodyGeoData["facility"]> {
   const [row] = await db
@@ -225,7 +227,7 @@ async function getFacilityGeoIdentity(
       lng: facilities.gpsLongitude,
     })
     .from(facilities)
-    .where(eq(facilities.id, facilityId))
+    .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)))
     .limit(1);
   if (!row) {
     throw new SafeError("Facility not found for credit batch");

@@ -1,3 +1,4 @@
+import type { OrgContext } from "@/lib/auth/server";
 import { appliedBiocharFraction } from "@/lib/certification/mass-accounting";
 import { SafeError } from "@/lib/errors";
 import {
@@ -55,8 +56,23 @@ export interface RemovalSubmissionBuild {
   memberCreditBatchIds: string[];
 }
 
+export function assertEntityReadinessGapsResolved(
+  entityReadinessGaps: string[] | undefined,
+): void {
+  if (!entityReadinessGaps) {
+    throw new SafeError(
+      "Removal submission blocked - entity certification readiness was not evaluated.",
+    );
+  }
+  if (entityReadinessGaps.length === 0) return;
+
+  throw new SafeError(
+    `Removal submission blocked - entity certification readiness:\n${entityReadinessGaps.join("\n")}`,
+  );
+}
+
 export async function buildRemovalSubmissionBuild(args: {
-  userId: string;
+  orgCtx: OrgContext;
   removalId: string;
   ctx: RemovalSubmissionContext;
   defaultTemplate: IsometricGhgEntryTemplate;
@@ -68,7 +84,7 @@ export async function buildRemovalSubmissionBuild(args: {
   sourceIds?: string[];
 }): Promise<RemovalSubmissionBuild> {
   const {
-    userId,
+    orgCtx,
     removalId,
     ctx,
     defaultTemplate,
@@ -78,6 +94,8 @@ export async function buildRemovalSubmissionBuild(args: {
     hasDurabilityComponents,
     log,
   } = args;
+
+  assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
 
   const lineageWarnings: string[] = [];
   for (const lineage of ctx.lineages) {
@@ -145,16 +163,18 @@ export async function buildRemovalSubmissionBuild(args: {
     );
   }
 
-  const candidateDocumentIds = await collectCandidateDocumentIdsForRemoval(
-    userId,
-    {
-      lineages: ctx.lineages,
-      memberBatchIds: ctx.memberBatches.map((b) => b.id),
-    },
-  );
+  // A caller-supplied Source set makes this a side-effect-free preflight or a
+  // locked rebuild. Skip the document walk in that case; the caller already
+  // owns the authoritative IDs and does not consume `candidateDocumentIds`.
+  const candidateDocumentIds = args.sourceIds
+    ? []
+    : await collectCandidateDocumentIdsForRemoval(orgCtx, {
+        lineages: ctx.lineages,
+        memberBatchIds: ctx.memberBatches.map((b) => b.id),
+      });
   const sourceIds =
     args.sourceIds ??
-    (await resolveSourceIdsForRemoval(userId, { candidateDocumentIds }));
+    (await resolveSourceIdsForRemoval(orgCtx, { candidateDocumentIds }));
 
   const { monitored, fixed, datapointBodyByKey } = resolveTemplateInputs({
     template: defaultTemplate,
@@ -164,14 +184,21 @@ export async function buildRemovalSubmissionBuild(args: {
     sourceIds,
     allowPeriodInputStub,
   });
+  const hasOnly1000YearBatches =
+    ctx.batchesWithSamples.length > 0 &&
+    ctx.batchesWithSamples.every(
+      (batch) => batch.durabilityOption === "1000_year",
+    );
   const durabilityMeasurementSampleArgs =
-    hasDurabilityComponents && ctx.facilityReferenceSoilTemperature
+    hasDurabilityComponents &&
+    (hasOnly1000YearBatches || ctx.facilityReferenceSoilTemperature)
       ? {
           removalId,
           externalProjectId,
           batches: ctx.batchesWithSamples,
           attributionByRunId: ctx.attributionByRunId,
-          facilityReferenceSoilTemperature: ctx.facilityReferenceSoilTemperature,
+          facilityReferenceSoilTemperature:
+            ctx.facilityReferenceSoilTemperature ?? null,
           measuredAt: agg.latestEndTime.toISOString(),
         }
       : null;

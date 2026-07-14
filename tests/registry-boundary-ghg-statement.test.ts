@@ -1,3 +1,4 @@
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 /**
  * Boundary tests for the GHG Statement create pipeline against the fake
  * registry (reliability-track Phase 3, boundary test 3 — tests 1/2/4/5 live
@@ -18,7 +19,7 @@
  * Requires a real Postgres (`.env.test`), like
  * tests/certification-submissions.test.ts.
  */
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
@@ -31,9 +32,16 @@ vi.mock("@/lib/isometric/client", async (importOriginal) => {
   const { createFakeClientModule } = await import("./fixtures/fake-registry");
   return createFakeClientModule(actual);
 });
-vi.mock("@/lib/auth/server", () => ({
-  getUser: vi.fn(),
-}));
+vi.mock("@/lib/auth/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/auth/server")>();
+  return {
+    getUser: vi.fn(),
+    // withAction resolves the org context; requireOrgRole keeps its real
+    // owner⊃admin⊃member logic so the admin gate stays exercised.
+    requireOrgContext: vi.fn(),
+    requireOrgRole: actual.requireOrgRole,
+  };
+});
 
 import { db } from "@/db";
 import {
@@ -119,10 +127,11 @@ async function createFixture(
   const externalProjectId = `prj_ggs_bd_${runId}`;
   const [facility] = await db
     .insert(facilities)
-    .values({ name: `GGS Boundary Facility ${runId}`, code: `FAC-GB-${runId}` })
+    .values({ organizationId: TEST_ORG_ID, name: `GGS Boundary Facility ${runId}`, code: `FAC-GB-${runId}` })
     .returning({ id: facilities.id });
   createdFacilityIds.push(facility.id);
   await db.insert(certifierProjects).values({
+    organizationId: TEST_ORG_ID,
     facilityId: facility.id,
     provider: "isometric",
     externalProjectId,
@@ -134,9 +143,10 @@ async function createFixture(
     // creates get past the guard to the registry boundary under test.
     const [removal] = await db
       .insert(certifierRemovals)
-      .values({ facilityId: facility.id, completedOn: IN_WINDOW_COMPLETED_ON })
+      .values({ organizationId: TEST_ORG_ID, facilityId: facility.id, completedOn: IN_WINDOW_COMPLETED_ON })
       .returning({ id: certifierRemovals.id });
     await db.insert(certificationSubmissions).values({
+      organizationId: TEST_ORG_ID,
       provider: "isometric",
       submissionType: "removal",
       localEntityType: "removal",
@@ -155,6 +165,9 @@ async function createFixture(
     createdAt: new Date(),
     updatedAt: new Date(),
   } as never);
+  vi.mocked(authServer.requireOrgContext).mockResolvedValue(
+    makeTestOrgContext(`test-user-ggs-${runId}`),
+  );
   return { facilityId: facility.id, externalProjectId };
 }
 
@@ -188,12 +201,18 @@ beforeEach(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
+
+beforeAll(() => ensureTestOrg());
+
 describe("createGhgStatementDraft boundary — orphan reconciliation (test 3)", () => {
   it("resume reconciles the single dropped draft by (project, end_on) and finalizes without re-POSTing", async () => {
     const fixture = await createFixture();
     // The create commits server-side; the client sees a network error and
     // the in-attempt lookup is also down — orphan + locked draft left behind.
     registry.failNext("POST /ghg_statements", "drop-after-commit");
+    // The create path now checks for an existing exact-period draft before
+    // POSTing. Let that preflight return none, then fail the recovery lookup.
+    registry.passNext("GET /ghg_statements");
     registry.failNext("GET /ghg_statements", "reject-before-commit", {
       status: 503,
     });
@@ -246,6 +265,7 @@ describe("createGhgStatementDraft boundary — orphan reconciliation (test 3)", 
   it("rejects with the ambiguity message when the period holds two drafts", async () => {
     const fixture = await createFixture();
     registry.failNext("POST /ghg_statements", "drop-after-commit");
+    registry.passNext("GET /ghg_statements");
     registry.failNext("GET /ghg_statements", "reject-before-commit", {
       status: 503,
     });

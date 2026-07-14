@@ -21,7 +21,7 @@ import {
   type SampleWithRelations,
   type SampleStats,
 } from "@/data-access/samples";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import {
   createSampleSchema,
   deleteSampleSchema,
@@ -53,15 +53,12 @@ export async function getSamplesFn(
   filters?: Partial<z.infer<typeof sampleFilterSchema>>
 ): Promise<ActionResult<PaginatedSamples>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validatedFilters = filters
       ? sampleFilterSchema.parse(filters)
       : undefined;
-    const samples = await getSamplesData(user.id, validatedFilters);
+    const samples = await getSamplesData(ctx, validatedFilters);
 
     return { success: true, data: samples };
   } catch (error) {
@@ -89,12 +86,9 @@ export async function getSampleByIdFn(
   sampleId: string
 ): Promise<ActionResult<SampleWithRelations>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const sample = await getSampleByIdData(user.id, sampleId);
+    const sample = await getSampleByIdData(ctx, sampleId);
     return { success: true, data: sample };
   } catch (error) {
     return {
@@ -116,10 +110,7 @@ export async function getSampleStatsFn(
   facilityId?: string,
 ): Promise<ActionResult<SampleStats>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validatedCreditBatchId = creditBatchId
       ? z.string().uuid().parse(creditBatchId)
@@ -128,7 +119,7 @@ export async function getSampleStatsFn(
       ? z.string().uuid().parse(facilityId)
       : undefined;
     const stats = await getSampleStatsData(
-      user.id,
+      ctx,
       validatedCreditBatchId,
       validatedFacilityId,
     );
@@ -153,13 +144,10 @@ export async function checkSampleCodeFn(
   excludeSampleId?: string
 ): Promise<ActionResult<{ available: boolean }>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const available = await isSampleCodeAvailableData(
-      user.id,
+      ctx,
       code,
       excludeSampleId
     );
@@ -183,12 +171,9 @@ export async function generateNextSampleCodeFn(): Promise<
   ActionResult<{ code: string }>
 > {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const code = await generateNextSampleCodeData(user.id);
+    const code = await generateNextSampleCodeData(ctx);
     return { success: true, data: { code } };
   } catch (error) {
     return {
@@ -213,19 +198,17 @@ export async function createSampleFn(
   data: z.infer<typeof createSampleSchema>
 ): Promise<ActionResult<SampleWithRelations>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const sample = await withAutoCode(
+      ctx,
       "SAM",
       samples,
       samples.sampleCode,
       undefined,
       async (sampleCode) => {
         const validated = createSampleSchema.parse({ ...data, sampleCode });
-        return createSample(user.id, {
+        return createSample(ctx, {
           sampleCode,
           creditBatchId: validated.creditBatchId,
           samplingTime:
@@ -256,6 +239,7 @@ export async function createSampleFn(
       hToCOrgRatio: validated.hToCOrgRatio ?? null,
       oToCOrgRatio: validated.oToCOrgRatio ?? null,
       randomReflectanceR0Percent: validated.randomReflectanceR0Percent ?? null,
+      sReflectanceFraction: validated.sReflectanceFraction ?? null,
       r0MeasurementCount: validated.r0MeasurementCount ?? null,
       r0AnalysisDate: validated.r0AnalysisDate
         ? validated.r0AnalysisDate instanceof Date
@@ -310,14 +294,11 @@ export async function updateSampleFn(
   data: z.infer<typeof updateSampleSchema>
 ): Promise<ActionResult<SampleWithRelations>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = updateSampleSchema.parse(data);
 
-    const sample = await updateSample(user.id, validated.sampleId, {
+    const sample = await updateSample(ctx, validated.sampleId, {
       sampleCode: validated.sampleCode,
       creditBatchId: validated.creditBatchId,
       samplingTime: validated.samplingTime
@@ -353,6 +334,7 @@ export async function updateSampleFn(
       hToCOrgRatio: validated.hToCOrgRatio,
       oToCOrgRatio: validated.oToCOrgRatio,
       randomReflectanceR0Percent: validated.randomReflectanceR0Percent,
+      sReflectanceFraction: validated.sReflectanceFraction,
       r0MeasurementCount: validated.r0MeasurementCount,
       r0AnalysisDate: validated.r0AnalysisDate
         ? validated.r0AnalysisDate instanceof Date
@@ -413,13 +395,10 @@ export async function deleteSampleFn(
   data: z.infer<typeof deleteSampleSchema>
 ): Promise<ActionResult<void>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = deleteSampleSchema.parse(data);
-    await deleteSample(user.id, validated.sampleId);
+    await deleteSample(ctx, validated.sampleId);
 
     return { success: true, data: undefined };
   } catch (error) {

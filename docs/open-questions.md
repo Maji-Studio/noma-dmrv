@@ -219,6 +219,23 @@ guard. Pure starter-template residue; the app is facility-scoped.
   per-transaction `SET LOCAL` if a client contractually requires hard
   isolation guarantees beyond data-access-layer enforcement.
 
+### Certifier-credential key rotation (`tenancy/credentials-key-rotation`, opened 2026-07-12)
+
+- **Problem:** stored per-org certifier credentials
+  (`certifier_credentials.*_encrypted`) are AES-256-GCM payloads prefixed with
+  `v1:` — a *payload-format* version, **not** a key identifier. There is exactly
+  one active `CREDENTIALS_ENCRYPTION_KEY`, so rotating it makes every existing
+  row undecryptable (fail-closed: reads throw "authentication failed", not
+  silent corruption). No dual-key or re-encrypt path exists today.
+- **Why it matters:** the moment real production credentials are stored, key
+  rotation (routine hygiene, or incident response after a suspected leak)
+  becomes a data-loss event requiring every org to re-enter its secrets.
+- **Decide before production data exists:** (a) add a key-id to the payload
+  header (e.g. `v1:<keyId>:…`) so rows self-describe which key encrypted them;
+  (b) support a primary + set of decrypt-only retired keys, with a background
+  re-encrypt pass during a bounded rotation window. Cheap to design now,
+  expensive to retrofit once rows exist (M).
+
 ## Isometric Certify integration
 
 ### Template component → dmrv source mapping is hardcoded by display name (`certification/template-component-source-wizard`, opened 2026-07-04)
@@ -301,6 +318,22 @@ guard. Pure starter-template residue; the app is facility-scoped.
   production-process history rule, not just the removal member-batch subset. The
   live submission gate should either load the full process batch window or accept
   an explicit process-level cadence fact.
+- **Decided 2026-07-12 (regime boundary, `established_at` semantics,
+  submitted-evidence lock):** recorded as ADR 0017 amendments; verification
+  narrative in `docs/archive/qa/2026-07-12-final-12-month-followup.md`. The
+  evidence-snapshot enforcement for the submitted-evidence lock is still
+  unbuilt and relates to #200/#391.
+- **Still requires Isometric confirmation before the 1000-year unsampled route
+  is built or enabled:** the exact `_unsampled` registry wire contract. The
+  working product expectation is to reuse the trailing eligible historical
+  sample pool/average rather than require three new 1000-year replicates for
+  every unsampled batch, but noma must not invent the submitted representation.
+- **Still requires protocol confirmation:** whether independent/distributed
+  sampling is a hard eligibility gate or remains an operator warning. Synthetic
+  same-day rows must not be treated as proof in QA either way.
+- **Version dependency:** ADR 0017 cites biochar protocol 1.3 while the local
+  project pin remains 1.2; coordinate the migration decision and template
+  re-authoring under #278 before encoding more credit-bearing Method-B logic.
 - **Why it matters:** DEC runs Method A everywhere today, so Track 2 does not
   block current operation; do not enable Method B until the activation path and
   submission gate are process-grain end to end.
@@ -372,9 +405,10 @@ they don't churn a freshly-introduced surface mid-review:
   after the operator runs the confirms** — at the same cutover, delete the stale
   `carbon_rich_substance_sequestration` `INPUT_MAPPING` entry (see the Phase 3 note).
 
-- **1000-year extension (2026-07-04, ADR 0021).** The durability tier is now
+- **1000-year extension (2026-07-04, verified in sandbox 2026-07-10, ADR 0021).** The durability tier is now
   facility-scoped; DEC (Moshi) is 1000-year. The recognition + guard plumbing for
-  the **1000-year** submission path is built (still behind the same
+  the **1000-year** submission path is built and has passed an end-to-end
+  sandbox removal submit (still behind the sandbox-only
   `DURABILITY_MEASUREMENT_SAMPLES_LIVE` flag):
   - `biochar_sequestration_1000_year` is in `SEQUESTRATION_BLUEPRINT_KEYS`;
     `resolveTemplateInputs` skips the whole sequestration **family**
@@ -383,17 +417,16 @@ they don't churn a freshly-introduced surface mid-review:
   - `submitRemoval` now validates the template's sequestration blueprint against
     the facility tier (`expectedSequestrationBlueprintKeys`) and fails closed early
     on a mismatch (200-year facility with a 1000-year template, or vice versa).
-  - `build1000YearSequestrationSample` builds the blueprint inputs
+  - `build1000YearSequestrationSample` builds and submits the blueprint inputs
     (per-replicate `carbon_contents` + `s_fraction` LISTS + `product_mass` SCALAR,
-    NO local mean/−SE/cap — the registry reduces). It is unit-tested but **not yet
-    wired into the (blocked) submit path** — the exact datapoint↔list-input binding
-    is the remaining sandbox confirm, mirroring the 200-year confirms below.
+    NO local mean/−SE/cap — the registry reduces). The sandbox accepted the
+    versioned measurement sample and created the removal.
   - **s_fraction data model:** stored per Sample as
     `samples.s_reflectance_fraction` (the ISO 7404-5 inertinite fraction —
-    proportion of that sample's R₀ readings ≥ 2%). **Open Isometric confirm:**
-    whether the registry wants this computed proportion or the raw R₀ reading set;
-    and whether `carbon_contents` is total (blueprint) vs. organic carbon. Sample
-    **form capture** of `s_reflectance_fraction` is a follow-up (issue #348).
+    proportion of that sample's R₀ readings ≥ 2%). The form now captures it as a
+    percentage and stores/submits 0–1. Sandbox validation accepted
+    `dimensionless_ratio/inertinite_fraction`; `carbon_contents` was accepted as
+    total carbon with `mass_fraction_dry_basis/total_carbon`.
 
 - **Grill-with-docs resolution (2026-06-19).** The Tier-1 wiring plan was stress-tested
   against ADR 0013 / ADR 0016 and the authoritative protocol (biochar 1.2 §8.3.1; soil module
@@ -581,6 +614,22 @@ capability, not a blocker — tracked here so they are not lost:
 
 ### Certification submit surface is authenticated but not facility-scoped — IDOR (`security/certification-submit-authz`, opened 2026-06-18)
 
+- **Status:** a resolved-facility scope **seam** shipped (issue #277) —
+  `resolveSubmissionFacilityId` / `assertSubmissionInFacility` in
+  `data-access/certification.ts` resolve a submission's owning facility from its
+  anchor row (never a client field) and the id/key-addressed reads take an
+  optional `expectedFacilityId`. This is **defence-in-depth + fail-closed on a
+  dangling anchor, not cross-facility (IDOR) authorization**: every wired caller
+  derives the expected facility from the same anchor id it is reading, so the
+  live comparison is lineage-consistency, not an access check. `submitRemovalAction`
+  and `createRemovalWithBatchesAction` were **not** wired to the seam in that
+  slice, and the three admin mapping/emission actions stay on the **global**
+  `requireAdminAction()`. Dated shipped-detail log:
+  [`docs/archive/2026-07-09-certification-submit-facility-scope-partial-fix.md`](./archive/2026-07-09-certification-submit-facility-scope-partial-fix.md).
+  **Still open (needs #372/ADR 0010):** true per-*user* membership / an
+  independent caller-facility to compare against, so a genuine cross-facility id
+  swap is refused. Do not close #277's parent concern until the membership model
+  lands.
 - **Blocker before a second facility/org operator shares the deployment.**
   Formalizes pre-deploy gate #3 in
   [`integration-plan.md`](./isometric/integration-plan.md) and depends on the
@@ -1776,3 +1825,18 @@ Lint tooling (Biome 2 / oxlint vs ESLint 9), Vitest 4 browser mode, Playwright
 1.58+ features (test agents, trace tooling), OpenAPI contract testing for the
 Isometric client, Renovate vs Dependabot, pnpm supply-chain guidance updates —
 the research sweep produced no adversarially-verified claims in these areas.
+
+### Entity deletes orphan polymorphic documents — opened 2026-07-12
+
+- No `delete*` function in `src/data-access/` cleans up rows in the
+  polymorphic `documents` table (entityType/entityId, no FK). E.g.
+  `deleteFeedstock` and `deleteDelivery` hard-delete the parent without
+  touching its documents; `assertCanManageDocumentEntity` then throws its
+  entity-missing error for the orphan, so the document row and its storage
+  object become unlistable and undeletable — permanently leaked. Systemic
+  across every document-bearing entity; surfaced by the PR #432 review panel
+  and verified as pre-existing (not a #432 regression).
+- **Resolve via:** shared `deleteDocumentsForEntity(ctx, tx, entityType,
+  entityId)` helper mirroring `deleteTransportLegsForEntity`, called from
+  every entity delete in the same transaction, plus storage-object cleanup
+  and a delete-parent-with-documents regression test (M).

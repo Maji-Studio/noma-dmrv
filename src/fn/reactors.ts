@@ -20,7 +20,7 @@ import {
   type PaginatedReactors,
   type ReactorWithRelations,
 } from "@/data-access/reactors";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import {
   createReactorSchema,
   deleteReactorSchema,
@@ -52,15 +52,12 @@ export async function getReactorsFn(
   filters?: Partial<z.infer<typeof reactorFilterSchema>>
 ): Promise<ActionResult<PaginatedReactors>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validatedFilters = filters
       ? reactorFilterSchema.parse(filters)
       : undefined;
-    const reactors = await getReactorsData(user.id, validatedFilters);
+    const reactors = await getReactorsData(ctx, validatedFilters);
 
     return { success: true, data: reactors };
   } catch (error) {
@@ -88,12 +85,9 @@ export async function getReactorByIdFn(
   reactorId: string
 ): Promise<ActionResult<ReactorWithRelations>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const reactor = await getReactorByIdData(user.id, reactorId);
+    const reactor = await getReactorByIdData(ctx, reactorId);
     return { success: true, data: reactor };
   } catch (error) {
     return {
@@ -114,12 +108,9 @@ export async function getReactorsByFacilityFn(
   facilityId: string
 ): Promise<ActionResult<Reactor[]>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const reactors = await getReactorsByFacilityData(user.id, facilityId);
+    const reactors = await getReactorsByFacilityData(ctx, facilityId);
     return { success: true, data: reactors };
   } catch (error) {
     return {
@@ -138,12 +129,9 @@ export async function getReactorsByFacilityFn(
  */
 export async function getReactorTypesFn(): Promise<ActionResult<string[]>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
-    const types = await getReactorTypesData(user.id);
+    const types = await getReactorTypesData(ctx);
     return { success: true, data: types };
   } catch (error) {
     return {
@@ -165,13 +153,10 @@ export async function checkReactorCodeFn(
   excludeReactorId?: string
 ): Promise<ActionResult<{ available: boolean }>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const available = await isReactorCodeAvailableData(
-      user.id,
+      ctx,
       code,
       excludeReactorId
     );
@@ -199,20 +184,18 @@ export async function createReactorFn(
   data: z.infer<typeof createReactorSchema>
 ): Promise<ActionResult<Reactor>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = createReactorSchema.parse(data);
 
     const reactor = await withAutoCode(
+      ctx,
       "R",
       reactors,
       reactors.code,
       undefined,
       (code) =>
-        createReactor(user.id, {
+        createReactor(ctx, {
           code,
           identifier: validated.identifier,
           facilityId: validated.facilityId,
@@ -252,14 +235,11 @@ export async function updateReactorFn(
   data: z.infer<typeof updateReactorSchema>
 ): Promise<ActionResult<Reactor>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = updateReactorSchema.parse(data);
 
-    const reactor = await updateReactor(user.id, validated.reactorId, {
+    const reactor = await updateReactor(ctx, validated.reactorId, {
       code: validated.code,
       identifier: validated.identifier,
       facilityId: validated.facilityId,
@@ -298,13 +278,10 @@ export async function deleteReactorFn(
   data: z.infer<typeof deleteReactorSchema>
 ): Promise<ActionResult<void>> {
   try {
-    const user = await getUser();
-    if (!user?.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = deleteReactorSchema.parse(data);
-    await deleteReactor(user.id, validated.reactorId);
+    await deleteReactor(ctx, validated.reactorId);
 
     return { success: true, data: undefined };
   } catch (error) {

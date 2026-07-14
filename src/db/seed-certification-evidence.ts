@@ -48,7 +48,8 @@ type BoundaryEvidenceSeedSpec = {
 };
 
 export function buildProductionRunReadings(
-  specs: ProductionReadingSeedSpec[]
+  specs: ProductionReadingSeedSpec[],
+  organizationId: string,
 ): (typeof schema.productionRunReadings.$inferInsert)[] {
   const intervalMs = PRODUCTION_READING_INTERVAL_MINUTES * MS_PER_MINUTE;
 
@@ -62,6 +63,7 @@ export function buildProductionRunReadings(
       const controlledDecline = progress > 0.82 ? (progress - 0.82) * 18 : 0;
 
       rows.push({
+        organizationId,
         id: seedEvidenceId(spec.idBase + step),
         productionRunId: spec.productionRunId,
         timestamp: new Date(spec.start.getTime() + step * intervalMs),
@@ -92,11 +94,13 @@ export function buildProductionRunReadings(
 }
 
 export function buildSoilTemperatureMeasurements(
-  specs: SoilTemperatureSeedSpec[]
+  specs: SoilTemperatureSeedSpec[],
+  organizationId: string,
 ): (typeof schema.soilTemperatureMeasurements.$inferInsert)[] {
   return specs.flatMap((spec) =>
     SOIL_TEMPERATURE_MEASUREMENT_DAYS.map(
       (day, index): typeof schema.soilTemperatureMeasurements.$inferInsert => ({
+        organizationId,
         id: seedEvidenceId(spec.idBase + index),
         applicationId: spec.applicationId,
         measurementDate: `${spec.baselineMonth}-${String(day).padStart(2, '0')}`,
@@ -115,9 +119,11 @@ export function buildSoilTemperatureMeasurements(
 }
 
 export function buildApplicationBoundaryDocuments(
-  specs: BoundaryEvidenceSeedSpec[]
+  specs: BoundaryEvidenceSeedSpec[],
+  organizationId: string,
 ): (typeof schema.documents.$inferInsert)[] {
   return specs.map((spec): typeof schema.documents.$inferInsert => ({
+    organizationId,
     id: spec.id,
     entityType: 'application',
     entityId: spec.applicationId,

@@ -1,4 +1,4 @@
-import { isometric, paginateAll } from "./client";
+import type { IsometricClient } from "./client";
 import type { components } from "./generated/certify";
 import type { IsometricComponentScope } from "./projects";
 
@@ -18,19 +18,20 @@ export type CreateComponentRequest =
   components["schemas"]["CreateComponentRequest"];
 export type Component = components["schemas"]["Component"];
 
-export function createDatapoint(body: CreateDatapointRequest): Promise<Datapoint> {
-  return isometric.post<Datapoint>("/datapoints", body);
+export function createDatapoint(client: IsometricClient, body: CreateDatapointRequest): Promise<Datapoint> {
+  return client.post<Datapoint>("/datapoints", body);
 }
 
 export function patchDatapoint(
+  client: IsometricClient,
   id: string,
   body: PatchDatapointRequest,
 ): Promise<Datapoint> {
-  return isometric.patch<Datapoint>(`/datapoints/${id}`, body);
+  return client.patch<Datapoint>(`/datapoints/${id}`, body);
 }
 
-export function createGhgEntry(body: CreateGhgEntryRequest): Promise<GhgEntry> {
-  return isometric.post<GhgEntry>("/ghg_entries", body);
+export function createGhgEntry(client: IsometricClient, body: CreateGhgEntryRequest): Promise<GhgEntry> {
+  return client.post<GhgEntry>("/ghg_entries", body);
 }
 
 // Reads back a submitted GHG entry (removal) so the UI can show the registry's
@@ -39,15 +40,15 @@ export function createGhgEntry(body: CreateGhgEntryRequest): Promise<GhgEntry> {
 // detailed Sequestrations/Activities component split lives behind
 // `/ghg_entries/{id}/component_attributions`; this entry-level read carries the
 // netted figures we surface in the removal breakdown card.
-export function getGhgEntry(id: string): Promise<GhgEntry> {
-  return isometric.get<GhgEntry>(`/ghg_entries/${id}`);
+export function getGhgEntry(client: IsometricClient, id: string): Promise<GhgEntry> {
+  return client.get<GhgEntry>(`/ghg_entries/${id}`);
 }
 
 // Defined for completeness; templated GHG entries embed inputs directly via
 // CreateGhgEntryRequest.ghg_entry_template_components, so Phase 3 does not call
 // this. Reserved for Phase 4 standalone-component flows.
-export function createComponent(body: CreateComponentRequest): Promise<Component> {
-  return isometric.post<Component>("/components", body);
+export function createComponent(client: IsometricClient, body: CreateComponentRequest): Promise<Component> {
+  return client.post<Component>("/components", body);
 }
 
 // Reconciliation lookup: when a draft submission row is left locked after a
@@ -55,10 +56,11 @@ export function createComponent(body: CreateComponentRequest): Promise<Component
 // supplier_reference_id we wrote at insert time. Stops after the first hit
 // instead of paginating to exhaustion.
 async function findBySupplierRef<T>(
+  client: IsometricClient,
   path: string,
   ref: string,
 ): Promise<T | null> {
-  for await (const node of isometric.paginate<T>(path, {
+  for await (const node of client.paginate<T>(path, {
     query: { supplier_reference_id: ref },
     pageSize: SUPPLIER_REF_LOOKUP_PAGE_SIZE,
   })) {
@@ -68,15 +70,17 @@ async function findBySupplierRef<T>(
 }
 
 export function findGhgEntryBySupplierRef(
+  client: IsometricClient,
   ref: string,
 ): Promise<GhgEntry | null> {
-  return findBySupplierRef<GhgEntry>("/ghg_entries", ref);
+  return findBySupplierRef<GhgEntry>(client, "/ghg_entries", ref);
 }
 
 export function findDatapointBySupplierRef(
+  client: IsometricClient,
   ref: string,
 ): Promise<Datapoint | null> {
-  return findBySupplierRef<Datapoint>("/datapoints", ref);
+  return findBySupplierRef<Datapoint>(client, "/datapoints", ref);
 }
 
 // Lists every Datapoint referenced by Components in the given scope (default
@@ -92,9 +96,10 @@ export interface ListDatapointsArgs {
 }
 
 export function listDatapoints(
+  client: IsometricClient,
   args: ListDatapointsArgs = {},
 ): Promise<Datapoint[]> {
-  return paginateAll<Datapoint>("/datapoints", {
+  return client.paginateAll<Datapoint>("/datapoints", {
     query: {
       project_id: args.projectId,
       used_in_scope: args.usedInScope,

@@ -3,8 +3,9 @@
 // dashboard, New-Removal wizard) recomputes the same preview from member
 // applications + pooled batch chemistry. Split out of credit-batches.ts to
 // keep that file under the 1000-line cap; the public surface stays importable
+import type { OrgContext } from "@/lib/auth/server";
 // from "./credit-batches" via re-exports.
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { creditBatches, type CreditBatch } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
@@ -15,7 +16,7 @@ import {
   type DurabilityOption,
 } from "@/schemas/credit-batches";
 
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 import { getChainOfCustodyData } from "./chain-of-custody";
 import {
   getApplicationRollupsByBatchFromRuns,
@@ -26,6 +27,8 @@ import { getCreditBatchesWithSamples } from "./credit-batch-samples";
 import {
   SOIL_STORAGE_MODULE_VERSION,
   computeApplicationCo2eStored,
+  computeApplicationCo2eStoredBlueprint1000,
+  type Blueprint1000YearReplicate,
 } from "@/lib/calculations/biochar-removal";
 import { weightedBatchChemistry } from "@/lib/isometric/utils/durability-aggregation";
 
@@ -52,14 +55,43 @@ export interface CreditBatchCo2eStoredPreview {
   warnings: string[];
 }
 
+/**
+ * Extract a 1000-year batch's COMPLETE blueprint replicates from its lab
+ * Samples — total carbon + s_fraction, the exact inputs the live
+ * `biochar_sequestration_1000_year` blueprint scores. The both-values filter
+ * mirrors `buildDurabilityMeasurementSampleSubmissions` so the preview can
+ * never see a different replicate set than the submission for the same batch.
+ */
+export function extract1000YearBlueprintReplicates(
+  samples: Array<{
+    totalCarbonPercent: number | null;
+    sReflectanceFraction: number | null;
+  }>,
+): Blueprint1000YearReplicate[] {
+  return samples.flatMap((sample) =>
+    sample.totalCarbonPercent == null || sample.sReflectanceFraction == null
+      ? []
+      : [
+          {
+            totalCarbonPercent: sample.totalCarbonPercent,
+            sReflectanceFraction: sample.sReflectanceFraction,
+          },
+        ],
+  );
+}
+
 export async function getFacilityCertifierWithExecutor(
+  ctx: OrgContext,
   executor: DbTransaction | typeof db,
   facilityId: string
 ): Promise<CertifierProvider | null> {
   const [row] = await executor
     .select({ provider: certifierProjects.provider })
     .from(certifierProjects)
-    .where(eq(certifierProjects.facilityId, facilityId))
+    .where(and(
+      eq(certifierProjects.facilityId, facilityId),
+      eq(certifierProjects.organizationId, ctx.organizationId),
+    ))
     .orderBy(
       sql`case ${certifierProjects.provider} when 'isometric' then 0 when 'puro_earth' then 1 else 2 end`
     )
@@ -68,11 +100,11 @@ export async function getFacilityCertifierWithExecutor(
 }
 
 export async function getFacilityCertifier(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string
 ): Promise<CertifierProvider | null> {
-  requireAuth(userId);
-  return getFacilityCertifierWithExecutor(db, facilityId);
+  requireOrgScope(ctx);
+  return getFacilityCertifierWithExecutor(ctx, db, facilityId);
 }
 
 function unique(values: string[]): string[] {
@@ -80,21 +112,16 @@ function unique(values: string[]): string[] {
 }
 
 export async function buildCo2eStoredPreview(
-  userId: string,
+  ctx: OrgContext,
   // The durability tier is join-derived from the facility (ADR 0021), so it is
   // supplied alongside the raw batch row rather than read off it.
-  batch: Pick<
-    CreditBatch,
-    | "id"
-    | "facilityId"
-    | "meanRandomReflectancePercent"
-    | "stdRandomReflectance"
-    | "meanNonReactiveCarbonPercent"
-    | "stdNonReactiveCarbonPercent"
-  > & { durabilityOption: DurabilityOption },
+  batch: Pick<CreditBatch, "id" | "facilityId"> & {
+    durabilityOption: DurabilityOption;
+  },
   applicationIds: string[]
 ): Promise<CreditBatchCo2eStoredPreview> {
-  const provider = await getFacilityCertifier(userId, batch.facilityId);
+  requireOrgScope(ctx);
+  const provider = await getFacilityCertifier(ctx, batch.facilityId);
   if (provider !== "isometric") {
     return {
       provider,
@@ -126,8 +153,8 @@ export async function buildCo2eStoredPreview(
         soilTemperatureC: applications.soilTemperatureC,
       })
       .from(applications)
-      .where(inArray(applications.id, applicationIds)),
-    Promise.all(applicationIds.map((id) => getChainOfCustodyData(userId, id))),
+      .where(and(inArray(applications.id, applicationIds), eq(applications.organizationId, ctx.organizationId))),
+    Promise.all(applicationIds.map((id) => getChainOfCustodyData(ctx, id))),
   ]);
 
   const appById = new Map(applicationRows.map((app) => [app.id, app]));
@@ -138,30 +165,44 @@ export async function buildCo2eStoredPreview(
   // Chemistry at the CREDIT-BATCH grain (issue #309): the batch's POOLED
   // replicate means — the same figures the durability data plane submits —
   // instead of run-weighted means, which don't see batch-anchored samples.
-  const batchesWithSamples = await getCreditBatchesWithSamples(userId, [
+  const batchesWithSamples = await getCreditBatchesWithSamples(ctx, [
     batch.id,
   ]);
   const { weightedOrganicCarbonPercent, weightedHToCorgRatio } =
     weightedBatchChemistry(batchesWithSamples);
+  // 1000-year previews compute from the SAME blueprint inputs the registry
+  // scores (per-replicate total carbon + s_fraction — see
+  // `build1000YearSequestrationSample`), NOT module Eq.6 over the legacy batch
+  // petrography columns: Eq.6 is a different formula from the live blueprint,
+  // and those columns are never populated (issue #375 — do not "fix" the
+  // preview by filling them). Sample-derived only: missing or incomplete
+  // (< 3 complete replicates) evidence degrades to the null-co2e /
+  // missingInputs gap contract inside the compute — never to Eq.6.
+  const thousandYearReplicates =
+    batch.durabilityOption === "1000_year"
+      ? extract1000YearBlueprintReplicates(batchesWithSamples[0]?.samples ?? [])
+      : [];
 
-  // The engine branches on durabilityOption: "1000_year" consumes the batch's
-  // stored petrography/TGA columns (Eq.6, issue #142); the default 200-year
-  // path uses per-application soil temperature + pooled H/C_org (Eq.3). An
-  // unpopulated 1000-year batch degrades to the same missingInputs /
-  // co2eStoredTonnes: null gap contract as 200-year gaps.
+  // The preview branches on durabilityOption: "1000_year" runs the Certify
+  // blueprint parity math over the batch's pooled replicates; the default
+  // 200-year path uses per-application soil temperature + pooled H/C_org
+  // (Eq.3). Both degrade to the same missingInputs / co2eStoredTonnes: null
+  // gap contract.
   const applicationResults = applicationIds.map((applicationId) => {
     const app = appById.get(applicationId);
-    const result = computeApplicationCo2eStored({
-      durabilityOption: batch.durabilityOption,
-      dryMassTonnes: app?.biocharAppliedDryTons ?? null,
-      soilTemperatureC: app?.soilTemperatureC ?? null,
-      hToCorgRatio: weightedHToCorgRatio,
-      organicCarbonPercent: weightedOrganicCarbonPercent,
-      meanRandomReflectancePercent: batch.meanRandomReflectancePercent,
-      stdRandomReflectance: batch.stdRandomReflectance,
-      meanNonReactiveCarbonPercent: batch.meanNonReactiveCarbonPercent,
-      stdNonReactiveCarbonPercent: batch.stdNonReactiveCarbonPercent,
-    });
+    const result =
+      batch.durabilityOption === "1000_year"
+        ? computeApplicationCo2eStoredBlueprint1000({
+            dryMassTonnes: app?.biocharAppliedDryTons ?? null,
+            replicates: thousandYearReplicates,
+          })
+        : computeApplicationCo2eStored({
+            durabilityOption: batch.durabilityOption,
+            dryMassTonnes: app?.biocharAppliedDryTons ?? null,
+            soilTemperatureC: app?.soilTemperatureC ?? null,
+            hToCorgRatio: weightedHToCorgRatio,
+            organicCarbonPercent: weightedOrganicCarbonPercent,
+          });
 
     return {
       applicationId,
@@ -203,7 +244,7 @@ export async function buildCo2eStoredPreview(
 const PREVIEW_FANOUT_CONCURRENCY = 8;
 
 export async function getCo2eStoredPreviews(
-  userId: string,
+  ctx: OrgContext,
   batchIds: string[],
   options?: {
     // Reuse rollups the caller already computed (e.g. the New-Removal wizard
@@ -212,7 +253,7 @@ export async function getCo2eStoredPreviews(
     applicationRollups?: Record<string, BatchApplicationRollup>;
   }
 ): Promise<Record<string, CreditBatchCo2eStoredPreview>> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
   const ids = unique(batchIds);
   if (ids.length === 0) return {};
 
@@ -222,8 +263,8 @@ export async function getCo2eStoredPreviews(
       facilityDurabilityOption: facilities.durabilityOption,
     })
     .from(creditBatches)
-    .leftJoin(facilities, eq(creditBatches.facilityId, facilities.id))
-    .where(inArray(creditBatches.id, ids));
+    .leftJoin(facilities, and(eq(creditBatches.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .where(and(inArray(creditBatches.id, ids), eq(creditBatches.organizationId, ctx.organizationId)));
 
   // Re-attach the facility-derived tier onto each raw batch row (ADR 0021).
   const batches = batchRows.map((row) => ({
@@ -237,8 +278,8 @@ export async function getCo2eStoredPreviews(
   const rollupsByBatch =
     options?.applicationRollups ??
     (await getApplicationRollupsByBatchFromRuns(
-      userId,
-      await getProductionRunIdsByBatchId(allowedIds),
+      ctx,
+      await getProductionRunIdsByBatchId(ctx, allowedIds),
     ));
 
   // Bounded chunks (order-preserving) rather than one unbounded Promise.all
@@ -250,7 +291,7 @@ export async function getCo2eStoredPreviews(
         const applicationIds = rollupsByBatch[batch.id]?.applicationIds ?? [];
         return [
           batch.id,
-          await buildCo2eStoredPreview(userId, batch, applicationIds),
+          await buildCo2eStoredPreview(ctx, batch, applicationIds),
         ] as const;
       })
     );

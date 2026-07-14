@@ -11,25 +11,39 @@
  * with [projectId] or ISOMETRIC_DEMO_PROJECT_ID for sandbox validation.
  */
 import { config } from "dotenv";
+import { eq } from "drizzle-orm";
+import type { OrgContext } from "../src/lib/auth/server";
 
 config({ path: ".env.local" });
 
 const DEMO_EXTERNAL_PROJECT_ID = "prj_1K5F2F6SN1S0ZKDQ";
 const DEMO_PROJECT_NAME = "Dark Earth Carbon Ltd's Biochar Demo Project";
+const BOOTSTRAP_ORGANIZATION_ID = "org_dark_earth_carbon";
 
 async function main(): Promise<void> {
   const { db } = await import("../src/db");
   const { facilities } = await import("../src/db/schema/facilities");
   const { certifierProjects } = await import("../src/db/schema/certification");
+  // CLI scripts operate on the bootstrap organization without a web session.
+  const ctx: OrgContext = {
+    userId: "isometric-link-demo-cli",
+    organizationId: BOOTSTRAP_ORGANIZATION_ID,
+    orgRole: "owner",
+    isPlatformAdmin: false,
+  };
 
   const facilityRows = await db
     .select({ id: facilities.id })
-    .from(facilities);
+    .from(facilities)
+    .where(eq(facilities.organizationId, ctx.organizationId));
 
   console.log("Facilities:");
   for (const f of facilityRows) console.log(`  ${f.id}`);
 
-  const existing = await db.select().from(certifierProjects);
+  const existing = await db
+    .select()
+    .from(certifierProjects)
+    .where(eq(certifierProjects.organizationId, ctx.organizationId));
   console.log(`\nExisting certifier_projects rows: ${existing.length}`);
   for (const p of existing) {
     console.log(
@@ -83,6 +97,7 @@ async function main(): Promise<void> {
   const [inserted] = await db
     .insert(certifierProjects)
     .values({
+      organizationId: ctx.organizationId,
       facilityId: targetFacilityId,
       provider: "isometric",
       externalProjectId: demoExternalProjectId,

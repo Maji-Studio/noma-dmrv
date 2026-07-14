@@ -9,7 +9,8 @@
 import { and, desc, eq, SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { productionRunReadings, productionRuns } from "@/db/schema";
-import { requireAuth } from "./utils";
+import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 
 // ============================================
@@ -53,13 +54,16 @@ const readingSelect = {
 // ============================================
 
 export async function getProductionRunReadingsList(
-  userId: string,
+  ctx: OrgContext,
   productionRunId?: string,
   facilityId?: string
 ): Promise<ProductionRunReadingWithRelations[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [
+    eq(productionRunReadings.organizationId, ctx.organizationId),
+    eq(productionRuns.organizationId, ctx.organizationId),
+  ];
 
   if (productionRunId) {
     conditions.push(
@@ -71,8 +75,7 @@ export async function getProductionRunReadingsList(
     conditions.push(eq(productionRuns.facilityId, facilityId));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
+  // org-scope-ok: conditions includes both joined organization predicates.
   return db
     .select(readingSelect)
     .from(productionRunReadings)
@@ -80,7 +83,7 @@ export async function getProductionRunReadingsList(
       productionRuns,
       eq(productionRunReadings.productionRunId, productionRuns.id)
     )
-    .where(whereClause)
+    .where(and(...conditions))
     .orderBy(desc(productionRunReadings.timestamp));
 }
 
@@ -94,15 +97,15 @@ export async function getProductionRunReadingsList(
  * telemetry before re-importing a readings CSV.
  */
 export async function deleteAllProductionRunReadings(
-  userId: string,
+  ctx: OrgContext,
   productionRunId: string
 ): Promise<number> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [run] = await db
     .select({ id: productionRuns.id })
     .from(productionRuns)
-    .where(eq(productionRuns.id, productionRunId));
+    .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
 
   if (!run) {
     throw new SafeError("Production run not found");
@@ -110,7 +113,7 @@ export async function deleteAllProductionRunReadings(
 
   const deleted = await db
     .delete(productionRunReadings)
-    .where(eq(productionRunReadings.productionRunId, productionRunId))
+    .where(and(eq(productionRunReadings.productionRunId, productionRunId), eq(productionRunReadings.organizationId, ctx.organizationId)))
     .returning({ id: productionRunReadings.id });
 
   return deleted.length;

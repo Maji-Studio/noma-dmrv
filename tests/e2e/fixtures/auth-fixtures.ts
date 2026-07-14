@@ -14,6 +14,7 @@ import {
   test as base,
   expect,
   type Page,
+  type Browser,
   type BrowserContext,
 } from "@playwright/test";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -27,6 +28,7 @@ import {
   type SeededChainData,
 } from "./seed-chain-data";
 import { hashPassword } from "./hash-password";
+import { enterDefaultOrganization } from "./organization-helpers";
 
 // Types for user roles
 export type UserRole = "admin" | "operator" | "lab_technician" | "viewer";
@@ -336,6 +338,16 @@ async function createSignedAuthStorageState(
   return buildAuthStorageState(normalizedCookies);
 }
 
+/** Sign in through Better Auth's HTTP API and return an authenticated context. */
+export async function createDirectAuthContext(
+  browser: Browser,
+  user: TestUser,
+  baseURL: string,
+): Promise<BrowserContext> {
+  const storageState = await createSignedAuthStorageState(user, baseURL);
+  return browser.newContext({ storageState });
+}
+
 /**
  * Authenticate a page context by logging in through the UI
  */
@@ -540,6 +552,7 @@ export const test = base.extend<AuthFixtures, { workerAuthData: WorkerAuthData }
 
   adminPage: async ({ adminContext }, use) => {
     const page = await adminContext.newPage();
+    await enterDefaultOrganization(page);
     await use(page);
     await page.close();
   },

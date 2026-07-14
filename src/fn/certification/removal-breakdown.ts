@@ -16,7 +16,7 @@ import {
   type ConservativeSoilTemperature,
 } from "@/lib/isometric/utils/durability-aggregation";
 import { SafeError } from "@/lib/errors";
-import { getGhgEntry } from "@/lib/isometric";
+import { getGhgEntry, getIsometricClientForOrg } from "@/lib/isometric";
 import {
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
@@ -65,16 +65,17 @@ function unique(values: string[]): string[] {
 export async function loadRemovalBreakdown(
   removalId: string,
 ): Promise<ActionResult<RemovalBreakdownData>> {
-  return withAction(async (userId) => {
-    const removal = await getCertifierRemovalById(userId, removalId);
+  return withAction(async (orgCtx) => {
+    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+    const removal = await getCertifierRemovalById(orgCtx, removalId);
     if (!removal) throw new SafeError("Removal not found.");
 
-    const batches = await getCreditBatchesByRemovalId(userId, removalId);
+    const batches = await getCreditBatchesByRemovalId(orgCtx, removalId);
     const batchIds = batches.map((batch) => batch.id);
 
     const [previews, submission] = await Promise.all([
-      getCo2eStoredPreviews(userId, batchIds),
-      getLatestSubmission(userId, {
+      getCo2eStoredPreviews(orgCtx, batchIds),
+      getLatestSubmission(orgCtx, {
         provider: ISOMETRIC_PROVIDER,
         submissionType: REMOVAL_SUBMISSION_TYPE,
         localEntityType: REMOVAL_ENTITY_TYPE,
@@ -84,7 +85,7 @@ export async function loadRemovalBreakdown(
 
     const externalId = submission?.externalId ?? null;
     const ghgEntry = externalId
-      ? await getGhgEntry(externalId).catch(() => null)
+      ? await getGhgEntry(client, externalId).catch(() => null)
       : null;
 
     // Conservative soil-temperature estimate across the removal's application

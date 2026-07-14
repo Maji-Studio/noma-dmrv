@@ -4,6 +4,7 @@
  */
 
 import { and, asc, desc, eq, ilike, isNull, or, sql, SQL, count } from "drizzle-orm";
+import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
   biocharProducts,
@@ -72,11 +73,22 @@ function runDateToProductionDate(runDate: string | Date): Date {
 // Auth Guards
 // ============================================
 
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
+import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
 import { deleteTransportLegsForEntity } from "./transport-legs";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { validateCompositionIngredientBins } from "./biochar-product-composition";
+import { assertBiocharDrawWithinStock } from "./bin-stock-guards";
+import { lockBinStocks } from "./lock-bin-stocks";
+import {
+  assertBiocharProductMassReductionWithinStock,
+  assertBiocharProductUpdateDraw,
+  biocharEquivalentKg,
+  lockBiocharProductUpdateRows,
+  lockBiocharProductUpdateStock,
+  lockDeleteBiocharProductStock,
+} from "./biochar-product-stock-locks";
 
 // ============================================
 // Biochar Product Read Operations
@@ -87,10 +99,10 @@ import { validateCompositionIngredientBins } from "./biochar-product-composition
  * Supports search, status filter, facility filter, sorting, and pagination
  */
 export async function getBiocharProducts(
-  userId: string,
+  ctx: OrgContext,
   filters?: Partial<BiocharProductFilterData>
 ): Promise<PaginatedBiocharProducts> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const {
     search,
@@ -104,7 +116,7 @@ export async function getBiocharProducts(
   } = filters ?? {};
 
   // Build where conditions — archived products (facility archive cascade) are hidden
-  const conditions: SQL[] = [isNull(biocharProducts.archivedAt)];
+  const conditions: SQL[] = [eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -147,8 +159,8 @@ export async function getBiocharProducts(
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(biocharProducts)
-    .leftJoin(facilities, eq(biocharProducts.facilityId, facilities.id))
-    .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
+    .leftJoin(facilities, and(eq(biocharProducts.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(formulations, and(eq(biocharProducts.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
     .where(whereClause);
 
   const total = Number(totalCount);
@@ -160,6 +172,7 @@ export async function getBiocharProducts(
     .select({
       // Product fields
       id: biocharProducts.id,
+      organizationId: biocharProducts.organizationId,
       code: biocharProducts.code,
       facilityId: biocharProducts.facilityId,
       productionDate: biocharProducts.productionDate,
@@ -189,10 +202,10 @@ export async function getBiocharProducts(
       productionRunCode: productionRuns.code,
     })
     .from(biocharProducts)
-    .leftJoin(facilities, eq(biocharProducts.facilityId, facilities.id))
-    .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
-    .leftJoin(storageLocations, eq(biocharProducts.storageLocationId, storageLocations.id))
-    .leftJoin(productionRuns, eq(biocharProducts.linkedProductionRunId, productionRuns.id))
+    .leftJoin(facilities, and(eq(biocharProducts.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(formulations, and(eq(biocharProducts.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
+    .leftJoin(storageLocations, and(eq(biocharProducts.storageLocationId, storageLocations.id), eq(storageLocations.organizationId, ctx.organizationId)))
+    .leftJoin(productionRuns, and(eq(biocharProducts.linkedProductionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
@@ -201,6 +214,7 @@ export async function getBiocharProducts(
   // Transform to BiocharProductWithRelations
   const items: BiocharProductWithRelations[] = productList.map((row) => ({
     id: row.id,
+    organizationId: row.organizationId,
     code: row.code,
     facilityId: row.facilityId,
     productionDate: row.productionDate,
@@ -257,14 +271,15 @@ export async function getBiocharProducts(
  * Get a single biochar product by ID with relations
  */
 export async function getBiocharProductById(
-  userId: string,
+  ctx: OrgContext,
   productId: string
 ): Promise<BiocharProductWithRelations> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [row] = await db
     .select({
       id: biocharProducts.id,
+      organizationId: biocharProducts.organizationId,
       code: biocharProducts.code,
       facilityId: biocharProducts.facilityId,
       productionDate: biocharProducts.productionDate,
@@ -290,11 +305,11 @@ export async function getBiocharProductById(
       productionRunCode: productionRuns.code,
     })
     .from(biocharProducts)
-    .leftJoin(facilities, eq(biocharProducts.facilityId, facilities.id))
-    .leftJoin(formulations, eq(biocharProducts.formulationId, formulations.id))
-    .leftJoin(storageLocations, eq(biocharProducts.storageLocationId, storageLocations.id))
-    .leftJoin(productionRuns, eq(biocharProducts.linkedProductionRunId, productionRuns.id))
-    .where(eq(biocharProducts.id, productId));
+    .leftJoin(facilities, and(eq(biocharProducts.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(formulations, and(eq(biocharProducts.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
+    .leftJoin(storageLocations, and(eq(biocharProducts.storageLocationId, storageLocations.id), eq(storageLocations.organizationId, ctx.organizationId)))
+    .leftJoin(productionRuns, and(eq(biocharProducts.linkedProductionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
+    .where(and(eq(biocharProducts.id, productId), eq(biocharProducts.organizationId, ctx.organizationId)));
 
   if (!row) {
     throw new SafeError("Biochar product not found");
@@ -302,6 +317,7 @@ export async function getBiocharProductById(
 
   return {
     id: row.id,
+    organizationId: row.organizationId,
     code: row.code,
     facilityId: row.facilityId,
     productionDate: row.productionDate,
@@ -354,7 +370,7 @@ export async function getBiocharProductById(
  * Create a new biochar product
  */
 export async function createBiocharProduct(
-  userId: string,
+  ctx: OrgContext,
   data: {
     code: string;
     facilityId: string;
@@ -369,7 +385,7 @@ export async function createBiocharProduct(
     composition?: Record<string, unknown>;
   }
 ): Promise<BiocharProduct> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // A null formulation means a pure-biochar product (no amendment blend).
   const formulationId = data.formulationId ?? null;
@@ -378,7 +394,7 @@ export async function createBiocharProduct(
   const [existing] = await db
     .select({ id: biocharProducts.id })
     .from(biocharProducts)
-    .where(eq(biocharProducts.code, data.code));
+    .where(and(eq(biocharProducts.code, data.code), eq(biocharProducts.organizationId, ctx.organizationId)));
 
   if (existing) {
     throw new SafeError("A biochar product with this code already exists");
@@ -392,12 +408,12 @@ export async function createBiocharProduct(
     db
       .select({ id: facilities.id })
       .from(facilities)
-      .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt))),
+      .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt))),
     formulationId
       ? db
           .select({ id: formulations.id })
           .from(formulations)
-          .where(eq(formulations.id, formulationId))
+          .where(and(eq(formulations.id, formulationId), eq(formulations.organizationId, ctx.organizationId)))
       : Promise.resolve([] as { id: string }[]),
   ]);
 
@@ -440,10 +456,11 @@ export async function createBiocharProduct(
     .select({
       id: productionRuns.id,
       facilityId: productionRuns.facilityId,
-      date: productionRuns.date,
+      date: productionRunDateExpr(),
+      biocharStorageLocationId: productionRuns.biocharStorageLocationId,
     })
     .from(productionRuns)
-    .where(eq(productionRuns.id, data.linkedProductionRunId));
+    .where(and(eq(productionRuns.id, data.linkedProductionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
 
   if (!run) {
     throw new SafeError("Linked production run not found");
@@ -454,6 +471,15 @@ export async function createBiocharProduct(
 
   const productionDate = runDateToProductionDate(run.date);
 
+  // Biochar ratio scales the wet mass to the biochar-equivalent draw (#116).
+  const [formulationRatioRow] = formulationId
+    ? await db
+        .select({ biocharRatio: formulations.biocharRatio })
+        .from(formulations)
+        .where(and(eq(formulations.id, formulationId), eq(formulations.organizationId, ctx.organizationId)))
+    : [];
+  const biocharRatio = formulationRatioRow?.biocharRatio ?? null;
+
   const destinationBinId = data.storageLocationId;
 
   // Lock the destination bin, validate it, insert the product, and claim the bin
@@ -461,16 +487,43 @@ export async function createBiocharProduct(
   // so two products with different formulations can't both pass the reservation
   // check and strand a mismatched product (the claim-after-insert TOCTOU).
   const product = await db.transaction(async (tx) => {
+    const [lockedRun] = await tx
+      .select({
+        id: productionRuns.id,
+        biocharStorageLocationId: productionRuns.biocharStorageLocationId,
+      })
+      .from(productionRuns)
+      .where(and(
+        eq(productionRuns.id, run.id),
+        eq(productionRuns.organizationId, ctx.organizationId),
+      ))
+      .for("update");
+
+    if (!lockedRun) {
+      throw new SafeError("Linked production run not found");
+    }
+
     // A submitted production run can't gain new source inventory after
     // certification. Mirror the update/delete guards so the create path can't
     // bypass certification locking by attaching a fresh product to a locked run.
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "productionRun", entityId: run.id },
       "create",
     );
 
+    await lockBinStocks(
+      ctx,
+      tx,
+      [
+        (data.massKg ?? 0) > 0 ? destinationBinId : null,
+        lockedRun.biocharStorageLocationId,
+      ],
+    );
+
     await validateCompositionIngredientBins(
+      ctx,
       tx,
       data.composition,
       formulationId,
@@ -485,7 +538,7 @@ export async function createBiocharProduct(
         formulationId: storageLocations.formulationId,
       })
       .from(storageLocations)
-      .where(eq(storageLocations.id, destinationBinId))
+      .where(and(eq(storageLocations.id, destinationBinId), eq(storageLocations.organizationId, ctx.organizationId)))
       .for("update");
 
     if (!storage) {
@@ -505,9 +558,19 @@ export async function createBiocharProduct(
       );
     }
 
+    // Hard-block a biochar draw that exceeds the source biochar bin's derived
+    // on-hand stock (#116). Skip when the run has no biochar bin to draw from.
+    if (lockedRun.biocharStorageLocationId) {
+      await assertBiocharDrawWithinStock(ctx, tx, {
+        biocharStorageLocationId: lockedRun.biocharStorageLocationId,
+        requestedBiocharKg: biocharEquivalentKg(data.massKg ?? null, biocharRatio),
+      });
+    }
+
     const [inserted] = await tx
       .insert(biocharProducts)
       .values({
+        organizationId: ctx.organizationId,
         code: data.code,
         facilityId: data.facilityId,
         formulationId,
@@ -529,7 +592,7 @@ export async function createBiocharProduct(
       await tx
         .update(storageLocations)
         .set({ formulationId, updatedAt: new Date() })
-        .where(eq(storageLocations.id, destinationBinId));
+        .where(and(eq(storageLocations.id, destinationBinId), eq(storageLocations.organizationId, ctx.organizationId)));
     }
 
     return inserted;
@@ -546,7 +609,7 @@ export async function createBiocharProduct(
  * Update an existing biochar product
  */
 export async function updateBiocharProduct(
-  userId: string,
+  ctx: OrgContext,
   productId: string,
   data: {
     code?: string;
@@ -562,13 +625,13 @@ export async function updateBiocharProduct(
     composition?: Record<string, unknown>;
   }
 ): Promise<BiocharProduct> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify product exists
   const [existing] = await db
     .select()
     .from(biocharProducts)
-    .where(eq(biocharProducts.id, productId));
+    .where(and(eq(biocharProducts.id, productId), eq(biocharProducts.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Biochar product not found");
@@ -579,7 +642,7 @@ export async function updateBiocharProduct(
     const [duplicate] = await db
       .select({ id: biocharProducts.id })
       .from(biocharProducts)
-      .where(eq(biocharProducts.code, data.code));
+      .where(and(eq(biocharProducts.code, data.code), eq(biocharProducts.organizationId, ctx.organizationId)));
 
     if (duplicate) {
       throw new SafeError("A biochar product with this code already exists");
@@ -591,7 +654,7 @@ export async function updateBiocharProduct(
     const [facility] = await db
       .select({ id: facilities.id })
       .from(facilities)
-      .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
+      .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)));
 
     if (!facility) {
       throw new SafeError("Facility not found or archived");
@@ -603,7 +666,7 @@ export async function updateBiocharProduct(
     const [formulation] = await db
       .select({ id: formulations.id })
       .from(formulations)
-      .where(eq(formulations.id, data.formulationId));
+      .where(and(eq(formulations.id, data.formulationId), eq(formulations.organizationId, ctx.organizationId)));
 
     if (!formulation) {
       throw new SafeError("Formulation not found");
@@ -629,10 +692,6 @@ export async function updateBiocharProduct(
   const effectiveWaterAddedKg = data.waterAddedKg !== undefined
     ? data.waterAddedKg
     : existing.waterAddedKg;
-  const effectiveComposition =
-    data.composition !== undefined
-      ? data.composition
-      : (existing.composition as Record<string, unknown> | null);
 
   if (data.linkedProductionRunId !== undefined && !effectiveLinkedRunId) {
     throw new SafeError("Production run is required");
@@ -675,10 +734,10 @@ export async function updateBiocharProduct(
       .select({
         id: productionRuns.id,
         facilityId: productionRuns.facilityId,
-        date: productionRuns.date,
+        date: productionRunDateExpr(),
       })
       .from(productionRuns)
-      .where(eq(productionRuns.id, effectiveLinkedRunId));
+      .where(and(eq(productionRuns.id, effectiveLinkedRunId), eq(productionRuns.organizationId, ctx.organizationId)));
 
     if (!run) {
       throw new SafeError("Linked production run not found");
@@ -691,35 +750,76 @@ export async function updateBiocharProduct(
     }
   }
 
-  // The effective formulation is the new one if being changed, otherwise existing.
-  // A null formulation means a pure-biochar product.
-  const effectiveFormulationId =
-    data.formulationId !== undefined ? data.formulationId : existing.formulationId;
-
   // Re-check the destination bin whenever the bin, the formulation, or the
   // facility changes, then update the product and (re)claim an unassigned bin —
   // all atomically. Locking the bin row serializes concurrent placements so two
   // products with different formulations can't strand a mismatch in one bin.
   const updated = await db.transaction(async (tx) => {
+    const stockPreparation = await lockBiocharProductUpdateStock(
+      ctx,
+      tx,
+      existing,
+      data,
+    );
+
+    const [locked] = await tx
+      .select()
+      .from(biocharProducts)
+      .where(and(
+        eq(biocharProducts.id, productId),
+        eq(biocharProducts.organizationId, ctx.organizationId),
+      ))
+      .for("update");
+
+    if (!locked) {
+      throw new SafeError("Biochar product not found");
+    }
+
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "biocharProduct", entityId: productId },
       "update",
+    );
+
+    const stockState = await lockBiocharProductUpdateRows(
+      ctx,
+      tx,
+      locked,
+      data,
+      stockPreparation,
+    );
+    const {
+      transactionFacilityId,
+      transactionFormulationId,
+      transactionLinkedRunId,
+      transactionStorageId,
+      transactionMassKg,
+      transactionComposition,
+    } = stockState;
+
+    await assertBiocharProductMassReductionWithinStock(
+      ctx,
+      tx,
+      productId,
+      locked,
+      data,
     );
 
     let claimBinFormulationId: string | null = null;
 
     if (data.composition !== undefined || data.formulationId !== undefined || facilityChanged) {
       await validateCompositionIngredientBins(
+        ctx,
         tx,
-        effectiveComposition,
-        effectiveFormulationId,
-        effectiveFacilityId
+        transactionComposition,
+        transactionFormulationId,
+        transactionFacilityId
       );
     }
 
     if (
-      effectiveStorageId &&
+      transactionStorageId &&
       (data.storageLocationId !== undefined ||
         data.formulationId !== undefined ||
         facilityChanged)
@@ -732,27 +832,36 @@ export async function updateBiocharProduct(
           formulationId: storageLocations.formulationId,
         })
         .from(storageLocations)
-        .where(eq(storageLocations.id, effectiveStorageId))
+        .where(and(eq(storageLocations.id, transactionStorageId), eq(storageLocations.organizationId, ctx.organizationId)))
         .for("update");
 
       if (!storage) {
         throw new SafeError("Storage location not found");
       }
-      if (storage.facilityId !== effectiveFacilityId) {
+      if (storage.facilityId !== transactionFacilityId) {
         throw new SafeError("Storage location belongs to a different facility");
       }
       if (storage.type !== "product_bin") {
         throw new SafeError("Storage location must be a product bin");
       }
-      if (storage.formulationId !== null && storage.formulationId !== effectiveFormulationId) {
+      if (storage.formulationId !== null && storage.formulationId !== transactionFormulationId) {
         throw new SafeError(
           "Product bin is reserved for a different formulation. Pick a matching or empty bin."
         );
       }
-      if (effectiveFormulationId && storage.formulationId === null) {
-        claimBinFormulationId = effectiveFormulationId;
+      if (transactionFormulationId && storage.formulationId === null) {
+        claimBinFormulationId = transactionFormulationId;
       }
     }
+
+    await assertBiocharProductUpdateDraw(ctx, tx, productId, data, {
+      transactionFacilityId,
+      transactionFormulationId,
+      transactionLinkedRunId,
+      transactionStorageId,
+      transactionMassKg,
+      transactionComposition,
+    });
 
     const [row] = await tx
       .update(biocharProducts)
@@ -761,16 +870,16 @@ export async function updateBiocharProduct(
         ...(derivedProductionDate && { productionDate: derivedProductionDate }),
         updatedAt: new Date(),
       })
-      .where(eq(biocharProducts.id, productId))
+      .where(and(eq(biocharProducts.id, productId), eq(biocharProducts.organizationId, ctx.organizationId)))
       .returning();
 
     // Claim an unassigned bin for this formulation so it stays clean going
     // forward. Safe under the row lock held above.
-    if (claimBinFormulationId && effectiveStorageId) {
+    if (claimBinFormulationId && transactionStorageId) {
       await tx
         .update(storageLocations)
         .set({ formulationId: claimBinFormulationId, updatedAt: new Date() })
-        .where(eq(storageLocations.id, effectiveStorageId));
+        .where(and(eq(storageLocations.id, transactionStorageId), eq(storageLocations.organizationId, ctx.organizationId)));
     }
 
     return row;
@@ -787,23 +896,16 @@ export async function updateBiocharProduct(
  * Delete a biochar product
  */
 export async function deleteBiocharProduct(
-  userId: string,
+  ctx: OrgContext,
   productId: string
 ): Promise<void> {
-  requireAuth(userId);
-
-  // Verify product exists
-  const [existing] = await db
-    .select({ id: biocharProducts.id })
-    .from(biocharProducts)
-    .where(eq(biocharProducts.id, productId));
-
-  if (!existing) {
-    throw new SafeError("Biochar product not found");
-  }
+  requireOrgScope(ctx);
 
   await db.transaction(async (tx) => {
+    await lockDeleteBiocharProductStock(ctx, tx, productId);
+
     await assertCanMutateCertifiedLineage(
+      ctx,
       tx,
       { entityType: "biocharProduct", entityId: productId },
       "delete",
@@ -812,11 +914,11 @@ export async function deleteBiocharProduct(
     const [orderCount] = await tx
       .select({ count: count() })
       .from(orders)
-      .where(eq(orders.biocharProductId, productId));
+      .where(and(eq(orders.biocharProductId, productId), eq(orders.organizationId, ctx.organizationId)));
     const [deliveryCount] = await tx
       .select({ count: count() })
       .from(deliveries)
-      .where(eq(deliveries.biocharProductId, productId));
+      .where(and(eq(deliveries.biocharProductId, productId), eq(deliveries.organizationId, ctx.organizationId)));
 
     if (Number(orderCount.count) > 0) {
       throw new SafeError(
@@ -829,8 +931,8 @@ export async function deleteBiocharProduct(
       );
     }
 
-    await deleteTransportLegsForEntity(tx, "biochar", productId);
-    await tx.delete(biocharProducts).where(eq(biocharProducts.id, productId));
+    await deleteTransportLegsForEntity(ctx, tx, "biochar", productId);
+    await tx.delete(biocharProducts).where(and(eq(biocharProducts.id, productId), eq(biocharProducts.organizationId, ctx.organizationId)));
   });
 }
 
@@ -842,18 +944,19 @@ export async function deleteBiocharProduct(
  * Check if a biochar product code is available
  */
 export async function isBiocharProductCodeAvailable(
-  userId: string,
+  ctx: OrgContext,
   code: string,
   excludeProductId?: string
 ): Promise<boolean> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [eq(biocharProducts.code, code)];
+  const conditions: SQL[] = [eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.code, code)];
 
   if (excludeProductId) {
     conditions.push(sql`${biocharProducts.id} != ${excludeProductId}`);
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: biocharProducts.id })
     .from(biocharProducts)
@@ -867,9 +970,9 @@ export async function isBiocharProductCodeAvailable(
  * Returns minimal data needed for select inputs
  */
 export async function getBiocharProductOptions(
-  userId: string
+  ctx: OrgContext
 ): Promise<Array<{ id: string; code: string }>> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   return db
     .select({
@@ -877,6 +980,6 @@ export async function getBiocharProductOptions(
       code: biocharProducts.code,
     })
     .from(biocharProducts)
-    .where(isNull(biocharProducts.archivedAt))
+    .where(and(eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)))
     .orderBy(desc(biocharProducts.productionDate));
 }

@@ -74,6 +74,60 @@ before they can surface as raw DB errors; integer/count fields use
 - Better Auth rate limits are enabled with stricter rules for auth-sensitive endpoints.
 - DB pool limits are centralized in `src/db/index.ts` and configurable via env.
 
+## Environment Variables
+
+All env vars are validated with **Zod in `src/config/env.ts`**; a `superRefine`
+block enforces cross-field rules (e.g. Isometric token+secret are both-or-neither,
+`local-fs` / `stub` are rejected in production). The app refuses to boot on an
+invalid or missing-required var.
+
+**Document NAMES only, never values** — here, in code, in comments, or in tests.
+
+Inventory by group (app-validated in `src/config/env.ts`):
+
+- **Core:** `DATABASE_URL`, `NEXT_PUBLIC_APP_URL`, `BETTER_AUTH_SECRET` (32+ chars),
+  `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `ADMIN_EMAIL`, `ALLOW_SELF_SIGNUP`,
+  `NODE_ENV`
+- **Logging / DB pool:** `LOG_LEVEL`, `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`,
+  `DB_POOL_CONNECTION_TIMEOUT_MS`
+- **Storage:** `STORAGE_PROVIDER` (`s3-compatible` required in prod),
+  `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`,
+  `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_SIGNING_SECRET`,
+  `STORAGE_LOCAL_FS_ROOT`
+- **Isometric:** `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
+  (both-or-neither; seed and dedicated CI health inputs only),
+  `CREDENTIALS_ENCRYPTION_KEY` (optional at boot; required when storing or
+  reading per-organization registry credentials),
+  `ISOMETRIC_ENVIRONMENT`, `ISOMETRIC_UPLOAD_HOST_ALLOWLIST`,
+  `ISOMETRIC_STORAGE_REDIRECT_HOSTS` (document-redirect allowlist),
+  `DURABILITY_MEASUREMENT_SAMPLES_LIVE` (sandbox-only opt-in; rejected in
+  production)
+- **Geo / maps** (all optional — graceful degradation): `OPENROUTESERVICE_API_KEY`
+  (server-only geocode/routing), `NEXT_PUBLIC_MAPTILER_KEY` (public,
+  domain-locked basemap key), `GEO_PROVIDER` (`ors` default; `stub` = hermetic
+  test fixtures, rejected in prod)
+
+Not validated by `env.ts` — read directly from `process.env` by scripts/tests:
+
+- `ADMIN_PASSWORD` — consumed only by the admin-bootstrap CLI
+  (`src/lib/cli/ensure-admin.ts`), never by the running app.
+- `DISABLE_RATE_LIMIT` — test-only toggle read in `src/lib/auth/better-auth.ts`;
+  required for E2E fixtures (see `docs/testing.md`).
+- `ISOMETRIC_DEMO_PROJECT_ID` — CI/staging smoke-test target.
+
+### The three environment items intentionally differ
+
+The `local`, `staging`, and `production` 1Password items are **not** copies of
+each other. `local` has its own `DATABASE_URL` (Docker Postgres),
+`NEXT_PUBLIC_APP_URL` (`localhost:3100`), dev admin credentials, and test
+toggles (`DISABLE_RATE_LIMIT`).
+
+Before debugging any env/auth issue, **state your assumptions about local vs.
+deployed config and confirm them against the right item.** The `op` CLI needs
+interactive desktop approval — a sandboxed shell can't reproduce 1Password auth,
+so ask the user to run `op` commands themselves (`! op …`) rather than
+diagnosing around a sign-in you can't perform.
+
 ## Secrets Management
 
 Secrets live in **1Password** (vault `Environment Variables`), never in the repo. One item per environment, with fields named exactly like the env vars:
@@ -89,6 +143,50 @@ Three consumers read those items:
   synced.
 - **GitHub Actions** — `e2e.yml`, `isometric-health.yml`, and `migrate.yml` resolve `op://` references via `1password/load-secrets-action`, authenticating with a single repo secret **`OP_SERVICE_ACCOUNT_TOKEN`** — a read-only 1Password Service Account scoped to the `Environment Variables` vault. It replaces all per-secret Actions secrets; `CLAUDE_CODE_OAUTH_TOKEN` is the only other one. Staging jobs read the staging item, production jobs the production item. The e2e/health load steps are gated on `OP_SERVICE_ACCOUNT_TOKEN != ''` so fork PRs (which can't read secrets) skip cleanly.
 
+### Per-organization Isometric credentials
+
+Runtime registry credentials are stored per organization in
+`certifier_credentials`. The access token and client secret are encrypted at
+rest with AES-256-GCM using `CREDENTIALS_ENCRYPTION_KEY`; only masked status
+(configured, access-token last four characters, and update time) may cross a
+server-action boundary. Platform Admins manage these write-only values from the
+organization admin area. Certification readiness and live submission fail
+closed when the active organization has no credential row.
+
+`CREDENTIALS_ENCRYPTION_KEY` is a server-only 32-byte hex or base64 key sourced
+from 1Password. **Open deployment step:** the user deploying this batch must add
+the field to both `noma-dmrv env staging` and `noma-dmrv env production`, then
+run the normal Vercel environment sync. Keep the same key while stored rows
+exist; rotating it requires re-encrypting or replacing every organization's
+credentials.
+
+`ISOMETRIC_ACCESS_TOKEN` and `ISOMETRIC_CLIENT_SECRET` are no longer runtime app
+credentials. They remain seed/CI-only: `db:ensure-admin` uses the pair to seed
+the default organization's encrypted row when all three values (including the
+encryption key) are present. The read-only `isometric-health.yml` workflow uses
+its dedicated pair directly through `getIsometricClientFromEnv`; it has no app
+database and intentionally receives no `CREDENTIALS_ENCRYPTION_KEY`.
+
+The production bootstrap is a **manual, one-off job**, not part of the automatic
+deployment path. Pushes to `main` run `migrate-production`, which loads only
+`DATABASE_URL` — schema migrations never depend on the admin/registry fields, so
+a renamed 1Password field cannot block them. To initialize a fresh production
+database, dispatch `migrate.yml` on `main` with action `bootstrap-production` and
+the confirmation phrase `BOOTSTRAP PRODUCTION`. That job loads the admin and
+Isometric bootstrap fields and runs `db:ensure-admin` with `NODE_ENV=production`,
+creating the Platform Admin, the default organization, and the encrypted
+per-organization registry credentials, while explicitly skipping the shared
+local/test teammate.
+
+The bootstrap is idempotent and never clobbers live state: in production it
+leaves an existing admin credential account's password untouched and inserts
+registry credentials only when none exist, so operator rotations survive. It
+fails loudly instead of silently degrading — a missing or blank
+`ISOMETRIC_ACCESS_TOKEN`, `ISOMETRIC_CLIENT_SECRET`, or
+`CREDENTIALS_ENCRYPTION_KEY` throws rather than exiting 0 with no credential row.
+The Platform Admin must use the organization invitation flow to add the first
+real Owner.
+
 Notes:
 
 - Rotating a secret = edit the 1Password item. No GitHub or Vercel change needed.
@@ -99,6 +197,14 @@ Notes:
 - Two CI-only fields are **not** in `.env.tpl`, so they aren't pulled locally and must be set directly on the items: `ISOMETRIC_DEMO_PROJECT_ID` (staging) and `ADMIN_PASSWORD` (both items).
 - **Optional vars may be missing from an item.** Both sync scripts pre-check the item's field names and skip template refs with no matching field (per-var warning) instead of letting `op inject` hard-fail. They abort only when a **required** field is missing — `REQUIRED_LOCAL_VARS` / `REQUIRED_DEPLOYED_VARS` in `scripts/env-tpl-utils.ts`, the vars `src/config/env.ts` cannot boot without. `pnpm env:check` reports the same split (missing-optional is advisory; missing-required exits 1).
 - `load-secrets-action` **fails the step** when a referenced `op://` field doesn't exist — it does not skip. Add the field before the workflow runs.
+
+### Never expose real keys
+
+- Never put real keys in code, comments, or docs — use the placeholder
+  `<REDACTED_API_KEY>` when an example needs one.
+- **If a key leaks:** rotate it immediately (edit the 1Password item), then
+  scrub it from git history with `git-filter-repo`.
+- Review PR diffs for accidental secret exposure before merging.
 
 ## Dependency Supply Chain
 

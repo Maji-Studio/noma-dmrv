@@ -1,3 +1,4 @@
+import type { OrgContext } from "@/lib/auth/server";
 import { env } from "@/config/env";
 import {
   appendSyncEvent,
@@ -70,12 +71,12 @@ export function assertProductionConfirmed(confirmProduction?: boolean): void {
 // insert must NEVER unwind a successful submission, so this swallows the
 // error and console.warns with caller-supplied context (e.g. submissionId).
 export async function appendSyncEventBestEffort(
-  userId: string,
+  orgCtx: OrgContext,
   input: AppendSyncEventInput,
   logContext?: Record<string, unknown>,
 ): Promise<void> {
   try {
-    await appendSyncEvent(userId, input);
+    await appendSyncEvent(orgCtx, input);
   } catch (err) {
     logger.warn(
       {
@@ -90,13 +91,13 @@ export async function appendSyncEventBestEffort(
 }
 
 export async function loadTransportLegsByCategory(
-  userId: string,
+  orgCtx: OrgContext,
   entityIds: TransportEntityIdsByCategory,
 ): Promise<TransportLegsByCategory> {
   const [feedstock, biochar, sample] = await Promise.all([
-    getTransportLegsForEntities(userId, "feedstock", entityIds.feedstockIds),
-    getTransportLegsForEntities(userId, "biochar", entityIds.biocharProductIds),
-    getTransportLegsForEntities(userId, "sample", entityIds.sampleIds),
+    getTransportLegsForEntities(orgCtx, "feedstock", entityIds.feedstockIds),
+    getTransportLegsForEntities(orgCtx, "biochar", entityIds.biocharProductIds),
+    getTransportLegsForEntities(orgCtx, "sample", entityIds.sampleIds),
   ]);
   return { feedstock, biochar, sample };
 }

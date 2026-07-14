@@ -362,7 +362,8 @@ function legRow(leg: LedgerCategory["legs"][number], isLast: boolean): ReactElem
     t([styles.legRef, { width: COL.leg }], leg.ref),
     routeCell(leg),
     h(Text, { style: [styles.qty, { width: COL.distance, paddingLeft: 4 }] },
-      nfi(leg.distanceKm), h(Text, { style: styles.qtyUnit }, " km")),
+      nfi(leg.distanceKm),
+      h(Text, { style: styles.qtyUnit }, leg.roundTrip ? " km · rt" : " km")),
     h(Text, { style: [styles.qty, { width: COL.mass, paddingLeft: GAP }] },
       leg.massMissing ? "—" : nfi(leg.loadMassKg),
       leg.massMissing ? "" : h(Text, { style: styles.qtyUnit }, " kg")),
@@ -415,8 +416,26 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
   // keeps the default emphasized footer treatment.
   const operandRow = { backgroundColor: C.sea };
   const stackedRow = { borderTopWidth: 1, borderTopColor: C.ink12 };
+  const roundingRows =
+    cat.roundingAdjustmentTkm == null || cat.displayedRowSumTkm == null
+      ? []
+      : [
+          footRow(
+            `Displayed row sum — ${cat.key} · ${cat.legs.length} legs`,
+            nf2(cat.displayedRowSumTkm),
+            "t·km",
+            operandRow,
+          ),
+          footRow(
+            "Rounding adjustment — displayed rows to canonical sum",
+            nf2(cat.roundingAdjustmentTkm),
+            "t·km",
+            { ...operandRow, ...stackedRow },
+          ),
+        ];
   const foot = cat.scaling
     ? v({}, {},
+        ...roundingRows,
         footRow(
           `Leg sum — ${cat.key} · ${cat.legs.length} legs`,
           nf2(cat.scaling.rawSubtotalTkm),
@@ -429,6 +448,16 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
           null,
           { ...operandRow, ...stackedRow },
         ),
+        ...(cat.scaling.displayAdjustmentTkm == null
+          ? []
+          : [
+              footRow(
+                "Scaling adjustment — displayed operands to canonical scalar",
+                nf2(cat.scaling.displayAdjustmentTkm),
+                "t·km",
+                { ...operandRow, ...stackedRow },
+              ),
+            ]),
         footRow(
           `Subtotal — ${cat.key} · submitted scalar`,
           nf2(cat.subtotalTkm),
@@ -436,11 +465,21 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
           stackedRow,
         ),
       )
-    : footRow(
-        `Subtotal — ${cat.key} · ${cat.legs.length} legs`,
-        nf2(cat.subtotalTkm),
-        "t·km",
-      );
+    : roundingRows.length > 0
+      ? v({}, {},
+          ...roundingRows,
+          footRow(
+            `Subtotal — ${cat.key} · submitted scalar`,
+            nf2(cat.subtotalTkm),
+            "t·km",
+            stackedRow,
+          ),
+        )
+      : footRow(
+          `Subtotal — ${cat.key} · ${cat.legs.length} legs`,
+          nf2(cat.subtotalTkm),
+          "t·km",
+        );
   return v(styles.section, {}, header, v(styles.table, {}, th, ...rows, foot));
 }
 
@@ -471,7 +510,7 @@ function apparatus(model: LedgerModel): ReactElement {
     legendRow("Map · manual", "Routed estimate, entered for this leg."),
     legendRow("t·km", "tonne·kilometre = distance (km) × load (t)."),
   );
-  return v(styles.apparatus, {}, note, legend);
+  return v(styles.apparatus, { wrap: false }, note, legend);
 }
 
 function footer(model: LedgerModel): ReactElement {

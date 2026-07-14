@@ -34,6 +34,10 @@ export {
   deleteProductionRun,
 } from "./mutations";
 
+export { ProductionRunOverlapError } from "./overlap";
+
+export { productionRunDateExpr } from "./date-expr";
+
 export {
   getProductionRunReadings,
   addProductionRunReading,

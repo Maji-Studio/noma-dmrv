@@ -1,5 +1,6 @@
 import {
   check,
+  foreignKey,
   index,
   pgTable,
   text,
@@ -8,6 +9,8 @@ import {
   real,
   date,
   integer,
+  unique,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { relations, sql, type InferSelectModel } from 'drizzle-orm';
 import { electricitySourceCategory, incidentSeverity, productionRunStatus } from './common';
@@ -15,6 +18,7 @@ import { fraction, massKg, percent, ppm } from './numeric-families';
 import { facilities, reactors, storageLocations } from './facilities';
 import { operators } from './parties';
 import { feedstocks } from './feedstock';
+import { organizations } from './auth';
 
 // ============================================
 // Production Runs - Pyrolysis batches
@@ -25,16 +29,22 @@ export const productionRuns = pgTable(
   'production_runs',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    code: text('code').notNull().unique(), // e.g., "PR-2025-043"
-    facilityId: uuid('facility_id')
+    organizationId: text('organization_id')
       .notNull()
-      .references(() => facilities.id),
-    date: date('date').notNull(),
+      .references(() => organizations.id),
+    code: text('code').notNull(), // e.g., "PR-2025-043"
+    facilityId: uuid('facility_id')
+      .notNull(),
     status: productionRunStatus('status').default('running').notNull(),
 
     // --- Overview ---
+    // The run's physical time window. `startTime` is the natural key (with
+    // reactor) and its date is the run's calendar date — the standalone `date`
+    // column was dropped (issue #259); consumers derive it from `startTime`.
     startTime: timestamp('start_time').defaultNow().notNull(),
-    endTime: timestamp('end_time').defaultNow().notNull(),
+    // NULL = the run has started but not ended yet (an "open" run). A closed
+    // run occupies [startTime, endTime); an open run occupies [startTime, ∞).
+    endTime: timestamp('end_time'),
     reactorId: uuid('reactor_id')
       .notNull()
       .references(() => reactors.id),
@@ -74,7 +84,25 @@ export const productionRuns = pgTable(
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
+    unique('production_runs_organization_id_code_unique').on(table.organizationId, table.code),
+    unique('production_runs_id_organization_id_unique').on(table.id, table.organizationId),
+    foreignKey({
+      columns: [table.facilityId, table.organizationId],
+      foreignColumns: [facilities.id, facilities.organizationId],
+    }),
     index('production_runs_facility_id_idx').on(table.facilityId),
+    // A run's window must be forward in time (or still open). Mirrors the
+    // server-side overlap guard (#259).
+    check(
+      'production_runs_end_after_start',
+      sql`${table.endTime} is null or ${table.endTime} > ${table.startTime}`
+    ),
+    // One physical run per (reactor, start instant): two runs can't begin at the
+    // same moment on the same reactor. Partial so voided/archived rows free the
+    // slot. The server layer additionally rejects overlapping windows (#259).
+    uniqueIndex('production_runs_reactor_start_unique_idx')
+      .on(table.reactorId, table.startTime)
+      .where(sql`${table.status} <> 'void' and ${table.archivedAt} is null`),
     check(
       'production_runs_feedstock_wet_mass_non_negative',
       sql`${table.feedstockWetMassKg} is null or ${table.feedstockWetMassKg} >= 0`
@@ -120,9 +148,11 @@ export const productionRunReadings = pgTable(
   'production_run_readings',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    productionRunId: uuid('production_run_id')
+    organizationId: text('organization_id')
       .notNull()
-      .references(() => productionRuns.id),
+      .references(() => organizations.id),
+    productionRunId: uuid('production_run_id')
+      .notNull(),
 
     timestamp: timestamp('timestamp').notNull(),
 
@@ -142,7 +172,17 @@ export const productionRunReadings = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [
-    index('production_run_readings_run_timestamp_idx').on(
+    index('production_run_readings_organization_id_idx').on(table.organizationId),
+    foreignKey({
+      columns: [table.productionRunId, table.organizationId],
+      foreignColumns: [productionRuns.id, productionRuns.organizationId],
+    }),
+    // One canonical reading per (run, UTC timestamp). The unique constraint is
+    // the storage-level guarantee behind the idempotent readings import (#398):
+    // re-importing a file inserts with ON CONFLICT DO NOTHING against this
+    // index, so duplicate telemetry for the same reactor instant is impossible
+    // and can never reach an Isometric sensor submission.
+    uniqueIndex('production_run_readings_run_timestamp_uq').on(
       table.productionRunId,
       table.timestamp
     ),
@@ -159,6 +199,9 @@ export const productionRunReadings = pgTable(
 
 export const samples = pgTable('samples', {
   id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: text('organization_id')
+    .notNull()
+    .references(() => organizations.id),
   // ADR 0016: a lab Sample characterises the CREDIT BATCH (the protocol
   // production batch) — its >=3 replicates' mean/std-dev. Drizzle keeps this
   // free of .references() to avoid a circular schema import with credits.ts;
@@ -167,7 +210,10 @@ export const samples = pgTable('samples', {
   // Provenance: which production run the sample was physically drawn from.
   // Nullable — batch biochar can be commingled across runs. (Was the primary
   // link pre-0015; now secondary to creditBatchId.)
-  productionRunId: uuid('production_run_id').references(() => productionRuns.id),
+  productionRunId: uuid('production_run_id'),
+  // Unique per organization (issue #395, re-scoped for multi-tenancy #372):
+  // DB-enforced via `samples_organization_id_sample_code_unique` so concurrent
+  // creates can't duplicate a code within a tenant.
   sampleCode: text('sample_code').notNull(),
   samplingTime: timestamp('sampling_time').notNull(),
   weightGrams: real('weight_grams'),
@@ -246,7 +292,16 @@ export const samples = pgTable('samples', {
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (table) => [
+  unique('samples_organization_id_sample_code_unique').on(
+    table.organizationId,
+    table.sampleCode
+  ),
+  foreignKey({
+    columns: [table.productionRunId, table.organizationId],
+    foreignColumns: [productionRuns.id, productionRuns.organizationId],
+  }),
+]);
 
 // ============================================
 // Incident Reports - Production issues
@@ -255,9 +310,11 @@ export const samples = pgTable('samples', {
 
 export const incidentReports = pgTable('incident_reports', {
   id: uuid('id').primaryKey().defaultRandom(),
-  productionRunId: uuid('production_run_id')
+  organizationId: text('organization_id')
     .notNull()
-    .references(() => productionRuns.id),
+    .references(() => organizations.id),
+  productionRunId: uuid('production_run_id')
+    .notNull(),
   incidentTime: timestamp('incident_time').notNull(),
   incidentDate: timestamp('incident_date').defaultNow().notNull(),
   operatorId: uuid('operator_id').references(() => operators.id),
@@ -269,19 +326,33 @@ export const incidentReports = pgTable('incident_reports', {
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (table) => [
+  index('incident_reports_organization_id_idx').on(table.organizationId),
+  foreignKey({
+    columns: [table.productionRunId, table.organizationId],
+    foreignColumns: [productionRuns.id, productionRuns.organizationId],
+  }),
+]);
 
 export const productionRunFeedstocks = pgTable('production_run_feedstocks', {
   id: uuid('id').primaryKey().defaultRandom(),
-  productionRunId: uuid('production_run_id')
+  organizationId: text('organization_id')
     .notNull()
-    .references(() => productionRuns.id),
+    .references(() => organizations.id),
+  productionRunId: uuid('production_run_id')
+    .notNull(),
   feedstockId: uuid('feedstock_id')
     .notNull()
     .references(() => feedstocks.id),
   massUsedKg: massKg('mass_used_kg').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-});
+}, (table) => [
+  index('production_run_feedstocks_organization_id_idx').on(table.organizationId),
+  foreignKey({
+    columns: [table.productionRunId, table.organizationId],
+    foreignColumns: [productionRuns.id, productionRuns.organizationId],
+  }),
+]);
 
 // ============================================
 // Production Samples - In-process sampling (~every 2h)
@@ -290,9 +361,11 @@ export const productionRunFeedstocks = pgTable('production_run_feedstocks', {
 
 export const productionSamples = pgTable('production_samples', {
   id: uuid('id').primaryKey().defaultRandom(),
-  productionRunId: uuid('production_run_id')
+  organizationId: text('organization_id')
     .notNull()
-    .references(() => productionRuns.id),
+    .references(() => organizations.id),
+  productionRunId: uuid('production_run_id')
+    .notNull(),
   sampleCode: text('sample_code'),
   timestamp: timestamp('timestamp').notNull(),
   weightGrams: real('weight_grams'),
@@ -307,7 +380,13 @@ export const productionSamples = pgTable('production_samples', {
   notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
-});
+}, (table) => [
+  index('production_samples_organization_id_idx').on(table.organizationId),
+  foreignKey({
+    columns: [table.productionRunId, table.organizationId],
+    foreignColumns: [productionRuns.id, productionRuns.organizationId],
+  }),
+]);
 
 // ============================================
 // Relations

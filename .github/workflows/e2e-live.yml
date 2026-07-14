@@ -48,6 +48,9 @@ jobs:
       STORAGE_ACCESS_KEY_ID: e2e-build
       STORAGE_SECRET_ACCESS_KEY: e2e-build-placeholder
       ISOMETRIC_ENVIRONMENT: sandbox
+      # Bootstrap admin for db:ensure-admin. The same command seeds the default
+      # organization's encrypted Isometric credential row from the live pair.
+      ADMIN_EMAIL: e2e-admin@e2e.local
       # Live sandbox calls are slow (paginated template/project fetches at
       # 200–700ms each); a single worker avoids hammering the sandbox and the
       # higher timeout absorbs registry latency without flaking.
@@ -55,8 +58,11 @@ jobs:
       PLAYWRIGHT_RETRIES: "1"
 
     steps:
-      - name: Generate ephemeral auth secret
-        run: echo "BETTER_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+      - name: Generate ephemeral app secrets
+        run: |
+          echo "BETTER_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "ADMIN_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+          echo "CREDENTIALS_ENCRYPTION_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
       - name: Checkout code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -110,8 +116,13 @@ jobs:
           DISABLE_RATE_LIMIT=${DISABLE_RATE_LIMIT}
           EOF
 
+      # Migrations, not `drizzle-kit push`: hand-written trigger migrations
+      # are invisible to push, and specs assert on DB-enforced behavior.
       - name: Apply schema
-        run: pnpm drizzle-kit push --force
+        run: pnpm db:migrate
+
+      - name: Ensure admin, default organization, and Isometric credentials
+        run: pnpm db:ensure-admin
 
       - name: Run @live Playwright specs
         run: pnpm test:e2e --grep "@live"

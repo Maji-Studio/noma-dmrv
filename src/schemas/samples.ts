@@ -22,6 +22,11 @@ const optionalNumber = z
   .optional()
   .nullable();
 
+const optionalFraction = optionalNumber.refine(
+  (value) => value == null || (value >= 0 && value <= 1),
+  { message: "Must be between 0 and 1" },
+);
+
 const requiredNumber = z.union([
   z.number().finite(),
   z.string().transform((val) => {
@@ -123,6 +128,9 @@ export const sampleFormSchema = z
 
     // R₀ reflectance (required for 1000-year)
     randomReflectanceR0Percent: optionalNumber,
+    // Proportion of the sample's ISO 7404-5 R₀ readings at or above 2%.
+    // Stored/submitted as 0–1; the form presents it as a percentage.
+    sReflectanceFraction: optionalFraction,
     r0MeasurementCount: z.union([
       z.number().int().min(0).max(PG_INTEGER_MAX, "Measurement count is too large"),
       z.string()
@@ -165,6 +173,15 @@ export const sampleFormSchema = z
           code: z.ZodIssueCode.custom,
           path: ["randomReflectanceR0Percent"],
           message: "R₀ reflectance is required for 1000-year durability",
+        });
+      }
+
+      if (value.sReflectanceFraction == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["sReflectanceFraction"],
+          message:
+            "R₀ readings at or above 2% are required for 1000-year durability",
         });
       }
 
@@ -259,6 +276,7 @@ export const updateSampleSchema = z.object({
   oToCOrgRatio: z.number().optional().nullable(),
   durabilityOption: z.enum(["200_year", "1000_year"]).optional(),
   randomReflectanceR0Percent: z.number().optional().nullable(),
+  sReflectanceFraction: z.number().min(0).max(1).optional().nullable(),
   r0MeasurementCount: z.number().int().min(0).max(PG_INTEGER_MAX, "Measurement count is too large").optional().nullable(),
   r0AnalysisDate: z.union([z.date(), z.string(), z.null()]).optional().nullable(),
   r0HistogramFileUrl: z.string().max(2000).optional().nullable(),

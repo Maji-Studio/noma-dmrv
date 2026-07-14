@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "@/lib/auth/client";
@@ -9,6 +9,22 @@ import Link from "next/link";
 import { Button } from "@/components/ui";
 import { loginSchema, type LoginFormData } from "@/schemas/auth";
 import { FormField, FormInput, ServerError } from "@/components/forms";
+
+const DEFAULT_SIGN_IN_PATH = "/dashboard";
+
+function getSafeSignInPath(from: string | null): string {
+  if (
+    !from ||
+    !from.startsWith("/") ||
+    from.startsWith("//") ||
+    from.includes("://") ||
+    from.includes("\\")
+  ) {
+    return DEFAULT_SIGN_IN_PATH;
+  }
+
+  return from;
+}
 
 export function LoginForm() {
   const [serverError, setServerError] = useState("");
@@ -18,6 +34,7 @@ export function LoginForm() {
 
   const { signIn, resendVerification } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const {
     register,
@@ -40,7 +57,7 @@ export function LoginForm() {
     const result = await signIn(data.email, data.password);
 
     if (result.success) {
-      router.push("/dashboard");
+      router.push(getSafeSignInPath(searchParams.get("from")));
     } else {
       setServerError(result.error || "Failed to sign in");
 

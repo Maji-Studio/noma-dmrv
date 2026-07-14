@@ -10,6 +10,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  ArrowsClockwiseIcon,
   CubeIcon,
   LeafIcon,
   MagnifyingGlassIcon,
@@ -39,6 +40,8 @@ import { Button, EmptyState, PageHeader } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { StorageLocationForm } from "./storage-location-form";
 import { StorageLocationCard } from "./storage-location-card";
+import { BinReconcileSheet } from "./bin-reconcile-sheet";
+import { BinMovementHistory } from "./bin-movement-history";
 import { STORAGE_LANE_ORDER, binCurrentMassKg } from "./bin-display";
 import {
   formatStorageLocationType,
@@ -195,6 +198,8 @@ export function StorageLocationList() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
+  const [reconcilingBin, setReconcilingBin] =
+    useState<StorageLocationWithFacility | null>(null);
   const [deletingStorageLocationId, setDeletingStorageLocationId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -289,6 +294,13 @@ export function StorageLocationList() {
   const openEdit = (storageLocation: StorageLocationWithFacility) => {
     setFormError(null);
     setSideSheet({ mode: "edit", entity: storageLocation });
+  };
+
+  // Reconcile lives in its own side sheet — close the detail sheet first so the
+  // two panels never stack.
+  const openReconcile = (storageLocation: StorageLocationWithFacility) => {
+    setSideSheet(null);
+    setReconcilingBin(storageLocation);
   };
 
   const closeSideSheet = () => {
@@ -477,6 +489,7 @@ export function StorageLocationList() {
                         onView={openView}
                         onEdit={openEdit}
                         onDelete={handleDelete}
+                        onReconcile={openReconcile}
                       />
                     ))}
                   </div>
@@ -544,6 +557,20 @@ export function StorageLocationList() {
               ]
             : undefined
         }
+        viewModeChildren={
+          sideSheet?.mode === "view" && sideSheet.entity ? (
+            <div className="flex flex-col gap-16">
+              <Button
+                variant="default"
+                onClick={() => openReconcile(sideSheet.entity)}
+              >
+                <ArrowsClockwiseIcon size={18} weight="bold" />
+                Reconcile stock
+              </Button>
+              <BinMovementHistory storageLocationId={sideSheet.entity.id} />
+            </div>
+          ) : undefined
+        }
       >
         {formError && (
           <div className="mb-24">
@@ -560,6 +587,14 @@ export function StorageLocationList() {
           submitLabel={sideSheet?.mode === "edit" ? "Save Changes" : "Create Storage Bin"}
         />
       </EntitySideSheet>
+
+      <BinReconcileSheet
+        open={!!reconcilingBin}
+        onOpenChange={(open) => {
+          if (!open) setReconcilingBin(null);
+        }}
+        storageLocation={reconcilingBin}
+      />
     </div>
   );
 }

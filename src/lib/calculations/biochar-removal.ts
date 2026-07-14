@@ -27,6 +27,8 @@
  * against the authoritative URL above before relying on this output.
  */
 
+import { MINIMUM_REPLICATES_PER_BATCH } from "./biochar-eligibility";
+
 // ── Pinned protocol constants ────────────────────────────────────────────────
 
 /** Storage module patch version these constants are derived from. Bump here first. */
@@ -443,5 +445,143 @@ function computeApplicationCo2eStored1000(
     moduleVersion: SOIL_STORAGE_MODULE_VERSION,
     missingInputs,
     warnings,
+  };
+}
+
+// ── Certify-blueprint parity — 1000-year sequestration preview ───────────────
+//
+// The LIVE Certify `biochar_sequestration_1000_year` blueprint does NOT run
+// module Eq.6 — the two disagree and the blueprint is what the registry scores
+// (research 2026-07-04; see `transformers/measurement-sample.ts`, which submits
+// the per-replicate inputs). The registry computes
+//
+//   CO₂e = product_mass × mean(carbon_contents) × F_durable,blueprint × 44.01/12.01
+//   F_durable,blueprint = mean(s_fraction) − √(mean·(1−mean)/n)
+//
+// from per-replicate `carbon_contents` (total carbon, dry-basis 0–1 fraction)
+// and `s_fraction` (each sample's proportion of R₀ readings ≥ 2%). There is no
+// non-reactive-carbon term and NO 0.95 cap — this is a DIFFERENT formula from
+// Eq.6, not a variant of it. Any local 1000-year PREVIEW must use this parity
+// math so the number a user sees is the number the registry will compute;
+// Eq.6 above remains only for the non-preview module-engine paths. Do NOT
+// "restore" the preview by populating the legacy Eq.6 batch columns
+// (issue #375).
+
+/**
+ * One complete 1000-year lab replicate — mirrors the completeness filter the
+ * submission builder applies (`buildDurabilityMeasurementSampleSubmissions`):
+ * a Sample only counts when BOTH values are present.
+ */
+export interface Blueprint1000YearReplicate {
+  /** Total carbon (%, dry basis) — `samples.totalCarbonPercent`. */
+  totalCarbonPercent: number;
+  /** Proportion (0–1) of the sample's R₀ readings ≥ 2% — `samples.sReflectanceFraction`. */
+  sReflectanceFraction: number;
+}
+
+export interface Blueprint1000YearDurabilityResult {
+  /** mean(carbon_contents) — total carbon as a 0–1 dry-basis fraction. */
+  meanCarbonContentFraction: number;
+  /** mean(s_fraction) − √(mean·(1−mean)/n) — the blueprint's durable fraction (uncapped). */
+  durableFraction: number;
+  /** n — replicates the reduction ran over. */
+  replicateCount: number;
+}
+
+/**
+ * Reduce per-replicate blueprint inputs exactly as the registry does (see the
+ * section comment above). Returns null on empty input. Deliberately no 0.95
+ * cap and no clamping — parity with the registry beats local conservatism
+ * here, since the preview's one job is to predict the registry's figure.
+ */
+export function computeBlueprint1000YearDurability(
+  replicates: Blueprint1000YearReplicate[],
+): Blueprint1000YearDurabilityResult | null {
+  const n = replicates.length;
+  if (n === 0) return null;
+
+  const meanCarbonContentFraction =
+    replicates.reduce((sum, r) => sum + r.totalCarbonPercent, 0) /
+    n /
+    PERCENT_DENOMINATOR;
+  const meanSFraction =
+    replicates.reduce((sum, r) => sum + r.sReflectanceFraction, 0) / n;
+  const durableFraction =
+    meanSFraction - Math.sqrt((meanSFraction * (1 - meanSFraction)) / n);
+
+  return { meanCarbonContentFraction, durableFraction, replicateCount: n };
+}
+
+/**
+ * `missingInputs` key reported when a 1000-year batch lacks the ≥ 3 complete
+ * (total carbon + s_fraction) replicates the blueprint needs.
+ */
+export const BLUEPRINT_1000_YEAR_REPLICATES_INPUT = "thousandYearReplicates";
+
+export interface ApplicationCo2eStoredBlueprint1000Input {
+  /** Dry mass of biochar applied (tonnes) — e.g. `applications.biocharAppliedDryTons`. */
+  dryMassTonnes?: number | null;
+  /** The batch's COMPLETE replicates (caller applies the both-values filter). */
+  replicates: Blueprint1000YearReplicate[];
+}
+
+/**
+ * Per-application 1000-year CO₂e-stored PREVIEW under the live Certify
+ * blueprint (parity math — see the section comment). Same result shape as
+ * `computeApplicationCo2eStored` so preview consumers are agnostic to the
+ * durability tier. Fewer than MINIMUM_REPLICATES_PER_BATCH complete replicates
+ * degrades to the null / `missingInputs` gap contract — NEVER to Eq.6.
+ * `organicCarbonPercent` carries the blueprint's mean TOTAL carbon (%) — the
+ * carbon figure this formula actually multiplies. The temperature fields are
+ * inert and `durabilityCapped` is always false (the blueprint has no cap).
+ */
+export function computeApplicationCo2eStoredBlueprint1000(
+  input: ApplicationCo2eStoredBlueprint1000Input,
+): ApplicationCo2eStoredResult {
+  const missingInputs: string[] = [];
+
+  const durability =
+    input.replicates.length >= MINIMUM_REPLICATES_PER_BATCH
+      ? computeBlueprint1000YearDurability(input.replicates)
+      : null;
+  if (!durability) missingInputs.push(BLUEPRINT_1000_YEAR_REPLICATES_INPUT);
+  if (!isUsableNumber(input.dryMassTonnes)) missingInputs.push("dryMassTonnes");
+
+  const meanTotalCarbonPercent = durability
+    ? durability.meanCarbonContentFraction * PERCENT_DENOMINATOR
+    : null;
+
+  if (durability == null || !isUsableNumber(input.dryMassTonnes)) {
+    return {
+      co2eStoredTonnes: null,
+      fDurable: durability?.durableFraction ?? null,
+      organicCarbonPercent: meanTotalCarbonPercent,
+      effectiveSoilTemperatureC: null,
+      temperatureFloored: false,
+      durabilityCapped: false,
+      moduleVersion: SOIL_STORAGE_MODULE_VERSION,
+      missingInputs,
+      warnings: [],
+    };
+  }
+
+  // Reuse the single Eq.1-style multiply so the CO₂↔C ratio stays pinned to
+  // CO2_C_MOLAR_RATIO in exactly one place (never a hard-coded 3.667).
+  const co2eStoredTonnes = computeCo2eStoredTonnes({
+    organicCarbonPercent: durability.meanCarbonContentFraction * PERCENT_DENOMINATOR,
+    dryMassTonnes: input.dryMassTonnes,
+    fDurable: durability.durableFraction,
+  });
+
+  return {
+    co2eStoredTonnes,
+    fDurable: durability.durableFraction,
+    organicCarbonPercent: meanTotalCarbonPercent,
+    effectiveSoilTemperatureC: null,
+    temperatureFloored: false,
+    durabilityCapped: false,
+    moduleVersion: SOIL_STORAGE_MODULE_VERSION,
+    missingInputs,
+    warnings: [],
   };
 }

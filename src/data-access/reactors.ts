@@ -5,6 +5,7 @@
 
 import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
+import type { OrgContext } from "@/lib/auth/server";
 import {
   reactors,
   facilities,
@@ -33,8 +34,9 @@ export interface PaginatedReactors {
 // Auth Guards
 // ============================================
 
-import { requireAuth } from "./utils";
+import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { guardReactorIdentifier } from "./unique-name-guards";
 
 // ADR 0016 removed the reactor-level sampling method. Reactor surfaces still
 // need a stable Method-A value while Method B is process-scoped.
@@ -49,10 +51,10 @@ const LEGACY_REACTOR_SAMPLING_METHOD = "method_a" as const;
  * Supports search, facility/type filters, sorting, and pagination
  */
 export async function getReactors(
-  userId: string,
+  ctx: OrgContext,
   filters?: Partial<ReactorFilterData>
 ): Promise<PaginatedReactors> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const {
     search,
@@ -65,7 +67,7 @@ export async function getReactors(
   } = filters ?? {};
 
   // Build where conditions — archived reactors (facility archive cascade) are hidden
-  const conditions: SQL[] = [isNull(reactors.archivedAt)];
+  const conditions: SQL[] = [eq(reactors.organizationId, ctx.organizationId), isNull(reactors.archivedAt)];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -100,6 +102,7 @@ export async function getReactors(
   const orderFn = sortOrder === "desc" ? desc : asc;
 
   // Count total for pagination
+  // org-scope-ok: whereClause includes the active organization predicate.
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(reactors)
@@ -113,6 +116,7 @@ export async function getReactors(
   const reactorList = await db
     .select({
       id: reactors.id,
+      organizationId: reactors.organizationId,
       code: reactors.code,
       identifier: reactors.identifier,
       facilityId: reactors.facilityId,
@@ -126,7 +130,13 @@ export async function getReactors(
       facilityName: facilities.name,
     })
     .from(reactors)
-    .leftJoin(facilities, eq(reactors.facilityId, facilities.id))
+    .leftJoin(
+      facilities,
+      and(
+        eq(reactors.facilityId, facilities.id),
+        eq(facilities.organizationId, ctx.organizationId),
+      ),
+    )
     .where(whereClause)
     .orderBy(orderFn(sortColumn))
     .limit(pageSize)
@@ -134,6 +144,7 @@ export async function getReactors(
 
   const items: ReactorWithRelations[] = reactorList.map((reactor) => ({
     id: reactor.id,
+    organizationId: reactor.organizationId,
     code: reactor.code,
     identifier: reactor.identifier,
     facilityId: reactor.facilityId,
@@ -161,14 +172,15 @@ export async function getReactors(
  * Returns reactor data with facility info
  */
 export async function getReactorById(
-  userId: string,
+  ctx: OrgContext,
   reactorId: string
 ): Promise<ReactorWithRelations> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   const [reactor] = await db
     .select({
       id: reactors.id,
+      organizationId: reactors.organizationId,
       code: reactors.code,
       identifier: reactors.identifier,
       facilityId: reactors.facilityId,
@@ -182,8 +194,14 @@ export async function getReactorById(
       facilityName: facilities.name,
     })
     .from(reactors)
-    .leftJoin(facilities, eq(reactors.facilityId, facilities.id))
-    .where(eq(reactors.id, reactorId));
+    .leftJoin(
+      facilities,
+      and(
+        eq(reactors.facilityId, facilities.id),
+        eq(facilities.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)));
 
   if (!reactor) {
     throw new SafeError("Reactor not found");
@@ -191,6 +209,7 @@ export async function getReactorById(
 
   return {
     id: reactor.id,
+    organizationId: reactor.organizationId,
     code: reactor.code,
     identifier: reactor.identifier,
     facilityId: reactor.facilityId,
@@ -217,17 +236,17 @@ export async function getReactorById(
  * gates to source the method from the production process directly.
  */
 export async function getSamplingMethodsByReactorIds(
-  userId: string,
+  ctx: OrgContext,
   reactorIds: string[]
 ): Promise<Map<string, "method_a" | "method_b">> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   if (reactorIds.length === 0) return new Map();
 
   const rows = await db
     .select({ id: reactors.id })
     .from(reactors)
-    .where(inArray(reactors.id, reactorIds));
+    .where(and(inArray(reactors.id, reactorIds), eq(reactors.organizationId, ctx.organizationId)));
 
   return new Map(rows.map((r) => [r.id, LEGACY_REACTOR_SAMPLING_METHOD]));
 }
@@ -237,16 +256,16 @@ export async function getSamplingMethodsByReactorIds(
  * Returns reactors for a specific facility
  */
 export async function getReactorsByFacility(
-  userId: string,
+  ctx: OrgContext,
   facilityId: string
 ): Promise<Reactor[]> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify facility exists
   const [facility] = await db
     .select({ id: facilities.id })
     .from(facilities)
-    .where(eq(facilities.id, facilityId));
+    .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
 
   if (!facility) {
     throw new SafeError("Facility not found");
@@ -255,7 +274,7 @@ export async function getReactorsByFacility(
   return db
     .select()
     .from(reactors)
-    .where(and(eq(reactors.facilityId, facilityId), isNull(reactors.archivedAt)))
+    .where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId), isNull(reactors.archivedAt)))
     .orderBy(asc(reactors.code));
 }
 
@@ -267,7 +286,7 @@ export async function getReactorsByFacility(
  * Create a new reactor
  */
 export async function createReactor(
-  userId: string,
+  ctx: OrgContext,
   data: {
     code: string;
     identifier: string;
@@ -277,13 +296,13 @@ export async function createReactor(
     specifications?: Record<string, unknown> | null;
   }
 ): Promise<Reactor> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Check for duplicate code
   const [existing] = await db
     .select({ id: reactors.id })
     .from(reactors)
-    .where(eq(reactors.code, data.code));
+    .where(and(eq(reactors.code, data.code), eq(reactors.organizationId, ctx.organizationId)));
 
   if (existing) {
     throw new SafeError("A reactor with this code already exists");
@@ -293,7 +312,7 @@ export async function createReactor(
   const [facility] = await db
     .select({ id: facilities.id })
     .from(facilities)
-    .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
+    .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)));
 
   if (!facility) {
     throw new SafeError("Facility not found or archived");
@@ -302,17 +321,20 @@ export async function createReactor(
   // ADR 0016: a reactor no longer declares a sampling method (it lives on the
   // production process). Nothing Method-B to validate at reactor creation.
 
-  const [reactor] = await db
-    .insert(reactors)
-    .values({
-      code: data.code,
-      identifier: data.identifier,
-      facilityId: data.facilityId,
-      reactorType: data.reactorType,
-      nominalThroughputTph: data.nominalThroughputTph ?? null,
-      specifications: data.specifications ?? null,
-    })
-    .returning();
+  const [reactor] = await guardReactorIdentifier(ctx, data.identifier, () =>
+    db
+      .insert(reactors)
+      .values({
+        organizationId: ctx.organizationId,
+        code: data.code,
+        identifier: data.identifier,
+        facilityId: data.facilityId,
+        reactorType: data.reactorType,
+        nominalThroughputTph: data.nominalThroughputTph ?? null,
+        specifications: data.specifications ?? null,
+      })
+      .returning()
+  );
 
   return reactor;
 }
@@ -325,7 +347,7 @@ export async function createReactor(
  * Update an existing reactor
  */
 export async function updateReactor(
-  userId: string,
+  ctx: OrgContext,
   reactorId: string,
   data: {
     code?: string;
@@ -336,13 +358,13 @@ export async function updateReactor(
     specifications?: Record<string, unknown> | null;
   }
 ): Promise<Reactor> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify reactor exists
   const [existing] = await db
     .select()
     .from(reactors)
-    .where(eq(reactors.id, reactorId));
+    .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Reactor not found");
@@ -353,7 +375,7 @@ export async function updateReactor(
     const [duplicate] = await db
       .select({ id: reactors.id })
       .from(reactors)
-      .where(eq(reactors.code, data.code));
+      .where(and(eq(reactors.code, data.code), eq(reactors.organizationId, ctx.organizationId)));
 
     if (duplicate) {
       throw new SafeError("A reactor with this code already exists");
@@ -365,7 +387,7 @@ export async function updateReactor(
     const [facility] = await db
       .select({ id: facilities.id })
       .from(facilities)
-      .where(and(eq(facilities.id, data.facilityId), isNull(facilities.archivedAt)));
+      .where(and(eq(facilities.id, data.facilityId), eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)));
 
     if (!facility) {
       throw new SafeError("Facility not found or archived");
@@ -376,14 +398,21 @@ export async function updateReactor(
   // production process), so there is no Method-B eligibility to re-validate on
   // a reactor update.
 
-  const [updated] = await db
-    .update(reactors)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
-    .where(eq(reactors.id, reactorId))
-    .returning();
+  // A rename OR a facility move can collide with the per-facility identifier
+  // index, so guard the update too.
+  const [updated] = await guardReactorIdentifier(
+    ctx,
+    data.identifier ?? existing.identifier,
+    () =>
+      db
+        .update(reactors)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)))
+        .returning()
+  );
 
   return updated;
 }
@@ -397,16 +426,16 @@ export async function updateReactor(
  * Will fail if reactor has associated production runs
  */
 export async function deleteReactor(
-  userId: string,
+  ctx: OrgContext,
   reactorId: string
 ): Promise<void> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
   // Verify reactor exists
   const [existing] = await db
     .select({ id: reactors.id })
     .from(reactors)
-    .where(eq(reactors.id, reactorId));
+    .where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)));
 
   if (!existing) {
     throw new SafeError("Reactor not found");
@@ -415,7 +444,7 @@ export async function deleteReactor(
   // Note: Foreign key constraints will prevent deletion if there are
   // dependent production runs. The error will be caught by the server action.
 
-  await db.delete(reactors).where(eq(reactors.id, reactorId));
+  await db.delete(reactors).where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)));
 }
 
 // ============================================
@@ -426,18 +455,19 @@ export async function deleteReactor(
  * Check if a reactor code is available
  */
 export async function isReactorCodeAvailable(
-  userId: string,
+  ctx: OrgContext,
   code: string,
   excludeReactorId?: string
 ): Promise<boolean> {
-  requireAuth(userId);
+  requireOrgScope(ctx);
 
-  const conditions: SQL[] = [eq(reactors.code, code)];
+  const conditions: SQL[] = [eq(reactors.code, code), eq(reactors.organizationId, ctx.organizationId)];
 
   if (excludeReactorId) {
     conditions.push(sql`${reactors.id} != ${excludeReactorId}`);
   }
 
+  // org-scope-ok: organization predicate is composed in conditions above.
   const [existing] = await db
     .select({ id: reactors.id })
     .from(reactors)
@@ -450,13 +480,13 @@ export async function isReactorCodeAvailable(
  * Get unique reactor types from all reactors
  * Useful for filter dropdowns
  */
-export async function getReactorTypes(userId: string): Promise<string[]> {
-  requireAuth(userId);
+export async function getReactorTypes(ctx: OrgContext): Promise<string[]> {
+  requireOrgScope(ctx);
 
   const results = await db
     .selectDistinct({ reactorType: reactors.reactorType })
     .from(reactors)
-    .where(isNull(reactors.archivedAt))
+    .where(and(eq(reactors.organizationId, ctx.organizationId), isNull(reactors.archivedAt)))
     .orderBy(asc(reactors.reactorType));
 
   return results.map((r) => r.reactorType);

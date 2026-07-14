@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  // Next's development logger serializes Server Function arguments by default.
+  // Some actions accept write-only credentials, so argument logging must remain
+  // disabled even in local development.
+  logging: { serverFunctions: false },
   // The transport evidence-ledger renderer reads bundled DM Sans/Mono TTFs at
   // runtime via a dynamic process.cwd() path (src/lib/certification/evidence-
   // ledger/fonts.ts), which Next's static tracer cannot follow. The render runs

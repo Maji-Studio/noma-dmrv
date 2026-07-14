@@ -42,8 +42,9 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { formatSafeDate } from "@/lib/format-utils";
+import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
-import { ProductionRunForm } from "./production-run-form";
+import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
 import { ProductionIncidentTable } from "./production-incident-table";
 import { ProductionSampleTable } from "./production-sample-table";
 import {
@@ -239,36 +240,44 @@ export function ProductionRunList() {
     toast.success(`${message}. Still needed to certify: ${gapLabels}${suffix}`);
   };
 
-  const handleCreate = async (data: ProductionRunFormData) => {
+  const handleCreate = async (data: ProductionRunSubmitData) => {
     setCreateError(null);
     try {
-      const run = await createRun.mutateAsync(data);
+      const run = await createRun.mutateAsync(data as ProductionRunFormData);
       setSideSheet(null);
       showSavedToast("Production run created successfully", run);
     } catch (error) {
+      // Let the form surface an overlap conflict inline (on the start field,
+      // with a link to the conflicting run); show other errors as a banner.
+      if (getRunConflict(error)) throw error;
       setCreateError(error instanceof Error ? error.message : "Failed to create production run");
     }
   };
 
-  const handleUpdate = async (data: ProductionRunFormData) => {
+  const handleUpdate = async (data: ProductionRunSubmitData) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     try {
-      const { date, startTime, endTime, ...rest } = data;
+      const { startTime, endTime } = data;
       const run = await updateRun.mutateAsync({
+        // startDate/endDate are folded into startTime/endTime by the form and
+        // are stripped by the update schema.
+        ...data,
         productionRunId: sideSheet.entity.id,
-        ...rest,
-        date: date instanceof Date ? date : new Date(date),
         startTime: startTime instanceof Date ? startTime : new Date(startTime),
-        endTime: endTime !== undefined
-          ? endTime instanceof Date
-            ? endTime
-            : new Date(endTime)
-          : undefined,
+        endTime:
+          endTime === null
+            ? null
+            : endTime === undefined
+              ? undefined
+              : endTime instanceof Date
+                ? endTime
+                : new Date(endTime),
       });
       setSideSheet(null);
       showSavedToast("Production run updated successfully", run);
     } catch (error) {
+      if (getRunConflict(error)) throw error;
       setUpdateError(error instanceof Error ? error.message : "Failed to update production run");
     }
   };
