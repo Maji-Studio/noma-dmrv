@@ -31,6 +31,13 @@ const TEST_USER_ID = "test-user-bin-reconciliation";
 const INITIAL_FEEDSTOCK_DRY_MASS_KG = 100;
 const RECOUNTED_FEEDSTOCK_DRY_MASS_KG = 10;
 const CONCURRENCY_BARRIER_TIMEOUT_MS = 5_000;
+/**
+ * These tests park real transactions on real locks, so a barrier poll can burn
+ * the whole budget on its own — vitest's 5s default leaves nothing for the DB
+ * setup, the racing transactions and the cleanup around it. Give the suite room
+ * so a slow CI runner reports a genuine failure instead of a timeout.
+ */
+const CONCURRENCY_TEST_TIMEOUT_MS = 30_000;
 
 vi.mock("@/lib/auth/server", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/auth/server")>();
@@ -60,7 +67,7 @@ beforeAll(async () => {
     .onConflictDoNothing({ target: users.id });
 });
 
-describe("bin reconciliation integrity", () => {
+describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS }, () => {
   it("subtracts delivered product mass from product-bin stock", async () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
