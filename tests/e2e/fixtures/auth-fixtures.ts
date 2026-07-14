@@ -21,7 +21,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { inArray } from "drizzle-orm";
 import * as schema from "../../../src/db/schema";
-import { auth } from "../../../src/lib/auth/better-auth";
+import { hashPassword } from "better-auth/crypto";
 import * as crypto from "crypto";
 import {
   seedChainData,
@@ -142,7 +142,7 @@ export async function seedTestUsers(
   try {
     const seededUsers: Record<UserRole, TestUser> = {} as Record<UserRole, TestUser>;
 
-    const passwordHash = await (await auth.$context).password.hash(
+    const passwordHash = await hashPassword(
       "TestPassword123!"
     );
 

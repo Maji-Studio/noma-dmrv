@@ -2,7 +2,7 @@ import * as crypto from "crypto";
 import { eq } from "drizzle-orm";
 import type { Page } from "@playwright/test";
 import * as schema from "../../src/db/schema";
-import { auth } from "../../src/lib/auth/better-auth";
+import { hashPassword } from "better-auth/crypto";
 import {
   createDirectAuthContext,
   expect,
@@ -45,7 +45,7 @@ const test = base.extend<{ orgB: OrgBFixture }>({
     let context: Awaited<ReturnType<typeof createDirectAuthContext>> | null = null;
 
     try {
-      const passwordHash = await (await auth.$context).password.hash(
+      const passwordHash = await hashPassword(
         TEST_PASSWORD
       );
       await db.transaction(async (tx) => {
