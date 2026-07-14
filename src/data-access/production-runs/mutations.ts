@@ -25,6 +25,7 @@ import { getProductionRunById } from "./queries";
 import type { ProductionRunWithRelations } from "./types";
 import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
 import { assertFeedstockDrawWithinStock } from "../bin-stock-guards";
+import { lockBinStocks } from "../lock-bin-stocks";
 import {
   assertNoReactorRunOverlap,
   isReactorStartUniqueViolation,
@@ -224,6 +225,11 @@ export async function createProductionRun(
       startTime: data.startTime,
       endTime: data.endTime,
     });
+
+    await lockBinStocks(ctx, tx, [
+      computedDryMass ? data.feedstockStorageLocationId : null,
+      data.biocharOutputKg ? data.biocharStorageLocationId : null,
+    ]);
 
     // Validate long-tail storage references before writing the run.
     if (data.feedstockStorageLocationId) {
@@ -442,9 +448,21 @@ export async function updateProductionRun(
     data.feedstockStorageLocationId !== undefined ||
     data.feedstockWetMassKg !== undefined ||
     data.feedstockMoisturePercent !== undefined;
-
   try {
     await db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select()
+      .from(productionRuns)
+      .where(and(
+        eq(productionRuns.id, productionRunId),
+        eq(productionRuns.organizationId, ctx.organizationId),
+      ))
+      .for("update");
+
+    if (!locked) {
+      throw new SafeError("Production run not found");
+    }
+
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
@@ -465,7 +483,25 @@ export async function updateProductionRun(
     const effectiveFeedstockStorageId =
       data.feedstockStorageLocationId !== undefined
         ? data.feedstockStorageLocationId
-        : existing.feedstockStorageLocationId;
+        : locked.feedstockStorageLocationId;
+    const effectiveBiocharStorageId =
+      data.biocharStorageLocationId !== undefined
+        ? data.biocharStorageLocationId
+        : locked.biocharStorageLocationId;
+    const biocharStockChanged =
+      (data.biocharOutputKg !== undefined &&
+        data.biocharOutputKg !== locked.biocharOutputKg) ||
+      (data.biocharStorageLocationId !== undefined &&
+        data.biocharStorageLocationId !== locked.biocharStorageLocationId);
+
+    await lockBinStocks(ctx, tx, [
+      ...(feedstockFieldsChanged
+        ? [locked.feedstockStorageLocationId, effectiveFeedstockStorageId]
+        : []),
+      ...(biocharStockChanged
+        ? [locked.biocharStorageLocationId, effectiveBiocharStorageId]
+        : []),
+    ]);
 
     if (
       effectiveFeedstockStorageId &&
@@ -474,11 +510,6 @@ export async function updateProductionRun(
       await validateProductionFeedstockSource(ctx, tx, effectiveFeedstockStorageId, targetFacilityId);
     }
 
-    const effectiveBiocharStorageId =
-      data.biocharStorageLocationId !== undefined
-        ? data.biocharStorageLocationId
-        : existing.biocharStorageLocationId;
-
     if (
       effectiveBiocharStorageId &&
       (data.biocharStorageLocationId !== undefined || data.facilityId !== undefined)
@@ -486,9 +517,41 @@ export async function updateProductionRun(
       await validateBiocharStorageLocation(ctx, tx, effectiveBiocharStorageId, targetFacilityId, "Biochar");
     }
 
+    const transactionUpdateData = { ...updateData };
+    if (
+      data.feedstockWetMassKg !== undefined ||
+      data.feedstockMoisturePercent !== undefined
+    ) {
+      const wetMass = data.feedstockWetMassKg !== undefined
+        ? data.feedstockWetMassKg
+        : locked.feedstockWetMassKg;
+      const moisture = data.feedstockMoisturePercent !== undefined
+        ? data.feedstockMoisturePercent
+        : locked.feedstockMoisturePercent;
+      transactionUpdateData.feedstockMassDryKg =
+        wetMass != null && moisture != null
+          ? deriveMassDryKg(wetMass, moisture)
+          : null;
+    }
+    if (
+      data.biocharOutputKg !== undefined ||
+      data.biocharMoisturePercent !== undefined
+    ) {
+      const wetMass = data.biocharOutputKg !== undefined
+        ? data.biocharOutputKg
+        : locked.biocharOutputKg;
+      const moisture = data.biocharMoisturePercent !== undefined
+        ? data.biocharMoisturePercent
+        : locked.biocharMoisturePercent;
+      transactionUpdateData.biocharDryMassKg = computeClampedDryMass(
+        wetMass,
+        moisture,
+      );
+    }
+
     await tx
       .update(productionRuns)
-      .set(updateData)
+      .set(transactionUpdateData)
       .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
 
     // Re-allocate feedstock M:M when feedstock fields change
@@ -497,7 +560,9 @@ export async function updateProductionRun(
         .delete(productionRunFeedstocks)
         .where(and(eq(productionRunFeedstocks.productionRunId, productionRunId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
 
-      const dryMassKg = (updateData.feedstockMassDryKg as number | null) ?? existing.feedstockMassDryKg;
+      const dryMassKg =
+        (transactionUpdateData.feedstockMassDryKg as number | null) ??
+        locked.feedstockMassDryKg;
 
       if (effectiveFeedstockStorageId && dryMassKg) {
         // Hard-block an over-draw (#116). The run's prior allocation was just
@@ -546,7 +611,11 @@ export async function deleteProductionRun(
 
   // Verify run exists
   const [existing] = await db
-    .select({ id: productionRuns.id })
+    .select({
+      id: productionRuns.id,
+      feedstockStorageLocationId: productionRuns.feedstockStorageLocationId,
+      biocharStorageLocationId: productionRuns.biocharStorageLocationId,
+    })
     .from(productionRuns)
     .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
 
@@ -560,12 +629,34 @@ export async function deleteProductionRun(
   // transaction the children would already be gone, leaving a half-deleted run.
   // The FK violation propagates out and is caught by the server action.
   await db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select({
+        id: productionRuns.id,
+        feedstockStorageLocationId: productionRuns.feedstockStorageLocationId,
+        biocharStorageLocationId: productionRuns.biocharStorageLocationId,
+      })
+      .from(productionRuns)
+      .where(and(
+        eq(productionRuns.id, productionRunId),
+        eq(productionRuns.organizationId, ctx.organizationId),
+      ))
+      .for("update");
+
+    if (!locked) {
+      throw new SafeError("Production run not found");
+    }
+
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
       { entityType: "productionRun", entityId: productionRunId },
       "delete",
     );
+
+    await lockBinStocks(ctx, tx, [
+      locked.feedstockStorageLocationId,
+      locked.biocharStorageLocationId,
+    ]);
 
     await tx
       .delete(productionRunFeedstocks)

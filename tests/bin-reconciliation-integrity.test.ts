@@ -264,6 +264,34 @@ describe("bin reconciliation integrity", () => {
       .returning({ id: orders.id });
 
     try {
+      const reducedCount = await recordStockTakeFn({
+        storageLocationId: bin.id,
+        lane: "product",
+        countedMassKg: 50,
+        reason: "Reduce product stock before delivery guard",
+      });
+      expect(reducedCount.success).toBe(true);
+
+      await expect(
+        createDelivery(ctx, {
+          code: `DL-DEL-RACE-${tag}-MOVEMENT`,
+          orderId: order.id,
+          facilityId: facility.id,
+          deliveryDate: new Date("2026-07-02T00:00:00Z"),
+          biocharProductId: product.id,
+          status: "delivered",
+          deliveredWetMassKg: 60,
+        }),
+      ).rejects.toThrow("50 kg available");
+
+      const restoredCount = await recordStockTakeFn({
+        storageLocationId: bin.id,
+        lane: "product",
+        countedMassKg: 100,
+        reason: "Restore product stock for delivery race",
+      });
+      expect(restoredCount.success).toBe(true);
+
       const results = await Promise.allSettled(
         [1, 2].map((attempt) =>
           createDelivery(ctx, {
@@ -293,6 +321,9 @@ describe("bin reconciliation integrity", () => {
       ).toBe(60);
     } finally {
       await db.delete(deliveries).where(eq(deliveries.orderId, order.id));
+      await db
+        .delete(binMovements)
+        .where(eq(binMovements.storageLocationId, bin.id));
       await db.delete(orders).where(eq(orders.id, order.id));
       await db.delete(biocharProducts).where(eq(biocharProducts.id, product.id));
       await db.delete(storageLocations).where(eq(storageLocations.id, bin.id));

@@ -3,7 +3,7 @@
  * CRUD operations for orders with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, gte, ilike, isNull, lte, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, ilike, inArray, isNull, lte, sql, SQL, count } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
@@ -83,6 +83,7 @@ export interface OrderDetail extends Order {
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { lockBinStocks } from "./lock-bin-stocks";
 
 // ============================================
 // Read Operations
@@ -623,12 +624,67 @@ export async function updateOrder(
   }
 
   const updated = await db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select()
+      .from(orders)
+      .where(and(
+        eq(orders.id, orderId),
+        eq(orders.organizationId, ctx.organizationId),
+      ))
+      .for("update");
+
+    if (!locked) {
+      throw new SafeError("Order not found");
+    }
+
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
       { entityType: "order", entityId: orderId },
       "update",
     );
+
+    if (
+      data.biocharProductId !== undefined &&
+      data.biocharProductId !== locked.biocharProductId
+    ) {
+      const [affectedDelivery] = await tx
+        .select({ id: deliveries.id })
+        .from(deliveries)
+        .where(and(
+          eq(deliveries.orderId, orderId),
+          eq(deliveries.organizationId, ctx.organizationId),
+          eq(deliveries.status, "delivered"),
+          isNull(deliveries.biocharProductId),
+          gt(deliveries.deliveredWetMassKg, 0),
+        ))
+        .limit(1);
+
+      if (affectedDelivery) {
+        const productBins = await tx
+          .select({
+            id: biocharProducts.id,
+            storageLocationId: biocharProducts.storageLocationId,
+          })
+          .from(biocharProducts)
+          .where(and(
+            inArray(biocharProducts.id, [
+              locked.biocharProductId,
+              data.biocharProductId,
+            ]),
+            eq(biocharProducts.organizationId, ctx.organizationId),
+          ))
+          .orderBy(biocharProducts.id)
+          .for("update");
+        await lockBinStocks(
+          ctx,
+          tx,
+          productBins.map(
+            (product) => product.storageLocationId ?? product.id,
+          ),
+        );
+      }
+    }
 
     const [row] = await tx
       .update(orders)

@@ -10,6 +10,7 @@ import {
   feedstockTypes,
   formulations,
   formulationIngredients,
+  productionRuns,
   storageLocations,
   type Formulation,
   type FeedstockType,
@@ -53,6 +54,7 @@ export type IngredientInput = {
 
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { lockBinStocks } from "./lock-bin-stocks";
 
 async function assertBlendFeedstockTypes(ctx: OrgContext, ingredients?: IngredientInput[]) {
   const feedstockTypeIds = [
@@ -380,6 +382,46 @@ export async function updateFormulation(
               eq(formulationIngredients.organizationId, ctx.organizationId),
             ));
     assertRatioSumWithinBounds(effectiveBiocharRatio, effectiveIngredients);
+
+    if (
+      data.biocharRatio !== undefined &&
+      data.biocharRatio !== locked.biocharRatio
+    ) {
+      const affectedProducts = await tx
+        .select({
+          linkedProductionRunId: biocharProducts.linkedProductionRunId,
+        })
+        .from(biocharProducts)
+        .where(and(
+          eq(biocharProducts.formulationId, formulationId),
+          eq(biocharProducts.organizationId, ctx.organizationId),
+        ))
+        .orderBy(biocharProducts.id)
+        .for("update");
+      const runIds = [...new Set(
+        affectedProducts
+          .map((product) => product.linkedProductionRunId)
+          .filter((id): id is string => id != null),
+      )];
+      const sourceBins = runIds.length > 0
+        ? await tx
+            .select({
+              storageLocationId: productionRuns.biocharStorageLocationId,
+            })
+            .from(productionRuns)
+            .where(and(
+              inArray(productionRuns.id, runIds),
+              eq(productionRuns.organizationId, ctx.organizationId),
+            ))
+            .orderBy(productionRuns.id)
+            .for("update")
+        : [];
+      await lockBinStocks(
+        ctx,
+        tx,
+        sourceBins.map((run) => run.storageLocationId),
+      );
+    }
 
     const [updated] = await tx
       .update(formulations)

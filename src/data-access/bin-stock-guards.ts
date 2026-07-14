@@ -150,7 +150,17 @@ async function deriveProductAvailableKg(
   ctx: OrgContext,
   tx: DbReader,
   storageLocationId: string,
+  excludeDeliveryId?: string,
 ): Promise<number> {
+  const deliveredConditions = [
+    eq(deliveries.status, "delivered"),
+    eq(deliveries.organizationId, ctx.organizationId),
+    eq(biocharProducts.storageLocationId, storageLocationId),
+  ];
+  if (excludeDeliveryId) {
+    deliveredConditions.push(ne(deliveries.id, excludeDeliveryId));
+  }
+
   const [[product], [delivered], [movement]] = await Promise.all([
     tx
       .select({
@@ -182,13 +192,7 @@ async function deriveProductAvailableKg(
           eq(biocharProducts.organizationId, ctx.organizationId),
         ),
       )
-      .where(
-        and(
-          eq(deliveries.status, "delivered"),
-          eq(deliveries.organizationId, ctx.organizationId),
-          eq(biocharProducts.storageLocationId, storageLocationId),
-        ),
-      ),
+      .where(and(...deliveredConditions)),
     tx
       .select({
         total: sql<number>`COALESCE(SUM(${binMovements.massDeltaKg}), 0)`,
@@ -398,8 +402,8 @@ export async function assertBiocharProductDrawWithinStock(
     )
     .where(and(...deliveredConditions));
 
-  const available = Number(product?.massKg ?? 0) - Number(delivered.total);
-  if (isOverdraw(params.requestedWetKg, available)) {
+  const batchAvailable = Number(product?.massKg ?? 0) - Number(delivered.total);
+  if (isOverdraw(params.requestedWetKg, batchAvailable)) {
     // Batch-specific copy: a delivery over-draw is against the product batch's
     // remaining wet mass, not a bin lane, so the #194 bin reconcile workflow is
     // the wrong lever — point the operator at the source bin or the product.
@@ -407,8 +411,20 @@ export async function assertBiocharProductDrawWithinStock(
       `Cannot deliver ${formatKg(params.requestedWetKg)} from product ${
         product?.code ?? "this batch"
       }: only ${formatKg(
-        available,
+        batchAvailable,
       )} remain undelivered. Reconcile the source bin or adjust the product before delivering.`,
     );
+  }
+
+  if (product?.storageLocationId) {
+    const binAvailable = await deriveProductAvailableKg(
+      ctx,
+      tx,
+      product.storageLocationId,
+      params.excludeDeliveryId,
+    );
+    if (isOverdraw(params.requestedWetKg, binAvailable)) {
+      throw overdrawError("product", binAvailable, params.requestedWetKg);
+    }
   }
 }
