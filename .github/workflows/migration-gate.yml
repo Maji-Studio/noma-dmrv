@@ -54,7 +54,9 @@ jobs:
       # repository or environment secrets.
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/noma_dmrv_migration_gate
       ADMIN_EMAIL: migration-gate-admin@ci.local
-      CREDENTIALS_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
+      # Quoted: unquoted, YAML parses an all-digit scalar as the integer 0, and
+      # the key must reach the process as 64 hex characters.
+      CREDENTIALS_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
       ISOMETRIC_ACCESS_TOKEN: migration-gate-access-token
       ISOMETRIC_CLIENT_SECRET: migration-gate-client-secret
 
