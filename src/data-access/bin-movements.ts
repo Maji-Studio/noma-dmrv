@@ -22,6 +22,8 @@ import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { isPgCheckViolation } from "@/db/errors";
 
+export type DbReader = Pick<typeof db, "select">;
+
 const LOSS_NEGATIVITY_CONSTRAINT = "bin_movements_loss_is_negative";
 const LOSS_NEGATIVITY_MESSAGE = "A loss must be recorded as a negative mass delta";
 
@@ -58,17 +60,19 @@ export interface CreateBinMovementInput {
 
 /**
  * Signed sum of movement deltas per (storage location, lane). Used by the
- * storage-location enrichment overlay to fold documented adjustments/losses
- * into derived stock. Guarded because it is a data-access read.
+ * shared lane-stock derivation to fold documented adjustments/losses into
+ * derived stock. Guarded because it is a data-access read. Transactional
+ * callers must pass their transaction as `executor`.
  */
 export async function getBinMovementLaneSums(
   ctx: OrgContext,
-  storageLocationIds: string[]
+  storageLocationIds: string[],
+  executor: DbReader = db,
 ): Promise<BinMovementLaneSum[]> {
   requireOrgScope(ctx);
   if (storageLocationIds.length === 0) return [];
 
-  const rows = await db
+  const rows = await executor
     .select({
       storageLocationId: binMovements.storageLocationId,
       lane: binMovements.lane,

@@ -10,6 +10,7 @@ import { count, eq } from "drizzle-orm";
 import { Resend } from "resend";
 import { env } from "@/config/env";
 import { db } from "@/db";
+import { seedOrgDefaults } from "@/db/org-defaults";
 import * as schema from "@/db/schema";
 
 /** Pending invitations expire after 7 days. */
@@ -301,10 +302,15 @@ export const auth = betterAuth({
   },
   plugins: [
     organization({
-      // Self-serve org creation is disabled: Organizations are created only by
-      // Platform Admins via the guarded `createOrganizationAction` server
-      // action (which also stamps the creator's chosen Owner, not the admin).
-      allowUserToCreateOrganization: false,
+      // Organization creation is reserved for app-level Platform Admins. The
+      // guarded server action uses the server-only userId path so the selected
+      // user, rather than the acting Platform Admin, becomes the Owner.
+      allowUserToCreateOrganization: (user) => user.role === "admin",
+      organizationHooks: {
+        afterCreateOrganization: async ({ organization }) => {
+          await seedOrgDefaults(db, organization.id);
+        },
+      },
       invitationExpiresIn: INVITATION_EXPIRES_IN_SECONDS,
       // Re-inviting the same email cancels the stale pending invite so the
       // pending list never shows duplicates.

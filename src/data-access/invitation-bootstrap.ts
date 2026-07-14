@@ -1,8 +1,13 @@
-import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { accounts, invitations, users } from "@/db/schema";
+import { isPgUniqueViolation } from "@/db/errors";
+import { invitations, users } from "@/db/schema";
+import { auth } from "@/lib/auth/better-auth";
 import { SafeError } from "@/lib/errors";
+
+const USERS_EMAIL_UNIQUE_CONSTRAINT = "users_email_unique";
+const EXISTING_ACCOUNT_MESSAGE =
+  "An account already exists for this invitation. Sign in instead.";
 
 export type InvitationBootstrapState = {
   invitationId: string;
@@ -84,46 +89,59 @@ export async function createInvitedAccount(input: {
   name: string;
   passwordHash: string;
 }): Promise<{ userId: string; email: string; organizationId: string }> {
-  return db.transaction(async (tx) => {
-    const [row] = await tx
-      .select({
-        id: invitations.id,
-        email: invitations.email,
-        organizationId: invitations.organizationId,
-        status: invitations.status,
-        expiresAt: invitations.expiresAt,
-      })
-      .from(invitations)
-      .where(eq(invitations.id, input.invitationId))
-      .limit(1)
-      .for("update");
-    const invitation = assertValidInvitation(row);
-    if (await findUserByEmail(tx, invitation.email)) {
-      throw new SafeError(
-        "An account already exists for this invitation. Sign in instead."
-      );
-    }
+  const [row] = await db
+    .select({
+      id: invitations.id,
+      email: invitations.email,
+      organizationId: invitations.organizationId,
+      status: invitations.status,
+      expiresAt: invitations.expiresAt,
+    })
+    .from(invitations)
+    .where(eq(invitations.id, input.invitationId))
+    .limit(1);
+  const invitation = assertValidInvitation(row);
+  if (await findUserByEmail(db, invitation.email)) {
+    throw new SafeError(EXISTING_ACCOUNT_MESSAGE);
+  }
 
-    const userId = randomUUID();
-    await tx.insert(users).values({
-      id: userId,
-      email: invitation.email.toLowerCase(),
+  const email = invitation.email.toLowerCase();
+  const { internalAdapter } = await auth.$context;
+  let createdUser: Awaited<ReturnType<typeof internalAdapter.createUser>>;
+  try {
+    createdUser = await internalAdapter.createUser({
+      email,
       name: input.name,
-      role: "user",
       // Receiving the single-use invitation proves control of this address.
       emailVerified: true,
     });
-    await tx.insert(accounts).values({
-      id: randomUUID(),
-      userId,
-      accountId: userId,
+  } catch (error) {
+    // Normalized email plus the database uniqueness constraint is the race
+    // backstop when two bootstrap requests pass the anonymous pre-check.
+    if (isPgUniqueViolation(error, USERS_EMAIL_UNIQUE_CONSTRAINT)) {
+      throw new SafeError(EXISTING_ACCOUNT_MESSAGE);
+    }
+    throw error;
+  }
+
+  try {
+    await internalAdapter.linkAccount({
+      userId: createdUser.id,
+      accountId: createdUser.id,
       providerId: "credential",
       password: input.passwordHash,
     });
-    return {
-      userId,
-      email: invitation.email.toLowerCase(),
-      organizationId: invitation.organizationId,
-    };
-  });
+  } catch (error) {
+    // Better Auth 1.6 does not expose a public way to bind internalAdapter
+    // calls to this module's invitation transaction. Compensate through the
+    // adapter so hooks still run and a failed link does not leave an orphan.
+    await internalAdapter.deleteUser(createdUser.id).catch(() => undefined);
+    throw error;
+  }
+
+  return {
+    userId: createdUser.id,
+    email,
+    organizationId: invitation.organizationId,
+  };
 }

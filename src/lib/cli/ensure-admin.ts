@@ -10,7 +10,6 @@ import { config } from 'dotenv';
 import { Pool } from 'pg';
 import * as schema from '../../db/schema';
 import { DEC_ORG_ID, DEC_ORG_NAME, DEC_ORG_SLUG } from '../../db/org-defaults';
-import { hashPassword } from '../auth/hash-password';
 import { getPgPoolConfig } from '../pg-pool-config';
 import { encryptSecret } from '../crypto/secrets';
 
@@ -163,7 +162,9 @@ async function ensureAdmin() {
   const db = drizzle(pool, { schema });
 
   try {
-    const passwordHash = await hashPassword(adminPassword);
+    // Load auth only after dotenv has populated process.env for this CLI.
+    const { auth } = await import('../auth/better-auth');
+    const passwordHash = await (await auth.$context).password.hash(adminPassword);
 
     // Check if user exists
     const [existing] = await db

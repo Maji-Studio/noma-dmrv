@@ -26,7 +26,6 @@ import { env } from "@/config/env";
 import {
   cancelInvitationAsPlatformAdmin,
   createInvitationAsPlatformAdmin,
-  createOrganizationWithOwner,
   findMembershipRole,
   findUserIdByEmail,
   getActiveOrganization,
@@ -292,12 +291,10 @@ export async function createOrganizationAction(
         "No user account found for the owner email. The owner must have an account first."
       );
     }
-    const { id } = await createOrganizationWithOwner({
-      name,
-      slug,
-      ownerUserId,
+    const organization = await auth.api.createOrganization({
+      body: { name, slug, userId: ownerUserId },
     });
-    return { organizationId: id };
+    return { organizationId: organization.id };
   }, "Failed to create organization.");
 }
 

@@ -19,7 +19,6 @@ import {
   feedstocks,
   feedstockTypes,
   productionRuns,
-  productionRunFeedstocks,
   biocharProducts,
   formulations,
   deliveries,
@@ -27,7 +26,7 @@ import {
   applications,
   type StorageLocation,
 } from "@/db/schema";
-import { getBinMovementLaneSums, groupLaneSumsByLocation } from "./bin-movements";
+import { deriveLaneStock } from "./lane-stock-derivation";
 import { requireOrgScope } from "./utils";
 
 // ============================================
@@ -122,13 +121,12 @@ export async function enrichStorageLocationRows(
   // Run all enrichment queries in parallel
   const [
     feedstockInventoryRows,
-    feedstockConsumptionRows,
     biocharOutputRows,
     biocharAllocationRows,
     productInventoryRows,
     productApplicationRows,
     lastActivityRows,
-    movementLaneSums,
+    laneStockRows,
   ] = storageLocationIds.length > 0
     ? await Promise.all([
         db
@@ -138,9 +136,6 @@ export async function enrichStorageLocationRows(
             pendingBatchCount: sql<number>`count(*) filter (where ${feedstocks.status} = 'missing_data')`,
             feedstockTypes: sql<string | null>`
               string_agg(DISTINCT ${feedstockTypes.name}, ', ' ORDER BY ${feedstockTypes.name})
-            `,
-            totalDryKg: sql<number>`
-              COALESCE(SUM(${feedstocks.massDryKg}) filter (where ${feedstocks.status} = 'complete'), 0)
             `,
             totalWetKg: sql<number>`
               COALESCE(SUM(${feedstocks.massWetKg}) filter (where ${feedstocks.status} = 'complete'), 0)
@@ -166,29 +161,8 @@ export async function enrichStorageLocationRows(
           .groupBy(feedstocks.storageLocationId),
         db
           .select({
-            storageLocationId: productionRuns.feedstockStorageLocationId,
-            consumedDryKg: sql<number>`COALESCE(SUM(${productionRunFeedstocks.massUsedKg}), 0)`,
-          })
-          .from(productionRuns)
-          .leftJoin(
-            productionRunFeedstocks,
-            and(
-              eq(productionRunFeedstocks.productionRunId, productionRuns.id),
-              eq(productionRunFeedstocks.organizationId, ctx.organizationId),
-            ),
-          )
-          .where(
-            and(
-              inArray(productionRuns.feedstockStorageLocationId, storageLocationIds),
-              eq(productionRuns.organizationId, ctx.organizationId),
-            ),
-          )
-          .groupBy(productionRuns.feedstockStorageLocationId),
-        db
-          .select({
             storageLocationId: productionRuns.biocharStorageLocationId,
             productionRunCount: count(),
-            producedKg: sql<number>`COALESCE(SUM(${productionRuns.biocharOutputKg}), 0)`,
           })
           .from(productionRuns)
           .where(
@@ -201,14 +175,6 @@ export async function enrichStorageLocationRows(
         db
           .select({
             storageLocationId: productionRuns.biocharStorageLocationId,
-            allocatedKg: sql<number>`
-              COALESCE(
-                SUM(
-                  COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)
-                ),
-                0
-              )
-            `,
             downstreamFormulations: sql<string | null>`
               string_agg(DISTINCT ${formulations.name}, ', ' ORDER BY ${formulations.name})
             `,
@@ -361,10 +327,9 @@ export async function enrichStorageLocationRows(
           WHERE storage_location_id IS NOT NULL
           ORDER BY storage_location_id, created_at DESC
         `),
-        getBinMovementLaneSums(ctx, storageLocationIds),
+        deriveLaneStock(ctx, db, { storageLocationIds }),
       ])
     : [
-        [],
         [],
         [],
         [],
@@ -397,9 +362,6 @@ export async function enrichStorageLocationRows(
   const feedstockInventoryMap = new Map(
     feedstockInventoryRows.map((row) => [row.storageLocationId ?? "", row])
   );
-  const feedstockConsumptionMap = new Map(
-    feedstockConsumptionRows.map((row) => [row.storageLocationId ?? "", row])
-  );
   const biocharOutputMap = new Map(
     biocharOutputRows.map((row) => [row.storageLocationId ?? "", row])
   );
@@ -414,22 +376,20 @@ export async function enrichStorageLocationRows(
       .filter((row) => row.storageLocationId != null)
       .map((row) => [row.storageLocationId, row])
   );
-  // Signed manual-reconciliation deltas per lane (issue #194).
-  const movementMap = groupLaneSumsByLocation(movementLaneSums);
+  const laneStockMap = new Map(
+    laneStockRows.map((row) => [row.storageLocationId, row]),
+  );
 
   return rows.map((row) => {
     const feedstockInventoryRow = feedstockInventoryMap.get(row.id);
-    const feedstockConsumptionRow = feedstockConsumptionMap.get(row.id);
-    const movements = movementMap.get(row.id) ?? {};
-    const totalDryKg = Number(feedstockInventoryRow?.totalDryKg ?? 0);
+    const laneStock = laneStockMap.get(row.id);
+    const totalDryKg = laneStock?.feedstockIntakeDryKg ?? 0;
     const totalWetKg = Number(feedstockInventoryRow?.totalWetKg ?? 0);
     const pendingDryKg = Number(feedstockInventoryRow?.pendingDryKg ?? 0);
-    const consumedDryKg = Number(feedstockConsumptionRow?.consumedDryKg ?? 0);
     // Unclamped: intake − consumption + manual adjustments/losses. A negative
     // result is a real signal (draws outran recorded stock), surfaced as
     // "needs reconciliation" rather than hidden with Math.max.
-    const currentDryMassKg =
-      totalDryKg - consumedDryKg + (movements.feedstock ?? 0);
+    const currentDryMassKg = laneStock?.feedstockStockDryKg ?? 0;
     // The moisture-ratio clamp stays — it bounds a ratio to [0, 1], it is not a
     // stock clamp.
     const moistureRatio =
@@ -443,8 +403,7 @@ export async function enrichStorageLocationRows(
 
     const biocharOutputRow = biocharOutputMap.get(row.id);
     const biocharAllocationRow = biocharAllocationMap.get(row.id);
-    const producedKg = Number(biocharOutputRow?.producedKg ?? 0);
-    const allocatedKg = Number(biocharAllocationRow?.allocatedKg ?? 0);
+    const allocatedKg = laneStock?.biocharAllocatedKg ?? 0;
 
     const productInventoryRow = productInventoryMap.get(row.id);
     const productApplicationRow = productApplicationMap.get(row.id);
@@ -467,7 +426,7 @@ export async function enrichStorageLocationRows(
       biocharInventory: {
         productionRunCount: Number(biocharOutputRow?.productionRunCount ?? 0),
         // Unclamped, movement-inclusive (see currentDryMassKg above).
-        currentMassKg: producedKg - allocatedKg + (movements.biochar ?? 0),
+        currentMassKg: laneStock?.biocharStockKg ?? 0,
         allocatedToProductsKg: allocatedKg,
         downstreamFormulations: splitAggregateLabels(
           biocharAllocationRow?.downstreamFormulations ?? null
@@ -475,7 +434,8 @@ export async function enrichStorageLocationRows(
       },
       productInventory: {
         batchCount: Number(productInventoryRow?.batchCount ?? 0),
-        currentMassKg: productBaseMassKg + (movements.product ?? 0),
+        currentMassKg:
+          productBaseMassKg + (laneStock?.productMovementDeltaKg ?? 0),
         biocharEquivalentKg: Number(productInventoryRow?.biocharEquivalentKg ?? 0),
         formulationNames: splitAggregateLabels(
           productInventoryRow?.formulationNames ?? null

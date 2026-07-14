@@ -2,6 +2,7 @@ import * as crypto from "crypto";
 import { eq } from "drizzle-orm";
 import type { Page } from "@playwright/test";
 import * as schema from "../../src/db/schema";
+import { auth } from "../../src/lib/auth/better-auth";
 import {
   createDirectAuthContext,
   expect,
@@ -9,7 +10,6 @@ import {
   type TestUser,
 } from "./fixtures/auth-fixtures";
 import { createDbConnection } from "./fixtures/db";
-import { hashPassword } from "./fixtures/hash-password";
 import { seedCreditBatch } from "./fixtures/seed-chain-data";
 
 const TEST_PASSWORD = "TestPassword123!";
@@ -45,7 +45,9 @@ const test = base.extend<{ orgB: OrgBFixture }>({
     let context: Awaited<ReturnType<typeof createDirectAuthContext>> | null = null;
 
     try {
-      const passwordHash = await hashPassword(TEST_PASSWORD);
+      const passwordHash = await (await auth.$context).password.hash(
+        TEST_PASSWORD
+      );
       await db.transaction(async (tx) => {
         await tx.insert(schema.organizations).values({
           id: ids.organization,

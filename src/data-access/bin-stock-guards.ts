@@ -12,28 +12,21 @@
  * stock), where a stock-take adjustment or documented loss brings the derived
  * count back in line before the draw is retried.
  *
- * The derivation mirrors `storage-location-enrichment.ts` lane-by-lane; keep the
- * two in step if either changes.
+ * Both this write guard and storage-location enrichment use the same shared
+ * lane-stock derivation so their available quantities cannot drift.
  */
 
 import { and, eq, ne, sql } from "drizzle-orm";
-import type { db, DbTransaction } from "@/db";
+import type { DbTransaction } from "@/db";
 import {
-  feedstocks,
-  productionRuns,
-  productionRunFeedstocks,
   biocharProducts,
-  formulations,
-  binMovements,
   deliveries,
   orders,
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
 import type { OrgContext } from "@/lib/auth/server";
+import { deriveLaneStock } from "./lane-stock-derivation";
 import { requireOrgScope } from "./utils";
-
-/** Any Drizzle client that can run reads — the live `db` or a transaction. */
-type DbReader = Pick<typeof db, "select">;
 
 /** Serialize stock guards with the write they protect for one stock resource. */
 async function lockStockResource(
@@ -85,59 +78,6 @@ function isOverdraw(requestedKg: number, availableKg: number): boolean {
 }
 
 /**
- * Derived on-hand feedstock (dry kg) for a feedstock bin:
- * complete-batch intake − consumption by production runs + reconciliation deltas.
- * `excludeRunId` drops one run's consumption (its allocation is being replaced).
- */
-async function deriveFeedstockAvailableKg(
-  ctx: OrgContext,
-  tx: DbReader,
-  storageLocationId: string,
-  excludeRunId?: string,
-): Promise<number> {
-  const consumptionConditions = [
-    eq(productionRuns.feedstockStorageLocationId, storageLocationId),
-    eq(productionRuns.organizationId, ctx.organizationId),
-  ];
-  if (excludeRunId) {
-    consumptionConditions.push(ne(productionRuns.id, excludeRunId));
-  }
-
-  const [[intake], [consumed], [movement]] = await Promise.all([
-    tx
-      .select({
-        total: sql<number>`COALESCE(SUM(${feedstocks.massDryKg}) FILTER (WHERE ${feedstocks.status} = 'complete'), 0)`,
-      })
-      .from(feedstocks)
-      .where(and(eq(feedstocks.storageLocationId, storageLocationId), eq(feedstocks.organizationId, ctx.organizationId))),
-    tx
-      .select({
-        total: sql<number>`COALESCE(SUM(${productionRunFeedstocks.massUsedKg}), 0)`,
-      })
-      .from(productionRuns)
-      .leftJoin(
-        productionRunFeedstocks,
-        and(eq(productionRunFeedstocks.productionRunId, productionRuns.id), eq(productionRunFeedstocks.organizationId, ctx.organizationId)),
-      )
-      .where(and(...consumptionConditions)),
-    tx
-      .select({
-        total: sql<number>`COALESCE(SUM(${binMovements.massDeltaKg}), 0)`,
-      })
-      .from(binMovements)
-      .where(
-        and(
-          eq(binMovements.storageLocationId, storageLocationId),
-          eq(binMovements.lane, "feedstock"),
-          eq(binMovements.organizationId, ctx.organizationId),
-        ),
-      ),
-  ]);
-
-  return Number(intake.total) - Number(consumed.total) + Number(movement.total);
-}
-
-/**
  * Hard-block a production-run feedstock draw that exceeds the bin's derived
  * on-hand dry stock. Call inside the run's transaction, before allocating.
  */
@@ -152,74 +92,18 @@ export async function assertFeedstockDrawWithinStock(
 ): Promise<void> {
   requireOrgScope(ctx);
   await lockStockResource(tx, params.storageLocationId);
-  const available = await deriveFeedstockAvailableKg(
+  const [stock] = await deriveLaneStock(
     ctx,
     tx,
-    params.storageLocationId,
-    params.excludeRunId,
+    {
+      storageLocationIds: [params.storageLocationId],
+      excludeRunId: params.excludeRunId,
+    },
   );
+  const available = stock?.feedstockStockDryKg ?? 0;
   if (isOverdraw(params.requestedDryKg, available)) {
     throw overdrawError("feedstock", available, params.requestedDryKg);
   }
-}
-
-/**
- * Derived on-hand biochar (kg) for a biochar bin (the run's output bin):
- * run output − biochar-equivalent allocated to products + reconciliation deltas.
- * `excludeProductId` drops one product's allocation (its mass is being replaced).
- */
-async function deriveBiocharAvailableKg(
-  ctx: OrgContext,
-  tx: DbReader,
-  biocharStorageLocationId: string,
-  excludeProductId?: string,
-): Promise<number> {
-  const allocationConditions = [
-    eq(productionRuns.biocharStorageLocationId, biocharStorageLocationId),
-    eq(productionRuns.organizationId, ctx.organizationId),
-  ];
-  if (excludeProductId) {
-    allocationConditions.push(ne(biocharProducts.id, excludeProductId));
-  }
-
-  const [[produced], [allocated], [movement]] = await Promise.all([
-    tx
-      .select({
-        total: sql<number>`COALESCE(SUM(${productionRuns.biocharOutputKg}), 0)`,
-      })
-      .from(productionRuns)
-      .where(and(
-        eq(productionRuns.biocharStorageLocationId, biocharStorageLocationId),
-        eq(productionRuns.organizationId, ctx.organizationId),
-      )),
-    tx
-      .select({
-        total: sql<number>`COALESCE(SUM(COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)), 0)`,
-      })
-      .from(productionRuns)
-      .innerJoin(
-        biocharProducts,
-        and(eq(biocharProducts.linkedProductionRunId, productionRuns.id), eq(biocharProducts.organizationId, ctx.organizationId)),
-      )
-      .leftJoin(formulations, and(eq(biocharProducts.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
-      .where(and(...allocationConditions)),
-    tx
-      .select({
-        total: sql<number>`COALESCE(SUM(${binMovements.massDeltaKg}), 0)`,
-      })
-      .from(binMovements)
-      .where(
-        and(
-          eq(binMovements.storageLocationId, biocharStorageLocationId),
-          eq(binMovements.lane, "biochar"),
-          eq(binMovements.organizationId, ctx.organizationId),
-        ),
-      ),
-  ]);
-
-  return (
-    Number(produced.total) - Number(allocated.total) + Number(movement.total)
-  );
 }
 
 /**
@@ -238,12 +122,15 @@ export async function assertBiocharDrawWithinStock(
 ): Promise<void> {
   requireOrgScope(ctx);
   await lockStockResource(tx, params.biocharStorageLocationId);
-  const available = await deriveBiocharAvailableKg(
+  const [stock] = await deriveLaneStock(
     ctx,
     tx,
-    params.biocharStorageLocationId,
-    params.excludeProductId,
+    {
+      storageLocationIds: [params.biocharStorageLocationId],
+      excludeProductId: params.excludeProductId,
+    },
   );
+  const available = stock?.biocharStockKg ?? 0;
   if (isOverdraw(params.requestedBiocharKg, available)) {
     throw overdrawError("biochar", available, params.requestedBiocharKg);
   }

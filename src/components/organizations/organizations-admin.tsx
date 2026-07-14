@@ -11,7 +11,8 @@ import { z } from "zod";
 import { BuildingsIcon } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FormField, FormInput } from "@/components/forms";
+import { Skeleton } from "@/components/ui/loading-skeleton";
+import { FormActions, FormField, FormInput } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import {
   useAllOrganizations,
@@ -20,6 +21,10 @@ import {
 } from "@/hooks/use-organizations";
 import { createOrganizationSchema } from "@/schemas/organizations";
 import { OrganizationCertifierCredentials } from "./organization-certifier-credentials";
+import {
+  OrganizationRosterList,
+  OrganizationRosterRow,
+} from "./organization-roster-list";
 
 type CreateForm = z.infer<typeof createOrganizationSchema>;
 
@@ -67,7 +72,7 @@ export function OrganizationsAdmin() {
       <section className="flex flex-col gap-16">
         <h2 className="title-heading-3">Organizations</h2>
         {isLoading ? (
-          <div className="h-64 animate-pulse bg-[var(--color-background-medium)]" />
+          <Skeleton className="h-64 w-full" />
         ) : !organizations || organizations.length === 0 ? (
           <EmptyState
             icon={<BuildingsIcon size={40} />}
@@ -76,39 +81,37 @@ export function OrganizationsAdmin() {
             padding="md"
           />
         ) : (
-          <ul className="flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]">
+          <OrganizationRosterList>
             {organizations.map((org) => (
-              <li
+              <OrganizationRosterRow
                 key={org.id}
-                className="flex flex-col border-b border-[var(--color-border-tertiary)] last:border-b-0"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-12 px-16 py-12">
-                  <div className="flex min-w-0 flex-col">
-                    <span className="body-small font-medium text-[var(--color-text-primary)] truncate">
-                      {org.name}
-                    </span>
-                    <span className="body-caption text-[var(--color-text-secondary)] truncate">
-                      {org.slug} · {org.memberCount} member
-                      {org.memberCount === 1 ? "" : "s"}
-                    </span>
-                  </div>
+                primary={org.name}
+                secondary={
+                  <>
+                    {org.slug} · {org.memberCount} member
+                    {org.memberCount === 1 ? "" : "s"}
+                  </>
+                }
+                actions={
                   <Button
                     type="button"
                     variant="weak"
                     size="small"
                     onClick={() => enterOrg(org.id)}
-                    disabled={enteringId === org.id}
+                    busy={enteringId === org.id}
                   >
-                    {enteringId === org.id ? "Entering…" : "Enter"}
+                    Enter
                   </Button>
-                </div>
-                <OrganizationCertifierCredentials
-                  organizationId={org.id}
-                  organizationName={org.name}
-                />
-              </li>
+                }
+                details={
+                  <OrganizationCertifierCredentials
+                    organizationId={org.id}
+                    organizationName={org.name}
+                  />
+                }
+              />
             ))}
-          </ul>
+          </OrganizationRosterList>
         )}
       </section>
 
@@ -156,15 +159,12 @@ export function OrganizationsAdmin() {
               {...register("ownerEmail")}
             />
           </FormField>
-          <div>
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={createOrg.isPending}
-            >
-              {createOrg.isPending ? "Creating…" : "Create organization"}
-            </Button>
-          </div>
+          <FormActions
+            isSubmitting={createOrg.isPending}
+            submitLabel="Create organization"
+            submittingLabel="Creating…"
+            sticky={false}
+          />
         </form>
       </section>
     </div>
