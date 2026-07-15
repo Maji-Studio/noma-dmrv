@@ -139,6 +139,10 @@ function buildTrustedOrigins(): string[] {
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
+    // Better Auth composes several writes (for example user + credential
+    // account) through adapter transactions. Drizzle leaves this disabled by
+    // default, so opt in explicitly or those writes can commit independently.
+    transaction: true,
     schema: {
       user: schema.users,
       session: schema.sessions,
