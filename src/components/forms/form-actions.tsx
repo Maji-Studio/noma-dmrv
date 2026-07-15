@@ -13,6 +13,7 @@ interface FormActionsProps {
   onCancel?: () => void;
   isSubmitting?: boolean;
   submitLabel?: string;
+  submittingLabel?: string;
   defaultSubmitLabel?: string;
   /** Block submit while a precondition is unmet (e.g. an unchecked ack). */
   submitDisabled?: boolean;
@@ -31,6 +32,7 @@ export function FormActions({
   onCancel,
   isSubmitting = false,
   submitLabel,
+  submittingLabel = "Saving...",
   defaultSubmitLabel = "Save",
   submitDisabled = false,
   formId,
@@ -55,7 +57,7 @@ export function FormActions({
         form={formId}
         disabled={isSubmitting || submitDisabled}
       >
-        {isSubmitting ? "Saving..." : submitLabel ?? defaultSubmitLabel}
+        {isSubmitting ? submittingLabel : submitLabel ?? defaultSubmitLabel}
       </Button>
       {onCancel && (
         <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>

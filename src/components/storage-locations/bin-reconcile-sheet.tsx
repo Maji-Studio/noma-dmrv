@@ -217,7 +217,7 @@ function StockTakeForm({
           <span
             className={`body-small font-mono font-medium ${
               deltaKg > 0
-                ? "text-[var(--color-signal-green)]"
+                ? "text-[var(--st-ok)]"
                 : deltaKg < 0
                   ? "text-[var(--color-signal-red)]"
                   : "text-[var(--color-text-primary)]"

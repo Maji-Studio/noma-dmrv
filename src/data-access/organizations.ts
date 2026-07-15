@@ -9,8 +9,8 @@ import { randomUUID } from "node:crypto";
 import { and, count, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { isPgUniqueViolation } from "@/db/errors";
-import { invitations, members, organizations, users } from "@/db/schema";
 import { seedOrgDefaults } from "@/db/org-defaults";
+import { invitations, members, organizations, users } from "@/db/schema";
 import { requireOrgScope } from "@/data-access/utils";
 import { getBetterAuthSession } from "@/lib/auth/providers/better-auth-server";
 import {
@@ -19,6 +19,7 @@ import {
   type OrgRole,
 } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { logger } from "@/lib/log";
 
 // Mirrors Better Auth's organization plugin configuration in better-auth.ts.
 const INVITATION_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
@@ -324,11 +325,7 @@ export async function listAllOrganizations(): Promise<OrganizationSummary[]> {
   return rows.map((row) => ({ ...row, memberCount: Number(row.memberCount) }));
 }
 
-/**
- * Create an organization and stamp the given user as its Owner, in one
- * transaction. The Owner is a real member (not the Platform Admin who ran the
- * action). The starter organization-owned catalog is created atomically too.
- */
+/** Create an organization and its selected Owner as one atomic unit. */
 export async function createOrganizationWithOwner(input: {
   name: string;
   slug: string;
@@ -351,7 +348,6 @@ export async function createOrganizationWithOwner(input: {
         name: input.name,
         slug: input.slug,
       });
-      await seedOrgDefaults(tx, organizationId);
       await tx.insert(members).values({
         id: randomUUID(),
         organizationId,
@@ -364,6 +360,15 @@ export async function createOrganizationWithOwner(input: {
       throw new SafeError(ORGANIZATION_SLUG_CONFLICT_MESSAGE);
     }
     throw error;
+  }
+
+  try {
+    await seedOrgDefaults(db, organizationId);
+  } catch (error) {
+    logger.error(
+      { error, organizationId },
+      "failed to seed organization defaults",
+    );
   }
   return { id: organizationId };
 }

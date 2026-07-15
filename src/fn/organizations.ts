@@ -292,12 +292,12 @@ export async function createOrganizationAction(
         "No user account found for the owner email. The owner must have an account first."
       );
     }
-    const { id } = await createOrganizationWithOwner({
+    const organization = await createOrganizationWithOwner({
       name,
       slug,
       ownerUserId,
     });
-    return { organizationId: id };
+    return { organizationId: organization.id };
   }, "Failed to create organization.");
 }
 
