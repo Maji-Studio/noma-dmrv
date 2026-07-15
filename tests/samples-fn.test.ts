@@ -42,6 +42,7 @@ vi.mock("@/data-access/facilities", () => ({
 import { createSampleFn, getSampleByIdFn, updateSampleFn } from "@/fn/samples";
 
 const CREDIT_BATCH_ID = "22222222-2222-4222-8222-222222222222";
+const LATER_CREDIT_BATCH_ID = "55555555-5555-4555-8555-555555555555";
 const FACILITY_ID = "44444444-4444-4444-8444-444444444444";
 
 function baseSampleInput(overrides: Record<string, unknown> = {}) {
@@ -167,6 +168,28 @@ describe("updateSampleFn", () => {
     });
 
     expect(result.success).toBe(false);
+    expect(mockUpdateSample).not.toHaveBeenCalled();
+  });
+
+  it("rejects reassigning a sample to a later credit-batch window", async () => {
+    mockGetCreditBatchById.mockResolvedValueOnce({
+      code: "CB-002",
+      facilityId: FACILITY_ID,
+      startDate: "2026-02-01",
+      endDate: "2026-02-28",
+    });
+
+    const result = await updateSampleFn({
+      sampleId: "33333333-3333-4333-8333-333333333333",
+      creditBatchId: LATER_CREDIT_BATCH_ID,
+    });
+
+    expect(result.success).toBe(false);
+    expect(mockGetCreditBatchById).toHaveBeenCalledWith(
+      expect.anything(),
+      LATER_CREDIT_BATCH_ID,
+      { skipPreview: true },
+    );
     expect(mockUpdateSample).not.toHaveBeenCalled();
   });
 
