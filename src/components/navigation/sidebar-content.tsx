@@ -43,9 +43,8 @@ import { useAuth, authClient } from "@/lib/auth/client";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { FacilitySelector } from "./facility-selector";
-import { OrgSwitcher } from "./org-switcher";
+import { OrgBrand } from "./org-brand";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useActiveOrganizationProfile } from "@/hooks/use-organizations";
 
 interface NavItem {
   href: string;
@@ -257,12 +256,6 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { facilityId: facilityParam } = useFacilityContext();
   const { signOut } = useAuth();
   const { data: session } = authClient.useSession();
-  // Override-aware active-org lookup: the plugin's useActiveOrganization() is
-  // members-only, so it never resolves for Platform Admins inside an org they
-  // don't belong to.
-  const { data: activeOrg } = useActiveOrganizationProfile();
-  const activeOrgName = activeOrg?.name?.trim() || "noma dMRV";
-  const orgInitial = activeOrgName.charAt(0).toUpperCase();
 
   // Append the Admin section only for admin users. `useIsAdmin()` is
   // hydration-safe (server snapshot is `false`, so the admin subtree only
@@ -297,32 +290,8 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       className="flex flex-col h-full"
       style={{ background: SIDEBAR_BACKGROUND_GRADIENT }}
     >
-      {/* Brand header */}
-      <div className="flex items-center h-56 px-16 border-b border-[var(--color-white-10)] shrink-0">
-        <Link
-          href="/dashboard"
-          onClick={onNavigate}
-          className="flex items-center gap-10"
-        >
-          <div className="size-28 bg-[var(--clr-purple)] flex items-center justify-center shrink-0">
-            <span
-              className="text-white font-bold text-[length:var(--text-xxs)] leading-none"
-              suppressHydrationWarning
-            >
-              {orgInitial}
-            </span>
-          </div>
-          <span
-            className="body-small font-medium text-white truncate"
-            suppressHydrationWarning
-          >
-            {activeOrgName}
-          </span>
-        </Link>
-      </div>
-
-      {/* Organization switcher (multi-org members + Platform Admins only) */}
-      <OrgSwitcher />
+      {/* Brand header — doubles as the org switcher for multi-org users */}
+      <OrgBrand onNavigate={onNavigate} />
 
       {/* Facility Selector */}
       <FacilitySelector />
