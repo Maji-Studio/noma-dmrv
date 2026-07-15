@@ -1,14 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SafeError } from "@/lib/errors";
 
-const mockCreateOrganization = vi.fn();
+const mockCreateOrganizationWithOwner = vi.fn();
 
 vi.mock("@/lib/auth/better-auth", () => ({
   auth: {
-    api: {
-      createOrganization: (...args: unknown[]) =>
-        mockCreateOrganization(...args),
-    },
+    api: {},
   },
 }));
 
@@ -26,6 +23,8 @@ vi.mock("@/lib/auth/providers/better-auth-server", () => ({
 vi.mock("@/data-access/organizations", () => ({
   cancelInvitationAsPlatformAdmin: vi.fn(),
   createInvitationAsPlatformAdmin: vi.fn(),
+  createOrganizationWithOwner: (...args: unknown[]) =>
+    mockCreateOrganizationWithOwner(...args),
   findMembershipRole: vi.fn(),
   findUserIdByEmail: vi.fn(),
   getActiveOrganization: vi.fn(),
@@ -61,7 +60,7 @@ describe("createOrganizationAction", () => {
     vi.clearAllMocks();
     vi.mocked(requirePlatformAdmin).mockResolvedValue({} as never);
     vi.mocked(findUserIdByEmail).mockResolvedValue(OWNER_USER_ID);
-    mockCreateOrganization.mockResolvedValue({ id: "organization-123" });
+    mockCreateOrganizationWithOwner.mockResolvedValue({ id: "organization-123" });
   });
 
   it("requires Platform Admin authorization before resolving the owner", async () => {
@@ -76,7 +75,7 @@ describe("createOrganizationAction", () => {
       error: "Admin access is required for this action.",
     });
     expect(findUserIdByEmail).not.toHaveBeenCalled();
-    expect(mockCreateOrganization).not.toHaveBeenCalled();
+    expect(mockCreateOrganizationWithOwner).not.toHaveBeenCalled();
   });
 
   it("creates through Better Auth with the selected owner user id", async () => {
@@ -89,12 +88,10 @@ describe("createOrganizationAction", () => {
 
     expect(requirePlatformAdmin).toHaveBeenCalledOnce();
     expect(findUserIdByEmail).toHaveBeenCalledWith("owner@example.com");
-    expect(mockCreateOrganization).toHaveBeenCalledWith({
-      body: {
-        name: "Example Organization",
-        slug: "example-organization",
-        userId: OWNER_USER_ID,
-      },
+    expect(mockCreateOrganizationWithOwner).toHaveBeenCalledWith({
+      name: "Example Organization",
+      slug: "example-organization",
+      ownerUserId: OWNER_USER_ID,
     });
     expect(result).toEqual({
       success: true,
@@ -112,11 +109,11 @@ describe("createOrganizationAction", () => {
       error:
         "No user account found for the owner email. The owner must have an account first.",
     });
-    expect(mockCreateOrganization).not.toHaveBeenCalled();
+    expect(mockCreateOrganizationWithOwner).not.toHaveBeenCalled();
   });
 
   it("surfaces Better Auth API errors", async () => {
-    mockCreateOrganization.mockRejectedValue({
+    mockCreateOrganizationWithOwner.mockRejectedValue({
       body: { message: "Organization slug is already taken." },
     });
 
@@ -129,7 +126,7 @@ describe("createOrganizationAction", () => {
   });
 
   it("uses the generic creation error for unexpected failures", async () => {
-    mockCreateOrganization.mockRejectedValue(new Error("database unavailable"));
+    mockCreateOrganizationWithOwner.mockRejectedValue(new Error("database unavailable"));
 
     const result = await createOrganizationAction(VALID_INPUT);
 
