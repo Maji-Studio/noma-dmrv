@@ -56,7 +56,7 @@ Each finding was verified against the code (and, for F2, against the authoritati
 - **Expected:** Evidence ledgers are generated/retired, measurement samples and the Removal are created in Isometric, and the local submission stores remote IDs and `Submitted` status.
 - **Actual:** The server action takes 10.7–10.8 seconds, then the wizard shows “Unable to retire stale certification evidence. Please retry the submission.” The Removal stays `Not submitted`. Two attempts produced zero `certification_submissions`, zero generated ledger documents, and no observed Isometric POST. Isometric prerequisite GETs all returned 200.
 - **Impact:** Certification cannot complete under the repository's default local/staging DB configuration. GHG Statement and verifier testing are blocked.
-- **Evidence:** [submission failure screenshot](../../../../../../.codex/visualizations/2026/07/15/019f64b7-fb30-76b3-b53d-cda43eca4ffc/output/screenshots/12-removal-submit-failed.jpeg); server attempts `56386ce3-7037-40c5-8b7c-292710ca7b4c` and `21e0a06c-faf7-459c-833c-35a1631e2f53`; page-action POSTs returned HTTP 200 after ~10.7 seconds.
+- **Evidence:** submission failure screenshot `12-removal-submit-failed.jpeg` (local Computer Use artifact, not checked in); server attempts `56386ce3-7037-40c5-8b7c-292710ca7b4c` and `21e0a06c-faf7-459c-833c-35a1631e2f53`; page-action POSTs returned HTTP 200 after ~10.7 seconds.
 - **Reproducibility:** 2/2.
 - **Confirmed root cause:** `src/db/index.ts:11-15` defaults `DB_POOL_MAX` to 1. `src/fn/certification/evidence-ledger-core.ts:138-157` holds that connection in a transaction, then `:165-173` calls `listDocumentsByKindForRemoval`, which uses the global `db` at `src/data-access/documents.ts:342-362`. The nested lookup waits for a second connection until `connectionTimeoutMillis` (10 seconds), matching the observed latency. `DB_POOL_MAX` was unset in the tested environment.
 - **Suggested fix:** Pass the transaction handle through all ledger data-access operations, or avoid holding a transaction/advisory lock while using the global pool. Add an integration test with `DB_POOL_MAX=1`; preserve the fail-closed retirement behavior, but log the underlying safe error category and return actionable operator copy.
@@ -72,7 +72,7 @@ Each finding was verified against the code (and, for F2, against the authoritati
 - **Expected:** The third Sample is rejected, excluded from eligible replicates, or shown as an explicit blocker requiring correction.
 - **Actual:** UI reported `3 of 3 usable`, three distinct runs/days, and `Eligible`. After capturing the defect, `SAM-26-003` was corrected to 2026-06-07 before submission.
 - **Impact:** An operator can certify a batch using laboratory evidence that is temporally unrelated to the batch, weakening lineage and registry evidence integrity.
-- **Evidence:** [out-of-window eligibility screenshot](../../../../../../.codex/visualizations/2026/07/15/019f64b7-fb30-76b3-b53d-cda43eca4ffc/output/screenshots/09-out-of-window-sample-counts-eligible.jpeg).
+- **Evidence:** out-of-window eligibility screenshot `09-out-of-window-sample-counts-eligible.jpeg` (local Computer Use artifact, not checked in).
 - **Reproducibility:** 1/1.
 - **Confirmed root cause:** `src/fn/certification/durability-readiness.ts:67-80` forwards every batch Sample's chemistry and timestamp without comparing it to the batch window. `src/lib/certification/durability-submission-gates.ts:138-180` evaluates chemistry completeness and provenance distribution, but has no production-window check.
 - **Suggested fix:** Validate `samplingTime` against the credit batch and/or linked production-run window at create/update and again in the fail-closed submission gate. Show the offending Sample code and allowed date range.
@@ -87,7 +87,7 @@ Each finding was verified against the code (and, for F2, against the authoritati
 - **Expected:** Organization, facility selector, navigation, and facility records survive refresh.
 - **Actual:** The server-rendered page showed generic `User`, omitted organization/facility switchers, and rendered “Select a facility” even though the URL still held the valid facility UUID. Clicking Dashboard internally caused the previous organization/facility to reappear.
 - **Impact:** Deep links and refreshes look like missing data, interrupt certification, and can make operators distrust active context.
-- **Evidence:** [deep-link context-loss screenshot](../../../../../../.codex/visualizations/2026/07/15/019f64b7-fb30-76b3-b53d-cda43eca4ffc/output/screenshots/13-deep-link-loses-facility-context.jpeg).
+- **Evidence:** deep-link context-loss screenshot `13-deep-link-loses-facility-context.jpeg` (local Computer Use artifact, not checked in).
 - **Reproducibility:** Consistent across multiple direct loads during the final staging pass.
 - **Likely root cause:** Client-only resolution in `src/components/navigation/facility-provider.tsx:46-150` depends on an organization-scoped facilities query; when the session's active organization is absent on the direct-load path, the valid URL selection is discarded. Related active-organization resolution is client-side in `src/components/navigation/org-switcher.tsx:34-74`.
 - **Suggested fix:** Persist/set the active organization during login/organization entry, resolve the route's facility server-side before rendering a facility-empty state, and add refresh/deep-link E2E coverage. Coordinate with #253's query-sheet reconciliation behavior.
@@ -102,7 +102,7 @@ Each finding was verified against the code (and, for F2, against the authoritati
 - **Expected:** Detail and list show 1.5 tph; combined throughput is 1.5 tph.
 - **Actual:** List showed combined nominal throughput of 0 tph; the persisted `reactors.nominal_throughput_tph` value was `NULL` in the final read-only reconciliation.
 - **Impact:** Capacity planning data can be silently lost after a successful create.
-- **Evidence:** [reactor list screenshot](../../../../../../.codex/visualizations/2026/07/15/019f64b7-fb30-76b3-b53d-cda43eca4ffc/output/screenshots/03-reactor-list-throughput.png).
+- **Evidence:** reactor list screenshot `03-reactor-list-throughput.png` (local Computer Use artifact, not checked in).
 - **Reproducibility:** One observed create; repeat before treating as release-blocking.
 - **Source note:** The intended mapping exists (`src/components/reactors/reactor-form.tsx:102-107`, `src/fn/reactors.ts:201-208`, `src/data-access/reactors.ts:314-325`), so the exact loss point was not confirmed.
 - **Suggested fix:** Add a browser-level create/reopen test for optional numeric fields and include saved throughput in the success/detail view.
@@ -117,7 +117,7 @@ Each finding was verified against the code (and, for F2, against the authoritati
 - **Expected:** Primary/default location appears in the Location column/summary.
 - **Actual:** The supplier had a valid nested location, but the list displayed `—` for Location.
 - **Impact:** Operators cannot confirm the feedstock source from the main supplier view and may recreate locations or assume GPS is missing.
-- **Evidence:** [supplier-location screenshot](../../../../../../.codex/visualizations/2026/07/15/019f64b7-fb30-76b3-b53d-cda43eca4ffc/output/screenshots/04-supplier-location-missing-in-list.png).
+- **Evidence:** supplier-location screenshot `04-supplier-location-missing-in-list.png` (local Computer Use artifact, not checked in).
 - **Reproducibility:** 1/1.
 - **Confirmed root cause:** `src/components/suppliers/supplier-list.tsx:52-63` and `supplier-detail.tsx:142-147` render legacy `supplier.location`, while actual locations are separate `supplier_locations` records displayed later in the detail page.
 - **Suggested fix:** Return/render the default nested location in supplier summaries, or relabel the legacy field so the two concepts are not conflated.
@@ -202,7 +202,7 @@ All records below are synthetic and exist only in the authorized local reset dat
 
 ## Supporting-artifact inventory
 
-Artifact root: `/Users/kenji/.codex/visualizations/2026/07/15/019f64b7-fb30-76b3-b53d-cda43eca4ffc/output`
+Artifacts were captured to the local Computer Use output directory during this run and are not checked into the repository. Filenames below are the originals for cross-reference.
 
 - `pdf/synthetic-feedstock-weigh-ticket.pdf`
 - `pdf/synthetic-biochar-delivery-note.pdf`
@@ -228,7 +228,7 @@ Artifact root: `/Users/kenji/.codex/visualizations/2026/07/15/019f64b7-fb30-76b3
 | Random reflectance R0 | 2.50, 2.60, 2.55 | Mean 2.55; sample SD 0.05 | Reconciled |
 | Stored-carbon preview | 0.25 t dry application | UI preview approximately 0.57 t CO2e | Plausible; remote payload unavailable due F1 |
 | Removal reporting window / ID | Local values remain unset until submit | No remote ID; no submitted/locked timestamp | Correct fail-closed result for F1 |
-| GHG Statement | Requires submitted Removal | Zero statements | Blocked as expected downstream of F1 |
+| GHG Statement | Requires a submitted Removal | Zero statements | Blocked as expected downstream of F1 |
 
 ## Console and network observations
 
@@ -241,7 +241,7 @@ Artifact root: `/Users/kenji/.codex/visualizations/2026/07/15/019f64b7-fb30-76b3
 ## Five fixes to prioritize
 
 1. Remove the evidence-ledger pool self-deadlock and add `DB_POOL_MAX=1` integration coverage.
-2. Enforce Sample timestamps against credit-batch/production-run windows at write and submit time.
+2. Gate Sample timestamps against the credit-batch/production-run window per biochar protocol v1.3 §8.3.1: reject pre-window samples (physically impossible) at write and submit time, but keep post-window stored-material samples usable with a warning and exclude their day from within-batch temporal-distribution provenance rather than hard-rejecting them.
 3. Persist and server-resolve active organization/facility context across direct loads and refreshes.
 4. Unify list/detail/submit readiness so evidence requirements cannot disagree.
 5. Make supplier/default-location and transport-evidence relationships visible in primary operator views.
@@ -258,7 +258,7 @@ Quick wins:
 
 Product/design decisions:
 
-- Decide whether a Sample may ever sit outside the batch window (and what formal exception evidence is required).
+- Sample-vs-window policy is resolved (§8.3.1): pre-window samples are rejected and post-window stored-material samples are permitted with a warning; the remaining decision is what registry-facing note, if any, should accompany a warned post-window sample.
 - Complete #253's facility-reconciliation policy for query-param sheets and same-facility refreshes.
 - Decide which documents satisfy “distance document-backed” and whether entity attachments automatically bind to transport legs.
 - Decide whether application list readiness is operational readiness or certification readiness; label and gate accordingly.
