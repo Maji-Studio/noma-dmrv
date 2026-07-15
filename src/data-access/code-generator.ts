@@ -12,6 +12,7 @@ import { SafeError } from "@/lib/errors";
 import { requireOrgScope } from "./utils";
 
 const MAX_RETRIES = 3;
+const RETRY_BACKOFF_BASE_MS = 50;
 
 export const CODE_CONFLICT_MESSAGES = {
   biocharProduct: "A biochar product with this code already exists",
@@ -222,7 +223,9 @@ export async function withAutoCode<T>(
       if (isCodeUniqueViolation(error, table, codeColumn)) {
         if (attempt < MAX_RETRIES - 1) {
           // Brief pause before retry to let the other transaction commit
-          await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+          await new Promise((resolve) =>
+            setTimeout(resolve, RETRY_BACKOFF_BASE_MS * (attempt + 1)),
+          );
           continue;
         }
         throw duplicateCodeError(code, duplicateMessage);
