@@ -7,7 +7,10 @@
 
 import { z } from "zod";
 import { type Order, orders } from "@/db/schema";
-import { withAutoCode } from "@/data-access/code-generator";
+import {
+  CODE_CONFLICT_MESSAGES,
+  withAutoCode,
+} from "@/data-access/code-generator";
 import {
   createOrder,
   deleteOrder,
@@ -156,7 +159,8 @@ export async function createOrderFn(
           packaging: validated.packaging,
           value: validated.value ?? null,
           currency: validated.currency,
-        })
+        }),
+      CODE_CONFLICT_MESSAGES.order,
     );
   }, { fallbackMessage: "Failed to create order" });
 }

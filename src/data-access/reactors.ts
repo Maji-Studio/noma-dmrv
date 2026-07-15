@@ -298,16 +298,6 @@ export async function createReactor(
 ): Promise<Reactor> {
   requireOrgScope(ctx);
 
-  // Check for duplicate code
-  const [existing] = await db
-    .select({ id: reactors.id })
-    .from(reactors)
-    .where(and(eq(reactors.code, data.code), eq(reactors.organizationId, ctx.organizationId)));
-
-  if (existing) {
-    throw new SafeError("A reactor with this code already exists");
-  }
-
   // Verify facility exists and is active (no new children under an archived parent)
   const [facility] = await db
     .select({ id: facilities.id })

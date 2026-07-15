@@ -28,6 +28,7 @@ import {
 } from "./helpers/test-org";
 
 const TEST_USER_ID = "test-user-bin-reconciliation";
+const BIN_STOCK_LOCK_SCOPE = "bin-stock";
 const INITIAL_FEEDSTOCK_DRY_MASS_KG = 100;
 const RECOUNTED_FEEDSTOCK_DRY_MASS_KG = 10;
 const CONCURRENCY_BARRIER_TIMEOUT_MS = 5_000;
@@ -606,10 +607,10 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
       });
       let sourceLockBackendPid = 0;
       sourceLockTransaction = db.transaction(async (tx) => {
+        const lockKey = `${BIN_STOCK_LOCK_SCOPE}:${TEST_ORG_ID}:${sourceBin.id}`;
         await tx.execute(sql`
           select pg_advisory_xact_lock(
-            hashtext(${TEST_ORG_ID}),
-            hashtext(${sourceBin.id})
+            hashtextextended(${lockKey}, 0)
           )
         `);
         const backend = await tx.execute<{ pid: number }>(

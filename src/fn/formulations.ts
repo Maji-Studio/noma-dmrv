@@ -7,7 +7,10 @@
 
 import { z } from "zod";
 import { formulations } from "@/db/schema";
-import { withAutoCode } from "@/data-access/code-generator";
+import {
+  CODE_CONFLICT_MESSAGES,
+  withAutoCode,
+} from "@/data-access/code-generator";
 import {
   createFormulation,
   deleteFormulation,
@@ -182,7 +185,8 @@ export async function createFormulationFn(
             feedstockTypeId: ing.feedstockTypeId,
             ratio: ing.ratio ?? null,
           })),
-        })
+        }),
+      CODE_CONFLICT_MESSAGES.formulation,
     );
 
     return { success: true, data: formulation };

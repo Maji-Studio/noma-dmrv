@@ -10,11 +10,14 @@
 
 import { and, eq, gt, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { productionRuns } from "@/db/schema";
+import { isPgUniqueViolation } from "@/db/errors";
 import { formatLocalDate, formatLocalTime } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import type { DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "../utils";
+
+const REACTOR_LOCK_SCOPE = "reactor";
 
 /** A reference to the run a candidate window collides with. */
 export interface RunConflict {
@@ -99,7 +102,10 @@ export async function assertNoReactorRunOverlap(
   const { reactorId, startTime, endTime, selfId } = params;
 
   // Serialize concurrent writers on this reactor for the rest of the tx.
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${reactorId}))`);
+  const lockKey = `${REACTOR_LOCK_SCOPE}:${ctx.organizationId}:${reactorId}`;
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
+  );
 
   const conditions: SQL[] = [
     eq(productionRuns.organizationId, ctx.organizationId),
@@ -159,8 +165,8 @@ export async function assertNoReactorRunOverlap(
  * friendly overlap message instead of leaking a raw constraint error.
  */
 export function isReactorStartUniqueViolation(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    error.message.includes("production_runs_reactor_start_unique_idx")
+  return isPgUniqueViolation(
+    error,
+    "production_runs_reactor_start_unique_idx",
   );
 }

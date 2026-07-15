@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { runWindowsConflict } from "./overlap";
+import {
+  isReactorStartUniqueViolation,
+  runWindowsConflict,
+} from "./overlap";
 
 /**
  * Unit coverage for the half-open interval intersection that backs the
@@ -41,5 +44,19 @@ describe("runWindowsConflict", () => {
     const open = { start: 12, end: null };
     // [8,10) ends before the open run starts — no conflict.
     expect(runWindowsConflict({ start: 8, end: 10 }, open)).toBe(false);
+  });
+});
+
+describe("isReactorStartUniqueViolation", () => {
+  it("does not treat a non-23505 error mentioning the index as a uniqueness violation", () => {
+    const error = Object.assign(
+      new Error("production_runs_reactor_start_unique_idx failed"),
+      {
+        code: "XX000",
+        constraint: "production_runs_reactor_start_unique_idx",
+      },
+    );
+
+    expect(isReactorStartUniqueViolation(error)).toBe(false);
   });
 });

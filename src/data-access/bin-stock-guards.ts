@@ -36,6 +36,8 @@ import { requireOrgScope } from "./utils";
 /** Any Drizzle client that can run reads — the live `db` or a transaction. */
 type DbReader = Pick<typeof db, "select">;
 
+const BIN_STOCK_LOCK_SCOPE = "bin-stock";
+
 /**
  * Floating-point slack (kg). Derived stock is a sum of floating-point masses, so
  * an exactly-equal draw can land a hair over its available stock. Only a draw
@@ -54,8 +56,9 @@ export async function lockBinStock(
   storageLocationId: string,
 ): Promise<void> {
   requireOrgScope(ctx);
+  const lockKey = `${BIN_STOCK_LOCK_SCOPE}:${ctx.organizationId}:${storageLocationId}`;
   await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtext(${ctx.organizationId}), hashtext(${storageLocationId}))`,
+    sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
   );
 }
 

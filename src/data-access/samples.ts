@@ -118,7 +118,10 @@ export interface SampleStats {
 
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
-import { isPgCheckViolation, isPgUniqueViolation } from "@/db/errors";
+import {
+  isPgCheckViolationMessage,
+  isPgUniqueViolation,
+} from "@/db/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 
 // DB-enforced sample-code uniqueness (issue #395). Drizzle names the
@@ -141,7 +144,7 @@ async function guardSampleMutation<T>(fn: () => Promise<T>): Promise<T> {
     if (isPgUniqueViolation(err, SAMPLE_CODE_UNIQUE_CONSTRAINT)) {
       throw new SafeError("A sample with this code already exists");
     }
-    if (isPgCheckViolation(err, METHOD_B_BASELINE_VIOLATION_FRAGMENT)) {
+    if (isPgCheckViolationMessage(err, METHOD_B_BASELINE_VIOLATION_FRAGMENT)) {
       throw new SafeError(METHOD_B_BASELINE_FLOOR_MESSAGE);
     }
     throw err;

@@ -7,7 +7,10 @@
 
 import { z } from "zod";
 import { type Supplier, type SupplierLocation, suppliers } from "@/db/schema";
-import { withAutoCode } from "@/data-access/code-generator";
+import {
+  CODE_CONFLICT_MESSAGES,
+  withAutoCode,
+} from "@/data-access/code-generator";
 import {
   createSupplier,
   createSupplierWithLocations,
@@ -222,7 +225,8 @@ export async function createSupplierFn(
             validated.distanceToFacilityKm ?? null,
             validated.distanceSource,
           ),
-        })
+        }),
+      CODE_CONFLICT_MESSAGES.supplier,
     );
 
     return { success: true, data: supplier };

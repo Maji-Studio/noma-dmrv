@@ -80,6 +80,10 @@ export interface FacilityDetail extends Facility {
 
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
+import {
+  CODE_CONFLICT_MESSAGES,
+  withUniqueCodeGuard,
+} from "./code-generator";
 
 // ============================================
 // Read Operations
@@ -551,16 +555,6 @@ export async function createFacility(
 ): Promise<Facility> {
   requireOrgScope(ctx);
 
-  // Check for duplicate code
-  const [existing] = await db
-    .select({ id: facilities.id })
-    .from(facilities)
-    .where(and(eq(facilities.code, data.code), eq(facilities.organizationId, ctx.organizationId)));
-
-  if (existing) {
-    throw new SafeError("A facility with this code already exists");
-  }
-
   const [facility] = await db
     .insert(facilities)
     .values({
@@ -635,18 +629,6 @@ export async function updateFacility(
     throw new SafeError("Facility not found");
   }
 
-  // If code is being changed, check for duplicates
-  if (data.code && data.code !== existing.code) {
-    const [duplicate] = await db
-      .select({ id: facilities.id })
-      .from(facilities)
-      .where(and(eq(facilities.code, data.code), eq(facilities.organizationId, ctx.organizationId)));
-
-    if (duplicate) {
-      throw new SafeError("A facility with this code already exists");
-    }
-  }
-
   // Lock the durability tier once the facility has consequential batches: the
   // tier is join-derived onto every batch (ADR 0021), so changing it here would
   // silently reinterpret existing batches and collapse their stored-carbon
@@ -688,14 +670,21 @@ export async function updateFacility(
     }
   }
 
-  const [updated] = await db
-    .update(facilities)
-    .set({
-      ...data,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)))
-    .returning();
+  const [updated] = await withUniqueCodeGuard(
+    ctx,
+    facilities,
+    facilities.code,
+    CODE_CONFLICT_MESSAGES.facility,
+    () =>
+      db
+        .update(facilities)
+        .set({
+          ...data,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)))
+        .returning(),
+  );
 
   return updated;
 }

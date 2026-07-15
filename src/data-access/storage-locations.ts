@@ -285,16 +285,6 @@ export async function createStorageLocation(
     throw new SafeError("Facility not found or archived");
   }
 
-  // Check for duplicate code
-  const [existing] = await db
-    .select({ id: storageLocations.id })
-    .from(storageLocations)
-    .where(and(eq(storageLocations.code, data.code), eq(storageLocations.organizationId, ctx.organizationId)));
-
-  if (existing) {
-    throw new SafeError("A storage location with this code already exists");
-  }
-
   if (data.feedstockTypeId) {
     const [feedstockType] = await db
       .select({ id: feedstockTypes.id })

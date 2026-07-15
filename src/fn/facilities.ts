@@ -33,7 +33,10 @@ import {
   facilityFilterSchema,
 } from "@/schemas/facilities";
 import type { ActionResult } from "@/types/actions";
-import { withAutoCode } from "@/data-access/code-generator";
+import {
+  CODE_CONFLICT_MESSAGES,
+  withAutoCode,
+} from "@/data-access/code-generator";
 import { facilities as facilitiesTable } from "@/db/schema";
 import { toLoggedActionError } from "./action-errors";
 
@@ -290,7 +293,8 @@ export async function createFacilityFn(
           contactEmail: validated.contactEmail || null,
           contactPhone: validated.contactPhone || null,
           durabilityOption: validated.durabilityOption,
-        })
+        }),
+      CODE_CONFLICT_MESSAGES.facility,
     );
 
     return { success: true, data: facility };

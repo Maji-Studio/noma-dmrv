@@ -26,7 +26,10 @@ import {
   biocharProductFilterSchema,
 } from "@/schemas/biochar-products";
 import type { ActionResult } from "@/types/actions";
-import { withAutoCode } from "@/data-access/code-generator";
+import {
+  CODE_CONFLICT_MESSAGES,
+  withAutoCode,
+} from "@/data-access/code-generator";
 import { biocharProducts } from "@/db/schema";
 import { toCompositionJsonb } from "@/lib/biochar-composition/composition";
 import { toLoggedActionError } from "./action-errors";
@@ -189,7 +192,8 @@ export async function createBiocharProductFn(
           densityKgM3: validated.densityKgM3 ?? null,
           waterAddedKg: validated.waterAddedKg ?? null,
           composition,
-        })
+        }),
+      CODE_CONFLICT_MESSAGES.biocharProduct,
     );
 
     return { success: true, data: product };
