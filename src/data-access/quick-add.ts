@@ -165,7 +165,7 @@ export async function createVehicle(ctx: OrgContext, data: CreateVehicleData): P
     };
   } catch (error) {
     if (isPgUniqueViolation(error, VEHICLE_NAME_CONSTRAINT)) {
-      throw new SafeError("A vehicle with this code or name already exists");
+      throw new SafeError("A vehicle with this name already exists");
     }
     throw error;
   }
@@ -234,7 +234,7 @@ export async function createFeedstockType(
     };
   } catch (error) {
     if (isPgUniqueViolation(error, FEEDSTOCK_TYPE_NAME_USAGE_CONSTRAINT)) {
-      throw new SafeError("A feedstock type with this code or name and usage already exists");
+      throw new SafeError("A feedstock type with this name and usage already exists");
     }
     throw error;
   }
