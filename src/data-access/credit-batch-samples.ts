@@ -14,6 +14,8 @@ import type { CreditBatchDurabilityInput } from "@/lib/isometric/utils/durabilit
 import { DURABILITY_TIER_FALLBACK } from "@/schemas/credit-batches";
 import { requireOrgScope } from "./utils";
 
+const FALLBACK_FACILITY_TIMEZONE = "UTC";
+
 /**
  * A credit batch's durability inputs as loaded from the DB: its lab Samples
  * pooled on `samples.creditBatchId` (across member runs/days — ADR 0016 made the
@@ -27,6 +29,8 @@ export interface CreditBatchWithSamples extends CreditBatchDurabilityInput {
   /** ISO date-only production window bounds from the credit-batch row. */
   startDate?: string | null;
   endDate?: string | null;
+  /** IANA timezone used to classify sampling instants by facility-local day. */
+  facilityTimezone: string;
   runs: Array<{ id: string; code: string; biocharDryMassKg: number | null }>;
   /** The (facility, feedstock) process this batch belongs to; null = unfound. */
   productionProcessId: string | null;
@@ -64,6 +68,7 @@ export async function getCreditBatchesWithSamples(
       declaredHToCorgRatio: creditBatches.hToCorgRatio,
       // Tier is inherited from the facility (ADR 0021), not a batch column.
       durabilityOption: facilities.durabilityOption,
+      facilityTimezone: facilities.timezone,
     })
     .from(creditBatches)
     .leftJoin(facilities, and(eq(creditBatches.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
@@ -157,6 +162,8 @@ export async function getCreditBatchesWithSamples(
     creditBatchCode: batch.code,
     startDate: batch.startDate,
     endDate: batch.endDate,
+    facilityTimezone:
+      batch.facilityTimezone ?? FALLBACK_FACILITY_TIMEZONE,
     productionProcessId: batch.productionProcessId,
     samplingMethod: (() => {
       if (batch.productionProcessId == null) return "method_a";

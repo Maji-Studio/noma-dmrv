@@ -329,6 +329,7 @@ export function makeBatchesWithSamples(
       creditBatchCode: "CB-TEST-001",
       startDate: "2026-01-01",
       endDate: "2026-01-31",
+      facilityTimezone: "UTC",
       productionProcessId: null,
       samplingMethod: "method_a",
       declaredHToCorgRatio: null,

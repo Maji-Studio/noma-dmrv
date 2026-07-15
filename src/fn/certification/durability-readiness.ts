@@ -7,7 +7,7 @@ import {
   evaluateDurabilitySubmissionGates,
   type BatchGateFacts,
 } from "@/lib/certification/durability-submission-gates";
-import { formatUtcDate } from "@/lib/date-utils";
+import { formatFacilityDate } from "@/lib/date-utils";
 
 export interface DurabilityGateResult {
   /** Fail-closed blockers — the exact list the submit pipeline blocks on. */
@@ -43,9 +43,12 @@ export async function loadDurabilityBatchData(
   return { batchesWithSamples, ...gates };
 }
 
-function isoSamplingDay(samplingTime: Date | null | undefined): string | null {
+function isoSamplingDay(
+  samplingTime: Date | null | undefined,
+  facilityTimezone: string,
+): string | null {
   if (!samplingTime) return null;
-  const day = formatUtcDate(samplingTime);
+  const day = formatFacilityDate(samplingTime, facilityTimezone);
   return day || null;
 }
 
@@ -78,7 +81,7 @@ export function buildDurabilityGates(
     replicateProvenance: batch.samples.map((s) => ({
       sampleCode: s.sampleCode,
       productionRunId: s.productionRunId,
-      samplingDay: isoSamplingDay(s.samplingTime),
+      samplingDay: isoSamplingDay(s.samplingTime, batch.facilityTimezone),
     })),
   }));
   const result = evaluateDurabilitySubmissionGates(facts);
