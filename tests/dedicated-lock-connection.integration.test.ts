@@ -29,6 +29,7 @@ describe("withDedicatedLockConnection", () => {
       max: 1,
       connectionTimeoutMillis: COMPLETION_TIMEOUT_MS,
     });
+    const previousDbPoolMax = process.env.DB_POOL_MAX;
 
     try {
       try {
@@ -74,6 +75,11 @@ describe("withDedicatedLockConnection", () => {
       expect(result).toBe(TEST_QUERY_RESULT);
       expect(performance.now() - startedAt).toBeLessThan(COMPLETION_TIMEOUT_MS);
     } finally {
+      if (previousDbPoolMax === undefined) {
+        delete process.env.DB_POOL_MAX;
+      } else {
+        process.env.DB_POOL_MAX = previousDbPoolMax;
+      }
       await sharedPool.end();
     }
   });
