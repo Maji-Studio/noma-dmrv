@@ -129,8 +129,8 @@ export async function enrichStorageLocationRows(
     lastActivityRows,
     laneStockRows,
   ] = storageLocationIds.length > 0
-    ? await Promise.all([
-        db
+    ? await db.transaction(async (tx) => Promise.all([
+        tx
           .select({
             storageLocationId: feedstocks.storageLocationId,
             batchCount: sql<number>`count(*) filter (where ${feedstocks.status} = 'complete')`,
@@ -160,7 +160,7 @@ export async function enrichStorageLocationRows(
             ),
           )
           .groupBy(feedstocks.storageLocationId),
-        db
+        tx
           .select({
             storageLocationId: productionRuns.biocharStorageLocationId,
             productionRunCount: count(),
@@ -173,7 +173,7 @@ export async function enrichStorageLocationRows(
             ),
           )
           .groupBy(productionRuns.biocharStorageLocationId),
-        db
+        tx
           .select({
             storageLocationId: productionRuns.biocharStorageLocationId,
             downstreamFormulations: sql<string | null>`
@@ -202,7 +202,7 @@ export async function enrichStorageLocationRows(
             ),
           )
           .groupBy(productionRuns.biocharStorageLocationId),
-        db
+        tx
           .select({
             storageLocationId: biocharProducts.storageLocationId,
             batchCount: count(),
@@ -234,7 +234,7 @@ export async function enrichStorageLocationRows(
             ),
           )
           .groupBy(biocharProducts.storageLocationId),
-        db
+        tx
           .select({
             storageLocationId: biocharProducts.storageLocationId,
             deliveredMassKg: sql<number>`COALESCE(SUM(${deliveries.deliveredWetMassKg}), 0)`,
@@ -262,7 +262,7 @@ export async function enrichStorageLocationRows(
             ),
           )
           .groupBy(biocharProducts.storageLocationId),
-        db
+        tx
           .select({
             storageLocationId: sql<string>`
               COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId})
@@ -311,7 +311,7 @@ export async function enrichStorageLocationRows(
           .groupBy(
             sql`COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId})`
           ),
-        db.execute<{
+        tx.execute<{
           storage_location_id: string;
           activity_type: "in" | "out";
           activity_date: Date;
@@ -356,8 +356,11 @@ export async function enrichStorageLocationRows(
           WHERE storage_location_id IS NOT NULL
           ORDER BY storage_location_id, created_at DESC
         `),
-        deriveLaneStock(ctx, db, { storageLocationIds }),
-      ])
+        deriveLaneStock(ctx, tx, { storageLocationIds }),
+      ]), {
+        isolationLevel: "repeatable read",
+        accessMode: "read only",
+      })
     : [
         [],
         [],
