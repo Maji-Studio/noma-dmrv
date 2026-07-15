@@ -182,13 +182,6 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
                 />
               </FormField>
             </div>
-            <FormActions
-              isSubmitting={inviteMember.isPending}
-              submitLabel="Send invitation"
-              submittingLabel="Sending…"
-              sticky={false}
-            />
-
             {lastInviteLink && (
               <div className="flex flex-col gap-8 border border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] p-12">
                 <span className="body-caption font-medium text-[var(--color-text-primary)]">
@@ -217,6 +210,12 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
                 </div>
               </div>
             )}
+            <FormActions
+              isSubmitting={inviteMember.isPending}
+              submitLabel="Send invitation"
+              submittingLabel="Sending…"
+              sticky={false}
+            />
           </form>
         </section>
       )}
