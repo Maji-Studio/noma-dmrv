@@ -219,17 +219,3 @@ export async function recordStockTakeMovement(
     });
   });
 }
-
-// Re-exported for callers that group sums by location without depending on the
-// enrichment module's internals.
-export function groupLaneSumsByLocation(
-  sums: BinMovementLaneSum[]
-): Map<string, Partial<Record<BinMovementLane, number>>> {
-  const map = new Map<string, Partial<Record<BinMovementLane, number>>>();
-  for (const sum of sums) {
-    const existing = map.get(sum.storageLocationId) ?? {};
-    existing[sum.lane] = sum.totalDeltaKg;
-    map.set(sum.storageLocationId, existing);
-  }
-  return map;
-}
