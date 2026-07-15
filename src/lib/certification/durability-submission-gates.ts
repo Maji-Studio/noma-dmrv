@@ -80,6 +80,21 @@ export interface DurabilitySubmissionGateResult {
 }
 
 /**
+ * A stored-material sample taken AFTER a batch's production window end remains a
+ * valid replicate, but its later day cannot demonstrate within-batch temporal
+ * distribution — so it is normalized to a null day for the §8.3.1 distribution
+ * evidence. Days on/before endDate (or when endDate is unknown) pass through.
+ */
+export function normalizePostWindowSamplingDay(
+  samplingDay: string | null,
+  endDate: string | null | undefined,
+): string | null {
+  return endDate != null && samplingDay != null && samplingDay > endDate
+    ? null
+    : samplingDay;
+}
+
+/**
  * Distinct (run, day) provenance keys among a batch's pooled replicates — the
  * §8.3.1 "distributed across distinct runs/days" evidence. Replicates with
  * fully-null provenance can't be judged, so they add no key (a set of only
@@ -147,12 +162,10 @@ function usableProvenance(batch: BatchGateFacts): ReplicateProvenance[] {
       ...provenance,
       // Stored-material samples remain valid replicates, but their later day
       // cannot demonstrate temporal distribution within the production batch.
-      samplingDay:
-        batch.endDate != null &&
-        provenance.samplingDay != null &&
-        provenance.samplingDay > batch.endDate
-          ? null
-          : provenance.samplingDay,
+      samplingDay: normalizePostWindowSamplingDay(
+        provenance.samplingDay,
+        batch.endDate,
+      ),
     }));
 }
 
