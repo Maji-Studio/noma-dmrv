@@ -292,7 +292,13 @@ export function SupplierList() {
             fields: [
               { label: "Code", value: sideSheetEntity.code },
               { label: "Name", value: sideSheetEntity.name },
-              { label: "Location", value: sideSheetEntity.location },
+              {
+                label: "Location",
+                value: resolveSupplierLocationText(
+                  sideSheetEntity.location,
+                  sideSheetEntity.defaultLocationDisplay,
+                ),
+              },
               { label: "Source Region", value: sideSheetEntity.sourceRegion },
               { label: "Address", value: sideSheetEntity.address },
               {
