@@ -179,7 +179,7 @@ describe("buildDurabilityLedgerModel", () => {
 
   it("counts distinct (run, day) provenance for the §8.3.1 distribution check", () => {
     const model = buildDurabilityLedgerModel({ ...COMMON, batches: [eligibleBatch()] });
-    expect(model.batches[0].distinctDayCount).toBe(3);
+    expect(model.batches[0].distinctRunDayCount).toBe(3);
 
     const clustered = batch({
       creditBatchId: "c",
@@ -192,7 +192,7 @@ describe("buildDurabilityLedgerModel", () => {
     });
     expect(
       buildDurabilityLedgerModel({ ...COMMON, batches: [clustered] }).batches[0]
-        .distinctDayCount,
+        .distinctRunDayCount,
     ).toBe(1);
   });
 
@@ -225,7 +225,7 @@ describe("buildDurabilityLedgerModel", () => {
 
     expect(
       buildDurabilityLedgerModel({ ...COMMON, batches: [storedMaterial] })
-        .batches[0].distinctDayCount,
+        .batches[0].distinctRunDayCount,
     ).toBe(1);
   });
 

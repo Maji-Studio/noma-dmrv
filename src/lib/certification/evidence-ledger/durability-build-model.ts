@@ -107,7 +107,9 @@ function buildReplicate(s: Sample, index: number): LedgerReplicate {
 // Distinct (run, day) provenance keys among a batch's samples — the §8.3.1
 // "distributed across distinct runs/days" evidence. Fully-null provenance can't
 // be judged, so it doesn't add a distinct key (mirrors the gate's cluster check).
-function distinctDayCount(
+// Delegates to the gate's OWN counter with the gate's OWN post-window
+// normalization, so the ledger count can never diverge from what the gate credits.
+function distinctRunDayCount(
   samples: Sample[],
   endDate: string | null | undefined,
 ): number {
@@ -145,10 +147,10 @@ export function buildDurabilityLedgerModel(
 
     const samples = samplesByBatchId.get(dp.creditBatchId) ?? [];
     // Render only the replicates that back the submitted figures so the ledger
-    // can't show more rows than its own `replicateCount`/distinctDayCount claim:
+    // can't show more rows than its own `replicateCount`/distinctRunDayCount claim:
     //   • rows + replicateCount → the H/C_org-usable set (dp.replicateCount is
     //     hValues.length in buildPerBatchDurabilityData);
-    //   • distinctDayCount → the complete-chemistry (H + O) set, mirroring the
+    //   • distinctRunDayCount → the complete-chemistry (H + O) set, mirroring the
     //     §8.3.1 cluster gate's `usableProvenance` so an incomplete off-day
     //     sample can't inflate the distribution evidence; post-window days are
     //     normalized to null.
@@ -173,7 +175,7 @@ export function buildDurabilityLedgerModel(
       creditBatchCode: dp.creditBatchCode,
       replicates: usableHReplicates.map(buildReplicate),
       replicateCount: dp.replicateCount,
-      distinctDayCount: distinctDayCount(
+      distinctRunDayCount: distinctRunDayCount(
         usablePairedReplicates,
         endDateByBatchId.get(dp.creditBatchId),
       ),

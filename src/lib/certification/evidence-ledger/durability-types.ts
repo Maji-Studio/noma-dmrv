@@ -78,8 +78,13 @@ export interface LedgerBatch {
   replicates: LedgerReplicate[];
   /** Usable H/C_org replicate count (also the §8.3.1 ≥3 gate input). */
   replicateCount: number;
-  /** Distinct (run, day) provenance count — evidences §8.3.1 distribution. */
-  distinctDayCount: number;
+  /**
+   * Distinct (run, day) provenance count — evidences §8.3.1 distribution.
+   * Counts distinct run/day keys, NOT distinct calendar days: a sample with a
+   * known run but an unknown or post-window (normalized-null) day still adds a
+   * run-level key, so this can exceed the number of distinct days.
+   */
+  distinctRunDayCount: number;
   /** Submitted H/C_org mean ± std-dev (dimensionless molar). */
   hToCorg: LedgerStat;
   /** Submitted total carbon % mean ± std-dev. */

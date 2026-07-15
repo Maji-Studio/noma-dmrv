@@ -420,9 +420,9 @@ function replicateRow(
 
 function batchSection(batch: LedgerBatch): ReactElement {
   const distrib =
-    batch.distinctDayCount >= 3
-      ? `${batch.distinctDayCount} distinct days`
-      : `${batch.distinctDayCount} distinct day(s) — review distribution`;
+    batch.distinctRunDayCount >= 3
+      ? `${batch.distinctRunDayCount} distinct run/day sources`
+      : `${batch.distinctRunDayCount} distinct run/day source(s) — review distribution`;
   const header = v(styles.sectionHead, { minPresenceAhead: 80 },
     v(styles.rule, {}),
     t(styles.sectionName, `Credit batch ${batch.creditBatchCode}`),
