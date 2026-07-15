@@ -7,7 +7,6 @@ import {
 } from "@/data-access/code-generator";
 import { createCustomer } from "@/data-access/customers";
 import { customers } from "@/db/schema";
-import { SafeError } from "@/lib/errors";
 import {
   ensureTestOrg,
   makeTestOrgContext,
@@ -34,35 +33,45 @@ describe("customer code concurrency", () => {
     }
   });
 
-  it("surfaces a concurrent duplicate as SafeError instead of raw Postgres", async () => {
+  it("retries a concurrent auto-generated code collision", async () => {
     const ctx = makeTestOrgContext(TEST_USER_ID);
-    const code = `CUS-DUP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-    createdCodes.push(code);
+    let firstAttemptsReady = 0;
+    let releaseFirstAttempts = () => {};
+    const firstAttemptBarrier = new Promise<void>((resolve) => {
+      releaseFirstAttempts = resolve;
+    });
 
-    const create = (name: string) =>
-      withAutoCode(
+    const create = (name: string) => {
+      let attempt = 0;
+      return withAutoCode(
         ctx,
         "CUS",
         customers,
         customers.code,
-        code,
-        (resolvedCode) => createCustomer(ctx, { code: resolvedCode, name }),
+        undefined,
+        async (resolvedCode) => {
+          if (attempt++ === 0) {
+            firstAttemptsReady += 1;
+            if (firstAttemptsReady === 2) releaseFirstAttempts();
+            await firstAttemptBarrier;
+          }
+          const customer = await createCustomer(ctx, {
+            code: resolvedCode,
+            name,
+          });
+          createdCodes.push(customer.code);
+          return customer;
+        },
         CODE_CONFLICT_MESSAGES.customer,
       );
+    };
 
-    const results = await Promise.allSettled([
+    const results = await Promise.all([
       create("Concurrent Customer A"),
       create("Concurrent Customer B"),
     ]);
-    const fulfilled = results.filter((result) => result.status === "fulfilled");
-    const rejected = results.filter((result) => result.status === "rejected");
 
-    expect(fulfilled).toHaveLength(1);
-    expect(rejected).toHaveLength(1);
-
-    const reason = (rejected[0] as PromiseRejectedResult).reason;
-    expect(reason).toBeInstanceOf(SafeError);
-    expect(reason).toMatchObject({ message: CODE_CONFLICT_MESSAGES.customer });
-    expect(reason.message).not.toMatch(/duplicate key|23505|constraint/i);
+    expect(results.map((customer) => customer.code)).toHaveLength(2);
+    expect(new Set(results.map((customer) => customer.code)).size).toBe(2);
   });
 });
