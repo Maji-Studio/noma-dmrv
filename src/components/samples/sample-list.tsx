@@ -500,7 +500,6 @@ export function SampleList() {
             fields: [
               { label: "Bulk Density", value: displaySideSheet.entity.bulkDensityKgPerM3 != null ? `${displaySideSheet.entity.bulkDensityKgPerM3} kg/m\u00B3` : null },
               { label: "pH", value: displaySideSheet.entity.ph != null ? String(displaySideSheet.entity.ph) : null },
-              { label: "Surface Area", value: displaySideSheet.entity.surfaceAreaM2PerG != null ? `${displaySideSheet.entity.surfaceAreaM2PerG} m\u00B2/g` : null },
             ],
           },
           {

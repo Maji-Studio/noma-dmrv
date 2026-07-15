@@ -75,6 +75,23 @@ guard. Pure starter-template residue; the app is facility-scoped.
   hand-entered assay values; matters only if a lab/CSV import path ever writes
   gas-composition or contaminant ppm columns (none exists today).
 
+### Sample Surface Area / Volatile Matter — removed from the form; add columns or drop for good? (`schema/sample-lab-properties`, opened 2026-07-15)
+
+- **Context:** the 2026-07-15 staging QA
+  (`docs/qa/2026-07-15-qa-staging-production-chain.md`, S3) found the sample
+  form accepted **Surface Area (m²/g)** and **Volatile Matter (%)** and then
+  silently discarded them — the `samples` table has neither column and
+  `data-access/samples.ts` hard-coded both to `null`. The fields were removed
+  from the samples flow (form, schemas, list display, type) so success no
+  longer lies about what was stored.
+- **Decision needed:** are these two lab properties part of the canonical
+  sample record (COAs commonly report both; `production_samples` already has
+  `volatile_matter_percent`) or permanently out of scope? Neither feeds credit
+  math today.
+- **To resolve:** stakeholder call on whether verifiers/customers want them; if
+  yes, add columns via the `percent` numeric family + re-add the fields
+  end-to-end (no backfill needed — reseed, not migrate).
+
 ## Architecture
 
 ### Auto-fill sample chemistry from an uploaded lab report (`samples/coa-autofill`, opened 2026-07-02)

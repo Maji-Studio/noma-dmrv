@@ -9,6 +9,7 @@ import {
 // cluster warning stays silent unless a test deliberately clusters them.
 function distributedProvenance(n: number): ReplicateProvenance[] {
   return Array.from({ length: n }, (_, i) => ({
+    sampleCode: `SAM-${i + 1}`,
     productionRunId: `run-${i}`,
     samplingDay: `2026-06-0${(i % 9) + 1}`,
   }));
@@ -19,6 +20,8 @@ function gateBatch(overrides: Partial<BatchGateFacts>): BatchGateFacts {
   return {
     creditBatchId: "batch-1",
     creditBatchCode: "CB-1",
+    startDate: "2026-06-01",
+    endDate: "2026-06-30",
     productionProcessId: "proc-1",
     samplingMethod: "method_a",
     replicates,
@@ -154,9 +157,9 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
 
   it("warns (does not block) when ≥3 eligible replicates cluster on a single run/day (§8.3.1)", () => {
     const clustered: ReplicateProvenance[] = [
-      { productionRunId: "run-1", samplingDay: "2026-06-01" },
-      { productionRunId: "run-1", samplingDay: "2026-06-01" },
-      { productionRunId: "run-1", samplingDay: "2026-06-01" },
+      { sampleCode: "SAM-1", productionRunId: "run-1", samplingDay: "2026-06-01" },
+      { sampleCode: "SAM-2", productionRunId: "run-1", samplingDay: "2026-06-01" },
+      { sampleCode: "SAM-3", productionRunId: "run-1", samplingDay: "2026-06-01" },
     ];
     const r = evaluateDurabilitySubmissionGates([
       gateBatch({ replicates: eligibleTriplet, replicateProvenance: clustered }),
@@ -177,10 +180,10 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
       { hToCOrgRatio: 0.31, oToCOrgRatio: null },
     ];
     const replicateProvenance: ReplicateProvenance[] = [
-      { productionRunId: "run-1", samplingDay: "2026-06-01" },
-      { productionRunId: "run-1", samplingDay: "2026-06-01" },
-      { productionRunId: "run-1", samplingDay: "2026-06-01" },
-      { productionRunId: "run-2", samplingDay: "2026-06-02" },
+      { sampleCode: "SAM-1", productionRunId: "run-1", samplingDay: "2026-06-01" },
+      { sampleCode: "SAM-2", productionRunId: "run-1", samplingDay: "2026-06-01" },
+      { sampleCode: "SAM-3", productionRunId: "run-1", samplingDay: "2026-06-01" },
+      { sampleCode: "SAM-4", productionRunId: "run-2", samplingDay: "2026-06-02" },
     ];
     const r = evaluateDurabilitySubmissionGates([
       gateBatch({ replicates, replicateProvenance }),
@@ -192,9 +195,9 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
 
   it("warns distinctly when ≥3 eligible replicates have unknown run/day provenance", () => {
     const unknown: ReplicateProvenance[] = [
-      { productionRunId: null, samplingDay: null },
-      { productionRunId: null, samplingDay: null },
-      { productionRunId: null, samplingDay: null },
+      { sampleCode: "SAM-1", productionRunId: null, samplingDay: null },
+      { sampleCode: "SAM-2", productionRunId: null, samplingDay: null },
+      { sampleCode: "SAM-3", productionRunId: null, samplingDay: null },
     ];
     const r = evaluateDurabilitySubmissionGates([
       gateBatch({ replicates: eligibleTriplet, replicateProvenance: unknown }),
@@ -225,5 +228,49 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
       blockers: [],
       warnings: [],
     });
+  });
+
+  it("blocks a sample dated before its credit-batch production window", () => {
+    const r = evaluateDurabilitySubmissionGates([
+      gateBatch({
+        replicates: eligibleTriplet,
+        replicateProvenance: [
+          { sampleCode: "SAM-26-003", productionRunId: "run-1", samplingDay: "2026-05-31" },
+          { sampleCode: "SAM-26-004", productionRunId: "run-1", samplingDay: "2026-06-02" },
+          { sampleCode: "SAM-26-005", productionRunId: "run-1", samplingDay: "2026-06-03" },
+        ],
+      }),
+    ]);
+
+    expect(r.ok).toBe(false);
+    expect(r.blockers.some((b) => /SAM-26-003/.test(b) && /2026-06-01–2026-06-30/.test(b) && /8\.3\.1/.test(b))).toBe(true);
+  });
+
+  it("counts a post-window sample as usable but excludes its day from temporal distribution", () => {
+    const r = evaluateDurabilitySubmissionGates([
+      gateBatch({
+        replicates: eligibleTriplet,
+        replicateProvenance: [
+          { sampleCode: "SAM-26-001", productionRunId: "run-1", samplingDay: "2026-06-15" },
+          { sampleCode: "SAM-26-002", productionRunId: "run-1", samplingDay: "2026-06-15" },
+          { sampleCode: "SAM-26-003", productionRunId: "run-1", samplingDay: "2026-07-20" },
+        ],
+      }),
+    ]);
+
+    expect(r.ok).toBe(true);
+    expect(r.blockers.every((b) => !/replicate/.test(b))).toBe(true);
+    expect(r.warnings.some((w) => /SAM-26-003/.test(w) && /stored material/.test(w) && /registry/.test(w))).toBe(true);
+    expect(r.warnings.some((w) => /single run\/day/.test(w))).toBe(true);
+  });
+
+  it("leaves distinct in-window sampling days unchanged", () => {
+    const r = evaluateDurabilitySubmissionGates([
+      gateBatch({ replicates: eligibleTriplet }),
+    ]);
+
+    expect(r.ok).toBe(true);
+    expect(r.blockers).toEqual([]);
+    expect(r.warnings).toEqual([]);
   });
 });
