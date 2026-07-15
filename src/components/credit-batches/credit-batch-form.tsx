@@ -147,11 +147,22 @@ function CohortPickerSection({
             {notReadyMessage}
           </span>
         </div>
-      ) : totalCount === 0 ? (
+      ) : totalCount === 0 && count === 0 ? (
         <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
           <span className="body-small text-[var(--color-text-tertiary)]">
-            {count > 0 ? noMatchWithSelectionMessage ?? noMatchMessage : noMatchMessage}
+            {noMatchMessage}
           </span>
+        </div>
+      ) : totalCount === 0 ? (
+        <div className="space-y-8">
+          <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
+            <span className="body-small text-[var(--color-text-tertiary)]">
+              {noMatchWithSelectionMessage ?? noMatchMessage}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-8 max-h-[320px] overflow-y-auto">
+            {children}
+          </div>
         </div>
       ) : (
         <div className="border border-[var(--color-border-tertiary)]">
@@ -306,6 +317,16 @@ export function CreditBatchForm({
           run.feedstockTypeIds[0] === declaredFeedstockTypeId,
       )
     : [];
+  const typedRunOptionIds = new Set(typedRunOptions.map((run) => run.id));
+  const productionRunOptionsById = new Map(
+    productionRunOptions.map((run) => [run.id, run]),
+  );
+  const retainedProductionRunOptions = selectedProductionRunIds
+    .filter((runId) => !typedRunOptionIds.has(runId))
+    .map((runId) => ({
+      id: runId,
+      run: productionRunOptionsById.get(runId),
+    }));
   const selectableProductionRunIds = typedRunOptions
     .filter(
       (run) =>
@@ -384,6 +405,47 @@ export function CreditBatchForm({
     onSubmit(data as CreditBatchFormData);
   });
 
+  const renderProductionRunOption = (run: CreditBatchProductionRunOption) => {
+    const assignedElsewhere =
+      !!run.assignedCreditBatchId &&
+      run.assignedCreditBatchId !== creditBatch?.id;
+    return (
+      <label
+        key={run.id}
+        className={`flex min-h-44 items-center gap-12 px-12 py-8 border ${
+          assignedElsewhere
+            ? "bg-[var(--color-background-sunken)] border-[var(--color-border-tertiary)] text-[var(--color-text-quaternary)]"
+            : "bg-[var(--color-background-white)] border-[var(--color-border-tertiary)] text-[var(--color-text-primary)]"
+        }`}
+      >
+        <input
+          type="checkbox"
+          value={run.id}
+          disabled={isSubmitting || assignedElsewhere}
+          className="h-16 w-16 shrink-0"
+          {...register("productionRunIds")}
+        />
+        <span className="body-small font-medium shrink-0">{run.code}</span>
+        <span className="text-[11px] text-[var(--color-text-tertiary)] shrink-0">
+          {formatSafeDate(run.date)}
+        </span>
+        {assignedElsewhere && run.assignedCreditBatchCode && (
+          <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-quaternary)] truncate">
+            Assigned to {run.assignedCreditBatchCode}
+          </span>
+        )}
+        <span className="ml-auto text-[10px] uppercase tracking-wider text-[var(--color-text-quaternary)] shrink-0">
+          Dry output{" "}
+          {formatTons(
+            run.biocharDryMassKg == null
+              ? null
+              : kgToTonnes(run.biocharDryMassKg),
+          )}
+        </span>
+      </label>
+    );
+  };
+
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* ── Overview ── */}
@@ -454,46 +516,28 @@ export function CreditBatchForm({
         noMatchMessage="No runs of this feedstock type fall within the production window."
         noMatchWithSelectionMessage="No additional runs of this feedstock type fall within the production window."
       >
-        {typedRunOptions.map((run: CreditBatchProductionRunOption) => {
-          const assignedElsewhere =
-            !!run.assignedCreditBatchId &&
-            run.assignedCreditBatchId !== creditBatch?.id;
-          return (
+        {typedRunOptions.map(renderProductionRunOption)}
+        {retainedProductionRunOptions.map(({ id, run }) =>
+          run ? (
+            renderProductionRunOption(run)
+          ) : (
             <label
-              key={run.id}
-              className={`flex min-h-44 items-center gap-12 px-12 py-8 border ${
-                assignedElsewhere
-                  ? "bg-[var(--color-background-sunken)] border-[var(--color-border-tertiary)] text-[var(--color-text-quaternary)]"
-                  : "bg-[var(--color-background-white)] border-[var(--color-border-tertiary)] text-[var(--color-text-primary)]"
-              }`}
+              key={id}
+              className="flex min-h-44 items-center gap-12 px-12 py-8 border bg-[var(--color-background-white)] border-[var(--color-border-tertiary)] text-[var(--color-text-primary)]"
             >
               <input
                 type="checkbox"
-                value={run.id}
-                disabled={isSubmitting || assignedElsewhere}
+                value={id}
+                disabled={isSubmitting}
                 className="h-16 w-16 shrink-0"
                 {...register("productionRunIds")}
               />
-              <span className="body-small font-medium shrink-0">{run.code}</span>
-              <span className="text-[11px] text-[var(--color-text-tertiary)] shrink-0">
-                {formatSafeDate(run.date)}
-              </span>
-              {assignedElsewhere && run.assignedCreditBatchCode && (
-                <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-quaternary)] truncate">
-                  Assigned to {run.assignedCreditBatchCode}
-                </span>
-              )}
-              <span className="ml-auto text-[10px] uppercase tracking-wider text-[var(--color-text-quaternary)] shrink-0">
-                Dry output{" "}
-                {formatTons(
-                  run.biocharDryMassKg == null
-                    ? null
-                    : kgToTonnes(run.biocharDryMassKg),
-                )}
+              <span className="body-small font-mono break-all">
+                {id}
               </span>
             </label>
-          );
-        })}
+          ),
+        )}
       </CohortPickerSection>
 
       {errors.productionRunIds?.message && (
