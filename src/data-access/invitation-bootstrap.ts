@@ -107,35 +107,29 @@ export async function createInvitedAccount(input: {
 
   const email = invitation.email.toLowerCase();
   const { internalAdapter } = await auth.$context;
-  let createdUser: Awaited<ReturnType<typeof internalAdapter.createUser>>;
+  let createdUser: Awaited<
+    ReturnType<typeof internalAdapter.createOAuthUser>
+  >["user"];
   try {
-    createdUser = await internalAdapter.createUser({
-      email,
-      name: input.name,
-      // Receiving the single-use invitation proves control of this address.
-      emailVerified: true,
-    });
+    ({ user: createdUser } = await internalAdapter.createOAuthUser(
+      {
+        email,
+        name: input.name,
+        // Receiving the single-use invitation proves control of this address.
+        emailVerified: true,
+      },
+      {
+        accountId: email,
+        providerId: "credential",
+        password: input.passwordHash,
+      },
+    ));
   } catch (error) {
     // Normalized email plus the database uniqueness constraint is the race
     // backstop when two bootstrap requests pass the anonymous pre-check.
     if (isPgUniqueViolation(error, USERS_EMAIL_UNIQUE_CONSTRAINT)) {
       throw new SafeError(EXISTING_ACCOUNT_MESSAGE);
     }
-    throw error;
-  }
-
-  try {
-    await internalAdapter.linkAccount({
-      userId: createdUser.id,
-      accountId: createdUser.id,
-      providerId: "credential",
-      password: input.passwordHash,
-    });
-  } catch (error) {
-    // Better Auth 1.6 does not expose a public way to bind internalAdapter
-    // calls to this module's invitation transaction. Compensate through the
-    // adapter so hooks still run and a failed link does not leave an orphan.
-    await internalAdapter.deleteUser(createdUser.id).catch(() => undefined);
     throw error;
   }
 

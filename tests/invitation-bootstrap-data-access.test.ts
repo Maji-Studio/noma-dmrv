@@ -2,9 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SafeError } from "@/lib/errors";
 
 const mockSelect = vi.fn();
-const mockCreateUser = vi.fn();
-const mockLinkAccount = vi.fn();
-const mockDeleteUser = vi.fn();
+const mockCreateOAuthUser = vi.fn();
 
 vi.mock("@/db", () => ({
   db: {
@@ -16,9 +14,7 @@ vi.mock("@/lib/auth/better-auth", () => ({
   auth: {
     $context: Promise.resolve({
       internalAdapter: {
-        createUser: (...args: unknown[]) => mockCreateUser(...args),
-        linkAccount: (...args: unknown[]) => mockLinkAccount(...args),
-        deleteUser: (...args: unknown[]) => mockDeleteUser(...args),
+        createOAuthUser: (...args: unknown[]) => mockCreateOAuthUser(...args),
       },
     }),
   },
@@ -56,9 +52,10 @@ function validInvitation() {
 describe("createInvitedAccount", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCreateUser.mockResolvedValue({ id: USER_ID });
-    mockLinkAccount.mockResolvedValue({ id: "account-123" });
-    mockDeleteUser.mockResolvedValue(undefined);
+    mockCreateOAuthUser.mockResolvedValue({
+      user: { id: USER_ID },
+      account: { id: "account-123" },
+    });
   });
 
   it("re-checks the invitation and creates the credential through Better Auth", async () => {
@@ -70,17 +67,18 @@ describe("createInvitedAccount", () => {
       passwordHash: PASSWORD_HASH,
     });
 
-    expect(mockCreateUser).toHaveBeenCalledWith({
-      email: "invitee@example.com",
-      name: "Invitee",
-      emailVerified: true,
-    });
-    expect(mockLinkAccount).toHaveBeenCalledWith({
-      userId: USER_ID,
-      accountId: USER_ID,
-      providerId: "credential",
-      password: PASSWORD_HASH,
-    });
+    expect(mockCreateOAuthUser).toHaveBeenCalledWith(
+      {
+        email: "invitee@example.com",
+        name: "Invitee",
+        emailVerified: true,
+      },
+      {
+        accountId: "invitee@example.com",
+        providerId: "credential",
+        password: PASSWORD_HASH,
+      },
+    );
     expect(result).toEqual({
       userId: USER_ID,
       email: "invitee@example.com",
@@ -102,8 +100,7 @@ describe("createInvitedAccount", () => {
         "An account already exists for this invitation. Sign in instead."
       )
     );
-    expect(mockCreateUser).not.toHaveBeenCalled();
-    expect(mockLinkAccount).not.toHaveBeenCalled();
+    expect(mockCreateOAuthUser).not.toHaveBeenCalled();
   });
 
   it("rejects an expired invitation during the creation re-check", async () => {
@@ -120,12 +117,12 @@ describe("createInvitedAccount", () => {
     ).rejects.toEqual(
       new SafeError("Invitation not found, expired, or already used.")
     );
-    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(mockCreateOAuthUser).not.toHaveBeenCalled();
   });
 
   it("maps a concurrent normalized-email insert to existing-user behavior", async () => {
     queueSelectResults([validInvitation()], []);
-    mockCreateUser.mockRejectedValue({
+    mockCreateOAuthUser.mockRejectedValue({
       code: "23505",
       constraint: "users_email_unique",
     });
@@ -141,20 +138,5 @@ describe("createInvitedAccount", () => {
         "An account already exists for this invitation. Sign in instead."
       )
     );
-    expect(mockLinkAccount).not.toHaveBeenCalled();
-  });
-
-  it("removes the adapter-created user if credential linking fails", async () => {
-    queueSelectResults([validInvitation()], []);
-    mockLinkAccount.mockRejectedValue(new Error("link failed"));
-
-    await expect(
-      createInvitedAccount({
-        invitationId: INVITATION_ID,
-        name: "Invitee",
-        passwordHash: PASSWORD_HASH,
-      })
-    ).rejects.toThrow("link failed");
-    expect(mockDeleteUser).toHaveBeenCalledWith(USER_ID);
   });
 });
