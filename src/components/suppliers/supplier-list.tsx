@@ -27,6 +27,7 @@ import { SupplierForm, type PendingSupplierLocation } from "./supplier-form";
 import type { SupplierFormData } from "@/schemas/suppliers";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { resolveSupplierLocationText } from "@/lib/supplier-location-display";
 
 // ============================================
 // Column Definitions
@@ -58,7 +59,10 @@ function createColumns(
       header: "Location",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
-          {row.original.location || "\u2014"}
+          {resolveSupplierLocationText(
+            row.original.location,
+            row.original.defaultLocationDisplay,
+          ) || "\u2014"}
         </span>
       ),
     },
