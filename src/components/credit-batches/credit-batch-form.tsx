@@ -32,6 +32,8 @@ import { useCreditBatchProductionRunOptions } from "@/hooks/use-credit-batches";
 import { CohortInputLedger } from "./cohort-input-ledger";
 import { FeedstockProcessChip } from "./feedstock-process-chip";
 
+const COHORT_LIST_HEIGHT_CLASS = "max-h-[320px]";
+
 // ============================================
 // Section helpers
 // ============================================
@@ -160,7 +162,9 @@ function CohortPickerSection({
               {noMatchWithSelectionMessage ?? noMatchMessage}
             </span>
           </div>
-          <div className="grid grid-cols-1 gap-8 max-h-[320px] overflow-y-auto">
+          <div
+            className={`grid grid-cols-1 gap-8 ${COHORT_LIST_HEIGHT_CLASS} overflow-y-auto`}
+          >
             {children}
           </div>
         </div>
@@ -181,7 +185,11 @@ function CohortPickerSection({
             </span>
           </button>
           {isOpen && (
-            <div id={panelId} role="region" className="grid grid-cols-1 gap-8 p-8 max-h-[320px] overflow-y-auto">
+            <div
+              id={panelId}
+              role="region"
+              className={`grid grid-cols-1 gap-8 p-8 ${COHORT_LIST_HEIGHT_CLASS} overflow-y-auto`}
+            >
               {children}
             </div>
           )}
