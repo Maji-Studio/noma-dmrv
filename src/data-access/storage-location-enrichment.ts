@@ -124,6 +124,7 @@ export async function enrichStorageLocationRows(
     biocharOutputRows,
     biocharAllocationRows,
     productInventoryRows,
+    productDeliveredRows,
     productApplicationRows,
     lastActivityRows,
     laneStockRows,
@@ -235,6 +236,34 @@ export async function enrichStorageLocationRows(
           .groupBy(biocharProducts.storageLocationId),
         db
           .select({
+            storageLocationId: biocharProducts.storageLocationId,
+            deliveredMassKg: sql<number>`COALESCE(SUM(${deliveries.deliveredWetMassKg}), 0)`,
+          })
+          .from(deliveries)
+          .innerJoin(
+            orders,
+            and(
+              eq(deliveries.orderId, orders.id),
+              eq(orders.organizationId, ctx.organizationId),
+            ),
+          )
+          .innerJoin(
+            biocharProducts,
+            and(
+              sql`${biocharProducts.id} = COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+              eq(biocharProducts.organizationId, ctx.organizationId),
+            ),
+          )
+          .where(
+            and(
+              eq(deliveries.status, "delivered"),
+              eq(deliveries.organizationId, ctx.organizationId),
+              inArray(biocharProducts.storageLocationId, storageLocationIds),
+            ),
+          )
+          .groupBy(biocharProducts.storageLocationId),
+        db
+          .select({
             storageLocationId: sql<string>`
               COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId})
             `,
@@ -335,6 +364,7 @@ export async function enrichStorageLocationRows(
         [],
         [],
         [],
+        [],
         {
           rows: [] as Array<{
             storage_location_id: string;
@@ -371,6 +401,9 @@ export async function enrichStorageLocationRows(
   const productInventoryMap = new Map(
     productInventoryRows.map((row) => [row.storageLocationId ?? "", row])
   );
+  const productDeliveredMap = new Map(
+    productDeliveredRows.map((row) => [row.storageLocationId ?? "", row])
+  );
   const productApplicationMap = new Map(
     productApplicationRows
       .filter((row) => row.storageLocationId != null)
@@ -406,8 +439,12 @@ export async function enrichStorageLocationRows(
     const allocatedKg = laneStock?.biocharAllocatedKg ?? 0;
 
     const productInventoryRow = productInventoryMap.get(row.id);
+    const productDeliveredRow = productDeliveredMap.get(row.id);
     const productApplicationRow = productApplicationMap.get(row.id);
     const productBaseMassKg = Number(productInventoryRow?.currentMassKg ?? 0);
+    const productDeliveredMassKg = Number(
+      productDeliveredRow?.deliveredMassKg ?? 0,
+    );
 
     return {
       ...row,
@@ -435,7 +472,9 @@ export async function enrichStorageLocationRows(
       productInventory: {
         batchCount: Number(productInventoryRow?.batchCount ?? 0),
         currentMassKg:
-          productBaseMassKg + (laneStock?.productMovementDeltaKg ?? 0),
+          productBaseMassKg -
+          productDeliveredMassKg +
+          (laneStock?.productMovementDeltaKg ?? 0),
         biocharEquivalentKg: Number(productInventoryRow?.biocharEquivalentKg ?? 0),
         formulationNames: splitAggregateLabels(
           productInventoryRow?.formulationNames ?? null
