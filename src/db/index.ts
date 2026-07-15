@@ -28,7 +28,10 @@ export type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export async function withDedicatedLockConnection<T>(
   fn: (tx: DbTransaction) => Promise<T>,
 ): Promise<T> {
-  const client = new Client(getPgPoolConfig(env.DATABASE_URL));
+  const client = new Client({
+    ...getPgPoolConfig(env.DATABASE_URL),
+    connectionTimeoutMillis: env.DB_POOL_CONNECTION_TIMEOUT_MS ?? 10_000,
+  });
 
   try {
     await client.connect();
