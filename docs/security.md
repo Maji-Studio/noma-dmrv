@@ -198,6 +198,34 @@ Notes:
 - **Optional vars may be missing from an item.** Both sync scripts pre-check the item's field names and skip template refs with no matching field (per-var warning) instead of letting `op inject` hard-fail. They abort only when a **required** field is missing — `REQUIRED_LOCAL_VARS` / `REQUIRED_DEPLOYED_VARS` in `scripts/env-tpl-utils.ts`, the vars `src/config/env.ts` cannot boot without. `pnpm env:check` reports the same split (missing-optional is advisory; missing-required exits 1).
 - `load-secrets-action` **fails the step** when a referenced `op://` field doesn't exist — it does not skip. Add the field before the workflow runs.
 
+### Post-reset staging runbook — restore the Isometric integration
+
+Both staging reset actions in `migrate.yml` (`reset-seed-staging` and
+`reset-empty-staging`) load only `DATABASE_URL` + `ADMIN_EMAIL`/`ADMIN_PASSWORD`
+— deliberately not the Isometric trio — so `db:ensure-admin` skips the
+credential-row seed. After every staging reset the app therefore has **no
+organization registry credentials and no facility→project link**: Certification
+Settings shows `Credentials: Not configured` and the Removals hub redirects to
+Settings (fail-closed, working as designed; observed in
+`docs/qa/2026-07-15-qa-staging-production-chain.md`, B1).
+
+Manual restore steps (Platform Admin, staging UI):
+
+1. **Credentials** — organization admin area → enter the sandbox access token
+   and client secret from the `noma-dmrv env staging` 1Password item
+   (`ISOMETRIC_ACCESS_TOKEN` / `ISOMETRIC_CLIENT_SECRET` fields). The deployed
+   env must already have `CREDENTIALS_ENCRYPTION_KEY` (it does; see above).
+2. **Project link** — Certification Settings → link the facility to the
+   sandbox project (`ISOMETRIC_DEMO_PROJECT_ID` field on the staging item) and
+   its removal template.
+3. **Verify** — Certification Settings health shows the credential as
+   configured and the Removals hub loads without redirecting.
+
+Automating this in the reset workflows was considered and deliberately not
+built (decision 2026-07-15): the manual step keeps sandbox tokens out of the
+reset path and forces an explicit check that staging points at the intended
+sandbox project after a wipe.
+
 ### Never expose real keys
 
 - Never put real keys in code, comments, or docs — use the placeholder
