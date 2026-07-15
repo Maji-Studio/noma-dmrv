@@ -14,12 +14,13 @@ vi.mock("@/data-access/invitation-bootstrap", () => ({
   createInvitedAccount: (...args: unknown[]) => mockCreateAccount(...args),
 }));
 
-vi.mock("@/lib/auth/hash-password", () => ({
-  hashPassword: (...args: unknown[]) => mockHashPassword(...args),
-}));
-
 vi.mock("@/lib/auth/better-auth", () => ({
   auth: {
+    $context: Promise.resolve({
+      password: {
+        hash: (...args: unknown[]) => mockHashPassword(...args),
+      },
+    }),
     api: {
       getSession: (...args: unknown[]) => mockGetSession(...args),
       signInEmail: (...args: unknown[]) => mockSignInEmail(...args),
@@ -133,6 +134,7 @@ describe("bootstrapInvitationAccountAction", () => {
       name: "Invitee",
       passwordHash: "password-hash",
     });
+    expect(mockHashPassword).toHaveBeenCalledWith(VALID_INPUT.password);
     expect(mockSignInEmail).toHaveBeenCalledOnce();
     expect(mockAcceptInvitation).toHaveBeenCalledOnce();
     expect(mockSetActiveOrganization).toHaveBeenCalledWith(

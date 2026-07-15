@@ -21,8 +21,14 @@ import {
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/loading-skeleton";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
-import { FormField, FormInput, FormSelect } from "@/components/forms";
+import {
+  FormActions,
+  FormField,
+  FormInput,
+  FormSelect,
+} from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import {
   useChangeMemberRole,
@@ -32,6 +38,10 @@ import {
   useRevokeInvitation,
   useRemoveMember,
 } from "@/hooks/use-organizations";
+import {
+  OrganizationRosterList,
+  OrganizationRosterRow,
+} from "./organization-roster-list";
 
 const ROLE_OPTIONS = [
   { value: "owner", label: "Owner" },
@@ -172,16 +182,6 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
                 />
               </FormField>
             </div>
-            <div>
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={inviteMember.isPending}
-              >
-                {inviteMember.isPending ? "Sending…" : "Send invitation"}
-              </Button>
-            </div>
-
             {lastInviteLink && (
               <div className="flex flex-col gap-8 border border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] p-12">
                 <span className="body-caption font-medium text-[var(--color-text-primary)]">
@@ -210,6 +210,12 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
                 </div>
               </div>
             )}
+            <FormActions
+              isSubmitting={inviteMember.isPending}
+              submitLabel="Send invitation"
+              submittingLabel="Sending…"
+              sticky={false}
+            />
           </form>
         </section>
       )}
@@ -218,7 +224,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
       <section className="flex flex-col gap-16">
         <h2 className="title-heading-3">Members</h2>
         {membersLoading ? (
-          <div className="h-64 animate-pulse bg-[var(--color-background-medium)]" />
+          <Skeleton className="h-64 w-full" />
         ) : !members || members.length === 0 ? (
           <EmptyState
             icon={<UsersIcon size={40} />}
@@ -227,55 +233,49 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
             padding="md"
           />
         ) : (
-          <ul className="flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]">
+          <OrganizationRosterList>
             {members.map((member) => (
-              <li
+              <OrganizationRosterRow
                 key={member.memberId}
-                className="flex flex-wrap items-center justify-between gap-12 border-b border-[var(--color-border-tertiary)] px-16 py-12 last:border-b-0"
-              >
-                <div className="flex min-w-0 flex-col">
-                  <span className="body-small font-medium text-[var(--color-text-primary)] truncate">
-                    {member.name?.trim() || member.email}
-                  </span>
-                  <span className="body-caption text-[var(--color-text-secondary)] truncate">
-                    {member.email}
-                  </span>
-                </div>
-                <div className="flex items-center gap-8">
-                  {canManage ? (
-                    <FormSelect
-                      options={ROLE_OPTIONS}
-                      value={member.role}
-                      onChange={(e) =>
-                        onChangeRole(member.memberId, e.target.value)
-                      }
-                      className="w-[140px]"
-                      aria-label={`Role for ${member.email}`}
-                    />
-                  ) : (
-                    <span className="body-caption uppercase tracking-wide text-[var(--color-text-secondary)]">
-                      {member.role}
-                    </span>
-                  )}
-                  {canManage && (
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="small"
-                      onClick={() =>
-                        setRemovingMember({
-                          memberId: member.memberId,
-                          email: member.email,
-                        })
-                      }
-                    >
-                      Remove
-                    </Button>
-                  )}
-                </div>
-              </li>
+                primary={member.name?.trim() || member.email}
+                secondary={member.email}
+                actions={
+                  <>
+                    {canManage ? (
+                      <FormSelect
+                        options={ROLE_OPTIONS}
+                        value={member.role}
+                        onChange={(e) =>
+                          onChangeRole(member.memberId, e.target.value)
+                        }
+                        className="w-[140px]"
+                        aria-label={`Role for ${member.email}`}
+                      />
+                    ) : (
+                      <span className="body-caption uppercase tracking-wide text-[var(--color-text-secondary)]">
+                        {member.role}
+                      </span>
+                    )}
+                    {canManage && (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="small"
+                        onClick={() =>
+                          setRemovingMember({
+                            memberId: member.memberId,
+                            email: member.email,
+                          })
+                        }
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </>
+                }
+              />
             ))}
-          </ul>
+          </OrganizationRosterList>
         )}
       </section>
 
@@ -291,33 +291,28 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
               padding="md"
             />
           ) : (
-            <ul className="flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]">
+            <OrganizationRosterList>
               {invitations.map((invite) => (
-                <li
+                <OrganizationRosterRow
                   key={invite.id}
-                  className="flex flex-wrap items-center justify-between gap-12 border-b border-[var(--color-border-tertiary)] px-16 py-12 last:border-b-0"
-                >
-                  <div className="flex min-w-0 flex-col">
-                    <span className="body-small font-medium text-[var(--color-text-primary)] truncate">
-                      {invite.email}
-                    </span>
-                    <span className="body-caption uppercase tracking-wide text-[var(--color-text-secondary)]">
-                      {invite.role}
-                    </span>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="weak"
-                    size="small"
-                    onClick={() =>
-                      setRevokingInvite({ id: invite.id, email: invite.email })
-                    }
-                  >
-                    Revoke
-                  </Button>
-                </li>
+                  primary={invite.email}
+                  secondary={invite.role}
+                  secondaryClassName="uppercase tracking-wide"
+                  actions={
+                    <Button
+                      type="button"
+                      variant="weak"
+                      size="small"
+                      onClick={() =>
+                        setRevokingInvite({ id: invite.id, email: invite.email })
+                      }
+                    >
+                      Revoke
+                    </Button>
+                  }
+                />
               ))}
-            </ul>
+            </OrganizationRosterList>
           )}
         </section>
       )}

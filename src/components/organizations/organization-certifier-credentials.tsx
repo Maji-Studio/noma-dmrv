@@ -4,10 +4,16 @@ import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { KeyIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useForm } from "react-hook-form";
-import { FormField, FormInput, ServerError } from "@/components/forms";
+import {
+  FormActions,
+  FormField,
+  FormInput,
+  ServerError,
+} from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/loading-skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -102,7 +108,7 @@ export function OrganizationCertifierCredentials({
       </div>
 
       {statusQuery.isLoading ? (
-        <div className="h-64 animate-pulse bg-[var(--color-background-medium)]" />
+        <Skeleton className="h-64 w-full" />
       ) : statusQuery.error ? (
         <EmptyState
           icon={<WarningCircleIcon size={32} />}
@@ -172,20 +178,14 @@ export function OrganizationCertifierCredentials({
           </FormField>
         </div>
         <ServerError message={serverError} />
-        <div>
-          <Button
-            type="submit"
-            variant="primary"
-            size="small"
-            disabled={setCredentials.isPending}
-          >
-            {setCredentials.isPending
-              ? "Saving…"
-              : status?.configured
-                ? "Replace credentials"
-                : "Set credentials"}
-          </Button>
-        </div>
+        <FormActions
+          isSubmitting={setCredentials.isPending}
+          submitLabel={
+            status?.configured ? "Replace credentials" : "Set credentials"
+          }
+          submittingLabel="Saving…"
+          sticky={false}
+        />
       </form>
 
       <DeleteConfirmDialog

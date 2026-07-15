@@ -23,6 +23,8 @@ import { SafeError } from "@/lib/errors";
 import { isPgCheckViolation } from "@/db/errors";
 import { deriveBinLaneAvailableKg, lockBinStock } from "./bin-stock-guards";
 
+export type DbReader = Pick<typeof db, "select">;
+
 const LOSS_NEGATIVITY_CONSTRAINT = "bin_movements_loss_is_negative";
 const LOSS_NEGATIVITY_MESSAGE = "A loss must be recorded as a negative mass delta";
 
@@ -68,17 +70,19 @@ export interface RecordStockTakeMovementInput {
 
 /**
  * Signed sum of movement deltas per (storage location, lane). Used by the
- * storage-location enrichment overlay to fold documented adjustments/losses
- * into derived stock. Guarded because it is a data-access read.
+ * shared lane-stock derivation to fold documented adjustments/losses into
+ * derived stock. Guarded because it is a data-access read. Transactional
+ * callers must pass their transaction as `executor`.
  */
 export async function getBinMovementLaneSums(
   ctx: OrgContext,
-  storageLocationIds: string[]
+  storageLocationIds: string[],
+  executor: DbReader = db,
 ): Promise<BinMovementLaneSum[]> {
   requireOrgScope(ctx);
   if (storageLocationIds.length === 0) return [];
 
-  const rows = await db
+  const rows = await executor
     .select({
       storageLocationId: binMovements.storageLocationId,
       lane: binMovements.lane,
@@ -214,18 +218,4 @@ export async function recordStockTakeMovement(
       moistureRatioUsed: input.moistureRatioUsed ?? null,
     });
   });
-}
-
-// Re-exported for callers that group sums by location without depending on the
-// enrichment module's internals.
-export function groupLaneSumsByLocation(
-  sums: BinMovementLaneSum[]
-): Map<string, Partial<Record<BinMovementLane, number>>> {
-  const map = new Map<string, Partial<Record<BinMovementLane, number>>>();
-  for (const sum of sums) {
-    const existing = map.get(sum.storageLocationId) ?? {};
-    existing[sum.lane] = sum.totalDeltaKg;
-    map.set(sum.storageLocationId, existing);
-  }
-  return map;
 }

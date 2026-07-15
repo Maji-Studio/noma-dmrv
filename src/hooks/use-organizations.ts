@@ -16,7 +16,7 @@ import {
   setActiveOrganizationAction,
 } from "@/fn/organizations";
 import { FACILITY_STORAGE_KEY } from "@/hooks/use-facility-context";
-import type { ActionResult } from "@/types/actions";
+import { unwrap } from "@/hooks/types";
 
 export const organizationKeys = {
   all: ["organizations"] as const,
@@ -36,13 +36,6 @@ export function useActiveOrganizationProfile() {
     queryKey: organizationKeys.activeProfile(),
     queryFn: () => getActiveOrganizationProfile(),
   });
-}
-
-function unwrap<T>(result: ActionResult<T>): T {
-  if (!result.success) {
-    throw new Error(result.error);
-  }
-  return result.data;
 }
 
 export function useResetAfterOrgSwitch() {

@@ -21,13 +21,13 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { inArray } from "drizzle-orm";
 import * as schema from "../../../src/db/schema";
+import { hashPassword } from "better-auth/crypto";
 import * as crypto from "crypto";
 import {
   seedChainData,
   cleanupChainData,
   type SeededChainData,
 } from "./seed-chain-data";
-import { hashPassword } from "./hash-password";
 import { enterDefaultOrganization } from "./organization-helpers";
 
 // Types for user roles
@@ -142,8 +142,9 @@ export async function seedTestUsers(
   try {
     const seededUsers: Record<UserRole, TestUser> = {} as Record<UserRole, TestUser>;
 
-    // Hash passwords using Better Auth's scrypt format
-    const passwordHash = await hashPassword("TestPassword123!");
+    const passwordHash = await hashPassword(
+      "TestPassword123!"
+    );
 
     await db.transaction(async (tx) => {
       // Create users
