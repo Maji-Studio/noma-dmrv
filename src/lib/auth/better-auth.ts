@@ -12,6 +12,7 @@ import { env } from "@/config/env";
 import { db } from "@/db";
 import { seedOrgDefaults } from "@/db/org-defaults";
 import * as schema from "@/db/schema";
+import { logger } from "@/lib/log";
 
 /** Pending invitations expire after 7 days. */
 const INVITATION_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
@@ -308,7 +309,17 @@ export const auth = betterAuth({
       allowUserToCreateOrganization: (user) => user.role === "admin",
       organizationHooks: {
         afterCreateOrganization: async ({ organization }) => {
-          await seedOrgDefaults(db, organization.id);
+          try {
+            await seedOrgDefaults(db, organization.id);
+          } catch (error) {
+            // Organization and owner membership are already committed before
+            // this hook runs. Starter types are optional and can be recreated,
+            // so do not turn a recoverable seed failure into a wedged retry.
+            logger.error(
+              { error, organizationId: organization.id },
+              "failed to seed organization defaults",
+            );
+          }
         },
       },
       invitationExpiresIn: INVITATION_EXPIRES_IN_SECONDS,

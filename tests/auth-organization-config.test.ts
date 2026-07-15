@@ -57,4 +57,15 @@ describe("Better Auth organization configuration", () => {
 
     expect(mockSeedOrgDefaults).toHaveBeenCalledWith(db, "organization-123");
   });
+
+  it("does not fail organization creation when starter seeding fails", async () => {
+    mockSeedOrgDefaults.mockRejectedValueOnce(new Error("seed unavailable"));
+    const afterCreate =
+      getOrganizationPluginOptions().organizationHooks
+        ?.afterCreateOrganization;
+
+    await expect(
+      afterCreate?.({ organization: { id: "organization-123" } }),
+    ).resolves.toBeUndefined();
+  });
 });
