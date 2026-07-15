@@ -30,6 +30,13 @@ import { getProductionRunById } from "./queries";
 import type { ProductionRunWithRelations } from "./types";
 import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
 import { assertFeedstockDrawWithinStock } from "../bin-stock-guards";
+import { lockBinStocks } from "../lock-bin-stocks";
+import {
+  assertProductionRunStockSnapshot,
+  assertProductionRunBiocharStockNotOverdrawn,
+  deriveProductionRunBiocharStockState,
+  lockProductionRunUpdateStock,
+} from "../production-run-stock-locks";
 import {
   assertNoReactorRunOverlap,
   isReactorStartUniqueViolation,
@@ -39,14 +46,19 @@ const END_AFTER_START_CONSTRAINT = "production_runs_end_after_start";
 const END_AFTER_START_MESSAGE = "End time must be after the start time";
 
 /**
- * Reject a run status that is inconsistent with its time window. The database
- * owns end-after-start integrity; this application-only rule requires an end
- * time when the run is Complete.
+ * Reject a time window that is malformed or inconsistent with the run's status.
+ * Re-checks, in data-access, the rules the form schema enforces client-side
+ * (issue #259): an end time must be after the start, and a Complete run needs an
+ * end time.
  */
 function assertRunWindowConsistent(
+  startTime: Date,
   endTime: Date | null,
   status: "draft" | "running" | "complete" | "void",
 ): void {
+  if (endTime && endTime.getTime() <= startTime.getTime()) {
+    throw new SafeError("End time must be after the start time");
+  }
   if (status === "complete" && !endTime) {
     throw new SafeError("A complete run needs an end time");
   }
@@ -196,7 +208,7 @@ export async function createProductionRun(
   }
 
   const status = data.status ?? "draft";
-  assertRunWindowConsistent(data.endTime, status);
+  assertRunWindowConsistent(data.startTime, data.endTime, status);
 
   // Compute dry mass from wet mass + moisture
   const computedDryMass =
@@ -217,6 +229,11 @@ export async function createProductionRun(
       startTime: data.startTime,
       endTime: data.endTime,
     });
+
+    await lockBinStocks(ctx, tx, [
+      computedDryMass ? data.feedstockStorageLocationId : null,
+      data.biocharOutputKg ? data.biocharStorageLocationId : null,
+    ]);
 
     // Validate long-tail storage references before writing the run.
     if (data.feedstockStorageLocationId) {
@@ -376,7 +393,7 @@ export async function updateProductionRun(
   const effectiveEndTime =
     data.endTime !== undefined ? data.endTime : existing.endTime;
   const effectiveStatus = data.status ?? existing.status;
-  assertRunWindowConsistent(effectiveEndTime, effectiveStatus);
+  assertRunWindowConsistent(effectiveStartTime, effectiveEndTime, effectiveStatus);
 
   // Update production run + M:M re-allocation in a transaction
   const updateData: Record<string, unknown> = {
@@ -426,7 +443,6 @@ export async function updateProductionRun(
     data.feedstockStorageLocationId !== undefined ||
     data.feedstockWetMassKg !== undefined ||
     data.feedstockMoisturePercent !== undefined;
-
   try {
     await withUniqueCodeGuard(
       ctx,
@@ -434,6 +450,22 @@ export async function updateProductionRun(
       productionRuns.code,
       CODE_CONFLICT_MESSAGES.productionRun,
       () => db.transaction(async (tx) => {
+    await lockProductionRunUpdateStock(ctx, tx, existing, data);
+
+    const [locked] = await tx
+      .select()
+      .from(productionRuns)
+      .where(and(
+        eq(productionRuns.id, productionRunId),
+        eq(productionRuns.organizationId, ctx.organizationId),
+      ))
+      .for("update");
+
+    if (!locked) {
+      throw new SafeError("Production run not found");
+    }
+    assertProductionRunStockSnapshot(existing, locked, data);
+
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
@@ -454,7 +486,23 @@ export async function updateProductionRun(
     const effectiveFeedstockStorageId =
       data.feedstockStorageLocationId !== undefined
         ? data.feedstockStorageLocationId
-        : existing.feedstockStorageLocationId;
+        : locked.feedstockStorageLocationId;
+    const effectiveBiocharStorageId =
+      data.biocharStorageLocationId !== undefined
+        ? data.biocharStorageLocationId
+        : locked.biocharStorageLocationId;
+    const biocharStockChanged =
+      (data.biocharOutputKg !== undefined &&
+        data.biocharOutputKg !== locked.biocharOutputKg) ||
+      (data.biocharStorageLocationId !== undefined &&
+        data.biocharStorageLocationId !== locked.biocharStorageLocationId);
+
+    const biocharStockState = biocharStockChanged
+      ? await deriveProductionRunBiocharStockState(ctx, tx, [
+          locked.biocharStorageLocationId,
+          effectiveBiocharStorageId,
+        ])
+      : [];
 
     if (
       effectiveFeedstockStorageId &&
@@ -463,11 +511,6 @@ export async function updateProductionRun(
       await validateProductionFeedstockSource(ctx, tx, effectiveFeedstockStorageId, targetFacilityId);
     }
 
-    const effectiveBiocharStorageId =
-      data.biocharStorageLocationId !== undefined
-        ? data.biocharStorageLocationId
-        : existing.biocharStorageLocationId;
-
     if (
       effectiveBiocharStorageId &&
       (data.biocharStorageLocationId !== undefined || data.facilityId !== undefined)
@@ -475,10 +518,48 @@ export async function updateProductionRun(
       await validateBiocharStorageLocation(ctx, tx, effectiveBiocharStorageId, targetFacilityId, "Biochar");
     }
 
+    const transactionUpdateData = { ...updateData };
+    if (
+      data.feedstockWetMassKg !== undefined ||
+      data.feedstockMoisturePercent !== undefined
+    ) {
+      const wetMass = data.feedstockWetMassKg !== undefined
+        ? data.feedstockWetMassKg
+        : locked.feedstockWetMassKg;
+      const moisture = data.feedstockMoisturePercent !== undefined
+        ? data.feedstockMoisturePercent
+        : locked.feedstockMoisturePercent;
+      transactionUpdateData.feedstockMassDryKg =
+        wetMass != null && moisture != null
+          ? deriveMassDryKg(wetMass, moisture)
+          : null;
+    }
+    if (
+      data.biocharOutputKg !== undefined ||
+      data.biocharMoisturePercent !== undefined
+    ) {
+      const wetMass = data.biocharOutputKg !== undefined
+        ? data.biocharOutputKg
+        : locked.biocharOutputKg;
+      const moisture = data.biocharMoisturePercent !== undefined
+        ? data.biocharMoisturePercent
+        : locked.biocharMoisturePercent;
+      transactionUpdateData.biocharDryMassKg = computeClampedDryMass(
+        wetMass,
+        moisture,
+      );
+    }
+
     await tx
       .update(productionRuns)
-      .set(updateData)
+      .set(transactionUpdateData)
       .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
+
+    await assertProductionRunBiocharStockNotOverdrawn(
+      ctx,
+      tx,
+      biocharStockState,
+    );
 
     // Re-allocate feedstock M:M when feedstock fields change
     if (feedstockFieldsChanged) {
@@ -486,7 +567,9 @@ export async function updateProductionRun(
         .delete(productionRunFeedstocks)
         .where(and(eq(productionRunFeedstocks.productionRunId, productionRunId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
 
-      const dryMassKg = (updateData.feedstockMassDryKg as number | null) ?? existing.feedstockMassDryKg;
+      const dryMassKg =
+        (transactionUpdateData.feedstockMassDryKg as number | null) ??
+        locked.feedstockMassDryKg;
 
       if (effectiveFeedstockStorageId && dryMassKg) {
         // Hard-block an over-draw (#116). The run's prior allocation was just
@@ -496,6 +579,7 @@ export async function updateProductionRun(
           storageLocationId: effectiveFeedstockStorageId,
           requestedDryKg: dryMassKg,
           excludeRunId: productionRunId,
+          binLockAlreadyHeld: true,
         });
         const allocated = await allocateFeedstockMass(ctx, effectiveFeedstockStorageId, dryMassKg, tx);
         await tx.insert(productionRunFeedstocks).values(
@@ -539,7 +623,11 @@ export async function deleteProductionRun(
 
   // Verify run exists
   const [existing] = await db
-    .select({ id: productionRuns.id })
+    .select({
+      id: productionRuns.id,
+      feedstockStorageLocationId: productionRuns.feedstockStorageLocationId,
+      biocharStorageLocationId: productionRuns.biocharStorageLocationId,
+    })
     .from(productionRuns)
     .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
 
@@ -553,12 +641,34 @@ export async function deleteProductionRun(
   // transaction the children would already be gone, leaving a half-deleted run.
   // The FK violation propagates out and is caught by the server action.
   await db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select({
+        id: productionRuns.id,
+        feedstockStorageLocationId: productionRuns.feedstockStorageLocationId,
+        biocharStorageLocationId: productionRuns.biocharStorageLocationId,
+      })
+      .from(productionRuns)
+      .where(and(
+        eq(productionRuns.id, productionRunId),
+        eq(productionRuns.organizationId, ctx.organizationId),
+      ))
+      .for("update");
+
+    if (!locked) {
+      throw new SafeError("Production run not found");
+    }
+
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
       { entityType: "productionRun", entityId: productionRunId },
       "delete",
     );
+
+    await lockBinStocks(ctx, tx, [
+      locked.feedstockStorageLocationId,
+      locked.biocharStorageLocationId,
+    ]);
 
     await tx
       .delete(productionRunFeedstocks)

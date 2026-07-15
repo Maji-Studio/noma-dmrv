@@ -8,7 +8,7 @@
  */
 
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import {
   binMovements,
   storageLocations,
@@ -18,9 +18,10 @@ import {
 import type { BinMovementLane, BinMovementType } from "@/schemas/bin-movements";
 import { laneForStorageType } from "@/schemas/bin-movements";
 import type { OrgContext } from "@/lib/auth/server";
-import { assertSameOrg, requireOrgScope } from "./utils";
+import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { isPgCheckViolation } from "@/db/errors";
+import { deriveBinLaneAvailableKg, lockBinStock } from "./bin-stock-guards";
 
 const LOSS_NEGATIVITY_CONSTRAINT = "bin_movements_loss_is_negative";
 const LOSS_NEGATIVITY_MESSAGE = "A loss must be recorded as a negative mass delta";
@@ -48,6 +49,15 @@ export interface CreateBinMovementInput {
   reason: string;
   countedMassKg?: number | null;
   derivedMassKgAtTime?: number | null;
+  countedWetMassKg?: number | null;
+  moistureRatioUsed?: number | null;
+}
+
+export interface RecordStockTakeMovementInput {
+  storageLocationId: string;
+  lane: BinMovementLane;
+  reason: string;
+  countedMassKg: number;
   countedWetMassKg?: number | null;
   moistureRatioUsed?: number | null;
 }
@@ -114,14 +124,12 @@ export async function getBinMovements(
 // Create Operations (append-only — no update/delete)
 // ============================================
 
-export async function createBinMovement(
+async function createBinMovementInTransaction(
   ctx: OrgContext,
-  input: CreateBinMovementInput
+  tx: DbTransaction,
+  input: CreateBinMovementInput,
 ): Promise<BinMovement> {
-  requireOrgScope(ctx);
-  await assertSameOrg(ctx, storageLocations, input.storageLocationId);
-
-  const [location] = await db
+  const [location] = await tx
     .select({ id: storageLocations.id, type: storageLocations.type })
     .from(storageLocations)
     .where(and(eq(storageLocations.id, input.storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
@@ -139,7 +147,7 @@ export async function createBinMovement(
 
   let movement: BinMovement;
   try {
-    [movement] = await db
+    [movement] = await tx
       .insert(binMovements)
       .values({
         organizationId: ctx.organizationId,
@@ -163,6 +171,49 @@ export async function createBinMovement(
   }
 
   return movement;
+}
+
+export async function createBinMovement(
+  ctx: OrgContext,
+  input: CreateBinMovementInput,
+): Promise<BinMovement> {
+  requireOrgScope(ctx);
+  return db.transaction(async (tx) => {
+    await lockBinStock(ctx, tx, input.storageLocationId);
+    return createBinMovementInTransaction(ctx, tx, input);
+  });
+}
+
+/**
+ * Record a physical count against stock derived inside the same locked
+ * transaction. The lock is shared with every withdrawal guard, so the delta is
+ * always based on the latest committed stock and cannot double-apply.
+ */
+export async function recordStockTakeMovement(
+  ctx: OrgContext,
+  input: RecordStockTakeMovementInput,
+): Promise<BinMovement> {
+  requireOrgScope(ctx);
+  return db.transaction(async (tx) => {
+    await lockBinStock(ctx, tx, input.storageLocationId);
+    const derivedMassKgAtTime = await deriveBinLaneAvailableKg(
+      ctx,
+      tx,
+      input.storageLocationId,
+      input.lane,
+    );
+    return createBinMovementInTransaction(ctx, tx, {
+      storageLocationId: input.storageLocationId,
+      lane: input.lane,
+      movementType: "adjustment",
+      massDeltaKg: input.countedMassKg - derivedMassKgAtTime,
+      reason: input.reason,
+      countedMassKg: input.countedMassKg,
+      derivedMassKgAtTime,
+      countedWetMassKg: input.countedWetMassKg ?? null,
+      moistureRatioUsed: input.moistureRatioUsed ?? null,
+    });
+  });
 }
 
 // Re-exported for callers that group sums by location without depending on the

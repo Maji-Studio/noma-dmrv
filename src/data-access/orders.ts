@@ -83,6 +83,10 @@ export interface OrderDetail extends Order {
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import {
+  assertOrderProductRepointWithinStock,
+  lockOrderProductRepointBins,
+} from "./order-stock-locks";
 
 // ============================================
 // Read Operations
@@ -606,12 +610,48 @@ export async function updateOrder(
   }
 
   const updated = await db.transaction(async (tx) => {
+    const repointPreparation = data.biocharProductId !== undefined
+      ? await lockOrderProductRepointBins(
+          ctx,
+          tx,
+          orderId,
+          data.biocharProductId,
+        )
+      : null;
+
+    const [locked] = await tx
+      .select()
+      .from(orders)
+      .where(and(
+        eq(orders.id, orderId),
+        eq(orders.organizationId, ctx.organizationId),
+      ))
+      .for("update");
+
+    if (!locked) {
+      throw new SafeError("Order not found");
+    }
+
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
       { entityType: "order", entityId: orderId },
       "update",
     );
+
+    if (
+      data.biocharProductId !== undefined &&
+      repointPreparation
+    ) {
+      await assertOrderProductRepointWithinStock(
+        ctx,
+        tx,
+        orderId,
+        locked.biocharProductId,
+        data.biocharProductId,
+        repointPreparation,
+      );
+    }
 
     const [row] = await tx
       .update(orders)
