@@ -49,8 +49,8 @@ const requiredNumber = z.union([
  * 1. Sample Info — code, samplingTime, credit batch
  * 2. Carbon Analysis — totalCarbonPercent, organicCarbonPercent, inorganicCarbonPercent
  * 3. Elemental — H, N, O, S percentages
- * 4. Proximate — ash, volatile matter, moisture
- * 5. Physical — bulkDensity, pH, surfaceArea
+ * 4. Proximate — ash, moisture
+ * 5. Physical — bulkDensity, pH
  * 6. Stability — hToCOrgRatio (calculated)
  * 7. 1000-Year Durability (conditional) — R₀ reflectance, TGA non-reactive carbon
  */
@@ -107,12 +107,10 @@ export const sampleFormSchema = z
     // === Section 4: Proximate ===
     ashContentPercent: optionalNumber,
     moistureContentPercent: optionalNumber,
-    volatileMatterPercent: optionalNumber,
 
     // === Section 5: Physical ===
     bulkDensityKgPerM3: optionalNumber,
     ph: optionalNumber,
-    surfaceAreaM2PerG: optionalNumber,
     saltContentGPerKg: optionalNumber,
 
     // === Section 6: Stability ===
@@ -267,10 +265,8 @@ export const updateSampleSchema = z.object({
   totalSulfurPercent: z.number().optional().nullable(),
   ashContentPercent: z.number().optional().nullable(),
   moistureContentPercent: z.number().optional().nullable(),
-  volatileMatterPercent: z.number().optional().nullable(),
   bulkDensityKgPerM3: z.number().optional().nullable(),
   ph: z.number().optional().nullable(),
-  surfaceAreaM2PerG: z.number().optional().nullable(),
   saltContentGPerKg: z.number().optional().nullable(),
   hToCOrgRatio: z.number().optional().nullable(),
   oToCOrgRatio: z.number().optional().nullable(),

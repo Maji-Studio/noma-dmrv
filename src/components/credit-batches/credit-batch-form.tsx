@@ -112,6 +112,7 @@ function CohortPickerSection({
   hasDates,
   notReadyMessage,
   noMatchMessage,
+  noMatchWithSelectionMessage,
   children,
 }: {
   title: string;
@@ -121,6 +122,7 @@ function CohortPickerSection({
   hasDates: boolean;
   notReadyMessage: string;
   noMatchMessage: string;
+  noMatchWithSelectionMessage?: string;
   children: React.ReactNode;
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -148,7 +150,7 @@ function CohortPickerSection({
       ) : totalCount === 0 ? (
         <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
           <span className="body-small text-[var(--color-text-tertiary)]">
-            {noMatchMessage}
+            {count > 0 ? noMatchWithSelectionMessage ?? noMatchMessage : noMatchMessage}
           </span>
         </div>
       ) : (
@@ -450,6 +452,7 @@ export function CreditBatchForm({
         hasDates={isCohortReady}
         notReadyMessage="Select a feedstock type and set the production window to load runs."
         noMatchMessage="No runs of this feedstock type fall within the production window."
+        noMatchWithSelectionMessage="No additional runs of this feedstock type fall within the production window."
       >
         {typedRunOptions.map((run: CreditBatchProductionRunOption) => {
           const assignedElsewhere =
