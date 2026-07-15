@@ -5,6 +5,7 @@ const mockUpdateSample = vi.fn();
 const mockGetSampleById = vi.fn();
 const mockWithAutoCode = vi.fn();
 const mockGetCreditBatchById = vi.fn();
+const mockGetFacilityById = vi.fn();
 
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi.fn().mockResolvedValue({
@@ -34,9 +35,14 @@ vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchById: (...args: unknown[]) => mockGetCreditBatchById(...args),
 }));
 
+vi.mock("@/data-access/facilities", () => ({
+  getFacilityById: (...args: unknown[]) => mockGetFacilityById(...args),
+}));
+
 import { createSampleFn, getSampleByIdFn, updateSampleFn } from "@/fn/samples";
 
 const CREDIT_BATCH_ID = "22222222-2222-4222-8222-222222222222";
+const FACILITY_ID = "44444444-4444-4444-8444-444444444444";
 
 function baseSampleInput(overrides: Record<string, unknown> = {}) {
   return {
@@ -58,8 +64,14 @@ describe("createSampleFn", () => {
     mockGetCreditBatchById.mockReset();
     mockGetCreditBatchById.mockResolvedValue({
       code: "CB-001",
+      facilityId: FACILITY_ID,
       startDate: "2026-01-01",
       endDate: "2026-01-31",
+    });
+    mockGetFacilityById.mockReset();
+    mockGetFacilityById.mockResolvedValue({
+      id: FACILITY_ID,
+      timezone: "UTC",
     });
     mockWithAutoCode.mockImplementation(
       async (
@@ -137,8 +149,14 @@ describe("updateSampleFn", () => {
     mockGetCreditBatchById.mockReset();
     mockGetCreditBatchById.mockResolvedValue({
       code: "CB-001",
+      facilityId: FACILITY_ID,
       startDate: "2026-01-01",
       endDate: "2026-01-31",
+    });
+    mockGetFacilityById.mockReset();
+    mockGetFacilityById.mockResolvedValue({
+      id: FACILITY_ID,
+      timezone: "UTC",
     });
   });
 
