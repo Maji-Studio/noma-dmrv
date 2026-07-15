@@ -641,7 +641,7 @@ export async function getSupplierLocationsBySupplier(
         eq(supplierLocations.organizationId, ctx.organizationId),
       ),
     )
-    .orderBy(asc(supplierLocations.country));
+    .orderBy(desc(supplierLocations.isDefault), asc(supplierLocations.createdAt));
 }
 
 export async function getSupplierLocationById(

@@ -55,8 +55,10 @@ function createColumns(
       header: "Name",
     },
     {
-      accessorKey: "location",
+      id: "location",
       header: "Location",
+      accessorFn: (row) =>
+        resolveSupplierLocationText(row.location, row.defaultLocationDisplay) || "",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
           {resolveSupplierLocationText(
