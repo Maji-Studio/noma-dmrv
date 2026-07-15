@@ -154,11 +154,10 @@ organization admin area. Certification readiness and live submission fail
 closed when the active organization has no credential row.
 
 `CREDENTIALS_ENCRYPTION_KEY` is a server-only 32-byte hex or base64 key sourced
-from 1Password. **Open deployment step:** the user deploying this batch must add
-the field to both `noma-dmrv env staging` and `noma-dmrv env production`, then
-run the normal Vercel environment sync. Keep the same key while stored rows
-exist; rotating it requires re-encrypting or replacing every organization's
-credentials.
+from 1Password. It has been added to both `noma-dmrv env staging` and
+`noma-dmrv env production` and synced to Vercel. Keep the same key while
+stored rows exist; rotating it requires re-encrypting or replacing every
+organization's credentials.
 
 `ISOMETRIC_ACCESS_TOKEN` and `ISOMETRIC_CLIENT_SECRET` are no longer runtime app
 credentials. They remain seed/CI-only: `db:ensure-admin` uses the pair to seed
