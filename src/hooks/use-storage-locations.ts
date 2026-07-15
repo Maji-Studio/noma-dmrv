@@ -185,17 +185,19 @@ export function useCreateStorageLocation(
     },
     onSuccess: async (data, variables) => {
       // Invalidate all storage location lists
-      queryClient.invalidateQueries({
-        queryKey: storageLocationKeys.lists(),
-      });
-      // Invalidate storage locations by facility
-      queryClient.invalidateQueries({
-        queryKey: storageLocationKeys.byFacility(variables.facilityId),
-      });
-      // Invalidate facility storage locations in facility cache
-      queryClient.invalidateQueries({
-        queryKey: facilityKeys.storageLocations(variables.facilityId),
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: storageLocationKeys.lists(),
+        }),
+        // Invalidate storage locations by facility
+        queryClient.invalidateQueries({
+          queryKey: storageLocationKeys.byFacility(variables.facilityId),
+        }),
+        // Invalidate facility storage locations in facility cache
+        queryClient.invalidateQueries({
+          queryKey: facilityKeys.storageLocations(variables.facilityId),
+        }),
+      ]);
 
       // Pre-populate the detail cache with the new storage location
       queryClient.setQueryData(storageLocationKeys.detail(data.id), data);
@@ -298,19 +300,21 @@ export function useUpdateStorageLocation(
       queryClient.setQueryData(storageLocationKeys.detail(data.id), data);
 
       // Invalidate to ensure consistency
-      queryClient.invalidateQueries({
-        queryKey: storageLocationKeys.detailWithFacility(data.id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: storageLocationKeys.lists(),
-      });
-      // Invalidate byFacility queries for both old and potentially new facility
-      queryClient.invalidateQueries({
-        queryKey: storageLocationKeys.byFacility(data.facilityId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: facilityKeys.storageLocations(data.facilityId),
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: storageLocationKeys.detailWithFacility(data.id),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: storageLocationKeys.lists(),
+        }),
+        // Invalidate byFacility queries for both old and potentially new facility
+        queryClient.invalidateQueries({
+          queryKey: storageLocationKeys.byFacility(data.facilityId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: facilityKeys.storageLocations(data.facilityId),
+        }),
+      ]);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -424,19 +428,22 @@ export function useDeleteStorageLocation(
       });
 
       // Invalidate lists for consistency
-      queryClient.invalidateQueries({
-        queryKey: storageLocationKeys.lists(),
-      });
-
-      // Invalidate facility-specific caches
-      if (storageLocation?.facilityId) {
+      await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: storageLocationKeys.byFacility(storageLocation.facilityId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: facilityKeys.storageLocations(storageLocation.facilityId),
-        });
-      }
+          queryKey: storageLocationKeys.lists(),
+        }),
+        // Invalidate facility-specific caches
+        ...(storageLocation?.facilityId
+          ? [
+              queryClient.invalidateQueries({
+                queryKey: storageLocationKeys.byFacility(storageLocation.facilityId),
+              }),
+              queryClient.invalidateQueries({
+                queryKey: facilityKeys.storageLocations(storageLocation.facilityId),
+              }),
+            ]
+          : []),
+      ]);
 
       await callbacks?.onSuccess?.(undefined, storageLocationId);
     },

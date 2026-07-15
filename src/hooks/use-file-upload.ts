@@ -49,6 +49,14 @@ export interface UseFileUploadResult {
   cancel: () => void;
 }
 
+function safeHost(url: string): string {
+  try {
+    return new URL(url).host || "storage endpoint";
+  } catch {
+    return "storage endpoint";
+  }
+}
+
 function putWithProgress(
   url: string,
   headers: Record<string, string>,
@@ -75,7 +83,12 @@ function putWithProgress(
       if (xhr.status >= 200 && xhr.status < 300) resolve();
       else reject(new Error(`Upload failed with status ${xhr.status}`));
     };
-    xhr.onerror = () => reject(new Error("Upload network error"));
+    xhr.onerror = () =>
+      reject(
+        new Error(
+          `Upload network error — could not reach ${safeHost(url)}. Check your connection and retry.`,
+        ),
+      );
     xhr.onabort = () => reject(new Error("Upload aborted"));
     signal?.addEventListener("abort", () => xhr.abort(), { once: true });
     xhr.send(file);

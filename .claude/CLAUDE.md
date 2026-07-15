@@ -83,6 +83,7 @@ Rankings below are **higher = better**. Cost reflects what I actually pay (gpt-5
 
 ## Docs Index — read the target BEFORE doing the work (docs are NOT auto-indexed)
 
+- Be aware that we don't have a production system in place yet - DB Resets are fine, backfills are not needed - Let the user know if they need to reset the db on staging or production, reset it yourself on local
 - Before ANY **form/schema** work → `docs/forms.md` — `@/schemas/helpers` numeric helpers, Zod 4 string formats, never `valueAsNumber`.
 - Before **Isometric/certification/requirements** work → `docs/isometric/README.md` + `versions.json`, and call the isometric MCP `how_to` first. Local summaries are **non-authoritative** — verify against the registry.
 - Before **UI** work → `docs/design-system.md` — Canonical Page Shell, design tokens, `EmptyState` (never bare text).

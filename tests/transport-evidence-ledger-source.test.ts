@@ -31,6 +31,7 @@ vi.mock("@/db", () => ({
   db: {
     transaction: ledgerDbMocks.transaction,
   },
+  withDedicatedLockConnection: ledgerDbMocks.transaction,
 }));
 vi.mock("@/lib/certification/submission-lock", () => ({
   acquireCertificationArtifactLocksSorted: vi.fn(async () => {}),

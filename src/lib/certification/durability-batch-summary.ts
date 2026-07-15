@@ -58,6 +58,9 @@ function samplingDayOf(samplingTime: unknown): string | null {
  * compatible shape, so the DB loader feeds this directly without a server import.
  */
 export interface DurabilityBatchSummaryInput extends CreditBatchDurabilityInput {
+  /** ISO date-only production window when loaded from the DB. */
+  startDate?: string | null;
+  endDate?: string | null;
   /** The batch's process's CURRENT sampling method (default Method A). */
   samplingMethod: SamplingMethod;
   /** Member runs (id + code + dry mass) — code labels the replicate provenance. */
@@ -173,8 +176,14 @@ export function buildDurabilityBatchSummaries(
           isUsableNumber(s.hToCOrgRatio) && isUsableNumber(s.oToCOrgRatio),
       )
       .map((s) => ({
+        sampleCode: s.sampleCode,
         productionRunId: s.productionRunId,
-        samplingDay: samplingDayOf(s.samplingTime),
+        samplingDay: (() => {
+          const day = samplingDayOf(s.samplingTime);
+          return day != null && batch.endDate != null && day > batch.endDate
+            ? null
+            : day;
+        })(),
       }));
     const distinctRunDayCount = countDistinctProvenance(provenance);
     const replicateCheck = evaluateReplicateCount(

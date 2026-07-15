@@ -13,6 +13,10 @@
 import type { Sample } from "@/db/schema";
 import { evaluateRunEligibility } from "@/lib/calculations/biochar-eligibility";
 import {
+  countDistinctProvenance,
+  normalizePostWindowSamplingDay,
+} from "@/lib/certification/durability-submission-gates";
+import {
   buildPerBatchDurabilityData,
   type CreditBatchDurabilityInput,
   type FacilityReferenceSoilTemperature,
@@ -27,7 +31,7 @@ import type {
 
 export interface BuildDurabilityLedgerModelArgs {
   /** The removal's member credit batches with pooled Samples + applied runs. */
-  batches: CreditBatchDurabilityInput[];
+  batches: (CreditBatchDurabilityInput & { endDate?: string | null })[];
   /** Per-run applied-biochar fraction (scales each batch's product mass). */
   attributionByRunId: Map<string, number>;
   /** Facility reference soil temperature (7 °C-floored; non-null past the gate). */
@@ -103,14 +107,22 @@ function buildReplicate(s: Sample, index: number): LedgerReplicate {
 // Distinct (run, day) provenance keys among a batch's samples — the §8.3.1
 // "distributed across distinct runs/days" evidence. Fully-null provenance can't
 // be judged, so it doesn't add a distinct key (mirrors the gate's cluster check).
-function distinctDayCount(samples: Sample[]): number {
-  const keys = new Set<string>();
-  for (const s of samples) {
-    const day = samplingDayOf(s.samplingTime);
-    if (s.productionRunId == null && day == null) continue;
-    keys.add(`${s.productionRunId ?? "?"}::${day ?? "?"}`);
-  }
-  return keys.size;
+// Delegates to the gate's OWN counter with the gate's OWN post-window
+// normalization, so the ledger count can never diverge from what the gate credits.
+function distinctRunDayCount(
+  samples: Sample[],
+  endDate: string | null | undefined,
+): number {
+  return countDistinctProvenance(
+    samples.map((s) => ({
+      sampleCode: s.sampleCode,
+      productionRunId: s.productionRunId,
+      samplingDay: normalizePostWindowSamplingDay(
+        samplingDayOf(s.samplingTime),
+        endDate,
+      ),
+    })),
+  );
 }
 
 export function buildDurabilityLedgerModel(
@@ -123,6 +135,9 @@ export function buildDurabilityLedgerModel(
   const samplesByBatchId = new Map(
     args.batches.map((b) => [b.creditBatchId, b.samples]),
   );
+  const endDateByBatchId = new Map(
+    args.batches.map((b) => [b.creditBatchId, b.endDate ?? null]),
+  );
 
   const batches: LedgerBatch[] = [];
   for (const dp of perBatch) {
@@ -132,12 +147,13 @@ export function buildDurabilityLedgerModel(
 
     const samples = samplesByBatchId.get(dp.creditBatchId) ?? [];
     // Render only the replicates that back the submitted figures so the ledger
-    // can't show more rows than its own `replicateCount`/distinctDayCount claim:
+    // can't show more rows than its own `replicateCount`/distinctRunDayCount claim:
     //   • rows + replicateCount → the H/C_org-usable set (dp.replicateCount is
     //     hValues.length in buildPerBatchDurabilityData);
-    //   • distinctDayCount → the complete-chemistry (H + O) set, mirroring the
+    //   • distinctRunDayCount → the complete-chemistry (H + O) set, mirroring the
     //     §8.3.1 cluster gate's `usableProvenance` so an incomplete off-day
-    //     sample can't inflate the distribution evidence.
+    //     sample can't inflate the distribution evidence; post-window days are
+    //     normalized to null.
     const usableHReplicates = samples.filter((s) =>
       isUsableNumber(s.hToCOrgRatio),
     );
@@ -159,7 +175,10 @@ export function buildDurabilityLedgerModel(
       creditBatchCode: dp.creditBatchCode,
       replicates: usableHReplicates.map(buildReplicate),
       replicateCount: dp.replicateCount,
-      distinctDayCount: distinctDayCount(usablePairedReplicates),
+      distinctRunDayCount: distinctRunDayCount(
+        usablePairedReplicates,
+        endDateByBatchId.get(dp.creditBatchId),
+      ),
       hToCorg: { mean: dp.hToCorgRatio.mean, stdDev: dp.hToCorgRatio.stdDev },
       totalCarbonPercent: statOf(dp.totalCarbonPercent),
       inorganicCarbonPercent: statOf(dp.inorganicCarbonPercent),

@@ -26,6 +26,7 @@ function batch(
   return {
     samples: [],
     runs: [],
+    facilityTimezone: "UTC",
     productionProcessId: "pp_1",
     samplingMethod: "method_a",
     declaredHToCorgRatio: null,

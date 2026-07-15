@@ -5,7 +5,6 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import Link from "next/link";
 import { parseAsString, useQueryState } from "nuqs";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
@@ -104,14 +103,7 @@ function createColumns(
       id: "facility",
       header: "Facility",
       accessorFn: (row) => row.facilityName ?? "",
-      cell: ({ row }) => (
-        <Link
-          href={`/facilities/${row.original.facilityId}`}
-          className="text-[var(--clr-dark-purple)] hover:underline"
-        >
-          {row.original.facilityName}
-        </Link>
-      ),
+      cell: ({ row }) => <span>{row.original.facilityName || "—"}</span>,
     },
     {
       id: "reactor",

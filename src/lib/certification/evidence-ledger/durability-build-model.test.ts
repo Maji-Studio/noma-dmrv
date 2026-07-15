@@ -7,6 +7,10 @@ import {
 } from "@/lib/isometric/utils/durability-aggregation";
 import { buildDurabilityLedgerModel } from "./durability-build-model";
 
+type DurabilityBatchWithEndDate = CreditBatchDurabilityInput & {
+  endDate?: string | null;
+};
+
 function sample(overrides: Partial<Sample>): Sample {
   return {
     id: "s",
@@ -24,9 +28,9 @@ function sample(overrides: Partial<Sample>): Sample {
 }
 
 function batch(
-  overrides: Partial<CreditBatchDurabilityInput> &
+  overrides: Partial<DurabilityBatchWithEndDate> &
     Pick<CreditBatchDurabilityInput, "creditBatchId" | "creditBatchCode">,
-): CreditBatchDurabilityInput {
+): DurabilityBatchWithEndDate {
   return {
     samples: [],
     runs: [{ id: "run-a", biocharDryMassKg: 1000 }],
@@ -175,7 +179,7 @@ describe("buildDurabilityLedgerModel", () => {
 
   it("counts distinct (run, day) provenance for the §8.3.1 distribution check", () => {
     const model = buildDurabilityLedgerModel({ ...COMMON, batches: [eligibleBatch()] });
-    expect(model.batches[0].distinctDayCount).toBe(3);
+    expect(model.batches[0].distinctRunDayCount).toBe(3);
 
     const clustered = batch({
       creditBatchId: "c",
@@ -188,7 +192,40 @@ describe("buildDurabilityLedgerModel", () => {
     });
     expect(
       buildDurabilityLedgerModel({ ...COMMON, batches: [clustered] }).batches[0]
-        .distinctDayCount,
+        .distinctRunDayCount,
+    ).toBe(1);
+  });
+
+  it("normalizes post-window sampling days for distribution evidence", () => {
+    const storedMaterial = batch({
+      creditBatchId: "stored",
+      creditBatchCode: "CB-STORED",
+      endDate: "2026-01-31",
+      samples: [
+        sample({
+          sampleCode: "S-STORED-01",
+          samplingTime: new Date("2026-01-15T00:00:00.000Z"),
+          hToCOrgRatio: 0.3,
+          oToCOrgRatio: 0.04,
+        }),
+        sample({
+          sampleCode: "S-STORED-02",
+          samplingTime: new Date("2026-01-15T00:00:00.000Z"),
+          hToCOrgRatio: 0.31,
+          oToCOrgRatio: 0.05,
+        }),
+        sample({
+          sampleCode: "S-STORED-03",
+          samplingTime: new Date("2026-02-15T00:00:00.000Z"),
+          hToCOrgRatio: 0.32,
+          oToCOrgRatio: 0.06,
+        }),
+      ],
+    });
+
+    expect(
+      buildDurabilityLedgerModel({ ...COMMON, batches: [storedMaterial] })
+        .batches[0].distinctRunDayCount,
     ).toBe(1);
   });
 

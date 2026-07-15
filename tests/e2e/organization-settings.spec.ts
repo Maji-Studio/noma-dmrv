@@ -139,6 +139,11 @@ test.describe("Organization foundation UI", () => {
       .filter({ hasText: ORGANIZATION_NAME });
 
     await expect(orgSwitcher).toBeVisible();
-    await expect(orgSwitcher).toHaveText(ORGANIZATION_NAME);
+    // The switcher pairs a decorative BrandMark initial ("D") with the org
+    // name span, so the button's full text is "DDark Earth Carbon". Assert the
+    // name node itself renders exactly once rather than the whole button text.
+    await expect(
+      orgSwitcher.getByText(ORGANIZATION_NAME, { exact: true }),
+    ).toBeVisible();
   });
 });

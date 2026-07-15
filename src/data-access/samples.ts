@@ -55,12 +55,10 @@ export interface SampleWithRelations {
   // Proximate
   ashContentPercent: number | null;
   moistureContentPercent: number | null;
-  volatileMatterPercent: number | null;
 
   // Physical
   bulkDensityKgPerM3: number | null;
   ph: number | null;
-  surfaceAreaM2PerG: number | null;
   saltContentGPerKg: number | null;
 
   // Stability
@@ -300,8 +298,6 @@ export async function getSamples(
   const items: SampleWithRelations[] = sampleList.map(
     ({ batchDurabilityOption, ...sample }) => ({
       ...sample,
-      volatileMatterPercent: null, // Not in current DB schema
-      surfaceAreaM2PerG: null, // Not in current DB schema
       // The durability tier lives on the credit batch (issue #309); infer from
       // R₀ presence only for legacy batchless rows.
       durabilityOption:
@@ -399,8 +395,6 @@ export async function getSampleById(
   const { batchDurabilityOption, ...rest } = sample;
   return {
     ...rest,
-    volatileMatterPercent: null,
-    surfaceAreaM2PerG: null,
     durabilityOption:
       batchDurabilityOption ??
       (rest.randomReflectanceR0Percent != null ? "1000_year" : "200_year"),
