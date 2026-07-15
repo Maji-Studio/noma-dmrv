@@ -5,6 +5,7 @@
 
 import { and, eq, isNull } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
+import { isPgCheckViolation } from "@/db/errors";
 import {
   productionRuns,
   productionRunFeedstocks,
@@ -21,6 +22,10 @@ import { computeClampedDryMass, deriveMassDryKg } from "@/lib/calculations/mass-
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "../utils";
 import { SafeError } from "@/lib/errors";
+import {
+  CODE_CONFLICT_MESSAGES,
+  withUniqueCodeGuard,
+} from "../code-generator";
 import { getProductionRunById } from "./queries";
 import type { ProductionRunWithRelations } from "./types";
 import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
@@ -36,6 +41,9 @@ import {
   assertNoReactorRunOverlap,
   isReactorStartUniqueViolation,
 } from "./overlap";
+
+const END_AFTER_START_CONSTRAINT = "production_runs_end_after_start";
+const END_AFTER_START_MESSAGE = "End time must be after the start time";
 
 /**
  * Reject a time window that is malformed or inconsistent with the run's status.
@@ -175,16 +183,6 @@ export async function createProductionRun(
   requireOrgScope(ctx);
   if (data.operatorId) await assertSameOrg(ctx, operators, data.operatorId);
 
-  // Check for duplicate code
-  const [existing] = await db
-    .select({ id: productionRuns.id })
-    .from(productionRuns)
-    .where(and(eq(productionRuns.code, data.code), eq(productionRuns.organizationId, ctx.organizationId)));
-
-  if (existing) {
-    throw new SafeError("A production run with this code already exists");
-  }
-
   // Verify facility exists and is active (no new children under an archived parent)
   const [facility] = await db
     .select({ id: facilities.id })
@@ -299,6 +297,9 @@ export async function createProductionRun(
     return created;
     });
   } catch (error) {
+    if (isPgCheckViolation(error, END_AFTER_START_CONSTRAINT)) {
+      throw new SafeError(END_AFTER_START_MESSAGE);
+    }
     // Race backstop: map a raw (reactor, start_time) unique violation that
     // slipped past the advisory lock to the friendly overlap message.
     if (isReactorStartUniqueViolation(error)) {
@@ -351,18 +352,6 @@ export async function updateProductionRun(
 
   if (!existing) {
     throw new SafeError("Production run not found");
-  }
-
-  // If code is being changed, check for duplicates
-  if (data.code && data.code !== existing.code) {
-    const [duplicate] = await db
-      .select({ id: productionRuns.id })
-      .from(productionRuns)
-      .where(and(eq(productionRuns.code, data.code), eq(productionRuns.organizationId, ctx.organizationId)));
-
-    if (duplicate) {
-      throw new SafeError("A production run with this code already exists");
-    }
   }
 
   // Moving the run to another facility requires that facility to be active
@@ -455,7 +444,12 @@ export async function updateProductionRun(
     data.feedstockWetMassKg !== undefined ||
     data.feedstockMoisturePercent !== undefined;
   try {
-    await db.transaction(async (tx) => {
+    await withUniqueCodeGuard(
+      ctx,
+      productionRuns,
+      productionRuns.code,
+      CODE_CONFLICT_MESSAGES.productionRun,
+      () => db.transaction(async (tx) => {
     await lockProductionRunUpdateStock(ctx, tx, existing, data);
 
     const [locked] = await tx
@@ -598,8 +592,12 @@ export async function updateProductionRun(
         );
       }
     }
-    });
+      }),
+    );
   } catch (error) {
+    if (isPgCheckViolation(error, END_AFTER_START_CONSTRAINT)) {
+      throw new SafeError(END_AFTER_START_MESSAGE);
+    }
     // Race backstop (see createProductionRun): map a raw (reactor, start_time)
     // unique violation to the friendly overlap message.
     if (isReactorStartUniqueViolation(error)) {

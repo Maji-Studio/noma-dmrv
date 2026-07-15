@@ -7,7 +7,10 @@
 
 import { z } from "zod";
 import { type Reactor, reactors } from "@/db/schema";
-import { withAutoCode } from "@/data-access/code-generator";
+import {
+  CODE_CONFLICT_MESSAGES,
+  withAutoCode,
+} from "@/data-access/code-generator";
 import {
   createReactor,
   deleteReactor,
@@ -202,7 +205,8 @@ export async function createReactorFn(
           reactorType: validated.reactorType,
           nominalThroughputTph: validated.nominalThroughputTph ?? null,
           specifications: validated.specifications ?? null,
-        })
+        }),
+      CODE_CONFLICT_MESSAGES.reactor,
     );
 
     return { success: true, data: reactor };

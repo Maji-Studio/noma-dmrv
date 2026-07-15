@@ -7,7 +7,10 @@
 
 import { z } from "zod";
 import { type StorageLocation, storageLocations } from "@/db/schema";
-import { withAutoCode } from "@/data-access/code-generator";
+import {
+  CODE_CONFLICT_MESSAGES,
+  withAutoCode,
+} from "@/data-access/code-generator";
 import {
   createStorageLocation,
   deleteStorageLocation,
@@ -219,7 +222,8 @@ export async function createStorageLocationFn(
           formulationId: validated.formulationId ?? null,
           storageMethod: validated.storageMethod || null,
           storageDescription: validated.storageDescription || null,
-        })
+        }),
+      CODE_CONFLICT_MESSAGES.storageLocation,
     );
 
     return { success: true, data: storageLocation };

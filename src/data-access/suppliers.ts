@@ -259,25 +259,7 @@ export async function createSupplier(
 ): Promise<Supplier> {
   requireOrgScope(ctx);
 
-  // Check for duplicate code
-  const [existing] = await db
-    .select({ id: suppliers.id })
-    .from(suppliers)
-    .where(
-      and(
-        eq(suppliers.code, data.code),
-        eq(suppliers.organizationId, ctx.organizationId),
-      ),
-    );
-
-  if (existing) {
-    throw new SafeError("A supplier with this code already exists");
-  }
-
-  // The pre-check above covers an already-committed duplicate code. An
-  // insert-time unique violation (a concurrent auto-code collision) is left to
-  // propagate raw so withAutoCode can detect and retry it — catching it here as
-  // a SafeError would mask the signal it matches on. Mirrors createFacility.
+  // Insert-time code violations stay raw so `withAutoCode` can retry races.
   const [supplier] = await guardSupplierName(ctx, data.name, () =>
     db
       .insert(suppliers)

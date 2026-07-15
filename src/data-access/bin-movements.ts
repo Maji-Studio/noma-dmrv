@@ -20,7 +20,11 @@ import { laneForStorageType } from "@/schemas/bin-movements";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { isPgCheckViolation } from "@/db/errors";
 import { deriveBinLaneAvailableKg, lockBinStock } from "./bin-stock-guards";
+
+const LOSS_NEGATIVITY_CONSTRAINT = "bin_movements_loss_is_negative";
+const LOSS_NEGATIVITY_MESSAGE = "A loss must be recorded as a negative mass delta";
 
 // ============================================
 // Types
@@ -141,27 +145,30 @@ async function createBinMovementInTransaction(
     throw new SafeError("This lane does not match the bin's material type");
   }
 
-  // A loss can only ever remove material (DB check mirrors this).
-  if (input.movementType === "loss" && input.massDeltaKg >= 0) {
-    throw new SafeError("A loss must be recorded as a negative mass delta");
+  let movement: BinMovement;
+  try {
+    [movement] = await tx
+      .insert(binMovements)
+      .values({
+        organizationId: ctx.organizationId,
+        storageLocationId: input.storageLocationId,
+        lane: input.lane,
+        movementType: input.movementType,
+        massDeltaKg: input.massDeltaKg,
+        reason: input.reason,
+        createdBy: ctx.userId,
+        countedMassKg: input.countedMassKg ?? null,
+        derivedMassKgAtTime: input.derivedMassKgAtTime ?? null,
+        countedWetMassKg: input.countedWetMassKg ?? null,
+        moistureRatioUsed: input.moistureRatioUsed ?? null,
+      })
+      .returning();
+  } catch (error) {
+    if (isPgCheckViolation(error, LOSS_NEGATIVITY_CONSTRAINT)) {
+      throw new SafeError(LOSS_NEGATIVITY_MESSAGE);
+    }
+    throw error;
   }
-
-  const [movement] = await tx
-    .insert(binMovements)
-    .values({
-      organizationId: ctx.organizationId,
-      storageLocationId: input.storageLocationId,
-      lane: input.lane,
-      movementType: input.movementType,
-      massDeltaKg: input.massDeltaKg,
-      reason: input.reason,
-      createdBy: ctx.userId,
-      countedMassKg: input.countedMassKg ?? null,
-      derivedMassKgAtTime: input.derivedMassKgAtTime ?? null,
-      countedWetMassKg: input.countedWetMassKg ?? null,
-      moistureRatioUsed: input.moistureRatioUsed ?? null,
-    })
-    .returning();
 
   return movement;
 }

@@ -82,6 +82,10 @@ import { validateCompositionIngredientBins } from "./biochar-product-composition
 import { assertBiocharDrawWithinStock } from "./bin-stock-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
 import {
+  CODE_CONFLICT_MESSAGES,
+  withUniqueCodeGuard,
+} from "./code-generator";
+import {
   assertBiocharProductMassReductionWithinStock,
   assertBiocharProductUpdateDraw,
   biocharEquivalentKg,
@@ -390,16 +394,6 @@ export async function createBiocharProduct(
   // A null formulation means a pure-biochar product (no amendment blend).
   const formulationId = data.formulationId ?? null;
 
-  // Check for duplicate code
-  const [existing] = await db
-    .select({ id: biocharProducts.id })
-    .from(biocharProducts)
-    .where(and(eq(biocharProducts.code, data.code), eq(biocharProducts.organizationId, ctx.organizationId)));
-
-  if (existing) {
-    throw new SafeError("A biochar product with this code already exists");
-  }
-
   // Verify facility exists and is active; verify the formulation only when one
   // was provided. The lookups are independent, so run them in parallel — but
   // evaluate the results in a fixed order so the surfaced error stays
@@ -637,18 +631,6 @@ export async function updateBiocharProduct(
     throw new SafeError("Biochar product not found");
   }
 
-  // If code is being changed, check for duplicates
-  if (data.code && data.code !== existing.code) {
-    const [duplicate] = await db
-      .select({ id: biocharProducts.id })
-      .from(biocharProducts)
-      .where(and(eq(biocharProducts.code, data.code), eq(biocharProducts.organizationId, ctx.organizationId)));
-
-    if (duplicate) {
-      throw new SafeError("A biochar product with this code already exists");
-    }
-  }
-
   // Verify facility if being changed (must be active)
   if (data.facilityId && data.facilityId !== existing.facilityId) {
     const [facility] = await db
@@ -754,7 +736,12 @@ export async function updateBiocharProduct(
   // facility changes, then update the product and (re)claim an unassigned bin —
   // all atomically. Locking the bin row serializes concurrent placements so two
   // products with different formulations can't strand a mismatch in one bin.
-  const updated = await db.transaction(async (tx) => {
+  const updated = await withUniqueCodeGuard(
+    ctx,
+    biocharProducts,
+    biocharProducts.code,
+    CODE_CONFLICT_MESSAGES.biocharProduct,
+    () => db.transaction(async (tx) => {
     const stockPreparation = await lockBiocharProductUpdateStock(
       ctx,
       tx,
@@ -883,7 +870,8 @@ export async function updateBiocharProduct(
     }
 
     return row;
-  });
+    }),
+  );
 
   return updated;
 }
