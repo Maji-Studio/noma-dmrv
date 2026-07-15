@@ -67,6 +67,8 @@ export function buildDurabilityGates(
   const facts: BatchGateFacts[] = batches.map((batch) => ({
     creditBatchId: batch.creditBatchId,
     creditBatchCode: batch.creditBatchCode,
+    startDate: batch.startDate,
+    endDate: batch.endDate,
     productionProcessId: batch.productionProcessId,
     samplingMethod: batch.samplingMethod,
     replicates: batch.samples.map((s) => ({
@@ -74,6 +76,7 @@ export function buildDurabilityGates(
       oToCOrgRatio: s.oToCOrgRatio,
     })),
     replicateProvenance: batch.samples.map((s) => ({
+      sampleCode: s.sampleCode,
       productionRunId: s.productionRunId,
       samplingDay: isoSamplingDay(s.samplingTime),
     })),

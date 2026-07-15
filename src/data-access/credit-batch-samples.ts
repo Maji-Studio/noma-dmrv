@@ -24,6 +24,9 @@ import { requireOrgScope } from "./utils";
  * directly.
  */
 export interface CreditBatchWithSamples extends CreditBatchDurabilityInput {
+  /** ISO date-only production window bounds from the credit-batch row. */
+  startDate?: string | null;
+  endDate?: string | null;
   runs: Array<{ id: string; code: string; biocharDryMassKg: number | null }>;
   /** The (facility, feedstock) process this batch belongs to; null = unfound. */
   productionProcessId: string | null;
@@ -56,6 +59,7 @@ export async function getCreditBatchesWithSamples(
       id: creditBatches.id,
       code: creditBatches.code,
       startDate: creditBatches.startDate,
+      endDate: creditBatches.endDate,
       productionProcessId: creditBatches.productionProcessId,
       declaredHToCorgRatio: creditBatches.hToCorgRatio,
       // Tier is inherited from the facility (ADR 0021), not a batch column.
@@ -151,6 +155,8 @@ export async function getCreditBatchesWithSamples(
   return batchRows.map((batch) => ({
     creditBatchId: batch.id,
     creditBatchCode: batch.code,
+    startDate: batch.startDate,
+    endDate: batch.endDate,
     productionProcessId: batch.productionProcessId,
     samplingMethod: (() => {
       if (batch.productionProcessId == null) return "method_a";
