@@ -180,7 +180,7 @@ The worst operator-experience gap is the disagreement between readiness surfaces
 | Credit batch | Pass locally | One feedstock, one-day window, one run, one application, Method A |
 | Lab Samples | Partial | Three chemistry-complete 1000-year Samples; clustered-run/day warning shown; zero lab reports attached |
 | Removal/GHG Entry | Blocked | B1 redirects Removals to Settings; no local Removal created |
-| GHG Statement | Blocked | Requires submitted Removal |
+| GHG Statement | Blocked | Requires a submitted Removal |
 | Registry/verifier submission | Blocked | No project/credentials and no complete evidence package |
 | Chain DAG | Pass | Full local entity chain visible |
 | Chain Map | Pass | Supplier 28 km, facility, application 35 km shown |
