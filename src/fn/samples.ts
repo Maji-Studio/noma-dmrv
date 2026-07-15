@@ -331,8 +331,9 @@ export async function updateSampleFn(
       const existing = await getSampleByIdData(ctx, validated.sampleId);
       const creditBatchId = validated.creditBatchId ?? existing.creditBatchId;
       const samplingTime = validated.samplingTime ?? existing.samplingTime;
-      if (creditBatchId == null) throw new SafeError("Credit batch not found");
-      await assertSampleNotBeforeBatchWindow(ctx, creditBatchId, samplingTime);
+      if (creditBatchId != null) {
+        await assertSampleNotBeforeBatchWindow(ctx, creditBatchId, samplingTime);
+      }
     }
 
     const sample = await updateSample(ctx, validated.sampleId, {

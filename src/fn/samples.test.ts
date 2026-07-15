@@ -106,7 +106,34 @@ describe("sample credit batch window guard", () => {
       error:
         "Sampling date 2026-01-14 cannot be before credit batch CB-2026-001's production window 2026-01-15–2026-01-31.",
     });
+    expect(mocks.getCreditBatchById).toHaveBeenCalledWith(
+      expect.anything(),
+      CREDIT_BATCH_ID,
+      { skipPreview: true },
+    );
     expect(mocks.updateSample).not.toHaveBeenCalled();
+  });
+
+  it("allows changing sampling time on a legacy batchless sample", async () => {
+    mocks.getSampleById.mockResolvedValue({
+      id: SAMPLE_ID,
+      creditBatchId: null,
+      samplingTime: new Date("2026-01-15T12:00:00.000Z"),
+    });
+    const samplingTime = new Date("2026-01-20T09:00:00.000Z");
+
+    const result = await updateSampleFn({
+      sampleId: SAMPLE_ID,
+      samplingTime,
+    });
+
+    expect(result.success).toBe(true);
+    expect(mocks.getCreditBatchById).not.toHaveBeenCalled();
+    expect(mocks.updateSample).toHaveBeenCalledWith(
+      expect.anything(),
+      SAMPLE_ID,
+      expect.objectContaining({ samplingTime }),
+    );
   });
 
   it("accepts a sample clearly inside the local production window", async () => {
