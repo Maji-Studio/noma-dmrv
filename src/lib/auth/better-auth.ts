@@ -306,7 +306,7 @@ export const auth = betterAuth({
       // Organization creation is reserved for app-level Platform Admins. The
       // guarded server action uses the server-only userId path so the selected
       // user, rather than the acting Platform Admin, becomes the Owner.
-      allowUserToCreateOrganization: (user) => user.role === "admin",
+      allowUserToCreateOrganization: false,
       organizationHooks: {
         afterCreateOrganization: async ({ organization }) => {
           try {

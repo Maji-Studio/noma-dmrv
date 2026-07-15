@@ -31,17 +31,10 @@ function getOrganizationPluginOptions(): OrganizationPluginOptions {
 }
 
 describe("Better Auth organization configuration", () => {
-  it("permits organization creation only for app-level admins", async () => {
+  it("disables direct session-based organization creation", () => {
     const allowCreation =
       getOrganizationPluginOptions().allowUserToCreateOrganization;
-    expect(allowCreation).toBeTypeOf("function");
-    if (typeof allowCreation !== "function") {
-      throw new Error("Organization creation policy must be a function.");
-    }
-
-    expect(await allowCreation({ role: "admin" })).toBe(true);
-    expect(await allowCreation({ role: "user" })).toBe(false);
-    expect(await allowCreation({})).toBe(false);
+    expect(allowCreation).toBe(false);
   });
 
   it("seeds starter defaults after every plugin-created organization", async () => {
