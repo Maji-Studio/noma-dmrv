@@ -9,6 +9,7 @@ import { z } from "zod";
 import { samples } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
 import { getCreditBatchById } from "@/data-access/credit-batches";
+import { getFacilityById } from "@/data-access/facilities";
 import {
   createSample,
   deleteSample,
@@ -23,7 +24,7 @@ import {
   type SampleStats,
 } from "@/data-access/samples";
 import { requireOrgContext } from "@/lib/auth/server";
-import { formatUtcDate } from "@/lib/date-utils";
+import { formatFacilityDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import {
   createSampleSchema,
@@ -55,7 +56,8 @@ async function assertSampleNotBeforeBatchWindow(
   });
   if (!batch) throw new SafeError("Credit batch not found");
 
-  const samplingDay = formatUtcDate(samplingTime);
+  const facility = await getFacilityById(ctx, batch.facilityId);
+  const samplingDay = formatFacilityDate(samplingTime, facility.timezone);
   if (samplingDay < batch.startDate) {
     throw new SafeError(
       `Sampling date ${samplingDay} cannot be before credit batch ${batch.code}'s production window ${batch.startDate}–${batch.endDate}.`,
