@@ -5,6 +5,22 @@ const emptyToUndefined = (value: unknown) =>
   typeof value === "string" && value.trim() === "" ? undefined : value;
 
 const LOCAL_APP_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+const DIGITALOCEAN_SPACES_REGIONS = new Set([
+  "nyc1",
+  "nyc2",
+  "nyc3",
+  "ams2",
+  "ams3",
+  "sfo1",
+  "sfo2",
+  "sfo3",
+  "sgp1",
+  "fra1",
+  "blr1",
+  "lon1",
+  "tor1",
+  "syd1",
+]);
 
 function isLocalAppUrl(value: string): boolean {
   try {
@@ -200,6 +216,18 @@ const envSchema = z.object({
         code: z.ZodIssueCode.custom,
         path: ["STORAGE_PROVIDER"],
         message: `STORAGE_PROVIDER='s3-compatible' requires: ${missing.join(", ")}`,
+      });
+    }
+    if (
+      !data.STORAGE_ENDPOINT &&
+      data.STORAGE_REGION &&
+      DIGITALOCEAN_SPACES_REGIONS.has(data.STORAGE_REGION.trim().toLowerCase())
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["STORAGE_ENDPOINT"],
+        message:
+          "STORAGE_REGION looks like a DigitalOcean Spaces region; set STORAGE_ENDPOINT (e.g. https://fra1.digitaloceanspaces.com) or the AWS SDK will target a nonexistent amazonaws.com host",
       });
     }
   }

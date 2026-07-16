@@ -6,6 +6,7 @@
 
 import { z } from "zod";
 import { getEntities, getEntityById } from "@/data-access/entities";
+import { requireOrgFacility } from "@/data-access/utils";
 import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
@@ -26,12 +27,28 @@ const entityTypeSchema = z.string().refine(
   { message: "Invalid entity type" },
 );
 
-const searchEntitiesSchema = z.object({
-  entityType: entityTypeSchema,
-  search: z.string().optional(),
-  filterBy: z.record(z.string(), z.string()).optional(),
-  limit: z.number().int().positive().max(MAX_SEARCH_LIMIT).optional(),
-});
+const searchEntitiesSchema = z
+  .object({
+    entityType: entityTypeSchema,
+    search: z.string().optional(),
+    filterBy: z.record(z.string(), z.string()).optional(),
+    limit: z.number().int().positive().max(MAX_SEARCH_LIMIT).optional(),
+  })
+  .superRefine((data, ctx) => {
+    // filterBy is a free-form record; facilityId feeds the org-scope guard
+    // and uuid-typed query filters, so a blank/malformed value must be a
+    // validation error rather than silently degrading to an unfiltered read.
+    if (
+      data.filterBy?.facilityId !== undefined &&
+      !z.uuid().safeParse(data.filterBy.facilityId).success
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["filterBy", "facilityId"],
+        message: "facilityId filter must be a UUID",
+      });
+    }
+  });
 
 /**
  * Search entities by type with optional filters
@@ -41,6 +58,9 @@ export async function searchEntitiesFn(
 ): Promise<ActionResult<EntityOption[]>> {
   return withAction(async (ctx) => {
     const validated = searchEntitiesSchema.parse(params);
+    if (validated.filterBy?.facilityId) {
+      await requireOrgFacility(ctx, validated.filterBy.facilityId);
+    }
     return getEntities(ctx, validated);
   }, { zodErrorPrefix: "Invalid search parameters", fallbackMessage: "Failed to search entities" });
 }

@@ -190,6 +190,7 @@ export function EntitySelect({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listboxRef = useRef<HTMLUListElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   // Debounce search for better performance
   const debouncedSearch = useDebounce(searchQuery, 200);
@@ -342,9 +343,16 @@ export function EntitySelect({
           }
           break;
         case "Escape":
-          e.preventDefault();
-          setIsOpen(false);
-          setSearchQuery("");
+          if (isOpen) {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsOpen(false);
+            setSearchQuery("");
+            // Escape may fire from the search input, which unmounts on
+            // close — return focus to the trigger so keyboard users are
+            // not dropped onto the document body.
+            triggerRef.current?.focus();
+          }
           break;
         case "Tab":
           setIsOpen(false);
@@ -352,7 +360,7 @@ export function EntitySelect({
           break;
       }
     },
-    [options, clampedHighlightedIndex, handleSelect, resolvedCreateAction, shouldShowCreateAction]
+    [options, clampedHighlightedIndex, handleSelect, resolvedCreateAction, shouldShowCreateAction, isOpen]
   );
 
   const handleToggle = useCallback(() => {
@@ -370,6 +378,7 @@ export function EntitySelect({
       <div className="relative flex items-center">
         <button
           type="button"
+          ref={triggerRef}
           onClick={handleToggle}
           onKeyDown={handleKeyDown}
           disabled={disabled}

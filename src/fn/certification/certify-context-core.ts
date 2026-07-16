@@ -6,6 +6,7 @@ import {
   type CertificationSubmissionRow,
   type CertifierProjectRow,
 } from "@/data-access/certification";
+import { requireOrgFacility } from "@/data-access/utils";
 import { getLatestSubmission } from "@/data-access/certification-submissions";
 import {
   getCertifierRemovalById,
@@ -878,6 +879,7 @@ export async function loadRemovalsForFacility(
   facilityId: string,
 ): Promise<ActionResult<RemovalsHubData>> {
   return withAction(async (orgCtx) => {
+    await requireOrgFacility(orgCtx, facilityId);
     const [removalRows, ungroupedBatches] = await Promise.all([
       listRemovalsForFacility(orgCtx, facilityId),
       listUngroupedCreditBatches(orgCtx, facilityId),
@@ -947,6 +949,7 @@ export async function loadSelectableBatchesForFacility(
   facilityId: string,
 ): Promise<ActionResult<SelectableBatchesData>> {
   return withAction(async (orgCtx) => {
+    await requireOrgFacility(orgCtx, facilityId);
     const facilityFacts = await loadFacilityCertifierFacts(orgCtx, facilityId);
     const ungrouped = await listUngroupedCreditBatches(orgCtx, facilityId);
     const ungroupedIds = ungrouped.map((row) => row.id);

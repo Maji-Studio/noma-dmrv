@@ -5,14 +5,17 @@
  */
 "use client";
 
-import { type ReactNode, useEffect, useMemo } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { useQueryState, parseAsString } from "nuqs";
 import { useFacilities, useFacility } from "@/hooks/use-facilities";
+import { authClient } from "@/lib/auth/client";
 import {
   FACILITY_STORAGE_KEY,
   FacilityContext,
   type FacilityContextValue,
 } from "@/hooks/use-facility-context";
+
+const EMPTY_FACILITIES: FacilityContextValue["facilities"] = [];
 
 function readStoredFacilityId(): string | null {
   if (typeof window === "undefined") {
@@ -44,14 +47,26 @@ function writeStoredFacilityId(facilityId: string | null) {
 }
 
 export function FacilityProvider({ children }: { children: ReactNode }) {
+  const { data: sessionData, isPending: isSessionPending } =
+    authClient.useSession();
+  const activeOrganizationId =
+    (sessionData?.session as
+      | { activeOrganizationId?: string | null }
+      | undefined)?.activeOrganizationId ?? null;
+  const previousOrganizationIdRef = useRef<string | null>(null);
   const [facilityId, setFacilityId] = useQueryState(
     "facility",
     parseAsString.withOptions({ shallow: true, history: "replace" })
   );
 
   // Keep within schema limit (max 100) so the sidebar facilities query does not fail.
-  const { data: facilitiesData, isLoading, isError } = useFacilities({ pageSize: 100 });
-  const facilities = useMemo(() => facilitiesData?.items ?? [], [facilitiesData]);
+  const {
+    data: facilitiesData,
+    isLoading: isFacilitiesLoading,
+    isError,
+  } = useFacilities({ pageSize: 100 }, activeOrganizationId);
+  const isLoading = isSessionPending || isFacilitiesLoading;
+  const facilities = facilitiesData?.items ?? EMPTY_FACILITIES;
   const hasFacilityInList = facilityId
     ? facilities.some((facility) => facility.id === facilityId)
     : false;
@@ -61,11 +76,33 @@ export function FacilityProvider({ children }: { children: ReactNode }) {
   const {
     data: selectedFacilityById,
     isLoading: isSelectedFacilityLoading,
-  } = useFacility(facilityId ?? "", shouldLoadSelectedFacility);
+  } = useFacility(
+    facilityId ?? "",
+    shouldLoadSelectedFacility,
+    activeOrganizationId,
+  );
   const selectedFacilityFromLookup =
     selectedFacilityById && selectedFacilityById.archivedAt == null
       ? selectedFacilityById
       : undefined;
+
+  // The URL and localStorage are external facility-selection stores. Drop
+  // both as soon as Better Auth reports that the active organization changed.
+  useEffect(() => {
+    if (!activeOrganizationId) {
+      return;
+    }
+
+    const previousOrganizationId = previousOrganizationIdRef.current;
+    previousOrganizationIdRef.current = activeOrganizationId;
+    if (
+      previousOrganizationId &&
+      previousOrganizationId !== activeOrganizationId
+    ) {
+      writeStoredFacilityId(null);
+      void setFacilityId(null);
+    }
+  }, [activeOrganizationId, setFacilityId]);
 
   // Resolve facility selection from URL -> localStorage -> first facility.
   useEffect(() => {
@@ -118,20 +155,17 @@ export function FacilityProvider({ children }: { children: ReactNode }) {
     setFacilityId,
   ]);
 
-  const isResolvingOutOfListSelection = Boolean(
-    facilityId && !hasFacilityInList && isSelectedFacilityLoading
-  );
   const hasSelectedFacility =
     hasFacilityInList || Boolean(facilityId && selectedFacilityFromLookup);
-  const resolvedFacilityId = isResolvingOutOfListSelection
-    ? facilityId
-    : hasSelectedFacility
+  const resolvedFacilityId = facilityId
+    ? hasSelectedFacility
       ? facilityId
-      : facilities[0]?.id ?? null;
-  const selectedFacility = isResolvingOutOfListSelection
-    ? undefined
-    : facilities.find((f) => f.id === resolvedFacilityId) ??
-      selectedFacilityFromLookup;
+      : null
+    : facilities[0]?.id ?? null;
+  const selectedFacility = resolvedFacilityId
+    ? facilities.find((f) => f.id === resolvedFacilityId) ??
+      selectedFacilityFromLookup
+    : undefined;
   const availableFacilities =
     selectedFacilityFromLookup && !hasFacilityInList
       ? [selectedFacilityFromLookup, ...facilities]

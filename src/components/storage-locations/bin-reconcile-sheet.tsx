@@ -9,7 +9,11 @@ import { FormActions } from "@/components/forms/form-actions";
 import { useToast } from "@/components/ui/toast";
 import { numericValue } from "@/lib/form-utils";
 import { formatMass } from "@/lib/format-utils";
-import { useRecordLoss, useRecordStockTake } from "@/hooks/use-bin-movements";
+import {
+  RecordLossFieldError,
+  useRecordLoss,
+  useRecordStockTake,
+} from "@/hooks/use-bin-movements";
 import {
   BIN_MOVEMENT_LANE_LABELS,
   laneForStorageType,
@@ -272,6 +276,7 @@ function LossForm({
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(recordLossFormSchema),
@@ -291,6 +296,10 @@ function LossForm({
       toast.success("Loss recorded");
       onRecorded?.();
     } catch (error) {
+      if (error instanceof RecordLossFieldError) {
+        setError(error.field, { type: "server", message: error.message });
+        return;
+      }
       setServerError(
         error instanceof Error ? error.message : "Failed to record loss"
       );

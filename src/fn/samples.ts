@@ -10,6 +10,7 @@ import { samples } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getFacilityById } from "@/data-access/facilities";
+import { requireOrgFacility } from "@/data-access/utils";
 import {
   createSample,
   deleteSample,
@@ -81,6 +82,9 @@ export async function getSamplesFn(
     const validatedFilters = filters
       ? sampleFilterSchema.parse(filters)
       : undefined;
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
     const samples = await getSamplesData(ctx, validatedFilters);
 
     return { success: true, data: samples };
@@ -141,6 +145,9 @@ export async function getSampleStatsFn(
     const validatedFacilityId = facilityId
       ? z.string().uuid().parse(facilityId)
       : undefined;
+    if (validatedFacilityId) {
+      await requireOrgFacility(ctx, validatedFacilityId);
+    }
     const stats = await getSampleStatsData(
       ctx,
       validatedCreditBatchId,

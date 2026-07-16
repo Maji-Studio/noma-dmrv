@@ -5,6 +5,7 @@ import {
   getDashboardOverview,
   type DashboardOverview,
 } from "@/data-access/dashboard-overview";
+import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgContext } from "@/lib/auth/server";
 import type { ActionResult } from "@/types/actions";
 import { toLoggedActionError } from "./action-errors";
@@ -27,6 +28,7 @@ export async function getDashboardOverviewFn(
     const ctx = await requireOrgContext();
 
     const validated = getDashboardOverviewSchema.parse(input);
+    await requireOrgFacility(ctx, validated.facilityId);
 
     const overview = await getDashboardOverview(
       ctx,
