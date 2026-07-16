@@ -274,6 +274,24 @@ export function ApplicationEvidencePanel({
   const boundaryDocs = uploadedDocs.filter(isBoundaryEvidenceDocument);
   const visibleDocs = mode === "visual" ? visualDocs : boundaryDocs;
 
+  const handleLogbookEvidenceTypeChange = (
+    type: ApplicationBoundaryLogbookEvidenceType,
+  ) => {
+    setLogbookEvidenceType(type);
+    // Held boundary entries captured the classification at add-time; re-tag
+    // them so a late radio change does not upload the file misclassified.
+    for (const attachment of deferredAttachments?.attachments ?? []) {
+      if (
+        attachment.documentType === BOUNDARY_DOC_TYPE &&
+        attachment.status !== "uploaded"
+      ) {
+        deferredAttachments?.updateMeta(attachment.key, {
+          applicationLogbookEvidenceType: type,
+        });
+      }
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteId) return;
     setErrorMessage(null);
@@ -397,7 +415,7 @@ export function ApplicationEvidencePanel({
                       name="application-create-logbook-evidence-type"
                       value={type}
                       checked={logbookEvidenceType === type}
-                      onChange={() => setLogbookEvidenceType(type)}
+                      onChange={() => handleLogbookEvidenceTypeChange(type)}
                       disabled={disabled}
                     />
                     {APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS[type]}
@@ -560,7 +578,7 @@ export function ApplicationEvidencePanel({
                     name={`application-${applicationId}-logbook-evidence-type`}
                     value={type}
                     checked={logbookEvidenceType === type}
-                    onChange={() => setLogbookEvidenceType(type)}
+                    onChange={() => handleLogbookEvidenceTypeChange(type)}
                     disabled={disabled}
                   />
                   {APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS[type]}
