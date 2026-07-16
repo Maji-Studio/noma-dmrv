@@ -242,7 +242,7 @@ export function ProductionReadingsDocuments({
                   variant="weak"
                   size="small"
                   onClick={() => runImport(doc.id)}
-                  disabled={importReadings.isPending}
+                  disabled={disabled || importReadings.isPending}
                   className="shrink-0"
                 >
                   <ArrowClockwiseIcon size={14} weight="bold" />
@@ -263,7 +263,7 @@ export function ProductionReadingsDocuments({
                   variant="destructive"
                   size="icon"
                   onClick={() => setDeletingId(doc.id)}
-                  disabled={deleteMutation.isPending}
+                  disabled={disabled || deleteMutation.isPending}
                   className="shrink-0"
                   aria-label={`Delete ${doc.fileName}`}
                 >
