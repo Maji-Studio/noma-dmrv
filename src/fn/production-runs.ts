@@ -13,6 +13,7 @@ import {
   withAutoCode,
 } from "@/data-access/code-generator";
 import { db } from "@/db";
+import { requireOrgFacility } from "@/data-access/utils";
 import {
   createProductionRun,
   deleteProductionRun,
@@ -70,6 +71,9 @@ export async function getProductionRunsFn(
     const validatedFilters = filters
       ? productionRunFilterSchema.parse(filters)
       : undefined;
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
     const runs = await getProductionRunsData(ctx, validatedFilters);
 
     return { success: true, data: runs };
@@ -163,6 +167,9 @@ export async function getProductionRunStatsFn(
   try {
     const ctx = await requireOrgContext();
 
+    if (facilityId) {
+      await requireOrgFacility(ctx, facilityId);
+    }
     const stats = await getProductionRunStatsData(ctx, facilityId);
     return { success: true, data: stats };
   } catch (error) {
@@ -186,6 +193,7 @@ export async function getFacilityEnergyTotalsFn(
   try {
     const ctx = await requireOrgContext();
 
+    await requireOrgFacility(ctx, facilityId);
     const totals = await getFacilityEnergyTotalsData(ctx, facilityId);
     return { success: true, data: totals };
   } catch (error) {

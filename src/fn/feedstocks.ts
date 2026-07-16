@@ -8,6 +8,7 @@
 import { z } from "zod";
 import { feedstocks as feedstocksTable } from "@/db/schema";
 import { generateNextCodes } from "@/data-access/code-generator";
+import { requireOrgFacility } from "@/data-access/utils";
 import {
   createFeedstock,
   deleteFeedstock,
@@ -91,6 +92,9 @@ export async function getFeedstocksFn(
     const validatedFilters = filters
       ? feedstockFilterSchema.parse(filters)
       : undefined;
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
     const data = await getFeedstocksData(ctx, validatedFilters);
 
     return { success: true, data };
@@ -138,6 +142,9 @@ export async function getFeedstockStatsFn(
   try {
     const ctx = await requireOrgContext();
 
+    if (facilityId) {
+      await requireOrgFacility(ctx, facilityId);
+    }
     const data = await getFeedstockStatsData(ctx, facilityId);
     return { success: true, data };
   } catch (error) {

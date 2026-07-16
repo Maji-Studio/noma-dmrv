@@ -11,6 +11,7 @@ import {
   CODE_CONFLICT_MESSAGES,
   withAutoCode,
 } from "@/data-access/code-generator";
+import { requireOrgFacility } from "@/data-access/utils";
 import {
   createStorageLocation,
   deleteStorageLocation,
@@ -60,6 +61,9 @@ export async function getStorageLocationsFn(
     const validatedFilters = filters
       ? storageLocationFilterSchema.parse(filters)
       : undefined;
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
     const storageLocations = await getStorageLocationsData(
       ctx,
       validatedFilters
@@ -145,6 +149,7 @@ export async function getStorageLocationsByFacilityFn(
   try {
     const ctx = await requireOrgContext();
 
+    await requireOrgFacility(ctx, facilityId);
     const storageLocations = await getStorageLocationsByFacilityData(
       ctx,
       facilityId

@@ -13,7 +13,9 @@ import {
   deleteAllProductionRunReadings as deleteAllData,
   type ProductionRunReadingWithRelations,
 } from "@/data-access/production-run-readings";
+import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgContext } from "@/lib/auth/server";
+import { toActionError } from "@/lib/errors";
 import {
   deleteAllProductionRunReadingsSchema,
   productionRunReadingListFiltersSchema,
@@ -31,6 +33,9 @@ export async function getProductionRunReadingsListFn(
       productionRunId,
       facilityId,
     });
+    if (filters.facilityId) {
+      await requireOrgFacility(ctx, filters.facilityId);
+    }
 
     const readings = await getListData(ctx, filters.productionRunId, filters.facilityId);
     return { success: true, data: readings };
@@ -45,7 +50,7 @@ export async function getProductionRunReadingsListFn(
     console.error("[production-run-readings] Failed to load readings:", error);
     return {
       success: false,
-      error: "Failed to load readings",
+      error: toActionError(error, "Failed to load readings"),
     };
   }
 }
