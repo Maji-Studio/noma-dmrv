@@ -16,6 +16,9 @@ vi.mock("@/hooks/use-applications", () => ({
   useUpdateApplication: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useDeleteApplication: () => ({ isPending: false, mutateAsync: vi.fn() }),
 }));
+vi.mock("@/hooks/use-file-upload", () => ({
+  useFileUpload: () => ({ upload: vi.fn() }),
+}));
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ success: vi.fn() }),
 }));

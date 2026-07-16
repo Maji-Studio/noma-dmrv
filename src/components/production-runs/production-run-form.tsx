@@ -35,6 +35,7 @@ import {
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
+import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 
 // ============================================
@@ -241,6 +242,7 @@ interface ProductionRunFormProps {
    * so it may contain its own forms. Nothing ever renders after the CTA.
    */
   children?: React.ReactNode;
+  deferredAttachments?: UseDeferredAttachmentsResult;
 }
 
 export function ProductionRunForm({
@@ -250,6 +252,7 @@ export function ProductionRunForm({
   isSubmitting = false,
   submitLabel,
   children,
+  deferredAttachments,
 }: ProductionRunFormProps) {
   const formId = useId();
   const isEditMode = !!productionRun;
@@ -874,14 +877,11 @@ export function ProductionRunForm({
           helperText="Upload a readings CSV (timestamp_utc, temperature_c, pressure_bar, plus optional dryer/reactor frequency). A file may span multiple UTC days; rows inside the run's time window populate the readings table below."
           certifyRequired
         >
-          {isEditMode && productionRun ? (
-            <ProductionReadingsDocuments productionRunId={productionRun.id} />
-          ) : (
-            <p className="body-small text-[var(--color-text-secondary)]">
-              Save the production run first, then reopen it to attach readings
-              CSV files.
-            </p>
-          )}
+          <ProductionReadingsDocuments
+            productionRunId={productionRun?.id}
+            deferredAttachments={deferredAttachments}
+            disabled={isSubmitting}
+          />
         </FormField>
       </FormSection>
       </FormSpine>

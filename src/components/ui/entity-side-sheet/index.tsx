@@ -56,6 +56,8 @@ interface EntitySideSheetProps {
   open: boolean;
   /** Callback when the panel should close */
   onOpenChange: (open: boolean) => void;
+  /** Return false to veto a create/edit close attempt. */
+  onCloseAttempt?: () => boolean;
   /** Current display mode */
   mode: SideSheetMode;
   /** Callback when the mode changes (view ↔ edit) */
@@ -105,6 +107,7 @@ function chunkFields<T>(fields: T[]): T[][] {
 function EntitySideSheet({
   open,
   onOpenChange,
+  onCloseAttempt,
   mode,
   onModeChange,
   title,
@@ -126,8 +129,20 @@ function EntitySideSheet({
       ? subtitle
       : subtitle;
 
+  function handleOpenChange(nextOpen: boolean) {
+    if (
+      !nextOpen &&
+      !isViewMode &&
+      onCloseAttempt &&
+      !onCloseAttempt()
+    ) {
+      return;
+    }
+    onOpenChange(nextOpen);
+  }
+
   return (
-    <SlideOverPanel.Root open={open} onOpenChange={onOpenChange}>
+    <SlideOverPanel.Root open={open} onOpenChange={handleOpenChange}>
       <SlideOverPanel.Content size={size}>
         {/* Header */}
         <SlideOverPanel.Header showClose>

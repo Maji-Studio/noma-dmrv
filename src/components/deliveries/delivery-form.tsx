@@ -24,6 +24,7 @@ import type { Delivery } from "@/db/schema";
 import { useOrdersForSelect } from "@/hooks/use-orders";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
+import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { DeliveryEvidenceSection } from "./delivery-trailing-sections";
 
 // ============================================
@@ -69,9 +70,10 @@ interface DeliveryFormProps {
   isSubmitting?: boolean;
   /** Custom label for the submit button */
   submitLabel?: string;
+  deferredAttachments?: UseDeferredAttachmentsResult;
 }
 
-export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, submitLabel }: DeliveryFormProps) {
+export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, submitLabel, deferredAttachments }: DeliveryFormProps) {
   const isEditMode = !!delivery;
   const formId = useId();
   const { facilityId: contextFacilityId } = useFacilityContext();
@@ -401,7 +403,12 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
       </form>
 
-      <DeliveryEvidenceSection delivery={delivery} isEditMode={isEditMode} />
+      <DeliveryEvidenceSection
+        delivery={delivery}
+        isEditMode={isEditMode}
+        deferredAttachments={deferredAttachments}
+        isSubmitting={isSubmitting}
+      />
       </FormSpine>
 
       <FormActions

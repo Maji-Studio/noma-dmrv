@@ -27,6 +27,7 @@ import { type DistanceSourceValue } from "@/schemas/distance-source";
 import { DEFAULT_TRIP_TYPE, TRIP_TYPE_OPTIONS, type TripTypeValue } from "@/schemas/trip-type";
 import { FormSelect } from "@/components/forms/form-select";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
+import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { VehicleQuickAddDialog } from "@/components/forms/entity-select/vehicle-quick-add-dialog";
 import { FeedstockTypeQuickAddDialog } from "@/components/forms/entity-select/feedstock-type-quick-add-dialog";
 import { StorageLocationQuickAddDialog } from "@/components/forms/entity-select/storage-location-quick-add-dialog";
@@ -55,6 +56,9 @@ interface FeedstockFormProps {
   isSubmitting?: boolean;
   submitLabel?: string;
   serverError?: string;
+  deferredAttachments?: UseDeferredAttachmentsResult;
+  /** All rows a failed create produced, so evidence retry reaches each. */
+  retryEntityIds?: string[];
 }
 
 export function FeedstockForm({
@@ -64,6 +68,8 @@ export function FeedstockForm({
   isSubmitting = false,
   submitLabel,
   serverError,
+  deferredAttachments,
+  retryEntityIds,
 }: FeedstockFormProps) {
   const isEditMode = !!feedstock;
   const formId = useId();
@@ -574,6 +580,9 @@ export function FeedstockForm({
         <FeedstockEvidenceSection
           feedstock={feedstock}
           isEditMode={isEditMode}
+          deferredAttachments={deferredAttachments}
+          retryEntityIds={retryEntityIds}
+          isSubmitting={isSubmitting}
         />
       </FormSpine>
 
