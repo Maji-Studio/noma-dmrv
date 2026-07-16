@@ -217,7 +217,7 @@ export function TransportEvidencePanel({
         </h3>
         <p className="body-small text-[var(--color-text-secondary)]">
           {readOnly
-            ? "Bill of lading and weigh-scale tickets attached to support this journey."
+            ? "Bill of lading and weigh-scale tickets supporting this journey."
             : "Attach the bill of lading and weigh-scale ticket used to support this journey. Uploaded files become Source candidates; mirror them from the Removal's Supporting Sources panel before submission. These are the document types currently supported here; the active module may require additional journey evidence."}
         </p>
       </div>
