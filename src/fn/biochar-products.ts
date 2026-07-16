@@ -30,6 +30,7 @@ import {
   CODE_CONFLICT_MESSAGES,
   withAutoCode,
 } from "@/data-access/code-generator";
+import { requireOrgFacility } from "@/data-access/utils";
 import { biocharProducts } from "@/db/schema";
 import { toCompositionJsonb } from "@/lib/biochar-composition/composition";
 import { toLoggedActionError } from "./action-errors";
@@ -61,6 +62,9 @@ export async function getBiocharProductsFn(
     const validatedFilters = filters
       ? biocharProductFilterSchema.parse(filters)
       : undefined;
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
     const products = await getBiocharProductsData(ctx, validatedFilters);
 
     return { success: true, data: products };

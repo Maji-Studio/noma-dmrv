@@ -366,6 +366,7 @@ function DataTableRoot<TData, TValue>({
     (child) => !(React.isValidElement(child) && child.type === DataTablePagination),
   );
   const framed = variant !== "default";
+  const isEmpty = !isLoading && table.getRowModel().rows.length === 0;
 
   return (
     <DataTableContext.Provider value={contextValue as DataTableContextValue<unknown>}>
@@ -381,6 +382,12 @@ function DataTableRoot<TData, TValue>({
         )}
       >
         {headerChildren}
+        {isEmpty ? (
+          <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] py-48 px-16 text-center text-[var(--color-text-secondary)] md:border-0 md:bg-transparent md:px-12">
+            {emptyMessage}
+          </div>
+        ) : (
+          <>
         {/* Desktop: real table (hidden on mobile in favor of the card view) */}
         <div className="hidden md:block overflow-auto">
           <table
@@ -458,15 +465,6 @@ function DataTableRoot<TData, TValue>({
                     columns={table.getVisibleLeafColumns().length}
                   />
                 ))
-              ) : table.getRowModel().rows.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={columns.length}
-                    className="py-48 px-12 text-center text-[var(--color-text-secondary)]"
-                  >
-                    {emptyMessage}
-                  </td>
-                </tr>
               ) : (
                 table.getRowModel().rows.map((row) => (
                   <tr
@@ -529,10 +527,6 @@ function DataTableRoot<TData, TValue>({
                 <div className="mt-12 h-12 w-3/4 bg-[var(--color-background-medium)] animate-pulse" />
               </div>
             ))
-          ) : table.getRowModel().rows.length === 0 ? (
-            <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] py-48 px-16 text-center text-[var(--color-text-secondary)]">
-              {emptyMessage}
-            </div>
           ) : (
             table.getRowModel().rows.map((row) => (
               <div
@@ -591,6 +585,8 @@ function DataTableRoot<TData, TValue>({
             ))
           )}
         </div>
+          </>
+        )}
         {footerChildren}
       </div>
     </DataTableContext.Provider>

@@ -218,6 +218,7 @@ export async function removeMemberAction(
  * they are not a member of writes `activeOrganizationId` directly and clears
  * the cached session snapshot so the next read reflects the switch.
  */
+// Callers must pair a successful switch with resetAfterOrgSwitch() from useResetAfterOrgSwitch.
 export async function setActiveOrganizationAction(
   input: unknown
 ): Promise<ActionResult<{ organizationId: string }>> {
@@ -307,6 +308,7 @@ export async function createOrganizationAction(
  * Accept a pending invitation for the currently signed-in user (whose email
  * must match the invite — enforced by the plugin), then switch into the org.
  */
+// Callers must pair a successful switch with resetAfterOrgSwitch() from useResetAfterOrgSwitch.
 export async function acceptInvitationAction(
   input: unknown
 ): Promise<ActionResult<{ organizationId: string }>> {

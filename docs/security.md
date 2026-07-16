@@ -128,6 +128,25 @@ interactive desktop approval — a sandboxed shell can't reproduce 1Password aut
 so ask the user to run `op` commands themselves (`! op …`) rather than
 diagnosing around a sign-in you can't perform.
 
+### Storage endpoint gotcha — non-AWS regions need `STORAGE_ENDPOINT`
+
+With `STORAGE_ENDPOINT` unset, the AWS SDK derives the host from
+`STORAGE_REGION` on `amazonaws.com`. A DigitalOcean Spaces region (`fra1`,
+`nyc3`, …) then mints presigned URLs against a hostname that does not exist
+(`bucket.s3.fra1.amazonaws.com` → `ENOTFOUND`) — every upload fails at the
+browser PUT. `src/config/env.ts` fails env parse when a known DO region is
+configured without an endpoint, so a misconfigured deploy refuses to boot
+instead of silently minting phantom URLs.
+
+Fixing an affected environment: add `STORAGE_ENDPOINT`
+(e.g. `https://fra1.digitaloceanspaces.com`) to the environment's 1Password
+item, sync it to the deploy platform, and add the field to
+`.github/workflows/storage-health.yml` and `.env.tpl` so the smoke test and
+drift check cover it. Do the env fix **before** deploying, or the parse
+guard will fail the app closed at boot. `pnpm storage:smoke` (run with the
+target environment's storage vars via `op run`) verifies the full presigned
+round-trip; it does not exercise browser CORS.
+
 ## Secrets Management
 
 Secrets live in **1Password** (vault `Environment Variables`), never in the repo. One item per environment, with fields named exactly like the env vars:

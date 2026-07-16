@@ -3,7 +3,7 @@
  * CRUD operations for deliveries with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, sql, SQL, count, sum } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, sql, SQL, count } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
@@ -443,8 +443,8 @@ export async function getDeliveryStats(
   const [stats] = await db
     .select({
       totalDeliveries: count(),
-      totalDeliveredWetMassKg: sum(deliveries.deliveredWetMassKg),
-      totalMassDryKg: sum(deliveries.massDryKg),
+      totalDeliveredWetMassKg: sql<number>`COALESCE(SUM(${deliveries.deliveredWetMassKg}) FILTER (WHERE ${deliveries.status} = 'delivered'), 0)`,
+      totalMassDryKg: sql<number>`COALESCE(SUM(${deliveries.massDryKg}) FILTER (WHERE ${deliveries.status} = 'delivered'), 0)`,
     })
     .from(deliveries)
     .where(whereClause);

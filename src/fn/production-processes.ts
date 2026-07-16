@@ -1,6 +1,7 @@
 "use server";
 
 import type { ActionResult } from "@/types/actions";
+import { requireOrgFacility } from "@/data-access/utils";
 import {
   getProcessComplianceDrift,
   getProductionProcessSummariesByFacility,
@@ -26,9 +27,10 @@ import { withAction } from "./with-action";
 export async function getProductionProcessSummariesByFacilityFn(
   facilityId: string,
 ): Promise<ActionResult<ProductionProcessSummary[]>> {
-  return withAction((ctx) =>
-    getProductionProcessSummariesByFacility(ctx, facilityId),
-  );
+  return withAction(async (ctx) => {
+    await requireOrgFacility(ctx, facilityId);
+    return getProductionProcessSummariesByFacility(ctx, facilityId);
+  });
 }
 
 /**

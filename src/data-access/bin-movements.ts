@@ -21,7 +21,12 @@ import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { isPgCheckViolation } from "@/db/errors";
-import { deriveBinLaneAvailableKg, lockBinStock } from "./bin-stock-guards";
+import {
+  deriveBinLaneAvailableKg,
+  isOverdraw,
+  lockBinStock,
+  overdrawError,
+} from "./bin-stock-guards";
 
 export type DbReader = Pick<typeof db, "select">;
 
@@ -128,11 +133,18 @@ export async function getBinMovements(
 // Create Operations (append-only — no update/delete)
 // ============================================
 
-async function createBinMovementInTransaction(
+/**
+ * Assert the target bin exists in this org and physically holds the lane's
+ * material. A bin holds one material, so a movement's lane must match the
+ * bin's type. Enforced at the trust boundary (every insert) and again before
+ * any balance derivation, so a bad target fails with its own error instead of
+ * a misleading stock error.
+ */
+async function assertBinLaneTarget(
   ctx: OrgContext,
   tx: DbTransaction,
-  input: CreateBinMovementInput,
-): Promise<BinMovement> {
+  input: Pick<CreateBinMovementInput, "storageLocationId" | "lane">,
+): Promise<void> {
   const [location] = await tx
     .select({ id: storageLocations.id, type: storageLocations.type })
     .from(storageLocations)
@@ -142,12 +154,17 @@ async function createBinMovementInTransaction(
     throw new SafeError("Storage location not found");
   }
 
-  // A bin physically holds one material, so a movement's lane must match the
-  // bin's type. Enforced here (the trust boundary) so it covers every caller —
-  // stock-take and loss alike — not just the paths that check it themselves.
   if (laneForStorageType(location.type) !== input.lane) {
     throw new SafeError("This lane does not match the bin's material type");
   }
+}
+
+async function createBinMovementInTransaction(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  input: CreateBinMovementInput,
+): Promise<BinMovement> {
+  await assertBinLaneTarget(ctx, tx, input);
 
   let movement: BinMovement;
   try {
@@ -184,6 +201,21 @@ export async function createBinMovement(
   requireOrgScope(ctx);
   return db.transaction(async (tx) => {
     await lockBinStock(ctx, tx, input.storageLocationId);
+    if (input.movementType === "loss" && input.massDeltaKg < 0) {
+      // Validate the target first so a bad bin/lane fails with its own error
+      // rather than a misleading "not enough stock" for an empty derivation.
+      await assertBinLaneTarget(ctx, tx, input);
+      const available = await deriveBinLaneAvailableKg(
+        ctx,
+        tx,
+        input.storageLocationId,
+        input.lane,
+      );
+      const requested = Math.abs(input.massDeltaKg);
+      if (isOverdraw(requested, available)) {
+        throw overdrawError(input.lane, available, requested);
+      }
+    }
     return createBinMovementInTransaction(ctx, tx, input);
   });
 }
