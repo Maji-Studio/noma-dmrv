@@ -48,6 +48,12 @@ export const facilityKeys = {
     [...facilityKeys.all, "archiveImpact", id] as const,
 };
 
+// Exact message thrown by the facility data-access reads
+// (src/data-access/facilities.ts) for a missing or foreign facility.
+// Deterministic — retrying it only prolongs a stale selection window.
+const FACILITY_NOT_FOUND_MESSAGE = "Facility not found";
+const FACILITY_LOOKUP_MAX_RETRIES = 2;
+
 // ============================================
 // Query Hooks
 // ============================================
@@ -97,7 +103,12 @@ export function useFacility(
       return result.data;
     },
     enabled: enabled && !!facilityId && organizationId !== null,
-    retry: false,
+    // Cross-org/missing facility is deterministic — never retry it. Transient
+    // failures still retry so a valid deep-linked selection isn't discarded
+    // on a network blip.
+    retry: (failureCount, error) =>
+      !(error instanceof Error && error.message === FACILITY_NOT_FOUND_MESSAGE) &&
+      failureCount < FACILITY_LOOKUP_MAX_RETRIES,
     staleTime: 30000,
   });
 }

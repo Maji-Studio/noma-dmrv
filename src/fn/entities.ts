@@ -6,6 +6,7 @@
 
 import { z } from "zod";
 import { getEntities, getEntityById } from "@/data-access/entities";
+import { requireOrgFacility } from "@/data-access/utils";
 import type { EntityOption, EntityType } from "@/components/forms/entity-select/types";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
@@ -41,6 +42,9 @@ export async function searchEntitiesFn(
 ): Promise<ActionResult<EntityOption[]>> {
   return withAction(async (ctx) => {
     const validated = searchEntitiesSchema.parse(params);
+    if (validated.filterBy?.facilityId) {
+      await requireOrgFacility(ctx, validated.filterBy.facilityId);
+    }
     return getEntities(ctx, validated);
   }, { zodErrorPrefix: "Invalid search parameters", fallbackMessage: "Failed to search entities" });
 }
