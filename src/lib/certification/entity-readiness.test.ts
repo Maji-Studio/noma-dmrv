@@ -199,6 +199,27 @@ describe("deriveEntityCertifyReadiness", () => {
       { kind: "field", key: "massWetKg", fields: ["massWetKg"] },
     ]);
   });
+
+  it("reports an upcoming delivery as a lifecycle gap", () => {
+    const readiness = deriveEntityCertifyReadiness("delivery", {
+      status: "upcoming",
+      deliveredWetMassKg: 400,
+    });
+
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      { kind: "lifecycle", key: "lifecycleState", fields: ["status"] },
+    ]);
+  });
+
+  it("accepts a delivered delivery without a lifecycle gap", () => {
+    const readiness = deriveEntityCertifyReadiness("delivery", {
+      status: "delivered",
+      deliveredWetMassKg: 400,
+    });
+
+    expect(readiness).toEqual({ state: "ready", gaps: [] });
+  });
 });
 
 describe("isCertifyFormField", () => {

@@ -54,7 +54,7 @@ export function FeedstockMix({ slices }: FeedstockMixProps) {
       ) : (
         <div className="flex flex-col px-20 py-12" data-testid="feedstock-mix">
           <p className="pb-8 label-micro text-[var(--color-text-tertiary)]">
-            Dry mass processed by feedstock type
+            Dry mass received by feedstock type
           </p>
           {slices.map((slice, index) => (
             <div

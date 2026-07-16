@@ -21,7 +21,12 @@ import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { isPgCheckViolation } from "@/db/errors";
-import { deriveBinLaneAvailableKg, lockBinStock } from "./bin-stock-guards";
+import {
+  deriveBinLaneAvailableKg,
+  isOverdraw,
+  lockBinStock,
+  overdrawError,
+} from "./bin-stock-guards";
 
 export type DbReader = Pick<typeof db, "select">;
 
@@ -184,6 +189,18 @@ export async function createBinMovement(
   requireOrgScope(ctx);
   return db.transaction(async (tx) => {
     await lockBinStock(ctx, tx, input.storageLocationId);
+    if (input.movementType === "loss" && input.massDeltaKg < 0) {
+      const available = await deriveBinLaneAvailableKg(
+        ctx,
+        tx,
+        input.storageLocationId,
+        input.lane,
+      );
+      const requested = Math.abs(input.massDeltaKg);
+      if (isOverdraw(requested, available)) {
+        throw overdrawError(input.lane, available, requested);
+      }
+    }
     return createBinMovementInTransaction(ctx, tx, input);
   });
 }

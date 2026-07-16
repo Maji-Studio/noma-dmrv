@@ -342,9 +342,12 @@ export function EntitySelect({
           }
           break;
         case "Escape":
-          e.preventDefault();
-          setIsOpen(false);
-          setSearchQuery("");
+          if (isOpen) {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsOpen(false);
+            setSearchQuery("");
+          }
           break;
         case "Tab":
           setIsOpen(false);
@@ -352,7 +355,7 @@ export function EntitySelect({
           break;
       }
     },
-    [options, clampedHighlightedIndex, handleSelect, resolvedCreateAction, shouldShowCreateAction]
+    [options, clampedHighlightedIndex, handleSelect, resolvedCreateAction, shouldShowCreateAction, isOpen]
   );
 
   const handleToggle = useCallback(() => {
