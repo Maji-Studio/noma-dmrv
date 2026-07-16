@@ -10,6 +10,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
+import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -22,11 +23,17 @@ import {
 import { useImportProductionRunReadings } from "@/hooks/use-production-run-reading-imports";
 import type { ProductionRunReadingsImportResult } from "@/fn/production-run-reading-imports";
 import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
+import type {
+  DeferredAttachment,
+  UseDeferredAttachmentsResult,
+} from "@/hooks/use-deferred-attachments";
 
 interface ProductionReadingsDocumentsProps {
-  productionRunId: string;
+  productionRunId?: string;
   /** View mode hides the upload control and delete actions. */
   readOnly?: boolean;
+  deferredAttachments?: UseDeferredAttachmentsResult;
+  disabled?: boolean;
 }
 
 const READINGS_DOC_TYPE: DocumentType = "sensor_data";
@@ -69,6 +76,8 @@ function readingsImportFailed(metadata: unknown): boolean {
 export function ProductionReadingsDocuments({
   productionRunId,
   readOnly = false,
+  deferredAttachments,
+  disabled = false,
 }: ProductionReadingsDocumentsProps) {
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -76,7 +85,9 @@ export function ProductionReadingsDocuments({
     ENTITY_TYPE,
     productionRunId,
   );
-  const invalidateKey = documentKeys.forEntity(ENTITY_TYPE, productionRunId);
+  const invalidateKey = productionRunId
+    ? documentKeys.forEntity(ENTITY_TYPE, productionRunId)
+    : undefined;
   const deleteMutation = useDeleteDocument(invalidateKey);
   const importReadings = useImportProductionRunReadings();
 
@@ -103,6 +114,28 @@ export function ProductionReadingsDocuments({
     })();
   };
 
+  // Retrying a failed deferred upload re-attaches the CSV as a document but does
+  // not import its rows — mirror the create path (production-run-list) and run
+  // the same per-doc import so the readings land instead of silently vanishing.
+  // A failed import writes its durable flag via runImport, surfacing Re-import.
+  const importUploadedReadings = (uploaded: DeferredAttachment[]) => {
+    for (const attachment of uploaded) {
+      if (attachment.documentType === READINGS_DOC_TYPE && attachment.documentId) {
+        runImport(attachment.documentId);
+      }
+    }
+  };
+
+  const handleDeferredRetry = async (key?: string) => {
+    if (!deferredAttachments || !productionRunId) return;
+    const result = await deferredAttachments.retry(
+      ENTITY_TYPE,
+      [productionRunId],
+      key,
+    );
+    importUploadedReadings(result.uploaded);
+  };
+
   const handleDeleteConfirm = async () => {
     if (!deletingId) return;
     setDeleteError(null);
@@ -123,8 +156,34 @@ export function ProductionReadingsDocuments({
       (d.uploadStatus === "uploaded" || d.fileUrl),
   );
 
+  if (!productionRunId) {
+    return (
+      <FormFileUpload
+        id="production-run-deferred-readings-upload"
+        accept={READINGS_ACCEPT}
+        multiple={false}
+        maxSizeMb={READINGS_MAX_MB}
+        disabled={disabled}
+        deferred
+        deferredFiles={deferredAttachments?.attachments ?? []}
+        onDeferredAdd={(files) =>
+          deferredAttachments?.add(files, READINGS_DOC_TYPE)
+        }
+        onDeferredRemove={(key) => deferredAttachments?.remove(key)}
+      />
+    );
+  }
+
   return (
     <section className="flex flex-col gap-12">
+      {deferredAttachments && (
+        <FailedDeferredAttachments
+          attachments={deferredAttachments.attachments}
+          onRetry={handleDeferredRetry}
+          onRemove={deferredAttachments.remove}
+          disabled={disabled}
+        />
+      )}
       <header className="flex items-center justify-between">
         <span className="body-caption text-[var(--color-text-tertiary)]">
           {uploadedDocs.length} {uploadedDocs.length === 1 ? "file" : "files"}
@@ -183,7 +242,7 @@ export function ProductionReadingsDocuments({
                   variant="weak"
                   size="small"
                   onClick={() => runImport(doc.id)}
-                  disabled={importReadings.isPending}
+                  disabled={disabled || importReadings.isPending}
                   className="shrink-0"
                 >
                   <ArrowClockwiseIcon size={14} weight="bold" />
@@ -204,7 +263,7 @@ export function ProductionReadingsDocuments({
                   variant="destructive"
                   size="icon"
                   onClick={() => setDeletingId(doc.id)}
-                  disabled={deleteMutation.isPending}
+                  disabled={disabled || deleteMutation.isPending}
                   className="shrink-0"
                   aria-label={`Delete ${doc.fileName}`}
                 >
@@ -225,7 +284,7 @@ export function ProductionReadingsDocuments({
           // any (run, timestamp) already imported, so a re-run is idempotent.
           multiple={false}
           maxSizeMb={READINGS_MAX_MB}
-          disabled={importReadings.isPending}
+          disabled={disabled || importReadings.isPending}
           entityType={ENTITY_TYPE}
           entityId={productionRunId}
           documentType={READINGS_DOC_TYPE}

@@ -18,6 +18,7 @@ import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { ProductionSampleForm } from "./production-sample-form";
+import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
 import type { ProductionSampleWithRelations } from "@/data-access/production-samples";
 import type { ProductionSampleFormData } from "@/schemas/production-samples";
 
@@ -57,6 +58,8 @@ export function ProductionSampleTable({
   const updateSample = useUpdateProductionSample();
   const deleteSample = useDeleteProductionSample(productionRunId);
   const toast = useToast();
+  const deferredAttachments = useDeferredAttachments();
+  const [isFlushing, setIsFlushing] = useState(false);
 
   // Inline form state: "closed" | { mode: "create" } | { mode: "edit", sample }
   const [inlineForm, setInlineForm] = useState<
@@ -68,30 +71,92 @@ export function ProductionSampleTable({
 
   const openCreate = () => {
     setFormError(null);
+    deferredAttachments.clear();
     setInlineForm({ open: true });
   };
   const openEdit = (sample: ProductionSampleWithRelations) => {
     setFormError(null);
+    deferredAttachments.clear();
     setInlineForm({ open: true, sample });
   };
-  const closeForm = () => setInlineForm({ open: false });
+  const closeForm = () => {
+    setInlineForm({ open: false });
+    setFormError(null);
+    deferredAttachments.clear();
+  };
+
+  const handleRetryDeferredAttachments = async (key?: string) => {
+    if (!inlineForm.open || !inlineForm.sample) return;
+    const failedBefore = deferredAttachments.attachments.filter(
+      (attachment) => attachment.status === "failed",
+    ).length;
+    // Bracket the retry with isFlushing (which feeds isSubmitting) so a save or
+    // close cannot fire while attachments are mid-`uploading` and clear the
+    // retry state out from under this handler.
+    setIsFlushing(true);
+    try {
+      const result = await deferredAttachments.retry(
+        "production_sample",
+        [inlineForm.sample.id],
+        key,
+      );
+      if (result.ok && (key === undefined || failedBefore === 1)) {
+        setFormError(null);
+      }
+    } finally {
+      setIsFlushing(false);
+    }
+  };
+
+  const handleRemoveDeferredAttachment = (key: string) => {
+    const failedBefore = deferredAttachments.attachments.filter(
+      (attachment) => attachment.status === "failed",
+    ).length;
+    deferredAttachments.remove(key);
+    if (failedBefore === 1) setFormError(null);
+  };
 
   const handleSubmit = async (data: ProductionSampleFormData) => {
     setFormError(null);
     try {
       if (inlineForm.open && inlineForm.sample) {
+        if (
+          deferredAttachments.attachments.some(
+            (attachment) => attachment.status === "failed",
+          )
+        ) {
+          setFormError(
+            "Resolve or remove the failed attachments before saving this sample.",
+          );
+          return;
+        }
         await updateSample.mutateAsync({
           productionSampleId: inlineForm.sample.id,
           ...data,
         });
         toast.success("Sample updated");
       } else {
-        await createSample.mutateAsync(data);
+        const createdSample = await createSample.mutateAsync(data);
+        setIsFlushing(true);
+        const flushResult = await deferredAttachments.flush(
+          "production_sample",
+          createdSample.id,
+        );
+        if (!flushResult.ok) {
+          setInlineForm({ open: true, sample: createdSample });
+          setFormError(
+            `Production sample created, but ${flushResult.failed.length} ${flushResult.failed.length === 1 ? "attachment" : "attachments"} failed to upload.`,
+          );
+          return;
+        }
+        deferredAttachments.clear();
         toast.success("Sample added");
       }
       closeForm();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Failed to save sample");
+    } finally {
+      setIsFlushing(false);
     }
   };
 
@@ -107,7 +172,8 @@ export function ProductionSampleTable({
     }
   };
 
-  const isSubmitting = createSample.isPending || updateSample.isPending;
+  const isSubmitting =
+    createSample.isPending || updateSample.isPending || isFlushing;
 
   // NOTE: no certification replicate chip here. These are in-process production
   // samples; the ≥3-replicate / eligibility certification signal is judged on the
@@ -219,6 +285,9 @@ export function ProductionSampleTable({
             onSubmit={handleSubmit}
             onCancel={closeForm}
             isSubmitting={isSubmitting}
+            deferredAttachments={deferredAttachments}
+            onRetryDeferredAttachment={handleRetryDeferredAttachments}
+            onRemoveDeferredAttachment={handleRemoveDeferredAttachment}
           />
         </div>
       )}
