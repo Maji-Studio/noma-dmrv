@@ -26,6 +26,10 @@ interface FormActionsProps {
   formId?: string;
   /** Sticky footer (default) — disable for nested inline forms. */
   sticky?: boolean;
+  /** Use `button` when actions render inside an owning parent form. */
+  submitType?: "submit" | "button";
+  /** Click handler for a non-submit action button. */
+  onSubmitClick?: () => void;
 }
 
 export function FormActions({
@@ -37,6 +41,8 @@ export function FormActions({
   submitDisabled = false,
   formId,
   sticky = true,
+  submitType = "submit",
+  onSubmitClick,
 }: FormActionsProps) {
   return (
     <div
@@ -52,9 +58,10 @@ export function FormActions({
       )}
     >
       <Button
-        type="submit"
+        type={submitType}
         variant="primary"
         form={formId}
+        onClick={onSubmitClick}
         disabled={isSubmitting || submitDisabled}
       >
         {isSubmitting ? submittingLabel : submitLabel ?? defaultSubmitLabel}

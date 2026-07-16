@@ -32,6 +32,18 @@ interface TransportLegsEditorProps {
   readOnly?: boolean;
   /** Override the no-legs message (e.g. for auto-derived categories). */
   emptyMessage?: string;
+  /** Hold legs in parent state instead of persisting them immediately. */
+  deferred?: boolean;
+  deferredLegs?: TransportLegFormData[];
+  onDeferredChange?: (legs: TransportLegFormData[]) => void;
+}
+
+type EditableTransportLeg = TransportLeg | TransportLegFormData;
+
+function isSavedTransportLeg(
+  leg: EditableTransportLeg,
+): leg is TransportLeg {
+  return "id" in leg;
 }
 
 // Feedstock and biochar legs are auto-derived (supplier distance / delivery
@@ -59,10 +71,16 @@ export function TransportLegsEditor({
   title,
   readOnly = false,
   emptyMessage,
+  deferred = false,
+  deferredLegs = [],
+  onDeferredChange,
 }: TransportLegsEditorProps) {
+  // `readOnly` and `deferred` are intentionally separate modes. Callers should
+  // not combine them: deferred legs only exist while a create form is editable.
   const { data: legs, isLoading, error } = useTransportLegsForEntity(
     entityType,
     entityId,
+    { enabled: !deferred },
   );
   const createMutation = useCreateTransportLeg();
   const updateMutation = useUpdateTransportLeg(entityType, entityId);
@@ -70,9 +88,16 @@ export function TransportLegsEditor({
   const toast = useToast();
 
   const [inlineForm, setInlineForm] = useState<
-    { open: false } | { open: true; leg?: TransportLeg }
+    | { open: false }
+    | {
+        open: true;
+        leg?: EditableTransportLeg;
+        deferredIndex?: number;
+      }
   >({ open: false });
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<
+    { savedId: string } | { deferredIndex: number } | null
+  >(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -80,16 +105,33 @@ export function TransportLegsEditor({
     setFormError(null);
     setInlineForm({ open: true });
   };
-  const openEdit = (leg: TransportLeg) => {
+  const openEdit = (leg: EditableTransportLeg, deferredIndex?: number) => {
     setFormError(null);
-    setInlineForm({ open: true, leg });
+    setInlineForm({ open: true, leg, deferredIndex });
   };
   const closeForm = () => setInlineForm({ open: false });
 
   const handleSubmit = async (data: TransportLegFormData) => {
     setFormError(null);
+
+    if (deferred) {
+      const nextLegs =
+        inlineForm.open && inlineForm.deferredIndex !== undefined
+          ? deferredLegs.map((leg, index) =>
+              index === inlineForm.deferredIndex ? data : leg,
+            )
+          : [...deferredLegs, data];
+      onDeferredChange?.(nextLegs);
+      closeForm();
+      return;
+    }
+
     try {
-      if (inlineForm.open && inlineForm.leg) {
+      if (
+        inlineForm.open &&
+        inlineForm.leg &&
+        isSavedTransportLeg(inlineForm.leg)
+      ) {
         await updateMutation.mutateAsync({ id: inlineForm.leg.id, ...data });
         toast.success("Transport leg updated");
       } else {
@@ -105,12 +147,21 @@ export function TransportLegsEditor({
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deletingId) return;
+    if (!deleteTarget) return;
     setDeleteError(null);
+
+    if ("deferredIndex" in deleteTarget) {
+      onDeferredChange?.(
+        deferredLegs.filter((_, index) => index !== deleteTarget.deferredIndex),
+      );
+      setDeleteTarget(null);
+      return;
+    }
+
     try {
-      await deleteMutation.mutateAsync({ id: deletingId });
+      await deleteMutation.mutateAsync({ id: deleteTarget.savedId });
       toast.success("Transport leg deleted");
-      setDeletingId(null);
+      setDeleteTarget(null);
     } catch (err) {
       setDeleteError(
         err instanceof Error ? err.message : "Failed to delete transport leg",
@@ -120,7 +171,10 @@ export function TransportLegsEditor({
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
   const showAddButton = !readOnly && !inlineForm.open;
-  const hasLegs = !!legs && legs.length > 0;
+  const displayedLegs: EditableTransportLeg[] = deferred
+    ? deferredLegs
+    : (legs ?? []);
+  const hasLegs = displayedLegs.length > 0;
 
   return (
     <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
@@ -130,14 +184,19 @@ export function TransportLegsEditor({
           {title ?? DEFAULT_TITLES[entityType]}
         </h3>
         {showAddButton && (
-          <Button variant="default" size="small" onClick={openCreate}>
+          <Button
+            type="button"
+            variant="default"
+            size="small"
+            onClick={openCreate}
+          >
             <PlusIcon size={16} weight="bold" />
             Add leg
           </Button>
         )}
       </div>
 
-      {error && (
+      {!deferred && error && (
         <ServerError
           message={
             error instanceof Error ? error.message : "Failed to load transport legs"
@@ -146,7 +205,7 @@ export function TransportLegsEditor({
       )}
 
       {/* Table */}
-      {isLoading ? (
+      {!deferred && isLoading ? (
         <TableSkeleton columns={readOnly ? 4 : 5} rows={2} />
       ) : !hasLegs && !inlineForm.open ? (
         <p className="body-small text-[var(--color-text-tertiary)] py-16">
@@ -178,9 +237,9 @@ export function TransportLegsEditor({
               </tr>
             </thead>
             <tbody>
-              {legs!.map((leg) => (
+              {displayedLegs.map((leg, index) => (
                 <tr
-                  key={leg.id}
+                  key={isSavedTransportLeg(leg) ? leg.id : `deferred-${index}`}
                   className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-background-medium)]"
                 >
                   <td className="py-8 pr-12 text-[var(--color-text-primary)]">
@@ -190,11 +249,15 @@ export function TransportLegsEditor({
                   </td>
                   <td className="py-8 pr-12">
                     {leg.distanceKm} km
-                    {leg.distanceSource && (
+                    {leg.distanceSource ? (
                       <span className="text-[var(--color-text-tertiary)]">
                         {" "}· {DISTANCE_SOURCE_LABELS[leg.distanceSource]}
                       </span>
-                    )}
+                    ) : deferred ? (
+                      <span className="text-[var(--color-text-tertiary)]">
+                        {" "}· —
+                      </span>
+                    ) : null}
                   </td>
                   <td className="py-8 pr-12">{formatMethod(leg.transportMethodType)}</td>
                   <td className="py-8 pr-12">
@@ -204,18 +267,28 @@ export function TransportLegsEditor({
                     <td className="py-8 text-right">
                       <div className="flex items-center justify-end gap-4">
                         <Button
+                          type="button"
                           variant="noOutline"
                           size="icon"
-                          onClick={() => openEdit(leg)}
+                          onClick={() =>
+                            openEdit(leg, deferred ? index : undefined)
+                          }
                           aria-label="Edit transport leg"
                           disabled={inlineForm.open}
                         >
                           <PencilIcon size={16} />
                         </Button>
                         <Button
+                          type="button"
                           variant="destructive"
                           size="icon"
-                          onClick={() => setDeletingId(leg.id)}
+                          onClick={() =>
+                            setDeleteTarget(
+                              isSavedTransportLeg(leg)
+                                ? { savedId: leg.id }
+                                : { deferredIndex: index },
+                            )
+                          }
                           aria-label="Delete transport leg"
                           disabled={inlineForm.open}
                         >
@@ -243,11 +316,18 @@ export function TransportLegsEditor({
             </div>
           )}
           <TransportLegForm
-            key={inlineForm.leg?.id ?? "create"}
+            key={
+              inlineForm.leg && isSavedTransportLeg(inlineForm.leg)
+                ? inlineForm.leg.id
+                : inlineForm.deferredIndex !== undefined
+                  ? `deferred-${inlineForm.deferredIndex}`
+                  : "create"
+            }
             leg={inlineForm.leg}
             onSubmit={handleSubmit}
             onCancel={closeForm}
             isSubmitting={isSubmitting}
+            embedded={deferred}
           />
         </div>
       )}
@@ -257,12 +337,12 @@ export function TransportLegsEditor({
         <>
           {deleteError && <ServerError message={deleteError} />}
           <DeleteConfirmDialog
-            isOpen={!!deletingId}
+            isOpen={deleteTarget !== null}
             title="Delete transport leg"
             message="This transport leg will be permanently removed. This cannot be undone."
             onConfirm={handleDeleteConfirm}
             onCancel={() => {
-              setDeletingId(null);
+              setDeleteTarget(null);
               setDeleteError(null);
             }}
             isPending={deleteMutation.isPending}
