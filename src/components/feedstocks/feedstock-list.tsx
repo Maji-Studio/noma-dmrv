@@ -239,9 +239,12 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         throw new Error("Feedstock creation returned no feedstock");
       }
       setIsFlushing(true);
-      const flushResult = await deferredAttachments.flush(
+      // A multi-bin split creates one feedstock row per bin, each with its own
+      // auto-derived transport leg — so the held BoL/weighbridge evidence must
+      // attach to every row, not just the first, or rows 2..n ship without it.
+      const flushResult = await deferredAttachments.flushMany(
         "feedstock",
-        createdFeedstock.id,
+        result.feedstocks.map((feedstock) => feedstock.id),
       );
       if (!flushResult.ok) {
         setSideSheet({ entity: createdFeedstock, mode: "edit" });
