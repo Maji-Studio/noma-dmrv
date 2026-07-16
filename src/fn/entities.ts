@@ -27,12 +27,28 @@ const entityTypeSchema = z.string().refine(
   { message: "Invalid entity type" },
 );
 
-const searchEntitiesSchema = z.object({
-  entityType: entityTypeSchema,
-  search: z.string().optional(),
-  filterBy: z.record(z.string(), z.string()).optional(),
-  limit: z.number().int().positive().max(MAX_SEARCH_LIMIT).optional(),
-});
+const searchEntitiesSchema = z
+  .object({
+    entityType: entityTypeSchema,
+    search: z.string().optional(),
+    filterBy: z.record(z.string(), z.string()).optional(),
+    limit: z.number().int().positive().max(MAX_SEARCH_LIMIT).optional(),
+  })
+  .superRefine((data, ctx) => {
+    // filterBy is a free-form record; facilityId feeds the org-scope guard
+    // and uuid-typed query filters, so a blank/malformed value must be a
+    // validation error rather than silently degrading to an unfiltered read.
+    if (
+      data.filterBy?.facilityId !== undefined &&
+      !z.uuid().safeParse(data.filterBy.facilityId).success
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["filterBy", "facilityId"],
+        message: "facilityId filter must be a UUID",
+      });
+    }
+  });
 
 /**
  * Search entities by type with optional filters
