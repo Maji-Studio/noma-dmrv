@@ -18,6 +18,13 @@ interface EvidenceExif {
   gpsLongitude?: number;
 }
 
+/**
+ * Abort a stalled PUT so it cannot hang forever — an open request keeps the
+ * caller's `isFlushing` guard latched and traps the user behind the side-sheet
+ * close guard. Generous because evidence PDFs can be several MB on slow links.
+ */
+const UPLOAD_TIMEOUT_MS = 120_000;
+
 export type UploadState =
   | { status: "idle" }
   | { status: "uploading"; progress: number }
@@ -71,6 +78,7 @@ function putWithProgress(
     }
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url, true);
+    xhr.timeout = UPLOAD_TIMEOUT_MS;
     for (const [k, v] of Object.entries(headers)) {
       xhr.setRequestHeader(k, v);
     }
@@ -87,6 +95,12 @@ function putWithProgress(
       reject(
         new Error(
           `Upload network error — could not reach ${safeHost(url)}. Check your connection and retry.`,
+        ),
+      );
+    xhr.ontimeout = () =>
+      reject(
+        new Error(
+          `Upload timed out after ${UPLOAD_TIMEOUT_MS / 1000}s reaching ${safeHost(url)}. Check your connection and retry.`,
         ),
       );
     xhr.onabort = () => reject(new Error("Upload aborted"));
