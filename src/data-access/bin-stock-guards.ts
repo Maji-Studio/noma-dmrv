@@ -42,6 +42,14 @@ const BIN_STOCK_LOCK_SCOPE = "bin-stock";
  */
 const STOCK_OVERDRAW_EPSILON_KG = 1e-6;
 
+/** SafeError subtype so server actions can attach field-level metadata. */
+export class StockOverdrawError extends SafeError {
+  constructor(message: string) {
+    super(message);
+    this.name = "StockOverdrawError";
+  }
+}
+
 /**
  * Serialize every stock read-modify-write for one physical bin. All withdrawal
  * guards and reconciliation movements use this same key, so a stock-take can
@@ -79,9 +87,9 @@ export function overdrawError(
   material: string,
   availableKg: number,
   requestedKg: number,
-): SafeError {
+): StockOverdrawError {
   const available = formatKg(availableKg);
-  return new SafeError(
+  return new StockOverdrawError(
     `Not enough ${material} in this bin — ${available} available but this draw needs ${formatKg(
       requestedKg,
     )}. Reconcile the bin's stock (Storage locations → the bin → Reconcile stock), then try again.`,

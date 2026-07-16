@@ -409,7 +409,10 @@ export function DeliveryList() {
                   title: "Mass",
                   fields: [
                     {
-                      label: "Delivered Wet Mass",
+                      label:
+                        sideSheetEntity.status === "delivered"
+                          ? "Delivered Wet Mass"
+                          : "Planned Wet Mass",
                       ...certificationDetailField("delivery", "deliveredWetMassKg"),
                       value:
                         sideSheetEntity.deliveredWetMassKg != null

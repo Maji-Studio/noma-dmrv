@@ -26,6 +26,7 @@ export type EntityReadinessRecord = object;
 const TERMINAL_STATUS_BY_ENTITY: Partial<Record<CertifyEntityKind, string[]>> = {
   productionRun: ["complete"],
   feedstock: ["complete"],
+  delivery: ["delivered"],
 };
 
 const TELEMETRY_GAP: EntityCertifyGap = {

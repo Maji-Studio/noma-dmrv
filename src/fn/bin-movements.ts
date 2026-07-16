@@ -25,7 +25,12 @@ import {
   recordStockTakeSchema,
 } from "@/schemas/bin-movements";
 import type { ActionResult } from "@/types/actions";
+import { StockOverdrawError } from "@/data-access/bin-stock-guards";
 import { toLoggedActionError } from "./action-errors";
+
+export type RecordLossActionResult =
+  | { success: true; data: BinMovement }
+  | { success: false; error: string; field?: "lossMassKg" };
 
 function binMovementActionError(
   error: unknown,
@@ -110,7 +115,7 @@ export async function recordStockTakeFn(
 
 export async function recordLossFn(
   data: z.infer<typeof recordLossSchema>
-): Promise<ActionResult<BinMovement>> {
+): Promise<RecordLossActionResult> {
   try {
     const ctx = await requireOrgContext();
 
@@ -132,6 +137,9 @@ export async function recordLossFn(
         success: false,
         error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
       };
+    }
+    if (error instanceof StockOverdrawError) {
+      return { success: false, error: error.message, field: "lossMassKg" };
     }
     return {
       success: false,
