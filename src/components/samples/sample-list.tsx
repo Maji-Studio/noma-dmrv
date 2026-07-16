@@ -18,6 +18,8 @@ import {
 } from "@/hooks/use-samples";
 import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
+import { useCreateTransportLeg } from "@/hooks/use-transport-legs";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
@@ -37,6 +39,7 @@ import {
   type SampleFilterData,
 } from "@/schemas/samples";
 import type { SampleWithRelations } from "@/data-access/samples";
+import type { TransportLegFormData } from "@/schemas/transport-legs";
 import { SampleDocumentsPanel } from "./sample-documents-panel";
 
 const READINESS_PREVIEW_LIMIT = 3;
@@ -201,6 +204,10 @@ export function SampleList() {
   const updateSample = useUpdateSample();
   const deleteSample = useDeleteSample();
   const toast = useToast();
+  const deferredAttachments = useDeferredAttachments();
+  const createTransportLeg = useCreateTransportLeg();
+  const [deferredLegs, setDeferredLegs] = useState<TransportLegFormData[]>([]);
+  const [isFlushing, setIsFlushing] = useState(false);
 
   const samples = samplesData?.items ?? [];
   const totalPages = samplesData?.totalPages ?? 0;
@@ -242,21 +249,89 @@ export function SampleList() {
     setFormError(null);
     try {
       const sample = await createSample.mutateAsync(data);
+      setIsFlushing(true);
+      const attachmentResult = await deferredAttachments.flush("sample", sample.id);
+      const failedLegs: TransportLegFormData[] = [];
+      for (const leg of deferredLegs) {
+        try {
+          await createTransportLeg.mutateAsync({
+            ...leg,
+            entityType: "sample",
+            entityId: sample.id,
+          });
+        } catch {
+          failedLegs.push(leg);
+        }
+      }
+      setDeferredLegs(failedLegs);
+
+      const failedCount = attachmentResult.failed.length + failedLegs.length;
+      if (failedCount > 0) {
+        setSideSheet({ mode: "edit", entity: sample });
+        setFormError(
+          `Sample created, but ${failedCount} ${failedCount === 1 ? "attachment" : "attachments"} failed to save.`,
+        );
+        return;
+      }
+
+      deferredAttachments.clear();
       setSideSheet(null);
       showSavedToast("Sample created successfully", sample);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to create sample");
+    } finally {
+      setIsFlushing(false);
+    }
+  };
+
+  const retryDeferredLegs = async () => {
+    if (sideSheet?.mode !== "edit" || deferredLegs.length === 0) return;
+    setIsFlushing(true);
+    const failedLegs: TransportLegFormData[] = [];
+    try {
+      for (const leg of deferredLegs) {
+        try {
+          await createTransportLeg.mutateAsync({
+            ...leg,
+            entityType: "sample",
+            entityId: sideSheet.entity.id,
+          });
+        } catch {
+          failedLegs.push(leg);
+        }
+      }
+      setDeferredLegs(failedLegs);
+      setFormError(
+        failedLegs.length > 0
+          ? `Sample was saved, but ${failedLegs.length} transport ${failedLegs.length === 1 ? "leg" : "legs"} still failed to save.`
+          : null,
+      );
+    } finally {
+      setIsFlushing(false);
     }
   };
 
   const handleUpdate = async (data: SampleFormData) => {
     if (sideSheet?.mode !== "edit") return;
     setFormError(null);
+    if (
+      deferredLegs.length > 0 ||
+      deferredAttachments.attachments.some(
+        (attachment) => attachment.status === "failed",
+      )
+    ) {
+      setFormError(
+        "Resolve or remove the failed attachments and transport legs before saving this sample.",
+      );
+      return;
+    }
     try {
       const sample = await updateSample.mutateAsync({
         sampleId: sideSheet.entity.id,
         ...data,
       });
+      deferredAttachments.clear();
+      setDeferredLegs([]);
       setSideSheet(null);
       showSavedToast("Sample updated successfully", sample);
     } catch (error) {
@@ -283,6 +358,8 @@ export function SampleList() {
   const openCreate = () => {
     setFocusedSampleId(null);
     setFormError(null);
+    deferredAttachments.clear();
+    setDeferredLegs([]);
     setSideSheet({ mode: "create", entity: null });
   };
   const openView = (sample: SampleWithRelations) => {
@@ -298,6 +375,20 @@ export function SampleList() {
     setFocusedSampleId(null);
     setSideSheet(null);
     setFormError(null);
+    deferredAttachments.clear();
+    setDeferredLegs([]);
+  };
+
+  const unsavedAttachmentCount =
+    deferredAttachments.attachments.filter(
+      (attachment) => attachment.status !== "uploaded",
+    ).length + deferredLegs.length;
+  const confirmCreateClose = () =>
+    displaySideSheet?.mode !== "create" ||
+    unsavedAttachmentCount === 0 ||
+    window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`);
+  const attemptCloseSideSheet = () => {
+    if (confirmCreateClose()) closeSideSheet();
   };
 
   const handleModeChange = (mode: SideSheetMode) => {
@@ -315,7 +406,8 @@ export function SampleList() {
 
   const editingEntity =
     displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
-  const isSubmitting = createSample.isPending || updateSample.isPending;
+  const isSubmitting =
+    createSample.isPending || updateSample.isPending || isFlushing;
 
   const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
@@ -450,6 +542,7 @@ export function SampleList() {
       <EntitySideSheet
         open={!!displaySideSheet}
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}
+        onCloseAttempt={confirmCreateClose}
         mode={displaySideSheet?.mode ?? "create"}
         onModeChange={handleModeChange}
         title={displaySideSheet?.mode === "create" ? "Create Sample" : (displaySideSheet?.entity?.sampleCode ?? "")}
@@ -537,9 +630,13 @@ export function SampleList() {
           key={editingEntity?.id ?? "create"}
           sample={editingEntity ?? undefined}
           onSubmit={displaySideSheet?.mode === "edit" ? handleUpdate : handleCreate}
-          onCancel={closeSideSheet}
+          onCancel={attemptCloseSideSheet}
           isSubmitting={isSubmitting}
           submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Sample"}
+          deferredAttachments={deferredAttachments}
+          deferredLegs={deferredLegs}
+          onDeferredLegsChange={setDeferredLegs}
+          onRetryDeferredLegs={retryDeferredLegs}
         />
       </EntitySideSheet>
     </div>

@@ -17,6 +17,7 @@ import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
@@ -225,12 +226,31 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const updateFeedstock = useUpdateFeedstock();
   const deleteFeedstock = useDeleteFeedstock();
   const toast = useToast();
+  const deferredAttachments = useDeferredAttachments();
+  const [isFlushing, setIsFlushing] = useState(false);
 
   // Handlers
   const handleCreate = async (data: FeedstockFormData) => {
     setCreateError(null);
     try {
       const result = await createFeedstock.mutateAsync(data);
+      const createdFeedstock = result.feedstocks[0];
+      if (!createdFeedstock) {
+        throw new Error("Feedstock creation returned no feedstock");
+      }
+      setIsFlushing(true);
+      const flushResult = await deferredAttachments.flush(
+        "feedstock",
+        createdFeedstock.id,
+      );
+      if (!flushResult.ok) {
+        setSideSheet({ entity: createdFeedstock, mode: "edit" });
+        setCreateError(
+          `Feedstock created, but ${flushResult.failed.length} ${flushResult.failed.length === 1 ? "attachment" : "attachments"} failed to upload.`,
+        );
+        return;
+      }
+      deferredAttachments.clear();
       setSideSheet(null);
       const transferMessage = buildFeedstockTransferToast(result.feedstocks);
       const msg = result.warning
@@ -239,12 +259,24 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       toast.success(msg);
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Failed to create feedstock");
+    } finally {
+      setIsFlushing(false);
     }
   };
 
   const handleUpdate = async (data: FeedstockFormData) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
+    if (
+      deferredAttachments.attachments.some(
+        (attachment) => attachment.status === "failed",
+      )
+    ) {
+      setUpdateError(
+        "Resolve or remove the failed attachments before saving this feedstock.",
+      );
+      return;
+    }
     try {
       await updateFeedstock.mutateAsync({
         feedstockId: sideSheet.entity.id,
@@ -266,6 +298,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         overrideJustification: data.overrideJustification || null,
         notes: data.notes || null,
       });
+      deferredAttachments.clear();
       setSideSheet(null);
       toast.success("Feedstock updated successfully");
     } catch (error) {
@@ -291,6 +324,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     setFocusedFeedstockId(null);
     setCreateError(null);
     setUpdateError(null);
+    deferredAttachments.clear();
     setSideSheet({ entity: null, mode: "create" });
   };
   const openView = (feedstock: FeedstockWithRelations) => {
@@ -303,6 +337,18 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
+    deferredAttachments.clear();
+  };
+
+  const unsavedAttachmentCount = deferredAttachments.attachments.filter(
+    (attachment) => attachment.status !== "uploaded",
+  ).length;
+  const confirmCreateClose = () =>
+    displaySideSheet?.mode !== "create" ||
+    unsavedAttachmentCount === 0 ||
+    window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`);
+  const attemptCloseSideSheet = () => {
+    if (confirmCreateClose()) closeSideSheet();
   };
   useOpenCreateIntent(openCreate);
 
@@ -436,6 +482,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       <EntitySideSheet
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
+        onCloseAttempt={confirmCreateClose}
         mode={sideSheetMode}
         onModeChange={(mode) =>
           sideSheetEntity
@@ -518,10 +565,11 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           key={sideSheetEntity?.id ?? "create"}
           feedstock={sideSheetEntity ?? undefined}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
-          onCancel={closeSideSheet}
-          isSubmitting={createFeedstock.isPending || updateFeedstock.isPending}
+          onCancel={attemptCloseSideSheet}
+          isSubmitting={createFeedstock.isPending || updateFeedstock.isPending || isFlushing}
           submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Feedstock"}
           serverError={createError || updateError || undefined}
+          deferredAttachments={deferredAttachments}
         />
       </EntitySideSheet>
     </div>

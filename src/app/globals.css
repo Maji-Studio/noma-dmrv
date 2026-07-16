@@ -174,6 +174,9 @@
   --color-status-success: var(--st-ok);
   --color-status-success-bg: rgba(23, 116, 74, 0.1);
   --color-status-success-border: rgba(23, 116, 74, 0.4);
+  /* Several components already reference this token; it was never defined,
+     so error text silently inherited its parent color. */
+  --color-status-error: var(--color-signal-red);
 
   /* ===== BLACK & WHITE OPACITY VARIANTS ===== */
   --color-black-100: #000000ff;

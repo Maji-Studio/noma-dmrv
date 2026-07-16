@@ -34,6 +34,7 @@ import {
   type SoilTemperatureSource,
 } from "@/schemas/applications";
 import type { Application } from "@/db/schema/application";
+import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { DurabilityOption } from "@/schemas/credit-batches";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import {
@@ -199,6 +200,7 @@ interface ApplicationFormProps {
    * might need.
    */
   durabilityOption?: DurabilityOption;
+  deferredAttachments?: UseDeferredAttachmentsResult;
 }
 
 export function ApplicationForm({
@@ -209,6 +211,7 @@ export function ApplicationForm({
   isSubmitting = false,
   submitLabel,
   durabilityOption = "200_year",
+  deferredAttachments,
 }: ApplicationFormProps) {
   const isEditMode = !!application;
   // Soil temperature feeds only the 200-year durable fraction; 1000-year
@@ -653,6 +656,7 @@ export function ApplicationForm({
           applicationId={application?.id}
           mode={evidenceMethod ?? "visual"}
           disabled={isSubmitting}
+          deferredAttachments={deferredAttachments}
         />
       </FormSection>
 

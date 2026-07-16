@@ -400,6 +400,7 @@ export function FormFileUpload({
                   </span>
                 )}
               <Button
+                type="button"
                 variant="noOutline"
                 size="icon"
                 onClick={() => removeUpload(u.tempKey)}
@@ -432,6 +433,7 @@ export function FormFileUpload({
                 {formatFileSize(file.size)}
               </span>
               <Button
+                type="button"
                 variant="noOutline"
                 size="icon"
                 disabled={disabled}

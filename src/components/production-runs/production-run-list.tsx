@@ -27,6 +27,7 @@ import {
   useProductionRunStats,
 } from "@/hooks/use-production-runs";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -213,6 +214,8 @@ export function ProductionRunList() {
   const updateRun = useUpdateProductionRun();
   const deleteRun = useDeleteProductionRun();
   const toast = useToast();
+  const deferredAttachments = useDeferredAttachments();
+  const [isFlushing, setIsFlushing] = useState(false);
 
   const runs = runsData?.items ?? [];
   const totalPages = runsData?.totalPages ?? 0;
@@ -237,6 +240,19 @@ export function ProductionRunList() {
     setCreateError(null);
     try {
       const run = await createRun.mutateAsync(data as ProductionRunFormData);
+      setIsFlushing(true);
+      const flushResult = await deferredAttachments.flush(
+        "production_run",
+        run.id,
+      );
+      if (!flushResult.ok) {
+        setSideSheet({ entity: run, mode: "edit" });
+        setCreateError(
+          `Production run created, but ${flushResult.failed.length} ${flushResult.failed.length === 1 ? "attachment" : "attachments"} failed to upload.`,
+        );
+        return;
+      }
+      deferredAttachments.clear();
       setSideSheet(null);
       showSavedToast("Production run created successfully", run);
     } catch (error) {
@@ -244,12 +260,24 @@ export function ProductionRunList() {
       // with a link to the conflicting run); show other errors as a banner.
       if (getRunConflict(error)) throw error;
       setCreateError(error instanceof Error ? error.message : "Failed to create production run");
+    } finally {
+      setIsFlushing(false);
     }
   };
 
   const handleUpdate = async (data: ProductionRunSubmitData) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
+    if (
+      deferredAttachments.attachments.some(
+        (attachment) => attachment.status === "failed",
+      )
+    ) {
+      setUpdateError(
+        "Resolve or remove the failed readings file before saving this production run.",
+      );
+      return;
+    }
     try {
       const { startTime, endTime } = data;
       const run = await updateRun.mutateAsync({
@@ -267,6 +295,7 @@ export function ProductionRunList() {
                 ? endTime
                 : new Date(endTime),
       });
+      deferredAttachments.clear();
       setSideSheet(null);
       showSavedToast("Production run updated successfully", run);
     } catch (error) {
@@ -292,10 +321,22 @@ export function ProductionRunList() {
     }
   };
 
-  const openCreate = () => { setFocusedRunId(null); setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
+  const openCreate = () => {
+    setFocusedRunId(null);
+    setCreateError(null);
+    setUpdateError(null);
+    deferredAttachments.clear();
+    setSideSheet({ entity: null, mode: "create" });
+  };
   const openView = (run: ProductionRunWithRelations) => { setFocusedRunId(run.id); setSideSheet({ entity: run, mode: "view" }); };
   const openEdit = (run: ProductionRunWithRelations) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: run, mode: "edit" }); };
-  const closeSideSheet = () => { setFocusedRunId(null); setSideSheet(null); setCreateError(null); setUpdateError(null); };
+  const closeSideSheet = () => {
+    setFocusedRunId(null);
+    setSideSheet(null);
+    setCreateError(null);
+    setUpdateError(null);
+    deferredAttachments.clear();
+  };
   useOpenCreateIntent(openCreate);
 
   const clearFilters = () => { setSearchQuery(""); setStatusFilter(""); setCurrentPage(1); };
@@ -343,6 +384,17 @@ export function ProductionRunList() {
       ? ({ entity: focusedRun.data, mode: "view" } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+
+  const unsavedAttachmentCount = deferredAttachments.attachments.filter(
+    (attachment) => attachment.status !== "uploaded",
+  ).length;
+  const confirmCreateClose = () =>
+    displaySideSheet?.mode !== "create" ||
+    unsavedAttachmentCount === 0 ||
+    window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`);
+  const attemptCloseSideSheet = () => {
+    if (confirmCreateClose()) closeSideSheet();
+  };
 
   const handleModeChange = (mode: SideSheetMode) => {
     if (!displaySideSheet?.entity) return;
@@ -492,6 +544,7 @@ export function ProductionRunList() {
       <EntitySideSheet
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
+        onCloseAttempt={confirmCreateClose}
         mode={sideSheetMode}
         onModeChange={handleModeChange}
         title={sideSheetTitle}
@@ -586,9 +639,10 @@ export function ProductionRunList() {
           key={sideSheetEntity?.id ?? "create"}
           productionRun={sideSheetEntity ?? undefined}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
-          onCancel={closeSideSheet}
-          isSubmitting={createRun.isPending || updateRun.isPending}
+          onCancel={attemptCloseSideSheet}
+          isSubmitting={createRun.isPending || updateRun.isPending || isFlushing}
           submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Production Run"}
+          deferredAttachments={deferredAttachments}
         >
           {sideSheetEntity && sideSheetMode === "edit" ? (
             <>

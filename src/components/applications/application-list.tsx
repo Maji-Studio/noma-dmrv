@@ -18,6 +18,7 @@ import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
 import { ApplicationForm } from "./application-form";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import {
@@ -214,32 +215,66 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const updateApplication = useUpdateApplication();
   const deleteApplication = useDeleteApplication();
   const toast = useToast();
+  const deferredAttachments = useDeferredAttachments();
+  const [isFlushing, setIsFlushing] = useState(false);
 
   // Handlers
   const handleCreate = async (data: ApplicationFormData) => {
     setCreateError(null);
     try {
       const result = await createApplication.mutateAsync(data);
-      if (result.success) {
-        setSideSheet(null);
-        toast.success("Application created successfully");
-      } else {
+      if (result.success === false) {
         setCreateError(result.error || "Failed to create application");
+        return;
       }
+      const createdApplication: ApplicationListItem = {
+        ...result.data,
+        customerName: null,
+        locationName: null,
+        durabilityOption,
+      };
+      setIsFlushing(true);
+      const flushResult = await deferredAttachments.flush(
+        "application",
+        createdApplication.id,
+      );
+      if (!flushResult.ok) {
+        setSideSheet({ entity: createdApplication, mode: "edit" });
+        setCreateError(
+          `Application created, but ${flushResult.failed.length} ${flushResult.failed.length === 1 ? "attachment" : "attachments"} failed to upload.`,
+        );
+        return;
+      }
+      deferredAttachments.clear();
+      setSideSheet(null);
+      toast.success("Application created successfully");
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Failed to create application");
+    } finally {
+      setIsFlushing(false);
     }
   };
 
   const handleUpdate = async (data: ApplicationFormData) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
+    if (
+      deferredAttachments.attachments.some(
+        (attachment) => attachment.status === "failed",
+      )
+    ) {
+      setUpdateError(
+        "Resolve or remove the failed attachments before saving this application.",
+      );
+      return;
+    }
     try {
       const result = await updateApplication.mutateAsync({
         applicationId: sideSheet.entity.id,
         ...data,
       });
       if (result.success) {
+        deferredAttachments.clear();
         setSideSheet(null);
         toast.success("Application updated successfully");
       } else {
@@ -270,10 +305,31 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     }
   };
 
-  const openCreate = () => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
+  const openCreate = () => {
+    setCreateError(null);
+    setUpdateError(null);
+    deferredAttachments.clear();
+    setSideSheet({ entity: null, mode: "create" });
+  };
   const openView = (application: ApplicationListItem) => { setSideSheet({ entity: application, mode: "view" }); };
   const openEdit = (application: ApplicationListItem) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: application, mode: "edit" }); };
-  const closeSideSheet = () => { setSideSheet(null); setCreateError(null); setUpdateError(null); };
+  const closeSideSheet = () => {
+    setSideSheet(null);
+    setCreateError(null);
+    setUpdateError(null);
+    deferredAttachments.clear();
+  };
+
+  const unsavedAttachmentCount = deferredAttachments.attachments.filter(
+    (attachment) => attachment.status !== "uploaded",
+  ).length;
+  const confirmCreateClose = () =>
+    sideSheet?.mode !== "create" ||
+    unsavedAttachmentCount === 0 ||
+    window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`);
+  const attemptCloseSideSheet = () => {
+    if (confirmCreateClose()) closeSideSheet();
+  };
 
   // Memoize columns
   const columns = createColumns(openEdit, handleDelete);
@@ -452,6 +508,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       <EntitySideSheet
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
+        onCloseAttempt={confirmCreateClose}
         mode={sideSheetMode}
         onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
         title={sideSheetTitle}
@@ -556,8 +613,9 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           deliveries={deliveryOptions}
           durabilityOption={durabilityOption}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
-          onCancel={closeSideSheet}
-          isSubmitting={createApplication.isPending || updateApplication.isPending}
+          onCancel={attemptCloseSideSheet}
+          isSubmitting={createApplication.isPending || updateApplication.isPending || isFlushing}
+          deferredAttachments={deferredAttachments}
         />
       </EntitySideSheet>
     </div>

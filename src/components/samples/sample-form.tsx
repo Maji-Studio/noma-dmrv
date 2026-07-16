@@ -50,6 +50,8 @@ import {
   SampleTransportSection,
 } from "./sample-trailing-sections";
 import type { SampleWithRelations } from "@/data-access/samples";
+import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import type { TransportLegFormData } from "@/schemas/transport-legs";
 
 // ============================================
 // Constants
@@ -77,6 +79,10 @@ interface SampleFormProps {
   isSubmitting?: boolean;
   /** Custom label for the submit button */
   submitLabel?: string;
+  deferredAttachments?: UseDeferredAttachmentsResult;
+  deferredLegs?: TransportLegFormData[];
+  onDeferredLegsChange?: (legs: TransportLegFormData[]) => void;
+  onRetryDeferredLegs?: () => Promise<void>;
 }
 
 export function SampleForm({
@@ -86,6 +92,10 @@ export function SampleForm({
   onCancel,
   isSubmitting = false,
   submitLabel,
+  deferredAttachments,
+  deferredLegs,
+  onDeferredLegsChange,
+  onRetryDeferredLegs,
 }: SampleFormProps) {
   const formId = useId();
   const isEditMode = !!sample;
@@ -916,8 +926,20 @@ export function SampleForm({
 
       {/* ── Trailing field-less steps — outside the <form> (their editors nest
              their own forms), numbered by the spine as the final two steps. ── */}
-      <SampleEvidenceSection sample={sample} isEditMode={isEditMode} />
-      <SampleTransportSection sample={sample} isEditMode={isEditMode} />
+      <SampleEvidenceSection
+        sample={sample}
+        isEditMode={isEditMode}
+        deferredAttachments={deferredAttachments}
+        isSubmitting={isSubmitting}
+      />
+      <SampleTransportSection
+        sample={sample}
+        isEditMode={isEditMode}
+        deferredLegs={deferredLegs}
+        onDeferredLegsChange={onDeferredLegsChange}
+        onRetryLegs={onRetryDeferredLegs}
+        isSubmitting={isSubmitting}
+      />
       </FormSpine>
 
       <FormActions
