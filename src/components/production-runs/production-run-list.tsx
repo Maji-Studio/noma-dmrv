@@ -418,10 +418,16 @@ export function ProductionRunList() {
   const unsavedAttachmentCount = deferredAttachments.attachments.filter(
     (attachment) => attachment.status !== "uploaded",
   ).length;
-  const confirmCreateClose = () =>
-    displaySideSheet?.mode !== "create" ||
-    unsavedAttachmentCount === 0 ||
-    window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`);
+  const confirmCreateClose = () => {
+    // An in-flight flush is mid-write; blocking Escape/backdrop/X keeps the
+    // completion handler from mutating a discarded-then-reopened form.
+    if (isFlushing) return false;
+    return (
+      displaySideSheet?.mode !== "create" ||
+      unsavedAttachmentCount === 0 ||
+      window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`)
+    );
+  };
   const attemptCloseSideSheet = () => {
     if (confirmCreateClose()) closeSideSheet();
   };

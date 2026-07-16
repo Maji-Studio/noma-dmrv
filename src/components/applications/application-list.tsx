@@ -323,10 +323,16 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const unsavedAttachmentCount = deferredAttachments.attachments.filter(
     (attachment) => attachment.status !== "uploaded",
   ).length;
-  const confirmCreateClose = () =>
-    sideSheet?.mode !== "create" ||
-    unsavedAttachmentCount === 0 ||
-    window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`);
+  const confirmCreateClose = () => {
+    // An in-flight flush is mid-write; blocking Escape/backdrop/X keeps the
+    // completion handler from mutating a discarded-then-reopened form.
+    if (isFlushing) return false;
+    return (
+      sideSheet?.mode !== "create" ||
+      unsavedAttachmentCount === 0 ||
+      window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`)
+    );
+  };
   const attemptCloseSideSheet = () => {
     if (confirmCreateClose()) closeSideSheet();
   };
