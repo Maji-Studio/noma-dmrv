@@ -508,6 +508,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
               <TransportEvidencePanel
                 entityType="feedstock"
                 entityId={sideSheetEntity.id}
+                readOnly
               />
             </>
           ) : null

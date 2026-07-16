@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useForm, useWatch, useFieldArray, type FieldError } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowCounterClockwiseIcon, CalendarIcon, MapPinIcon, NoteIcon, PlantIcon, PlusIcon, StackIcon } from "@phosphor-icons/react";
@@ -32,6 +32,7 @@ import { FeedstockTypeQuickAddDialog } from "@/components/forms/entity-select/fe
 import { StorageLocationQuickAddDialog } from "@/components/forms/entity-select/storage-location-quick-add-dialog";
 import { useQuickAddDialog } from "@/components/forms/entity-select";
 import { BinAllocationRow } from "./bin-allocation-row";
+import { FeedstockEvidenceSection } from "./feedstock-trailing-sections";
 import { WetMassWarning } from "./wet-mass-warning";
 import { FEEDSTOCK_BIN_TYPES } from "@/schemas/storage-locations";
 
@@ -65,6 +66,7 @@ export function FeedstockForm({
   serverError,
 }: FeedstockFormProps) {
   const isEditMode = !!feedstock;
+  const formId = useId();
   const { facilityId: contextFacilityId } = useFacilityContext();
 
   // Quick-add dialogs
@@ -253,8 +255,11 @@ export function FeedstockForm({
 
   return (
     <>
-      <form onSubmit={handleFormSubmit} className="space-y-20">
-        <FormSpine control={control}>
+      {/* The wrapper div absorbs the side-sheet Body's direct-child flex-col
+          override so the sticky CTA row keeps its own layout (see sample-form). */}
+      <div className="space-y-20">
+      <FormSpine control={control}>
+        <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
         {/* Delivery Information */}
         <FormSection
           title="Delivery Information"
@@ -561,22 +566,29 @@ export function FeedstockForm({
             </FormField>
           </div>
         </FormSection>
-        </FormSpine>
 
         {/* Server Error */}
         {serverError && <ServerError message={serverError} />}
+        </form>
 
-        <FormActions
-          onCancel={onCancel}
-          isSubmitting={isSubmitting}
-          submitLabel={submitLabel}
-          defaultSubmitLabel={defaultSubmitLabel}
-          // The update path rebuilds the derived transport leg from the
-          // submitted values, so saving before the saved leg has prefilled
-          // trip type/distance would silently reset them to defaults.
-          submitDisabled={isEditMode && existingLegs === undefined}
+        <FeedstockEvidenceSection
+          feedstock={feedstock}
+          isEditMode={isEditMode}
         />
-      </form>
+      </FormSpine>
+
+      <FormActions
+        formId={formId}
+        onCancel={onCancel}
+        isSubmitting={isSubmitting}
+        submitLabel={submitLabel}
+        defaultSubmitLabel={defaultSubmitLabel}
+        // The update path rebuilds the derived transport leg from the
+        // submitted values, so saving before the saved leg has prefilled
+        // trip type/distance would silently reset them to defaults.
+        submitDisabled={isEditMode && existingLegs === undefined}
+      />
+      </div>
 
       {/* Quick-add dialogs */}
       <VehicleQuickAddDialog

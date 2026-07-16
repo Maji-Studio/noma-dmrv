@@ -37,6 +37,7 @@ import {
   type SampleFilterData,
 } from "@/schemas/samples";
 import type { SampleWithRelations } from "@/data-access/samples";
+import { SampleDocumentsPanel } from "./sample-documents-panel";
 
 const READINESS_PREVIEW_LIMIT = 3;
 
@@ -513,10 +514,21 @@ export function SampleList() {
         ] : undefined}
         viewModeChildren={
           displaySideSheet?.mode === "view" && displaySideSheet.entity ? (
-            <TransportLegsSummary
-              entityType="sample"
-              entityId={displaySideSheet.entity.id}
-            />
+            <>
+              <TransportLegsSummary
+                entityType="sample"
+                entityId={displaySideSheet.entity.id}
+              />
+              <section className="space-y-16 border-t border-[var(--color-border-tertiary)] pt-16">
+                <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+                  Evidence &amp; Documents
+                </h3>
+                <SampleDocumentsPanel
+                  sampleId={displaySideSheet.entity.id}
+                  readOnly
+                />
+              </section>
+            </>
           ) : null
         }
       >

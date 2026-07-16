@@ -45,6 +45,7 @@ import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
 import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
 import { ProductionIncidentTable } from "./production-incident-table";
+import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { ProductionSampleTable } from "./production-sample-table";
 import {
   type ProductionRunFormData,
@@ -500,6 +501,10 @@ export function ProductionRunList() {
         viewModeChildren={sideSheetEntity ? (
           <>
             <ProductionRunReadingTable
+              productionRunId={sideSheetEntity.id}
+              readOnly
+            />
+            <ProductionReadingsDocuments
               productionRunId={sideSheetEntity.id}
               readOnly
             />

@@ -441,6 +441,7 @@ export function DeliveryList() {
             <TransportEvidencePanel
               entityType="delivery"
               entityId={sideSheetEntity.id}
+              readOnly
             />
           ) : null
         }
