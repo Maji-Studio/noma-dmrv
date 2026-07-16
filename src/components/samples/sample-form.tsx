@@ -80,6 +80,8 @@ interface SampleFormProps {
   /** Custom label for the submit button */
   submitLabel?: string;
   deferredAttachments?: UseDeferredAttachmentsResult;
+  onRetryDeferredAttachments?: (key?: string) => Promise<unknown>;
+  onRemoveDeferredAttachment?: (key: string) => void;
   deferredLegs?: TransportLegFormData[];
   onDeferredLegsChange?: (legs: TransportLegFormData[]) => void;
   onRetryDeferredLegs?: () => Promise<void>;
@@ -93,6 +95,8 @@ export function SampleForm({
   isSubmitting = false,
   submitLabel,
   deferredAttachments,
+  onRetryDeferredAttachments,
+  onRemoveDeferredAttachment,
   deferredLegs,
   onDeferredLegsChange,
   onRetryDeferredLegs,
@@ -930,6 +934,8 @@ export function SampleForm({
         sample={sample}
         isEditMode={isEditMode}
         deferredAttachments={deferredAttachments}
+        onRetryAttachments={onRetryDeferredAttachments}
+        onRemoveAttachment={onRemoveDeferredAttachment}
         isSubmitting={isSubmitting}
       />
       <SampleTransportSection

@@ -23,6 +23,13 @@ interface SampleTrailingSectionProps {
   sample?: SampleWithRelations;
   isEditMode: boolean;
   deferredAttachments?: UseDeferredAttachmentsResult;
+  /**
+   * Retry/remove routed through the parent so it can reconcile its post-create
+   * error banner from the remaining failures. Falls back to mutating the
+   * deferred store directly when omitted.
+   */
+  onRetryAttachments?: (key?: string) => Promise<unknown>;
+  onRemoveAttachment?: (key: string) => void;
   deferredLegs?: TransportLegFormData[];
   onDeferredLegsChange?: (legs: TransportLegFormData[]) => void;
   onRetryLegs?: () => Promise<void>;
@@ -35,6 +42,8 @@ export function SampleEvidenceSection({
   sample,
   isEditMode,
   deferredAttachments,
+  onRetryAttachments,
+  onRemoveAttachment,
   isSubmitting = false,
   __spine,
 }: SampleTrailingSectionProps) {
@@ -49,8 +58,11 @@ export function SampleEvidenceSection({
           {deferredAttachments && (
             <FailedDeferredAttachments
               attachments={deferredAttachments.attachments}
-              onRetry={(key) => deferredAttachments.retry("sample", [sample.id], key)}
-              onRemove={deferredAttachments.remove}
+              onRetry={
+                onRetryAttachments ??
+                ((key) => deferredAttachments.retry("sample", [sample.id], key))
+              }
+              onRemove={onRemoveAttachment ?? deferredAttachments.remove}
               disabled={isSubmitting}
             />
           )}

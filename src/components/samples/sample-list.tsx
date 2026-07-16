@@ -284,6 +284,64 @@ export function SampleList() {
     }
   };
 
+  // Keep the post-create "failed to save" banner in sync when the user retries
+  // or removes individual failures inline: recompute it from the remaining
+  // failed attachments and transport legs so a fully-resolved queue clears it.
+  const setCreateFailureBanner = (
+    failedAttachments: number,
+    failedLegs: number,
+  ) => {
+    const total = failedAttachments + failedLegs;
+    setFormError(
+      total > 0
+        ? `Sample created, but ${total} ${total === 1 ? "attachment" : "attachments"} failed to save.`
+        : null,
+    );
+  };
+
+  const handleRetryDeferredAttachments = async (key?: string) => {
+    if (sideSheet?.mode !== "edit") return;
+    const result = await deferredAttachments.retry(
+      "sample",
+      [sideSheet.entity.id],
+      key,
+    );
+    // Failures this retry did not target stay failed (excluded by key); add
+    // whatever this attempt left failed.
+    const untouchedFailed =
+      key === undefined
+        ? 0
+        : deferredAttachments.attachments.filter(
+            (attachment) =>
+              attachment.status === "failed" && attachment.key !== key,
+          ).length;
+    setCreateFailureBanner(
+      untouchedFailed + result.failed.length,
+      deferredLegs.length,
+    );
+  };
+
+  const handleRemoveDeferredAttachment = (key: string) => {
+    deferredAttachments.remove(key);
+    if (sideSheet?.mode !== "edit") return;
+    const remainingFailed = deferredAttachments.attachments.filter(
+      (attachment) => attachment.status === "failed" && attachment.key !== key,
+    ).length;
+    setCreateFailureBanner(remainingFailed, deferredLegs.length);
+  };
+
+  const handleDeferredLegsChange = (legs: TransportLegFormData[]) => {
+    setDeferredLegs(legs);
+    // Removing a failed leg from the post-create failure list must reconcile
+    // the banner too (adding legs only happens pre-create, where mode !== edit
+    // short-circuits and there is no banner yet).
+    if (sideSheet?.mode !== "edit") return;
+    const failedAttachments = deferredAttachments.attachments.filter(
+      (attachment) => attachment.status === "failed",
+    ).length;
+    setCreateFailureBanner(failedAttachments, legs.length);
+  };
+
   const retryDeferredLegs = async () => {
     if (sideSheet?.mode !== "edit" || deferredLegs.length === 0) return;
     setIsFlushing(true);
@@ -643,8 +701,10 @@ export function SampleList() {
           isSubmitting={isSubmitting}
           submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Sample"}
           deferredAttachments={deferredAttachments}
+          onRetryDeferredAttachments={handleRetryDeferredAttachments}
+          onRemoveDeferredAttachment={handleRemoveDeferredAttachment}
           deferredLegs={deferredLegs}
-          onDeferredLegsChange={setDeferredLegs}
+          onDeferredLegsChange={handleDeferredLegsChange}
           onRetryDeferredLegs={retryDeferredLegs}
         />
       </EntitySideSheet>
