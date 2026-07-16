@@ -23,7 +23,10 @@ import {
 import { useImportProductionRunReadings } from "@/hooks/use-production-run-reading-imports";
 import type { ProductionRunReadingsImportResult } from "@/fn/production-run-reading-imports";
 import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
-import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import type {
+  DeferredAttachment,
+  UseDeferredAttachmentsResult,
+} from "@/hooks/use-deferred-attachments";
 
 interface ProductionReadingsDocumentsProps {
   productionRunId?: string;
@@ -111,6 +114,28 @@ export function ProductionReadingsDocuments({
     })();
   };
 
+  // Retrying a failed deferred upload re-attaches the CSV as a document but does
+  // not import its rows — mirror the create path (production-run-list) and run
+  // the same per-doc import so the readings land instead of silently vanishing.
+  // A failed import writes its durable flag via runImport, surfacing Re-import.
+  const importUploadedReadings = (uploaded: DeferredAttachment[]) => {
+    for (const attachment of uploaded) {
+      if (attachment.documentType === READINGS_DOC_TYPE && attachment.documentId) {
+        runImport(attachment.documentId);
+      }
+    }
+  };
+
+  const handleDeferredRetry = async (key?: string) => {
+    if (!deferredAttachments || !productionRunId) return;
+    const result = await deferredAttachments.retry(
+      ENTITY_TYPE,
+      [productionRunId],
+      key,
+    );
+    importUploadedReadings(result.uploaded);
+  };
+
   const handleDeleteConfirm = async () => {
     if (!deletingId) return;
     setDeleteError(null);
@@ -154,9 +179,7 @@ export function ProductionReadingsDocuments({
       {deferredAttachments && (
         <FailedDeferredAttachments
           attachments={deferredAttachments.attachments}
-          onRetry={(key) =>
-            deferredAttachments.retry(ENTITY_TYPE, productionRunId, key)
-          }
+          onRetry={handleDeferredRetry}
           onRemove={deferredAttachments.remove}
           disabled={disabled}
         />
