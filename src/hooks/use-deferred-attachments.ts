@@ -23,10 +23,14 @@ export interface DeferredAttachment extends DeferredFileEntry {
   extraMeta?: DeferredAttachmentExtraMeta;
   status: "held" | "uploading" | "uploaded" | "failed";
   error?: string;
+  /** Document id created by the last successful upload (set on flush). */
+  documentId?: string;
 }
 
 export interface DeferredAttachmentFlushResult {
   ok: boolean;
+  /** Entries uploaded during this flush, carrying their created document ids. */
+  uploaded: DeferredAttachment[];
   failed: DeferredAttachment[];
 }
 
@@ -39,10 +43,21 @@ export interface UseDeferredAttachmentsResult {
     extraMeta?: DeferredAttachmentExtraMeta,
   ) => void;
   remove: (key: string) => void;
+  /** Re-tag a held entry's metadata (e.g. a classification radio changed). */
+  updateMeta: (key: string, extraMeta?: DeferredAttachmentExtraMeta) => void;
   clear: () => void;
   flush: (
     entityType: string,
     entityId: string,
+  ) => Promise<DeferredAttachmentFlushResult>;
+  /**
+   * Upload every held entry to each of `entityIds` (same physical file
+   * attached to each). Used when one create produces several rows, e.g. a
+   * multi-bin feedstock split.
+   */
+  flushMany: (
+    entityType: string,
+    entityIds: string[],
   ) => Promise<DeferredAttachmentFlushResult>;
   retry: (
     entityType: string,
@@ -89,6 +104,16 @@ export function useDeferredAttachments(): UseDeferredAttachmentsResult {
     );
   }
 
+  function updateMeta(key: string, extraMeta?: DeferredAttachmentExtraMeta) {
+    updateAttachments((current) =>
+      current.map((item) =>
+        item.key === key && item.status !== "uploaded"
+          ? { ...item, extraMeta }
+          : item,
+      ),
+    );
+  }
+
   function clear() {
     updateAttachments(() => []);
   }
@@ -98,12 +123,24 @@ export function useDeferredAttachments(): UseDeferredAttachmentsResult {
     entityId: string,
     key?: string,
   ): Promise<DeferredAttachmentFlushResult> {
-    const pending = attachmentsRef.current.filter(
-      (attachment) =>
-        attachment.status !== "uploaded" &&
-        attachment.status !== "uploading" &&
-        (key === undefined || attachment.key === key),
+    return flushToEntities(
+      [entityId],
+      attachmentsRef.current.filter(
+        (attachment) =>
+          attachment.status !== "uploaded" &&
+          attachment.status !== "uploading" &&
+          (key === undefined || attachment.key === key),
+      ),
+      entityType,
     );
+  }
+
+  async function flushToEntities(
+    entityIds: string[],
+    pending: DeferredAttachment[],
+    entityType: string,
+  ): Promise<DeferredAttachmentFlushResult> {
+    const uploaded: DeferredAttachment[] = [];
     const failed: DeferredAttachment[] = [];
 
     // One useFileUpload instance aborts its previous request when upload is
@@ -118,21 +155,33 @@ export function useDeferredAttachments(): UseDeferredAttachmentsResult {
       );
 
       try {
-        await upload({
-          entityType,
-          entityId,
-          documentType: attachment.documentType,
-          file: attachment.file,
-          applicationEvidenceRole:
-            attachment.extraMeta?.applicationEvidenceRole,
-          applicationLogbookEvidenceType:
-            attachment.extraMeta?.applicationLogbookEvidenceType,
-        });
+        let lastDocumentId: string | undefined;
+        // Attach the same physical file to every target row (e.g. a multi-bin
+        // feedstock split). Stop at the first failure so a partial write is
+        // recorded as failed rather than silently half-done.
+        for (const entityId of entityIds) {
+          const result = await upload({
+            entityType,
+            entityId,
+            documentType: attachment.documentType,
+            file: attachment.file,
+            applicationEvidenceRole:
+              attachment.extraMeta?.applicationEvidenceRole,
+            applicationLogbookEvidenceType:
+              attachment.extraMeta?.applicationLogbookEvidenceType,
+          });
+          lastDocumentId = result.documentId;
+        }
+        const uploadedAttachment: DeferredAttachment = {
+          ...attachment,
+          status: "uploaded",
+          error: undefined,
+          documentId: lastDocumentId,
+        };
+        uploaded.push(uploadedAttachment);
         updateAttachments((current) =>
           current.map((item) =>
-            item.key === attachment.key
-              ? { ...item, status: "uploaded", error: undefined }
-              : item,
+            item.key === attachment.key ? uploadedAttachment : item,
           ),
         );
       } catch (error) {
@@ -152,11 +201,23 @@ export function useDeferredAttachments(): UseDeferredAttachmentsResult {
       }
     }
 
-    return { ok: failed.length === 0, failed };
+    return { ok: failed.length === 0, uploaded, failed };
   }
 
   function flush(entityType: string, entityId: string) {
     return flushMatching(entityType, entityId);
+  }
+
+  function flushMany(entityType: string, entityIds: string[]) {
+    return flushToEntities(
+      entityIds,
+      attachmentsRef.current.filter(
+        (attachment) =>
+          attachment.status !== "uploaded" &&
+          attachment.status !== "uploading",
+      ),
+      entityType,
+    );
   }
 
   function retry(entityType: string, entityId: string, key?: string) {
@@ -168,8 +229,10 @@ export function useDeferredAttachments(): UseDeferredAttachmentsResult {
     hasHeld: attachments.some((attachment) => attachment.status !== "uploaded"),
     add,
     remove,
+    updateMeta,
     clear,
     flush,
+    flushMany,
     retry,
   };
 }

@@ -28,6 +28,7 @@ import {
 } from "@/hooks/use-production-runs";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
+import { useImportProductionRunReadings } from "@/hooks/use-production-run-reading-imports";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -215,6 +216,7 @@ export function ProductionRunList() {
   const deleteRun = useDeleteProductionRun();
   const toast = useToast();
   const deferredAttachments = useDeferredAttachments();
+  const importReadings = useImportProductionRunReadings();
   const [isFlushing, setIsFlushing] = useState(false);
 
   const runs = runsData?.items ?? [];
@@ -249,6 +251,34 @@ export function ProductionRunList() {
         setSideSheet({ entity: run, mode: "edit" });
         setCreateError(
           `Production run created, but ${flushResult.failed.length} ${flushResult.failed.length === 1 ? "attachment" : "attachments"} failed to upload.`,
+        );
+        return;
+      }
+      // A deferred readings CSV is uploaded as a document but not yet imported;
+      // run the same import edit mode triggers on upload so the run does not
+      // land with an empty readings table (matching onUploaded={runImport}).
+      const readingsDocs = flushResult.uploaded.filter(
+        (attachment) =>
+          attachment.documentType === "sensor_data" && attachment.documentId,
+      );
+      let importFailedCount = 0;
+      for (const attachment of readingsDocs) {
+        try {
+          const importResult = await importReadings.mutateAsync(
+            attachment.documentId as string,
+          );
+          toast.success(`Imported ${importResult.insertedRows} readings`);
+        } catch {
+          importFailedCount += 1;
+        }
+      }
+      if (importFailedCount > 0) {
+        // The import fn records a durable "failed" flag on the document, so the
+        // edit-mode readings panel surfaces its Re-import affordance.
+        deferredAttachments.clear();
+        setSideSheet({ entity: run, mode: "edit" });
+        setCreateError(
+          `Production run created, but ${importFailedCount} readings ${importFailedCount === 1 ? "file" : "files"} could not be imported. Re-import ${importFailedCount === 1 ? "it" : "them"} below.`,
         );
         return;
       }
