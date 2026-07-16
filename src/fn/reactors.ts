@@ -11,6 +11,7 @@ import {
   CODE_CONFLICT_MESSAGES,
   withAutoCode,
 } from "@/data-access/code-generator";
+import { requireOrgFacility } from "@/data-access/utils";
 import {
   createReactor,
   deleteReactor,
@@ -60,6 +61,9 @@ export async function getReactorsFn(
     const validatedFilters = filters
       ? reactorFilterSchema.parse(filters)
       : undefined;
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
     const reactors = await getReactorsData(ctx, validatedFilters);
 
     return { success: true, data: reactors };
@@ -113,6 +117,7 @@ export async function getReactorsByFacilityFn(
   try {
     const ctx = await requireOrgContext();
 
+    await requireOrgFacility(ctx, facilityId);
     const reactors = await getReactorsByFacilityData(ctx, facilityId);
     return { success: true, data: reactors };
   } catch (error) {

@@ -26,6 +26,7 @@ import {
   type DeliveryStats,
 } from "@/data-access/deliveries";
 import { syncBiocharProductTransportLeg } from "@/data-access/transport-legs";
+import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgContext } from "@/lib/auth/server";
 import type { OrgContext } from "@/lib/auth/server";
 import { logger } from "@/lib/log";
@@ -99,6 +100,9 @@ export async function getDeliveriesFn(
     const validatedFilters = filters
       ? deliveryFilterSchema.parse(filters)
       : undefined;
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
     const deliveries = await getDeliveriesData(ctx, validatedFilters);
 
     return { success: true, data: deliveries };
@@ -175,6 +179,9 @@ export async function getDeliveryStatsFn(
   try {
     const ctx = await requireOrgContext();
 
+    if (filters?.facilityId) {
+      await requireOrgFacility(ctx, filters.facilityId);
+    }
     const stats = await getDeliveryStatsData(ctx, filters);
     return { success: true, data: stats };
   } catch (error) {

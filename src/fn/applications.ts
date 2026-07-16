@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { ActionResult } from "@/types/actions";
 import { type Application, applications } from "@/db/schema/application";
 import { withAutoCode } from "@/data-access/code-generator";
+import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
   getApplications as getApplicationsData,
@@ -49,6 +50,9 @@ export async function getApplicationsFn(
     const ctx = await requireOrgContext();
 
     const validatedOptions = getApplicationsOptionsSchema.parse(options);
+    if (validatedOptions?.facilityId) {
+      await requireOrgFacility(ctx, validatedOptions.facilityId);
+    }
     const result = await getApplicationsData(ctx, validatedOptions);
     return { success: true, data: result };
   } catch (error) {
@@ -72,6 +76,9 @@ export async function getApplicationDeliveryOptionsFn(
     const validatedFacilityId = facilityId
       ? z.string().uuid().parse(facilityId)
       : undefined;
+    if (validatedFacilityId) {
+      await requireOrgFacility(ctx, validatedFacilityId);
+    }
     const deliveries = await getApplicationDeliveryOptionsData(ctx, validatedFacilityId);
     return { success: true, data: deliveries };
   } catch (error) {

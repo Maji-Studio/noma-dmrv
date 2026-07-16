@@ -55,9 +55,15 @@ export const facilityKeys = {
 /**
  * Hook to fetch paginated list of facilities with filtering
  */
-export function useFacilities(filters?: Partial<FacilityFilterData>) {
+export function useFacilities(
+  filters?: Partial<FacilityFilterData>,
+  organizationId?: string | null,
+) {
   return useQuery({
-    queryKey: facilityKeys.list(filters),
+    queryKey:
+      organizationId === undefined
+        ? facilityKeys.list(filters)
+        : [...facilityKeys.list(filters), { organizationId }],
     queryFn: async () => {
       const result = await getFacilitiesFn(filters);
       if (!result.success) {
@@ -65,6 +71,7 @@ export function useFacilities(filters?: Partial<FacilityFilterData>) {
       }
       return result.data;
     },
+    enabled: organizationId !== null,
     staleTime: 30000, // 30 seconds
   });
 }
@@ -72,9 +79,16 @@ export function useFacilities(filters?: Partial<FacilityFilterData>) {
 /**
  * Hook to fetch a single facility by ID
  */
-export function useFacility(facilityId: string, enabled = true) {
+export function useFacility(
+  facilityId: string,
+  enabled = true,
+  organizationId?: string | null,
+) {
   return useQuery({
-    queryKey: facilityKeys.detail(facilityId),
+    queryKey:
+      organizationId === undefined
+        ? facilityKeys.detail(facilityId)
+        : [...facilityKeys.detail(facilityId), { organizationId }],
     queryFn: async () => {
       const result = await getFacilityByIdFn(facilityId);
       if (!result.success) {
@@ -82,7 +96,8 @@ export function useFacility(facilityId: string, enabled = true) {
       }
       return result.data;
     },
-    enabled: enabled && !!facilityId,
+    enabled: enabled && !!facilityId && organizationId !== null,
+    retry: false,
     staleTime: 30000,
   });
 }

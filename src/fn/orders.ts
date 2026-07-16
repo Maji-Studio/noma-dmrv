@@ -11,6 +11,7 @@ import {
   CODE_CONFLICT_MESSAGES,
   withAutoCode,
 } from "@/data-access/code-generator";
+import { requireOrgFacility } from "@/data-access/utils";
 import {
   createOrder,
   deleteOrder,
@@ -47,6 +48,9 @@ export async function getOrdersFn(
     const validatedFilters = filters
       ? orderFilterSchema.parse(filters)
       : undefined;
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
     return getOrdersData(ctx, validatedFilters);
   }, { zodErrorPrefix: "Invalid filter parameters", fallbackMessage: "Failed to load orders" });
 }
@@ -107,6 +111,9 @@ export async function getOrdersForSelectFn(
     const validatedFacilityId = facilityId
       ? facilityIdSchema.parse(facilityId)
       : undefined;
+    if (validatedFacilityId) {
+      await requireOrgFacility(ctx, validatedFacilityId);
+    }
     return getOrdersForSelectData(ctx, validatedFacilityId);
   }, { fallbackMessage: "Failed to load orders for select" });
 }

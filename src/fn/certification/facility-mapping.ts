@@ -10,6 +10,7 @@ import {
   type CertifierProjectRow,
   type LinkedFacilitySummary,
 } from "@/data-access/certification";
+import { requireOrgFacility } from "@/data-access/utils";
 import { requireAdminAction } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import {
@@ -62,6 +63,7 @@ export async function loadFacilityCertifierSummary(
   facilityId: string,
 ): Promise<ActionResult<FacilityCertifierSummary>> {
   return withAction(async (orgCtx) => {
+    await requireOrgFacility(orgCtx, facilityId);
     const mapping = await getCertifierProjectByFacility(
       orgCtx,
       facilityId,
@@ -78,6 +80,7 @@ export async function loadFacilityCertifierMapping(
   facilityId: string,
 ): Promise<ActionResult<FacilityCertifierMapping>> {
   return withAction(async (orgCtx) => {
+    await requireOrgFacility(orgCtx, facilityId);
     const client = await getIsometricClientForOrg(orgCtx.organizationId);
     const [mapping, projectCatalog, allLinkedFacilities] = await Promise.all([
       getCertifierProjectByFacility(orgCtx, facilityId, ISOMETRIC_PROVIDER),

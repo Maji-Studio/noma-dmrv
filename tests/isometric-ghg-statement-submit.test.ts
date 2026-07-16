@@ -52,6 +52,15 @@ vi.mock("@/data-access/certifier-ghg-statements");
 vi.mock("@/data-access/facilities", () => ({
   getFacilityById: vi.fn(),
 }));
+// The facility↔org read guard (DEF-001) does a real db.select; the db mock
+// below only fakes transaction(), so stub the guard like other data-access.
+vi.mock("@/data-access/utils", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/data-access/utils")>();
+  return {
+    ...actual,
+    requireOrgFacility: vi.fn().mockResolvedValue(undefined),
+  };
+});
 vi.mock("@/lib/auth/server", () => ({
   requireOrgRole: vi.fn(),
   requireOrgContext: vi.fn().mockResolvedValue({

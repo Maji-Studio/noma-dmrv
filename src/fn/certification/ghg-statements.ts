@@ -38,6 +38,7 @@ import {
   type RemovalCreditBatchSummary,
 } from "@/data-access/certifier-removals";
 import { getFacilityById } from "@/data-access/facilities";
+import { requireOrgFacility } from "@/data-access/utils";
 import { db } from "@/db";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
@@ -192,8 +193,9 @@ export async function createGhgStatementDraft(
 ): Promise<ActionResult<CreateGhgStatementResult>> {
   return withAction(async (orgCtx) => {
     requireOrgRole(orgCtx, "admin");
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
     const parsed = createGhgStatementSchema.parse(input);
+    await requireOrgFacility(orgCtx, parsed.facilityId);
+    const client = await getIsometricClientForOrg(orgCtx.organizationId);
     assertProductionConfirmed(parsed.confirmProduction);
 
     const submissionAttemptId = crypto.randomUUID();
@@ -838,6 +840,7 @@ export async function loadGhgStatementsForFacility(
   facilityId: string,
 ): Promise<ActionResult<GhgStatementListItem[]>> {
   return withAction(async (orgCtx) => {
+    await requireOrgFacility(orgCtx, facilityId);
     const statements = await listGhgStatementsForFacility(orgCtx, facilityId);
     if (statements.length === 0) return [];
 
@@ -868,6 +871,7 @@ export async function loadOpenRemovalsForFacility(
   facilityId: string,
 ): Promise<ActionResult<OpenRemovalView[]>> {
   return withAction(async (orgCtx) => {
+    await requireOrgFacility(orgCtx, facilityId);
     const open = await listOpenRemovalsForFacility(orgCtx, facilityId);
     const creditBatchesByRemoval = await getCreditBatchSummariesByRemovalIds(
       orgCtx,
