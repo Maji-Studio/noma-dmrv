@@ -228,6 +228,10 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const toast = useToast();
   const deferredAttachments = useDeferredAttachments();
   const [isFlushing, setIsFlushing] = useState(false);
+  // Ids of every row the last create produced (a multi-bin split makes
+  // several). Retained so a post-failure evidence retry re-attaches held files
+  // to every row, not just the first shown in the reopened edit sheet.
+  const [createdFeedstockIds, setCreatedFeedstockIds] = useState<string[]>([]);
 
   // Handlers
   const handleCreate = async (data: FeedstockFormData) => {
@@ -242,9 +246,11 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       // A multi-bin split creates one feedstock row per bin, each with its own
       // auto-derived transport leg — so the held BoL/weighbridge evidence must
       // attach to every row, not just the first, or rows 2..n ship without it.
+      const createdIds = result.feedstocks.map((feedstock) => feedstock.id);
+      setCreatedFeedstockIds(createdIds);
       const flushResult = await deferredAttachments.flushMany(
         "feedstock",
-        result.feedstocks.map((feedstock) => feedstock.id),
+        createdIds,
       );
       if (!flushResult.ok) {
         setSideSheet({ entity: createdFeedstock, mode: "edit" });
@@ -327,6 +333,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     setFocusedFeedstockId(null);
     setCreateError(null);
     setUpdateError(null);
+    setCreatedFeedstockIds([]);
     deferredAttachments.clear();
     setSideSheet({ entity: null, mode: "create" });
   };
@@ -334,12 +341,13 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     setFocusedFeedstockId(feedstock.id);
     setSideSheet({ entity: feedstock, mode: "view" });
   };
-  const openEdit = (feedstock: FeedstockWithRelations) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: feedstock, mode: "edit" }); };
+  const openEdit = (feedstock: FeedstockWithRelations) => { setCreateError(null); setUpdateError(null); setCreatedFeedstockIds([]); setSideSheet({ entity: feedstock, mode: "edit" }); };
   const closeSideSheet = () => {
     setFocusedFeedstockId(null);
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
+    setCreatedFeedstockIds([]);
     deferredAttachments.clear();
   };
 
@@ -579,6 +587,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Feedstock"}
           serverError={createError || updateError || undefined}
           deferredAttachments={deferredAttachments}
+          retryEntityIds={createdFeedstockIds}
         />
       </EntitySideSheet>
     </div>

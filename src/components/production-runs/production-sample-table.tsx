@@ -92,7 +92,7 @@ export function ProductionSampleTable({
     ).length;
     const result = await deferredAttachments.retry(
       "production_sample",
-      inlineForm.sample.id,
+      [inlineForm.sample.id],
       key,
     );
     if (result.ok && (key === undefined || failedBefore === 1)) {

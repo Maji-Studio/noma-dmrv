@@ -17,6 +17,11 @@ interface FeedstockEvidenceSectionProps {
   feedstock?: FeedstockWithRelations;
   isEditMode: boolean;
   deferredAttachments?: UseDeferredAttachmentsResult;
+  /**
+   * Every row a failed create produced (a multi-bin split makes several), so
+   * retry re-attaches held evidence to each. Falls back to the edited row.
+   */
+  retryEntityIds?: string[];
   isSubmitting?: boolean;
   /** Injected by FormSpine — do not set manually. */
   __spine?: SpineMeta;
@@ -26,6 +31,7 @@ export function FeedstockEvidenceSection({
   feedstock,
   isEditMode,
   deferredAttachments,
+  retryEntityIds,
   isSubmitting = false,
   __spine,
 }: FeedstockEvidenceSectionProps) {
@@ -41,7 +47,13 @@ export function FeedstockEvidenceSection({
             <FailedDeferredAttachments
               attachments={deferredAttachments.attachments}
               onRetry={(key) =>
-                deferredAttachments.retry("feedstock", feedstock.id, key)
+                deferredAttachments.retry(
+                  "feedstock",
+                  retryEntityIds && retryEntityIds.length > 0
+                    ? retryEntityIds
+                    : [feedstock.id],
+                  key,
+                )
               }
               onRemove={deferredAttachments.remove}
               disabled={isSubmitting}

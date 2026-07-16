@@ -25,6 +25,13 @@ export interface DeferredAttachment extends DeferredFileEntry {
   error?: string;
   /** Document id created by the last successful upload (set on flush). */
   documentId?: string;
+  /**
+   * Entity ids this file has already been attached to. When a create produces
+   * several rows (e.g. a multi-bin feedstock split) the same file is attached
+   * to each; retry re-sends only to the rows still missing from this list so a
+   * partial failure never duplicates the doc on rows that already succeeded.
+   */
+  uploadedEntityIds: string[];
 }
 
 export interface DeferredAttachmentFlushResult {
@@ -59,9 +66,14 @@ export interface UseDeferredAttachmentsResult {
     entityType: string,
     entityIds: string[],
   ) => Promise<DeferredAttachmentFlushResult>;
+  /**
+   * Re-attempt held/failed entries against the full target-id list. Each
+   * attachment skips rows it already reached, so callers must pass every
+   * target row (not just one) or rows that were never attempted stay missing.
+   */
   retry: (
     entityType: string,
-    entityId: string,
+    entityIds: string[],
     key?: string,
   ) => Promise<DeferredAttachmentFlushResult>;
 }
@@ -94,6 +106,7 @@ export function useDeferredAttachments(): UseDeferredAttachmentsResult {
         documentType,
         extraMeta,
         status: "held" as const,
+        uploadedEntityIds: [],
       })),
     ]);
   }
@@ -118,20 +131,14 @@ export function useDeferredAttachments(): UseDeferredAttachmentsResult {
     updateAttachments(() => []);
   }
 
-  async function flushMatching(
-    entityType: string,
-    entityId: string,
-    key?: string,
-  ): Promise<DeferredAttachmentFlushResult> {
-    return flushToEntities(
-      [entityId],
-      attachmentsRef.current.filter(
-        (attachment) =>
-          attachment.status !== "uploaded" &&
-          attachment.status !== "uploading" &&
-          (key === undefined || attachment.key === key),
-      ),
-      entityType,
+  function pendingEntries(key?: string): DeferredAttachment[] {
+    return attachmentsRef.current.filter(
+      (attachment) =>
+        // "uploaded" means attached to every target so far, so it is skipped;
+        // a still-incomplete attachment is left "failed" and remains eligible.
+        attachment.status !== "uploaded" &&
+        attachment.status !== "uploading" &&
+        (key === undefined || attachment.key === key),
     );
   }
 
@@ -154,12 +161,16 @@ export function useDeferredAttachments(): UseDeferredAttachmentsResult {
         ),
       );
 
-      try {
-        let lastDocumentId: string | undefined;
-        // Attach the same physical file to every target row (e.g. a multi-bin
-        // feedstock split). Stop at the first failure so a partial write is
-        // recorded as failed rather than silently half-done.
-        for (const entityId of entityIds) {
+      // Attach the same physical file to every target row (e.g. a multi-bin
+      // feedstock split), skipping rows a previous attempt already reached.
+      // Every remaining row is attempted even if an earlier one fails, so one
+      // failure never blocks the others and successes are recorded per-row.
+      const succeeded = new Set(attachment.uploadedEntityIds);
+      let lastDocumentId = attachment.documentId;
+      let lastError: string | undefined;
+      for (const entityId of entityIds) {
+        if (succeeded.has(entityId)) continue;
+        try {
           const result = await upload({
             entityType,
             entityId,
@@ -171,57 +182,48 @@ export function useDeferredAttachments(): UseDeferredAttachmentsResult {
               attachment.extraMeta?.applicationLogbookEvidenceType,
           });
           lastDocumentId = result.documentId;
+          succeeded.add(entityId);
+        } catch (error) {
+          lastError = error instanceof Error ? error.message : "Upload failed";
         }
-        const uploadedAttachment: DeferredAttachment = {
-          ...attachment,
-          status: "uploaded",
-          error: undefined,
-          documentId: lastDocumentId,
-        };
-        uploaded.push(uploadedAttachment);
-        updateAttachments((current) =>
-          current.map((item) =>
-            item.key === attachment.key ? uploadedAttachment : item,
-          ),
-        );
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Upload failed";
-        const failedAttachment: DeferredAttachment = {
-          ...attachment,
-          status: "failed",
-          error: message,
-        };
-        failed.push(failedAttachment);
-        updateAttachments((current) =>
-          current.map((item) =>
-            item.key === attachment.key ? failedAttachment : item,
-          ),
-        );
       }
+
+      const uploadedEntityIds = entityIds.filter((id) => succeeded.has(id));
+      const missing = entityIds.some((id) => !succeeded.has(id));
+      const settled: DeferredAttachment = missing
+        ? {
+            ...attachment,
+            status: "failed",
+            error: lastError ?? "Upload failed",
+            documentId: lastDocumentId,
+            uploadedEntityIds,
+          }
+        : {
+            ...attachment,
+            status: "uploaded",
+            error: undefined,
+            documentId: lastDocumentId,
+            uploadedEntityIds,
+          };
+      (missing ? failed : uploaded).push(settled);
+      updateAttachments((current) =>
+        current.map((item) => (item.key === attachment.key ? settled : item)),
+      );
     }
 
     return { ok: failed.length === 0, uploaded, failed };
   }
 
   function flush(entityType: string, entityId: string) {
-    return flushMatching(entityType, entityId);
+    return flushToEntities([entityId], pendingEntries(), entityType);
   }
 
   function flushMany(entityType: string, entityIds: string[]) {
-    return flushToEntities(
-      entityIds,
-      attachmentsRef.current.filter(
-        (attachment) =>
-          attachment.status !== "uploaded" &&
-          attachment.status !== "uploading",
-      ),
-      entityType,
-    );
+    return flushToEntities(entityIds, pendingEntries(), entityType);
   }
 
-  function retry(entityType: string, entityId: string, key?: string) {
-    return flushMatching(entityType, entityId, key);
+  function retry(entityType: string, entityIds: string[], key?: string) {
+    return flushToEntities(entityIds, pendingEntries(key), entityType);
   }
 
   return {

@@ -57,6 +57,8 @@ interface FeedstockFormProps {
   submitLabel?: string;
   serverError?: string;
   deferredAttachments?: UseDeferredAttachmentsResult;
+  /** All rows a failed create produced, so evidence retry reaches each. */
+  retryEntityIds?: string[];
 }
 
 export function FeedstockForm({
@@ -67,6 +69,7 @@ export function FeedstockForm({
   submitLabel,
   serverError,
   deferredAttachments,
+  retryEntityIds,
 }: FeedstockFormProps) {
   const isEditMode = !!feedstock;
   const formId = useId();
@@ -578,6 +581,7 @@ export function FeedstockForm({
           feedstock={feedstock}
           isEditMode={isEditMode}
           deferredAttachments={deferredAttachments}
+          retryEntityIds={retryEntityIds}
           isSubmitting={isSubmitting}
         />
       </FormSpine>

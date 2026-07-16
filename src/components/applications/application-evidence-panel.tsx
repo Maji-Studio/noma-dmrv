@@ -455,7 +455,7 @@ export function ApplicationEvidencePanel({
         <FailedDeferredAttachments
           attachments={deferredAttachments.attachments}
           onRetry={(key) =>
-            deferredAttachments.retry(ENTITY_TYPE, applicationId, key)
+            deferredAttachments.retry(ENTITY_TYPE, [applicationId], key)
           }
           onRemove={deferredAttachments.remove}
           disabled={disabled}

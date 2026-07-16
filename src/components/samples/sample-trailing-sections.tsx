@@ -49,7 +49,7 @@ export function SampleEvidenceSection({
           {deferredAttachments && (
             <FailedDeferredAttachments
               attachments={deferredAttachments.attachments}
-              onRetry={(key) => deferredAttachments.retry("sample", sample.id, key)}
+              onRetry={(key) => deferredAttachments.retry("sample", [sample.id], key)}
               onRemove={deferredAttachments.remove}
               disabled={isSubmitting}
             />
