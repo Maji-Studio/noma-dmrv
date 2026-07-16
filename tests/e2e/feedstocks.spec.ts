@@ -4,6 +4,8 @@
  * Covers:
  * - UI CRUD: create a feedstock through the side sheet form, verify it appears in the list
  * - Allocation mirroring: total wet mass auto-fills the single-bin allocation
+ * - Evidence gating: view mode lists transport evidence read-only (no upload
+ *   dropzone, no delete buttons); edit mode exposes the upload controls
  */
 import { test, expect } from "./fixtures";
 import { selectEntity, waitForSideSheet, waitForSideSheetClose } from "./fixtures";
@@ -134,5 +136,49 @@ test.describe("Feedstock UI CRUD", () => {
     await chipInDialog.hover();
 
     await expect(explanationOnPage).toHaveCount(beforeHover + 1);
+  });
+
+  test("view mode shows transport evidence read-only; edit mode has upload controls", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await page.goto(`/feedstocks?facility=${seededData.facility.id}`);
+    await page.waitForLoadState("networkidle");
+
+    // Open the seeded feedstock's row into VIEW mode (rows are clickable via
+    // onRowClick; filter by the seeded code so sort order doesn't matter).
+    await page
+      .locator("table tbody tr", { hasText: seededData.feedstock.code })
+      .first()
+      .click();
+    await waitForSideSheet(page);
+    const dialog = page.locator('[role="dialog"]');
+
+    // The read-only evidence panel rendered — the seeded feedstock has no
+    // documents, so its empty state is the proof the docs query resolved
+    // (guards against passing the absence checks against a blank panel).
+    await expect(dialog.getByText("Transport evidence").first()).toBeVisible();
+    await expect(
+      dialog.getByText("No transport evidence attached.")
+    ).toBeVisible();
+
+    // View mode is read-only: no upload dropzone, no per-file delete buttons.
+    await expect(dialog.locator('input[type="file"]')).toHaveCount(0);
+    await expect(
+      dialog.getByText("Drop files here or click to upload")
+    ).toHaveCount(0);
+    await expect(
+      dialog.getByRole("button", { name: /^Delete .+/ })
+    ).toHaveCount(0);
+
+    // Switch to edit mode: the same sheet swaps to the edit form, whose
+    // trailing evidence section mounts the editable panel with dropzones.
+    await page.getByRole("button", { name: "Edit Feedstock" }).click();
+    await expect(
+      dialog.getByText("Drop files here or click to upload").first()
+    ).toBeVisible({ timeout: 15000 });
+    await expect(
+      dialog.locator('input[type="file"]').first()
+    ).toBeAttached();
   });
 });
