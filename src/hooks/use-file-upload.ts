@@ -19,11 +19,16 @@ interface EvidenceExif {
 }
 
 /**
- * Abort a stalled PUT so it cannot hang forever — an open request keeps the
+ * Bound a hung PUT so it cannot hang forever — an open request keeps the
  * caller's `isFlushing` guard latched and traps the user behind the side-sheet
- * close guard. Generous because evidence PDFs can be several MB on slow links.
+ * close guard. `XMLHttpRequest.timeout` is a *total*-request deadline, not an
+ * inactivity/stall timer (it does not reset on upload progress), so this must
+ * stay generous: a 50 MB evidence file on a slow-but-healthy link needs many
+ * minutes, and cutting it off would look like a spurious failure. Ten minutes
+ * comfortably covers our largest evidence uploads while still capping a truly
+ * stuck flush.
  */
-const UPLOAD_TIMEOUT_MS = 120_000;
+const UPLOAD_TIMEOUT_MS = 600_000;
 
 export type UploadState =
   | { status: "idle" }
