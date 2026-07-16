@@ -247,16 +247,12 @@ export function ProductionRunList() {
         "production_run",
         run.id,
       );
-      if (!flushResult.ok) {
-        setSideSheet({ entity: run, mode: "edit" });
-        setCreateError(
-          `Production run created, but ${flushResult.failed.length} ${flushResult.failed.length === 1 ? "attachment" : "attachments"} failed to upload.`,
-        );
-        return;
-      }
-      // A deferred readings CSV is uploaded as a document but not yet imported;
-      // run the same import edit mode triggers on upload so the run does not
-      // land with an empty readings table (matching onUploaded={runImport}).
+      // Import every readings CSV that DID upload first — even on a partial
+      // failure. A deferred readings CSV is uploaded as a document but not yet
+      // imported, and deferred retry skips already-`uploaded` entries, so an
+      // import deferred past the failure return would never run and the run
+      // would keep those readings' file without their rows (matching the same
+      // import that onUploaded={runImport} triggers on a direct upload).
       const readingsDocs = flushResult.uploaded.filter(
         (attachment) =>
           attachment.documentType === "sensor_data" && attachment.documentId,
@@ -272,13 +268,27 @@ export function ProductionRunList() {
           importFailedCount += 1;
         }
       }
-      if (importFailedCount > 0) {
+      const uploadFailedCount = flushResult.failed.length;
+      if (uploadFailedCount > 0 || importFailedCount > 0) {
         // The import fn records a durable "failed" flag on the document, so the
-        // edit-mode readings panel surfaces its Re-import affordance.
-        deferredAttachments.clear();
+        // edit-mode readings panel surfaces its Re-import affordance. Keep the
+        // deferred entries only when uploads still need a retry; otherwise the
+        // failure is import-only and the deferred queue is already settled.
+        if (uploadFailedCount === 0) deferredAttachments.clear();
         setSideSheet({ entity: run, mode: "edit" });
+        const messages: string[] = [];
+        if (uploadFailedCount > 0) {
+          messages.push(
+            `${uploadFailedCount} ${uploadFailedCount === 1 ? "attachment" : "attachments"} failed to upload`,
+          );
+        }
+        if (importFailedCount > 0) {
+          messages.push(
+            `${importFailedCount} readings ${importFailedCount === 1 ? "file" : "files"} could not be imported`,
+          );
+        }
         setCreateError(
-          `Production run created, but ${importFailedCount} readings ${importFailedCount === 1 ? "file" : "files"} could not be imported. Re-import ${importFailedCount === 1 ? "it" : "them"} below.`,
+          `Production run created, but ${messages.join(" and ")}. Resolve ${messages.length > 1 || importFailedCount > 1 || uploadFailedCount > 1 ? "them" : "it"} below.`,
         );
         return;
       }
