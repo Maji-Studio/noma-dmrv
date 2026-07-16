@@ -36,6 +36,13 @@ interface TransportLegsEditorProps {
   deferred?: boolean;
   deferredLegs?: TransportLegFormData[];
   onDeferredChange?: (legs: TransportLegFormData[]) => void;
+  /**
+   * External busy signal (e.g. the parent form is submitting/flushing). Blocks
+   * add/edit/delete so deferred legs cannot be mutated while a create is
+   * iterating an older snapshot and its completion handler is about to
+   * overwrite them.
+   */
+  disabled?: boolean;
 }
 
 type EditableTransportLeg = TransportLeg | TransportLegFormData;
@@ -74,6 +81,7 @@ export function TransportLegsEditor({
   deferred = false,
   deferredLegs = [],
   onDeferredChange,
+  disabled = false,
 }: TransportLegsEditorProps) {
   // `readOnly` and `deferred` are intentionally separate modes. Callers should
   // not combine them: deferred legs only exist while a create form is editable.
@@ -112,6 +120,7 @@ export function TransportLegsEditor({
   const closeForm = () => setInlineForm({ open: false });
 
   const handleSubmit = async (data: TransportLegFormData) => {
+    if (disabled) return;
     setFormError(null);
 
     if (deferred) {
@@ -147,7 +156,7 @@ export function TransportLegsEditor({
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || disabled) return;
     setDeleteError(null);
 
     if ("deferredIndex" in deleteTarget) {
@@ -189,6 +198,7 @@ export function TransportLegsEditor({
             variant="default"
             size="small"
             onClick={openCreate}
+            disabled={disabled}
           >
             <PlusIcon size={16} weight="bold" />
             Add leg
@@ -274,7 +284,7 @@ export function TransportLegsEditor({
                             openEdit(leg, deferred ? index : undefined)
                           }
                           aria-label="Edit transport leg"
-                          disabled={inlineForm.open}
+                          disabled={inlineForm.open || disabled}
                         >
                           <PencilIcon size={16} />
                         </Button>
@@ -290,7 +300,7 @@ export function TransportLegsEditor({
                             )
                           }
                           aria-label="Delete transport leg"
-                          disabled={inlineForm.open}
+                          disabled={inlineForm.open || disabled}
                         >
                           <TrashIcon size={16} />
                         </Button>
@@ -326,7 +336,7 @@ export function TransportLegsEditor({
             leg={inlineForm.leg}
             onSubmit={handleSubmit}
             onCancel={closeForm}
-            isSubmitting={isSubmitting}
+            isSubmitting={isSubmitting || disabled}
             embedded={deferred}
           />
         </div>

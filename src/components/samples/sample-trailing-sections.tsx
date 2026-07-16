@@ -123,7 +123,11 @@ export function SampleTransportSection({
               ))}
             </div>
           )}
-          <TransportLegsEditor entityType="sample" entityId={sample.id} />
+          <TransportLegsEditor
+            entityType="sample"
+            entityId={sample.id}
+            disabled={isSubmitting}
+          />
         </div>
       ) : (
         <TransportLegsEditor
@@ -132,6 +136,7 @@ export function SampleTransportSection({
           deferred
           deferredLegs={deferredLegs}
           onDeferredChange={(legs) => onDeferredLegsChange?.(legs)}
+          disabled={isSubmitting}
         />
       )}
     </FormSection>
