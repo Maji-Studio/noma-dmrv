@@ -310,7 +310,10 @@ export function ProductionRunList() {
     setUpdateError(null);
     if (
       deferredAttachments.attachments.some(
-        (attachment) => attachment.status === "failed",
+        // Any not-yet-`uploaded` entry is unresolved: "failed" awaits a retry,
+        // and "uploading" means a readings retry is mid-flight whose state a
+        // save would clobber. Both must block the save.
+        (attachment) => attachment.status !== "uploaded",
       )
     ) {
       setUpdateError(

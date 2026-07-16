@@ -317,7 +317,10 @@ export function SampleList() {
     if (
       deferredLegs.length > 0 ||
       deferredAttachments.attachments.some(
-        (attachment) => attachment.status === "failed",
+        // Any not-yet-`uploaded` entry is unresolved: "failed" awaits a retry,
+        // and "uploading" means an attachment retry is mid-flight whose state a
+        // save would clobber. Both must block the save.
+        (attachment) => attachment.status !== "uploaded",
       )
     ) {
       setFormError(

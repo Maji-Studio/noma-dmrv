@@ -90,13 +90,21 @@ export function ProductionSampleTable({
     const failedBefore = deferredAttachments.attachments.filter(
       (attachment) => attachment.status === "failed",
     ).length;
-    const result = await deferredAttachments.retry(
-      "production_sample",
-      [inlineForm.sample.id],
-      key,
-    );
-    if (result.ok && (key === undefined || failedBefore === 1)) {
-      setFormError(null);
+    // Bracket the retry with isFlushing (which feeds isSubmitting) so a save or
+    // close cannot fire while attachments are mid-`uploading` and clear the
+    // retry state out from under this handler.
+    setIsFlushing(true);
+    try {
+      const result = await deferredAttachments.retry(
+        "production_sample",
+        [inlineForm.sample.id],
+        key,
+      );
+      if (result.ok && (key === undefined || failedBefore === 1)) {
+        setFormError(null);
+      }
+    } finally {
+      setIsFlushing(false);
     }
   };
 
