@@ -221,7 +221,7 @@ const envSchema = z.object({
     if (
       !data.STORAGE_ENDPOINT &&
       data.STORAGE_REGION &&
-      DIGITALOCEAN_SPACES_REGIONS.has(data.STORAGE_REGION)
+      DIGITALOCEAN_SPACES_REGIONS.has(data.STORAGE_REGION.trim().toLowerCase())
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
