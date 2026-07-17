@@ -1,12 +1,11 @@
 /**
- * Dashboard overview data access (visual design plan, Phase 5).
- *
- * One facility-scoped aggregate read powering the dashboard: the 5-KPI strip
- * (value + delta vs the previous equal period + a 12-bucket sparkline series),
- * the needs-attention queue (cheap checks derived from existing MRV records —
- * no separate task lifecycle, the item disappears when the record is fixed),
- * the feedstock mix, and the custody-flow ribbon (the batch Sankey's
- * mass-balance grammar via `buildStageFlow`).
+ * Dashboard overview data access — the Flow Hero dashboard's single aggregate
+ * read. Period-scoped numbers (the 4-KPI band with deltas vs the previous
+ * equal period, and the 5-segment mass flow along the traceability chain)
+ * plus the range-independent station/activity/certification snapshot from
+ * `dashboard-stations.ts` and the needs-attention queue (cheap checks derived
+ * from existing MRV records — no separate task lifecycle, an item disappears
+ * when the record is fixed).
  *
  * Deliberately lean: row-level fetches are facility-scoped and column-narrow,
  * aggregation happens in JS — facilities operate at hundreds of records, not
@@ -21,52 +20,39 @@ import {
   creditBatches,
   deliveries,
   feedstocks,
-  feedstockTypes,
   productionRuns,
 } from "@/db/schema";
-import {
-  buildStageFlow,
-  type CreditBatchSankeyData,
-} from "@/lib/chain-of-custody/sankey";
 import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { getCo2eStoredPreviews } from "./credit-batches";
 import {
-  getDashboardOperations,
-  type DashboardEvidenceRow,
-  type DashboardMapEdge,
-  type DashboardMapPoint,
-  type DashboardNowItem,
-  type DashboardProgressStage,
-} from "./dashboard-operations";
+  getDashboardStations,
+  type DashboardStationsData,
+} from "./dashboard-stations";
 import { requireOrgScope } from "./utils";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 
 // Re-exported so components import every dashboard type from one module.
 export type {
-  DashboardEvidenceRow,
-  DashboardMapDetail,
-  DashboardMapEdge,
-  DashboardMapKind,
-  DashboardMapPoint,
-  DashboardNowItem,
-  DashboardNowKind,
-  DashboardNowStatus,
-  DashboardProgressStage,
-} from "./dashboard-operations";
+  DashboardActivityItem,
+  DashboardCertification,
+  DashboardCertificationBatch,
+  DashboardCreditBatchStatus,
+  DashboardStation,
+  DashboardStationKey,
+  DashboardStationReason,
+  DashboardStationTone,
+} from "./dashboard-stations";
 
-export type DashboardRange = "30d" | "ytd" | "all";
+export type DashboardRange = "week" | "month" | "all";
 
-/** Sparkline resolution — every KPI series carries exactly this many buckets. */
-const SERIES_BUCKETS = 12;
 /** Per-check row cap for the attention queue (the queue is a sample, not a list page). */
 const ATTENTION_PER_CHECK = 4;
 /** Total attention-queue cap, flags first. */
 const ATTENTION_TOTAL = 8;
-/** Feedstock-mix slices shown before collapsing the tail into "Other". */
-const MIX_SLICES = 5;
-/** Fallback window when range="all" finds no dated records. */
-const ALL_RANGE_FALLBACK_DAYS = 365;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEK_DAYS = 7;
+const MONTH_DAYS = 30;
 
 function productionRunHref(facilityId: string, productionRunId: string): string {
   const params = new URLSearchParams({
@@ -79,23 +65,37 @@ function productionRunHref(facilityId: string, productionRunId: string): string 
 export type DashboardKpiKey =
   | "feedstockProcessed"
   | "biocharProduced"
-  | "pyrolysisYield"
   | "appliedToSoil"
   | "co2eStored";
 
 export interface DashboardKpi {
   key: DashboardKpiKey;
   label: string;
-  /** Display unit, e.g. "t", "%", "tCO₂e". */
+  /** Display unit, e.g. "t", "tCO₂e". */
   unit: string;
   /** Null = no data in range (render "—", not 0). */
   value: number | null;
   /** Percent change vs the previous equal-length period; null when not comparable. */
   deltaPercent: number | null;
-  /** 12-bucket series across the range, oldest first. */
-  series: number[];
   /** One-line context, e.g. "8 runs in period". */
   detail: string;
+}
+
+export type DashboardMassFlowKey =
+  | "delivered"
+  | "intoRuns"
+  | "produced"
+  | "bagged"
+  | "applied";
+
+/**
+ * One traceability-chain segment (supplier→feedstock, …, delivery→application)
+ * for the selected period — the scene's mass chips and flow ribbons.
+ */
+export interface DashboardMassFlowSegment {
+  key: DashboardMassFlowKey;
+  /** Dry tonnes moved through the segment in the period. */
+  tonnes: number;
 }
 
 export interface DashboardAttentionItem {
@@ -107,32 +107,14 @@ export interface DashboardAttentionItem {
   href: string;
 }
 
-export interface DashboardFeedstockMixSlice {
-  feedstockTypeId: string | null;
-  name: string;
-  massDryKg: number;
-  /** Share of the period's total dry mass, 0–100. */
-  percent: number;
-}
-
-export interface DashboardOverview {
+export interface DashboardOverview extends DashboardStationsData {
   range: DashboardRange;
   /** Server time the snapshot was built (ISO) — drives the header "updated" stamp. */
   generatedAt: string;
   kpis: DashboardKpi[];
+  /** Chain segments in flow order, supplier → application. */
+  massFlow: DashboardMassFlowSegment[];
   attention: DashboardAttentionItem[];
-  feedstockMix: DashboardFeedstockMixSlice[];
-  flow: CreditBatchSankeyData;
-  /** Live signal: running runs + in-flight submissions (range-independent). */
-  now: DashboardNowItem[];
-  /** MRV pipeline funnel with per-stage needs-attention share. */
-  progress: DashboardProgressStage[];
-  /** Structural certification gaps (GPS, samples, transport provenance). */
-  evidence: DashboardEvidenceRow[];
-  /** Plottable sites for the dashboard traceability map. */
-  mapPoints: DashboardMapPoint[];
-  /** Directional traceability legs between the plotted sites. */
-  mapEdges: DashboardMapEdge[];
 }
 
 interface RangeBounds {
@@ -148,14 +130,10 @@ function resolveRange(range: DashboardRange): RangeBounds {
   if (range === "all") {
     return { startMs: null, previousStartMs: null, nowMs };
   }
-  if (range === "ytd") {
-    const startMs = new Date(new Date().getFullYear(), 0, 1).getTime();
-    return { startMs, previousStartMs: startMs - (nowMs - startMs), nowMs };
-  }
-  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  const spanMs = (range === "week" ? WEEK_DAYS : MONTH_DAYS) * DAY_MS;
   return {
-    startMs: nowMs - THIRTY_DAYS_MS,
-    previousStartMs: nowMs - 2 * THIRTY_DAYS_MS,
+    startMs: nowMs - spanMs,
+    previousStartMs: nowMs - 2 * spanMs,
     nowMs,
   };
 }
@@ -167,37 +145,13 @@ function toMs(value: string | Date | null): number | null {
   return Number.isNaN(ms) ? null : ms;
 }
 
-interface DatedValue {
-  ms: number;
-  value: number;
-}
-
-function inCurrentPeriod(ms: number, bounds: RangeBounds, allStartMs: number) {
-  const start = bounds.startMs ?? allStartMs;
-  return ms >= start && ms <= bounds.nowMs;
+function inCurrentPeriod(ms: number, bounds: RangeBounds) {
+  return (bounds.startMs == null || ms >= bounds.startMs) && ms <= bounds.nowMs;
 }
 
 function inPreviousPeriod(ms: number, bounds: RangeBounds) {
   if (bounds.previousStartMs == null || bounds.startMs == null) return false;
   return ms >= bounds.previousStartMs && ms < bounds.startMs;
-}
-
-function bucketSeries(
-  points: DatedValue[],
-  startMs: number,
-  endMs: number,
-): number[] {
-  const series = new Array<number>(SERIES_BUCKETS).fill(0);
-  const span = Math.max(1, endMs - startMs);
-  for (const point of points) {
-    if (point.ms < startMs || point.ms > endMs) continue;
-    const index = Math.min(
-      SERIES_BUCKETS - 1,
-      Math.max(0, Math.floor(((point.ms - startMs) / span) * SERIES_BUCKETS)),
-    );
-    series[index] += point.value;
-  }
-  return series;
 }
 
 function deltaPercent(current: number, previous: number): number | null {
@@ -221,99 +175,99 @@ export async function getDashboardOverview(
   const fetchStart =
     bounds.previousStartMs == null ? null : new Date(bounds.previousStartMs);
 
-  const [
-    [runRows, lotRows, applicationRows, batchRows, feedstockRows],
-    attention,
-    operations,
-  ] = await Promise.all([
-    Promise.all([
-      db
-        .select({
-          date: productionRunDateExpr(),
-          feedstockMassDryKg: productionRuns.feedstockMassDryKg,
-          biocharDryMassKg: productionRuns.biocharDryMassKg,
-        })
-        .from(productionRuns)
-        .where(
-          and(
-            eq(productionRuns.organizationId, ctx.organizationId),
-            eq(productionRuns.facilityId, facilityId),
-            isNull(productionRuns.archivedAt),
-            ne(productionRuns.status, "void"),
-            ...(fetchStart
-              ? [gte(productionRunDateExpr(), fetchStart.toISOString().slice(0, 10))]
-              : []),
+  const [[runRows, lotRows, applicationRows, batchRows, feedstockRows], attention, stationsData] =
+    await Promise.all([
+      Promise.all([
+        db
+          .select({
+            date: productionRunDateExpr(),
+            feedstockMassDryKg: productionRuns.feedstockMassDryKg,
+            biocharDryMassKg: productionRuns.biocharDryMassKg,
+          })
+          .from(productionRuns)
+          .where(
+            and(
+              eq(productionRuns.organizationId, ctx.organizationId),
+              eq(productionRuns.facilityId, facilityId),
+              isNull(productionRuns.archivedAt),
+              ne(productionRuns.status, "void"),
+              ...(fetchStart
+                ? [gte(productionRunDateExpr(), fetchStart.toISOString().slice(0, 10))]
+                : []),
+            ),
           ),
-        ),
-      db
-        .select({
-          productionDate: biocharProducts.productionDate,
-          massKg: biocharProducts.massKg,
-          moistureContentPercent: biocharProducts.moistureContentPercent,
-        })
-        .from(biocharProducts)
-        .where(
-          and(
-            eq(biocharProducts.organizationId, ctx.organizationId),
-            eq(biocharProducts.facilityId, facilityId),
-            isNull(biocharProducts.archivedAt),
-            ne(biocharProducts.status, "draft"),
-            ...(fetchStart ? [gte(biocharProducts.productionDate, fetchStart)] : []),
+        db
+          .select({
+            productionDate: biocharProducts.productionDate,
+            massKg: biocharProducts.massKg,
+            moistureContentPercent: biocharProducts.moistureContentPercent,
+          })
+          .from(biocharProducts)
+          .where(
+            and(
+              eq(biocharProducts.organizationId, ctx.organizationId),
+              eq(biocharProducts.facilityId, facilityId),
+              isNull(biocharProducts.archivedAt),
+              ne(biocharProducts.status, "draft"),
+              ...(fetchStart ? [gte(biocharProducts.productionDate, fetchStart)] : []),
+            ),
           ),
-        ),
-      db
-        .select({
-          applicationDate: applications.applicationDate,
-          biocharAppliedDryTons: applications.biocharAppliedDryTons,
-        })
-        .from(applications)
-        .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
-        .where(
-          and(
-            eq(applications.organizationId, ctx.organizationId),
-            eq(deliveries.facilityId, facilityId),
-            isNull(deliveries.archivedAt),
-            ...(fetchStart ? [gte(applications.applicationDate, fetchStart)] : []),
+        db
+          .select({
+            applicationDate: applications.applicationDate,
+            biocharAppliedDryTons: applications.biocharAppliedDryTons,
+          })
+          .from(applications)
+          .innerJoin(
+            deliveries,
+            and(
+              eq(applications.deliveryId, deliveries.id),
+              eq(deliveries.organizationId, ctx.organizationId),
+            ),
+          )
+          .where(
+            and(
+              eq(applications.organizationId, ctx.organizationId),
+              eq(deliveries.facilityId, facilityId),
+              isNull(deliveries.archivedAt),
+              ...(fetchStart ? [gte(applications.applicationDate, fetchStart)] : []),
+            ),
           ),
-        ),
-      db
-        .select({
-          id: creditBatches.id,
-          endDate: creditBatches.endDate,
-        })
-        .from(creditBatches)
-        .where(
-          and(
-            eq(creditBatches.organizationId, ctx.organizationId),
-            eq(creditBatches.facilityId, facilityId),
-            isNull(creditBatches.archivedAt),
-            ne(creditBatches.status, "rejected"),
-            ...(fetchStart
-              ? [gte(creditBatches.endDate, fetchStart.toISOString().slice(0, 10))]
-              : []),
+        db
+          .select({
+            id: creditBatches.id,
+            endDate: creditBatches.endDate,
+          })
+          .from(creditBatches)
+          .where(
+            and(
+              eq(creditBatches.organizationId, ctx.organizationId),
+              eq(creditBatches.facilityId, facilityId),
+              isNull(creditBatches.archivedAt),
+              ne(creditBatches.status, "rejected"),
+              ...(fetchStart
+                ? [gte(creditBatches.endDate, fetchStart.toISOString().slice(0, 10))]
+                : []),
+            ),
           ),
-        ),
-      db
-        .select({
-          feedstockTypeId: feedstocks.feedstockTypeId,
-          typeName: feedstockTypes.name,
-          massDryKg: feedstocks.massDryKg,
-          deliveryDate: feedstocks.deliveryDate,
-        })
-        .from(feedstocks)
-        .innerJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
-        .where(
-          and(
-            eq(feedstocks.organizationId, ctx.organizationId),
-            eq(feedstocks.facilityId, facilityId),
-            isNull(feedstocks.archivedAt),
-            ...(fetchStart ? [gte(feedstocks.deliveryDate, fetchStart)] : []),
+        db
+          .select({
+            massDryKg: feedstocks.massDryKg,
+            deliveryDate: feedstocks.deliveryDate,
+          })
+          .from(feedstocks)
+          .where(
+            and(
+              eq(feedstocks.organizationId, ctx.organizationId),
+              eq(feedstocks.facilityId, facilityId),
+              isNull(feedstocks.archivedAt),
+              ...(fetchStart ? [gte(feedstocks.deliveryDate, fetchStart)] : []),
+            ),
           ),
-        ),
-    ]),
-    getAttentionItems(ctx, facilityId),
-    getDashboardOperations(ctx, facilityId),
-  ]);
+      ]),
+      getAttentionItems(ctx, facilityId),
+      getDashboardStations(ctx, facilityId),
+    ]);
 
   // Derived CO₂e stored per batch (issue #285): the same preview figure the
   // credit-batch detail page shows — the stored column no longer exists.
@@ -344,32 +298,10 @@ export async function getDashboardOverview(
   const batchPoints = batchRows
     .map((row) => ({ ms: toMs(row.endDate), row }))
     .filter((p): p is { ms: number; row: (typeof batchRows)[number] } => p.ms != null);
-  const feedstockPoints = feedstockRows.map((row) => ({
-    // Feedstocks may predate the delivery-date backfill; created order keeps
-    // them in the "all" range without inventing a date.
-    ms: toMs(row.deliveryDate),
-    row,
-  }));
-
-  // "all" range: anchor the series at the earliest dated record.
-  const allDates = [
-    ...runPoints.map((p) => p.ms),
-    ...lotPoints.map((p) => p.ms),
-    ...applicationPoints.map((p) => p.ms),
-    ...batchPoints.map((p) => p.ms),
-    ...feedstockPoints.map((p) => p.ms).filter((ms): ms is number => ms != null),
-  ];
-  const allStartMs =
-    allDates.length > 0
-      ? Math.min(...allDates)
-      : bounds.nowMs - ALL_RANGE_FALLBACK_DAYS * 24 * 60 * 60 * 1000;
-  const seriesStartMs = bounds.startMs ?? allStartMs;
 
   // ---- KPI assembly --------------------------------------------------------
 
-  const currentRuns = runPoints.filter((p) =>
-    inCurrentPeriod(p.ms, bounds, allStartMs),
-  );
+  const currentRuns = runPoints.filter((p) => inCurrentPeriod(p.ms, bounds));
   const previousRuns = runPoints.filter((p) => inPreviousPeriod(p.ms, bounds));
 
   const currentFeedstockRuns = currentRuns.filter(
@@ -398,24 +330,8 @@ export async function getDashboardOverview(
     previousOutputRuns.map((p) => p.row.biocharDryMassKg ?? 0),
   );
 
-  // Yield only counts runs that recorded both sides of the conversion.
-  const yieldRuns = currentRuns.filter(
-    (p) => p.row.feedstockMassDryKg != null && p.row.biocharDryMassKg != null,
-  );
-  const yieldInKg = sum(yieldRuns.map((p) => p.row.feedstockMassDryKg ?? 0));
-  const yieldOutKg = sum(yieldRuns.map((p) => p.row.biocharDryMassKg ?? 0));
-  const previousYieldRuns = previousRuns.filter(
-    (p) => p.row.feedstockMassDryKg != null && p.row.biocharDryMassKg != null,
-  );
-  const previousYieldInKg = sum(
-    previousYieldRuns.map((p) => p.row.feedstockMassDryKg ?? 0),
-  );
-  const previousYieldOutKg = sum(
-    previousYieldRuns.map((p) => p.row.biocharDryMassKg ?? 0),
-  );
-
   const currentApplications = applicationPoints.filter((p) =>
-    inCurrentPeriod(p.ms, bounds, allStartMs),
+    inCurrentPeriod(p.ms, bounds),
   );
   const previousApplications = applicationPoints.filter((p) =>
     inPreviousPeriod(p.ms, bounds),
@@ -427,9 +343,7 @@ export async function getDashboardOverview(
     previousApplications.map((p) => p.row.biocharAppliedDryTons ?? 0),
   );
 
-  const currentBatches = batchPoints.filter((p) =>
-    inCurrentPeriod(p.ms, bounds, allStartMs),
-  );
+  const currentBatches = batchPoints.filter((p) => inCurrentPeriod(p.ms, bounds));
   const previousBatches = batchPoints.filter((p) => inPreviousPeriod(p.ms, bounds));
   const currentStoredBatches = currentBatches.filter(
     (p) => storedTonnesOf(p.row.id) != null,
@@ -444,17 +358,6 @@ export async function getDashboardOverview(
     previousStoredBatches.map((p) => storedTonnesOf(p.row.id) ?? 0),
   );
 
-  const yieldSeriesIn = bucketSeries(
-    yieldRuns.map((p) => ({ ms: p.ms, value: p.row.feedstockMassDryKg ?? 0 })),
-    seriesStartMs,
-    bounds.nowMs,
-  );
-  const yieldSeriesOut = bucketSeries(
-    yieldRuns.map((p) => ({ ms: p.ms, value: p.row.biocharDryMassKg ?? 0 })),
-    seriesStartMs,
-    bounds.nowMs,
-  );
-
   const kpis: DashboardKpi[] = [
     {
       key: "feedstockProcessed",
@@ -466,14 +369,6 @@ export async function getDashboardOverview(
         range === "all" || currentFeedstockRuns.length === 0
           ? null
           : deltaPercent(feedstockInCurrentKg, feedstockInPreviousKg),
-      series: bucketSeries(
-        currentFeedstockRuns.map((p) => ({
-          ms: p.ms,
-          value: (p.row.feedstockMassDryKg ?? 0) / 1000,
-        })),
-        seriesStartMs,
-        bounds.nowMs,
-      ),
       detail:
         currentFeedstockRuns.length > 0
           ? `dry mass into ${currentFeedstockRuns.length} ${currentFeedstockRuns.length === 1 ? "run" : "runs"}`
@@ -488,37 +383,9 @@ export async function getDashboardOverview(
         range === "all" || currentOutputRuns.length === 0
           ? null
           : deltaPercent(outputCurrentKg, outputPreviousKg),
-      series: bucketSeries(
-        currentOutputRuns.map((p) => ({
-          ms: p.ms,
-          value: (p.row.biocharDryMassKg ?? 0) / 1000,
-        })),
-        seriesStartMs,
-        bounds.nowMs,
-      ),
       detail:
         currentOutputRuns.length > 0
           ? "dry mass out of the reactors"
-          : "no measured runs in period",
-    },
-    {
-      key: "pyrolysisYield",
-      label: "Pyrolysis yield",
-      unit: "%",
-      value: yieldInKg > 0 ? (yieldOutKg / yieldInKg) * 100 : null,
-      deltaPercent:
-        range === "all" || previousYieldInKg <= 0 || yieldInKg <= 0
-          ? null
-          : deltaPercent(
-              (yieldOutKg / yieldInKg) * 100,
-              (previousYieldOutKg / previousYieldInKg) * 100,
-            ),
-      series: yieldSeriesIn.map((inKg, i) =>
-        inKg > 0 ? (yieldSeriesOut[i] / inKg) * 100 : 0,
-      ),
-      detail:
-        yieldInKg > 0
-          ? `${(yieldInKg / 1000).toFixed(1)} t in → ${(yieldOutKg / 1000).toFixed(1)} t out`
           : "no measured runs in period",
     },
     {
@@ -530,14 +397,6 @@ export async function getDashboardOverview(
         range === "all"
           ? null
           : deltaPercent(appliedCurrentTons, appliedPreviousTons),
-      series: bucketSeries(
-        currentApplications.map((p) => ({
-          ms: p.ms,
-          value: p.row.biocharAppliedDryTons ?? 0,
-        })),
-        seriesStartMs,
-        bounds.nowMs,
-      ),
       detail: `${currentApplications.length} ${currentApplications.length === 1 ? "application" : "applications"}`,
     },
     {
@@ -549,14 +408,6 @@ export async function getDashboardOverview(
         range === "all" || currentStoredBatches.length === 0
           ? null
           : deltaPercent(storedCurrentTons, storedPreviousTons),
-      series: bucketSeries(
-        currentStoredBatches.map((p) => ({
-          ms: p.ms,
-          value: storedTonnesOf(p.row.id) ?? 0,
-        })),
-        seriesStartMs,
-        bounds.nowMs,
-      ),
       detail:
         currentStoredBatches.length > 0
           ? `${currentStoredBatches.length} ${currentStoredBatches.length === 1 ? "credit batch" : "credit batches"}`
@@ -564,85 +415,46 @@ export async function getDashboardOverview(
     },
   ];
 
-  // ---- feedstock mix --------------------------------------------------------
+  // ---- mass flow along the chain -------------------------------------------
 
-  const mixFeedstocks = feedstockPoints.filter(
-    (p) =>
-      p.ms == null
-        ? bounds.startMs == null
-        : inCurrentPeriod(p.ms, bounds, allStartMs),
-  );
-  const mixByType = new Map<string, DashboardFeedstockMixSlice>();
-  for (const { row } of mixFeedstocks) {
-    const existing = mixByType.get(row.feedstockTypeId);
-    if (existing) {
-      existing.massDryKg += row.massDryKg;
-    } else {
-      mixByType.set(row.feedstockTypeId, {
-        feedstockTypeId: row.feedstockTypeId,
-        name: row.typeName,
-        massDryKg: row.massDryKg,
-        percent: 0,
-      });
-    }
-  }
-  const mixSorted = Array.from(mixByType.values()).sort(
-    (a, b) => b.massDryKg - a.massDryKg,
-  );
-  const mixHead = mixSorted.slice(0, MIX_SLICES);
-  const mixTailKg = sum(mixSorted.slice(MIX_SLICES).map((s) => s.massDryKg));
-  if (mixTailKg > 0) {
-    mixHead.push({
-      feedstockTypeId: null,
-      name: "Other",
-      massDryKg: mixTailKg,
-      percent: 0,
-    });
-  }
-  const mixTotalKg = sum(mixHead.map((s) => s.massDryKg));
-  const feedstockMix = mixHead.map((slice) => ({
-    ...slice,
-    percent: mixTotalKg > 0 ? (slice.massDryKg / mixTotalKg) * 100 : 0,
+  const feedstockPoints = feedstockRows.map((row) => ({
+    ms: toMs(row.deliveryDate),
+    row,
   }));
-
-  // ---- custody flow ribbon --------------------------------------------------
-
-  const currentLots = lotPoints.filter((p) =>
-    inCurrentPeriod(p.ms, bounds, allStartMs),
+  // Feedstocks may predate the delivery-date backfill; undated rows only
+  // count in the unbounded "all" period rather than inventing a date.
+  const deliveredKg = sum(
+    feedstockPoints
+      .filter((p) =>
+        p.ms == null ? bounds.startMs == null : inCurrentPeriod(p.ms, bounds),
+      )
+      .map((p) => p.row.massDryKg),
   );
-  // The flow is dry kg end to end: `massKg` is the lot's wet mass, so derive
-  // dry via the recorded moisture (biochar runs 1–2%); a lot without a
-  // moisture reading counts at wet mass rather than vanishing into the
-  // "not bagged into lots" exit.
+  const currentLots = lotPoints.filter((p) => inCurrentPeriod(p.ms, bounds));
+  // Dry kg end to end: `massKg` is the lot's wet mass, so derive dry via the
+  // recorded moisture (biochar runs 1–2%); a lot without a moisture reading
+  // counts at wet mass rather than vanishing from the segment.
   const lotDryKg = (row: (typeof lotRows)[number]) =>
     computeClampedDryMass(row.massKg, row.moistureContentPercent) ??
     row.massKg ??
     0;
-  const flow = buildStageFlow({
-    feedstockInKg: feedstockInCurrentKg,
-    runOutputKg: outputCurrentKg,
-    lotMassKg: sum(currentLots.map((p) => lotDryKg(p.row))),
-    appliedKg: tonnesToKg(appliedCurrentTons),
-    counts: {
-      feedstocks: mixFeedstocks.length,
-      productionRuns: currentRuns.length,
-      biocharLots: currentLots.length,
-      applications: currentApplications.length,
-    },
-  });
+  const baggedKg = sum(currentLots.map((p) => lotDryKg(p.row)));
+
+  const massFlow: DashboardMassFlowSegment[] = [
+    { key: "delivered", tonnes: deliveredKg / 1000 },
+    { key: "intoRuns", tonnes: feedstockInCurrentKg / 1000 },
+    { key: "produced", tonnes: outputCurrentKg / 1000 },
+    { key: "bagged", tonnes: baggedKg / 1000 },
+    { key: "applied", tonnes: tonnesToKg(appliedCurrentTons) / 1000 },
+  ];
 
   return {
     range,
-    generatedAt: operations.generatedAt,
+    generatedAt: new Date().toISOString(),
     kpis,
+    massFlow,
     attention,
-    feedstockMix,
-    flow,
-    now: operations.now,
-    progress: operations.progress,
-    evidence: operations.evidence,
-    mapPoints: operations.mapPoints,
-    mapEdges: operations.mapEdges,
+    ...stationsData,
   };
 }
 

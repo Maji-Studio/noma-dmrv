@@ -1,11 +1,10 @@
 /**
- * DashboardView — the facility operations dashboard, consolidated into four
- * top-to-bottom altitudes: the 5-KPI strip (the numbers), the Action center
- * (the single "what needs me" surface — record flags, evidence gaps, and the
- * live signal merged), the Traceability hero (the custody flow over an
- * interactive directional map), and a supporting strip (the MRV pipeline
- * funnel and the feedstock breakdown). All facility-scoped via the sidebar
- * selector like every other page.
+ * DashboardView — the Flow Hero dashboard, deliberately simple: the display
+ * headline, the 4-stat KPI band, the isometric traceability hero (the single
+ * "see the chain" surface with its Overview / Flow / Needs-attention views),
+ * and a supporting row below — the open-items list, the recent-activity feed,
+ * and the certification summary. All facility-scoped via the sidebar selector
+ * like every other page.
  */
 "use client";
 
@@ -16,14 +15,14 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
 import type { DashboardRange } from "@/data-access/dashboard-overview";
-import { DashboardKpis } from "./dashboard-kpis";
-import { ActionCenter } from "./action-center";
-import { ProgressPipeline } from "./progress-pipeline";
-import { FeedstockMix } from "./feedstock-mix";
-import { TraceabilitySection } from "./traceability-section";
+import { HeroKpiBand } from "./hero-kpi-band";
+import { FlowHero } from "./flow-hero";
+import { AttentionList } from "./attention-list";
+import { ActivityFeed } from "./activity-feed";
+import { CertificationBlock } from "./certification-block";
 import { RangeToggle } from "./range-toggle";
 
-const DEFAULT_RANGE: DashboardRange = "30d";
+const DEFAULT_RANGE: DashboardRange = "month";
 
 function formatUpdated(iso: string): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -76,30 +75,27 @@ export function DashboardView() {
         />
       ) : (
         <>
-          <DashboardKpis kpis={data?.kpis} isLoading={isLoading} />
+          <HeroKpiBand kpis={data?.kpis} isLoading={isLoading} />
 
-          {/* Panels only mount with data — an empty "all clear" queue during
+          <FlowHero
+            stations={data?.stations}
+            massFlow={data?.massFlow}
+            runningRuns={data?.runningRuns ?? 0}
+            isLoading={isLoading}
+            facilityId={facilityId}
+          />
+
+          {/* Supporting row — only with data; an empty "all clear" list during
               loading would read as a (false) signal. */}
           {data && (
-            <>
-              <ActionCenter
-                attention={data.attention}
-                evidence={data.evidence}
-                now={data.now}
+            <div className="grid grid-cols-1 gap-24 lg:grid-cols-2 xl:grid-cols-3">
+              <AttentionList attention={data.attention} />
+              <ActivityFeed activity={data.activity} />
+              <CertificationBlock
+                certification={data.certification}
                 facilityId={facilityId}
               />
-
-              <TraceabilitySection
-                flow={data.flow}
-                points={data.mapPoints}
-                edges={data.mapEdges}
-                facilityId={facilityId}
-              />
-
-              <ProgressPipeline stages={data.progress} />
-
-              <FeedstockMix slices={data.feedstockMix} />
-            </>
+            </div>
           )}
         </>
       )}
