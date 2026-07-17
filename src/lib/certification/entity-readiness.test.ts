@@ -220,6 +220,55 @@ describe("deriveEntityCertifyReadiness", () => {
 
     expect(readiness).toEqual({ state: "ready", gaps: [] });
   });
+
+  it("marks an application with complete visual evidence ready", () => {
+    const readiness = deriveEntityCertifyReadiness("application", {
+      biocharAppliedTons: 10,
+      biocharAppliedDryTons: 8,
+      durabilityOption: "200_year",
+      soilTemperatureC: 15,
+      evidenceGapCount: 0,
+    });
+
+    expect(readiness).toEqual({ state: "ready", gaps: [] });
+  });
+
+  it("reports missing visual evidence roles for an application", () => {
+    const readiness = deriveEntityCertifyReadiness("application", {
+      biocharAppliedTons: 10,
+      biocharAppliedDryTons: 8,
+      durabilityOption: "200_year",
+      soilTemperatureC: 15,
+      evidenceGapCount: 3,
+    });
+
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      {
+        kind: "field",
+        key: "applicationEvidence",
+        label: "Application evidence",
+      },
+    ]);
+  });
+
+  it("fails closed when an application row omits its evidence gap count", () => {
+    const readiness = deriveEntityCertifyReadiness("application", {
+      biocharAppliedTons: 10,
+      biocharAppliedDryTons: 8,
+      durabilityOption: "200_year",
+      soilTemperatureC: 15,
+    });
+
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      {
+        kind: "field",
+        key: "applicationEvidence",
+        label: "Application evidence",
+      },
+    ]);
+  });
 });
 
 describe("isCertifyFormField", () => {

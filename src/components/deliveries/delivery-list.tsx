@@ -115,6 +115,8 @@ function createColumns(
       cell: ({ row }) => (
         <EntityCertifyReadinessBadge
           readiness={deriveEntityCertifyReadiness("delivery", row.original)}
+          readyLabel="Fields complete"
+          readinessNoun="delivery fields"
         />
       ),
     },
@@ -452,6 +454,8 @@ export function DeliveryList() {
                             "delivery",
                             sideSheetEntity,
                           )}
+                          readyLabel="Fields complete"
+                          readinessNoun="delivery fields"
                         />
                       ),
                     },
