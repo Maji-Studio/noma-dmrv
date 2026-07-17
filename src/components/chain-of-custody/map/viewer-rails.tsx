@@ -29,7 +29,11 @@ import {
   RAIL_AREA_CARD_WIDTH_PX,
   RAIL_DROPDOWN_WIDTH_PX,
 } from "./viewer-constants";
-import { totalLegDistanceKm } from "./viewer-utils";
+import {
+  totalLegAppliedWetMassKg,
+  totalLegDistanceKm,
+  totalLegLoadMassKg,
+} from "./viewer-utils";
 
 const RAIL_BOX_CLASS =
   "border-[1.5px] border-[var(--clr-dark-purple-20)] " +
@@ -97,13 +101,6 @@ function legOuterName(leg: ChainGeoLeg): string {
   return name ?? leg.outerCode ?? "Unknown";
 }
 
-/** Sum of cargo mass across legs (the area card's mass line), kg. */
-function totalLoadMassKg(legs: ChainGeoLeg[]): number | null {
-  const withMass = legs.filter((leg) => leg.loadMassKg != null);
-  if (withMass.length === 0) return null;
-  return withMass.reduce((sum, leg) => sum + (leg.loadMassKg ?? 0), 0);
-}
-
 /**
  * Collapsed material summary for the feedstock side: the single type when the
  * legs agree, else the first plus a "+N" remainder.
@@ -142,7 +139,15 @@ function AreaDropdownRow({
   onFocus,
   onHoverLeg,
 }: AreaDropdownRowProps) {
-  const meta = [leg.materialLabel, formatMass(leg.loadMassKg)]
+  const mass =
+    leg.kind === "inbound" ? leg.loadMassKg : leg.appliedWetMassKg;
+  const massLabel =
+    mass == null
+      ? null
+      : `${formatMass(mass)} wet ${
+          leg.kind === "inbound" ? "received" : "applied"
+        }`;
+  const meta = [leg.materialLabel, massLabel]
     .filter(Boolean)
     .join(" · ");
 
@@ -214,7 +219,16 @@ function AreaCard({
     side === "inbound"
       ? materialSummary(shown)
       : `${shown.length} ${shown.length === 1 ? "site" : "sites"}`;
-  const mass = totalLoadMassKg(shown);
+  const mass =
+    side === "inbound"
+      ? totalLegLoadMassKg(shown)
+      : totalLegAppliedWetMassKg(shown);
+  const massLabel =
+    mass == null
+      ? "—"
+      : `${formatMass(mass)} wet ${
+          side === "inbound" ? "received" : "applied"
+        }`;
   const narrowed = focusLegIds !== null && shown.length < legs.length;
 
   if (legs.length === 0) {
@@ -281,7 +295,7 @@ function AreaCard({
           {summary}
         </span>
         <span className="font-mono text-[10px] tracking-[0.02em] text-[var(--clr-dark-purple-60)]">
-          {mass != null ? formatMass(mass) : "—"}
+          {massLabel}
         </span>
       </DropdownMenu.Trigger>
 
