@@ -468,9 +468,18 @@ export function ApplicationEvidencePanel({
       {deferredAttachments && (
         <FailedDeferredAttachments
           attachments={deferredAttachments.attachments}
-          onRetry={(key) =>
-            deferredAttachments.retry(ENTITY_TYPE, [applicationId], key)
-          }
+          onRetry={async (key) => {
+            const result = await deferredAttachments.retry(
+              ENTITY_TYPE,
+              [applicationId],
+              key,
+            );
+            // A retry can succeed partially; any landed upload changes the
+            // row's readiness, so refresh the list whenever something uploaded.
+            if (result.uploaded.length > 0) {
+              invalidateApplicationLists();
+            }
+          }}
           onRemove={deferredAttachments.remove}
           disabled={disabled}
         />
