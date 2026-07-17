@@ -395,7 +395,14 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   // Derived values for the side sheet
   const sideSheetOpen = !!sideSheet;
   const sideSheetMode = sideSheet?.mode ?? "create";
-  const sideSheetEntity = sideSheet?.entity ?? null;
+  // The stored entity is a snapshot from when the sheet opened; prefer the
+  // refreshed row from the list query so evidence-driven readiness changes
+  // show while the sheet stays open. Fall back to the snapshot for rows the
+  // list has not caught up with yet (e.g. just-created applications).
+  const sideSheetEntity = sideSheet?.entity
+    ? (items.find((item) => item.id === sideSheet.entity?.id) ??
+      sideSheet.entity)
+    : null;
 
   const sideSheetTitle =
     sideSheetMode === "create" ? "Create Application" : sideSheetEntity?.code ?? "";
