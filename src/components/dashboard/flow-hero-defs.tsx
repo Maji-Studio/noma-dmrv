@@ -41,25 +41,80 @@ export function FlowHeroDefs() {
             fill="none"
           />
         </g>
+        {/* FIBC big-bag — iso cube with softly bulged sides, top rhombus,
+            four lifting loops and a tied neck. Origin = front bottom corner. */}
         <g id="fh-bag">
-          <path d="M-22,3 L30,-23" stroke="currentColor" strokeWidth="1" strokeOpacity=".35" />
           <path
-            d="M0,0 L24,-12 C29,-20 29,-32 24,-38 Q12,-29 0,-26 C3,-18 3,-8 0,0 Z"
+            d="M0,0 L16,-8 C19,-16 19,-27 16,-34 L0,-26 C1.5,-18 1.5,-8 0,0 Z"
             fill="currentColor"
             fillOpacity=".06"
             stroke="currentColor"
             strokeWidth="1.5"
           />
           <path
-            d="M0,0 L-18,-9 C-23,-17 -23,-29 -18,-35 Q-9,-27 0,-26 C3,-18 3,-8 0,0 Z"
+            d="M0,0 L-16,-8 C-19,-16 -19,-27 -16,-34 L0,-26 C1.5,-18 1.5,-8 0,0 Z"
             fill="currentColor"
             fillOpacity=".13"
             stroke="currentColor"
             strokeWidth="1.5"
           />
-          <path d="M-18,-35 Q3,-45 24,-38" stroke="currentColor" strokeWidth="1.5" fill="none" />
-          <path d="M-1,-41 L-1,-47 M7,-42 L7,-48" stroke="currentColor" strokeWidth="1.2" />
-          <path d="M-1,-47 Q3,-49 7,-48" stroke="currentColor" strokeWidth="1.2" fill="none" />
+          <path d="M0,-26 L16,-34 L0,-42 L-16,-34 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          <path
+            d="M8,-4 C10,-12 10,-24 8,-30 M-8,-4 C-10,-12 -10,-24 -8,-30"
+            stroke="currentColor"
+            strokeWidth="1"
+            strokeOpacity=".35"
+            fill="none"
+          />
+          <path
+            d="M14,-34 Q16,-40 18,-34 M-14,-34 Q-16,-40 -18,-34 M-2,-42 Q0,-48 2,-42 M-2,-26 Q0,-32 2,-26"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            fill="none"
+          />
+          <path
+            d="M-2.5,-32 L-1.5,-38 M2.5,-32 L1.5,-38 M-1.5,-38 Q0,-40 1.5,-38"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            fill="none"
+          />
+        </g>
+        {/* Compact production facility — iso hall, roller door, chimney.
+            Origin = front bottom corner (used by the mobile stack). */}
+        <g id="fh-plant">
+          <path
+            d="M0,0 L44,-22 L44,-46 L0,-24 Z"
+            fill="currentColor"
+            fillOpacity=".06"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          />
+          <path
+            d="M0,0 L-20,-10 L-20,-34 L0,-24 Z"
+            fill="currentColor"
+            fillOpacity=".13"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          />
+          <path d="M0,-24 L44,-46 L24,-56 L-20,-34 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          <path
+            d="M10,-7 L26,-15 L26,-29 L10,-21 Z"
+            fill="currentColor"
+            fillOpacity=".08"
+            stroke="currentColor"
+            strokeWidth="1.2"
+          />
+          <path d="M18,-44 L18,-66 L26,-66 L26,-44" fill={SCENE_BG} stroke="currentColor" strokeWidth="1.5" />
+          <ellipse
+            cx="22"
+            cy="-66"
+            rx="4"
+            ry="2"
+            fill="currentColor"
+            fillOpacity=".08"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          />
         </g>
         <g id="fh-truck">
           <path

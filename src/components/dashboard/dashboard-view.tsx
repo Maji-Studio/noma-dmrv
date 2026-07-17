@@ -39,21 +39,20 @@ export function DashboardView() {
   return (
     <div className="container-max page-shell">
       <header className="flex flex-wrap items-end justify-between gap-24">
-        <div className="flex min-w-0 flex-col gap-8">
-          <p className="label-micro text-[var(--color-text-tertiary)]">
-            Dashboard
-          </p>
-          {/* Blank/whitespace-only names (legacy/manual data — the schema now
-              trims on every write) fall back to the always-present code so the
-              title never renders empty (#378). */}
-          <h1 className="title-heading-1 truncate">
+        <div className="flex min-w-0 flex-col gap-6">
+          {/* Facility rides in the eyebrow (per the hero design) so long names
+              never truncate the display title. Blank/whitespace-only names
+              (legacy/manual data — the schema now trims on every write) fall
+              back to the always-present code (#378). */}
+          <p className="label-micro truncate text-[var(--color-text-tertiary)]">
             {facilityId
               ? selectedFacility
                 ? selectedFacility.name?.trim() || selectedFacility.code
                 : "Facility"
               : "Operations"}
-          </h1>
-          <p className="body-medium text-[var(--color-text-secondary)]">
+          </p>
+          <h1 className="title-heading-2">Dashboard</h1>
+          <p className="body-small text-[var(--color-text-secondary)]">
             {facilityId
               ? data
                 ? `Live operations · updated ${formatUpdated(data.generatedAt)}`

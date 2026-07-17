@@ -48,9 +48,9 @@ export function ActivityFeed({ activity }: ActivityFeedProps) {
             >
               <Link
                 href={item.href}
-                className="group grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-12 py-11"
+                className="group grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-12 py-12"
               >
-                <span className="label-micro w-52 text-[var(--color-text-tertiary)]">
+                <span className="label-micro w-56 text-[var(--color-text-tertiary)]">
                   {formatDate(item.dateIso)}
                 </span>
                 <span className="body-small truncate text-[var(--color-text-primary)]">

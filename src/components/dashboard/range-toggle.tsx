@@ -35,7 +35,7 @@ export function RangeToggle({ value, onChange }: RangeToggleProps) {
             aria-pressed={isActive}
             onClick={() => onChange(option.value)}
             className={[
-              "label-micro h-48 px-18 transition-colors",
+              "label-micro h-36 px-16 transition-colors",
               index < RANGE_OPTIONS.length - 1
                 ? "border-r-[1.5px] border-[var(--clr-dark-purple-20)]"
                 : "",

@@ -24,7 +24,11 @@ import type { FlowHeroView } from "./flow-hero-types";
 import "./flow-hero.css";
 
 const VIEW_W = 1160;
-const VIEW_H = 500;
+/** The art lives between y≈150 and y≈490 — crop the empty sky above it so the
+    hero has no dead band (the design's registry card that filled it moved to
+    the supporting row). */
+const VIEW_Y0 = 140;
+const VIEW_H = 360;
 
 /** Ribbon stroke width range in flow view (px, min → min+span, scaled by tonnes/max). */
 const RIBBON_MIN_WIDTH = 5;
@@ -116,7 +120,7 @@ function pctX(x: number): string {
 }
 
 function pctY(y: number): string {
-  return `${(y / VIEW_H) * 100}%`;
+  return `${((y - VIEW_Y0) / VIEW_H) * 100}%`;
 }
 
 export function formatTonnes(tonnes: number): string {
@@ -220,7 +224,7 @@ export function FlowHeroScene({
       data-testid="flow-hero-scene"
     >
       <svg
-        viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+        viewBox={`0 ${VIEW_Y0} ${VIEW_W} ${VIEW_H}`}
         fill="none"
         className="absolute inset-0 h-full w-full transition-[filter,opacity] duration-500"
         style={ghosted ? { filter: "grayscale(1)", opacity: 0.25 } : undefined}
@@ -312,102 +316,74 @@ export function FlowHeroScene({
             {...stationProps(byKey.get("production")!)}
             style={stationStyle(byKey.get("production")!)}
           >
+            {/* Infeed conveyor climbing into the hall's left wall. */}
+            <path d="M468,352 L516,324 M472,356 L520,328" stroke="currentColor" strokeWidth="1.5" />
             <path
-              d="M545,364 L625,324 L625,316 L545,356 Z"
+              d="M490,346 L490,358 M508,336 L508,350"
+              stroke="currentColor"
+              strokeWidth="1"
+              strokeOpacity=".5"
+            />
+            {/* The hall — lit right face, shaded left face, flat roof. */}
+            <path
+              d="M540,372 L640,322 L640,280 L540,330 Z"
               fill="currentColor"
               fillOpacity=".06"
               stroke="currentColor"
               strokeWidth="1.5"
             />
             <path
-              d="M545,364 L497,340 L497,332 L545,356 Z"
+              d="M540,372 L504,354 L504,312 L540,330 Z"
               fill="currentColor"
               fillOpacity=".13"
               stroke="currentColor"
               strokeWidth="1.5"
             />
+            <path d="M540,330 L640,280 L604,262 L504,312 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            {/* Roller door with slats, vent strip under the roofline, skylight. */}
             <path
-              d="M545,356 L625,316 L577,292 L497,332 Z"
+              d="M560,362 L596,344 L596,320 L560,338 Z"
+              fill="currentColor"
+              fillOpacity=".08"
+              stroke="currentColor"
+              strokeWidth="1.2"
+            />
+            <path
+              d="M560,354 L596,336 M560,346 L596,328"
+              stroke="currentColor"
+              strokeWidth="1"
+              strokeOpacity=".3"
+            />
+            <path d="M546,333 L634,289" stroke="currentColor" strokeWidth="1" strokeOpacity=".35" />
+            <path
+              d="M560,310 L580,300 L568,294 L548,304 Z"
               fill="none"
+              stroke="currentColor"
+              strokeWidth="1"
+              strokeOpacity=".35"
+            />
+            {/* Chimney — body masks the roof edge behind it. */}
+            <path
+              d="M587,216 L587,287 A7,3.5 0 0 0 601,287 L601,216"
+              fill={SCENE_BG}
               stroke="currentColor"
               strokeWidth="1.5"
             />
-            <path d="M495,310 L580,268 L600,307 L515,350 Z" fill="currentColor" fillOpacity=".08" stroke="none" />
-            <path d="M495,310 L580,268 M515,350 L600,307" stroke="currentColor" strokeWidth="1.5" />
             <ellipse
-              cx="590"
-              cy="288"
-              rx="22"
-              ry="11"
-              transform="rotate(63 590 288)"
+              cx="594"
+              cy="216"
+              rx="7"
+              ry="3.5"
               fill="currentColor"
               fillOpacity=".08"
               stroke="currentColor"
               strokeWidth="1.5"
             />
-            <ellipse
-              cx="532"
-              cy="317"
-              rx="22"
-              ry="11"
-              transform="rotate(63 532 317)"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1"
-              strokeOpacity=".45"
-            />
-            <ellipse
-              cx="560"
-              cy="303"
-              rx="22"
-              ry="11"
-              transform="rotate(63 560 303)"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1"
-              strokeOpacity=".45"
-            />
-            <path
-              d="M522,347 L522,362 M528,350 L528,365 M556,330 L556,345 M562,333 L562,348"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            />
-            <path d="M462,322 L494,306 L510,314 L478,330 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
-            <path
-              d="M478,330 L510,314 L486,336 Z"
-              fill="currentColor"
-              fillOpacity=".06"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            />
-            <path
-              d="M462,322 L478,330 L486,336 Z"
-              fill="currentColor"
-              fillOpacity=".13"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            />
-            <path d="M482,338 L482,354 M496,331 L496,347" stroke="currentColor" strokeWidth="1.5" />
-            <path
-              d="M468,318 Q478,310 488,312 Q498,306 504,312"
-              stroke="currentColor"
-              strokeWidth="1"
-              strokeOpacity=".6"
-              fill="none"
-            />
-            <path d="M568,271 L568,217 M576,271 L576,217" stroke="currentColor" strokeWidth="1.5" />
-            <ellipse cx="572" cy="217" rx="4" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5" />
-            <path d="M565,211 L579,211" stroke="currentColor" strokeWidth="1.5" />
-            <path
-              d="M600,296 L634,324 L634,334 L600,306 Z"
-              fill="currentColor"
-              fillOpacity=".08"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            />
+            {/* Char discharge chute + fresh pile (product-zone tint). */}
+            <path d="M628,326 L646,338 M621,330 L639,342" stroke="currentColor" strokeWidth="1.5" />
             <g color={ZONE.prod}>
               <path
-                d="M636,352 L646,340 L658,346 L664,352 Z"
+                d="M642,352 L652,338 L664,344 L670,352 Z"
                 fill="currentColor"
                 fillOpacity=".3"
                 stroke="currentColor"
@@ -416,9 +392,9 @@ export function FlowHeroScene({
             </g>
             {showSmoke && (
               <g fill="var(--clr-dark-purple-30)">
-                <circle cx="572" cy="206" r="4.5" className="fh-smoke" />
-                <circle cx="575" cy="204" r="6" className="fh-smoke" style={{ animationDelay: "-1.6s" }} />
-                <circle cx="569" cy="205" r="7.5" className="fh-smoke" style={{ animationDelay: "-3.2s" }} />
+                <circle cx="594" cy="206" r="4.5" className="fh-smoke" />
+                <circle cx="597" cy="204" r="6" className="fh-smoke" style={{ animationDelay: "-1.6s" }} />
+                <circle cx="591" cy="205" r="7.5" className="fh-smoke" style={{ animationDelay: "-3.2s" }} />
               </g>
             )}
           </g>
@@ -432,8 +408,8 @@ export function FlowHeroScene({
           >
             <use href="#fh-bag" transform="translate(730,328)" />
             <use href="#fh-bag" transform="translate(768,347)" />
-            <use href="#fh-bag" transform="translate(680,353)" />
-            <use href="#fh-bag" transform="translate(718,372)" />
+            <use href="#fh-bag" transform="translate(688,349)" />
+            <use href="#fh-bag" transform="translate(726,368)" />
           </g>
         )}
 
@@ -541,8 +517,8 @@ export function FlowHeroScene({
             <div
               key={`chip-${segment.key}`}
               className={[
-                "pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border border-[var(--clr-dark-purple-30)] font-[family-name:var(--font-mono)] transition-all",
-                emphasized ? "px-8 py-4 text-[12.5px]" : "px-6 py-2 text-[10px]",
+                "pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border border-[var(--clr-dark-purple-30)] font-[family-name:var(--font-mono)] leading-none transition-all",
+                emphasized ? "px-8 py-4 text-[11.5px]" : "px-6 py-4 text-[9.5px]",
               ].join(" ")}
               style={{ left: pctX(pos.x), top: pctY(pos.y), background: SCENE_BG }}
               aria-hidden
@@ -564,7 +540,7 @@ export function FlowHeroScene({
                 key={`badge-${station.key}`}
                 className={[
                   "pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-full bg-[var(--st-wait)] font-[family-name:var(--font-mono)] font-medium leading-none text-white transition-all",
-                  emphasized ? "px-9 py-5 text-[13px]" : "px-7 py-3 text-[10.5px]",
+                  emphasized ? "px-10 py-6 text-[13px]" : "px-8 py-4 text-[10.5px]",
                 ].join(" ")}
                 style={{
                   left: pctX(badge.x),
@@ -581,7 +557,7 @@ export function FlowHeroScene({
       {/* Running-runs chip under the production badge (overview only). */}
       {interactive && view === "overview" && runningRuns > 0 && (
         <div
-          className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap rounded-full bg-[var(--st-run)] px-7 py-3 font-[family-name:var(--font-mono)] text-[9px] font-medium uppercase leading-none tracking-[0.08em] text-white"
+          className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap rounded-full bg-[var(--st-run)] px-8 py-4 font-[family-name:var(--font-mono)] text-[9px] font-medium uppercase leading-none tracking-[0.08em] text-white"
           style={{ left: pctX(632), top: pctY(238) }}
           aria-hidden
         >
@@ -592,10 +568,12 @@ export function FlowHeroScene({
       {/* Hover/focus tooltip — presentation only; the station link carries the a11y. */}
       {interactive && hoveredStation && hoveredGeo && (
         <div
-          className="pointer-events-none absolute z-[5] w-[264px] border-[1.5px] border-[var(--ink)] bg-[var(--paper)] p-14"
+          className="pointer-events-none absolute z-[5] w-[264px] border-[1.5px] border-[var(--ink)] bg-[var(--paper)] p-16"
           style={{
             left: pctX(hoveredGeo.tip.x),
-            top: pctY(Math.max(12, Math.min(hoveredGeo.tip.y - 30, 320))),
+            top: pctY(
+              Math.max(VIEW_Y0 + 12, Math.min(hoveredGeo.tip.y - 30, VIEW_Y0 + 200)),
+            ),
             transform: hoveredGeo.tip.x > TIP_FLIP_X ? "translateX(-100%)" : undefined,
             boxShadow: "6px 6px 0 var(--clr-purple-10)",
           }}
@@ -608,7 +586,7 @@ export function FlowHeroScene({
             </div>
           </div>
           {hoveredStation.reasons.map((reason) => (
-            <div key={reason.text} className="mt-7 flex items-center gap-8">
+            <div key={reason.text} className="mt-8 flex items-center gap-8">
               <span
                 className="h-8 w-8 flex-none rounded-full"
                 style={{

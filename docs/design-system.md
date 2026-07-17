@@ -1340,7 +1340,8 @@ Rules:
 
 **The one sanctioned exception is the Dashboard** (Flow Hero, 2026-07-17):
 it keeps the container/gap shell but opens with a display headline
-(`title-heading-1` under a mono eyebrow) instead of `PageHeader`, its KPI
+("Dashboard" as `title-heading-2` under a mono facility eyebrow) instead of
+`PageHeader`, its KPI
 strip is the 4-cell **HeroKpiBand** (one ink-bordered strip, not iconed
 StatCards), and its hero is the isometric traceability scene
 (`components/dashboard/flow-hero*`). No other page gets a display headline.

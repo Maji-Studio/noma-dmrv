@@ -20,9 +20,9 @@ test.describe("Dashboard (Flow Hero)", () => {
     const page = adminPage;
     await page.goto(`/dashboard?facility=${seededData.facility.id}`);
 
-    await expect(
-      page.getByRole("heading", { name: seededData.facility.name }),
-    ).toBeVisible();
+    // Display headline with the facility riding in the eyebrow
+    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+    await expect(page.getByText(seededData.facility.name).first()).toBeVisible();
 
     // 4-stat KPI band
     const kpis = page.getByTestId("dashboard-kpis");

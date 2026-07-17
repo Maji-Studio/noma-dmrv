@@ -21,8 +21,8 @@ const STATION_GLYPH: Record<
 > = {
   suppliers: { viewBox: "-4 -30 52 36", href: "#fh-heap", color: "var(--acc-prod-ink)" },
   feedstock: { viewBox: "-24 -48 48 56", href: "#fh-bin", color: "var(--acc-prod-ink)" },
-  production: { viewBox: "-28 -64 62 70", href: "#fh-bag", color: "var(--acc-infra-ink)" },
-  products: { viewBox: "-28 -64 62 70", href: "#fh-bag", color: "var(--acc-prod-ink)" },
+  production: { viewBox: "-26 -76 76 84", href: "#fh-plant", color: "var(--acc-infra-ink)" },
+  products: { viewBox: "-23 -53 46 60", href: "#fh-bag", color: "var(--acc-prod-ink)" },
   deliveries: { viewBox: "-26 -72 106 86", href: "#fh-truck", color: "var(--acc-dist-ink)" },
   applications: { viewBox: "-4 -30 52 36", href: "#fh-heap", color: "var(--acc-dist-ink)" },
 };
@@ -123,7 +123,7 @@ export function FlowHeroMobile({ stations, massFlow }: FlowHeroMobileProps) {
                 </span>
               </span>
               {station.attention > 0 && (
-                <span className="rounded-full bg-[var(--st-wait)] px-7 py-3 font-[family-name:var(--font-mono)] text-[10px] leading-none text-white">
+                <span className="rounded-full bg-[var(--st-wait)] px-8 py-4 font-[family-name:var(--font-mono)] text-[10px] leading-none text-white">
                   {station.attention}
                 </span>
               )}
@@ -140,7 +140,7 @@ export function FlowHeroMobile({ stations, massFlow }: FlowHeroMobileProps) {
                   className="h-18 w-0 border-l-[1.5px] border-dashed border-[var(--clr-dark-purple-40)]"
                   aria-hidden
                 />
-                <span className="border border-[var(--clr-dark-purple-30)] bg-[var(--bg)] px-5 py-2 font-[family-name:var(--font-mono)] text-[9px]">
+                <span className="border border-[var(--clr-dark-purple-30)] bg-[var(--bg)] px-6 py-2 font-[family-name:var(--font-mono)] text-[9px] leading-none">
                   {formatTonnes(segment.tonnes)}
                 </span>
               </div>

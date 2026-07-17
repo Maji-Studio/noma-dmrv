@@ -16,10 +16,10 @@
     opacity: 0;
   }
   18% {
-    opacity: 0.65;
+    opacity: 0.55;
   }
   100% {
-    transform: translateY(-48px);
+    transform: translateY(-30px);
     opacity: 0;
   }
 }

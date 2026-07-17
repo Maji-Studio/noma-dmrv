@@ -98,7 +98,7 @@ export function FlowHero({
                 aria-pressed={isActive}
                 onClick={() => setView(option.value)}
                 className={[
-                  "label-micro border-[1.5px] border-[var(--ink)] px-12 py-9 transition-colors",
+                  "label-micro border-[1.5px] border-[var(--ink)] px-12 py-8 transition-colors",
                   isActive
                     ? "bg-[var(--ink)] text-[var(--paper)]"
                     : "bg-transparent text-[var(--ink)] hover:bg-[var(--sea)]",
@@ -156,7 +156,9 @@ export function FlowHero({
               className="w-full max-w-[380px] border-[1.5px] border-[var(--ink)] bg-[var(--paper)] p-24"
               style={{ boxShadow: "6px 6px 0 var(--clr-purple-10)" }}
             >
-              <p className="text-[18px] font-bold">No activity yet</p>
+              <div className="text-[18px] font-bold leading-[1.3] text-[var(--ink)]">
+                No activity yet
+              </div>
               <p className="body-small mt-6 text-[var(--color-text-secondary)]">
                 This facility hasn&apos;t recorded any material. The scene comes to
                 life as feedstock, runs and deliveries are logged.
@@ -189,7 +191,7 @@ export function FlowHero({
         ))}
         <span className="flex items-center gap-6 font-[family-name:var(--font-mono)] text-[9.5px] uppercase tracking-[0.08em] text-[var(--clr-dark-purple-60)]">
           <span
-            className="w-14 border-t-[1.5px] border-dashed border-[var(--clr-dark-purple-50)]"
+            className="w-16 border-t-[1.5px] border-dashed border-[var(--clr-dark-purple-50)]"
             aria-hidden
           />
           Mass flow (t)
