@@ -21,6 +21,7 @@ import {
   transportLegs,
 } from "@/db/schema";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
+import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
 import { requireOrgScope } from "./utils";
 import {
   getChainOfCustodyData,
@@ -78,10 +79,12 @@ export interface ChainGeoLeg {
   distanceSource: DistanceSourceValue | null;
   isDerived: boolean;
   /**
-   * Cargo mass moving along the leg (transport_legs.load_mass_kg — the carbon
-   * number the rail card shows, distinct from distance). Null when not stored.
+   * Cargo mass moving along the transport leg. Kept as the transport/emissions
+   * basis even when an outbound application records a smaller applied mass.
    */
   loadMassKg: number | null;
+  /** Wet biochar mass recorded as applied at the destination, in kg. */
+  appliedWetMassKg: number | null;
   /**
    * What's moving: the feedstock type ("Coffee husk") for inbound, the biochar
    * formulation name (or "Biochar" when pure) for outbound. Drives the card's
@@ -399,6 +402,7 @@ async function getFeedstockLegs(
     ...row,
     kind: row.entityType === "feedstock" ? ("inbound" as const) : ("outbound" as const),
     // Material / link / code are enriched from the lineage by the caller.
+    appliedWetMassKg: null,
     materialLabel: null,
     outerHref: null,
     outerCode: null,
@@ -423,6 +427,7 @@ async function getApplicationBiocharLeg({
   const [row] = await db
     .select({
       loadMassKg: deliveries.deliveredWetMassKg,
+      appliedWetMassTons: applications.biocharAppliedTons,
       deliveryDistanceKmOverride: deliveries.distanceKmOverride,
       deliveryDistanceSource: deliveries.distanceSource,
       locationDistanceKm: customerLocations.distanceFromFacilityKm,
@@ -432,6 +437,14 @@ async function getApplicationBiocharLeg({
       locationGpsLongitude: customerLocations.gpsLongitude,
     })
     .from(deliveries)
+    .innerJoin(
+      applications,
+      and(
+        eq(applications.id, applicationId),
+        eq(applications.deliveryId, deliveries.id),
+        eq(applications.organizationId, ctx.organizationId),
+      ),
+    )
     .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
     .leftJoin(
       customerLocations,
@@ -445,6 +458,7 @@ async function getApplicationBiocharLeg({
   const override = positiveOrNull(row.deliveryDistanceKmOverride);
   const distanceKm = override ?? positiveOrNull(row.locationDistanceKm);
   const loadMassKg = positiveOrNull(row.loadMassKg);
+  const appliedWetMassKg = row.appliedWetMassTons * KG_PER_TONNE;
   if (distanceKm == null || loadMassKg == null) return [];
 
   return [
@@ -466,6 +480,7 @@ async function getApplicationBiocharLeg({
           : row.locationDistanceSource,
       isDerived: true,
       loadMassKg,
+      appliedWetMassKg,
       materialLabel: null,
       outerHref: null,
       outerCode: null,
