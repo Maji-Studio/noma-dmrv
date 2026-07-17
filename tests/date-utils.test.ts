@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { formatLocalDate, parseLocalDateString } from "@/lib/date-utils";
+import {
+  formatLocalDate,
+  parseLocalDateString,
+  toDateInputValue,
+} from "@/lib/date-utils";
 
 const originalTz = process.env.TZ;
 
@@ -36,5 +40,23 @@ describe("parseLocalDateString", () => {
 
   it("rejects an invalid calendar day", () => {
     expect(() => parseLocalDateString("2026-02-30")).toThrow();
+  });
+});
+
+describe("toDateInputValue", () => {
+  it("normalizes persisted Date values for native date inputs", () => {
+    process.env.TZ = "Europe/Zurich";
+    const persisted = new Date(2026, 6, 17, 14, 30);
+
+    expect(toDateInputValue(persisted)).toBe("2026-07-17");
+  });
+
+  it("normalizes persisted ISO strings and preserves date-only strings", () => {
+    process.env.TZ = "Europe/Zurich";
+
+    expect(toDateInputValue("2026-07-17T12:00:00.000Z")).toBe(
+      "2026-07-17",
+    );
+    expect(toDateInputValue("2026-07-17")).toBe("2026-07-17");
   });
 });
