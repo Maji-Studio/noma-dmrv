@@ -6,6 +6,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { MapPinIcon, PlusIcon, LeafIcon, XIcon } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
@@ -33,6 +34,7 @@ import {
   useCreateApplication,
   useUpdateApplication,
   useDeleteApplication,
+  applicationKeys,
 } from "@/hooks/use-applications";
 import type { ApplicationFormData } from "@/schemas/applications";
 import {
@@ -216,6 +218,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const updateApplication = useUpdateApplication();
   const deleteApplication = useDeleteApplication();
   const toast = useToast();
+  const queryClient = useQueryClient();
   const deferredAttachments = useDeferredAttachments();
   const [isFlushing, setIsFlushing] = useState(false);
 
@@ -250,6 +253,11 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         return;
       }
       deferredAttachments.clear();
+      // The create mutation already invalidated the list, but that ran before
+      // the evidence flush finished — so the row's readiness/evidence-gap count
+      // was recomputed with zero uploads. Re-invalidate now that the deferred
+      // attachments have landed so the list reflects the true evidence state.
+      queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
       setSideSheet(null);
       toast.success("Application created successfully");
     } catch (error) {
