@@ -82,13 +82,22 @@ export function combineDateAndTime(dateStr: string, timeStr: string): Date {
   return new Date(`${dateStr}T${timeStr}`);
 }
 
-/** Convert a date value (string or Date) to "YYYY-MM-DD" for input[type="date"]. Passes through YYYY-MM-DD strings as-is. */
+/**
+ * Convert a date value (string or Date) to "YYYY-MM-DD" for input[type="date"].
+ *
+ * Persisted date-only values are stored at UTC midnight, so a `Date`/ISO input
+ * must be read on the UTC calendar, not the browser's — otherwise a value like
+ * `2026-07-17T00:00:00Z` renders as `2026-07-16` west of UTC and a status-only
+ * edit silently saves the shifted day (#46). Plain `YYYY-MM-DD` strings pass
+ * through untouched; only the empty/invalid fallback defaults to local today,
+ * which is the right "new record" default.
+ */
 export function toDateInputValue(value: string | Date | null | undefined): string {
   if (!value) return formatLocalDate(new Date());
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   const date = typeof value === "string" ? new Date(value) : value;
   if (isNaN(date.getTime())) return formatLocalDate(new Date());
-  return formatLocalDate(date);
+  return formatUtcDate(date);
 }
 
 /**
