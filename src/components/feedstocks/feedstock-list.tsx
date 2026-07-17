@@ -142,6 +142,8 @@ function createColumns(
       cell: ({ row }) => (
         <EntityCertifyReadinessBadge
           readiness={deriveEntityCertifyReadiness("feedstock", row.original)}
+          readyLabel="Fields complete"
+          readinessNoun="feedstock fields"
         />
       ),
     },
@@ -529,6 +531,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
                       "feedstock",
                       sideSheetEntity,
                     )}
+                    readyLabel="Fields complete"
+                    readinessNoun="feedstock fields"
                   />
                 ),
               },

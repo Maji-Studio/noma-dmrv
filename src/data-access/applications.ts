@@ -29,6 +29,7 @@ import type { DeliveryStatus } from "@/schemas/deliveries";
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { applicationEvidenceGapCountSql } from "./application-evidence-sql";
 
 // ============================================
 // Application Data Access Layer
@@ -254,6 +255,8 @@ async function resolveApplicationDryMassTons(
 export interface ApplicationListItem extends Application {
   customerName: string | null;
   locationName: string | null;
+  /** Join-derived count of missing visual roles or boundary evidence inputs. */
+  evidenceGapCount: number;
   /**
    * Facility durability tier (ADR 0021), join-derived via the delivery's
    * facility. Drives tier-aware certify readiness — soil temperature is a
@@ -318,6 +321,7 @@ export async function getApplications(
       customerName: customers.name,
       locationName: customerLocations.name,
       durabilityOption: facilities.durabilityOption,
+      evidenceGapCount: applicationEvidenceGapCountSql(),
     })
     .from(applications)
     .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))

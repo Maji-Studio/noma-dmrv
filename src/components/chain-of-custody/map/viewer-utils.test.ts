@@ -8,7 +8,9 @@ import {
   chipAnchor,
   legLineCoordinates,
   resolveLegEndpoints,
+  totalLegAppliedWetMassKg,
   totalLegDistanceKm,
+  totalLegLoadMassKg,
 } from "./viewer-utils";
 
 const FACILITY = { lat: -6.163, lng: 35.7516 };
@@ -31,6 +33,7 @@ function leg(overrides: Partial<ChainGeoLeg>): ChainGeoLeg {
     distanceSource: null,
     isDerived: true,
     loadMassKg: null,
+    appliedWetMassKg: null,
     materialLabel: null,
     outerHref: null,
     outerCode: null,
@@ -184,5 +187,22 @@ describe("totalLegDistanceKm", () => {
   it("sums stored distances at one-decimal precision", () => {
     expect(totalLegDistanceKm([leg({ distanceKm: 41.5 }), leg({ distanceKm: 12.3 })])).toBe(53.8);
     expect(totalLegDistanceKm([])).toBe(0);
+  });
+});
+
+describe("rail-card mass bases", () => {
+  it("keeps transport load separate from applied wet mass", () => {
+    const legs = [
+      leg({ loadMassKg: 270, appliedWetMassKg: 240 }),
+      leg({ id: "leg-2", loadMassKg: 30, appliedWetMassKg: 20 }),
+    ];
+
+    expect(totalLegLoadMassKg(legs)).toBe(300);
+    expect(totalLegAppliedWetMassKg(legs)).toBe(260);
+  });
+
+  it("returns null when the requested mass basis is unavailable", () => {
+    expect(totalLegLoadMassKg([leg({ appliedWetMassKg: 240 })])).toBeNull();
+    expect(totalLegAppliedWetMassKg([leg({ loadMassKg: 270 })])).toBeNull();
   });
 });

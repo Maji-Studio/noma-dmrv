@@ -209,11 +209,21 @@ export function EntitySelect({
   });
 
   // Fetch selected entity details
-  const { data: selectedEntity } = useEntityById(entityType, value);
+  const { data: selectedEntity, isPending: isSelectedEntityPending } =
+    useEntityById(entityType, value);
 
-  const displayText = selectedEntity
-    ? (formatSelectedLabel ? formatSelectedLabel(selectedEntity) : selectedEntity.name)
+  const selectedOption =
+    selectedEntity?.id === value
+      ? selectedEntity
+      : options.find((option) => option.id === value);
+  const displayText = selectedOption
+    ? (formatSelectedLabel ? formatSelectedLabel(selectedOption) : selectedOption.name)
     : "";
+  // Only while the by-ID fetch is unresolved — once it settles without a
+  // match (deleted or inaccessible entity) the ordinary placeholder returns.
+  const isSelectionLoading = Boolean(
+    value && !selectedOption && isSelectedEntityPending,
+  );
 
   const handleCreatedEntity = useCallback(
     (entity: EntityOption) => {
@@ -401,12 +411,15 @@ export function EntitySelect({
           <span
             className={cn(
               "truncate text-left",
-              value
+              value && !isSelectionLoading
                 ? "text-[var(--color-text-primary)]"
                 : "text-[var(--color-text-tertiary)]"
             )}
           >
-            {displayText || placeholder || defaultPlaceholder}
+            {displayText ||
+              (isSelectionLoading
+                ? "Loading selection…"
+                : placeholder || defaultPlaceholder)}
           </span>
           <ChevronDown
             className={cn(

@@ -7,7 +7,7 @@
 import { SampleList } from "@/components/samples";
 
 export const metadata = {
-  title: "Lab Samples | NOMA dMRV",
+  title: "Lab Samples | Maji dMRV",
   description: "Lab sample tracking for biochar quality analysis linked to production runs",
 };
 

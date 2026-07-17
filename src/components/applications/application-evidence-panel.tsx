@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowSquareOutIcon,
   CameraIcon,
@@ -19,6 +20,7 @@ import {
   useDocumentsForEntity,
   useUpdateApplicationEvidenceMetadata,
 } from "@/hooks/use-documents";
+import { applicationKeys } from "@/hooks/use-applications";
 import {
   APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_DESCRIPTIONS,
   APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS,
@@ -248,7 +250,16 @@ export function ApplicationEvidencePanel({
   deferredAttachments,
 }: ApplicationEvidencePanelProps) {
   const toast = useToast();
+  const queryClient = useQueryClient();
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  // Evidence mutations only invalidate the per-entity document query, but the
+  // application list computes each row's readiness/evidence-gap count from the
+  // same documents. Refresh the list after any evidence change so a row does
+  // not linger as stale Incomplete/Ready.
+  const invalidateApplicationLists = () => {
+    queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
+  };
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [classifyingDocumentId, setClassifyingDocumentId] = useState<
     string | null
@@ -297,6 +308,7 @@ export function ApplicationEvidencePanel({
     setErrorMessage(null);
     try {
       await deleteMutation.mutateAsync(deleteId);
+      invalidateApplicationLists();
       toast.success("Evidence deleted");
       setDeleteId(null);
     } catch (err) {
@@ -317,6 +329,7 @@ export function ApplicationEvidencePanel({
         documentId,
         applicationEvidenceRole: role,
       });
+      invalidateApplicationLists();
       toast.success("Evidence classified");
     } catch (err) {
       setErrorMessage(
@@ -338,6 +351,7 @@ export function ApplicationEvidencePanel({
         documentId,
         applicationLogbookEvidenceType: type,
       });
+      invalidateApplicationLists();
       toast.success("Evidence classified");
     } catch (err) {
       setErrorMessage(
@@ -454,9 +468,18 @@ export function ApplicationEvidencePanel({
       {deferredAttachments && (
         <FailedDeferredAttachments
           attachments={deferredAttachments.attachments}
-          onRetry={(key) =>
-            deferredAttachments.retry(ENTITY_TYPE, [applicationId], key)
-          }
+          onRetry={async (key) => {
+            const result = await deferredAttachments.retry(
+              ENTITY_TYPE,
+              [applicationId],
+              key,
+            );
+            // A retry can succeed partially; any landed upload changes the
+            // row's readiness, so refresh the list whenever something uploaded.
+            if (result.uploaded.length > 0) {
+              invalidateApplicationLists();
+            }
+          }}
           onRemove={deferredAttachments.remove}
           disabled={disabled}
         />
@@ -538,7 +561,10 @@ export function ApplicationEvidencePanel({
                   entityId={applicationId}
                   documentType={VISUAL_DOC_TYPE}
                   applicationEvidenceRole={role}
-                  onUploaded={() => setErrorMessage(null)}
+                  onUploaded={() => {
+                    setErrorMessage(null);
+                    invalidateApplicationLists();
+                  }}
                   onUploadError={(err) => setErrorMessage(err)}
                 />
               </div>
@@ -612,7 +638,10 @@ export function ApplicationEvidencePanel({
             entityId={applicationId}
             documentType={BOUNDARY_DOC_TYPE}
             applicationLogbookEvidenceType={logbookEvidenceType}
-            onUploaded={() => setErrorMessage(null)}
+            onUploaded={() => {
+              setErrorMessage(null);
+              invalidateApplicationLists();
+            }}
             onUploadError={(err) => setErrorMessage(err)}
           />
         </div>
