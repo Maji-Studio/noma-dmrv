@@ -3,7 +3,7 @@
  * CRUD operations for facilities with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, SQL, count, countDistinct } from "drizzle-orm";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
@@ -18,7 +18,9 @@ import {
   formulations,
   orders,
   deliveries,
+  applications,
   creditBatches,
+  samples,
   stockpileEvents,
   powerProcurementEvidence,
   type Facility,
@@ -702,7 +704,9 @@ export interface FacilityArchiveImpact {
   biocharProductCount: number;
   orderCount: number;
   deliveryCount: number;
+  applicationCount: number;
   creditBatchCount: number;
+  sampleCount: number;
   stockpileEventCount: number;
   powerProcurementEvidenceCount: number;
   /**
@@ -741,7 +745,9 @@ export async function getFacilityArchiveImpact(
     [productCount],
     [orderCount],
     [deliveryCount],
+    [applicationCount],
     [batchCount],
+    [sampleCount],
     [stockpileEventCount],
     [powerEvidenceCount],
     hasRegistrySubmissions,
@@ -754,7 +760,54 @@ export async function getFacilityArchiveImpact(
     db.select({ count: count() }).from(biocharProducts).where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId))),
     db.select({ count: count() }).from(orders).where(and(eq(orders.facilityId, facilityId), eq(orders.organizationId, ctx.organizationId))),
     db.select({ count: count() }).from(deliveries).where(and(eq(deliveries.facilityId, facilityId), eq(deliveries.organizationId, ctx.organizationId))),
+    db
+      .select({ count: count() })
+      .from(applications)
+      .innerJoin(
+        deliveries,
+        and(
+          eq(applications.deliveryId, deliveries.id),
+          eq(deliveries.organizationId, ctx.organizationId),
+        ),
+      )
+      .where(
+        and(
+          eq(applications.organizationId, ctx.organizationId),
+          eq(deliveries.facilityId, facilityId),
+        ),
+      ),
     db.select({ count: count() }).from(creditBatches).where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId))),
+    // Mirror the getSamples read model: a sample's effective facility comes from
+    // EITHER its production-run or its credit-batch parent (schema still allows
+    // run-linked, batchless provenance). An inner join through creditBatchId
+    // alone dropped those rows, undercounting the archive impact. Left-join both
+    // parents and count distinct samples where either facility matches.
+    db
+      .select({ count: countDistinct(samples.id) })
+      .from(samples)
+      .leftJoin(
+        productionRuns,
+        and(
+          eq(samples.productionRunId, productionRuns.id),
+          eq(productionRuns.organizationId, ctx.organizationId),
+        ),
+      )
+      .leftJoin(
+        creditBatches,
+        and(
+          eq(samples.creditBatchId, creditBatches.id),
+          eq(creditBatches.organizationId, ctx.organizationId),
+        ),
+      )
+      .where(
+        and(
+          eq(samples.organizationId, ctx.organizationId),
+          or(
+            eq(productionRuns.facilityId, facilityId),
+            eq(creditBatches.facilityId, facilityId),
+          ),
+        ),
+      ),
     db.select({ count: count() }).from(stockpileEvents).where(and(eq(stockpileEvents.facilityId, facilityId), eq(stockpileEvents.organizationId, ctx.organizationId))),
     db.select({ count: count() }).from(powerProcurementEvidence).where(and(eq(powerProcurementEvidence.facilityId, facilityId), eq(powerProcurementEvidence.organizationId, ctx.organizationId))),
     hasBlockingFacilitySubmission(ctx, db, facilityId, "isometric"),
@@ -769,7 +822,9 @@ export async function getFacilityArchiveImpact(
     biocharProductCount: Number(productCount.count),
     orderCount: Number(orderCount.count),
     deliveryCount: Number(deliveryCount.count),
+    applicationCount: Number(applicationCount.count),
     creditBatchCount: Number(batchCount.count),
+    sampleCount: Number(sampleCount.count),
     stockpileEventCount: Number(stockpileEventCount.count),
     powerProcurementEvidenceCount: Number(powerEvidenceCount.count),
     hasRegistrySubmissions,

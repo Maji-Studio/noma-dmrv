@@ -35,7 +35,6 @@ import {
   certificationSubmissions,
   creditBatches,
   deliveries,
-  documents,
   facilities,
   feedstocks,
   productionRuns,
@@ -43,14 +42,8 @@ import {
   transportLegs,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
-import {
-  APPLICATION_BOUNDARY_LOGBOOK_CONDITIONAL_DOCUMENT_TYPE,
-  APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES,
-  APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES,
-  APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE,
-  APPLICATION_VISUAL_EVIDENCE_ROLES,
-} from "@/lib/certification/application-evidence";
 import { requireOrgScope } from "./utils";
+import { applicationHasEvidenceGapSql } from "./application-evidence-sql";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { loadMapTrace } from "./dashboard-map-trace";
 import type {
@@ -74,11 +67,6 @@ const MAX_NOW_ITEMS = 8;
 /** A completed run stops being "now" after this many days. */
 const NOW_COMPLETED_LOOKBACK_DAYS = 14;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const EVIDENCE_METHOD_VISUAL = "visual";
-const EVIDENCE_METHOD_BOUNDARY = "boundary";
-const ENTITY_TYPE_APPLICATION = "application";
-const UPLOAD_STATUS_UPLOADED = "uploaded";
-const GEOTAG_STATUS_PRESENT = "present";
 
 export type DashboardNowKind = "production" | "registry" | "verifier";
 export type DashboardNowStatus = "running" | "complete" | "submitted" | "locked";
@@ -583,65 +571,6 @@ function buildProgress(args: {
 // ============================================
 
 async function loadGpsGapCounts(ctx: OrgContext, facilityId: string) {
-  // Mirror `buildApplicationEvidenceGaps` (the certification submission gate) so
-  // this dashboard count can't drift from what certification actually blocks on.
-  // Visual evidence needs a geotagged photo for EVERY role (stockpile/spreading/
-  // incorporation); boundary evidence needs a GIS reference AND a logbook doc —
-  // a typed PDF, a weighbridge ticket, or an affidavit. The document-type
-  // taxonomy is shared with that builder via
-  // `@/lib/certification/application-evidence` so the two cannot drift; the role
-  // and logbook semantics below are still hand-maintained in both.
-  const visualRoleMissing = (role: string) => sql`not exists (
-          select 1
-          from ${documents}
-          where ${documents.entityType} = ${ENTITY_TYPE_APPLICATION}
-            and ${documents.entityId} = ${applications.id}
-            and ${documents.documentType} = ${APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE}
-            and (${documents.uploadStatus} = ${UPLOAD_STATUS_UPLOADED} or ${documents.fileUrl} is not null)
-            and ${documents.metadata}->>'geotagStatus' = ${GEOTAG_STATUS_PRESENT}
-            and ${documents.metadata}->>'evidenceRole' = ${role}
-        )`;
-
-  const boundaryLogbookMissing = sql`not exists (
-          select 1
-          from ${documents}
-          where ${documents.entityType} = ${ENTITY_TYPE_APPLICATION}
-            and ${documents.entityId} = ${applications.id}
-            and (${documents.uploadStatus} = ${UPLOAD_STATUS_UPLOADED} or ${documents.fileUrl} is not null)
-            and (
-              ${documents.documentType} in (${sql.join(
-                APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES.map(
-                  (type) => sql`${type}`,
-                ),
-                sql`, `,
-              )})
-              or (
-                ${documents.documentType} = ${APPLICATION_BOUNDARY_LOGBOOK_CONDITIONAL_DOCUMENT_TYPE}
-                and ${documents.metadata}->>'logbookEvidenceType' in (${sql.join(
-                  APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES.map(
-                    (type) => sql`${type}`,
-                  ),
-                  sql`, `,
-                )})
-              )
-            )
-        )`;
-
-  const applicationEvidenceGap = or(
-    and(
-      eq(applications.evidenceMethod, EVIDENCE_METHOD_VISUAL),
-      or(...APPLICATION_VISUAL_EVIDENCE_ROLES.map(visualRoleMissing))!,
-    )!,
-    and(
-      eq(applications.evidenceMethod, EVIDENCE_METHOD_BOUNDARY),
-      or(
-        isNull(applications.gisBoundaryReference),
-        sql`trim(${applications.gisBoundaryReference}::text) = ''`,
-        boundaryLogbookMissing,
-      )!,
-    )!,
-  );
-
   const [[facilityGps], [feedstockGps], [applicationGps]] = await Promise.all([
     db
       .select({ count: count() })
@@ -673,7 +602,7 @@ async function loadGpsGapCounts(ctx: OrgContext, facilityId: string) {
           eq(applications.organizationId, ctx.organizationId),
           eq(deliveries.facilityId, facilityId),
           isNull(deliveries.archivedAt),
-          applicationEvidenceGap,
+          applicationHasEvidenceGapSql(),
         ),
       ),
   ]);

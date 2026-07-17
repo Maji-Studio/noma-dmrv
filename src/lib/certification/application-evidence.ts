@@ -92,11 +92,10 @@ export function isApplicationBoundaryLogbookEvidenceType(
 
 /**
  * Document-type taxonomy behind the evidence-gap rule. The rule is implemented
- * twice — once as the certification submission gate (`buildApplicationEvidenceGaps`,
- * `src/fn/certification/application-evidence-readiness.ts`) and once as raw SQL for
- * the dashboard count (`loadGpsGapCounts`, `src/data-access/dashboard-operations.ts`).
- * Both read these document types from here so the taxonomy cannot silently drift
- * between the two implementations when the evidence rules change again.
+ * by the certification submission gate (`buildApplicationEvidenceGaps`) and by
+ * the shared SQL builder (`src/data-access/application-evidence-sql.ts`) used by
+ * list readiness and dashboard counts. Both paths read the document types from
+ * here so the taxonomy cannot silently drift when evidence rules change again.
  */
 
 /** Visual evidence (§8.5.1) is attested by geotagged photos of this document type. */

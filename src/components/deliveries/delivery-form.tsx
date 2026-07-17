@@ -7,7 +7,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { numericValue } from "@/lib/form-utils";
-import { formatLocalDate } from "@/lib/date-utils";
+import { toDateInputValue } from "@/lib/date-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
@@ -88,7 +88,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
   const defaultValues = {
     orderId: delivery?.orderId ?? "",
-    deliveryDate: delivery?.deliveryDate ?? formatLocalDate(new Date()),
+    deliveryDate: toDateInputValue(delivery?.deliveryDate),
     status: defaultStatus,
     deliveredWetMassKg: delivery?.deliveredWetMassKg ?? undefined,
     massDryKg: delivery?.massDryKg ?? undefined,
