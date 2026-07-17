@@ -29,7 +29,9 @@ const IMPACT_LABELS = [
   ["biocharProductCount", "biochar product", "biochar products"],
   ["orderCount", "order", "orders"],
   ["deliveryCount", "delivery", "deliveries"],
+  ["applicationCount", "application", "applications"],
   ["creditBatchCount", "credit batch", "credit batches"],
+  ["sampleCount", "lab sample", "lab samples"],
   ["stockpileEventCount", "stockpile event", "stockpile events"],
   ["powerProcurementEvidenceCount", "power procurement record", "power procurement records"],
 ] as const;
