@@ -3,7 +3,7 @@
  * CRUD operations for facilities with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, SQL, count, countDistinct } from "drizzle-orm";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
@@ -777,10 +777,22 @@ export async function getFacilityArchiveImpact(
         ),
       ),
     db.select({ count: count() }).from(creditBatches).where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId))),
+    // Mirror the getSamples read model: a sample's effective facility comes from
+    // EITHER its production-run or its credit-batch parent (schema still allows
+    // run-linked, batchless provenance). An inner join through creditBatchId
+    // alone dropped those rows, undercounting the archive impact. Left-join both
+    // parents and count distinct samples where either facility matches.
     db
-      .select({ count: count() })
+      .select({ count: countDistinct(samples.id) })
       .from(samples)
-      .innerJoin(
+      .leftJoin(
+        productionRuns,
+        and(
+          eq(samples.productionRunId, productionRuns.id),
+          eq(productionRuns.organizationId, ctx.organizationId),
+        ),
+      )
+      .leftJoin(
         creditBatches,
         and(
           eq(samples.creditBatchId, creditBatches.id),
@@ -790,7 +802,10 @@ export async function getFacilityArchiveImpact(
       .where(
         and(
           eq(samples.organizationId, ctx.organizationId),
-          eq(creditBatches.facilityId, facilityId),
+          or(
+            eq(productionRuns.facilityId, facilityId),
+            eq(creditBatches.facilityId, facilityId),
+          ),
         ),
       ),
     db.select({ count: count() }).from(stockpileEvents).where(and(eq(stockpileEvents.facilityId, facilityId), eq(stockpileEvents.organizationId, ctx.organizationId))),
