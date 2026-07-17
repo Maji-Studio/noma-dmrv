@@ -12,7 +12,7 @@
  */
 "use client";
 
-import { type ElementType } from "react";
+import { type ElementType, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -39,7 +39,11 @@ import {
   SignOutIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
-import { useAuth, authClient } from "@/lib/auth/client";
+import {
+  AUTH_SIGNED_OUT_STORAGE_KEY,
+  authClient,
+  useAuth,
+} from "@/lib/auth/client";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { FacilitySelector } from "./facility-selector";
@@ -256,6 +260,30 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { facilityId: facilityParam } = useFacilityContext();
   const { signOut } = useAuth();
   const { data: session } = authClient.useSession();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    if (isSigningOut) return;
+
+    setIsSigningOut(true);
+    onNavigate?.();
+
+    try {
+      await signOut();
+    } catch {
+      // The full navigation below still drops protected state in this tab.
+    }
+
+    try {
+      localStorage.setItem(
+        AUTH_SIGNED_OUT_STORAGE_KEY,
+        String(Date.now()),
+      );
+    } catch {
+      // Full navigation still clears this tab when storage is unavailable.
+    }
+    window.location.assign("/login");
+  }
 
   // Append the Admin section only for admin users. `useIsAdmin()` is
   // hydration-safe (server snapshot is `false`, so the admin subtree only
@@ -362,11 +390,9 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </Link>
           <button
             type="button"
-            onClick={() => {
-              onNavigate?.();
-              signOut();
-            }}
-            className="flex items-center justify-center size-44 md:size-28 text-[var(--color-white-25)] hover:text-[var(--clr-rose)] transition-colors duration-150"
+            onClick={handleSignOut}
+            disabled={isSigningOut}
+            className="flex items-center justify-center size-44 md:size-28 text-[var(--color-white-25)] hover:text-[var(--clr-rose)] transition-colors duration-150 disabled:cursor-wait disabled:opacity-40"
             aria-label="Sign out"
           >
             <SignOutIcon size={16} />

@@ -15,6 +15,9 @@ import {
   authClient,
 } from "./providers/better-auth-client";
 
+/** Cross-tab signal written after a user signs out. */
+export const AUTH_SIGNED_OUT_STORAGE_KEY = "auth:signed-out";
+
 /**
  * Authentication hook for client components
  * Provides methods for authentication operations
