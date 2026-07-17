@@ -5,6 +5,7 @@
 import { requireAuth } from "@/lib/auth/server";
 import { AppSidebar, MobileNav } from "@/components/navigation";
 import { FacilityProvider } from "@/components/navigation/facility-provider";
+import { SessionSignOutListener } from "@/components/auth/session-signout-listener";
 
 export default async function AppLayout({
   children,
@@ -16,6 +17,7 @@ export default async function AppLayout({
 
   return (
     <FacilityProvider>
+      <SessionSignOutListener />
       {/* Desktop: sidebar + main side by side. Mobile: a sticky top bar
           stacks above a full-width main (the sidebar is hidden, its nav lives
           in the drawer that MobileNav opens). */}
