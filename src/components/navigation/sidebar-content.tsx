@@ -46,6 +46,7 @@ import {
 } from "@/lib/auth/client";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
+import { useToast } from "@/components/ui/toast";
 import { FacilitySelector } from "./facility-selector";
 import { OrgBrand } from "./org-brand";
 import { useFacilityContext } from "@/hooks/use-facility-context";
@@ -260,19 +261,27 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { facilityId: facilityParam } = useFacilityContext();
   const { signOut } = useAuth();
   const { data: session } = authClient.useSession();
+  const toast = useToast();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   async function handleSignOut() {
     if (isSigningOut) return;
 
     setIsSigningOut(true);
-    onNavigate?.();
 
-    try {
-      await signOut();
-    } catch {
-      // The full navigation below still drops protected state in this tab.
+    // The provider catches request failures and resolves { success: false }
+    // rather than throwing. Only a confirmed sign-out may broadcast the cross-tab
+    // signal or navigate: on failure the session is still live, so broadcasting
+    // would falsely log other tabs out and navigating to /login would be bounced
+    // straight back to a protected page by middleware.
+    const result = await signOut();
+    if (!result.success) {
+      toast.error(result.error ?? "Sign out failed. Please try again.");
+      setIsSigningOut(false);
+      return;
     }
+
+    onNavigate?.();
 
     try {
       localStorage.setItem(
@@ -282,7 +291,9 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     } catch {
       // Full navigation still clears this tab when storage is unavailable.
     }
-    window.location.assign("/login");
+    // replace(), not assign(): keep the authenticated page out of history/bfcache
+    // so Back cannot restore it (matches the listener tabs' navigation).
+    window.location.replace("/login");
   }
 
   // Append the Admin section only for admin users. `useIsAdmin()` is
