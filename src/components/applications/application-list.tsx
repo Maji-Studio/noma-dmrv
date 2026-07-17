@@ -26,6 +26,7 @@ import {
   type ApplicationDeliveryOption,
 } from "./mass-utils";
 import type { ApplicationListItem } from "@/data-access/applications";
+import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "@/lib/certification/application-evidence";
 import {
   useApplications,
   useApplicationDeliveryOptions,
@@ -232,6 +233,9 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         customerName: null,
         locationName: null,
         durabilityOption,
+        // Fail closed until the authoritative list query recounts uploaded
+        // evidence after this create flow completes.
+        evidenceGapCount: APPLICATION_VISUAL_EVIDENCE_ROLES.length,
       };
       setIsFlushing(true);
       const flushResult = await deferredAttachments.flush(

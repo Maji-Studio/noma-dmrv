@@ -37,6 +37,14 @@ const TELEMETRY_GAP: EntityCertifyGap = {
   detail: "Production readings CSV is required to certify",
 };
 
+const APPLICATION_EVIDENCE_GAP: EntityCertifyGap = {
+  kind: "field",
+  key: "applicationEvidence",
+  label: "Application evidence",
+  fields: ["evidenceGapCount"],
+  detail: "Geotagged photos or boundary evidence required to certify",
+};
+
 function fieldValue(
   entity: EntityReadinessRecord,
   field: string,
@@ -147,6 +155,17 @@ export function deriveEntityCertifyReadiness(
       readingsCount <= 0
     ) {
       gaps.push(TELEMETRY_GAP);
+    }
+  }
+
+  if (entityKind === "application") {
+    const evidenceGapCount = fieldValue(entity, "evidenceGapCount");
+    if (
+      typeof evidenceGapCount !== "number" ||
+      !Number.isFinite(evidenceGapCount) ||
+      evidenceGapCount !== 0
+    ) {
+      gaps.push(APPLICATION_EVIDENCE_GAP);
     }
   }
 
