@@ -123,7 +123,19 @@ export function FlowHeroMobile({ stations, massFlow }: FlowHeroMobileProps) {
                 </span>
               </span>
               {station.attention > 0 && (
-                <span className="rounded-full bg-[var(--st-wait)] px-8 py-4 font-[family-name:var(--font-mono)] text-[10px] leading-none text-white">
+                <span
+                  className="rounded-full bg-[var(--st-wait)] px-8 py-4 font-[family-name:var(--font-mono)] text-[10px] leading-none text-white"
+                  aria-label={
+                    // Screen readers otherwise hear a bare number; spell out
+                    // the count and the reasons behind it.
+                    [
+                      `${station.attention} needing attention`,
+                      ...station.reasons
+                        .filter((reason) => reason.tone === "wait")
+                        .map((reason) => reason.text),
+                    ].join(": ")
+                  }
+                >
                   {station.attention}
                 </span>
               )}
