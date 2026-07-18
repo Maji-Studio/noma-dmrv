@@ -20,6 +20,11 @@ export function sumNumeric(
  * count(*), optionally FILTERed, coerced to number by construction.
  * Postgres returns numeric/bigint aggregates as text; `.mapWith(Number)` coerces
  * at the driver boundary (#402).
+ *
+ * The two migrated sites that previously cast `count(*)::int` intentionally drop
+ * the cast: `.mapWith(Number)` decodes the bigint text to a JS number either way,
+ * and the one site that keeps the value in SQL only compares it inside a
+ * `coalesce(...) = 0` predicate, so the cast was inert.
  */
 export function countRows(filter?: SQLWrapper): SQL<number> {
   return filter
