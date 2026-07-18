@@ -1,0 +1,27 @@
+Visible Computer Use session evidence — 2026-07-17
+
+Setup
+- Tab A held the protected FS-26-001 Feedstock detail/edit route.
+- Tab B opened the Facility A Feedstocks route and activated the visible Sign out control.
+
+Logout confirmation
+- Immediately after activation in Tab B, the authenticated administrator label changed to generic `User` and Admin navigation disappeared, while the cached Feedstock list remained visible.
+- A visible reload of Tab B redirected to `/login?from=%2Ffeedstocks`, confirming that the session had been cleared.
+- Browser Back from that tab returned to the pre-navigation Chrome new tab and exposed no protected application data.
+
+Confirmed defect
+- After logout was confirmed in Tab B, switching to already-open Tab A still exposed the full protected FS-26-001 edit view, including supplier, material, storage, notes, upload controls, and Save/Cancel actions.
+- No edit or mutation was submitted.
+- A visible reload of Tab A redirected to `/login?from=%2Ffeedstocks`.
+- Browser Back from the redirected tab remained fail-closed at `/login?from=%2Fstorage-locations`.
+- Entering the protected Feedstock deep link visibly while signed out redirected to `/login?from=%2Ffeedstocks`.
+
+Expected
+- Logout in any tab should immediately invalidate or mask protected views in every already-open tab.
+
+Actual
+- An already-open protected tab retained and displayed cached record data until navigation or reload.
+
+Method boundary
+- All steps used the visible bundled @oai/sky Computer Use runtime.
+- No browser JavaScript, DOM inspection, API, direct session/cookie/storage manipulation, or authentication bypass was used.
