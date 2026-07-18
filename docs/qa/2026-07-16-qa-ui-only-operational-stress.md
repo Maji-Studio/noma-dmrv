@@ -128,7 +128,7 @@ The 2026-07-17 visible continuation reverified three production-blocking defects
 
 ### DEF-009 — Logout does not invalidate an already-open protected tab
 
-- Severity / type: **P1 — Security/session scoping**
+- Severity / type: **P2 — Security/session scoping** (downgraded from P1: only a stale already-rendered view was demonstrated; reload, Back, and deep-link all failed closed to `/login`, and no post-logout authorization failure was shown — matches the P2 classification of duplicate `B-001` in `2026-07-17-qa-parallel-facility-b.md`)
 - Role / context: staging owner; two visible Chrome tabs in the same profile.
 - Routes: Tab A on protected Feedstock `FS-26-001` detail/edit; Tab B on the Facility A Feedstocks list and then `/login`.
 - Reproduction:

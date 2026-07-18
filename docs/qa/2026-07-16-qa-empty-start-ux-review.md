@@ -146,7 +146,7 @@ The production process was created/selected implicitly by the Credit Batch flow.
 - Expected: empty pages explain prerequisites and provide a coherent next action through the Facility → Reactor → material-flow chain.
 - Actual: the dashboard provides little guided sequence; Suppliers, Customers and Formulations initially resemble unexplained empty table skeletons. Reactors provides the stronger pattern: explicit “No reactors yet” copy and a New Reactor action.
 - Impact: first-time operators must infer entity order and may interpret a true empty state as loading or broken data.
-- Evidence: `docs/qa/artifacts/2026-07-16-local-ux-review/00-empty-dashboard.png`; `docs/qa/artifacts/2026-07-16-local-ux-review/01-suppliers-empty-table.png`
+- Evidence: `docs/qa/artifacts/2026-07-16-local-ux-review/01-suppliers-empty-table.png`. The captured `00-empty-dashboard.png` rendered effectively blank and does not document the dashboard state; the dashboard portion of this finding rests on the reviewer's session notes only.
 - Known-issue mapping: #262 (onboarding) for the dashboard/sequence; no exact mapping for the table presentation.
 
 ### Low — QA-07: Samples uses the legacy `NOMA dMRV` browser title
