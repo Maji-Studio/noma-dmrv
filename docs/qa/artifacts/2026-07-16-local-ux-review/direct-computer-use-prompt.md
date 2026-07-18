@@ -18,7 +18,7 @@ Environment:
 - Repository: `/Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv`
 - Exact checkout: `staging` at `05272d11571ada982a950363d948c1ababfed1d3`, equal to freshly pulled `origin/staging`
 - App: `http://localhost:3100`
-- Database: sanitized local development database, already reset and empty
+- Database: sanitized local development database, reset once before the first computer-use pass; it is no longer empty — it now holds the two synthetic facilities noted below. Do not reset it again.
 - Evidence directory: `docs/qa/artifacts/2026-07-16-local-ux-review/`
 - Final findings ledger: `docs/qa/2026-07-16-qa-empty-start-ux-review.md`
 
@@ -30,7 +30,7 @@ Work already completed by the parent; do not repeat it:
 - Opened and validated the blank facility form, then cancelled without creating data.
 - A first computer-use pass then created two synthetic facilities and began the primary facility's reactor workflow before the user requested a fresh staging pull. Inspect the current UI state and reuse those records; do not create duplicates unless required.
 
-Now perform the remaining full browser-driven QA mission from an empty database.
+Now perform the remaining full browser-driven QA mission, continuing from the state left by the first pass (the two existing facilities); do not re-reset or start over from empty.
 
 1. Create a coherent synthetic end-to-end chain through the UI only. Use obviously fictional, non-PII names. The intended chain is Facility → Reactor plus Supplier/location → pyrolysis Feedstock type → Feedstock intake/storage → Production run → Biochar product → Customer/location → Order → delivered Delivery → Application → Credit Batch → at least three Samples → Removal → GHG Statement. Production Process may be auto-created by the Credit Batch flow.
 2. Exercise normal create, detail, edit, list, filter, back-navigation, and status transitions while building the chain. Verify saved values survive navigation and refresh.

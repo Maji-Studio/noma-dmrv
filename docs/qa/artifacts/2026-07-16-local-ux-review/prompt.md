@@ -366,6 +366,8 @@ or file issues during this run.
 
 Follow `.agents/skills/codex-computer-use/SKILL.md`: substitute the real artifact
 directory for `/Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv/docs/qa/artifacts/2026-07-16-local-ux-review`, write the prompt to that directory, and run Codex with
-computer use from the repository root. The prompt itself authorizes the local
-`pnpm db:reset`; it does not authorize resetting any remote environment.
+computer use from the repository root. By default this template authorizes the local
+`pnpm db:reset` and never a remote environment; the 2026-07-16 OVERRIDE above superseded
+that default for this run — the database was already reset, so the worker was
+instructed not to run `pnpm db:reset` again.
 
