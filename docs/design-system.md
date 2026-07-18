@@ -1338,7 +1338,7 @@ Rules:
   (codes, names) get the full width on a phone instead of a wrapping
   half-column.
 
-**The one sanctioned exception is the Dashboard** (Flow Hero, 2026-07-17):
+**The one sanctioned exception is the Dashboard**:
 it keeps the container/gap shell but opens with a display headline
 ("Dashboard" as `title-heading-2` under a mono facility eyebrow) instead of
 `PageHeader`, its KPI
