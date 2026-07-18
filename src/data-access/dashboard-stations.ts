@@ -394,6 +394,9 @@ async function loadActivity(
             eq(applications.organizationId, ctx.organizationId),
             eq(deliveries.facilityId, facilityId),
             isNull(deliveries.archivedAt),
+            // "Biochar applied to soil" — only applications actually applied,
+            // not ones still in the `delivered` state.
+            eq(applications.status, "applied"),
             isNotNull(applications.applicationDate),
           ),
         )

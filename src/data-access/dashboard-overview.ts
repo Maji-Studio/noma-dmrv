@@ -230,6 +230,9 @@ export async function getDashboardOverview(
               eq(applications.organizationId, ctx.organizationId),
               eq(deliveries.facilityId, facilityId),
               isNull(deliveries.archivedAt),
+              // Only material actually applied to soil counts toward KPI/mass
+              // flow; `delivered` applications are not yet on the field.
+              eq(applications.status, "applied"),
               ...(fetchStart ? [gte(applications.applicationDate, fetchStart)] : []),
             ),
           ),
