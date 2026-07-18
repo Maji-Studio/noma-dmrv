@@ -35,6 +35,7 @@ import {
 } from "./dashboard-attention";
 import {
   getDashboardStations,
+  type DashboardStationKey,
   type DashboardStationsData,
 } from "./dashboard-stations";
 import { requireOrgScope } from "./utils";
@@ -126,7 +127,21 @@ export interface DashboardOverview extends DashboardStationsData {
   attention: DashboardAttentionItem[];
   /** Exact uncapped count of open items — the "N open" figure. */
   attentionTotal: number;
+  /** Exact uncapped count of blocking flags (a subset of `attentionTotal`). */
+  attentionFlagsTotal: number;
 }
+
+/**
+ * Stations whose attention items surface as blocking "flags" (severity flag).
+ * The remaining open items — upcoming deliveries and overdue credit batches —
+ * are "pending", not flags, so they're excluded from the flag total.
+ */
+const FLAG_STATION_KEYS: ReadonlySet<DashboardStationKey> = new Set([
+  "feedstock",
+  "production",
+  "products",
+  "applications",
+]);
 
 interface RangeBounds {
   /** Current-period start (ms); null = unbounded ("all"). */
@@ -468,6 +483,11 @@ export async function getDashboardOverview(
   const attentionTotal =
     stationsData.stations.reduce((acc, station) => acc + station.attention, 0) +
     attentionResult.overdueBatchesCount;
+  // Exact (uncapped) flag count: the flag-station badges only. Upcoming
+  // deliveries and overdue batches are pending, not flags.
+  const attentionFlagsTotal = stationsData.stations
+    .filter((station) => FLAG_STATION_KEYS.has(station.key))
+    .reduce((acc, station) => acc + station.attention, 0);
 
   return {
     range,
@@ -476,6 +496,7 @@ export async function getDashboardOverview(
     massFlow,
     attention: attentionResult.items,
     attentionTotal,
+    attentionFlagsTotal,
     ...stationsData,
   };
 }

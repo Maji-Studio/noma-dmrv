@@ -88,7 +88,11 @@ export function DashboardView() {
               loading would read as a (false) signal. */}
           {data && (
             <div className="grid grid-cols-1 gap-24 lg:grid-cols-2 xl:grid-cols-3">
-              <AttentionList attention={data.attention} total={data.attentionTotal} />
+              <AttentionList
+                attention={data.attention}
+                total={data.attentionTotal}
+                flagsTotal={data.attentionFlagsTotal}
+              />
               <ActivityFeed activity={data.activity} />
               <CertificationBlock
                 certification={data.certification}
