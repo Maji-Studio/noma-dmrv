@@ -123,9 +123,12 @@ function pctY(y: number): string {
   return `${((y - VIEW_Y0) / VIEW_H) * 100}%`;
 }
 
+/** Pinned so server and client format the number identically (no hydration drift). */
+const TONNES_LOCALE = "en-US";
+
 export function formatTonnes(tonnes: number): string {
   const digits = tonnes >= 100 || tonnes === 0 ? 0 : 1;
-  return `${tonnes.toLocaleString(undefined, {
+  return `${tonnes.toLocaleString(TONNES_LOCALE, {
     minimumFractionDigits: 0,
     maximumFractionDigits: digits,
   })} t`;
