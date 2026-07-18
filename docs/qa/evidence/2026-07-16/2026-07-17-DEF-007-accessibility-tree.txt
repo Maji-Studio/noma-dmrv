@@ -1,0 +1,16 @@
+Visible Computer Use accessibility evidence — 2026-07-17
+
+Context
+- Organization: QA UI Stress 20260716-0902
+- Facility: QAORG A Alpine Pyrolysis 20260716
+- Route: /feedstocks?facility=71ae921a-57c0-48fa-92de-e919129fbfda
+- Search input: NO-MATCH-20260717
+
+Observed result
+- The visual table showed a single no-results state.
+- The accessibility tree returned by the authorized bundled visible Computer Use runtime repeated the same "No feedstocks yet" heading/text block approximately twelve times.
+- Full-code, partial-code, and name searches each returned FS-26-001 correctly before the no-match check.
+
+Method boundary
+- This was inspected only through the visible @oai/sky Computer Use accessibility surface.
+- No DOM inspection, browser JavaScript, selector engine, API, or direct application data access was used.
