@@ -232,8 +232,8 @@ describe("buildApplicationEvidenceGaps", () => {
 /**
  * Drift guard for the evidence-gap document-type taxonomy. The same rule is
  * implemented twice — the gate here (`buildApplicationEvidenceGaps`) and the
- * dashboard count (`loadGpsGapCounts`, raw SQL in
- * `src/data-access/dashboard-operations.ts`). Both now read the document types
+ * dashboard count (`loadApplicationEvidenceGapCount`, raw SQL in
+ * `src/data-access/dashboard-stations.ts`). Both now read the document types
  * from `@/lib/certification/application-evidence`, so they cannot drift. These
  * tests pin the shared taxonomy and exercise the gate for every type in it, so a
  * taxonomy change is a deliberate, test-visible decision both sides inherit.

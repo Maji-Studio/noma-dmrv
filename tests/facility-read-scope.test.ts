@@ -45,7 +45,7 @@ describe("facility-scoped read guard", () => {
   it("returns the standard error instead of querying dashboard data for a foreign facility", async () => {
     const result = await getDashboardOverviewFn({
       facilityId: FOREIGN_FACILITY_ID,
-      range: "30d",
+      range: "month",
     });
 
     expect(result).toEqual({
