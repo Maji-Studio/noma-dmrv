@@ -550,19 +550,39 @@ async function getAttentionItems(
     db
       .select({ id: deliveries.id, code: deliveries.code })
       .from(deliveries)
-      .where(upcomingDeliveriesWhere(orgId, facilityId))
+      // Redundant explicit org predicate beside the shared helper: the
+      // check:org-scoping lexical guard can't see organizationId inside the
+      // helper call, and the helper already scopes by org (harmless overlap).
+      .where(
+        and(
+          upcomingDeliveriesWhere(orgId, facilityId),
+          eq(deliveries.organizationId, orgId),
+        ),
+      )
       .orderBy(asc(deliveries.deliveryDate))
       .limit(ATTENTION_PER_CHECK),
     db
       .select({ id: creditBatches.id, code: creditBatches.code })
       .from(creditBatches)
-      .where(overdueBatchesWhere(orgId, facilityId, todayStr))
+      // Redundant org predicate for the lexical guard (see note above).
+      .where(
+        and(
+          overdueBatchesWhere(orgId, facilityId, todayStr),
+          eq(creditBatches.organizationId, orgId),
+        ),
+      )
       .orderBy(asc(creditBatches.endDate))
       .limit(ATTENTION_PER_CHECK),
     db
       .select({ count: count() })
       .from(creditBatches)
-      .where(overdueBatchesWhere(orgId, facilityId, todayStr)),
+      // Redundant org predicate for the lexical guard (see note above).
+      .where(
+        and(
+          overdueBatchesWhere(orgId, facilityId, todayStr),
+          eq(creditBatches.organizationId, orgId),
+        ),
+      ),
   ]);
 
   const facilityQuery = `?facility=${facilityId}`;
