@@ -22,7 +22,11 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
-import { applicationHasEvidenceGapSql } from "./application-evidence-sql";
+import {
+  applicationEvidenceGapWhere,
+  productsUnlinkedWhere,
+  runsMissingMassWhere,
+} from "./dashboard-attention";
 
 /** Total rows the activity feed keeps after the merge sort. */
 const ACTIVITY_TOTAL = 8;
@@ -246,14 +250,31 @@ async function loadApplicationEvidenceGapCount(
         eq(deliveries.organizationId, ctx.organizationId),
       ),
     )
-    .where(
-      and(
-        eq(applications.organizationId, ctx.organizationId),
-        eq(deliveries.facilityId, facilityId),
-        isNull(deliveries.archivedAt),
-        applicationHasEvidenceGapSql(),
-      ),
-    );
+    .where(applicationEvidenceGapWhere(ctx.organizationId, facilityId));
+  return Number(row?.count ?? 0);
+}
+
+/** Complete runs missing a mass reading — the production station's badge. */
+async function loadRunsMissingMassCount(
+  ctx: OrgContext,
+  facilityId: string,
+): Promise<number> {
+  const [row] = await db
+    .select({ count: count() })
+    .from(productionRuns)
+    .where(runsMissingMassWhere(ctx.organizationId, facilityId));
+  return Number(row?.count ?? 0);
+}
+
+/** Biochar products not linked to a production run — the biochar station's badge. */
+async function loadProductsUnlinkedCount(
+  ctx: OrgContext,
+  facilityId: string,
+): Promise<number> {
+  const [row] = await db
+    .select({ count: count() })
+    .from(biocharProducts)
+    .where(productsUnlinkedWhere(ctx.organizationId, facilityId));
   return Number(row?.count ?? 0);
 }
 
@@ -490,23 +511,31 @@ export async function getDashboardStations(
 ): Promise<DashboardStationsData> {
   requireOrgScope(ctx);
 
-  const [counts, supplierCount, evidenceGaps, batchesWithoutSamples, batches, activity] =
-    await Promise.all([
-      loadStatusCounts(ctx, facilityId),
-      loadSupplierCount(ctx, facilityId),
-      loadApplicationEvidenceGapCount(ctx, facilityId),
-      loadBatchesWithoutSamplesCount(ctx, facilityId),
-      loadRecentBatches(ctx, facilityId),
-      loadActivity(ctx, facilityId),
-    ]);
+  const [
+    counts,
+    supplierCount,
+    evidenceGaps,
+    runsMissingMass,
+    productsUnlinked,
+    batchesWithoutSamples,
+    batches,
+    activity,
+  ] = await Promise.all([
+    loadStatusCounts(ctx, facilityId),
+    loadSupplierCount(ctx, facilityId),
+    loadApplicationEvidenceGapCount(ctx, facilityId),
+    loadRunsMissingMassCount(ctx, facilityId),
+    loadProductsUnlinkedCount(ctx, facilityId),
+    loadBatchesWithoutSamplesCount(ctx, facilityId),
+    loadRecentBatches(ctx, facilityId),
+    loadActivity(ctx, facilityId),
+  ]);
 
   const feedstockTotal = totalCount(counts.feedstocks);
   const feedstockMissing = countByStatus(counts.feedstocks, ["missing_data"]);
   const runTotal = totalCount(counts.productionRuns);
-  const runDrafts = countByStatus(counts.productionRuns, ["draft"]);
   const runningRuns = countByStatus(counts.productionRuns, ["running"]);
   const productTotal = totalCount(counts.biocharProducts);
-  const productOpen = countByStatus(counts.biocharProducts, ["draft", "testing"]);
   const deliveryTotal = totalCount(counts.deliveries);
   const deliveriesUpcoming = countByStatus(counts.deliveries, ["upcoming"]);
   const applicationTotal = totalCount(counts.applications);
@@ -538,10 +567,10 @@ export async function getDashboardStations(
       name: "Production",
       total: runTotal,
       totalLabel: plural(runTotal, "run"),
-      attention: runDrafts,
+      attention: runsMissingMass,
       reasons: [
-        ...(runDrafts > 0
-          ? [{ tone: "wait" as const, text: `${plural(runDrafts, "draft run")}` }]
+        ...(runsMissingMass > 0
+          ? [{ tone: "wait" as const, text: `${plural(runsMissingMass, "run")} missing mass data` }]
           : []),
         ...(runningRuns > 0
           ? [{ tone: "run" as const, text: `${runningRuns} running now` }]
@@ -554,10 +583,10 @@ export async function getDashboardStations(
       name: "Biochar",
       total: productTotal,
       totalLabel: plural(productTotal, "product"),
-      attention: productOpen,
+      attention: productsUnlinked,
       reasons:
-        productOpen > 0
-          ? [{ tone: "wait", text: `${productOpen} in draft or testing` }]
+        productsUnlinked > 0
+          ? [{ tone: "wait", text: `${plural(productsUnlinked, "product")} not linked to a run` }]
           : [],
       href: facilityHref("/biochar-products", facilityId),
     },

@@ -11,7 +11,7 @@
  * aggregation happens in JS — facilities operate at hundreds of records, not
  * millions, and this keeps the module free of fragile SQL bucketing.
  */
-import { and, asc, desc, eq, gte, isNull, lt, ne, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, ne } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
@@ -25,6 +25,14 @@ import {
 import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { getCo2eStoredPreviews } from "./credit-batches";
+import {
+  applicationEvidenceGapWhere,
+  feedstocksMissingDataWhere,
+  overdueBatchesWhere,
+  productsUnlinkedWhere,
+  runsMissingMassWhere,
+  upcomingDeliveriesWhere,
+} from "./dashboard-attention";
 import {
   getDashboardStations,
   type DashboardStationsData,
@@ -475,80 +483,60 @@ async function getAttentionItems(
   facilityId: string,
 ): Promise<DashboardAttentionItem[]> {
   const todayStr = new Date().toISOString().slice(0, 10);
+  const orgId = ctx.organizationId;
 
-  const [runsMissingMass, unlinkedLots, feedstocksMissingData, upcomingDeliveries, batchesAwaitingVerification] =
-    await Promise.all([
-      db
-        .select({ id: productionRuns.id, code: productionRuns.code })
-        .from(productionRuns)
-        .where(
-          and(
-            eq(productionRuns.organizationId, ctx.organizationId),
-            eq(productionRuns.facilityId, facilityId),
-            isNull(productionRuns.archivedAt),
-            eq(productionRuns.status, "complete"),
-            or(
-              isNull(productionRuns.biocharDryMassKg),
-              isNull(productionRuns.feedstockMassDryKg),
-            ),
-          ),
-        )
-        .orderBy(desc(productionRuns.startTime))
-        .limit(ATTENTION_PER_CHECK),
-      db
-        .select({ id: biocharProducts.id, code: biocharProducts.code })
-        .from(biocharProducts)
-        .where(
-          and(
-            eq(biocharProducts.organizationId, ctx.organizationId),
-            eq(biocharProducts.facilityId, facilityId),
-            isNull(biocharProducts.archivedAt),
-            isNull(biocharProducts.linkedProductionRunId),
-          ),
-        )
-        .orderBy(desc(biocharProducts.productionDate))
-        .limit(ATTENTION_PER_CHECK),
-      db
-        .select({ id: feedstocks.id, code: feedstocks.code })
-        .from(feedstocks)
-        .where(
-          and(
-            eq(feedstocks.organizationId, ctx.organizationId),
-            eq(feedstocks.facilityId, facilityId),
-            isNull(feedstocks.archivedAt),
-            eq(feedstocks.status, "missing_data"),
-          ),
-        )
-        .orderBy(desc(feedstocks.createdAt))
-        .limit(ATTENTION_PER_CHECK),
-      db
-        .select({ id: deliveries.id, code: deliveries.code })
-        .from(deliveries)
-        .where(
-          and(
-            eq(deliveries.organizationId, ctx.organizationId),
-            eq(deliveries.facilityId, facilityId),
-            isNull(deliveries.archivedAt),
-            eq(deliveries.status, "upcoming"),
-          ),
-        )
-        .orderBy(asc(deliveries.deliveryDate))
-        .limit(ATTENTION_PER_CHECK),
-      db
-        .select({ id: creditBatches.id, code: creditBatches.code })
-        .from(creditBatches)
-        .where(
-          and(
-            eq(creditBatches.organizationId, ctx.organizationId),
-            eq(creditBatches.facilityId, facilityId),
-            isNull(creditBatches.archivedAt),
-            eq(creditBatches.status, "pending"),
-            lt(creditBatches.endDate, todayStr),
-          ),
-        )
-        .orderBy(asc(creditBatches.endDate))
-        .limit(ATTENTION_PER_CHECK),
-    ]);
+  const [
+    runsMissingMass,
+    unlinkedLots,
+    feedstocksMissingData,
+    applicationsMissingEvidence,
+    upcomingDeliveries,
+    batchesAwaitingVerification,
+  ] = await Promise.all([
+    db
+      .select({ id: productionRuns.id, code: productionRuns.code })
+      .from(productionRuns)
+      .where(runsMissingMassWhere(orgId, facilityId))
+      .orderBy(desc(productionRuns.startTime))
+      .limit(ATTENTION_PER_CHECK),
+    db
+      .select({ id: biocharProducts.id, code: biocharProducts.code })
+      .from(biocharProducts)
+      .where(productsUnlinkedWhere(orgId, facilityId))
+      .orderBy(desc(biocharProducts.productionDate))
+      .limit(ATTENTION_PER_CHECK),
+    db
+      .select({ id: feedstocks.id, code: feedstocks.code })
+      .from(feedstocks)
+      .where(feedstocksMissingDataWhere(orgId, facilityId))
+      .orderBy(desc(feedstocks.createdAt))
+      .limit(ATTENTION_PER_CHECK),
+    db
+      .select({ id: applications.id, code: applications.code })
+      .from(applications)
+      .innerJoin(
+        deliveries,
+        and(
+          eq(applications.deliveryId, deliveries.id),
+          eq(deliveries.organizationId, orgId),
+        ),
+      )
+      .where(applicationEvidenceGapWhere(orgId, facilityId))
+      .orderBy(desc(applications.applicationDate))
+      .limit(ATTENTION_PER_CHECK),
+    db
+      .select({ id: deliveries.id, code: deliveries.code })
+      .from(deliveries)
+      .where(upcomingDeliveriesWhere(orgId, facilityId))
+      .orderBy(asc(deliveries.deliveryDate))
+      .limit(ATTENTION_PER_CHECK),
+    db
+      .select({ id: creditBatches.id, code: creditBatches.code })
+      .from(creditBatches)
+      .where(overdueBatchesWhere(orgId, facilityId, todayStr))
+      .orderBy(asc(creditBatches.endDate))
+      .limit(ATTENTION_PER_CHECK),
+  ]);
 
   const facilityQuery = `?facility=${facilityId}`;
   const flags: DashboardAttentionItem[] = [
@@ -572,6 +560,13 @@ async function getAttentionItems(
       title: "Feedstock record missing data",
       severity: "flag" as const,
       href: `/feedstocks${facilityQuery}`,
+    })),
+    ...applicationsMissingEvidence.map((row) => ({
+      id: `application-evidence-${row.id}`,
+      entityCode: row.code,
+      title: "Application missing evidence",
+      severity: "flag" as const,
+      href: `/applications${facilityQuery}`,
     })),
   ];
   const pending: DashboardAttentionItem[] = [
