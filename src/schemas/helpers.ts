@@ -217,6 +217,20 @@ export function optionalMassKgInputSchema(message = "Must be 0 or greater") {
 /** Largest value a Postgres `integer` column can hold. */
 export const PG_INTEGER_MAX = 2_147_483_647;
 
+// ============================================
+// Ratio Input Caps
+// ============================================
+
+/**
+ * Ceiling for a single ratio/fraction form input backed by the `fraction`
+ * DB family (`numeric(7,6)` — one integer digit + 6 decimal digits), for
+ * fields whose domain exceeds [0, 1] (e.g. H:C org / O:C org atomic ratios,
+ * #400). Fields that are true 0–1 fractions should keep their own `.max(1)`
+ * instead of this constant.
+ */
+export const RATIO_INPUT_MAX = 9.999999;
+export const RATIO_MAX_MESSAGE = `Must be ${RATIO_INPUT_MAX} or less`;
+
 /** Plausible soil-temperature range for biochar application sites (°C). */
 export const SOIL_TEMPERATURE_MIN_C = -50;
 export const SOIL_TEMPERATURE_MAX_C = 60;

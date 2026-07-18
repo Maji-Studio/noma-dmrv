@@ -11,6 +11,8 @@ import {
   optionalNumber,
   optionalPercent,
   PG_INTEGER_MAX,
+  RATIO_INPUT_MAX,
+  RATIO_MAX_MESSAGE,
   requiredNumber,
 } from "./helpers";
 
@@ -41,6 +43,16 @@ const requiredPercent = requiredNumber("This field is required").pipe(
 
 const optionalNonNegativeNumber = optionalNumber.pipe(
   nonNegativeNumber.nullable().optional(),
+).optional();
+
+// hToCOrgRatio / oToCOrgRatio are atomic ratios (not 0–1 fractions) backed by
+// the `fraction` DB family (numeric(7,6)) — cap at the column's ceiling so an
+// out-of-scale entry fails inline instead of a raw Postgres 22003 overflow
+// (#400; mirrors the mass-cap approach from #345).
+const nonNegativeRatio = nonNegativeNumber.max(RATIO_INPUT_MAX, RATIO_MAX_MESSAGE);
+
+const optionalNonNegativeRatio = optionalNumber.pipe(
+  nonNegativeRatio.nullable().optional(),
 ).optional();
 
 const optionalPercentInput = optionalPercent.optional();
@@ -137,8 +149,8 @@ export const sampleFormSchema = z
 
     // === Section 6: Stability ===
     // H:C org ratio - can be calculated from totalHydrogenPercent / organicCarbonPercent
-    hToCOrgRatio: optionalNonNegativeNumber,
-    oToCOrgRatio: optionalNonNegativeNumber,
+    hToCOrgRatio: optionalNonNegativeRatio,
+    oToCOrgRatio: optionalNonNegativeRatio,
 
     // === Section 7: 1000-Year Durability (conditional) ===
     // Not user-selected: the form derives it from the chosen credit batch's
@@ -290,8 +302,8 @@ export const updateSampleSchema = z.object({
   bulkDensityKgPerM3: nonNegativeNumber.optional().nullable(),
   ph: z.number().min(PH_MIN, PH_RANGE_MESSAGE).max(PH_MAX, PH_RANGE_MESSAGE).optional().nullable(),
   saltContentGPerKg: nonNegativeNumber.optional().nullable(),
-  hToCOrgRatio: nonNegativeNumber.optional().nullable(),
-  oToCOrgRatio: nonNegativeNumber.optional().nullable(),
+  hToCOrgRatio: nonNegativeRatio.optional().nullable(),
+  oToCOrgRatio: nonNegativeRatio.optional().nullable(),
   durabilityOption: z.enum(["200_year", "1000_year"]).optional(),
   randomReflectanceR0Percent: percentNumber.optional().nullable(),
   sReflectanceFraction: z.number().min(0).max(1).optional().nullable(),
