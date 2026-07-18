@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { sampleFormSchema, updateSampleSchema } from "@/schemas/samples";
+import {
+  calculateHToCOrgRatio,
+  sampleFormSchema,
+  updateSampleSchema,
+} from "@/schemas/samples";
 import { RATIO_INPUT_MAX, RATIO_MAX_MESSAGE } from "@/schemas/helpers";
 
 const UUID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
@@ -68,6 +72,34 @@ describe("sample ratio input caps", () => {
     const result = sampleFormSchema.safeParse({
       ...formBase,
       hToCOrgRatio: RATIO_INPUT_MAX + 5,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["hToCOrgRatio"],
+            message: RATIO_MAX_MESSAGE,
+          }),
+        ]),
+      );
+    }
+  });
+
+  // The form injects the auto-calculated H:C ratio after the resolver ran
+  // (sample-form.tsx handleFormSubmit), so the derived value must be re-checked
+  // against the cap there. This pins down that plausible extreme inputs really
+  // do derive an over-cap ratio the schema would reject.
+  it("derives an over-cap H:C ratio from extreme H%/C_org% inputs and rejects it", () => {
+    const derived = calculateHToCOrgRatio(1, 0.1);
+
+    expect(derived).not.toBeNull();
+    expect(derived as number).toBeGreaterThan(RATIO_INPUT_MAX);
+
+    const result = sampleFormSchema.safeParse({
+      ...formBase,
+      hToCOrgRatio: parseFloat((derived as number).toFixed(4)),
     });
 
     expect(result.success).toBe(false);
