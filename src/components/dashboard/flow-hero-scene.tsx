@@ -223,12 +223,15 @@ export function FlowHeroScene({
       style={{ aspectRatio: `${VIEW_W} / ${VIEW_H}`, background: SCENE_BG }}
       data-testid="flow-hero-scene"
     >
+      {/* Not aria-hidden: the station <g role="link"> groups inside are
+          keyboard-focusable, so hiding the whole SVG would trap focusable
+          nodes in hidden content. Decorative shapes are bare (presentational)
+          and non-interactive station groups carry aria-hidden themselves. */}
       <svg
         viewBox={`0 ${VIEW_Y0} ${VIEW_W} ${VIEW_H}`}
         fill="none"
         className="absolute inset-0 h-full w-full transition-[filter,opacity] duration-500"
         style={ghosted ? { filter: "grayscale(1)", opacity: 0.25 } : undefined}
-        aria-hidden
         focusable="false"
       >
         {/* Ground — supplier pad, central facility slab, application field ticks. */}
