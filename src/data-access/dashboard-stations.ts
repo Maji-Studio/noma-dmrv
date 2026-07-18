@@ -24,10 +24,14 @@ import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
 import { applicationHasEvidenceGapSql } from "./application-evidence-sql";
 
-/** Rows per entity pulled into the merged activity feed. */
-const ACTIVITY_PER_ENTITY = 5;
 /** Total rows the activity feed keeps after the merge sort. */
 const ACTIVITY_TOTAL = 8;
+/**
+ * Rows per entity pulled before the merge. Must be ≥ ACTIVITY_TOTAL: fewer and
+ * a single busy entity's newest events get truncated pre-merge, letting older
+ * events from other entities slip into the global top-N.
+ */
+const ACTIVITY_PER_ENTITY = ACTIVITY_TOTAL;
 /** Recent credit batches listed in the certification block. */
 const CERTIFICATION_BATCH_ROWS = 4;
 
