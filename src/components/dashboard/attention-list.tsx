@@ -13,19 +13,19 @@ import { DashboardPanel } from "./dashboard-panel";
 
 interface AttentionListProps {
   attention: DashboardAttentionItem[];
+  /** Exact uncapped count of open items; `attention` is a capped sample of it. */
+  total: number;
 }
 
-export function AttentionList({ attention }: AttentionListProps) {
+export function AttentionList({ attention, total }: AttentionListProps) {
   const flagCount = attention.filter((item) => item.severity === "flag").length;
 
   return (
     <DashboardPanel
       title="Needs attention"
       meta={
-        attention.length > 0 ? (
-          <span className="label-micro text-[var(--st-wait)]">
-            {attention.length} open
-          </span>
+        total > 0 ? (
+          <span className="label-micro text-[var(--st-wait)]">{total} open</span>
         ) : (
           <span className="label-micro text-[var(--st-ok)]">All clear</span>
         )
@@ -80,11 +80,20 @@ export function AttentionList({ attention }: AttentionListProps) {
           ))}
         </ul>
       )}
-      {flagCount > 0 && (
-        <div className="border-t border-[var(--color-border-tertiary)] px-20 py-10">
-          <span className="label-micro text-[var(--st-bad)]">
-            {flagCount} {flagCount === 1 ? "flag" : "flags"} blocking records
-          </span>
+      {(flagCount > 0 || total > attention.length) && (
+        <div className="flex flex-wrap items-center justify-between gap-8 border-t border-[var(--color-border-tertiary)] px-20 py-10">
+          {flagCount > 0 ? (
+            <span className="label-micro text-[var(--st-bad)]">
+              {flagCount} {flagCount === 1 ? "flag" : "flags"} blocking records
+            </span>
+          ) : (
+            <span />
+          )}
+          {total > attention.length && (
+            <span className="label-micro text-[var(--color-text-tertiary)]">
+              Showing first {attention.length}
+            </span>
+          )}
         </div>
       )}
     </DashboardPanel>

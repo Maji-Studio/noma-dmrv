@@ -11,7 +11,7 @@
  * aggregation happens in JS — facilities operate at hundreds of records, not
  * millions, and this keeps the module free of fragile SQL bucketing.
  */
-import { and, asc, desc, eq, gte, isNull, ne } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, isNull, ne } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
@@ -122,7 +122,10 @@ export interface DashboardOverview extends DashboardStationsData {
   kpis: DashboardKpi[];
   /** Chain segments in flow order, supplier → application. */
   massFlow: DashboardMassFlowSegment[];
+  /** Capped sample of open items shown as rows (flags first). */
   attention: DashboardAttentionItem[];
+  /** Exact uncapped count of open items — the "N open" figure. */
+  attentionTotal: number;
 }
 
 interface RangeBounds {
@@ -183,7 +186,7 @@ export async function getDashboardOverview(
   const fetchStart =
     bounds.previousStartMs == null ? null : new Date(bounds.previousStartMs);
 
-  const [[runRows, lotRows, applicationRows, batchRows, feedstockRows], attention, stationsData] =
+  const [[runRows, lotRows, applicationRows, batchRows, feedstockRows], attentionResult, stationsData] =
     await Promise.all([
       Promise.all([
         db
@@ -459,12 +462,20 @@ export async function getDashboardOverview(
     { key: "applied", tonnes: tonnesToKg(appliedCurrentTons) / 1000 },
   ];
 
+  // Every attention check except overdue batches maps 1:1 to a flow station,
+  // and the station badge counts are exact (uncapped) — so the true queue size
+  // is their sum plus the batch-only count, without re-running the row queries.
+  const attentionTotal =
+    stationsData.stations.reduce((acc, station) => acc + station.attention, 0) +
+    attentionResult.overdueBatchesCount;
+
   return {
     range,
     generatedAt: new Date().toISOString(),
     kpis,
     massFlow,
-    attention,
+    attention: attentionResult.items,
+    attentionTotal,
     ...stationsData,
   };
 }
@@ -472,6 +483,17 @@ export async function getDashboardOverview(
 // ============================================
 // Needs-attention queue
 // ============================================
+
+interface AttentionResult {
+  /** Capped sample of open items (flags first) — the list rows. */
+  items: DashboardAttentionItem[];
+  /**
+   * Exact uncapped count of overdue credit batches. The other checks map 1:1
+   * to a flow station, so `getDashboardOverview` derives the true queue size
+   * from the (uncapped) station badge counts plus this batch-only count.
+   */
+  overdueBatchesCount: number;
+}
 
 /**
  * Cheap record checks derived from existing MRV data. Each check is one
@@ -481,7 +503,7 @@ export async function getDashboardOverview(
 async function getAttentionItems(
   ctx: OrgContext,
   facilityId: string,
-): Promise<DashboardAttentionItem[]> {
+): Promise<AttentionResult> {
   const todayStr = new Date().toISOString().slice(0, 10);
   const orgId = ctx.organizationId;
 
@@ -492,6 +514,7 @@ async function getAttentionItems(
     applicationsMissingEvidence,
     upcomingDeliveries,
     batchesAwaitingVerification,
+    [overdueBatchesRow],
   ] = await Promise.all([
     db
       .select({ id: productionRuns.id, code: productionRuns.code })
@@ -536,6 +559,10 @@ async function getAttentionItems(
       .where(overdueBatchesWhere(orgId, facilityId, todayStr))
       .orderBy(asc(creditBatches.endDate))
       .limit(ATTENTION_PER_CHECK),
+    db
+      .select({ count: count() })
+      .from(creditBatches)
+      .where(overdueBatchesWhere(orgId, facilityId, todayStr)),
   ]);
 
   const facilityQuery = `?facility=${facilityId}`;
@@ -586,5 +613,8 @@ async function getAttentionItems(
     })),
   ];
 
-  return [...flags, ...pending].slice(0, ATTENTION_TOTAL);
+  return {
+    items: [...flags, ...pending].slice(0, ATTENTION_TOTAL),
+    overdueBatchesCount: Number(overdueBatchesRow?.count ?? 0),
+  };
 }
