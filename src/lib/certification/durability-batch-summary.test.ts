@@ -385,4 +385,68 @@ describe("buildDurabilityBatchSummaries facility-local sampling day", () => {
 
     expect(summary.distinctRunDayCount).toBe(2);
   });
+
+  it("resolves offset-bearing string timestamps through the facility branch (UTC-8)", () => {
+    // A raw/string-backed samplingTime must classify on the same facility-local
+    // day as a Date. Two run-a samples share the UTC day 2026-01-15 but fall on
+    // different LA local days — string handling must not slice to the UTC day.
+    const [summary] = buildDurabilityBatchSummaries([
+      batch({
+        creditBatchId: "cb-a",
+        creditBatchCode: "CB-A",
+        facilityTimezone: "America/Los_Angeles",
+        endDate: "2026-01-31",
+        samples: [
+          sample({
+            id: "s1",
+            sampleCode: "S-A-01",
+            productionRunId: "run-a",
+            // LA 2026-01-14, not the UTC-sliced 2026-01-15.
+            samplingTime: "2026-01-15T03:30:00.000Z" as unknown as Date,
+            hToCOrgRatio: 0.3,
+            oToCOrgRatio: 0.04,
+            totalCarbonPercent: 80,
+            organicCarbonPercent: 79,
+          }),
+          sample({
+            id: "s2",
+            sampleCode: "S-A-02",
+            productionRunId: "run-a",
+            samplingTime: "2026-01-15T09:30:00.000Z" as unknown as Date, // LA 2026-01-15
+            hToCOrgRatio: 0.31,
+            oToCOrgRatio: 0.05,
+            totalCarbonPercent: 81,
+            organicCarbonPercent: 80,
+          }),
+        ],
+      }),
+    ]);
+
+    expect(summary.replicates[0].samplingDay).toBe("2026-01-14");
+    expect(summary.distinctRunDayCount).toBe(2);
+  });
+
+  it("keeps a date-only string as its calendar day", () => {
+    const [summary] = buildDurabilityBatchSummaries([
+      batch({
+        creditBatchId: "cb-a",
+        creditBatchCode: "CB-A",
+        facilityTimezone: "America/Los_Angeles",
+        endDate: "2026-01-31",
+        samples: [
+          sample({
+            id: "s1",
+            sampleCode: "S-A-01",
+            samplingTime: "2026-01-15" as unknown as Date,
+            hToCOrgRatio: 0.3,
+            oToCOrgRatio: 0.04,
+            totalCarbonPercent: 80,
+            organicCarbonPercent: 79,
+          }),
+        ],
+      }),
+    ]);
+
+    expect(summary.replicates[0].samplingDay).toBe("2026-01-15");
+  });
 });

@@ -310,4 +310,31 @@ describe("buildDurabilityLedgerModel", () => {
 
     expect(model.batches[0].replicates[0].samplingDay).toBe("2026-01-14");
   });
+
+  it("resolves offset-bearing string timestamps through the facility branch (UTC-8)", () => {
+    // A raw/string-backed samplingTime must render on the same facility-local day
+    // as a Date — it must not slice to the UTC day 2026-01-15.
+    const model = buildDurabilityLedgerModel({
+      ...COMMON,
+      batches: [
+        {
+          ...eligibleBatch(),
+          facilityTimezone: "America/Los_Angeles",
+          samples: [
+            sample({
+              sampleCode: "S-A-01",
+              samplingTime: "2026-01-15T03:30:00.000Z" as unknown as Date,
+              hToCOrgRatio: 0.3,
+              oToCOrgRatio: 0.04,
+              totalCarbonPercent: 80,
+              organicCarbonPercent: 79,
+              inorganicCarbonPercent: 1,
+            }),
+          ],
+        },
+      ],
+    });
+
+    expect(model.batches[0].replicates[0].samplingDay).toBe("2026-01-14");
+  });
 });

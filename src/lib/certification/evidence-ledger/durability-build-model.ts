@@ -67,16 +67,33 @@ function samplingDayOf(
   facilityTimezone: string | null | undefined,
 ): string | null {
   if (samplingTime instanceof Date) {
-    return (
-      (facilityTimezone
-        ? formatFacilityDate(samplingTime, facilityTimezone)
-        : formatUtcDate(samplingTime)) || null
-    );
+    return formatDayInZone(samplingTime, facilityTimezone);
   }
   if (typeof samplingTime === "string" && samplingTime.length >= 10) {
+    // A timestamp string (carries a time/offset component) must resolve through
+    // the SAME facility/UTC branch as a Date — otherwise an offset-bearing value
+    // like `2026-01-15T03:30:00.000Z` slices to the UTC day and diverges from the
+    // Date-backed local day. A bare date-only string is already a calendar day.
+    if (samplingTime.includes("T")) {
+      const parsed = new Date(samplingTime);
+      if (!Number.isNaN(parsed.getTime())) {
+        return formatDayInZone(parsed, facilityTimezone);
+      }
+    }
     return samplingTime.slice(0, 10);
   }
   return null;
+}
+
+/** Format a Date as its YYYY-MM-DD calendar day in the facility zone (UTC fallback). */
+function formatDayInZone(
+  date: Date,
+  facilityTimezone: string | null | undefined,
+): string | null {
+  const day = facilityTimezone
+    ? formatFacilityDate(date, facilityTimezone)
+    : formatUtcDate(date);
+  return day || null;
 }
 
 // Inorganic carbon for one replicate: prefer the measured value, else derive
