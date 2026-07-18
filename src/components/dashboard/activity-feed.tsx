@@ -10,10 +10,16 @@ import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import type { DashboardActivityItem } from "@/data-access/dashboard-overview";
 import { DashboardPanel } from "./dashboard-panel";
 
+/** Pinned so server and client render identically (no SSR hydration drift). */
+const DATE_LOCALE = "en-US";
+
 function formatDate(iso: string): string {
-  return new Intl.DateTimeFormat(undefined, {
+  // `iso` is a UTC instant (toISOString on a date-only column); format in UTC
+  // so a negative-offset viewer never sees the day shifted back by one.
+  return new Intl.DateTimeFormat(DATE_LOCALE, {
     month: "short",
     day: "numeric",
+    timeZone: "UTC",
   }).format(new Date(iso));
 }
 

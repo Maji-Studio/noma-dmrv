@@ -11,10 +11,13 @@
 
 import type { DashboardKpi } from "@/data-access/dashboard-overview";
 
+/** Pinned so server and client format the number identically (no hydration drift). */
+const NUMBER_LOCALE = "en-US";
+
 function formatValue(kpi: DashboardKpi): string {
   if (kpi.value == null) return "—";
   const digits = Math.abs(kpi.value) >= 100 ? 0 : 1;
-  return kpi.value.toLocaleString(undefined, {
+  return kpi.value.toLocaleString(NUMBER_LOCALE, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
