@@ -1857,3 +1857,27 @@ the research sweep produced no adversarially-verified claims in these areas.
   entityId)` helper mirroring `deleteTransportLegsForEntity`, called from
   every entity delete in the same transaction, plus storage-object cleanup
   and a delete-parent-with-documents regression test (M).
+
+### Flow Hero dropped the old action-center structural cert checks — opened 2026-07-18
+
+- The isometric Flow Hero dashboard (PR #462) replaced the old action-center,
+  whose "Evidence" section (deleted `dashboard-operations.ts`) surfaced six
+  structural certification gaps. Two are still visible: application evidence
+  gaps (applications station badge) and credit batches without samples
+  (certification block). Four are no longer surfaced anywhere: **facility GPS
+  missing**, **feedstock GPS missing**, **transport endpoint (origin/dest GPS)
+  gaps**, and **transport distances not document-backed**. With those gaps
+  present but every station check clean, "Needs attention" reads "All clear" —
+  a false green for certification readiness.
+- **Why not fixed in #462:** the new attention model is station-anchored (each
+  flag maps 1:1 to a flow station; `attentionTotal` derives from station
+  badges). The dropped checks don't fit that model cleanly — facility GPS is
+  facility-level, and transport endpoint/distance gaps span feedstock, biochar,
+  and sample legs (a multi-join query that maps to the chain-of-custody page,
+  not a single station). Forcing them onto station badges would conflate
+  distinct meanings and balloon scope; only feedstock GPS maps to one station.
+- **Resolve via:** a dedicated certification-readiness surface (or a
+  non-station "structural gaps" panel) that re-adds `loadGpsGapCounts` and
+  `loadTransportGapTotals` from git history (`origin/staging:
+  src/data-access/dashboard-operations.ts`), preserving the fail-closed
+  evidence contract (M).
