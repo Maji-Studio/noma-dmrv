@@ -35,6 +35,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { FlaskIcon, FireIcon, AtomIcon, ScalesIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, makeCertFieldStatus } from "@/components/forms";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import { RATIO_INPUT_MAX, RATIO_MAX_MESSAGE } from "@/schemas/helpers";
 import {
   sampleFormSchema,
   calculateHToCOrgRatio,
@@ -153,6 +154,7 @@ export function SampleForm({
     control,
     watch,
     setValue,
+    setError,
     formState: { errors },
   } = useForm({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -297,6 +299,21 @@ export function SampleForm({
     // O/C_org eligibility gate has an input even under 1000-year.
     if (data.oToCOrgRatio == null && calculatedOToCRatio !== null) {
       data.oToCOrgRatio = parseFloat(calculatedOToCRatio.toFixed(4));
+    }
+    // Derived values are injected after the zod resolver ran, so re-check the
+    // numeric(7,6) cap here or an out-of-range auto-calculated ratio would
+    // only surface as a generic server error.
+    let derivedRatioOverCap = false;
+    if (data.hToCOrgRatio != null && data.hToCOrgRatio > RATIO_INPUT_MAX) {
+      setError("hToCOrgRatio", { type: "max", message: RATIO_MAX_MESSAGE });
+      derivedRatioOverCap = true;
+    }
+    if (data.oToCOrgRatio != null && data.oToCOrgRatio > RATIO_INPUT_MAX) {
+      setError("oToCOrgRatio", { type: "max", message: RATIO_MAX_MESSAGE });
+      derivedRatioOverCap = true;
+    }
+    if (derivedRatioOverCap) {
+      return;
     }
     onSubmit(data as unknown as SampleFormData);
   });

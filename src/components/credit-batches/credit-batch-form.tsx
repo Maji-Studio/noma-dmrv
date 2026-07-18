@@ -19,7 +19,12 @@ import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 import { useEffect, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  ArrowsClockwiseIcon,
+  WarningCircleIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, SectionLabel, FormActions } from "@/components/forms";
+import { Button } from "@/components/ui";
 import { DurabilityTierSelect } from "@/components/certification";
 import {
   creditBatchFormSchema,
@@ -112,6 +117,9 @@ function CohortPickerSection({
   count,
   totalCount,
   hasDates,
+  isError,
+  onRetry,
+  isRetrying,
   notReadyMessage,
   noMatchMessage,
   noMatchWithSelectionMessage,
@@ -122,6 +130,12 @@ function CohortPickerSection({
   totalCount: number;
   /** Whether the cohort's prerequisites (feedstock + window) are all set. */
   hasDates: boolean;
+  /** True when the underlying production-run-options query has failed. */
+  isError?: boolean;
+  /** Refetch handler surfaced by the fetch-error retry affordance. */
+  onRetry?: () => void;
+  /** Disables the retry button while a refetch is already in flight. */
+  isRetrying?: boolean;
   notReadyMessage: string;
   noMatchMessage: string;
   noMatchWithSelectionMessage?: string;
@@ -143,7 +157,36 @@ function CohortPickerSection({
         )}
       </div>
 
-      {!hasDates ? (
+      {hasDates && isError ? (
+        <div
+          role="alert"
+          className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-signal-red)] bg-[var(--clr-red-10)]"
+        >
+          <WarningCircleIcon
+            size={16}
+            weight="fill"
+            aria-hidden
+            className="mt-1 shrink-0 text-[var(--color-signal-red)]"
+          />
+          <div className="flex flex-1 items-center justify-between gap-12">
+            <span className="body-small text-[var(--color-signal-red)]">
+              Couldn&apos;t load production runs for this window. Try again.
+            </span>
+            {onRetry && (
+              <Button
+                type="button"
+                variant="noOutline"
+                size="small"
+                onClick={onRetry}
+                disabled={isRetrying}
+              >
+                <ArrowsClockwiseIcon size={14} />
+                {isRetrying ? "Retrying…" : "Retry"}
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : !hasDates ? (
         <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
           <span className="body-small text-[var(--color-text-tertiary)]">
             {notReadyMessage}
@@ -309,6 +352,9 @@ export function CreditBatchForm({
   const {
     data: productionRunOptions = [],
     isSuccess: productionRunOptionsLoaded,
+    isError: productionRunOptionsErrored,
+    isFetching: productionRunOptionsFetching,
+    refetch: refetchProductionRunOptions,
   } = useCreditBatchProductionRunOptions({
     facilityId: effectiveFacilityId || undefined,
     startDate: hasBothDates ? startDateStr : undefined,
@@ -520,6 +566,9 @@ export function CreditBatchForm({
         count={selectedProductionRunIds.length}
         totalCount={typedRunOptions.length}
         hasDates={isCohortReady}
+        isError={productionRunOptionsErrored}
+        onRetry={() => refetchProductionRunOptions()}
+        isRetrying={productionRunOptionsFetching}
         notReadyMessage="Select a feedstock type and set the production window to load runs."
         noMatchMessage="No runs of this feedstock type fall within the production window."
         noMatchWithSelectionMessage="No additional runs of this feedstock type fall within the production window."
