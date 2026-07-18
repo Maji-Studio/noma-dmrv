@@ -607,7 +607,7 @@ export function ApplicationForm({
             <label
               key={method}
               className={[
-                "flex min-h-44 cursor-pointer flex-col gap-4 border px-14 py-12 transition-colors duration-300",
+                "flex min-h-44 cursor-pointer flex-col gap-4 border px-16 py-12 transition-colors duration-300",
                 evidenceMethod === method
                   ? "border-[var(--color-interaction)] bg-[var(--color-background-interaction-light)]"
                   : "border-[var(--color-border-tertiary)] bg-[var(--color-background-white)]",

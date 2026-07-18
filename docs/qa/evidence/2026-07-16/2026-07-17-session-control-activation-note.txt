@@ -1,0 +1,16 @@
+Visible Computer Use session-check activation note — 2026-07-17
+
+Setup
+- A protected FS-26-001 detail was left open in one visible Chrome tab.
+- A second visible Chrome tab was opened to the Facility A feedstock route solely to operate Sign out.
+
+Resolved activation ambiguity
+- The visible Sign out control was present and exposed as a named button.
+- Its state change was not immediate. After an accessibility-element activation, the account label later changed to generic `User` and Admin navigation disappeared while cached data remained visible.
+- A visible reload redirected to `/login`, confirming that logout had occurred.
+
+Result
+- Logout, browser Back, and protected deep-link redirect were tested.
+- DEF-009 records the confirmed cross-tab stale protected view.
+- Re-login remains blocked because the visible 1Password vault is locked and no credential value was retrieved or exposed.
+- No API, browser script, direct session/cookie/storage manipulation, or authentication bypass was substituted.

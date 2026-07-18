@@ -77,7 +77,7 @@ export function StorageLocationCard({
       <div className="flex flex-col gap-12 p-16">
         {/* Header: code + last activity */}
         <div className="flex items-center justify-between gap-8">
-          <span className="inline-flex items-center bg-[var(--bin-soft)] px-8 py-3 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--bin-ink)]">
+          <span className="inline-flex items-center bg-[var(--bin-soft)] px-8 py-4 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--bin-ink)]">
             {storageLocation.code}
           </span>
           {lastActivity && (
