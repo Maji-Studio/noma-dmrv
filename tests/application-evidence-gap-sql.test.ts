@@ -30,7 +30,7 @@
  */
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { getApplications } from "@/data-access/applications";
 import { buildApplicationEvidenceGaps } from "@/fn/certification/application-evidence-readiness";
@@ -224,20 +224,25 @@ interface Fixture {
 let dbReachable = true;
 let fixture: Fixture | null = null;
 
-async function seedDeliveryChain(runId: string): Promise<
-  Omit<Fixture, "applications" | "documentIds">
-> {
-  const [customer] = await db
+/** `db` or a transaction client — seeding runs inside one transaction so a
+ * partial setup failure rolls back instead of leaking rows. */
+type DbClient = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function seedDeliveryChain(
+  dbc: DbClient,
+  runId: string,
+): Promise<Omit<Fixture, "applications" | "documentIds">> {
+  const [customer] = await dbc
     .insert(customers)
     .values({ organizationId: TEST_ORG_ID, name: `Gap Customer ${runId}`, code: `CU-GAP-${runId}` })
     .returning({ id: customers.id });
 
-  const [formulation] = await db
+  const [formulation] = await dbc
     .insert(formulations)
     .values({ organizationId: TEST_ORG_ID, name: `Gap Formulation ${runId}`, code: `FM-GAP-${runId}` })
     .returning({ id: formulations.id });
 
-  const [feedstockType] = await db
+  const [feedstockType] = await dbc
     .insert(feedstockTypes)
     .values({
       organizationId: TEST_ORG_ID,
@@ -247,12 +252,12 @@ async function seedDeliveryChain(runId: string): Promise<
     })
     .returning({ id: feedstockTypes.id });
 
-  const [facility] = await db
+  const [facility] = await dbc
     .insert(facilities)
     .values({ organizationId: TEST_ORG_ID, name: `Gap Facility ${runId}`, code: `FAC-GAP-${runId}` })
     .returning({ id: facilities.id });
 
-  const [productionProcess] = await db
+  const [productionProcess] = await dbc
     .insert(productionProcesses)
     .values({
       organizationId: TEST_ORG_ID,
@@ -261,7 +266,7 @@ async function seedDeliveryChain(runId: string): Promise<
     })
     .returning({ id: productionProcesses.id });
 
-  const [reactor] = await db
+  const [reactor] = await dbc
     .insert(reactors)
     .values({
       organizationId: TEST_ORG_ID,
@@ -272,7 +277,7 @@ async function seedDeliveryChain(runId: string): Promise<
     })
     .returning({ id: reactors.id });
 
-  const [productionRun] = await db
+  const [productionRun] = await dbc
     .insert(productionRuns)
     .values({
       organizationId: TEST_ORG_ID,
@@ -285,7 +290,7 @@ async function seedDeliveryChain(runId: string): Promise<
     })
     .returning({ id: productionRuns.id });
 
-  const [product] = await db
+  const [product] = await dbc
     .insert(biocharProducts)
     .values({
       organizationId: TEST_ORG_ID,
@@ -296,7 +301,7 @@ async function seedDeliveryChain(runId: string): Promise<
     })
     .returning({ id: biocharProducts.id });
 
-  const [order] = await db
+  const [order] = await dbc
     .insert(orders)
     .values({
       organizationId: TEST_ORG_ID,
@@ -310,7 +315,7 @@ async function seedDeliveryChain(runId: string): Promise<
     })
     .returning({ id: orders.id });
 
-  const [delivery] = await db
+  const [delivery] = await dbc
     .insert(deliveries)
     .values({
       organizationId: TEST_ORG_ID,
@@ -337,6 +342,7 @@ async function seedDeliveryChain(runId: string): Promise<
 }
 
 async function seedApplicationsAndDocuments(
+  dbc: DbClient,
   chain: Omit<Fixture, "applications" | "documentIds">,
   runId: string,
 ): Promise<Pick<Fixture, "applications" | "documentIds">> {
@@ -344,7 +350,7 @@ async function seedApplicationsAndDocuments(
   const documentIds: string[] = [];
 
   for (const [index, spec] of APP_SPECS.entries()) {
-    const [application] = await db
+    const [application] = await dbc
       .insert(applications)
       .values({
         organizationId: TEST_ORG_ID,
@@ -361,7 +367,7 @@ async function seedApplicationsAndDocuments(
     seededApplications.push({ id: application.id, code: application.code, spec });
 
     for (const [docIndex, doc] of spec.docs.entries()) {
-      const [inserted] = await db
+      const [inserted] = await dbc
         .insert(documents)
         .values({
           organizationId: TEST_ORG_ID,
@@ -441,14 +447,23 @@ function lineageFor(app: SeededApplication): ChainOfCustodyData {
 
 beforeAll(async () => {
   const runId = crypto.randomUUID().slice(0, 8);
+  // Skip only on genuine unreachability; any later seeding failure must fail
+  // the suite loudly — this spec guards a fail-closed signal, and a silent
+  // skip on a schema regression would be exactly the fail-open it exists to catch.
   try {
-    await ensureTestOrg();
-    const chain = await seedDeliveryChain(runId);
-    const seeded = await seedApplicationsAndDocuments(chain, runId);
-    fixture = { ...chain, ...seeded };
+    await db.execute(sql`select 1`);
   } catch {
     dbReachable = false;
+    return;
   }
+  await ensureTestOrg();
+  // One transaction: a partial seeding failure rolls back instead of leaking
+  // rows, and the original error propagates.
+  fixture = await db.transaction(async (tx) => {
+    const chain = await seedDeliveryChain(tx, runId);
+    const seeded = await seedApplicationsAndDocuments(tx, chain, runId);
+    return { ...chain, ...seeded };
+  });
 });
 
 afterAll(async () => {
