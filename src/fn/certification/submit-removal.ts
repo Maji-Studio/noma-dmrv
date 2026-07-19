@@ -220,6 +220,11 @@ export async function submitRemoval(
   if (ctx.memberBatches.length === 0) {
     throw new SafeError("This removal has no credit batches.");
   }
+  if (!facilityTier) {
+    throw new SafeError(
+      "Facility durability tier could not be resolved. Reload and retry.",
+    );
+  }
 
   // §8.6.2 front-loading pre-flight (issue #349, ADR 0020): fail closed on a
   // foreign production-bucket claim BEFORE aggregation, the evidence ledgers,
@@ -236,6 +241,7 @@ export async function submitRemoval(
     provider: ISOMETRIC_PROVIDER,
     expectedExternalProjectId: externalProjectId,
     expectedDefaultRemovalTemplateId: ctx.mapping.defaultRemovalTemplateId,
+    expectedDurabilityOption: facilityTier,
   };
 
   // ADR 0005 escape hatch: in SANDBOX, a Removal Template that still declares a

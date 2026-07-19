@@ -22,17 +22,18 @@ import {
 } from "@/data-access/certification-submissions";
 import {
   certificationSubmissions,
+  certifierGhgStatements,
   certifierProjects,
   certifierRemovals,
 } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
+import { acquireFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
+import { updateFacility } from "@/data-access/facilities";
 import { SafeError } from "@/lib/errors";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 
 const USER_ID = "test-user-claim";
 const PROVIDER = "isometric" as const;
-const SUBMISSION_TYPE = "removal";
-const ENTITY_TYPE = "removal";
 
 // How long to let a parked claim reach the FOR UPDATE before mutating the
 // ledger underneath it. Generous on purpose — a slow CI runner that hasn't
@@ -55,6 +56,9 @@ afterAll(async () => {
     .delete(certifierRemovals)
     .where(inArray(certifierRemovals.facilityId, createdFacilityIds));
   await db
+    .delete(certifierGhgStatements)
+    .where(inArray(certifierGhgStatements.facilityId, createdFacilityIds));
+  await db
     .delete(certifierProjects)
     .where(inArray(certifierProjects.facilityId, createdFacilityIds));
   await db.delete(facilities).where(inArray(facilities.id, createdFacilityIds));
@@ -74,12 +78,19 @@ interface Fixture {
   ext: (suffix: string) => string;
 }
 
-async function createFixture(): Promise<Fixture> {
+async function createFixture(
+  entityType: "removal" | "ghgStatement" = "removal",
+): Promise<Fixture> {
   const runId = crypto.randomUUID().slice(0, 8);
   const externalProjectId = `prj_claim_${runId}`;
   const [facility] = await db
     .insert(facilities)
-    .values({ organizationId: TEST_ORG_ID, name: `Claim Test Facility ${runId}`, code: `FAC-CL-${runId}` })
+    .values({
+      organizationId: TEST_ORG_ID,
+      name: `Claim Test Facility ${runId}`,
+      code: `FAC-CL-${runId}`,
+      durabilityOption: "200_year",
+    })
     .returning({ id: facilities.id });
   createdFacilityIds.push(facility.id);
   await db.insert(certifierProjects).values({
@@ -88,25 +99,40 @@ async function createFixture(): Promise<Fixture> {
     provider: PROVIDER,
     externalProjectId,
   });
-  // The claim path proves the submission anchor (the removal row) belongs to
-  // the caller's org, so the fixture needs a real certifier_removals row.
-  const [removal] = await db
-    .insert(certifierRemovals)
-    .values({
-      organizationId: TEST_ORG_ID,
-      facilityId: facility.id,
-      provider: PROVIDER,
-    })
-    .returning({ id: certifierRemovals.id });
-  const localEntityId = removal.id;
+  // The claim path proves its submission anchor belongs to the caller's org,
+  // so each variant needs a real facility-scoped artifact row.
+  const localEntityId =
+    entityType === "removal"
+      ? (
+          await db
+            .insert(certifierRemovals)
+            .values({
+              organizationId: TEST_ORG_ID,
+              facilityId: facility.id,
+              provider: PROVIDER,
+            })
+            .returning({ id: certifierRemovals.id })
+        )[0].id
+      : (
+          await db
+            .insert(certifierGhgStatements)
+            .values({
+              organizationId: TEST_ORG_ID,
+              facilityId: facility.id,
+              provider: PROVIDER,
+              reportingPeriodEndOn: "2026-12-31",
+            })
+            .returning({ id: certifierGhgStatements.id })
+        )[0].id;
   createdEntityIds.push(localEntityId);
   return {
     facilityId: facility.id,
     externalProjectId,
     key: {
       provider: PROVIDER,
-      submissionType: SUBMISSION_TYPE,
-      localEntityType: ENTITY_TYPE,
+      submissionType:
+        entityType === "removal" ? "removal" : "ghg_statement",
+      localEntityType: entityType,
       localEntityId,
     },
     guard: {
@@ -387,6 +413,95 @@ describe("claimSubmissionDraft — concurrency (the GHG drift regression)", () =
     const outcome = await claimPromise;
     expect(outcome).toEqual({ kind: "blocked", reason: "state-changed" });
     expect(await listRows(fixture.key)).toHaveLength(1);
+  });
+
+  it.each(["removal", "ghgStatement"] as const)(
+    "serializes a tier edit behind a %s claim and rejects the stale edit",
+    async (entityType) => {
+      const fixture = await createFixture(entityType);
+      let releaseResolve!: () => void;
+      let markResolveStarted!: () => void;
+      const resolveStarted = new Promise<void>((resolve) => {
+        markResolveStarted = resolve;
+      });
+      const resolveRelease = new Promise<void>((resolve) => {
+        releaseResolve = resolve;
+      });
+
+      const claimPromise = claimSubmissionDraft(
+        makeTestOrgContext(USER_ID),
+        baseArgs(fixture, {
+          resolve: async (_tx, tentative) => {
+            markResolveStarted();
+            await resolveRelease;
+            return tentative;
+          },
+        }),
+      );
+
+      // `resolve` runs after facility + mapping + artifact locks. Hold it there
+      // while the tier edit reads the old tier and parks on the shared lock.
+      await resolveStarted;
+      let tierEditSettled = false;
+      const tierEditPromise = updateFacility(
+        makeTestOrgContext(USER_ID),
+        fixture.facilityId,
+        { durabilityOption: "1000_year" },
+      );
+      tierEditPromise.then(
+        () => {
+          tierEditSettled = true;
+        },
+        () => {
+          tierEditSettled = true;
+        },
+      );
+      await sleep(PARK_DELAY_MS);
+      expect(tierEditSettled).toBe(false);
+
+      releaseResolve();
+      await expect(claimPromise).resolves.toMatchObject({ kind: "claimed" });
+      await expect(tierEditPromise).rejects.toMatchObject({
+        message: expect.stringMatching(/durability tier/i),
+      });
+
+      const [facility] = await db
+        .select({ durabilityOption: facilities.durabilityOption })
+        .from(facilities)
+        .where(eq(facilities.id, fixture.facilityId));
+      expect(facility.durabilityOption).toBe("200_year");
+      expect(await listRows(fixture.key)).toHaveLength(1);
+    },
+  );
+
+  it("rejects a Removal claim prepared before a tier edit that commits first", async () => {
+    const fixture = await createFixture();
+    const ctx = makeTestOrgContext(USER_ID);
+    let claimPromise!: Promise<ClaimOutcome>;
+
+    await db.transaction(async (tx) => {
+      await acquireFacilityDurabilityLock(ctx, tx, fixture.facilityId);
+      claimPromise = claimSubmissionDraft(
+        ctx,
+        baseArgs(fixture, {
+          guard: {
+            ...fixture.guard,
+            expectedDurabilityOption: "200_year",
+          },
+        }),
+      );
+      claimPromise.catch(() => {});
+      await sleep(PARK_DELAY_MS);
+      await tx
+        .update(facilities)
+        .set({ durabilityOption: "1000_year" })
+        .where(eq(facilities.id, fixture.facilityId));
+    });
+
+    await expect(claimPromise).rejects.toMatchObject({
+      message: expect.stringMatching(/durability tier changed/i),
+    });
+    expect(await listRows(fixture.key)).toHaveLength(0);
   });
 });
 
