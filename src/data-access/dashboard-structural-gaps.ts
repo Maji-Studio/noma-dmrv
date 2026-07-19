@@ -44,6 +44,9 @@ interface TransportGapRow {
   distanceEvidenceGaps: number;
 }
 
+const DOCUMENT_BACKED_DISTANCE_SOURCE =
+  "document" satisfies (typeof transportLegs.distanceSource.enumValues)[number];
+
 const transportGapSelection = {
   endpointGpsGaps: sql<number>`count(*) filter (where
     ${transportLegs.originGpsLatitude} is null
@@ -53,7 +56,7 @@ const transportGapSelection = {
   )::int`,
   distanceEvidenceGaps: sql<number>`count(*) filter (where
     ${transportLegs.distanceSource} is null
-    or ${transportLegs.distanceSource} <> 'document'
+    or ${transportLegs.distanceSource} <> ${DOCUMENT_BACKED_DISTANCE_SOURCE}
   )::int`,
 };
 
