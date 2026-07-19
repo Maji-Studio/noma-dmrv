@@ -28,6 +28,7 @@
 
 import { METHOD_B_SAMPLING_CADENCE_BATCHES } from "@/config/certification";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
+import { toIsoUtcCalendarDay } from "@/lib/certification/iso-utc-calendar-day";
 
 export type SamplingMethod = "method_a" | "method_b";
 
@@ -46,30 +47,11 @@ export function deriveBatchSamplingMethod(params: {
     return "method_a";
   }
 
-  const batchStartDate = toIsoDate(params.batchStartDate);
-  const unlockDate = toIsoDate(params.methodBUnlockedAt);
+  const batchStartDate = toIsoUtcCalendarDay(params.batchStartDate);
+  const unlockDate = toIsoUtcCalendarDay(params.methodBUnlockedAt);
   if (batchStartDate == null || unlockDate == null) return "method_a";
 
   return batchStartDate > unlockDate ? "method_b" : "method_a";
-}
-
-function toIsoDate(value: Date | string): string | null {
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? null : value.toISOString().slice(0, 10);
-  }
-
-  const dateOnlyMatch = /^(\d{4}-\d{2}-\d{2})(?:T|$)/.exec(value);
-  if (dateOnlyMatch) {
-    const dateOnly = dateOnlyMatch[1];
-    const parsedDateOnly = new Date(`${dateOnly}T00:00:00.000Z`);
-    return !Number.isNaN(parsedDateOnly.getTime()) &&
-      parsedDateOnly.toISOString().slice(0, 10) === dateOnly
-      ? dateOnly
-      : null;
-  }
-
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
 }
 
 /** One in-scope credit batch and how many replicate samples it pools. */

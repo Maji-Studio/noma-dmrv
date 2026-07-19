@@ -59,6 +59,16 @@ describe("deriveBatchSamplingMethod — immutable unlock boundary", () => {
       }),
     ).toBe("method_a");
   });
+
+  it("uses the unlock instant's UTC day when its offset crosses midnight", () => {
+    expect(
+      deriveBatchSamplingMethod({
+        processMethod: "method_b",
+        methodBUnlockedAt: "2026-02-01T00:30:00+02:00",
+        batchStartDate: "2026-02-01",
+      }),
+    ).toBe("method_b");
+  });
 });
 
 describe("deriveSamplingRequirement — Method A (every batch, §8.3)", () => {
