@@ -6,9 +6,10 @@
  * legacy provenance only (pre-re-grain rows) and is no longer written.
  */
 
-import { and, asc, avg, count, desc, eq, gte, ilike, lte, or, sql, SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, lte, or, sql, SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db, type DbTransaction } from "@/db";
+import { avgNumeric } from "@/db/aggregate";
 import {
   creditBatches,
   samples,
@@ -437,8 +438,8 @@ export async function getSampleStats(
   const [stats] = await db
     .select({
       totalSamples: count(),
-      avgCarbonPercent: avg(samples.totalCarbonPercent),
-      avgOrganicCarbonPercent: avg(samples.organicCarbonPercent),
+      avgCarbonPercent: avgNumeric(samples.totalCarbonPercent),
+      avgOrganicCarbonPercent: avgNumeric(samples.organicCarbonPercent),
     })
     .from(samples)
     .leftJoin(productionRuns, and(eq(samples.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
@@ -464,9 +465,9 @@ export async function getSampleStats(
 
   return {
     totalSamples: total,
-    avgCarbonPercent: stats.avgCarbonPercent ? Number(stats.avgCarbonPercent) : null,
+    avgCarbonPercent: stats.avgCarbonPercent ? stats.avgCarbonPercent : null,
     avgOrganicCarbonPercent: stats.avgOrganicCarbonPercent
-      ? Number(stats.avgOrganicCarbonPercent)
+      ? stats.avgOrganicCarbonPercent
       : null,
     samples200Year: total - samples1000,
     samples1000Year: samples1000,

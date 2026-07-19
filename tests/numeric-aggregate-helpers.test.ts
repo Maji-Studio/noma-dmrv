@@ -2,14 +2,19 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { sql, type SQL } from "drizzle-orm";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { countRows, numericAggregate, sumNumeric } from "@/db/aggregate";
+import {
+  avgNumeric,
+  countRows,
+  numericAggregate,
+  sumNumeric,
+} from "@/db/aggregate";
 
-type SQLWithDecoder = SQL<number> & {
-  decoder: { mapFromDriverValue(value: unknown): number };
+type SQLWithDecoder<TResult> = SQL<TResult> & {
+  decoder: { mapFromDriverValue(value: unknown): TResult };
 };
 
-function decode(fragment: SQL<number>, value: unknown): number {
-  return (fragment as SQLWithDecoder).decoder.mapFromDriverValue(value);
+function decode<TResult>(fragment: SQL<TResult>, value: unknown): TResult {
+  return (fragment as SQLWithDecoder<TResult>).decoder.mapFromDriverValue(value);
 }
 
 describe("numeric aggregate helpers — decoder", () => {
@@ -25,6 +30,8 @@ describe("numeric aggregate helpers — decoder", () => {
       numericAggregate(sql<number>`COALESCE(SUM(mass_kg * ratio), 0)`),
       "7.25",
     );
+    const average = decode(avgNumeric(sql`mass_kg`), "5.5");
+    const emptyAverage = decode(avgNumeric(sql`mass_kg`), null);
 
     expect(sum).toBe(12.5);
     expect(typeof sum).toBe("number");
@@ -36,6 +43,9 @@ describe("numeric aggregate helpers — decoder", () => {
     expect(typeof filteredCount).toBe("number");
     expect(complex).toBe(7.25);
     expect(typeof complex).toBe("number");
+    expect(average).toBe(5.5);
+    expect(typeof average).toBe("number");
+    expect(emptyAverage).toBeNull();
   });
 });
 
@@ -56,6 +66,10 @@ describe("numeric aggregate helpers — real SQL", () => {
   ) AS t(mass_kg, ratio, status)`;
   // A guaranteed-empty source to exercise zero-row / NULL-aggregate behaviour.
   const emptySource = sql`(SELECT 1::numeric AS mass_kg, 'x'::text AS status WHERE false) AS t`;
+  const allNullSource = sql`(VALUES
+    (NULL::numeric),
+    (NULL::numeric)
+  ) AS t(mass_kg)`;
 
   beforeAll(async () => {
     const databaseUrl = process.env.DATABASE_URL;
@@ -86,6 +100,7 @@ describe("numeric aggregate helpers — real SQL", () => {
         total: sumNumeric(sql`mass_kg`),
         doneTotal: sumNumeric(sql`mass_kg`, sql`status = 'done'`),
         weighted: numericAggregate(sql<number>`COALESCE(SUM(mass_kg * ratio), 0)`),
+        average: avgNumeric(sql`mass_kg`),
         n: countRows(),
         doneN: countRows(sql`status = 'done'`),
       })
@@ -94,11 +109,26 @@ describe("numeric aggregate helpers — real SQL", () => {
     expect(row.total).toBe(17); // 10.5 + 4.5 + 2
     expect(row.doneTotal).toBe(12.5); // 10.5 + 2
     expect(row.weighted).toBe(42.5); // 10.5*2 + 4.5*3 + 2*4
+    expect(row.average).toBeCloseTo(17 / 3);
     expect(row.n).toBe(3);
     expect(row.doneN).toBe(2);
     for (const value of Object.values(row)) {
       expect(typeof value).toBe("number");
     }
+  });
+
+  it("preserves null for zero-row and all-null averages", async (ctx) => {
+    if (!db) return ctx.skip();
+
+    const [emptyRow] = await db
+      .select({ average: avgNumeric(sql`mass_kg`) })
+      .from(emptySource);
+    const [allNullRow] = await db
+      .select({ average: avgNumeric(sql`mass_kg`) })
+      .from(allNullSource);
+
+    expect(emptyRow.average).toBeNull();
+    expect(allNullRow.average).toBeNull();
   });
 
   it("coalesces zero-row sums to 0 and counts to 0", async (ctx) => {

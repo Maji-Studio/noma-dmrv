@@ -17,6 +17,17 @@ export function sumNumeric(
 }
 
 /**
+ * AVG(expr), coerced to number by construction while preserving NULL for an
+ * empty or all-NULL set. Postgres returns numeric aggregates as text; the
+ * decoder coerces non-NULL values at the driver boundary (#402).
+ */
+export function avgNumeric(expr: SQLWrapper): SQL<number | null> {
+  return sql<number | null>`AVG(${expr})`.mapWith((value) =>
+    value === null ? null : Number(value),
+  );
+}
+
+/**
  * count(*), optionally FILTERed, coerced to number by construction.
  * Postgres returns numeric/bigint aggregates as text; `.mapWith(Number)` coerces
  * at the driver boundary (#402).
