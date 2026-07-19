@@ -38,6 +38,7 @@ import {
   assertSubmissionInFacility,
   type CertificationSubmissionRow,
 } from "./certification";
+import { acquireFacilityDurabilityLock } from "./facility-durability-lock";
 import { assertSameOrg, requireOrgScope } from "./utils";
 
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
@@ -410,15 +411,17 @@ async function getLatestSubmissionWithExecutor(
 // are checked by presence: a GHG Statement has no template, so it simply
 // omits `expectedDefaultRemovalTemplateId`.
 //
-// The mapping lock is always acquired FIRST so every submit path shares one
-// lock order (`mapping → caller-supplied locks`), preventing an ABBA
-// deadlock with admin flows that touch certifier_projects and
-// certifier_document_uploads in the opposite order.
+// The facility durability lock is always acquired first, followed by the
+// mapping lock, so every submit path shares one order
+// (`facility → mapping → artifact → mirror`). This serializes the first
+// blocking ledger write with facility tier edits and prevents ABBA deadlocks.
 async function lockAndVerifyMapping(
   ctx: OrgContext,
   executor: DbTransaction,
   guard: MappingClaimGuard,
 ): Promise<void> {
+  await acquireFacilityDurabilityLock(ctx, executor, guard.facilityId);
+
   const [current] = await executor
     .select({
       externalProjectId: certifierProjects.externalProjectId,
