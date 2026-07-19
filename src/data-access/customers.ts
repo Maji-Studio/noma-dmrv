@@ -64,6 +64,7 @@ export interface CustomerLocationDetail extends CustomerLocation {
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { guardCustomerName } from "./unique-name-guards";
+import { syncBiocharLegsForCustomerLocation } from "./transport-legs";
 
 // ============================================
 // Customer Read Operations
@@ -641,6 +642,8 @@ export async function updateCustomerLocation(
       .set(updateData)
       .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)))
       .returning();
+
+    await syncBiocharLegsForCustomerLocation(ctx, tx, locationId);
 
     return updated;
   });

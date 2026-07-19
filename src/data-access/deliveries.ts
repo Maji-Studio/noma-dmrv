@@ -90,6 +90,7 @@ import {
   lockDeleteDeliveryStock,
   lockDeliveryUpdateStock,
 } from "./delivery-stock-locks";
+import { syncBiocharProductTransportLegs } from "./transport-legs";
 
 // ============================================
 // Read Operations
@@ -626,6 +627,10 @@ export async function createDelivery(
       })
       .returning(getDeliveryBaseSelection(deliveryColumns));
 
+    await syncBiocharProductTransportLegs(ctx, tx, [
+      effectiveBiocharProductId,
+    ]);
+
     return row;
   });
 
@@ -730,6 +735,9 @@ export async function updateDelivery(
   const effectiveBiocharProductId = data.biocharProductId !== undefined
     ? data.biocharProductId ?? effectiveOrder.biocharProductId
     : existing.biocharProductId ?? effectiveOrder.biocharProductId;
+  const existingOrder = orderRows.find((order) => order.id === existing.orderId);
+  const existingBiocharProductId =
+    existing.biocharProductId ?? existingOrder?.biocharProductId ?? null;
   if (
     effectiveBiocharProductId &&
     (data.facilityId !== undefined ||
@@ -789,6 +797,11 @@ export async function updateDelivery(
       .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)))
       .returning(getDeliveryBaseSelection(deliveryColumns));
 
+    await syncBiocharProductTransportLegs(ctx, tx, [
+      existingBiocharProductId,
+      effectiveBiocharProductId,
+    ]);
+
     return row;
   });
 
@@ -818,7 +831,16 @@ export async function deleteDelivery(
       "delete",
     );
 
-    await lockDeleteDeliveryStock(ctx, tx, deliveryId);
+    const locked = await lockDeleteDeliveryStock(ctx, tx, deliveryId);
+    const [lockedOrder] = await tx
+      .select({ biocharProductId: orders.biocharProductId })
+      .from(orders)
+      .where(and(
+        eq(orders.id, locked.orderId),
+        eq(orders.organizationId, ctx.organizationId),
+      ));
+    const affectedBiocharProductId =
+      locked.biocharProductId ?? lockedOrder?.biocharProductId ?? null;
 
     const [{ value: applicationCount }] = await tx
       .select({ value: count() })
@@ -832,6 +854,9 @@ export async function deleteDelivery(
     }
 
     await tx.delete(deliveries).where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
+    await syncBiocharProductTransportLegs(ctx, tx, [
+      affectedBiocharProductId,
+    ]);
   });
 }
 
