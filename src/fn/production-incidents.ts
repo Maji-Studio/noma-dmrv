@@ -14,6 +14,7 @@ import {
   type ProductionIncidentWithRelations,
 } from "@/data-access/production-incidents";
 import { requireOrgContext } from "@/lib/auth/server";
+import { toActionError } from "@/lib/errors";
 import {
   createProductionIncidentSchema,
   updateProductionIncidentSchema,
@@ -152,7 +153,7 @@ export async function deleteProductionIncidentFn(
     logServerError("deleteProductionIncidentFn failed", error);
     return {
       success: false,
-      error: "Failed to delete production incident",
+      error: toActionError(error, "Failed to delete production incident"),
     };
   }
 }
