@@ -257,6 +257,7 @@ beforeAll(async () => {
           facilityId: gapFacility.id,
           reactorId: reactor.id,
           status: "cancelled",
+          cancellationReason: "Excluded from active dashboard gap metrics",
           startTime: new Date("2026-07-02T08:00:00Z"),
         },
         {
