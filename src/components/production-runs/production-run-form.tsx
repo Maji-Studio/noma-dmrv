@@ -16,7 +16,7 @@ import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
 import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, FileCsvIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, DryMassInput, FormActions, FormSection, FormSpine, SectionLabel, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, DryMassInput, FormActions, FormSection, FormSpine, SectionLabel, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { Button } from "@/components/ui";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { FormSelect } from "@/components/forms/form-select";
@@ -29,11 +29,11 @@ import { useEntityById } from "@/hooks/use-entities";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import {
   productionRunFormSchema,
-  productionRunStatuses,
   formatProductionRunStatus,
   type ProductionRunFormData,
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
+import { allowedProductionRunStatusesFrom } from "@/lib/production-runs/lifecycle";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { StorageLocationType } from "@/schemas/storage-locations";
@@ -41,11 +41,6 @@ import type { StorageLocationType } from "@/schemas/storage-locations";
 // ============================================
 // Constants for select options
 // ============================================
-
-const statusOptions: readonly { value: string; label: string }[] = productionRunStatuses.map((status) => ({
-  value: status,
-  label: formatProductionRunStatus(status),
-}));
 
 const isProductionRunCertifyField = (field: string) =>
   isCertifyFormField("productionRun", field);
@@ -223,6 +218,7 @@ function ProcessFlowPreview({
 
 export type ProductionRunSubmitData = Omit<ProductionRunFormData, "endTime"> & {
   endTime?: ProductionRunFormData["endTime"] | null;
+  expectedUpdatedAt?: Date;
 };
 
 interface ProductionRunFormProps {
@@ -256,12 +252,17 @@ export function ProductionRunForm({
 }: ProductionRunFormProps) {
   const formId = useId();
   const isEditMode = !!productionRun;
+  const transitionFrom = (productionRun?.status as ProductionRunStatus) ?? "draft";
+  const statusOptions = allowedProductionRunStatusesFrom(transitionFrom).map(
+    (status) => ({ value: status, label: formatProductionRunStatus(status) }),
+  );
   const { facilityId: contextFacilityId } = useFacilityContext();
 
   const defaultValues = {
     facilityId: productionRun?.facilityId || contextFacilityId || "",
     reactorId: productionRun?.reactorId ?? "",
     status: (productionRun?.status as ProductionRunStatus) ?? "draft",
+    cancellationReason: productionRun?.cancellationReason ?? "",
     // Start and end are explicit date + time pairs (issue #259). The end pair is
     // blank for an unfinished run; an overnight run gets an end date one day on.
     startDate: productionRun?.startTime
@@ -319,6 +320,7 @@ export function ProductionRunForm({
 
   // Watch facility to filter reactors and storage locations
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
+  const watchedStatus = useWatch({ control, name: "status" });
 
   // Watch fields for flow preview
   const watchedReactorId = useWatch({ control, name: "reactorId" });
@@ -395,6 +397,7 @@ export function ProductionRunForm({
     const endTouched = !!dirtyFields.endDate || !!dirtyFields.endTime;
     const combined: ProductionRunSubmitData = {
       ...data,
+      expectedUpdatedAt: productionRun?.updatedAt,
       startTime: combineDateAndTime(startDateStr, data.startTime as string),
       endTime: endTimeCleared
         ? null
@@ -430,7 +433,7 @@ export function ProductionRunForm({
       <FormSection
         title="Run Setup"
         icon={<FactoryIcon size={14} weight="bold" />}
-        fields={["reactorId", "status", "startDate", "startTime", "endDate", "endTime", "operatorId"]}
+        fields={["reactorId", "status", "cancellationReason", "startDate", "startTime", "endDate", "endTime", "operatorId"]}
       >
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
@@ -470,6 +473,24 @@ export function ProductionRunForm({
             />
           </FormField>
         </div>
+
+        {watchedStatus === "cancelled" && (
+          <FormField
+            id="cancellationReason"
+            label="Cancellation reason"
+            error={errors.cancellationReason?.message}
+            required
+            helperText="Explain why this run did not take place."
+          >
+            <FormTextarea
+              id="cancellationReason"
+              rows={3}
+              disabled={isSubmitting}
+              error={!!errors.cancellationReason}
+              {...register("cancellationReason")}
+            />
+          </FormField>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField id="startDate" label="Start Date" error={errors.startDate?.message} required>
@@ -531,7 +552,10 @@ export function ProductionRunForm({
                   size="small"
                   disabled={isSubmitting}
                   onClick={() => {
-                    if (getValues("status") === "complete") {
+                    if (
+                      getValues("status") === "complete" ||
+                      getValues("status") === "failed"
+                    ) {
                       setValue("status", "running", SET_VALUE_OPTS);
                     }
                     setValue("endDate", "", SET_VALUE_OPTS);
