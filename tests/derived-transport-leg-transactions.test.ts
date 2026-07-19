@@ -11,6 +11,7 @@ import {
   feedstockTypes,
   orders,
   storageLocations,
+  supplierLocations,
   suppliers,
   transportLegs,
 } from "@/db/schema";
@@ -36,6 +37,7 @@ describe("derived transport-leg transaction boundaries", () => {
   const created = {
     facilityIds: [] as string[],
     supplierIds: [] as string[],
+    supplierLocationIds: [] as string[],
     feedstockTypeIds: [] as string[],
     feedstockCodes: [] as string[],
     storageLocationIds: [] as string[],
@@ -98,6 +100,11 @@ describe("derived transport-leg transaction boundaries", () => {
       await db
         .delete(feedstockTypes)
         .where(inArray(feedstockTypes.id, created.feedstockTypeIds));
+    }
+    if (created.supplierLocationIds.length > 0) {
+      await db
+        .delete(supplierLocations)
+        .where(inArray(supplierLocations.id, created.supplierLocationIds));
     }
     if (created.supplierIds.length > 0) {
       await db.delete(suppliers).where(inArray(suppliers.id, created.supplierIds));
@@ -191,7 +198,7 @@ describe("derived transport-leg transaction boundaries", () => {
     expect(persistedBin.feedstockTypeId).toBeNull();
   });
 
-  it("preserves feedstock transport overrides on partial updates", async () => {
+  it("preserves feedstock overrides on partial updates and resets them on reroute", async () => {
     const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
     const [facility] = await db
       .insert(facilities)
@@ -203,17 +210,39 @@ describe("derived transport-leg transaction boundaries", () => {
       .returning({ id: facilities.id });
     created.facilityIds.push(facility.id);
 
-    const [supplier] = await db
+    const [supplier, newRouteSupplier] = await db
       .insert(suppliers)
+      .values([
+        {
+          organizationId: TEST_ORG_ID,
+          code: `SUP-OVR-${tag}`,
+          name: `Override Supplier ${tag}`,
+          distanceToFacilityKm: 10,
+          distanceSource: "map_estimate" as const,
+        },
+        {
+          organizationId: TEST_ORG_ID,
+          code: `SUP-ROUTE-${tag}`,
+          name: `New Route Supplier ${tag}`,
+          distanceToFacilityKm: 35,
+          distanceSource: "manual" as const,
+        },
+      ])
+      .returning({ id: suppliers.id });
+    created.supplierIds.push(supplier.id, newRouteSupplier.id);
+
+    const [newDefaultLocation] = await db
+      .insert(supplierLocations)
       .values({
         organizationId: TEST_ORG_ID,
-        code: `SUP-OVR-${tag}`,
-        name: `Override Supplier ${tag}`,
-        distanceToFacilityKm: 10,
+        supplierId: newRouteSupplier.id,
+        name: `New Route Source ${tag}`,
+        isDefault: true,
+        distanceFromFacilityKm: 45,
         distanceSource: "map_estimate",
       })
-      .returning({ id: suppliers.id });
-    created.supplierIds.push(supplier.id);
+      .returning({ id: supplierLocations.id });
+    created.supplierLocationIds.push(newDefaultLocation.id);
 
     const [feedstockType] = await db
       .insert(feedstockTypes)
@@ -275,6 +304,35 @@ describe("derived transport-leg transaction boundaries", () => {
     expect(derived).toEqual({
       distanceKm: 25,
       distanceSource: "document",
+      tripType: "one_way",
+    });
+
+    // A full edit form may submit the old leg's autofilled distance together
+    // with a supplier change. The route anchor wins: recompute from the new
+    // supplier's effective default source, while preserving the saved trip type.
+    await updateFeedstock(ctx, feedstockId, {
+      supplierId: newRouteSupplier.id,
+      transportDistanceKm: 25,
+      transportDistanceSource: "document",
+    });
+
+    const [rerouted] = await db
+      .select({
+        originName: transportLegs.originName,
+        distanceKm: transportLegs.distanceKm,
+        distanceSource: transportLegs.distanceSource,
+        tripType: transportLegs.tripType,
+      })
+      .from(transportLegs)
+      .where(and(
+        eq(transportLegs.entityId, feedstockId),
+        eq(transportLegs.isDerived, true),
+      ));
+
+    expect(rerouted).toEqual({
+      originName: `New Route Source ${tag}`,
+      distanceKm: 45,
+      distanceSource: "map_estimate",
       tripType: "one_way",
     });
   });

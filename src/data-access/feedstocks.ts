@@ -572,6 +572,11 @@ export async function updateFeedstock(
     );
 
     const status = determineFeedstockStatus({ ...locked, ...feedstockData });
+    const routeAnchorChanged =
+      (feedstockData.supplierId !== undefined &&
+        feedstockData.supplierId !== locked.supplierId) ||
+      (feedstockData.facilityId !== undefined &&
+        feedstockData.facilityId !== locked.facilityId);
     const effectiveStorageLocationId =
       feedstockData.storageLocationId !== undefined
         ? feedstockData.storageLocationId
@@ -602,6 +607,7 @@ export async function updateFeedstock(
       distanceKm: transportDistanceKm,
       distanceSource: transportDistanceSource,
       tripType: transportTripType,
+      resetDistanceToRoute: routeAnchorChanged,
     });
   });
 

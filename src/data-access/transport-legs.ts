@@ -55,6 +55,9 @@ const CERTIFIED_LINEAGE_TARGET: Record<
   sample: "sample",
 };
 
+const BIOCHAR_TRANSPORT_AGGREGATE_LOCK_SCOPE =
+  "biochar-transport-aggregate";
+
 // sample resolves indirectly via `production_runs.facility_id`; others have
 // a direct `facility_id` column.
 async function resolveEntityFacility(
@@ -387,6 +390,8 @@ export interface FeedstockTransportOverride {
   distanceKm?: number | null;
   distanceSource?: "map_estimate" | "manual" | "document" | null;
   tripType?: "return" | "one_way" | null;
+  /** Route anchors changed, so the previous route's distance is not reusable. */
+  resetDistanceToRoute?: boolean;
 }
 
 /**
@@ -459,7 +464,15 @@ export async function syncFeedstockTransportLeg(
       : row.supplierDistanceSource;
   const locationHasGps =
     row.locationGpsLatitude != null && row.locationGpsLongitude != null;
-  const preserveExistingDistance = distanceOverride?.distanceKm === undefined;
+  const preserveExistingDistance =
+    distanceOverride?.distanceKm === undefined &&
+    distanceOverride?.resetDistanceToRoute !== true;
+  const distanceKmOverride = distanceOverride?.resetDistanceToRoute
+    ? undefined
+    : distanceOverride?.distanceKm;
+  const distanceSourceOverride = distanceOverride?.resetDistanceToRoute
+    ? undefined
+    : distanceOverride?.distanceSource;
 
   const derived = deriveTransportLeg({
     origin: {
@@ -478,10 +491,10 @@ export async function syncFeedstockTransportLeg(
     storedDistanceSource,
     distanceKmOverride: preserveExistingDistance
       ? row.existingDistanceKm
-      : distanceOverride.distanceKm,
+      : distanceKmOverride,
     distanceSourceOverride:
-      distanceOverride?.distanceSource !== undefined
-        ? distanceOverride.distanceSource
+      distanceSourceOverride !== undefined
+        ? distanceSourceOverride
         : preserveExistingDistance
           ? row.existingDistanceSource
           : undefined,
@@ -511,7 +524,7 @@ export async function syncFeedstockTransportLeg(
  * source. Deliveries missing a positive distance or mass are skipped. Call
  * after every delivery create/update/delete. Manual legs are untouched.
  */
-export async function syncBiocharProductTransportLeg(
+async function syncLockedBiocharProductTransportLeg(
   ctx: OrgContext,
   tx: DbTransaction,
   biocharProductId: string,
@@ -608,7 +621,16 @@ export async function syncBiocharProductTransportLeg(
   await replaceDerivedTransportLeg(ctx, tx, "biochar", biocharProductId, derived);
 }
 
-/** Recompute each affected product once, serially on the shared transaction. */
+/**
+ * Recompute each affected product once on the shared transaction.
+ *
+ * The org/product transaction locks are acquired together in sorted order,
+ * before any product aggregate is read. This lets a waiter observe the prior
+ * transaction's committed delivery/location/order changes under READ COMMITTED
+ * and prevents two stale snapshots from overwriting the same derived leg.
+ * Callers take stock/certification/parent row locks first; these aggregate locks
+ * are the final lock tier and the aggregate reads do not lock parent rows.
+ */
 export async function syncBiocharProductTransportLegs(
   ctx: OrgContext,
   tx: DbTransaction,
@@ -619,9 +641,27 @@ export async function syncBiocharProductTransportLegs(
   const ids = [...new Set(
     biocharProductIds.filter((id): id is string => Boolean(id)),
   )].sort();
+
   for (const id of ids) {
-    await syncBiocharProductTransportLeg(ctx, tx, id);
+    const lockKey = `${BIOCHAR_TRANSPORT_AGGREGATE_LOCK_SCOPE}:${ctx.organizationId}:${id}`;
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
+    );
   }
+
+  for (const id of ids) {
+    await syncLockedBiocharProductTransportLeg(ctx, tx, id);
+  }
+}
+
+/** Recompute one product through the same lock-ordering entry point. */
+export async function syncBiocharProductTransportLeg(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  biocharProductId: string,
+): Promise<void> {
+  requireOrgScope(ctx);
+  await syncBiocharProductTransportLegs(ctx, tx, [biocharProductId]);
 }
 
 /**
