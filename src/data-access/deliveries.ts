@@ -90,7 +90,10 @@ import {
   lockDeleteDeliveryStock,
   lockDeliveryUpdateStock,
 } from "./delivery-stock-locks";
-import { syncBiocharProductTransportLegs } from "./transport-legs";
+import {
+  lockBiocharTransportRouteTopology,
+  syncBiocharProductTransportLegs,
+} from "./transport-legs";
 
 // ============================================
 // Read Operations
@@ -551,46 +554,48 @@ export async function createDelivery(
     throw new SafeError("Dry mass must be less than or equal to wet mass");
   }
 
-  // Verify order exists
-  const [order] = await db
-    .select({ id: orders.id, facilityId: orders.facilityId, biocharProductId: orders.biocharProductId })
-    .from(orders)
-    .where(and(eq(orders.id, data.orderId), eq(orders.organizationId, ctx.organizationId)));
-
-  if (!order) {
-    throw new SafeError("Order not found");
-  }
-
-  if (order.facilityId !== data.facilityId) {
-    throw new SafeError("Order belongs to a different facility");
-  }
-
-  const effectiveBiocharProductId = data.biocharProductId ?? order.biocharProductId;
-  if (effectiveBiocharProductId) {
-    const [product] = await db
-      .select({ facilityId: biocharProducts.facilityId })
-      .from(biocharProducts)
-      .where(and(eq(biocharProducts.id, effectiveBiocharProductId), eq(biocharProducts.organizationId, ctx.organizationId)));
-
-    if (!product) {
-      throw new SafeError("Biochar product not found");
-    }
-
-    if (product.facilityId !== data.facilityId) {
-      throw new SafeError("Biochar product belongs to a different facility");
-    }
-  }
-
   const effectiveStatus = data.status ?? "upcoming";
   if (data.driverId) await assertSameOrg(ctx, drivers, data.driverId);
   if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
 
   const delivery = await db.transaction(async (tx) => {
+    await lockBiocharTransportRouteTopology(ctx, tx);
+
+    const [order] = await tx
+      .select({
+        facilityId: orders.facilityId,
+        biocharProductId: orders.biocharProductId,
+      })
+      .from(orders)
+      .where(and(
+        eq(orders.id, data.orderId),
+        eq(orders.organizationId, ctx.organizationId),
+      ));
+    if (!order) {
+      throw new SafeError("Order not found");
+    }
+    if (order.facilityId !== data.facilityId) {
+      throw new SafeError("Order belongs to a different facility");
+    }
+
+    const effectiveBiocharProductId =
+      data.biocharProductId ?? order.biocharProductId;
+    const [product] = await tx
+      .select({ facilityId: biocharProducts.facilityId })
+      .from(biocharProducts)
+      .where(and(
+        eq(biocharProducts.id, effectiveBiocharProductId),
+        eq(biocharProducts.organizationId, ctx.organizationId),
+      ));
+    if (!product) {
+      throw new SafeError("Biochar product not found");
+    }
+    if (product.facilityId !== data.facilityId) {
+      throw new SafeError("Biochar product belongs to a different facility");
+    }
+
     // Hard-block shipping more than the product batch physically holds (#116).
-    if (
-      effectiveBiocharProductId &&
-      deliveryDrawsStock(effectiveStatus, data.deliveredWetMassKg)
-    ) {
+    if (deliveryDrawsStock(effectiveStatus, data.deliveredWetMassKg)) {
       await lockCreateDeliveryStock(ctx, tx, {
         biocharProductId: effectiveBiocharProductId,
         requestedWetKg: data.deliveredWetMassKg,
@@ -605,7 +610,7 @@ export async function createDelivery(
         orderId: data.orderId,
         facilityId: data.facilityId,
         deliveryDate: data.deliveryDate,
-        biocharProductId: effectiveBiocharProductId ?? null,
+        biocharProductId: effectiveBiocharProductId,
         driverId: data.driverId ?? null,
         vehicleId: data.vehicleId ?? null,
         status: effectiveStatus,
@@ -759,6 +764,12 @@ export async function updateDelivery(
   if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
 
   const updated = await db.transaction(async (tx) => {
+    const routeMembershipCanChange =
+      data.orderId !== undefined || data.biocharProductId !== undefined;
+    if (routeMembershipCanChange) {
+      await lockBiocharTransportRouteTopology(ctx, tx);
+    }
+
     // Certified-lineage precedence: a verifier-bound delivery may not be edited
     // at all, so that refusal has to reach the operator ahead of any stock
     // complaint about an edit they were never allowed to make.
@@ -856,6 +867,8 @@ export async function deleteDelivery(
   requireOrgScope(ctx);
 
   await db.transaction(async (tx) => {
+    await lockBiocharTransportRouteTopology(ctx, tx);
+
     // Same precedence as updateDelivery: refuse the locked-lineage delete before
     // taking stock locks or complaining about stock.
     await assertCanMutateCertifiedLineage(

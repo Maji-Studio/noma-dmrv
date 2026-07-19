@@ -577,6 +577,9 @@ export async function updateFeedstock(
         feedstockData.supplierId !== locked.supplierId) ||
       (feedstockData.facilityId !== undefined &&
         feedstockData.facilityId !== locked.facilityId);
+    const explicitDistanceSupplied = transportDistanceKm !== undefined;
+    const explicitDistanceSourceSupplied =
+      transportDistanceSource !== undefined;
     const effectiveStorageLocationId =
       feedstockData.storageLocationId !== undefined
         ? feedstockData.storageLocationId
@@ -607,7 +610,10 @@ export async function updateFeedstock(
       distanceKm: transportDistanceKm,
       distanceSource: transportDistanceSource,
       tripType: transportTripType,
-      resetDistanceToRoute: routeAnchorChanged,
+      resetDistanceToRoute:
+        routeAnchorChanged &&
+        !explicitDistanceSupplied &&
+        !explicitDistanceSourceSupplied,
     });
   });
 

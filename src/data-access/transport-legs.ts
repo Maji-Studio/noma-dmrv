@@ -57,6 +57,8 @@ const CERTIFIED_LINEAGE_TARGET: Record<
 
 const BIOCHAR_TRANSPORT_AGGREGATE_LOCK_SCOPE =
   "biochar-transport-aggregate";
+const BIOCHAR_TRANSPORT_ROUTE_TOPOLOGY_LOCK_SCOPE =
+  "biochar-transport-route-topology";
 
 // sample resolves indirectly via `production_runs.facility_id`; others have
 // a direct `facility_id` column.
@@ -512,6 +514,27 @@ export async function syncFeedstockTransportLeg(
 // ============================================
 
 /**
+ * Serialize mutations that can change which deliveries belong to a product or
+ * customer-location route. This is the first transaction lock tier: callers
+ * must acquire it before certification, stock, parent-row, and aggregate locks.
+ *
+ * The organization-wide scope is intentional. Customer-location resync first
+ * discovers affected products, so a narrower key could miss a concurrently
+ * inserted or repointed delivery before its product identity is known.
+ */
+export async function lockBiocharTransportRouteTopology(
+  ctx: OrgContext,
+  tx: DbTransaction,
+): Promise<void> {
+  requireOrgScope(ctx);
+  const lockKey =
+    `${BIOCHAR_TRANSPORT_ROUTE_TOPOLOGY_LOCK_SCOPE}:${ctx.organizationId}`;
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
+  );
+}
+
+/**
  * Recompute and persist a biochar product's SINGLE auto-derived distribution
  * leg (facility → customer sites) from its completed deliveries. A product can be
  * delivered many times to different distances; the one-derived-per-entity
@@ -628,8 +651,9 @@ async function syncLockedBiocharProductTransportLeg(
  * before any product aggregate is read. This lets a waiter observe the prior
  * transaction's committed delivery/location/order changes under READ COMMITTED
  * and prevents two stale snapshots from overwriting the same derived leg.
- * Callers take stock/certification/parent row locks first; these aggregate locks
- * are the final lock tier and the aggregate reads do not lock parent rows.
+ * Topology-changing callers take the route-topology lock, followed by any
+ * certification/stock/parent row locks. These aggregate locks are the final
+ * lock tier and the aggregate reads do not lock parent rows.
  */
 export async function syncBiocharProductTransportLegs(
   ctx: OrgContext,

@@ -307,13 +307,10 @@ describe("derived transport-leg transaction boundaries", () => {
       tripType: "one_way",
     });
 
-    // A full edit form may submit the old leg's autofilled distance together
-    // with a supplier change. The route anchor wins: recompute from the new
-    // supplier's effective default source, while preserving the saved trip type.
+    // With no explicit transport fields, a route-anchor change discards the
+    // stale saved override and recomputes from the new supplier's default.
     await updateFeedstock(ctx, feedstockId, {
       supplierId: newRouteSupplier.id,
-      transportDistanceKm: 25,
-      transportDistanceSource: "document",
     });
 
     const [rerouted] = await db
@@ -333,6 +330,34 @@ describe("derived transport-leg transaction boundaries", () => {
       originName: `New Route Source ${tag}`,
       distanceKm: 45,
       distanceSource: "map_estimate",
+      tripType: "one_way",
+    });
+
+    // An explicit override submitted with a reroute is authoritative. It must
+    // not be discarded merely because the supplier anchor also changed.
+    await updateFeedstock(ctx, feedstockId, {
+      supplierId: supplier.id,
+      transportDistanceKm: 30,
+      transportDistanceSource: "document",
+    });
+
+    const [explicitReroute] = await db
+      .select({
+        originName: transportLegs.originName,
+        distanceKm: transportLegs.distanceKm,
+        distanceSource: transportLegs.distanceSource,
+        tripType: transportLegs.tripType,
+      })
+      .from(transportLegs)
+      .where(and(
+        eq(transportLegs.entityId, feedstockId),
+        eq(transportLegs.isDerived, true),
+      ));
+
+    expect(explicitReroute).toEqual({
+      originName: `Override Supplier ${tag}`,
+      distanceKm: 30,
+      distanceSource: "document",
       tripType: "one_way",
     });
   });

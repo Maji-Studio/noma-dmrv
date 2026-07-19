@@ -88,7 +88,10 @@ import {
   assertOrderProductRepointWithinStock,
   lockOrderProductRepointBins,
 } from "./order-stock-locks";
-import { syncBiocharProductTransportLegs } from "./transport-legs";
+import {
+  lockBiocharTransportRouteTopology,
+  syncBiocharProductTransportLegs,
+} from "./transport-legs";
 
 // ============================================
 // Read Operations
@@ -615,8 +618,16 @@ export async function updateOrder(
   }
 
   const updated = await db.transaction(async (tx) => {
-    // Match delivery mutation lock precedence: certification artifacts first,
-    // then stock bins, parent/product rows, and finally transport aggregates.
+    const routeAnchorCanChange =
+      data.biocharProductId !== undefined ||
+      data.customerLocationId !== undefined;
+    if (routeAnchorCanChange) {
+      await lockBiocharTransportRouteTopology(ctx, tx);
+    }
+
+    // Match delivery mutation lock precedence: route topology first, then
+    // certification artifacts, stock bins, parent/product rows, and finally
+    // transport aggregates.
     // This prevents an order↔delivery ABBA cycle on artifact and order locks.
     await assertCanMutateCertifiedLineage(
       ctx,

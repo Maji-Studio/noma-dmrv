@@ -10,6 +10,7 @@ import {
   orders,
   transportLegs,
 } from "@/db/schema";
+import { updateCustomerLocation } from "@/data-access/customers";
 import { createDelivery, updateDelivery } from "@/data-access/deliveries";
 import { updateOrder } from "@/data-access/orders";
 import { syncBiocharProductTransportLegs } from "@/data-access/transport-legs";
@@ -302,6 +303,123 @@ describe(
         releaseBarrier();
         await barrierTransaction.catch(() => undefined);
         await updates?.catch(() => undefined);
+      }
+    });
+
+    it("serializes a first delivery with its location route update", async () => {
+      const fixture = await createFixture("ROUTE", [10], 1);
+
+      let releaseBarrier = () => {};
+      let signalBarrierReady = () => {};
+      const barrierReady = new Promise<void>((resolve) => {
+        signalBarrierReady = resolve;
+      });
+      const barrierRelease = new Promise<void>((resolve) => {
+        releaseBarrier = resolve;
+      });
+      const barrierTransaction = db.transaction(async (tx) => {
+        await tx.execute(sql`lock table ${deliveries} in share mode`);
+        signalBarrierReady();
+        await barrierRelease;
+      });
+
+      let deliveryPromise:
+        | ReturnType<typeof createDelivered>
+        | undefined;
+      let locationUpdatePromise:
+        | ReturnType<typeof updateCustomerLocation>
+        | undefined;
+
+      try {
+        await barrierReady;
+        deliveryPromise = createDelivered(
+          fixture,
+          "ROUTE-FIRST",
+          fixture.productIds[0],
+          100,
+        );
+
+        // The delivery holds the route-topology lock before it reaches the
+        // insert barrier. This gives the location update a deterministic race.
+        await expect
+          .poll(
+            async () => {
+              const result = await db.execute<{ ready: boolean }>(sql`
+                select exists (
+                  select 1
+                  from pg_locks
+                  where not granted
+                    and mode = 'RowExclusiveLock'
+                    and relation = 'deliveries'::regclass
+                ) as ready
+              `);
+              return result.rows[0]?.ready ?? false;
+            },
+            { timeout: BARRIER_TIMEOUT_MS },
+          )
+          .toBe(true);
+
+        locationUpdatePromise = updateCustomerLocation(
+          ctx,
+          fixture.locationIds[0],
+          { distanceFromFacilityKm: 55, distanceSource: "manual" },
+        );
+
+        await expect
+          .poll(
+            async () => {
+              const result = await db.execute<{ ready: boolean }>(sql`
+                with blocked_delivery_writers as (
+                  select pid
+                  from pg_locks
+                  where not granted
+                    and mode = 'RowExclusiveLock'
+                    and relation = 'deliveries'::regclass
+                )
+                select exists (
+                  select 1
+                  from pg_locks waiting
+                  join pg_locks held
+                    on held.locktype = waiting.locktype
+                   and held.database is not distinct from waiting.database
+                   and held.classid is not distinct from waiting.classid
+                   and held.objid is not distinct from waiting.objid
+                   and held.objsubid is not distinct from waiting.objsubid
+                  where waiting.locktype = 'advisory'
+                    and not waiting.granted
+                    and held.granted
+                    and held.pid in (select pid from blocked_delivery_writers)
+                ) as ready
+              `);
+              return result.rows[0]?.ready ?? false;
+            },
+            { timeout: BARRIER_TIMEOUT_MS },
+          )
+          .toBe(true);
+
+        releaseBarrier();
+        await barrierTransaction;
+        await deliveryPromise;
+        await locationUpdatePromise;
+
+        const [derived] = await db
+          .select({
+            distanceKm: transportLegs.distanceKm,
+            loadMassKg: transportLegs.loadMassKg,
+          })
+          .from(transportLegs)
+          .where(and(
+            eq(transportLegs.entityType, "biochar"),
+            eq(transportLegs.entityId, fixture.productIds[0]),
+            eq(transportLegs.isDerived, true),
+          ));
+
+        expect(derived).toEqual({ distanceKm: 55, loadMassKg: 100 });
+      } finally {
+        releaseBarrier();
+        await barrierTransaction.catch(() => undefined);
+        await deliveryPromise?.catch(() => undefined);
+        await locationUpdatePromise?.catch(() => undefined);
       }
     });
 
