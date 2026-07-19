@@ -4,12 +4,13 @@ import { test, expect } from "./fixtures/auth-fixtures";
 import { createDbConnection } from "./fixtures/db";
 import { waitForSideSheet } from "./fixtures/page-helpers";
 import { DEC_ORG_ID } from "@/db/org-defaults";
-import { creditBatches, orders, productionProcesses } from "@/db/schema";
+import { creditBatches, orders, productionProcesses, samples } from "@/db/schema";
 
 const SAME_YEAR_START = "2026-06-01";
 const SAME_YEAR_END = "2026-06-30";
 const CROSS_YEAR_START = "2026-12-15";
 const CROSS_YEAR_END = "2027-01-10";
+const ANALYSIS_DATE = "2026-06-13";
 
 test("read surfaces use canonical dates while native inputs keep ISO values", async ({
   adminPage: page,
@@ -21,9 +22,11 @@ test("read surfaces use canonical dates while native inputs keep ISO values", as
   const sameYearBatchId = randomUUID();
   const crossYearBatchId = randomUUID();
   const orderId = randomUUID();
+  const sampleId = randomUUID();
   const sameYearCode = `E2E-DATE-SAME-${tag}`;
   const crossYearCode = `E2E-DATE-CROSS-${tag}`;
   const orderCode = `E2E-DATE-ORDER-${tag}`;
+  const sampleCode = `E2E-DATE-SAMPLE-${tag}`;
 
   try {
     await db.transaction(async (tx) => {
@@ -67,6 +70,16 @@ test("read surfaces use canonical dates while native inputs keep ISO values", as
         quantityKg: 100,
         packaging: "loose",
       });
+      await tx.insert(samples).values({
+        id: sampleId,
+        organizationId: DEC_ORG_ID,
+        sampleCode,
+        creditBatchId: sameYearBatchId,
+        samplingTime: new Date(2026, 5, 13, 12),
+        analysisDate: ANALYSIS_DATE,
+        totalCarbonPercent: 80,
+        organicCarbonPercent: 78,
+      });
     });
 
     await page.goto(`/orders?facility=${seededData.facility.id}`);
@@ -86,6 +99,11 @@ test("read surfaces use canonical dates while native inputs keep ISO values", as
     await expect(page.locator('input[name="startDate"]')).toHaveValue(SAME_YEAR_START);
     await expect(page.locator('input[name="endDate"]')).toHaveValue(SAME_YEAR_END);
 
+    await page.goto(`/samples?facility=${seededData.facility.id}`);
+    await page.locator("tbody tr").filter({ hasText: sampleCode }).click();
+    await waitForSideSheet(page);
+    await expect(page.getByRole("dialog")).toContainText("Jun 13, 2026");
+
     await page.goto(`/dashboard?facility=${seededData.facility.id}`);
     const updatedLine = page.getByText(/Live operations · updated/);
     await expect(updatedLine).toHaveText(
@@ -93,6 +111,7 @@ test("read surfaces use canonical dates while native inputs keep ISO values", as
     );
     await expect(updatedLine).not.toContainText(/\b(?:AM|PM)\b/);
   } finally {
+    await db.delete(samples).where(inArray(samples.id, [sampleId]));
     await db.delete(orders).where(inArray(orders.id, [orderId]));
     await db
       .delete(creditBatches)

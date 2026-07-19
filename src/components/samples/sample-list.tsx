@@ -32,7 +32,7 @@ import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatDateTime } from "@/lib/format-utils";
+import { formatDate, formatDateTime } from "@/lib/format-utils";
 import { SampleForm } from "./sample-form";
 import {
   formatDurabilityOption,
@@ -669,7 +669,7 @@ export function SampleList() {
             fields: [
               { label: "Lab Name", value: displaySideSheet.entity.labName },
               { label: "Lab Accreditation", value: displaySideSheet.entity.labAccreditation },
-              { label: "Analysis Date", value: displaySideSheet.entity.analysisDate },
+              { label: "Analysis Date", value: formatDate(displaySideSheet.entity.analysisDate) },
             ],
           },
         ] : undefined}
