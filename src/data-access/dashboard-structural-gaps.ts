@@ -19,6 +19,7 @@ import {
   transportLegs,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { requireOrgScope } from "./utils";
 
 export interface DashboardStructuralGapCounts {
@@ -306,7 +307,7 @@ export async function loadDashboardStructuralGapCounts(
               isNull(samples.creditBatchId),
               eq(productionRuns.facilityId, facilityId),
               isNull(productionRuns.archivedAt),
-              ne(productionRuns.status, "cancelled"),
+              ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
             ),
           ),
         ),
