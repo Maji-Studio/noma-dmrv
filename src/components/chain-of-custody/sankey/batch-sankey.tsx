@@ -230,7 +230,7 @@ function SankeyDiagramNode({ data }: NodeProps) {
             />
             {/* Marching centerline — direction of the mass flow */}
             <line
-              className="coc-flow-line"
+              className="traceability-flow-line"
               x1={xLeft}
               y1={FLOW_TOP + leftH / 2}
               x2={xRight}

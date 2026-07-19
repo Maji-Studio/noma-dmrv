@@ -383,9 +383,9 @@ Production-run telemetry is document-backed and imported from a canonical CSV.
   caps table height, but server-side pagination/virtualization remains tracked
   in `docs/open-questions.md`.
 
-## Chain of Custody Visualization
+## Traceability Visualization
 
-Credit-batch anchored lineage view at `/chain-of-custody`, with dual
+Credit-batch anchored lineage view at `/traceability`, with dual
 deep-link selectors:
 
 - `?batch=<id>` opens the batch roll-up.

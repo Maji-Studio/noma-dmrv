@@ -48,7 +48,7 @@ export const GRAPH_CONTROLS_CLASS =
   "[&>button]:!bg-transparent [&>button:last-child]:!border-b-0 " +
   "[&>button:hover]:!bg-[var(--ink)] [&>button:hover>svg]:!fill-[var(--paper)]";
 export const GRAPH_MINIMAP_CLASS =
-  "!rounded-none !border-[1.5px] !border-[var(--ink)] !bg-[var(--paper)] !shadow-none";
+  "pointer-events-none !rounded-none !border-[1.5px] !border-[var(--ink)] !bg-[var(--paper)] !shadow-none";
 export const GRAPH_MINIMAP_MASK = "rgba(15, 2, 26, 0.05)";
 
 export type LineageNodeKind =

@@ -1,7 +1,7 @@
 # Chain-of-Custody Views — Credit-Batch Anchor, Sankey, Trail
 
 > **Status: IMPLEMENTED** (2026-06-11, branch `feat/chain-of-custody-views`) —
-> shipped per the Phase 3 sketch below; see `docs/chain-of-custody.md` for the
+> shipped per the Phase 3 sketch below; see `docs/traceability.md` for the
 > as-built reference. Originally planned via a grilling session against the Maji
 > concept canvas (external design reference, not checked into the repo —
 > five chain-of-custody treatments + map styles). Sequenced **after**
@@ -63,7 +63,7 @@ drill-down.
    deep links both work. No synthetic "unbatched" pseudo-batch.
 6. **Sequencing** — Phase 2 lands first on its own anchor; this work is
    **Phase 3** on a fresh branch. On ship: update
-   `docs/chain-of-custody.md` + the CLAUDE.md Chain of Custody section
+   `docs/traceability.md` + the CLAUDE.md Chain of Custody section
    (both still say application-first).
 
 ## Concept-canvas treatment mapping
