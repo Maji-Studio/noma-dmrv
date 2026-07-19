@@ -9,7 +9,14 @@ import type { StorageProvider } from "./types";
 let _provider: StorageProvider | null = null;
 
 function s3ConfigFromEnv(): S3CompatibleConfig {
-  const { STORAGE_BUCKET, STORAGE_REGION, STORAGE_ACCESS_KEY_ID, STORAGE_SECRET_ACCESS_KEY, STORAGE_ENDPOINT } = env;
+  const {
+    STORAGE_BUCKET,
+    STORAGE_REGION,
+    STORAGE_ACCESS_KEY_ID,
+    STORAGE_SECRET_ACCESS_KEY,
+    STORAGE_ENDPOINT,
+    STORAGE_PREFIX,
+  } = env;
   const missing = [
     ["STORAGE_BUCKET", STORAGE_BUCKET],
     ["STORAGE_REGION", STORAGE_REGION],
@@ -25,6 +32,7 @@ function s3ConfigFromEnv(): S3CompatibleConfig {
     bucket: STORAGE_BUCKET as string,
     region: STORAGE_REGION as string,
     endpoint: STORAGE_ENDPOINT,
+    prefix: STORAGE_PREFIX,
     accessKeyId: STORAGE_ACCESS_KEY_ID as string,
     secretAccessKey: STORAGE_SECRET_ACCESS_KEY as string,
   };
