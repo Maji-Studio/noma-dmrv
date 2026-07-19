@@ -58,6 +58,7 @@ import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/sub
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
 import { loadCreditBatchLineageFacts } from "./credit-batch-lineage-facts";
+import { retireDocumentsForEntities } from "./documents";
 
 export { getApplicationsForRuns } from "./credit-batch-production-runs";
 export type { ApplicationForRun } from "./credit-batch-production-runs";
@@ -747,6 +748,9 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string): Promise<vo
     if (batch?.removalId) {
       await gcRemovalIfOrphaned(ctx, tx, batch.removalId);
     }
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "credit_batch", entityId: id },
+    ]);
   });
 }
 

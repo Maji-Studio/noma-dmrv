@@ -84,10 +84,15 @@ export interface OrderDetail extends Order {
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { retireDocumentsForEntities } from "./documents";
 import {
   assertOrderProductRepointWithinStock,
   lockOrderProductRepointBins,
 } from "./order-stock-locks";
+import {
+  lockBiocharTransportRouteTopology,
+  syncBiocharProductTransportLegs,
+} from "./transport-legs";
 
 // ============================================
 // Read Operations
@@ -614,6 +619,24 @@ export async function updateOrder(
   }
 
   const updated = await db.transaction(async (tx) => {
+    const routeAnchorCanChange =
+      data.biocharProductId !== undefined ||
+      data.customerLocationId !== undefined;
+    if (routeAnchorCanChange) {
+      await lockBiocharTransportRouteTopology(ctx, tx);
+    }
+
+    // Match delivery mutation lock precedence: route topology first, then
+    // certification artifacts, stock bins, parent/product rows, and finally
+    // transport aggregates.
+    // This prevents an order↔delivery ABBA cycle on artifact and order locks.
+    await assertCanMutateCertifiedLineage(
+      ctx,
+      tx,
+      { entityType: "order", entityId: orderId },
+      "update",
+    );
+
     const repointPreparation = data.biocharProductId !== undefined
       ? await lockOrderProductRepointBins(
           ctx,
@@ -636,13 +659,6 @@ export async function updateOrder(
       throw new SafeError("Order not found");
     }
 
-    await assertCanMutateCertifiedLineage(
-      ctx,
-      tx,
-      { entityType: "order", entityId: orderId },
-      "update",
-    );
-
     if (
       data.biocharProductId !== undefined &&
       repointPreparation
@@ -657,6 +673,47 @@ export async function updateOrder(
       );
     }
 
+    const productChanged =
+      data.biocharProductId !== undefined &&
+      data.biocharProductId !== locked.biocharProductId;
+    const customerLocationChanged =
+      data.customerLocationId !== undefined &&
+      data.customerLocationId !== locked.customerLocationId;
+    const affectedProductIds: Array<string | null> = [];
+
+    if (productChanged || customerLocationChanged) {
+      const inheritingDeliveries = await tx
+        .select({
+          biocharProductId: deliveries.biocharProductId,
+          customerLocationId: deliveries.customerLocationId,
+        })
+        .from(deliveries)
+        .where(and(
+          eq(deliveries.orderId, orderId),
+          eq(deliveries.organizationId, ctx.organizationId),
+        ));
+
+      for (const delivery of inheritingDeliveries) {
+        if (productChanged && delivery.biocharProductId === null) {
+          affectedProductIds.push(
+            locked.biocharProductId,
+            data.biocharProductId ?? locked.biocharProductId,
+          );
+        }
+        if (
+          customerLocationChanged &&
+          delivery.customerLocationId === null
+        ) {
+          affectedProductIds.push(
+            delivery.biocharProductId ?? locked.biocharProductId,
+            delivery.biocharProductId ??
+              data.biocharProductId ??
+              locked.biocharProductId,
+          );
+        }
+      }
+    }
+
     const [row] = await tx
       .update(orders)
       .set({
@@ -665,6 +722,12 @@ export async function updateOrder(
       })
       .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)))
       .returning();
+
+    await syncBiocharProductTransportLegs(
+      ctx,
+      tx,
+      affectedProductIds,
+    );
     return row;
   });
 
@@ -716,6 +779,9 @@ export async function deleteOrder(
     }
 
     await tx.delete(orders).where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "order", entityId: orderId },
+    ]);
   });
 }
 
