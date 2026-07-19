@@ -31,8 +31,8 @@ The largest operator gap is facility-context reliability. Direct navigation to a
 
 ## Evidence
 
-- [Credit-batch loading screenshot](./artifacts/2026-07-18-staging-full-journey/sanitized-credit-batch-readiness.png) — main-content-only crop showing the detail shell and asynchronous readiness/sample loading state; the completed values are recorded from the later DOM observation.
-- [GHG gate screenshot](./artifacts/2026-07-18-staging-full-journey/sanitized-ghg-gate.png) — main-content-only crop showing the registry setup gate.
+- [Credit-batch loading screenshot](./artifacts/2026-07-18-staging-full-journey/sanitized-credit-batch-readiness.jpg) — main-content-only crop showing the detail shell and asynchronous readiness/sample loading state; the completed values are recorded from the later DOM observation.
+- [GHG gate screenshot](./artifacts/2026-07-18-staging-full-journey/sanitized-ghg-gate.jpg) — main-content-only crop showing the registry setup gate.
 - [Computer-use assignment](./artifacts/2026-07-18-staging-full-journey/computer-use-assignment.md)
 
 No screen recording was available. Full-page captures were deleted after independent review found incidental account PII in the sidebar; only sanitized main-content crops are retained.

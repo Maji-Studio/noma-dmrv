@@ -4,7 +4,7 @@ Repository: `/Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv`
 
 Staging URL: `https://staging.noma.maji.studio`
 
-Artifact directory: `/Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv/docs/qa/artifacts/2026-07-18-staging-full-journey`
+Artifact directory: `/Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv/docs/archive/qa/artifacts/2026-07-18-staging-full-journey`
 
 ## Authentication and safety
 

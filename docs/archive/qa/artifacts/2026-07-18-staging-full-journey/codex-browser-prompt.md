@@ -4,7 +4,7 @@ You are performing a long, evidence-heavy staging QA audit using computer use in
 
 Repository: /Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv
 Staging: https://staging.noma.maji.studio
-Artifact directory: /Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv/docs/qa/artifacts/2026-07-18-staging-full-journey
+Artifact directory: /Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv/docs/archive/qa/artifacts/2026-07-18-staging-full-journey
 
 Read ADMIN_EMAIL and ADMIN_PASSWORD from .env.local and enter them only into the visible login form. Never print, persist, screenshot, or report either value. Do not include personal names/emails in evidence. Redact incidental PII before saving. Use staging only and a facility visibly designated for QA/testing. If multiple qualify, choose the clearest and record only its stable ID or sanitized alias.
 
