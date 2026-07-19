@@ -41,6 +41,7 @@ import {
   assertNoReactorRunOverlap,
   isReactorStartUniqueViolation,
 } from "./overlap";
+import { retireDocumentsForEntities } from "../documents";
 
 const END_AFTER_START_CONSTRAINT = "production_runs_end_after_start";
 const END_AFTER_START_MESSAGE = "End time must be after the start time";
@@ -668,6 +669,23 @@ export async function deleteProductionRun(
     await lockBinStocks(ctx, tx, [
       locked.feedstockStorageLocationId,
       locked.biocharStorageLocationId,
+    ]);
+
+    const productionIncidents = await tx
+      .select({ id: incidentReports.id })
+      .from(incidentReports)
+      .where(
+        and(
+          eq(incidentReports.productionRunId, productionRunId),
+          eq(incidentReports.organizationId, ctx.organizationId),
+        ),
+      );
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "production_run", entityId: productionRunId },
+      ...productionIncidents.map((incident) => ({
+        entityType: "production_incident" as const,
+        entityId: incident.id,
+      })),
     ]);
 
     await tx

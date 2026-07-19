@@ -9,6 +9,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import {
   reactors,
   facilities,
+  productionRuns,
   type Reactor,
 } from "@/db/schema";
 import type { ReactorFilterData } from "@/schemas/reactors";
@@ -37,6 +38,7 @@ export interface PaginatedReactors {
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { guardReactorIdentifier } from "./unique-name-guards";
+import { retireDocumentsForEntities } from "./documents";
 
 // ADR 0016 removed the reactor-level sampling method. Reactor surfaces still
 // need a stable Method-A value while Method B is process-scoped.
@@ -431,10 +433,27 @@ export async function deleteReactor(
     throw new SafeError("Reactor not found");
   }
 
-  // Note: Foreign key constraints will prevent deletion if there are
-  // dependent production runs. The error will be caught by the server action.
+  await db.transaction(async (tx) => {
+    const [{ value: productionRunCount }] = await tx
+      .select({ value: count() })
+      .from(productionRuns)
+      .where(
+        and(
+          eq(productionRuns.reactorId, reactorId),
+          eq(productionRuns.organizationId, ctx.organizationId),
+        ),
+      );
+    if (Number(productionRunCount) > 0) {
+      throw new SafeError(
+        "Cannot delete reactor with associated production runs. Remove the production runs first.",
+      );
+    }
 
-  await db.delete(reactors).where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)));
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "reactor", entityId: reactorId },
+    ]);
+    await tx.delete(reactors).where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)));
+  });
 }
 
 // ============================================

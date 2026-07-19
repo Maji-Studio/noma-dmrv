@@ -31,6 +31,7 @@ import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { applicationEvidenceGapCountSql } from "./application-evidence-sql";
+import { retireDocumentsForEntities } from "./documents";
 
 // ============================================
 // Application Data Access Layer
@@ -708,6 +709,10 @@ export async function deleteApplication(ctx: OrgContext, id: string): Promise<vo
     await tx
       .delete(soilTemperatureMeasurements)
       .where(and(eq(soilTemperatureMeasurements.applicationId, id), eq(soilTemperatureMeasurements.organizationId, ctx.organizationId)));
+
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "application", entityId: id },
+    ]);
 
     await tx.delete(applications).where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)));
     // Batch aggregates (applied weight, CO2e stored) are derived on read

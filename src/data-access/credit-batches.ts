@@ -59,6 +59,7 @@ import { formatUtcDate } from "@/lib/date-utils";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
+import { retireDocumentsForEntities } from "./documents";
 
 export { getApplicationsForRuns } from "./credit-batch-production-runs";
 export type { ApplicationForRun } from "./credit-batch-production-runs";
@@ -750,6 +751,9 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string): Promise<vo
     await tx
       .delete(creditBatchProductionRuns)
       .where(and(eq(creditBatchProductionRuns.creditBatchId, id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)));
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "credit_batch", entityId: id },
+    ]);
     await tx.delete(creditBatches).where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)));
 
     // Drop the removal if this was its last member and it has no history.

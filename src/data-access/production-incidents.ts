@@ -9,6 +9,7 @@ import { incidentReports, operators, reactors, productionRuns } from "@/db/schem
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { retireDocumentsForEntities } from "./documents";
 
 export interface ProductionIncidentWithRelations {
   id: string;
@@ -185,10 +186,15 @@ export async function deleteProductionIncident(
 ): Promise<void> {
   requireOrgScope(ctx);
 
-  const deleted = await db
-    .delete(incidentReports)
-    .where(and(eq(incidentReports.id, id), eq(incidentReports.organizationId, ctx.organizationId)))
-    .returning({ id: incidentReports.id });
+  const deleted = await db.transaction(async (tx) => {
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "production_incident", entityId: id },
+    ]);
+    return tx
+      .delete(incidentReports)
+      .where(and(eq(incidentReports.id, id), eq(incidentReports.organizationId, ctx.organizationId)))
+      .returning({ id: incidentReports.id });
+  });
 
   if (deleted.length === 0) {
     throw new SafeError("Production incident not found");

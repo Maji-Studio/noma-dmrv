@@ -35,6 +35,7 @@ import {
   type CertifiedLineageEntityType,
 } from "./certification-lineage-guards";
 import { requireOrgScope } from "./utils";
+import { retireDocumentsForEntities } from "./documents";
 
 export type TransportEntityType = TransportEntityTypeValue;
 
@@ -280,6 +281,10 @@ export async function deleteTransportLeg(
       "delete",
     );
 
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "transport_leg", entityId: id },
+    ]);
+
     return tx
       .delete(transportLegs)
       .where(and(eq(transportLegs.id, id), eq(transportLegs.organizationId, ctx.organizationId)))
@@ -301,6 +306,21 @@ export async function deleteTransportLegsForEntity(
   entityId: string,
 ): Promise<void> {
   requireOrgScope(ctx);
+  const legs = await tx
+    .select({ id: transportLegs.id })
+    .from(transportLegs)
+    .where(
+      and(
+        eq(transportLegs.entityType, entityType),
+        eq(transportLegs.entityId, entityId),
+        eq(transportLegs.organizationId, ctx.organizationId),
+      ),
+    );
+  await retireDocumentsForEntities(
+    ctx,
+    tx,
+    legs.map((leg) => ({ entityType: "transport_leg", entityId: leg.id })),
+  );
   await tx
     .delete(transportLegs)
     .where(

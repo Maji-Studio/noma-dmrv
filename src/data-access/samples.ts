@@ -18,6 +18,7 @@ import {
 } from "@/db/schema";
 import type { SampleFilterData } from "@/schemas/samples";
 import { deleteTransportLegsForEntity } from "./transport-legs";
+import { retireDocumentsForEntities } from "./documents";
 import type { OrgContext } from "@/lib/auth/server";
 
 // ============================================
@@ -865,6 +866,9 @@ export async function deleteSample(
     );
 
     await deleteTransportLegsForEntity(ctx, tx, "sample", sampleId);
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "sample", entityId: sampleId },
+    ]);
     await tx.delete(samples).where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
   }));
 }

@@ -9,6 +9,7 @@ import { productionSamples, operators } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { retireDocumentsForEntities } from "./documents";
 
 // ============================================
 // Types
@@ -198,10 +199,15 @@ export async function deleteProductionSample(
 ): Promise<void> {
   requireOrgScope(ctx);
 
-  const deleted = await db
-    .delete(productionSamples)
-    .where(and(eq(productionSamples.id, id), eq(productionSamples.organizationId, ctx.organizationId)))
-    .returning({ id: productionSamples.id });
+  const deleted = await db.transaction(async (tx) => {
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "production_sample", entityId: id },
+    ]);
+    return tx
+      .delete(productionSamples)
+      .where(and(eq(productionSamples.id, id), eq(productionSamples.organizationId, ctx.organizationId)))
+      .returning({ id: productionSamples.id });
+  });
 
   if (deleted.length === 0) {
     throw new SafeError("Production sample not found");

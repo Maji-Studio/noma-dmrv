@@ -28,6 +28,7 @@ import {
   replaceDerivedTransportLeg,
 } from "./transport-legs";
 import { SafeError } from "@/lib/errors";
+import { retireDocumentsForEntities } from "./documents";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
 
@@ -648,6 +649,9 @@ export async function deleteFeedstock(
     }
 
     await deleteTransportLegsForEntity(ctx, tx, "feedstock", feedstockId);
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "feedstock", entityId: feedstockId },
+    ]);
     const result = await tx
       .delete(feedstocks)
       .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
