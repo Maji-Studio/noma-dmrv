@@ -27,6 +27,7 @@ import {
   type FeedstockTransportOverride,
 } from "./transport-legs";
 import { SafeError } from "@/lib/errors";
+import { retireDocumentsForEntities } from "./documents";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
 
@@ -684,13 +685,22 @@ export async function deleteFeedstock(
       await lockBinStocks(ctx, tx, [locked.storageLocationId]);
     }
 
-    await deleteTransportLegsForEntity(ctx, tx, "feedstock", feedstockId);
+    const transportLegDocuments = await deleteTransportLegsForEntity(
+      ctx,
+      tx,
+      "feedstock",
+      feedstockId,
+    );
     const result = await tx
       .delete(feedstocks)
       .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
     if (result.rowCount === 0) {
       throw new SafeError("Feedstock not found");
     }
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "feedstock", entityId: feedstockId },
+      ...transportLegDocuments,
+    ]);
   });
 }
 

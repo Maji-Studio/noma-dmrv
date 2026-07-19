@@ -37,6 +37,10 @@ import {
   type CertifiedLineageEntityType,
 } from "./certification-lineage-guards";
 import { requireOrgScope } from "./utils";
+import {
+  retireDocumentsForEntities,
+  type DocumentEntityRef,
+} from "./documents";
 
 export type TransportEntityType = TransportEntityTypeValue;
 
@@ -287,10 +291,14 @@ export async function deleteTransportLeg(
       "delete",
     );
 
-    return tx
+    const rows = await tx
       .delete(transportLegs)
       .where(and(eq(transportLegs.id, id), eq(transportLegs.organizationId, ctx.organizationId)))
       .returning({ id: transportLegs.id });
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "transport_leg", entityId: id },
+    ]);
+    return rows;
   });
 
   if (result.length === 0) {
@@ -306,8 +314,18 @@ export async function deleteTransportLegsForEntity(
   tx: DbTransaction,
   entityType: TransportEntityType,
   entityId: string,
-): Promise<void> {
+): Promise<DocumentEntityRef[]> {
   requireOrgScope(ctx);
+  const legs = await tx
+    .select({ id: transportLegs.id })
+    .from(transportLegs)
+    .where(
+      and(
+        eq(transportLegs.entityType, entityType),
+        eq(transportLegs.entityId, entityId),
+        eq(transportLegs.organizationId, ctx.organizationId),
+      ),
+    );
   await tx
     .delete(transportLegs)
     .where(
@@ -317,6 +335,10 @@ export async function deleteTransportLegsForEntity(
         eq(transportLegs.organizationId, ctx.organizationId),
       ),
     );
+  return legs.map((leg) => ({
+    entityType: "transport_leg",
+    entityId: leg.id,
+  }));
 }
 
 // ============================================
@@ -334,11 +356,24 @@ async function replaceDerivedTransportLeg(
   entityType: "feedstock" | "biochar",
   entityId: string,
   derived: DerivedTransportLeg,
+  deferredRetirements?: DocumentEntityRef[],
 ): Promise<void> {
   requireOrgScope(ctx);
 
   // No persistable derivation → clear any stale derived leg.
   if (!isDerivedLegPersistable(derived)) {
+    const derivedLegs = await tx
+      .select({ id: transportLegs.id })
+      .from(transportLegs)
+      .where(
+        and(
+          eq(transportLegs.entityType, entityType),
+          eq(transportLegs.entityId, entityId),
+          eq(transportLegs.isDerived, true),
+          eq(transportLegs.organizationId, ctx.organizationId),
+        ),
+      )
+      .for("update");
     await tx
       .delete(transportLegs)
       .where(
@@ -349,6 +384,15 @@ async function replaceDerivedTransportLeg(
           eq(transportLegs.organizationId, ctx.organizationId),
         ),
       );
+    const retirements: DocumentEntityRef[] = derivedLegs.map((leg) => ({
+      entityType: "transport_leg",
+      entityId: leg.id,
+    }));
+    if (deferredRetirements) {
+      deferredRetirements.push(...retirements);
+    } else {
+      await retireDocumentsForEntities(ctx, tx, retirements);
+    }
     return;
   }
 
@@ -551,6 +595,7 @@ async function syncLockedBiocharProductTransportLeg(
   ctx: OrgContext,
   tx: DbTransaction,
   biocharProductId: string,
+  deferredRetirements?: DocumentEntityRef[],
 ): Promise<void> {
   requireOrgScope(ctx);
 
@@ -641,7 +686,14 @@ async function syncLockedBiocharProductTransportLeg(
 
   // When no delivery qualifies, `derived` is not persistable and the replace
   // clears any stale derived leg.
-  await replaceDerivedTransportLeg(ctx, tx, "biochar", biocharProductId, derived);
+  await replaceDerivedTransportLeg(
+    ctx,
+    tx,
+    "biochar",
+    biocharProductId,
+    derived,
+    deferredRetirements,
+  );
 }
 
 /**
@@ -659,6 +711,7 @@ export async function syncBiocharProductTransportLegs(
   ctx: OrgContext,
   tx: DbTransaction,
   biocharProductIds: Array<string | null | undefined>,
+  deferredRetirements?: DocumentEntityRef[],
 ): Promise<void> {
   requireOrgScope(ctx);
 
@@ -674,7 +727,12 @@ export async function syncBiocharProductTransportLegs(
   }
 
   for (const id of ids) {
-    await syncLockedBiocharProductTransportLeg(ctx, tx, id);
+    await syncLockedBiocharProductTransportLeg(
+      ctx,
+      tx,
+      id,
+      deferredRetirements,
+    );
   }
 }
 
