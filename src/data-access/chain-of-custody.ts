@@ -28,6 +28,16 @@ import type {
   BatchLineageRunFact,
 } from "./credit-batch-lineage-facts";
 
+const CHAIN_HREFS = {
+  application: "/applications",
+  delivery: "/deliveries",
+  order: "/orders",
+  biocharProduct: "/biochar-products",
+  productionRun: "/production-runs",
+  reactor: "/reactors",
+  feedstock: "/feedstocks",
+} as const;
+
 export interface ChainFacility {
   id: string;
   code: string;
@@ -154,21 +164,28 @@ export function projectChainOfCustodyFromBatchFacts(
       gisBoundaryReference: application.gisBoundaryReference,
       biocharAppliedDryTons: application.biocharAppliedDryTons,
       soilTemperatureC: application.soilTemperatureC,
-      href: "/applications",
+      href: CHAIN_HREFS.application,
     },
-    delivery: { ...application.delivery, href: "/deliveries" },
-    order: application.order ? { ...application.order, href: "/orders" } : null,
-    biocharProduct: { ...application.biocharProduct, href: "/biochar-products" },
+    delivery: { ...application.delivery, href: CHAIN_HREFS.delivery },
+    order: application.order
+      ? { ...application.order, href: CHAIN_HREFS.order }
+      : null,
+    biocharProduct: {
+      ...application.biocharProduct,
+      href: CHAIN_HREFS.biocharProduct,
+    },
     productionRun: {
       id: run.id, code: run.code, status: run.status, date: run.date,
       biocharDryMassKg: run.biocharDryMassKg,
       feedstockMassDryKg: run.feedstockMassDryKg,
-      href: "/production-runs",
+      href: CHAIN_HREFS.productionRun,
     },
-    reactor: run.reactor ? { ...run.reactor, href: "/reactors" } : null,
+    reactor: run.reactor
+      ? { ...run.reactor, href: CHAIN_HREFS.reactor }
+      : null,
     feedstocks: run.feedstocks.map((feedstock) => ({
       ...feedstock,
-      href: "/feedstocks",
+      href: CHAIN_HREFS.feedstock,
     })),
     warnings,
   };
