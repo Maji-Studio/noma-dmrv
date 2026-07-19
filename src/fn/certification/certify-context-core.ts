@@ -17,6 +17,7 @@ import {
   type UngroupedCreditBatchRow,
 } from "@/data-access/certifier-removals";
 import {
+  projectChainOfCustodyFromBatchFacts,
   type ChainOfCustodyData,
 } from "@/data-access/chain-of-custody";
 import {
@@ -79,7 +80,6 @@ import { buildApplicationEvidenceGaps } from "./application-evidence-readiness";
 import { buildEntityReadinessGaps } from "./certify-readiness-gaps";
 import { loadDurabilityBatchData } from "./durability-readiness";
 import { buildSubmissionWarnings } from "./submission-warnings";
-import { projectCertificationLineage } from "./certification-lineage-projection";
 import {
   loadLinkedGhgStatementStatus,
   type LinkedGhgStatementStatus,
@@ -323,11 +323,16 @@ async function resolveScopeForCreditBatch(
   orgCtx: OrgContext,
   creditBatchId: string,
 ): Promise<RemovalScope> {
-  const batch = await getCreditBatchById(orgCtx, creditBatchId);
+  // Preloaded once so the CO₂e preview and lineage projection share one load.
+  const facts = (await loadCreditBatchLineageFacts(orgCtx, [creditBatchId]))[
+    creditBatchId
+  ];
+  const batch = await getCreditBatchById(orgCtx, creditBatchId, {
+    lineageFacts: facts,
+  });
   if (!batch) throw new SafeError("Credit batch not found");
 
   if (!batch.removalId) {
-    const facts = (await loadCreditBatchLineageFacts(orgCtx, [batch.id]))[batch.id];
     const runById = new Map(facts.runs.map((run) => [run.id, run]));
     return {
       facilityId: batch.facilityId,
@@ -346,9 +351,9 @@ async function resolveScopeForCreditBatch(
         },
       ],
       lineages: facts.applications.map((application) =>
-        projectCertificationLineage(
+        projectChainOfCustodyFromBatchFacts(
           application,
-          runById.get(application.biocharProduct.linkedProductionRunId)!,
+          runById.get(application.biocharProduct.linkedProductionRunId),
         ),
       ),
     };
@@ -389,9 +394,9 @@ export async function resolveScopeForRemoval(
   const lineages = Object.values(factsByBatch).flatMap((facts) => {
     const runById = new Map(facts.runs.map((run) => [run.id, run]));
     return facts.applications.map((application) =>
-      projectCertificationLineage(
+      projectChainOfCustodyFromBatchFacts(
         application,
-        runById.get(application.biocharProduct.linkedProductionRunId)!,
+        runById.get(application.biocharProduct.linkedProductionRunId),
       ),
     );
   });
