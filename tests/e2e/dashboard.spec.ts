@@ -11,6 +11,10 @@
  */
 import { test, expect } from "./fixtures/auth-fixtures";
 import { seedCreditBatch } from "./fixtures/seed-chain-data";
+import { createDbConnection } from "./fixtures/db";
+import { DEC_ORG_ID } from "@/db/org-defaults";
+import { facilities, transportLegs } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 test.describe("Dashboard (Flow Hero)", () => {
   test("renders headline, KPI band, hero views, supporting panels, and the period toggle", async ({
@@ -54,6 +58,72 @@ test.describe("Dashboard (Flow Hero)", () => {
       "aria-pressed",
       "false",
     );
+  });
+
+  test("structural certification gaps block false green while a zero-gap facility is all clear", async ({
+    adminPage,
+    seededData,
+  }) => {
+    const { db, pool } = createDbConnection();
+    const clearFacilityId = crypto.randomUUID();
+    const transportLegId = crypto.randomUUID();
+    const tag = crypto.randomUUID().slice(0, 8);
+
+    try {
+      await db.transaction(async (tx) => {
+        await tx
+          .update(facilities)
+          .set({ gpsLatitude: null, gpsLongitude: null })
+          .where(eq(facilities.id, seededData.facility.id));
+        await tx.insert(transportLegs).values({
+          id: transportLegId,
+          organizationId: DEC_ORG_ID,
+          entityType: "feedstock",
+          entityId: seededData.feedstock.id,
+          originGpsLatitude: null,
+          originGpsLongitude: null,
+          destinationGpsLatitude: -6.163,
+          destinationGpsLongitude: 35.7516,
+          distanceKm: 25,
+          distanceSource: "manual",
+          transportMethodType: "road",
+          loadMassKg: 100,
+        });
+        await tx.insert(facilities).values({
+          id: clearFacilityId,
+          organizationId: DEC_ORG_ID,
+          code: `E2E-DASH-CLEAR-${tag}`,
+          name: `E2E Dashboard Clear ${tag}`,
+          gpsLatitude: -6.163,
+          gpsLongitude: 35.7516,
+        });
+      });
+
+      const page = adminPage;
+      await page.goto(`/dashboard?facility=${seededData.facility.id}`);
+      const structuralGaps = page.getByTestId("structural-gap-list");
+      await expect(structuralGaps.getByText("Facility GPS missing")).toBeVisible();
+      await expect(structuralGaps.getByText("Feedstock GPS missing")).toBeVisible();
+      await expect(
+        structuralGaps.getByText("Transport endpoint GPS missing"),
+      ).toBeVisible();
+      await expect(
+        structuralGaps.getByText("Transport distance lacks document evidence"),
+      ).toBeVisible();
+      await expect(page.getByText("All clear")).toHaveCount(0);
+
+      await page.goto(`/dashboard?facility=${clearFacilityId}`);
+      await expect(page.getByText("All clear")).toBeVisible();
+      await expect(page.getByText("Every record check passes.")).toBeVisible();
+    } finally {
+      await db.delete(transportLegs).where(eq(transportLegs.id, transportLegId));
+      await db.delete(facilities).where(eq(facilities.id, clearFacilityId));
+      await db
+        .update(facilities)
+        .set({ gpsLatitude: -6.163, gpsLongitude: 35.7516 })
+        .where(eq(facilities.id, seededData.facility.id));
+      await pool.end();
+    }
   });
 });
 

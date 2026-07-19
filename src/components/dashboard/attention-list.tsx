@@ -9,17 +9,31 @@ import Link from "next/link";
 import { ArrowRightIcon, CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { DashboardAttentionItem } from "@/data-access/dashboard-overview";
+import type { DashboardStructuralGap } from "@/data-access/dashboard-structural-gaps";
 import { DashboardPanel } from "./dashboard-panel";
+import { StructuralGapList } from "./structural-gap-list";
 
 interface AttentionListProps {
   attention: DashboardAttentionItem[];
+  structuralGaps: DashboardStructuralGap[];
   /** Exact uncapped count of open items; `attention` is a capped sample of it. */
   total: number;
   /** Exact uncapped count of blocking flags (subset of `total`). */
   flagsTotal: number;
 }
 
-export function AttentionList({ attention, total, flagsTotal }: AttentionListProps) {
+export function AttentionList({
+  attention,
+  structuralGaps,
+  total,
+  flagsTotal,
+}: AttentionListProps) {
+  const structuralGapTotal = structuralGaps.reduce(
+    (sum, gap) => sum + gap.count,
+    0,
+  );
+  const displayedOpenCount = structuralGapTotal + attention.length;
+
   return (
     <DashboardPanel
       title="Needs attention"
@@ -31,7 +45,8 @@ export function AttentionList({ attention, total, flagsTotal }: AttentionListPro
         )
       }
     >
-      {attention.length === 0 ? (
+      <StructuralGapList gaps={structuralGaps} />
+      {attention.length === 0 && structuralGaps.length === 0 ? (
         <div className="flex items-center gap-10 px-20 py-20">
           <CheckCircleIcon
             size={18}
@@ -80,7 +95,7 @@ export function AttentionList({ attention, total, flagsTotal }: AttentionListPro
           ))}
         </ul>
       )}
-      {(flagsTotal > 0 || total > attention.length) && (
+      {(flagsTotal > 0 || total > displayedOpenCount) && (
         <div className="flex flex-wrap items-center justify-between gap-8 border-t border-[var(--color-border-tertiary)] px-20 py-10">
           {flagsTotal > 0 ? (
             <span className="label-micro text-[var(--st-bad)]">
@@ -89,9 +104,9 @@ export function AttentionList({ attention, total, flagsTotal }: AttentionListPro
           ) : (
             <span />
           )}
-          {total > attention.length && (
+          {total > displayedOpenCount && (
             <span className="label-micro text-[var(--color-text-tertiary)]">
-              Showing first {attention.length}
+              Showing first {displayedOpenCount}
             </span>
           )}
         </div>
