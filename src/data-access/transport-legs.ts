@@ -618,7 +618,7 @@ export async function syncBiocharProductTransportLegs(
 
   const ids = [...new Set(
     biocharProductIds.filter((id): id is string => Boolean(id)),
-  )];
+  )].sort();
   for (const id of ids) {
     await syncBiocharProductTransportLeg(ctx, tx, id);
   }
@@ -649,7 +649,6 @@ export async function syncBiocharLegsForCustomerLocation(
       and(
         eq(sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`, customerLocationId),
         eq(deliveries.organizationId, ctx.organizationId),
-        eq(deliveries.status, "delivered"),
       ),
     );
 

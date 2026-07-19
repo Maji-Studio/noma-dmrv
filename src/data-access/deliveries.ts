@@ -735,9 +735,6 @@ export async function updateDelivery(
   const effectiveBiocharProductId = data.biocharProductId !== undefined
     ? data.biocharProductId ?? effectiveOrder.biocharProductId
     : existing.biocharProductId ?? effectiveOrder.biocharProductId;
-  const existingOrder = orderRows.find((order) => order.id === existing.orderId);
-  const existingBiocharProductId =
-    existing.biocharProductId ?? existingOrder?.biocharProductId ?? null;
   if (
     effectiveBiocharProductId &&
     (data.facilityId !== undefined ||
@@ -772,7 +769,44 @@ export async function updateDelivery(
       "update",
     );
 
-    await lockDeliveryUpdateStock(ctx, tx, deliveryId, data);
+    const lockedDelivery = await lockDeliveryUpdateStock(
+      ctx,
+      tx,
+      deliveryId,
+      data,
+    );
+    const lockedEffectiveOrderId = data.orderId ?? lockedDelivery.orderId;
+    const lockedOrderIds = [...new Set([
+      lockedDelivery.orderId,
+      lockedEffectiveOrderId,
+    ])];
+    const lockedOrders = await tx
+      .select({ id: orders.id, biocharProductId: orders.biocharProductId })
+      .from(orders)
+      .where(and(
+        inArray(orders.id, lockedOrderIds),
+        eq(orders.organizationId, ctx.organizationId),
+      ))
+      .orderBy(orders.id)
+      .for("update");
+    const lockedExistingOrder = lockedOrders.find(
+      (order) => order.id === lockedDelivery.orderId,
+    );
+    const lockedEffectiveOrder = lockedOrders.find(
+      (order) => order.id === lockedEffectiveOrderId,
+    );
+    if (!lockedEffectiveOrder) {
+      throw new SafeError("Order not found");
+    }
+    const lockedExistingBiocharProductId =
+      lockedDelivery.biocharProductId ??
+      lockedExistingOrder?.biocharProductId ??
+      null;
+    const lockedEffectiveBiocharProductId =
+      data.biocharProductId !== undefined
+        ? data.biocharProductId ?? lockedEffectiveOrder.biocharProductId
+        : lockedDelivery.biocharProductId ??
+          lockedEffectiveOrder.biocharProductId;
 
     const [row] = await tx
       .update(deliveries)
@@ -798,8 +832,8 @@ export async function updateDelivery(
       .returning(getDeliveryBaseSelection(deliveryColumns));
 
     await syncBiocharProductTransportLegs(ctx, tx, [
-      existingBiocharProductId,
-      effectiveBiocharProductId,
+      lockedExistingBiocharProductId,
+      lockedEffectiveBiocharProductId,
     ]);
 
     return row;

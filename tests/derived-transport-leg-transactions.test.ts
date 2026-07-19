@@ -423,6 +423,28 @@ describe("derived transport-leg transaction boundaries", () => {
     ]));
     expect(legsAfterReassignment).toHaveLength(2);
 
+    const upcomingDelivery = await createDelivery(ctx, {
+      code: `DL-STALE-${tag}`,
+      orderId: firstOrder.id,
+      facilityId: facility.id,
+      deliveryDate: new Date("2026-07-19T00:00:00Z"),
+      biocharProductId: firstProduct.id,
+      status: "upcoming",
+      deliveredWetMassKg: 100,
+    });
+    created.deliveryIds.push(upcomingDelivery.id);
+    await db.insert(transportLegs).values({
+      organizationId: TEST_ORG_ID,
+      entityType: "biochar",
+      entityId: firstProduct.id,
+      distanceKm: 20,
+      distanceSource: "manual",
+      transportMethodType: "road",
+      calculationMethodType: "distance_based",
+      loadMassKg: 100,
+      isDerived: true,
+    });
+
     await updateCustomerLocation(ctx, secondLocation.id, {
       distanceFromFacilityKm: 80,
       distanceSource: "map_estimate",
@@ -436,6 +458,19 @@ describe("derived transport-leg transaction boundaries", () => {
         eq(transportLegs.isDerived, true),
       ));
     expect(updatedDerived.distanceKm).toBe(80);
+
+    await updateCustomerLocation(ctx, firstLocation.id, {
+      distanceFromFacilityKm: 40,
+      distanceSource: "map_estimate",
+    });
+    const staleDerived = await db
+      .select({ id: transportLegs.id })
+      .from(transportLegs)
+      .where(and(
+        eq(transportLegs.entityId, firstProduct.id),
+        eq(transportLegs.isDerived, true),
+      ));
+    expect(staleDerived).toEqual([]);
 
     await deleteDelivery(ctx, delivery.id);
     const remainingLegs = await db
