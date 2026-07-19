@@ -736,6 +736,7 @@ describe("Credit Batch Production-Run Validation", () => {
         status: "running",
         endTime: null,
       });
+      void reopenPromise.catch(() => undefined);
       releaseProcessLock();
       await blocker;
 

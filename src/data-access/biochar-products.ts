@@ -506,10 +506,6 @@ export async function createBiocharProduct(
     if (lockedRun.facilityId !== data.facilityId) {
       throw new SafeError("Linked production run belongs to a different facility");
     }
-    if (lockedRun.status !== COMPLETED_PRODUCTION_RUN_STATUS) {
-      throw new SafeError("Biochar products can only link to complete production runs");
-    }
-
     // Prevent new source inventory on a submitted production-run lineage.
     await assertCanMutateCertifiedLineage(
       ctx,
@@ -517,6 +513,10 @@ export async function createBiocharProduct(
       { entityType: "productionRun", entityId: run.id },
       "create",
     );
+
+    if (lockedRun.status !== COMPLETED_PRODUCTION_RUN_STATUS) {
+      throw new SafeError("Biochar products can only link to complete production runs");
+    }
 
     const productionDate = runDateToProductionDate(lockedRun.date);
 
