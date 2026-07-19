@@ -55,7 +55,7 @@ export function AttentionList({
             aria-hidden
           />
           <span className="body-small text-[var(--color-text-secondary)]">
-            Every record check passes.
+            Every blocking check passes.
           </span>
         </div>
       ) : (
@@ -99,7 +99,7 @@ export function AttentionList({
         <div className="flex flex-wrap items-center justify-between gap-8 border-t border-[var(--color-border-tertiary)] px-20 py-10">
           {flagsTotal > 0 ? (
             <span className="label-micro text-[var(--st-bad)]">
-              {flagsTotal} {flagsTotal === 1 ? "flag" : "flags"} blocking records
+              {flagsTotal} {flagsTotal === 1 ? "flag" : "flags"} from blocking checks
             </span>
           ) : (
             <span />

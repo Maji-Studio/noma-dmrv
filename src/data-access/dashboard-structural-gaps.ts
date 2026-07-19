@@ -5,7 +5,7 @@
  * transport provenance are cross-cutting certification inputs, so they block
  * the dashboard's all-clear state without changing any station badge.
  */
-import { and, count, eq, isNull, or, sql } from "drizzle-orm";
+import { and, count, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   biocharProducts,
@@ -14,6 +14,8 @@ import {
   feedstocks,
   productionRuns,
   samples,
+  supplierLocations,
+  suppliers,
   transportLegs,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
@@ -24,6 +26,14 @@ export interface DashboardStructuralGapCounts {
   missingFeedstockGps: number;
   transportEndpointGpsGaps: number;
   transportDistanceEvidenceGaps: number;
+  missingFeedstockGpsSupplierId: string | null;
+  transportEndpointGpsTarget: TransportGapTarget | null;
+  transportDistanceEvidenceTarget: TransportGapTarget | null;
+}
+
+export interface TransportGapTarget {
+  entityType: "feedstock" | "biochar" | "sample";
+  entityId: string;
 }
 
 export type DashboardStructuralGapKey =
@@ -40,8 +50,11 @@ export interface DashboardStructuralGap {
 }
 
 interface TransportGapRow {
+  entityType: TransportGapTarget["entityType"];
   endpointGpsGaps: number;
   distanceEvidenceGaps: number;
+  endpointGpsTargetId: string | null;
+  distanceEvidenceTargetId: string | null;
 }
 
 const DOCUMENT_BACKED_DISTANCE_SOURCE =
@@ -58,24 +71,72 @@ const transportGapSelection = {
     ${transportLegs.distanceSource} is null
     or ${transportLegs.distanceSource} <> ${DOCUMENT_BACKED_DISTANCE_SOURCE}
   )::int`,
+  endpointGpsTargetId: sql<string | null>`min(${transportLegs.entityId}::text) filter (where
+    ${transportLegs.originGpsLatitude} is null
+    or ${transportLegs.originGpsLongitude} is null
+    or ${transportLegs.destinationGpsLatitude} is null
+    or ${transportLegs.destinationGpsLongitude} is null
+  )`,
+  distanceEvidenceTargetId: sql<string | null>`min(${transportLegs.entityId}::text) filter (where
+    ${transportLegs.distanceSource} is null
+    or ${transportLegs.distanceSource} <> ${DOCUMENT_BACKED_DISTANCE_SOURCE}
+  )`,
 };
 
-function addTransportGapRows(rows: TransportGapRow[]): TransportGapRow {
-  return rows.reduce(
-    (total, row) => ({
-      endpointGpsGaps: total.endpointGpsGaps + Number(row.endpointGpsGaps ?? 0),
-      distanceEvidenceGaps:
-        total.distanceEvidenceGaps + Number(row.distanceEvidenceGaps ?? 0),
-    }),
-    { endpointGpsGaps: 0, distanceEvidenceGaps: 0 },
-  );
+function addTransportGapRows(rows: TransportGapRow[]) {
+  return {
+    endpointGpsGaps: rows.reduce(
+      (total, row) => total + Number(row.endpointGpsGaps ?? 0),
+      0,
+    ),
+    distanceEvidenceGaps: rows.reduce(
+      (total, row) => total + Number(row.distanceEvidenceGaps ?? 0),
+      0,
+    ),
+    endpointGpsTarget: resolveTransportGapTarget(rows, "endpointGpsTargetId"),
+    distanceEvidenceTarget: resolveTransportGapTarget(
+      rows,
+      "distanceEvidenceTargetId",
+    ),
+  };
+}
+
+function resolveTransportGapTarget(
+  rows: TransportGapRow[],
+  key: "endpointGpsTargetId" | "distanceEvidenceTargetId",
+): TransportGapTarget | null {
+  const row = rows.find((candidate) => candidate[key] != null);
+  return row?.[key]
+    ? { entityType: row.entityType, entityId: row[key] }
+    : null;
+}
+
+function parentEditorHref(
+  facilityId: string,
+  target: TransportGapTarget | null,
+): string {
+  const params = new URLSearchParams({ facility: facilityId });
+  if (!target) return `/feedstocks?${params.toString()}`;
+
+  const targetRoutes = {
+    feedstock: { path: "/feedstocks", queryKey: "feedstock" },
+    biochar: { path: "/biochar-products", queryKey: "biocharProduct" },
+    sample: { path: "/samples", queryKey: "sample" },
+  } as const;
+  const route = targetRoutes[target.entityType];
+  params.set(route.queryKey, target.entityId);
+  return `${route.path}?${params.toString()}`;
 }
 
 export function buildDashboardStructuralGaps(
   counts: DashboardStructuralGapCounts,
   facilityId: string,
 ): DashboardStructuralGap[] {
-  const facilityQuery = `?facility=${encodeURIComponent(facilityId)}`;
+  const facilityParams = new URLSearchParams({ facility: facilityId });
+  const facilityQuery = `?${facilityParams.toString()}`;
+  const supplierHref = counts.missingFeedstockGpsSupplierId
+    ? `/suppliers/${counts.missingFeedstockGpsSupplierId}${facilityQuery}`
+    : `/suppliers${facilityQuery}`;
   return [
     {
       key: "facilityGps" as const,
@@ -87,19 +148,22 @@ export function buildDashboardStructuralGaps(
       key: "feedstockGps" as const,
       label: "Feedstock GPS missing",
       count: counts.missingFeedstockGps,
-      href: `/feedstocks${facilityQuery}`,
+      href: supplierHref,
     },
     {
       key: "transportEndpointGps" as const,
       label: "Transport endpoint GPS missing",
       count: counts.transportEndpointGpsGaps,
-      href: `/chain-of-custody${facilityQuery}`,
+      href: parentEditorHref(facilityId, counts.transportEndpointGpsTarget),
     },
     {
       key: "transportDistanceEvidence" as const,
       label: "Transport distance lacks document evidence",
       count: counts.transportDistanceEvidenceGaps,
-      href: `/chain-of-custody${facilityQuery}`,
+      href: parentEditorHref(
+        facilityId,
+        counts.transportDistanceEvidenceTarget,
+      ),
     },
   ].filter((gap) => gap.count > 0);
 }
@@ -136,14 +200,36 @@ export async function loadDashboardStructuralGapCounts(
         ),
       ),
     db
-      .select({ count: count() })
+      .select({
+        count: count(),
+        supplierId: sql<string | null>`min(${feedstocks.supplierId}::text)`,
+      })
       .from(feedstocks)
+      .leftJoin(
+        suppliers,
+        and(
+          eq(feedstocks.supplierId, suppliers.id),
+          eq(suppliers.organizationId, orgId),
+        ),
+      )
+      .leftJoin(
+        supplierLocations,
+        and(
+          eq(supplierLocations.supplierId, suppliers.id),
+          eq(supplierLocations.isDefault, true),
+          eq(supplierLocations.organizationId, orgId),
+        ),
+      )
       .where(
         and(
           eq(feedstocks.organizationId, orgId),
           eq(feedstocks.facilityId, facilityId),
           isNull(feedstocks.archivedAt),
-          or(isNull(feedstocks.gpsLatitude), isNull(feedstocks.gpsLongitude)),
+          or(
+            isNull(supplierLocations.gpsLatitude),
+            isNull(supplierLocations.gpsLongitude),
+          ),
+          or(isNull(suppliers.gpsLatitude), isNull(suppliers.gpsLongitude)),
         ),
       ),
     db
@@ -212,12 +298,15 @@ export async function loadDashboardStructuralGapCounts(
           eq(transportLegs.organizationId, orgId),
           or(
             and(
-              eq(productionRuns.facilityId, facilityId),
-              isNull(productionRuns.archivedAt),
-            ),
-            and(
+              isNotNull(samples.creditBatchId),
               eq(creditBatches.facilityId, facilityId),
               isNull(creditBatches.archivedAt),
+            ),
+            and(
+              isNull(samples.creditBatchId),
+              eq(productionRuns.facilityId, facilityId),
+              isNull(productionRuns.archivedAt),
+              ne(productionRuns.status, "void"),
             ),
           ),
         ),
@@ -225,9 +314,9 @@ export async function loadDashboardStructuralGapCounts(
   ]);
 
   const transport = addTransportGapRows([
-    feedstockTransport,
-    biocharTransport,
-    sampleTransport,
+    { ...feedstockTransport, entityType: "feedstock" },
+    { ...biocharTransport, entityType: "biochar" },
+    { ...sampleTransport, entityType: "sample" },
   ]);
 
   return {
@@ -235,5 +324,8 @@ export async function loadDashboardStructuralGapCounts(
     missingFeedstockGps: Number(feedstockGps?.count ?? 0),
     transportEndpointGpsGaps: transport.endpointGpsGaps,
     transportDistanceEvidenceGaps: transport.distanceEvidenceGaps,
+    missingFeedstockGpsSupplierId: feedstockGps?.supplierId ?? null,
+    transportEndpointGpsTarget: transport.endpointGpsTarget,
+    transportDistanceEvidenceTarget: transport.distanceEvidenceTarget,
   };
 }
