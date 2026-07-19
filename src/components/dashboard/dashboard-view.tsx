@@ -90,6 +90,7 @@ export function DashboardView() {
             <div className="grid grid-cols-1 gap-24 lg:grid-cols-2 xl:grid-cols-3">
               <AttentionList
                 attention={data.attention}
+                structuralGaps={data.structuralGaps}
                 total={data.attentionTotal}
                 flagsTotal={data.attentionFlagsTotal}
               />

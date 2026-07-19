@@ -38,6 +38,11 @@ import {
   type DashboardStationKey,
   type DashboardStationsData,
 } from "./dashboard-stations";
+import {
+  buildDashboardStructuralGaps,
+  loadDashboardStructuralGapCounts,
+  type DashboardStructuralGap,
+} from "./dashboard-structural-gaps";
 import { requireOrgScope } from "./utils";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 
@@ -125,6 +130,8 @@ export interface DashboardOverview extends DashboardStationsData {
   massFlow: DashboardMassFlowSegment[];
   /** Capped sample of open items shown as rows (flags first). */
   attention: DashboardAttentionItem[];
+  /** Cross-cutting certification blockers, kept separate from station badges. */
+  structuralGaps: DashboardStructuralGap[];
   /** Exact uncapped count of open items — the "N open" figure. */
   attentionTotal: number;
   /** Exact uncapped count of blocking flags (a subset of `attentionTotal`). */
@@ -201,7 +208,12 @@ export async function getDashboardOverview(
   const fetchStart =
     bounds.previousStartMs == null ? null : new Date(bounds.previousStartMs);
 
-  const [[runRows, lotRows, applicationRows, batchRows, feedstockRows], attentionResult, stationsData] =
+  const [
+    [runRows, lotRows, applicationRows, batchRows, feedstockRows],
+    attentionResult,
+    stationsData,
+    structuralGapCounts,
+  ] =
     await Promise.all([
       Promise.all([
         db
@@ -296,6 +308,7 @@ export async function getDashboardOverview(
       ]),
       getAttentionItems(ctx, facilityId),
       getDashboardStations(ctx, facilityId),
+      loadDashboardStructuralGapCounts(ctx, facilityId),
     ]);
 
   // Derived CO₂e stored per batch (issue #285): the same preview figure the
@@ -480,14 +493,23 @@ export async function getDashboardOverview(
   // Every attention check except overdue batches maps 1:1 to a flow station,
   // and the station badge counts are exact (uncapped) — so the true queue size
   // is their sum plus the batch-only count, without re-running the row queries.
+  const structuralGaps = buildDashboardStructuralGaps(
+    structuralGapCounts,
+    facilityId,
+  );
+  const structuralGapTotal = structuralGaps.reduce(
+    (total, gap) => total + gap.count,
+    0,
+  );
   const attentionTotal =
     stationsData.stations.reduce((acc, station) => acc + station.attention, 0) +
-    attentionResult.overdueBatchesCount;
+    attentionResult.overdueBatchesCount +
+    structuralGapTotal;
   // Exact (uncapped) flag count: the flag-station badges only. Upcoming
   // deliveries and overdue batches are pending, not flags.
   const attentionFlagsTotal = stationsData.stations
     .filter((station) => FLAG_STATION_KEYS.has(station.key))
-    .reduce((acc, station) => acc + station.attention, 0);
+    .reduce((acc, station) => acc + station.attention, structuralGapTotal);
 
   return {
     range,
@@ -495,6 +517,7 @@ export async function getDashboardOverview(
     kpis,
     massFlow,
     attention: attentionResult.items,
+    structuralGaps,
     attentionTotal,
     attentionFlagsTotal,
     ...stationsData,
