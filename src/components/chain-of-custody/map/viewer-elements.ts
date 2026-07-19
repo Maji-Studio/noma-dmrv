@@ -6,7 +6,7 @@
  */
 
 import { formatDistanceKm } from "@/lib/format-utils";
-import { STATUS_COLOR_FALLBACK, STATUS_COLORS } from "../chain-constants";
+import { getStatusState, getStatusStateColor } from "@/lib/status-state";
 import type { LineageDetailRow } from "../use-chain-graph";
 import type { ViewerMarkerKind } from "./viewer-constants";
 
@@ -87,7 +87,8 @@ export function createPopupCardElement(input: PopupCardInput): HTMLDivElement {
   if (input.status) {
     const pill = document.createElement("span");
     pill.className = "cvm-card-pill";
-    pill.style.color = STATUS_COLORS[input.status] ?? STATUS_COLOR_FALLBACK;
+    pill.dataset.statusState = getStatusState(input.status);
+    pill.style.color = getStatusStateColor(input.status);
     pill.textContent = input.status.replaceAll("_", " ");
     head.appendChild(pill);
   }

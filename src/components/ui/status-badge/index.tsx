@@ -1,6 +1,10 @@
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
+import {
+  STATUS_STATE_BADGE_CLASSES,
+  getStatusState,
+} from "@/lib/status-state"
 
 /**
  * Status Badge Component
@@ -19,43 +23,7 @@ const statusBadgeVariants = cva(
   "inline-flex items-center justify-center whitespace-nowrap body-caption-fit font-medium border transition-colors",
   {
     variants: {
-      /**
-       * Status determines the color scheme of the badge
-       */
-      /**
-       * All states map onto the design-system status ramp
-       * (--st-ok / --st-run / --st-wait / --st-off / --st-bad).
-       */
-      status: {
-        // Off / inactive states — muted (st-off)
-        draft: "bg-[var(--st-off-bg)] text-[var(--color-text-secondary)] border-[var(--st-off-border)]",
-
-        // Superseded / replaced states - muted with strikethrough, distinct from draft
-        superseded: "bg-[var(--st-off-bg)] text-[var(--color-text-tertiary)] border-[var(--st-off-border)] line-through",
-
-        // In-progress / Active states (st-run)
-        running: "bg-[var(--st-run-bg)] text-[var(--st-run)] border-[var(--st-run-border)]",
-        sold: "bg-[var(--st-run-bg)] text-[var(--st-run)] border-[var(--st-run-border)]",
-
-        // Pending / Upcoming / attention states (st-wait)
-        pending: "bg-[var(--st-wait-bg)] text-[var(--st-wait)] border-[var(--st-wait-border)]",
-        upcoming: "bg-[var(--st-wait-bg)] text-[var(--st-wait)] border-[var(--st-wait-border)]",
-        testing: "bg-[var(--st-wait-bg)] text-[var(--st-wait)] border-[var(--st-wait-border)]",
-
-        // Success / Complete states (st-ok)
-        complete: "bg-[var(--st-ok-bg)] text-[var(--st-ok)] border-[var(--st-ok-border)]",
-        delivered: "bg-[var(--st-ok-bg)] text-[var(--st-ok)] border-[var(--st-ok-border)]",
-        applied: "bg-[var(--st-ok-bg)] text-[var(--st-ok)] border-[var(--st-ok-border)]",
-        verified: "bg-[var(--st-ok-bg)] text-[var(--st-ok)] border-[var(--st-ok-border)]",
-        issued: "bg-[var(--st-ok-bg)] text-[var(--st-ok)] border-[var(--st-ok-border)]",
-        ready: "bg-[var(--st-ok-bg)] text-[var(--st-ok)] border-[var(--st-ok-border)]",
-
-        // Error / Void / Rejected states (st-bad)
-        void: "bg-[var(--st-bad-bg)] text-[var(--st-bad)] border-[var(--st-bad-border)]",
-        failed: "bg-[var(--st-bad-bg)] text-[var(--st-bad)] border-[var(--st-bad-border)]",
-        cancelled: "bg-[var(--st-bad-bg)] text-[var(--st-bad)] border-[var(--st-bad-border)]",
-        rejected: "bg-[var(--st-bad-bg)] text-[var(--st-bad)] border-[var(--st-bad-border)]",
-      },
+      stateClass: STATUS_STATE_BADGE_CLASSES,
       /**
        * Size variants
        */
@@ -66,7 +34,7 @@ const statusBadgeVariants = cva(
       },
     },
     defaultVariants: {
-      status: "draft",
+      stateClass: "neutral",
       size: "default",
     },
   }
@@ -120,7 +88,7 @@ const statusLabels: Record<StatusValue, string> = {
 
 export interface StatusBadgeProps
   extends Omit<React.HTMLAttributes<HTMLSpanElement>, "children">,
-    VariantProps<typeof statusBadgeVariants> {
+    Omit<VariantProps<typeof statusBadgeVariants>, "stateClass"> {
   /**
    * The status value to display.
    * Determines both the label and the color scheme.
@@ -173,16 +141,19 @@ export interface StatusBadgeProps
 const StatusBadge = React.forwardRef<HTMLSpanElement, StatusBadgeProps>(
   ({ className, status, size, label, icon, ...props }, ref) => {
     const displayLabel = label ?? statusLabels[status]
+    const stateClass = getStatusState(status)
 
     return (
       <span
         ref={ref}
         className={cn(
-          statusBadgeVariants({ status, size, className }),
+          statusBadgeVariants({ stateClass, size, className }),
+          status === "superseded" ? "line-through" : undefined,
           icon ? "gap-4" : undefined
         )}
-        data-status={status}
         {...props}
+        data-status={status}
+        data-status-state={stateClass}
       >
         {icon && (
           <span aria-hidden className="shrink-0 inline-flex">
