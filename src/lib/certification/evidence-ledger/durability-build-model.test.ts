@@ -9,6 +9,7 @@ import { buildDurabilityLedgerModel } from "./durability-build-model";
 
 type DurabilityBatchWithEndDate = CreditBatchDurabilityInput & {
   endDate?: string | null;
+  facilityTimezone?: string | null;
 };
 
 function sample(overrides: Partial<Sample>): Sample {
@@ -254,5 +255,86 @@ describe("buildDurabilityLedgerModel", () => {
     expect(model.soil.declaredSoilTemperatureC).toBe(5);
     expect(model.soil.effectiveSoilTemperatureC).toBe(7);
     expect(model.soil.temperatureFloored).toBe(true);
+  });
+
+  // The ledger's replicate days must be the facility-LOCAL calendar days, so the
+  // evidence PDF agrees with the write guard and submission gate (issue #455).
+  it("renders replicate sampling days in the facility timezone (UTC+3)", () => {
+    // Africa/Nairobi (UTC+3): 21:30Z on the 14th is 00:30 local on the 15th.
+    const model = buildDurabilityLedgerModel({
+      ...COMMON,
+      batches: [
+        {
+          ...eligibleBatch(),
+          facilityTimezone: "Africa/Nairobi",
+          samples: [
+            sample({
+              sampleCode: "S-A-01",
+              samplingTime: new Date("2026-01-14T21:30:00.000Z"),
+              hToCOrgRatio: 0.3,
+              oToCOrgRatio: 0.04,
+              totalCarbonPercent: 80,
+              organicCarbonPercent: 79,
+              inorganicCarbonPercent: 1,
+            }),
+          ],
+        },
+      ],
+    });
+
+    expect(model.batches[0].replicates[0].samplingDay).toBe("2026-01-15");
+  });
+
+  it("renders replicate sampling days in the facility timezone (UTC-8)", () => {
+    // America/Los_Angeles (UTC-8): 03:30Z on the 15th is 19:30 local on the 14th.
+    const model = buildDurabilityLedgerModel({
+      ...COMMON,
+      batches: [
+        {
+          ...eligibleBatch(),
+          facilityTimezone: "America/Los_Angeles",
+          samples: [
+            sample({
+              sampleCode: "S-A-01",
+              samplingTime: new Date("2026-01-15T03:30:00.000Z"),
+              hToCOrgRatio: 0.3,
+              oToCOrgRatio: 0.04,
+              totalCarbonPercent: 80,
+              organicCarbonPercent: 79,
+              inorganicCarbonPercent: 1,
+            }),
+          ],
+        },
+      ],
+    });
+
+    expect(model.batches[0].replicates[0].samplingDay).toBe("2026-01-14");
+  });
+
+  it("resolves offset-bearing string timestamps through the facility branch (UTC-8)", () => {
+    // A raw/string-backed samplingTime must render on the same facility-local day
+    // as a Date — it must not slice to the UTC day 2026-01-15.
+    const model = buildDurabilityLedgerModel({
+      ...COMMON,
+      batches: [
+        {
+          ...eligibleBatch(),
+          facilityTimezone: "America/Los_Angeles",
+          samples: [
+            sample({
+              sampleCode: "S-A-01",
+              samplingTime: "2026-01-15T03:30:00.000Z" as unknown as Date,
+              hToCOrgRatio: 0.3,
+              oToCOrgRatio: 0.04,
+              totalCarbonPercent: 80,
+              organicCarbonPercent: 79,
+              inorganicCarbonPercent: 1,
+            }),
+          ],
+        },
+      ],
+    });
+
+    expect(model.batches[0].replicates[0].samplingDay).toBe("2026-01-14");
   });
 });
