@@ -5,7 +5,7 @@
  * stored product), computed from five aggregate subqueries joined per location.
  */
 
-import { ilike, or, eq, and, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { ilike, or, eq, and, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import { numericAggregate, sumNumeric } from "@/db/aggregate";
@@ -140,7 +140,10 @@ function buildInventoryAggregates(ctx: OrgContext) {
       eq(productionRunFeedstocks.organizationId, ctx.organizationId),
     ),
   )
-  .where(eq(productionRuns.organizationId, ctx.organizationId))
+  .where(and(
+    eq(productionRuns.organizationId, ctx.organizationId),
+    ne(productionRuns.status, "cancelled"),
+  ))
   .groupBy(productionRuns.feedstockStorageLocationId)
   .as("production_run_consumption_agg");
 
@@ -152,7 +155,10 @@ function buildInventoryAggregates(ctx: OrgContext) {
     ),
   })
   .from(productionRuns)
-  .where(eq(productionRuns.organizationId, ctx.organizationId))
+  .where(and(
+    eq(productionRuns.organizationId, ctx.organizationId),
+    ne(productionRuns.status, "cancelled"),
+  ))
   .groupBy(productionRuns.biocharStorageLocationId)
   .as("biochar_output_agg");
 
@@ -183,7 +189,10 @@ function buildInventoryAggregates(ctx: OrgContext) {
       eq(formulations.organizationId, ctx.organizationId),
     ),
   )
-  .where(eq(productionRuns.organizationId, ctx.organizationId))
+  .where(and(
+    eq(productionRuns.organizationId, ctx.organizationId),
+    ne(productionRuns.status, "cancelled"),
+  ))
   .groupBy(productionRuns.biocharStorageLocationId)
   .as("biochar_allocation_agg");
 

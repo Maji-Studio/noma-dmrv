@@ -207,7 +207,7 @@ beforeAll(async () => {
         endTime: new Date("2025-06-21T12:00:00Z"),
         biocharDryMassKg: 3600,
       },
-    ])
+    ].map((row) => ({ ...row, status: "complete" as const })))
     .returning({ id: productionRuns.id });
   [
     runInFacilityA,

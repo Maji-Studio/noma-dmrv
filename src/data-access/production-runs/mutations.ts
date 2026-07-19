@@ -3,7 +3,7 @@
  * feedstock allocation and storage-location validation.
  */
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sum } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { isPgCheckViolation } from "@/db/errors";
 import {
@@ -17,6 +17,7 @@ import {
   feedstocks,
   feedstockTypes,
   operators,
+  creditBatchProductionRuns,
 } from "@/db/schema";
 import { computeClampedDryMass, deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import type { OrgContext } from "@/lib/auth/server";
@@ -41,6 +42,12 @@ import {
   assertNoReactorRunOverlap,
   isReactorStartUniqueViolation,
 } from "./overlap";
+import {
+  assertProductionRunOutcome,
+  assertProductionRunTransition,
+  statusOccupiesReactor,
+  type ProductionRunStatus,
+} from "@/lib/production-runs/lifecycle";
 
 const END_AFTER_START_CONSTRAINT = "production_runs_end_after_start";
 const END_AFTER_START_MESSAGE = "End time must be after the start time";
@@ -51,16 +58,9 @@ const END_AFTER_START_MESSAGE = "End time must be after the start time";
  * (issue #259): an end time must be after the start, and a Complete run needs an
  * end time.
  */
-function assertRunWindowConsistent(
-  startTime: Date,
-  endTime: Date | null,
-  status: "draft" | "running" | "complete" | "void",
-): void {
+function assertRunWindowConsistent(startTime: Date, endTime: Date | null): void {
   if (endTime && endTime.getTime() <= startTime.getTime()) {
     throw new SafeError("End time must be after the start time");
-  }
-  if (status === "complete" && !endTime) {
-    throw new SafeError("A complete run needs an end time");
   }
 }
 
@@ -162,7 +162,8 @@ export async function createProductionRun(
     code: string;
     facilityId: string;
     reactorId: string;
-    status?: "draft" | "running" | "complete" | "void";
+    status?: ProductionRunStatus;
+    cancellationReason?: string | null;
     startTime: Date;
     endTime: Date | null;
     operatorId?: string | null;
@@ -208,7 +209,8 @@ export async function createProductionRun(
   }
 
   const status = data.status ?? "draft";
-  assertRunWindowConsistent(data.startTime, data.endTime, status);
+  assertProductionRunTransition("draft", status);
+  assertRunWindowConsistent(data.startTime, data.endTime);
 
   // Compute dry mass from wet mass + moisture
   const computedDryMass =
@@ -224,11 +226,13 @@ export async function createProductionRun(
   try {
     run = await db.transaction(async (tx) => {
     // Reject an overlapping window before writing (serialized per-reactor).
-    await assertNoReactorRunOverlap(ctx, tx, {
-      reactorId: data.reactorId,
-      startTime: data.startTime,
-      endTime: data.endTime,
-    });
+    if (statusOccupiesReactor(status)) {
+      await assertNoReactorRunOverlap(ctx, tx, {
+        reactorId: data.reactorId,
+        startTime: data.startTime,
+        endTime: data.endTime,
+      });
+    }
 
     await lockBinStocks(ctx, tx, [
       computedDryMass ? data.feedstockStorageLocationId : null,
@@ -250,6 +254,7 @@ export async function createProductionRun(
         code: data.code,
         facilityId: data.facilityId,
         status,
+        cancellationReason: data.cancellationReason?.trim() || null,
         startTime: data.startTime,
         endTime: data.endTime,
         reactorId: data.reactorId,
@@ -272,6 +277,7 @@ export async function createProductionRun(
       .returning();
 
     // Auto-populate M:M feedstock relationships from bin contents
+    let consumedFeedstockKg = 0;
     if (data.feedstockStorageLocationId && computedDryMass) {
       // Hard-block a draw that exceeds the bin's derived on-hand stock (#116).
       await assertFeedstockDrawWithinStock(ctx, tx, {
@@ -292,7 +298,17 @@ export async function createProductionRun(
           massUsedKg: a.massUsedKg,
         }))
       );
+      consumedFeedstockKg = allocated.reduce((total, item) => total + item.massUsedKg, 0);
     }
+
+    assertProductionRunOutcome({
+      status,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      consumedFeedstockKg,
+      biocharOutputKg: data.biocharOutputKg ?? null,
+      cancellationReason: data.cancellationReason ?? null,
+    });
 
     return created;
     });
@@ -323,7 +339,9 @@ export async function updateProductionRun(
     code?: string;
     facilityId?: string;
     reactorId?: string;
-    status?: "draft" | "running" | "complete" | "void";
+    status?: ProductionRunStatus;
+    expectedUpdatedAt?: Date;
+    cancellationReason?: string | null;
     startTime?: Date;
     endTime?: Date | null;
     operatorId?: string | null;
@@ -392,8 +410,7 @@ export async function updateProductionRun(
   const effectiveStartTime = data.startTime ?? existing.startTime;
   const effectiveEndTime =
     data.endTime !== undefined ? data.endTime : existing.endTime;
-  const effectiveStatus = data.status ?? existing.status;
-  assertRunWindowConsistent(effectiveStartTime, effectiveEndTime, effectiveStatus);
+  assertRunWindowConsistent(effectiveStartTime, effectiveEndTime);
 
   // Update production run + M:M re-allocation in a transaction
   const updateData: Record<string, unknown> = {
@@ -404,6 +421,9 @@ export async function updateProductionRun(
   if (data.facilityId !== undefined) updateData.facilityId = data.facilityId;
   if (data.reactorId !== undefined) updateData.reactorId = data.reactorId;
   if (data.status !== undefined) updateData.status = data.status;
+  if (data.cancellationReason !== undefined) {
+    updateData.cancellationReason = data.cancellationReason?.trim() || null;
+  }
   if (data.startTime !== undefined) updateData.startTime = data.startTime;
   if (data.endTime !== undefined) updateData.endTime = data.endTime;
   if (data.operatorId !== undefined) updateData.operatorId = data.operatorId;
@@ -464,7 +484,51 @@ export async function updateProductionRun(
     if (!locked) {
       throw new SafeError("Production run not found");
     }
+    if (
+      data.expectedUpdatedAt &&
+      data.expectedUpdatedAt.getTime() !== locked.updatedAt.getTime()
+    ) {
+      throw new SafeError(
+        "This production run changed since you opened it. Reload it before saving.",
+      );
+    }
     assertProductionRunStockSnapshot(existing, locked, data);
+
+    const lockedTargetStatus = data.status ?? locked.status;
+    const lockedTargetStartTime = data.startTime ?? locked.startTime;
+    const lockedTargetEndTime = data.endTime !== undefined ? data.endTime : locked.endTime;
+    const lockedTargetReactorId = data.reactorId ?? locked.reactorId;
+    const lockedTargetFacilityId = data.facilityId ?? locked.facilityId;
+    const lockedTargetBiocharOutput =
+      data.biocharOutputKg !== undefined
+        ? data.biocharOutputKg
+        : locked.biocharOutputKg;
+    const lockedTargetCancellationReason =
+      data.cancellationReason !== undefined
+        ? data.cancellationReason
+        : locked.cancellationReason;
+
+    assertProductionRunTransition(locked.status, lockedTargetStatus);
+    assertRunWindowConsistent(lockedTargetStartTime, lockedTargetEndTime);
+
+    if (
+      (locked.status === "complete" || locked.status === "failed") &&
+      lockedTargetStatus === "running"
+    ) {
+      const [membership] = await tx
+        .select({ creditBatchId: creditBatchProductionRuns.creditBatchId })
+        .from(creditBatchProductionRuns)
+        .where(and(
+          eq(creditBatchProductionRuns.productionRunId, productionRunId),
+          eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
+        ))
+        .limit(1);
+      if (membership) {
+        throw new SafeError(
+          "Remove this run from its Credit batch before reopening it.",
+        );
+      }
+    }
 
     await assertCanMutateCertifiedLineage(
       ctx,
@@ -473,12 +537,12 @@ export async function updateProductionRun(
       "update",
     );
 
-    // A void run frees its slot, so only a non-void run needs the overlap guard.
-    if (effectiveStatus !== "void") {
+    // A cancelled run frees its slot, so only an occupying run needs this guard.
+    if (statusOccupiesReactor(lockedTargetStatus)) {
       await assertNoReactorRunOverlap(ctx, tx, {
-        reactorId: effectiveReactorId,
-        startTime: effectiveStartTime,
-        endTime: effectiveEndTime,
+        reactorId: lockedTargetReactorId,
+        startTime: lockedTargetStartTime,
+        endTime: lockedTargetEndTime,
         selfId: productionRunId,
       });
     }
@@ -508,14 +572,14 @@ export async function updateProductionRun(
       effectiveFeedstockStorageId &&
       (data.feedstockStorageLocationId !== undefined || data.facilityId !== undefined)
     ) {
-      await validateProductionFeedstockSource(ctx, tx, effectiveFeedstockStorageId, targetFacilityId);
+      await validateProductionFeedstockSource(ctx, tx, effectiveFeedstockStorageId, lockedTargetFacilityId);
     }
 
     if (
       effectiveBiocharStorageId &&
       (data.biocharStorageLocationId !== undefined || data.facilityId !== undefined)
     ) {
-      await validateBiocharStorageLocation(ctx, tx, effectiveBiocharStorageId, targetFacilityId, "Biochar");
+      await validateBiocharStorageLocation(ctx, tx, effectiveBiocharStorageId, lockedTargetFacilityId, "Biochar");
     }
 
     const transactionUpdateData = { ...updateData };
@@ -592,6 +656,23 @@ export async function updateProductionRun(
         );
       }
     }
+
+    const [consumption] = await tx
+      .select({ total: sum(productionRunFeedstocks.massUsedKg) })
+      .from(productionRunFeedstocks)
+      .where(and(
+        eq(productionRunFeedstocks.productionRunId, productionRunId),
+        eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+      ));
+
+    assertProductionRunOutcome({
+      status: lockedTargetStatus,
+      startTime: lockedTargetStartTime,
+      endTime: lockedTargetEndTime,
+      consumedFeedstockKg: Number(consumption?.total ?? 0),
+      biocharOutputKg: lockedTargetBiocharOutput,
+      cancellationReason: lockedTargetCancellationReason,
+    });
       }),
     );
   } catch (error) {

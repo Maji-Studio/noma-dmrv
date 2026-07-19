@@ -805,6 +805,7 @@ export async function getCreditBatchProductionRunOptions(
   const conditions = [
     eq(productionRuns.organizationId, ctx.organizationId),
     eq(productionRuns.facilityId, params.facilityId),
+    eq(productionRuns.status, "complete"),
     isNull(productionRuns.archivedAt),
   ];
 

@@ -55,6 +55,7 @@ export async function deriveLaneStock(
       options.storageLocationIds,
     ),
     eq(productionRuns.organizationId, ctx.organizationId),
+    ne(productionRuns.status, "cancelled"),
   ];
   if (options.excludeRunId) {
     consumptionConditions.push(ne(productionRuns.id, options.excludeRunId));
@@ -66,6 +67,7 @@ export async function deriveLaneStock(
       options.storageLocationIds,
     ),
     eq(productionRuns.organizationId, ctx.organizationId),
+    ne(productionRuns.status, "cancelled"),
   ];
   if (options.excludeProductId) {
     allocationConditions.push(
@@ -125,6 +127,7 @@ export async function deriveLaneStock(
               options.storageLocationIds,
             ),
             eq(productionRuns.organizationId, ctx.organizationId),
+            ne(productionRuns.status, "cancelled"),
           ),
         )
         .groupBy(productionRuns.biocharStorageLocationId),

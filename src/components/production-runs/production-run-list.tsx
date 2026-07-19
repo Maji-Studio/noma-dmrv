@@ -74,7 +74,8 @@ const STATUS_ICONS: Record<ProductionRunStatus, React.ReactNode> = {
   draft: <WarningIcon size={14} weight="fill" />,
   running: <ClockIcon size={14} weight="fill" />,
   complete: <CheckCircleIcon size={14} weight="fill" />,
-  void: <ProhibitIcon size={14} weight="fill" />,
+  failed: <WarningIcon size={14} weight="fill" />,
+  cancelled: <ProhibitIcon size={14} weight="fill" />,
 };
 
 function RunStatusBadge({ status }: { status: ProductionRunStatus }) {
@@ -566,7 +567,8 @@ export function ProductionRunList() {
               <option value="draft">Draft</option>
               <option value="running">Running</option>
               <option value="complete">Complete</option>
-              <option value="void">Void</option>
+              <option value="failed">Failed</option>
+              <option value="cancelled">Cancelled</option>
             </select>
             {hasActiveFilters && (
               <Button variant="noOutline" size="small" onClick={clearFilters}>

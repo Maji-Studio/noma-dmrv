@@ -13,6 +13,7 @@ import {
   inArray,
   isNull,
   lte,
+  ne,
   sql,
   SQL,
   count,
@@ -141,6 +142,7 @@ export async function getProductionRuns(
       facilityId: productionRuns.facilityId,
       date: productionRunDateExpr(),
       status: productionRuns.status,
+      cancellationReason: productionRuns.cancellationReason,
       startTime: productionRuns.startTime,
       endTime: productionRuns.endTime,
       reactorId: productionRuns.reactorId,
@@ -283,6 +285,7 @@ export async function getProductionRunById(
       facilityId: productionRuns.facilityId,
       date: productionRunDateExpr(),
       status: productionRuns.status,
+      cancellationReason: productionRuns.cancellationReason,
       startTime: productionRuns.startTime,
       endTime: productionRuns.endTime,
       reactorId: productionRuns.reactorId,
@@ -377,6 +380,7 @@ export async function getProductionRunStats(
   const conditions: SQL[] = [
     eq(productionRuns.organizationId, ctx.organizationId),
     isNull(productionRuns.archivedAt),
+    ne(productionRuns.status, "cancelled"),
   ];
   if (facilityId) {
     conditions.push(eq(productionRuns.facilityId, facilityId));
@@ -446,7 +450,12 @@ export async function getFacilityEnergyTotals(
       preprocessingLitres: sum(productionRuns.preprocessingFuelLiters),
     })
     .from(productionRuns)
-    .where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId), isNull(productionRuns.archivedAt)));
+    .where(and(
+      eq(productionRuns.facilityId, facilityId),
+      eq(productionRuns.organizationId, ctx.organizationId),
+      isNull(productionRuns.archivedAt),
+      ne(productionRuns.status, "cancelled"),
+    ));
 
   return {
     runCount: Number(row.runCount),

@@ -45,6 +45,7 @@ export async function validateProductionRunIds(
       id: productionRuns.id,
       code: productionRuns.code,
       facilityId: productionRuns.facilityId,
+      status: productionRuns.status,
       date: productionRunDateExpr(),
     })
     .from(productionRuns)
@@ -54,6 +55,13 @@ export async function validateProductionRunIds(
     const found = new Set(rows.map((r) => r.id));
     const missing = productionRunIds.filter((id) => !found.has(id));
     throw new SafeError(`Production run(s) not found: ${missing.join(", ")}`);
+  }
+
+  const incomplete = rows.filter((row) => row.status !== "complete");
+  if (incomplete.length > 0) {
+    throw new SafeError(
+      `Only complete production runs can be added to a Credit batch: ${incomplete.map((row) => row.id).join(", ")}`,
+    );
   }
 
   const crossFacility = rows.filter((r) => r.facilityId !== facilityId);

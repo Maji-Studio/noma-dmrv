@@ -73,6 +73,8 @@ describe("production run window validation", () => {
       endDate: "2026-06-14",
       endTime: "02:00",
       status: "complete",
+      feedstockWetMassKg: 100,
+      biocharOutputKg: 20,
     });
     expect(parsed.success).toBe(true);
   });

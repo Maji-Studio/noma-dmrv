@@ -193,6 +193,37 @@ async function saveEdit(page: Page) {
     .click();
 }
 
+test.describe("Production Run lifecycle (#254)", () => {
+  test("requires a cancellation reason and saves the cancelled audit record", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await openRunForm(page, seededData, {
+      startDate: "2030-01-05",
+      startTime: "08:00",
+      status: "cancelled",
+    });
+
+    const dialog = page.locator('[role="dialog"]');
+    const cancellationReason = dialog.locator(
+      'textarea[name="cancellationReason"]',
+    );
+    await expect(cancellationReason).toBeVisible();
+
+    await submitCreate(page);
+    await expect(dialog.getByText("Enter a cancellation reason.")).toBeVisible();
+
+    await cancellationReason.fill("Duplicate run entered by the operator");
+    await submitCreate(page);
+    await waitForSideSheetClose(page);
+
+    await page.selectOption('select:not([name="status"])', "cancelled");
+    await expect(
+      page.locator("tbody").getByText("Cancelled", { exact: true }).first(),
+    ).toBeVisible();
+  });
+});
+
 test.describe("Production Run reactor time-window overlap (#259)", () => {
   test("rejects a duplicate start on the same reactor", async ({
     adminPage: page,

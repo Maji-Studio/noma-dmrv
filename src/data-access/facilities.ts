@@ -3,7 +3,7 @@
  * CRUD operations for facilities with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, SQL, count, countDistinct } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, ne, or, sql, SQL, count, countDistinct } from "drizzle-orm";
 import { db } from "@/db";
 import { numericAggregate, sumNumeric } from "@/db/aggregate";
 import type { OrgContext } from "@/lib/auth/server";
@@ -233,7 +233,11 @@ export async function getFacilities(
             productionRunFeedstocks,
             and(eq(productionRunFeedstocks.productionRunId, productionRuns.id), eq(productionRunFeedstocks.organizationId, ctx.organizationId))
           )
-          .where(and(inArray(productionRuns.facilityId, facilityIds), eq(productionRuns.organizationId, ctx.organizationId)))
+          .where(and(
+            inArray(productionRuns.facilityId, facilityIds),
+            eq(productionRuns.organizationId, ctx.organizationId),
+            ne(productionRuns.status, "cancelled"),
+          ))
           .groupBy(productionRuns.facilityId),
         db
           .select({
@@ -241,7 +245,11 @@ export async function getFacilities(
             totalProducedKg: sumNumeric(productionRuns.biocharOutputKg),
           })
           .from(productionRuns)
-          .where(and(inArray(productionRuns.facilityId, facilityIds), eq(productionRuns.organizationId, ctx.organizationId)))
+          .where(and(
+            inArray(productionRuns.facilityId, facilityIds),
+            eq(productionRuns.organizationId, ctx.organizationId),
+            ne(productionRuns.status, "cancelled"),
+          ))
           .groupBy(productionRuns.facilityId),
         db
           .select({

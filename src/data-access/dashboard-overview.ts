@@ -216,7 +216,7 @@ export async function getDashboardOverview(
               eq(productionRuns.organizationId, ctx.organizationId),
               eq(productionRuns.facilityId, facilityId),
               isNull(productionRuns.archivedAt),
-              ne(productionRuns.status, "void"),
+              ne(productionRuns.status, "cancelled"),
               ...(fetchStart
                 ? [gte(productionRunDateExpr(), fetchStart.toISOString().slice(0, 10))]
                 : []),
