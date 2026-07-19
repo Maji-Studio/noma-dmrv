@@ -2,7 +2,7 @@ import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { Button } from "@/components/ui/button";
-import { ListPagination } from "./index";
+import { DEFAULT_PAGE_SIZE, ListPagination } from "./index";
 
 type ElementProps = Record<string, unknown> & { children?: ReactNode };
 
@@ -25,7 +25,7 @@ function renderPagination(page: number, pageCount: number) {
   return ListPagination({
     page,
     pageCount,
-    pageSize: 10,
+    pageSize: DEFAULT_PAGE_SIZE,
     onPageChange: vi.fn(),
     onPageSizeChange: vi.fn(),
   });

@@ -30,7 +30,13 @@ import {
   type SideSheetMode,
 } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
-import { Button, EmptyState, ListPagination, PageHeader } from "@/components/ui";
+import {
+  Button,
+  DEFAULT_PAGE_SIZE,
+  EmptyState,
+  ListPagination,
+  PageHeader,
+} from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useIsAdmin } from "@/hooks/use-is-admin";
@@ -50,7 +56,7 @@ export function FacilityList() {
   const [countryFilter, setCountryFilter] = useState<string>("");
   const [showArchived, setShowArchived] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const [sideSheet, setSideSheet] = useState<{
     entity: FacilityWithRelations | null;

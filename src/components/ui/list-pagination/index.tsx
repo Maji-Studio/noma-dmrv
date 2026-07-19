@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_ROWS_PER_PAGE_OPTIONS = [10, 20, 30, 50];
+const DEFAULT_PAGE_SIZE = DEFAULT_ROWS_PER_PAGE_OPTIONS[0];
 const PAGINATION_NAV_BUTTON_CLASS = "h-44 w-44 sm:h-32 sm:w-32";
 
 interface ListPaginationProps {
@@ -123,5 +124,5 @@ function ListPagination({
   );
 }
 
-export { ListPagination };
+export { DEFAULT_PAGE_SIZE, ListPagination };
 export type { ListPaginationProps };

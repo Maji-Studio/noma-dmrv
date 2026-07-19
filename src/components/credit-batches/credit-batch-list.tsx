@@ -22,7 +22,13 @@ import {
 } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
 import { useToast } from "@/components/ui/toast";
-import { Button, EmptyState, ListPagination, PageHeader } from "@/components/ui";
+import {
+  Button,
+  DEFAULT_PAGE_SIZE,
+  EmptyState,
+  ListPagination,
+  PageHeader,
+} from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ServerError } from "@/components/forms";
 import { CreditBatchForm } from "./credit-batch-form";
@@ -68,7 +74,7 @@ export function CreditBatchList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   // Side sheet state
   const [sideSheet, setSideSheet] = useState<{
