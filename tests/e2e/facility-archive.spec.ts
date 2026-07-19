@@ -86,7 +86,9 @@ test.describe("Facility cascading archive", () => {
     await expect(dialog.getByText(/1 storage bin/)).toBeVisible({
       timeout: 30000,
     });
-    await dialog.getByRole("button", { name: "Archive", exact: true }).click();
+    const archiveButton = dialog.getByRole("button", { name: "Archive", exact: true });
+    await expect(archiveButton).not.toHaveAttribute("class", /color-signal-red/);
+    await archiveButton.click();
 
     // --- Facility disappears from the active list ---
     await expect(facilityCard.getByRole("heading", { name: facility.name })).not.toBeVisible({
