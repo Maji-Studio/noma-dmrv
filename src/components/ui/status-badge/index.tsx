@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils"
 import {
   STATUS_STATE_BADGE_CLASSES,
   getStatusState,
+  type SemanticEntityStatus,
 } from "@/lib/status-state"
 
 /**
@@ -40,36 +41,8 @@ const statusBadgeVariants = cva(
   }
 )
 
-// All possible status values
-export type StatusValue =
-  // Production run status
-  | "draft"
-  | "superseded"
-  | "running"
-  | "complete"
-  | "failed"
-  | "cancelled"
-  | "void"
-  // Production process sampling method
-  | "method_a"
-  | "method_b"
-  // Delivery status
-  | "upcoming"
-  | "delivered"
-  // Application status
-  | "applied"
-  // Product status
-  | "testing"
-  | "ready"
-  | "sold"
-  // Credit batch status
-  | "pending"
-  | "verified"
-  | "issued"
-  | "rejected"
-
 // Status display labels (maps status value to human-readable text)
-const statusLabels: Record<StatusValue, string> = {
+const statusLabels = {
   draft: "Draft",
   superseded: "Superseded",
   running: "Running",
@@ -89,7 +62,9 @@ const statusLabels: Record<StatusValue, string> = {
   verified: "Verified",
   issued: "Issued",
   rejected: "Rejected",
-}
+} as const satisfies Partial<Record<SemanticEntityStatus, string>>
+
+export type StatusValue = keyof typeof statusLabels
 
 export interface StatusBadgeProps
   extends Omit<React.HTMLAttributes<HTMLSpanElement>, "children">,

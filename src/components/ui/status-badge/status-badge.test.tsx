@@ -1,8 +1,15 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { StatusBadge } from ".";
+import { ENTITY_STATUS_STATES } from "@/lib/status-state";
+import { StatusBadge, statusLabels } from ".";
 
 describe("StatusBadge semantic state treatment", () => {
+  it("maps every supported status through the canonical state mapping", () => {
+    for (const status of Object.keys(statusLabels)) {
+      expect(Object.hasOwn(ENTITY_STATUS_STATES, status), status).toBe(true);
+    }
+  });
+
   it("renders failed as an error without changing its label", () => {
     const html = renderToStaticMarkup(<StatusBadge status="failed" />);
 
