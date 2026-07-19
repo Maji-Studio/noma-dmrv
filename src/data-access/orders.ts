@@ -6,6 +6,7 @@
 import { and, asc, desc, eq, gte, ilike, isNull, lte, sql, SQL, count } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
+import { countRows, numericAggregate } from "@/db/aggregate";
 import {
   orders,
   facilities,
@@ -121,10 +122,9 @@ export async function getOrders(
     .select({
       orderId: deliveries.orderId,
       total: count().as("delivery_total"),
-      delivered:
-        sql<number>`count(*) filter (where ${deliveries.status} = 'delivered')`.as(
-          "delivery_delivered",
-        ),
+      delivered: countRows(sql`${deliveries.status} = 'delivered'`).as(
+        "delivery_delivered",
+      ),
     })
     .from(deliveries)
     .where(and(
@@ -223,8 +223,12 @@ export async function getOrders(
       customerName: customers.name,
       customerLocationName: customerLocations.name,
       biocharProductCode: biocharProducts.code,
-      deliveryCount: sql<number>`coalesce(${deliveryAgg.total}, 0)`,
-      deliveredCount: sql<number>`coalesce(${deliveryAgg.delivered}, 0)`,
+      deliveryCount: numericAggregate(
+        sql<number>`coalesce(${deliveryAgg.total}, 0)`,
+      ),
+      deliveredCount: numericAggregate(
+        sql<number>`coalesce(${deliveryAgg.delivered}, 0)`,
+      ),
     })
     .from(orders)
     .leftJoin(facilities, and(eq(orders.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
@@ -239,8 +243,8 @@ export async function getOrders(
 
   // Combine data — derive fulfillment status from the counts (single source of truth)
   const items: OrderWithRelations[] = orderList.map((o) => {
-    const deliveryCount = Number(o.deliveryCount);
-    const deliveredCount = Number(o.deliveredCount);
+    const deliveryCount = o.deliveryCount;
+    const deliveredCount = o.deliveredCount;
     return {
       ...o,
       deliveryCount,

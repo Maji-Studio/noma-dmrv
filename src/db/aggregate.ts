@@ -1,0 +1,55 @@
+import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
+
+/**
+ * COALESCE(SUM(expr), 0), optionally FILTERed, coerced to number by construction.
+ * Postgres returns numeric/bigint aggregates as text; `.mapWith(Number)` coerces
+ * at the driver boundary (#402).
+ */
+export function sumNumeric(
+  expr: SQLWrapper,
+  filter?: SQLWrapper,
+): SQL<number> {
+  return filter
+    ? sql<number>`COALESCE(SUM(${expr}) FILTER (WHERE ${filter}), 0)`.mapWith(
+        Number,
+      )
+    : sql<number>`COALESCE(SUM(${expr}), 0)`.mapWith(Number);
+}
+
+/**
+ * AVG(expr), coerced to number by construction while preserving NULL for an
+ * empty or all-NULL set. Postgres returns numeric aggregates as text; the
+ * decoder coerces non-NULL values at the driver boundary (#402).
+ */
+export function avgNumeric(expr: SQLWrapper): SQL<number | null> {
+  return sql<number | null>`AVG(${expr})`.mapWith((value) =>
+    value === null ? null : Number(value),
+  );
+}
+
+/**
+ * count(*), optionally FILTERed, coerced to number by construction.
+ * Postgres returns numeric/bigint aggregates as text; `.mapWith(Number)` coerces
+ * at the driver boundary (#402).
+ *
+ * The two migrated sites that previously cast `count(*)::int` intentionally drop
+ * the cast: `.mapWith(Number)` decodes the bigint text to a JS number either way,
+ * and the one site that keeps the value in SQL only compares it inside a
+ * `coalesce(...) = 0` predicate, so the cast was inert.
+ */
+export function countRows(filter?: SQLWrapper): SQL<number> {
+  return filter
+    ? sql<number>`count(*) filter (where ${filter})`.mapWith(Number)
+    : sql<number>`count(*)`.mapWith(Number);
+}
+
+/**
+ * Coerce an arbitrary already-built numeric-aggregate SQL fragment to number by
+ * construction. Postgres returns numeric/bigint aggregates as text;
+ * `.mapWith(Number)` coerces at the driver boundary (#402). Use for complex
+ * aggregates that don't fit sumNumeric/countRows (multiplier SUMs, re-wraps of
+ * subquery aggregate columns).
+ */
+export function numericAggregate(fragment: SQL<number>): SQL<number> {
+  return fragment.mapWith(Number);
+}

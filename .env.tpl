@@ -53,6 +53,7 @@ STORAGE_PROVIDER="op://Environment Variables/noma-dmrv env staging/STORAGE_PROVI
 STORAGE_BUCKET="op://Environment Variables/noma-dmrv env staging/STORAGE_BUCKET"
 STORAGE_REGION="op://Environment Variables/noma-dmrv env staging/STORAGE_REGION"
 STORAGE_ENDPOINT="op://Environment Variables/noma-dmrv env staging/STORAGE_ENDPOINT"
+STORAGE_PREFIX="op://Environment Variables/noma-dmrv env staging/STORAGE_PREFIX"
 STORAGE_ACCESS_KEY_ID="op://Environment Variables/noma-dmrv env staging/STORAGE_ACCESS_KEY_ID"
 STORAGE_SECRET_ACCESS_KEY="op://Environment Variables/noma-dmrv env staging/STORAGE_SECRET_ACCESS_KEY"
 

@@ -7,6 +7,7 @@
  */
 
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
   biocharProducts,
   feedstocks,
@@ -77,7 +78,10 @@ export async function deriveLaneStock(
       executor
         .select({
           storageLocationId: feedstocks.storageLocationId,
-          total: sql<number>`COALESCE(SUM(${feedstocks.massDryKg}) FILTER (WHERE ${feedstocks.status} = 'complete'), 0)`,
+          total: sumNumeric(
+            feedstocks.massDryKg,
+            sql`${feedstocks.status} = 'complete'`,
+          ),
         })
         .from(feedstocks)
         .where(
@@ -90,7 +94,7 @@ export async function deriveLaneStock(
       executor
         .select({
           storageLocationId: productionRuns.feedstockStorageLocationId,
-          total: sql<number>`COALESCE(SUM(${productionRunFeedstocks.massUsedKg}), 0)`,
+          total: sumNumeric(productionRunFeedstocks.massUsedKg),
         })
         .from(productionRuns)
         .leftJoin(
@@ -111,7 +115,7 @@ export async function deriveLaneStock(
       executor
         .select({
           storageLocationId: productionRuns.biocharStorageLocationId,
-          total: sql<number>`COALESCE(SUM(${productionRuns.biocharOutputKg}), 0)`,
+          total: sumNumeric(productionRuns.biocharOutputKg),
         })
         .from(productionRuns)
         .where(
@@ -127,7 +131,9 @@ export async function deriveLaneStock(
       executor
         .select({
           storageLocationId: productionRuns.biocharStorageLocationId,
-          total: sql<number>`COALESCE(SUM(COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)), 0)`,
+          total: numericAggregate(
+            sql<number>`COALESCE(SUM(COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)), 0)`,
+          ),
         })
         .from(productionRuns)
         .innerJoin(
@@ -178,25 +184,25 @@ export async function deriveLaneStock(
     const stock = row.storageLocationId
       ? byLocation.get(row.storageLocationId)
       : undefined;
-    if (stock) stock.feedstockIntakeDryKg = Number(row.total);
+    if (stock) stock.feedstockIntakeDryKg = row.total;
   }
   for (const row of consumptionRows) {
     const stock = row.storageLocationId
       ? byLocation.get(row.storageLocationId)
       : undefined;
-    if (stock) stock.feedstockConsumedDryKg = Number(row.total);
+    if (stock) stock.feedstockConsumedDryKg = row.total;
   }
   for (const row of outputRows) {
     const stock = row.storageLocationId
       ? byLocation.get(row.storageLocationId)
       : undefined;
-    if (stock) stock.biocharProducedKg = Number(row.total);
+    if (stock) stock.biocharProducedKg = row.total;
   }
   for (const row of allocationRows) {
     const stock = row.storageLocationId
       ? byLocation.get(row.storageLocationId)
       : undefined;
-    if (stock) stock.biocharAllocatedKg = Number(row.total);
+    if (stock) stock.biocharAllocatedKg = row.total;
   }
   for (const row of movementRows) {
     const stock = byLocation.get(row.storageLocationId);

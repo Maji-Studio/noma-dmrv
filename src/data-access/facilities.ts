@@ -5,6 +5,7 @@
 
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, SQL, count, countDistinct } from "drizzle-orm";
 import { db } from "@/db";
+import { numericAggregate, sumNumeric } from "@/db/aggregate";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   facilities,
@@ -217,7 +218,7 @@ export async function getFacilities(
         db
           .select({
             facilityId: feedstocks.facilityId,
-            totalDryKg: sql<number>`COALESCE(SUM(${feedstocks.massDryKg}), 0)`,
+            totalDryKg: sumNumeric(feedstocks.massDryKg),
           })
           .from(feedstocks)
           .where(and(inArray(feedstocks.facilityId, facilityIds), eq(feedstocks.organizationId, ctx.organizationId)))
@@ -225,7 +226,7 @@ export async function getFacilities(
         db
           .select({
             facilityId: productionRuns.facilityId,
-            totalConsumedKg: sql<number>`COALESCE(SUM(${productionRunFeedstocks.massUsedKg}), 0)`,
+            totalConsumedKg: sumNumeric(productionRunFeedstocks.massUsedKg),
           })
           .from(productionRuns)
           .leftJoin(
@@ -237,7 +238,7 @@ export async function getFacilities(
         db
           .select({
             facilityId: productionRuns.facilityId,
-            totalProducedKg: sql<number>`COALESCE(SUM(${productionRuns.biocharOutputKg}), 0)`,
+            totalProducedKg: sumNumeric(productionRuns.biocharOutputKg),
           })
           .from(productionRuns)
           .where(and(inArray(productionRuns.facilityId, facilityIds), eq(productionRuns.organizationId, ctx.organizationId)))
@@ -245,14 +246,14 @@ export async function getFacilities(
         db
           .select({
             facilityId: biocharProducts.facilityId,
-            totalAllocatedKg: sql<number>`
+            totalAllocatedKg: numericAggregate(sql<number>`
               COALESCE(
                 SUM(
                   COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)
                 ),
                 0
               )
-            `,
+            `),
           })
           .from(biocharProducts)
           .leftJoin(formulations, and(eq(biocharProducts.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
@@ -261,7 +262,7 @@ export async function getFacilities(
         db
           .select({
             facilityId: biocharProducts.facilityId,
-            totalProductKg: sql<number>`COALESCE(SUM(${biocharProducts.massKg}), 0)`,
+            totalProductKg: sumNumeric(biocharProducts.massKg),
           })
           .from(biocharProducts)
           .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId)))
@@ -312,19 +313,19 @@ export async function getFacilities(
   }
 
   const feedstockInventoryMap = new Map(
-    feedstockInventoryRows.map((row) => [row.facilityId, Number(row.totalDryKg)])
+    feedstockInventoryRows.map((row) => [row.facilityId, row.totalDryKg])
   );
   const feedstockConsumptionMap = new Map(
-    feedstockConsumptionRows.map((row) => [row.facilityId, Number(row.totalConsumedKg)])
+    feedstockConsumptionRows.map((row) => [row.facilityId, row.totalConsumedKg])
   );
   const biocharOutputMap = new Map(
-    biocharOutputRows.map((row) => [row.facilityId, Number(row.totalProducedKg)])
+    biocharOutputRows.map((row) => [row.facilityId, row.totalProducedKg])
   );
   const biocharAllocationMap = new Map(
-    biocharAllocationRows.map((row) => [row.facilityId, Number(row.totalAllocatedKg)])
+    biocharAllocationRows.map((row) => [row.facilityId, row.totalAllocatedKg])
   );
   const productInventoryMap = new Map(
-    productInventoryRows.map((row) => [row.facilityId, Number(row.totalProductKg)])
+    productInventoryRows.map((row) => [row.facilityId, row.totalProductKg])
   );
 
   // Combine data

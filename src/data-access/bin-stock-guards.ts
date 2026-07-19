@@ -18,6 +18,7 @@
 
 import { and, eq, ne, sql } from "drizzle-orm";
 import type { db, DbTransaction } from "@/db";
+import { sumNumeric } from "@/db/aggregate";
 import {
   biocharProducts,
   binMovements,
@@ -137,7 +138,7 @@ export async function deriveProductAvailableKg(
   const [[product], [delivered], [movement]] = await Promise.all([
     tx
       .select({
-        total: sql<number>`COALESCE(SUM(${biocharProducts.massKg}), 0)`,
+        total: sumNumeric(biocharProducts.massKg),
       })
       .from(biocharProducts)
       .where(
@@ -148,7 +149,7 @@ export async function deriveProductAvailableKg(
       ),
     tx
       .select({
-        total: sql<number>`COALESCE(SUM(${deliveries.deliveredWetMassKg}), 0)`,
+        total: sumNumeric(deliveries.deliveredWetMassKg),
       })
       .from(deliveries)
       .innerJoin(
@@ -168,7 +169,7 @@ export async function deriveProductAvailableKg(
       .where(and(...deliveredConditions)),
     tx
       .select({
-        total: sql<number>`COALESCE(SUM(${binMovements.massDeltaKg}), 0)`,
+        total: sumNumeric(binMovements.massDeltaKg),
       })
       .from(binMovements)
       .where(
@@ -180,7 +181,7 @@ export async function deriveProductAvailableKg(
       ),
   ]);
 
-  return Number(product.total) - Number(delivered.total) + Number(movement.total);
+  return product.total - delivered.total + movement.total;
 }
 
 /** Derive one bin lane while the caller holds that bin's transaction lock. */
@@ -373,7 +374,7 @@ export async function deriveBiocharProductDeliveredKg(
 
   const [delivered] = await tx
     .select({
-      total: sql<number>`COALESCE(SUM(${deliveries.deliveredWetMassKg}), 0)`,
+      total: sumNumeric(deliveries.deliveredWetMassKg),
     })
     .from(deliveries)
     .innerJoin(
@@ -385,5 +386,5 @@ export async function deriveBiocharProductDeliveredKg(
     )
     .where(and(...deliveredConditions));
 
-  return Number(delivered.total);
+  return delivered.total;
 }
