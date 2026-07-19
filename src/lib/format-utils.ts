@@ -9,6 +9,7 @@ const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_FORMAT = "MMM d, yyyy";
 const DATE_TIME_FORMAT = "MMM d, yyyy, HH:mm";
 const SAME_YEAR_RANGE_START_FORMAT = "MMM d";
+const FALLBACK_DISPLAY = "—";
 const KG_PER_TONNE = 1000;
 const CO2E_TONNES_MAX_FRACTION_DIGITS = 3;
 
@@ -38,7 +39,7 @@ function parseDateValue(value: DateValue): Date | null {
  */
 export function formatDate(value: DateValue): string {
   const date = parseDateValue(value);
-  return date ? format(date, DATE_FORMAT) : "—";
+  return date ? format(date, DATE_FORMAT) : FALLBACK_DISPLAY;
 }
 
 /**
@@ -47,7 +48,7 @@ export function formatDate(value: DateValue): string {
  */
 export function formatDateTime(value: DateValue): string {
   const date = parseDateValue(value);
-  return date ? format(date, DATE_TIME_FORMAT) : "—";
+  return date ? format(date, DATE_TIME_FORMAT) : FALLBACK_DISPLAY;
 }
 
 /**
@@ -58,7 +59,7 @@ export function formatDateTime(value: DateValue): string {
 export function formatDateRange(start: DateValue, end: DateValue): string {
   const startDate = parseDateValue(start);
   const endDate = parseDateValue(end);
-  if (!startDate || !endDate) return "—";
+  if (!startDate || !endDate) return FALLBACK_DISPLAY;
 
   if (startDate.getFullYear() === endDate.getFullYear()) {
     return `${format(startDate, SAME_YEAR_RANGE_START_FORMAT)} – ${format(endDate, DATE_FORMAT)}`;
@@ -72,7 +73,7 @@ export function formatDateRange(start: DateValue, end: DateValue): string {
  * Returns "—" for null/undefined.
  */
 export function formatMass(kg: number | null | undefined): string {
-  if (kg == null) return "—";
+  if (kg == null) return FALLBACK_DISPLAY;
   if (kg >= 1000) return `${(kg / 1000).toFixed(1)} t`;
   return `${Math.round(kg).toLocaleString()} kg`;
 }
@@ -89,7 +90,7 @@ export function formatCo2e(
   kg: number | null | undefined,
   opts?: { signed?: boolean; unit?: string }
 ): string {
-  if (kg == null || Number.isNaN(kg)) return "—";
+  if (kg == null || Number.isNaN(kg)) return FALLBACK_DISPLAY;
   const { signed = false, unit } = opts ?? {};
   const abs = Math.abs(kg);
   const inTonnes = abs >= KG_PER_TONNE;
@@ -117,7 +118,7 @@ export function formatTonnes(
   value: number | null | undefined,
   opts?: { digits?: number; unit?: string }
 ): string {
-  if (value == null) return "—";
+  if (value == null) return FALLBACK_DISPLAY;
   const { digits = 2, unit = "t" } = opts ?? {};
   return `${value.toFixed(digits)} ${unit}`;
 }
@@ -131,7 +132,7 @@ export function formatSafeDate(
   fmt = DATE_FORMAT
 ): string {
   const date = parseDateValue(dateStr);
-  return date ? format(date, fmt) : "—";
+  return date ? format(date, fmt) : FALLBACK_DISPLAY;
 }
 
 /**
@@ -163,7 +164,7 @@ export function roundKmDisplay(km: number): string {
  * Returns "—" for null/undefined.
  */
 export function formatDistanceKm(km: number | null | undefined): string {
-  if (km == null) return "—";
+  if (km == null) return FALLBACK_DISPLAY;
   return `${roundKmDisplay(km)} km`;
 }
 
@@ -171,7 +172,7 @@ export const BYTES_PER_KB = 1024;
 export const BYTES_PER_MB = 1024 * 1024;
 
 export function formatFileSize(bytes: number | null | undefined): string {
-  if (bytes == null) return "—";
+  if (bytes == null) return FALLBACK_DISPLAY;
   if (bytes < BYTES_PER_KB) return `${bytes} B`;
   if (bytes < BYTES_PER_MB) return `${(bytes / BYTES_PER_KB).toFixed(1)} KB`;
   return `${(bytes / BYTES_PER_MB).toFixed(1)} MB`;
