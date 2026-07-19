@@ -29,11 +29,11 @@ import { useEntityById } from "@/hooks/use-entities";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import {
   productionRunFormSchema,
-  productionRunStatuses,
   formatProductionRunStatus,
   type ProductionRunFormData,
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
+import { allowedProductionRunStatusesFrom } from "@/lib/production-runs/lifecycle";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { StorageLocationType } from "@/schemas/storage-locations";
@@ -41,11 +41,6 @@ import type { StorageLocationType } from "@/schemas/storage-locations";
 // ============================================
 // Constants for select options
 // ============================================
-
-const statusOptions: readonly { value: string; label: string }[] = productionRunStatuses.map((status) => ({
-  value: status,
-  label: formatProductionRunStatus(status),
-}));
 
 const isProductionRunCertifyField = (field: string) =>
   isCertifyFormField("productionRun", field);
@@ -257,6 +252,10 @@ export function ProductionRunForm({
 }: ProductionRunFormProps) {
   const formId = useId();
   const isEditMode = !!productionRun;
+  const transitionFrom = (productionRun?.status as ProductionRunStatus) ?? "draft";
+  const statusOptions = allowedProductionRunStatusesFrom(transitionFrom).map(
+    (status) => ({ value: status, label: formatProductionRunStatus(status) }),
+  );
   const { facilityId: contextFacilityId } = useFacilityContext();
 
   const defaultValues = {

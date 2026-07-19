@@ -17,6 +17,7 @@ import {
   toNumberOrNull,
 } from "./helpers";
 import {
+  allowedProductionRunStatusesFrom,
   PRODUCTION_RUN_STATUSES,
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
@@ -27,6 +28,7 @@ import {
 
 const TIME_ONLY_RE = /^\d{2}:\d{2}$/;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+export const CANCELLATION_REASON_MAX_LENGTH = 2000;
 
 /**
  * Resolve a calendar-date value + a time value into a single instant, robust to
@@ -83,7 +85,7 @@ export const productionRunFormSchema = z.object({
 
   // Status
   status: z.enum(productionRunStatuses).default("draft"),
-  cancellationReason: z.string().max(2000).optional().or(z.literal("")),
+  cancellationReason: z.string().max(CANCELLATION_REASON_MAX_LENGTH).optional().or(z.literal("")),
 
   // Timing — explicit date + time pairs. The run's start (date + time) is
   // required; the end pair is optional (a blank end = the run has not finished
@@ -177,12 +179,17 @@ export const productionRunFormSchema = z.object({
     }
     if (
       (data.status === "complete" || data.status === "failed") &&
-      !(data.feedstockWetMassKg && data.feedstockWetMassKg > 0)
+      !(
+        data.feedstockWetMassKg &&
+        data.feedstockWetMassKg > 0 &&
+        data.feedstockStorageLocationId &&
+        data.feedstockMoisturePercent != null
+      )
     ) {
       ctx.addIssue({
         code: "custom",
         path: ["feedstockWetMassKg"],
-        message: `A ${data.status} run needs consumed feedstock.`,
+        message: `A ${data.status} run needs a source bin, moisture %, and wet mass to compute consumed feedstock.`,
       });
     }
     if (data.status === "cancelled" && !data.cancellationReason?.trim()) {
@@ -197,7 +204,13 @@ export const productionRunFormSchema = z.object({
 /**
  * Schema for creating a production run (server action)
  */
-export const createProductionRunSchema = productionRunFormSchema;
+export const createProductionRunSchema = productionRunFormSchema.refine(
+  (data) => allowedProductionRunStatusesFrom("draft").includes(data.status),
+  {
+    path: ["status"],
+    message: "A new production run can only start as Draft, Running, or Cancelled.",
+  },
+);
 
 /**
  * Schema for updating a production run (server action)
@@ -215,7 +228,7 @@ export const updateProductionRunSchema = z.object({
   reactorId: z.string().uuid().optional(),
   status: z.enum(productionRunStatuses).optional(),
   expectedUpdatedAt: z.coerce.date().optional(),
-  cancellationReason: z.string().max(2000).nullable().optional(),
+  cancellationReason: z.string().max(CANCELLATION_REASON_MAX_LENGTH).nullable().optional(),
   startTime: z.union([
     z.date(),
     z.string().transform((val, ctx) => {
