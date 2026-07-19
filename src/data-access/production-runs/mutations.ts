@@ -49,6 +49,7 @@ import {
   statusOccupiesReactor,
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
+import { retireDocumentsForEntities } from "../documents";
 
 const END_AFTER_START_CONSTRAINT = "production_runs_end_after_start";
 const END_AFTER_START_MESSAGE = "End time must be after the start time";
@@ -768,6 +769,15 @@ export async function deleteProductionRun(
       locked.biocharStorageLocationId,
     ]);
 
+    const productionIncidents = await tx
+      .select({ id: incidentReports.id })
+      .from(incidentReports)
+      .where(
+        and(
+          eq(incidentReports.productionRunId, productionRunId),
+          eq(incidentReports.organizationId, ctx.organizationId),
+        ),
+      );
     await tx
       .delete(productionRunFeedstocks)
       .where(and(eq(productionRunFeedstocks.productionRunId, productionRunId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
@@ -783,5 +793,12 @@ export async function deleteProductionRun(
     await tx
       .delete(productionRuns)
       .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "production_run", entityId: productionRunId },
+      ...productionIncidents.map((incident) => ({
+        entityType: "production_incident" as const,
+        entityId: incident.id,
+      })),
+    ]);
   });
 }
