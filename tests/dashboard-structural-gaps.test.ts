@@ -253,10 +253,11 @@ beforeAll(async () => {
         },
         {
           organizationId: TEST_ORG_ID,
-          code: `PR-DG-VOID-${tag}`,
+          code: `PR-DG-CANCELLED-${tag}`,
           facilityId: gapFacility.id,
           reactorId: reactor.id,
-          status: "void",
+          status: "cancelled",
+          cancellationReason: "Excluded from active dashboard gap metrics",
           startTime: new Date("2026-07-02T08:00:00Z"),
         },
         {
@@ -270,7 +271,7 @@ beforeAll(async () => {
         },
       ])
       .returning({ id: productionRuns.id });
-    const [activeRun, voidRun, archivedRun] = productionRunRows;
+    const [activeRun, cancelledRun, archivedRun] = productionRunRows;
 
     const processRows = await tx
       .insert(productionProcesses)
@@ -362,8 +363,8 @@ beforeAll(async () => {
         },
         {
           organizationId: TEST_ORG_ID,
-          productionRunId: voidRun.id,
-          sampleCode: `S-DG-VOID-RUN-${tag}`,
+          productionRunId: cancelledRun.id,
+          sampleCode: `S-DG-CANCELLED-RUN-${tag}`,
           samplingTime: new Date("2026-07-09T10:00:00Z"),
           ...SAMPLE_CHEMISTRY,
         },

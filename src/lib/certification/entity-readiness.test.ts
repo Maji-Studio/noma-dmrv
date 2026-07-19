@@ -6,6 +6,20 @@ import {
 } from "./certify-field-registry";
 
 describe("deriveEntityCertifyReadiness", () => {
+  it.each(["failed", "cancelled"])(
+    "reports only the lifecycle gap for a %s production run",
+    (status) => {
+      const readiness = deriveEntityCertifyReadiness("productionRun", {
+        status,
+        readingsCount: 0,
+      });
+
+      expect(readiness.state).toBe("incomplete");
+      expect(readiness.gaps).toHaveLength(1);
+      expect(readiness.gaps[0]?.kind).toBe("lifecycle");
+    },
+  );
+
   it("marks a complete production run ready", () => {
     const readiness = deriveEntityCertifyReadiness("productionRun", {
       status: "complete",

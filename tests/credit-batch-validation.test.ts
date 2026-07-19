@@ -8,7 +8,7 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
  * Requires a running database (uses DATABASE_URL from .env.test or test defaults).
  */
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
-import { inArray } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { facilities, reactors } from "@/db/schema/facilities";
 import {
@@ -27,6 +27,7 @@ import {
   createCreditBatch,
   updateCreditBatch,
 } from "@/data-access/credit-batches";
+import { updateProductionRun } from "@/data-access/production-runs";
 
 // Fake userId for requireAuth (just needs to be truthy)
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
@@ -62,6 +63,8 @@ let primaryFeedstockTypeId: string;
 let multiFeedstockRunInFacilityA: { id: string };
 let noFeedstockRunInFacilityA: { id: string };
 let mismatchedFeedstockRunInFacilityA: { id: string };
+let concurrencyRunInFacilityA: { id: string };
+const CONCURRENCY_BARRIER_TIMEOUT_MS = 5_000;
 
 beforeAll(() => ensureTestOrg());
 
@@ -207,7 +210,18 @@ beforeAll(async () => {
         endTime: new Date("2025-06-21T12:00:00Z"),
         biocharDryMassKg: 3600,
       },
-    ])
+      {
+        organizationId: TEST_ORG_ID,
+        code: `PR-VAL-RACE-${runId}`,
+        facilityId: facilityA.id,
+        reactorId: reactorA.id,
+        startTime: new Date("2025-06-22T08:00:00Z"),
+        endTime: new Date("2025-06-22T12:00:00Z"),
+        feedstockMassDryKg: 400,
+        biocharOutputKg: 100,
+        biocharDryMassKg: 100,
+      },
+    ].map((row) => ({ ...row, status: "complete" as const })))
     .returning({ id: productionRuns.id });
   [
     runInFacilityA,
@@ -219,6 +233,7 @@ beforeAll(async () => {
     multiFeedstockRunInFacilityA,
     noFeedstockRunInFacilityA,
     mismatchedFeedstockRunInFacilityA,
+    concurrencyRunInFacilityA,
   ] = productionRunRows;
   createdIds.productionRuns.push(...productionRunRows.map((run) => run.id));
 
@@ -298,6 +313,7 @@ beforeAll(async () => {
     // A8 uses ONLY the secondary type — a single, valid feedstock that differs
     // from the primary type the batch will declare (equality-guard fixture).
     { organizationId: TEST_ORG_ID, productionRunId: mismatchedFeedstockRunInFacilityA.id, feedstockId: feedstockASecondary.id, massUsedKg: 400 },
+    { organizationId: TEST_ORG_ID, productionRunId: concurrencyRunInFacilityA.id, feedstockId: feedstockAPrimary.id, massUsedKg: 400 },
   ]);
 
   // Create biochar products (needs formulation)
@@ -659,5 +675,88 @@ describe("Credit Batch Production-Run Validation", () => {
         productionRunIds: [runInFacilityB.id],
       })
     ).rejects.toThrow("do not belong to the selected facility");
+  });
+
+  it("serializes batch assignment ahead of a concurrent Complete-to-Running reopen", async () => {
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const lockKey = `production-process-current:${facilityA.id}:${primaryFeedstockTypeId}`;
+    let releaseProcessLock = () => {};
+    let signalProcessLockReady = () => {};
+    const processLockReady = new Promise<void>((resolve) => {
+      signalProcessLockReady = resolve;
+    });
+    const releaseProcessLockPromise = new Promise<void>((resolve) => {
+      releaseProcessLock = resolve;
+    });
+    let blockerPid = 0;
+    const blocker = db.transaction(async (tx) => {
+      await tx.execute(sql`
+        select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))
+      `);
+      const backend = await tx.execute<{ pid: number }>(
+        sql`select pg_backend_pid() as pid`,
+      );
+      blockerPid = backend.rows[0]?.pid ?? 0;
+      signalProcessLockReady();
+      await releaseProcessLockPromise;
+    });
+
+    let createPromise: ReturnType<typeof createCreditBatch> | undefined;
+    let reopenPromise: ReturnType<typeof updateProductionRun> | undefined;
+    try {
+      await processLockReady;
+      createPromise = createCreditBatch(ctx, {
+        ...baseBatchData,
+        code: `CB-VAL-RACE-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+        facilityId: facilityA.id,
+        productionRunIds: [concurrencyRunInFacilityA.id],
+      });
+
+      await expect.poll(async () => {
+        const result = await db.execute<{ waiting: boolean }>(sql`
+          select exists (
+            select 1
+            from pg_locks waiting
+            join pg_locks held
+              on held.locktype = waiting.locktype
+             and held.database is not distinct from waiting.database
+             and held.classid is not distinct from waiting.classid
+             and held.objid is not distinct from waiting.objid
+             and held.objsubid is not distinct from waiting.objsubid
+            where waiting.locktype = 'advisory'
+              and not waiting.granted
+              and held.granted
+              and held.pid = ${blockerPid}
+          ) as waiting
+        `);
+        return result.rows[0]?.waiting ?? false;
+      }, { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS }).toBe(true);
+
+      reopenPromise = updateProductionRun(ctx, concurrencyRunInFacilityA.id, {
+        status: "running",
+        endTime: null,
+      });
+      void reopenPromise.catch(() => undefined);
+      releaseProcessLock();
+      await blocker;
+
+      const batch = await createPromise;
+      createdIds.creditBatches.push(batch.id);
+      await expect(reopenPromise).rejects.toThrow(
+        "Remove this run from its Credit batch before reopening it.",
+      );
+
+      const [persistedRun] = await db
+        .select({ status: productionRuns.status })
+        .from(productionRuns)
+        .where(inArray(productionRuns.id, [concurrencyRunInFacilityA.id]));
+      expect(persistedRun?.status).toBe("complete");
+      expect(batch.productionRunIds).toEqual([concurrencyRunInFacilityA.id]);
+    } finally {
+      releaseProcessLock();
+      await blocker.catch(() => undefined);
+      await createPromise?.catch(() => undefined);
+      await reopenPromise?.catch(() => undefined);
+    }
   });
 });

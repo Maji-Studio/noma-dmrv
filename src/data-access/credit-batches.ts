@@ -39,6 +39,7 @@ import { requireOrgScope } from "./utils";
 import { findOrCreateProductionProcess } from "./production-processes";
 import {
   assertDeclaredFeedstockType,
+  lockCreditBatchProductionRuns,
   validateProductionRunIds,
 } from "./credit-batch-membership";
 import { gcRemovalIfOrphaned } from "./certifier-removals";
@@ -376,7 +377,6 @@ export async function createCreditBatch(
   const { productionRunIds, ...batchData } = data;
 
   const creditBatch = await db.transaction(async (tx) => {
-    const certifier = await resolveCreditBatchCertifier(ctx, tx, batchData.facilityId);
     assertCreditBatchProductionWindow(batchData.startDate, batchData.endDate);
 
     // ADR 0016 (amended 2026-07-04): the credit batch is the protocol production
@@ -386,6 +386,8 @@ export async function createCreditBatch(
     // declared feedstock type, then find-or-create the (facility, feedstock)
     // production process this batch is a <=1-month slice of.
     const runIds = productionRunIds ?? [];
+    const lockedRuns = await lockCreditBatchProductionRuns(ctx, tx, runIds);
+    const certifier = await resolveCreditBatchCertifier(ctx, tx, batchData.facilityId);
     const feedstockTypeId = batchData.feedstockTypeId;
     await validateProductionRunIds(
       ctx,
@@ -394,6 +396,8 @@ export async function createCreditBatch(
       batchData.facilityId,
       batchData.startDate,
       batchData.endDate,
+      undefined,
+      lockedRuns,
     );
     await assertDeclaredFeedstockType(ctx, tx, runIds, feedstockTypeId);
     const process = await findOrCreateProductionProcess(
@@ -537,6 +541,31 @@ export async function updateCreditBatch(
     updateData.siteManagementNotes = updateFields.siteManagementNotes || null;
 
   await db.transaction(async (tx) => {
+    // Discover the current membership without taking a batch/removal lock, then
+    // lock old + prospective members in one sorted run-row batch. Every writer
+    // follows run -> batch -> removal/certification order; production-run reopen
+    // also locks the run before checking membership.
+    const currentMembership = productionRunIds !== undefined
+      ? await tx
+          .select({ productionRunId: creditBatchProductionRuns.productionRunId })
+          .from(creditBatchProductionRuns)
+          .where(and(
+            eq(creditBatchProductionRuns.creditBatchId, id),
+            eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
+          ))
+      : [];
+    const membershipRunIds = productionRunIds !== undefined
+      ? [
+          ...currentMembership.map((link) => link.productionRunId),
+          ...productionRunIds,
+        ]
+      : [];
+    const lockedMembershipRuns = await lockCreditBatchProductionRuns(
+      ctx,
+      tx,
+      membershipRunIds,
+    );
+
     // Fetch existing batch inside transaction to avoid TOCTOU race
     const [existingBatch] = await tx
       .select({
@@ -552,6 +581,30 @@ export async function updateCreditBatch(
 
     if (!existingBatch) {
       throw new SafeError("Credit batch not found");
+    }
+
+    if (productionRunIds !== undefined) {
+      const lockedCurrentMembership = await tx
+        .select({ productionRunId: creditBatchProductionRuns.productionRunId })
+        .from(creditBatchProductionRuns)
+        .where(and(
+          eq(creditBatchProductionRuns.creditBatchId, id),
+          eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
+        ));
+      const discoveredIds = currentMembership
+        .map((link) => link.productionRunId)
+        .sort();
+      const lockedIds = lockedCurrentMembership
+        .map((link) => link.productionRunId)
+        .sort();
+      if (
+        discoveredIds.length !== lockedIds.length ||
+        discoveredIds.some((runId, index) => runId !== lockedIds[index])
+      ) {
+        throw new SafeError(
+          "Credit batch membership changed while this update was being prepared. Refresh and retry.",
+        );
+      }
     }
 
     await assertRemovalAllowsCreditBatchMutation(
@@ -590,6 +643,7 @@ export async function updateCreditBatch(
         effectiveStartDate,
         effectiveEndDate,
         id,
+        lockedMembershipRuns.filter((run) => productionRunIds.includes(run.id)),
       );
     }
 
@@ -800,6 +854,7 @@ export async function getCreditBatchProductionRunOptions(
   const conditions = [
     eq(productionRuns.organizationId, ctx.organizationId),
     eq(productionRuns.facilityId, params.facilityId),
+    eq(productionRuns.status, "complete"),
     isNull(productionRuns.archivedAt),
   ];
 

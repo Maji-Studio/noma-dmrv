@@ -133,6 +133,8 @@ export const STATUS_COLORS: Record<string, string> = {
   missing_data: "var(--st-off)",
   rejected: "var(--st-bad)",
   void: "var(--st-bad)",
+  failed: "var(--st-bad)",
+  cancelled: "var(--st-bad)",
 };
 
 export const STATUS_COLOR_FALLBACK = "var(--st-off)";

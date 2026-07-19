@@ -1,7 +1,7 @@
 /**
  * Same-reactor time-window overlap validation for production runs (issue #259).
  *
- * A reactor can only run one physical batch at a time, so two non-void runs on
+ * A reactor can only run one physical batch at a time, so two non-cancelled runs on
  * the same reactor must not overlap in time. This guard runs inside the create
  * and update transactions, serialized per-reactor by a transaction-scoped
  * advisory lock so the check-then-write can't race. The partial unique index
@@ -85,7 +85,7 @@ function overlapMessage(conflict: {
 
 /**
  * Acquire the per-reactor advisory lock and reject the candidate window if it
- * overlaps any existing non-void, non-archived run on the same reactor. Pass
+ * overlaps any existing non-cancelled, non-archived run on the same reactor. Pass
  * `selfId` on the edit path to exclude the run being edited.
  */
 export async function assertNoReactorRunOverlap(
@@ -110,7 +110,7 @@ export async function assertNoReactorRunOverlap(
   const conditions: SQL[] = [
     eq(productionRuns.organizationId, ctx.organizationId),
     eq(productionRuns.reactorId, reactorId),
-    ne(productionRuns.status, "void"),
+    ne(productionRuns.status, "cancelled"),
     isNull(productionRuns.archivedAt),
   ];
 

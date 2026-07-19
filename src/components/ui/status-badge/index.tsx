@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
  * Status Badge Component
  *
  * Color-coded status badge component with variants for:
- * - Production run status: draft, running, complete, void
+ * - Production run status: draft, running, complete, failed, cancelled
  * - Delivery status: upcoming, delivered
  * - Application status: delivered, applied
  * - Credit batch status: draft, pending, verified, issued, rejected
@@ -52,6 +52,8 @@ const statusBadgeVariants = cva(
 
         // Error / Void / Rejected states (st-bad)
         void: "bg-[var(--st-bad-bg)] text-[var(--st-bad)] border-[var(--st-bad-border)]",
+        failed: "bg-[var(--st-bad-bg)] text-[var(--st-bad)] border-[var(--st-bad-border)]",
+        cancelled: "bg-[var(--st-bad-bg)] text-[var(--st-bad)] border-[var(--st-bad-border)]",
         rejected: "bg-[var(--st-bad-bg)] text-[var(--st-bad)] border-[var(--st-bad-border)]",
       },
       /**
@@ -77,6 +79,8 @@ export type StatusValue =
   | "superseded"
   | "running"
   | "complete"
+  | "failed"
+  | "cancelled"
   | "void"
   // Delivery status
   | "upcoming"
@@ -99,6 +103,8 @@ const statusLabels: Record<StatusValue, string> = {
   superseded: "Superseded",
   running: "Running",
   complete: "Complete",
+  failed: "Failed",
+  cancelled: "Cancelled",
   void: "Void",
   upcoming: "Upcoming",
   delivered: "Delivered",

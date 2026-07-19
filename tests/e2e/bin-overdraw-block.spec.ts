@@ -75,7 +75,7 @@ async function openRunFormWithSource(
   );
 }
 
-/** Open a complete run form that can draw feedstock and/or seed biochar stock. */
+/** Open a running run form that can draw feedstock and/or seed biochar stock. */
 async function openCompleteRunForm(
   page: Page,
   seededData: SeededChainData,
@@ -94,7 +94,7 @@ async function openCompleteRunForm(
   await page.getByRole("button", { name: "New Production Run" }).click();
   await waitForSideSheet(page);
 
-  await page.selectOption('select[name="status"]', "complete");
+  await page.selectOption('select[name="status"]', "running");
   await selectEntity(
     page,
     "Reactor",
@@ -103,38 +103,31 @@ async function openCompleteRunForm(
   );
   await page.fill('input[name="startDate"]', RUN_DATE);
   await page.fill('input[name="startTime"]', RUN_START_TIME);
-  await page.fill('input[name="endDate"]', RUN_DATE);
-  await page.fill('input[name="endTime"]', RUN_END_TIME);
+  await selectEntity(
+    page,
+    "Source Bin",
+    seededData.feedstockStorageLocation.id,
+    seededData.feedstockStorageLocation.name,
+  );
+  await page.fill(
+    'input[name="feedstockWetMassKg"]',
+    values.feedstockWetMassKg ?? "1",
+  );
+  await page.fill(
+    'input[name="feedstockMoisturePercent"]',
+    values.feedstockMoisturePercent ?? "0",
+  );
 
-  if (values.feedstockWetMassKg) {
-    await selectEntity(
-      page,
-      "Source Bin",
-      seededData.feedstockStorageLocation.id,
-      seededData.feedstockStorageLocation.name,
-    );
-    await page.fill(
-      'input[name="feedstockWetMassKg"]',
-      values.feedstockWetMassKg,
-    );
-    await page.fill(
-      'input[name="feedstockMoisturePercent"]',
-      values.feedstockMoisturePercent ?? "0",
-    );
-  }
-
-  if (values.biocharOutputKg) {
-    await selectEntity(
-      page,
-      "Biochar Storage",
-      seededData.biocharStorageLocation.id,
-      seededData.biocharStorageLocation.name,
-    );
-    await page.fill(
-      'input[name="biocharOutputKg"]',
-      values.biocharOutputKg,
-    );
-  }
+  await selectEntity(
+    page,
+    "Biochar Storage",
+    seededData.biocharStorageLocation.id,
+    seededData.biocharStorageLocation.name,
+  );
+  await page.fill(
+    'input[name="biocharOutputKg"]',
+    values.biocharOutputKg ?? "1",
+  );
 }
 
 /** Submit the create-production-run side sheet. */
@@ -162,6 +155,13 @@ async function createCompleteRun(
   const actionLabel = await actionButton.getAttribute("aria-label");
   const runCode = actionLabel?.replace(/^Actions for /, "").trim();
   if (!runCode) throw new Error("Created production run code was not rendered");
+
+  await editFirstRow(page, "endTime");
+  await page.fill('input[name="endDate"]', RUN_DATE);
+  await page.fill('input[name="endTime"]', RUN_END_TIME);
+  await page.selectOption('select[name="status"]', "complete");
+  await saveEdit(page);
+  await waitForSideSheetClose(page);
   return runCode;
 }
 

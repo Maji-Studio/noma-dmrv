@@ -324,9 +324,9 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
           code: runCode,
           facilityId: facility.id,
           reactorId: reactor.id,
-          status: "complete",
+          status: "running",
           startTime: new Date("2026-07-03T08:00:00Z"),
-          endTime: new Date("2026-07-03T10:00:00Z"),
+          endTime: null,
           feedstockWetMassKg: INITIAL_FEEDSTOCK_DRY_MASS_KG,
           feedstockMoisturePercent: 0,
           feedstockStorageLocationId: bin.id,
@@ -657,6 +657,18 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
           select ${storageLocations.id}
           from ${storageLocations}
           where ${storageLocations.id} = ${destinationBin.id}
+          for update nowait
+        `);
+      })).resolves.toBeUndefined();
+
+      // The create must not lock the run before it obtains the source-bin
+      // advisory lock. updateProductionRun uses bins -> run; this NOWAIT probe
+      // makes the shared global order deterministic and catches run -> bin ABBA.
+      await expect(db.transaction(async (tx) => {
+        await tx.execute(sql`
+          select ${productionRuns.id}
+          from ${productionRuns}
+          where ${productionRuns.id} = ${run.id}
           for update nowait
         `);
       })).resolves.toBeUndefined();
