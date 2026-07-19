@@ -5,6 +5,7 @@
 
 import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql, SQL, count, countDistinct } from "drizzle-orm";
 import { db } from "@/db";
+import { numericAggregate, sumNumeric } from "@/db/aggregate";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   facilities,
@@ -82,10 +83,6 @@ export interface FacilityDetail extends Facility {
 
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
-import {
-  CODE_CONFLICT_MESSAGES,
-  withUniqueCodeGuard,
-} from "./code-generator";
 
 // ============================================
 // Read Operations
@@ -221,7 +218,7 @@ export async function getFacilities(
         db
           .select({
             facilityId: feedstocks.facilityId,
-            totalDryKg: sql<number>`COALESCE(SUM(${feedstocks.massDryKg}), 0)`,
+            totalDryKg: sumNumeric(feedstocks.massDryKg),
           })
           .from(feedstocks)
           .where(and(inArray(feedstocks.facilityId, facilityIds), eq(feedstocks.organizationId, ctx.organizationId)))
@@ -229,7 +226,7 @@ export async function getFacilities(
         db
           .select({
             facilityId: productionRuns.facilityId,
-            totalConsumedKg: sql<number>`COALESCE(SUM(${productionRunFeedstocks.massUsedKg}), 0)`,
+            totalConsumedKg: sumNumeric(productionRunFeedstocks.massUsedKg),
           })
           .from(productionRuns)
           .leftJoin(
@@ -241,7 +238,7 @@ export async function getFacilities(
         db
           .select({
             facilityId: productionRuns.facilityId,
-            totalProducedKg: sql<number>`COALESCE(SUM(${productionRuns.biocharOutputKg}), 0)`,
+            totalProducedKg: sumNumeric(productionRuns.biocharOutputKg),
           })
           .from(productionRuns)
           .where(and(inArray(productionRuns.facilityId, facilityIds), eq(productionRuns.organizationId, ctx.organizationId)))
@@ -249,14 +246,14 @@ export async function getFacilities(
         db
           .select({
             facilityId: biocharProducts.facilityId,
-            totalAllocatedKg: sql<number>`
+            totalAllocatedKg: numericAggregate(sql<number>`
               COALESCE(
                 SUM(
                   COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)
                 ),
                 0
               )
-            `,
+            `),
           })
           .from(biocharProducts)
           .leftJoin(formulations, and(eq(biocharProducts.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
@@ -265,7 +262,7 @@ export async function getFacilities(
         db
           .select({
             facilityId: biocharProducts.facilityId,
-            totalProductKg: sql<number>`COALESCE(SUM(${biocharProducts.massKg}), 0)`,
+            totalProductKg: sumNumeric(biocharProducts.massKg),
           })
           .from(biocharProducts)
           .where(and(inArray(biocharProducts.facilityId, facilityIds), eq(biocharProducts.organizationId, ctx.organizationId)))
@@ -316,19 +313,19 @@ export async function getFacilities(
   }
 
   const feedstockInventoryMap = new Map(
-    feedstockInventoryRows.map((row) => [row.facilityId, Number(row.totalDryKg)])
+    feedstockInventoryRows.map((row) => [row.facilityId, row.totalDryKg])
   );
   const feedstockConsumptionMap = new Map(
-    feedstockConsumptionRows.map((row) => [row.facilityId, Number(row.totalConsumedKg)])
+    feedstockConsumptionRows.map((row) => [row.facilityId, row.totalConsumedKg])
   );
   const biocharOutputMap = new Map(
-    biocharOutputRows.map((row) => [row.facilityId, Number(row.totalProducedKg)])
+    biocharOutputRows.map((row) => [row.facilityId, row.totalProducedKg])
   );
   const biocharAllocationMap = new Map(
-    biocharAllocationRows.map((row) => [row.facilityId, Number(row.totalAllocatedKg)])
+    biocharAllocationRows.map((row) => [row.facilityId, row.totalAllocatedKg])
   );
   const productInventoryMap = new Map(
-    productInventoryRows.map((row) => [row.facilityId, Number(row.totalProductKg)])
+    productInventoryRows.map((row) => [row.facilityId, row.totalProductKg])
   );
 
   // Combine data
@@ -532,164 +529,7 @@ export async function getFacilityStorageLocations(
     .orderBy(asc(storageLocations.code));
 }
 
-// ============================================
-// Create Operations
-// ============================================
-
-/**
- * Create a new facility
- */
-export async function createFacility(
-  ctx: OrgContext,
-  data: {
-    code: string;
-    name: string;
-    country: string;
-    location?: string | null;
-    address?: string | null;
-    gpsLatitude?: number | null;
-    gpsLongitude?: number | null;
-    timezone: string;
-    contactEmail?: string | null;
-    contactPhone?: string | null;
-    durabilityOption?: "200_year" | "1000_year";
-  }
-): Promise<Facility> {
-  requireOrgScope(ctx);
-
-  const [facility] = await db
-    .insert(facilities)
-    .values({
-      organizationId: ctx.organizationId,
-      code: data.code,
-      name: data.name,
-      country: data.country,
-      location: data.location ?? null,
-      address: data.address ?? null,
-      gpsLatitude: data.gpsLatitude ?? null,
-      gpsLongitude: data.gpsLongitude ?? null,
-      timezone: data.timezone,
-      contactEmail: data.contactEmail ?? null,
-      contactPhone: data.contactPhone ?? null,
-      durabilityOption: data.durabilityOption ?? "1000_year",
-    })
-    .returning();
-
-  return facility;
-}
-
-// ============================================
-// Update Operations
-// ============================================
-
-// Credit-batch statuses that lock a facility's durability tier. Since ADR 0021
-// the tier is join-derived onto every batch at read time (there is no per-batch
-// durability column), so flipping the facility tier retroactively reinterprets
-// every existing batch under it: a 200→1000-year flip feeds
-// `computeApplicationCo2eStored` a 1000-year tier with no R₀/TGA data and the
-// CO₂e-stored preview silently collapses. A batch locally committed to a
-// consequential (verified/issued) status has a preview that was computed under
-// the current tier, so the tier is locked once one exists.
-//
-// This is only the LOCAL-commitment half of the lock. The registry half — a
-// Removal / GHG Statement already built for the facility under the current tier
-// — is NOT reflected in `credit_batches.status` (the registry submit path never
-// writes it; it lives in `certification_submissions`). `updateFacility` probes
-// that separately via `hasBlockingFacilitySubmission`, the same helper that
-// guards removal regroup and certifier-mapping repoint.
-const TIER_LOCKING_BATCH_STATUSES = ["verified", "issued"] as const;
-
-/**
- * Update an existing facility
- */
-export async function updateFacility(
-  ctx: OrgContext,
-  facilityId: string,
-  data: {
-    code?: string;
-    name?: string;
-    country?: string;
-    location?: string | null;
-    address?: string | null;
-    gpsLatitude?: number | null;
-    gpsLongitude?: number | null;
-    timezone?: string;
-    contactEmail?: string | null;
-    contactPhone?: string | null;
-    durabilityOption?: "200_year" | "1000_year";
-  }
-): Promise<Facility> {
-  requireOrgScope(ctx);
-
-  // Verify facility exists
-  const [existing] = await db
-    .select()
-    .from(facilities)
-    .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Facility not found");
-  }
-
-  // Lock the durability tier once the facility has consequential batches: the
-  // tier is join-derived onto every batch (ADR 0021), so changing it here would
-  // silently reinterpret existing batches and collapse their stored-carbon
-  // claims. Two independent signals lock it — only probe when the tier changes:
-  //   1. Local commitment — a non-archived verified/issued credit batch, whose
-  //      CO₂e-stored preview was computed under the current tier.
-  //   2. Registry submission — a Removal / GHG Statement already built for this
-  //      facility under the current tier. The registry lifecycle is tracked in
-  //      `certification_submissions`, NOT `credit_batches.status` (which the
-  //      submit path never writes), so a submitted removal can leave its member
-  //      batches at `pending`; `hasBlockingFacilitySubmission` reads the ledger
-  //      directly, staying consistent with the regroup/repoint guards.
-  if (
-    data.durabilityOption !== undefined &&
-    data.durabilityOption !== existing.durabilityOption
-  ) {
-    const [blockingBatch] = await db
-      .select({ id: creditBatches.id })
-      .from(creditBatches)
-      .where(
-        and(
-          eq(creditBatches.facilityId, facilityId),
-          eq(creditBatches.organizationId, ctx.organizationId),
-          isNull(creditBatches.archivedAt),
-          inArray(creditBatches.status, TIER_LOCKING_BATCH_STATUSES),
-        ),
-      )
-      .limit(1);
-
-    // Cheap indexed status probe first; only hit the ledger when it clears.
-    const tierIsLocked =
-      blockingBatch !== undefined ||
-      (await hasBlockingFacilitySubmission(ctx, db, facilityId, "isometric"));
-
-    if (tierIsLocked) {
-      throw new SafeError(
-        "Cannot change this facility's durability tier: it has verified or issued credit batches, or registry submissions, built under the current tier. Archive or reassign those before changing the tier.",
-      );
-    }
-  }
-
-  const [updated] = await withUniqueCodeGuard(
-    ctx,
-    facilities,
-    facilities.code,
-    CODE_CONFLICT_MESSAGES.facility,
-    () =>
-      db
-        .update(facilities)
-        .set({
-          ...data,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)))
-        .returning(),
-  );
-
-  return updated;
-}
+export { createFacility, updateFacility } from "./facility-mutations";
 
 // ============================================
 // Archive Operations (soft delete, reversible)

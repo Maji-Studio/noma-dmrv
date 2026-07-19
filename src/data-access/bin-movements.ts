@@ -7,8 +7,9 @@
  * per-lane sums feed the storage-location derivation overlay.
  */
 
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
+import { sumNumeric } from "@/db/aggregate";
 import {
   binMovements,
   storageLocations,
@@ -91,7 +92,7 @@ export async function getBinMovementLaneSums(
     .select({
       storageLocationId: binMovements.storageLocationId,
       lane: binMovements.lane,
-      totalDeltaKg: sql<number>`COALESCE(SUM(${binMovements.massDeltaKg}), 0)`,
+      totalDeltaKg: sumNumeric(binMovements.massDeltaKg),
     })
     .from(binMovements)
     .where(and(inArray(binMovements.storageLocationId, storageLocationIds), eq(binMovements.organizationId, ctx.organizationId)))
@@ -100,7 +101,7 @@ export async function getBinMovementLaneSums(
   return rows.map((row) => ({
     storageLocationId: row.storageLocationId,
     lane: row.lane,
-    totalDeltaKg: Number(row.totalDeltaKg),
+    totalDeltaKg: row.totalDeltaKg,
   }));
 }
 

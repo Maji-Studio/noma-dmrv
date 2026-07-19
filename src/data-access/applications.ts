@@ -1,6 +1,7 @@
 import { desc, eq, count, sum, ne, and, isNull, SQL, sql } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
+import { numericAggregate } from "@/db/aggregate";
 import {
   applications,
   soilTemperatureMeasurements,
@@ -405,7 +406,9 @@ export async function getApplicationDeliveryOptions(
     db
       .select({
         deliveryId: applications.deliveryId,
-        totalAppliedKg: sql<number>`coalesce(sum(${applications.biocharAppliedTons}) * ${KG_PER_TONNE}, 0)`,
+        totalAppliedKg: numericAggregate(
+          sql<number>`coalesce(sum(${applications.biocharAppliedTons}) * ${KG_PER_TONNE}, 0)`,
+        ),
       })
       .from(applications)
       .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
@@ -414,7 +417,7 @@ export async function getApplicationDeliveryOptions(
   ]);
 
   const appliedByDeliveryId = new Map(
-    appliedRows.map((row) => [row.deliveryId, Number(row.totalAppliedKg)])
+    appliedRows.map((row) => [row.deliveryId, row.totalAppliedKg])
   );
 
   return rawDeliveries.map((delivery) => ({
