@@ -465,10 +465,8 @@ export async function getSampleStats(
 
   return {
     totalSamples: total,
-    avgCarbonPercent: stats.avgCarbonPercent ? stats.avgCarbonPercent : null,
-    avgOrganicCarbonPercent: stats.avgOrganicCarbonPercent
-      ? stats.avgOrganicCarbonPercent
-      : null,
+    avgCarbonPercent: stats.avgCarbonPercent,
+    avgOrganicCarbonPercent: stats.avgOrganicCarbonPercent,
     samples200Year: total - samples1000,
     samples1000Year: samples1000,
   };
