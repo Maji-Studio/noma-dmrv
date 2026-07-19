@@ -50,16 +50,32 @@ describe("production-run lifecycle", () => {
   });
 
   it("permits failed output to be absent but still requires consumption and an end", () => {
-    expect(() =>
-      assertProductionRunOutcome({
+    const failed = {
         status: "failed",
         startTime: new Date("2026-01-01T10:00:00Z"),
         endTime: new Date("2026-01-01T11:00:00Z"),
         consumedFeedstockKg: 100,
         biocharOutputKg: null,
         cancellationReason: null,
-      }),
-    ).not.toThrow();
+      } as const;
+    expect(() => assertProductionRunOutcome(failed)).not.toThrow();
+    expect(() =>
+      assertProductionRunOutcome({ ...failed, consumedFeedstockKg: 0 }),
+    ).toThrow("must consume feedstock");
+    expect(() =>
+      assertProductionRunOutcome({ ...failed, endTime: null }),
+    ).toThrow("needs an end time");
+  });
+
+  it("requires a running run to remain open-ended", () => {
+    expect(() => assertProductionRunOutcome({
+      status: "running",
+      startTime: new Date("2026-01-01T10:00:00Z"),
+      endTime: new Date("2026-01-01T11:00:00Z"),
+      consumedFeedstockKg: 100,
+      biocharOutputKg: 20,
+      cancellationReason: null,
+    })).toThrow("cannot have an end time");
   });
 
   it("requires a nonblank cancellation reason", () => {

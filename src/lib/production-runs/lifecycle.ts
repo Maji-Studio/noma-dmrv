@@ -1,11 +1,14 @@
 import { SafeError } from "@/lib/errors";
 
+export const COMPLETED_PRODUCTION_RUN_STATUS = "complete" as const;
+export const CANCELLED_PRODUCTION_RUN_STATUS = "cancelled" as const;
+
 export const PRODUCTION_RUN_STATUSES = [
   "draft",
   "running",
-  "complete",
+  COMPLETED_PRODUCTION_RUN_STATUS,
   "failed",
-  "cancelled",
+  CANCELLED_PRODUCTION_RUN_STATUS,
 ] as const;
 
 export type ProductionRunStatus = (typeof PRODUCTION_RUN_STATUSES)[number];
@@ -17,6 +20,12 @@ const ALLOWED_TRANSITIONS: Record<ProductionRunStatus, readonly ProductionRunSta
   failed: ["failed", "running"],
   cancelled: ["cancelled"],
 };
+
+export function allowedProductionRunStatusesFrom(
+  status: ProductionRunStatus,
+): readonly ProductionRunStatus[] {
+  return ALLOWED_TRANSITIONS[status];
+}
 
 export function assertProductionRunTransition(
   from: ProductionRunStatus,
@@ -42,6 +51,9 @@ export function assertProductionRunOutcome(input: {
       throw new SafeError("A cancellation reason is required");
     }
     return;
+  }
+  if (input.status === "running" && input.endTime) {
+    throw new SafeError("A running run cannot have an end time");
   }
   if (input.status !== "complete" && input.status !== "failed") return;
   if (!input.endTime) {
