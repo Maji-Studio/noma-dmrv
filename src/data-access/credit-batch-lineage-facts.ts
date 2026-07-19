@@ -307,8 +307,15 @@ export async function loadCreditBatchLineageFacts(
     applicationsByRun.set(row.linkedProductionRunId, facts);
   }
 
+  const runIdsByBatch = new Map<string, string[]>();
+  for (const row of membershipRows) {
+    const runIds = runIdsByBatch.get(row.batchId) ?? [];
+    runIds.push(row.runId);
+    runIdsByBatch.set(row.batchId, runIds);
+  }
+
   return Object.fromEntries(ids.map((batchId) => {
-    const productionRunIds = uniqueSorted(membershipRows.filter((row) => row.batchId === batchId).map((row) => row.runId));
+    const productionRunIds = uniqueSorted(runIdsByBatch.get(batchId) ?? []);
     const applications = Array.from(new Map(productionRunIds.flatMap((runId) => applicationsByRun.get(runId) ?? []).map((app) => [app.id, app])).values()).sort((a, b) => a.id.localeCompare(b.id));
     return [batchId, {
       batchId,
