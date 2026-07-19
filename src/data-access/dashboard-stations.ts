@@ -11,6 +11,7 @@
  */
 import { and, count, countDistinct, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
+import { countRows } from "@/db/aggregate";
 import {
   applications,
   biocharProducts,
@@ -287,7 +288,7 @@ async function loadBatchesWithoutSamplesCount(
   const sampleCounts = db
     .select({
       creditBatchId: samples.creditBatchId,
-      sampleCount: sql<number>`count(*)::int`.as("sample_count"),
+      sampleCount: countRows().as("sample_count"),
     })
     .from(samples)
     .where(eq(samples.organizationId, ctx.organizationId))

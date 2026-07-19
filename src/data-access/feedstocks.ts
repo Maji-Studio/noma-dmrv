@@ -7,6 +7,7 @@
 
 import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lte, or, sql, SQL } from "drizzle-orm";
 import { db } from "@/db";
+import { countRows, sumNumeric } from "@/db/aggregate";
 import {
   feedstocks,
   feedstockTypes,
@@ -286,20 +287,22 @@ export async function getFeedstockStats(
   const [stats] = await db
     .select({
       totalFeedstocks: count(),
-      totalDryMassKg: sql<number>`coalesce(sum(${feedstocks.massDryKg}), 0)`,
+      totalDryMassKg: sumNumeric(feedstocks.massDryKg),
       avgMoisturePercent: sql<number | null>`case when sum(case when ${feedstocks.moistureContentPercent} is not null then ${feedstocks.massWetKg} end) > 0 then sum(case when ${feedstocks.moistureContentPercent} is not null then ${feedstocks.moistureContentPercent} * ${feedstocks.massWetKg} end) / sum(case when ${feedstocks.moistureContentPercent} is not null then ${feedstocks.massWetKg} end) else null end`,
-      completeFeedstocks: sql<number>`count(*) filter (where ${feedstocks.status} = 'complete')`,
-      missingDataFeedstocks: sql<number>`count(*) filter (where ${feedstocks.status} = 'missing_data')`,
+      completeFeedstocks: countRows(sql`${feedstocks.status} = 'complete'`),
+      missingDataFeedstocks: countRows(
+        sql`${feedstocks.status} = 'missing_data'`,
+      ),
     })
     .from(feedstocks)
     .where(whereClause);
 
   return {
     totalFeedstocks: Number(stats.totalFeedstocks),
-    totalDryMassKg: Number(stats.totalDryMassKg),
+    totalDryMassKg: stats.totalDryMassKg,
     avgMoisturePercent: stats.avgMoisturePercent != null ? Number(stats.avgMoisturePercent) : null,
-    completeFeedstocks: Number(stats.completeFeedstocks),
-    missingDataFeedstocks: Number(stats.missingDataFeedstocks),
+    completeFeedstocks: stats.completeFeedstocks,
+    missingDataFeedstocks: stats.missingDataFeedstocks,
   };
 }
 

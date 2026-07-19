@@ -6,6 +6,7 @@
 import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, sql, SQL, count } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
+import { sumNumeric } from "@/db/aggregate";
 import {
   deliveries,
   orders,
@@ -443,8 +444,14 @@ export async function getDeliveryStats(
   const [stats] = await db
     .select({
       totalDeliveries: count(),
-      totalDeliveredWetMassKg: sql<number>`COALESCE(SUM(${deliveries.deliveredWetMassKg}) FILTER (WHERE ${deliveries.status} = 'delivered'), 0)`,
-      totalMassDryKg: sql<number>`COALESCE(SUM(${deliveries.massDryKg}) FILTER (WHERE ${deliveries.status} = 'delivered'), 0)`,
+      totalDeliveredWetMassKg: sumNumeric(
+        deliveries.deliveredWetMassKg,
+        sql`${deliveries.status} = 'delivered'`,
+      ),
+      totalMassDryKg: sumNumeric(
+        deliveries.massDryKg,
+        sql`${deliveries.status} = 'delivered'`,
+      ),
     })
     .from(deliveries)
     .where(whereClause);
@@ -466,8 +473,8 @@ export async function getDeliveryStats(
 
   return {
     totalDeliveries: Number(stats.totalDeliveries),
-    totalDeliveredWetMassKg: Number(stats.totalDeliveredWetMassKg) || 0,
-    totalMassDryKg: Number(stats.totalMassDryKg) || 0,
+    totalDeliveredWetMassKg: stats.totalDeliveredWetMassKg || 0,
+    totalMassDryKg: stats.totalMassDryKg || 0,
     upcomingCount: statusCountMap.get("upcoming") ?? 0,
     deliveredCount: statusCountMap.get("delivered") ?? 0,
   };

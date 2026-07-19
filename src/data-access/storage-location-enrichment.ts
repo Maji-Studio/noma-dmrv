@@ -14,6 +14,11 @@
 
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
+import {
+  countRows,
+  numericAggregate,
+  sumNumeric,
+} from "@/db/aggregate";
 import type { OrgContext } from "@/lib/auth/server";
 import {
   feedstocks,
@@ -133,17 +138,21 @@ export async function enrichStorageLocationRows(
         tx
           .select({
             storageLocationId: feedstocks.storageLocationId,
-            batchCount: sql<number>`count(*) filter (where ${feedstocks.status} = 'complete')`,
-            pendingBatchCount: sql<number>`count(*) filter (where ${feedstocks.status} = 'missing_data')`,
+            batchCount: countRows(sql`${feedstocks.status} = 'complete'`),
+            pendingBatchCount: countRows(
+              sql`${feedstocks.status} = 'missing_data'`,
+            ),
             feedstockTypes: sql<string | null>`
               string_agg(DISTINCT ${feedstockTypes.name}, ', ' ORDER BY ${feedstockTypes.name})
             `,
-            totalWetKg: sql<number>`
-              COALESCE(SUM(${feedstocks.massWetKg}) filter (where ${feedstocks.status} = 'complete'), 0)
-            `,
-            pendingDryKg: sql<number>`
-              COALESCE(SUM(${feedstocks.massDryKg}) filter (where ${feedstocks.status} = 'missing_data'), 0)
-            `,
+            totalWetKg: sumNumeric(
+              feedstocks.massWetKg,
+              sql`${feedstocks.status} = 'complete'`,
+            ),
+            pendingDryKg: sumNumeric(
+              feedstocks.massDryKg,
+              sql`${feedstocks.status} = 'missing_data'`,
+            ),
           })
           .from(feedstocks)
           .leftJoin(
@@ -206,15 +215,15 @@ export async function enrichStorageLocationRows(
           .select({
             storageLocationId: biocharProducts.storageLocationId,
             batchCount: count(),
-            currentMassKg: sql<number>`COALESCE(SUM(${biocharProducts.massKg}), 0)`,
-            biocharEquivalentKg: sql<number>`
+            currentMassKg: sumNumeric(biocharProducts.massKg),
+            biocharEquivalentKg: numericAggregate(sql<number>`
               COALESCE(
                 SUM(
                   COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)
                 ),
                 0
               )
-            `,
+            `),
             formulationNames: sql<string | null>`
               string_agg(DISTINCT ${formulations.name}, ', ' ORDER BY ${formulations.name})
             `,
@@ -237,7 +246,7 @@ export async function enrichStorageLocationRows(
         tx
           .select({
             storageLocationId: biocharProducts.storageLocationId,
-            deliveredMassKg: sql<number>`COALESCE(SUM(${deliveries.deliveredWetMassKg}), 0)`,
+            deliveredMassKg: sumNumeric(deliveries.deliveredWetMassKg),
           })
           .from(deliveries)
           .innerJoin(
@@ -268,14 +277,14 @@ export async function enrichStorageLocationRows(
               COALESCE(${deliveries.storageLocationId}, ${biocharProducts.storageLocationId})
             `,
             appliedApplicationCount: count(),
-            appliedDryMassKg: sql<number>`
+            appliedDryMassKg: numericAggregate(sql<number>`
               COALESCE(
                 SUM(
                   COALESCE(${applications.biocharAppliedDryTons}, 0) * 1000
                 ),
                 0
               )
-            `,
+            `),
             lastAppliedAt: sql<Date | null>`MAX(${applications.applicationDate})`,
           })
           .from(applications)
@@ -420,8 +429,8 @@ export async function enrichStorageLocationRows(
     const feedstockInventoryRow = feedstockInventoryMap.get(row.id);
     const laneStock = laneStockMap.get(row.id);
     const totalDryKg = laneStock?.feedstockIntakeDryKg ?? 0;
-    const totalWetKg = Number(feedstockInventoryRow?.totalWetKg ?? 0);
-    const pendingDryKg = Number(feedstockInventoryRow?.pendingDryKg ?? 0);
+    const totalWetKg = feedstockInventoryRow?.totalWetKg ?? 0;
+    const pendingDryKg = feedstockInventoryRow?.pendingDryKg ?? 0;
     // Unclamped: intake − consumption + manual adjustments/losses. A negative
     // result is a real signal (draws outran recorded stock), surfaced as
     // "needs reconciliation" rather than hidden with Math.max.
@@ -444,18 +453,16 @@ export async function enrichStorageLocationRows(
     const productInventoryRow = productInventoryMap.get(row.id);
     const productDeliveredRow = productDeliveredMap.get(row.id);
     const productApplicationRow = productApplicationMap.get(row.id);
-    const productBaseMassKg = Number(productInventoryRow?.currentMassKg ?? 0);
-    const productDeliveredMassKg = Number(
-      productDeliveredRow?.deliveredMassKg ?? 0,
-    );
+    const productBaseMassKg = productInventoryRow?.currentMassKg ?? 0;
+    const productDeliveredMassKg = productDeliveredRow?.deliveredMassKg ?? 0;
 
     return {
       ...row,
       facilityCode: row.facilityCode ?? "",
       facilityName: row.facilityName ?? "",
       feedstockInventory: {
-        batchCount: Number(feedstockInventoryRow?.batchCount ?? 0),
-        pendingBatchCount: Number(feedstockInventoryRow?.pendingBatchCount ?? 0),
+        batchCount: feedstockInventoryRow?.batchCount ?? 0,
+        pendingBatchCount: feedstockInventoryRow?.pendingBatchCount ?? 0,
         feedstockTypes: splitAggregateLabels(feedstockInventoryRow?.feedstockTypes ?? null),
         currentDryMassKg,
         pendingDryMassKg: pendingDryKg,
@@ -478,14 +485,14 @@ export async function enrichStorageLocationRows(
           productBaseMassKg -
           productDeliveredMassKg +
           (laneStock?.productMovementDeltaKg ?? 0),
-        biocharEquivalentKg: Number(productInventoryRow?.biocharEquivalentKg ?? 0),
+        biocharEquivalentKg: productInventoryRow?.biocharEquivalentKg ?? 0,
         formulationNames: splitAggregateLabels(
           productInventoryRow?.formulationNames ?? null
         ),
         appliedApplicationCount: Number(
           productApplicationRow?.appliedApplicationCount ?? 0
         ),
-        appliedDryMassKg: Number(productApplicationRow?.appliedDryMassKg ?? 0),
+        appliedDryMassKg: productApplicationRow?.appliedDryMassKg ?? 0,
         lastAppliedAt: productApplicationRow?.lastAppliedAt
           ? new Date(productApplicationRow.lastAppliedAt)
           : null,

@@ -1,5 +1,6 @@
-import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
+import { sumNumeric } from "@/db/aggregate";
 import { biocharProducts, deliveries, orders } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
@@ -109,7 +110,7 @@ export async function assertOrderProductRepointWithinStock(
 
   const [inheritedDraw] = await tx
     .select({
-      total: sql<number>`COALESCE(SUM(${deliveries.deliveredWetMassKg}), 0)`,
+      total: sumNumeric(deliveries.deliveredWetMassKg),
     })
     .from(deliveries)
     .where(and(
@@ -119,7 +120,7 @@ export async function assertOrderProductRepointWithinStock(
       isNull(deliveries.biocharProductId),
       gt(deliveries.deliveredWetMassKg, 0),
     ));
-  const inheritedDrawKg = Number(inheritedDraw.total);
+  const inheritedDrawKg = inheritedDraw.total;
   if (inheritedDrawKg <= 0) return;
 
   const previousProduct = lockedProductBins.find(

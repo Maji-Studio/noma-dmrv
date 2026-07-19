@@ -11,6 +11,7 @@
 
 import { and, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
+import { numericAggregate, sumNumeric } from "@/db/aggregate";
 import { biocharProducts, deliveries, formulations, orders } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
@@ -33,10 +34,9 @@ function buildDeliveredMassAggregate(ctx: OrgContext) {
       sql<string>`COALESCE(${deliveries.biocharProductId}, ${orders.biocharProductId})`.as(
         "biochar_product_id"
       ),
-    totalDeliveredKg:
-      sql<number>`COALESCE(SUM(${deliveries.deliveredWetMassKg}), 0)`.as(
-        "total_delivered_kg"
-      ),
+    totalDeliveredKg: sumNumeric(deliveries.deliveredWetMassKg).as(
+      "total_delivered_kg",
+    ),
   })
   .from(deliveries)
   .innerJoin(
@@ -64,7 +64,9 @@ function buildSelection(
     code: biocharProducts.code,
     formulationName: formulations.name,
     massKg: biocharProducts.massKg,
-    totalDeliveredKg: sql<number>`COALESCE(${deliveredMassAggregate.totalDeliveredKg}, 0)`,
+    totalDeliveredKg: numericAggregate(
+      sql<number>`COALESCE(${deliveredMassAggregate.totalDeliveredKg}, 0)`,
+    ),
   };
 }
 
@@ -79,8 +81,7 @@ function toEntityOption(r: {
     id: r.id,
     code: r.code,
     name: r.formulationName ?? PURE_BIOCHAR_LABEL,
-    // Raw SQL aggregates over numeric columns arrive as strings — coerce at the boundary.
-    subtitle: formatStockSubtitle(r.massKg, Number(r.totalDeliveredKg)),
+    subtitle: formatStockSubtitle(r.massKg, r.totalDeliveredKg),
   };
 }
 
