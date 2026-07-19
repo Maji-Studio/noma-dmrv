@@ -59,3 +59,7 @@ test-results
 # local-fs storage provider (dev/test only)
 .storage/
 .storage-test/
+
+# local agent/QA working files
+/.scratchpad/
+/output/
