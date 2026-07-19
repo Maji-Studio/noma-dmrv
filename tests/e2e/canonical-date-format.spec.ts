@@ -88,8 +88,8 @@ test("read surfaces use canonical dates while native inputs keep ISO values", as
 
     await page.goto(`/dashboard?facility=${seededData.facility.id}`);
     const updatedLine = page.getByText(/Live operations · updated/);
-    await expect(updatedLine).toContainText(
-      /[A-Z][a-z]{2} \d{1,2}, 20\d{2}, \d{2}:\d{2}/,
+    await expect(updatedLine).toHaveText(
+      /^Live operations · updated [A-Z][a-z]{2} \d{1,2}, 20\d{2}, (?:[01]\d|2[0-3]):[0-5]\d$/,
     );
     await expect(updatedLine).not.toContainText(/\b(?:AM|PM)\b/);
   } finally {
