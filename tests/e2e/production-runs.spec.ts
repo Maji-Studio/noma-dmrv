@@ -47,6 +47,13 @@ test.describe("Production Run + Sample UI CRUD", () => {
 
     await page.fill('input[name="feedstockWetMassKg"]', "50");
     await page.fill('input[name="feedstockMoisturePercent"]', "15");
+    await selectEntity(
+      page,
+      "Biochar Storage",
+      seededData.biocharStorageLocation.id,
+      seededData.biocharStorageLocation.name,
+    );
+    await page.fill('input[name="biocharOutputKg"]', "10");
 
     await page.locator('[role="dialog"]').locator('button:has-text("Create Production Run")').click();
     await waitForSideSheetClose(page);
@@ -194,6 +201,19 @@ async function saveEdit(page: Page) {
 }
 
 test.describe("Production Run lifecycle (#254)", () => {
+  test("offers only legal initial statuses", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await page.goto(`/production-runs?facility=${seededData.facility.id}`);
+    await page.getByRole("button", { name: "New Production Run" }).click();
+    await waitForSideSheet(page);
+
+    await expect(
+      page.locator('[role="dialog"] select[name="status"] option'),
+    ).toHaveText(["Draft", "Running", "Cancelled"]);
+  });
+
   test("requires a cancellation reason and saves the cancelled audit record", async ({
     adminPage: page,
     seededData,
@@ -234,7 +254,7 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "08:00",
       endDate: "2027-01-05",
       endTime: "12:00",
-      status: "complete",
+      status: "draft",
     });
     await submitCreate(page);
     await waitForSideSheetClose(page);
@@ -244,7 +264,7 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "08:00",
       endDate: "2027-01-05",
       endTime: "10:00",
-      status: "complete",
+      status: "draft",
     });
     await submitCreate(page);
 
@@ -262,7 +282,7 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "08:00",
       endDate: "2027-02-05",
       endTime: "12:00",
-      status: "complete",
+      status: "draft",
     });
     await submitCreate(page);
     await waitForSideSheetClose(page);
@@ -273,7 +293,7 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "10:00",
       endDate: "2027-02-05",
       endTime: "11:00",
-      status: "complete",
+      status: "draft",
     });
     await submitCreate(page);
 
@@ -301,7 +321,7 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "13:00",
       endDate: "2027-03-05",
       endTime: "15:00",
-      status: "complete",
+      status: "draft",
     });
     await submitCreate(page);
 
@@ -319,7 +339,7 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "22:00",
       endDate: "2027-04-06",
       endTime: "02:00",
-      status: "complete",
+      status: "draft",
     });
     await submitCreate(page);
     // A clean save closes the side sheet.
@@ -336,7 +356,7 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "08:00",
       endDate: "2027-05-05",
       endTime: "10:00",
-      status: "complete",
+      status: "draft",
     });
     await submitCreate(page);
     await waitForSideSheetClose(page);
@@ -346,7 +366,7 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "14:00",
       endDate: "2027-05-05",
       endTime: "16:00",
-      status: "complete",
+      status: "draft",
     });
     await submitCreate(page);
     await waitForSideSheetClose(page);
@@ -384,15 +404,35 @@ test.describe("Production Run end-time clear (#413)", () => {
   }) => {
     const dialog = page.locator('[role="dialog"]');
 
-    // A finished run: 2027-06-05 08:00–12:00, marked complete.
+    // Create the run open, then finish it through the legal Running → Complete
+    // transition.
     await openRunForm(page, seededData, {
       startDate: "2027-06-05",
       startTime: "08:00",
-      endDate: "2027-06-05",
-      endTime: "12:00",
-      status: "complete",
+      status: "running",
     });
+    await selectEntity(
+      page,
+      "Source Bin",
+      seededData.feedstockStorageLocation.id,
+      seededData.feedstockStorageLocation.name,
+    );
+    await page.fill('input[name="feedstockWetMassKg"]', "50");
+    await page.fill('input[name="feedstockMoisturePercent"]', "15");
+    await selectEntity(
+      page,
+      "Biochar Storage",
+      seededData.biocharStorageLocation.id,
+      seededData.biocharStorageLocation.name,
+    );
+    await page.fill('input[name="biocharOutputKg"]', "10");
     await submitCreate(page);
+    await waitForSideSheetClose(page);
+    await editFirstRow(page);
+    await page.fill('input[name="endDate"]', "2027-06-05");
+    await page.fill('input[name="endTime"]', "12:00");
+    await page.selectOption('select[name="status"]', "complete");
+    await saveEdit(page);
     await waitForSideSheetClose(page);
 
     // No-op guard: edit only a non-time field. Blank-or-untouched end fields
@@ -432,7 +472,7 @@ test.describe("Production Run end-time clear (#413)", () => {
       startTime: "14:00",
       endDate: "2027-06-05",
       endTime: "15:00",
-      status: "complete",
+      status: "draft",
     });
     await submitCreate(page);
     await expect(dialog.getByText(overlapText)).toBeVisible({ timeout: 10000 });
