@@ -12,7 +12,7 @@
 "use client";
 
 import { formatUtcDate, toDateInputValue } from "@/lib/date-utils";
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 
@@ -481,7 +481,7 @@ export function CreditBatchForm({
         />
         <span className="body-small font-medium shrink-0">{run.code}</span>
         <span className="text-[11px] text-[var(--color-text-tertiary)] shrink-0">
-          {formatSafeDate(run.date)}
+          {formatDate(run.date)}
         </span>
         {assignedElsewhere && run.assignedCreditBatchCode && (
           <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-quaternary)] truncate">

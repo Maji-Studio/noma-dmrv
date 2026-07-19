@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { formatCo2e, formatSafeDate } from "@/lib/format-utils";
+import {
+  formatCo2e,
+  formatDate,
+  formatDateRange,
+  formatDateTime,
+} from "@/lib/format-utils";
 
 const originalTz = process.env.TZ;
 
@@ -7,21 +12,67 @@ afterEach(() => {
   process.env.TZ = originalTz;
 });
 
-describe("formatSafeDate", () => {
+describe("formatDate", () => {
   it("formats date-only strings as calendar dates without UTC drift", () => {
     process.env.TZ = "America/Los_Angeles";
 
-    expect(formatSafeDate("2026-06-13")).toBe("Jun 13, 2026");
+    expect(formatDate("2026-06-13")).toBe("Jun 13, 2026");
   });
 
-  it("keeps timestamp formatting safe", () => {
-    expect(formatSafeDate("2026-06-13T10:30:00.000Z", "yyyy-MM-dd")).toBe(
-      "2026-06-13",
+  it("formats ISO strings and Date inputs", () => {
+    process.env.TZ = "UTC";
+
+    expect(formatDate("2026-06-13T10:30:00.000Z")).toBe("Jun 13, 2026");
+    expect(formatDate(new Date("2026-06-13T10:30:00.000Z"))).toBe(
+      "Jun 13, 2026",
     );
   });
 
-  it("returns a dash for invalid dates", () => {
-    expect(formatSafeDate("2026-02-31")).toBe("—");
+  it("returns a dash for null and invalid dates", () => {
+    expect(formatDate(null)).toBe("—");
+    expect(formatDate(undefined)).toBe("—");
+    expect(formatDate("2026-02-31")).toBe("—");
+    expect(formatDate(new Date(Number.NaN))).toBe("—");
+  });
+});
+
+describe("formatDateTime", () => {
+  it("uses the canonical date and a 24-hour time", () => {
+    process.env.TZ = "UTC";
+
+    expect(formatDateTime("2026-06-13T14:05:00.000Z")).toBe(
+      "Jun 13, 2026, 14:05",
+    );
+    expect(formatDateTime(new Date("2026-06-13T23:05:00.000Z"))).toBe(
+      "Jun 13, 2026, 23:05",
+    );
+  });
+
+  it("returns a dash for null and invalid values", () => {
+    expect(formatDateTime(null)).toBe("—");
+    expect(formatDateTime("not-a-date")).toBe("—");
+  });
+});
+
+describe("formatDateRange", () => {
+  it("compacts ranges within the same year", () => {
+    expect(formatDateRange("2026-06-01", "2026-06-30")).toBe(
+      "Jun 1 – Jun 30, 2026",
+    );
+  });
+
+  it("shows both years for cross-year ranges", () => {
+    expect(formatDateRange("2026-12-15", "2027-01-10")).toBe(
+      "Dec 15, 2026 – Jan 10, 2027",
+    );
+  });
+
+  it("accepts Date inputs and rejects incomplete or invalid ranges", () => {
+    expect(
+      formatDateRange(new Date(2026, 5, 1), new Date(2026, 5, 30)),
+    ).toBe("Jun 1 – Jun 30, 2026");
+    expect(formatDateRange(null, "2026-06-30")).toBe("—");
+    expect(formatDateRange("2026-06-01", "invalid")).toBe("—");
   });
 });
 

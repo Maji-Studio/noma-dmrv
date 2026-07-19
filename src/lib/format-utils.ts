@@ -6,8 +6,66 @@ import { format, isValid, parseISO } from "date-fns";
 import { parseLocalDateString } from "@/lib/date-utils";
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const DATE_FORMAT = "MMM d, yyyy";
+const DATE_TIME_FORMAT = "MMM d, yyyy, HH:mm";
+const SAME_YEAR_RANGE_START_FORMAT = "MMM d";
 const KG_PER_TONNE = 1000;
 const CO2E_TONNES_MAX_FRACTION_DIGITS = 3;
+
+type DateValue = string | Date | null | undefined;
+
+function parseDateValue(value: DateValue): Date | null {
+  if (!value) return null;
+
+  try {
+    const date =
+      typeof value === "string" && DATE_ONLY_PATTERN.test(value)
+        ? parseLocalDateString(value)
+        : typeof value === "string"
+          ? parseISO(value)
+          : value;
+
+    return isValid(date) ? date : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Format a calendar date for user-facing display. Bare `YYYY-MM-DD` values are
+ * parsed in local time so they cannot drift to the previous day west of UTC.
+ * Returns "—" for null, undefined, or invalid values.
+ */
+export function formatDate(value: DateValue): string {
+  const date = parseDateValue(value);
+  return date ? format(date, DATE_FORMAT) : "—";
+}
+
+/**
+ * Format a date and time for user-facing display using a 24-hour clock.
+ * Returns "—" for null, undefined, or invalid values.
+ */
+export function formatDateTime(value: DateValue): string {
+  const date = parseDateValue(value);
+  return date ? format(date, DATE_TIME_FORMAT) : "—";
+}
+
+/**
+ * Format a user-facing date range. Ranges within one calendar year omit the
+ * year from the start; cross-year ranges show both years in full.
+ * Returns "—" when either boundary is null, undefined, or invalid.
+ */
+export function formatDateRange(start: DateValue, end: DateValue): string {
+  const startDate = parseDateValue(start);
+  const endDate = parseDateValue(end);
+  if (!startDate || !endDate) return "—";
+
+  if (startDate.getFullYear() === endDate.getFullYear()) {
+    return `${format(startDate, SAME_YEAR_RANGE_START_FORMAT)} – ${format(endDate, DATE_FORMAT)}`;
+  }
+
+  return `${format(startDate, DATE_FORMAT)} – ${format(endDate, DATE_FORMAT)}`;
+}
 
 /**
  * Format a mass value in kg, auto-converting to tonnes when >= 1000.
@@ -69,24 +127,11 @@ export function formatTonnes(
  * Returns "—" for invalid/null dates.
  */
 export function formatSafeDate(
-  dateStr: string | Date | null | undefined,
-  fmt = "MMM d, yyyy"
+  dateStr: DateValue,
+  fmt = DATE_FORMAT
 ): string {
-  if (!dateStr) return "—";
-  let date: Date;
-
-  try {
-    date =
-      typeof dateStr === "string" && DATE_ONLY_PATTERN.test(dateStr)
-        ? parseLocalDateString(dateStr)
-        : typeof dateStr === "string"
-          ? parseISO(dateStr)
-          : dateStr;
-  } catch {
-    return "—";
-  }
-
-  return isValid(date) ? format(date, fmt) : "—";
+  const date = parseDateValue(dateStr);
+  return date ? format(date, fmt) : "—";
 }
 
 /**

@@ -32,6 +32,7 @@ import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { formatDateTime } from "@/lib/format-utils";
 import { SampleForm } from "./sample-form";
 import {
   formatDurabilityOption,
@@ -86,7 +87,7 @@ function createColumns(
     {
       accessorKey: "samplingTime",
       header: "Sampling Time",
-      cell: ({ row }) => new Date(row.original.samplingTime).toLocaleString(),
+      cell: ({ row }) => formatDateTime(row.original.samplingTime),
     },
     {
       id: "creditBatch",
@@ -620,7 +621,7 @@ export function SampleList() {
             title: "General",
             fields: [
               { label: "Sample Code", value: displaySideSheet.entity.sampleCode },
-              { label: "Sampling Time", value: new Date(displaySideSheet.entity.samplingTime).toLocaleString() },
+              { label: "Sampling Time", value: formatDateTime(displaySideSheet.entity.samplingTime) },
               { label: "Credit Batch", value: displaySideSheet.entity.creditBatchCode },
               { label: "Facility", value: displaySideSheet.entity.facilityName },
               {
