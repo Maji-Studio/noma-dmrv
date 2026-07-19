@@ -78,6 +78,7 @@ import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
 import { deleteTransportLegsForEntity } from "./transport-legs";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { validateCompositionIngredientBins } from "./biochar-product-composition";
 import { assertBiocharDrawWithinStock } from "./bin-stock-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
@@ -497,10 +498,6 @@ export async function createBiocharProduct(
     if (!lockedRun) {
       throw new SafeError("Linked production run not found");
     }
-    if (lockedRun.status !== "complete") {
-      throw new SafeError("Biochar products can only link to complete production runs");
-    }
-
     // A submitted production run can't gain new source inventory after
     // certification. Mirror the update/delete guards so the create path can't
     // bypass certification locking by attaching a fresh product to a locked run.
@@ -510,6 +507,10 @@ export async function createBiocharProduct(
       { entityType: "productionRun", entityId: run.id },
       "create",
     );
+
+    if (lockedRun.status !== COMPLETED_PRODUCTION_RUN_STATUS) {
+      throw new SafeError("Biochar products can only link to complete production runs");
+    }
 
     await lockBinStocks(
       ctx,
@@ -789,19 +790,18 @@ export async function updateBiocharProduct(
       transactionComposition,
     } = stockState;
 
-    if (!transactionLinkedRunId) {
-      throw new SafeError("Production run is required");
-    }
-    const [lockedRun] = await tx
-      .select({ status: productionRuns.status })
-      .from(productionRuns)
-      .where(and(
-        eq(productionRuns.id, transactionLinkedRunId),
-        eq(productionRuns.organizationId, ctx.organizationId),
-      ))
-      .for("update");
-    if (!lockedRun || lockedRun.status !== "complete") {
-      throw new SafeError("Biochar products can only link to complete production runs");
+    if (transactionLinkedRunId) {
+      const [lockedRun] = await tx
+        .select({ status: productionRuns.status })
+        .from(productionRuns)
+        .where(and(
+          eq(productionRuns.id, transactionLinkedRunId),
+          eq(productionRuns.organizationId, ctx.organizationId),
+        ))
+        .for("update");
+      if (!lockedRun || lockedRun.status !== COMPLETED_PRODUCTION_RUN_STATUS) {
+        throw new SafeError("Biochar products can only link to complete production runs");
+      }
     }
 
     await assertBiocharProductMassReductionWithinStock(
