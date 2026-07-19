@@ -306,7 +306,8 @@ describe("parent document retirement", () => {
         makeTestOrgContext(TEST_USER_ID),
         fixture.reactorId,
       );
-      expect(provider.deleteCalls.filter((key) => key === keys[0])).toHaveLength(2);
+      expect(provider.objects.has(keys[0])).toBe(false);
+      expect(provider.objects.has(keys[1])).toBe(false);
       expect(
         await db
           .select()
