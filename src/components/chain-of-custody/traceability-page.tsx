@@ -812,15 +812,15 @@ export function TraceabilityPage() {
 
         <div className="flex-1 min-h-0 relative">
           {anchor === "none" ? (
-            <CenteredMessage>
-              {batchSelection.isLoading
-                ? "Loading this facility's credit batches…"
-                : batchSelection.isError
-                  ? "Credit batches could not be loaded. Refresh the page to try again."
-                  : batchSelection.batches.length === 0
-                    ? "No credit batches are available for this facility. Create one before reviewing its traceability."
-                    : "Selecting the remembered or most recent credit batch…"}
-            </CenteredMessage>
+            batchSelection.isLoading ? (
+              <CenteredMessage>
+                Loading this facility&apos;s credit batches…
+              </CenteredMessage>
+            ) : batchSelection.isError || batchSelection.batches.length === 0 ? null : (
+              <CenteredMessage>
+                Selecting the remembered or most recent credit batch…
+              </CenteredMessage>
+            )
           ) : anchor === "application" ? (
             applicationBody
           ) : (

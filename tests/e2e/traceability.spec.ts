@@ -425,11 +425,7 @@ test.describe("Traceability Visualization", () => {
     await expect(
       adminPage.getByRole("heading", { name: /Traceability/i })
     ).toBeVisible();
-    await expect(
-      adminPage.getByText(
-        /No credit batches are available for this facility/i
-      )
-    ).toBeVisible();
+    await expect(adminPage.getByText(/No credit batches/i)).toHaveCount(1);
     await expect(
       adminPage.getByTestId("chain-batch-selector")
     ).toContainText("No credit batches for this facility");
