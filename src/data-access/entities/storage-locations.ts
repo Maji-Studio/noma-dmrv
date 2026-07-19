@@ -8,6 +8,7 @@
 import { ilike, or, eq, and, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
+import { numericAggregate, sumNumeric } from "@/db/aggregate";
 import {
   storageLocations,
   feedstocks,
@@ -103,12 +104,14 @@ function buildInventoryAggregates(ctx: OrgContext) {
   .select({
     storageLocationId: feedstocks.storageLocationId,
     feedstockTypeName: sql<string | null>`string_agg(DISTINCT ${feedstockTypes.name}, ', ' ORDER BY ${feedstockTypes.name})`.as("feedstock_type_name"),
-    totalStoredKg: sql<number>`
-      COALESCE(SUM(${feedstocks.massDryKg}) filter (where ${feedstocks.status} = 'complete'), 0)
-    `.as("total_stored_kg"),
-    pendingStoredKg: sql<number>`
-      COALESCE(SUM(${feedstocks.massDryKg}) filter (where ${feedstocks.status} = 'missing_data'), 0)
-    `.as("pending_stored_kg"),
+    totalStoredKg: sumNumeric(
+      feedstocks.massDryKg,
+      sql`${feedstocks.status} = 'complete'`,
+    ).as("total_stored_kg"),
+    pendingStoredKg: sumNumeric(
+      feedstocks.massDryKg,
+      sql`${feedstocks.status} = 'missing_data'`,
+    ).as("pending_stored_kg"),
   })
   .from(feedstocks)
   .leftJoin(
@@ -125,7 +128,9 @@ function buildInventoryAggregates(ctx: OrgContext) {
   const productionRunConsumptionAggregate = db
   .select({
     storageLocationId: productionRuns.feedstockStorageLocationId,
-    totalConsumedKg: sql<number>`COALESCE(SUM(${productionRunFeedstocks.massUsedKg}), 0)`.as("total_consumed_kg"),
+    totalConsumedKg: sumNumeric(productionRunFeedstocks.massUsedKg).as(
+      "total_consumed_kg",
+    ),
   })
   .from(productionRuns)
   .leftJoin(
@@ -142,7 +147,9 @@ function buildInventoryAggregates(ctx: OrgContext) {
   const biocharOutputAggregate = db
   .select({
     storageLocationId: productionRuns.biocharStorageLocationId,
-    totalProducedKg: sql<number>`COALESCE(SUM(${productionRuns.biocharOutputKg}), 0)`.as("total_produced_kg"),
+    totalProducedKg: sumNumeric(productionRuns.biocharOutputKg).as(
+      "total_produced_kg",
+    ),
   })
   .from(productionRuns)
   .where(eq(productionRuns.organizationId, ctx.organizationId))
@@ -152,14 +159,14 @@ function buildInventoryAggregates(ctx: OrgContext) {
   const biocharAllocationAggregate = db
   .select({
     storageLocationId: productionRuns.biocharStorageLocationId,
-    totalAllocatedKg: sql<number>`
+    totalAllocatedKg: numericAggregate(sql<number>`
       COALESCE(
         SUM(
           COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)
         ),
         0
       )
-    `.as("total_allocated_kg"),
+    `).as("total_allocated_kg"),
   })
   .from(productionRuns)
   .innerJoin(
@@ -183,15 +190,15 @@ function buildInventoryAggregates(ctx: OrgContext) {
   const productInventoryAggregate = db
   .select({
     storageLocationId: biocharProducts.storageLocationId,
-    totalProductKg: sql<number>`COALESCE(SUM(${biocharProducts.massKg}), 0)`.as("total_product_kg"),
-    biocharEquivalentKg: sql<number>`
+    totalProductKg: sumNumeric(biocharProducts.massKg).as("total_product_kg"),
+    biocharEquivalentKg: numericAggregate(sql<number>`
       COALESCE(
         SUM(
           COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)
         ),
         0
       )
-    `.as("biochar_equivalent_kg"),
+    `).as("biochar_equivalent_kg"),
   })
   .from(biocharProducts)
   .leftJoin(
@@ -324,13 +331,27 @@ export async function getStorageLocations(ctx: OrgContext, params: {
       heldFeedstockTypeUsage: heldFeedstockTypes.usage,
       feedstockTypeName: feedstockInventoryAggregate.feedstockTypeName,
       formulationName: formulations.name,
-      totalStoredKg: sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredKg}, 0)`,
-      pendingStoredKg: sql<number>`COALESCE(${feedstockInventoryAggregate.pendingStoredKg}, 0)`,
-      totalConsumedKg: sql<number>`COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)`,
-      totalProducedKg: sql<number>`COALESCE(${biocharOutputAggregate.totalProducedKg}, 0)`,
-      totalAllocatedKg: sql<number>`COALESCE(${biocharAllocationAggregate.totalAllocatedKg}, 0)`,
-      totalProductKg: sql<number>`COALESCE(${productInventoryAggregate.totalProductKg}, 0)`,
-      biocharEquivalentKg: sql<number>`COALESCE(${productInventoryAggregate.biocharEquivalentKg}, 0)`,
+      totalStoredKg: numericAggregate(
+        sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredKg}, 0)`,
+      ),
+      pendingStoredKg: numericAggregate(
+        sql<number>`COALESCE(${feedstockInventoryAggregate.pendingStoredKg}, 0)`,
+      ),
+      totalConsumedKg: numericAggregate(
+        sql<number>`COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)`,
+      ),
+      totalProducedKg: numericAggregate(
+        sql<number>`COALESCE(${biocharOutputAggregate.totalProducedKg}, 0)`,
+      ),
+      totalAllocatedKg: numericAggregate(
+        sql<number>`COALESCE(${biocharAllocationAggregate.totalAllocatedKg}, 0)`,
+      ),
+      totalProductKg: numericAggregate(
+        sql<number>`COALESCE(${productInventoryAggregate.totalProductKg}, 0)`,
+      ),
+      biocharEquivalentKg: numericAggregate(
+        sql<number>`COALESCE(${productInventoryAggregate.biocharEquivalentKg}, 0)`,
+      ),
     })
     .from(storageLocations)
     .leftJoin(
@@ -378,14 +399,13 @@ export async function getStorageLocations(ctx: OrgContext, params: {
       r.type,
       r.heldFeedstockTypeName ?? r.feedstockTypeName,
       r.heldFeedstockTypeUsage,
-      // Raw SQL aggregates over numeric columns arrive as strings — coerce at the boundary.
-      Number(r.totalStoredKg),
-      Number(r.pendingStoredKg),
-      Number(r.totalConsumedKg),
-      Number(r.totalProducedKg),
-      Number(r.totalAllocatedKg),
-      Number(r.totalProductKg),
-      Number(r.biocharEquivalentKg),
+      r.totalStoredKg,
+      r.pendingStoredKg,
+      r.totalConsumedKg,
+      r.totalProducedKg,
+      r.totalAllocatedKg,
+      r.totalProductKg,
+      r.biocharEquivalentKg,
       r.formulationName
     ),
   }));
@@ -415,13 +435,27 @@ export async function getStorageLocationById(
       heldFeedstockTypeUsage: heldFeedstockTypes.usage,
       feedstockTypeName: feedstockInventoryAggregate.feedstockTypeName,
       formulationName: formulations.name,
-      totalStoredKg: sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredKg}, 0)`,
-      pendingStoredKg: sql<number>`COALESCE(${feedstockInventoryAggregate.pendingStoredKg}, 0)`,
-      totalConsumedKg: sql<number>`COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)`,
-      totalProducedKg: sql<number>`COALESCE(${biocharOutputAggregate.totalProducedKg}, 0)`,
-      totalAllocatedKg: sql<number>`COALESCE(${biocharAllocationAggregate.totalAllocatedKg}, 0)`,
-      totalProductKg: sql<number>`COALESCE(${productInventoryAggregate.totalProductKg}, 0)`,
-      biocharEquivalentKg: sql<number>`COALESCE(${productInventoryAggregate.biocharEquivalentKg}, 0)`,
+      totalStoredKg: numericAggregate(
+        sql<number>`COALESCE(${feedstockInventoryAggregate.totalStoredKg}, 0)`,
+      ),
+      pendingStoredKg: numericAggregate(
+        sql<number>`COALESCE(${feedstockInventoryAggregate.pendingStoredKg}, 0)`,
+      ),
+      totalConsumedKg: numericAggregate(
+        sql<number>`COALESCE(${productionRunConsumptionAggregate.totalConsumedKg}, 0)`,
+      ),
+      totalProducedKg: numericAggregate(
+        sql<number>`COALESCE(${biocharOutputAggregate.totalProducedKg}, 0)`,
+      ),
+      totalAllocatedKg: numericAggregate(
+        sql<number>`COALESCE(${biocharAllocationAggregate.totalAllocatedKg}, 0)`,
+      ),
+      totalProductKg: numericAggregate(
+        sql<number>`COALESCE(${productInventoryAggregate.totalProductKg}, 0)`,
+      ),
+      biocharEquivalentKg: numericAggregate(
+        sql<number>`COALESCE(${productInventoryAggregate.biocharEquivalentKg}, 0)`,
+      ),
     })
     .from(storageLocations)
     .leftJoin(
@@ -476,14 +510,13 @@ export async function getStorageLocationById(
       result.type,
       result.heldFeedstockTypeName ?? result.feedstockTypeName,
       result.heldFeedstockTypeUsage,
-      // Raw SQL aggregates over numeric columns arrive as strings — coerce at the boundary.
-      Number(result.totalStoredKg),
-      Number(result.pendingStoredKg),
-      Number(result.totalConsumedKg),
-      Number(result.totalProducedKg),
-      Number(result.totalAllocatedKg),
-      Number(result.totalProductKg),
-      Number(result.biocharEquivalentKg),
+      result.totalStoredKg,
+      result.pendingStoredKg,
+      result.totalConsumedKg,
+      result.totalProducedKg,
+      result.totalAllocatedKg,
+      result.totalProductKg,
+      result.biocharEquivalentKg,
       result.formulationName
     ),
   };

@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
+import { countRows } from "@/db/aggregate";
 import {
   certifierGhgStatements,
   certifierRemovals,
@@ -149,7 +150,7 @@ export async function countRemovalsByGhgStatementIds(
   const rows = await db
     .select({
       ghgStatementId: certifierRemovals.ghgStatementId,
-      count: sql<number>`count(*)::int`,
+      count: countRows(),
     })
     .from(certifierRemovals)
     .where(and(inArray(certifierRemovals.ghgStatementId, ghgStatementIds), eq(certifierRemovals.organizationId, ctx.organizationId)))
