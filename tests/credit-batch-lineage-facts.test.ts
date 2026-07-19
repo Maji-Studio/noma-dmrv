@@ -60,6 +60,10 @@ describe("credit batch lineage facts", () => {
         facts.applications.find((application) => application.id === appRows[0].id)
           ?.biocharProduct.id,
       ).toBe(products[0].id);
+      expect(
+        facts.applications.find((application) => application.id === appRows[1].id)
+          ?.biocharProduct.id,
+      ).toBe(products[1].id);
       expect(detail?.applicationIds.sort()).toEqual(facts.applicationIds.sort());
       expect(detail?.productionRunIds.sort()).toEqual(facts.productionRunIds.sort());
       expect(detail?.appliedWeightTons).toBe(facts.appliedWeightTons);
