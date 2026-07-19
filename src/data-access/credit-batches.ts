@@ -342,7 +342,8 @@ export async function getCreditBatchById(
     co2eStoredPreview: await buildCo2eStoredPreview(
       ctx,
       { ...batch.creditBatch, durabilityOption },
-      applicationIds
+      applicationIds,
+      facts,
     ),
     previewAvailable: true,
   };

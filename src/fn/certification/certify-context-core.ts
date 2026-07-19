@@ -370,7 +370,9 @@ export async function resolveScopeForRemoval(
   const factsByBatch = await loadCreditBatchLineageFacts(orgCtx, batchIds);
   const previewsByBatch = options?.skipPreview
     ? {}
-    : await getCo2eStoredPreviews(orgCtx, batchIds);
+    : await getCo2eStoredPreviews(orgCtx, batchIds, {
+        lineageFactsByBatch: factsByBatch,
+      });
   const memberBatches = batches.map((batch) => {
       const facts = factsByBatch[batch.id];
       return {

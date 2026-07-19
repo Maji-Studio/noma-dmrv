@@ -247,6 +247,7 @@ export async function getCo2eStoredPreviews(
     // derives per-batch applied weight from the same map) instead of walking
     // the run membership a second time.
     applicationRollups?: Record<string, BatchApplicationRollup>;
+    lineageFactsByBatch?: Record<string, CreditBatchLineageFacts>;
   }
 ): Promise<Record<string, CreditBatchCo2eStoredPreview>> {
   requireOrgScope(ctx);
@@ -271,7 +272,8 @@ export async function getCo2eStoredPreviews(
   const allowedIds = batches.map((batch) => batch.id);
   if (allowedIds.length === 0) return {};
 
-  const lineageFactsByBatch = await loadCreditBatchLineageFacts(ctx, allowedIds);
+  const lineageFactsByBatch = options?.lineageFactsByBatch ??
+    await loadCreditBatchLineageFacts(ctx, allowedIds);
   const rollupsByBatch = options?.applicationRollups ?? Object.fromEntries(
     Object.entries(lineageFactsByBatch).map(([batchId, facts]) => [batchId, {
       applicationIds: facts.applicationIds,

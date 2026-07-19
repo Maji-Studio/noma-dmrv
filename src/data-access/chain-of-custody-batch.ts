@@ -11,7 +11,7 @@
 import { and, eq } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
-import { facilities } from "@/db/schema";
+import { creditBatches, facilities } from "@/db/schema";
 import {
   buildBatchSankey,
   type CreditBatchSankeyData,
@@ -28,7 +28,6 @@ import {
   type ChainGeoNode,
   type ChainOfCustodyGeoData,
 } from "./chain-of-custody-geo";
-import { getCreditBatchById } from "./credit-batches";
 import { loadCreditBatchLineageFacts } from "./credit-batch-lineage-facts";
 import { requireOrgScope } from "./utils";
 
@@ -55,21 +54,35 @@ export interface CreditBatchChainData {
 }
 
 interface ResolvedBatchScope {
-  batch: NonNullable<Awaited<ReturnType<typeof getCreditBatchById>>>;
+  batch: CreditBatchChainBatch & { facilityId: string };
   applicationIds: string[];
   lineages: CreditBatchChainLineage[];
 }
 
 // The roll-up's lineage walk — shared by the chain and geo payloads. The
-// co2eStored preview is skipped: this page reads recorded masses, not the
-// certification preview math.
+// This page only needs the batch identity fields below; loading the full batch
+// detail would resolve the same lineage facts a second time.
 async function resolveBatchScope(
   ctx: OrgContext,
   creditBatchId: string,
 ): Promise<ResolvedBatchScope> {
-  const batch = await getCreditBatchById(ctx, creditBatchId, {
-    skipPreview: true,
-  });
+  const [batch] = await db
+    .select({
+      id: creditBatches.id,
+      code: creditBatches.code,
+      status: creditBatches.status,
+      startDate: creditBatches.startDate,
+      endDate: creditBatches.endDate,
+      facilityId: creditBatches.facilityId,
+    })
+    .from(creditBatches)
+    .where(
+      and(
+        eq(creditBatches.id, creditBatchId),
+        eq(creditBatches.organizationId, ctx.organizationId),
+      ),
+    )
+    .limit(1);
   if (!batch) {
     throw new SafeError("Credit batch not found");
   }
