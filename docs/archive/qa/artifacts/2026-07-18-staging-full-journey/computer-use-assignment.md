@@ -1,10 +1,10 @@
 # Staging full-journey QA assignment
 
-Repository: `/Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv`
+Repository: `$REPO_ROOT`
 
 Staging URL: `https://staging.noma.maji.studio`
 
-Artifact directory: `/Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv/docs/archive/qa/artifacts/2026-07-18-staging-full-journey`
+Artifact directory: `$REPO_ROOT/docs/archive/qa/artifacts/2026-07-18-staging-full-journey`
 
 ## Authentication and safety
 

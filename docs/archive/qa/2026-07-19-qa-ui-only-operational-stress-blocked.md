@@ -63,7 +63,7 @@ Visible execution was blocked. Read-only source reconnaissance established the e
 | Global administration / enter any organization | Expected no | Expected no | Expected no | Expected yes | Untested |
 | Registry credentials, facility link, emissions/health management | Expected no | Expected no | Expected no | Expected yes | Untested |
 
-Canonical source references: `CONTEXT.md:431`, `CONTEXT.md:441`, `src/lib/auth/server.ts:129`, `src/components/organizations/organization-settings.tsx:147`, and `src/fn/certification/facility-mapping.ts:132`.
+Canonical source references: `CONTEXT.md:431` and `CONTEXT.md:441`; `requireOrgRole` and `requirePlatformAdmin` in `src/lib/auth/server.ts:217-232`; `inviteMemberAction`, `revokeInvitationAction`, `changeMemberRoleAction`, and `removeMemberAction` (each guarded by `requireOrgRole(ctx, "admin")`) in `src/fn/organizations.ts:129-210`; and `requireAdminAction` guards in `src/fn/certification/facility-mapping.ts:136-225`.
 
 ## Storage reconciliation
 
