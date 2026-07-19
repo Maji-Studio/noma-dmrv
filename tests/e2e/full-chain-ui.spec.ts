@@ -454,7 +454,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.click('button:has-text("New Production Run")');
       await waitForSideSheet(page);
 
-      await page.selectOption('select[name="status"]', "draft");
+      await page.selectOption('select[name="status"]', "running");
 
       await selectEntityById(
         page,
@@ -465,6 +465,7 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       // Fill start date
       await page.fill('input[name="startDate"]', today);
+      await page.fill('input[name="startTime"]', "08:00");
 
       await selectEntityById(
         page,
@@ -474,8 +475,31 @@ test.describe("Full Chain UI Smoke Test", () => {
       );
       await page.fill('input[name="feedstockWetMassKg"]', "50");
       await page.fill('input[name="feedstockMoisturePercent"]', "15");
+      await selectEntityById(
+        page,
+        "Biochar Storage",
+        seededData.biocharStorageLocation.id,
+        seededData.biocharStorageLocation.name
+      );
+      await page.fill('input[name="biocharOutputKg"]', "10");
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Production Run")').click();
+      await waitForSideSheetClose(page);
+
+      await page
+        .locator("tbody tr")
+        .first()
+        .getByRole("button", { name: /Actions for/ })
+        .click();
+      await page.getByRole("menuitem", { name: "Edit" }).click();
+      await waitForSideSheet(page);
+      await page.fill('input[name="endDate"]', today);
+      await page.fill('input[name="endTime"]', "12:00");
+      await page.selectOption('select[name="status"]', "complete");
+      await page
+        .locator('[role="dialog"]')
+        .getByRole("button", { name: "Save Changes" })
+        .click();
       await waitForSideSheetClose(page);
 
       // Verify a row exists in the list

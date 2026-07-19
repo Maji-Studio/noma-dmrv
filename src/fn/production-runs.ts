@@ -286,6 +286,7 @@ export async function createProductionRunFn(
           facilityId: validated.facilityId,
           reactorId: validated.reactorId,
           status: validated.status,
+          cancellationReason: validated.cancellationReason || null,
           startTime: validated.startTime instanceof Date ? validated.startTime : new Date(validated.startTime),
           // Absent end time now stores NULL (an open run) — no silent coercion
           // to startTime, which produced misleading zero-duration windows (#259).
@@ -387,6 +388,8 @@ export async function updateProductionRunFn(
       facilityId: validated.facilityId,
       reactorId: validated.reactorId,
       status: validated.status,
+      expectedUpdatedAt: validated.expectedUpdatedAt,
+      cancellationReason: validated.cancellationReason,
       startTime: validated.startTime instanceof Date ? validated.startTime : validated.startTime ? new Date(validated.startTime) : undefined,
       // null clears the end time; undefined leaves it unchanged.
       endTime:

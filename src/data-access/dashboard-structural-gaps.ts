@@ -306,7 +306,7 @@ export async function loadDashboardStructuralGapCounts(
               isNull(samples.creditBatchId),
               eq(productionRuns.facilityId, facilityId),
               isNull(productionRuns.archivedAt),
-              ne(productionRuns.status, "void"),
+              ne(productionRuns.status, "cancelled"),
             ),
           ),
         ),

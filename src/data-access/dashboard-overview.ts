@@ -45,6 +45,7 @@ import {
 } from "./dashboard-structural-gaps";
 import { requireOrgScope } from "./utils";
 import { productionRunDateExpr } from "./production-runs/date-expr";
+import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 
 // Re-exported so components import every dashboard type from one module.
 export type {
@@ -228,7 +229,7 @@ export async function getDashboardOverview(
               eq(productionRuns.organizationId, ctx.organizationId),
               eq(productionRuns.facilityId, facilityId),
               isNull(productionRuns.archivedAt),
-              ne(productionRuns.status, "void"),
+              eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS),
               ...(fetchStart
                 ? [gte(productionRunDateExpr(), fetchStart.toISOString().slice(0, 10))]
                 : []),

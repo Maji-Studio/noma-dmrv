@@ -35,7 +35,8 @@ export const productionRuns = pgTable(
     code: text('code').notNull(), // e.g., "PR-2025-043"
     facilityId: uuid('facility_id')
       .notNull(),
-    status: productionRunStatus('status').default('running').notNull(),
+    status: productionRunStatus('status').default('draft').notNull(),
+    cancellationReason: text('cancellation_reason'),
 
     // --- Overview ---
     // The run's physical time window. `startTime` is the natural key (with
@@ -98,11 +99,15 @@ export const productionRuns = pgTable(
       sql`${table.endTime} is null or ${table.endTime} > ${table.startTime}`
     ),
     // One physical run per (reactor, start instant): two runs can't begin at the
-    // same moment on the same reactor. Partial so voided/archived rows free the
+    // same moment on the same reactor. Partial so cancelled/archived rows free the
     // slot. The server layer additionally rejects overlapping windows (#259).
     uniqueIndex('production_runs_reactor_start_unique_idx')
       .on(table.reactorId, table.startTime)
-      .where(sql`${table.status} <> 'void' and ${table.archivedAt} is null`),
+      .where(sql`${table.status} <> 'cancelled' and ${table.archivedAt} is null`),
+    check(
+      'production_runs_cancelled_requires_reason',
+      sql`${table.status} <> 'cancelled' or COALESCE(length(trim(${table.cancellationReason})), 0) > 0`
+    ),
     check(
       'production_runs_feedstock_wet_mass_non_negative',
       sql`${table.feedstockWetMassKg} is null or ${table.feedstockWetMassKg} >= 0`

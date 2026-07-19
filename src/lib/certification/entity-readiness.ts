@@ -147,6 +147,17 @@ export function deriveEntityCertifyReadiness(
   const lifecycle = lifecycleGap(entityKind, effectiveLifecycleState);
   if (lifecycle) gaps.push(lifecycle);
 
+  // Failed and cancelled runs are audit records, not certification candidates.
+  // Their lifecycle state is the only actionable certification gap; surfacing
+  // output, telemetry, or document gaps would send operators to fill data that
+  // cannot make these outcomes certifiable.
+  if (
+    entityKind === "productionRun" &&
+    (effectiveLifecycleState === "failed" || effectiveLifecycleState === "cancelled")
+  ) {
+    return { state: "incomplete", gaps };
+  }
+
   if (entityKind === "productionRun") {
     const readingsCount = fieldValue(entity, "readingsCount");
     if (
