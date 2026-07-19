@@ -289,7 +289,7 @@ describe("parent document retirement", () => {
     try {
       await expect(
         deleteReactor(makeTestOrgContext(TEST_USER_ID), fixture.reactorId),
-      ).rejects.toThrow(/kept; try deleting again/);
+      ).rejects.toThrow(/retry deletion to finish storage cleanup/);
 
       expect(
         await db.select().from(reactors).where(eq(reactors.id, fixture.reactorId)),

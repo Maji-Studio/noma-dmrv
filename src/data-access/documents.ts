@@ -509,7 +509,7 @@ export async function retireDocumentsForEntities(
           error: error instanceof Error ? error.message : String(error),
         });
         throw new SafeError(
-          "Failed to delete an attached storage object. The record and its documents were kept; try deleting again.",
+          "Failed to delete all attached storage objects. The record and document metadata were kept; retry deletion to finish storage cleanup.",
         );
       }
     }
