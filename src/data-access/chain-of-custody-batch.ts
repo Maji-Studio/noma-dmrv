@@ -95,7 +95,7 @@ async function resolveBatchScope(
     applicationId: application.id,
     chain: projectChainOfCustodyFromBatchFacts(
       application,
-      runById.get(application.biocharProduct.linkedProductionRunId)!,
+      runById.get(application.biocharProduct.linkedProductionRunId),
     ),
   }));
   const applicationIds = facts.applicationIds;

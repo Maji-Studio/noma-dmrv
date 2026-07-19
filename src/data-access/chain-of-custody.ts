@@ -134,8 +134,13 @@ export interface ChainOfCustodyData {
 
 export function projectChainOfCustodyFromBatchFacts(
   application: BatchLineageApplicationFact,
-  run: BatchLineageRunFact,
+  run: BatchLineageRunFact | undefined,
 ): ChainOfCustodyData {
+  if (!run) {
+    throw new SafeError(
+      `Application ${application.id} has no resolved production run`,
+    );
+  }
   const warnings = run.feedstocks.length === 0
     ? ["The linked production run does not have any recorded feedstock allocations."]
     : [];
