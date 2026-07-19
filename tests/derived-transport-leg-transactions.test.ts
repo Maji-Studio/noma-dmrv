@@ -20,7 +20,10 @@ import {
   deleteDelivery,
   updateDelivery,
 } from "@/data-access/deliveries";
-import { createFeedstock } from "@/data-access/feedstocks";
+import {
+  createFeedstock,
+  updateFeedstock,
+} from "@/data-access/feedstocks";
 import {
   ensureTestOrg,
   makeTestOrgContext,
@@ -186,6 +189,94 @@ describe("derived transport-leg transaction boundaries", () => {
 
     expect(persistedFeedstock).toBeUndefined();
     expect(persistedBin.feedstockTypeId).toBeNull();
+  });
+
+  it("preserves feedstock transport overrides on partial updates", async () => {
+    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const [facility] = await db
+      .insert(facilities)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FAC-OVR-${tag}`,
+        name: `Override Facility ${tag}`,
+      })
+      .returning({ id: facilities.id });
+    created.facilityIds.push(facility.id);
+
+    const [supplier] = await db
+      .insert(suppliers)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `SUP-OVR-${tag}`,
+        name: `Override Supplier ${tag}`,
+        distanceToFacilityKm: 10,
+        distanceSource: "map_estimate",
+      })
+      .returning({ id: suppliers.id });
+    created.supplierIds.push(supplier.id);
+
+    const [feedstockType] = await db
+      .insert(feedstockTypes)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FT-OVR-${tag}`,
+        name: `Override Feedstock ${tag}`,
+        category: "forestry",
+      })
+      .returning({ id: feedstockTypes.id });
+    created.feedstockTypeIds.push(feedstockType.id);
+
+    const [bin] = await db
+      .insert(storageLocations)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        code: `BIN-OVR-${tag}`,
+        name: `Override Bin ${tag}`,
+        type: "feedstock_bin",
+      })
+      .returning({ id: storageLocations.id });
+    created.storageLocationIds.push(bin.id);
+
+    const feedstockCode = `FS-OVR-${tag}`;
+    created.feedstockCodes.push(feedstockCode);
+    const result = await createFeedstock(
+      ctx,
+      {
+        facilityId: facility.id,
+        deliveryDate: new Date("2026-07-19T00:00:00Z"),
+        supplierId: supplier.id,
+        feedstockTypeId: feedstockType.id,
+        totalWetMassKg: 100,
+        moisturePercent: 10,
+        allocations: [{ storageLocationId: bin.id, allocatedWetMassKg: 100 }],
+        transportDistanceKm: 25,
+        transportDistanceSource: "document",
+        transportTripType: "one_way",
+      },
+      async () => [feedstockCode],
+    );
+    const feedstockId = result.feedstocks[0].id;
+
+    await updateFeedstock(ctx, feedstockId, { notes: "Partial update" });
+
+    const [derived] = await db
+      .select({
+        distanceKm: transportLegs.distanceKm,
+        distanceSource: transportLegs.distanceSource,
+        tripType: transportLegs.tripType,
+      })
+      .from(transportLegs)
+      .where(and(
+        eq(transportLegs.entityId, feedstockId),
+        eq(transportLegs.isDerived, true),
+      ));
+
+    expect(derived).toEqual({
+      distanceKm: 25,
+      distanceSource: "document",
+      tripType: "one_way",
+    });
   });
 
   it("recomputes prior, new, and location-affected product legs without touching manual legs", async () => {

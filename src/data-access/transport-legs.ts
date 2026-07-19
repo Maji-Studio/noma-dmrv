@@ -420,6 +420,9 @@ export async function syncFeedstockTransportLeg(
       vehicleType: vehicles.vehicleType,
       vehicleModelYear: vehicles.modelYear,
       loadMassKg: feedstocks.massWetKg,
+      existingDistanceKm: transportLegs.distanceKm,
+      existingDistanceSource: transportLegs.distanceSource,
+      existingTripType: transportLegs.tripType,
     })
     .from(feedstocks)
     .leftJoin(suppliers, and(eq(feedstocks.supplierId, suppliers.id), eq(suppliers.organizationId, ctx.organizationId)))
@@ -433,6 +436,15 @@ export async function syncFeedstockTransportLeg(
     )
     .leftJoin(facilities, and(eq(feedstocks.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
     .leftJoin(vehicles, and(eq(feedstocks.vehicleId, vehicles.id), eq(vehicles.organizationId, ctx.organizationId)))
+    .leftJoin(
+      transportLegs,
+      and(
+        eq(transportLegs.entityType, "feedstock"),
+        eq(transportLegs.entityId, feedstocks.id),
+        eq(transportLegs.isDerived, true),
+        eq(transportLegs.organizationId, ctx.organizationId),
+      ),
+    )
     .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
 
   if (!row) {
@@ -447,6 +459,7 @@ export async function syncFeedstockTransportLeg(
       : row.supplierDistanceSource;
   const locationHasGps =
     row.locationGpsLatitude != null && row.locationGpsLongitude != null;
+  const preserveExistingDistance = distanceOverride?.distanceKm === undefined;
 
   const derived = deriveTransportLeg({
     origin: {
@@ -463,9 +476,19 @@ export async function syncFeedstockTransportLeg(
     loadMassKg: row.loadMassKg,
     storedDistanceKm,
     storedDistanceSource,
-    distanceKmOverride: distanceOverride?.distanceKm,
-    distanceSourceOverride: distanceOverride?.distanceSource,
-    tripType: distanceOverride?.tripType,
+    distanceKmOverride: preserveExistingDistance
+      ? row.existingDistanceKm
+      : distanceOverride.distanceKm,
+    distanceSourceOverride:
+      distanceOverride?.distanceSource !== undefined
+        ? distanceOverride.distanceSource
+        : preserveExistingDistance
+          ? row.existingDistanceSource
+          : undefined,
+    tripType:
+      distanceOverride?.tripType === undefined
+        ? row.existingTripType
+        : distanceOverride.tripType,
   });
 
   await replaceDerivedTransportLeg(ctx, tx, "feedstock", feedstockId, derived);
