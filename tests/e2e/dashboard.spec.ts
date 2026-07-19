@@ -13,7 +13,7 @@ import { test, expect } from "./fixtures/auth-fixtures";
 import { seedCreditBatch } from "./fixtures/seed-chain-data";
 import { createDbConnection } from "./fixtures/db";
 import { DEC_ORG_ID } from "@/db/org-defaults";
-import { facilities, transportLegs } from "@/db/schema";
+import { facilities, feedstocks, transportLegs } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 test.describe("Dashboard (Flow Hero)", () => {
@@ -68,13 +68,32 @@ test.describe("Dashboard (Flow Hero)", () => {
     const clearFacilityId = crypto.randomUUID();
     const transportLegId = crypto.randomUUID();
     const tag = crypto.randomUUID().slice(0, 8);
+    let originalFeedstockGps:
+      | Pick<
+          typeof feedstocks.$inferSelect,
+          "gpsLatitude" | "gpsLongitude"
+        >
+      | undefined;
 
     try {
+      [originalFeedstockGps] = await db
+        .select({
+          gpsLatitude: feedstocks.gpsLatitude,
+          gpsLongitude: feedstocks.gpsLongitude,
+        })
+        .from(feedstocks)
+        .where(eq(feedstocks.id, seededData.feedstock.id))
+        .limit(1);
+
       await db.transaction(async (tx) => {
         await tx
           .update(facilities)
           .set({ gpsLatitude: null, gpsLongitude: null })
           .where(eq(facilities.id, seededData.facility.id));
+        await tx
+          .update(feedstocks)
+          .set({ gpsLatitude: null, gpsLongitude: null })
+          .where(eq(feedstocks.id, seededData.feedstock.id));
         await tx.insert(transportLegs).values({
           id: transportLegId,
           organizationId: DEC_ORG_ID,
@@ -122,6 +141,12 @@ test.describe("Dashboard (Flow Hero)", () => {
         .update(facilities)
         .set({ gpsLatitude: -6.163, gpsLongitude: 35.7516 })
         .where(eq(facilities.id, seededData.facility.id));
+      if (originalFeedstockGps) {
+        await db
+          .update(feedstocks)
+          .set(originalFeedstockGps)
+          .where(eq(feedstocks.id, seededData.feedstock.id));
+      }
       await pool.end();
     }
   });
