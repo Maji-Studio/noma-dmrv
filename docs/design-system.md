@@ -1314,7 +1314,7 @@ icon-less KPI cards, off-canon grid breakpoints).
 Rules:
 
 - Container is always `container-max page-shell` — no custom page padding
-  (Chain of Custody's deviation was fixed in Phase 2). `page-shell` is the
+  (Traceability's deviation was fixed in Phase 2). `page-shell` is the
   flex-column vertical rhythm (`globals.css`): it replaces the old literal
   `py-32 flex flex-col gap-32` and scales the section gap + vertical padding
   responsively — **20px mobile → 24px tablet (≥768px) → 32px desktop (≥1024px)**
@@ -1366,7 +1366,7 @@ import { PageHeader } from "@/components/ui";
 
 - `area` sets both the eyebrow text and its ink (`--acc-prod-ink` /
   `--acc-infra-ink` / `--acc-dist-ink`); `eyebrow` overrides the text.
-- Omit `area` for pages outside the nav groups (Chain of Custody) — no eyebrow.
+- Omit `area` for pages outside the nav groups (Traceability) — no eyebrow.
 - **Every list page gets a subtitle** — a single descriptive line, sentence case.
 
 ### StatCard Component (KPI card)

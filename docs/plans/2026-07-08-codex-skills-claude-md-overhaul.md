@@ -261,7 +261,7 @@ first; merge, don't duplicate.
 | Forms section (helpers, valueAsNumber, GPS, quick-add schemas) | `docs/forms.md` (mostly there — verify each bullet) |
 | Code Quality: naming, file caps, style, React compiler, a11y, page shell pointer, JSONB defaults | **NEW `docs/code-style.md`** |
 | Adding a Feature checklist | `TEMPLATE_USAGE.md` (verify) or `docs/code-style.md` |
-| Chain of Custody paragraph | `docs/chain-of-custody.md` (verify coverage) |
+| Chain of Custody paragraph | `docs/traceability.md` (verify coverage) |
 | Production Run Extensions | `docs/architecture.md` or chain-of-custody — wherever fits |
 | Isometric section (file list, MCP note) | `docs/isometric/README.md` (mostly there — verify) |
 | Authentication section | `docs/auth.md` (verify) |

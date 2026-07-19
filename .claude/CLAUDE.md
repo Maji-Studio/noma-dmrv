@@ -92,7 +92,7 @@ Rankings below are **higher = better**. Cost reflects what I actually pay (gpt-5
 - Before **env/auth debugging** → `docs/security.md` — env inventory, 1Password items differ, secrets management.
 - **Architecture / patterns** (ActionResult, facility context, React Query, quick-add, cascading selects, logging, CI/CD) → `docs/architecture.md`.
 - **Database** → `docs/database.md` + `docs/schema-overview.md` (60+ tables).
-- **Chain of Custody** (DAG | Map | Sankey, Trail) → `docs/chain-of-custody.md`.
+- **Traceability** (DAG | Map | Sankey, Trail) → `docs/traceability.md`.
 - **File uploads / object storage** → `docs/storage.md`.
 - **Auth flow / route protection** → `docs/auth.md`.
 - **Stuck on a known gotcha** → `docs/troubleshooting.md`.

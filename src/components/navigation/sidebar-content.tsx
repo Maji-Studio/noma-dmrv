@@ -95,7 +95,7 @@ const navSections: NavSection[] = [
   {
     items: [
       { href: "/dashboard", label: "Dashboard", icon: HouseIcon },
-      { href: "/chain-of-custody", label: "Chain of Custody", icon: TreeStructureIcon },
+      { href: "/traceability", label: "Traceability", icon: TreeStructureIcon },
     ],
     accent: SECTION_ACCENTS.default,
   },

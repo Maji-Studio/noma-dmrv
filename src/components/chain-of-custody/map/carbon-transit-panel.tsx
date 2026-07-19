@@ -187,7 +187,7 @@ export function CarbonTransitPanel({
     return (
       <div className="flex h-full items-center justify-center bg-[var(--color-background-white)]">
         <p className="body-medium text-[var(--color-signal-red)]">
-          {error?.message || "Failed to load chain of custody map data."}
+          {error?.message || "Failed to load traceability map data."}
         </p>
       </div>
     );

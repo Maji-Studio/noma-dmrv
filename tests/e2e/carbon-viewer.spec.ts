@@ -1,7 +1,7 @@
 /**
  * Carbon Viewer E2E (hermetic) — map-integration Phase 2.
  *
- * Covers the chain-of-custody view segment (Lineage / Map / Split), the
+ * Covers the traceability view segment (Lineage / Map / Split), the
  * geography panel's rails (transport legs, not-geolocated), the split-view
  * cross-linking into the DAG, and the nothing-to-plot empty state.
  *
@@ -47,12 +47,12 @@ function createDbConnection() {
   return { db: drizzle(pool, { schema }), pool };
 }
 
-function chainUrl(
+function traceabilityUrl(
   facilityId: string,
   params: Record<string, string>
 ) {
   const search = new URLSearchParams({ facility: facilityId, ...params });
-  return `/chain-of-custody?${search.toString()}`;
+  return `/traceability?${search.toString()}`;
 }
 
 /** Keep the suite offline: basemap/style/tile hosts are never real deps. */
@@ -231,7 +231,7 @@ async function seedGeoLineage(
   }
 }
 
-test.describe("Carbon Viewer (chain-of-custody geography)", () => {
+test.describe("Carbon Viewer (traceability geography)", () => {
   test.beforeEach(async ({ adminPage }) => {
     await blockExternalMapHosts(adminPage);
   });
@@ -245,7 +245,7 @@ test.describe("Carbon Viewer (chain-of-custody geography)", () => {
     const lineage = await seedGeoLineage(seededData);
 
     await page.goto(
-      chainUrl(seededData.facility.id, { application: lineage.application.id })
+      traceabilityUrl(seededData.facility.id, { application: lineage.application.id })
     );
     // Default view: lineage DAG, no geography panel.
     await expect(page.locator(".react-flow__viewport")).toBeVisible({ timeout: 15000 });
@@ -276,7 +276,7 @@ test.describe("Carbon Viewer (chain-of-custody geography)", () => {
     const lineage = await seedGeoLineage(seededData);
 
     await page.goto(
-      chainUrl(seededData.facility.id, {
+      traceabilityUrl(seededData.facility.id, {
         application: lineage.application.id,
         view: "map",
       })
@@ -313,7 +313,7 @@ test.describe("Carbon Viewer (chain-of-custody geography)", () => {
     const lineage = await seedGeoLineage(seededData);
 
     await page.goto(
-      chainUrl(seededData.facility.id, {
+      traceabilityUrl(seededData.facility.id, {
         application: lineage.application.id,
         view: "split",
       })
@@ -339,7 +339,7 @@ test.describe("Carbon Viewer (chain-of-custody geography)", () => {
     const lineage = await seedGeoLineage(seededData);
 
     await page.goto(
-      chainUrl(seededData.facility.id, {
+      traceabilityUrl(seededData.facility.id, {
         application: lineage.application.id,
         view: "split",
       })
@@ -352,7 +352,7 @@ test.describe("Carbon Viewer (chain-of-custody geography)", () => {
     await applicationNode.click();
 
     // No navigation — the card highlights itself (and the map marker).
-    await expect(page).toHaveURL(/chain-of-custody/);
+    await expect(page).toHaveURL(/traceability/);
     await expect(page).toHaveURL(/view=split/);
     await expect(
       applicationNode.locator('[data-highlighted="true"]')
@@ -368,7 +368,7 @@ test.describe("Carbon Viewer (chain-of-custody geography)", () => {
     const lineage = await seedGeoLineage(seededData, { withGeo: false });
 
     await page.goto(
-      chainUrl(seededData.facility.id, {
+      traceabilityUrl(seededData.facility.id, {
         application: lineage.application.id,
         view: "map",
       })
