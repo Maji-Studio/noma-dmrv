@@ -199,18 +199,16 @@ export async function deleteProductionSample(
 ): Promise<void> {
   requireOrgScope(ctx);
 
-  const deleted = await db.transaction(async (tx) => {
+  await db.transaction(async (tx) => {
     const rows = await tx
       .delete(productionSamples)
       .where(and(eq(productionSamples.id, id), eq(productionSamples.organizationId, ctx.organizationId)))
       .returning({ id: productionSamples.id });
+    if (rows.length === 0) {
+      throw new SafeError("Production sample not found");
+    }
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "production_sample", entityId: id },
     ]);
-    return rows;
   });
-
-  if (deleted.length === 0) {
-    throw new SafeError("Production sample not found");
-  }
 }

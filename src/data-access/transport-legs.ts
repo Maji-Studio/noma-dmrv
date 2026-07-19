@@ -356,6 +356,7 @@ async function replaceDerivedTransportLeg(
   entityType: "feedstock" | "biochar",
   entityId: string,
   derived: DerivedTransportLeg,
+  deferredRetirements?: DocumentEntityRef[],
 ): Promise<void> {
   requireOrgScope(ctx);
 
@@ -383,14 +384,15 @@ async function replaceDerivedTransportLeg(
           eq(transportLegs.organizationId, ctx.organizationId),
         ),
       );
-    await retireDocumentsForEntities(
-      ctx,
-      tx,
-      derivedLegs.map((leg) => ({
-        entityType: "transport_leg",
-        entityId: leg.id,
-      })),
-    );
+    const retirements: DocumentEntityRef[] = derivedLegs.map((leg) => ({
+      entityType: "transport_leg",
+      entityId: leg.id,
+    }));
+    if (deferredRetirements) {
+      deferredRetirements.push(...retirements);
+    } else {
+      await retireDocumentsForEntities(ctx, tx, retirements);
+    }
     return;
   }
 
@@ -593,6 +595,7 @@ async function syncLockedBiocharProductTransportLeg(
   ctx: OrgContext,
   tx: DbTransaction,
   biocharProductId: string,
+  deferredRetirements?: DocumentEntityRef[],
 ): Promise<void> {
   requireOrgScope(ctx);
 
@@ -683,7 +686,14 @@ async function syncLockedBiocharProductTransportLeg(
 
   // When no delivery qualifies, `derived` is not persistable and the replace
   // clears any stale derived leg.
-  await replaceDerivedTransportLeg(ctx, tx, "biochar", biocharProductId, derived);
+  await replaceDerivedTransportLeg(
+    ctx,
+    tx,
+    "biochar",
+    biocharProductId,
+    derived,
+    deferredRetirements,
+  );
 }
 
 /**
@@ -701,6 +711,7 @@ export async function syncBiocharProductTransportLegs(
   ctx: OrgContext,
   tx: DbTransaction,
   biocharProductIds: Array<string | null | undefined>,
+  deferredRetirements?: DocumentEntityRef[],
 ): Promise<void> {
   requireOrgScope(ctx);
 
@@ -716,7 +727,12 @@ export async function syncBiocharProductTransportLegs(
   }
 
   for (const id of ids) {
-    await syncLockedBiocharProductTransportLeg(ctx, tx, id);
+    await syncLockedBiocharProductTransportLeg(
+      ctx,
+      tx,
+      id,
+      deferredRetirements,
+    );
   }
 }
 

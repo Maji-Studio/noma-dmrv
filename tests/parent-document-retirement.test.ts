@@ -2,21 +2,30 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  biocharProducts,
   certifierDocumentUploads,
+  customerLocations,
+  customers,
+  deliveries,
   documents,
   facilities,
   feedstocks,
   feedstockTypes,
   incidentReports,
   organizations,
+  orders,
   productionSamples,
   productionRuns,
   reactors,
   transportLegs,
 } from "@/db/schema";
 import { deleteFeedstock } from "@/data-access/feedstocks";
+import { deleteDelivery } from "@/data-access/deliveries";
+import { deleteProductionIncident } from "@/data-access/production-incidents";
 import { deleteProductionRun } from "@/data-access/production-runs";
+import { deleteProductionSample } from "@/data-access/production-samples";
 import { deleteReactor } from "@/data-access/reactors";
+import { deleteSample } from "@/data-access/samples";
 import { syncFeedstockTransportLeg } from "@/data-access/transport-legs";
 import { __setStorageProviderForTests } from "@/lib/storage";
 import type {
@@ -198,13 +207,13 @@ describe("parent document retirement", () => {
       await db.insert(certifierDocumentUploads).values({
         organizationId: TEST_ORG_ID,
         documentId,
-        provider: "isometric",
+        provider: "puro_earth",
         externalDocumentId: `source-${tag}`,
       });
 
       await expect(
         deleteReactor(makeTestOrgContext(TEST_USER_ID), fixture.reactorId),
-      ).rejects.toThrow(/Unlink the document/);
+      ).rejects.toThrow(/certification provider/);
 
       expect(provider.deleteCalls).toEqual([]);
       expect(provider.objects.has(key)).toBe(true);
@@ -223,6 +232,164 @@ describe("parent document retirement", () => {
       await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
     }
   });
+
+  it("preflights delivery and derived-leg evidence together before deleting storage", async () => {
+    const tag = crypto.randomUUID().slice(0, 8);
+    const [facility] = await db
+      .insert(facilities)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FAC-DEL-${tag}`,
+        name: `Delivery evidence facility ${tag}`,
+      })
+      .returning({ id: facilities.id });
+    const [customer] = await db
+      .insert(customers)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `CUS-DEL-${tag}`,
+        name: `Delivery evidence customer ${tag}`,
+      })
+      .returning({ id: customers.id });
+    const [location] = await db
+      .insert(customerLocations)
+      .values({
+        organizationId: TEST_ORG_ID,
+        customerId: customer.id,
+        name: `Delivery evidence site ${tag}`,
+      })
+      .returning({ id: customerLocations.id });
+    const [product] = await db
+      .insert(biocharProducts)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        code: `BP-DEL-${tag}`,
+        massKg: 1_000,
+      })
+      .returning({ id: biocharProducts.id });
+    const [order] = await db
+      .insert(orders)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        customerId: customer.id,
+        customerLocationId: location.id,
+        biocharProductId: product.id,
+        code: `OR-DEL-${tag}`,
+        orderDate: new Date("2026-07-19T00:00:00Z"),
+        quantityKg: 100,
+        packaging: "bagged",
+      })
+      .returning({ id: orders.id });
+    const [delivery] = await db
+      .insert(deliveries)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        orderId: order.id,
+        biocharProductId: product.id,
+        code: `DL-DEL-${tag}`,
+        deliveryDate: new Date("2026-07-19T00:00:00Z"),
+        status: "upcoming",
+        deliveredWetMassKg: 100,
+      })
+      .returning({ id: deliveries.id });
+    const [leg] = await db
+      .insert(transportLegs)
+      .values({
+        organizationId: TEST_ORG_ID,
+        entityType: "biochar",
+        entityId: product.id,
+        isDerived: true,
+        distanceKm: 20,
+        distanceSource: "manual",
+        transportMethodType: "road",
+        loadMassKg: 100,
+      })
+      .returning({ id: transportLegs.id });
+    const deliveryKey = `delivery/${delivery.id}/pdf/${tag}.pdf`;
+    const legKey = `transport_leg/${leg.id}/pdf/${tag}.pdf`;
+    const deliveryDocumentId = await insertManagedDocument(
+      "delivery",
+      delivery.id,
+      deliveryKey,
+    );
+    const legDocumentId = await insertManagedDocument(
+      "transport_leg",
+      leg.id,
+      legKey,
+    );
+
+    try {
+      await db.insert(certifierDocumentUploads).values({
+        organizationId: TEST_ORG_ID,
+        documentId: legDocumentId,
+        provider: "verra",
+        externalDocumentId: `derived-source-${tag}`,
+      });
+
+      await expect(
+        deleteDelivery(makeTestOrgContext(TEST_USER_ID), delivery.id),
+      ).rejects.toThrow(/certification provider/);
+
+      expect(provider.deleteCalls).toEqual([]);
+      expect(provider.objects.has(deliveryKey)).toBe(true);
+      expect(provider.objects.has(legKey)).toBe(true);
+      expect(
+        await db.select().from(deliveries).where(eq(deliveries.id, delivery.id)),
+      ).toHaveLength(1);
+      expect(
+        await db.select().from(transportLegs).where(eq(transportLegs.id, leg.id)),
+      ).toHaveLength(1);
+      expect(
+        await db
+          .select()
+          .from(documents)
+          .where(inArray(documents.id, [deliveryDocumentId, legDocumentId])),
+      ).toHaveLength(2);
+    } finally {
+      await db
+        .delete(certifierDocumentUploads)
+        .where(eq(certifierDocumentUploads.documentId, legDocumentId));
+      await db
+        .delete(documents)
+        .where(inArray(documents.id, [deliveryDocumentId, legDocumentId]));
+      await db.delete(deliveries).where(eq(deliveries.id, delivery.id));
+      await db.delete(transportLegs).where(eq(transportLegs.id, leg.id));
+      await db.delete(orders).where(eq(orders.id, order.id));
+      await db.delete(customerLocations).where(eq(customerLocations.id, location.id));
+      await db.delete(customers).where(eq(customers.id, customer.id));
+      await db.delete(biocharProducts).where(eq(biocharProducts.id, product.id));
+      await db.delete(facilities).where(eq(facilities.id, facility.id));
+    }
+  });
+
+  it.each([
+    ["production incident", "production_incident", deleteProductionIncident],
+    ["production sample", "production_sample", deleteProductionSample],
+    ["lab sample", "sample", deleteSample],
+  ] as const)(
+    "does not retire orphaned %s evidence when the entity delete finds no row",
+    async (_label, entityType, deleteEntity) => {
+      const entityId = crypto.randomUUID();
+      const key = `${entityType}/${entityId}/pdf/orphan.pdf`;
+      const documentId = await insertManagedDocument(entityType, entityId, key);
+
+      try {
+        await expect(
+          deleteEntity(makeTestOrgContext(TEST_USER_ID), entityId),
+        ).rejects.toThrow(/not found/i);
+        expect(provider.deleteCalls).toEqual([]);
+        expect(provider.objects.has(key)).toBe(true);
+        expect(
+          await db.select().from(documents).where(eq(documents.id, documentId)),
+        ).toHaveLength(1);
+      } finally {
+        await db.delete(documents).where(eq(documents.id, documentId));
+      }
+    },
+  );
 
   it("keeps storage intact when a parent foreign-key delete fails", async () => {
     const tag = crypto.randomUUID().slice(0, 8);

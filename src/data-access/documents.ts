@@ -482,7 +482,6 @@ export async function retireDocumentsForEntities(
     .where(
       and(
         eq(certifierDocumentUploads.organizationId, ctx.organizationId),
-        eq(certifierDocumentUploads.provider, "isometric"),
         inArray(certifierDocumentUploads.documentId, documentIds),
       ),
     )
@@ -490,7 +489,7 @@ export async function retireDocumentsForEntities(
 
   if (mirror) {
     throw new SafeError(
-      "Cannot delete this record while one of its documents is mirrored to Isometric. Unlink the document from the Removal's Sources panel first.",
+      "Cannot delete this record while one of its documents is mirrored to a certification provider. Unlink the document from its certification source first.",
     );
   }
 
@@ -509,7 +508,7 @@ export async function retireDocumentsForEntities(
           error: error instanceof Error ? error.message : String(error),
         });
         throw new SafeError(
-          "Failed to delete all attached storage objects. The record and document metadata were kept; retry deletion to finish storage cleanup.",
+          "Failed to delete an attached storage object. Earlier objects may already have been deleted; the record and document metadata were kept. Retry deletion to finish storage cleanup.",
         );
       }
     }

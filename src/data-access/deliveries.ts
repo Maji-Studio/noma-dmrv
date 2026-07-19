@@ -84,7 +84,10 @@ export interface DeliveryStats {
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
-import { retireDocumentsForEntities } from "./documents";
+import {
+  retireDocumentsForEntities,
+  type DocumentEntityRef,
+} from "./documents";
 import {
   deliveryDrawsStock,
   lockCreateDeliveryStock,
@@ -889,6 +892,7 @@ export async function deleteDelivery(
       ));
     const affectedBiocharProductId =
       locked.biocharProductId ?? lockedOrder?.biocharProductId ?? null;
+    const deferredRetirements: DocumentEntityRef[] = [];
 
     const [{ value: applicationCount }] = await tx
       .select({ value: count() })
@@ -902,11 +906,12 @@ export async function deleteDelivery(
     }
 
     await tx.delete(deliveries).where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
-    await retireDocumentsForEntities(ctx, tx, [
-      { entityType: "delivery", entityId: deliveryId },
-    ]);
     await syncBiocharProductTransportLegs(ctx, tx, [
       affectedBiocharProductId,
+    ], deferredRetirements);
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "delivery", entityId: deliveryId },
+      ...deferredRetirements,
     ]);
   });
 }

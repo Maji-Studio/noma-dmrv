@@ -847,16 +847,6 @@ export async function deleteSample(
 ): Promise<void> {
   requireOrgScope(ctx);
 
-  // Verify sample exists
-  const [existing] = await db
-    .select({ id: samples.id })
-    .from(samples)
-    .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Sample not found");
-  }
-
   await guardSampleMutation(() => db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
       ctx,
@@ -871,7 +861,13 @@ export async function deleteSample(
       "sample",
       sampleId,
     );
-    await tx.delete(samples).where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
+    const deleted = await tx
+      .delete(samples)
+      .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)))
+      .returning({ id: samples.id });
+    if (deleted.length === 0) {
+      throw new SafeError("Sample not found");
+    }
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "sample", entityId: sampleId },
       ...transportLegDocuments,

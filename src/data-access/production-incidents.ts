@@ -186,18 +186,16 @@ export async function deleteProductionIncident(
 ): Promise<void> {
   requireOrgScope(ctx);
 
-  const deleted = await db.transaction(async (tx) => {
+  await db.transaction(async (tx) => {
     const rows = await tx
       .delete(incidentReports)
       .where(and(eq(incidentReports.id, id), eq(incidentReports.organizationId, ctx.organizationId)))
       .returning({ id: incidentReports.id });
+    if (rows.length === 0) {
+      throw new SafeError("Production incident not found");
+    }
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "production_incident", entityId: id },
     ]);
-    return rows;
   });
-
-  if (deleted.length === 0) {
-    throw new SafeError("Production incident not found");
-  }
 }
