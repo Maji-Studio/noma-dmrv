@@ -38,17 +38,28 @@ reads go through `/api/documents/[id]`, which mints a fresh signed GET
 on each request. **The app never embeds signed URLs in HTML or the DB**
 — so the user never sees "URL expired".
 
-## Bucket convention
+## Bucket and prefix convention
 
-One bucket per environment: `noma-dev`, `noma-staging`, `noma-prod`.
+Storage can use one bucket per environment (`noma-dev`, `noma-staging`,
+`noma-prod`) or a shared bucket with an optional `STORAGE_PREFIX`. A shared
+DigitalOcean Space might use `STORAGE_BUCKET=maji` and
+`STORAGE_PREFIX=noma-dmrv/staging`.
 
-**Key format** (no leading `/`):
+The prefix is a provider concern. It is added to every S3-compatible PUT, GET,
+HEAD, and DELETE request, but it is not stored in the database. This keeps the
+logical document key stable if an environment moves between buckets or
+prefixes.
+
+**Logical key format** (stored in the database, no leading `/`):
 
 ```
 {entityType}/{entityId}/{documentType}/{ulid}.{ext}
 ```
 
 Example: `sample/3a7e.../lab_report/01hn93.....pdf`
+
+With `STORAGE_PREFIX=noma-dmrv/staging`, the corresponding physical object key
+is `noma-dmrv/staging/sample/3a7e.../lab_report/01hn93.....pdf`.
 
 - Original filename lives in `documents.file_name`, NOT in the key.
   This avoids URL-encoding pain and accidental PII leakage via

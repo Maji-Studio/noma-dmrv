@@ -16,6 +16,7 @@ import type {
   CreateUploadUrlArgs,
   CreateDownloadUrlArgs,
 } from "./types";
+import { isSafeStorageKey } from "./keys";
 
 const DEFAULT_UPLOAD_TTL_SECONDS = 60 * 5;
 const DEFAULT_DOWNLOAD_TTL_SECONDS = 60 * 5;
@@ -24,6 +25,7 @@ export interface S3CompatibleConfig {
   bucket: string;
   region: string;
   endpoint?: string;
+  prefix?: string;
   accessKeyId: string;
   secretAccessKey: string;
 }
@@ -32,9 +34,19 @@ export class S3CompatibleProvider implements StorageProvider {
   readonly name: StorageProviderName;
   readonly bucket: string;
   private readonly client: S3Client;
+  private readonly prefix?: string;
 
   constructor(config: S3CompatibleConfig) {
+    if (
+      config.prefix !== undefined &&
+      (!isSafeStorageKey(config.prefix) || config.prefix.endsWith("/"))
+    ) {
+      throw new Error(
+        "STORAGE_PREFIX must be a relative storage key path without a trailing slash"
+      );
+    }
     this.bucket = config.bucket;
+    this.prefix = config.prefix;
     this.name = config.endpoint ? "do-spaces" : "s3";
     this.client = new S3Client({
       region: config.region,
@@ -52,7 +64,7 @@ export class S3CompatibleProvider implements StorageProvider {
     const ttl = args.expiresInSeconds ?? DEFAULT_UPLOAD_TTL_SECONDS;
     const cmd = new PutObjectCommand({
       Bucket: this.bucket,
-      Key: args.key,
+      Key: this.physicalKey(args.key),
       ContentType: args.contentType,
     });
     const url = await getSignedUrl(this.client, cmd, { expiresIn: ttl });
@@ -68,7 +80,7 @@ export class S3CompatibleProvider implements StorageProvider {
     const ttl = args.expiresInSeconds ?? DEFAULT_DOWNLOAD_TTL_SECONDS;
     const cmd = new GetObjectCommand({
       Bucket: this.bucket,
-      Key: args.key,
+      Key: this.physicalKey(args.key),
     });
     return getSignedUrl(this.client, cmd, { expiresIn: ttl });
   }
@@ -76,7 +88,10 @@ export class S3CompatibleProvider implements StorageProvider {
   async headObject(key: string): Promise<ObjectHead | null> {
     try {
       const res = await this.client.send(
-        new HeadObjectCommand({ Bucket: this.bucket, Key: key })
+        new HeadObjectCommand({
+          Bucket: this.bucket,
+          Key: this.physicalKey(key),
+        })
       );
       return {
         size: res.ContentLength ?? 0,
@@ -95,7 +110,10 @@ export class S3CompatibleProvider implements StorageProvider {
 
   async deleteObject(key: string): Promise<void> {
     await this.client.send(
-      new DeleteObjectCommand({ Bucket: this.bucket, Key: key })
+      new DeleteObjectCommand({
+        Bucket: this.bucket,
+        Key: this.physicalKey(key),
+      })
     );
   }
 
@@ -107,10 +125,14 @@ export class S3CompatibleProvider implements StorageProvider {
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
-        Key: key,
+        Key: this.physicalKey(key),
         Body: body,
         ContentType: contentType,
       })
     );
+  }
+
+  private physicalKey(key: string): string {
+    return this.prefix ? `${this.prefix}/${key}` : key;
   }
 }

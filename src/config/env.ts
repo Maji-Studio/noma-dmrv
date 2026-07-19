@@ -22,6 +22,15 @@ const DIGITALOCEAN_SPACES_REGIONS = new Set([
   "syd1",
 ]);
 
+function isValidStoragePrefix(value: string): boolean {
+  if (value.endsWith("/")) return false;
+  if (!/^[A-Za-z0-9._/-]+$/.test(value)) return false;
+  if (value.startsWith("/") || value.includes("//") || value.includes("..")) {
+    return false;
+  }
+  return value.split("/").every((segment) => segment !== ".");
+}
+
 function isLocalAppUrl(value: string): boolean {
   try {
     return LOCAL_APP_HOSTS.has(new URL(value).hostname);
@@ -160,6 +169,16 @@ const envSchema = z.object({
   STORAGE_BUCKET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   STORAGE_REGION: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   STORAGE_ENDPOINT: z.preprocess(emptyToUndefined, z.string().url().optional()),
+  STORAGE_PREFIX: z.preprocess(
+    emptyToUndefined,
+    z
+      .string()
+      .refine(isValidStoragePrefix, {
+        message:
+          "STORAGE_PREFIX must be a relative storage key path without empty, '.' or '..' segments",
+      })
+      .optional()
+  ),
   STORAGE_ACCESS_KEY_ID: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   STORAGE_SECRET_ACCESS_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   STORAGE_LOCAL_FS_ROOT: z
