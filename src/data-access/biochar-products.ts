@@ -77,6 +77,7 @@ import { requireOrgScope } from "./utils";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
 import { deleteTransportLegsForEntity } from "./transport-legs";
+import { retireDocumentsForEntities } from "./documents";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { validateCompositionIngredientBins } from "./biochar-product-composition";
 import { assertBiocharDrawWithinStock } from "./bin-stock-guards";
@@ -919,8 +920,17 @@ export async function deleteBiocharProduct(
       );
     }
 
-    await deleteTransportLegsForEntity(ctx, tx, "biochar", productId);
+    const transportLegDocuments = await deleteTransportLegsForEntity(
+      ctx,
+      tx,
+      "biochar",
+      productId,
+    );
     await tx.delete(biocharProducts).where(and(eq(biocharProducts.id, productId), eq(biocharProducts.organizationId, ctx.organizationId)));
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "biochar_product", entityId: productId },
+      ...transportLegDocuments,
+    ]);
   });
 }
 

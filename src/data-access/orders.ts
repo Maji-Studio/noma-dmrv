@@ -84,6 +84,7 @@ export interface OrderDetail extends Order {
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { retireDocumentsForEntities } from "./documents";
 import {
   assertOrderProductRepointWithinStock,
   lockOrderProductRepointBins,
@@ -778,6 +779,9 @@ export async function deleteOrder(
     }
 
     await tx.delete(orders).where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "order", entityId: orderId },
+    ]);
   });
 }
 
