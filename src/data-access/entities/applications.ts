@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { applications, deliveries, facilities } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
+import { formatDate } from "@/lib/format-utils";
 import { requireOrgScope } from "../utils";
 
 interface ApplicationOptionRow {
@@ -30,12 +31,7 @@ function toApplicationOption(result: ApplicationOptionRow): EntityOption {
       result.facilityName,
       result.deliveryCode ? `Delivery ${result.deliveryCode}` : undefined,
       result.fieldIdentifier ?? undefined,
-      // Deterministic ISO `yyyy-mm-dd` — `toLocaleDateString()` renders in the
-      // server's locale/timezone, so the same row could format differently
-      // across environments.
-      result.applicationDate
-        ? new Date(result.applicationDate).toISOString().slice(0, 10)
-        : undefined,
+      result.applicationDate ? formatDate(result.applicationDate) : undefined,
       result.status,
     ]
       .filter(Boolean)
