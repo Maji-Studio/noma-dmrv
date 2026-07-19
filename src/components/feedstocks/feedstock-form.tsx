@@ -174,11 +174,13 @@ export function FeedstockForm({
     defaultSupplierLocation?.distanceFromFacilityKm != null
       ? defaultSupplierLocation.distanceSource
       : (selectedSupplier?.distanceSource ?? null);
-  const suggestedDistanceKm = isEditMode
+  const supplierAnchorChanged =
+    isEditMode && watchedSupplierId !== feedstock?.supplierId;
+  const suggestedDistanceKm = isEditMode && !supplierAnchorChanged
     ? existingLegDistanceKm ?? storedDistanceKm
     : storedDistanceKm;
   const suggestedDistanceSource =
-    isEditMode && existingLegDistanceKm != null
+    isEditMode && !supplierAnchorChanged && existingLegDistanceKm != null
       ? (existingLegs?.[0]?.distanceSource ?? null)
       : storedDistanceSource;
 
