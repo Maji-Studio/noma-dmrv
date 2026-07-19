@@ -18,6 +18,7 @@ import { productionRuns, productionRunFeedstocks } from "@/db/schema/production"
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
+import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 
 export interface LockedCreditBatchProductionRun {
   id: string;
@@ -103,7 +104,9 @@ export async function validateProductionRunIds(
     throw new SafeError(`Production run(s) not found: ${missing.join(", ")}`);
   }
 
-  const incomplete = rows.filter((row) => row.status !== "complete");
+  const incomplete = rows.filter(
+    (row) => row.status !== COMPLETED_PRODUCTION_RUN_STATUS,
+  );
   if (incomplete.length > 0) {
     throw new SafeError(
       `Only complete production runs can be added to a Credit batch: ${incomplete.map((row) => row.id).join(", ")}`,
