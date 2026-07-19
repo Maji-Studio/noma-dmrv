@@ -44,7 +44,9 @@ import {
 } from "./credit-batch-membership";
 import { gcRemovalIfOrphaned } from "./certifier-removals";
 import {
+  getApplicationRollupsByBatchFromRuns,
   getApplicationsForRuns,
+  getProductionRunIdsByBatchId,
   summarizeApplicationsForBatches,
 } from "./credit-batch-production-runs";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
@@ -58,7 +60,10 @@ import { formatUtcDate } from "@/lib/date-utils";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
-import { loadCreditBatchLineageFacts } from "./credit-batch-lineage-facts";
+import {
+  loadCreditBatchLineageFacts,
+  type CreditBatchLineageFacts,
+} from "./credit-batch-lineage-facts";
 import { retireDocumentsForEntities } from "./documents";
 
 export { getApplicationsForRuns } from "./credit-batch-production-runs";
@@ -262,12 +267,19 @@ export async function getCreditBatches(
     return [];
   }
 
-  const factsByBatch = await loadCreditBatchLineageFacts(ctx, batchIds);
+  const productionRunIdsByBatchId = await getProductionRunIdsByBatchId(
+    ctx,
+    batchIds,
+  );
+  const rollupsByBatchId = await getApplicationRollupsByBatchFromRuns(
+    ctx,
+    productionRunIdsByBatchId,
+  );
 
   return batches.map((b) => {
-    const facts = factsByBatch[b.creditBatch.id];
-    const productionRunIds = facts?.productionRunIds ?? [];
-    const applicationIds = facts?.applicationIds ?? [];
+    const productionRunIds = productionRunIdsByBatchId[b.creditBatch.id] ?? [];
+    const rollup = rollupsByBatchId[b.creditBatch.id];
+    const applicationIds = rollup?.applicationIds ?? [];
     return {
       ...b.creditBatch,
       facility: b.facilityName ? { name: b.facilityName } : null,
@@ -276,7 +288,7 @@ export async function getCreditBatches(
       applicationIds,
       productionRunCount: productionRunIds.length,
       productionRunIds,
-      appliedWeightTons: facts?.appliedWeightTons ?? 0,
+      appliedWeightTons: rollup?.appliedWeightTons ?? 0,
       co2eStoredPreview: null,
       previewAvailable: false,
     };
@@ -288,17 +300,18 @@ export async function getCreditBatches(
  */
 export async function getCreditBatchById(
   ctx: OrgContext,
-  id: string
+  id: string,
+  options?: { skipPreview?: false; lineageFacts?: CreditBatchLineageFacts }
 ): Promise<CreditBatchWithRelations | null>;
 export async function getCreditBatchById(
   ctx: OrgContext,
   id: string,
-  options: { skipPreview: true }
+  options: { skipPreview: true; lineageFacts?: CreditBatchLineageFacts }
 ): Promise<CreditBatchWithOptionalPreview | null>;
 export async function getCreditBatchById(
   ctx: OrgContext,
   id: string,
-  options?: { skipPreview?: boolean }
+  options?: { skipPreview?: boolean; lineageFacts?: CreditBatchLineageFacts }
 ): Promise<CreditBatchWithRelations | CreditBatchWithOptionalPreview | null> {
   requireOrgScope(ctx);
   const [batch] = await db
@@ -318,7 +331,8 @@ export async function getCreditBatchById(
   const durabilityOption =
     batch.facilityDurabilityOption ?? DURABILITY_TIER_FALLBACK;
 
-  const facts = (await loadCreditBatchLineageFacts(ctx, [id]))[id];
+  const facts =
+    options?.lineageFacts ?? (await loadCreditBatchLineageFacts(ctx, [id]))[id];
   const productionRunIds = facts?.productionRunIds ?? [];
   const applicationIds = facts?.applicationIds ?? [];
 
