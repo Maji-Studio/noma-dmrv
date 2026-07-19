@@ -25,6 +25,7 @@ export const ENTITY_STATUS_STATES = {
   cancelled: "neutral",
   missing_data: "neutral",
   no_deliveries: "neutral",
+  method_a: "neutral",
 
   // Active / in progress
   running: "in-progress",
@@ -32,6 +33,7 @@ export const ENTITY_STATUS_STATES = {
   ordered: "in-progress",
   partial: "in-progress",
   submitted: "in-progress",
+  method_b: "in-progress",
 
   // Successful / complete
   complete: "success",

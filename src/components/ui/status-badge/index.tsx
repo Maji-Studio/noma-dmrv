@@ -50,6 +50,9 @@ export type StatusValue =
   | "failed"
   | "cancelled"
   | "void"
+  // Production process sampling method
+  | "method_a"
+  | "method_b"
   // Delivery status
   | "upcoming"
   | "delivered"
@@ -74,6 +77,8 @@ const statusLabels: Record<StatusValue, string> = {
   failed: "Failed",
   cancelled: "Cancelled",
   void: "Void",
+  method_a: "Method A",
+  method_b: "Method B",
   upcoming: "Upcoming",
   delivered: "Delivered",
   applied: "Applied",

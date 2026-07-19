@@ -5,26 +5,21 @@
 "use client";
 
 import { LockIcon, LockOpenIcon } from "@phosphor-icons/react";
-import { cn } from "@/lib/utils";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { SamplingMethod } from "@/lib/certification/sampling-requirements";
 
 export function MethodPill({ method }: { method: SamplingMethod }) {
   const isMethodB = method === "method_b";
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-4 border px-8 py-2 body-caption font-medium",
-        isMethodB
-          ? "bg-[var(--st-run-bg)] text-[var(--st-run)] border-[var(--st-run-border)]"
-          : "bg-[var(--st-off-bg)] text-[var(--color-text-secondary)] border-[var(--st-off-border)]",
-      )}
-    >
-      {isMethodB ? (
-        <LockOpenIcon size={12} weight="bold" />
-      ) : (
-        <LockIcon size={12} weight="bold" />
-      )}
-      {isMethodB ? "Method B" : "Method A"}
-    </span>
+    <StatusBadge
+      status={method}
+      icon={
+        isMethodB ? (
+          <LockOpenIcon size={12} weight="bold" />
+        ) : (
+          <LockIcon size={12} weight="bold" />
+        )
+      }
+    />
   );
 }
