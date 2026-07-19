@@ -661,6 +661,18 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
         `);
       })).resolves.toBeUndefined();
 
+      // The create must not lock the run before it obtains the source-bin
+      // advisory lock. updateProductionRun uses bins -> run; this NOWAIT probe
+      // makes the shared global order deterministic and catches run -> bin ABBA.
+      await expect(db.transaction(async (tx) => {
+        await tx.execute(sql`
+          select ${productionRuns.id}
+          from ${productionRuns}
+          where ${productionRuns.id} = ${run.id}
+          for update nowait
+        `);
+      })).resolves.toBeUndefined();
+
       releaseSourceLock();
       await sourceLockTransaction;
       await expect(createPromise).resolves.toMatchObject({ massKg: 0 });

@@ -19,6 +19,45 @@ import { assertCreditBatchProductionWindow } from "./credit-batch-production-win
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
 
+export interface LockedCreditBatchProductionRun {
+  id: string;
+  code: string;
+  facilityId: string;
+  status: string;
+  date: string;
+}
+
+/**
+ * Lock every prospective/current member in deterministic order before a credit
+ * batch, removal, or certification lock is taken. Production-run reopen takes
+ * the same row lock before checking membership, so either the membership write
+ * or the reopen wins; they cannot both validate stale state.
+ */
+export async function lockCreditBatchProductionRuns(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  productionRunIds: readonly string[],
+): Promise<LockedCreditBatchProductionRun[]> {
+  const sortedRunIds = [...new Set(productionRunIds)].sort();
+  if (sortedRunIds.length === 0) return [];
+
+  return tx
+    .select({
+      id: productionRuns.id,
+      code: productionRuns.code,
+      facilityId: productionRuns.facilityId,
+      status: productionRuns.status,
+      date: productionRunDateExpr(),
+    })
+    .from(productionRuns)
+    .where(and(
+      inArray(productionRuns.id, sortedRunIds),
+      eq(productionRuns.organizationId, ctx.organizationId),
+    ))
+    .orderBy(productionRuns.id)
+    .for("update");
+}
+
 /**
  * Validate that all production run IDs exist, belong to the credit batch's
  * facility and production window, and are not already assigned elsewhere.
@@ -31,6 +70,7 @@ export async function validateProductionRunIds(
   startDate?: string | Date,
   endDate?: string | Date,
   excludeCreditBatchId?: string,
+  lockedRows?: readonly LockedCreditBatchProductionRun[],
 ): Promise<void> {
   if (productionRunIds.length === 0) return;
 
@@ -40,7 +80,10 @@ export async function validateProductionRunIds(
     throw new SafeError("Duplicate production run IDs are not allowed");
   }
 
-  const rows = await tx
+  // Membership-changing callers pass rows acquired by the lock helper above.
+  // Other revalidation paths retain a plain read: taking a hidden run lock
+  // after their batch/removal locks would invert the documented lock order.
+  const rows = lockedRows ?? await tx
     .select({
       id: productionRuns.id,
       code: productionRuns.code,
@@ -49,7 +92,10 @@ export async function validateProductionRunIds(
       date: productionRunDateExpr(),
     })
     .from(productionRuns)
-    .where(and(inArray(productionRuns.id, productionRunIds), eq(productionRuns.organizationId, ctx.organizationId)));
+    .where(and(
+      inArray(productionRuns.id, productionRunIds),
+      eq(productionRuns.organizationId, ctx.organizationId),
+    ));
 
   if (rows.length !== productionRunIds.length) {
     const found = new Set(rows.map((r) => r.id));

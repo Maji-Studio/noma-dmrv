@@ -465,8 +465,6 @@ export async function createBiocharProduct(
     throw new SafeError("Linked production run belongs to a different facility");
   }
 
-  const productionDate = runDateToProductionDate(run.date);
-
   // Biochar ratio scales the wet mass to the biochar-equivalent draw (#116).
   const [formulationRatioRow] = formulationId
     ? await db
@@ -483,25 +481,36 @@ export async function createBiocharProduct(
   // so two products with different formulations can't both pass the reservation
   // check and strand a mismatched product (the claim-after-insert TOCTOU).
   const product = await db.transaction(async (tx) => {
+    await lockBinStocks(ctx, tx, [
+      (data.massKg ?? 0) > 0 ? destinationBinId : null,
+      run.biocharStorageLocationId,
+    ]);
+
     const [lockedRun] = await tx
       .select({
         id: productionRuns.id,
+        facilityId: productionRuns.facilityId,
         status: productionRuns.status,
+        date: productionRunDateExpr(),
         biocharStorageLocationId: productionRuns.biocharStorageLocationId,
       })
       .from(productionRuns)
-      .where(and(
-        eq(productionRuns.id, run.id),
-        eq(productionRuns.organizationId, ctx.organizationId),
-      ))
+      .where(and(eq(productionRuns.id, run.id), eq(productionRuns.organizationId, ctx.organizationId)))
       .for("update");
-
     if (!lockedRun) {
       throw new SafeError("Linked production run not found");
     }
-    // A submitted production run can't gain new source inventory after
-    // certification. Mirror the update/delete guards so the create path can't
-    // bypass certification locking by attaching a fresh product to a locked run.
+    if (lockedRun.biocharStorageLocationId !== run.biocharStorageLocationId) {
+      throw new SafeError("Stock changed while this operation was being prepared. Refresh and retry.");
+    }
+    if (lockedRun.facilityId !== data.facilityId) {
+      throw new SafeError("Linked production run belongs to a different facility");
+    }
+    if (lockedRun.status !== COMPLETED_PRODUCTION_RUN_STATUS) {
+      throw new SafeError("Biochar products can only link to complete production runs");
+    }
+
+    // Prevent new source inventory on a submitted production-run lineage.
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
@@ -509,18 +518,7 @@ export async function createBiocharProduct(
       "create",
     );
 
-    if (lockedRun.status !== COMPLETED_PRODUCTION_RUN_STATUS) {
-      throw new SafeError("Biochar products can only link to complete production runs");
-    }
-
-    await lockBinStocks(
-      ctx,
-      tx,
-      [
-        (data.massKg ?? 0) > 0 ? destinationBinId : null,
-        lockedRun.biocharStorageLocationId,
-      ],
-    );
+    const productionDate = runDateToProductionDate(lockedRun.date);
 
     await validateCompositionIngredientBins(
       ctx,
