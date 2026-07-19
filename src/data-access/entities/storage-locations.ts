@@ -26,6 +26,7 @@ import {
 } from "@/schemas/storage-locations";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { requireOrgScope } from "../utils";
+import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 
 function formatStorageLocationSubtitle(
   type: string,
@@ -142,7 +143,7 @@ function buildInventoryAggregates(ctx: OrgContext) {
   )
   .where(and(
     eq(productionRuns.organizationId, ctx.organizationId),
-    ne(productionRuns.status, "cancelled"),
+    ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
   ))
   .groupBy(productionRuns.feedstockStorageLocationId)
   .as("production_run_consumption_agg");
@@ -157,7 +158,7 @@ function buildInventoryAggregates(ctx: OrgContext) {
   .from(productionRuns)
   .where(and(
     eq(productionRuns.organizationId, ctx.organizationId),
-    ne(productionRuns.status, "cancelled"),
+    ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
   ))
   .groupBy(productionRuns.biocharStorageLocationId)
   .as("biochar_output_agg");
@@ -191,7 +192,7 @@ function buildInventoryAggregates(ctx: OrgContext) {
   )
   .where(and(
     eq(productionRuns.organizationId, ctx.organizationId),
-    ne(productionRuns.status, "cancelled"),
+    ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
   ))
   .groupBy(productionRuns.biocharStorageLocationId)
   .as("biochar_allocation_agg");

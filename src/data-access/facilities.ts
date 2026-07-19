@@ -28,6 +28,7 @@ import {
 } from "@/db/schema";
 import { hasBlockingFacilitySubmission } from "./certification";
 import type { FacilityFilterData } from "@/schemas/facilities";
+import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 
 // ============================================
 // Types
@@ -236,7 +237,7 @@ export async function getFacilities(
           .where(and(
             inArray(productionRuns.facilityId, facilityIds),
             eq(productionRuns.organizationId, ctx.organizationId),
-            ne(productionRuns.status, "cancelled"),
+            ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
           ))
           .groupBy(productionRuns.facilityId),
         db
@@ -248,7 +249,7 @@ export async function getFacilities(
           .where(and(
             inArray(productionRuns.facilityId, facilityIds),
             eq(productionRuns.organizationId, ctx.organizationId),
-            ne(productionRuns.status, "cancelled"),
+            ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
           ))
           .groupBy(productionRuns.facilityId),
         db

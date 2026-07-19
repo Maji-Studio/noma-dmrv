@@ -21,6 +21,7 @@ import {
   type DbReader,
 } from "./bin-movements";
 import { requireOrgScope } from "./utils";
+import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 
 export interface LaneStockDerivation {
   storageLocationId: string;
@@ -55,7 +56,7 @@ export async function deriveLaneStock(
       options.storageLocationIds,
     ),
     eq(productionRuns.organizationId, ctx.organizationId),
-    ne(productionRuns.status, "cancelled"),
+    ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
   ];
   if (options.excludeRunId) {
     consumptionConditions.push(ne(productionRuns.id, options.excludeRunId));
@@ -67,7 +68,7 @@ export async function deriveLaneStock(
       options.storageLocationIds,
     ),
     eq(productionRuns.organizationId, ctx.organizationId),
-    ne(productionRuns.status, "cancelled"),
+    ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
   ];
   if (options.excludeProductId) {
     allocationConditions.push(
@@ -127,7 +128,7 @@ export async function deriveLaneStock(
               options.storageLocationIds,
             ),
             eq(productionRuns.organizationId, ctx.organizationId),
-            ne(productionRuns.status, "cancelled"),
+            ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
           ),
         )
         .groupBy(productionRuns.biocharStorageLocationId),
