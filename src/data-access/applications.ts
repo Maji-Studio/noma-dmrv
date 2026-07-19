@@ -710,11 +710,10 @@ export async function deleteApplication(ctx: OrgContext, id: string): Promise<vo
       .delete(soilTemperatureMeasurements)
       .where(and(eq(soilTemperatureMeasurements.applicationId, id), eq(soilTemperatureMeasurements.organizationId, ctx.organizationId)));
 
+    await tx.delete(applications).where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)));
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "application", entityId: id },
     ]);
-
-    await tx.delete(applications).where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)));
     // Batch aggregates (applied weight, CO2e stored) are derived on read
     // (issue #285) — no write-back sync is needed after removing a member.
   });

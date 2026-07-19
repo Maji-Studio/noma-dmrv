@@ -751,15 +751,15 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string): Promise<vo
     await tx
       .delete(creditBatchProductionRuns)
       .where(and(eq(creditBatchProductionRuns.creditBatchId, id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)));
-    await retireDocumentsForEntities(ctx, tx, [
-      { entityType: "credit_batch", entityId: id },
-    ]);
     await tx.delete(creditBatches).where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)));
 
     // Drop the removal if this was its last member and it has no history.
     if (batch?.removalId) {
       await gcRemovalIfOrphaned(ctx, tx, batch.removalId);
     }
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "credit_batch", entityId: id },
+    ]);
   });
 }
 

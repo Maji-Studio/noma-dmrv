@@ -648,16 +648,22 @@ export async function deleteFeedstock(
       await lockBinStocks(ctx, tx, [locked.storageLocationId]);
     }
 
-    await deleteTransportLegsForEntity(ctx, tx, "feedstock", feedstockId);
-    await retireDocumentsForEntities(ctx, tx, [
-      { entityType: "feedstock", entityId: feedstockId },
-    ]);
+    const transportLegDocuments = await deleteTransportLegsForEntity(
+      ctx,
+      tx,
+      "feedstock",
+      feedstockId,
+    );
     const result = await tx
       .delete(feedstocks)
       .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
     if (result.rowCount === 0) {
       throw new SafeError("Feedstock not found");
     }
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "feedstock", entityId: feedstockId },
+      ...transportLegDocuments,
+    ]);
   });
 }
 

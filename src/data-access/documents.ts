@@ -432,11 +432,12 @@ export async function deleteDocumentRow(
 /**
  * Retire documents owned by entities that are about to be hard-deleted.
  *
- * Call this inside the parent's delete transaction, after its dependency and
- * certified-lineage guards. Document rows are locked before the mirror check,
- * which makes the FK from certifier_document_uploads the race backstop while
- * storage cleanup runs. A storage failure aborts the transaction, preserving
- * both the parent and document rows for an idempotent retry.
+ * Call this as the final operation inside the parent's delete transaction,
+ * after every FK-constrained database delete has succeeded. Document rows are
+ * locked before the mirror check, which makes the FK from
+ * certifier_document_uploads the race backstop while storage cleanup runs. A
+ * storage failure aborts the transaction, preserving both the parent and
+ * document rows for an idempotent retry.
  */
 export async function retireDocumentsForEntities(
   ctx: OrgContext,

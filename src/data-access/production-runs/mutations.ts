@@ -680,14 +680,6 @@ export async function deleteProductionRun(
           eq(incidentReports.organizationId, ctx.organizationId),
         ),
       );
-    await retireDocumentsForEntities(ctx, tx, [
-      { entityType: "production_run", entityId: productionRunId },
-      ...productionIncidents.map((incident) => ({
-        entityType: "production_incident" as const,
-        entityId: incident.id,
-      })),
-    ]);
-
     await tx
       .delete(productionRunFeedstocks)
       .where(and(eq(productionRunFeedstocks.productionRunId, productionRunId), eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
@@ -703,5 +695,12 @@ export async function deleteProductionRun(
     await tx
       .delete(productionRuns)
       .where(and(eq(productionRuns.id, productionRunId), eq(productionRuns.organizationId, ctx.organizationId)));
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "production_run", entityId: productionRunId },
+      ...productionIncidents.map((incident) => ({
+        entityType: "production_incident" as const,
+        entityId: incident.id,
+      })),
+    ]);
   });
 }

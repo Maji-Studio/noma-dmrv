@@ -449,10 +449,10 @@ export async function deleteReactor(
       );
     }
 
+    await tx.delete(reactors).where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)));
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "reactor", entityId: reactorId },
     ]);
-    await tx.delete(reactors).where(and(eq(reactors.id, reactorId), eq(reactors.organizationId, ctx.organizationId)));
   });
 }
 

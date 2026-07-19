@@ -716,11 +716,10 @@ export async function deleteOrder(
       );
     }
 
+    await tx.delete(orders).where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "order", entityId: orderId },
     ]);
-
-    await tx.delete(orders).where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
   });
 }
 

@@ -187,13 +187,14 @@ export async function deleteProductionIncident(
   requireOrgScope(ctx);
 
   const deleted = await db.transaction(async (tx) => {
-    await retireDocumentsForEntities(ctx, tx, [
-      { entityType: "production_incident", entityId: id },
-    ]);
-    return tx
+    const rows = await tx
       .delete(incidentReports)
       .where(and(eq(incidentReports.id, id), eq(incidentReports.organizationId, ctx.organizationId)))
       .returning({ id: incidentReports.id });
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "production_incident", entityId: id },
+    ]);
+    return rows;
   });
 
   if (deleted.length === 0) {

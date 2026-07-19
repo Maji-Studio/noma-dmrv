@@ -200,13 +200,14 @@ export async function deleteProductionSample(
   requireOrgScope(ctx);
 
   const deleted = await db.transaction(async (tx) => {
-    await retireDocumentsForEntities(ctx, tx, [
-      { entityType: "production_sample", entityId: id },
-    ]);
-    return tx
+    const rows = await tx
       .delete(productionSamples)
       .where(and(eq(productionSamples.id, id), eq(productionSamples.organizationId, ctx.organizationId)))
       .returning({ id: productionSamples.id });
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "production_sample", entityId: id },
+    ]);
+    return rows;
   });
 
   if (deleted.length === 0) {

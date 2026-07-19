@@ -9,6 +9,7 @@ import {
   feedstockTypes,
   incidentReports,
   organizations,
+  productionSamples,
   productionRuns,
   reactors,
   transportLegs,
@@ -217,6 +218,56 @@ describe("parent document retirement", () => {
         .delete(certifierDocumentUploads)
         .where(eq(certifierDocumentUploads.documentId, documentId));
       await db.delete(documents).where(eq(documents.id, documentId));
+      await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
+      await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+    }
+  });
+
+  it("keeps storage intact when a parent foreign-key delete fails", async () => {
+    const tag = crypto.randomUUID().slice(0, 8);
+    const fixture = await createReactorFixture(tag);
+    const [run] = await db
+      .insert(productionRuns)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: fixture.facilityId,
+        reactorId: fixture.reactorId,
+        code: `PR-FK-${tag}`,
+        startTime: new Date("2026-07-02T10:00:00Z"),
+      })
+      .returning({ id: productionRuns.id });
+    const [productionSample] = await db
+      .insert(productionSamples)
+      .values({
+        organizationId: TEST_ORG_ID,
+        productionRunId: run.id,
+        timestamp: new Date("2026-07-02T11:00:00Z"),
+      })
+      .returning({ id: productionSamples.id });
+    const key = `production_run/${run.id}/pdf/${tag}.pdf`;
+    const documentId = await insertManagedDocument(
+      "production_run",
+      run.id,
+      key,
+    );
+
+    try {
+      await expect(
+        deleteProductionRun(makeTestOrgContext(TEST_USER_ID), run.id),
+      ).rejects.toThrow();
+
+      expect(provider.deleteCalls).toEqual([]);
+      expect(provider.objects.has(key)).toBe(true);
+      expect(
+        await db.select().from(productionRuns).where(eq(productionRuns.id, run.id)),
+      ).toHaveLength(1);
+      expect(
+        await db.select().from(documents).where(eq(documents.id, documentId)),
+      ).toHaveLength(1);
+    } finally {
+      await db.delete(productionSamples).where(eq(productionSamples.id, productionSample.id));
+      await db.delete(documents).where(eq(documents.id, documentId));
+      await db.delete(productionRuns).where(eq(productionRuns.id, run.id));
       await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
       await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
     }

@@ -865,11 +865,17 @@ export async function deleteSample(
       "delete",
     );
 
-    await deleteTransportLegsForEntity(ctx, tx, "sample", sampleId);
+    const transportLegDocuments = await deleteTransportLegsForEntity(
+      ctx,
+      tx,
+      "sample",
+      sampleId,
+    );
+    await tx.delete(samples).where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "sample", entityId: sampleId },
+      ...transportLegDocuments,
     ]);
-    await tx.delete(samples).where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
   }));
 }
 

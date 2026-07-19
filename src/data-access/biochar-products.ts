@@ -920,11 +920,17 @@ export async function deleteBiocharProduct(
       );
     }
 
-    await deleteTransportLegsForEntity(ctx, tx, "biochar", productId);
+    const transportLegDocuments = await deleteTransportLegsForEntity(
+      ctx,
+      tx,
+      "biochar",
+      productId,
+    );
+    await tx.delete(biocharProducts).where(and(eq(biocharProducts.id, productId), eq(biocharProducts.organizationId, ctx.organizationId)));
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "biochar_product", entityId: productId },
+      ...transportLegDocuments,
     ]);
-    await tx.delete(biocharProducts).where(and(eq(biocharProducts.id, productId), eq(biocharProducts.organizationId, ctx.organizationId)));
   });
 }
 

@@ -832,11 +832,10 @@ export async function deleteDelivery(
       );
     }
 
+    await tx.delete(deliveries).where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
     await retireDocumentsForEntities(ctx, tx, [
       { entityType: "delivery", entityId: deliveryId },
     ]);
-
-    await tx.delete(deliveries).where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
   });
 }
 
