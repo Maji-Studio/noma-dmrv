@@ -17,7 +17,6 @@ import {
   type UngroupedCreditBatchRow,
 } from "@/data-access/certifier-removals";
 import {
-  getChainOfCustodyData,
   type ChainOfCustodyData,
 } from "@/data-access/chain-of-custody";
 import {
@@ -28,8 +27,10 @@ import {
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import {
   getApplicationRollupsByBatchIds,
-  getApplicationsForRuns,
 } from "@/data-access/credit-batch-production-runs";
+import {
+  loadCreditBatchLineageFacts,
+} from "@/data-access/credit-batch-lineage-facts";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
 import {
   deriveBatchHealth,
@@ -78,6 +79,7 @@ import { buildApplicationEvidenceGaps } from "./application-evidence-readiness";
 import { buildEntityReadinessGaps } from "./certify-readiness-gaps";
 import { loadDurabilityBatchData } from "./durability-readiness";
 import { buildSubmissionWarnings } from "./submission-warnings";
+import { projectCertificationLineage } from "./certification-lineage-projection";
 import {
   loadLinkedGhgStatementStatus,
   type LinkedGhgStatementStatus,
@@ -311,17 +313,7 @@ interface RemovalScope {
     productionEmissionsClaimedByRemovalId: string | null;
     co2eStoredPreview?: CreditBatchCo2eStoredPreview;
   }[];
-}
-
-async function getApplicationIdsForProductionRuns(
-  orgCtx: OrgContext,
-  productionRunIds: string[],
-): Promise<string[]> {
-  const applicationsForRuns = await getApplicationsForRuns(
-    orgCtx,
-    productionRunIds,
-  );
-  return Array.from(new Set(applicationsForRuns.map((row) => row.applicationId)));
+  lineages: ChainOfCustodyData[];
 }
 
 // Resolves the removal scope for a credit batch. When the batch is already
@@ -335,10 +327,8 @@ async function resolveScopeForCreditBatch(
   if (!batch) throw new SafeError("Credit batch not found");
 
   if (!batch.removalId) {
-    const applicationIds = await getApplicationIdsForProductionRuns(
-      orgCtx,
-      batch.productionRunIds,
-    );
+    const facts = (await loadCreditBatchLineageFacts(orgCtx, [batch.id]))[batch.id];
+    const runById = new Map(facts.runs.map((run) => [run.id, run]));
     return {
       facilityId: batch.facilityId,
       removalId: null,
@@ -348,13 +338,19 @@ async function resolveScopeForCreditBatch(
           id: batch.id,
           code: batch.code,
           productionRunIds: batch.productionRunIds,
-          applicationIds,
+          applicationIds: facts.applicationIds,
           durabilityOption: batch.durabilityOption,
           productionEmissionsClaimedByRemovalId:
             batch.productionEmissionsClaimedByRemovalId,
           co2eStoredPreview: batch.co2eStoredPreview ?? undefined,
         },
       ],
+      lineages: facts.applications.map((application) =>
+        projectCertificationLineage(
+          application,
+          runById.get(application.biocharProduct.linkedProductionRunId)!,
+        ),
+      ),
     };
   }
   return resolveScopeForRemoval(orgCtx, batch.removalId);
@@ -370,40 +366,41 @@ export async function resolveScopeForRemoval(
   if (!removal) throw new SafeError("Removal not found");
 
   const batches = await getCreditBatchesByRemovalId(orgCtx, removalId);
-  const memberBatches = await Promise.all(
-    batches.map(async (b) => {
-      const full = options?.skipPreview
-        ? await getCreditBatchById(orgCtx, b.id, { skipPreview: true })
-        : await getCreditBatchById(orgCtx, b.id);
-      // Fail fast rather than emitting a member batch with missing run-derived
-      // applications / preview — partial data here silently understates a
-      // removal's scope downstream.
-      if (!full) {
-        throw new SafeError(
-          `Credit batch ${b.id} in removal ${removalId} could not be loaded`,
-        );
-      }
-      const applicationIds = await getApplicationIdsForProductionRuns(
-        orgCtx,
-        full.productionRunIds,
-      );
+  const batchIds = batches.map((batch) => batch.id);
+  const factsByBatch = await loadCreditBatchLineageFacts(orgCtx, batchIds);
+  const previewsByBatch = options?.skipPreview
+    ? {}
+    : await getCo2eStoredPreviews(orgCtx, batchIds, {
+        lineageFactsByBatch: factsByBatch,
+      });
+  const memberBatches = batches.map((batch) => {
+      const facts = factsByBatch[batch.id];
       return {
-        id: full.id,
-        code: full.code,
-        productionRunIds: full.productionRunIds,
-        applicationIds,
-        durabilityOption: full.durabilityOption,
+        id: batch.id,
+        code: batch.code,
+        productionRunIds: facts.productionRunIds,
+        applicationIds: facts.applicationIds,
+        durabilityOption: batch.durabilityOption,
         productionEmissionsClaimedByRemovalId:
-          full.productionEmissionsClaimedByRemovalId,
-        co2eStoredPreview: full.co2eStoredPreview ?? undefined,
+          batch.productionEmissionsClaimedByRemovalId,
+        co2eStoredPreview: previewsByBatch[batch.id],
       };
-    }),
-  );
+    });
+  const lineages = Object.values(factsByBatch).flatMap((facts) => {
+    const runById = new Map(facts.runs.map((run) => [run.id, run]));
+    return facts.applications.map((application) =>
+      projectCertificationLineage(
+        application,
+        runById.get(application.biocharProduct.linkedProductionRunId)!,
+      ),
+    );
+  });
   return {
     facilityId: removal.facilityId,
     removalId,
     removal,
     memberBatches,
+    lineages: Array.from(new Map(lineages.map((lineage) => [lineage.application.id, lineage])).values()),
   };
 }
 
@@ -640,9 +637,7 @@ export async function buildRemovalContext(
     };
   }
 
-  const lineages = await Promise.all(
-    applicationIds.map((id) => getChainOfCustodyData(orgCtx, id)),
-  );
+  const lineages = scope.lineages;
   const runIds = Array.from(
     new Set(
       lineages
