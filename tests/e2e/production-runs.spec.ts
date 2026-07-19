@@ -238,9 +238,42 @@ test.describe("Production Run lifecycle (#254)", () => {
     await waitForSideSheetClose(page);
 
     await page.selectOption('select:not([name="status"])', "cancelled");
-    await expect(
-      page.locator("tbody").getByText("Cancelled", { exact: true }).first(),
-    ).toBeVisible();
+    const cancelledBadge = page
+      .locator('tbody [data-status="cancelled"]')
+      .first();
+    await expect(cancelledBadge).toBeVisible();
+    await expect(cancelledBadge).toHaveAttribute("data-status-state", "neutral");
+    await expect(cancelledBadge).toHaveClass(/--st-off-bg/);
+  });
+
+  test("renders a failed run with the canonical error treatment", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await openRunForm(page, seededData, {
+      startDate: "2030-02-05",
+      startTime: "08:00",
+      status: "running",
+    });
+    await submitCreate(page);
+    await waitForSideSheetClose(page);
+
+    await page.selectOption('select:not([name="status"])', "running");
+    await expect(page.locator('tbody [data-status="running"]').first()).toBeVisible();
+    await editFirstRow(page);
+
+    const dialog = page.locator('[role="dialog"]');
+    await dialog.locator('input[name="endDate"]').fill("2030-02-05");
+    await dialog.locator('input[name="endTime"]').fill("12:00");
+    await dialog.locator('select[name="status"]').selectOption("failed");
+    await saveEdit(page);
+    await waitForSideSheetClose(page);
+
+    await page.selectOption('select:not([name="status"])', "failed");
+    const failedBadge = page.locator('tbody [data-status="failed"]').first();
+    await expect(failedBadge).toBeVisible();
+    await expect(failedBadge).toHaveAttribute("data-status-state", "error");
+    await expect(failedBadge).toHaveClass(/--st-bad-bg/);
   });
 });
 
