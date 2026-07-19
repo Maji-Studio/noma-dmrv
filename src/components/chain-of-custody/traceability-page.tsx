@@ -1,5 +1,5 @@
 /**
- * Chain of Custody Page — credit-batch anchored (ADR 0011, Phase 3).
+ * Traceability Page — credit-batch anchored (ADR 0011, Phase 3).
  *
  * The page re-anchors on the credit batch — the unit whose provenance
  * verification actually cares about — with the single application's rollback
@@ -32,7 +32,6 @@ import "@xyflow/react/dist/base.css";
 import { ArrowLeftIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui";
-import { EntitySelect } from "@/components/forms/entity-select";
 import { cn } from "@/lib/utils";
 import { buildBatchSankey } from "@/lib/chain-of-custody/sankey";
 import {
@@ -51,10 +50,12 @@ import {
 import { ChainEdge } from "./chain-edge";
 import { ChainNode, type ChainNodeData } from "./chain-node";
 import { ChainNodeSheet, type ChainNodeSheetNode } from "./chain-node-sheet";
+import { CreditBatchCardSelector } from "./credit-batch-card-selector";
 import { CarbonTransitPanel } from "./map";
 import { RunFilterSelect, type RunFilterOption } from "./run-filter-select";
 import { BatchSankey } from "./sankey";
 import { ApplicationTrail } from "./trail";
+import { useCreditBatchCardSelection } from "./use-credit-batch-card-selection";
 import {
   reachableNodeIds,
   useBatchChainGraph,
@@ -97,8 +98,7 @@ const MASS_UNIT_MODES: Array<{
 const DEFAULT_APPLICATION_VIEW: ApplicationViewMode = "lineage";
 const DEFAULT_BATCH_VIEW: BatchViewMode = "dag";
 
-// Shared width for the batch / run selector wrappers in the page header.
-const SELECTOR_WRAPPER_CLASS = "w-[320px] max-w-full";
+const RUN_SELECTOR_WRAPPER_CLASS = "w-[320px] max-w-full";
 
 function parseApplicationView(raw: string | null): ApplicationViewMode {
   return APPLICATION_VIEW_MODES.some((mode) => mode.value === raw)
@@ -276,7 +276,7 @@ function LoadingState({ label }: { label: string }) {
   );
 }
 
-export function ChainOfCustodyPage() {
+export function TraceabilityPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -284,10 +284,14 @@ export function ChainOfCustodyPage() {
   // selector only offers the current facility's batches, and a selection that
   // resolves to another facility (a facility switch, or a foreign deep link)
   // is dropped below so the chain never renders out-of-facility provenance.
-  const { facilityId } = useFacilityContext();
+  const { facilityId, selectedFacility } = useFacilityContext();
   const selectedApplicationId = searchParams.get("application");
-  const selectedBatchId = searchParams.get("batch");
   const selectedRunId = searchParams.get("run");
+  const batchSelection = useCreditBatchCardSelection(facilityId);
+  // Only a batch returned by the current facility's layered list query may
+  // anchor or appear selected. This prevents a prior facility's URL value
+  // from flashing its graph while the remembered/fallback selection resolves.
+  const selectedBatchId = batchSelection.validSelectedBatchId;
   // Application wins: with both params present the page is a drill-down
   // inside the batch context (plan decision 5).
   const anchor: "application" | "batch" | "none" = selectedApplicationId
@@ -462,18 +466,9 @@ export function ChainOfCustodyPage() {
     pathname,
   ]);
 
-  const handleBatchChange = (creditBatchId: string | undefined) => {
+  const handleBatchChange = (creditBatchId: string) => {
     setSelection(null);
-    updateParams((params) => {
-      params.delete("application");
-      params.delete("run");
-      params.delete("view");
-      if (creditBatchId) {
-        params.set("batch", creditBatchId);
-      } else {
-        params.delete("batch");
-      }
-    });
+    batchSelection.selectBatch(creditBatchId);
   };
 
   const handleRunChange = (runId: string | undefined) => {
@@ -537,7 +532,8 @@ export function ChainOfCustodyPage() {
   };
 
   const facility =
-    anchor === "application" ? chainData?.facility : batchData?.facility;
+    (anchor === "application" ? chainData?.facility : batchData?.facility) ??
+    selectedFacility;
   const viewModes =
     anchor === "batch" ? BATCH_VIEW_MODES : APPLICATION_VIEW_MODES;
   const activeView = anchor === "batch" ? batchView : applicationView;
@@ -555,7 +551,7 @@ export function ChainOfCustodyPage() {
     if (chainIsError) {
       return (
         <CenteredMessage tone="error">
-          {chainError?.message || "Failed to load chain of custody data."}
+          {chainError?.message || "Failed to load traceability data."}
         </CenteredMessage>
       );
     }
@@ -627,7 +623,7 @@ export function ChainOfCustodyPage() {
     if (batchIsError) {
       return (
         <CenteredMessage tone="error">
-          {batchError?.message || "Failed to load credit batch chain of custody data."}
+          {batchError?.message || "Failed to load credit batch traceability data."}
         </CenteredMessage>
       );
     }
@@ -687,10 +683,10 @@ export function ChainOfCustodyPage() {
     return (
       <div className="container-max page-shell">
         <PageHeader
-          title="Chain of Custody"
+          title="Traceability"
           subtitle="Trace a credit batch's provenance back through production to feedstock."
         />
-        <SelectFacilityEmptyState description="Choose a facility from the sidebar to trace its chain of custody." />
+        <SelectFacilityEmptyState description="Choose a facility from the sidebar to trace its provenance." />
       </div>
     );
   }
@@ -704,7 +700,7 @@ export function ChainOfCustodyPage() {
           <div className="container-max py-16 flex flex-col gap-16">
           <div className="flex items-start justify-between gap-16">
             <PageHeader
-              title="Chain of Custody"
+              title="Traceability"
               subtitle="Select a credit batch to roll up its provenance, narrow it by production run, or click an application card to trace a single rollback."
             />
 
@@ -720,24 +716,19 @@ export function ChainOfCustodyPage() {
             </div>
           </div>
 
+          <CreditBatchCardSelector
+            batches={batchSelection.batches}
+            selectedBatchId={selectedBatchId}
+            isLoading={batchSelection.isLoading}
+            isError={batchSelection.isError}
+            error={batchSelection.error}
+            onSelect={handleBatchChange}
+          />
+
           <div className="flex flex-wrap items-end justify-between gap-16">
             <div className="flex flex-wrap items-end gap-16">
-              <div className={SELECTOR_WRAPPER_CLASS} data-testid="chain-batch-select">
-                <p className="body-caption uppercase tracking-[0.12em] text-[var(--color-text-tertiary)] mb-8">
-                  Credit Batch
-                </p>
-                <EntitySelect
-                  entityType="creditBatch"
-                  value={anchor === "batch" ? (selectedBatchId ?? undefined) : undefined}
-                  onChange={handleBatchChange}
-                  filterBy={facilityId ? { facilityId } : undefined}
-                  placeholder="Search batch code"
-                  alwaysShowSearch
-                  className="bg-[var(--color-background-white)]"
-                />
-              </div>
               {anchor === "batch" ? (
-                <div className={SELECTOR_WRAPPER_CLASS} data-testid="chain-run-select">
+                <div className={RUN_SELECTOR_WRAPPER_CLASS} data-testid="chain-run-select">
                   <p className="body-caption uppercase tracking-[0.12em] text-[var(--color-text-tertiary)] mb-8">
                     Production Run
                   </p>
@@ -822,7 +813,13 @@ export function ChainOfCustodyPage() {
         <div className="flex-1 min-h-0 relative">
           {anchor === "none" ? (
             <CenteredMessage>
-              Select a credit batch above to view its chain of custody.
+              {batchSelection.isLoading
+                ? "Loading this facility's credit batches…"
+                : batchSelection.isError
+                  ? "Credit batches could not be loaded. Refresh the page to try again."
+                  : batchSelection.batches.length === 0
+                    ? "No credit batches are available for this facility. Create one before reviewing its traceability."
+                    : "Selecting the remembered or most recent credit batch…"}
             </CenteredMessage>
           ) : anchor === "application" ? (
             applicationBody

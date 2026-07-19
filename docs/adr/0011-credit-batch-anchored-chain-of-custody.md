@@ -1,7 +1,7 @@
 # Chain of custody is credit-batch-anchored; the application is the drill-down
 
 > **Status: Accepted** (2026-06-11). Reverses the application-first anchor
-> recorded in `docs/chain-of-custody.md` (itself a deliberate redesign).
+> recorded in `docs/traceability.md` (itself a deliberate redesign).
 > Feature shape lives in `docs/plans/2026-06-11-chain-of-custody-views.md`;
 > this ADR fixes only *what the page is anchored on and why*.
 
@@ -47,6 +47,6 @@ unbatched applications reachable.
   transit map, **mass balance** Sankey); application level keeps the
   linear readings (DAG, map, split, **Trail**). See CONTEXT.md →
   Provenance & lineage for the canonical terms.
-- The application-first sections of `docs/chain-of-custody.md` and
+- The application-first sections of `docs/traceability.md` and
   CLAUDE.md must be updated when the re-anchor ships (Phase 3), not
   before — Phase 2 (transit map) lands on the old anchor first.

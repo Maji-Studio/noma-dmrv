@@ -124,7 +124,7 @@
   --st-bad-bg: rgba(229, 69, 82, 0.1);
   --st-bad-border: rgba(229, 69, 82, 0.4);
 
-  /* Tinted canvas wash (chain-of-custody figure/ground) */
+  /* Tinted canvas wash (traceability figure/ground) */
   --sea: rgba(72, 11, 115, 0.045);
 
   /* ===== HAIRLINE HIERARCHY (Maji DS) =====
@@ -1335,19 +1335,19 @@ p,
 
 /* ===== ANIMATIONS ===== */
 
-/* Chain-of-custody Sankey — marching flow centerline on the mass ribbons
+/* Traceability Sankey — marching flow centerline on the mass ribbons
    (dash cycle = 5 + 7, so one offset period reads as continuous travel). */
-@keyframes coc-flow-march {
+@keyframes traceability-flow-march {
   to {
     stroke-dashoffset: -12;
   }
 }
-.coc-flow-line {
+.traceability-flow-line {
   stroke-dasharray: 5 7;
-  animation: coc-flow-march 1.1s linear infinite;
+  animation: traceability-flow-march 1.1s linear infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .coc-flow-line {
+  .traceability-flow-line {
     animation: none;
   }
 }

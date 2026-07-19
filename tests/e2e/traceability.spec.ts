@@ -7,6 +7,9 @@ import { DEC_ORG_ID } from "@/db/org-defaults";
 import * as schema from "../../src/db/schema";
 import { test, expect, type SeededChainData } from "./fixtures";
 
+const TRACEABILITY_BATCH_STORAGE_PREFIX =
+  "noma:traceability:selected-credit-batch";
+
 function createDbConnection() {
   const databaseUrl =
     process.env.DATABASE_URL ||
@@ -15,12 +18,12 @@ function createDbConnection() {
   return { db: drizzle(pool, { schema }), pool };
 }
 
-function chainUrl(
+function traceabilityUrl(
   facilityId: string,
   params: Record<string, string> = {}
 ) {
   const search = new URLSearchParams({ facility: facilityId, ...params });
-  return `/chain-of-custody?${search.toString()}`;
+  return `/traceability?${search.toString()}`;
 }
 
 async function seedApplicationLineage(seededData: SeededChainData) {
@@ -128,20 +131,75 @@ async function seedApplicationLineage(seededData: SeededChainData) {
   }
 }
 
-// Scope by the wrapping testid — the trigger testid itself is not unique.
-async function selectEntity(
-  page: Page,
-  wrapperTestId: "chain-batch-select",
-  entityId: string,
-  entityCode: string
-) {
-  await page
-    .getByTestId(wrapperTestId)
-    .getByTestId("entity-select-trigger")
-    .click();
-  await expect(page.getByTestId("entity-select-listbox")).toBeVisible();
-  await page.getByTestId("entity-select-search").fill(entityCode);
-  await page.getByTestId(`entity-option-${entityId}`).click();
+function batchStorageKey(facilityId: string) {
+  return `${TRACEABILITY_BATCH_STORAGE_PREFIX}:${facilityId}`;
+}
+
+async function clearRememberedBatchSelections(page: Page) {
+  await page.evaluate((prefix) => {
+    for (const key of Object.keys(window.localStorage)) {
+      if (key.startsWith(prefix)) window.localStorage.removeItem(key);
+    }
+  }, TRACEABILITY_BATCH_STORAGE_PREFIX);
+}
+
+async function selectBatchCard(page: Page, creditBatchId: string) {
+  await page.getByTestId(`chain-batch-card-${creditBatchId}`).click();
+}
+
+async function seedBatchOptions(seededData: SeededChainData) {
+  const { db, pool } = createDbConnection();
+  const suffix = crypto.randomUUID().slice(0, 8).toUpperCase();
+  const productionProcessId = crypto.randomUUID();
+  const older = {
+    id: crypto.randomUUID(),
+    code: `E2E-CB-OLDER-${suffix}`,
+  };
+  const newest = {
+    id: crypto.randomUUID(),
+    code: `E2E-CB-NEWEST-${suffix}`,
+  };
+
+  try {
+    await db.transaction(async (tx) => {
+      await tx.insert(schema.productionProcesses).values({
+        organizationId: DEC_ORG_ID,
+        id: productionProcessId,
+        facilityId: seededData.facility.id,
+        feedstockTypeId: seededData.feedstockType.id,
+      });
+      await tx.insert(schema.creditBatches).values([
+        {
+          organizationId: DEC_ORG_ID,
+          ...older,
+          facilityId: seededData.facility.id,
+          feedstockTypeId: seededData.feedstockType.id,
+          productionProcessId,
+          status: "verified",
+          startDate: "2026-01-01",
+          endDate: "2026-01-31",
+          hToCorgRatio: 0.4,
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        },
+        {
+          organizationId: DEC_ORG_ID,
+          ...newest,
+          facilityId: seededData.facility.id,
+          feedstockTypeId: seededData.feedstockType.id,
+          productionProcessId,
+          status: "pending",
+          startDate: "2026-02-01",
+          endDate: "2026-02-28",
+          hToCorgRatio: 0.4,
+          createdAt: new Date("2026-02-01T00:00:00.000Z"),
+        },
+      ]);
+    });
+
+    return { newest, older };
+  } finally {
+    await pool.end();
+  }
 }
 
 /**
@@ -347,8 +405,12 @@ async function seedBatchChain(seededData: SeededChainData) {
   }
 }
 
-test.describe("Chain of Custody Visualization", () => {
-  test("page loads with the batch-selector empty state", async ({
+test.beforeEach(async ({ adminPage }) => {
+  await clearRememberedBatchSelections(adminPage);
+});
+
+test.describe("Traceability Visualization", () => {
+  test("page loads with the batch-card selector empty state", async ({
     adminPage,
     seededData,
     cleanupTestData,
@@ -358,19 +420,24 @@ test.describe("Chain of Custody Visualization", () => {
     // Anchor a facility explicitly: without one the page renders the
     // "Select a facility" empty state instead, so this test only passed
     // when an earlier spec in the shard happened to leave a facility.
-    await adminPage.goto(chainUrl(seededData.facility.id));
+    await adminPage.goto(traceabilityUrl(seededData.facility.id));
 
     await expect(
-      adminPage.getByRole("heading", { name: /Chain of Custody/i })
+      adminPage.getByRole("heading", { name: /Traceability/i })
     ).toBeVisible();
     await expect(
       adminPage.getByText(
-        /Select a credit batch above to view its chain of custody/i
+        /No credit batches are available for this facility/i
       )
     ).toBeVisible();
     await expect(
-      adminPage.getByTestId("chain-batch-select").getByTestId("entity-select-trigger")
-    ).toBeVisible();
+      adminPage.getByTestId("chain-batch-selector")
+    ).toContainText("No credit batches for this facility");
+    await expect(
+      adminPage.getByRole("radiogroup", {
+        name: "Credit batches for this facility",
+      })
+    ).toHaveCount(0);
     // The run filter is derived from the batch, so it only renders once a
     // batch anchors the page.
     await expect(adminPage.getByTestId("chain-run-select")).toHaveCount(0);
@@ -385,7 +452,7 @@ test.describe("Chain of Custody Visualization", () => {
     const lineage = await seedApplicationLineage(seededData);
 
     await adminPage.goto(
-      chainUrl(seededData.facility.id, { application: lineage.application.id })
+      traceabilityUrl(seededData.facility.id, { application: lineage.application.id })
     );
 
     await expect(adminPage.locator(".react-flow__viewport")).toBeVisible({
@@ -422,7 +489,7 @@ test.describe("Chain of Custody Visualization", () => {
     const lineage = await seedApplicationLineage(seededData);
 
     await adminPage.goto(
-      chainUrl(seededData.facility.id, { application: lineage.application.id })
+      traceabilityUrl(seededData.facility.id, { application: lineage.application.id })
     );
 
     await expect(adminPage.locator(".react-flow__viewport")).toBeVisible({
@@ -448,7 +515,7 @@ test.describe("Chain of Custody Visualization", () => {
     const lineage = await seedApplicationLineage(seededData);
 
     await adminPage.goto(
-      chainUrl(seededData.facility.id, { application: lineage.application.id })
+      traceabilityUrl(seededData.facility.id, { application: lineage.application.id })
     );
     await expect(adminPage.locator(".react-flow__viewport")).toBeVisible({
       timeout: 15000,
@@ -466,7 +533,61 @@ test.describe("Chain of Custody Visualization", () => {
   });
 });
 
-test.describe("Chain of Custody Views (credit-batch anchor)", () => {
+test.describe("Traceability Views (credit-batch anchor)", () => {
+  test("automatically selects the newest-first batch when none is remembered", async ({
+    adminPage,
+    seededData,
+    cleanupTestData,
+  }) => {
+    void cleanupTestData;
+    const batches = await seedBatchOptions(seededData);
+
+    await adminPage.goto(traceabilityUrl(seededData.facility.id));
+
+    await expect(adminPage).toHaveURL(
+      new RegExp(`batch=${batches.newest.id}`),
+    );
+    await expect(
+      adminPage.getByTestId(`chain-batch-radio-${batches.newest.id}`),
+    ).toBeChecked();
+    await expect(
+      adminPage.getByTestId(`chain-batch-card-${batches.newest.id}`),
+    ).toContainText("Selected");
+    const rememberedBatchId = await adminPage.evaluate(
+      (key) => window.localStorage.getItem(key),
+      batchStorageKey(seededData.facility.id),
+    );
+    expect(rememberedBatchId).toBe(batches.newest.id);
+  });
+
+  test("restores the remembered batch for the current facility", async ({
+    adminPage,
+    seededData,
+    cleanupTestData,
+  }) => {
+    void cleanupTestData;
+    const batches = await seedBatchOptions(seededData);
+    await adminPage.evaluate(
+      ({ key, batchId }) => window.localStorage.setItem(key, batchId),
+      {
+        key: batchStorageKey(seededData.facility.id),
+        batchId: batches.older.id,
+      },
+    );
+
+    await adminPage.goto(traceabilityUrl(seededData.facility.id));
+
+    await expect(adminPage).toHaveURL(
+      new RegExp(`batch=${batches.older.id}`),
+    );
+    await expect(
+      adminPage.getByTestId(`chain-batch-radio-${batches.older.id}`),
+    ).toBeChecked();
+    await expect(
+      adminPage.getByTestId(`chain-batch-radio-${batches.newest.id}`),
+    ).not.toBeChecked();
+  });
+
   test("batch deep link renders the merged roll-up with shared runs deduped", async ({
     adminPage,
     seededData,
@@ -476,7 +597,7 @@ test.describe("Chain of Custody Views (credit-batch anchor)", () => {
     const batch = await seedBatchChain(seededData);
 
     await adminPage.goto(
-      chainUrl(seededData.facility.id, { batch: batch.ids.creditBatch })
+      traceabilityUrl(seededData.facility.id, { batch: batch.ids.creditBatch })
     );
 
     await expect(adminPage.locator(".react-flow__viewport")).toBeVisible({
@@ -485,6 +606,9 @@ test.describe("Chain of Custody Views (credit-batch anchor)", () => {
     await expect(
       adminPage.getByText(`${seededData.facility.code} - ${seededData.facility.name}`)
     ).toBeVisible({ timeout: 10000 });
+    await expect(
+      adminPage.getByTestId(`chain-batch-radio-${batch.ids.creditBatch}`),
+    ).toBeChecked();
 
     // Both member applications render…
     await expect(
@@ -511,7 +635,7 @@ test.describe("Chain of Custody Views (credit-batch anchor)", () => {
     await expect(segment.getByRole("button", { name: "Sankey" })).toBeVisible();
   });
 
-  test("dual selector drills down from batch to application and back", async ({
+  test("batch card selection drills down to an application and back", async ({
     adminPage,
     seededData,
     cleanupTestData,
@@ -519,17 +643,32 @@ test.describe("Chain of Custody Views (credit-batch anchor)", () => {
     void cleanupTestData;
     const batch = await seedBatchChain(seededData);
 
-    await adminPage.goto(chainUrl(seededData.facility.id));
-    await selectEntity(
-      adminPage,
-      "chain-batch-select",
-      batch.ids.creditBatch,
-      batch.codes.creditBatch
+    // A standalone application deep link must not be replaced automatically,
+    // even though its facility has a batch available.
+    await adminPage.goto(
+      traceabilityUrl(seededData.facility.id, {
+        application: batch.ids.applicationA,
+      }),
     );
+    await expect(adminPage).not.toHaveURL(/batch=/);
+    await expect(
+      adminPage.getByTestId(`chain-batch-radio-${batch.ids.creditBatch}`),
+    ).not.toBeChecked();
+
+    await selectBatchCard(adminPage, batch.ids.creditBatch);
 
     await expect(adminPage).toHaveURL(
-      new RegExp(`/chain-of-custody\\?.*batch=${batch.ids.creditBatch}`)
+      new RegExp(`/traceability\\?.*batch=${batch.ids.creditBatch}`)
     );
+    await expect(adminPage).not.toHaveURL(/application=/);
+    await expect(
+      adminPage.getByTestId(`chain-batch-radio-${batch.ids.creditBatch}`),
+    ).toBeChecked();
+    const rememberedBatchId = await adminPage.evaluate(
+      (key) => window.localStorage.getItem(key),
+      batchStorageKey(seededData.facility.id),
+    );
+    expect(rememberedBatchId).toBe(batch.ids.creditBatch);
     await expect(adminPage.locator(".react-flow__viewport")).toBeVisible({
       timeout: 15000,
     });
@@ -547,6 +686,9 @@ test.describe("Chain of Custody Views (credit-batch anchor)", () => {
     await expect(adminPage).toHaveURL(
       new RegExp(`batch=${batch.ids.creditBatch}`)
     );
+    await expect(
+      adminPage.getByTestId(`chain-batch-radio-${batch.ids.creditBatch}`),
+    ).toBeChecked();
     // Drill-down shows the application view modes, incl. the Trail.
     await expect(
       adminPage
@@ -571,7 +713,7 @@ test.describe("Chain of Custody Views (credit-batch anchor)", () => {
     const batch = await seedBatchChain(seededData);
 
     await adminPage.goto(
-      chainUrl(seededData.facility.id, { batch: batch.ids.creditBatch })
+      traceabilityUrl(seededData.facility.id, { batch: batch.ids.creditBatch })
     );
     await expect(adminPage.locator(".react-flow__viewport")).toBeVisible({
       timeout: 15000,
@@ -613,7 +755,7 @@ test.describe("Chain of Custody Views (credit-batch anchor)", () => {
     const batch = await seedBatchChain(seededData);
 
     await adminPage.goto(
-      chainUrl(seededData.facility.id, {
+      traceabilityUrl(seededData.facility.id, {
         batch: batch.ids.creditBatch,
         view: "sankey",
       })
@@ -652,7 +794,7 @@ test.describe("Chain of Custody Views (credit-batch anchor)", () => {
     const batch = await seedBatchChain(seededData);
 
     await adminPage.goto(
-      chainUrl(seededData.facility.id, {
+      traceabilityUrl(seededData.facility.id, {
         application: batch.ids.applicationA,
         view: "trail",
       })

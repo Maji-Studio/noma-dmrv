@@ -104,7 +104,7 @@ Cutover stance: **not live → reseed, not migrate-in-place** (no production dat
 - New: derived-aggregate reconciliation test (#285) — edit a member run's output/samples → batch totals update; no drift.
 - New: forward-resolver test — run → applications; assert one-run-one-application invariant.
 - **`tests/e2e/credit-batches.spec.ts`** + **`src/db/seed-data.ts`**: seed via run membership, not application junction.
-- Update `docs/chain-of-custody.md`, `docs/database.md`, `docs/schema-overview.md`, and the credit-batch sections of CLAUDE.md.
+- Update `docs/traceability.md`, `docs/database.md`, `docs/schema-overview.md`, and the credit-batch sections of CLAUDE.md.
 
 ## 7. Blast radius (from exploration)
 

@@ -45,7 +45,7 @@ const ROUTES = [
   "/certification/settings",
   "/certification/removals",
   "/certification/ghg-statements",
-  "/chain-of-custody",
+  "/traceability",
   "/admin",
   "/admin/users",
 ] as const;
