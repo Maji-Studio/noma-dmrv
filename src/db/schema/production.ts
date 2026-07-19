@@ -106,7 +106,7 @@ export const productionRuns = pgTable(
       .where(sql`${table.status} <> 'cancelled' and ${table.archivedAt} is null`),
     check(
       'production_runs_cancelled_requires_reason',
-      sql`${table.status} <> 'cancelled' or length(trim(${table.cancellationReason})) > 0`
+      sql`${table.status} <> 'cancelled' or COALESCE(length(trim(${table.cancellationReason})), 0) > 0`
     ),
     check(
       'production_runs_feedstock_wet_mass_non_negative',

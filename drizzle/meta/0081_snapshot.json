@@ -6440,7 +6440,7 @@
         },
         "production_runs_cancelled_requires_reason": {
           "name": "production_runs_cancelled_requires_reason",
-          "value": "\"production_runs\".\"status\" <> 'cancelled' or length(trim(\"production_runs\".\"cancellation_reason\")) > 0"
+          "value": "\"production_runs\".\"status\" <> 'cancelled' or COALESCE(length(trim(\"production_runs\".\"cancellation_reason\")), 0) > 0"
         },
         "production_runs_feedstock_wet_mass_non_negative": {
           "name": "production_runs_feedstock_wet_mass_non_negative",
