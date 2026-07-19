@@ -16,7 +16,6 @@ import {
 } from "@/schemas/credit-batches";
 
 import { requireOrgScope } from "./utils";
-import { projectChainOfCustodyFromBatchFacts } from "./chain-of-custody";
 import {
   loadCreditBatchLineageFacts,
   type CreditBatchLineageFacts,
@@ -150,17 +149,14 @@ export async function buildCo2eStoredPreview(
     (await loadCreditBatchLineageFacts(ctx, [batch.id]))[batch.id];
   const applicationRows = facts.applications;
   const runById = new Map(facts.runs.map((run) => [run.id, run]));
-  const lineages = applicationRows.map((application) =>
-    projectChainOfCustodyFromBatchFacts(
-      application,
-      runById.get(application.biocharProduct.linkedProductionRunId)!,
-    ),
-  );
 
   const appById = new Map(applicationRows.map((app) => [app.id, app]));
-  const warnings: string[] = lineages.flatMap((lineage) =>
-    lineage.warnings.map((warning) => `${lineage.application.code}: ${warning}`)
-  );
+  const warnings: string[] = applicationRows.flatMap((application) => {
+    const run = runById.get(application.biocharProduct.linkedProductionRunId);
+    return run && run.feedstocks.length === 0
+      ? [`${application.code}: The linked production run does not have any recorded feedstock allocations.`]
+      : [];
+  });
 
   // Chemistry at the CREDIT-BATCH grain (issue #309): the batch's POOLED
   // replicate means — the same figures the durability data plane submits —

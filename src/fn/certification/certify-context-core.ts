@@ -17,7 +17,6 @@ import {
   type UngroupedCreditBatchRow,
 } from "@/data-access/certifier-removals";
 import {
-  projectChainOfCustodyFromBatchFacts,
   type ChainOfCustodyData,
 } from "@/data-access/chain-of-custody";
 import {
@@ -29,7 +28,9 @@ import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples"
 import {
   getApplicationRollupsByBatchIds,
 } from "@/data-access/credit-batch-production-runs";
-import { loadCreditBatchLineageFacts } from "@/data-access/credit-batch-lineage-facts";
+import {
+  loadCreditBatchLineageFacts,
+} from "@/data-access/credit-batch-lineage-facts";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
 import {
   deriveBatchHealth,
@@ -78,6 +79,7 @@ import { buildApplicationEvidenceGaps } from "./application-evidence-readiness";
 import { buildEntityReadinessGaps } from "./certify-readiness-gaps";
 import { loadDurabilityBatchData } from "./durability-readiness";
 import { buildSubmissionWarnings } from "./submission-warnings";
+import { projectCertificationLineage } from "./certification-lineage-projection";
 import {
   loadLinkedGhgStatementStatus,
   type LinkedGhgStatementStatus,
@@ -344,7 +346,7 @@ async function resolveScopeForCreditBatch(
         },
       ],
       lineages: facts.applications.map((application) =>
-        projectChainOfCustodyFromBatchFacts(
+        projectCertificationLineage(
           application,
           runById.get(application.biocharProduct.linkedProductionRunId)!,
         ),
@@ -385,7 +387,7 @@ export async function resolveScopeForRemoval(
   const lineages = Object.values(factsByBatch).flatMap((facts) => {
     const runById = new Map(facts.runs.map((run) => [run.id, run]));
     return facts.applications.map((application) =>
-      projectChainOfCustodyFromBatchFacts(
+      projectCertificationLineage(
         application,
         runById.get(application.biocharProduct.linkedProductionRunId)!,
       ),
