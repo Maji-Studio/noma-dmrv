@@ -111,6 +111,12 @@ export async function loadCreditBatchLineageFacts(
   const ids = uniqueSorted(batchIds);
   if (ids.length === 0) return {};
 
+  if (executor === db) {
+    return db.transaction((tx) =>
+      loadCreditBatchLineageFacts(ctx, ids, tx, options),
+    );
+  }
+
   options?.onQuery?.();
   const membershipRows = await executor
     .select({
