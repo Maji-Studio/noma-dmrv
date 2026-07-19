@@ -30,11 +30,13 @@ import {
 } from "@/db/schema/certification";
 import { creditBatchStatus } from "@/db/schema/common";
 import { updateFacility } from "@/data-access/facilities";
+import { acquireFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
 import { SafeError } from "@/lib/errors";
 
 type CreditBatchStatus = (typeof creditBatchStatus.enumValues)[number];
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000909";
+const LOCK_OBSERVATION_DELAY_MS = 200;
 
 const createdIds = {
   facilities: [] as string[],
@@ -157,6 +159,10 @@ async function tierOf(facilityId: string): Promise<string> {
   return row.durabilityOption;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 beforeAll(() => ensureTestOrg());
 
 beforeAll(async () => {
@@ -253,5 +259,26 @@ describe("updateFacility durability-tier guard", () => {
 
     expect(updated.contactEmail).toBe("ops@example.com");
     expect(updated.durabilityOption).toBe("200_year");
+  });
+
+  it("does not make a non-tier update wait for the durability lock", async () => {
+    const chain = await setupFacility("non-tier-fast-path", "200_year");
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    let updatePromise!: ReturnType<typeof updateFacility>;
+
+    await db.transaction(async (tx) => {
+      await acquireFacilityDurabilityLock(ctx, tx, chain.facilityId);
+      updatePromise = updateFacility(ctx, chain.facilityId, {
+        contactPhone: "+41 44 555 01 23",
+      });
+
+      const completedWhileLockHeld = await Promise.race([
+        updatePromise.then(() => true),
+        sleep(LOCK_OBSERVATION_DELAY_MS).then(() => false),
+      ]);
+      expect(completedWhileLockHeld).toBe(true);
+    });
+
+    expect((await updatePromise).contactPhone).toBe("+41 44 555 01 23");
   });
 });

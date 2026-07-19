@@ -24,6 +24,7 @@ import {
   certifierProjects,
   certifierRemovals,
 } from "@/db/schema/certification";
+import { facilities } from "@/db/schema/facilities";
 import { SafeError } from "@/lib/errors";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
@@ -38,6 +39,7 @@ import {
   assertSubmissionInFacility,
   type CertificationSubmissionRow,
 } from "./certification";
+import { acquireFacilityDurabilityLock } from "./facility-durability-lock";
 import { assertSameOrg, requireOrgScope } from "./utils";
 
 type CertifierProvider = (typeof certifierProjects.$inferSelect)["provider"];
@@ -55,6 +57,7 @@ export interface MappingClaimGuard {
   expectedExternalProjectId: string;
   expectedExternalFacilityId?: string | null;
   expectedDefaultRemovalTemplateId?: string | null;
+  expectedDurabilityOption?: (typeof facilities.$inferSelect)["durabilityOption"];
 }
 
 export interface InsertDraftSubmissionInput extends SubmissionKey {
@@ -410,15 +413,38 @@ async function getLatestSubmissionWithExecutor(
 // are checked by presence: a GHG Statement has no template, so it simply
 // omits `expectedDefaultRemovalTemplateId`.
 //
-// The mapping lock is always acquired FIRST so every submit path shares one
-// lock order (`mapping → caller-supplied locks`), preventing an ABBA
-// deadlock with admin flows that touch certifier_projects and
-// certifier_document_uploads in the opposite order.
+// The facility durability lock is always acquired first, followed by the
+// mapping lock, so every submit path shares one order
+// (`facility → mapping → artifact → mirror`). This serializes the first
+// blocking ledger write with facility tier edits and prevents ABBA deadlocks.
 async function lockAndVerifyMapping(
   ctx: OrgContext,
   executor: DbTransaction,
   guard: MappingClaimGuard,
 ): Promise<void> {
+  await acquireFacilityDurabilityLock(ctx, executor, guard.facilityId);
+
+  if (guard.expectedDurabilityOption !== undefined) {
+    const [facility] = await executor
+      .select({ durabilityOption: facilities.durabilityOption })
+      .from(facilities)
+      .where(
+        and(
+          eq(facilities.id, guard.facilityId),
+          eq(facilities.organizationId, ctx.organizationId),
+        ),
+      )
+      .limit(1);
+    if (!facility) {
+      throw new SafeError("Facility no longer exists. Reload and retry.");
+    }
+    if (facility.durabilityOption !== guard.expectedDurabilityOption) {
+      throw new SafeError(
+        "Facility's durability tier changed mid-submission. Reload and retry.",
+      );
+    }
+  }
+
   const [current] = await executor
     .select({
       externalProjectId: certifierProjects.externalProjectId,
