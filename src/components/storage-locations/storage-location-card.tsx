@@ -68,7 +68,7 @@ export function StorageLocationCard({
           </span>
           {lastActivity && (
             <span
-              className={`inline-flex shrink-0 items-center gap-4 body-caption ${
+              className={`inline-flex min-w-0 items-center gap-4 body-caption ${
                 lastActivity.type === "in"
                   ? "text-[var(--color-signal-green)]"
                   : "text-[var(--color-signal-orange)]"
@@ -78,11 +78,13 @@ export function StorageLocationCard({
               }${formatMass(lastActivity.massKg)}`}
             >
               {lastActivity.type === "in" ? (
-                <ArrowUpIcon size={12} weight="bold" />
+                <ArrowUpIcon className="shrink-0" size={12} weight="bold" />
               ) : (
-                <ArrowDownIcon size={12} weight="bold" />
+                <ArrowDownIcon className="shrink-0" size={12} weight="bold" />
               )}
-              {formatDateTime(lastActivity.date)}
+              <span className="truncate">
+                {formatDateTime(lastActivity.date)}
+              </span>
             </span>
           )}
         </div>
