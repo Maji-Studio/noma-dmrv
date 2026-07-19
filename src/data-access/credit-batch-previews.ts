@@ -10,17 +10,17 @@ import { db, type DbTransaction } from "@/db";
 import { creditBatches, type CreditBatch } from "@/db/schema/credits";
 import { facilities } from "@/db/schema/facilities";
 import { certifierProjects } from "@/db/schema/certification";
-import { applications } from "@/db/schema/application";
 import {
   DURABILITY_TIER_FALLBACK,
   type DurabilityOption,
 } from "@/schemas/credit-batches";
 
 import { requireOrgScope } from "./utils";
-import { getChainOfCustodyData } from "./chain-of-custody";
 import {
-  getApplicationRollupsByBatchFromRuns,
-  getProductionRunIdsByBatchId,
+  loadCreditBatchLineageFacts,
+  type CreditBatchLineageFacts,
+} from "./credit-batch-lineage-facts";
+import {
   type BatchApplicationRollup,
 } from "./credit-batch-production-runs";
 import { getCreditBatchesWithSamples } from "./credit-batch-samples";
@@ -118,7 +118,8 @@ export async function buildCo2eStoredPreview(
   batch: Pick<CreditBatch, "id" | "facilityId"> & {
     durabilityOption: DurabilityOption;
   },
-  applicationIds: string[]
+  applicationIds: string[],
+  lineageFacts?: CreditBatchLineageFacts,
 ): Promise<CreditBatchCo2eStoredPreview> {
   requireOrgScope(ctx);
   const provider = await getFacilityCertifier(ctx, batch.facilityId);
@@ -144,23 +145,18 @@ export async function buildCo2eStoredPreview(
     };
   }
 
-  const [applicationRows, lineages] = await Promise.all([
-    db
-      .select({
-        id: applications.id,
-        code: applications.code,
-        biocharAppliedDryTons: applications.biocharAppliedDryTons,
-        soilTemperatureC: applications.soilTemperatureC,
-      })
-      .from(applications)
-      .where(and(inArray(applications.id, applicationIds), eq(applications.organizationId, ctx.organizationId))),
-    Promise.all(applicationIds.map((id) => getChainOfCustodyData(ctx, id))),
-  ]);
+  const facts = lineageFacts ??
+    (await loadCreditBatchLineageFacts(ctx, [batch.id]))[batch.id];
+  const applicationRows = facts.applications;
+  const runById = new Map(facts.runs.map((run) => [run.id, run]));
 
   const appById = new Map(applicationRows.map((app) => [app.id, app]));
-  const warnings: string[] = lineages.flatMap((lineage) =>
-    lineage.warnings.map((warning) => `${lineage.application.code}: ${warning}`)
-  );
+  const warnings: string[] = applicationRows.flatMap((application) => {
+    const run = runById.get(application.biocharProduct.linkedProductionRunId);
+    return run && run.feedstocks.length === 0
+      ? [`${application.code}: The linked production run does not have any recorded feedstock allocations.`]
+      : [];
+  });
 
   // Chemistry at the CREDIT-BATCH grain (issue #309): the batch's POOLED
   // replicate means — the same figures the durability data plane submits —
@@ -251,6 +247,7 @@ export async function getCo2eStoredPreviews(
     // derives per-batch applied weight from the same map) instead of walking
     // the run membership a second time.
     applicationRollups?: Record<string, BatchApplicationRollup>;
+    lineageFactsByBatch?: Record<string, CreditBatchLineageFacts>;
   }
 ): Promise<Record<string, CreditBatchCo2eStoredPreview>> {
   requireOrgScope(ctx);
@@ -275,12 +272,14 @@ export async function getCo2eStoredPreviews(
   const allowedIds = batches.map((batch) => batch.id);
   if (allowedIds.length === 0) return {};
 
-  const rollupsByBatch =
-    options?.applicationRollups ??
-    (await getApplicationRollupsByBatchFromRuns(
-      ctx,
-      await getProductionRunIdsByBatchId(ctx, allowedIds),
-    ));
+  const lineageFactsByBatch = options?.lineageFactsByBatch ??
+    await loadCreditBatchLineageFacts(ctx, allowedIds);
+  const rollupsByBatch = options?.applicationRollups ?? Object.fromEntries(
+    Object.entries(lineageFactsByBatch).map(([batchId, facts]) => [batchId, {
+      applicationIds: facts.applicationIds,
+      appliedWeightTons: facts.appliedWeightTons,
+    }]),
+  );
 
   // Bounded chunks (order-preserving) rather than one unbounded Promise.all
   // over every batch — see PREVIEW_FANOUT_CONCURRENCY.
@@ -291,7 +290,12 @@ export async function getCo2eStoredPreviews(
         const applicationIds = rollupsByBatch[batch.id]?.applicationIds ?? [];
         return [
           batch.id,
-          await buildCo2eStoredPreview(ctx, batch, applicationIds),
+          await buildCo2eStoredPreview(
+            ctx,
+            batch,
+            applicationIds,
+            lineageFactsByBatch[batch.id],
+          ),
         ] as const;
       })
     );

@@ -124,6 +124,14 @@ export async function getChainOfCustodyGeoData(
   requireOrgScope(ctx);
 
   const chain = await getChainOfCustodyData(ctx, applicationId);
+  return projectChainOfCustodyGeoData(ctx, chain);
+}
+
+export async function projectChainOfCustodyGeoData(
+  ctx: OrgContext,
+  chain: ChainOfCustodyData,
+): Promise<ChainOfCustodyGeoData> {
+  requireOrgScope(ctx);
   const feedstockIds = chain.feedstocks.map((feedstock) => feedstock.id);
 
   const [facilityGps, applicationGps, feedstockGpsById, feedstockLegs] = await Promise.all([

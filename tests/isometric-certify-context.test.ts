@@ -6,6 +6,10 @@ import {
 } from "@/data-access/certification";
 import { hasCertifierCredentials } from "@/data-access/certifier-credentials";
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
+import {
+  loadCreditBatchLineageFacts,
+  type CreditBatchLineageFacts,
+} from "@/data-access/credit-batch-lineage-facts";
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
 import { listDocumentsForEntityIds } from "@/data-access/documents";
@@ -38,8 +42,15 @@ vi.mock("@/data-access/certifier-credentials", () => ({
   hasCertifierCredentials: vi.fn(),
 }));
 
-vi.mock("@/data-access/chain-of-custody", () => ({
-  getChainOfCustodyData: vi.fn(),
+vi.mock("@/data-access/chain-of-custody", async () => {
+  const actual = await vi.importActual<
+    typeof import("@/data-access/chain-of-custody")
+  >("@/data-access/chain-of-custody");
+  return { ...actual, getChainOfCustodyData: vi.fn() };
+});
+
+vi.mock("@/data-access/credit-batch-lineage-facts", () => ({
+  loadCreditBatchLineageFacts: vi.fn(),
 }));
 
 vi.mock("@/data-access/production-runs", () => ({
@@ -75,6 +86,7 @@ const mockedGetApplicationsForRuns = vi.mocked(getApplicationsForRuns);
 const mockedGetMapping = vi.mocked(getCertifierProjectByFacility);
 const mockedHasCredentials = vi.mocked(hasCertifierCredentials);
 const mockedGetLineage = vi.mocked(getChainOfCustodyData);
+const mockedLoadLineageFacts = vi.mocked(loadCreditBatchLineageFacts);
 const mockedGetRuns = vi.mocked(getProductionRunsWithSamples);
 const mockedGetBatchesWithSamples = vi.mocked(getCreditBatchesWithSamples);
 const mockedListDocuments = vi.mocked(listDocumentsForEntityIds);
@@ -92,6 +104,132 @@ const APPLICATION_FOR_PR_1 = {
   productionRunId: "pr-1",
   biocharAppliedTons: 1,
 };
+
+const DEFAULT_FACT_DATE = new Date("2026-01-20T00:00:00Z");
+
+function factsFromMockedLineages(
+  batchId: string,
+  productionRunIds: string[],
+  lineages: Awaited<ReturnType<typeof getChainOfCustodyData>>[],
+): CreditBatchLineageFacts {
+  const resolved = lineages.filter(Boolean);
+  const runs = resolved.flatMap((lineage) =>
+    lineage.productionRun
+      ? [{
+          id: lineage.productionRun.id,
+          code: lineage.productionRun.code ?? "PR-1",
+          status: lineage.productionRun.status ?? "complete",
+          date: lineage.productionRun.date ?? DEFAULT_FACT_DATE,
+          biocharDryMassKg: lineage.productionRun.biocharDryMassKg ?? 100,
+          feedstockMassDryKg: lineage.productionRun.feedstockMassDryKg ?? 200,
+          reactor: lineage.reactor
+            ? {
+                id: lineage.reactor.id,
+                code: lineage.reactor.code ?? "R-1",
+                identifier: lineage.reactor.identifier ?? "R-1",
+                reactorType: lineage.reactor.reactorType ?? "fixed-bed",
+              }
+            : null,
+          feedstocks: lineage.feedstocks.map((feedstock, index) => ({
+            id: feedstock.id,
+            code: feedstock.code ?? `FS-${index + 1}`,
+            status: feedstock.status ?? "complete",
+            deliveryDate: feedstock.deliveryDate ?? DEFAULT_FACT_DATE,
+            massDryKg: feedstock.massDryKg ?? 100,
+            massUsedKg: feedstock.massUsedKg ?? 100,
+            eligibilityStatus: feedstock.eligibilityStatus ?? "eligible",
+            supplierName: feedstock.supplierName ?? "Supplier",
+            feedstockTypeName: feedstock.feedstockTypeName ?? "Wood",
+            feedstockDeliveryCode: feedstock.feedstockDeliveryCode ?? null,
+          })),
+        }]
+      : [],
+  );
+  const applications = resolved.map((lineage, index) => {
+    const runId =
+      lineage.productionRun?.id ?? productionRunIds[index] ?? "pr-1";
+    return {
+      id: lineage.application.id ?? `app-${index + 1}`,
+      code: lineage.application.code ?? `APP-${index + 1}`,
+      status: lineage.application.status ?? "complete",
+      applicationDate: lineage.application.applicationDate ?? DEFAULT_FACT_DATE,
+      fieldIdentifier: lineage.application.fieldIdentifier ?? null,
+      evidenceMethod: lineage.application.evidenceMethod,
+      gisBoundaryReference: lineage.application.gisBoundaryReference ?? null,
+      biocharAppliedTons: lineage.application.biocharAppliedDryTons ?? 1,
+      biocharAppliedDryTons: lineage.application.biocharAppliedDryTons ?? 1,
+      soilTemperatureC: lineage.application.soilTemperatureC ?? 15,
+      facility: lineage.facility,
+      delivery: {
+        id: lineage.delivery.id ?? `del-${index + 1}`,
+        code: lineage.delivery.code ?? `D-${index + 1}`,
+        status: lineage.delivery.status ?? "complete",
+        deliveryDate: lineage.delivery.deliveryDate ?? DEFAULT_FACT_DATE,
+        massDryKg: lineage.delivery.massDryKg ?? 100,
+      },
+      order: lineage.order
+        ? {
+            id: lineage.order.id,
+            code: lineage.order.code ?? `O-${index + 1}`,
+            orderDate: lineage.order.orderDate ?? DEFAULT_FACT_DATE,
+            quantityKg: lineage.order.quantityKg ?? 100,
+          }
+        : null,
+      biocharProduct: {
+        id: lineage.biocharProduct?.id ?? `bp-${index + 1}`,
+        code: lineage.biocharProduct?.code ?? `BP-${index + 1}`,
+        status: lineage.biocharProduct?.status ?? "complete",
+        productionDate:
+          lineage.biocharProduct?.productionDate ?? DEFAULT_FACT_DATE,
+        massKg: lineage.biocharProduct?.massKg ?? 100,
+        moistureContentPercent:
+          lineage.biocharProduct?.moistureContentPercent ?? 0,
+        formulationName: lineage.biocharProduct?.formulationName ?? null,
+        linkedProductionRunId:
+          lineage.biocharProduct?.linkedProductionRunId ?? runId,
+      },
+    };
+  });
+
+  return {
+    batchId,
+    productionRunIds,
+    runs: Array.from(new Map(runs.map((run) => [run.id, run])).values()),
+    applications,
+    applicationIds: applications.map((application) => application.id),
+    appliedWeightTons: applications.reduce(
+      (total, application) => total + application.biocharAppliedTons,
+      0,
+    ),
+  };
+}
+
+function mockNormalizedLineageFacts(): void {
+  mockedLoadLineageFacts.mockImplementation(async (ctx, batchIds) => {
+    const entries = await Promise.all(
+      batchIds.map(async (batchId) => {
+        const batch = await mockedGetCreditBatch(ctx, batchId, {
+          skipPreview: true,
+        });
+        const productionRunIds = batch?.productionRunIds ?? [];
+        const applicationRows = await mockedGetApplicationsForRuns(
+          ctx,
+          productionRunIds,
+        );
+        const lineages = await Promise.all(
+          applicationRows.map((application) =>
+            mockedGetLineage(ctx, application.applicationId),
+          ),
+        );
+        return [
+          batchId,
+          factsFromMockedLineages(batchId, productionRunIds, lineages),
+        ] as const;
+      }),
+    );
+    return Object.fromEntries(entries);
+  });
+}
 
 function mapping(
   overrides: Partial<CertifierProjectRow> = {},
@@ -150,6 +288,7 @@ function blueprint(key: string): IsometricComponentBlueprint {
 describe("loadCertifyContextForCreditBatchForUser", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mockNormalizedLineageFacts();
     mockedHasCredentials.mockResolvedValue(true);
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
@@ -583,6 +722,7 @@ function transportTemplate(
 describe("requiredTransportCategories", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mockNormalizedLineageFacts();
     mockedHasCredentials.mockResolvedValue(true);
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,

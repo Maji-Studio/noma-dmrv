@@ -23,6 +23,20 @@ import {
 import { requireOrgScope } from "./utils";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
+import type {
+  BatchLineageApplicationFact,
+  BatchLineageRunFact,
+} from "./credit-batch-lineage-facts";
+
+const CHAIN_HREFS = {
+  application: "/applications",
+  delivery: "/deliveries",
+  order: "/orders",
+  biocharProduct: "/biochar-products",
+  productionRun: "/production-runs",
+  reactor: "/reactors",
+  feedstock: "/feedstocks",
+} as const;
 
 export interface ChainFacility {
   id: string;
@@ -126,6 +140,55 @@ export interface ChainOfCustodyData {
   reactor: ChainReactorLineage | null;
   feedstocks: ChainFeedstockLineage[];
   warnings: string[];
+}
+
+export function projectChainOfCustodyFromBatchFacts(
+  application: BatchLineageApplicationFact,
+  run: BatchLineageRunFact | undefined,
+): ChainOfCustodyData {
+  if (!run) {
+    throw new SafeError(
+      `Application ${application.id} has no resolved production run`,
+    );
+  }
+  const warnings = run.feedstocks.length === 0
+    ? ["The linked production run does not have any recorded feedstock allocations."]
+    : [];
+  return {
+    facility: application.facility,
+    application: {
+      id: application.id, code: application.code, status: application.status,
+      applicationDate: application.applicationDate,
+      fieldIdentifier: application.fieldIdentifier,
+      evidenceMethod: application.evidenceMethod,
+      gisBoundaryReference: application.gisBoundaryReference,
+      biocharAppliedDryTons: application.biocharAppliedDryTons,
+      soilTemperatureC: application.soilTemperatureC,
+      href: CHAIN_HREFS.application,
+    },
+    delivery: { ...application.delivery, href: CHAIN_HREFS.delivery },
+    order: application.order
+      ? { ...application.order, href: CHAIN_HREFS.order }
+      : null,
+    biocharProduct: {
+      ...application.biocharProduct,
+      href: CHAIN_HREFS.biocharProduct,
+    },
+    productionRun: {
+      id: run.id, code: run.code, status: run.status, date: run.date,
+      biocharDryMassKg: run.biocharDryMassKg,
+      feedstockMassDryKg: run.feedstockMassDryKg,
+      href: CHAIN_HREFS.productionRun,
+    },
+    reactor: run.reactor
+      ? { ...run.reactor, href: CHAIN_HREFS.reactor }
+      : null,
+    feedstocks: run.feedstocks.map((feedstock) => ({
+      ...feedstock,
+      href: CHAIN_HREFS.feedstock,
+    })),
+    warnings,
+  };
 }
 
 export async function getChainOfCustodyData(
