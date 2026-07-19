@@ -17,8 +17,7 @@ import {
 import { deleteFeedstock } from "@/data-access/feedstocks";
 import { deleteProductionRun } from "@/data-access/production-runs";
 import { deleteReactor } from "@/data-access/reactors";
-import { replaceDerivedTransportLeg } from "@/data-access/transport-legs";
-import { deriveTransportLeg } from "@/lib/calculations/transport-leg";
+import { syncFeedstockTransportLeg } from "@/data-access/transport-legs";
 import { __setStorageProviderForTests } from "@/lib/storage";
 import type {
   ObjectHead,
@@ -365,14 +364,6 @@ describe("parent document retirement", () => {
       .returning({ id: transportLegs.id });
     const key = `transport_leg/${leg.id}/pdf/${tag}.pdf`;
     const documentId = await insertManagedDocument("transport_leg", leg.id, key);
-    const incompleteDerived = deriveTransportLeg({
-      origin: null,
-      destination: null,
-      vehicle: null,
-      loadMassKg: null,
-      storedDistanceKm: null,
-    });
-
     try {
       await db.insert(certifierDocumentUploads).values({
         organizationId: TEST_ORG_ID,
@@ -382,11 +373,12 @@ describe("parent document retirement", () => {
       });
 
       await expect(
-        replaceDerivedTransportLeg(
-          makeTestOrgContext(TEST_USER_ID),
-          "feedstock",
-          feedstock.id,
-          incompleteDerived,
+        db.transaction((tx) =>
+          syncFeedstockTransportLeg(
+            makeTestOrgContext(TEST_USER_ID),
+            tx,
+            feedstock.id,
+          ),
         ),
       ).rejects.toThrow(/Unlink the document/);
       expect(provider.deleteCalls).toEqual([]);
@@ -397,11 +389,12 @@ describe("parent document retirement", () => {
       await db
         .delete(certifierDocumentUploads)
         .where(eq(certifierDocumentUploads.documentId, documentId));
-      await replaceDerivedTransportLeg(
-        makeTestOrgContext(TEST_USER_ID),
-        "feedstock",
-        feedstock.id,
-        incompleteDerived,
+      await db.transaction((tx) =>
+        syncFeedstockTransportLeg(
+          makeTestOrgContext(TEST_USER_ID),
+          tx,
+          feedstock.id,
+        ),
       );
       expect(provider.objects.has(key)).toBe(false);
       expect(
