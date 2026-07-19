@@ -3,8 +3,7 @@
  *
  * Re-anchors the chain-of-custody page on the credit batch (ADR 0011): the
  * batch roll-up is its member applications' rollbacks merged, runs deduped —
- * resolved by reusing `getChainOfCustodyData` per application exactly like
- * the certification path (`certify-context-core.ts`), not a new traversal.
+ * resolved from the shared set-based lineage facts.
  * The Sankey aggregates come from the same payload via the pure
  * `buildBatchSankey` builder; the geo roll-up merges the per-application
  * Phase 2 geo payloads so the Carbon Transit map renders unchanged.
@@ -19,18 +18,18 @@ import {
 } from "@/lib/chain-of-custody/sankey";
 import { SafeError } from "@/lib/errors";
 import {
-  getChainOfCustodyData,
+  projectChainOfCustodyFromBatchFacts,
   type ChainFacility,
   type ChainOfCustodyData,
 } from "./chain-of-custody";
 import {
-  getChainOfCustodyGeoData,
+  projectChainOfCustodyGeoData,
   type ChainGeoLeg,
   type ChainGeoNode,
   type ChainOfCustodyGeoData,
 } from "./chain-of-custody-geo";
 import { getCreditBatchById } from "./credit-batches";
-import { getApplicationsForRuns } from "./credit-batch-production-runs";
+import { loadCreditBatchLineageFacts } from "./credit-batch-lineage-facts";
 import { requireOrgScope } from "./utils";
 
 export interface CreditBatchChainBatch {
@@ -61,17 +60,6 @@ interface ResolvedBatchScope {
   lineages: CreditBatchChainLineage[];
 }
 
-async function getApplicationIdsForBatchRuns(
-  ctx: OrgContext,
-  productionRunIds: string[],
-): Promise<string[]> {
-  const applicationsForRuns = await getApplicationsForRuns(
-    ctx,
-    productionRunIds,
-  );
-  return Array.from(new Set(applicationsForRuns.map((row) => row.applicationId)));
-}
-
 // The roll-up's lineage walk — shared by the chain and geo payloads. The
 // co2eStored preview is skipped: this page reads recorded masses, not the
 // certification preview math.
@@ -86,16 +74,18 @@ async function resolveBatchScope(
     throw new SafeError("Credit batch not found");
   }
 
-  const applicationIds = await getApplicationIdsForBatchRuns(
-    ctx,
-    batch.productionRunIds,
-  );
-  const lineages = await Promise.all(
-    applicationIds.map(async (applicationId) => ({
-      applicationId,
-      chain: await getChainOfCustodyData(ctx, applicationId),
-    })),
-  );
+  const facts = (await loadCreditBatchLineageFacts(ctx, [creditBatchId]))[
+    creditBatchId
+  ];
+  const runById = new Map(facts.runs.map((run) => [run.id, run]));
+  const lineages = facts.applications.map((application) => ({
+    applicationId: application.id,
+    chain: projectChainOfCustodyFromBatchFacts(
+      application,
+      runById.get(application.biocharProduct.linkedProductionRunId)!,
+    ),
+  }));
+  const applicationIds = facts.applicationIds;
   return { batch, applicationIds, lineages };
 }
 
@@ -154,15 +144,13 @@ export async function getCreditBatchChainGeoData(
 ): Promise<ChainOfCustodyGeoData> {
   requireOrgScope(ctx);
 
-  const { batch, applicationIds } = await resolveBatchScope(
+  const { batch, lineages } = await resolveBatchScope(
     ctx,
     creditBatchId,
   );
 
   const payloads = await Promise.all(
-    applicationIds.map((applicationId) =>
-      getChainOfCustodyGeoData(ctx, applicationId),
-    ),
+    lineages.map(({ chain }) => projectChainOfCustodyGeoData(ctx, chain)),
   );
 
   if (payloads.length === 0) {

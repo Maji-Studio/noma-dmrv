@@ -8,6 +8,7 @@ import { biocharProducts } from "@/db/schema/products";
 import { SafeError } from "@/lib/errors";
 
 import { requireOrgScope } from "./utils";
+import { loadCreditBatchLineageFacts } from "./credit-batch-lineage-facts";
 
 export interface ApplicationForRun {
   applicationId: string;
@@ -187,6 +188,11 @@ export async function getApplicationRollupsByBatchIds(
   batchIds: string[],
 ): Promise<Record<string, BatchApplicationRollup>> {
   requireOrgScope(ctx);
-  const productionRunIdsByBatchId = await getProductionRunIdsByBatchId(ctx, batchIds);
-  return getApplicationRollupsByBatchFromRuns(ctx, productionRunIdsByBatchId);
+  const factsByBatch = await loadCreditBatchLineageFacts(ctx, batchIds);
+  return Object.fromEntries(
+    Object.entries(factsByBatch).map(([batchId, facts]) => [batchId, {
+      applicationIds: facts.applicationIds,
+      appliedWeightTons: facts.appliedWeightTons,
+    }]),
+  );
 }
