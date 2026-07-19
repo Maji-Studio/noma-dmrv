@@ -18,14 +18,12 @@ import {
   getFeedstockOptions as getFeedstockOptionsData,
   isFeedstockCodeAvailable as isFeedstockCodeAvailableData,
   updateFeedstock,
-  syncFeedstockTransportLeg,
   type PaginatedFeedstocks,
   type FeedstockWithRelations,
   type FeedstockStats,
   type CreateFeedstockResult,
 } from "@/data-access/feedstocks";
-import { requireOrgContext, type OrgContext } from "@/lib/auth/server";
-import { logger } from "@/lib/log";
+import { requireOrgContext } from "@/lib/auth/server";
 import {
   createFeedstockSchema,
   deleteFeedstockSchema,
@@ -44,38 +42,6 @@ function feedstockActionError(
   return toLoggedActionError(error, fallbackMessage, {
     message: "feedstock action failed",
     context: { op },
-  });
-}
-
-// The leg sync runs AFTER the feedstock write has committed, so a failure here
-// must not surface as a failed mutation — the UI would invite a retry of a
-// create that already happened (duplicate codes). Mirrors resyncBiocharLegs in
-// fn/deliveries.ts, with one difference: the form's distance override is NOT
-// persisted on the feedstock row, so a swallowed failure loses it until the
-// next edit — log the override so the value is recoverable.
-async function syncFeedstockLegsBestEffort(
-  ctx: OrgContext,
-  feedstockIds: string[],
-  override: NonNullable<Parameters<typeof syncFeedstockTransportLeg>[2]>,
-): Promise<void> {
-  const results = await Promise.allSettled(
-    feedstockIds.map((id) => syncFeedstockTransportLeg(ctx, id, override)),
-  );
-  results.forEach((result, index) => {
-    if (result.status !== "rejected") return;
-    logger.warn(
-      {
-        userId: ctx.userId,
-        feedstockId: feedstockIds[index],
-        distanceKmOverride: override.distanceKm ?? null,
-        distanceSourceOverride: override.distanceSource ?? null,
-        err:
-          result.reason instanceof Error
-            ? result.reason.message
-            : String(result.reason),
-      },
-      "feedstock transport leg sync failed after committed write; leg (and any form distance override) stale until next edit",
-    );
   });
 }
 
@@ -216,21 +182,16 @@ export async function createFeedstockFn(
     const codesFn = (count: number) =>
       generateNextCodes(ctx, "FS", feedstocksTable, feedstocksTable.code, count);
 
-    const result = await createFeedstock(ctx, data, codesFn);
-
-    // Auto-derive the transport leg for each created feedstock (split deliveries
-    // produce one feedstock row per bin; each gets its own leg, mass-weighted).
-    await syncFeedstockLegsBestEffort(
+    const result = await createFeedstock(
       ctx,
-      result.feedstocks.map((feedstock) => feedstock.id),
       {
-        distanceKm: data.transportDistanceKm,
-        distanceSource: resolveDistanceSource(
+        ...data,
+        transportDistanceSource: resolveDistanceSource(
           data.transportDistanceKm,
           data.transportDistanceSource,
         ),
-        tripType: data.transportTripType ?? undefined,
       },
+      codesFn,
     );
 
     return { success: true, data: result };
@@ -262,8 +223,6 @@ export async function updateFeedstockFn(
   try {
     const ctx = await requireOrgContext();
 
-    // transportDistanceKm/-Source are not feedstock columns — they drive the
-    // derived transport leg, so strip them before the feedstock update spread.
     const {
       feedstockId,
       transportDistanceKm,
@@ -271,15 +230,14 @@ export async function updateFeedstockFn(
       transportTripType,
       ...updateData
     } = updateFeedstockSchema.parse(input);
-    const data = await updateFeedstock(ctx, feedstockId, updateData);
-
-    await syncFeedstockLegsBestEffort(ctx, [feedstockId], {
-      distanceKm: transportDistanceKm,
-      distanceSource: resolveDistanceSource(
+    const data = await updateFeedstock(ctx, feedstockId, {
+      ...updateData,
+      transportDistanceKm,
+      transportDistanceSource: resolveDistanceSource(
         transportDistanceKm,
         transportDistanceSource,
       ),
-      tripType: transportTripType ?? undefined,
+      transportTripType,
     });
 
     return { success: true, data };

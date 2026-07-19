@@ -28,9 +28,7 @@ import {
   type PaginatedCustomers,
   type CustomerDetail,
 } from "@/data-access/customers";
-import { syncBiocharLegsForCustomerLocation } from "@/data-access/transport-legs";
 import { requireOrgContext } from "@/lib/auth/server";
-import { logger } from "@/lib/log";
 import {
   createCustomerSchema,
   deleteCustomerSchema,
@@ -463,22 +461,6 @@ export async function updateCustomerLocationFn(
       defaultSoilTemperatureC: validated.defaultSoilTemperatureC,
       isDefault: validated.isDefault,
     });
-
-    // The distance feeds derived biochar distribution legs; recompute the legs
-    // of every product delivered here. Best-effort — a stale leg self-heals on
-    // the next delivery write and must not fail the location update.
-    try {
-      await syncBiocharLegsForCustomerLocation(ctx, validated.locationId);
-    } catch (error) {
-      logger.warn(
-        {
-          userId: ctx.userId,
-          customerLocationId: validated.locationId,
-          err: error instanceof Error ? error.message : String(error),
-        },
-        "biochar transport leg resync after customer-location update failed",
-      );
-    }
 
     return { success: true, data: location };
   } catch (error) {
