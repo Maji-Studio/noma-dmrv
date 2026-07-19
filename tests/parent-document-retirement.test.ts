@@ -17,6 +17,8 @@ import {
 import { deleteFeedstock } from "@/data-access/feedstocks";
 import { deleteProductionRun } from "@/data-access/production-runs";
 import { deleteReactor } from "@/data-access/reactors";
+import { replaceDerivedTransportLeg } from "@/data-access/transport-legs";
+import { deriveTransportLeg } from "@/lib/calculations/transport-leg";
 import { __setStorageProviderForTests } from "@/lib/storage";
 import type {
   ObjectHead,
@@ -315,6 +317,104 @@ describe("parent document retirement", () => {
       await db.delete(documents).where(eq(documents.entityId, fixture.reactorId));
       await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
       await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+    }
+  });
+
+  it("retires a stale derived leg through the mirrored-evidence guard", async () => {
+    const tag = crypto.randomUUID().slice(0, 8);
+    const [facility] = await db
+      .insert(facilities)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FAC-DERIVED-${tag}`,
+        name: `Derived leg facility ${tag}`,
+      })
+      .returning({ id: facilities.id });
+    const [feedstockType] = await db
+      .insert(feedstockTypes)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FT-DERIVED-${tag}`,
+        name: `Derived leg feedstock ${tag}`,
+        category: "forestry",
+      })
+      .returning({ id: feedstockTypes.id });
+    const [feedstock] = await db
+      .insert(feedstocks)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        feedstockTypeId: feedstockType.id,
+        code: `FS-DERIVED-${tag}`,
+        status: "missing_data",
+        massDryKg: 0,
+      })
+      .returning({ id: feedstocks.id });
+    const [leg] = await db
+      .insert(transportLegs)
+      .values({
+        organizationId: TEST_ORG_ID,
+        entityType: "feedstock",
+        entityId: feedstock.id,
+        isDerived: true,
+        distanceKm: 10,
+        transportMethodType: "road",
+        loadMassKg: 100,
+      })
+      .returning({ id: transportLegs.id });
+    const key = `transport_leg/${leg.id}/pdf/${tag}.pdf`;
+    const documentId = await insertManagedDocument("transport_leg", leg.id, key);
+    const incompleteDerived = deriveTransportLeg({
+      origin: null,
+      destination: null,
+      vehicle: null,
+      loadMassKg: null,
+      storedDistanceKm: null,
+    });
+
+    try {
+      await db.insert(certifierDocumentUploads).values({
+        organizationId: TEST_ORG_ID,
+        documentId,
+        provider: "isometric",
+        externalDocumentId: `derived-source-${tag}`,
+      });
+
+      await expect(
+        replaceDerivedTransportLeg(
+          makeTestOrgContext(TEST_USER_ID),
+          "feedstock",
+          feedstock.id,
+          incompleteDerived,
+        ),
+      ).rejects.toThrow(/Unlink the document/);
+      expect(provider.deleteCalls).toEqual([]);
+      expect(
+        await db.select().from(transportLegs).where(eq(transportLegs.id, leg.id)),
+      ).toHaveLength(1);
+
+      await db
+        .delete(certifierDocumentUploads)
+        .where(eq(certifierDocumentUploads.documentId, documentId));
+      await replaceDerivedTransportLeg(
+        makeTestOrgContext(TEST_USER_ID),
+        "feedstock",
+        feedstock.id,
+        incompleteDerived,
+      );
+      expect(provider.objects.has(key)).toBe(false);
+      expect(
+        await db.select().from(documents).where(eq(documents.id, documentId)),
+      ).toHaveLength(0);
+    } finally {
+      await db
+        .delete(certifierDocumentUploads)
+        .where(eq(certifierDocumentUploads.documentId, documentId));
+      await db.delete(documents).where(eq(documents.id, documentId));
+      await db.delete(transportLegs).where(eq(transportLegs.id, leg.id));
+      await db.delete(feedstocks).where(eq(feedstocks.id, feedstock.id));
+      await db.delete(feedstockTypes).where(eq(feedstockTypes.id, feedstockType.id));
+      await db.delete(facilities).where(eq(facilities.id, facility.id));
     }
   });
 

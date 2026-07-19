@@ -354,16 +354,47 @@ export async function replaceDerivedTransportLeg(
 
   // No persistable derivation → clear any stale derived leg.
   if (!isDerivedLegPersistable(derived)) {
-    await db
-      .delete(transportLegs)
-      .where(
-        and(
-          eq(transportLegs.entityType, entityType),
-          eq(transportLegs.entityId, entityId),
-          eq(transportLegs.isDerived, true),
-          eq(transportLegs.organizationId, ctx.organizationId),
-        ),
+    await db.transaction(async (tx) => {
+      await assertCanMutateCertifiedLineage(
+        ctx,
+        tx,
+        {
+          entityType: CERTIFIED_LINEAGE_TARGET[entityType],
+          entityId,
+        },
+        "delete",
       );
+      const derivedLegs = await tx
+        .select({ id: transportLegs.id })
+        .from(transportLegs)
+        .where(
+          and(
+            eq(transportLegs.entityType, entityType),
+            eq(transportLegs.entityId, entityId),
+            eq(transportLegs.isDerived, true),
+            eq(transportLegs.organizationId, ctx.organizationId),
+          ),
+        )
+        .for("update");
+      await tx
+        .delete(transportLegs)
+        .where(
+          and(
+            eq(transportLegs.entityType, entityType),
+            eq(transportLegs.entityId, entityId),
+            eq(transportLegs.isDerived, true),
+            eq(transportLegs.organizationId, ctx.organizationId),
+          ),
+        );
+      await retireDocumentsForEntities(
+        ctx,
+        tx,
+        derivedLegs.map((leg) => ({
+          entityType: "transport_leg",
+          entityId: leg.id,
+        })),
+      );
+    });
     return;
   }
 
