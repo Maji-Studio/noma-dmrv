@@ -17,6 +17,7 @@ import {
   feedstocks,
   feedstockTypes,
   operators,
+  biocharProducts,
   creditBatchProductionRuns,
 } from "@/db/schema";
 import { computeClampedDryMass, deriveMassDryKg } from "@/lib/calculations/mass-dry";
@@ -510,6 +511,22 @@ export async function updateProductionRun(
 
     assertProductionRunTransition(locked.status, lockedTargetStatus);
     assertRunWindowConsistent(lockedTargetStartTime, lockedTargetEndTime);
+
+    if (lockedTargetStatus !== locked.status && lockedTargetStatus !== "complete") {
+      const [linkedProduct] = await tx
+        .select({ id: biocharProducts.id })
+        .from(biocharProducts)
+        .where(and(
+          eq(biocharProducts.linkedProductionRunId, productionRunId),
+          eq(biocharProducts.organizationId, ctx.organizationId),
+        ))
+        .limit(1);
+      if (linkedProduct) {
+        throw new SafeError(
+          "Remove linked Biochar products before changing this run's outcome.",
+        );
+      }
+    }
 
     if (
       (locked.status === "complete" || locked.status === "failed") &&

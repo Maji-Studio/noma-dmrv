@@ -484,6 +484,7 @@ export async function createBiocharProduct(
     const [lockedRun] = await tx
       .select({
         id: productionRuns.id,
+        status: productionRuns.status,
         biocharStorageLocationId: productionRuns.biocharStorageLocationId,
       })
       .from(productionRuns)
@@ -495,6 +496,9 @@ export async function createBiocharProduct(
 
     if (!lockedRun) {
       throw new SafeError("Linked production run not found");
+    }
+    if (lockedRun.status !== "complete") {
+      throw new SafeError("Biochar products can only link to complete production runs");
     }
 
     // A submitted production run can't gain new source inventory after
@@ -784,6 +788,21 @@ export async function updateBiocharProduct(
       transactionMassKg,
       transactionComposition,
     } = stockState;
+
+    if (!transactionLinkedRunId) {
+      throw new SafeError("Production run is required");
+    }
+    const [lockedRun] = await tx
+      .select({ status: productionRuns.status })
+      .from(productionRuns)
+      .where(and(
+        eq(productionRuns.id, transactionLinkedRunId),
+        eq(productionRuns.organizationId, ctx.organizationId),
+      ))
+      .for("update");
+    if (!lockedRun || lockedRun.status !== "complete") {
+      throw new SafeError("Biochar products can only link to complete production runs");
+    }
 
     await assertBiocharProductMassReductionWithinStock(
       ctx,
