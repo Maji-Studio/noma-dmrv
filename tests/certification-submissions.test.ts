@@ -27,6 +27,7 @@ import {
   certifierRemovals,
 } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
+import { acquireFacilityDurabilityLock } from "@/data-access/facility-durability-lock";
 import { updateFacility } from "@/data-access/facilities";
 import { SafeError } from "@/lib/errors";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
@@ -472,6 +473,36 @@ describe("claimSubmissionDraft — concurrency (the GHG drift regression)", () =
       expect(await listRows(fixture.key)).toHaveLength(1);
     },
   );
+
+  it("rejects a Removal claim prepared before a tier edit that commits first", async () => {
+    const fixture = await createFixture();
+    const ctx = makeTestOrgContext(USER_ID);
+    let claimPromise!: Promise<ClaimOutcome>;
+
+    await db.transaction(async (tx) => {
+      await acquireFacilityDurabilityLock(ctx, tx, fixture.facilityId);
+      claimPromise = claimSubmissionDraft(
+        ctx,
+        baseArgs(fixture, {
+          guard: {
+            ...fixture.guard,
+            expectedDurabilityOption: "200_year",
+          },
+        }),
+      );
+      claimPromise.catch(() => {});
+      await sleep(PARK_DELAY_MS);
+      await tx
+        .update(facilities)
+        .set({ durabilityOption: "1000_year" })
+        .where(eq(facilities.id, fixture.facilityId));
+    });
+
+    await expect(claimPromise).rejects.toMatchObject({
+      message: expect.stringMatching(/durability tier changed/i),
+    });
+    expect(await listRows(fixture.key)).toHaveLength(0);
+  });
 });
 
 describe("claimSubmissionDraft — in-lock re-resolution", () => {
