@@ -1,61 +1,53 @@
 # Mail Setup
 
-This template uses Better Auth for email-based authentication flows and Resend for delivery.
+How transactional auth email is delivered (Better Auth handlers → Resend) and
+how the no-Resend local fallback behaves. Read it when an auth email is not
+arriving, or before changing an email handler. Auth flows and route protection
+are owned by [auth.md](./auth.md); the env inventory and secrets handling by
+[security.md](./security.md).
 
-## Supported Flows
+## Flows That Send Mail
 
-- Password reset (`/forgot-password` -> `/reset-password`)
-- Email verification (`/verify-email`)
+| Flow | Route | Handler |
+|---|---|---|
+| Password reset | `/forgot-password` → `/reset-password` | `sendResetPassword` |
+| Email verification | `/verify-email` | `sendVerificationEmail` |
+| Org invitation | `/accept-invitation/<invitationId>` | organization plugin `sendInvitationEmail` |
 
-## Environment Variables
+Signup is invite-first, so the invitation mail is the entry point for most new
+users. It is deliberately **best-effort**: the invite action also surfaces a
+copyable accept link in the UI, so a mail failure never blocks onboarding.
 
-```bash
-# Required
-NEXT_PUBLIC_APP_URL=http://localhost:3100
-BETTER_AUTH_SECRET=your-32-character-secret-here-change-this
+## Configuration
 
-# Optional for local development
-# Required in production for real email delivery
-RESEND_API_KEY=
-RESEND_FROM_EMAIL=
-```
+Handlers live in `src/lib/auth/better-auth.ts`; env validation in
+`src/config/env.ts`.
 
-## Behavior by Environment
+`RESEND_API_KEY` and `RESEND_FROM_EMAIL` are validated as a **both-or-neither
+pair** — setting only one fails env validation at boot with
+`"RESEND_API_KEY and RESEND_FROM_EMAIL must either both be set or both be
+omitted"`. There is no half-configured state.
 
-### With Resend configured
-
-If both `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are set, auth emails are sent through Resend.
-
-### Without Resend configured (local fallback)
-
-If either variable is missing, the app does not fail auth flows. Instead, it logs verification/reset URLs to the server console.
-
-Look for messages like:
+- **Both set** → mail is sent through Resend.
+- **Both omitted** → local fallback: nothing is sent, and the target URL is
+  logged to the server console. Open it directly to continue the flow.
 
 ```text
 [auth:reset-password] RESEND_* env vars are not configured, using local fallback.
-[auth:reset-password] userId=... email=... url=http://localhost:3100/reset-password?token=...
+[auth:reset-password] userId=... url=http://localhost:3100/reset-password?token=...
 ```
 
-You can open the logged URL directly in your browser to continue the flow.
+The fallback logs `userId` and the URL, never the recipient address — the
+no-PII-in-logs rule applies to mail code like everywhere else.
 
-## Where It Is Configured
-
-- Auth email handlers: `src/lib/auth/better-auth.ts`
-- Env validation: `src/config/env.ts`
-
-## Local Testing Checklist
-
-1. Start app: `pnpm dev` (or `pnpm dev:manual` if DB is already running)
-2. Open `http://localhost:3100/forgot-password`
-3. Submit a seeded/local user email
-4. If Resend is configured, check inbox
-5. If Resend is not configured, copy the logged URL from server output
+`NEXT_PUBLIC_APP_URL` is what every emailed link is built from. If reset or
+invitation links point at the wrong host, that is the variable to check.
 
 ## Production Checklist
 
-1. Set `RESEND_API_KEY`
-2. Set `RESEND_FROM_EMAIL` with a verified domain/sender in Resend
-3. Set `NEXT_PUBLIC_APP_URL` to the production URL
-4. Set `BETTER_AUTH_SECRET` to a strong secret (32+ chars)
-5. Verify reset and email verification flows in deployed environment
+1. Set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` together, with a sender on a
+   domain verified in Resend.
+2. Set `NEXT_PUBLIC_APP_URL` to the deployed URL, or emailed links will 404.
+3. Exercise reset and invitation flows against the deployed environment — the
+   fallback is silent-by-design, so an unset pair looks identical to success
+   from the UI.

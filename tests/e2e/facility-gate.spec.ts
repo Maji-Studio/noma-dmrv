@@ -9,6 +9,11 @@ import {
   test as base,
   type TestUser,
 } from "./fixtures/auth-fixtures";
+import {
+  createTestFacility,
+  deleteTestFacility,
+  type TestFacility,
+} from "./fixtures";
 import { createDbConnection } from "./fixtures/db";
 
 const TEST_PASSWORD = "TestPassword123!";
@@ -143,5 +148,44 @@ test("facility-scoped lists render one operator gate and no inactive controls", 
   await page.screenshot({
     path: testInfo.outputPath("production-processes-select-facility.png"),
     fullPage: true,
+  });
+});
+
+// Regression for #473: a direct/deep-linked `?facility=<id>` must resolve the
+// facility on first load — the shell must never canonicalize the param away or
+// flash the "Select a facility" gate before the org-scoped queries prove
+// membership. The active org is seeded server-side and verified per query, so
+// the facility resolves without any manual org-switcher interaction.
+test.describe("Deep-linked facility resolves on direct navigation (#473)", () => {
+  let facility: TestFacility;
+
+  test.beforeAll(async () => {
+    facility = await createTestFacility();
+  });
+
+  test.afterAll(async () => {
+    if (facility) await deleteTestFacility(facility.id);
+  });
+
+  test("direct navigation to a facility-scoped URL resolves without touching the switcher", async ({
+    adminPage: page,
+  }) => {
+    await page.goto(`/reactors?facility=${facility.id}`);
+
+    // The resolved list surface renders (its create affordance only exists once
+    // a facility is selected) — never the "Select a facility" gate.
+    await expect(
+      page.getByRole("button", { name: "New Reactor", exact: true }),
+    ).toBeVisible({ timeout: 20000 });
+    await expect(
+      page.getByRole("heading", { name: "Select a facility", exact: true }),
+    ).toHaveCount(0);
+
+    // The deep-linked facility survives in the URL (no canonicalize to /reactors)
+    // and is the active selection in the sidebar — proving URL-first resolution.
+    await expect(page).toHaveURL(new RegExp(`facility=${facility.id}`));
+    await expect(page.getByText(facility.name).first()).toBeVisible({
+      timeout: 20000,
+    });
   });
 });

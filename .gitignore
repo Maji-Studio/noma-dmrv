@@ -63,3 +63,11 @@ test-results
 # local agent/QA working files
 /.scratchpad/
 /output/
+# QA run artifacts: only markdown reports are tracked; screenshots, videos,
+# raw driver output, and scripts stay local (docs/organization.md)
+docs/qa/artifacts/**
+!docs/qa/artifacts/**/
+!docs/qa/artifacts/**/*.md
+docs/qa/artifacts/**/video/
+docs/qa/artifacts/**/runtime/
+docs/qa/artifacts/**/screenshots/

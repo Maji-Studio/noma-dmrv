@@ -247,6 +247,7 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env staging/DATABASE_URL
+          DB_RESET_ALLOW_REMOTE: op://Environment Variables/noma-dmrv env staging/DB_RESET_ALLOW_REMOTE
           ADMIN_EMAIL: op://Environment Variables/noma-dmrv env staging/ADMIN_EMAIL
           ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env staging/ADMIN_PASSWORD
 
@@ -296,6 +297,7 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env staging/DATABASE_URL
+          DB_RESET_ALLOW_REMOTE: op://Environment Variables/noma-dmrv env staging/DB_RESET_ALLOW_REMOTE
           ADMIN_EMAIL: op://Environment Variables/noma-dmrv env staging/ADMIN_EMAIL
           ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env staging/ADMIN_PASSWORD
 
@@ -348,6 +350,7 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env production/DATABASE_URL
+          DB_RESET_ALLOW_REMOTE: op://Environment Variables/noma-dmrv env production/DB_RESET_ALLOW_REMOTE
           ADMIN_EMAIL: op://Environment Variables/noma-dmrv env production/ADMIN_EMAIL
           ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env production/ADMIN_PASSWORD
           CREDENTIALS_ENCRYPTION_KEY: op://Environment Variables/noma-dmrv env production/CREDENTIALS_ENCRYPTION_KEY

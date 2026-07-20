@@ -97,23 +97,31 @@ Follow the layered architecture pattern used in the `items` feature:
 #### 1. Data Access Layer (`src/data-access/your-feature.ts`)
 
 ```typescript
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { yourFeature } from "@/db/schema";
-import { requireAuth } from "@/lib/auth/server";
+import { requireOrgScope, type OrgContext } from "@/data-access/utils";
 
-export async function getYourFeatures(userId: string) {
-  // Always check auth first
-  await requireAuth();
+// `ctx: OrgContext` is always the first parameter. `requireOrgScope` validates
+// the context; the `organizationId` filter is what actually isolates tenants —
+// you need BOTH. A query without the WHERE clause returns every org's rows.
+export async function getYourFeatures(ctx: OrgContext) {
+  requireOrgScope(ctx);
 
-  return db.select().from(yourFeature);
+  return db
+    .select()
+    .from(yourFeature)
+    .where(eq(yourFeature.organizationId, ctx.organizationId));
 }
 
-export async function createYourFeature(userId: string, data: any) {
-  await requireAuth();
+export async function createYourFeature(ctx: OrgContext, data: NewYourFeature) {
+  requireOrgScope(ctx);
 
+  // organizationId is stamped server-side from the session — never accepted
+  // from client input or a Zod payload.
   const [item] = await db
     .insert(yourFeature)
-    .values(data)
+    .values({ ...data, organizationId: ctx.organizationId })
     .returning();
 
   return item;
@@ -289,17 +297,19 @@ export function YourFeatureForm({ onSubmit }) {
 
 ### Authentication Guards
 
-Always use authentication guards in data-access layer:
+Guards split by layer — see [docs/auth.md](docs/auth.md), which owns this vocabulary.
 
 ```typescript
+// Layouts and pages (redirecting guards):
 import { requireAuth } from "@/lib/auth/server";
-import { requireProjectMember } from "@/data-access/projects";
-
-// Require any authenticated user
 await requireAuth();
 
-// Require project membership
-await requireProjectMember(projectId, userId);
+// Data-access (org-scoped, throwing):
+import { requireOrgScope, requireOrgFacility, assertSameOrg } from "@/data-access/utils";
+
+requireOrgScope(ctx);                       // validate the OrgContext
+await requireOrgFacility(ctx, facilityId);  // facility belongs to this org
+await assertSameOrg(ctx, table, id, tx);    // cross-entity ref; pass `tx` inside a transaction
 ```
 
 ### Server Actions Pattern

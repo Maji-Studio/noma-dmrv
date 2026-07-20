@@ -57,12 +57,16 @@ function importSummary(result: ProductionRunReadingsImportResult): string {
   return `Imported ${result.insertedRows} readings (${parts.join(", ")})`;
 }
 
-/** Reads the durable import status the fn writes to `metadata.readingsImport`. */
-function readingsImportFailed(metadata: unknown): boolean {
-  if (!metadata || typeof metadata !== "object") return false;
+/** Reads the durable, operator-safe failure the fn writes to metadata. */
+function readingsImportFailureReason(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object") return null;
   const imp = (metadata as Record<string, unknown>).readingsImport;
-  if (!imp || typeof imp !== "object") return false;
-  return (imp as Record<string, unknown>).status === "failed";
+  if (!imp || typeof imp !== "object") return null;
+  const outcome = imp as Record<string, unknown>;
+  if (outcome.status !== "failed") return null;
+  return typeof outcome.error === "string" && outcome.error.trim()
+    ? outcome.error.trim()
+    : "Import failed";
 }
 
 /**
@@ -210,7 +214,7 @@ export function ProductionReadingsDocuments({
       ) : (
         <ul className="flex flex-col gap-8">
           {uploadedDocs.map((doc) => {
-            const importFailed = readingsImportFailed(doc.metadata);
+            const importFailureReason = readingsImportFailureReason(doc.metadata);
             return (
             <li
               key={doc.id}
@@ -227,17 +231,14 @@ export function ProductionReadingsDocuments({
                 </span>
                 <span className="body-caption text-[var(--color-text-tertiary)]">
                   Readings CSV · {formatFileSize(doc.fileSizeBytes)}
-                  {importFailed && (
-                    <>
-                      {" · "}
-                      <span className="text-[var(--color-status-error)]">
-                        Import failed
-                      </span>
-                    </>
-                  )}
                 </span>
+                {importFailureReason && (
+                  <span className="body-caption text-[var(--color-status-error)]">
+                    {importFailureReason}
+                  </span>
+                )}
               </div>
-              {!readOnly && importFailed && (
+              {!readOnly && importFailureReason && (
                 <Button
                   variant="weak"
                   size="small"

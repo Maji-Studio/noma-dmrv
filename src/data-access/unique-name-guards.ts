@@ -1,9 +1,10 @@
 /**
  * Friendly duplicate-name guards for the human-identifier uniqueness indexes
  * (issue #252): reactor identifier, storage-bin name, supplier name, customer
- * name. Each constraint is a case- and whitespace-insensitive expression index
- * (`lower(trim(...))`); the four bound guards below own the constraint name and
- * user-facing message so every create/update path shares one source of truth.
+ * name, facility name. Each constraint is a case- and whitespace-insensitive
+ * expression index (`lower(trim(...))`); the bound guards below own the
+ * constraint name and user-facing message so every create/update path shares
+ * one source of truth.
  */
 
 import { isPgUniqueViolation } from "@/db/errors";
@@ -34,6 +35,21 @@ async function withUniqueNameGuard<T>(
     throw err;
   }
 }
+
+/** Facility name — unique within an organization. */
+export const guardFacilityName = <T>(
+  ctx: OrgContext,
+  name: string,
+  fn: () => Promise<T>,
+) =>
+  withUniqueNameGuard(
+    ctx,
+    "facilities_organization_id_name_unique",
+    name,
+    (n) =>
+      `A facility named "${n}" already exists. Rename the existing facility to reuse this name.`,
+    fn
+  );
 
 /** Reactor identifier — unique per facility. */
 export const guardReactorIdentifier = <T>(

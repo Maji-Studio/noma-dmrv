@@ -21,6 +21,7 @@ import {
   PRODUCTION_RUN_STATUSES,
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
+import { dryOutputExceedsDryInput } from "@/lib/calculations/mass-dry";
 
 // ============================================
 // Time-window helpers (start/end date + time pairs)
@@ -29,6 +30,8 @@ import {
 const TIME_ONLY_RE = /^\d{2}:\d{2}$/;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 export const CANCELLATION_REASON_MAX_LENGTH = 2000;
+const DRY_MASS_BALANCE_MESSAGE =
+  "Dry biochar output cannot exceed dry feedstock input";
 
 /**
  * Resolve a calendar-date value + a time value into a single instant, robust to
@@ -194,6 +197,13 @@ export const productionRunFormSchema = z.object({
     }
     if (data.status === "cancelled" && !data.cancellationReason?.trim()) {
       ctx.addIssue({ code: "custom", path: ["cancellationReason"], message: "Enter a cancellation reason." });
+    }
+    if (dryOutputExceedsDryInput(data)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["biocharOutputKg"],
+        message: DRY_MASS_BALANCE_MESSAGE,
+      });
     }
   });
 
