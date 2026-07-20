@@ -100,4 +100,5 @@ Rankings below are **higher = better**. Cost reflects what I actually pay (gpt-5
 - **Stuck on a known gotcha** → `docs/troubleshooting.md`.
 - **Library version drift vs training data** (Drizzle callback, Zod 4, async `params`; Cache Components are NOT enabled) → `docs/modern-patterns.md`.
 - **Adding a feature (checklist + reference entity)** → `TEMPLATE_USAGE.md`.
+- **Why Greptile reviews what it does** (logic-only scope, rule set, CodeRabbit split) → `docs/greptile-review-strategy.md`; config lives in `.greptile/`.
 - **Deferred work / open decisions** → `docs/open-questions.md`; **architecture decisions** → `docs/adr/`.
