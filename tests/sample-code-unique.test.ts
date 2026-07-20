@@ -29,7 +29,7 @@ import {
 } from "@/db/schema/credits";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { createCreditBatch } from "@/data-access/credit-batches";
-import { createSample } from "@/data-access/samples";
+import { createSample, updateSample } from "@/data-access/samples";
 import { withAutoCode } from "@/data-access/code-generator";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000395";
@@ -246,5 +246,29 @@ describe("sample_code uniqueness is DB-enforced (issue #395)", () => {
     for (const code of codes) {
       expect(code).toMatch(/^SAM-\d{2}-\d{3,}$/);
     }
+  });
+});
+
+describe("updateSample reconciles carbon against the stored state (QA 2026-07-20)", () => {
+  it("rejects a partial update whose effective organic carbon exceeds the stored total", async () => {
+    // Seeded with totalCarbonPercent 80 / organicCarbonPercent 78; patching
+    // only the organic value must be validated against the STORED total —
+    // the update schema alone cannot see it.
+    const { id } = await createConcurrentSample(undefined);
+
+    await expect(
+      updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+        organicCarbonPercent: 95,
+      }),
+    ).rejects.toThrow(/Organic carbon cannot exceed total carbon/);
+  });
+
+  it("accepts a partial update that stays reconciled with the stored total", async () => {
+    const { id } = await createConcurrentSample(undefined);
+
+    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+      organicCarbonPercent: 75,
+    });
+    expect(updated.organicCarbonPercent).toBe(75);
   });
 });

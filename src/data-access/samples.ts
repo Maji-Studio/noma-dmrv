@@ -17,6 +17,7 @@ import {
   facilities,
 } from "@/db/schema";
 import type { SampleFilterData } from "@/schemas/samples";
+import { CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS } from "@/schemas/samples";
 import { deleteTransportLegsForEntity } from "./transport-legs";
 import { retireDocumentsForEntities } from "./documents";
 import type { OrgContext } from "@/lib/auth/server";
@@ -717,6 +718,38 @@ export async function updateSample(
 
   if (!existing) {
     throw new SafeError("Sample not found");
+  }
+
+  // Carbon reconciliation on the EFFECTIVE state (stored ∪ patch): the update
+  // schema can only validate fields present in the patch, so a partial update
+  // (e.g. organic-only) could otherwise persist organic > total against the
+  // stored total. Same tolerance as the create/update schemas.
+  const effectiveTotalCarbon =
+    "totalCarbonPercent" in data ? data.totalCarbonPercent : existing.totalCarbonPercent;
+  const effectiveOrganicCarbon =
+    "organicCarbonPercent" in data ? data.organicCarbonPercent : existing.organicCarbonPercent;
+  const effectiveInorganicCarbon =
+    "inorganicCarbonPercent" in data ? data.inorganicCarbonPercent : existing.inorganicCarbonPercent;
+  if (
+    effectiveTotalCarbon != null &&
+    effectiveOrganicCarbon != null &&
+    effectiveOrganicCarbon - effectiveTotalCarbon >
+      CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS
+  ) {
+    throw new SafeError(
+      `Organic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points`
+    );
+  }
+  if (
+    effectiveTotalCarbon != null &&
+    effectiveOrganicCarbon != null &&
+    effectiveInorganicCarbon != null &&
+    effectiveOrganicCarbon + effectiveInorganicCarbon - effectiveTotalCarbon >
+      CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS
+  ) {
+    throw new SafeError(
+      `Organic plus inorganic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points`
+    );
   }
 
   // Sample-code uniqueness is DB-enforced (issue #395). No racy pre-check —
