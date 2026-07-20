@@ -1,0 +1,77 @@
+{
+  "files": [
+    {
+      "path": ".claude/CLAUDE.md",
+      "description": "Authoritative repository instructions, architecture boundaries, security guardrails, and review workflow."
+    },
+    {
+      "path": "CONTEXT.md",
+      "description": "Authoritative noma-dmrv domain glossary and invariant vocabulary."
+    },
+    {
+      "path": "docs/architecture.md",
+      "description": "Current application layering, facility context, caching, certification, and integration patterns.",
+      "scope": ["src/**", "tests/**"]
+    },
+    {
+      "path": "docs/security.md",
+      "description": "Authentication, safe error handling, PII logging, environment, and credential rules.",
+      "scope": ["src/**", "tests/**", ".github/**"]
+    },
+    {
+      "path": "docs/auth.md",
+      "description": "Current Better Auth, route protection, guard, role, and data-ownership model.",
+      "scope": ["src/data-access/**", "src/fn/**", "src/app/**", "src/lib/auth*", "tests/**"]
+    },
+    {
+      "path": "docs/database.md",
+      "description": "Database access model, archive invariants, migration safety, and certification persistence.",
+      "scope": ["src/data-access/**", "src/db/**", "src/fn/**", "drizzle/**", ".github/workflows/**"]
+    },
+    {
+      "path": "docs/schema-overview.md",
+      "description": "Current table ownership and schema module map.",
+      "scope": ["src/data-access/**", "src/db/**", "drizzle/**"]
+    },
+    {
+      "path": "docs/forms.md",
+      "description": "Form, Zod, numeric coercion, date/time, quick-add, and dependent-select contracts.",
+      "scope": ["src/components/**", "src/schemas/**", "src/fn/**", "src/hooks/**"]
+    },
+    {
+      "path": "docs/testing.md",
+      "description": "E2E fixtures, authentication, cleanup, environment, and selector conventions.",
+      "scope": ["tests/**", "playwright.config.*"]
+    },
+    {
+      "path": "docs/traceability.md",
+      "description": "Chain-of-Custody graph anchors, lineage, behavior, and verification expectations.",
+      "scope": ["src/**/*trace*", "src/**/*lineage*", "src/data-access/**", "tests/**/*trace*", "tests/**/*lineage*"]
+    },
+    {
+      "path": "docs/storage.md",
+      "description": "Object storage visibility, upload flow, telemetry import, limits, and cleanup behavior.",
+      "scope": ["src/**/*storage*", "src/**/*document*", "src/**/*upload*", "tests/**/*storage*", "tests/**/*document*", "tests/**/*upload*"]
+    },
+    {
+      "path": "docs/isometric/README.md",
+      "description": "Routing and freshness rules for local Isometric requirements and integration documentation.",
+      "scope": ["src/**/*certif*", "src/**/*isometric*", "tests/**/*certif*", "tests/**/*isometric*"]
+    },
+    {
+      "path": "docs/adr/0019-credit-batch-aggregates-derived-on-read.md",
+      "description": "Decision that verifier-facing credit-batch aggregates are derived, not stored.",
+      "scope": ["src/**/*credit-batch*", "src/**/*certif*", "src/**/*removal*", "src/data-access/**", "src/db/**"]
+    },
+    {
+      "path": "docs/adr/0020-production-emissions-front-loaded-per-credit-batch.md",
+      "description": "Production-emissions allocation and claim ownership invariant.",
+      "scope": ["src/**/*credit-batch*", "src/**/*certif*", "src/**/*removal*", "src/data-access/**", "src/db/**"]
+    },
+    {
+      "path": "docs/adr/0021-durability-tier-is-facility-scoped.md",
+      "description": "Facility-scoped durability decision and evidence implications.",
+      "scope": ["src/**/*durab*", "src/**/*sample*", "src/**/*certif*", "src/data-access/**", "src/db/**"]
+    }
+  ]
+}

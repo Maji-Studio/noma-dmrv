@@ -1,0 +1,100 @@
+{
+  "strictness": 1,
+  "commentTypes": ["logic"],
+  "fileChangeLimit": 100,
+  "includeBranches": ["staging", "main"],
+  "disabledLabels": ["wip", "skip-greptile"],
+  "excludeAuthors": [
+    "dependabot[bot]",
+    "renovate[bot]",
+    "pre-commit-ci[bot]",
+    "github-actions[bot]",
+    "allcontributors[bot]"
+  ],
+  "ignorePatterns": "pnpm-lock.yaml\ndrizzle/meta/**\n**/*.snap\npublic/**",
+  "triggerOnUpdates": true,
+  "statusCheck": true,
+  "statusCommentsEnabled": false,
+  "summarySection": {
+    "included": false
+  },
+  "issuesTableSection": {
+    "included": false
+  },
+  "confidenceScoreSection": {
+    "included": false
+  },
+  "sequenceDiagramSection": {
+    "included": false
+  },
+  "instructions": "Act as noma-dmrv's deep correctness reviewer. Use repository-wide context to trace changed behavior through callers, callees, persistence, and parallel implementations. Prioritize concrete failure modes involving authorization, facility isolation, domain invariants, data integrity, concurrency, migrations, certification immutability, numerical precision, and time handling. CodeRabbit and CI cover summaries, syntax, formatting, style, and routine static-analysis feedback; do not duplicate them. Comment only when you can identify the affected execution path, violated invariant, and user or data consequence. Review the current full PR state after every update and recognize when earlier findings were fixed.",
+  "rules": [
+    {
+      "id": "preserve-layer-boundaries",
+      "rule": "Preserve the Component -> hooks -> fn -> data-access -> db dependency flow. Flag bypasses that move validation, authorization, orchestration, or persistence into the wrong layer, including direct database access outside data-access modules.",
+      "scope": ["src/**"],
+      "severity": "high"
+    },
+    {
+      "id": "enforce-auth-and-facility-scope",
+      "rule": "Every data-access path must enforce authentication and the intended authorization boundary. For facility-scoped operational data, trace facilityId from the caller to every read, write, aggregate, existence check, and option query; flag missing or inconsistent filters and stale or foreign IDs that can cross facility boundaries.",
+      "scope": ["src/data-access/**", "src/fn/**", "src/app/api/**"],
+      "severity": "high"
+    },
+    {
+      "id": "protect-domain-state-and-lineage",
+      "rule": "Trace lifecycle transitions, mass-balance effects, Chain-of-Custody lineage, archive visibility, parent eligibility, and code reservation across all affected entities. Flag any path that permits an illegal transition, changes historical meaning, hides or exposes the wrong records, creates orphaned polymorphic rows, or makes parallel readiness calculations disagree.",
+      "scope": ["src/**", "tests/**"],
+      "severity": "high"
+    },
+    {
+      "id": "protect-certification-freeze-and-idempotency",
+      "rule": "Certification changes must preserve submission locks, immutable payload snapshots, canonical payload hashing, retry idempotency, append-only sync history, provider-neutral persistence, and facility-scoped registry mappings. Trace every mutation of upstream lineage after a draft, submitted, or accepted ledger entry and flag bypasses of the data-access guards.",
+      "scope": [
+        "src/**/certif*/**",
+        "src/**/isometric/**",
+        "src/data-access/**",
+        "src/db/schema/certification.ts",
+        "tests/**/*certif*",
+        "tests/**/*isometric*"
+      ],
+      "severity": "high"
+    },
+    {
+      "id": "make-multi-row-writes-atomic",
+      "rule": "For stock movements, archive/restore cascades, submissions, transfers, derived claims, and other multi-row workflows, verify transaction boundaries, lock or compare-and-set behavior, retry safety, constraint ordering, and failure cleanup. Flag partial-success states, double application, lost updates, check-then-write races, and side effects performed before durable state is secured.",
+      "scope": ["src/data-access/**", "src/fn/**", "src/db/**"],
+      "severity": "high"
+    },
+    {
+      "id": "preserve-units-precision-and-time",
+      "rule": "Trace units, conversion direction, nullable semantics, exact decimal handling, rounding boundaries, inclusive/exclusive date ranges, facility-local dates, and canonical UTC timestamps end to end. Flag silent number/string coercion, float use for credit-bearing quantities, timezone-dependent behavior, double conversion, and inconsistent aggregation precision.",
+      "scope": ["src/**", "tests/**", "drizzle/**"],
+      "severity": "high"
+    },
+    {
+      "id": "keep-migrations-forward-only",
+      "rule": "Never modify an already-applied migration to introduce new behavior. New schema changes require a new migration. For new constraints, NOT NULL columns, unique indexes, renames, or destructive changes, verify existing-row repair, safe ordering, schema/migration agreement, rollback or reset implications, and both seeded-upgrade and fresh-database paths.",
+      "scope": ["drizzle/**", "src/db/schema/**", ".github/workflows/**/*migrat*"],
+      "severity": "high"
+    },
+    {
+      "id": "fail-closed-without-leaking-data",
+      "rule": "Unexpected failures must fail closed, preserve actionable server-side context, and expose only safe client messages. Flag swallowed errors, success returned after partial failure, logging or returning names/emails/tokens/query parameters, raw provider or database errors crossing the server boundary, and secrets committed in any file.",
+      "scope": ["src/**", "tests/**", ".github/**"],
+      "severity": "high"
+    },
+    {
+      "id": "keep-cache-and-ui-contracts-coherent",
+      "rule": "Trace server result shapes and facility identity through hooks, query keys, optimistic updates, invalidation, URL state, and UI derivations. Flag stale cross-facility cache reuse, incomplete invalidation, optimistic data that violates server invariants, readiness or status logic duplicated inconsistently, and errors that leave the UI claiming success.",
+      "scope": ["src/hooks/**", "src/components/**", "src/app/**", "src/fn/**"],
+      "severity": "medium"
+    },
+    {
+      "id": "tests-must-prove-the-regression",
+      "rule": "Tests must exercise the production path named by the requirement and assert observable outcomes against stable entity identity. Flag positional selectors, fixtures that leak persistent or object-storage data, mocks that bypass the behavior under test, assertions that pass on the wrong record, missing negative or boundary cases for changed invariants, and tests whose comments claim more than they prove.",
+      "scope": ["tests/**", "src/**/*.test.*", "src/**/*.spec.*"],
+      "severity": "medium"
+    }
+  ]
+}
