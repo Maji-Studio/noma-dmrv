@@ -156,6 +156,19 @@ Pure starter residue; org scoping came later via ADR 0010.
   batch it certifies. Bound in `src/schemas/production-runs.ts` +
   `src/fn/production-runs.ts`. **Owned by #207 (OPEN).**
 
+### Facility switcher unreachable while an entity side sheet is open (`navigation/sheet-blocks-facility-switch`, opened 2026-07-20)
+
+- QA 2026-07-20 (`docs/qa/artifacts/2026-07-20-qa-a-b93d/findings.md`, P2):
+  with a detail or create sheet open, the modal overlay of
+  `src/components/ui/entity-side-sheet.tsx` makes the sidebar facility
+  selector inert, so the operator cannot switch facilities without first
+  closing the sheet. This is the modal behavior working as designed — the
+  open question is the intended UX: keep the sheet modal (status quo),
+  make it non-modal, or add an explicit close-and-switch flow that
+  reconciles URL, navigation, and unsaved form state.
+- **To resolve:** UX decision with DEC; adjacent to #253 (cross-facility
+  context reconciliation), which any switch-while-open flow must satisfy.
+
 ### White-label dashboards per Organization (`tenancy/white-label`, opened 2026-06-11)
 
 - **Deferred (2026-06-11 multi-tenancy grilling):** at launch each Organization

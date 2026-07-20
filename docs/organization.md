@@ -63,6 +63,9 @@ selection) sit with the feature, while **server-data** hooks belong in
 
 - Only **evergreen** notes belong in `/docs`. Dated plans → `docs/plans/`;
   implementation logs, superseded docs and debugging notes → `docs/archive/`.
+- QA runs commit **only their markdown reports** under `docs/qa/artifacts/`;
+  screenshots, videos, raw driver output, and scripts stay local
+  (enforced by `.gitignore`).
 - **Before creating a doc, ask:** is it evergreen, and does it duplicate an
   existing one? If it duplicates, update the existing doc — a second copy is how
   the two drift apart and start contradicting each other.
