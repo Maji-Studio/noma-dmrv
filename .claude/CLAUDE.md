@@ -5,7 +5,7 @@ Guidance for Claude Code. **These instructions OVERRIDE default behavior — fol
 ## DO NOT — Critical Rules
 
 - ❌ **NEVER use npm or yarn** — always `pnpm`.
-- ❌ **NEVER skip org scoping** — every `data-access/` function takes `ctx: OrgContext` first, calls `requireOrgScope(ctx)` (`src/data-access/utils.ts`), and filters on `organizationId`. Filtering only on `facilityId` is a cross-tenant leak. (`requireAuth` is a *route* guard in `src/lib/auth/server.ts` — not this layer.)
+- ❌ **NEVER skip org scoping without an explicit waiver** — every normal `data-access/` function takes `ctx: OrgContext` first, calls `requireOrgScope(ctx)` (`src/data-access/utils.ts`), and filters on `organizationId`. Filtering only on `facilityId` is a cross-tenant leak. Deliberate public or privileged seams use `// org-scope-ok:`; do not "fix" them. (`requireAuth` is a *route* guard in `src/lib/auth/server.ts` — not this layer.)
 - ❌ **NEVER let a file exceed 1000 lines** — split into modular files.
 - ❌ **NEVER hard-code magic numbers** — constants at top of file or in `@/config`; use design tokens, never hardcoded values.
 - ❌ **NEVER commit `.env` files, secrets, API keys, or credentials** — not even in docs or tests.
@@ -88,7 +88,7 @@ Rankings below are **higher = better**. Cost reflects what I actually pay (gpt-5
 - Before **Isometric/certification/requirements** work → `docs/isometric/README.md` + `versions.json`, and call the isometric MCP `how_to` first. Local summaries are **non-authoritative** — verify against the registry.
 - Before **UI** work → `docs/design-system.md` — Canonical Page Shell, `EmptyState` (never bare text), a11y, and the token trap: default Tailwind spacing/radius classes are **deleted**, not remapped (`p-4` = 4px, `rounded-md` = nothing).
 - Before **writing code** → `docs/code-style.md` — naming/file conventions, the org-scoping seam + waiver syntax, React Compiler rules (no manual memo, avoid `useEffect`), local gates.
-- Before **any test** work → `docs/testing.md` — two layers (vitest `tests/*.test.ts` + Playwright E2E), fixtures, `.env.test`, E2E naming prefixes, `db:reset` on dup keys.
+- Before **any test** work → `docs/testing.md` — two layers (Vitest in root `tests/` and colocated `src/**/*.test.{ts,tsx}` + Playwright E2E), fixtures, `.env.test`, E2E naming prefixes, `db:reset` on dup keys.
 - Before **writing a server action or data-access query** → `docs/architecture.md` — `withAction()`, `OrgContext`, `ActionResult` (+ `conflict`), React Query key factories, facility context, CI/CD.
 - Before **env / secrets / tenancy** work → `docs/security.md` — env inventory is `envSchema`, fail-closed prod gates, 1Password items differ.
 - **Auth guards, route protection, org context** → `docs/auth.md` — owns the guard vocabulary (redirect-vs-throw, `requireOrgScope` vs `requireAuth`).

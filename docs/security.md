@@ -37,7 +37,7 @@ context scopes workflows *within* an org.
   returns early when `ctx.isPlatformAdmin`). Org isolation is policy toward other
   organizations, not toward the platform — the platform-admin path is not a leak.
 - The org column is deliberately denormalized so the enforcement point is a
-  uniform, greppable `WHERE organizationId = ctx.orgId`. **New data-access
+  uniform, greppable `WHERE organizationId = ctx.organizationId`. **New data-access
   functions must follow that uniform pattern, not derive org through a join
   chain** — that missed-join leak class has already occurred once
   (`getSupplierOptions`). See [ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md)
@@ -74,6 +74,11 @@ Non-obvious semantics only:
 - **Both-or-neither pairs** (`superRefine`): `RESEND_API_KEY` +
   `RESEND_FROM_EMAIL`; `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
   (seed/CI-only, not runtime app credentials).
+- **Signup is invite-only.** `ALLOW_SELF_SIGNUP` is `false` in every environment
+  (`.env.example`, `tests/setup.ts`, both E2E workflows) and public self-signup
+  is not a supported configuration for a B2B tenant — the flag is a tunable
+  that is never tuned. See [open-questions.md](./open-questions.md)
+  (`auth/drop-self-signup-flag`).
 - **`CREDENTIALS_ENCRYPTION_KEY`** — a hard boot requirement in production (see
   CI carve-out below). Server-only 32-byte hex/base64 key.
 - **`BETTER_AUTH_SECRET`** and **`STORAGE_SIGNING_SECRET`** — min length 32. In
