@@ -6,7 +6,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDateRange } from "@/lib/format-utils";
 import {
   CertificateIcon,
   CurrencyCircleDollarIcon,
@@ -327,7 +327,7 @@ export function CreditBatchList() {
             },
             {
               label: "Crediting Period",
-              value: `${formatSafeDate(sideSheetEntity.startDate)} — ${formatSafeDate(sideSheetEntity.endDate)}`,
+              value: formatDateRange(sideSheetEntity.startDate, sideSheetEntity.endDate),
             },
             {
               label: "Durability Option",

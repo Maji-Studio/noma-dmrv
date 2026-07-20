@@ -1,6 +1,6 @@
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 import type { SoilTemperatureSource } from "@/schemas/applications";
 import type { DeliveryStatus } from "@/schemas/deliveries";
 
@@ -127,7 +127,7 @@ export function formatKg(value: number | null | undefined): string {
 }
 
 function formatDeliveryDate(value: Date | string): string {
-  return formatSafeDate(value);
+  return formatDate(value);
 }
 
 export function getApplicationDeliveryMassLabel(delivery: ApplicationDeliveryOption): string | null {

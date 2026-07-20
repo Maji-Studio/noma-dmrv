@@ -32,6 +32,7 @@ import {
 import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
+import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { GhgStatementCreateDrawer } from "./ghg-statement-create-drawer";
 import { GhgStatementDetailSheet } from "./ghg-statement-detail-sheet";
 
@@ -71,11 +72,11 @@ function statementPeriod(item: GhgStatementListItem): {
   const { reportingPeriodStartOn, reportingPeriodEndOn } = item.statement;
   return reportingPeriodStartOn
     ? {
-        primary: `${reportingPeriodStartOn} → ${reportingPeriodEndOn}`,
+        primary: formatDateRange(reportingPeriodStartOn, reportingPeriodEndOn),
         secondary: "Reconciled period",
       }
     : {
-        primary: `Ends ${reportingPeriodEndOn}`,
+        primary: `Ends ${formatDate(reportingPeriodEndOn)}`,
         secondary: "Period start pending",
       };
 }

@@ -15,6 +15,7 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
 import type { DashboardRange } from "@/data-access/dashboard-overview";
+import { formatDateTime } from "@/lib/format-utils";
 import { HeroKpiBand } from "./hero-kpi-band";
 import { FlowHero } from "./flow-hero";
 import { AttentionList } from "./attention-list";
@@ -23,13 +24,6 @@ import { CertificationBlock } from "./certification-block";
 import { RangeToggle } from "./range-toggle";
 
 const DEFAULT_RANGE: DashboardRange = "month";
-
-function formatUpdated(iso: string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(iso));
-}
 
 export function DashboardView() {
   const { facilityId, selectedFacility } = useFacilityContext();
@@ -55,7 +49,7 @@ export function DashboardView() {
           <p className="body-small text-[var(--color-text-secondary)]">
             {facilityId
               ? data
-                ? `Live operations · updated ${formatUpdated(data.generatedAt)}`
+                ? `Live operations · updated ${formatDateTime(data.generatedAt)}`
                 : "Live operations across this facility"
               : "Select a facility to monitor its carbon removal."}
           </p>
