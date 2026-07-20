@@ -32,8 +32,8 @@ Read these first. Each one fails quietly rather than loudly.
   `rounded-4` (skeletons, micro-tags — 6), `rounded-8` (skeleton cards — 3).
   Three legacy surfaces hardcode `rounded-[8px]` (Accordion root, `Card.Root`
   with the opt-in `radius="default"`, bordered `Card.Icon`) — don't copy that
-  into new code. Never write the bracket form `rounded-[var(--radius-*)]`; use
-  the generated utility.
+  into new code. Never wrap the wildcard `--radius-*` token in Tailwind's
+  arbitrary-value radius syntax; use the generated utility.
 - **Two-greys rule:** every grey in the light theme is an **alpha of plum over
   white**, never a neutral grey — cool neutrals read dirty on the warm field.
   `--color-border-*`, `--color-text-*`, `--color-icon-*`,
