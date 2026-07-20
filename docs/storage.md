@@ -61,7 +61,7 @@ stable when an environment moves bucket or prefix.
 
 **Logical key** (stored in `documents.storage_key`, no leading `/`):
 
-```
+```text
 {entityType}/{entityId}/{documentType}/{ulid}.{ext}
 ```
 

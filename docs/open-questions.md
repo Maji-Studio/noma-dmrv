@@ -145,7 +145,7 @@ Pure starter residue; org scoping came later via ADR 0010.
 
 - Parse an uploaded COA/lab-report PDF to pre-fill the sample form's ~30
   hand-transcribed chemistry fields. Upload slot already exists (`lab_report` on
-  the sample's Evidence step). **Owned by #329 (OPEN)** — extraction approach,
+  the sample's Evidence step). **Owned by #329** — extraction approach,
   review UX, and where parsing runs are all scoped there.
 
 ### Validate production-run window ⊆ credit-batch period (`production/run-window`, opened 2026-07-01)
@@ -154,7 +154,34 @@ Pure starter residue; org scoping came later via ADR 0010.
   falls inside its credit batch's period ([ADR 0016](./adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md));
   both timestamps default to `now()`. Telemetry can therefore land outside the
   batch it certifies. Bound in `src/schemas/production-runs.ts` +
-  `src/fn/production-runs.ts`. **Owned by #207 (OPEN).**
+  `src/fn/production-runs.ts`. **Owned by #207.**
+
+### #473 no-flash guarantee is now per-page, not global (`navigation/select-facility-deep-link-skeleton`, opened 2026-07-20)
+
+- **Context:** the layout-level `FacilityGate` was deleted; the pre-resolution
+  loading skeleton for a deep-linked `?facility=<id>` (issue #473) now lives
+  inside `SelectFacilityEmptyState`
+  (`src/components/navigation/select-facility-empty-state.tsx`), rendered only
+  when a facility-scoped page reaches the point of rendering that component
+  for its no-selection state.
+- **Consequence:** the guarantee "a deep-linked facility never flashes an
+  empty/select-a-facility state while it resolves" is an **invariant of
+  `SelectFacilityEmptyState` usage**, not something the router or layout
+  enforces. Any facility-scoped page that branches on the facility itself
+  (e.g. an early return or a different empty-state component instead of
+  rendering `SelectFacilityEmptyState`) can still flash on a direct/deep-link
+  navigation, and nothing will catch it.
+- **Test coverage gap:** the regression spec for #473
+  (`tests/e2e/facility-gate.spec.ts`, `describe("Deep-linked facility
+  resolves on direct navigation (#473)")`) only exercises `/reactors`. It does
+  not assert the invariant on any other facility-scoped page.
+- **To resolve:** either (a) audit every facility-scoped page to confirm its
+  no-selection branch always routes through `SelectFacilityEmptyState` and add
+  a lint/test convention that prevents future pages from rolling their own, or
+  (b) extend `tests/e2e/facility-gate.spec.ts` to cover a second, differently-
+  shaped facility-scoped page. Until then: **new facility-scoped pages must
+  route their no-selection state through `SelectFacilityEmptyState`** rather
+  than a bespoke empty state or early return.
 
 ### Facility switcher unreachable while an entity side sheet is open (`navigation/sheet-blocks-facility-switch`, opened 2026-07-20)
 
@@ -262,6 +289,24 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   rotation window. Cheap now, expensive to retrofit (M). See
   [`docs/security.md`](./security.md).
 
+### Drop the `ALLOW_SELF_SIGNUP` flag (`auth/drop-self-signup-flag`, opened 2026-07-20)
+
+- **Decided:** public self-signup is not a supported configuration. The product
+  is B2B invite-only, so the flag has exactly one correct value and is a tunable
+  that is never tuned.
+- **Current state:** `false` in every environment — `.env.example:28`,
+  `tests/setup.ts:21`, `.github/workflows/e2e.yml:35`,
+  `.github/workflows/e2e-live.yml:41` — feeding
+  `disableSignUp: !env.ALLOW_SELF_SIGNUP` (`src/lib/auth/better-auth.ts:171`).
+- **Simplification (S):** hardcode `disableSignUp: true`, delete
+  `ALLOW_SELF_SIGNUP` from `src/config/env.ts:64` and the four environment
+  declarations, and rewrite `tests/auth-config.test.ts:6` to assert the constant
+  rather than the env round-trip. Removes a config surface whose only failure
+  mode is someone setting it to `true`.
+- **Why it hasn't been done:** no urgency — the flag is fail-closed and every
+  environment already pins it. Worth folding into the next auth-area change
+  rather than as its own PR.
+
 ### Application evidence-readiness: two implementations, one taxonomy (opened 2026-07-20)
 
 - **Problem:** the list badge / dashboard evaluate application visual-evidence
@@ -273,7 +318,7 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   share only the `application-evidence` constants (roles / geotag predicate),
   not the evaluation path — unlike production-run / sample / transport, which
   both route through `deriveEntityCertifyReadiness`.
-- **Owned by #246 (OPEN)** — "certification badges and removal gates read one
+- **Owned by #246** — "certification badges and removal gates read one
   shared readiness source". Both surfaces now fail-closed, so the visible
   contradiction (list "Ready", wizard blocked) is gone, but the duplicated logic
   is a live drift risk: E2E `application-readiness-evidence.spec.ts` guards only
@@ -300,7 +345,7 @@ Merged 2026-07-20 with the former `transport/storage-topology` — one question.
   on the certifier mapping row) plus an assignment wizard in facility settings;
   the constant becomes the seed/default. Scope it when a second multi-component
   `(group, blueprint, input)` triple appears — today only the pyrolysis
-  generator/startup diesel split collides. Structural umbrella: **#291 (OPEN)**.
+  generator/startup diesel split collides. Structural umbrella: **#291**.
 
 ### Eq.6 R₀-term semantics — 1000-year F_durable normalization (`certification/fdurable-1000-r0-semantics`, opened 2026-07-03)
 
@@ -341,11 +386,11 @@ Method B until all three close.
   batch — but noma must not invent it. Also unconfirmed: whether
   independent/distributed sampling is a hard eligibility gate or an operator
   warning (synthetic same-day rows are not proof in QA either way).
-- **Fail-closed gate shape at process grain → #417 (OPEN).** Method-B cadence is
+- **Fail-closed gate shape at process grain → #417.** Method-B cadence is
   a production-process history rule, not just the removal member-batch subset;
   the live gate must load the full process batch window or accept an explicit
   process-level cadence fact.
-- **Version dependency → #278 (OPEN).** ADR 0017 cites biochar protocol 1.3
+- **Version dependency → #278.** ADR 0017 cites biochar protocol 1.3
   while the local pin remains 1.2; resolve before encoding more credit-bearing
   Method-B logic. Also entangled with #291 (template-driven remodel) —
   coordinate so the submission layer isn't double-built.
@@ -375,7 +420,7 @@ enabled against production. The whole surface sits behind it. This entry closes
 when the flag is retired.
 
 Phases 1–5 and the 1000-year extension are **built and committed** (ADR 0021;
-issues #358 and #348 CLOSED); the phased plan and its decision record live in
+issues #358 and #348); the phased plan and its decision record live in
 [`docs/plans/2026-06-19-tier1-durability-live-wiring.md`](./plans/2026-06-19-tier1-durability-live-wiring.md).
 Two sandbox-empirical confirms and one cutover checklist are all that remain.
 
@@ -812,7 +857,7 @@ are clean deferrals.
 
 ### Submit-removal — `pyrolyzer_direct` PROJECT-scope conflict in default template (opened 2026-05-27)
 
-**Settled — see #304 (CLOSED COMPLETED 2026-07-02),
+**Settled — see #304,
 [ADR 0005](./adr/0005-period-emissions-as-project-components.md) and
 [ADR 0018](./adr/0018-isometric-owns-project-emissions.md).** `pyrolyzer_direct`
 stays a PROJECT-scope Component updated yearly from the emissions test / LCA. The
@@ -828,7 +873,7 @@ neutral placeholder.
 
 ### Pinned biochar protocol behind latest certified (opened 2026-06-04)
 
-**Owned by #278 (OPEN)** — impact analysis, acceptance checklist, and the
+**Owned by #278** — impact analysis, acceptance checklist, and the
 migration sequence all live there; do not duplicate them here. Local pins are in
 [`docs/isometric/versions.json`](./isometric/versions.json), but the real work is
 registry-side (re-authoring the GHG-entry template in Certify), so editing that
