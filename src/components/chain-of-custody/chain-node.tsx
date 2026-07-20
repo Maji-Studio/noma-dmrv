@@ -3,8 +3,8 @@
 import { type ElementType } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { ArrowUpRightIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/ssr";
+import { getStatusState, getStatusStateColor } from "@/lib/status-state";
 import type { LineageDetailRow } from "./use-chain-graph";
-import { STATUS_COLORS, STATUS_COLOR_FALLBACK } from "./chain-constants";
 
 export interface ChainNodeData {
   label: string;
@@ -41,7 +41,8 @@ function StatusPill({ status }: { status: string | null | undefined }) {
   return (
     <span
       className="inline-flex items-center gap-6 whitespace-nowrap border-[1.5px] border-current px-6 py-2 font-mono text-[9px] font-medium uppercase tracking-[0.09em]"
-      style={{ color: STATUS_COLORS[status] ?? STATUS_COLOR_FALLBACK }}
+      data-status-state={getStatusState(status)}
+      style={{ color: getStatusStateColor(status) }}
     >
       <span aria-hidden className="size-[6px] bg-current" />
       {formatStatus(status)}

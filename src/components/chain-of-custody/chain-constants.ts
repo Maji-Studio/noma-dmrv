@@ -117,24 +117,3 @@ export const LINEAGE_NODE_STYLES: Record<LineageNodeKind, LineageNodeStyle> = {
     accentInk: "var(--acc-prod-ink)",
   },
 };
-
-export const STATUS_COLORS: Record<string, string> = {
-  applied: "var(--st-ok)",
-  delivered: "var(--st-ok)",
-  complete: "var(--st-ok)",
-  ready: "var(--st-ok)",
-  processed: "var(--st-ok)",
-  running: "var(--st-run)",
-  upcoming: "var(--st-run)",
-  ordered: "var(--st-run)",
-  pending: "var(--st-wait)",
-  scheduled: "var(--st-wait)",
-  draft: "var(--st-off)",
-  missing_data: "var(--st-off)",
-  rejected: "var(--st-bad)",
-  void: "var(--st-bad)",
-  failed: "var(--st-bad)",
-  cancelled: "var(--st-bad)",
-};
-
-export const STATUS_COLOR_FALLBACK = "var(--st-off)";

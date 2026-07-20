@@ -238,9 +238,55 @@ test.describe("Production Run lifecycle (#254)", () => {
     await waitForSideSheetClose(page);
 
     await page.selectOption('select:not([name="status"])', "cancelled");
-    await expect(
-      page.locator("tbody").getByText("Cancelled", { exact: true }).first(),
-    ).toBeVisible();
+    const cancelledBadge = page
+      .locator('tbody [data-status="cancelled"]')
+      .first();
+    await expect(cancelledBadge).toBeVisible();
+    await expect(cancelledBadge).toHaveText("Cancelled");
+    await expect(cancelledBadge).toHaveAttribute("data-status-state", "neutral");
+    await expect(cancelledBadge).toHaveClass(/--st-off-bg/);
+  });
+
+  test("renders a failed run with the canonical error treatment", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await openRunForm(page, seededData, {
+      startDate: "2030-02-05",
+      startTime: "08:00",
+      status: "running",
+    });
+    await submitCreate(page);
+    await waitForSideSheetClose(page);
+
+    await page.selectOption('select:not([name="status"])', "running");
+    await expect(page.locator('tbody [data-status="running"]').first()).toBeVisible();
+    await editFirstRow(page);
+
+    const dialog = page.locator('[role="dialog"]');
+    await dialog.locator('input[name="endDate"]').fill("2030-02-05");
+    await dialog.locator('input[name="endTime"]').fill("12:00");
+    // A failed run needs a source bin, moisture %, and wet mass to compute
+    // consumed feedstock (same guard as a complete run) — the lifecycle
+    // schema rejects the status change without them.
+    await selectEntity(
+      page,
+      "Source Bin",
+      seededData.feedstockStorageLocation.id,
+      seededData.feedstockStorageLocation.name,
+    );
+    await dialog.locator('input[name="feedstockWetMassKg"]').fill("50");
+    await dialog.locator('input[name="feedstockMoisturePercent"]').fill("15");
+    await dialog.locator('select[name="status"]').selectOption("failed");
+    await saveEdit(page);
+    await waitForSideSheetClose(page);
+
+    await page.selectOption('select:not([name="status"])', "failed");
+    const failedBadge = page.locator('tbody [data-status="failed"]').first();
+    await expect(failedBadge).toBeVisible();
+    await expect(failedBadge).toHaveText("Failed");
+    await expect(failedBadge).toHaveAttribute("data-status-state", "error");
+    await expect(failedBadge).toHaveClass(/--st-bad-bg/);
   });
 });
 
