@@ -263,6 +263,22 @@ describe("updateSample reconciles carbon against the stored state (QA 2026-07-20
     ).rejects.toThrow(/Organic carbon cannot exceed total carbon/);
   });
 
+  it("rejects when all three carbon keys are explicitly present but undefined for the unrelated ones (mirrors the real fn payload shape)", async () => {
+    // Regression pin for the P1 fix: src/fn/samples.ts always spells out all
+    // three carbon keys on the object passed to updateSample, even when a
+    // value is undefined for that call. A `"key" in data` check is therefore
+    // always true and must not be reintroduced — this uses `!== undefined`
+    // semantics that must still fall back to the stored total.
+    const { id } = await createConcurrentSample(undefined);
+    await expect(
+      updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+        totalCarbonPercent: undefined,
+        organicCarbonPercent: 95,
+        inorganicCarbonPercent: undefined,
+      }),
+    ).rejects.toThrow(/Organic carbon cannot exceed total carbon/);
+  });
+
   it("accepts a partial update that stays reconciled with the stored total", async () => {
     const { id } = await createConcurrentSample(undefined);
 

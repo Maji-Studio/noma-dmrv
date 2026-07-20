@@ -17,7 +17,6 @@ import {
   facilities,
 } from "@/db/schema";
 import type { SampleFilterData } from "@/schemas/samples";
-import { CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS } from "@/schemas/samples";
 import { deleteTransportLegsForEntity } from "./transport-legs";
 import { retireDocumentsForEntities } from "./documents";
 import type { OrgContext } from "@/lib/auth/server";
@@ -124,6 +123,7 @@ import {
   isPgUniqueViolation,
 } from "@/db/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { assertCarbonReconciliation } from "./samples/carbon-reconciliation";
 
 // DB-enforced sample-code uniqueness (issue #395). Drizzle names the
 // `.unique()` on `samples.sampleCode` this constraint.
@@ -654,29 +654,6 @@ export async function createSample(
   });
 
   return getSampleById(ctx, sample.id);
-}
-
-// ============================================
-// Sample Update Operations
-// ============================================
-
-function assertCarbonReconciliation(
-  existing: Pick<typeof samples.$inferSelect, "totalCarbonPercent" | "organicCarbonPercent" | "inorganicCarbonPercent">,
-  data: Partial<Pick<typeof samples.$inferSelect, "totalCarbonPercent" | "organicCarbonPercent" | "inorganicCarbonPercent">>,
-): void {
-  const total = "totalCarbonPercent" in data ? data.totalCarbonPercent : existing.totalCarbonPercent;
-  const organic = "organicCarbonPercent" in data ? data.organicCarbonPercent : existing.organicCarbonPercent;
-  const inorganic = "inorganicCarbonPercent" in data ? data.inorganicCarbonPercent : existing.inorganicCarbonPercent;
-  if (total != null && organic != null && organic - total > CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS) {
-    throw new SafeError(
-      `Organic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points`
-    );
-  }
-  if (total != null && organic != null && inorganic != null && organic + inorganic - total > CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS) {
-    throw new SafeError(
-      `Organic plus inorganic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points`
-    );
-  }
 }
 
 /**
