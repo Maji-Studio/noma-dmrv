@@ -660,6 +660,25 @@ export async function createSample(
 // Sample Update Operations
 // ============================================
 
+function assertCarbonReconciliation(
+  existing: Pick<typeof samples.$inferSelect, "totalCarbonPercent" | "organicCarbonPercent" | "inorganicCarbonPercent">,
+  data: Partial<Pick<typeof samples.$inferSelect, "totalCarbonPercent" | "organicCarbonPercent" | "inorganicCarbonPercent">>,
+): void {
+  const total = "totalCarbonPercent" in data ? data.totalCarbonPercent : existing.totalCarbonPercent;
+  const organic = "organicCarbonPercent" in data ? data.organicCarbonPercent : existing.organicCarbonPercent;
+  const inorganic = "inorganicCarbonPercent" in data ? data.inorganicCarbonPercent : existing.inorganicCarbonPercent;
+  if (total != null && organic != null && organic - total > CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS) {
+    throw new SafeError(
+      `Organic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points`
+    );
+  }
+  if (total != null && organic != null && inorganic != null && organic + inorganic - total > CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS) {
+    throw new SafeError(
+      `Organic plus inorganic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points`
+    );
+  }
+}
+
 /**
  * Update an existing sample
  */
@@ -720,37 +739,8 @@ export async function updateSample(
     throw new SafeError("Sample not found");
   }
 
-  // Carbon reconciliation on the EFFECTIVE state (stored ∪ patch): the update
-  // schema can only validate fields present in the patch, so a partial update
-  // (e.g. organic-only) could otherwise persist organic > total against the
-  // stored total. Same tolerance as the create/update schemas.
-  const effectiveTotalCarbon =
-    "totalCarbonPercent" in data ? data.totalCarbonPercent : existing.totalCarbonPercent;
-  const effectiveOrganicCarbon =
-    "organicCarbonPercent" in data ? data.organicCarbonPercent : existing.organicCarbonPercent;
-  const effectiveInorganicCarbon =
-    "inorganicCarbonPercent" in data ? data.inorganicCarbonPercent : existing.inorganicCarbonPercent;
-  if (
-    effectiveTotalCarbon != null &&
-    effectiveOrganicCarbon != null &&
-    effectiveOrganicCarbon - effectiveTotalCarbon >
-      CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS
-  ) {
-    throw new SafeError(
-      `Organic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points`
-    );
-  }
-  if (
-    effectiveTotalCarbon != null &&
-    effectiveOrganicCarbon != null &&
-    effectiveInorganicCarbon != null &&
-    effectiveOrganicCarbon + effectiveInorganicCarbon - effectiveTotalCarbon >
-      CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS
-  ) {
-    throw new SafeError(
-      `Organic plus inorganic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points`
-    );
-  }
+  // Fast-fail before opening a transaction; the locked check below is authoritative.
+  assertCarbonReconciliation(existing, data);
 
   // Sample-code uniqueness is DB-enforced (issue #395). No racy pre-check —
   // a user-supplied duplicate is mapped to a friendly SafeError by the
@@ -811,6 +801,17 @@ export async function updateSample(
   if (data.ironPercent !== undefined) updateData.ironPercent = data.ironPercent;
 
   await guardSampleMutation(() => db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select()
+      .from(samples)
+      .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)))
+      .for("update");
+
+    if (!locked) {
+      throw new SafeError("Sample not found");
+    }
+    assertCarbonReconciliation(locked, data);
+
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
