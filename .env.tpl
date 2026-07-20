@@ -14,7 +14,6 @@
 # Database (PostgreSQL via Drizzle ORM)
 # -----------------------------------------------------------------------------
 DATABASE_URL="op://Environment Variables/noma-dmrv env staging/DATABASE_URL"
-DB_RESET_ALLOW_REMOTE="op://Environment Variables/noma-dmrv env staging/DB_RESET_ALLOW_REMOTE"
 
 # -----------------------------------------------------------------------------
 # App URL (Used for Better Auth and general app links)

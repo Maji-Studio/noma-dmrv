@@ -199,7 +199,7 @@ storageLocationId: emptyToNull.or(z.uuid()).optional().nullable(),
 
 **Quick-add** — minimal-field schemas live in `src/schemas/quick-add.ts`. `useOpenCreateIntent()` (`@/hooks/use-open-create-intent`) opens the create dialog from a `?create=true` deep link.
 
-**Cascading selects (`dependsOn`)** — when a `FormEntitySelect` depends on another field (bins filtered by feedstock type, reactors by facility), pass `dependsOn`. `filterBy` is already part of the React Query key so options refetch on its own; `dependsOn` is what **clears the stale selection**, resetting the field to `null` when any watched value changes (it skips initial mount). Pass an array for multiple parents.
+**Cascading selects (`dependsOn`)** — when a `FormEntitySelect` depends on another field (bins filtered by feedstock type, reactors by facility), pass `dependsOn`. `filterBy` is already part of the React Query key so options refetch on its own; `dependsOn` is what **clears the stale selection**, resetting the field to `""` when any watched value changes (it skips initial mount); the schema's `emptyToNull` turns that into `null` on submit. Pass an array for multiple parents.
 
 ```typescript
 <FormEntitySelect

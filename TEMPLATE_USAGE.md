@@ -135,7 +135,7 @@ export async function createYourFeature(ctx: OrgContext, data: NewYourFeature) {
 
 import { z } from "zod";
 import type { ActionResult } from "@/types/actions";
-import { getUser } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import { createYourFeature } from "@/data-access/your-feature";
 
 const createSchema = z.object({
@@ -146,13 +146,10 @@ export async function createYourFeatureFn(
   data: z.infer<typeof createSchema>
 ): Promise<ActionResult<YourFeature>> {
   try {
-    const user = await getUser();
-    if (!user || !user.id) {
-      return { success: false, error: "Unauthorized" };
-    }
+    const ctx = await requireOrgContext();
 
     const validated = createSchema.parse(data);
-    const item = await createYourFeature(user.id, validated);
+    const item = await createYourFeature(ctx, validated);
 
     return { success: true, data: item };
   } catch (error) {

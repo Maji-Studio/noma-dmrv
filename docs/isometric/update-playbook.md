@@ -82,17 +82,15 @@ above. Override locally only if testing against a non-default spec.
 - No database schema changes included in this docs-only update.
 - If the bump changes schema, validation, or workflow behavior in the app, run `pnpm test:e2e` and keep the relevant Playwright paths green before merge.
 
-## Open Defects Filed Against Isometric's Public Docs
+## Dated Isometric Docs Observations (2026-07-20)
 
-Filed via the MCP `submit_feedback` tool; re-check each on every playbook pass
-and delete the row once the public docs page is corrected. These are defects in
-Isometric's documentation, not deferred work in this repo.
+**Non-authoritative:** re-check each through the Isometric MCP server before use.
 
-| Defect | Page | Status |
-| --- | --- | --- |
-| **UPPERCASE vs lowercase enum mismatch.** The page shows measurement-property `quantity_kind`/qualifier values UPPERCASE (`TEMPERATURE`, `PRESSURE`, `MASS_FRACTION`, `COMPOUND_CO2`); the API requires **lowercase** — confirmed against sandbox with `POST /sensors` (UPPERCASE → 422 enum violation listing the canonical lowercase set). A reader following the docs produces rejected requests. | `user-guides/certify/time-series-data-upload` | Filed, open |
-| **Undocumented 60-second cap on aggregation period.** Isometric rejects DataUploadSubmissions where `aggregation_period_end - aggregation_period_start > 60 s` (`AggregationPeriodDurationInvalidError`). The page documents the Parquet column shape but not the cap. noma's first design picked 1-hour windows and the sandbox smoke forced a revision to 60 s; that pattern now lives in `tests/isometric-sandbox.integration.test.ts`. | same page | Filed, open |
-| **Biochar pyrolysis reactor declared DAC-only.** The page opens *"Time series data can currently be associated with either a Direct Air Capture (DAC) capture facility or a DAC storage location (saline aquifer),"* then lists Biochar Pyrolysis Reactor measurement properties; the OpenAPI enum includes `biochar_pyrolysis_reactor_facility_time_series` and a sandbox probe confirmed the API accepts it. The prose intro is stale, so anyone evaluating biochar time-series support via the docs incorrectly concludes it is unsupported. | same page | Filed, open |
+| Observation | Page |
+| --- | --- |
+| **Enum-case mismatch observed.** The page showed measurement-property `quantity_kind`/qualifier values UPPERCASE (`TEMPERATURE`, `PRESSURE`, `MASS_FRACTION`, `COMPOUND_CO2`); a sandbox `POST /sensors` rejected them with a 422 enum violation listing lowercase values. | `user-guides/certify/time-series-data-upload` |
+| **60-second aggregation cap observed.** A sandbox DataUploadSubmission over 60 seconds was rejected with `AggregationPeriodDurationInvalidError`; noma's 60-second pattern lives in `tests/isometric-sandbox.integration.test.ts`. | same page |
+| **Biochar pyrolysis reactor support observed despite DAC-only prose.** The OpenAPI enum included `biochar_pyrolysis_reactor_facility_time_series`, and a sandbox probe accepted it. | same page |
 
 ## Quick Refresh Checklist (8 steps)
 1. Pull metadata for pinned slugs.

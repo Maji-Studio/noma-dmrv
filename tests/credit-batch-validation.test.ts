@@ -88,11 +88,11 @@ beforeAll(async () => {
   // Create two facilities
   const [fA] = await db
     .insert(facilities)
-    .values({ organizationId: TEST_ORG_ID, name: "Test Facility A", code: `TFA-VAL-${runId}` })
+    .values({ organizationId: TEST_ORG_ID, name: `Test Facility A ${runId}`, code: `TFA-VAL-${runId}` })
     .returning({ id: facilities.id });
   const [fB] = await db
     .insert(facilities)
-    .values({ organizationId: TEST_ORG_ID, name: "Test Facility B", code: `TFB-VAL-${runId}` })
+    .values({ organizationId: TEST_ORG_ID, name: `Test Facility B ${runId}`, code: `TFB-VAL-${runId}` })
     .returning({ id: facilities.id });
   facilityA = fA;
   facilityB = fB;
