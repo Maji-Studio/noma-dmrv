@@ -545,6 +545,25 @@ export async function updateProductionRun(
 
     assertProductionRunTransition(locked.status, lockedTargetStatus);
     assertRunWindowConsistent(lockedTargetStartTime, lockedTargetEndTime);
+    // Re-assert on the LOCKED row: the pre-transaction check ran against a
+    // snapshot, so two concurrent partial updates (one lowering input, one
+    // raising output) could each pass individually yet serialize into an
+    // output-above-input row without this.
+    assertDryMassBalance({
+      feedstockWetMassKg:
+        data.feedstockWetMassKg !== undefined
+          ? data.feedstockWetMassKg
+          : locked.feedstockWetMassKg,
+      feedstockMoisturePercent:
+        data.feedstockMoisturePercent !== undefined
+          ? data.feedstockMoisturePercent
+          : locked.feedstockMoisturePercent,
+      biocharOutputKg: lockedTargetBiocharOutput,
+      biocharMoisturePercent:
+        data.biocharMoisturePercent !== undefined
+          ? data.biocharMoisturePercent
+          : locked.biocharMoisturePercent,
+    });
 
     if (lockedTargetStatus !== locked.status && lockedTargetStatus !== "complete") {
       const [linkedProduct] = await tx

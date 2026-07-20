@@ -156,6 +156,33 @@ Pure starter residue; org scoping came later via ADR 0010.
   batch it certifies. Bound in `src/schemas/production-runs.ts` +
   `src/fn/production-runs.ts`. **Owned by #207 (OPEN).**
 
+### #473 no-flash guarantee is now per-page, not global (`navigation/select-facility-deep-link-skeleton`, opened 2026-07-20)
+
+- **Context:** the layout-level `FacilityGate` was deleted; the pre-resolution
+  loading skeleton for a deep-linked `?facility=<id>` (issue #473) now lives
+  inside `SelectFacilityEmptyState`
+  (`src/components/navigation/select-facility-empty-state.tsx`), rendered only
+  when a facility-scoped page reaches the point of rendering that component
+  for its no-selection state.
+- **Consequence:** the guarantee "a deep-linked facility never flashes an
+  empty/select-a-facility state while it resolves" is an **invariant of
+  `SelectFacilityEmptyState` usage**, not something the router or layout
+  enforces. Any facility-scoped page that branches on the facility itself
+  (e.g. an early return or a different empty-state component instead of
+  rendering `SelectFacilityEmptyState`) can still flash on a direct/deep-link
+  navigation, and nothing will catch it.
+- **Test coverage gap:** the regression spec for #473
+  (`tests/e2e/facility-gate.spec.ts`, `describe("Deep-linked facility
+  resolves on direct navigation (#473)")`) only exercises `/reactors`. It does
+  not assert the invariant on any other facility-scoped page.
+- **To resolve:** either (a) audit every facility-scoped page to confirm its
+  no-selection branch always routes through `SelectFacilityEmptyState` and add
+  a lint/test convention that prevents future pages from rolling their own, or
+  (b) extend `tests/e2e/facility-gate.spec.ts` to cover a second, differently-
+  shaped facility-scoped page. Until then: **new facility-scoped pages must
+  route their no-selection state through `SelectFacilityEmptyState`** rather
+  than a bespoke empty state or early return.
+
 ### Facility switcher unreachable while an entity side sheet is open (`navigation/sheet-blocks-facility-switch`, opened 2026-07-20)
 
 - QA 2026-07-20 (`docs/qa/artifacts/2026-07-20-qa-a-b93d/findings.md`, P2):

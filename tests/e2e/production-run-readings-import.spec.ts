@@ -227,9 +227,14 @@ test.describe("production run readings CSV import", () => {
     ).toBeVisible({ timeout: 30000 });
     expect(await countReadings(run.id)).toBe(0);
 
-    // The failed document is flagged and offers a scoped re-import affordance;
+    // The failed document row surfaces the stored actionable reason (not a
+    // generic "Import failed") and offers a scoped re-import affordance;
     // successful documents never get one.
-    await expect(dialog.getByText("Import failed").first()).toBeVisible({
+    await expect(
+      dialog
+        .getByText(/None of the 1 timestamped row\(s\) fall within/)
+        .first(),
+    ).toBeVisible({
       timeout: 30000,
     });
     const reimport = dialog.getByRole("button", { name: /Re-import/ });
