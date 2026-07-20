@@ -92,6 +92,9 @@ Read directly from `process.env`, **not** validated by `env.ts`:
 
 - `ADMIN_PASSWORD` — consumed only by the admin-bootstrap CLI
   (`src/lib/cli/ensure-admin.ts`), never by the running app.
+- `DB_RESET_ALLOW_REMOTE` — consumed only by the database-reset CLI. Only the
+  literal string `"true"` permits a remote reset; the manually confirmed staging
+  and production reset jobs load it from their matching 1Password item.
 - `DISABLE_RATE_LIMIT` — rate limiting is **opt-out** via a bare
   `process.env.DISABLE_RATE_LIMIT !== "true"` read
   (`src/lib/auth/better-auth.ts`). A typo fails safe (limits stay ON), but only
