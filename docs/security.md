@@ -37,7 +37,7 @@ context scopes workflows *within* an org.
   returns early when `ctx.isPlatformAdmin`). Org isolation is policy toward other
   organizations, not toward the platform — the platform-admin path is not a leak.
 - The org column is deliberately denormalized so the enforcement point is a
-  uniform, greppable `WHERE organizationId = ctx.orgId`. **New data-access
+  uniform, greppable `WHERE organizationId = ctx.organizationId`. **New data-access
   functions must follow that uniform pattern, not derive org through a join
   chain** — that missed-join leak class has already occurred once
   (`getSupplierOptions`). See [ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md)
