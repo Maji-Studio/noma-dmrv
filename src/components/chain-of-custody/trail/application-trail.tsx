@@ -24,7 +24,7 @@ import type {
   TrailTransportLeg,
 } from "@/data-access/chain-of-custody-trail";
 import { useApplicationTrail } from "@/hooks/use-chain-of-custody";
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDate, formatDateTime } from "@/lib/format-utils";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import {
   LINEAGE_NODE_STYLES,
@@ -48,7 +48,7 @@ function formatKg(value: number | null): string | null {
 
 function formatStepDate(value: Date | string | null): string {
   if (!value) return "No date";
-  return formatSafeDate(value, "MMM d, yyyy");
+  return formatDate(value);
 }
 
 /** Custody order, upstream to soil: feedstocks → run → lot → order → delivery → application. */
@@ -219,7 +219,7 @@ function StepEvidence({ evidence }: { evidence: TrailNodeEvidence | undefined })
               Sample {sample.sampleCode ?? sample.id.slice(0, 8)}
             </p>
             <p className="body-caption text-[var(--color-text-tertiary)]">
-              {formatSafeDate(sample.timestamp, "MMM d, yyyy HH:mm")}
+              {formatDateTime(sample.timestamp)}
             </p>
           </div>
         </li>

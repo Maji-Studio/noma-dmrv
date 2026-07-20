@@ -37,7 +37,7 @@ import type {
 import type { DeliveryWithRelations } from "@/data-access/deliveries";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 
 // ============================================
 // Helper Functions
@@ -70,7 +70,7 @@ function createColumns(
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <CalendarIcon size={16} className="text-[var(--color-text-tertiary)]" />
-          <span>{formatSafeDate(row.original.deliveryDate)}</span>
+          <span>{formatDate(row.original.deliveryDate)}</span>
         </div>
       ),
     },
@@ -439,7 +439,7 @@ export function DeliveryList() {
                   title: "General",
                   fields: [
                     { label: "Code", value: sideSheetEntity.code },
-                    { label: "Delivery Date", value: formatSafeDate(sideSheetEntity.deliveryDate) },
+                    { label: "Delivery Date", value: formatDate(sideSheetEntity.deliveryDate) },
                     {
                       label: "Status",
                       value: (

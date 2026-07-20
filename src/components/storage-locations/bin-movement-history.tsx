@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useBinMovements } from "@/hooks/use-bin-movements";
 import type { BinMovementWithActor } from "@/data-access/bin-movements";
-import { formatMass, formatSafeDate } from "@/lib/format-utils";
+import { formatDateTime, formatMass } from "@/lib/format-utils";
 import {
   BIN_MOVEMENT_LANE_LABELS,
   type BinMovementLane,
@@ -82,7 +82,7 @@ function MovementRow({ movement }: { movement: BinMovementWithActor }) {
 
       <p className="body-caption text-[var(--color-text-tertiary)]">
         {movement.actorName ? `${movement.actorName} · ` : ""}
-        {formatSafeDate(movement.createdAt, "MMM d, yyyy · HH:mm")}
+        {formatDateTime(movement.createdAt)}
       </p>
     </li>
   );

@@ -31,6 +31,7 @@ import type { GhgStatement } from "@/lib/isometric";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import { chooseGhgSubmitMode } from "@/lib/isometric/utils/ghg-statement-state";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
+import { formatDate, formatDateRange } from "@/lib/format-utils";
 import { EnvBanner } from "./env-banner";
 import { GhgStatementCarbonBreakdown } from "./ghg-statement-carbon-breakdown";
 import { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
@@ -52,8 +53,8 @@ interface GhgStatementDetailSheetProps {
 function statementPeriod(item: GhgStatementListItem): string {
   const { reportingPeriodStartOn, reportingPeriodEndOn } = item.statement;
   return reportingPeriodStartOn
-    ? `${reportingPeriodStartOn} → ${reportingPeriodEndOn}`
-    : `Ends ${reportingPeriodEndOn}`;
+    ? formatDateRange(reportingPeriodStartOn, reportingPeriodEndOn)
+    : `Ends ${formatDate(reportingPeriodEndOn)}`;
 }
 
 // Friendly one-line phrase for the raw registry verifier status. The raw enum

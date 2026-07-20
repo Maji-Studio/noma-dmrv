@@ -8,20 +8,8 @@
 import Link from "next/link";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import type { DashboardActivityItem } from "@/data-access/dashboard-overview";
+import { formatDate } from "@/lib/format-utils";
 import { DashboardPanel } from "./dashboard-panel";
-
-/** Pinned so server and client render identically (no SSR hydration drift). */
-const DATE_LOCALE = "en-US";
-
-function formatDate(iso: string): string {
-  // `iso` is a UTC instant (toISOString on a date-only column); format in UTC
-  // so a negative-offset viewer never sees the day shifted back by one.
-  return new Intl.DateTimeFormat(DATE_LOCALE, {
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(iso));
-}
 
 interface ActivityFeedProps {
   activity: DashboardActivityItem[];
@@ -56,8 +44,8 @@ export function ActivityFeed({ activity }: ActivityFeedProps) {
                 href={item.href}
                 className="group grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-12 py-12"
               >
-                <span className="label-micro w-56 text-[var(--color-text-tertiary)]">
-                  {formatDate(item.dateIso)}
+                <span className="label-micro whitespace-nowrap text-[var(--color-text-tertiary)]">
+                  {formatDate(item.dateIso.slice(0, 10))}
                 </span>
                 <span className="body-small truncate text-[var(--color-text-primary)]">
                   {item.title}
