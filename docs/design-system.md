@@ -26,11 +26,14 @@ Read these first. Each one fails quietly rather than loudly.
   **deleted, not remapped** — `rounded-md` resolves to nothing at all and is
   dropped without any visible error. Only scale values that exist in the theme
   block work.
-- **`var(--radius-*)` has zero call sites.** The tokens are defined but dead.
-  The three rounded surfaces hardcode `rounded-[8px]` (Accordion root,
-  `Card.Root` with the opt-in `radius="default"`, bordered `Card.Icon`).
-  Match the codebase: `rounded-none` everywhere, `rounded-[8px]` on those
-  three. Do not introduce `var(--radius-*)`.
+- **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
+  the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
+  the `--radius-*` tokens: `rounded-full` (dots, pills, avatars — 11),
+  `rounded-4` (skeletons, micro-tags — 6), `rounded-8` (skeleton cards — 3).
+  Three legacy surfaces hardcode `rounded-[8px]` (Accordion root, `Card.Root`
+  with the opt-in `radius="default"`, bordered `Card.Icon`) — don't copy that
+  into new code. Never write the bracket form `rounded-[var(--radius-*)]`; use
+  the generated utility.
 - **Two-greys rule:** every grey in the light theme is an **alpha of plum over
   white**, never a neutral grey — cool neutrals read dirty on the warm field.
   `--color-border-*`, `--color-text-*`, `--color-icon-*`,
@@ -156,11 +159,17 @@ use, so match whichever the file you're editing already imports. Sizes: 16
 ## Base components
 
 All live in `src/components/ui/<name>` (lowercase paths — capitalised paths
-only resolve on macOS and break CI) and re-export from the barrel:
+only resolve on macOS and break CI). Most re-export from the barrel:
 
 ```tsx
 import { Button, EmptyState, Modal, PageHeader, StatCard } from "@/components/ui";
 ```
+
+The barrel is **incomplete** — `Accordion`, `CertificationFieldTag`,
+`DetailPanel`, `LoadingSkeleton`, `Toast`, `ViewRelatedLink` and
+`DeleteConfirmDialog` are not exported. Import those from their own path. A
+failed barrel import means the component exists elsewhere, not that it's
+missing — don't rebuild it.
 
 `@/` already maps to `src/` — `@/src/...` is always wrong.
 
@@ -205,10 +214,15 @@ restore for free.
 
 ### Other primitives — intent only, props at source
 
-- **`EmptyState`** — the shared dashed empty/zero-data card. Every empty,
-  "select a facility", and filtered-empty state uses it; **never a bare `<p>`**.
-  Icon sizing is caller-owned. Facility-scoped pages branch the copy:
-  `title={facilityId ? "No X yet" : "Select a facility"}`.
+- **`EmptyState`** — the shared dashed empty/zero-data card. Every empty and
+  filtered-empty state uses it; **never a bare `<p>`**. Icon sizing is
+  caller-owned.
+- **`SelectFacilityEmptyState`** (`src/components/navigation`) — the *no
+  facility chosen* state. Do not branch `EmptyState` copy on `facilityId`;
+  this component exists so every first-run screen speaks with one voice.
+  Facility-scoped pages early-return `container-max page-shell` + `PageHeader`
+  + this, and gate the query `{ enabled: !!facilityId }` — skipping the gate
+  fires an unscoped query.
 - **`StepFlow`** — step rail + content slot + pinned footer. Deliberately dumb:
   **StepFlow never validates**; the parent owns the active index and gates
   forward progress by disabling its own Next button.
@@ -260,7 +274,16 @@ Derive title/subtitle/sections/form props with optional chaining + fallbacks
 
 The single anatomy for every routed page — list, rollup, and detail alike.
 Reference implementations: `facility-list.tsx`, `reactor-list.tsx`,
-`order-list.tsx`. **Any page that deviates from this shell is a bug.**
+`order-list.tsx`. **A main return that deviates from this shell is a bug**
+(the early-return exceptions below are not deviations).
+
+Routes themselves are 5–10 line server wrappers — `src/app/(app)/orders/page.tsx`
+renders `src/components/orders/order-list.tsx`. The shell and all state live in
+that `"use client"` component, **not** in `page.tsx`. Detail routes usually
+redirect into the list's side sheet (`production-runs/[id]/page.tsx`); genuine
+detail pages follow `credit-batches/[id]/page.tsx` — `requireOrgContext` → uuid
+`safeParse` → `notFound()` → canonical `?facility=` redirect, plus a sibling
+`not-found.tsx`.
 
 ```tsx
 <div className="container-max page-shell">
@@ -277,8 +300,12 @@ Reference implementations: `facility-list.tsx`, `reactor-list.tsx`,
 </div>
 ```
 
-- Container is always `container-max page-shell` — **no custom page padding.**
-  `page-shell` (defined in `globals.css`) is the flex-column vertical rhythm
+- The **main return** is always `container-max page-shell` — **no custom page
+  padding.** Two sanctioned exceptions, both early returns before it: the
+  no-facility state (above) and the query-error state, which is
+  `<div className="container-max py-32"><ServerError … /></div>`
+  (`ServerError` lives in `@/components/forms`, not `ui/`).
+- `page-shell` (defined in `globals.css`) is the flex-column vertical rhythm
   and scales gap + vertical padding responsively (20px mobile → 24px ≥768px →
   32px ≥1024px), so pages don't carry a fixed 32px gap on phones.
 - KPI strips: `gap-24` grid, `md:grid-cols-2` with `lg:grid-cols-3` (3 cards)
@@ -296,6 +323,33 @@ a mono facility eyebrow) instead of `PageHeader`, its KPI strip is the 4-cell
 **HeroKpiBand** (one ink-bordered strip, not iconed StatCards), and its hero is
 the isometric traceability scene (`components/dashboard/flow-hero*`). No other
 page gets a display headline.
+
+### List-page idiom — copy `order-list.tsx:120-349`
+
+Fifteen list components share one shape. Copy it rather than re-deriving:
+
+- **State:** a single `sideSheet: { entity, mode } | null` with
+  `openCreate/openView/openEdit/closeSideSheet` — not separate
+  `isCreateOpen`/`editingX`/`viewingX` flags, which don't compose with
+  `onModeChange`. Plus `searchQuery`, per-column filters, `currentPage`/
+  `pageSize`, `hasActiveFilters`, `clearFilters`.
+- **Loading is prop-driven.** There are **zero** route `loading.tsx` files —
+  pass `isLoading` to `DataTable` and each `StatCard`; nested tables use
+  `LoadingSkeleton`. A page-level spinner flashes the whole shell.
+- **Mutations:** `toast.success(...)` on success; **failures go to local error
+  state rendered as `<ServerError>` inside the sheet**, which stays open.
+  `toast.error` is for non-form actions only — a form error in a toast lands
+  far from the field that caused it.
+- **Destructive confirm** is `DeleteConfirmDialog`
+  (`@/components/ui/delete-confirm-dialog`), driven by a `deletingXId` state.
+  Never hand-roll a `Modal` for this.
+- **Toolbar controls are deliberately raw**: a hand-rolled `h-40` search
+  `<input>` and plain `<select>`s, both needing `aria-label` — not `Input` or a
+  Base UI Select. `<DataTable.Toolbar>` / `<DataTable.Pagination>` go in as
+  children; server-paginated lists use `manualPagination` + `pageCount` +
+  `pageIndex`.
+- Call `useOpenCreateIntent(openCreate)` on any list with a create sheet — it
+  powers `?create=true` deep links from the sidebar's "New X" actions.
 
 ---
 

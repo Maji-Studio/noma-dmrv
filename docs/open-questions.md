@@ -18,6 +18,18 @@ Two rules bind this file:
 
 Deferred work lives here, never as a `TODO` in code.
 
+**Anchor every entry on a `file:symbol` it depends on.** This file's recurring
+failure mode is entries whose code was renamed or deleted underneath them
+(`safeAppendSyncEvent`, `deleteDocumentsForEntity`,
+`insertDraftSubmissionWithMappingLockAndLocks` — all gone, all still cited here
+for weeks). A named symbol makes a rename break the entry visibly under grep;
+prose alone rots silently.
+
+**`needs-registry-check`** marks a question that must be answered by the
+Isometric MCP server (`how_to`, then the protocol/OpenAPI tools) or a sandbox
+probe — **never** from `docs/isometric/*`, which are non-authoritative local
+summaries. Do not close one of these from a local doc.
+
 ## Invariants an LLM must not violate
 
 Short, load-bearing rules that this file's entries assume. Each is enforced in
@@ -38,10 +50,14 @@ code today; breaking one compiles cleanly and fails silently.
   optimization.** A caller inside a transaction MUST pass its `tx`; reading
   through the global pool from inside an open transaction holds one connection
   while waiting for another, and starves the pool under parallel load. This is
-  the same failure the `storage/sources-sync-events-tx` entry below band-aided
-  with `DB_POOL_MAX=10`. Applies to every tx-scoped read, not just this helper.
+  the same failure the `storage/sources-sync-events-tx` entry below describes —
+  and that one is **not** mitigated: `src/db/index.ts` runs `max: env.DB_POOL_MAX
+  ?? 1`, and `DB_POOL_MAX` is unset in every environment. Applies to every
+  tx-scoped read, not just this helper.
 - **`transport_legs.tripType` defaults to `'return'` and is credit-bearing.**
-  `roundTripDistanceFactor` in `src/lib/isometric/utils/aggregation.ts` applies
+  `roundTripDistanceFactor` (defined in `src/schemas/trip-type.ts`; imported by
+  `src/lib/isometric/utils/aggregation.ts` and
+  `src/lib/certification/evidence-ledger/build-model.ts`) applies
   ×2 for `return` and ×1 for `one_way` (issue #316, §4.2 — conservative by
   default; `one_way` requires an evidenced onward destination). "Simplifying"
   the default or the multiplier halves submitted transport emissions in the
@@ -127,28 +143,18 @@ Pure starter residue; org scoping came later via ADR 0010.
 
 ### Auto-fill sample chemistry from an uploaded lab report (`samples/coa-autofill`, opened 2026-07-02)
 
-- **Deferred from issue #309** (samples re-anchored on credit batches — built).
-  The issue also asked for parsing an uploaded COA/lab-report PDF to pre-fill
-  the sample form's chemistry fields.
-- **Why it matters:** ~30 numeric fields transcribed by hand from the lab
-  certificate; transcription errors feed certified carbon figures directly.
-- **To resolve:** decide extraction approach (LLM vs. per-lab templates),
-  confidence/review UX (never silently overwrite operator entries), and where
-  parsing runs (server action + storage provider, [`docs/storage.md`](./storage.md)).
-  The upload slot already exists (`lab_report` on the sample's Evidence step).
+- Parse an uploaded COA/lab-report PDF to pre-fill the sample form's ~30
+  hand-transcribed chemistry fields. Upload slot already exists (`lab_report` on
+  the sample's Evidence step). **Owned by #329 (OPEN)** — extraction approach,
+  review UX, and where parsing runs are all scoped there.
 
 ### Validate production-run window ⊆ credit-batch period (`production/run-window`, opened 2026-07-01)
 
-- **Deferred from the readings-CSV work (issue #207).** A run may span days, but
-  its `start_time`/`end_time` window should not extend beyond its credit batch
-  (the protocol production batch — [ADR 0016](./adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md)).
-  No cross-entity check exists; both timestamps default to `now()`.
-- **Why it matters:** the readings importer clips telemetry to the run window,
-  so readings can't escape a run — but nothing stops a run's window from
-  exceeding its batch period, letting telemetry land outside the batch it
-  certifies.
-- **To resolve:** decide where the run↔batch link is authoritative, then bound
-  it in `src/schemas/production-runs.ts` + `src/fn/production-runs.ts`.
+- **No cross-entity check exists** that a run's `start_time`/`end_time` window
+  falls inside its credit batch's period ([ADR 0016](./adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md));
+  both timestamps default to `now()`. Telemetry can therefore land outside the
+  batch it certifies. Bound in `src/schemas/production-runs.ts` +
+  `src/fn/production-runs.ts`. **Owned by #207 (OPEN).**
 
 ### White-label dashboards per Organization (`tenancy/white-label`, opened 2026-06-11)
 
@@ -158,26 +164,6 @@ Pure starter residue; org scoping came later via ADR 0010.
 - **To resolve:** revisit on client demand; scope is wildcard domain routing,
   per-org theme tokens, branded Resend templates
   ([`docs/mail-setup.md`](./mail-setup.md)).
-
-### Documents are org-scoped but not entity/facility-narrowed (`security/document-authz`, opened 2026-06-15)
-
-- **Current behavior:** `getDocumentById` / `updateDocument` /
-  `setDocumentVisibility` / `assertCanManageDocumentEntity`
-  (`src/data-access/documents.ts`) all take `ctx: OrgContext`, call
-  `requireOrgScope(ctx)`, and filter on `documents.organizationId`;
-  `assertCanManageDocumentEntity` re-checks the owning entity's
-  `organizationId` across all document-bearing entity types. **Cross-org reads
-  are refused**, including via the `/api/documents/[id]` presigned-download
-  redirect.
-- **Still open:** *intra-org* narrowing. Any member of an organization can read
-  any private document in that org by UUID, without proving access to the
-  owning `(entityType, entityId)` — no per-user facility membership exists (see
-  `security/facility-membership` below). The `visibility: public | private`
-  column encodes an intended boundary that org scoping alone doesn't enforce.
-- **To resolve:** fold document reads/mutations through a facility/entity-scoped
-  check once membership lands. A `createdBy`-only stopgap is too tight —
-  operators share documents on shared entities. Implement the `it.todo` negative
-  tests in `tests/documents-authz.test.ts` against the scoped helper.
 
 ### Facility-wide monitoring dashboard / live map (`coc/facility-dashboard`, opened 2026-06-11)
 
@@ -192,44 +178,37 @@ Pure starter residue; org scoping came later via ADR 0010.
   geospatial/mass-balance panel, and whether a buyer-facing shareable page is
   wanted (different audience, different auth surface).
 
-### Multi-hop biochar transport — intermediate storage (`transport/multi-hop-distribution`, opened 2026-06-11)
+### Facility-anchored transport origin breaks on multi-hop / multi-storage orgs (`transport/multi-hop-distribution`, opened 2026-06-11)
+
+Merged 2026-07-20 with the former `transport/storage-topology` — one question.
 
 - **Current model:** a biochar product carries exactly ONE auto-derived
   distribution leg (facility → delivery destination), aggregated from its
-  deliveries (mass-weighted distance, `transport_legs`
-  one-derived-per-entity invariant). Matches Dark Earth Carbon's flow. The
-  manual "biochar → storage" leg editor was removed from the product sheet (it
-  predated derivation and invited rows the resync didn't own).
-- **Question:** how to model orgs that truck biochar to an intermediate
-  storage/depot first — two or more real legs per product with different masses
-  per hop, which the single-derived-leg invariant can't represent. The live
-  Certify template's `biochar-transport` component takes one distance + mass
-  pair per removal, so submission-side needs either per-hop Σ(dist×mass) folded
-  into one equivalent leg, or a template change.
-- **To resolve:** wait for an org with intermediate storage; then choose (a)
-  multi-leg derivation with hop ordering, folded into one equivalent
-  distance×mass for Certify, or (b) per-hop components in the removal template.
-  Touches `aggregateDistributionLegs`, the one-derived-per-entity index, and the
-  batch readiness transport gate.
-
-### Additional storage locations — keeping the dMRV flexible (`transport/storage-topology`, opened 2026-06-11)
-
-- **Question:** how does the dMRV stay correct when an org adds a second storage
-  location? Parts of the flow hard-code a single facility-anchored topology:
-  - derived transport legs use the **facility** (name + GPS) as the biochar
-    origin — the storage location a product actually sits in never enters the
-    route;
-  - the live template's `biochar-transport` component assumes one
-    facility → destination hop (see the multi-hop entry above);
-  - `biochar-storage` emissions (template group currently empty) would need
-    per-location attribution if storage sites with different energy/fuel
-    profiles appear.
+  deliveries via `aggregateDistributionLegs` (mass-weighted distance,
+  `transport_legs` one-derived-per-entity invariant). The **facility** (name +
+  GPS) is the hard-coded origin — the storage location a product actually sits
+  in never enters the route. Matches Dark Earth Carbon's flow. The manual
+  "biochar → storage" leg editor was removed from the product sheet (it predated
+  derivation and invited rows the resync didn't own).
+- **Question:** how to stay correct when an org trucks biochar to an
+  intermediate storage/depot first, or simply adds a second storage location.
+  Both cases mean two or more real legs per product with different masses per
+  hop, which the single-derived-leg invariant can't represent; and
+  `biochar-storage` emissions (template group currently empty) would need
+  per-location attribution once sites have different energy/fuel profiles. The
+  live Certify template's `biochar-transport` component takes one distance + mass
+  pair per removal.
 - **Why it matters:** a second storage site silently changes real transport
   distances and storage emissions without changing anything the derivation
   reads, so submitted numbers drift from reality.
-- **To resolve:** decide whether storage locations get GPS + distance provenance
-  and enter leg derivation (origin = the product's bin location), and whether
-  storage-site transfers become first-class custody events in the trail.
+- **To resolve:** wait for an org with intermediate storage or a second site;
+  then decide (a) multi-leg derivation with hop ordering (origin = the product's
+  bin location, storage locations gaining GPS + distance provenance), folded into
+  one equivalent Σ(dist×mass) for Certify, or (b) per-hop components in the
+  removal template — plus whether storage-site transfers become first-class
+  custody events in the trail. Touches `aggregateDistributionLegs`, the
+  one-derived-per-entity index, and the batch readiness transport gate.
+- **See also:** #456, #420.
 
 ### Split `src/db/seed-data.ts` into domain seed modules (`db/seed-modularization`, opened 2026-06-11)
 
@@ -273,48 +252,46 @@ Pure starter residue; org scoping came later via ADR 0010.
 ### Application evidence-readiness: two implementations, one taxonomy (opened 2026-07-20)
 
 - **Problem:** the list badge / dashboard evaluate application visual-evidence
-  gaps via `applicationEvidenceGapCountSql` (raw SQL, folded into
+  gaps via `applicationEvidenceGapCountSql`
+  (`src/data-access/application-evidence-sql.ts`, raw SQL folded into
   `deriveEntityCertifyReadiness`), while the certify wizard evaluates the same
   concept via `buildApplicationEvidenceGaps`
   (`src/fn/certification/application-evidence-readiness.ts`, async TS). They
   share only the `application-evidence` constants (roles / geotag predicate),
   not the evaluation path — unlike production-run / sample / transport, which
   both route through `deriveEntityCertifyReadiness`.
-- **Why it matters:** issue #246's contradiction (list "Ready", wizard blocked)
-  is closed because both surfaces now fail-closed, but the duplicated logic is a
-  live drift risk. E2E `application-readiness-evidence.spec.ts` guards only the
-  badge side; nothing asserts badge/wizard *agreement*, so a future divergence
-  in one predicate would reintroduce #246 undetected.
-- **To resolve:** either (a) route `buildApplicationEvidenceGaps` through the
-  same shared source as the badge (true unification), or (b) add a regression
-  test driving the wizard's gap computation against the same seeded application
-  the badge test uses. (b) needs the full ready-batch / certifier-mapping setup
-  the wizard spec currently deems too fragile for CI, so (a) is likely cheaper (M).
+- **Owned by #246 (OPEN)** — "certification badges and removal gates read one
+  shared readiness source". Both surfaces now fail-closed, so the visible
+  contradiction (list "Ready", wizard blocked) is gone, but the duplicated logic
+  is a live drift risk: E2E `application-readiness-evidence.spec.ts` guards only
+  the badge side and nothing asserts badge/wizard *agreement*.
+- **To resolve:** route `buildApplicationEvidenceGaps` through the same shared
+  source as the badge (true unification) — likely cheaper than the alternative
+  regression test, which needs the full ready-batch / certifier-mapping setup the
+  wizard spec currently deems too fragile for CI (M).
 
 ## Isometric Certify integration
 
 ### Template component → dmrv source mapping is hardcoded by display name (`certification/template-component-source-wizard`, opened 2026-07-04)
 
 - **Decision needed** — where should the "this template component carries this
-  dmrv aggregated source" mapping live? Today it's a code constant
-  (`PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT` in
-  `src/lib/isometric/transformers/datapoint.ts`), keyed by component **display
-  name**, because Certify's template model exposes no stable per-component key.
-  It only bites when one `(group, blueprint, input)` triple is declared by more
-  than one component — currently just the pyrolysis generator/startup diesel
-  split.
-- **Why it matters** — a display-name rename in the Isometric UI silently
-  requires a code change. It fails closed with a clear `SafeError` (so it can't
-  mis-submit) but blocks the submit until code catches up, coupling the registry
-  template to a deploy that a non-engineer operator can't do.
+  dmrv aggregated source" mapping live? Today it's the code constant
+  `PYROLYSIS_DIESEL_SOURCE_BY_COMPONENT`
+  (`src/lib/isometric/transformers/datapoint.ts`), keyed by component **display
+  name** because Certify exposes no stable per-component key. Full rationale is
+  in the code comment above that constant — do not restate it here.
+- **Why it matters** — a display-name rename in the Isometric UI fails closed
+  with a `SafeError` (can't mis-submit) but blocks the submit until code catches
+  up, coupling the registry template to a deploy no operator can do.
 - **To resolve** — a facility-configurable component→source mapping (persisted
-  on the certifier mapping row) plus a small assignment wizard in facility
-  settings; the code constant becomes the seed/default. Scope it when a second
-  multi-component triple appears.
+  on the certifier mapping row) plus an assignment wizard in facility settings;
+  the constant becomes the seed/default. Scope it when a second multi-component
+  `(group, blueprint, input)` triple appears — today only the pyrolysis
+  generator/startup diesel split collides. Structural umbrella: **#291 (OPEN)**.
 
 ### Eq.6 R₀-term semantics — 1000-year F_durable normalization (`certification/fdurable-1000-r0-semantics`, opened 2026-07-03)
 
-- **From issue #142.** The storage module ("Biochar Storage in Soil
+- The storage module ("Biochar Storage in Soil
   Environments" v1.2, Eq.6 §5.1.1.3.2) is internally inconsistent about the
   units/semantics of the first Eq.6 factor: the formal glossary defines R̄₀ as a
   mean of R₀ measurements in **percent**, but the narrative ("credited for the
@@ -327,61 +304,38 @@ Pure starter residue; org scoping came later via ADR 0010.
   interpretation is documented at the function. The registry computes the
   authoritative F_durable at submission, so this is a preview — but a wrong
   reading shows operators a misleading crediting estimate.
-- **The live path follows the blueprint, not Eq.6.**
-  [ADR 0021](./adr/0021-durability-tier-is-facility-scoped.md) is authoritative:
-  the `biochar_sequestration_1000_year` blueprint resolves the ambiguity in
-  favour of the narrative reading and has neither a non-reactive-carbon factor
-  nor the 0.95 cap, so it **diverges from module Eq.6**. The blueprint is what
-  runs; `computeFDurable1000` stays the local preview.
-- **Still open — needs Isometric staff sign-off:** which of Eq.6 vs. the
-  blueprint governs verification credit, and total-vs-organic carbon for
-  `carbon_contents`. Authoritative module:
+- **Still open — needs-registry-check:** which of Eq.6 vs. the
+  `biochar_sequestration_1000_year` blueprint governs verification credit (the
+  blueprint is what runs and it diverges from Eq.6 — see
+  [ADR 0021](./adr/0021-durability-tier-is-facility-scoped.md)), and
+  total-vs-organic carbon for `carbon_contents`. Authoritative module:
   <https://registry.isometric.com/module/biochar-storage-soil-environments/1.2?tag=1.2.0>.
   Record the answer in [`docs/isometric/changes.md`](./isometric/changes.md).
 
 ### Credit-batch lab-sampling — Method-B Track 2 unlock followups (`certification/method-b-unlock-track-2`)
 
-- **[ADR 0017](./adr/0017-method-b-unlock-registry-computes-noma-gates-and-previews.md)
-  Track 2 shipped** (PR #301): explicit Method-B unlock (`unlockMethodBForProcess`)
-  with prerequisite capture, the μ−σ/√n unsampled estimate preview
-  (`previewUnsampledCarbon`, 6-month eligible pool), compliance-drift counters,
-  `_unsampled` submission routing, the process-grain **DB trigger backstop**
-  (migration `0060`, replacing the dropped `0052` reactor trigger, counting only
-  the pre-unlock baseline), and the operator surface under the registry-gated
-  `/certification/production-processes`.
-- **Still gated:** the live `_unsampled` submission POST stays behind
-  `DURABILITY_MEASUREMENT_SAMPLES_LIVE` (wire format unconfirmed); the preview
-  does NOT winsorise (the registry's 3σ winsorisation over the eligible pool
-  remains the registry's authority,
-  [ADR 0013](./adr/0013-registry-computed-durable-fraction.md) / D1).
-- **Gate shape to settle before activation:** Method-B cadence is a
-  production-process history rule, not just the removal member-batch subset. The
-  live gate should load the full process batch window or accept an explicit
-  process-level cadence fact.
-- **Decided 2026-07-12** (regime boundary, `established_at` semantics,
-  submitted-evidence lock): recorded as ADR 0017 amendments; verification
-  narrative in
-  [`docs/archive/qa/2026-07-12-final-12-month-followup.md`](./archive/qa/2026-07-12-final-12-month-followup.md).
-  The evidence-snapshot enforcement for the submitted-evidence lock is still
-  unbuilt (#200/#391).
-- **Needs Isometric confirmation before the 1000-year unsampled route is built
-  or enabled:** the exact `_unsampled` registry wire contract. The working
-  product expectation is to reuse the trailing eligible historical sample
+Track 2 shipped in PR #301
+([ADR 0017](./adr/0017-method-b-unlock-registry-computes-noma-gates-and-previews.md),
+incl. its 2026-07-12 amendments). Three things remain. DEC runs Method A
+everywhere today, so none of this blocks current work — but do not enable
+Method B until all three close.
+
+- **`_unsampled` registry wire contract — needs-registry-check.** The live
+  `_unsampled` POST stays behind `DURABILITY_MEASUREMENT_SAMPLES_LIVE`
+  (`src/config/env.ts`) because the submitted representation is unconfirmed. The
+  working product expectation is to reuse the trailing eligible historical sample
   pool/average rather than require three new 1000-year replicates per unsampled
-  batch — but noma must not invent the submitted representation.
-- **Needs protocol confirmation:** whether independent/distributed sampling is a
-  hard eligibility gate or an operator warning. Synthetic same-day rows must not
-  be treated as proof in QA either way.
-- **Version dependency:** ADR 0017 cites biochar protocol 1.3 while the local
-  pin remains 1.2; coordinate under #278 before encoding more credit-bearing
-  Method-B logic.
-- **Why it matters:** DEC runs Method A everywhere today, so Track 2 blocks
-  nothing current. Do not enable Method B until the activation path and
-  submission gate are process-grain end to end.
-- **Watch:** entangled with ADR 0013 and issue #291 (template-driven remodel) —
+  batch — but noma must not invent it. Also unconfirmed: whether
+  independent/distributed sampling is a hard eligibility gate or an operator
+  warning (synthetic same-day rows are not proof in QA either way).
+- **Fail-closed gate shape at process grain → #417 (OPEN).** Method-B cadence is
+  a production-process history rule, not just the removal member-batch subset;
+  the live gate must load the full process batch window or accept an explicit
+  process-level cadence fact.
+- **Version dependency → #278 (OPEN).** ADR 0017 cites biochar protocol 1.3
+  while the local pin remains 1.2; resolve before encoding more credit-bearing
+  Method-B logic. Also entangled with #291 (template-driven remodel) —
   coordinate so the submission layer isn't double-built.
-- **ADR-number hygiene:** ADR 0017 refines ADR 0016; keep sampling/credit-batch
-  references on ADR 0016 unless they specifically describe the Method-B unlock.
 
 ### Method-B compute — tracked cleanups on the process-grain surface (`certification/method-b-compute-cleanups`, opened 2026-06-20)
 
@@ -399,176 +353,55 @@ they don't churn a freshly-introduced surface mid-review:
   window pool; if pools grow, compute the leave-one-out mean/variance
   analytically in O(n) from running sums.
 
-### Evidence-ledger font tracing — verify on first deploy (`isometric/evidence-ledger-font-tracing`, opened 2026-06-19)
-
-- The evidence-ledger PDFs (transport mass·distance and 200-year durability —
-  both auto-generated and mirrored as Sources on every Removal submit) render
-  with bundled DM Sans/Mono TTFs read at runtime via a dynamic `process.cwd()`
-  path (`src/lib/certification/evidence-ledger/fonts.ts`, shared via
-  `registerEvidenceLedgerFonts`). Next's static tracer can't follow a dynamic fs
-  path, so the TTFs are pulled into the serverless bundle by
-  `outputFileTracingIncludes` in `next.config.ts` (broad `"/**"` key, since the
-  submit action bundles under several routes). The glob is directory-wide, so it
-  already covers the durability renderer.
-- **Why it matters:** serverless file-tracing can't be exercised locally. If the
-  glob misses, the renderer throws `ENOENT` at submit time — and because ledger
-  generation is best-effort (try/catch in `submitRemoval`), the failure is
-  **silent**: the submit succeeds but no ledger Source is attached. A wrong
-  trace config looks like "working" until someone notices removals have no
-  ledger.
-- **Narrowed, not closed:** the dev-runtime render + full
-  generate→store→mirror→`source_ids` flow is verified in-process against the
-  seeded sandbox. The remaining risk is *the serverless file-tracing path
-  specifically* — local dev does not bundle.
-- **Resolve via:** on the first staging deploy, run a real submit and confirm a
-  `transport_evidence_ledger` document + Source is created (check the removal's
-  sources, or the structured log line `generated evidence ledger`). The
-  durability ledger shares fonts + render path, so a passing transport render
-  confirms both. If absent, inspect the function bundle for the `.ttf` files and
-  tighten the trace key to the actual submit route(s). Record the outcome in
-  [`docs/isometric/changes.md`](./isometric/changes.md) and remove this entry (S).
-
 ### Durability measurement-samples — sandbox confirms before live wiring (`isometric/durability-measurement-samples`, opened 2026-06-18)
 
-**The whole surface is behind `DURABILITY_MEASUREMENT_SAMPLES_LIVE`**, which
-`src/config/env.ts` defines as an optional flag *plus* a cross-field refinement
-rejecting it whenever `ISOMETRIC_ENVIRONMENT !== "sandbox"` — i.e. it is a
-sandbox-only kill-switch that cannot be enabled against production. Do not
-remove this entry until the flag is retired after the operator runs the confirms
-below; at the same cutover, delete the stale `carbon_rich_substance_sequestration`
-`INPUT_MAPPING` entry (see the Phase 3 note).
+**Flag semantics:** `DURABILITY_MEASUREMENT_SAMPLES_LIVE` (`src/config/env.ts`)
+is an optional flag *plus* a cross-field refinement rejecting it whenever
+`ISOMETRIC_ENVIRONMENT !== "sandbox"` — a sandbox-only kill-switch that cannot be
+enabled against production. The whole surface sits behind it. This entry closes
+when the flag is retired.
 
-- **Tier-1 Phases 1–5 built + committed** — the run → credit-batch re-grain, the
-  facility reference soil-temp field, the staged measurement-samples submission
-  step, the durability evidence-ledger PDF, and the two UX surfaces (lab-sample
-  batch progress + credit-batch durability panel).
+Phases 1–5 and the 1000-year extension are **built and committed** (ADR 0021;
+issues #358 and #348 CLOSED); the phased plan and its decision record live in
+[`docs/plans/2026-06-19-tier1-durability-live-wiring.md`](./plans/2026-06-19-tier1-durability-live-wiring.md).
+Two sandbox-empirical confirms and one cutover checklist are all that remain.
 
-- **1000-year extension (ADR 0021).** The durability tier is facility-scoped;
-  DEC (Moshi) is 1000-year. Recognition + guard plumbing is built and has passed
-  an end-to-end **sandbox** removal submit — the live POST remains gated:
-  - `biochar_sequestration_1000_year` is in `SEQUESTRATION_BLUEPRINT_KEYS`;
-    `resolveTemplateInputs` skips the whole sequestration **family**
-    (`isSequestrationBlueprintFamily`), so a 1000-year template reaches the
-    staging gate instead of throwing a misleading "no INPUT_MAPPING entry".
-  - `submitRemoval` validates the template's sequestration blueprint against the
-    facility tier (`expectedSequestrationBlueprintKeys`) and fails closed early
-    on a mismatch.
-  - `build1000YearSequestrationSample`
-    (`src/lib/isometric/transformers/measurement-sample.ts`) builds the
-    blueprint inputs (per-replicate `carbon_contents` + `s_fraction` LISTs +
-    `product_mass` SCALAR — **no** local mean/−SE/cap; the registry reduces).
-  - **`s_fraction` data model:** stored per Sample as
-    `samples.s_reflectance_fraction` (ISO 7404-5 inertinite fraction —
-    proportion of that sample's R₀ readings ≥ 2%). Captured as a percentage,
-    stored/submitted 0–1 (see the invariants section). Sandbox accepted
-    `dimensionless_ratio/inertinite_fraction`; `carbon_contents` was accepted as
-    total carbon with `mass_fraction_dry_basis/total_carbon`.
+**Two sandbox-empirical confirms gate the LIVE submit — both
+needs-registry-check.** The bodies, HTTP wrappers
+(`src/lib/isometric/measurement-samples.ts`), and per-batch aggregation are done
+and unit-tested; what remains needs the operator's
+`pnpm isometric:coverage-check -- --source=db` against the sandbox (interactive
+1Password — an agent can't run it).
 
-- **Grill-with-docs resolution (2026-06-19).** Stress-tested against ADR 0013 /
-  ADR 0016 and the authoritative protocol (biochar 1.2 §8.3.1; soil module 1.2
-  §5.1.1.3.1, both re-verified via the isometric MCP). Full phased plan +
-  sandbox-parameterised checklist:
-  [`docs/plans/2026-06-19-tier1-durability-live-wiring.md`](./plans/2026-06-19-tier1-durability-live-wiring.md).
-  Decisions locked:
-  1. **Re-grain run → credit batch (root issue).** Durability gates,
-     aggregation, measurement-sample builders, and the COA candidate-document
-     walk all read `run.samples`, but ADR 0016 re-pointed lab samples to
-     `creditBatchId`. Lab chemistry is therefore invisible to the durability
-     surfaces — re-grain to the **credit batch** before the live POST.
-  2. **Sample model:** enter a Sample against **one production run**
-     (provenance); **account at the credit batch** (pool ≥3 → mean + std-dev).
-     The ≥3 are **independent samples distributed across runs/days** (§8.3.1),
-     not aliquots; hard-gate the count, **warn** if not distributed.
-  3. **Submitted shape:** one measurement-sample submission per credit batch
-     carrying the batch's **mean + std-dev** (raw ≥3 evidenced by COA +
-     durability ledger); the registry means the per-batch list.
-  4. **Soil temperature:** an operator-declared **facility-level reference
-     value** (global DB, e.g. Lembrechts 2022; 7 °C floor), justified in the
-     PDD; per-application temps become a future override.
-  5. **COA:** the `lab_report` on each Sample via the existing document→Source
-     mirror (re-grain the walk to gather by credit batch); D4 gate at batch grain.
-  6. **INPUT_MAPPING:** delete the stale `carbon_rich_substance_sequestration`
-     entry; carve the two `biochar_sequestration_200_year_*` components out of
-     the legacy datapoint loop into the measurement-samples step. `_unsampled`
-     (Method B) is an **inert** seam — no estimate math.
-  7. **Scope grew (accepted):** a durability evidence-ledger PDF reconciling raw
-     replicates → submitted mean+std-dev + soil-temp reference, plus two UX
-     surfaces (lab-sample create form with single-run ref + live credit-batch
-     sample count; credit-batch sample list/aggregation view).
+1. **Datapoint↔component-input binding — needs-registry-check.** How a
+   `biochar_sequestration_200_year_*` blueprint input references the
+   measurement-sample datapoints: auto-link by measurement type/property vs. an
+   explicit `datapoint_id` reference. Not modelled yet. *Hypothesis (local docs,
+   non-authoritative):* `user-guides/certify/datapoint-sharing` describes an
+   explicit sharing act, which leans toward an explicit reference. Confirm the
+   exact field against the live sandbox or the `post-datapoint`/component schema.
+2. **H/C unit transform — needs-registry-check.** The blueprint declares
+   `h_c_molar_ratios` in `%` while samples store a dimensionless molar ratio
+   (~0.5); `toHcMolarRatioPercent`
+   (`src/lib/isometric/transformers/measurement-sample.ts`) applies ×100 as the
+   most likely transform. *Hypothesis (local docs, non-authoritative):* the
+   Certify measurement-samples reference lists H:C as `DIMENSIONLESS_RATIO` /
+   `HYDROGEN_TO_ORGANIC_CARBON_RATIO`, which would make the ×100 **wrong**. This
+   is a hypothesis, not evidence — verify the live template's blueprint *input*
+   unit declaration before flipping.
 
-- **Phase 3 staged.** The measurement-samples step is built and wired into
-  `runRemovalSubmission`, gated in
-  `src/fn/certification/durability-measurement-samples.ts`. With the flag off,
-  `submitRemoval` hard-blocks any template declaring a
-  `biochar_sequestration_200_year_*` component with a "staged, not yet live"
-  `SafeError`; `resolveTemplateInputs` + `buildCreateGhgEntryRequest` skip those
-  components.
-  - **DEFERRED — delete at the live-flip cutover:** decision #6 said to delete
-    the stale `carbon_rich_substance_sequestration` `INPUT_MAPPING` entry *now*.
-    It is **load-bearing on the still-live old-template carbon path** —
-    referenced by 5 tests (`isometric-submit-removal`, `registry-boundary-removal`,
-    `period-input-tuples`, `isometric-transformers`, `isometric-sources`) and by
-    two `tuple(…)` descriptors in `certify-field-registry.ts`. Deleting it while
-    the new path is gated breaks working tests for zero functional gain.
-    **Decision: keep it until the live flip**, then delete the entry + the two
-    field-registry tuples (`biocharOutputKg`→`product_mass`,
-    `organicCarbonPercent`→`carbon_content`) and retarget the 5 tests.
-
-- **Two sandbox-empirical confirms still gate the LIVE submit.** The
-  measurement-sample bodies, the HTTP wrappers
-  (`src/lib/isometric/measurement-samples.ts`), and the per-batch durability
-  aggregation are done and unit-tested; what remains needs the operator's
-  `pnpm isometric:coverage-check -- --source=db` against the sandbox
-  (interactive 1Password — an agent can't run it).
-  1. **Datapoint↔component-input binding.** How a
-     `biochar_sequestration_200_year_*` blueprint input references the
-     measurement-sample datapoints — auto-link by measurement type/property vs.
-     an explicit `datapoint_id` reference. Not modelled yet.
-     *Doc evidence leans explicit reference:* `user-guides/certify/datapoint-sharing`
-     describes a datapoint being created and then "used as an input to multiple
-     components" (an explicit sharing act). Type+property identify *what* a
-     datapoint measures but don't bind it to a blueprint input. Confirm the exact
-     field against the `post-datapoint`/component schema in `certify.d.ts` or
-     the live sandbox.
-  2. **H/C unit transform.** The blueprint declares `h_c_molar_ratios` in `%`
-     while samples store a dimensionless molar ratio (~0.5);
-     `toHcMolarRatioPercent` applies ×100 as the most likely transform.
-     *Doc evidence leans dimensionless, NOT %:* the Certify measurement-samples
-     reference lists the Biochar→Production batch **H:C** property as quantity
-     kind `DIMENSIONLESS_RATIO` / qualifier `HYDROGEN_TO_ORGANIC_CARBON_RATIO`,
-     and `biochar-storage-soil-environments` 1.2 §3 Table 2 evaluates the molar
-     H/C_org ratio as a dimensionless *Ratio* (threshold < 0.5). This suggests
-     the ×100 transform is likely **wrong**. Still verify against the live
-     template's blueprint *input* unit declaration before flipping — the module
-     doc covers the science, not the platform input declaration.
-
-  Neither doc finding closes the gate; both are sandbox-empirical.
-
-- **Also gated to the live wiring:** the `total_carbon_contents` /
-  `inorganic_carbon_contents` / `product_mass` datapoint construction + binding,
-  the COA/lab-report Source behind the chemistry datapoints (D4), and recording
-  the conservative soil-temp method string on the `biochar_soil` datapoint (the
-  `CreateMeasurementSampleRequest` body has no description field).
-- **Snapshot-back the measurement-sample bodies before the flip (resume
-  coherence).** The gated step in `runRemovalSubmission` rebuilds the
-  measurement-sample submissions from live `durability.batches` every attempt,
-  whereas `transport.datapointBodies` and the fixed bindings come off the
-  claimed row snapshot on resume. Inert while gated, but once live a resumed
-  claim could reconcile a stale body or POST changed live chemistry under the
-  prior version. Persist the built submissions into the payload snapshot and
-  read them back on resume — same pattern as `transport.datapointBodies`.
-  (Surfaced in PR #297 review.)
-- **Why live submit is already fail-closed:** the legacy
-  `carbon_rich_substance_sequestration` `INPUT_MAPPING` entry references a
-  blueprint the operator deleted when re-authoring the template (expected
-  mid-migration; not-live, no prod data).
-- **Resolve via:** run the coverage-check, confirm (1) + (2), wire the live path
-  in `submit-removal.ts` (blueprint selection via
-  `selectSequestrationBlueprintKey`, D6), replace the stale `INPUT_MAPPING`
-  entry, then close this entry and record the decision in
-  [`docs/isometric/changes.md`](./isometric/changes.md). Plan:
-  [`docs/archive/plans/2026-06-18-200yr-durability-submission-and-sampling-method-enforcement.md`](./archive/plans/2026-06-18-200yr-durability-submission-and-sampling-method-enforcement.md)
-  (§6 Phase E), [ADR 0013](./adr/0013-registry-computed-durable-fraction.md).
+**Cutover checklist (verified still load-bearing).** At the live flip, and not
+before: delete the stale `carbon_rich_substance_sequestration` `INPUT_MAPPING`
+entry (`src/lib/isometric/transformers/datapoint.ts`) plus the two `tuple(…)`
+descriptors in `src/lib/certification/certify-field-registry.ts`
+(`biocharOutputKg`→`product_mass`, `organicCarbonPercent`→`carbon_content`), and
+retarget the 5 tests that reference it (`isometric-submit-removal`,
+`registry-boundary-removal`, `period-input-tuples`, `isometric-transformers`,
+`isometric-sources`). It is load-bearing on the still-live old-template carbon
+path, so deleting it early breaks working tests for zero gain. Then wire the live
+path in `submit-removal.ts` via `selectSequestrationBlueprintKey`, close this
+entry, and record the outcome in
+[`docs/isometric/changes.md`](./isometric/changes.md).
 
 ### Ambiguous-lookup rejection records no failed sync event (`isometric/ambiguous-lookup-audit-silence`, opened 2026-06-10)
 
@@ -595,7 +428,8 @@ below; at the same cutover, delete the stale `carbon_rich_substance_sequestratio
 - **Migration landed.** noma calls the `ghg_entry` route family; the regen
   pipeline points at the docs-hosted Certify spec. Full inventory + phased plan:
   [`docs/plans/2026-06-10-isometric-ghg-entry-migration.md`](./plans/2026-06-10-isometric-ghg-entry-migration.md).
-- **Sunset CONFIRMED ~September 2026** (issue #353). What remains post-sunset:
+- **Sunset CONFIRMED ~September 2026.** No tracking issue exists for it — file
+  one. What remains post-sunset:
   (a) regenerate `certify.d.ts` — the deprecated `Removal*` schemas and the
   `GhgStatement.removal_ids` / `Component.removal_template_component_id` keys
   disappear, so the test mocks still carrying both old+new fields
@@ -604,14 +438,6 @@ below; at the same cutover, delete the stale `carbon_rich_substance_sequestratio
   the 🚫-marked deprecated rows from
   [`docs/isometric/openapi-index.md`](./isometric/openapi-index.md). No app-code
   change expected — the wire layer only calls new routes.
-- **Domain term "Removal" is RETAINED** (stakeholder decision): the
-  `Removal → GhgEntry` *domain* rename floated in
-  [ADR 0014](./adr/0014-credit-batch-as-production-cohort.md) is **decided
-  against**. Only the wire layer uses `ghg_entry*`; routes, UI, tables, and
-  `CONTEXT.md` keep "Removal" as the canonical submission-unit term.
-  `submissions.test.ts` guards that no deprecated `/removals` or
-  `/removal_templates` calls remain.
-
 ### GHG entry / statement free-field follow-ups (`isometric/ghg-entry-free-fields`, opened 2026-06-10)
 
 The migrated surface returns fields noma does not yet capture — new capability,
@@ -621,10 +447,6 @@ not a blocker:
   `risk_of_reversal_percentage` and `credit_allocation`
   (`buffer_pool_contribution_kg` / `supplier_allocation_kg`). Surfacing the
   split is new UI. Relates to the dropped `reversal_risk_assessments` table.
-- **Reporting-period readback.** `GhgStatement.reporting_period_start_at` /
-  `_end_at` are returned; reading them back can fix the reconciliation gap where
-  the statement wizard's "predicted to be linked" preview over-promises against
-  Isometric's server-derived period.
 - **Source `description`.** Optional human-readable label now accepted on
   `POST /sources` / `PATCH /sources/{id}` (we pass the `Undefined` sentinel).
   Wire it when the Sources panel grows a label.
@@ -654,6 +476,20 @@ itself is **built and enforced** — see the invariants section,
   fail-closed on a dangling anchor, **not** an access check — every wired caller
   derives the expected facility from the same anchor id it is reading. Detail:
   [`docs/archive/2026-07-09-certification-submit-facility-scope-partial-fix.md`](./archive/2026-07-09-certification-submit-facility-scope-partial-fix.md).
+- **Documents are blocked on the same decision** (was
+  `security/document-authz`, opened 2026-06-15). `getDocumentById` /
+  `updateDocument` / `setDocumentVisibility` / `assertCanManageDocumentEntity`
+  (`src/data-access/documents.ts`) all take `ctx: OrgContext`, call
+  `requireOrgScope(ctx)`, and filter on `documents.organizationId`, so
+  **cross-org reads are refused** — including via the `/api/documents/[id]`
+  presigned-download redirect. What is missing is *intra-org* narrowing: any org
+  member can read any private document in that org by UUID without proving
+  access to the owning `(entityType, entityId)`, so the
+  `visibility: public | private` column encodes a boundary org scoping alone
+  doesn't enforce. Fold document reads/mutations through the facility/entity
+  check once membership lands (a `createdBy`-only stopgap is too tight —
+  operators share documents on shared entities) and implement the `it.todo`
+  negative tests in `tests/documents-authz.test.ts` against the scoped helper.
 - **Not wired to that seam:** `submitRemovalAction` and
   `createRemovalWithBatchesAction`; the three admin mapping/emission actions
   stay on `requireAdminAction()` (platform-global, see
@@ -711,23 +547,7 @@ itself is **built and enforced** — see the invariants section,
     (P0-16 method-hierarchy + fallback evidence, P0-17 per-leg round-trip
     default, P0-18 factor vintage by mode).
 
-- **Per-leg vs aggregated submission strategy**
-  (`isometric/transport-v1.1-aggregation`) — **resolved within the SCALAR
-  constraint.** The operator re-authored the template onto the
-  `mass_distance_based_ci_emissions` blueprint, so each category submits one
-  `mass_distance` (tonne·km) scalar = `Σⱼ(distⱼ × massⱼ)` directly, still
-  enforcing per-category factor uniformity. See `aggregateTransportMassDistance`
-  in `src/lib/isometric/utils/aggregation.ts` — and note the `tripType`
-  multiplier is applied there, so the summed scalar is already round-trip
-  adjusted.
-  - **True per-leg submission is categorically impossible, not merely
-    un-exposed.** A live catalog sweep confirmed *every* `mass_distance` input
-    across all Certify blueprints is `data_shape: SCALAR`; no transport
-    blueprint accepts a `datapoint_ids` LIST. Per-leg visibility would require
-    one component *instance* per leg (dynamic `AddComponentToRemoval`, outside
-    the template-driven pipeline) and yields no numerical gain for same-mode
-    legs — rejected.
-  - **Deferred — mixed-mode transport** (`isometric/transport-mixed-mode`): one
+- **Mixed-mode transport** (`isometric/transport-mixed-mode`) — **deferred.** One
     `mass_distance` component carries one emission factor, so rail/ship legs
     (different EF) cannot be summed into a road tonne·km scalar — today they
     trip the mixed-factor warning and block submission. Supporting them needs
@@ -740,21 +560,7 @@ itself is **built and enforced** — see the invariants section,
 > [`docs/isometric/integration-plan.md`](./isometric/integration-plan.md) →
 > **Pre-deploy gates**. They are actions before deploy, not open questions.
 
-### Remaining template-coverage gaps
-
-The Phase 3 / 3.6 / 3.7 template inspection found ~10 input coverage gaps; all
-are closed (period-level inputs resolved by
-[ADR 0005](./adr/0005-period-emissions-as-project-components.md) — they're now
-`PROJECT`-scope Components managed in the Isometric UI). Breakdown in
-[`docs/isometric/changes.md`](./isometric/changes.md). Two forward-looking items
-remain:
-
-- **Pyrolyzer pre/post electricity readout** (`isometric/phase-3-readouts`).
-  `INPUT_MAPPING` under `pyrolysis / metered_energy_based_ci_emissions`
-  synthesises `initial_readout = 0`, `final_readout = totalElectricityKwh`. The
-  difference equals real consumption, the only quantity Certify uses downstream
-  — verifier-acceptable today, but replace with real per-run pre/post readouts
-  when `production_runs` gains the columns.
+### Blueprint versioning in `INPUT_MAPPING`
 
 - **Blueprint version dimension in `INPUT_MAPPING`**
   (`isometric/mapping-version-dimension`) — **deferred**.
@@ -795,37 +601,6 @@ independently shippable once Slice A is in production and demand surfaces.
   temperature/pressure belongs in `MonitoringSubmission` or
   `DataUploadSubmission`. If the former, consider whether Slice A's hourly
   aggregator becomes a `MonitoringSubmission` feeder rather than a Parquet writer.
-
-### Isometric Certify docs — three filed defects awaiting a docs update
-
-All three were filed with Isometric via the MCP `submit_feedback` tool
-(`mcp__claude_ai_Isometric__submit_feedback`) and remain open here until the
-public docs page is corrected. Re-check them in the next
-[`update-playbook`](./isometric/update-playbook.md) pass.
-
-- **UPPERCASE vs lowercase enum mismatch.** The "Uploading time series data"
-  page (`docs.isometric.com/user-guides/certify/time-series-data-upload`) shows
-  measurement-property `quantity_kind`/qualifier values UPPERCASE
-  (`TEMPERATURE`, `PRESSURE`, `MASS_FRACTION`, `COMPOUND_CO2`). The API requires
-  **lowercase** — confirmed against sandbox with `POST /sensors` (UPPERCASE →
-  422 enum violation listing the canonical lowercase set). A reader following
-  the docs produces rejected requests until they discover it by trial.
-- **Undocumented 60-second cap on aggregation period.** Isometric rejects
-  DataUploadSubmissions where
-  `aggregation_period_end - aggregation_period_start > 60 s`
-  (`AggregationPeriodDurationInvalidError`). The docs page describes the Parquet
-  column shape but not the cap. noma's first design picked 1-hour windows on
-  verifier-readability grounds and the sandbox smoke forced a revision to 60 s.
-  (The smoke probe was deleted; its pattern lives in
-  `tests/isometric-sandbox.integration.test.ts`.)
-- **Biochar pyrolysis reactor declared DAC-only.** The same page opens *"Time
-  series data can currently be associated with either a Direct Air Capture (DAC)
-  capture facility or a DAC storage location (saline aquifer),"* then lists
-  Biochar Pyrolysis Reactor measurement properties, and the OpenAPI enum
-  includes `biochar_pyrolysis_reactor_facility_time_series`. A sandbox probe
-  confirmed the API accepts the biochar submission_type; the prose intro is
-  stale, so anyone evaluating biochar time-series support via the docs
-  incorrectly concludes no.
 
 ### Isometric Certify API — no facilities LIST endpoint (`isometric/facilities-list-endpoint`, opened 2026-06-10)
 
@@ -890,8 +665,11 @@ public docs page is corrected. Re-check them in the next
   `buildCreateDatapointRequest`'s `sourceIds` arg, which is already per-input.
 
 - **Stream large source files** (`isometric/sources-stream-large-files`).
-  Phase 3.5 caps mirror size at 50 MB via `arrayBuffer()` for code simplicity;
-  larger documents fail loud with a `SafeError`. **Resolve via:** pipe
+  Phase 3.5 caps mirror size at 50 MB with a **pre-flight** check —
+  `if (document.fileSizeBytes > SOURCES_MAX_BYTES)` in
+  `src/fn/certification/sources.ts` — and larger documents fail loud with a
+  `SafeError`. The download itself buffers via `response.blob()`
+  (`src/fn/certification/sources-transfer.ts`). **Resolve via:** pipe
   `response.body` from the noma storage download directly into the Isometric PUT
   with `duplex: "half"` (needs careful `Content-Length` handling). Defer until a
   real LCA PDF or video exceeds the cap.
@@ -932,10 +710,12 @@ public docs page is corrected. Re-check them in the next
   Removal" with aggregated values. **Resolve only when** a template surfaces
   that needs a per-run breakdown.
 
-- **Per-column upload-URL field migration** (`storage/phase-2`).
-  `production.plc_data_file_url`, `samples.r0_histogram_file_url`,
-  `samples.tga_thermogram_file_url`, `production_samples.photo_url`,
-  `feedstock.registry_url`, `emissions.source_url` are still plain text columns.
+- **Per-column upload-URL field migration** (`storage/phase-2`). *(Misfiled — a
+  storage concern sitting inside the Isometric section; move on next touch.)*
+  Four plain-text URL columns survive: `r0HistogramFileUrl` and
+  `tgaThermogramFileUrl` (`src/db/schema/production.ts`), `photoUrl` (same file,
+  `production_samples`), and `registryUrl` (`src/db/schema/feedstock.ts`).
+  (`plc_data_file_url` and `emissions.source_url` no longer exist.)
   Phase 2 plan: add a `*_document_id` FK alongside each, backfill via UI, drop
   the URL column — routing all uploaded evidence through the single `documents`
   table (one audit trail, one storage-key convention, one visibility model, see
@@ -947,14 +727,6 @@ public docs page is corrected. Re-check them in the next
 
 Surfaced by the `/simplify` pass after the P1/P2 fix set. All below the
 threshold for the same PR; revisit next time the area is touched.
-
-- **Extract `finalizeSnapshotInputs` from `submitRemoval`'s create-new-version
-  closure** (`code/submit-removal-finalize-helper`). The `prepare` callback
-  passed to `insertDraftSubmissionWithMappingLockAndLocks` in
-  `src/fn/certification/submit-removal.ts` is ~80 lines mixing lock acquisition,
-  conditional source-id reconciliation, hash recomputation, template-input
-  rebuild, and final `InsertDraftSubmissionInput` assembly. Readable today
-  (linear, rare-path clearly marked) but a third caller would force extraction.
 
 - **Extract `assertDocumentReadyForMirror` pre-flight from
   `mirrorDocumentToSource`** (`code/mirror-preflight-helper`). Ten sequential
@@ -998,17 +770,25 @@ are clean deferrals.
   `STORAGE_SIGNING_SECRET` dependency on this path.
 
 - **`storage/sources-sync-events-tx` — move `certifier_sync_events` writes out
-  of the mirror business transaction.** `safeAppendSyncEvent` (called inside
-  `db.transaction` in `mirrorDocumentToSource`) calls `appendSyncEvent` on the
-  root `db`. With a single-connection pool the audit write deadlocks waiting for
-  a connection held by the open business transaction — **the same
-  pool-starvation failure the `assertSameOrg` `executor` parameter exists to
-  prevent** (see the invariants section). Band-aided by setting `DB_POOL_MAX=10`
-  in `.env.local`, which is pool-size-dependent and must not become the
-  long-term invariant. **Resolve via:** accumulate event payloads in a closure
-  and flush after the transaction settles (success or rollback). Touch points:
-  `src/fn/certification/sources.ts` (`withSyncEventOnFailure`,
-  `safeAppendSyncEvent`), `src/data-access/certification.ts` (`appendSyncEvent`).
+  of the mirror business transaction. ⚠️ NOT MITIGATED — live at the default
+  pool size.** `appendSyncEventBestEffort` (`src/fn/certification/shared.ts`)
+  runs on the root `db` while being called from inside the transaction opened in
+  `mirrorDocumentToSource` (`src/fn/certification/sources.ts`). With a
+  single-connection pool the audit write deadlocks waiting for a connection held
+  by the open business transaction — **the same pool-starvation failure the
+  `assertSameOrg` `executor` parameter exists to prevent** (see the invariants
+  section).
+  A previous version of this entry claimed the risk was band-aided with
+  `DB_POOL_MAX=10`. **That is false.** `src/db/index.ts` runs
+  `max: env.DB_POOL_MAX ?? 1` and `.env.local` records `DB_POOL_MAX skipped — no
+  "DB_POOL_MAX" field in the 1Password item`, so the effective pool size is
+  **1** and the starvation path is fully live. Treat this as unmitigated until
+  fixed.
+  **Resolve via:** accumulate event payloads in a closure and flush after the
+  transaction settles (success or rollback). Touch points:
+  `src/fn/certification/sources.ts` (`withSyncEventOnFailure`, the
+  `appendSyncEventBestEffort` calls inside the mirror transaction),
+  `src/data-access/certification.ts` (`appendSyncEvent`).
 
 - **`ux/sources-panel-row-layout` — buttons clip on narrow viewports.** The
   Mirror / Unlink / visibility-toggle button row in
@@ -1019,98 +799,41 @@ are clean deferrals.
 
 ### Submit-removal — `pyrolyzer_direct` PROJECT-scope conflict in default template (opened 2026-05-27)
 
-Clicking SUBMIT on a Removal raises a `SafeError` stating that
-`direct-emissions/ghg_direct_emissions/concentration` belongs to a PROJECT-scope
-Component (`category="pyrolyzer_direct"`) and must be removed from the Removal
-Template — the corresponding emission is a Project Component published in the
-Isometric UI ([ADR 0005](./adr/0005-period-emissions-as-project-components.md) /
-[ADR 0018](./adr/0018-isometric-owns-project-emissions.md)).
+**Settled — see #304 (CLOSED COMPLETED 2026-07-02),
+[ADR 0005](./adr/0005-period-emissions-as-project-components.md) and
+[ADR 0018](./adr/0018-isometric-owns-project-emissions.md).** `pyrolyzer_direct`
+stays a PROJECT-scope Component updated yearly from the emissions test / LCA. The
+guard is permanent and test-covered: `PERIOD_INPUT_TUPLES`
+(`src/lib/isometric/transformers/datapoint.ts`) is consulted *before*
+`INPUT_MAPPING`, pinned by `tests/period-input-tuples.test.ts`. Do not re-add a
+zero-stub `INPUT_MAPPING` entry to bypass it — `0` is an over-claim, not a
+neutral placeholder.
 
-- **The check is correct; the seed is wrong.** The seeded default Removal
-  Template still references that input. Update the seed (and any fixture
-  template references) to drop it per ADR 0005.
-- **Root cause is upstream of the template:** noma has **no source for the
-  `pyrolyzer_direct` magnitude** (exhaust CH₄/CO concentration + gas mass flow).
-  It is not operational production-run data — it comes from the annual external
-  LCA, and no real extracted value has been published as a PROJECT-scope
-  Component in Isometric yet. (The former `certifier_project_emissions` journal
-  rows were Moshi-LCA placeholders; the journal is gone per ADR 0018.)
-- **The interim-`0` temptation is the exact integrity bug ADR 0005 removed.**
-  Pyrolyzer direct emissions are *positive* emissions that *reduce* net removal.
-  Sending `0` **inflates** the credit — anti-conservative, the wrong direction
-  for a registry. `0` is not a neutral placeholder; it is an over-claim until
-  the real LCA value lands.
-- **Stakeholder questions to resolve:**
-  1. Who owns the LCA report, and what is the real `pyrolyzer_direct` value (kg
-     CO₂e for the window) to publish as a PROJECT-scope Component?
-  2. Until it exists, is the agreed interim posture (a) **omit the component
-     from the template** so the Removal simply doesn't carry it (data absent,
-     not a false `0`), or (b) a deliberately **conservative over-estimate**
-     transcribed as a PROJECT-scope Component? Both defensible; `0` is not.
-  3. Does this block only sandbox exploration or a real production submission?
-     (Sandbox: unblock by editing the sandbox template only.)
-- **Do NOT re-add a zero-stub `INPUT_MAPPING` entry to bypass the guard.** That
-  reverts ADR 0005/0018 and re-introduces the over-claim. The unblock path is
-  template-field removal, not a fake datapoint.
+- **Still open — needs-registry-check:** whether Isometric or a verifier accepts
+  annual-test + throughput-proportional PROJECT-scope attribution, given biochar
+  §8.6.2 / §10.1 prefer Reporting-Period grain.
 
 ### Pinned biochar protocol behind latest certified (opened 2026-06-04)
 
-- [`docs/isometric/versions.json`](./isometric/versions.json) pins biochar
-  `1.2.0`, storage-soil `1.2.0`, energy-use `1.2.0`, ghg-accounting `1.0.1`.
-  Latest CERTIFIED is biochar **1.3** (2026-05-22), bundling **GHG Accounting
-  1.1**, **Energy Use Accounting 1.3**, and **Storage-in-Soil 1.3**
-  (biomass-feedstock 1.3 and transportation 1.1 are already current).
-- **Why it matters:** the per-batch health check + submit payload encode
-  1.2-line expectations; if 1.3 changes the required-input/evidence set or
-  durability thresholds (H:Corg < 0.5, R₀ ≥ 2%, pollutant ceilings), they drift
-  from the live protocol.
-- **noma-specific impact is mostly low:**
-  - **GHGAM 1.1 carbon-mass-balance (Procedure 4): largely N/A.** It governs
-    *co-product* allocation (biochar **+** a second creditable CDR product of
-    different durability); noma is biochar-only and `buildMassAccounting`
-    (`src/lib/certification/mass-accounting.ts`) does per-run *applied-mass*
-    attribution, not a co-product split. Only bites if a creditable co-product
-    is added.
-  - **GHGAM 1.1 20-year amortization cap + residual-debt reporting + mandatory
-    year-1/3/5 reviews:** amortization is server-side (ADR 0005/0018 — Isometric
-    owns project emissions end-to-end), so the cap is enforced registry-side.
-    Operator-process change, low code impact.
-  - **GHGAM 1.1 embodied-emissions LC-stage + staff-travel clarifications:**
-    verify the ADR 0005 period-emission category definitions still match
-    (doc-level).
-  - **EUA 1.3** (hourly-matching removed for pre-2030 FID; added
-    technical/feasibility tests) and **storage-soil 1.3 / Appendix-4
-    risk-of-reversal** (questionnaire/registry-determined): low code impact;
-    buffer-split *numbers* may shift.
-- **The real work is registry-side, not in `versions.json`.** The protocol
-  version is bound to the project's GHG-entry template in the Certify UI —
-  editing `versions.json` migrates nothing. Sequence once the project moves:
-  (1) re-author/re-bind the GHG-entry template to biochar 1.3 in Certify;
-  (2) `pnpm isometric:coverage-check` → update `INPUT_MAPPING` only if blueprint
-  keys/inputs/units changed; (3) doc refresh per
-  [`update-playbook`](./isometric/update-playbook.md); (4)
-  `pnpm regenerate-certify-types` is separate (the OpenAPI surface is
-  version-independent).
-- **Why this stays open:** whether the project migrates to biochar 1.3 needs
-  Isometric coordination + template re-authoring (existing 1.2 removals may
-  stay; new crediting periods may require 1.3). Authoritative:
-  <https://registry.isometric.com/protocol/biochar/1.3>.
-- **Standing re-audit mechanism:** `.claude/workflows/isometric-gap-check.js`
-  independently re-detected the same four drifts from a cold start and flagged
-  none on biomass-feedstock or transportation. Re-run it on any version bump to
-  regenerate the three-corner (authority vs. docs vs. code) gap list before
-  re-pinning. Run summary:
-  [`docs/archive/2026-06-22-isometric-gap-check-run.md`](./archive/2026-06-22-isometric-gap-check-run.md).
+**Owned by #278 (OPEN)** — impact analysis, acceptance checklist, and the
+migration sequence all live there; do not duplicate them here. Local pins are in
+[`docs/isometric/versions.json`](./isometric/versions.json), but the real work is
+registry-side (re-authoring the GHG-entry template in Certify), so editing that
+file migrates nothing. **Which versions are currently latest-certified is
+needs-registry-check** — do not restate version numbers from local docs. Re-run
+`.claude/workflows/isometric-gap-check.js` on any bump to regenerate the
+authority-vs-docs-vs-code gap list before re-pinning.
 
 ### Submit-context builder N+1 on selection/submit hot paths (`certification/submit-context-n+1`, opened 2026-06-05)
 
-- Two N+1s remain in the shared submission-context builder:
-  `loadSelectableBatchesForFacility` (`src/fn/certification/certify-context.ts`)
-  loops a full `buildRemovalContext` per ungrouped batch — each iteration walks
-  that batch's applications through `getChainOfCustodyData` (~6
-  queries/application) plus production-run and transport-leg loads; and
-  `resolveScopeForRemoval` resolves member `applicationIds` + `co2eStoredPreview`
-  per member (≈2×M queries).
+- Two N+1s remain in the shared submission-context builder, now living in
+  `src/fn/certification/certify-context-core.ts` (`certify-context.ts` keeps
+  `loadSelectableBatchesForFacility` only as a thin re-export). The
+  selectable-batches path loops a full `buildRemovalContext` per ungrouped batch
+  — each iteration walks that batch's applications through
+  `getChainOfCustodyData` (~6 queries/application) plus production-run and
+  transport-leg loads; and `resolveScopeForRemoval` resolves member
+  `applicationIds` + `co2eStoredPreview` per member (≈2×M queries).
 - **Why it matters:** the New-Removal wizard's first step and the submit path;
   cost scales with batches × applications-per-batch. The per-batch Isometric
   *remote* calls were already hoisted and the create-removal confirm loop fixed
@@ -1173,11 +896,21 @@ checks, `max-lines` lint, `DB_POOL_MAX` docs, CI prod approval gate) and the
 observability half of Phase 2 (structured logger) are done; Phase 4 split the
 two oversized data-access files. Still open:
 
-- **Phase 1 — schema-wide indexes.** Add `index()` for unindexed FK columns,
-  time-series indexes (`productionRunReadings.timestamp`,
-  `soilTemperatureMeasurements.measurement_date`), and the composite
-  `transportLegs (entity_type, entity_id)`. One `pnpm db:generate` migration.
-  (Superset of `perf/missing-indexes` below — fold those in.) See
+- **Phase 1 — schema-wide indexes.** Two of the originally-listed indexes have
+  landed: `transport_legs_entity_type_entity_id_idx`
+  (`src/db/schema/logistics.ts`) and `production_run_readings_run_timestamp_uq`
+  (`src/db/schema/production.ts`). Remaining scope: `index()` for the unindexed
+  FK columns in `src/db/schema/feedstock.ts`, `facilities.ts`,
+  `storage-inventory.ts` and `geo.ts`, plus
+  `soilTemperatureMeasurements.measurement_date`. **Also folded in here** (was
+  the separate `perf/missing-indexes` entry, deleted 2026-07-20 after the two
+  drifted apart on column order): `certifier_sync_events`
+  (`src/db/schema/certification.ts`) carries an `organization_id` index but
+  nothing supporting the detail-page lookup by `(entity_type, entity_id)` ordered
+  by `attempted_at DESC`, so every detail page seq-scans. Under org scoping the
+  useful composite leads with `organization_id`:
+  `(organization_id, entity_type, entity_id, attempted_at DESC)`. One
+  `pnpm db:generate` migration for the whole set. See
   [`docs/database.md`](./database.md).
 - **Phase 3 — read-path + correctness.** Explicit column selection on
   wide-table reads, full document pagination, a central `query-config.ts`,
@@ -1188,27 +921,25 @@ two oversized data-access files. Still open:
   to `error` therefore only requires finishing `db/seed-modularization` above —
   **and removing `src/db/seed-data.ts` from the eslint `ignores` array**, which
   is why the lint does not flag it today.
-- **Phase 5 — CRUD/hooks de-duplication.** Same scope as `code/hooks-factory`
-  below; optional, only worth it if the entity set keeps growing.
-
 ### Structural / cross-cutting
 
 - **Duplicate-hooks factory** (`code/hooks-factory`). The `src/hooks/use-*.ts`
-  family is ~4–5k lines of near-identical query/mutation wiring per entity; a
-  `createEntityHooks(...)` factory would collapse most of it. Dedicated refactor
-  PR — should not stack on in-flight feature work. See
+  family is **9,710 lines** (measured 2026-07-20; this entry previously estimated
+  4–5k, so the case is twice as strong as it read) of near-identical
+  query/mutation wiring per entity; a `createEntityHooks(...)` factory would
+  collapse most of it. Dedicated refactor PR — should not stack on in-flight
+  feature work. See
   [`docs/architecture.md`](./architecture.md).
 
 - **Pin the document-redirect allowlist to the exact Isometric report bucket**
-  (`security/redirect-host-pinning`). The `/api/documents/[id]` redirect guard
-  was narrowed to `.s3.amazonaws.com` (+ regional/dualstack),
-  `.storage.googleapis.com`, `.digitaloceanspaces.com`, `.isometric.com`. The
-  S3/Spaces families still match **any** bucket on those providers, so an authed
-  user could store a `fileUrl` on an arbitrary bucket host. Low risk (browser
-  302; not request-attacker-controlled), accepted for now. **Resolve via:**
-  discover the exact host(s) Isometric presigns GHG-statement report URLs
-  against and set `ISOMETRIC_STORAGE_REDIRECT_HOSTS` to that explicit host per
-  environment — it replaces the default families. No code change needed.
+  (`security/redirect-host-pinning`). The default allowlist families in
+  `src/lib/documents/redirect-allowlist.ts` match **any** bucket on S3/Spaces, so
+  an authed user could store a `fileUrl` on an arbitrary bucket host — low risk
+  (browser 302, not request-attacker-controlled), accepted for now.
+  **Ops task, no code change:** the mechanism is fully built
+  (`ISOMETRIC_STORAGE_REDIRECT_HOSTS` in `src/config/env.ts` replaces the default
+  families) — discover the exact host Isometric presigns report URLs against and
+  set it per environment.
 
 ### Performance / scalability
 
@@ -1219,16 +950,6 @@ two oversized data-access files. Still open:
   wait. `Promise.all` with `p-limit(4)` cuts wall-time ~Nx without overwhelming
   Isometric's per-second budget; sync-event ordering becomes interleaved — a
   trade-off the owner should call.
-
-- **Missing composite index on `certifier_sync_events`** (`perf/missing-indexes`).
-  The table now carries `certifier_sync_events_organization_id_idx`
-  (`src/db/schema/certification.ts`) but still has no index supporting the
-  detail-page lookup by `(entity_type, entity_id)` ordered by `attempted_at
-  DESC`, so every detail page does a seq scan. Under org scoping the useful
-  composite now leads with `organization_id`, i.e.
-  `(organization_id, entity_type, entity_id, attempted_at DESC)` — not the
-  three-column shape this entry originally proposed. One migration; fold into
-  the Phase 1 index pass.
 
 - **CI coverage script serial per-facility loop** (`perf/coverage-check-fanout`).
   The outer `for (const facility of facilities)` in
@@ -1249,54 +970,30 @@ two oversized data-access files. Still open:
   no migration.
 
 - **Lossy `IsometricApiError` in submission catch paths**
-  (`obs/preserve-error-context`). `createOrReconcile` (`submit-removal.ts`) and
-  `createGhgStatementRemote` (`ghg-statements.ts`) catch failures, write a
-  `failed` sync event carrying only `errorMessage: message`, and throw a wrapped
-  `SafeError`. The original `err.body`, `err.status`, `err.code` are dropped —
-  neither the audit ledger nor any logger receives them. **Resolve via:**
-  include all three in `responsePayload` alongside `mapping_revision`; pair with
-  the logger work so the developer-facing stack and the operator-facing
-  `SafeError` live in different channels.
+  (`obs/preserve-error-context`). **Half fixed.** `createGhgStatementRemote`
+  (`src/fn/certification/ghg-statements.ts`) now records `status` +
+  `sanitizeIsometricErrorBody(err.body)` — copy that pattern. Still lossy:
+  `createOrReconcile` in `src/fn/certification/submit-removal.ts`, which logs
+  only `err.message` and drops `err.body` / `err.status` / `err.code`, so neither
+  the audit ledger nor any logger receives them. **Resolve via:** include all
+  three in `responsePayload` alongside `mapping_revision`; pair with the logger
+  work so the developer-facing stack and the operator-facing `SafeError` live in
+  different channels.
 
 ### Accessibility
 
 - **Color-only severity convention in warning notices** (`a11y/wcag-1.4.1`).
-  Warning/blocker notices on the certification surface (e.g. in
-  `src/components/certification/certify-panel.tsx`) encode visual severity only
-  by the `--color-signal-orange` left border + a decorative `!` glyph. WCAG
+  Mostly fixed — `check-row.tsx` now maps `unmet → WarningIcon` and
+  `certify-panel.tsx` no longer carries the `signal-orange` border. The residual
+  is `src/components/certification/ghg-statement-create-drawer.tsx`, whose two
+  warning blocks encode severity only by a `--color-signal-orange` left border +
+  matching text color. WCAG
   1.4.1 requires a non-color cue; SR-only text satisfies AT users but the
   sighted-low-vision case still needs a non-color visual signal ("Warning"
   inline text, or an icon with sufficient contrast). **Resolve via:** a
   dedicated `audit-a11y` pass that also runs a runtime contrast check on
   `--color-signal-orange` and picks a house style for severity badges
   ([`docs/design-system.md`](./design-system.md)).
-
-## Documentation hygiene
-
-### Review feedback parked for future PRs (opened 2026-05-19)
-
-- **`docs/isometric/changes.md` archival split** (`docs/changelog-archival`) —
-  **deferred**. Review suggested moving dated implementation-history sections
-  into `docs/archive/` and leaving an evergreen status pointer. Parked because
-  `changes.md` is documented in `CLAUDE.md` and
-  [`docs/isometric/README.md`](./isometric/README.md) as the project's local
-  changelog — dated by construction; splitting every entry would hurt
-  discoverability without changing information density. **Resolve via:** agree a
-  retention policy first (e.g. "entries older than 6 months move to
-  `docs/archive/isometric-changes-<year>.md`"), then execute in one PR.
-
-- **`docs/isometric/README.md` and `sandbox-template-authoring.md` phase
-  language** (`docs/evergreen-language`) — **deferred**. Phase- or date-specific
-  phrasing in the README index entry. Parked because the phase references
-  describe what the walkthrough *unblocks*, which remains accurate. Bundle with
-  the next substantive update to the walkthrough.
-
-- **`env-banner.tsx` style-constant extraction** (`code/env-banner-style-consts`)
-  — **deferred**. Review suggested extracting padding (`px-12 py-8` /
-  `px-16 py-12`) and icon-size (`16` / `20`) literals into named constants.
-  Parked: only two call sites duplicate each literal, and the inline ternary
-  makes the inline/page divergence immediately visible. Revisit on a third
-  variant.
 
 ## Product bins & formulations
 
@@ -1422,12 +1119,17 @@ Sizing: (S) small, (M) medium, (L) large.
 
 ### Inline-CRUD table duplication (`refactor/inline-crud-table`) — **deferred**
 
-- The three production-run child tables (readings/incidents/samples) share ~90%
-  boilerplate: identical `inlineForm` discriminated-union state machine, header
-  markup, `TableSkeleton`, empty state, edit/delete column, and
-  `DeleteConfirmDialog` wiring. `formatTimestamp` is copy-pasted 3×.
+- **Now two tables, not three** (re-verified 2026-07-20).
+  `src/components/production-runs/production-incident-table.tsx` and
+  `production-sample-table.tsx` still share ~90% boilerplate: identical
+  `inlineForm` discriminated-union state machine, header markup,
+  `TableSkeleton`, empty state, edit/delete column, and `DeleteConfirmDialog`
+  wiring. `production-run-readings/production-run-reading-table.tsx` has since
+  left the pattern (no `inlineForm`), and the "`formatTimestamp` copy-pasted 3×"
+  claim is dead — zero definitions remain in `src/`.
 - **Why it matters:** maintenance drift — a fix to one table's CRUD flow has to
-  be mirrored 3×.
+  be mirrored in the other. Weaker at two call sites than at three; re-raise if a
+  third inline-CRUD table appears.
 - **Resolve via:** extract a generic `<InlineEntityTable>` or
   `useInlineCrudTable` hook parameterized by columns + form component + mutation
   hooks; per-entity files collapse to a config (M). Pure refactor, no behavior
@@ -1491,19 +1193,6 @@ selectors. See [`docs/testing.md`](./testing.md).
   (started from Playwright `globalSetup`) serving canned project/template
   responses, so the certification flows run hermetically everywhere (M).
 
-### Unprompted "Link Isometric project" modal after facility create (`facilities/phantom-link-dialog`)
-
-- `FacilityCertifierDialog` opens unprompted over `/facilities` after facility
-  create, on GitHub-runner production builds only (6/6 there, 0 local repros).
-  Needs reproduction and a bisect; if real, it's a user-facing bug. CI forensics
-  archived in
-  [`docs/archive/2026-06-10-phantom-link-dialog-investigation.md`](./archive/2026-06-10-phantom-link-dialog-investigation.md).
-- **Interim quarantine:** `facilities.spec.ts` dismisses the modal if present
-  (loud `phantom-link-dialog` annotation); remove when resolved.
-- **Resolve via:** CI-side instrumentation — temporary `--trace on` on the first
-  attempt, or a debug step dumping the React owner chain of the dialog node
-  (component names need a non-minified build to be readable) (M).
-
 ### Playwright hygiene (`testing/e2e-hygiene`)
 
 - `waitForLoadState("networkidle")` is used throughout `full-chain-ui.spec.ts`
@@ -1521,15 +1210,10 @@ workflow.
 
 ### TypeScript 7 (tsgo) for CI typecheck (`tooling/ts7`)
 
-- TS 7's native Go compiler benchmarks ~7.5–10× faster full type-checks
-  (first-party numbers; partly multi-threading). Beta is live
-  (`@typescript/native-preview`, `tsgo` CLI, supports `--noEmit`); stable was
-  planned ~June 2026 but had not shipped as of 2026-06-12. Emit gaps are
-  irrelevant here (typecheck-only; SWC/Turbopack transpiles), but there is no
-  Strada compiler-API support — inventory API consumers first.
-- **Resolve via:** add a non-blocking `tsgo --noEmit` CI job now to validate
-  parity against the 60+-table schema and Zod-heavy types; flip the blocking
-  typecheck once stable ships (S).
+- Still open: `package.json` pins TS `^5.9.3` and there is no `tsgo` anywhere.
+- **Resolve via:** add a non-blocking `tsgo --noEmit` CI job to validate parity
+  against the 60+-table schema and Zod-heavy types; flip the blocking typecheck
+  once TS 7 ships stable (S).
 
 ### Drizzle ORM/Kit v1.0 upgrade (`db/drizzle-v1`)
 
@@ -1554,50 +1238,8 @@ workflow.
 
 ### Unverified research areas needing a follow-up pass
 
-Lint tooling (Biome 2 / oxlint vs ESLint 9), Vitest 4 browser mode, Playwright
-1.58+ features, OpenAPI contract testing for the Isometric client, Renovate vs
-Dependabot, pnpm supply-chain guidance — the sweep produced no
-adversarially-verified claims in these areas.
-
-## Entity deletes orphan polymorphic documents (opened 2026-07-12)
-
-- No `delete*` function in `src/data-access/` cleans up rows in the polymorphic
-  `documents` table (entityType/entityId, no FK). `deleteFeedstock` and
-  `deleteDelivery` hard-delete the parent without touching its documents;
-  `assertCanManageDocumentEntity` then throws its entity-missing error for the
-  orphan, so the document row and its storage object become unlistable and
-  undeletable — permanently leaked. Systemic across every document-bearing
-  entity; verified pre-existing (not a #432 regression).
-- No `deleteDocumentsForEntity` helper exists yet.
-- **Resolve via:** a shared
-  `deleteDocumentsForEntity(ctx, tx, entityType, entityId)` mirroring
-  `deleteTransportLegsForEntity`, called from every entity delete in the same
-  transaction, plus storage-object cleanup and a delete-parent-with-documents
-  regression test (M). **Note:** orphans are org-scoped rows — the helper must
-  take `ctx` and filter on `organizationId` like every other data-access write,
-  and must accept the caller's `tx` as its executor (see the invariants section),
-  not just mirror `deleteTransportLegsForEntity`'s signature.
-
-## Flow Hero dropped the old action-center structural cert checks (opened 2026-07-18)
-
-- The Flow Hero dashboard (PR #462) replaced the old action-center, whose
-  "Evidence" section (deleted `dashboard-operations.ts`) surfaced six structural
-  certification gaps. Two are still visible: application evidence gaps
-  (applications station badge) and credit batches without samples (certification
-  block). Four are no longer surfaced anywhere: **facility GPS missing**,
-  **feedstock GPS missing**, **transport endpoint (origin/dest GPS) gaps**, and
-  **transport distances not document-backed**. With those gaps present but every
-  station check clean, "Needs attention" reads "All clear" — a false green for
-  certification readiness.
-- **Why not fixed in #462:** the new attention model is station-anchored (each
-  flag maps 1:1 to a flow station; `attentionTotal` derives from station
-  badges). The dropped checks don't fit cleanly — facility GPS is
-  facility-level, and transport endpoint/distance gaps span feedstock, biochar,
-  and sample legs (a multi-join query that maps to the chain-of-custody page,
-  not a single station). Forcing them onto station badges would conflate
-  meanings and balloon scope; only feedstock GPS maps to one station.
-- **Resolve via:** a dedicated certification-readiness surface (or a
-  non-station "structural gaps" panel) that re-adds `loadGpsGapCounts` and
-  `loadTransportGapTotals` from git history
-  (`origin/staging: src/data-access/dashboard-operations.ts`), preserving the
-  fail-closed evidence contract (M).
+Lint tooling (Biome 2 / oxlint vs ESLint 9), OpenAPI contract testing for the
+Isometric client, Renovate vs Dependabot, pnpm supply-chain guidance — the sweep
+produced no adversarially-verified claims in these areas. (Vitest 4 and
+Playwright 1.58+ were on this list and are both already adopted — `vitest`
+`^4.1.0`, `@playwright/test` `^1.58.2`.)
