@@ -253,6 +253,29 @@ guard. Pure starter-template residue; the app is facility-scoped.
   re-encrypt pass during a bounded rotation window. Cheap to design now,
   expensive to retrofit once rows exist (M).
 
+### Application evidence-readiness: two implementations, one taxonomy (opened 2026-07-20)
+
+- **Problem:** the list badge / dashboard evaluate application visual-evidence
+  gaps via `applicationEvidenceGapCountSql` (raw SQL, folded into
+  `deriveEntityCertifyReadiness`), while the certify wizard evaluates the same
+  concept via `buildApplicationEvidenceGaps`
+  (`src/fn/certification/application-evidence-readiness.ts`, async TS). They
+  share only the `application-evidence` constants (roles / geotag predicate),
+  not the evaluation path — unlike production-run / sample / transport, which
+  both route through `deriveEntityCertifyReadiness`.
+- **Why it matters:** issue #246's contradiction (list "Ready", wizard blocked)
+  is closed because both surfaces now fail-closed on missing evidence, but the
+  duplicated logic is a live drift risk. E2E
+  `application-readiness-evidence.spec.ts` only guards the badge side; nothing
+  asserts badge/wizard *agreement*, so a future divergence in one predicate
+  would reintroduce #246 undetected.
+- **What we'd need to resolve it:** either (a) route
+  `buildApplicationEvidenceGaps` through the same SQL/shared source as the badge
+  (true unification), or (b) add a regression test that drives the removal
+  wizard's gap computation against the same seeded application the badge test
+  uses. (b) requires the full ready-batch / certifier-mapping setup the wizard
+  spec currently deems too fragile for CI, so (a) is likely the cheaper path (M).
+
 ## Isometric Certify integration
 
 ### Template component → dmrv source mapping is hardcoded by display name (`certification/template-component-source-wizard`, opened 2026-07-04)
