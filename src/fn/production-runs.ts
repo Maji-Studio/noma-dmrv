@@ -26,6 +26,7 @@ import {
   updateProductionRun,
   isProductionRunCodeAvailable as isProductionRunCodeAvailableData,
   ProductionRunOverlapError,
+  ProductionRunDependencyError,
   productionRunDateExpr,
   type PaginatedProductionRuns,
   type ProductionRunWithRelations,
@@ -460,6 +461,9 @@ export async function deleteProductionRunFn(
         success: false,
         error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
       };
+    }
+    if (error instanceof ProductionRunDependencyError) {
+      return { success: false, error: error.message, conflict: error.conflict };
     }
     return {
       success: false,
