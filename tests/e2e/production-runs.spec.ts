@@ -242,6 +242,7 @@ test.describe("Production Run lifecycle (#254)", () => {
       .locator('tbody [data-status="cancelled"]')
       .first();
     await expect(cancelledBadge).toBeVisible();
+    await expect(cancelledBadge).toHaveText("Cancelled");
     await expect(cancelledBadge).toHaveAttribute("data-status-state", "neutral");
     await expect(cancelledBadge).toHaveClass(/--st-off-bg/);
   });
@@ -272,6 +273,7 @@ test.describe("Production Run lifecycle (#254)", () => {
     await page.selectOption('select:not([name="status"])', "failed");
     const failedBadge = page.locator('tbody [data-status="failed"]').first();
     await expect(failedBadge).toBeVisible();
+    await expect(failedBadge).toHaveText("Failed");
     await expect(failedBadge).toHaveAttribute("data-status-state", "error");
     await expect(failedBadge).toHaveClass(/--st-bad-bg/);
   });
