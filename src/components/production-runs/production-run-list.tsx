@@ -259,14 +259,18 @@ export function ProductionRunList() {
           attachment.documentType === "sensor_data" && attachment.documentId,
       );
       let importFailedCount = 0;
+      const importFailureMessages: string[] = [];
       for (const attachment of readingsDocs) {
         try {
           const importResult = await importReadings.mutateAsync(
             attachment.documentId as string,
           );
           toast.success(`Imported ${importResult.insertedRows} readings`);
-        } catch {
+        } catch (error) {
           importFailedCount += 1;
+          if (error instanceof Error && error.message.trim()) {
+            importFailureMessages.push(error.message.trim());
+          }
         }
       }
       const uploadFailedCount = flushResult.failed.length;
@@ -288,8 +292,12 @@ export function ProductionRunList() {
             `${importFailedCount} readings ${importFailedCount === 1 ? "file" : "files"} could not be imported`,
           );
         }
+        const firstImportFailureMessage = importFailureMessages[0];
+        const importFailureDetail = firstImportFailureMessage
+          ? ` Import error: ${firstImportFailureMessage}`
+          : "";
         setCreateError(
-          `Production run created, but ${messages.join(" and ")}. Resolve ${messages.length > 1 || importFailedCount > 1 || uploadFailedCount > 1 ? "them" : "it"} below.`,
+          `Production run created, but ${messages.join(" and ")}. Resolve ${messages.length > 1 || importFailedCount > 1 || uploadFailedCount > 1 ? "them" : "it"} below.${importFailureDetail}`,
         );
         return;
       }
@@ -586,7 +594,7 @@ export function ProductionRunList() {
       <DeleteConfirmDialog
         isOpen={!!deletingRunId}
         title="Delete Production Run"
-        message="Are you sure you want to delete this production run? This action cannot be undone. Note: Production runs with associated samples or credit batches cannot be deleted."
+        message="Are you sure you want to delete this production run? This action cannot be undone. Note: Production runs with dependent biochar products or credit batches cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeletingRunId(null); setDeleteError(null); }}
         isPending={deleteRun.isPending}

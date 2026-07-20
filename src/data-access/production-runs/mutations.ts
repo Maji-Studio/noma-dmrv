@@ -18,9 +18,14 @@ import {
   feedstockTypes,
   operators,
   biocharProducts,
+  creditBatches,
   creditBatchProductionRuns,
 } from "@/db/schema";
-import { computeClampedDryMass, deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import {
+  computeClampedDryMass,
+  deriveMassDryKg,
+  dryOutputExceedsDryInput,
+} from "@/lib/calculations/mass-dry";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "../utils";
 import { SafeError } from "@/lib/errors";
@@ -53,6 +58,27 @@ import { retireDocumentsForEntities } from "../documents";
 
 const END_AFTER_START_CONSTRAINT = "production_runs_end_after_start";
 const END_AFTER_START_MESSAGE = "End time must be after the start time";
+const DRY_MASS_BALANCE_MESSAGE =
+  "Dry biochar output cannot exceed dry feedstock input";
+
+export class ProductionRunDependencyError extends SafeError {
+  readonly conflict: { entity: string; id: string; code: string };
+
+  constructor(
+    message: string,
+    conflict: { entity: string; id: string; code: string },
+  ) {
+    super(message);
+    this.name = "ProductionRunDependencyError";
+    this.conflict = conflict;
+  }
+}
+
+function assertDryMassBalance(input: Parameters<typeof dryOutputExceedsDryInput>[0]): void {
+  if (dryOutputExceedsDryInput(input)) {
+    throw new SafeError(DRY_MASS_BALANCE_MESSAGE);
+  }
+}
 
 /**
  * Reject a time window that is malformed or inconsistent with the run's status.
@@ -222,6 +248,7 @@ export async function createProductionRun(
 
   // Compute biochar dry mass from wet output + moisture, clamped to wet mass
   const biocharDryMass = computeClampedDryMass(data.biocharOutputKg, data.biocharMoisturePercent);
+  assertDryMassBalance(data);
 
   // Create production run + M:M allocation in a transaction
   let run: typeof productionRuns.$inferSelect;
@@ -435,6 +462,14 @@ export async function updateProductionRun(
   // Recompute dry mass when either wet mass or moisture changes
   const effectiveWetMass = data.feedstockWetMassKg !== undefined ? data.feedstockWetMassKg : existing.feedstockWetMassKg;
   const effectiveMoisture = data.feedstockMoisturePercent !== undefined ? data.feedstockMoisturePercent : existing.feedstockMoisturePercent;
+  const effectiveBiocharWet = data.biocharOutputKg !== undefined ? data.biocharOutputKg : existing.biocharOutputKg;
+  const effectiveBiocharMoisture = data.biocharMoisturePercent !== undefined ? data.biocharMoisturePercent : existing.biocharMoisturePercent;
+  assertDryMassBalance({
+    feedstockWetMassKg: effectiveWetMass,
+    feedstockMoisturePercent: effectiveMoisture,
+    biocharOutputKg: effectiveBiocharWet,
+    biocharMoisturePercent: effectiveBiocharMoisture,
+  });
   if (data.feedstockWetMassKg !== undefined || data.feedstockMoisturePercent !== undefined) {
     updateData.feedstockMassDryKg =
       effectiveWetMass != null && effectiveMoisture != null
@@ -453,8 +488,6 @@ export async function updateProductionRun(
 
   // Recompute biochar dry mass when either output or moisture changes
   if (data.biocharOutputKg !== undefined || data.biocharMoisturePercent !== undefined) {
-    const effectiveBiocharWet = data.biocharOutputKg !== undefined ? data.biocharOutputKg : existing.biocharOutputKg;
-    const effectiveBiocharMoisture = data.biocharMoisturePercent !== undefined ? data.biocharMoisturePercent : existing.biocharMoisturePercent;
     updateData.biocharDryMassKg = computeClampedDryMass(effectiveBiocharWet, effectiveBiocharMoisture);
   }
 
@@ -712,7 +745,7 @@ export async function updateProductionRun(
 
 /**
  * Delete a production run
- * Will fail if run has associated samples or credit batches
+ * Will fail if the run has dependent biochar products or credit batches.
  */
 export async function deleteProductionRun(
   ctx: OrgContext,
@@ -735,10 +768,9 @@ export async function deleteProductionRun(
   }
 
   // Run all four deletes in one transaction so the child-row deletes roll back
-  // if the final productionRuns delete fails. Foreign-key constraints prevent
-  // the run delete when dependent samples or credit batches exist; without the
-  // transaction the children would already be gone, leaving a half-deleted run.
-  // The FK violation propagates out and is caught by the server action.
+  // if the final productionRuns delete fails. Foreign-key constraints remain
+  // the race-safe backstop for dependent records; without the transaction the
+  // removable children would already be gone, leaving a half-deleted run.
   await db.transaction(async (tx) => {
     const [locked] = await tx
       .select({
@@ -763,6 +795,44 @@ export async function deleteProductionRun(
       { entityType: "productionRun", entityId: productionRunId },
       "delete",
     );
+
+    const [dependentProduct] = await tx
+      .select({ id: biocharProducts.id, code: biocharProducts.code })
+      .from(biocharProducts)
+      .where(and(
+        eq(biocharProducts.linkedProductionRunId, productionRunId),
+        eq(biocharProducts.organizationId, ctx.organizationId),
+      ))
+      .limit(1);
+    const [dependentCreditBatch] = await tx
+      .select({ id: creditBatches.id, code: creditBatches.code })
+      .from(creditBatchProductionRuns)
+      .innerJoin(
+        creditBatches,
+        and(
+          eq(creditBatchProductionRuns.creditBatchId, creditBatches.id),
+          eq(creditBatches.organizationId, ctx.organizationId),
+        ),
+      )
+      .where(and(
+        eq(creditBatchProductionRuns.productionRunId, productionRunId),
+        eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
+      ))
+      .limit(1);
+
+    if (dependentProduct || dependentCreditBatch) {
+      const dependentKinds = [
+        dependentProduct ? "biochar products" : null,
+        dependentCreditBatch ? "credit batches" : null,
+      ].filter((kind): kind is string => kind != null);
+      const conflict = dependentProduct
+        ? { entity: "biocharProduct", ...dependentProduct }
+        : { entity: "creditBatch", ...dependentCreditBatch! };
+      throw new ProductionRunDependencyError(
+        `This production run cannot be deleted because dependent ${dependentKinds.join(" and ")} exist. Remove those records first.`,
+        conflict,
+      );
+    }
 
     await lockBinStocks(ctx, tx, [
       locked.feedstockStorageLocationId,

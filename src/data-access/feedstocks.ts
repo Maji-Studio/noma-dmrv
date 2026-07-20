@@ -20,7 +20,10 @@ import {
 import type { FeedstockFilterData } from "@/schemas/feedstocks";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
-import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import {
+  deriveMassDryKg,
+  exceedsMassWithTolerance,
+} from "@/lib/calculations/mass-dry";
 import {
   deleteTransportLegsForEntity,
   syncFeedstockTransportLeg,
@@ -32,6 +35,8 @@ import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards"
 import { lockBinStocks } from "./lock-bin-stocks";
 
 const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin"] as const;
+const ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE =
+  "Enter a justification when allocated wet mass exceeds the declared delivery mass";
 
 function isFeedstockIntakeBinType(type: string): boolean {
   return FEEDSTOCK_INTAKE_BIN_TYPES.some((binType) => binType === type);
@@ -348,6 +353,13 @@ export async function createFeedstock(
   );
 
   const allocatedTotalWetKg = data.allocations.reduce((sum, a) => sum + a.allocatedWetMassKg, 0);
+  const allocationsExceedDelivery = exceedsMassWithTolerance(
+    allocatedTotalWetKg,
+    data.totalWetMassKg,
+  );
+  if (allocationsExceedDelivery && !data.overrideJustification?.trim()) {
+    throw new SafeError(ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE);
+  }
   const deliveryGroupId = data.allocations.length > 1 ? crypto.randomUUID() : null;
 
   // Confirm the feedstock type exists before locking compatible bins to it.
@@ -468,7 +480,7 @@ export async function createFeedstock(
 
   // Generate warning if allocated wet mass > total delivery wet mass
   let warning: string | null = null;
-  if (allocatedTotalWetKg > data.totalWetMassKg) {
+  if (allocationsExceedDelivery) {
     warning = `Allocated wet mass (${allocatedTotalWetKg.toFixed(1)} kg) exceeds total delivery wet mass (${data.totalWetMassKg.toFixed(1)} kg).`;
   }
 

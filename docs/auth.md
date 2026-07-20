@@ -1,143 +1,70 @@
 # Authentication
 
-noma-dmrv uses Better Auth with email/password, email verification, password reset, admin roles, and invite-first signup defaults.
+Better Auth (email/password, email verification, password reset, invite-first signup) plus the org-scoping layer built on the Better Auth organization plugin. Read this before touching a guard, a server action's auth line, the proxy, or anything that reads `activeOrganizationId`. This doc owns the guard vocabulary — [architecture.md](./architecture.md) defers to it. Env vars and signup policy: [security.md](./security.md). Auth email delivery: [mail-setup.md](./mail-setup.md). Tenancy rationale: [ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md).
 
-## Import Patterns
+Guards live in `src/lib/auth/server.ts`; the client hook `useAuth` is exported from `src/lib/auth/client.ts` (**not** from `providers/better-auth-client.ts`, which exports only `authClient`, types, and raw helpers).
 
-```ts
-// Client Components
-import { useAuth } from "@/lib/auth/providers/better-auth-client";
+## The redirect-vs-throw invariant
 
-// Server Components / Server Actions
-import {
-  getUser,
-  requireAuth,
-  requireOrgContext,
-  requireOrgRole,
-  requirePlatformAdmin,
-} from "@/lib/auth/server";
+`requireAuth()` / `requireVerifiedAuth()` / `requireAdmin()` call `redirect()`, which throws a `NEXT_REDIRECT` control-flow signal. Any try/catch — including `withAction` — swallows it and lets the caller through. **This is an auth bypass, not a cosmetic bug.**
 
-// Next.js 16 proxy
-import { updateSession } from "@/lib/auth/middleware";
-```
+- Layouts and pages → `requireAuth()`, `requireVerifiedAuth()`, `requireAdmin()` (redirecting).
+- Server actions and anything inside try/catch → `requireOrgContext()`, `requireAdminAction()` / `requirePlatformAdmin()` (throw `SafeError`). `requirePlatformAdmin` is an alias for `requireAdminAction`.
 
-## Next.js 16 Proxy
+`requireAdmin` and `requirePlatformAdmin` are **not** interchangeable.
 
-Next.js 16 uses `proxy.ts` instead of traditional middleware. The proxy runs in the Node.js runtime so Better Auth can use Node crypto and the app can share server-side auth helpers.
+## Next.js 16 proxy
 
-Key files:
+Next.js 16 uses `src/proxy.ts` (Node runtime, so Better Auth can use Node crypto) instead of `middleware.ts`. It delegates to `updateSession()` in `src/lib/auth/middleware.ts`, which is the authority on route access:
 
-- `proxy.ts`: request-level protection and redirects.
-- `src/lib/auth/middleware.ts`: `updateSession()` used by the proxy.
-- `src/lib/auth/better-auth.ts`: Better Auth config, signup policy, email, sessions, rate limits.
-- `src/lib/auth/server.ts`: authentication, active-organization context, and role guards.
-- `src/lib/auth/providers/better-auth-client.ts`: client hook (`useAuth`).
+- `PUBLIC_ROUTES` — reachable signed out. Includes `/schema` and `/api/storage-local` alongside the auth pages. Matching is prefix-based (`pathname === route || pathname.startsWith(route + "/")`), so every descendant is public too.
+- `AUTH_ROUTES` — only `/login` and `/forgot-password`; authenticated users are redirected to `/dashboard`. `/reset-password` and `/set-password` are public but **not** auth routes, deliberately: a signed-in user must be able to follow an invite's set-password link.
+- Unverified sessions are redirected to `/verify-email` (403 JSON for `/api/*`). `requireAuth()` does **not** check `emailVerified` — the `(app)` layout calls bare `requireAuth()`, so verification enforcement there comes entirely from the proxy. Use `requireVerifiedAuth()` where the page itself must guarantee it.
+- `/admin/*` is gated by the admin layout's `requireAdmin()`.
 
-## Current Behavior
+## Roles and active organization
 
-- `ALLOW_SELF_SIGNUP=false` disables public email signup by default (admin-invite only).
-- `ALLOW_SELF_SIGNUP=true` enables public signup.
-- `ADMIN_EMAIL` designates the admin user — the account seeded/promoted to the `admin` role.
-- Sessions use Better Auth session cookies, wired through the `nextCookies` plugin.
-- Each session may carry `activeOrganizationId`; org-scoped actions require it.
-- Email verification is required before login is considered valid.
-- Auth emails use Resend when configured.
-- If `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are unset, reset/verification links are logged locally for development.
-- Platform Admin routes call `requireAdmin()` or `requirePlatformAdmin()`.
-- Authenticated app routes call `requireAuth()` through the app layout and data-access layer.
+`users.role` distinguishes a global Platform Admin (`admin`) from a normal user (`user`). Organization membership lives in `members` with the hierarchy Owner ⊃ Admin ⊃ Member. See [organization.md](./organization.md).
 
-## Route Access
+- **Session cookie cache is on with `maxAge: 5 * 60`.** A role change, org switch, or revoked membership can take up to 5 minutes to show up in `session.session.activeOrganizationId`. This is the usual cause of "I fixed permissions but it still says unauthorized". `getUser()` deliberately re-reads `users.role` from the DB, so `requireAdmin` is not subject to this lag — org context is.
+- **`getOrgContext()` returns `null`, it does not throw,** when an `activeOrganizationId` is set but the user is neither a member nor a Platform Admin. Do not read `null` as "signed out".
+- **`OrgContext.orgRole` is `null` for a Platform Admin acting inside an org they don't belong to.** Never compare or rank `ctx.orgRole` directly — that wrongly denies Platform Admins. Use `requireOrgRole(ctx, minRole)`, which short-circuits on `isPlatformAdmin` first.
+- **How `activeOrganizationId` gets set:** a `databaseHooks.session.create.before` hook auto-selects it only when the user has exactly one membership, or when a Platform Admin has zero memberships and exactly one organization exists. Everyone else lands with no active org and goes through the switcher. The Platform Admin branch is coupled to `MAX_ORGANIZATIONS_UNTIL_PR2` and stops being safe once a second org exists.
+- **`allowUserToCreateOrganization: false`** — orgs are created only through the Platform-Admin-guarded server action, which makes the *selected* user the Owner, not the acting admin. `afterCreateOrganization` seeds starter types via `seedOrgDefaults` and deliberately swallows failures rather than wedging the create.
+- **`users.role` is declared `input: false`** on the Better Auth additionalField, so it can never be set through self-service signup. Role is assigned only by the admin-bootstrap CLI (`src/lib/cli/ensure-admin-core.ts`) or a Platform Admin path.
 
-| Route Pattern | Access | Enforced By |
-|---|---|---|
-| `/login`, `/forgot-password`, `/reset-password`, `/set-password` | Public | Proxy redirects authenticated users |
-| `/verify-email`, `/verify-email/callback` | Public | Proxy allows |
-| `/unauthorized` | Public | Proxy allows |
-| `/api/auth/*` | Public | Better Auth handlers |
-| `/(app)/*` | Authenticated; domain actions also require an active organization | App layout + org-scoped server actions |
-| `/admin/*` | Admin only | Admin layout calls `requireAdmin()` |
-| Protected API routes | Authenticated or admin, route-specific | Route handler and data-access guards |
+## Server actions
 
-## Roles And Active Organization
-
-`users.role` distinguishes a global Platform Admin (`admin`) from a normal user
-(`user`). Organization membership lives in `members` with the hierarchy Owner ⊃
-Admin ⊃ Member.
-
-The session's `activeOrganizationId` selects the workspace for every domain
-operation. A user with exactly one membership gets it selected at sign-in;
-members can switch only among their organizations. A Platform Admin does not
-need membership and enters any organization through the admin organization
-switcher. That override is intentional administrative authority, not membership.
-
-## Guard Patterns
-
-Layouts:
+`withAction` resolves `requireOrgContext()` for you and hands the callback `ctx`. Do not call it again by hand. Exported server actions end in `Fn` (e.g. `createFacilityFn`).
 
 ```ts
-// App layout
-await requireAuth();
-
-// Admin layout
-await requireAdmin();
-```
-
-Data-access:
-
-```ts
-export async function listFacilities(ctx: OrgContext) {
-  requireOrgScope(ctx);
-  return db
-    .select()
-    .from(facilities)
-    .where(eq(facilities.organizationId, ctx.organizationId));
-}
-```
-
-Server actions:
-
-```ts
-export async function createFacilityAction(input: CreateFacilityInput) {
-  return withAction(async () => {
-    const ctx = await requireOrgContext();
-    requireOrgRole(ctx, "member");
-    const data = createFacilitySchema.parse(input);
-    return createFacility(ctx, data);
+export async function getProductionProcessSummariesByFacilityFn(facilityId: string) {
+  return withAction(async (ctx) => {
+    await requireOrgFacility(ctx, facilityId);
+    return getProductionProcessSummariesByFacility(ctx, facilityId);
   });
 }
 ```
 
-Use `requirePlatformAdmin()` for cross-organization lifecycle operations. It
-throws a safe action error, while layout-only admin pages may redirect through
-`requireAdmin()`.
+`requireOrgRole(ctx, …)` is for admin-gated org/certification operations only — CRUD actions do not assert `"member"`, since any resolvable `OrgContext` is already at least a member or a Platform Admin.
 
-## Tenancy And Data Ownership
+## Tenancy in data-access
 
-Better Auth owns `organizations`, `members`, `invitations`, and the session's
-active organization. `requireOrgContext()` resolves an `OrgContext` containing
-`userId`, `organizationId`, `orgRole`, and `isPlatformAdmin`; it rejects a
-missing or unauthorized active organization. `requireOrgRole()` applies the
-Owner/Admin/Member hierarchy and accepts the Platform Admin override.
+Data-access functions take an `OrgContext` and call `requireOrgScope(ctx)` — they never call `requireAuth()`. Auth is resolved once, above, by `requireOrgContext()`.
 
-Every domain table carries `organizationId NOT NULL`. Data-access functions
-filter reads, updates, and deletes by `ctx.organizationId`, and stamp inserts
-from the same context. `organizationId` is never accepted from form data or
-other client input. Cross-organization record IDs therefore resolve as absent
-instead of disclosing another organization's data.
+- **`requireOrgScope(ctx)` is not the tenancy filter.** It only asserts `userId`/`organizationId` are non-empty strings. Isolation comes from the explicit `eq(table.organizationId, ctx.organizationId)` in every WHERE clause. Calling `requireOrgScope` and forgetting the WHERE clause is exactly the leak class [ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md) describes.
+- **`assertSameOrg()` must be passed the current `tx` as its `executor`** when called inside a transaction — reading through the global pool from inside a transaction starves the pool under parallel load. See `src/data-access/utils.ts`.
+- `organizationId` is never accepted from form data; cross-org IDs resolve as absent rather than disclosing another org's data.
 
-Organization Admins and Owners invite members from organization settings.
-Better Auth enforces invitation and membership changes server-side; invitees
-accept the generated link, then their membership controls available orgs and
-role. Email delivery is best-effort, with a copyable accept link available to
-the inviter. Auth flows must not log names or email addresses; use stable IDs.
+Registry credentials are owned per organization and managed only by Platform Admins; members use them through scoped certification flows but cannot read or replace the stored secrets.
 
-Registry credentials are owned per organization and managed only by Platform
-Admins; organization members can use them through scoped certification flows
-but cannot read or replace the stored secrets.
+## Rate limiting
 
-## Notes
+Two distinct limiters — a real trip hazard:
 
-- `ADMIN_PASSWORD` is required by `pnpm db:reset` / `ensure-admin.ts`.
-- `/admin/users` redirects to `/settings/organization`, the existing member and
-  invitation management surface for the active organization.
-- Do not log PII from auth flows; log stable IDs such as `userId`.
+1. Better Auth's limiter (`src/lib/auth/better-auth.ts`) is on unless `DISABLE_RATE_LIMIT === "true"` (how E2E disables it — see [testing.md](./testing.md)), with tightened custom rules on `/sign-in/email`, `/sign-up/email`, `/request-password-reset`, `/reset-password`.
+2. `withAction` has an opt-in per-user in-memory limiter (`options.rateLimit`) for expensive actions only.
+
+## Invitations
+
+Organization Admins and Owners invite from organization settings; Better Auth enforces invitation and membership changes server-side. Re-inviting the same email cancels the stale pending invite. Email delivery is best-effort — the inviter always gets a copyable accept link. `/admin/users` redirects to `/settings/organization`.
