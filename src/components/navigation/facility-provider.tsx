@@ -5,14 +5,17 @@
  */
 "use client";
 
-import { type ReactNode, useEffect, useMemo } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { useQueryState, parseAsString } from "nuqs";
 import { useFacilities, useFacility } from "@/hooks/use-facilities";
+import { authClient } from "@/lib/auth/client";
 import {
   FACILITY_STORAGE_KEY,
   FacilityContext,
   type FacilityContextValue,
 } from "@/hooks/use-facility-context";
+
+const EMPTY_FACILITIES: FacilityContextValue["facilities"] = [];
 
 function readStoredFacilityId(): string | null {
   if (typeof window === "undefined") {
@@ -43,15 +46,43 @@ function writeStoredFacilityId(facilityId: string | null) {
   }
 }
 
-export function FacilityProvider({ children }: { children: ReactNode }) {
+export function FacilityProvider({
+  children,
+  initialOrganizationId = null,
+}: {
+  children: ReactNode;
+  /**
+   * Active organization resolved on the server in the `(app)` layout. It is
+   * authoritative until the client session hydrates, so the facilities query
+   * can enable on first mount instead of waiting for `authClient.useSession()`
+   * to deliver the active org (which otherwise leaves a window where the URL
+   * `?facility=` param resolves to nothing and pages flash the "Select a
+   * facility" gate). Membership is still verified server-side on every query.
+   */
+  initialOrganizationId?: string | null;
+}) {
+  const { data: sessionData, isPending: isSessionPending } =
+    authClient.useSession();
+  const clientActiveOrganizationId =
+    (sessionData?.session as
+      | { activeOrganizationId?: string | null }
+      | undefined)?.activeOrganizationId ?? null;
+  const activeOrganizationId =
+    clientActiveOrganizationId ?? initialOrganizationId;
+  const previousOrganizationIdRef = useRef<string | null>(null);
   const [facilityId, setFacilityId] = useQueryState(
     "facility",
     parseAsString.withOptions({ shallow: true, history: "replace" })
   );
 
   // Keep within schema limit (max 100) so the sidebar facilities query does not fail.
-  const { data: facilitiesData, isLoading, isError } = useFacilities({ pageSize: 100 });
-  const facilities = useMemo(() => facilitiesData?.items ?? [], [facilitiesData]);
+  const {
+    data: facilitiesData,
+    isLoading: isFacilitiesLoading,
+    isError,
+  } = useFacilities({ pageSize: 100 }, activeOrganizationId);
+  const isLoading = isSessionPending || isFacilitiesLoading;
+  const facilities = facilitiesData?.items ?? EMPTY_FACILITIES;
   const hasFacilityInList = facilityId
     ? facilities.some((facility) => facility.id === facilityId)
     : false;
@@ -61,11 +92,33 @@ export function FacilityProvider({ children }: { children: ReactNode }) {
   const {
     data: selectedFacilityById,
     isLoading: isSelectedFacilityLoading,
-  } = useFacility(facilityId ?? "", shouldLoadSelectedFacility);
+  } = useFacility(
+    facilityId ?? "",
+    shouldLoadSelectedFacility,
+    activeOrganizationId,
+  );
   const selectedFacilityFromLookup =
     selectedFacilityById && selectedFacilityById.archivedAt == null
       ? selectedFacilityById
       : undefined;
+
+  // The URL and localStorage are external facility-selection stores. Drop
+  // both as soon as Better Auth reports that the active organization changed.
+  useEffect(() => {
+    if (!activeOrganizationId) {
+      return;
+    }
+
+    const previousOrganizationId = previousOrganizationIdRef.current;
+    previousOrganizationIdRef.current = activeOrganizationId;
+    if (
+      previousOrganizationId &&
+      previousOrganizationId !== activeOrganizationId
+    ) {
+      writeStoredFacilityId(null);
+      void setFacilityId(null);
+    }
+  }, [activeOrganizationId, setFacilityId]);
 
   // Resolve facility selection from URL -> localStorage -> first facility.
   useEffect(() => {
@@ -74,6 +127,13 @@ export function FacilityProvider({ children }: { children: ReactNode }) {
     }
 
     if (facilities.length === 0) {
+      // Don't discard a deep-linked `?facility=` while its by-id membership
+      // check is still in flight or has resolved it — the facility can belong
+      // to this org even when it isn't on the first page of the sidebar list.
+      // Stripping it here is what dropped the param on direct navigation (#473).
+      if (facilityId && (isSelectedFacilityLoading || selectedFacilityFromLookup)) {
+        return;
+      }
       if (facilityId) {
         void setFacilityId(null);
       }
@@ -118,27 +178,38 @@ export function FacilityProvider({ children }: { children: ReactNode }) {
     setFacilityId,
   ]);
 
-  const isResolvingOutOfListSelection = Boolean(
-    facilityId && !hasFacilityInList && isSelectedFacilityLoading
-  );
   const hasSelectedFacility =
     hasFacilityInList || Boolean(facilityId && selectedFacilityFromLookup);
-  const resolvedFacilityId = isResolvingOutOfListSelection
-    ? facilityId
-    : hasSelectedFacility
+  const resolvedFacilityId = facilityId
+    ? hasSelectedFacility
       ? facilityId
-      : facilities[0]?.id ?? null;
-  const selectedFacility = isResolvingOutOfListSelection
-    ? undefined
-    : facilities.find((f) => f.id === resolvedFacilityId) ??
-      selectedFacilityFromLookup;
+      : null
+    : facilities[0]?.id ?? null;
+  const selectedFacility = resolvedFacilityId
+    ? facilities.find((f) => f.id === resolvedFacilityId) ??
+      selectedFacilityFromLookup
+    : undefined;
   const availableFacilities =
     selectedFacilityFromLookup && !hasFacilityInList
       ? [selectedFacilityFromLookup, ...facilities]
       : facilities;
 
+  // A deep-linked `?facility=` is still being resolved when it isn't yet
+  // confirmed against the org (not in the sidebar list and not verified by id)
+  // while a query that could confirm it is in flight. During this window the
+  // shell shows a loading state instead of the misleading "Select a facility"
+  // gate, and never canonicalizes the param away. Fail-closed: once every
+  // query settles without confirming membership, this is false and the genuine
+  // no-selection gate renders.
+  const isResolving = Boolean(
+    facilityId &&
+      !hasSelectedFacility &&
+      (isLoading || isSelectedFacilityLoading)
+  );
+
   const value: FacilityContextValue = {
     facilityId: resolvedFacilityId,
+    isResolving,
     setFacilityId: (id: string | null) => {
       writeStoredFacilityId(id);
       void setFacilityId(id);

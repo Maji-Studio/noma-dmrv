@@ -26,9 +26,11 @@ export function DashboardPanel({
         className ?? "",
       ].join(" ")}
     >
-      <div className="flex items-center justify-between gap-16 border-b border-[var(--color-border-tertiary)] px-20 py-20">
-        <h2 className="label-micro text-[var(--color-text-primary)]">{title}</h2>
-        {meta}
+      <div className="flex items-center justify-between gap-16 border-b border-[var(--color-border-tertiary)] px-20 py-16">
+        <h2 className="label-micro min-w-0 truncate text-[var(--color-text-primary)]">
+          {title}
+        </h2>
+        <span className="flex-none whitespace-nowrap">{meta}</span>
       </div>
       {children}
     </section>

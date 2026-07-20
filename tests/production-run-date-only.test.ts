@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { formatLocalDate } from "@/lib/date-utils";
-import { createProductionRunSchema } from "@/schemas/production-runs";
+import {
+  createProductionRunSchema,
+  productionRunFormSchema,
+} from "@/schemas/production-runs";
 import { runWindowsConflict } from "@/data-access/production-runs/overlap";
 
 const FACILITY_ID = "11111111-1111-4111-8111-111111111111";
@@ -32,7 +35,7 @@ describe("production run start-date handling", () => {
   });
 
   it("rejects overflowed calendar dates", () => {
-    const parsed = createProductionRunSchema.safeParse({
+    const parsed = productionRunFormSchema.safeParse({
       facilityId: FACILITY_ID,
       startDate: "2026-02-31",
       reactorId: REACTOR_ID,
@@ -67,12 +70,16 @@ describe("production run window validation", () => {
   });
 
   it("accepts an overnight run when the end date is the next day", () => {
-    const parsed = createProductionRunSchema.safeParse({
+    const parsed = productionRunFormSchema.safeParse({
       ...base,
       startTime: "22:00",
       endDate: "2026-06-14",
       endTime: "02:00",
       status: "complete",
+      feedstockWetMassKg: 100,
+      feedstockMoisturePercent: 10,
+      feedstockStorageLocationId: "33333333-3333-4333-8333-333333333333",
+      biocharOutputKg: 20,
     });
     expect(parsed.success).toBe(true);
   });

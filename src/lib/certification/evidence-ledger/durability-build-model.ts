@@ -12,6 +12,11 @@
  */
 import type { Sample } from "@/db/schema";
 import { evaluateRunEligibility } from "@/lib/calculations/biochar-eligibility";
+import { formatFacilityDate, formatUtcDate } from "@/lib/date-utils";
+import {
+  countDistinctProvenance,
+  normalizePostWindowSamplingDay,
+} from "@/lib/certification/durability-submission-gates";
 import {
   buildPerBatchDurabilityData,
   type CreditBatchDurabilityInput,
@@ -27,7 +32,11 @@ import type {
 
 export interface BuildDurabilityLedgerModelArgs {
   /** The removal's member credit batches with pooled Samples + applied runs. */
-  batches: CreditBatchDurabilityInput[];
+  batches: (CreditBatchDurabilityInput & {
+    endDate?: string | null;
+    /** IANA facility timezone — classifies sampling instants by local day. */
+    facilityTimezone?: string | null;
+  })[];
   /** Per-run applied-biochar fraction (scales each batch's product mass). */
   attributionByRunId: Map<string, number>;
   /** Facility reference soil temperature (7 °C-floored; non-null past the gate). */
@@ -47,15 +56,44 @@ function statOf(value: ValueWithStdDev | null): LedgerStat | null {
 }
 
 // ISO calendar day (YYYY-MM-DD) of a sampling timestamp, for the §8.3.1
-// distribution evidence. Reads an existing Date/string — no clock access. Typed
+// distribution evidence, resolved in the facility's local timezone so the
+// ledger classifies a sampling instant on the SAME calendar day as the write
+// guard and submission gate. Falls back to UTC only when the timezone is absent
+// (light fixtures). Reads an existing Date/string — no clock access. Typed
 // `unknown` because the column maps to `Date` but raw rows / test fixtures can
 // carry a string.
-function samplingDayOf(samplingTime: unknown): string | null {
-  if (samplingTime instanceof Date) return samplingTime.toISOString().slice(0, 10);
+function samplingDayOf(
+  samplingTime: unknown,
+  facilityTimezone: string | null | undefined,
+): string | null {
+  if (samplingTime instanceof Date) {
+    return formatDayInZone(samplingTime, facilityTimezone);
+  }
   if (typeof samplingTime === "string" && samplingTime.length >= 10) {
+    // A timestamp string (carries a time/offset component) must resolve through
+    // the SAME facility/UTC branch as a Date — otherwise an offset-bearing value
+    // like `2026-01-15T03:30:00.000Z` slices to the UTC day and diverges from the
+    // Date-backed local day. A bare date-only string is already a calendar day.
+    if (samplingTime.includes("T")) {
+      const parsed = new Date(samplingTime);
+      if (!Number.isNaN(parsed.getTime())) {
+        return formatDayInZone(parsed, facilityTimezone);
+      }
+    }
     return samplingTime.slice(0, 10);
   }
   return null;
+}
+
+/** Format a Date as its YYYY-MM-DD calendar day in the facility zone (UTC fallback). */
+function formatDayInZone(
+  date: Date,
+  facilityTimezone: string | null | undefined,
+): string | null {
+  const day = facilityTimezone
+    ? formatFacilityDate(date, facilityTimezone)
+    : formatUtcDate(date);
+  return day || null;
 }
 
 // Inorganic carbon for one replicate: prefer the measured value, else derive
@@ -80,12 +118,16 @@ function replicateInorganic(s: Sample): {
   return { value: null, derived: false };
 }
 
-function buildReplicate(s: Sample, index: number): LedgerReplicate {
+function buildReplicate(
+  s: Sample,
+  index: number,
+  facilityTimezone: string | null | undefined,
+): LedgerReplicate {
   const inorganic = replicateInorganic(s);
   return {
     ref: `R${index + 1}`,
     sampleCode: s.sampleCode,
-    samplingDay: samplingDayOf(s.samplingTime),
+    samplingDay: samplingDayOf(s.samplingTime, facilityTimezone),
     labName: s.labName ?? null,
     hToCorg: isUsableNumber(s.hToCOrgRatio) ? s.hToCOrgRatio : null,
     oToCorg: isUsableNumber(s.oToCOrgRatio) ? s.oToCOrgRatio : null,
@@ -103,14 +145,23 @@ function buildReplicate(s: Sample, index: number): LedgerReplicate {
 // Distinct (run, day) provenance keys among a batch's samples — the §8.3.1
 // "distributed across distinct runs/days" evidence. Fully-null provenance can't
 // be judged, so it doesn't add a distinct key (mirrors the gate's cluster check).
-function distinctDayCount(samples: Sample[]): number {
-  const keys = new Set<string>();
-  for (const s of samples) {
-    const day = samplingDayOf(s.samplingTime);
-    if (s.productionRunId == null && day == null) continue;
-    keys.add(`${s.productionRunId ?? "?"}::${day ?? "?"}`);
-  }
-  return keys.size;
+// Delegates to the gate's OWN counter with the gate's OWN post-window
+// normalization, so the ledger count can never diverge from what the gate credits.
+function distinctRunDayCount(
+  samples: Sample[],
+  endDate: string | null | undefined,
+  facilityTimezone: string | null | undefined,
+): number {
+  return countDistinctProvenance(
+    samples.map((s) => ({
+      sampleCode: s.sampleCode,
+      productionRunId: s.productionRunId,
+      samplingDay: normalizePostWindowSamplingDay(
+        samplingDayOf(s.samplingTime, facilityTimezone),
+        endDate,
+      ),
+    })),
+  );
 }
 
 export function buildDurabilityLedgerModel(
@@ -123,6 +174,12 @@ export function buildDurabilityLedgerModel(
   const samplesByBatchId = new Map(
     args.batches.map((b) => [b.creditBatchId, b.samples]),
   );
+  const endDateByBatchId = new Map(
+    args.batches.map((b) => [b.creditBatchId, b.endDate ?? null]),
+  );
+  const timezoneByBatchId = new Map(
+    args.batches.map((b) => [b.creditBatchId, b.facilityTimezone ?? null]),
+  );
 
   const batches: LedgerBatch[] = [];
   for (const dp of perBatch) {
@@ -131,13 +188,15 @@ export function buildDurabilityLedgerModel(
     if (!dp.sampled || dp.hToCorgRatio == null) continue;
 
     const samples = samplesByBatchId.get(dp.creditBatchId) ?? [];
+    const facilityTimezone = timezoneByBatchId.get(dp.creditBatchId) ?? null;
     // Render only the replicates that back the submitted figures so the ledger
-    // can't show more rows than its own `replicateCount`/distinctDayCount claim:
+    // can't show more rows than its own `replicateCount`/distinctRunDayCount claim:
     //   • rows + replicateCount → the H/C_org-usable set (dp.replicateCount is
     //     hValues.length in buildPerBatchDurabilityData);
-    //   • distinctDayCount → the complete-chemistry (H + O) set, mirroring the
+    //   • distinctRunDayCount → the complete-chemistry (H + O) set, mirroring the
     //     §8.3.1 cluster gate's `usableProvenance` so an incomplete off-day
-    //     sample can't inflate the distribution evidence.
+    //     sample can't inflate the distribution evidence; post-window days are
+    //     normalized to null.
     const usableHReplicates = samples.filter((s) =>
       isUsableNumber(s.hToCOrgRatio),
     );
@@ -157,9 +216,15 @@ export function buildDurabilityLedgerModel(
     batches.push({
       creditBatchId: dp.creditBatchId,
       creditBatchCode: dp.creditBatchCode,
-      replicates: usableHReplicates.map(buildReplicate),
+      replicates: usableHReplicates.map((s, index) =>
+        buildReplicate(s, index, facilityTimezone),
+      ),
       replicateCount: dp.replicateCount,
-      distinctDayCount: distinctDayCount(usablePairedReplicates),
+      distinctRunDayCount: distinctRunDayCount(
+        usablePairedReplicates,
+        endDateByBatchId.get(dp.creditBatchId),
+        facilityTimezone,
+      ),
       hToCorg: { mean: dp.hToCorgRatio.mean, stdDev: dp.hToCorgRatio.stdDev },
       totalCarbonPercent: statOf(dp.totalCarbonPercent),
       inorganicCarbonPercent: statOf(dp.inorganicCarbonPercent),

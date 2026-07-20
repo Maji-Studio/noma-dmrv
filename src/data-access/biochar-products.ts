@@ -77,10 +77,16 @@ import { requireOrgScope } from "./utils";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
 import { deleteTransportLegsForEntity } from "./transport-legs";
+import { retireDocumentsForEntities } from "./documents";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { validateCompositionIngredientBins } from "./biochar-product-composition";
 import { assertBiocharDrawWithinStock } from "./bin-stock-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
+import {
+  CODE_CONFLICT_MESSAGES,
+  withUniqueCodeGuard,
+} from "./code-generator";
 import {
   assertBiocharProductMassReductionWithinStock,
   assertBiocharProductUpdateDraw,
@@ -390,16 +396,6 @@ export async function createBiocharProduct(
   // A null formulation means a pure-biochar product (no amendment blend).
   const formulationId = data.formulationId ?? null;
 
-  // Check for duplicate code
-  const [existing] = await db
-    .select({ id: biocharProducts.id })
-    .from(biocharProducts)
-    .where(and(eq(biocharProducts.code, data.code), eq(biocharProducts.organizationId, ctx.organizationId)));
-
-  if (existing) {
-    throw new SafeError("A biochar product with this code already exists");
-  }
-
   // Verify facility exists and is active; verify the formulation only when one
   // was provided. The lookups are independent, so run them in parallel — but
   // evaluate the results in a fixed order so the surfaced error stays
@@ -469,8 +465,6 @@ export async function createBiocharProduct(
     throw new SafeError("Linked production run belongs to a different facility");
   }
 
-  const productionDate = runDateToProductionDate(run.date);
-
   // Biochar ratio scales the wet mass to the biochar-equivalent draw (#116).
   const [formulationRatioRow] = formulationId
     ? await db
@@ -487,25 +481,32 @@ export async function createBiocharProduct(
   // so two products with different formulations can't both pass the reservation
   // check and strand a mismatched product (the claim-after-insert TOCTOU).
   const product = await db.transaction(async (tx) => {
+    await lockBinStocks(ctx, tx, [
+      (data.massKg ?? 0) > 0 ? destinationBinId : null,
+      run.biocharStorageLocationId,
+    ]);
+
     const [lockedRun] = await tx
       .select({
         id: productionRuns.id,
+        facilityId: productionRuns.facilityId,
+        status: productionRuns.status,
+        date: productionRunDateExpr(),
         biocharStorageLocationId: productionRuns.biocharStorageLocationId,
       })
       .from(productionRuns)
-      .where(and(
-        eq(productionRuns.id, run.id),
-        eq(productionRuns.organizationId, ctx.organizationId),
-      ))
+      .where(and(eq(productionRuns.id, run.id), eq(productionRuns.organizationId, ctx.organizationId)))
       .for("update");
-
     if (!lockedRun) {
       throw new SafeError("Linked production run not found");
     }
-
-    // A submitted production run can't gain new source inventory after
-    // certification. Mirror the update/delete guards so the create path can't
-    // bypass certification locking by attaching a fresh product to a locked run.
+    if (lockedRun.biocharStorageLocationId !== run.biocharStorageLocationId) {
+      throw new SafeError("Stock changed while this operation was being prepared. Refresh and retry.");
+    }
+    if (lockedRun.facilityId !== data.facilityId) {
+      throw new SafeError("Linked production run belongs to a different facility");
+    }
+    // Prevent new source inventory on a submitted production-run lineage.
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
@@ -513,14 +514,11 @@ export async function createBiocharProduct(
       "create",
     );
 
-    await lockBinStocks(
-      ctx,
-      tx,
-      [
-        (data.massKg ?? 0) > 0 ? destinationBinId : null,
-        lockedRun.biocharStorageLocationId,
-      ],
-    );
+    if (lockedRun.status !== COMPLETED_PRODUCTION_RUN_STATUS) {
+      throw new SafeError("Biochar products can only link to complete production runs");
+    }
+
+    const productionDate = runDateToProductionDate(lockedRun.date);
 
     await validateCompositionIngredientBins(
       ctx,
@@ -637,18 +635,6 @@ export async function updateBiocharProduct(
     throw new SafeError("Biochar product not found");
   }
 
-  // If code is being changed, check for duplicates
-  if (data.code && data.code !== existing.code) {
-    const [duplicate] = await db
-      .select({ id: biocharProducts.id })
-      .from(biocharProducts)
-      .where(and(eq(biocharProducts.code, data.code), eq(biocharProducts.organizationId, ctx.organizationId)));
-
-    if (duplicate) {
-      throw new SafeError("A biochar product with this code already exists");
-    }
-  }
-
   // Verify facility if being changed (must be active)
   if (data.facilityId && data.facilityId !== existing.facilityId) {
     const [facility] = await db
@@ -754,7 +740,12 @@ export async function updateBiocharProduct(
   // facility changes, then update the product and (re)claim an unassigned bin —
   // all atomically. Locking the bin row serializes concurrent placements so two
   // products with different formulations can't strand a mismatch in one bin.
-  const updated = await db.transaction(async (tx) => {
+  const updated = await withUniqueCodeGuard(
+    ctx,
+    biocharProducts,
+    biocharProducts.code,
+    CODE_CONFLICT_MESSAGES.biocharProduct,
+    () => db.transaction(async (tx) => {
     const stockPreparation = await lockBiocharProductUpdateStock(
       ctx,
       tx,
@@ -797,6 +788,20 @@ export async function updateBiocharProduct(
       transactionMassKg,
       transactionComposition,
     } = stockState;
+
+    if (transactionLinkedRunId) {
+      const [lockedRun] = await tx
+        .select({ status: productionRuns.status })
+        .from(productionRuns)
+        .where(and(
+          eq(productionRuns.id, transactionLinkedRunId),
+          eq(productionRuns.organizationId, ctx.organizationId),
+        ))
+        .for("update");
+      if (!lockedRun || lockedRun.status !== COMPLETED_PRODUCTION_RUN_STATUS) {
+        throw new SafeError("Biochar products can only link to complete production runs");
+      }
+    }
 
     await assertBiocharProductMassReductionWithinStock(
       ctx,
@@ -883,7 +888,8 @@ export async function updateBiocharProduct(
     }
 
     return row;
-  });
+    }),
+  );
 
   return updated;
 }
@@ -931,8 +937,17 @@ export async function deleteBiocharProduct(
       );
     }
 
-    await deleteTransportLegsForEntity(ctx, tx, "biochar", productId);
+    const transportLegDocuments = await deleteTransportLegsForEntity(
+      ctx,
+      tx,
+      "biochar",
+      productId,
+    );
     await tx.delete(biocharProducts).where(and(eq(biocharProducts.id, productId), eq(biocharProducts.organizationId, ctx.organizationId)));
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "biochar_product", entityId: productId },
+      ...transportLegDocuments,
+    ]);
   });
 }
 

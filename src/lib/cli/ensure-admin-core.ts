@@ -7,7 +7,7 @@ import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import * as schema from '../../db/schema';
 import { DEC_ORG_ID, DEC_ORG_NAME, DEC_ORG_SLUG } from '../../db/org-defaults';
-import { hashPassword } from '../auth/hash-password';
+import { hashPassword } from 'better-auth/crypto';
 import { encryptSecret } from '../crypto/secrets';
 import { getPgPoolConfig } from '../pg-pool-config';
 

@@ -45,6 +45,10 @@ pre-filled an independently-editable per-batch toggle.
   certifier-mapping repoint. Either case is rejected with a `SafeError`. This
   relocates the "locked after `verified`/`issued`" invariant that previously
   lived on the per-batch tier toggle and extends it to registry-built claims.
+  The check and tier update run in one transaction under a facility-scoped
+  advisory lock. Submission draft claim/reset paths acquire the same lock before
+  mapping and artifact locks, so a consequential ledger write cannot cross the
+  tier guard's check-to-update window.
 - Product framing (2026-07-04): **1000-year is the available tier**; 200-year is
   surfaced but disabled ("available later") in the facility / durability UI. This
   is independent of the durability *submission* staging gate

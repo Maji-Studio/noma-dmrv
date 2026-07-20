@@ -13,6 +13,7 @@ import {
   inArray,
   isNull,
   lte,
+  ne,
   sql,
   SQL,
   count,
@@ -47,6 +48,10 @@ import type {
   FacilityEnergyTotals,
   ProductionRunWithSamples,
 } from "./types";
+import {
+  CANCELLED_PRODUCTION_RUN_STATUS,
+  COMPLETED_PRODUCTION_RUN_STATUS,
+} from "@/lib/production-runs/lifecycle";
 
 /**
  * Get all production runs with pagination and filtering
@@ -141,6 +146,7 @@ export async function getProductionRuns(
       facilityId: productionRuns.facilityId,
       date: productionRunDateExpr(),
       status: productionRuns.status,
+      cancellationReason: productionRuns.cancellationReason,
       startTime: productionRuns.startTime,
       endTime: productionRuns.endTime,
       reactorId: productionRuns.reactorId,
@@ -283,6 +289,7 @@ export async function getProductionRunById(
       facilityId: productionRuns.facilityId,
       date: productionRunDateExpr(),
       status: productionRuns.status,
+      cancellationReason: productionRuns.cancellationReason,
       startTime: productionRuns.startTime,
       endTime: productionRuns.endTime,
       reactorId: productionRuns.reactorId,
@@ -377,21 +384,25 @@ export async function getProductionRunStats(
   const conditions: SQL[] = [
     eq(productionRuns.organizationId, ctx.organizationId),
     isNull(productionRuns.archivedAt),
+    ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
   ];
   if (facilityId) {
     conditions.push(eq(productionRuns.facilityId, facilityId));
   }
 
   const whereClause = and(...conditions);
+  const completedWhereClause = and(
+    ...conditions,
+    eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS),
+  );
 
   // org-scope-ok: whereClause includes the active organization predicate.
   const [stats] = await db
     .select({
-      totalRuns: count(),
       totalBiocharKg: sum(productionRuns.biocharOutputKg),
     })
     .from(productionRuns)
-    .where(whereClause);
+    .where(completedWhereClause);
 
   // Get total feedstock mass
   const [feedstockStats] = await db
@@ -400,7 +411,7 @@ export async function getProductionRunStats(
     })
     .from(productionRunFeedstocks)
     .leftJoin(productionRuns, and(eq(productionRunFeedstocks.productionRunId, productionRuns.id), eq(productionRunFeedstocks.organizationId, ctx.organizationId)))
-    .where(and(whereClause, eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
+    .where(and(completedWhereClause, eq(productionRunFeedstocks.organizationId, ctx.organizationId)));
 
   // Get status counts in a single GROUP BY query
   // org-scope-ok: whereClause includes the active organization predicate.
@@ -418,7 +429,7 @@ export async function getProductionRunStats(
   );
 
   return {
-    totalRuns: Number(stats.totalRuns),
+    totalRuns: statusCounts.reduce((total, row) => total + Number(row.count), 0),
     totalBiocharKg: Number(stats.totalBiocharKg) || 0,
     totalFeedstockKg: Number(feedstockStats.totalFeedstockKg) || 0,
     runningCount: statusMap["running"] ?? 0,
@@ -446,7 +457,12 @@ export async function getFacilityEnergyTotals(
       preprocessingLitres: sum(productionRuns.preprocessingFuelLiters),
     })
     .from(productionRuns)
-    .where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId), isNull(productionRuns.archivedAt)));
+    .where(and(
+      eq(productionRuns.facilityId, facilityId),
+      eq(productionRuns.organizationId, ctx.organizationId),
+      isNull(productionRuns.archivedAt),
+      ne(productionRuns.status, CANCELLED_PRODUCTION_RUN_STATUS),
+    ));
 
   return {
     runCount: Number(row.runCount),

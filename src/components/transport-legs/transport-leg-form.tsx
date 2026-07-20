@@ -1,5 +1,6 @@
 "use client";
 
+import type { FormEventHandler, ReactNode } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -29,10 +30,33 @@ import { TransportEvidenceDocuments } from "./transport-evidence-documents";
 
 interface TransportLegFormProps {
   /** When provided, the form edits this leg; otherwise it creates a new one. */
-  leg?: TransportLeg | null;
+  leg?: TransportLeg | TransportLegFormData | null;
   onSubmit: (data: TransportLegFormData) => Promise<void> | void;
   onCancel: () => void;
   isSubmitting?: boolean;
+  /** Render without a nested form when an owning parent form surrounds this UI. */
+  embedded?: boolean;
+}
+
+interface TransportLegFormContainerProps {
+  embedded: boolean;
+  onSubmit: FormEventHandler<HTMLFormElement>;
+  children: ReactNode;
+}
+
+function TransportLegFormContainer({
+  embedded,
+  onSubmit,
+  children,
+}: TransportLegFormContainerProps) {
+  const className = "flex flex-col gap-20";
+  return embedded ? (
+    <div className={className}>{children}</div>
+  ) : (
+    <form onSubmit={onSubmit} className={className}>
+      {children}
+    </form>
+  );
 }
 
 const transportMethodOptions = selectableTransportMethods.map((m) => ({
@@ -44,7 +68,15 @@ const MIN_LOAD_MASS_KG = 0.000001;
 const isTransportLegCertifyField = (field: string) =>
   isCertifyFormField("transportLeg", field);
 
-function legToFormDefaults(leg: TransportLeg | null | undefined) {
+function isSavedTransportLeg(
+  leg: TransportLeg | TransportLegFormData,
+): leg is TransportLeg {
+  return "id" in leg;
+}
+
+function legToFormDefaults(
+  leg: TransportLeg | TransportLegFormData | null | undefined,
+) {
   return {
     originGpsLatitude: leg?.originGpsLatitude ?? null,
     originGpsLongitude: leg?.originGpsLongitude ?? null,
@@ -76,6 +108,7 @@ export function TransportLegForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  embedded = false,
 }: TransportLegFormProps) {
   const isEditMode = !!leg;
 
@@ -121,7 +154,7 @@ export function TransportLegForm({
   });
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-20">
+    <TransportLegFormContainer embedded={embedded} onSubmit={submit}>
       {errors.root?.serverError?.message && (
         <ServerError message={errors.root.serverError.message} />
       )}
@@ -297,7 +330,7 @@ export function TransportLegForm({
           Verification evidence (Transportation v1.1 §6) — bill of lading and
           weigh-scale ticket.
         </p>
-        {isEditMode && leg ? (
+        {isEditMode && leg && isSavedTransportLeg(leg) ? (
           <TransportEvidenceDocuments
             entityType="transport_leg"
             entityId={leg.id}
@@ -315,7 +348,9 @@ export function TransportLegForm({
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         submitLabel={isEditMode ? "Save changes" : "Add transport leg"}
+        submitType={embedded ? "button" : "submit"}
+        onSubmitClick={embedded ? () => void submit() : undefined}
       />
-    </form>
+    </TransportLegFormContainer>
   );
 }

@@ -8,6 +8,9 @@
 import { z } from "zod";
 import { samples } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
+import { getCreditBatchById } from "@/data-access/credit-batches";
+import { getFacilityById } from "@/data-access/facilities";
+import { requireOrgFacility } from "@/data-access/utils";
 import {
   createSample,
   deleteSample,
@@ -22,6 +25,8 @@ import {
   type SampleStats,
 } from "@/data-access/samples";
 import { requireOrgContext } from "@/lib/auth/server";
+import { formatFacilityDate } from "@/lib/date-utils";
+import { SafeError } from "@/lib/errors";
 import {
   createSampleSchema,
   deleteSampleSchema,
@@ -42,6 +47,25 @@ function sampleActionError(
   });
 }
 
+async function assertSampleNotBeforeBatchWindow(
+  ctx: Awaited<ReturnType<typeof requireOrgContext>>,
+  creditBatchId: string,
+  samplingTime: Date,
+): Promise<void> {
+  const batch = await getCreditBatchById(ctx, creditBatchId, {
+    skipPreview: true,
+  });
+  if (!batch) throw new SafeError("Credit batch not found");
+
+  const facility = await getFacilityById(ctx, batch.facilityId);
+  const samplingDay = formatFacilityDate(samplingTime, facility.timezone);
+  if (samplingDay < batch.startDate) {
+    throw new SafeError(
+      `Sampling date ${samplingDay} cannot be before credit batch ${batch.code}'s production window ${batch.startDate}–${batch.endDate}.`,
+    );
+  }
+}
+
 // ============================================
 // List/Query Operations
 // ============================================
@@ -58,6 +82,9 @@ export async function getSamplesFn(
     const validatedFilters = filters
       ? sampleFilterSchema.parse(filters)
       : undefined;
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
     const samples = await getSamplesData(ctx, validatedFilters);
 
     return { success: true, data: samples };
@@ -118,6 +145,9 @@ export async function getSampleStatsFn(
     const validatedFacilityId = facilityId
       ? z.string().uuid().parse(facilityId)
       : undefined;
+    if (validatedFacilityId) {
+      await requireOrgFacility(ctx, validatedFacilityId);
+    }
     const stats = await getSampleStatsData(
       ctx,
       validatedCreditBatchId,
@@ -208,13 +238,19 @@ export async function createSampleFn(
       undefined,
       async (sampleCode) => {
         const validated = createSampleSchema.parse({ ...data, sampleCode });
+        const samplingTime =
+          validated.samplingTime instanceof Date
+            ? validated.samplingTime
+            : new Date(validated.samplingTime);
+        await assertSampleNotBeforeBatchWindow(
+          ctx,
+          validated.creditBatchId,
+          samplingTime,
+        );
         return createSample(ctx, {
           sampleCode,
           creditBatchId: validated.creditBatchId,
-          samplingTime:
-            validated.samplingTime instanceof Date
-              ? validated.samplingTime
-              : new Date(validated.samplingTime),
+          samplingTime,
           labName: validated.labName || null,
           labAccreditation: validated.labAccreditation || null,
           analysisDate: validated.analysisDate
@@ -297,6 +333,15 @@ export async function updateSampleFn(
     const ctx = await requireOrgContext();
 
     const validated = updateSampleSchema.parse(data);
+
+    if (validated.creditBatchId !== undefined || validated.samplingTime !== undefined) {
+      const existing = await getSampleByIdData(ctx, validated.sampleId);
+      const creditBatchId = validated.creditBatchId ?? existing.creditBatchId;
+      const samplingTime = validated.samplingTime ?? existing.samplingTime;
+      if (creditBatchId != null) {
+        await assertSampleNotBeforeBatchWindow(ctx, creditBatchId, samplingTime);
+      }
+    }
 
     const sample = await updateSample(ctx, validated.sampleId, {
       sampleCode: validated.sampleCode,

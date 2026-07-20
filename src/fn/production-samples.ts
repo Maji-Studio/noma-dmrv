@@ -16,6 +16,7 @@ import {
   type ProductionSampleWithRelations,
 } from "@/data-access/production-samples";
 import { requireOrgContext } from "@/lib/auth/server";
+import { toActionError } from "@/lib/errors";
 import {
   createProductionSampleSchema,
   updateProductionSampleSchema,
@@ -194,7 +195,7 @@ export async function deleteProductionSampleFn(
     logServerError("deleteProductionSampleFn failed", error);
     return {
       success: false,
-      error: "Failed to delete production sample",
+      error: toActionError(error, "Failed to delete production sample"),
     };
   }
 }

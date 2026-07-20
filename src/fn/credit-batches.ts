@@ -7,6 +7,7 @@ import { toActionError } from "@/lib/errors";
 import { logger, sanitizeErrorMessage } from "@/lib/log";
 import { creditBatches } from "@/db/schema";
 import { withAutoCode } from "@/data-access/code-generator";
+import { requireOrgFacility } from "@/data-access/utils";
 import {
   getCreditBatches as getCreditBatchesData,
   getCreditBatchById,
@@ -48,6 +49,7 @@ export async function getCreditBatchesFn(
     const ctx = await requireOrgContext();
 
     const validatedFacilityId = z.string().uuid().parse(facilityId);
+    await requireOrgFacility(ctx, validatedFacilityId);
     const creditBatches = await getCreditBatchesData(
       ctx,
       validatedFacilityId,
@@ -129,6 +131,7 @@ export async function getCreditBatchProductionRunOptionsFn(
     const ctx = await requireOrgContext();
 
     const validated = creditBatchProductionRunOptionsSchema.parse(input);
+    await requireOrgFacility(ctx, validated.facilityId);
     const options = await getCreditBatchProductionRunOptions(
       ctx,
       validated,

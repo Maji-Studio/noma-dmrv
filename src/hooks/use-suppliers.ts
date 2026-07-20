@@ -577,6 +577,8 @@ export function useCreateSupplierLocation(callbacks?: MutationCallbacks<Supplier
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(variables.supplierId) });
+      queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: supplierKeys.detail(variables.supplierId) });
       callbacks?.onSuccess?.(data, variables);
     },
     onError: (error, variables) => {
@@ -596,6 +598,8 @@ export function useUpdateSupplierLocation(supplierId: string, callbacks?: Mutati
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(supplierId) });
+      queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: supplierKeys.detail(supplierId) });
       callbacks?.onSuccess?.(data, variables);
     },
     onError: (error, variables) => {
@@ -614,6 +618,8 @@ export function useDeleteSupplierLocation(supplierId: string, callbacks?: Mutati
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: supplierKeys.supplierLocations(supplierId) });
+      queryClient.invalidateQueries({ queryKey: supplierKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: supplierKeys.detail(supplierId) });
       callbacks?.onSuccess?.(undefined, variables);
     },
     onError: (error, variables) => {

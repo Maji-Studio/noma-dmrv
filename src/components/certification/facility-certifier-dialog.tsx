@@ -215,7 +215,7 @@ export function FacilityCertifierDialog({
             <label className="flex items-start gap-12 body-small text-[var(--color-text-primary)] cursor-pointer">
               <input
                 type="checkbox"
-                className="mt-3 shrink-0"
+                className="mt-2 shrink-0"
                 checked={acknowledgeSharedProject}
                 onChange={(e) =>
                   setAcknowledgeSharedProject(e.target.checked)
@@ -304,7 +304,7 @@ export function UnlinkConfirmDialog({
       onConfirm={onConfirm}
       isPending={isPending}
       errorMessage={errorMessage}
-      variant="destructive"
+      variant="neutral"
       title="Unlink Isometric project"
       confirmLabel="Unlink"
       busyLabel="Unlinking…"

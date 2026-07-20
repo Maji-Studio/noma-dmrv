@@ -48,6 +48,12 @@ export const facilityKeys = {
     [...facilityKeys.all, "archiveImpact", id] as const,
 };
 
+// Exact message thrown by the facility data-access reads
+// (src/data-access/facilities.ts) for a missing or foreign facility.
+// Deterministic — retrying it only prolongs a stale selection window.
+const FACILITY_NOT_FOUND_MESSAGE = "Facility not found";
+const FACILITY_LOOKUP_MAX_RETRIES = 2;
+
 // ============================================
 // Query Hooks
 // ============================================
@@ -55,9 +61,15 @@ export const facilityKeys = {
 /**
  * Hook to fetch paginated list of facilities with filtering
  */
-export function useFacilities(filters?: Partial<FacilityFilterData>) {
+export function useFacilities(
+  filters?: Partial<FacilityFilterData>,
+  organizationId?: string | null,
+) {
   return useQuery({
-    queryKey: facilityKeys.list(filters),
+    queryKey:
+      organizationId === undefined
+        ? facilityKeys.list(filters)
+        : [...facilityKeys.list(filters), { organizationId }],
     queryFn: async () => {
       const result = await getFacilitiesFn(filters);
       if (!result.success) {
@@ -65,6 +77,7 @@ export function useFacilities(filters?: Partial<FacilityFilterData>) {
       }
       return result.data;
     },
+    enabled: organizationId !== null,
     staleTime: 30000, // 30 seconds
   });
 }
@@ -72,9 +85,16 @@ export function useFacilities(filters?: Partial<FacilityFilterData>) {
 /**
  * Hook to fetch a single facility by ID
  */
-export function useFacility(facilityId: string, enabled = true) {
+export function useFacility(
+  facilityId: string,
+  enabled = true,
+  organizationId?: string | null,
+) {
   return useQuery({
-    queryKey: facilityKeys.detail(facilityId),
+    queryKey:
+      organizationId === undefined
+        ? facilityKeys.detail(facilityId)
+        : [...facilityKeys.detail(facilityId), { organizationId }],
     queryFn: async () => {
       const result = await getFacilityByIdFn(facilityId);
       if (!result.success) {
@@ -82,7 +102,13 @@ export function useFacility(facilityId: string, enabled = true) {
       }
       return result.data;
     },
-    enabled: enabled && !!facilityId,
+    enabled: enabled && !!facilityId && organizationId !== null,
+    // Cross-org/missing facility is deterministic — never retry it. Transient
+    // failures still retry so a valid deep-linked selection isn't discarded
+    // on a network blip.
+    retry: (failureCount, error) =>
+      !(error instanceof Error && error.message === FACILITY_NOT_FOUND_MESSAGE) &&
+      failureCount < FACILITY_LOOKUP_MAX_RETRIES,
     staleTime: 30000,
   });
 }

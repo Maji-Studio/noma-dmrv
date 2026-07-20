@@ -47,6 +47,13 @@ test.describe("Production Run + Sample UI CRUD", () => {
 
     await page.fill('input[name="feedstockWetMassKg"]', "50");
     await page.fill('input[name="feedstockMoisturePercent"]', "15");
+    await selectEntity(
+      page,
+      "Biochar Storage",
+      seededData.biocharStorageLocation.id,
+      seededData.biocharStorageLocation.name,
+    );
+    await page.fill('input[name="biocharOutputKg"]', "10");
 
     await page.locator('[role="dialog"]').locator('button:has-text("Create Production Run")').click();
     await waitForSideSheetClose(page);
@@ -193,6 +200,96 @@ async function saveEdit(page: Page) {
     .click();
 }
 
+test.describe("Production Run lifecycle (#254)", () => {
+  test("offers only legal initial statuses", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await page.goto(`/production-runs?facility=${seededData.facility.id}`);
+    await page.getByRole("button", { name: "New Production Run" }).click();
+    await waitForSideSheet(page);
+
+    await expect(
+      page.locator('[role="dialog"] select[name="status"] option'),
+    ).toHaveText(["Draft", "Running", "Cancelled"]);
+  });
+
+  test("requires a cancellation reason and saves the cancelled audit record", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await openRunForm(page, seededData, {
+      startDate: "2030-01-05",
+      startTime: "08:00",
+      status: "cancelled",
+    });
+
+    const dialog = page.locator('[role="dialog"]');
+    const cancellationReason = dialog.locator(
+      'textarea[name="cancellationReason"]',
+    );
+    await expect(cancellationReason).toBeVisible();
+
+    await submitCreate(page);
+    await expect(dialog.getByText("Enter a cancellation reason.")).toBeVisible();
+
+    await cancellationReason.fill("Duplicate run entered by the operator");
+    await submitCreate(page);
+    await waitForSideSheetClose(page);
+
+    await page.selectOption('select:not([name="status"])', "cancelled");
+    const cancelledBadge = page
+      .locator('tbody [data-status="cancelled"]')
+      .first();
+    await expect(cancelledBadge).toBeVisible();
+    await expect(cancelledBadge).toHaveText("Cancelled");
+    await expect(cancelledBadge).toHaveAttribute("data-status-state", "neutral");
+    await expect(cancelledBadge).toHaveClass(/--st-off-bg/);
+  });
+
+  test("renders a failed run with the canonical error treatment", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await openRunForm(page, seededData, {
+      startDate: "2030-02-05",
+      startTime: "08:00",
+      status: "running",
+    });
+    await submitCreate(page);
+    await waitForSideSheetClose(page);
+
+    await page.selectOption('select:not([name="status"])', "running");
+    await expect(page.locator('tbody [data-status="running"]').first()).toBeVisible();
+    await editFirstRow(page);
+
+    const dialog = page.locator('[role="dialog"]');
+    await dialog.locator('input[name="endDate"]').fill("2030-02-05");
+    await dialog.locator('input[name="endTime"]').fill("12:00");
+    // A failed run needs a source bin, moisture %, and wet mass to compute
+    // consumed feedstock (same guard as a complete run) — the lifecycle
+    // schema rejects the status change without them.
+    await selectEntity(
+      page,
+      "Source Bin",
+      seededData.feedstockStorageLocation.id,
+      seededData.feedstockStorageLocation.name,
+    );
+    await dialog.locator('input[name="feedstockWetMassKg"]').fill("50");
+    await dialog.locator('input[name="feedstockMoisturePercent"]').fill("15");
+    await dialog.locator('select[name="status"]').selectOption("failed");
+    await saveEdit(page);
+    await waitForSideSheetClose(page);
+
+    await page.selectOption('select:not([name="status"])', "failed");
+    const failedBadge = page.locator('tbody [data-status="failed"]').first();
+    await expect(failedBadge).toBeVisible();
+    await expect(failedBadge).toHaveText("Failed");
+    await expect(failedBadge).toHaveAttribute("data-status-state", "error");
+    await expect(failedBadge).toHaveClass(/--st-bad-bg/);
+  });
+});
+
 test.describe("Production Run reactor time-window overlap (#259)", () => {
   test("rejects a duplicate start on the same reactor", async ({
     adminPage: page,
@@ -203,7 +300,7 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "08:00",
       endDate: "2027-01-05",
       endTime: "12:00",
-      status: "complete",
+      status: "draft",
     });
     await submitCreate(page);
     await waitForSideSheetClose(page);
@@ -213,7 +310,7 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "08:00",
       endDate: "2027-01-05",
       endTime: "10:00",
-      status: "complete",
+      status: "draft",
     });
     await submitCreate(page);
 
@@ -231,7 +328,7 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "08:00",
       endDate: "2027-02-05",
       endTime: "12:00",
-      status: "complete",
+      status: "draft",
     });
     await submitCreate(page);
     await waitForSideSheetClose(page);
@@ -242,7 +339,7 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "10:00",
       endDate: "2027-02-05",
       endTime: "11:00",
-      status: "complete",
+      status: "draft",
     });
     await submitCreate(page);
 
@@ -270,7 +367,7 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "13:00",
       endDate: "2027-03-05",
       endTime: "15:00",
-      status: "complete",
+      status: "draft",
     });
     await submitCreate(page);
 
@@ -288,7 +385,7 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "22:00",
       endDate: "2027-04-06",
       endTime: "02:00",
-      status: "complete",
+      status: "draft",
     });
     await submitCreate(page);
     // A clean save closes the side sheet.
@@ -305,7 +402,7 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "08:00",
       endDate: "2027-05-05",
       endTime: "10:00",
-      status: "complete",
+      status: "draft",
     });
     await submitCreate(page);
     await waitForSideSheetClose(page);
@@ -315,7 +412,7 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
       startTime: "14:00",
       endDate: "2027-05-05",
       endTime: "16:00",
-      status: "complete",
+      status: "draft",
     });
     await submitCreate(page);
     await waitForSideSheetClose(page);
@@ -353,15 +450,35 @@ test.describe("Production Run end-time clear (#413)", () => {
   }) => {
     const dialog = page.locator('[role="dialog"]');
 
-    // A finished run: 2027-06-05 08:00–12:00, marked complete.
+    // Create the run open, then finish it through the legal Running → Complete
+    // transition.
     await openRunForm(page, seededData, {
       startDate: "2027-06-05",
       startTime: "08:00",
-      endDate: "2027-06-05",
-      endTime: "12:00",
-      status: "complete",
+      status: "running",
     });
+    await selectEntity(
+      page,
+      "Source Bin",
+      seededData.feedstockStorageLocation.id,
+      seededData.feedstockStorageLocation.name,
+    );
+    await page.fill('input[name="feedstockWetMassKg"]', "50");
+    await page.fill('input[name="feedstockMoisturePercent"]', "15");
+    await selectEntity(
+      page,
+      "Biochar Storage",
+      seededData.biocharStorageLocation.id,
+      seededData.biocharStorageLocation.name,
+    );
+    await page.fill('input[name="biocharOutputKg"]', "10");
     await submitCreate(page);
+    await waitForSideSheetClose(page);
+    await editFirstRow(page);
+    await page.fill('input[name="endDate"]', "2027-06-05");
+    await page.fill('input[name="endTime"]', "12:00");
+    await page.selectOption('select[name="status"]', "complete");
+    await saveEdit(page);
     await waitForSideSheetClose(page);
 
     // No-op guard: edit only a non-time field. Blank-or-untouched end fields
@@ -401,7 +518,7 @@ test.describe("Production Run end-time clear (#413)", () => {
       startTime: "14:00",
       endDate: "2027-06-05",
       endTime: "15:00",
-      status: "complete",
+      status: "draft",
     });
     await submitCreate(page);
     await expect(dialog.getByText(overlapText)).toBeVisible({ timeout: 10000 });

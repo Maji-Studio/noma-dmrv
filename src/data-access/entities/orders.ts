@@ -12,12 +12,12 @@
 
 import { and, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
+import { numericAggregate, sumNumeric } from "@/db/aggregate";
 import { biocharProducts, customers, deliveries, orders } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
+import { formatDate } from "@/lib/format-utils";
 import { requireOrgScope } from "../utils";
-import { formatLocalDate } from "@/lib/date-utils";
-
 
 // Deterministic integer formatting — pin the locale so the label can't vary
 // with the server's locale (same rationale as production-runs.ts).
@@ -31,10 +31,9 @@ function buildAllocatedMassAggregate(ctx: OrgContext) {
   return db
   .select({
     orderId: deliveries.orderId,
-    totalDeliveredKg:
-      sql<number>`COALESCE(SUM(${deliveries.deliveredWetMassKg}), 0)`.as(
-        "total_delivered_kg"
-      ),
+    totalDeliveredKg: sumNumeric(deliveries.deliveredWetMassKg).as(
+      "total_delivered_kg",
+    ),
   })
   .from(deliveries)
   .where(
@@ -57,7 +56,9 @@ function buildSelection(
     quantityKg: orders.quantityKg,
     customerName: customers.name,
     biocharProductCode: biocharProducts.code,
-    totalDeliveredKg: sql<number>`COALESCE(${allocatedMassAggregate.totalDeliveredKg}, 0)`,
+    totalDeliveredKg: numericAggregate(
+      sql<number>`COALESCE(${allocatedMassAggregate.totalDeliveredKg}, 0)`,
+    ),
   };
 }
 
@@ -70,8 +71,7 @@ function toEntityOption(r: {
   biocharProductCode: string | null;
   totalDeliveredKg: number;
 }): EntityOption {
-  // Raw SQL aggregates over numeric columns arrive as strings — coerce at the boundary.
-  const remainingKg = Math.max(0, r.quantityKg - Number(r.totalDeliveredKg));
+  const remainingKg = Math.max(0, r.quantityKg - r.totalDeliveredKg);
   return {
     id: r.id,
     code: r.code,
@@ -79,7 +79,7 @@ function toEntityOption(r: {
     subtitle: [
       r.customerName,
       r.biocharProductCode,
-      formatLocalDate(r.orderDate),
+      formatDate(r.orderDate),
       `${INTEGER_FORMATTER.format(Math.round(remainingKg))} kg remaining`,
     ]
       .filter(Boolean)

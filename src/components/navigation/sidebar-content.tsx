@@ -12,7 +12,7 @@
  */
 "use client";
 
-import { type ElementType } from "react";
+import { type ElementType, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -39,13 +39,17 @@ import {
   SignOutIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
-import { useAuth, authClient } from "@/lib/auth/client";
+import {
+  AUTH_SIGNED_OUT_STORAGE_KEY,
+  authClient,
+  useAuth,
+} from "@/lib/auth/client";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
+import { useToast } from "@/components/ui/toast";
 import { FacilitySelector } from "./facility-selector";
-import { OrgSwitcher } from "./org-switcher";
+import { OrgBrand } from "./org-brand";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useActiveOrganizationProfile } from "@/hooks/use-organizations";
 
 interface NavItem {
   href: string;
@@ -91,7 +95,7 @@ const navSections: NavSection[] = [
   {
     items: [
       { href: "/dashboard", label: "Dashboard", icon: HouseIcon },
-      { href: "/chain-of-custody", label: "Chain of Custody", icon: TreeStructureIcon },
+      { href: "/traceability", label: "Traceability", icon: TreeStructureIcon },
     ],
     accent: SECTION_ACCENTS.default,
   },
@@ -257,12 +261,40 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { facilityId: facilityParam } = useFacilityContext();
   const { signOut } = useAuth();
   const { data: session } = authClient.useSession();
-  // Override-aware active-org lookup: the plugin's useActiveOrganization() is
-  // members-only, so it never resolves for Platform Admins inside an org they
-  // don't belong to.
-  const { data: activeOrg } = useActiveOrganizationProfile();
-  const activeOrgName = activeOrg?.name?.trim() || "noma dMRV";
-  const orgInitial = activeOrgName.charAt(0).toUpperCase();
+  const toast = useToast();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    if (isSigningOut) return;
+
+    setIsSigningOut(true);
+
+    // The provider catches request failures and resolves { success: false }
+    // rather than throwing. Only a confirmed sign-out may broadcast the cross-tab
+    // signal or navigate: on failure the session is still live, so broadcasting
+    // would falsely log other tabs out and navigating to /login would be bounced
+    // straight back to a protected page by middleware.
+    const result = await signOut();
+    if (!result.success) {
+      toast.error(result.error ?? "Sign out failed. Please try again.");
+      setIsSigningOut(false);
+      return;
+    }
+
+    onNavigate?.();
+
+    try {
+      localStorage.setItem(
+        AUTH_SIGNED_OUT_STORAGE_KEY,
+        String(Date.now()),
+      );
+    } catch {
+      // Full navigation still clears this tab when storage is unavailable.
+    }
+    // replace(), not assign(): keep the authenticated page out of history/bfcache
+    // so Back cannot restore it (matches the listener tabs' navigation).
+    window.location.replace("/login");
+  }
 
   // Append the Admin section only for admin users. `useIsAdmin()` is
   // hydration-safe (server snapshot is `false`, so the admin subtree only
@@ -297,32 +329,8 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       className="flex flex-col h-full"
       style={{ background: SIDEBAR_BACKGROUND_GRADIENT }}
     >
-      {/* Brand header */}
-      <div className="flex items-center h-56 px-16 border-b border-[var(--color-white-10)] shrink-0">
-        <Link
-          href="/dashboard"
-          onClick={onNavigate}
-          className="flex items-center gap-10"
-        >
-          <div className="size-28 bg-[var(--clr-purple)] flex items-center justify-center shrink-0">
-            <span
-              className="text-white font-bold text-[length:var(--text-xxs)] leading-none"
-              suppressHydrationWarning
-            >
-              {orgInitial}
-            </span>
-          </div>
-          <span
-            className="body-small font-medium text-white truncate"
-            suppressHydrationWarning
-          >
-            {activeOrgName}
-          </span>
-        </Link>
-      </div>
-
-      {/* Organization switcher (multi-org members + Platform Admins only) */}
-      <OrgSwitcher />
+      {/* Brand header — doubles as the org switcher for multi-org users */}
+      <OrgBrand onNavigate={onNavigate} />
 
       {/* Facility Selector */}
       <FacilitySelector />
@@ -393,11 +401,9 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </Link>
           <button
             type="button"
-            onClick={() => {
-              onNavigate?.();
-              signOut();
-            }}
-            className="flex items-center justify-center size-44 md:size-28 text-[var(--color-white-25)] hover:text-[var(--clr-rose)] transition-colors duration-150"
+            onClick={handleSignOut}
+            disabled={isSigningOut}
+            className="flex items-center justify-center size-44 md:size-28 text-[var(--color-white-25)] hover:text-[var(--clr-rose)] transition-colors duration-150 disabled:cursor-wait disabled:opacity-40"
             aria-label="Sign out"
           >
             <SignOutIcon size={16} />

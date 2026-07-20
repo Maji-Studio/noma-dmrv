@@ -10,7 +10,9 @@ import { count, eq } from "drizzle-orm";
 import { Resend } from "resend";
 import { env } from "@/config/env";
 import { db } from "@/db";
+import { seedOrgDefaults } from "@/db/org-defaults";
 import * as schema from "@/db/schema";
+import { logger } from "@/lib/log";
 
 /** Pending invitations expire after 7 days. */
 const INVITATION_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
@@ -137,6 +139,10 @@ function buildTrustedOrigins(): string[] {
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
+    // Better Auth composes several writes (for example user + credential
+    // account) through adapter transactions. Drizzle leaves this disabled by
+    // default, so opt in explicitly or those writes can commit independently.
+    transaction: true,
     schema: {
       user: schema.users,
       session: schema.sessions,
@@ -301,10 +307,25 @@ export const auth = betterAuth({
   },
   plugins: [
     organization({
-      // Self-serve org creation is disabled: Organizations are created only by
-      // Platform Admins via the guarded `createOrganizationAction` server
-      // action (which also stamps the creator's chosen Owner, not the admin).
+      // Organization creation is reserved for app-level Platform Admins. The
+      // guarded server action uses the server-only userId path so the selected
+      // user, rather than the acting Platform Admin, becomes the Owner.
       allowUserToCreateOrganization: false,
+      organizationHooks: {
+        afterCreateOrganization: async ({ organization }) => {
+          try {
+            await seedOrgDefaults(db, organization.id);
+          } catch (error) {
+            // Organization and owner membership are already committed before
+            // this hook runs. Starter types are optional and can be recreated,
+            // so do not turn a recoverable seed failure into a wedged retry.
+            logger.error(
+              { error, organizationId: organization.id },
+              "failed to seed organization defaults",
+            );
+          }
+        },
+      },
       invitationExpiresIn: INVITATION_EXPIRES_IN_SECONDS,
       // Re-inviting the same email cancels the stale pending invite so the
       // pending list never shows duplicates.

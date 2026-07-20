@@ -7,7 +7,11 @@
 
 import { z } from "zod";
 import { type Order, orders } from "@/db/schema";
-import { withAutoCode } from "@/data-access/code-generator";
+import {
+  CODE_CONFLICT_MESSAGES,
+  withAutoCode,
+} from "@/data-access/code-generator";
+import { requireOrgFacility } from "@/data-access/utils";
 import {
   createOrder,
   deleteOrder,
@@ -44,6 +48,9 @@ export async function getOrdersFn(
     const validatedFilters = filters
       ? orderFilterSchema.parse(filters)
       : undefined;
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
     return getOrdersData(ctx, validatedFilters);
   }, { zodErrorPrefix: "Invalid filter parameters", fallbackMessage: "Failed to load orders" });
 }
@@ -104,6 +111,9 @@ export async function getOrdersForSelectFn(
     const validatedFacilityId = facilityId
       ? facilityIdSchema.parse(facilityId)
       : undefined;
+    if (validatedFacilityId) {
+      await requireOrgFacility(ctx, validatedFacilityId);
+    }
     return getOrdersForSelectData(ctx, validatedFacilityId);
   }, { fallbackMessage: "Failed to load orders for select" });
 }
@@ -156,7 +166,8 @@ export async function createOrderFn(
           packaging: validated.packaging,
           value: validated.value ?? null,
           currency: validated.currency,
-        })
+        }),
+      CODE_CONFLICT_MESSAGES.order,
     );
   }, { fallbackMessage: "Failed to create order" });
 }

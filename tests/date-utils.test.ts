@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { formatLocalDate, parseLocalDateString } from "@/lib/date-utils";
+import {
+  formatLocalDate,
+  parseLocalDateString,
+  toDateInputValue,
+} from "@/lib/date-utils";
 
 const originalTz = process.env.TZ;
 
@@ -36,5 +40,36 @@ describe("parseLocalDateString", () => {
 
   it("rejects an invalid calendar day", () => {
     expect(() => parseLocalDateString("2026-02-30")).toThrow();
+  });
+});
+
+describe("toDateInputValue", () => {
+  it("normalizes persisted Date values for native date inputs", () => {
+    process.env.TZ = "Europe/Zurich";
+    const persisted = new Date(2026, 6, 17, 14, 30);
+
+    expect(toDateInputValue(persisted)).toBe("2026-07-17");
+  });
+
+  it("normalizes persisted ISO strings and preserves date-only strings", () => {
+    process.env.TZ = "Europe/Zurich";
+
+    expect(toDateInputValue("2026-07-17T12:00:00.000Z")).toBe(
+      "2026-07-17",
+    );
+    expect(toDateInputValue("2026-07-17")).toBe("2026-07-17");
+  });
+
+  // #46 west-of-UTC regression: date-only values persist at UTC midnight. Reading
+  // them on the browser calendar shifts the day back for users behind UTC, so a
+  // status-only edit would save the wrong day. Both the ISO string and the Date
+  // form of a UTC-midnight value must render the stored calendar day.
+  it("keeps the UTC calendar day for persisted midnight values west of UTC", () => {
+    process.env.TZ = "America/Los_Angeles";
+
+    expect(toDateInputValue("2026-07-17T00:00:00.000Z")).toBe("2026-07-17");
+    expect(toDateInputValue(new Date("2026-07-17T00:00:00.000Z"))).toBe(
+      "2026-07-17",
+    );
   });
 });

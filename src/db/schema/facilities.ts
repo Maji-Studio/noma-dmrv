@@ -46,6 +46,15 @@ export const facilities = pgTable(
   (table) => [
     unique('facilities_organization_id_code_unique').on(table.organizationId, table.code),
     unique('facilities_id_organization_id_unique').on(table.id, table.organizationId),
+    // Facility name is unique per organization, case- and whitespace-insensitive
+    // (issue #252 pattern, ADR 0010). Two indistinguishable facilities in one
+    // org let an operator file records against the wrong site. Archived
+    // facilities keep their name reserved so a restore can't collide (mirrors
+    // the code-reservation rule).
+    uniqueIndex('facilities_organization_id_name_unique').on(
+      table.organizationId,
+      sql`lower(trim(${table.name}))`,
+    ),
     check(
       'facilities_gps_latitude_range',
       sql`${table.gpsLatitude} is null or (${table.gpsLatitude} >= -90 and ${table.gpsLatitude} <= 90)`

@@ -247,6 +247,7 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env staging/DATABASE_URL
+          DB_RESET_ALLOW_REMOTE: op://Environment Variables/noma-dmrv env staging/DB_RESET_ALLOW_REMOTE
           ADMIN_EMAIL: op://Environment Variables/noma-dmrv env staging/ADMIN_EMAIL
           ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env staging/ADMIN_PASSWORD
 
@@ -269,6 +270,8 @@ jobs:
           node -e "const url = new URL(process.env.DATABASE_URL); console.log(`Database target: host=${url.hostname} port=${url.port || '5432'} user=${decodeURIComponent(url.username)} db=${url.pathname.slice(1)} sslmode=${url.searchParams.get('sslmode') ?? 'not set'}`)"
 
       - name: Reset and seed staging database
+        env:
+          ALLOW_DEV_BOOTSTRAP: "1"
         run: pnpm db:reset && pnpm db:seed && pnpm db:verify-schema
 
   # ── Manual reset (no seed): staging — start from scratch ───────────────
@@ -294,6 +297,7 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env staging/DATABASE_URL
+          DB_RESET_ALLOW_REMOTE: op://Environment Variables/noma-dmrv env staging/DB_RESET_ALLOW_REMOTE
           ADMIN_EMAIL: op://Environment Variables/noma-dmrv env staging/ADMIN_EMAIL
           ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env staging/ADMIN_PASSWORD
 
@@ -318,6 +322,8 @@ jobs:
       # No seed: drops all data, re-applies tracked migrations, ensures the
       # admin user (so you can still sign in) — an empty start-from-scratch DB.
       - name: Reset staging database (empty, no demo data)
+        env:
+          ALLOW_DEV_BOOTSTRAP: "1"
         run: pnpm db:reset && pnpm db:verify-schema
 
   # ── Manual reset: production ────────────────────────────────────────────
@@ -344,6 +350,7 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           DATABASE_URL: op://Environment Variables/noma-dmrv env production/DATABASE_URL
+          DB_RESET_ALLOW_REMOTE: op://Environment Variables/noma-dmrv env production/DB_RESET_ALLOW_REMOTE
           ADMIN_EMAIL: op://Environment Variables/noma-dmrv env production/ADMIN_EMAIL
           ADMIN_PASSWORD: op://Environment Variables/noma-dmrv env production/ADMIN_PASSWORD
           CREDENTIALS_ENCRYPTION_KEY: op://Environment Variables/noma-dmrv env production/CREDENTIALS_ENCRYPTION_KEY

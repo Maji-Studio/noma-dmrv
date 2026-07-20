@@ -6,7 +6,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { formatSafeDate, getPaginationLabel } from "@/lib/format-utils";
+import { formatDateRange } from "@/lib/format-utils";
 import {
   CertificateIcon,
   CurrencyCircleDollarIcon,
@@ -22,7 +22,13 @@ import {
 } from "@/components/ui/entity-side-sheet";
 import { StatCard } from "@/components/ui/stat-card";
 import { useToast } from "@/components/ui/toast";
-import { Button, EmptyState, PageHeader } from "@/components/ui";
+import {
+  Button,
+  DEFAULT_PAGE_SIZE,
+  EmptyState,
+  ListPagination,
+  PageHeader,
+} from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ServerError } from "@/components/forms";
 import { CreditBatchForm } from "./credit-batch-form";
@@ -68,7 +74,7 @@ export function CreditBatchList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(12);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   // Side sheet state
   const [sideSheet, setSideSheet] = useState<{
@@ -321,7 +327,7 @@ export function CreditBatchList() {
             },
             {
               label: "Crediting Period",
-              value: `${formatSafeDate(sideSheetEntity.startDate)} — ${formatSafeDate(sideSheetEntity.endDate)}`,
+              value: formatDateRange(sideSheetEntity.startDate, sideSheetEntity.endDate),
             },
             {
               label: "Durability Option",
@@ -455,20 +461,6 @@ export function CreditBatchList() {
           </div>
 
           <div className="flex flex-wrap items-center gap-8">
-            <select
-              value={String(pageSize)}
-              onChange={(event) => {
-                setPageSize(Number(event.target.value));
-                setCurrentPage(1);
-              }}
-              className="h-40 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small"
-              aria-label="Credit batches per page"
-            >
-              <option value="12">12 per page</option>
-              <option value="24">24 per page</option>
-              <option value="36">36 per page</option>
-            </select>
-
             {hasActiveFilters && (
               <Button variant="noOutline" size="small" onClick={clearFilters}>
                 <XIcon size={16} weight="bold" />
@@ -519,38 +511,17 @@ export function CreditBatchList() {
             ))}
           </div>
 
-          {/* Pagination */}
-          <div className="flex flex-col gap-12 border-t border-[var(--color-border-tertiary)] pt-16 md:flex-row md:items-center md:justify-between">
-            <p className="body-small text-[var(--color-text-secondary)]">
-              {getPaginationLabel(safeCurrentPage, pageSize, totalFiltered, "credit batches")}
-            </p>
-
-            <div className="flex items-center gap-8">
-              <Button
-                variant="default"
-                size="small"
-                disabled={safeCurrentPage <= 1}
-                onClick={() =>
-                  setCurrentPage((page) => Math.max(1, page - 1))
-                }
-              >
-                Previous
-              </Button>
-              <span className="px-8 body-small text-[var(--color-text-secondary)]">
-                Page {safeCurrentPage} of {totalPages}
-              </span>
-              <Button
-                variant="default"
-                size="small"
-                disabled={safeCurrentPage >= totalPages}
-                onClick={() =>
-                  setCurrentPage((page) => Math.min(totalPages, page + 1))
-                }
-              >
-                Next
-              </Button>
-            </div>
-          </div>
+          <ListPagination
+            page={safeCurrentPage}
+            pageCount={totalPages}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setCurrentPage(1);
+            }}
+            className="border-t border-[var(--color-border-tertiary)] pt-16 md:px-0"
+          />
         </>
       )}
 

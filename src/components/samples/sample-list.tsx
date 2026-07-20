@@ -18,6 +18,8 @@ import {
 } from "@/hooks/use-samples";
 import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
+import { useCreateTransportLeg } from "@/hooks/use-transport-legs";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
@@ -30,6 +32,7 @@ import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { formatDate, formatDateTime } from "@/lib/format-utils";
 import { SampleForm } from "./sample-form";
 import {
   formatDurabilityOption,
@@ -37,6 +40,8 @@ import {
   type SampleFilterData,
 } from "@/schemas/samples";
 import type { SampleWithRelations } from "@/data-access/samples";
+import type { TransportLegFormData } from "@/schemas/transport-legs";
+import { SampleDocumentsPanel } from "./sample-documents-panel";
 
 const READINESS_PREVIEW_LIMIT = 3;
 
@@ -82,7 +87,7 @@ function createColumns(
     {
       accessorKey: "samplingTime",
       header: "Sampling Time",
-      cell: ({ row }) => new Date(row.original.samplingTime).toLocaleString(),
+      cell: ({ row }) => formatDateTime(row.original.samplingTime),
     },
     {
       id: "creditBatch",
@@ -200,6 +205,10 @@ export function SampleList() {
   const updateSample = useUpdateSample();
   const deleteSample = useDeleteSample();
   const toast = useToast();
+  const deferredAttachments = useDeferredAttachments();
+  const createTransportLeg = useCreateTransportLeg();
+  const [deferredLegs, setDeferredLegs] = useState<TransportLegFormData[]>([]);
+  const [isFlushing, setIsFlushing] = useState(false);
 
   const samples = samplesData?.items ?? [];
   const totalPages = samplesData?.totalPages ?? 0;
@@ -241,21 +250,150 @@ export function SampleList() {
     setFormError(null);
     try {
       const sample = await createSample.mutateAsync(data);
+      setIsFlushing(true);
+      const attachmentResult = await deferredAttachments.flush("sample", sample.id);
+      const failedLegs: TransportLegFormData[] = [];
+      for (const leg of deferredLegs) {
+        try {
+          await createTransportLeg.mutateAsync({
+            ...leg,
+            entityType: "sample",
+            entityId: sample.id,
+          });
+        } catch {
+          failedLegs.push(leg);
+        }
+      }
+      setDeferredLegs(failedLegs);
+
+      const failedCount = attachmentResult.failed.length + failedLegs.length;
+      if (failedCount > 0) {
+        setSideSheet({ mode: "edit", entity: sample });
+        setFormError(
+          `Sample created, but ${failedCount} ${failedCount === 1 ? "attachment" : "attachments"} failed to save.`,
+        );
+        return;
+      }
+
+      deferredAttachments.clear();
       setSideSheet(null);
       showSavedToast("Sample created successfully", sample);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to create sample");
+    } finally {
+      setIsFlushing(false);
+    }
+  };
+
+  // Keep the post-create "failed to save" banner in sync when the user retries
+  // or removes individual failures inline: recompute it from the remaining
+  // failed attachments and transport legs so a fully-resolved queue clears it.
+  const setCreateFailureBanner = (
+    failedAttachments: number,
+    failedLegs: number,
+  ) => {
+    const total = failedAttachments + failedLegs;
+    setFormError(
+      total > 0
+        ? `Sample created, but ${total} ${total === 1 ? "attachment" : "attachments"} failed to save.`
+        : null,
+    );
+  };
+
+  const handleRetryDeferredAttachments = async (key?: string) => {
+    if (sideSheet?.mode !== "edit") return;
+    const result = await deferredAttachments.retry(
+      "sample",
+      [sideSheet.entity.id],
+      key,
+    );
+    // Failures this retry did not target stay failed (excluded by key); add
+    // whatever this attempt left failed.
+    const untouchedFailed =
+      key === undefined
+        ? 0
+        : deferredAttachments.attachments.filter(
+            (attachment) =>
+              attachment.status === "failed" && attachment.key !== key,
+          ).length;
+    setCreateFailureBanner(
+      untouchedFailed + result.failed.length,
+      deferredLegs.length,
+    );
+  };
+
+  const handleRemoveDeferredAttachment = (key: string) => {
+    deferredAttachments.remove(key);
+    if (sideSheet?.mode !== "edit") return;
+    const remainingFailed = deferredAttachments.attachments.filter(
+      (attachment) => attachment.status === "failed" && attachment.key !== key,
+    ).length;
+    setCreateFailureBanner(remainingFailed, deferredLegs.length);
+  };
+
+  const handleDeferredLegsChange = (legs: TransportLegFormData[]) => {
+    setDeferredLegs(legs);
+    // Removing a failed leg from the post-create failure list must reconcile
+    // the banner too (adding legs only happens pre-create, where mode !== edit
+    // short-circuits and there is no banner yet).
+    if (sideSheet?.mode !== "edit") return;
+    const failedAttachments = deferredAttachments.attachments.filter(
+      (attachment) => attachment.status === "failed",
+    ).length;
+    setCreateFailureBanner(failedAttachments, legs.length);
+  };
+
+  const retryDeferredLegs = async () => {
+    if (sideSheet?.mode !== "edit" || deferredLegs.length === 0) return;
+    setIsFlushing(true);
+    const failedLegs: TransportLegFormData[] = [];
+    try {
+      for (const leg of deferredLegs) {
+        try {
+          await createTransportLeg.mutateAsync({
+            ...leg,
+            entityType: "sample",
+            entityId: sideSheet.entity.id,
+          });
+        } catch {
+          failedLegs.push(leg);
+        }
+      }
+      setDeferredLegs(failedLegs);
+      setFormError(
+        failedLegs.length > 0
+          ? `Sample was saved, but ${failedLegs.length} transport ${failedLegs.length === 1 ? "leg" : "legs"} still failed to save.`
+          : null,
+      );
+    } finally {
+      setIsFlushing(false);
     }
   };
 
   const handleUpdate = async (data: SampleFormData) => {
     if (sideSheet?.mode !== "edit") return;
     setFormError(null);
+    if (
+      deferredLegs.length > 0 ||
+      deferredAttachments.attachments.some(
+        // Any not-yet-`uploaded` entry is unresolved: "failed" awaits a retry,
+        // and "uploading" means an attachment retry is mid-flight whose state a
+        // save would clobber. Both must block the save.
+        (attachment) => attachment.status !== "uploaded",
+      )
+    ) {
+      setFormError(
+        "Resolve or remove the failed attachments and transport legs before saving this sample.",
+      );
+      return;
+    }
     try {
       const sample = await updateSample.mutateAsync({
         sampleId: sideSheet.entity.id,
         ...data,
       });
+      deferredAttachments.clear();
+      setDeferredLegs([]);
       setSideSheet(null);
       showSavedToast("Sample updated successfully", sample);
     } catch (error) {
@@ -282,6 +420,8 @@ export function SampleList() {
   const openCreate = () => {
     setFocusedSampleId(null);
     setFormError(null);
+    deferredAttachments.clear();
+    setDeferredLegs([]);
     setSideSheet({ mode: "create", entity: null });
   };
   const openView = (sample: SampleWithRelations) => {
@@ -297,6 +437,26 @@ export function SampleList() {
     setFocusedSampleId(null);
     setSideSheet(null);
     setFormError(null);
+    deferredAttachments.clear();
+    setDeferredLegs([]);
+  };
+
+  const unsavedAttachmentCount =
+    deferredAttachments.attachments.filter(
+      (attachment) => attachment.status !== "uploaded",
+    ).length + deferredLegs.length;
+  const confirmCreateClose = () => {
+    // An in-flight flush is mid-write; blocking Escape/backdrop/X keeps the
+    // completion handler from mutating a discarded-then-reopened form.
+    if (isFlushing) return false;
+    return (
+      displaySideSheet?.mode !== "create" ||
+      unsavedAttachmentCount === 0 ||
+      window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`)
+    );
+  };
+  const attemptCloseSideSheet = () => {
+    if (confirmCreateClose()) closeSideSheet();
   };
 
   const handleModeChange = (mode: SideSheetMode) => {
@@ -314,7 +474,8 @@ export function SampleList() {
 
   const editingEntity =
     displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
-  const isSubmitting = createSample.isPending || updateSample.isPending;
+  const isSubmitting =
+    createSample.isPending || updateSample.isPending || isFlushing;
 
   const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
 
@@ -449,6 +610,7 @@ export function SampleList() {
       <EntitySideSheet
         open={!!displaySideSheet}
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}
+        onCloseAttempt={confirmCreateClose}
         mode={displaySideSheet?.mode ?? "create"}
         onModeChange={handleModeChange}
         title={displaySideSheet?.mode === "create" ? "Create Sample" : (displaySideSheet?.entity?.sampleCode ?? "")}
@@ -459,7 +621,7 @@ export function SampleList() {
             title: "General",
             fields: [
               { label: "Sample Code", value: displaySideSheet.entity.sampleCode },
-              { label: "Sampling Time", value: new Date(displaySideSheet.entity.samplingTime).toLocaleString() },
+              { label: "Sampling Time", value: formatDateTime(displaySideSheet.entity.samplingTime) },
               { label: "Credit Batch", value: displaySideSheet.entity.creditBatchCode },
               { label: "Facility", value: displaySideSheet.entity.facilityName },
               {
@@ -500,7 +662,6 @@ export function SampleList() {
             fields: [
               { label: "Bulk Density", value: displaySideSheet.entity.bulkDensityKgPerM3 != null ? `${displaySideSheet.entity.bulkDensityKgPerM3} kg/m\u00B3` : null },
               { label: "pH", value: displaySideSheet.entity.ph != null ? String(displaySideSheet.entity.ph) : null },
-              { label: "Surface Area", value: displaySideSheet.entity.surfaceAreaM2PerG != null ? `${displaySideSheet.entity.surfaceAreaM2PerG} m\u00B2/g` : null },
             ],
           },
           {
@@ -508,16 +669,27 @@ export function SampleList() {
             fields: [
               { label: "Lab Name", value: displaySideSheet.entity.labName },
               { label: "Lab Accreditation", value: displaySideSheet.entity.labAccreditation },
-              { label: "Analysis Date", value: displaySideSheet.entity.analysisDate },
+              { label: "Analysis Date", value: formatDate(displaySideSheet.entity.analysisDate) },
             ],
           },
         ] : undefined}
         viewModeChildren={
           displaySideSheet?.mode === "view" && displaySideSheet.entity ? (
-            <TransportLegsSummary
-              entityType="sample"
-              entityId={displaySideSheet.entity.id}
-            />
+            <>
+              <TransportLegsSummary
+                entityType="sample"
+                entityId={displaySideSheet.entity.id}
+              />
+              <section className="space-y-16 border-t border-[var(--color-border-tertiary)] pt-16">
+                <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+                  Evidence &amp; Documents
+                </h3>
+                <SampleDocumentsPanel
+                  sampleId={displaySideSheet.entity.id}
+                  readOnly
+                />
+              </section>
+            </>
           ) : null
         }
       >
@@ -526,9 +698,15 @@ export function SampleList() {
           key={editingEntity?.id ?? "create"}
           sample={editingEntity ?? undefined}
           onSubmit={displaySideSheet?.mode === "edit" ? handleUpdate : handleCreate}
-          onCancel={closeSideSheet}
+          onCancel={attemptCloseSideSheet}
           isSubmitting={isSubmitting}
           submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Sample"}
+          deferredAttachments={deferredAttachments}
+          onRetryDeferredAttachments={handleRetryDeferredAttachments}
+          onRemoveDeferredAttachment={handleRemoveDeferredAttachment}
+          deferredLegs={deferredLegs}
+          onDeferredLegsChange={handleDeferredLegsChange}
+          onRetryDeferredLegs={retryDeferredLegs}
         />
       </EntitySideSheet>
     </div>

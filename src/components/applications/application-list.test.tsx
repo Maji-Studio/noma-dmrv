@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -15,6 +16,9 @@ vi.mock("@/hooks/use-applications", () => ({
   useCreateApplication: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useUpdateApplication: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useDeleteApplication: () => ({ isPending: false, mutateAsync: vi.fn() }),
+}));
+vi.mock("@/hooks/use-file-upload", () => ({
+  useFileUpload: () => ({ upload: vi.fn() }),
 }));
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ success: vi.fn() }),
@@ -107,7 +111,11 @@ import { ApplicationList } from "./application-list";
 
 describe("ApplicationList without facility context", () => {
   it("renders one shared facility gate and no list or create affordance", () => {
-    const html = renderToStaticMarkup(<ApplicationList />);
+    const html = renderToStaticMarkup(
+      <QueryClientProvider client={new QueryClient()}>
+        <ApplicationList />
+      </QueryClientProvider>,
+    );
     const facilityPromptCount = html.match(/Select a facility/g)?.length ?? 0;
 
     expect(facilityPromptCount).toBe(1);

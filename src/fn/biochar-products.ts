@@ -26,7 +26,11 @@ import {
   biocharProductFilterSchema,
 } from "@/schemas/biochar-products";
 import type { ActionResult } from "@/types/actions";
-import { withAutoCode } from "@/data-access/code-generator";
+import {
+  CODE_CONFLICT_MESSAGES,
+  withAutoCode,
+} from "@/data-access/code-generator";
+import { requireOrgFacility } from "@/data-access/utils";
 import { biocharProducts } from "@/db/schema";
 import { toCompositionJsonb } from "@/lib/biochar-composition/composition";
 import { toLoggedActionError } from "./action-errors";
@@ -58,6 +62,9 @@ export async function getBiocharProductsFn(
     const validatedFilters = filters
       ? biocharProductFilterSchema.parse(filters)
       : undefined;
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
     const products = await getBiocharProductsData(ctx, validatedFilters);
 
     return { success: true, data: products };
@@ -189,7 +196,8 @@ export async function createBiocharProductFn(
           densityKgM3: validated.densityKgM3 ?? null,
           waterAddedKg: validated.waterAddedKg ?? null,
           composition,
-        })
+        }),
+      CODE_CONFLICT_MESSAGES.biocharProduct,
     );
 
     return { success: true, data: product };

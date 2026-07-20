@@ -13,7 +13,9 @@ import {
   deleteAllProductionRunReadings as deleteAllData,
   type ProductionRunReadingWithRelations,
 } from "@/data-access/production-run-readings";
+import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgContext } from "@/lib/auth/server";
+import { toLoggedActionError } from "./action-errors";
 import {
   deleteAllProductionRunReadingsSchema,
   productionRunReadingListFiltersSchema,
@@ -31,6 +33,9 @@ export async function getProductionRunReadingsListFn(
       productionRunId,
       facilityId,
     });
+    if (filters.facilityId) {
+      await requireOrgFacility(ctx, filters.facilityId);
+    }
 
     const readings = await getListData(ctx, filters.productionRunId, filters.facilityId);
     return { success: true, data: readings };
@@ -42,10 +47,12 @@ export async function getProductionRunReadingsListFn(
       };
     }
 
-    console.error("[production-run-readings] Failed to load readings:", error);
     return {
       success: false,
-      error: "Failed to load readings",
+      error: toLoggedActionError(error, "Failed to load readings", {
+        message: "production-run-readings list failed",
+        context: { op: "production-run-readings:list" },
+      }),
     };
   }
 }
@@ -68,10 +75,12 @@ export async function deleteAllProductionRunReadingsFn(
       };
     }
 
-    console.error("[production-run-readings] Failed to delete readings:", error);
     return {
       success: false,
-      error: "Failed to delete readings",
+      error: toLoggedActionError(error, "Failed to delete readings", {
+        message: "production-run-readings delete failed",
+        context: { op: "production-run-readings:deleteAll" },
+      }),
     };
   }
 }

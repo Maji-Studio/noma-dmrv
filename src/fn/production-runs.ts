@@ -8,8 +8,12 @@
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { productionRuns, storageLocations } from "@/db/schema";
-import { withAutoCode } from "@/data-access/code-generator";
+import {
+  CODE_CONFLICT_MESSAGES,
+  withAutoCode,
+} from "@/data-access/code-generator";
 import { db } from "@/db";
+import { requireOrgFacility } from "@/data-access/utils";
 import {
   createProductionRun,
   deleteProductionRun,
@@ -22,6 +26,7 @@ import {
   updateProductionRun,
   isProductionRunCodeAvailable as isProductionRunCodeAvailableData,
   ProductionRunOverlapError,
+  ProductionRunDependencyError,
   productionRunDateExpr,
   type PaginatedProductionRuns,
   type ProductionRunWithRelations,
@@ -67,6 +72,9 @@ export async function getProductionRunsFn(
     const validatedFilters = filters
       ? productionRunFilterSchema.parse(filters)
       : undefined;
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
+    }
     const runs = await getProductionRunsData(ctx, validatedFilters);
 
     return { success: true, data: runs };
@@ -160,6 +168,9 @@ export async function getProductionRunStatsFn(
   try {
     const ctx = await requireOrgContext();
 
+    if (facilityId) {
+      await requireOrgFacility(ctx, facilityId);
+    }
     const stats = await getProductionRunStatsData(ctx, facilityId);
     return { success: true, data: stats };
   } catch (error) {
@@ -183,6 +194,7 @@ export async function getFacilityEnergyTotalsFn(
   try {
     const ctx = await requireOrgContext();
 
+    await requireOrgFacility(ctx, facilityId);
     const totals = await getFacilityEnergyTotalsData(ctx, facilityId);
     return { success: true, data: totals };
   } catch (error) {
@@ -275,6 +287,7 @@ export async function createProductionRunFn(
           facilityId: validated.facilityId,
           reactorId: validated.reactorId,
           status: validated.status,
+          cancellationReason: validated.cancellationReason || null,
           startTime: validated.startTime instanceof Date ? validated.startTime : new Date(validated.startTime),
           // Absent end time now stores NULL (an open run) — no silent coercion
           // to startTime, which produced misleading zero-duration windows (#259).
@@ -292,7 +305,8 @@ export async function createProductionRunFn(
           biocharMoisturePercent: validated.biocharMoisturePercent ?? null,
           biocharStorageLocationId: validated.biocharStorageLocationId || null,
           feedstockStorageLocationId: validated.feedstockStorageLocationId || null,
-        })
+        }),
+      CODE_CONFLICT_MESSAGES.productionRun,
     );
 
     return { success: true, data: run };
@@ -375,6 +389,8 @@ export async function updateProductionRunFn(
       facilityId: validated.facilityId,
       reactorId: validated.reactorId,
       status: validated.status,
+      expectedUpdatedAt: validated.expectedUpdatedAt,
+      cancellationReason: validated.cancellationReason,
       startTime: validated.startTime instanceof Date ? validated.startTime : validated.startTime ? new Date(validated.startTime) : undefined,
       // null clears the end time; undefined leaves it unchanged.
       endTime:
@@ -445,6 +461,9 @@ export async function deleteProductionRunFn(
         success: false,
         error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
       };
+    }
+    if (error instanceof ProductionRunDependencyError) {
+      return { success: false, error: error.message, conflict: error.conflict };
     }
     return {
       success: false,

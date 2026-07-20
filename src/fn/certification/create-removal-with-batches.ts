@@ -1,6 +1,7 @@
 "use server";
 
 import { createRemovalWithCreditBatches } from "@/data-access/certifier-removals";
+import { requireOrgFacility } from "@/data-access/utils";
 import { deriveBatchHealth } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
 import { SafeError } from "@/lib/errors";
@@ -31,6 +32,7 @@ export async function createRemovalWithBatchesAction(
   return withAction(async (orgCtx) => {
     const { facilityId, creditBatchIds } =
       createRemovalWithBatchesSchema.parse(input);
+    await requireOrgFacility(orgCtx, facilityId);
     const uniqueIds = Array.from(new Set(creditBatchIds));
     const log = logger.child({
       op: "certifier-removal:create-with-batches",

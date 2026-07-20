@@ -18,6 +18,17 @@ import type {
 } from "@/schemas/bin-movements";
 import { storageLocationKeys } from "@/hooks/use-storage-locations";
 
+/** Client-side carrier for a structured loss action field error. */
+export class RecordLossFieldError extends Error {
+  readonly field: "lossMassKg";
+
+  constructor(message: string, field: "lossMassKg") {
+    super(message);
+    this.name = "RecordLossFieldError";
+    this.field = field;
+  }
+}
+
 export const binMovementKeys = {
   all: ["binMovements"] as const,
   byLocation: (storageLocationId: string) =>
@@ -75,6 +86,9 @@ export function useRecordLoss() {
     mutationFn: async (data: RecordLossData) => {
       const result = await recordLossFn(data);
       if (!result.success) {
+        if (result.field) {
+          throw new RecordLossFieldError(result.error, result.field);
+        }
         throw new Error(result.error);
       }
       return result.data;

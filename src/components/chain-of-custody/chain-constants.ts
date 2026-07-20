@@ -48,7 +48,7 @@ export const GRAPH_CONTROLS_CLASS =
   "[&>button]:!bg-transparent [&>button:last-child]:!border-b-0 " +
   "[&>button:hover]:!bg-[var(--ink)] [&>button:hover>svg]:!fill-[var(--paper)]";
 export const GRAPH_MINIMAP_CLASS =
-  "!rounded-none !border-[1.5px] !border-[var(--ink)] !bg-[var(--paper)] !shadow-none";
+  "pointer-events-none !rounded-none !border-[1.5px] !border-[var(--ink)] !bg-[var(--paper)] !shadow-none";
 export const GRAPH_MINIMAP_MASK = "rgba(15, 2, 26, 0.05)";
 
 export type LineageNodeKind =
@@ -117,22 +117,3 @@ export const LINEAGE_NODE_STYLES: Record<LineageNodeKind, LineageNodeStyle> = {
     accentInk: "var(--acc-prod-ink)",
   },
 };
-
-export const STATUS_COLORS: Record<string, string> = {
-  applied: "var(--st-ok)",
-  delivered: "var(--st-ok)",
-  complete: "var(--st-ok)",
-  ready: "var(--st-ok)",
-  processed: "var(--st-ok)",
-  running: "var(--st-run)",
-  upcoming: "var(--st-run)",
-  ordered: "var(--st-run)",
-  pending: "var(--st-wait)",
-  scheduled: "var(--st-wait)",
-  draft: "var(--st-off)",
-  missing_data: "var(--st-off)",
-  rejected: "var(--st-bad)",
-  void: "var(--st-bad)",
-};
-
-export const STATUS_COLOR_FALLBACK = "var(--st-off)";

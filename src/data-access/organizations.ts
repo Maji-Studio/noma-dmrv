@@ -8,8 +8,9 @@
 import { randomUUID } from "node:crypto";
 import { and, count, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { invitations, members, organizations, users } from "@/db/schema";
+import { isPgUniqueViolation } from "@/db/errors";
 import { seedOrgDefaults } from "@/db/org-defaults";
+import { invitations, members, organizations, users } from "@/db/schema";
 import { requireOrgScope } from "@/data-access/utils";
 import { getBetterAuthSession } from "@/lib/auth/providers/better-auth-server";
 import {
@@ -18,10 +19,14 @@ import {
   type OrgRole,
 } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
+import { logger } from "@/lib/log";
 
 // Mirrors Better Auth's organization plugin configuration in better-auth.ts.
 const INVITATION_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
 const MILLISECONDS_PER_SECOND = 1_000;
+const ORGANIZATION_SLUG_CONSTRAINT = "organizations_slug_unique";
+const ORGANIZATION_SLUG_CONFLICT_MESSAGE =
+  "An organization with this slug already exists.";
 
 export type OrgMemberRow = {
   memberId: string;
@@ -320,11 +325,7 @@ export async function listAllOrganizations(): Promise<OrganizationSummary[]> {
   return rows.map((row) => ({ ...row, memberCount: Number(row.memberCount) }));
 }
 
-/**
- * Create an organization and stamp the given user as its Owner, in one
- * transaction. The Owner is a real member (not the Platform Admin who ran the
- * action). The starter organization-owned catalog is created atomically too.
- */
+/** Create an organization and its selected Owner as one atomic unit. */
 export async function createOrganizationWithOwner(input: {
   name: string;
   slug: string;
@@ -332,36 +333,43 @@ export async function createOrganizationWithOwner(input: {
 }): Promise<{ id: string }> {
   await requirePlatformAdmin();
   const organizationId = randomUUID();
-  await db.transaction(async (tx) => {
-    const [ownerUser] = await tx
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.id, input.ownerUserId))
-      .limit(1);
-    if (!ownerUser) {
-      throw new SafeError("The selected owner account no longer exists.");
-    }
-    const [existingSlug] = await tx
-      .select({ id: organizations.id })
-      .from(organizations)
-      .where(eq(organizations.slug, input.slug))
-      .limit(1);
-    if (existingSlug) {
-      throw new SafeError("An organization with this slug already exists.");
-    }
-    await tx.insert(organizations).values({
-      id: organizationId,
-      name: input.name,
-      slug: input.slug,
+  try {
+    await db.transaction(async (tx) => {
+      const [ownerUser] = await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.id, input.ownerUserId))
+        .limit(1);
+      if (!ownerUser) {
+        throw new SafeError("The selected owner account no longer exists.");
+      }
+      await tx.insert(organizations).values({
+        id: organizationId,
+        name: input.name,
+        slug: input.slug,
+      });
+      await tx.insert(members).values({
+        id: randomUUID(),
+        organizationId,
+        userId: input.ownerUserId,
+        role: "owner",
+      });
     });
-    await seedOrgDefaults(tx, organizationId);
-    await tx.insert(members).values({
-      id: randomUUID(),
-      organizationId,
-      userId: input.ownerUserId,
-      role: "owner",
-    });
-  });
+  } catch (error) {
+    if (isPgUniqueViolation(error, ORGANIZATION_SLUG_CONSTRAINT)) {
+      throw new SafeError(ORGANIZATION_SLUG_CONFLICT_MESSAGE);
+    }
+    throw error;
+  }
+
+  try {
+    await seedOrgDefaults(db, organizationId);
+  } catch (error) {
+    logger.error(
+      { error, organizationId },
+      "failed to seed organization defaults",
+    );
+  }
   return { id: organizationId };
 }
 

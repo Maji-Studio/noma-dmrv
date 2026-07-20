@@ -1,5 +1,15 @@
 export type DeliveryDryMassSource = 'measured' | 'derived' | 'missing';
 
+/** Tolerance for comparing kg values derived from decimal form inputs. */
+export const MASS_COMPARISON_EPSILON_KG = 0.001;
+
+export function exceedsMassWithTolerance(
+  candidateMassKg: number,
+  referenceMassKg: number,
+): boolean {
+  return candidateMassKg > referenceMassKg + MASS_COMPARISON_EPSILON_KG;
+}
+
 export type ResolveDeliveryDryMassInput = {
   measuredMassDryKg?: number | null;
   deliveredWetMassKg?: number | null;
@@ -68,6 +78,32 @@ export function computeClampedDryMass(
     return null;
   }
   return Math.min(deriveMassDryKg(wetMassKg, moisturePercent), wetMassKg);
+}
+
+export function dryOutputExceedsDryInput(input: {
+  feedstockWetMassKg?: number | null;
+  feedstockMoisturePercent?: number | null;
+  biocharOutputKg?: number | null;
+  biocharMoisturePercent?: number | null;
+}): boolean {
+  if (
+    input.feedstockWetMassKg == null ||
+    input.feedstockMoisturePercent == null
+  ) {
+    return false;
+  }
+
+  const biocharDryMassKg = computeClampedDryMass(
+    input.biocharOutputKg,
+    input.biocharMoisturePercent,
+  );
+  if (biocharDryMassKg == null) return false;
+
+  const feedstockDryMassKg = deriveMassDryKg(
+    input.feedstockWetMassKg,
+    input.feedstockMoisturePercent,
+  );
+  return exceedsMassWithTolerance(biocharDryMassKg, feedstockDryMassKg);
 }
 
 export function resolveDeliveryDryMass(

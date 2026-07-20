@@ -20,6 +20,14 @@ export interface FacilityContextValue {
   selectedFacility: Facility | undefined;
   /** Whether the facilities are still loading */
   isLoading: boolean;
+  /**
+   * Whether a deep-linked `?facility=` from the URL is still being resolved
+   * against the active organization. While true the shell should render a
+   * loading state rather than the "Select a facility" gate — the selection is
+   * pending, not absent. Distinct from {@link isLoading}, which is also true
+   * for background facility-list refreshes when a facility is already selected.
+   */
+  isResolving: boolean;
   /** Whether loading facilities failed */
   isError: boolean;
 }

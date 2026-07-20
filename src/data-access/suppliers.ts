@@ -3,18 +3,22 @@
  * CRUD operations for suppliers with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import { suppliers, supplierLocations, feedstocks, type Supplier, type SupplierLocation } from "@/db/schema";
 import type { SupplierFilterData } from "@/schemas/suppliers";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
+import { formatSupplierLocationDisplay } from "@/lib/supplier-location-display";
 
 // ============================================
 // Types
 // ============================================
 
-export type SupplierWithRelations = Supplier;
+export type SupplierWithRelations = Supplier & {
+  /** Default (or first) structured source-location label for list display. */
+  defaultLocationDisplay?: string | null;
+};
 
 interface SupplierCreateFields {
   code: string;
@@ -205,9 +209,45 @@ export async function getSuppliers(
     .limit(pageSize)
     .offset(offset);
 
-  // Combine data (can be extended with computed fields)
+  const locationRows =
+    supplierList.length === 0
+      ? []
+      : await db
+          .select({
+            supplierId: supplierLocations.supplierId,
+            name: supplierLocations.name,
+            city: supplierLocations.city,
+            stateRegion: supplierLocations.stateRegion,
+            country: supplierLocations.country,
+            isDefault: supplierLocations.isDefault,
+          })
+          .from(supplierLocations)
+          .where(
+            and(
+              inArray(
+                supplierLocations.supplierId,
+                supplierList.map((supplier) => supplier.id),
+              ),
+              eq(supplierLocations.organizationId, ctx.organizationId),
+            ),
+          )
+          .orderBy(
+            desc(supplierLocations.isDefault),
+            asc(supplierLocations.createdAt),
+          );
+
+  const defaultLocationBySupplier = new Map<string, string | null>();
+  for (const locationRow of locationRows) {
+    if (defaultLocationBySupplier.has(locationRow.supplierId)) continue;
+    defaultLocationBySupplier.set(
+      locationRow.supplierId,
+      formatSupplierLocationDisplay(locationRow),
+    );
+  }
+
   const items: SupplierWithRelations[] = supplierList.map((s) => ({
     ...s,
+    defaultLocationDisplay: defaultLocationBySupplier.get(s.id) ?? null,
   }));
 
   return {
@@ -259,25 +299,7 @@ export async function createSupplier(
 ): Promise<Supplier> {
   requireOrgScope(ctx);
 
-  // Check for duplicate code
-  const [existing] = await db
-    .select({ id: suppliers.id })
-    .from(suppliers)
-    .where(
-      and(
-        eq(suppliers.code, data.code),
-        eq(suppliers.organizationId, ctx.organizationId),
-      ),
-    );
-
-  if (existing) {
-    throw new SafeError("A supplier with this code already exists");
-  }
-
-  // The pre-check above covers an already-committed duplicate code. An
-  // insert-time unique violation (a concurrent auto-code collision) is left to
-  // propagate raw so withAutoCode can detect and retry it — catching it here as
-  // a SafeError would mask the signal it matches on. Mirrors createFacility.
+  // Insert-time code violations stay raw so `withAutoCode` can retry races.
   const [supplier] = await guardSupplierName(ctx, data.name, () =>
     db
       .insert(suppliers)
@@ -619,7 +641,7 @@ export async function getSupplierLocationsBySupplier(
         eq(supplierLocations.organizationId, ctx.organizationId),
       ),
     )
-    .orderBy(asc(supplierLocations.country));
+    .orderBy(desc(supplierLocations.isDefault), asc(supplierLocations.createdAt));
 }
 
 export async function getSupplierLocationById(

@@ -138,3 +138,22 @@ export function chipAnchor(
 export function totalLegDistanceKm(legs: ChainGeoLeg[]): number {
   return Math.round(legs.reduce((sum, leg) => sum + leg.distanceKm, 0) * 10) / 10;
 }
+
+/** Sum available transport cargo mass across legs, in kg. */
+export function totalLegLoadMassKg(legs: ChainGeoLeg[]): number | null {
+  const withMass = legs.filter((leg) => leg.loadMassKg != null);
+  if (withMass.length === 0) return null;
+  return withMass.reduce((sum, leg) => sum + (leg.loadMassKg ?? 0), 0);
+}
+
+/** Sum available destination-recorded wet application mass across legs, in kg. */
+export function totalLegAppliedWetMassKg(
+  legs: ChainGeoLeg[],
+): number | null {
+  const withMass = legs.filter((leg) => leg.appliedWetMassKg != null);
+  if (withMass.length === 0) return null;
+  return withMass.reduce(
+    (sum, leg) => sum + (leg.appliedWetMassKg ?? 0),
+    0,
+  );
+}

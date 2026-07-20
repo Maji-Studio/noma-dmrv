@@ -6,6 +6,7 @@
 import { and, asc, desc, eq, gte, ilike, isNull, lte, sql, SQL, count } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
+import { countRows, numericAggregate } from "@/db/aggregate";
 import {
   orders,
   facilities,
@@ -83,10 +84,15 @@ export interface OrderDetail extends Order {
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { retireDocumentsForEntities } from "./documents";
 import {
   assertOrderProductRepointWithinStock,
   lockOrderProductRepointBins,
 } from "./order-stock-locks";
+import {
+  lockBiocharTransportRouteTopology,
+  syncBiocharProductTransportLegs,
+} from "./transport-legs";
 
 // ============================================
 // Read Operations
@@ -121,10 +127,9 @@ export async function getOrders(
     .select({
       orderId: deliveries.orderId,
       total: count().as("delivery_total"),
-      delivered:
-        sql<number>`count(*) filter (where ${deliveries.status} = 'delivered')`.as(
-          "delivery_delivered",
-        ),
+      delivered: countRows(sql`${deliveries.status} = 'delivered'`).as(
+        "delivery_delivered",
+      ),
     })
     .from(deliveries)
     .where(and(
@@ -223,8 +228,12 @@ export async function getOrders(
       customerName: customers.name,
       customerLocationName: customerLocations.name,
       biocharProductCode: biocharProducts.code,
-      deliveryCount: sql<number>`coalesce(${deliveryAgg.total}, 0)`,
-      deliveredCount: sql<number>`coalesce(${deliveryAgg.delivered}, 0)`,
+      deliveryCount: numericAggregate(
+        sql<number>`coalesce(${deliveryAgg.total}, 0)`,
+      ),
+      deliveredCount: numericAggregate(
+        sql<number>`coalesce(${deliveryAgg.delivered}, 0)`,
+      ),
     })
     .from(orders)
     .leftJoin(facilities, and(eq(orders.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
@@ -239,8 +248,8 @@ export async function getOrders(
 
   // Combine data — derive fulfillment status from the counts (single source of truth)
   const items: OrderWithRelations[] = orderList.map((o) => {
-    const deliveryCount = Number(o.deliveryCount);
-    const deliveredCount = Number(o.deliveredCount);
+    const deliveryCount = o.deliveryCount;
+    const deliveredCount = o.deliveredCount;
     return {
       ...o,
       deliveryCount,
@@ -487,16 +496,6 @@ export async function createOrder(
 ): Promise<Order> {
   requireOrgScope(ctx);
 
-  // Check for duplicate code
-  const [existing] = await db
-    .select({ id: orders.id })
-    .from(orders)
-    .where(and(eq(orders.code, data.code), eq(orders.organizationId, ctx.organizationId)));
-
-  if (existing) {
-    throw new SafeError("An order with this code already exists");
-  }
-
   const [product] = await db
     .select({ facilityId: biocharProducts.facilityId })
     .from(biocharProducts)
@@ -517,31 +516,24 @@ export async function createOrder(
     data.customerLocationId
   );
 
-  try {
-    const [order] = await db
-      .insert(orders)
-      .values({
-        organizationId: ctx.organizationId,
-        code: data.code,
-        facilityId: data.facilityId,
-        customerId: data.customerId,
-        customerLocationId: data.customerLocationId,
-        biocharProductId: data.biocharProductId,
-        orderDate: data.orderDate,
-        quantityKg: data.quantityKg,
-        packaging: data.packaging,
-        value: data.value ?? null,
-        currency: data.currency ?? "TZS",
-      })
-      .returning();
+  const [order] = await db
+    .insert(orders)
+    .values({
+      organizationId: ctx.organizationId,
+      code: data.code,
+      facilityId: data.facilityId,
+      customerId: data.customerId,
+      customerLocationId: data.customerLocationId,
+      biocharProductId: data.biocharProductId,
+      orderDate: data.orderDate,
+      quantityKg: data.quantityKg,
+      packaging: data.packaging,
+      value: data.value ?? null,
+      currency: data.currency ?? "TZS",
+    })
+    .returning();
 
-    return order;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("unique")) {
-      throw new SafeError("An order with this code already exists");
-    }
-    throw error;
-  }
+  return order;
 }
 
 // ============================================
@@ -627,6 +619,24 @@ export async function updateOrder(
   }
 
   const updated = await db.transaction(async (tx) => {
+    const routeAnchorCanChange =
+      data.biocharProductId !== undefined ||
+      data.customerLocationId !== undefined;
+    if (routeAnchorCanChange) {
+      await lockBiocharTransportRouteTopology(ctx, tx);
+    }
+
+    // Match delivery mutation lock precedence: route topology first, then
+    // certification artifacts, stock bins, parent/product rows, and finally
+    // transport aggregates.
+    // This prevents an order↔delivery ABBA cycle on artifact and order locks.
+    await assertCanMutateCertifiedLineage(
+      ctx,
+      tx,
+      { entityType: "order", entityId: orderId },
+      "update",
+    );
+
     const repointPreparation = data.biocharProductId !== undefined
       ? await lockOrderProductRepointBins(
           ctx,
@@ -649,13 +659,6 @@ export async function updateOrder(
       throw new SafeError("Order not found");
     }
 
-    await assertCanMutateCertifiedLineage(
-      ctx,
-      tx,
-      { entityType: "order", entityId: orderId },
-      "update",
-    );
-
     if (
       data.biocharProductId !== undefined &&
       repointPreparation
@@ -670,6 +673,47 @@ export async function updateOrder(
       );
     }
 
+    const productChanged =
+      data.biocharProductId !== undefined &&
+      data.biocharProductId !== locked.biocharProductId;
+    const customerLocationChanged =
+      data.customerLocationId !== undefined &&
+      data.customerLocationId !== locked.customerLocationId;
+    const affectedProductIds: Array<string | null> = [];
+
+    if (productChanged || customerLocationChanged) {
+      const inheritingDeliveries = await tx
+        .select({
+          biocharProductId: deliveries.biocharProductId,
+          customerLocationId: deliveries.customerLocationId,
+        })
+        .from(deliveries)
+        .where(and(
+          eq(deliveries.orderId, orderId),
+          eq(deliveries.organizationId, ctx.organizationId),
+        ));
+
+      for (const delivery of inheritingDeliveries) {
+        if (productChanged && delivery.biocharProductId === null) {
+          affectedProductIds.push(
+            locked.biocharProductId,
+            data.biocharProductId ?? locked.biocharProductId,
+          );
+        }
+        if (
+          customerLocationChanged &&
+          delivery.customerLocationId === null
+        ) {
+          affectedProductIds.push(
+            delivery.biocharProductId ?? locked.biocharProductId,
+            delivery.biocharProductId ??
+              data.biocharProductId ??
+              locked.biocharProductId,
+          );
+        }
+      }
+    }
+
     const [row] = await tx
       .update(orders)
       .set({
@@ -678,6 +722,12 @@ export async function updateOrder(
       })
       .where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)))
       .returning();
+
+    await syncBiocharProductTransportLegs(
+      ctx,
+      tx,
+      affectedProductIds,
+    );
     return row;
   });
 
@@ -729,6 +779,9 @@ export async function deleteOrder(
     }
 
     await tx.delete(orders).where(and(eq(orders.id, orderId), eq(orders.organizationId, ctx.organizationId)));
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "order", entityId: orderId },
+    ]);
   });
 }
 

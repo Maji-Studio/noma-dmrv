@@ -6,6 +6,20 @@ import {
 } from "./certify-field-registry";
 
 describe("deriveEntityCertifyReadiness", () => {
+  it.each(["failed", "cancelled"])(
+    "reports only the lifecycle gap for a %s production run",
+    (status) => {
+      const readiness = deriveEntityCertifyReadiness("productionRun", {
+        status,
+        readingsCount: 0,
+      });
+
+      expect(readiness.state).toBe("incomplete");
+      expect(readiness.gaps).toHaveLength(1);
+      expect(readiness.gaps[0]?.kind).toBe("lifecycle");
+    },
+  );
+
   it("marks a complete production run ready", () => {
     const readiness = deriveEntityCertifyReadiness("productionRun", {
       status: "complete",
@@ -197,6 +211,76 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness.state).toBe("incomplete");
     expect(readiness.gaps).toMatchObject([
       { kind: "field", key: "massWetKg", fields: ["massWetKg"] },
+    ]);
+  });
+
+  it("reports an upcoming delivery as a lifecycle gap", () => {
+    const readiness = deriveEntityCertifyReadiness("delivery", {
+      status: "upcoming",
+      deliveredWetMassKg: 400,
+    });
+
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      { kind: "lifecycle", key: "lifecycleState", fields: ["status"] },
+    ]);
+  });
+
+  it("accepts a delivered delivery without a lifecycle gap", () => {
+    const readiness = deriveEntityCertifyReadiness("delivery", {
+      status: "delivered",
+      deliveredWetMassKg: 400,
+    });
+
+    expect(readiness).toEqual({ state: "ready", gaps: [] });
+  });
+
+  it("marks an application with complete visual evidence ready", () => {
+    const readiness = deriveEntityCertifyReadiness("application", {
+      biocharAppliedTons: 10,
+      biocharAppliedDryTons: 8,
+      durabilityOption: "200_year",
+      soilTemperatureC: 15,
+      evidenceGapCount: 0,
+    });
+
+    expect(readiness).toEqual({ state: "ready", gaps: [] });
+  });
+
+  it("reports missing visual evidence roles for an application", () => {
+    const readiness = deriveEntityCertifyReadiness("application", {
+      biocharAppliedTons: 10,
+      biocharAppliedDryTons: 8,
+      durabilityOption: "200_year",
+      soilTemperatureC: 15,
+      evidenceGapCount: 3,
+    });
+
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      {
+        kind: "field",
+        key: "applicationEvidence",
+        label: "Application evidence",
+      },
+    ]);
+  });
+
+  it("fails closed when an application row omits its evidence gap count", () => {
+    const readiness = deriveEntityCertifyReadiness("application", {
+      biocharAppliedTons: 10,
+      biocharAppliedDryTons: 8,
+      durabilityOption: "200_year",
+      soilTemperatureC: 15,
+    });
+
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      {
+        kind: "field",
+        key: "applicationEvidence",
+        label: "Application evidence",
+      },
     ]);
   });
 });

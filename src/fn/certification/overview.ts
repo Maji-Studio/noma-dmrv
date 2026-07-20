@@ -4,6 +4,7 @@ import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
 import { env } from "@/config/env";
 import { db } from "@/db";
+import { requireOrgFacility } from "@/data-access/utils";
 import { creditBatches } from "@/db/schema";
 import {
   listRemovalsForFacility,
@@ -101,6 +102,7 @@ export async function loadCertificationOverview(
   facilityId: string,
 ): Promise<ActionResult<CertificationOverviewData>> {
   return withAction(async (orgCtx) => {
+    await requireOrgFacility(orgCtx, facilityId);
     const [removalRows, ungroupedBatches, facilityFacts] = await Promise.all([
       listRemovalsForFacility(orgCtx, facilityId),
       listUngroupedCreditBatches(orgCtx, facilityId),
@@ -188,6 +190,7 @@ export async function loadCreditBatchHealthSummaries(
 ): Promise<ActionResult<Record<string, CreditBatchHealthSummary>>> {
   return withAction(async (orgCtx) => {
     const validFacilityId = z.string().uuid().parse(facilityId);
+    await requireOrgFacility(orgCtx, validFacilityId);
     const ids = z
       .array(z.string().uuid())
       .max(

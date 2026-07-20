@@ -18,12 +18,9 @@
 
 import { and, eq, ne, sql } from "drizzle-orm";
 import type { db, DbTransaction } from "@/db";
+import { sumNumeric } from "@/db/aggregate";
 import {
-  feedstocks,
-  productionRuns,
-  productionRunFeedstocks,
   biocharProducts,
-  formulations,
   binMovements,
   deliveries,
   orders,
@@ -31,10 +28,13 @@ import {
 import { SafeError } from "@/lib/errors";
 import type { OrgContext } from "@/lib/auth/server";
 import type { BinMovementLane } from "@/schemas/bin-movements";
+import { deriveLaneStock } from "./lane-stock-derivation";
 import { requireOrgScope } from "./utils";
 
 /** Any Drizzle client that can run reads — the live `db` or a transaction. */
 type DbReader = Pick<typeof db, "select">;
+
+const BIN_STOCK_LOCK_SCOPE = "bin-stock";
 
 /**
  * Floating-point slack (kg). Derived stock is a sum of floating-point masses, so
@@ -42,6 +42,14 @@ type DbReader = Pick<typeof db, "select">;
  * beyond this slack is a real over-draw.
  */
 const STOCK_OVERDRAW_EPSILON_KG = 1e-6;
+
+/** SafeError subtype so server actions can attach field-level metadata. */
+export class StockOverdrawError extends SafeError {
+  constructor(message: string) {
+    super(message);
+    this.name = "StockOverdrawError";
+  }
+}
 
 /**
  * Serialize every stock read-modify-write for one physical bin. All withdrawal
@@ -54,8 +62,9 @@ export async function lockBinStock(
   storageLocationId: string,
 ): Promise<void> {
   requireOrgScope(ctx);
+  const lockKey = `${BIN_STOCK_LOCK_SCOPE}:${ctx.organizationId}:${storageLocationId}`;
   await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtext(${ctx.organizationId}), hashtext(${storageLocationId}))`,
+    sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
   );
 }
 
@@ -79,9 +88,9 @@ export function overdrawError(
   material: string,
   availableKg: number,
   requestedKg: number,
-): SafeError {
+): StockOverdrawError {
   const available = formatKg(availableKg);
-  return new SafeError(
+  return new StockOverdrawError(
     `Not enough ${material} in this bin — ${available} available but this draw needs ${formatKg(
       requestedKg,
     )}. Reconcile the bin's stock (Storage locations → the bin → Reconcile stock), then try again.`,
@@ -104,46 +113,11 @@ async function deriveFeedstockAvailableKg(
   storageLocationId: string,
   excludeRunId?: string,
 ): Promise<number> {
-  const consumptionConditions = [
-    eq(productionRuns.feedstockStorageLocationId, storageLocationId),
-    eq(productionRuns.organizationId, ctx.organizationId),
-  ];
-  if (excludeRunId) {
-    consumptionConditions.push(ne(productionRuns.id, excludeRunId));
-  }
-
-  const [[intake], [consumed], [movement]] = await Promise.all([
-    tx
-      .select({
-        total: sql<number>`COALESCE(SUM(${feedstocks.massDryKg}) FILTER (WHERE ${feedstocks.status} = 'complete'), 0)`,
-      })
-      .from(feedstocks)
-      .where(and(eq(feedstocks.storageLocationId, storageLocationId), eq(feedstocks.organizationId, ctx.organizationId))),
-    tx
-      .select({
-        total: sql<number>`COALESCE(SUM(${productionRunFeedstocks.massUsedKg}), 0)`,
-      })
-      .from(productionRuns)
-      .leftJoin(
-        productionRunFeedstocks,
-        and(eq(productionRunFeedstocks.productionRunId, productionRuns.id), eq(productionRunFeedstocks.organizationId, ctx.organizationId)),
-      )
-      .where(and(...consumptionConditions)),
-    tx
-      .select({
-        total: sql<number>`COALESCE(SUM(${binMovements.massDeltaKg}), 0)`,
-      })
-      .from(binMovements)
-      .where(
-        and(
-          eq(binMovements.storageLocationId, storageLocationId),
-          eq(binMovements.lane, "feedstock"),
-          eq(binMovements.organizationId, ctx.organizationId),
-        ),
-      ),
-  ]);
-
-  return Number(intake.total) - Number(consumed.total) + Number(movement.total);
+  const [stock] = await deriveLaneStock(ctx, tx, {
+    storageLocationIds: [storageLocationId],
+    excludeRunId,
+  });
+  return stock?.feedstockStockDryKg ?? 0;
 }
 
 export async function deriveProductAvailableKg(
@@ -164,7 +138,7 @@ export async function deriveProductAvailableKg(
   const [[product], [delivered], [movement]] = await Promise.all([
     tx
       .select({
-        total: sql<number>`COALESCE(SUM(${biocharProducts.massKg}), 0)`,
+        total: sumNumeric(biocharProducts.massKg),
       })
       .from(biocharProducts)
       .where(
@@ -175,7 +149,7 @@ export async function deriveProductAvailableKg(
       ),
     tx
       .select({
-        total: sql<number>`COALESCE(SUM(${deliveries.deliveredWetMassKg}), 0)`,
+        total: sumNumeric(deliveries.deliveredWetMassKg),
       })
       .from(deliveries)
       .innerJoin(
@@ -195,7 +169,7 @@ export async function deriveProductAvailableKg(
       .where(and(...deliveredConditions)),
     tx
       .select({
-        total: sql<number>`COALESCE(SUM(${binMovements.massDeltaKg}), 0)`,
+        total: sumNumeric(binMovements.massDeltaKg),
       })
       .from(binMovements)
       .where(
@@ -207,7 +181,7 @@ export async function deriveProductAvailableKg(
       ),
   ]);
 
-  return Number(product.total) - Number(delivered.total) + Number(movement.total);
+  return product.total - delivered.total + movement.total;
 }
 
 /** Derive one bin lane while the caller holds that bin's transaction lock. */
@@ -267,52 +241,11 @@ export async function deriveBiocharAvailableKg(
   biocharStorageLocationId: string,
   excludeProductId?: string,
 ): Promise<number> {
-  const allocationConditions = [
-    eq(productionRuns.biocharStorageLocationId, biocharStorageLocationId),
-    eq(productionRuns.organizationId, ctx.organizationId),
-  ];
-  if (excludeProductId) {
-    allocationConditions.push(ne(biocharProducts.id, excludeProductId));
-  }
-
-  const [[produced], [allocated], [movement]] = await Promise.all([
-    tx
-      .select({
-        total: sql<number>`COALESCE(SUM(${productionRuns.biocharOutputKg}), 0)`,
-      })
-      .from(productionRuns)
-      .where(and(
-        eq(productionRuns.biocharStorageLocationId, biocharStorageLocationId),
-        eq(productionRuns.organizationId, ctx.organizationId),
-      )),
-    tx
-      .select({
-        total: sql<number>`COALESCE(SUM(COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)), 0)`,
-      })
-      .from(productionRuns)
-      .innerJoin(
-        biocharProducts,
-        and(eq(biocharProducts.linkedProductionRunId, productionRuns.id), eq(biocharProducts.organizationId, ctx.organizationId)),
-      )
-      .leftJoin(formulations, and(eq(biocharProducts.formulationId, formulations.id), eq(formulations.organizationId, ctx.organizationId)))
-      .where(and(...allocationConditions)),
-    tx
-      .select({
-        total: sql<number>`COALESCE(SUM(${binMovements.massDeltaKg}), 0)`,
-      })
-      .from(binMovements)
-      .where(
-        and(
-          eq(binMovements.storageLocationId, biocharStorageLocationId),
-          eq(binMovements.lane, "biochar"),
-          eq(binMovements.organizationId, ctx.organizationId),
-        ),
-      ),
-  ]);
-
-  return (
-    Number(produced.total) - Number(allocated.total) + Number(movement.total)
-  );
+  const [stock] = await deriveLaneStock(ctx, tx, {
+    storageLocationIds: [biocharStorageLocationId],
+    excludeProductId,
+  });
+  return stock?.biocharStockKg ?? 0;
 }
 
 /**
@@ -441,7 +374,7 @@ export async function deriveBiocharProductDeliveredKg(
 
   const [delivered] = await tx
     .select({
-      total: sql<number>`COALESCE(SUM(${deliveries.deliveredWetMassKg}), 0)`,
+      total: sumNumeric(deliveries.deliveredWetMassKg),
     })
     .from(deliveries)
     .innerJoin(
@@ -453,5 +386,5 @@ export async function deriveBiocharProductDeliveredKg(
     )
     .where(and(...deliveredConditions));
 
-  return Number(delivered.total);
+  return delivered.total;
 }

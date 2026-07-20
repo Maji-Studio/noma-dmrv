@@ -14,6 +14,7 @@
 # Database (PostgreSQL via Drizzle ORM)
 # -----------------------------------------------------------------------------
 DATABASE_URL="op://Environment Variables/noma-dmrv env staging/DATABASE_URL"
+DB_RESET_ALLOW_REMOTE="op://Environment Variables/noma-dmrv env staging/DB_RESET_ALLOW_REMOTE"
 
 # -----------------------------------------------------------------------------
 # App URL (Used for Better Auth and general app links)
@@ -52,6 +53,8 @@ ISOMETRIC_ENVIRONMENT="op://Environment Variables/noma-dmrv env staging/ISOMETRI
 STORAGE_PROVIDER="op://Environment Variables/noma-dmrv env staging/STORAGE_PROVIDER"
 STORAGE_BUCKET="op://Environment Variables/noma-dmrv env staging/STORAGE_BUCKET"
 STORAGE_REGION="op://Environment Variables/noma-dmrv env staging/STORAGE_REGION"
+STORAGE_ENDPOINT="op://Environment Variables/noma-dmrv env staging/STORAGE_ENDPOINT"
+STORAGE_PREFIX="op://Environment Variables/noma-dmrv env staging/STORAGE_PREFIX"
 STORAGE_ACCESS_KEY_ID="op://Environment Variables/noma-dmrv env staging/STORAGE_ACCESS_KEY_ID"
 STORAGE_SECRET_ACCESS_KEY="op://Environment Variables/noma-dmrv env staging/STORAGE_SECRET_ACCESS_KEY"
 

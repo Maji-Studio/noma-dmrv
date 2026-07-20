@@ -1,1300 +1,289 @@
 # Maji Noema Design System
 
-This design system combines Maji Studio's brand identity with Manukai's systematic token structure, creating a cohesive visual language for the Maji Noema application.
+Visual language for the app: the token model, the canonical page shell, and the
+shared UI primitives in `src/components/ui/`. Read it before building or
+changing any UI surface. It carries **intent, invariants, and gotchas only** —
+token values live in `src/app/globals.css` (`:root`), and component props live
+in the components' own TSDoc. Neither is duplicated here.
 
-## Table of Contents
-
-1. [Quick Reference](#quick-reference)
-2. [Color System](#color-system)
-3. [Typography](#typography)
-4. [Spacing](#spacing)
-5. [Border Radius](#border-radius)
-6. [Layout](#layout)
-7. [Usage Guidelines](#usage-guidelines)
+Related: [forms.md](./forms.md) (form/schema work) ·
+[code-style.md](./code-style.md) (naming, React Compiler rules, a11y) ·
+[architecture.md](./architecture.md) (layers, ActionResult, facility context) ·
+[traceability.md](./traceability.md) (DAG / Map / Sankey surfaces) ·
+[troubleshooting.md](./troubleshooting.md) ·
+[open-questions.md](./open-questions.md) (deferred work).
 
 ---
 
-## Quick Reference
+## The invariants that break code silently
 
-### Spacing & Sizing
+Read these first. Each one fails quietly rather than loudly.
 
-- **2px:** `gap-2`, `mb-2` (Tightest spacing, e.g. label to input)
-- **4px:** `gap-4`, `p-4`, `mb-4` (Tight spacing)
-- **8px:** `gap-8`, `p-8`, `mb-8` (Small spacing)
-- **16px:** `gap-16`, `p-16`, `mb-16` (Standard spacing)
-- **24px:** `gap-24`, `p-24`, `mb-24` (Medium spacing)
-- **32px:** `gap-32`, `p-32`, `mb-32` (Large spacing)
-
-### Typography
-
-- **12px:** `.body-caption` (Captions)
-- **14px:** `.body-small`, `.label-button` (Secondary text, Buttons)
-- **16px:** `.body-medium` (Default body text)
-- **18px:** `.body-large`, `.label-input` (Large body, Input labels)
-- **20px:** `.body-lead` (Lead text)
-- **24px:** `.title-heading-3` (Subsection titles)
-- **32px:** `.title-heading-2` (Section titles)
-
-### Common Patterns
-
-- **Page Field:** the body sits on the warm `--bg` (#FFF9F7); panels and cards are pure white (`--paper`). Never re-apply a gray page background.
-- **Status Colors:** entity status uses the `--st-*` ramp (ok/run/wait/off/bad); `--color-signal-green` is deprecated.
-- **Auth Card Padding:** `p-32` (32px) standard for auth page cards
-- **Entity Card Body Padding:** `p-20` (20px) for entity cards (facility, credit batch, etc.)
-- **Entity Card Footer:** `px-20 py-12` with `border-t border-[var(--color-border-tertiary)]`
-- **Entity Card Border:** `border border-[var(--color-border-secondary)]` with `hover:border-[var(--color-border-primary)]`
-- **Entity Card Metrics:** `grid grid-cols-3 gap-12` for 3-column metric grids
-- **Page Shell:** every routed page follows the canonical shell — see [Canonical Page Shell](#canonical-page-shell). No bespoke page layouts.
-- **Form Spacing (side sheet):** `space-y-20` (20px) at the form's top level in side-sheet forms
-- **Form Spacing (full page):** `space-y-24` (24px) for auth and full-page forms
-- **Form Sections:** always `FormSection` (`@/components/forms`) — SectionLabel + `space-y-16` fields + `pt-16` hairline divider above every section but the first (`divider={false}`); never hand-roll section wrappers. Read-only sheets mirror it with `DetailSection`. See `docs/forms.md`.
-- **Label Spacing:** `mb-6` (6px) label to input
-- **Header Spacing:** `mb-32` (32px) header to content
-- **Border Radius:** `rounded-none` for most elements (brutalist); only UI primitives (StatusBadge, Card component, Accordion) use radius tokens
-- **Buttons:** Always use `Button` component — never raw `<button>` with manual styling
-- **Delete Buttons in Cards:** `Button size="small" variant="default"` with `border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]`
-- **Disabled State:** `disabled:opacity-40` (via Button component)
+- **The spacing scale is 1px per unit.** `p-4` is **4px**, not 16px. `gap-24`
+  is 24px. Never carry a default-Tailwind mental model into this repo.
+- **`@theme inline` sets `--spacing-*: initial` and `--radius-*: initial`**
+  (`src/app/globals.css`). Default Tailwind spacing and radius classes are
+  **deleted, not remapped** — `rounded-md` resolves to nothing at all and is
+  dropped without any visible error. Only scale values that exist in the theme
+  block work.
+- **Radius: default to `rounded-none`** — the aesthetic is brutalist, and it is
+  the majority (30 of 54 call sites). Sanctioned exceptions, all generated from
+  the `--radius-*` tokens: `rounded-full` (dots, pills, avatars — 11),
+  `rounded-4` (skeletons, micro-tags — 6), `rounded-8` (skeleton cards — 3).
+  Three legacy surfaces hardcode `rounded-[8px]` (Accordion root, `Card.Root`
+  with the opt-in `radius="default"`, bordered `Card.Icon`) — don't copy that
+  into new code. Never wrap the wildcard `--radius-*` token in Tailwind's
+  arbitrary-value radius syntax; use the generated utility.
+- **Two-greys rule:** every grey in the light theme is an **alpha of plum over
+  white**, never a neutral grey — cool neutrals read dirty on the warm field.
+  `--color-border-*`, `--color-text-*`, `--color-icon-*`,
+  `--color-background-*`, `--color-surface-*` are all plum alphas. Never
+  reintroduce `--color-gray-*` in component code.
+- **Never re-apply a page background.** The body sits on the warm `--bg`;
+  panels and cards are pure `--paper`.
 
 ---
 
 ## Color System
 
-### Theme Foundation (Warm Light)
+`src/app/globals.css` `:root` is the source of truth for every token value.
+What the CSS can't tell you:
 
-Adopted 2026-06-12 (visual design refresh). The app sits on a warm field with
-pure-white panels and near-black "ink" text. Light mode only; the tokens are
-structured so a `html[data-theme]` flip remains possible later.
+**Theme foundation (warm light).** `--bg` (warm field) → `--paper` (panels) →
+`--ink` (near-black text). Light mode only, structured so a `html[data-theme]`
+flip stays possible.
 
-```css
---bg: #fff9f7;                       /* Page field — clr-orange @ 5% over white */
---paper: #ffffff;                    /* Panel/card surface */
---ink: var(--clr-dark-purple-100);   /* Primary ink */
-```
+**Accent triad — always use the `-ink` variant for text on light.** The base
+tokens (`--acc-prod` / `--acc-infra` / `--acc-dist`) are display fills; only
+`--acc-prod-ink` / `--acc-infra-ink` / `--acc-dist-ink` pass 4.5:1. There is
+**no `--acc-verif-ink` and no `--acc-cert-ink`** — Verification and
+Certification deliberately share `--acc-dist-ink` (both read pink in the
+sidebar). Don't invent the missing tokens.
 
-Plum-tinted hairlines for **emphasized** borders and dividers:
+**Status ramp** — `--st-ok` / `--st-run` / `--st-wait` / `--st-off` /
+`--st-bad` is the canonical palette for status badges, dots, and state text.
 
-```css
---edge: #480b73;
---edge-soft: rgba(72, 11, 115, 0.45);
-```
+`--color-signal-green` / `--color-signal-green-light` are **DEPRECATED** in
+favour of `--st-ok` and an `--st-ok` tint, but still have ~22 live call sites
+in `src/components`. Don't propagate them by copying a neighbouring component.
 
-**Two-greys rule (Phase 2.5, 2026-06-12):** every grey in the light theme is an
-**alpha of plum over white** — never a neutral grey (cool neutrals read dirty on
-the warm field). The semantic tokens (`--color-border-*`, `--color-text-*`,
-`--color-background-light/medium/strong`, `--color-surface-*`) are all plum
-alphas now; don't reintroduce `--color-gray-*` in component code.
+**Hairlines & the panel recipe.** Structure is drawn with borders, never drop
+shadows — elevation is border + paper. Three steps: `--hair` (structural /
+floating chrome) → `--hair-2` (secondary structure) → `--hair-3` (row dividers
+in dense lists). Every surface on the warm field uses the `--panel-*` recipe,
+applied **through shared components** (StatCard, DataTable frame, Card, entity
+cards), never as per-page classes. Falls out of this:
 
-### Hairline Hierarchy & Panel Recipe (Phase 2.5)
-
-Structure is drawn with a three-step hairline hierarchy (no drop shadows —
-elevation is border + paper):
-
-```css
---hair:   1.5px solid var(--clr-dark-purple-100); /* structural / floating chrome */
---hair-2: 1.5px solid var(--clr-dark-purple-20);  /* secondary structure */
---hair-3: 1px solid var(--clr-dark-purple-10);    /* row dividers in dense lists */
-```
-
-Every surface that sits on the warm field uses the **panel recipe** — apply it
-through shared components (StatCard, DataTable frame, Card, entity cards),
-never as per-page classes:
-
-```css
---panel-bg: var(--paper);
---panel-border: 1.5px solid var(--clr-dark-purple-40); /* decided 2026-06-12 */
---panel-shadow: none;
---panel-head-bg: var(--sea);       /* table header / panel head wash */
---panel-head-border: var(--hair-3);
---row-divider: var(--hair-3);
---row-hover-bg: var(--sea);
-```
-
-Rules that fall out of this:
-
-- **Tables never sit flush on the field** — the DataTable renders as a framed
-  panel (toolbar inside, pagination as the panel's footer row); table headers
-  are mono uppercase micro-labels (`.label-micro`) on the `--sea` wash; rows
-  separate with `--row-divider`, **no zebra striping**.
+- **Tables never sit flush on the field** — DataTable renders as a framed panel
+  (toolbar inside, pagination as the footer row); headers are mono uppercase
+  `.label-micro` on the `--sea` wash; rows separate with `--row-divider`,
+  **no zebra striping**.
 - **Elevated surfaces (side sheets, menus, dialogs) are pure `--paper` with a
-  full-ink `--hair` border and no shadow** — the scrim + border do the
-  elevation. Alpha background tokens are translucent washes for fills *inside*
-  panels; never use them as an overlay's surface.
+  full-ink `--hair` border and no shadow** — scrim + border do the elevation.
+  Alpha background tokens are translucent washes for fills *inside* panels;
+  never an overlay's surface.
 
-Accent triad with **ink variants** — use the `-ink` token whenever accent
-colors render as text on light backgrounds (passes 4.5:1 contrast):
+### Entity status
 
-```css
---acc-prod: var(--clr-orange);   --acc-prod-ink: #bc4519;   /* Production */
---acc-infra: var(--clr-purple);  --acc-infra-ink: #480b73;  /* Infrastructure */
---acc-dist: var(--clr-pink);     --acc-dist-ink: #a6216e;   /* Distribution */
-```
+Five canonical state classes resolve every semantic entity status:
 
-Status ramp — the canonical palette for status badges, dots, and state text
-(replaces ad-hoc signal-green usage):
+| State class | Statuses | Ramp token |
+| --- | --- | --- |
+| Neutral | Draft, superseded, cancelled, missing data | `--st-off` |
+| In progress | Running, submitted, partial, ordered | `--st-run` |
+| Success | Complete, delivered, applied, verified, issued, ready | `--st-ok` |
+| Warning | Pending, upcoming, testing, scheduled, conditional | `--st-wait` |
+| Error | Failed, rejected, void, ineligible | `--st-bad` |
 
-```css
---st-ok: #17744a;               /* Complete, verified, healthy */
---st-run: #6e2ba8;              /* In progress, running */
---st-wait: #bc4519;             /* Pending, waiting, attention */
---st-off: rgba(15, 2, 26, 0.4); /* Inactive, draft, archived */
---st-bad: #e54552;              /* Failed, error, rejected */
-```
-
-Tinted canvas wash for graph/canvas figure-ground (chain of custody):
-
-```css
---sea: rgba(72, 11, 115, 0.045);
-```
-
-### Brand Colors
-
-The Maji brand is built on a dark purple foundation, representing depth, wisdom, and transformation.
-
-```css
---clr-dark-purple: rgba(15, 2, 26, 1);
---clr-dark-purple-100: rgba(15, 2, 26, 1);
---clr-dark-purple-80: rgba(15, 2, 26, 0.8);
---clr-dark-purple-60: rgba(15, 2, 26, 0.6);
---clr-dark-purple-50: rgba(15, 2, 26, 0.5);
---clr-dark-purple-40: rgba(15, 2, 26, 0.4);
---clr-dark-purple-30: rgba(15, 2, 26, 0.3);
---clr-dark-purple-20: rgba(15, 2, 26, 0.2);
---clr-dark-purple-10: rgba(15, 2, 26, 0.1);
---clr-dark-purple-5: rgba(15, 2, 26, 0.05);
---clr-dark-purple-1: rgba(15, 2, 26, 0.01);
-```
-
-### Accent Colors
-
-Expressive accent colors for brand moments, data visualization, and emotional cues.
-
-```css
---clr-rose: rgba(255, 178, 210, 1);      /* Soft, nurturing */
---clr-orange: rgba(255, 131, 89, 1);     /* Energetic, warm */
---clr-red: rgba(229, 69, 82, 1);         /* Alert, passion */
---clr-pink: rgba(166, 33, 110, 1);       /* Bold, creative */
---clr-purple: rgba(72, 11, 115, 1);      /* Deep, mystical */
-```
-
-**Accent Color Opacity Variants:**
-Every accent color ships the extended 9-step alpha ramp (Figma variables,
-2026-06-12): `100 / 80 / 60 / 40 / 30 / 20 / 10 / 5 / 1` — e.g.
-`--clr-rose-30`, `--clr-orange-5`, `--clr-orange-1`. The 5 and 1 steps are
-wash/field tints (the warm `--bg` is effectively orange-5 over white); 10–40
-serve badges, overlays, and subtle UI fills.
-
-**Usage:**
-- Rose: Supportive messaging, wellness features
-- Orange: Calls-to-action, highlights, energy
-- Red: Errors, warnings, critical actions
-- Pink: Creative tools, expression features
-- Purple: Premium features, brand accents
-
-### Grayscale Palette
-
-Neutral colors for UI structure and hierarchy.
-
-```css
---color-gray-50: #fafafaff;   /* Lightest background */
---color-gray-100: #f5f5f5ff;  /* Light background */
---color-gray-200: #ebececff;  /* Surface light */
---color-gray-300: #e1e2e2ff;  /* Border light */
---color-gray-400: #d7d8d9ff;  /* Border medium */
---color-gray-500: #878c8cff;  /* Text tertiary */
---color-gray-600: #5f6565ff;  /* Text secondary */
---color-gray-700: #373e3fff;  /* Background dark */
---color-gray-800: #232d2dff;  /* Text primary */
---color-gray-900: #161919ff;  /* Icon primary */
-```
-
-### Signal Colors
-
-System feedback and status indicators. **Prefer the status ramp
-(`--st-ok` / `--st-run` / `--st-wait` / `--st-off` / `--st-bad`, see Theme
-Foundation) for entity status.**
-
-```css
---color-signal-red: #e50b0bff;            /* Errors, destructive */
---color-signal-orange: #f59723ff;         /* Warnings, pending */
---color-signal-orange-strong: #f59723ff;  /* Strong warning */
---color-signal-orange-light: #f5972326;   /* Warning background */
---color-signal-green: var(--st-ok);       /* DEPRECATED — use --st-ok */
---color-signal-green-light: rgba(23, 116, 74, 0.15); /* DEPRECATED — use an --st-ok tint */
-```
-
-The `--color-status-success*` family also resolves to `--st-ok` values.
-
-### Black & White Opacity Variants
-
-```css
---color-black-100: #000000ff;   /* Solid black */
---color-black-75: #000000bf;    /* 75% opacity */
---color-black-50: #00000080;    /* 50% opacity */
---color-black-25: #00000040;    /* 25% opacity */
---color-black-10: #0000001a;    /* 10% opacity */
-
---color-white-100: #ffffffff;   /* Solid white */
---color-white-75: #ffffffbf;    /* 75% opacity */
---color-white-50: #ffffff80;    /* 50% opacity */
---color-white-25: #ffffff40;    /* 25% opacity */
---color-white-10: #ffffff1a;    /* 10% opacity */
-```
-
-### Semantic Color Tokens
-
-These tokens define the functional use of colors across the UI.
-
-#### Borders
-
-```css
---color-border-primary: var(--color-gray-400);    /* Primary borders */
---color-border-secondary: var(--color-gray-300);  /* Subtle borders */
---color-border-tertiary: var(--color-gray-200);   /* Minimal borders */
-```
-
-#### Text
-
-```css
---color-text-primary: var(--color-gray-800);      /* Primary text */
---color-text-secondary: var(--color-gray-600);    /* Secondary text */
---color-text-tertiary: var(--color-gray-500);     /* Tertiary text */
---color-text-white-primary: var(--color-white-100);     /* On dark backgrounds */
---color-text-white-secondary: var(--color-gray-300);    /* Secondary on dark */
-```
-
-#### Icons
-
-```css
---color-icon-primary: var(--color-gray-900);      /* Primary icons */
---color-icon-secondary: var(--color-gray-600);    /* Secondary icons */
-```
-
-#### Backgrounds
-
-```css
---color-background-white: var(--color-white-100);        /* Pure white */
---color-background-light: var(--color-gray-50);          /* Component insets (zebra rows, inset panels) — page field is --bg */
---color-background-medium: var(--color-gray-100);        /* Card background */
---color-background-strong: var(--color-gray-200);        /* Elevated surface */
---color-background-dark-light: var(--color-gray-700);    /* Dark surface light */
---color-background-dark-strong: var(--color-gray-800);   /* Dark surface strong */
-```
-
-#### Surfaces
-
-```css
---color-surface-light: var(--color-gray-200);     /* Light surface */
---color-surface-medium: var(--color-gray-400);    /* Medium surface */
---color-surface-strong: var(--color-gray-500);    /* Strong surface */
-```
-
-#### Interactive Backgrounds
-
-Uses brand purple with opacity for subtle hover and selection states.
-
-```css
---color-background-interaction-light: var(--clr-dark-purple-10);   /* Subtle hover */
---color-background-interaction-medium: var(--clr-dark-purple-20);  /* Hover medium */
---color-background-interaction-strong: var(--clr-dark-purple-30);  /* Active/selected */
---color-text-interaction-primary: var(--clr-dark-purple);          /* Text on interaction */
---color-background-dark-interaction-medium: var(--clr-dark-purple-80); /* Dark interaction */
-```
-
-#### Interaction States
-
-Primary interactions use filled brand purple. Secondary interactions use outline only (gray borders).
-
-```css
---color-interaction: var(--clr-dark-purple);          /* Primary action (filled) */
---color-interaction-hover: var(--clr-dark-purple-80); /* Hover state */
---color-interaction-active: var(--clr-purple);        /* Active/pressed */
---color-interaction-secondary: var(--color-gray-400); /* Secondary (outline only) */
-```
-
-#### Brand Accent
-
-```css
---color-accent: var(--clr-dark-purple);           /* Primary brand accent */
---color-accent-hover: var(--clr-dark-purple-80);  /* Brand hover */
---color-accent-active: var(--clr-purple);         /* Brand active */
-```
-
-#### Badge Colors
-
-Semantic tokens for knowledge item type badges and other categorical indicators.
-
-```css
---color-badge-insight-bg: var(--clr-rose-20);          /* Insight badge background */
---color-badge-insight-text: var(--clr-pink);           /* Insight badge text */
---color-badge-decision-bg: var(--clr-purple-10);       /* Decision badge background */
---color-badge-decision-text: var(--clr-purple);        /* Decision badge text */
---color-badge-constraint-bg: var(--clr-orange-20);     /* Constraint badge background */
---color-badge-constraint-text: var(--clr-red);         /* Constraint badge text */
---color-badge-pattern-bg: var(--clr-dark-purple-10);   /* Pattern badge background */
---color-badge-pattern-text: var(--clr-dark-purple);    /* Pattern badge text */
-```
-
-**Usage:**
-Use these semantic tokens for `KnowledgeTypeBadge` and similar categorical UI elements. Never reference raw accent colors directly in components.
+The exhaustive mapping lives in `src/lib/status-state.ts`; its entry points are
+`getStatusState(status)`, `getStatusStateColor(status)`, and
+`STATUS_STATE_BADGE_CLASSES`. Entity status badges must use `StatusBadge`;
+specialized renderers (map pills, graph pills) must use that shared mapping.
+**Never pick an `--st-*` token in a feature component off an entity status.**
+The ramp stays available for non-status uses (charts, feedback, accents).
 
 ---
 
 ## Typography
 
-### Font Families
+Class definitions live in `src/app/globals.css`. Size → class ladder:
 
-```css
---font-standard: 'GT-Flexa', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
---font-mono: 'GT-Flexa-Mono', 'Monaco', 'Consolas', 'Liberation Mono', 'Menlo', 'Courier New', monospace;
-```
+- **12px:** `.body-caption` (captions) · `.label-micro` (mono uppercase table headers)
+- **14px:** `.body-small`, `.label-button` (secondary text, buttons)
+- **16px:** `.body-medium` (default body)
+- **18px:** `.body-large`, `.label-input`
+- **20px:** `.body-lead`
+- **24px:** `.title-heading-3` (subsection titles)
+- **32px:** `.title-heading-2` (section titles)
 
-**Note:** Custom GT-Flexa fonts are included in this template. The fonts provide a distinctive brand identity with excellent legibility across all weights.
-
-### Font Weights
-
-```css
---font-weight-thin: 100;       /* Thin - for large display */
---font-weight-light: 300;      /* Light - for body text */
---font-weight-default: 400;    /* Regular - default body */
---font-weight-medium: 500;     /* Medium - for emphasis */
---font-weight-semibold: 600;   /* Semibold - for headings */
---font-weight-bold: 700;       /* Bold - for strong emphasis */
-```
-
-### Type Scale
-
-```css
---text-xxs: 0.75rem;    /* 12px */
---text-xs: 0.875rem;    /* 14px */
---text-s: 1rem;         /* 16px */
---text-m: 1.125rem;     /* 18px */
---text-l: 1.25rem;      /* 20px */
---text-xl: 1.5rem;      /* 24px */
---text-2xl: 2rem;       /* 32px */
---text-3xl: 2.5rem;     /* 40px */
---text-4xl: 3rem;       /* 48px */
---text-5xl: 4rem;       /* 64px */
---text-6xl: 6rem;       /* 96px */
-```
-
-### Heading Styles
-
-#### H1 - Display Heading
-```css
---text-h1: var(--text-4xl);              /* 48px base */
---text-h1--font-weight: var(--font-weight-bold);
---text-h1--line-height: 120%;
---text-h1--letter-spacing: 0%;
-```
-
-**Variants:**
-- `.title-heading-1`: Bold variant for primary page titles
-- `.title-heading-1-thin`: Thin variant for elegant display
-- Responsive: `text-4xl md:text-4xl lg:text-5xl 2xl:text-6xl`
-
-#### H2 - Section Heading
-```css
---text-h2: var(--text-2xl);              /* 32px base */
---text-h2--font-weight: var(--font-weight-bold);
---text-h2--line-height: 120%;
---text-h2--letter-spacing: 0%;
-```
-
-**Variants:**
-- `.title-heading-2`: Bold variant for section titles
-- `.title-heading-2-thin`: Thin variant for secondary display
-- Responsive: `text-2xl md:text-2xl lg:text-4xl 2xl:text-5xl`
-
-#### H3 - Subsection Heading
-```css
---text-h3: var(--text-xl);               /* 24px base */
---text-h3--font-weight: var(--font-weight-medium);
---text-h3--line-height: 120%;
---text-h3--letter-spacing: 0%;
-```
-
-**Variants:**
-- `.title-heading-3`: Bold variant
-- `.title-heading-3-thin`: Thin variant
-- Responsive: `text-xl md:text-xl lg:text-2xl 2xl:text-4xl`
-
-#### H4 - Component Heading
-```css
---text-h4: var(--text-m);                /* 18px base */
---text-h4--font-weight: var(--font-weight-medium);
---text-h4--line-height: 120%;
---text-h4--letter-spacing: 0%;
-```
-
-#### Chapter Title
-```css
-.title-chapter-title {
-  font-family: var(--font-mono);
-  font-weight: var(--font-weight-medium);
-  font-size: var(--text-xs);
-  line-height: 120%;
-  letter-spacing: 0.125%;
-  text-transform: uppercase;
-}
-```
-Responsive: `text-xs md:text-xs lg:text-s 2xl:text-s`
-
-### Body Styles
-
-#### Lead Text
-```css
---text-body-lead: var(--text-l);         /* 20px */
---text-body-lead--font-weight: var(--font-weight-thin);
---text-body-lead--line-height: 150%;
---text-body-lead--letter-spacing: 0%;
-```
-
-**Variants:**
-- `.body-lead`: Thin weight for elegant introductions
-- `.body-lead-bold`: Bold weight for emphasis
-- Responsive: `text-xl md:text-xl lg:text-3xl 2xl:text-3xl`
-
-#### Large Body
-```css
---text-body-large: var(--text-m);        /* 18px */
---text-body-large--font-weight: var(--font-weight-light);
---text-body-large--line-height: 150%;
---text-body-large--letter-spacing: 0%;
-```
-
-**Variants:**
-- `.body-large`: Light weight
-- `.body-large-bold`: Bold weight
-- Responsive: `text-l md:text-l lg:text-xl 2xl:text-2xl`
-
-#### Medium Body (Default)
-```css
---text-body-medium: var(--text-s);       /* 16px */
---text-body-medium--font-weight: var(--font-weight-light);
---text-body-medium--line-height: 150%;
---text-body-medium--letter-spacing: 0%;
-```
-
-**Variants:**
-- Default `<p>` and body text
-- `.body-bold`: Bold weight for emphasis
-- Responsive: `text-m md:text-m lg:text-l 2xl:text-l`
-
-#### Small Body
-```css
---text-body-small: var(--text-xs);       /* 14px */
---text-body-small--font-weight: var(--font-weight-light);
---text-body-small--line-height: 150%;
---text-body-small--letter-spacing: 0%;
-```
-
-**Variants:**
-- `.body-small`: Light weight for secondary info
-- `.body-small-bold`: Bold weight
-- Responsive: `text-xs md:text-xs lg:text-s 2xl:text-s`
-
-#### Caption
-```css
---text-body-caption: var(--text-xxs);    /* 12px */
---text-body-caption--font-weight: var(--font-weight-default);
---text-body-caption--line-height: 150%;
---text-body-caption--letter-spacing: 0%;
-```
-
-**Variants:**
-- Default line-height: 150%
-- `.body-caption-fit`: Tight line-height (100%)
-- Bold variants available for both
-
-#### Quote
-```css
-.body-quote {
-  font-family: var(--font-standard);
-  font-weight: var(--font-weight-thin);
-  font-size: var(--text-xl);
-  line-height: 150%;
-  letter-spacing: 0%;
-  font-style: italic;
-}
-```
-Responsive: `text-xl md:text-xl lg:text-2xl 2xl:text-3xl`
-
-### Label Styles
-
-#### Button Label
-```css
---text-label-button: var(--text-xs);     /* 14px */
---text-label-button--font-weight: var(--font-weight-medium);
---text-label-button--line-height: 100%;
---text-label-button--letter-spacing: 2%;
-```
-
-Class: `.label-button`
-- Uses monospace font
-- Uppercase transform
-- Tight line-height
-- Responsive: `text-xs md:text-xs lg:text-s 2xl:text-s`
-
-#### Input Label
-```css
---text-label-input: var(--text-m);       /* 18px */
---text-label-input--font-weight: var(--font-weight-light);
---text-label-input--line-height: 140%;
---text-label-input--letter-spacing: 0%;
-```
-
-Class: `.label-input`
-- Responsive: `text-base md:text-base lg:text-l 2xl:text-l`
+Use the design-system classes, never inline `text-4xl`. In-page section
+headings on rollup/detail pages are `title-heading-3`, sentence case.
 
 ---
 
-## Spacing
+## Date and time display
 
-### Spacing Scale
-
-The application uses a 1px spacing scale for Tailwind classes, meaning `1` unit = `1px`.
-
-**Tailwind Class Mapping:**
-- `mb-1` = 1px
-- `mb-4` = 4px
-- `mb-8` = 8px
-- `mb-16` = 16px
-- `mb-24` = 24px
-- `mb-32` = 32px
-- `mb-48` = 48px
-- `mb-64` = 64px
-
-### Fixed Spacing Tokens
-
-```css
---spacing-0: 0px;
---spacing-1: 1px;
---spacing-2: 2px;
---spacing-4: 4px;
---spacing-6: 6px;
---spacing-8: 8px;
---spacing-10: 10px;
---spacing-12: 12px;
---spacing-16: 16px;
---spacing-18: 18px;
---spacing-20: 20px;
---spacing-24: 24px;
---spacing-28: 28px;
---spacing-32: 32px;
---spacing-36: 36px;
---spacing-40: 40px;
---spacing-48: 48px;
---spacing-56: 56px;
---spacing-64: 64px;
---spacing-72: 72px;
---spacing-80: 80px;
---spacing-96: 96px;
---spacing-128: 128px;
---spacing-160: 160px;
---spacing-192: 192px;
---spacing-256: 256px;
---spacing-320: 320px;
-```
-
-### Responsive Spacing Utilities
-
-#### Gap Utilities
-
-```css
-.gap-xs    /* 16-32px */   gap: 16px md:20px lg:24px 2xl:32px
-.gap-s     /* 16-40px */   gap: 16px md:24px lg:32px 2xl:40px
-.gap-m     /* 24-48px */   gap: 24px md:32px lg:40px 2xl:48px
-.gap-l     /* 32-80px */   gap: 32px md:48px lg:64px 2xl:80px
-.gap-xl    /* 48-160px */  gap: 48px md:96px lg:128px 2xl:160px
-.gap-2xl   /* 64-256px */  gap: 64px md:128px lg:192px 2xl:256px
-
-/* Semantic gaps */
-.gap-sections  /* 160-320px */ gap: 160px md:192px lg:256px 2xl:320px
-.gap-blocks    /* 80-240px */  gap: 80px md:128px lg:160px 2xl:240px
-.gap-columns   /* 24-160px */  gap: 24px md:48px lg:80px 2xl:160px
-```
-
-#### Margin Bottom Utilities
-
-```css
-.mb-xs     /* 16-32px */  margin-bottom: 16px md:20px lg:24px 2xl:32px
-.mb-s      /* 16-40px */  margin-bottom: 16px md:24px lg:32px 2xl:40px
-.mb-m      /* 24-48px */  margin-bottom: 24px md:32px lg:40px 2xl:48px
-.mb-l      /* 32-80px */  margin-bottom: 32px md:48px lg:64px 2xl:80px
-.mb-xl     /* 48-160px */ margin-bottom: 48px md:96px lg:128px 2xl:160px
-```
-
-#### Padding Utilities
-
-```css
-.pt-xs     /* 16-32px */  padding-top: 16px md:20px lg:24px 2xl:32px
-.pt-s      /* 16-40px */  padding-top: 16px md:24px lg:32px 2xl:40px
-.pt-m      /* 24-48px */  padding-top: 24px md:32px lg:40px 2xl:48px
-.pt-l      /* 32-80px */  padding-top: 32px md:48px lg:64px 2xl:80px
-.pt-xl     /* 48-160px */ padding-top: 48px md:96px lg:128px 2xl:160px
-.pt-2xl    /* 64-256px */ padding-top: 64px md:128px lg:192px 2xl:256px
-
-.pb-xs     /* 16-32px */  padding-bottom: 16px md:20px lg:24px 2xl:32px
-.pb-s      /* 16-40px */  padding-bottom: 16px md:24px lg:32px 2xl:40px
-.pb-m      /* 24-48px */  padding-bottom: 24px md:32px lg:40px 2xl:48px
-.pb-l      /* 32-80px */  padding-bottom: 32px md:48px lg:64px 2xl:80px
-.pb-xl     /* 48-160px */ padding-bottom: 48px md:96px lg:128px 2xl:160px
-.pb-2xl    /* 64-256px */ padding-bottom: 64px md:128px lg:192px 2xl:256px
-```
+Interactive read surfaces use the shared formatters from `@/lib/format-utils` —
+`formatDate` (`Jun 13, 2026`), `formatDateTime` (24-hour), `formatDateRange`
+(same-year and cross-year) — so dates have one timezone-safe vocabulary. Pass
+bare `YYYY-MM-DD` calendar values straight in; `formatDate` and
+`formatDateRange` protect them from UTC day drift. Never call
+`toLocaleDateString`, `Intl.DateTimeFormat`, or a custom date-fns pattern in a
+component, and never assemble a range by hand. Native date inputs and
+machine-facing API/export/PDF contracts keep their ISO formats.
 
 ---
 
-## Border Radius
+## Component library
 
-The design system prefers a **square, brutalist aesthetic** with minimal border radius for most UI elements.
+**Base UI** ([base-ui.com](https://base-ui.com)) is the headless primitive
+library — unstyled, accessible, styled with our tokens. Check it first for any
+new primitive (dialog, select, menu). The package is **`@base-ui/react`** (it
+was renamed; `@base-ui-components/react` will not resolve):
 
-```css
---radius-2: 2px;
---radius-4: 4px;
---radius-8: 8px;
---radius-12: 12px;
---radius-16: 16px;
---radius-20: 20px;
---radius-24: 24px;
---radius-32: 32px;
---radius-48: 48px;
---radius-full: 9999px;
+```tsx
+import { Dialog } from "@base-ui/react/dialog";
 ```
 
-**Usage Guidelines:**
-- **Default:** Use `rounded-none` (Tailwind) or `0px` for most components to maintain the brutalist look.
-- **Exceptions:** The following components may use subtle rounding for improved visual hierarchy:
-  - **Cards:** May use `--radius-8` or `--radius-12` to create visual separation from page background
-  - **Circular elements:** Avatar images and profile pictures may use `--radius-full` when specifically designed as circular
-- **Do NOT use:** `rounded-md`, `rounded-lg` on standard buttons, inputs, or containers.
-- When in doubt, prefer square corners over rounded.
+Do not use shadcn or its theming system.
+
+**Phosphor icons** — always the `*Icon`-suffixed export names (`TrashIcon`,
+`PlusIcon`); the bare names are deprecated and appear nowhere in this codebase.
+Both `@phosphor-icons/react` and `@phosphor-icons/react/dist/ssr` are in live
+use, so match whichever the file you're editing already imports. Sizes: 16
+(small) · 20 (in buttons) · 24 (standalone / StatCard) · 32 (large). Prefer
+`weight="bold"`. Icon-only controls always need an `aria-label`.
 
 ---
 
-## Layout
+## Base components
 
-### Breakpoints
+All live in `src/components/ui/<name>` (lowercase paths — capitalised paths
+only resolve on macOS and break CI). Most re-export from the barrel:
 
-```css
---breakpoint-xl: 1280px;      /* Desktop */
---breakpoint-desktop: 100rem; /* Large desktop (1600px) */
+```tsx
+import { Button, EmptyState, Modal, PageHeader, StatCard } from "@/components/ui";
 ```
 
-**Tailwind Breakpoints:**
-- `sm`: 640px
-- `md`: 768px
-- `lg`: 1024px
-- `xl`: 1280px
-- `2xl`: 1536px
+The barrel is **incomplete** — `Accordion`, `CertificationFieldTag`,
+`DetailPanel`, `LoadingSkeleton`, `Toast`, `ViewRelatedLink` and
+`DeleteConfirmDialog` are not exported. Import those from their own path. A
+failed barrel import means the component exists elsewhere, not that it's
+missing — don't rebuild it.
 
-### Container
+`@/` already maps to `src/` — `@/src/...` is always wrong.
 
-```css
-.container-max {
-  margin: 0 auto;
-  width: 100%;
-  max-width: 120rem; /* 1920px */
-  padding-left: 24px;   /* sm:32px md:48px lg:64px xl:96px */
-  padding-right: 24px;
-}
+### Button — `src/components/ui/button`
+
+Always use `Button`; never a raw `<button>` with manual styling.
+
+- **Variants:** `default` · `weak` · `primary` · `accent` · `noOutline` ·
+  `destructive` (`--st-bad` outline, for delete actions).
+- **Sizes:** `default` (40px) · `small` (32px) · `large` (48px, 60px at xl) ·
+  `icon` (32×32, `p-0`).
+- **`busy` is the one sanctioned in-flight convention.** It disables the button
+  and renders a leading spinner. Do not hand-roll `disabled={isPending}` plus a
+  text swap or your own spinner — `busy` exists to replace exactly that mix.
+- **Quiet icon button:** `size="icon"` with `variant="noOutline"` (or
+  `variant="destructive"` for a delete row action), plus an `aria-label`. Use
+  this rather than `width="square"`, which yields a differently-sized control.
+- There is **no `asChild` / Slot polymorphism** — `Button` is a plain
+  `forwardRef` over `<button>`. To style a link, style the `<Link>` directly.
+- Disabled is `disabled:opacity-40`, handled by the component.
+
+### Modal — `src/components/ui/modal`
+
+Built on Base UI `Dialog` (same primitive as `SlideOverPanel`) so the app
+speaks one dialog library. Compose it for every centered dialog — you get the
+built-in close button, ESC dismissal, focus trap, scroll lock, and focus
+restore for free.
+
+- Width tokens: `sm` 400px (confirmations) · `md` 560px (default: forms,
+  wizards) · `lg` 720px (dense forms) · `xl` 880px (rich content). All are
+  full-width below `sm`.
+- **`dismissOnClickOutside={false}`** for multi-step workflows where a stray
+  backdrop click would discard in-progress work. Close button and ESC stay live.
+- **Accessibility is enforced, not suggested:** Modal dev-warns at runtime when
+  neither `ariaLabelledBy` (preferred — id of a visible heading) nor
+  `ariaLabel` is passed.
+- Pass `contentClassName=""` to opt out of the default `p-24` when children
+  render an edge-to-edge header and own their own spacing.
+- The certification area's single confirm gate is `ConfirmActionDialog`
+  (`src/components/certification/confirm-action-dialog.tsx`) — reuse it there
+  instead of hand-rolling.
+
+### Other primitives — intent only, props at source
+
+- **`EmptyState`** — the shared dashed empty/zero-data card. Every empty and
+  filtered-empty state uses it; **never a bare `<p>`**. Icon sizing is
+  caller-owned.
+- **`SelectFacilityEmptyState`** (`src/components/navigation`) — the *no
+  facility chosen* state. Do not branch `EmptyState` copy on `facilityId`;
+  this component exists so every first-run screen speaks with one voice.
+  Facility-scoped pages early-return `container-max page-shell` + `PageHeader`
+  + this, and gate the query `{ enabled: !!facilityId }` — skipping the gate
+  fires an unscoped query.
+- **`StepFlow`** — step rail + content slot + pinned footer. Deliberately dumb:
+  **StepFlow never validates**; the parent owns the active index and gates
+  forward progress by disabling its own Next button.
+- **`StatCard`** — the one KPI card. **Always carries a 24px Phosphor icon.**
+  Optional `sparkline` slot takes any node.
+- **`ListPagination`** — same rows-per-page + first/previous/next/last contract
+  as `DataTable.Pagination`. Facilities and Credit Batches are the sanctioned
+  KPI-rich card-list hubs; ordinary entity lists stay data tables.
+- **`PageHeader`** — mono uppercase area eyebrow → `title-heading-2` title →
+  one-line subtitle → actions. `area` sets the eyebrow text and ink; `eyebrow`
+  overrides the text; omit `area` for pages outside the nav groups
+  (Traceability). **Every list page gets a subtitle** — one descriptive line,
+  sentence case.
+- **`DropdownMenu` / `RowActionsMenu`** — `RowActionsMenu` is *the* single
+  row-action pattern for table and card lists: a quiet ⋮ per row, verbs in the
+  menu. Row click opens the detail side sheet everywhere; explicit "View"
+  buttons are retired (detail routes become an "Open details" item).
+  `destructive: true` for irreversible actions only — **archive, restore, and
+  unlink are reversible and stay neutral.** The wrapper stops propagation so
+  menu clicks never fire the row click.
+- **`Card`** (compound: `Card.Root` / `.Content` / `.Header` / `.Title` /
+  `.Icon` / …) — a general-purpose panel with the shared recipe, used on the
+  admin page. `Card.Root` defaults to `padding="none"` and `radius="none"`.
+  For entity lists, use the Entity Card pattern below instead.
+
+### EntitySideSheet mounting rule
+
+`EntitySideSheet` must be **always mounted with a controlled `open` prop** —
+conditional rendering skips the slide animation entirely (it mounts
+already-open and unmounts instantly):
+
+```tsx
+// ✅ animates in and out
+<EntitySideSheet open={!!sideSheet} onOpenChange={(o) => !o && closeSideSheet()}
+  mode={sideSheet?.mode ?? "create"} … />
+
+// ❌ no animation
+{sideSheet && <EntitySideSheet open … />}
 ```
 
-**Responsive Padding:**
-- Mobile: 24px
-- sm: 32px
-- md: 48px
-- lg: 64px
-- xl: 96px
+Derive title/subtitle/sections/form props with optional chaining + fallbacks
+(see `order-list.tsx`), and keep `key={entity?.id ?? "create"}` on the form.
+**`size` defaults to `"wide"`**, not `"default"` (`narrow` | `default` | `wide`
+| `full`).
 
 ---
 
-## Usage Guidelines
-
-### Forms and Validation
-
-Forms use TanStack Form with Zod validation. Schemas live in `src/schemas/` and are shared by client forms and server actions.
-
-**Key locations:**
-```plaintext
-src/schemas/
-src/components/forms/
-```
-
-**Pattern (short):**
-```typescript
-const form = useForm({
-  defaultValues: { email: "" },
-  validators: { onSubmit: createUserSchema },
-  onSubmit: async ({ value }) => { /* submit */ },
-});
-```
-
-Field-level validation is preferred for immediate feedback:
-```tsx
-<form.Field name="email" validators={{ onBlur: createUserSchema.shape.email }}>
-  {(field) => <FormInput field={field} label="Email" />}
-</form.Field>
-```
-
-**Why this approach:**
-- Consistent validation rules across client and server
-- Cleaner component logic (no manual field state)
-- Centralized schemas for reuse
-
-### Color Usage Best Practices
-
-1. **Text Hierarchy**
-   - Primary text: Use `--color-text-primary` for main content
-   - Secondary text: Use `--color-text-secondary` for supporting info
-   - Tertiary text: Use `--color-text-tertiary` for metadata
-
-2. **Brand Identity**
-   - Use dark purple (`--color-accent`) as the primary interaction color
-   - Reserve accent colors (rose, orange, pink) for specific emotional contexts
-   - Primary actions: filled with brand purple
-   - Secondary actions: outline only with gray borders
-
-3. **Interactive Elements**
-   - **Primary (filled):** `--color-interaction` (dark purple)
-   - **Primary hover:** `--color-interaction-hover` (dark purple 80%)
-   - **Primary active:** `--color-interaction-active` (deep purple)
-   - **Secondary (outline):** `--color-interaction-secondary` (gray border only)
-   - **Disabled:** 40% opacity of base color
-
-4. **Feedback**
-   - Success: Use `--clr-dark-purple` or a checkmark icon
-   - Error: `--color-signal-red`
-   - Warning: `--color-signal-orange`
-   - Info: Light purple or gray backgrounds
-
-### Typography Best Practices
-
-1. **Hierarchy**
-   - Use one H1 per page for primary title
-   - H2 for major sections
-   - H3 for subsections
-   - H4 for component headers
-
-2. **Weight Selection**
-   - Thin (100): Large display text only
-   - Light (300): Body copy, comfortable reading
-   - Regular (400): Default body, captions
-   - Medium (500): Emphasis, H3/H4 headings
-   - Semibold (600): Available from GT-Flexa font
-   - Bold (700): H1/H2, strong emphasis
-
-3. **Responsive Typography**
-   - Let type scale up naturally across breakpoints
-   - Test readability at all sizes
-   - Maintain consistent line-height ratios
-
-### Spacing Best Practices
-
-1. **Vertical Rhythm**
-   - Use consistent spacing scales
-   - Increase spacing at larger breakpoints proportionally
-   - Create clear visual groupings
-
-2. **Component Spacing**
-   - `gap-xs/s`: Internal component spacing
-   - `gap-m/l`: Between related components
-   - `gap-xl/2xl`: Between distinct sections
-
-3. **Whitespace**
-   - Don't fear empty space
-   - Use sections gaps for breathing room
-   - Increase spacing around focal points
-
-### Accessibility
-
-1. **Color Contrast**
-   - Ensure text meets WCAG AA standards (4.5:1 for body, 3:1 for large text)
-   - Test accent colors on backgrounds
-   - Provide additional non-color indicators
-
-2. **Typography**
-   - Minimum body text size: 16px
-   - Maximum line length: 75ch
-   - Maintain 1.5x line-height for body text
-
-3. **Interactive Elements**
-   - Minimum touch target: 44x44px
-   - Clear focus indicators
-   - Sufficient contrast for all states
-
----
-
-## Component Library
-
-### Base UI (Preferred)
-
-When creating new UI components, we use [Base UI](https://base-ui.com) by MUI as our preferred component library. Base UI provides unstyled, accessible React components that we can style according to our design system.
-
-**Resources:**
-- Documentation: https://base-ui.com/react/components/accordion
-- GitHub: https://github.com/mui/base-ui
-
-**Why Base UI:**
-- Unstyled components that work with our custom design tokens
-- Accessibility built-in (ARIA attributes, keyboard navigation)
-- Flexible styling - no theming system to override
-- Production-ready, well-maintained by MUI team
-
-**Usage Guidelines:**
-1. **Check Base UI first:** When you need to create a new component (accordion, dialog, select, etc.), check if Base UI provides it
-2. **Style with our design system:** Apply our design tokens and patterns to Base UI components
-3. **Use alternatives when needed:** If Base UI doesn't have the component you need, look for other headless/unstyled alternatives
-4. **Avoid shadcn:** Do not use shadcn or its theming system - we maintain our own design system
-
-**Example - Using Base UI Accordion:**
-```tsx
-import * as Accordion from '@base-ui-components/react/accordion';
-
-export function MyAccordion() {
-  return (
-    <Accordion.Root>
-      <Accordion.Item className="border-[var(--color-border-primary)]">
-        <Accordion.Header>
-          <Accordion.Trigger className="label-button p-[var(--spacing-16)]">
-            Section Title
-          </Accordion.Trigger>
-        </Accordion.Header>
-        <Accordion.Panel className="p-[var(--spacing-16)] gap-[var(--spacing-12)]">
-          <p className="body-large">Panel content...</p>
-        </Accordion.Panel>
-      </Accordion.Item>
-    </Accordion.Root>
-  );
-}
-```
-
-### Phosphor Icons
-
-We use [Phosphor Icons](https://phosphoricons.com/) for all icons in the application. Phosphor provides a flexible, consistent icon family with multiple weights.
-
-**Resources:**
-- Website: https://phosphoricons.com/
-- React Library: https://github.com/phosphor-icons/react
-- Documentation: https://phosphoricons.com/docs
-
-**Installation:**
-```bash
-pnpm add @phosphor-icons/react
-```
-
-**IMPORTANT - Correct Import Path and Names:**
-
-⚠️ **Use the `/dist/ssr` import path with the `*Icon`-suffixed export names for new code** — the bare names (`Trash`, `Pencil`, `Plus`, …) are deprecated by the library and may still exist in older surfaces:
-
-```tsx
-// ✅ CORRECT - SSR-compatible, works in both client and server components
-import { TrashIcon, PencilIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
-
-// ❌ WRONG - deprecated bare-export names, will show TypeScript warnings
-import { Trash, Pencil, Plus } from "@phosphor-icons/react/dist/ssr";
-```
-
-**Usage Guidelines:**
-
-1. **Icon Sizes:** Use consistent sizes across the application (see [Icon Sizing Pattern](#icon-sizing-pattern))
-   - Small icons (in buttons): 20px
-   - Medium icons (standalone): 24px
-   - Large icons (in cards): 32px
-
-2. **Icon Weights:** Phosphor icons support multiple weights
-   - `regular` (default) - Standard icons for most use cases
-   - `bold` - Emphasized icons in buttons or primary actions
-   - `fill` - Filled icons for active/selected states
-   - `light` - Lighter icons for subtle elements
-   - `thin` - Minimal icons for dense interfaces
-   - `duotone` - Two-tone icons for visual interest
-
-3. **Color:** Icons inherit text color by default, or use semantic color tokens
-   ```tsx
-   // Inherits text color
-   <TrashIcon size={20} />
-
-   // Custom color using design tokens
-   <TrashIcon size={20} className="text-[var(--color-text-error)]" />
-   ```
-
-**Example Usage:**
-
-```tsx
-import { TrashIcon, PencilIcon, PlusIcon, HouseIcon } from "@phosphor-icons/react/dist/ssr";
-
-// Basic icon
-<TrashIcon size={20} />
-
-// Icon with weight
-<PlusIcon size={20} weight="bold" />
-
-// Icon in button
-<button className="flex items-center gap-s">
-  <PlusIcon size={20} weight="bold" />
-  Add Item
-</button>
-
-// Icon with conditional weight (e.g., navigation)
-<HouseIcon size={20} weight={isActive ? "fill" : "regular"} />
-
-// Icon with semantic color
-<button className="text-[var(--color-text-error)]">
-  <TrashIcon size={20} />
-</button>
-```
-
----
-
-## Base Components
-
-We have created foundational UI components that follow the design system and are ready to use throughout the application. These components are located in `/src/components/`.
-
-### Button Component
-
-A versatile button component with support for different variants, sizes, and states. Built with `class-variance-authority` and Base UI's Slot primitive.
-
-**Location:** `/src/components/ui/Button/index.tsx`
-
-**Variants:**
-- `default` - Standard button with border (primary border, surface hover states)
-- `weak` - Lighter border for secondary actions (tertiary border)
-- `primary` - Dark purple filled button for primary actions
-- `accent` - Dark purple brand accent button
-- `noOutline` - Text-only button without borders
-
-**Sizes:**
-- `default` - 48px height (60px at xl breakpoint), with 16px/24px padding
-- `small` - 32px height, 12px padding
-
-**Width Options:**
-- `default` - Auto width based on content
-- `square` - Square aspect ratio (perfect for icon buttons)
-- `full` - Full width of container
-
-**Typography:** Uses `.label-button` class (monospace, medium weight, uppercase, 2% letter spacing)
-
-**Example Usage:**
-```tsx
-import { Button } from '@/src/components/ui/Button'
-import { ArrowRightIcon, PlusIcon } from '@phosphor-icons/react/dist/ssr'
-
-// Basic button
-<Button>Click me</Button>
-
-// Primary action with icon
-<Button variant="primary">
-  Continue
-  <ArrowRightIcon size={20} weight="bold" />
-</Button>
-
-// Icon-only button
-<Button width="square" aria-label="Add">
-  <PlusIcon size={20} weight="bold" />
-</Button>
-
-// As a link (polymorphic)
-<Button asChild>
-  <Link href="/about">Go to About</Link>
-</Button>
-```
-
-**Design Tokens Used:**
-- Colors: `--color-text-primary`, `--color-border-primary`, `--color-surface-medium`, `--color-interaction`, `--color-accent`
-- Spacing: `--spacing-12`, `--spacing-16`, `--spacing-24`
-- Typography: `.label-button` class
-- Transitions: `duration-300`
-
-### Card Component (Compound)
-
-A flexible compound component for building card layouts with images, overlays, and content. Inspired by the TeaserProject pattern.
-
-**Location:** `/src/components/ui/Card/index.tsx`
-
-**Sub-components:**
-- `Card.Root` - Container with border and rounded corners
-- `Card.Link` - Wraps content in Next.js Link
-- `Card.Image` - Optimized image with aspect ratio control (`square`, `video`, `auto`)
-- `Card.Overlay` - Overlay content (hover or always visible)
-- `Card.Content` - Main content area with configurable padding
-- `Card.Header` - Groups subtitle and title
-- `Card.Title` - Heading element (uses `.title-heading-3` by default)
-- `Card.Subtitle` - Small label (uses `.title-chapter-title`)
-- `Card.Description` - Body text (uses `.body-large`)
-- `Card.Footer` - Footer area for actions
-- `Card.Icon` - Icon container with optional border
-
-**Common Patterns:**
-
-**Project Teaser Card:**
-```tsx
-<Card.Root className="max-w-sm group">
-  <Card.Link href="/project/1" ariaLabel="View Project">
-    <Card.Image
-      src="/images/project.jpg"
-      alt="Project preview"
-      aspectRatio="square"
-    />
-    <Card.Overlay showOnHover>
-      <Card.Subtitle>Client Name</Card.Subtitle>
-      <Card.Title as="h3" className="body-large font-bold normal-case">
-        Project Description
-      </Card.Title>
-      <ArrowRight size={24} />
-    </Card.Overlay>
-  </Card.Link>
-</Card.Root>
-```
-
-**Feature Card:**
-```tsx
-<Card.Root>
-  <Card.Content padding="large">
-    <Card.Icon bordered size="large">
-      <Rocket size={32} weight="bold" />
-    </Card.Icon>
-    <Card.Header>
-      <Card.Title as="h3">Feature Title</Card.Title>
-    </Card.Header>
-    <Card.Description>
-      Feature description text.
-    </Card.Description>
-  </Card.Content>
-</Card.Root>
-```
-
-**Blog Post Card:**
-```tsx
-<Card.Root>
-  <Card.Image src="/images/post.jpg" alt="Blog post" aspectRatio="video" />
-  <Card.Content>
-    <Card.Header>
-      <Card.Subtitle>Blog Post</Card.Subtitle>
-      <Card.Title>Post Title</Card.Title>
-    </Card.Header>
-    <Card.Description>Post excerpt.</Card.Description>
-    <Card.Footer>
-      <Button variant="primary" size="small">
-        Read More
-        <ArrowRight size={16} />
-      </Button>
-    </Card.Footer>
-  </Card.Content>
-</Card.Root>
-```
-
-**Design Tokens Used:**
-- Colors: `--color-border-tertiary`, `--clr-dark-purple-40`, `--color-white-100`
-- Spacing: `--spacing-8`, `--spacing-12`, `--spacing-16`, `--spacing-24`, `--spacing-40`
-- Border Radius: `--radius-8`
-- Typography: `.title-heading-3`, `.title-chapter-title`, `.body-large`
-- Transitions: `duration-300`
-
-**Accessibility:**
-- Use `ariaLabel` with `Card.Link` for interactive cards
-- Provide meaningful `alt` text for images
-- Use semantic heading levels with `Card.Title`'s `as` prop
-- Add `group` class to `Card.Root` for group-hover functionality
-
-**Padding Options:**
-- `none` - No padding
-- `small` - 16px padding
-- `medium` - 24px padding (default)
-- `large` - 40px padding
-
-### Entity Card Pattern
-
-All biochar entity cards (Facility, CreditBatch, StorageLocation, Application) follow a consistent structure:
-
-```tsx
-<article
-  className="flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] transition-colors hover:border-[var(--color-border-primary)] cursor-pointer"
-  onClick={() => onView(entity)}
->
-  <div className="flex flex-1 flex-col gap-16 p-20">
-    {/* Header: accent badge + secondary info */}
-    <div className="flex items-center justify-between gap-12">
-      {/* Use area accent: purple, orange, rose, or dark-purple */}
-      <span className="inline-flex items-center gap-6 border border-[var(--clr-purple-20)] bg-[var(--clr-purple-10)] px-10 py-4 text-[11px] uppercase tracking-[0.12em] text-[var(--clr-purple)]">
-        <Icon size={12} weight="bold" />
-        {entity.code}
-      </span>
-      <span className="body-caption text-[var(--color-text-tertiary)]">
-        {secondaryLabel}
-      </span>
-    </div>
-
-    {/* Title */}
-    <h3 className="title-heading-3 text-[var(--color-text-primary)]">{entity.name}</h3>
-
-    {/* 3-col metrics */}
-    <div className="grid grid-cols-3 gap-12">
-      <div>
-        <p className="body-caption text-[var(--color-text-tertiary)]">Label</p>
-        <p className="title-heading-3">{value}</p>
-      </div>
-      {/* ... */}
-    </div>
-  </div>
-
-  {/* Footer */}
-  <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-20 py-12">
-    <span className="body-caption text-[var(--color-text-tertiary)]">{footer}</span>
-    <div className="flex items-center gap-8" onClick={(e) => e.stopPropagation()}>
-      <Button size="small" variant="default" onClick={() => onEdit(entity)}>
-        <PencilSimple size={16} /> Edit
-      </Button>
-      <Button size="small" variant="default"
-        className="border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]"
-        onClick={() => onDelete(entity.id)}
-      >
-        <Trash size={16} />
-      </Button>
-    </div>
-  </div>
-</article>
-```
-
-**Key rules:**
-- No border-radius — brutalist square corners
-- `border-secondary` default, `border-primary` on hover
-- Body `p-20`, footer `px-20 py-12`
-- Always use `Button` component for actions
-- Code badges use area accent colors (purple, orange, rose, dark-purple)
-- Metric labels use `body-caption`, primary values use `title-heading-3`
-
-### Modal Component
-
-Shared chrome for every native `<dialog>` in the app. Wraps `<dialog>` +
-`useDialog` so all modals inherit the same border, backdrop, centering,
-focus management, and width tokens.
-
-**Use Modal for every new dialog.** Don't roll your own `<dialog>` markup
-— that re-introduces the per-instance opportunity to forget the centering
-fix (see Troubleshooting → "Native `<dialog>` centering & backdrop").
-
-```tsx
-import { Modal } from "@/components/ui";
-
-<Modal
-  isOpen={isOpen}
-  onClose={() => setOpen(false)}
-  onOpen={() => reset(defaultValues)}    // optional — fires on each open
-  ariaLabelledBy="my-dialog-title"       // or `ariaLabel` for label fallback
-  width="md"                              // sm | md | lg | xl
->
-  <div className="flex flex-col gap-24">
-    <h2 id="my-dialog-title" className="title-heading-3">…</h2>
-    {/* form / content */}
-  </div>
-</Modal>
-```
-
-**Width tokens** (consistent across the app):
-
-| Token | Width | Use for |
-|-------|-------|---------|
-| `sm`  | 400px | Confirmation prompts, simple yes/no |
-| `md`  | 560px | Default — forms, wizards |
-| `lg`  | 720px | Dense forms, multi-column layouts |
-| `xl`  | 880px | Rich content (previews, comparisons) |
-
-**Edge-to-edge headers.** When your dialog renders an inset header with a
-bottom border that must reach the dialog edges (e.g., the quick-add
-shells), pass `contentClassName=""` to opt out of Modal's default `p-24`
-content padding and own all spacing yourself.
-
-**Accessibility:** pass exactly one of `ariaLabelledBy` (preferred — points
-at a visible heading) or `ariaLabel` (fallback when no heading is
-present). A dialog with neither has no accessible name. Optionally pass
-`ariaDescribedBy` pointing at descriptive copy (e.g., a warning paragraph)
-to give screen readers context beyond the heading.
-
-**Confirmation gates.** The certification area's single "are you sure?" gate
-is `ConfirmActionDialog`
-(`src/components/certification/confirm-action-dialog.tsx`) — a `width="sm"`
-Modal composition with `title` / `body`, a `default` or `destructive`
-primary, a `busy` pending state, an optional inline production `EnvBanner`,
-and `ServerError`. Reuse it for confirm gates in that area instead of
-hand-rolling a Modal.
-
-### EmptyState Component
-
-Shared dashed-border empty / zero-data card. Standardises the layout
-(centered icon → heading → description → optional action) and the
-padding tiers used across list pages.
-
-```tsx
-import { EmptyState } from "@/components/ui";
-
-<EmptyState
-  icon={<ClipboardText size={48} />}
-  title="No GHG statements yet"
-  description="Create one to roll up submitted removals for a reporting period."
-  action={<Button variant="primary" onClick={onCreate}>New GHG Statement</Button>}
-  padding="lg"  // sm | md | lg — defaults to lg
-/>
-```
-
-**Padding tiers:**
-
-| Token | `py-*` | Use for |
-|-------|--------|---------|
-| `lg`  | `py-56` | Top-level "no data yet" / "select a facility" |
-| `md`  | `py-40` | Mid-tier empty sections |
-| `sm`  | `py-32` | Nested empties (inside a card body or subsection) |
-
-**Icon sizing is caller-owned** — typically 48px for `lg`, 40px for `md`,
-32px for `sm`. The container styles the icon color via inherited
-`text-[var(--color-text-tertiary)]`.
-
-### StepFlow Component
-
-Minimal stepped-flow chrome — a step rail + content slot + pinned footer
-action bar. Deliberately "dumb": the parent owns the active index, per-step
-validation (gate your own Next button), and the step content. StepFlow only
-renders the rail, the current step's body, and the footer.
-
-```tsx
-import { StepFlow } from "@/components/ui";
-
-<StepFlow
-  steps={[
-    { key: "assemble", label: "Assemble" },
-    { key: "review", label: "Review", description: "Check the rollup" },
-    { key: "submit", label: "Submit" },
-  ]}
-  current={step}              // zero-based active index
-  furthest={furthest}         // visited steps (index ≤ this) are clickable
-  onNavigate={setStep}        // omit to make the rail display-only
-  orientation="horizontal"    // horizontal (default) | vertical
-  footer={/* Back / Next / Submit action row */}
->
-  {/* the active step's content */}
-</StepFlow>
-```
-
-**Orientations:**
-
-| Orientation | Use for |
-|---|---|
-| `horizontal` (default) | Numbered rail across the top — full-width routes (the removal Review flow) |
-| `vertical` | Compact rail down the side; `description` shows under each label — narrow surfaces (the GHG statement create drawer) |
-
-**Navigation.** Visited steps (index ≤ `furthest`, which defaults to
-`current`) are clickable when `onNavigate` is given, so an operator can jump
-back without losing progress; omit `onNavigate` for a display-only rail.
-Steps render `done` (✓) / `active` / `upcoming` states and carry the
-`--clr-pink` certification accent. StepFlow never validates — the parent
-gates forward progress by disabling its own Next button.
-
-### Canonical Page Shell
-
-The single anatomy for every routed page — list pages, rollup pages (Energy),
-and detail pages alike. Reference implementations: `facility-list.tsx`,
-`reactor-list.tsx`, `order-list.tsx`. **Any page that deviates from this shell
-is a bug** (this is how the Energy page drifted: bare-text empty state,
-icon-less KPI cards, off-canon grid breakpoints).
+## Canonical Page Shell
+
+The single anatomy for every routed page — list, rollup, and detail alike.
+Reference implementations: `facility-list.tsx`, `reactor-list.tsx`,
+`order-list.tsx`. **A main return that deviates from this shell is a bug**
+(the early-return exceptions below are not deviations).
+
+Routes themselves are 5–10 line server wrappers — `src/app/(app)/orders/page.tsx`
+renders `src/components/orders/order-list.tsx`. The shell and all state live in
+that `"use client"` component, **not** in `page.tsx`. Detail routes usually
+redirect into the list's side sheet (`production-runs/[id]/page.tsx`); genuine
+detail pages follow `credit-batches/[id]/page.tsx` — `requireOrgContext` → uuid
+`safeParse` → `notFound()` → canonical `?facility=` redirect, plus a sibling
+`not-found.tsx`.
 
 ```tsx
 <div className="container-max page-shell">
@@ -1303,935 +292,108 @@ icon-less KPI cards, off-canon grid breakpoints).
 
   {/* 2. KPI strip — StatCards, every card carries a 24px Phosphor icon */}
   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-24">
-    <StatCard title="…" value={…} icon={<Package size={24} weight="bold" />} description="…" isLoading={…} />
+    <StatCard title="…" value={…} icon={<PackageIcon size={24} weight="bold" />} … />
   </div>
 
   {/* 3. Content — DataTable (framed panel) / card grid / panels */}
-  <DataTable … emptyMessage={<EmptyState padding="md" icon={…} title="…" description="…" action={…} />} />
+  <DataTable … emptyMessage={<EmptyState padding="md" … />} />
 </div>
 ```
 
-Rules:
+- The **main return** is always `container-max page-shell` — **no custom page
+  padding.** Two sanctioned exceptions, both early returns before it: the
+  no-facility state (above) and the query-error state, which is
+  `<div className="container-max py-32"><ServerError … /></div>`
+  (`ServerError` lives in `@/components/forms`, not `ui/`).
+- `page-shell` (defined in `globals.css`) is the flex-column vertical rhythm
+  and scales gap + vertical padding responsively (20px mobile → 24px ≥768px →
+  32px ≥1024px), so pages don't carry a fixed 32px gap on phones.
+- KPI strips: `gap-24` grid, `md:grid-cols-2` with `lg:grid-cols-3` (3 cards)
+  or `lg:grid-cols-4` (4 cards).
+- Tables/panels never sit flush on the warm field — use the `--panel-*` recipe.
+- Side sheets: header title = entity code (or `Create X` in create mode — **no
+  filler subtitle in create mode**); view/edit subtitle = the identifying
+  secondary. Sections use `FormSection` / `DetailSection` — see
+  [forms.md](./forms.md). The panel is `w-full` below `sm`, then locks to its
+  size token. `DetailRow` pairs stack below `sm`, side-by-side at `sm`+.
 
-- Container is always `container-max page-shell` — no custom page padding
-  (Chain of Custody's deviation was fixed in Phase 2). `page-shell` is the
-  flex-column vertical rhythm (`globals.css`): it replaces the old literal
-  `py-32 flex flex-col gap-32` and scales the section gap + vertical padding
-  responsively — **20px mobile → 24px tablet (≥768px) → 32px desktop (≥1024px)**
-  — so pages don't carry a fixed 32px gap on small screens.
-- KPI strips: `gap-24` grid, `md:grid-cols-2 lg:grid-cols-3` (3 cards) or
-  `lg:grid-cols-4` (4 cards). StatCards always have an icon.
-- Empty, "select a facility", and filtered-empty states use `EmptyState` —
-  never a bare `<p>`. Facility-scoped pages branch the copy:
-  `title={facilityId ? "No X yet" : "Select a facility"}`.
-- In-page section headings (rollup/detail pages) are `title-heading-3`,
-  sentence case (e.g. "Health check", "Per-stage submission preview").
-- Tables/panels never sit flush on the warm field — panel recipe tokens
-  (`--panel-*`, see Hairline Hierarchy & Panel Recipe).
-- Side sheets: header title = entity code (or `Create X` in create mode —
-  **no filler subtitle in create mode**); view/edit subtitle = identifying
-  secondary (name or date). Sections inside sheets use `FormSection`
-  (forms) / `DetailSection` (read-only) — see `docs/forms.md`. The panel is
-  `w-full` below `sm` (full-screen on phones), then locks to its size token
-  (`narrow`/`default`/`wide`/`full`) at `sm`+. Read-only `DetailRow` pairs
-  stack to one column below `sm` and sit side-by-side at `sm`+ so long values
-  (codes, names) get the full width on a phone instead of a wrapping
-  half-column.
+**The one sanctioned exception is the Dashboard**: it keeps the container/gap
+shell but opens with a display headline ("Dashboard" as `title-heading-2` under
+a mono facility eyebrow) instead of `PageHeader`, its KPI strip is the 4-cell
+**HeroKpiBand** (one ink-bordered strip, not iconed StatCards), and its hero is
+the isometric traceability scene (`components/dashboard/flow-hero*`). No other
+page gets a display headline.
 
-**The one sanctioned exception is the Dashboard** (visual design plan,
-Phase 5): it keeps the container/gap shell but opens with the mock's display
-headline (`title-heading-1` + `title-heading-1-thin` span under a mono
-eyebrow) instead of `PageHeader`, its 5-card KPI strip is `xl:grid-cols-5`,
-and those cards carry **sparklines instead of icons** (`StatCard`'s
-`sparkline` slot). No other page gets a display headline.
+### List-page idiom — copy `order-list.tsx:120-349`
 
-### PageHeader Component
+Fifteen list components share one shape. Copy it rather than re-deriving:
 
-The canonical list-page shell header (visual design plan, Phase 2). Every
-routed list page opens with: mono uppercase **area eyebrow** → `title-heading-2`
-title → one-line subtitle → actions slot. The eyebrow names the sidebar nav
-area and is tinted with that area's accent ink (contrast-safe on light).
-
-```tsx
-import { PageHeader } from "@/components/ui";
-
-<PageHeader
-  area="distribution"   // production | infrastructure | distribution | verification | certification
-  title="Orders"
-  subtitle="Customer orders for biochar products"
-  actions={<Button variant="primary" onClick={openCreate}><Plus size={20} weight="bold" />New Order</Button>}
-/>
-```
-
-- `area` sets both the eyebrow text and its ink (`--acc-prod-ink` /
-  `--acc-infra-ink` / `--acc-dist-ink`); `eyebrow` overrides the text.
-- Omit `area` for pages outside the nav groups (Chain of Custody) — no eyebrow.
-- **Every list page gets a subtitle** — a single descriptive line, sentence case.
-
-### StatCard Component (KPI card)
-
-The one KPI card — `@/components/ui/stat-card` (moved from
-`components/dashboard/`). White `--paper` panel with a hairline border on the
-warm page field; gray-filled cards are retired. Trend badges sit on the
-`--st-*` status ramp. An optional `sparkline` slot takes any React node
-(renders full-width under the value row) so the same card builds the
-dashboard KPI strip.
-
-```tsx
-import { StatCard } from "@/components/ui/stat-card";
-
-<StatCard title="Total Orders" value={totalOrders} icon={<Package size={24} weight="bold" />}
-  description="All orders" isLoading={isLoading} />
-<StatCard title="CO2e Stored" value="1,204 t" trend="up" trendValue="+8%" trendLabel="vs last period"
-  sparkline={<MiniSparkline data={series} />} />
-```
-
-KPI strips use `gap-24` grids (`md:grid-cols-2 lg:grid-cols-3` or `-4`).
-
-### DropdownMenu & RowActionsMenu
-
-`DropdownMenu` (`@/components/ui/dropdown-menu`) is the light overflow menu
-primitive on Base UI Menu — white `--paper` popup, square corners, `z-[60]`
-(above slide-overs). `RowActionsMenu` composes it into **the single
-row-action pattern** for table and card lists: a quiet ⋮ icon button per row,
-menu carrying the explicit verbs. Inline Edit/Delete button pairs and
-always-on red outlines in rows are retired.
-
-```tsx
-import { RowActionsMenu } from "@/components/ui";
-
-// in a DataTable actions column
-<div className="flex items-center justify-end">
-  <RowActionsMenu
-    label={`Actions for ${row.original.code}`}
-    actions={[
-      { label: "Open details", href: `/customers/${row.original.id}` }, // optional navigation item
-      { label: "Edit", onSelect: () => onEdit(row.original) },
-      { label: "Delete", destructive: true, onSelect: () => onDelete(row.original.id) },
-    ]}
-  />
-</div>
-```
-
-- **Row click opens the detail side sheet** everywhere; the menu holds the
-  verbs. Explicit "View" buttons are retired (detail routes become an
-  "Open details" menu item).
-- `destructive: true` for irreversible actions (red text, red-tint highlight).
-- The wrapper stops propagation so menu clicks never trigger the row click.
-
-### Side-sheet mounting rule
-
-`EntitySideSheet` must be **always mounted with a controlled `open` prop** —
-never conditionally rendered:
-
-```tsx
-// ✅ animates in and out
-<EntitySideSheet open={!!sideSheet} onOpenChange={(o) => !o && closeSideSheet()}
-  mode={sideSheet?.mode ?? "create"} … />
-
-// ❌ skips the slide animation entirely (mounts already-open, unmounts instantly)
-{sideSheet && <EntitySideSheet open … />}
-```
-
-Derive title/subtitle/sections/form props with optional chaining + fallbacks
-(see `order-list.tsx` for the reference shape), and keep the form's
-`key={entity?.id ?? "create"}` reset.
-
-### Component Guidelines
-
-**When to Use Button:**
-- Primary actions (CTAs, form submissions)
-- Secondary actions (cancel, back)
-- Icon-only actions (close, menu, like)
-- Navigation links styled as buttons
-
-**When to Use Card:**
-- Content previews (blog posts, projects, products)
-- Feature highlights
-- Grouped information
-- Grid/list items
-- Interactive navigation elements
-
-**Icons:**
-- Use `@phosphor-icons/react` for all icons
-- Standard sizes: 16px (small), 20px (default), 24px (medium), 32px (large)
-- Always use `weight="bold"` for consistency
-- Provide `aria-label` for icon-only buttons
-
-**See Also:**
-- Component README: `/src/components/ui/README.md`
-- Button examples: `/src/components/ui/Button/examples.tsx`
-- Card examples: `/src/components/ui/Card/examples.tsx`
+- **State:** a single `sideSheet: { entity, mode } | null` with
+  `openCreate/openView/openEdit/closeSideSheet` — not separate
+  `isCreateOpen`/`editingX`/`viewingX` flags, which don't compose with
+  `onModeChange`. Plus `searchQuery`, per-column filters, `currentPage`/
+  `pageSize`, `hasActiveFilters`, `clearFilters`.
+- **Loading is prop-driven.** There are **zero** route `loading.tsx` files —
+  pass `isLoading` to `DataTable` and each `StatCard`; nested tables use
+  `LoadingSkeleton`. A page-level spinner flashes the whole shell.
+- **Mutations:** `toast.success(...)` on success; **failures go to local error
+  state rendered as `<ServerError>` inside the sheet**, which stays open.
+  `toast.error` is for non-form actions only — a form error in a toast lands
+  far from the field that caused it.
+- **Destructive confirm** is `DeleteConfirmDialog`
+  (`@/components/ui/delete-confirm-dialog`), driven by a `deletingXId` state.
+  Never hand-roll a `Modal` for this.
+- **Toolbar controls are deliberately raw**: a hand-rolled `h-40` search
+  `<input>` and plain `<select>`s, both needing `aria-label` — not `Input` or a
+  Base UI Select. `<DataTable.Toolbar>` / `<DataTable.Pagination>` go in as
+  children; server-paginated lists use `manualPagination` + `pageCount` +
+  `pageIndex`.
+- Call `useOpenCreateIntent(openCreate)` on any list with a create sheet — it
+  powers `?create=true` deep links from the sidebar's "New X" actions.
 
 ---
 
-## Implementation Notes
+## Entity Card pattern
 
-### CSS Custom Properties
+All biochar entity cards (Facility, Credit Batch, Storage Location,
+Application) are hand-rolled to this shape:
 
-All design tokens are defined as CSS custom properties in the `:root` selector and can be used throughout the codebase:
-
-```css
-.example {
-  color: var(--color-text-primary);
-  background: var(--color-background-light);
-  border-radius: var(--radius-8);
-  padding: var(--spacing-16);
-}
+```tsx
+<article
+  className="flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] transition-colors hover:border-[var(--color-border-primary)] cursor-pointer"
+  onClick={() => onView(entity)}
+>
+  <div className="flex flex-1 flex-col gap-16 p-20">
+    {/* code badge in the area accent + secondary info */}
+    {/* <h3 className="title-heading-3"> title */}
+    {/* <div className="grid grid-cols-3 gap-12"> metrics */}
+  </div>
+  <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-20 py-12">
+    <span className="body-caption text-[var(--color-text-tertiary)]">{footer}</span>
+    <RowActionsMenu label={`Actions for ${entity.code}`} actions={[…]} />
+  </div>
+</article>
 ```
 
-### Tailwind Integration
+Rules: no border-radius · `border-secondary` default, `border-primary` on hover
+· body `p-20`, footer `px-20 py-12` · 3-column metric grids are
+`grid grid-cols-3 gap-12` · metric labels `body-caption`, values
+`title-heading-3` · code badges use the area accent · actions go through
+`RowActionsMenu`.
 
-The application uses **Tailwind CSS v4** with a custom 1px spacing scale.
-
-**Key Configuration:**
-1.  **Reset Defaults:** Default Tailwind spacing and radius scales are reset to `initial` to prevent mix-ups.
-2.  **Theme Block:** Configuration is defined in the `@theme` CSS block in `globals.css`.
-3.  **1px Scale:** `space-y-16` equals `16px` (not `64px`).
-
-```css
-@theme inline {
-  /* Reset defaults to avoid confusion */
-  --spacing-*: initial;
-  --radius-*: initial;
-
-  /* Spacing Scale (1 unit = 1px) */
-  --spacing-1: 1px;
-  --spacing-4: 4px;
-  /* ... */
-  --spacing-32: 32px;
-}
-```
+Other fixed spacings: auth-page card padding `p-32` · label→input `mb-6` ·
+header→content `mb-32`.
 
 ---
 
-## Component Patterns & Guidelines
+## Forms
 
-Based on Maji Studio's existing components, these patterns ensure consistency across the application.
+Owned entirely by [forms.md](./forms.md) — react-hook-form + Zod resolver,
+`FormSection` / `DetailSection`, the `space-y-20` (side sheet) and `space-y-24`
+(full page) rhythm, and the `@/schemas/helpers` numeric helpers. Read it before
+any form or schema work; nothing about forms is duplicated here.
 
-### Repeatable Patterns
+## Naming, file structure, React rules
 
-#### Responsive Padding Pattern
-Consistent responsive padding used across containers:
-```tsx
-// Standard container padding progression
-mobile: var(--spacing-24)    // 24px
-sm: var(--spacing-32)        // 32px
-md: var(--spacing-48)        // 48px
-lg: var(--spacing-64)        // 64px
-xl: var(--spacing-96)        // 96px
-
-// Implementation
-className="px-6 md:px-10 lg:px-20"
-// Should be:
-className="px-[var(--spacing-24)] sm:px-[var(--spacing-32)] md:px-[var(--spacing-48)] lg:px-[var(--spacing-64)] xl:px-[var(--spacing-96)]"
-```
-
-#### Responsive Gap Pattern
-Standard gap progression for flex/grid containers:
-```tsx
-// Small gaps (between related items)
-gap-xs:  16px → 32px    (mobile → 2xl)
-gap-s:   16px → 40px
-gap-m:   24px → 48px
-
-// Large gaps (between sections)
-gap-l:   32px → 80px
-gap-xl:  48px → 160px
-gap-2xl: 64px → 256px
-```
-
-#### Border Pattern
-Consistent border styling across components:
-```tsx
-// Default border (buttons, cards)
-border-width: 1px
-border-color: var(--color-border-primary)
-
-// Emphasized border (cards, media)
-border-width: 1.5px
-border-color: var(--color-border-tertiary) or var(--color-white-100)
-
-// Subtle dividers
-border-width: 1px
-border-color: var(--color-white-10) or var(--color-border-tertiary)
-```
-
-#### Interactive State Pattern
-Standard state progression for interactive elements:
-```tsx
-// Text/Icon color progression
-default: var(--color-text-primary)
-secondary: var(--color-text-secondary)
-hover: var(--color-text-primary)
-
-// Border progression
-default: var(--color-border-tertiary)
-hover: var(--color-border-primary)
-active: var(--color-border-primary)
-
-// Background progression
-default: transparent
-hover: var(--color-surface-medium)
-active: var(--color-surface-light)
-
-// Opacity for disabled/inactive
-opacity: 0.4 (40%)
-```
-
-#### Aspect Ratio Pattern
-Common aspect ratios across media:
-```tsx
-// Square (project cards, images, profile pictures)
-aspect-square (1:1)
-
-// Square buttons/icons
-aspect-square with p-0
-```
-
-#### Icon Sizing Pattern
-Consistent icon dimensions:
-```tsx
-// Small icons (in buttons)
-size: 20px
-
-// Medium icons (standalone)
-size: 24px
-
-// Large icons (in cards)
-size: 32px
-
-// Feature icons (in value prop cards)
-size: 32px
-container: 68x68px with border
-```
-
-#### Overlay Pattern
-Dark overlay for image cards with content:
-```tsx
-// Standard overlay
-background: var(--clr-dark-purple-40)
-color: var(--color-white-100)
-padding: var(--spacing-24)
-gap: var(--spacing-24)
-
-// Transition
-transition-property: opacity
-transition-duration: 300ms
-opacity-states: 0 (hidden) → 1 (visible on hover/focus)
-```
-
-#### Two-Column Responsive Pattern
-Standard two-column layout that stacks on mobile:
-```tsx
-// Container
-flex flex-col lg:flex-row
-gap-l lg:gap-columns
-
-// Columns
-lg:w-1/2
-
-// Content spacing
-lg:px-20 (80px internal padding)
-```
-
-#### Transition Duration Pattern
-Consistent timing for animations:
-```tsx
-// Standard transitions (color, background, border)
-duration-300 (300ms)
-
-// Smooth content transitions (opacity, position)
-duration-500 (500ms)
-```
-
-#### Responsive Breakpoint Usage Pattern
-Standard breakpoint application order:
-```tsx
-// Mobile-first approach
-className="base-value md:tablet-value lg:desktop-value xl:large-desktop-value 2xl:extra-large-value"
-
-// Common patterns:
-// Text sizing
-text-xs md:text-xs lg:text-s 2xl:text-s
-
-// Padding progression
-px-6 md:px-10 lg:px-20
-// translates to:
-px-[var(--spacing-24)] md:px-[var(--spacing-40)] lg:px-[var(--spacing-80)]
-
-// Layout changes
-flex-col lg:flex-row
-```
-
-#### Flex Layout Patterns
-```tsx
-// Vertical stack with gap
-flex flex-col gap-{size}
-
-// Horizontal row with gap
-flex flex-row gap-{size}
-
-// Horizontal icon list (social media, actions)
-flex space-x-[var(--spacing-16)]
-
-// Space between
-flex justify-between
-
-// Center alignment
-flex items-center justify-center
-
-// Responsive direction change
-flex flex-col lg:flex-row
-
-// Grid layout (for card grids)
-grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-m
-```
-
-#### Grid-like Flex Pattern (Slider)
-```tsx
-// Container
-flex
-
-// Items with percentage-based flex-basis
-flex-[0_0_100%]           // Full width (mobile)
-md:flex-[0_0_50%]         // Half width (tablet)
-xl:flex-[0_0_33.333%]     // Third width (desktop)
-```
-
-#### Conditional Rendering Pattern
-```tsx
-// Optional content
-{subtitle && <span className="title-chapter-title">{subtitle}</span>}
-
-// Type guard
-{isMedia(image) && <MediaComponent media={image} />}
-
-// Responsive visibility
-<div className="hidden md:flex">
-  {/* Desktop-only content */}
-</div>
-```
-
-#### Dynamic Class Pattern
-```tsx
-// Using clsx/cn for conditional classes
-import { cn } from '@/lib/utils'
-
-className={cn(
-  'base-classes',
-  'more-base-classes',
-  condition && 'conditional-class',
-  variant === 'primary' && 'variant-class'
-)}
-
-// Opacity states
-className={`transition-opacity duration-300 ${
-  isDisabled ? 'opacity-40' : 'opacity-100'
-}`}
-```
-
-### Button Components
-
-**Structure:**
-```tsx
-// Primary button sizing
-height: 48px (default) | 60px (xl breakpoint)
-padding-x: var(--spacing-16) | var(--spacing-24) (xl)
-gap: var(--spacing-12)
-
-// Small button sizing
-height: 32px
-padding-x: var(--spacing-12)
-gap: var(--spacing-8)
-
-// Square/Icon buttons
-aspect-ratio: 1/1
-padding: 0
-```
-
-**Color tokens:**
-- Text: `var(--color-text-primary)`
-- Border default: `var(--color-border-primary)`
-- Border weak: `var(--color-border-tertiary)`
-- Hover background: `var(--color-surface-medium)`
-- Active background: `var(--color-surface-light)`
-
-**Typography:**
-- Use `.label-button` class (14px, medium weight, 100% line-height, 2% letter-spacing, uppercase)
-
-**Implementation pattern:**
-```tsx
-// Using class-variance-authority (CVA)
-const buttonVariants = cva(
-  'inline-flex whitespace-nowrap items-center justify-center label-button transition-colors duration-300',
-  {
-    variants: {
-      variant: { /* color variants */ },
-      size: { /* size variants */ },
-      width: { /* width variants */ },
-    }
-  }
-)
-```
-
-### Card Components
-
-**Border pattern:**
-```css
-border-width: 1.5px;
-border-color: var(--color-border-tertiary);
-```
-
-**Padding:**
-- Default: `var(--spacing-40)` (40px)
-- Responsive: Adjust based on viewport
-
-**Internal spacing:**
-- Gap between icon and title: `var(--spacing-32)` (32px)
-- Use semantic gap utilities: `gap-s`, `gap-m`, `gap-l`
-
-### Content Sections
-
-**Two-column layouts:**
-```tsx
-// Container gap
-gap-l lg:gap-columns
-
-// Content column internal spacing
-gap-m (24-48px responsive)
-
-// Column width
-lg:w-1/2
-lg:px-20 (80px padding for content spacing)
-```
-
-**Typography hierarchy:**
-1. Subtitle: `.title-chapter-title` (uppercase, monospace, 14px)
-2. Title: `.title-heading-2` (32px base, responsive)
-3. Description: `.body-large` (18px base, responsive)
-
-### Footer & Navigation
-
-**Container spacing:**
-```tsx
-// Outer padding
-padding: var(--spacing-48) var(--spacing-24)
-md: var(--spacing-64) var(--spacing-40)
-lg: var(--spacing-80)
-
-// Internal gaps
-gap: var(--spacing-48) lg:var(--spacing-80)
-```
-
-**Navigation lists:**
-- Gap between items: `var(--spacing-24)` (24px)
-- Min-height for touch targets: 32px
-
-**Dividers:**
-```css
-border: 1px solid var(--color-white-10);
-```
-
-### Project Cards & Media
-
-**Overlay pattern:**
-```tsx
-// Background overlay
-background: var(--clr-dark-purple-40)
-
-// Padding
-padding: var(--spacing-24)
-
-// Internal gap
-gap: var(--spacing-24)
-```
-
-**Border on images:**
-```css
-border-width: 1.5px;
-border-color: var(--color-white-100);
-```
-
-### Language Selector / Toggle Groups
-
-**Item sizing:**
-```tsx
-height: 48px (h-12)
-padding-x: var(--spacing-16) md:var(--spacing-24)
-```
-
-**States:**
-- Active: `border-color: var(--color-border-primary)`
-- Inactive: `border-color: var(--color-border-tertiary)`, `color: var(--color-text-secondary)`
-- Hover (inactive): `border-color: var(--color-border-primary)`, `color: var(--color-text-primary)`
-
-### Testimonials & Quotes
-
-**Layout spacing:**
-```tsx
-// Container gap
-gap-l lg:gap-xl
-
-// Content column gap
-gap-s
-```
-
-**Typography:**
-- Quote: `.body-quote` (italic, thin weight, 24px base, responsive)
-- Attribution: `.body-large`
-
-**Image sizing:**
-```tsx
-// Person image (circular)
-width/height: 160px (base) | 200px (md) | 240px (lg)
-border-radius: var(--radius-full)
-```
-
-### Sliders & Carousels
-
-**Container spacing:**
-```tsx
-// Wrapper gap
-gap: var(--spacing-32)
-
-// Slide spacing
-padding-right: var(--spacing-16) md:var(--spacing-24) xl:var(--spacing-48)
-```
-
-**Control spacing:**
-```tsx
-// Dot indicators gap
-gap: var(--spacing-16)
-```
-
-### Animated Elements
-
-**Headline animation:**
-- Container height: Fixed based on largest headline to prevent layout shift
-- Typography: Use heading classes (`title-heading-1`, etc.) or responsive text sizes
-- Animation duration: 500ms for smooth transitions
-
-### Component Composition Patterns
-
-#### Content Hierarchy Pattern
-Standard vertical spacing for content blocks:
-```tsx
-<div className="flex flex-col gap-m">
-  <span className="title-chapter-title">{subtitle}</span>
-  <h2 className="title-heading-2">{title}</h2>
-  <p className="body-large">{description}</p>
-</div>
-```
-
-**Spacing rules:**
-- Chapter title to heading: `gap-m` (24-48px)
-- Heading to body: `gap-m` (24-48px)
-- Body paragraphs: `gap-s` (16-40px)
-
-#### Media + Content Pattern
-Standard pattern for image with text content:
-```tsx
-<div className="flex flex-col lg:flex-row gap-l lg:gap-columns">
-  {/* Image column */}
-  <div className="lg:w-1/2">
-    <div className="relative aspect-square">
-      {/* Media component */}
-    </div>
-  </div>
-
-  {/* Content column */}
-  <div className="flex flex-col gap-m justify-center lg:w-1/2 lg:px-20">
-    {/* Content hierarchy */}
-  </div>
-</div>
-```
-
-#### Navigation List Pattern
-```tsx
-<nav>
-  <ul className="flex flex-col gap-[var(--spacing-24)]">
-    {items.map((item) => (
-      <li key={item.id}>
-        <Link className="min-h-8" href={item.href}>
-          {item.label}
-        </Link>
-      </li>
-    ))}
-  </ul>
-</nav>
-```
-
-**Touch target:** Minimum `min-h-8` (32px) for accessibility
-
-#### Slider/Carousel Pattern
-```tsx
-// Container
-<div className="flex flex-col gap-[var(--spacing-32)]">
-
-  {/* Embla viewport */}
-  <div ref={emblaRef}>
-    <div className="flex">
-      {items.map((item, index) => (
-        <div className="flex-[0_0_100%] md:flex-[0_0_50%] xl:flex-[0_0_33.333%] pr-[var(--spacing-16)] md:pr-[var(--spacing-24)] xl:pr-[var(--spacing-48)]">
-          {/* Slide content */}
-        </div>
-      ))}
-    </div>
-  </div>
-
-  {/* Controls */}
-  <div className="flex justify-between">
-    <div className="flex gap-[var(--spacing-16)]">
-      {/* Dot indicators */}
-    </div>
-    <div className="hidden md:flex">
-      {/* Prev/Next buttons */}
-    </div>
-  </div>
-</div>
-```
-
-**Slide widths:**
-- Mobile: 100%
-- Tablet (md): 50%
-- Desktop (xl): 33.333%
-
-**Slide spacing:**
-- Mobile: 16px right padding
-- Tablet: 24px right padding
-- Desktop: 48px right padding
-
-### Accessibility Patterns
-
-#### Touch Targets
-Minimum sizes for interactive elements:
-```tsx
-// Links in navigation
-min-h-8 (32px minimum)
-
-// Buttons
-height: 48px (default) | 32px (small) - both meet minimum
-
-// Icon buttons
-aspect-square with min 32px dimension
-```
-
-#### Focus States
-```tsx
-// Standard focus ring
-focus:outline-none focus:ring-2
-
-// Transition for smooth appearance
-transition (includes focus states)
-```
-
-#### ARIA Labels
-```tsx
-// Icon buttons
-aria-label="Descriptive action"
-
-// Carousel controls
-aria-label="Previous slide"
-aria-disabled={isDisabled}
-aria-current={isActive ? 'true' : 'false'}
-
-// Language selector
-aria-label="Language selector"
-aria-current={isActive ? 'page' : undefined}
-```
-
-#### Semantic HTML
-- Use `<nav>` for navigation sections
-- Use `<blockquote>` for testimonials/quotes
-- Use proper heading hierarchy (H1 → H2 → H3 → H4)
-
----
-
-## Design Token Usage Rules
-
-### When to Use Design Tokens
-
-**Always use tokens for:**
-1. **Spacing:** Use semantic utilities (`gap-xs`, `gap-s`, `gap-m`, etc.) or CSS variables (`var(--spacing-16)`)
-2. **Colors:** Always use CSS variables (`var(--color-text-primary)`, `var(--clr-dark-purple)`)
-3. **Typography:** Use design system classes (`.title-heading-2`, `.body-large`, etc.)
-4. **Border radius:** Use tokens (`var(--radius-8)`, `var(--radius-12)`, etc.)
-
-**Avoid:**
-- Spacing values not in the scale (e.g., `gap-3`, `gap-5`, `gap-7` — these don't exist)
-- Direct color values or custom color names without tokens
-- Inline text sizing (e.g., `text-4xl`) - use typography classes instead
-- Magic numbers without semantic meaning
-
-### Migration Pattern
-
-**Before (default Tailwind 4px scale — NOT our system):**
-```tsx
-// ❌ These assume default Tailwind where gap-6 = 24px — WRONG in our 1px scale
-className="gap-6 p-10 text-textprimary border-borderprimary"
-```
-
-**After (1px scale — direct values work):**
-```tsx
-// ✅ Direct Tailwind classes: gap-24 = 24px, p-40 = 40px
-className="gap-24 p-40 text-[var(--color-text-primary)] border-[var(--color-border-primary)]"
-```
-
-Or use semantic utilities where available:
-```tsx
-className="gap-m p-40 text-[var(--color-text-primary)] border-[var(--color-border-primary)]"
-```
-
-**Note:** With our 1px spacing scale, `gap-24` and `gap-[var(--spacing-24)]` are identical. Prefer the shorter direct form.
-
-### Common Token Mappings
-
-**Spacing (1px scale — use values directly):**
-- `gap-4` = 4px, `gap-8` = 8px, `gap-12` = 12px
-- `gap-16` = 16px, `gap-24` = 24px, `gap-32` = 32px
-- `gap-48` = 48px, `gap-64` = 64px
-- `p-16` = 16px, `p-24` = 24px, `p-32` = 32px, `p-40` = 40px
-- `px-16` = 16px, `px-24` = 24px
-
-**Important:** Do NOT use default Tailwind mental model. In our system `p-4` = **4px** (not 16px). If you want 16px padding, use `p-16`.
-
-**Color conversions:**
-- `textprimary` → `text-[var(--color-text-primary)]`
-- `textsecondary` → `text-[var(--color-text-secondary)]`
-- `borderprimary` → `border-[var(--color-border-primary)]`
-- `bordertertiary` → `border-[var(--color-border-tertiary)]`
-- `surfacestrong` → `bg-[var(--color-surface-strong)]`
-- `surfaceweak`/`surfacelight` → `bg-[var(--color-surface-light)]`
-- `darkPurple` → `bg-[var(--clr-dark-purple)]`
-- `darkPurple-40` → `bg-[var(--clr-dark-purple-40)]`
-
-### Utility Class Hierarchy
-
-**Priority order (from most to least preferred):**
-
-1. **Design system typography classes** (highest priority)
-   ```tsx
-   className="title-heading-2"
-   className="body-large"
-   className="label-button"
-   ```
-
-2. **Semantic spacing utilities**
-   ```tsx
-   className="gap-m"
-   className="pt-l"
-   className="mb-xl"
-   ```
-
-3. **Direct Tailwind spacing classes (1px scale) or CSS variable bracket notation**
-   ```tsx
-   // Spacing: direct classes preferred (1px scale makes them equivalent)
-   className="px-24"        // = 24px (same as px-[var(--spacing-24)])
-   className="gap-16"       // = 16px
-   className="p-32"         // = 32px
-   // Colors/radius: use bracket notation
-   className="text-[var(--color-text-primary)]"
-   className="rounded-[var(--radius-8)]"
-   ```
-
-4. **Raw Tailwind utilities** (only when no token exists)
-   ```tsx
-   className="flex items-center"
-   className="w-1/2"
-   className="aspect-square"
-   ```
-
-5. **Inline styles** (avoid unless dynamic values required)
-   ```tsx
-   style={{ objectFit: 'cover' }}
-   ```
-
-### Naming Conventions
-
-**Component files:**
-- Use index.tsx within component folders
-- Export named components: `export default function ComponentName()`
-
-**Props:**
-- Use descriptive, semantic names
-- Boolean props: `is*`, `has*`, `should*` (e.g., `isActive`, `imageOnLeft`)
-- Optional props: Mark with `?` in TypeScript
-
-**CSS classes:**
-- Use kebab-case for custom classes
-- Prefer design system classes over custom classes
-- Group Tailwind classes logically: layout → spacing → typography → colors → effects
-
-**Example class ordering:**
-```tsx
-className="
-  flex flex-col lg:flex-row          // Layout
-  gap-m lg:gap-l                      // Spacing
-  title-heading-2                     // Typography
-  text-[var(--color-text-primary)]   // Colors
-  transition-opacity duration-300     // Effects
-"
-```
-
-### Component File Structure Pattern
-
-```tsx
-'use client' // Only if needed (hooks, events)
-
-import * as React from 'react'
-import { /* external dependencies */ } from 'package'
-import { /* internal utilities */ } from '@/lib/utils'
-import { /* types */ } from '@/types'
-
-// Type definitions
-type ComponentProps = {
-  // Required props first
-  title: string
-  // Optional props with ? or null
-  subtitle?: string | null
-}
-
-// Main component
-export default function ComponentName({
-  title,
-  subtitle,
-}: ComponentProps) {
-  // Hooks first
-  // Derived state/calculations
-  // Event handlers
-
-  // Render
-  return (
-    <div className="design-system-classes">
-      {/* Component content */}
-    </div>
-  )
-}
-```
-
-### Best Practices Summary
-
-**DO:**
-- ✓ Use design system typography classes for all text
-- ✓ Use semantic spacing utilities (gap-m, pt-l) when available
-- ✓ Use CSS variables with bracket notation for exact values
-- ✓ Apply mobile-first responsive design
-- ✓ Include proper ARIA labels and semantic HTML
-- ✓ Use min-h-8 (32px) minimum for touch targets
-- ✓ Apply consistent transition durations (300ms or 500ms)
-- ✓ Use type guards for optional/union types
-
-**DON'T:**
-- ✗ Use hardcoded pixel values without tokens
-- ✗ Use inline text sizing (text-4xl) when heading classes exist
-- ✗ Create custom color names without design tokens
-- ✗ Skip accessibility attributes on interactive elements
-- ✗ Use magic numbers without semantic meaning
-- ✗ Mix different spacing systems in same component
-
----
-
-**Version:** 1.0.2
-**Last Updated:** 2026-01-31
-**Maintained by:** Maji Studio
+Owned by [code-style.md](./code-style.md). Note that `ui/` components are
+**named exports over `React.forwardRef`**, not default exports.

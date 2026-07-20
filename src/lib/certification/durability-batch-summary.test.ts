@@ -289,3 +289,164 @@ describe("buildDurabilityBatchSummaries", () => {
     expect(summary.distinctRunDayCount).toBe(3);
   });
 });
+
+// The readiness surface must classify a sampling instant on the facility-LOCAL
+// calendar day, matching the write guard (`assertSampleNotBeforeBatchWindow`)
+// and the submission gate (`isoSamplingDay`) — otherwise the distribution/
+// provenance evidence shown here diverges from what submission accepts (issue
+// #455). Boundary cases across a positive- and a negative-offset facility.
+describe("buildDurabilityBatchSummaries facility-local sampling day", () => {
+  it("resolves the local day for a positive-offset facility (UTC+3)", () => {
+    // Africa/Nairobi (UTC+3): 21:30Z on the 14th is 00:30 local on the 15th.
+    const [summary] = buildDurabilityBatchSummaries([
+      batch({
+        creditBatchId: "cb-a",
+        creditBatchCode: "CB-A",
+        facilityTimezone: "Africa/Nairobi",
+        endDate: "2026-01-31",
+        samples: [
+          sample({
+            id: "s1",
+            sampleCode: "S-A-01",
+            samplingTime: new Date("2026-01-14T21:30:00.000Z"),
+            hToCOrgRatio: 0.3,
+            oToCOrgRatio: 0.04,
+            totalCarbonPercent: 80,
+            organicCarbonPercent: 79,
+          }),
+        ],
+      }),
+    ]);
+
+    // Facility-local day, not the earlier UTC day 2026-01-14.
+    expect(summary.replicates[0].samplingDay).toBe("2026-01-15");
+  });
+
+  it("resolves the local day for a negative-offset facility (UTC-8)", () => {
+    // America/Los_Angeles (UTC-8): 03:30Z on the 15th is 19:30 local on the 14th.
+    const [summary] = buildDurabilityBatchSummaries([
+      batch({
+        creditBatchId: "cb-a",
+        creditBatchCode: "CB-A",
+        facilityTimezone: "America/Los_Angeles",
+        endDate: "2026-01-31",
+        samples: [
+          sample({
+            id: "s1",
+            sampleCode: "S-A-01",
+            samplingTime: new Date("2026-01-15T03:30:00.000Z"),
+            hToCOrgRatio: 0.3,
+            oToCOrgRatio: 0.04,
+            totalCarbonPercent: 80,
+            organicCarbonPercent: 79,
+          }),
+        ],
+      }),
+    ]);
+
+    // Facility-local day, not the later UTC day 2026-01-15.
+    expect(summary.replicates[0].samplingDay).toBe("2026-01-14");
+  });
+
+  it("counts distinct run/day provenance in facility-local days (UTC-8)", () => {
+    // Two run-a samples share the UTC day 2026-01-15 but fall on different LA
+    // local days — the local classification yields 2 distinct keys, where a UTC
+    // reading would collapse them to 1.
+    const [summary] = buildDurabilityBatchSummaries([
+      batch({
+        creditBatchId: "cb-a",
+        creditBatchCode: "CB-A",
+        facilityTimezone: "America/Los_Angeles",
+        endDate: "2026-01-31",
+        samples: [
+          sample({
+            id: "s1",
+            sampleCode: "S-A-01",
+            productionRunId: "run-a",
+            samplingTime: new Date("2026-01-15T03:30:00.000Z"), // LA 2026-01-14
+            hToCOrgRatio: 0.3,
+            oToCOrgRatio: 0.04,
+            totalCarbonPercent: 80,
+            organicCarbonPercent: 79,
+          }),
+          sample({
+            id: "s2",
+            sampleCode: "S-A-02",
+            productionRunId: "run-a",
+            samplingTime: new Date("2026-01-15T09:30:00.000Z"), // LA 2026-01-15
+            hToCOrgRatio: 0.31,
+            oToCOrgRatio: 0.05,
+            totalCarbonPercent: 81,
+            organicCarbonPercent: 80,
+          }),
+        ],
+      }),
+    ]);
+
+    expect(summary.distinctRunDayCount).toBe(2);
+  });
+
+  it("resolves offset-bearing string timestamps through the facility branch (UTC-8)", () => {
+    // A raw/string-backed samplingTime must classify on the same facility-local
+    // day as a Date. Two run-a samples share the UTC day 2026-01-15 but fall on
+    // different LA local days — string handling must not slice to the UTC day.
+    const [summary] = buildDurabilityBatchSummaries([
+      batch({
+        creditBatchId: "cb-a",
+        creditBatchCode: "CB-A",
+        facilityTimezone: "America/Los_Angeles",
+        endDate: "2026-01-31",
+        samples: [
+          sample({
+            id: "s1",
+            sampleCode: "S-A-01",
+            productionRunId: "run-a",
+            // LA 2026-01-14, not the UTC-sliced 2026-01-15.
+            samplingTime: "2026-01-15T03:30:00.000Z" as unknown as Date,
+            hToCOrgRatio: 0.3,
+            oToCOrgRatio: 0.04,
+            totalCarbonPercent: 80,
+            organicCarbonPercent: 79,
+          }),
+          sample({
+            id: "s2",
+            sampleCode: "S-A-02",
+            productionRunId: "run-a",
+            samplingTime: "2026-01-15T09:30:00.000Z" as unknown as Date, // LA 2026-01-15
+            hToCOrgRatio: 0.31,
+            oToCOrgRatio: 0.05,
+            totalCarbonPercent: 81,
+            organicCarbonPercent: 80,
+          }),
+        ],
+      }),
+    ]);
+
+    expect(summary.replicates[0].samplingDay).toBe("2026-01-14");
+    expect(summary.distinctRunDayCount).toBe(2);
+  });
+
+  it("keeps a date-only string as its calendar day", () => {
+    const [summary] = buildDurabilityBatchSummaries([
+      batch({
+        creditBatchId: "cb-a",
+        creditBatchCode: "CB-A",
+        facilityTimezone: "America/Los_Angeles",
+        endDate: "2026-01-31",
+        samples: [
+          sample({
+            id: "s1",
+            sampleCode: "S-A-01",
+            samplingTime: "2026-01-15" as unknown as Date,
+            hToCOrgRatio: 0.3,
+            oToCOrgRatio: 0.04,
+            totalCarbonPercent: 80,
+            organicCarbonPercent: 79,
+          }),
+        ],
+      }),
+    ]);
+
+    expect(summary.replicates[0].samplingDay).toBe("2026-01-15");
+  });
+});

@@ -160,7 +160,12 @@ async function createFixture(): Promise<Fixture> {
   const externalProjectId = `prj_boundary_${runId}`;
   const [facility] = await db
     .insert(facilities)
-    .values({ organizationId: TEST_ORG_ID, name: `Boundary Facility ${runId}`, code: `FAC-BD-${runId}` })
+    .values({
+      organizationId: TEST_ORG_ID,
+      name: `Boundary Facility ${runId}`,
+      code: `FAC-BD-${runId}`,
+      durabilityOption: "200_year",
+    })
     .returning({ id: facilities.id });
   createdFacilityIds.push(facility.id);
   await db.insert(certifierProjects).values({
@@ -429,6 +434,7 @@ function makeContext(
       {
         creditBatchId: "cb-bd-1",
         creditBatchCode: "CB-BD-001",
+        facilityTimezone: "UTC",
         productionProcessId: null,
         samplingMethod: "method_a",
         declaredHToCorgRatio: null,

@@ -7,35 +7,107 @@
  */
 
 import { z } from "zod";
-import { PG_INTEGER_MAX } from "./helpers";
+import {
+  optionalNumber,
+  optionalPercent,
+  PG_INTEGER_MAX,
+  RATIO_INPUT_MAX,
+  RATIO_MAX_MESSAGE,
+  requiredNumber,
+} from "./helpers";
 
 // ============================================
 // Constants
 // ============================================
 
-const optionalNumber = z
-  .union([
-    z.number().finite(),
-    z.string().transform((val) => (val === "" ? null : parseFloat(val))),
-    z.null(),
-  ])
-  .optional()
-  .nullable();
+const PERCENT_RANGE_MESSAGE = "Must be 0–100";
+const NON_NEGATIVE_NUMBER_MESSAGE = "Must be a non-negative number";
+const PH_MIN = 0;
+const PH_MAX = 14;
+const PH_RANGE_MESSAGE = `Must be between ${PH_MIN} and ${PH_MAX}`;
+export const CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS = 0.5;
+
+const percentNumber = z
+  .number()
+  .finite()
+  .min(0, PERCENT_RANGE_MESSAGE)
+  .max(100, PERCENT_RANGE_MESSAGE);
+
+const nonNegativeNumber = z
+  .number()
+  .finite()
+  .min(0, NON_NEGATIVE_NUMBER_MESSAGE);
+
+const requiredPercent = requiredNumber("This field is required").pipe(
+  percentNumber,
+);
+
+const optionalNonNegativeNumber = optionalNumber.pipe(
+  nonNegativeNumber.nullable().optional(),
+).optional();
+
+// hToCOrgRatio / oToCOrgRatio are atomic ratios (not 0–1 fractions) backed by
+// the `fraction` DB family (numeric(7,6)) — cap at the column's ceiling so an
+// out-of-scale entry fails inline instead of a raw Postgres 22003 overflow
+// (#400; mirrors the mass-cap approach from #345).
+const nonNegativeRatio = nonNegativeNumber.max(RATIO_INPUT_MAX, RATIO_MAX_MESSAGE);
+
+const optionalNonNegativeRatio = optionalNumber.pipe(
+  nonNegativeRatio.nullable().optional(),
+).optional();
+
+const optionalPercentInput = optionalPercent.optional();
+
+const optionalPh = optionalNumber.pipe(
+  z
+    .number()
+    .min(PH_MIN, PH_RANGE_MESSAGE)
+    .max(PH_MAX, PH_RANGE_MESSAGE)
+    .nullable()
+    .optional(),
+).optional();
 
 const optionalFraction = optionalNumber.refine(
   (value) => value == null || (value >= 0 && value <= 1),
   { message: "Must be between 0 and 1" },
-);
+).optional();
 
-const requiredNumber = z.union([
-  z.number().finite(),
-  z.string().transform((val) => {
-    if (val === "") return undefined;
-    const num = parseFloat(val);
-    if (isNaN(num)) return undefined;
-    return num;
-  }),
-]).refine((val) => val !== undefined, { message: "This field is required" });
+function carbonReconciliationSuperRefine(
+  value: {
+    totalCarbonPercent?: number | null;
+    organicCarbonPercent?: number | null;
+    inorganicCarbonPercent?: number | null;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  if (
+    value.totalCarbonPercent != null &&
+    value.organicCarbonPercent != null &&
+    value.organicCarbonPercent - value.totalCarbonPercent >
+      CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["organicCarbonPercent"],
+      message: `Organic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points`,
+    });
+  }
+
+  if (
+    value.totalCarbonPercent != null &&
+    value.organicCarbonPercent != null &&
+    value.inorganicCarbonPercent != null &&
+    value.organicCarbonPercent + value.inorganicCarbonPercent -
+      value.totalCarbonPercent >
+      CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["inorganicCarbonPercent"],
+      message: `Organic plus inorganic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points`,
+    });
+  }
+}
 
 // ============================================
 // Sample Form Schema (Client-side validation)
@@ -49,8 +121,8 @@ const requiredNumber = z.union([
  * 1. Sample Info — code, samplingTime, credit batch
  * 2. Carbon Analysis — totalCarbonPercent, organicCarbonPercent, inorganicCarbonPercent
  * 3. Elemental — H, N, O, S percentages
- * 4. Proximate — ash, volatile matter, moisture
- * 5. Physical — bulkDensity, pH, surfaceArea
+ * 4. Proximate — ash, moisture
+ * 5. Physical — bulkDensity, pH
  * 6. Stability — hToCOrgRatio (calculated)
  * 7. 1000-Year Durability (conditional) — R₀ reflectance, TGA non-reactive carbon
  */
@@ -84,41 +156,39 @@ export const sampleFormSchema = z
     ]).optional().nullable(),
 
     // Sample weight/volume
-    weightGrams: optionalNumber,
-    volumeMl: optionalNumber,
+    weightGrams: optionalNonNegativeNumber,
+    volumeMl: optionalNonNegativeNumber,
 
     // === Section 2: Carbon Analysis ===
-    totalCarbonPercent: requiredNumber,
-    organicCarbonPercent: requiredNumber,
+    totalCarbonPercent: requiredPercent,
+    organicCarbonPercent: requiredPercent,
     // The 200-year durability blueprint consumes `total_carbon_contents` AND
     // `inorganic_carbon_contents` as separate inputs and derives organic via
     // Eq.2 (Total − Inorganic) itself. Kept optional here (not every COA reports
     // it, and hard-requiring would trap in-flight samples) — the per-batch
     // carbon list derives it as max(0, total − organic) when absent (Phase D),
     // so the registry always receives a value without over-crediting.
-    inorganicCarbonPercent: optionalNumber,
+    inorganicCarbonPercent: optionalPercentInput,
 
     // === Section 3: Elemental ===
-    totalHydrogenPercent: optionalNumber,
-    totalNitrogenPercent: optionalNumber,
-    totalOxygenPercent: optionalNumber,
-    totalSulfurPercent: optionalNumber,
+    totalHydrogenPercent: optionalPercentInput,
+    totalNitrogenPercent: optionalPercentInput,
+    totalOxygenPercent: optionalPercentInput,
+    totalSulfurPercent: optionalPercentInput,
 
     // === Section 4: Proximate ===
-    ashContentPercent: optionalNumber,
-    moistureContentPercent: optionalNumber,
-    volatileMatterPercent: optionalNumber,
+    ashContentPercent: optionalPercentInput,
+    moistureContentPercent: optionalPercentInput,
 
     // === Section 5: Physical ===
-    bulkDensityKgPerM3: optionalNumber,
-    ph: optionalNumber,
-    surfaceAreaM2PerG: optionalNumber,
-    saltContentGPerKg: optionalNumber,
+    bulkDensityKgPerM3: optionalNonNegativeNumber,
+    ph: optionalPh,
+    saltContentGPerKg: optionalNonNegativeNumber,
 
     // === Section 6: Stability ===
     // H:C org ratio - can be calculated from totalHydrogenPercent / organicCarbonPercent
-    hToCOrgRatio: optionalNumber,
-    oToCOrgRatio: optionalNumber,
+    hToCOrgRatio: optionalNonNegativeRatio,
+    oToCOrgRatio: optionalNonNegativeRatio,
 
     // === Section 7: 1000-Year Durability (conditional) ===
     // Not user-selected: the form derives it from the chosen credit batch's
@@ -127,7 +197,7 @@ export const sampleFormSchema = z
     durabilityOption: z.enum(["200_year", "1000_year"]).default("200_year"),
 
     // R₀ reflectance (required for 1000-year)
-    randomReflectanceR0Percent: optionalNumber,
+    randomReflectanceR0Percent: optionalPercentInput,
     // Proportion of the sample's ISO 7404-5 R₀ readings at or above 2%.
     // Stored/submitted as 0–1; the form presents it as a percentage.
     sReflectanceFraction: optionalFraction,
@@ -148,8 +218,8 @@ export const sampleFormSchema = z
     r0HistogramFileUrl: z.string().max(2000).optional().nullable().or(z.literal("")),
 
     // TGA non-reactive carbon (required for 1000-year)
-    reactiveCarbonPercent: optionalNumber,
-    residualCarbonPercent: optionalNumber,
+    reactiveCarbonPercent: optionalPercentInput,
+    residualCarbonPercent: optionalPercentInput,
     tgaAnalysisDate: z.union([
       z.date(),
       z.string().transform((val) => (val ? new Date(val) : null)),
@@ -159,13 +229,15 @@ export const sampleFormSchema = z
 
     // === Nutrient Claims (from sampleConditionSchema) ===
     nutrientClaimEnabled: z.boolean().default(false),
-    phosphorusPercent: optionalNumber,
-    potassiumPercent: optionalNumber,
-    magnesiumPercent: optionalNumber,
-    calciumPercent: optionalNumber,
-    ironPercent: optionalNumber,
+    phosphorusPercent: optionalPercentInput,
+    potassiumPercent: optionalPercentInput,
+    magnesiumPercent: optionalPercentInput,
+    calciumPercent: optionalPercentInput,
+    ironPercent: optionalPercentInput,
   })
   .superRefine((value, ctx) => {
+    carbonReconciliationSuperRefine(value, ctx);
+
     // Conditional validation for 1000-year durability
     if (value.durabilityOption === "1000_year") {
       if (value.randomReflectanceR0Percent == null) {
@@ -256,41 +328,39 @@ export const updateSampleSchema = z.object({
     z.string().transform((val) => (val ? new Date(val) : null)),
     z.null(),
   ]).optional().nullable(),
-  weightGrams: z.number().optional().nullable(),
-  volumeMl: z.number().optional().nullable(),
-  totalCarbonPercent: z.number().optional(),
-  organicCarbonPercent: z.number().optional(),
-  inorganicCarbonPercent: z.number().optional().nullable(),
-  totalHydrogenPercent: z.number().optional().nullable(),
-  totalNitrogenPercent: z.number().optional().nullable(),
-  totalOxygenPercent: z.number().optional().nullable(),
-  totalSulfurPercent: z.number().optional().nullable(),
-  ashContentPercent: z.number().optional().nullable(),
-  moistureContentPercent: z.number().optional().nullable(),
-  volatileMatterPercent: z.number().optional().nullable(),
-  bulkDensityKgPerM3: z.number().optional().nullable(),
-  ph: z.number().optional().nullable(),
-  surfaceAreaM2PerG: z.number().optional().nullable(),
-  saltContentGPerKg: z.number().optional().nullable(),
-  hToCOrgRatio: z.number().optional().nullable(),
-  oToCOrgRatio: z.number().optional().nullable(),
+  weightGrams: nonNegativeNumber.optional().nullable(),
+  volumeMl: nonNegativeNumber.optional().nullable(),
+  totalCarbonPercent: percentNumber.optional(),
+  organicCarbonPercent: percentNumber.optional(),
+  inorganicCarbonPercent: percentNumber.optional().nullable(),
+  totalHydrogenPercent: percentNumber.optional().nullable(),
+  totalNitrogenPercent: percentNumber.optional().nullable(),
+  totalOxygenPercent: percentNumber.optional().nullable(),
+  totalSulfurPercent: percentNumber.optional().nullable(),
+  ashContentPercent: percentNumber.optional().nullable(),
+  moistureContentPercent: percentNumber.optional().nullable(),
+  bulkDensityKgPerM3: nonNegativeNumber.optional().nullable(),
+  ph: z.number().min(PH_MIN, PH_RANGE_MESSAGE).max(PH_MAX, PH_RANGE_MESSAGE).optional().nullable(),
+  saltContentGPerKg: nonNegativeNumber.optional().nullable(),
+  hToCOrgRatio: nonNegativeRatio.optional().nullable(),
+  oToCOrgRatio: nonNegativeRatio.optional().nullable(),
   durabilityOption: z.enum(["200_year", "1000_year"]).optional(),
-  randomReflectanceR0Percent: z.number().optional().nullable(),
+  randomReflectanceR0Percent: percentNumber.optional().nullable(),
   sReflectanceFraction: z.number().min(0).max(1).optional().nullable(),
   r0MeasurementCount: z.number().int().min(0).max(PG_INTEGER_MAX, "Measurement count is too large").optional().nullable(),
   r0AnalysisDate: z.union([z.date(), z.string(), z.null()]).optional().nullable(),
   r0HistogramFileUrl: z.string().max(2000).optional().nullable(),
-  reactiveCarbonPercent: z.number().optional().nullable(),
-  residualCarbonPercent: z.number().optional().nullable(),
+  reactiveCarbonPercent: percentNumber.optional().nullable(),
+  residualCarbonPercent: percentNumber.optional().nullable(),
   tgaAnalysisDate: z.union([z.date(), z.string(), z.null()]).optional().nullable(),
   tgaThermogramFileUrl: z.string().max(2000).optional().nullable(),
   nutrientClaimEnabled: z.boolean().optional(),
-  phosphorusPercent: z.number().optional().nullable(),
-  potassiumPercent: z.number().optional().nullable(),
-  magnesiumPercent: z.number().optional().nullable(),
-  calciumPercent: z.number().optional().nullable(),
-  ironPercent: z.number().optional().nullable(),
-});
+  phosphorusPercent: percentNumber.optional().nullable(),
+  potassiumPercent: percentNumber.optional().nullable(),
+  magnesiumPercent: percentNumber.optional().nullable(),
+  calciumPercent: percentNumber.optional().nullable(),
+  ironPercent: percentNumber.optional().nullable(),
+}).superRefine(carbonReconciliationSuperRefine);
 
 /**
  * Schema for deleting a sample

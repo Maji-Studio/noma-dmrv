@@ -5,7 +5,6 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import Link from "next/link";
 import { parseAsString, useQueryState } from "nuqs";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
@@ -28,6 +27,8 @@ import {
   useProductionRunStats,
 } from "@/hooks/use-production-runs";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
+import { useImportProductionRunReadings } from "@/hooks/use-production-run-reading-imports";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -41,11 +42,12 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
 import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
 import { ProductionIncidentTable } from "./production-incident-table";
+import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { ProductionSampleTable } from "./production-sample-table";
 import {
   type ProductionRunFormData,
@@ -72,7 +74,8 @@ const STATUS_ICONS: Record<ProductionRunStatus, React.ReactNode> = {
   draft: <WarningIcon size={14} weight="fill" />,
   running: <ClockIcon size={14} weight="fill" />,
   complete: <CheckCircleIcon size={14} weight="fill" />,
-  void: <ProhibitIcon size={14} weight="fill" />,
+  failed: <WarningIcon size={14} weight="fill" />,
+  cancelled: <ProhibitIcon size={14} weight="fill" />,
 };
 
 function RunStatusBadge({ status }: { status: ProductionRunStatus }) {
@@ -98,20 +101,13 @@ function createColumns(
     {
       accessorKey: "date",
       header: "Date",
-      cell: ({ row }) => formatSafeDate(row.original.date),
+      cell: ({ row }) => formatDate(row.original.date),
     },
     {
       id: "facility",
       header: "Facility",
       accessorFn: (row) => row.facilityName ?? "",
-      cell: ({ row }) => (
-        <Link
-          href={`/facilities/${row.original.facilityId}`}
-          className="text-[var(--clr-dark-purple)] hover:underline"
-        >
-          {row.original.facilityName}
-        </Link>
-      ),
+      cell: ({ row }) => <span>{row.original.facilityName || "—"}</span>,
     },
     {
       id: "reactor",
@@ -220,6 +216,9 @@ export function ProductionRunList() {
   const updateRun = useUpdateProductionRun();
   const deleteRun = useDeleteProductionRun();
   const toast = useToast();
+  const deferredAttachments = useDeferredAttachments();
+  const importReadings = useImportProductionRunReadings();
+  const [isFlushing, setIsFlushing] = useState(false);
 
   const runs = runsData?.items ?? [];
   const totalPages = runsData?.totalPages ?? 0;
@@ -244,6 +243,65 @@ export function ProductionRunList() {
     setCreateError(null);
     try {
       const run = await createRun.mutateAsync(data as ProductionRunFormData);
+      setIsFlushing(true);
+      const flushResult = await deferredAttachments.flush(
+        "production_run",
+        run.id,
+      );
+      // Import every readings CSV that DID upload first — even on a partial
+      // failure. A deferred readings CSV is uploaded as a document but not yet
+      // imported, and deferred retry skips already-`uploaded` entries, so an
+      // import deferred past the failure return would never run and the run
+      // would keep those readings' file without their rows (matching the same
+      // import that onUploaded={runImport} triggers on a direct upload).
+      const readingsDocs = flushResult.uploaded.filter(
+        (attachment) =>
+          attachment.documentType === "sensor_data" && attachment.documentId,
+      );
+      let importFailedCount = 0;
+      const importFailureMessages: string[] = [];
+      for (const attachment of readingsDocs) {
+        try {
+          const importResult = await importReadings.mutateAsync(
+            attachment.documentId as string,
+          );
+          toast.success(`Imported ${importResult.insertedRows} readings`);
+        } catch (error) {
+          importFailedCount += 1;
+          if (error instanceof Error && error.message.trim()) {
+            importFailureMessages.push(error.message.trim());
+          }
+        }
+      }
+      const uploadFailedCount = flushResult.failed.length;
+      if (uploadFailedCount > 0 || importFailedCount > 0) {
+        // The import fn records a durable "failed" flag on the document, so the
+        // edit-mode readings panel surfaces its Re-import affordance. Keep the
+        // deferred entries only when uploads still need a retry; otherwise the
+        // failure is import-only and the deferred queue is already settled.
+        if (uploadFailedCount === 0) deferredAttachments.clear();
+        setSideSheet({ entity: run, mode: "edit" });
+        const messages: string[] = [];
+        if (uploadFailedCount > 0) {
+          messages.push(
+            `${uploadFailedCount} ${uploadFailedCount === 1 ? "attachment" : "attachments"} failed to upload`,
+          );
+        }
+        if (importFailedCount > 0) {
+          messages.push(
+            `${importFailedCount} readings ${importFailedCount === 1 ? "file" : "files"} could not be imported`,
+          );
+        }
+        const firstImportFailureMessage = importFailureMessages[0];
+        const importFailureDetail = firstImportFailureMessage
+          ? ` Import error: ${firstImportFailureMessage}`
+          : "";
+        setCreateError(
+          `Production run created, but ${messages.join(" and ")}. Resolve ${messages.length > 1 || importFailedCount > 1 || uploadFailedCount > 1 ? "them" : "it"} below.${importFailureDetail}`,
+        );
+        return;
+      }
+      deferredAttachments.clear();
       setSideSheet(null);
       showSavedToast("Production run created successfully", run);
     } catch (error) {
@@ -251,12 +309,27 @@ export function ProductionRunList() {
       // with a link to the conflicting run); show other errors as a banner.
       if (getRunConflict(error)) throw error;
       setCreateError(error instanceof Error ? error.message : "Failed to create production run");
+    } finally {
+      setIsFlushing(false);
     }
   };
 
   const handleUpdate = async (data: ProductionRunSubmitData) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
+    if (
+      deferredAttachments.attachments.some(
+        // Any not-yet-`uploaded` entry is unresolved: "failed" awaits a retry,
+        // and "uploading" means a readings retry is mid-flight whose state a
+        // save would clobber. Both must block the save.
+        (attachment) => attachment.status !== "uploaded",
+      )
+    ) {
+      setUpdateError(
+        "Resolve or remove the failed readings file before saving this production run.",
+      );
+      return;
+    }
     try {
       const { startTime, endTime } = data;
       const run = await updateRun.mutateAsync({
@@ -274,6 +347,7 @@ export function ProductionRunList() {
                 ? endTime
                 : new Date(endTime),
       });
+      deferredAttachments.clear();
       setSideSheet(null);
       showSavedToast("Production run updated successfully", run);
     } catch (error) {
@@ -299,10 +373,22 @@ export function ProductionRunList() {
     }
   };
 
-  const openCreate = () => { setFocusedRunId(null); setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
+  const openCreate = () => {
+    setFocusedRunId(null);
+    setCreateError(null);
+    setUpdateError(null);
+    deferredAttachments.clear();
+    setSideSheet({ entity: null, mode: "create" });
+  };
   const openView = (run: ProductionRunWithRelations) => { setFocusedRunId(run.id); setSideSheet({ entity: run, mode: "view" }); };
   const openEdit = (run: ProductionRunWithRelations) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: run, mode: "edit" }); };
-  const closeSideSheet = () => { setFocusedRunId(null); setSideSheet(null); setCreateError(null); setUpdateError(null); };
+  const closeSideSheet = () => {
+    setFocusedRunId(null);
+    setSideSheet(null);
+    setCreateError(null);
+    setUpdateError(null);
+    deferredAttachments.clear();
+  };
   useOpenCreateIntent(openCreate);
 
   const clearFilters = () => { setSearchQuery(""); setStatusFilter(""); setCurrentPage(1); };
@@ -351,6 +437,23 @@ export function ProductionRunList() {
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
 
+  const unsavedAttachmentCount = deferredAttachments.attachments.filter(
+    (attachment) => attachment.status !== "uploaded",
+  ).length;
+  const confirmCreateClose = () => {
+    // An in-flight flush is mid-write; blocking Escape/backdrop/X keeps the
+    // completion handler from mutating a discarded-then-reopened form.
+    if (isFlushing) return false;
+    return (
+      displaySideSheet?.mode !== "create" ||
+      unsavedAttachmentCount === 0 ||
+      window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`)
+    );
+  };
+  const attemptCloseSideSheet = () => {
+    if (confirmCreateClose()) closeSideSheet();
+  };
+
   const handleModeChange = (mode: SideSheetMode) => {
     if (!displaySideSheet?.entity) return;
     setCreateError(null);
@@ -391,7 +494,7 @@ export function ProductionRunList() {
     sideSheetMode === "create"
       ? undefined
       : sideSheetEntity
-        ? formatSafeDate(sideSheetEntity.date)
+        ? formatDate(sideSheetEntity.date)
         : undefined;
 
   return (
@@ -472,7 +575,8 @@ export function ProductionRunList() {
               <option value="draft">Draft</option>
               <option value="running">Running</option>
               <option value="complete">Complete</option>
-              <option value="void">Void</option>
+              <option value="failed">Failed</option>
+              <option value="cancelled">Cancelled</option>
             </select>
             {hasActiveFilters && (
               <Button variant="noOutline" size="small" onClick={clearFilters}>
@@ -490,7 +594,7 @@ export function ProductionRunList() {
       <DeleteConfirmDialog
         isOpen={!!deletingRunId}
         title="Delete Production Run"
-        message="Are you sure you want to delete this production run? This action cannot be undone. Note: Production runs with associated samples or credit batches cannot be deleted."
+        message="Are you sure you want to delete this production run? This action cannot be undone. Note: Production runs with dependent biochar products or credit batches cannot be deleted."
         onConfirm={handleDeleteConfirm}
         onCancel={() => { setDeletingRunId(null); setDeleteError(null); }}
         isPending={deleteRun.isPending}
@@ -499,6 +603,7 @@ export function ProductionRunList() {
       <EntitySideSheet
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
+        onCloseAttempt={confirmCreateClose}
         mode={sideSheetMode}
         onModeChange={handleModeChange}
         title={sideSheetTitle}
@@ -508,6 +613,10 @@ export function ProductionRunList() {
         viewModeChildren={sideSheetEntity ? (
           <>
             <ProductionRunReadingTable
+              productionRunId={sideSheetEntity.id}
+              readOnly
+            />
+            <ProductionReadingsDocuments
               productionRunId={sideSheetEntity.id}
               readOnly
             />
@@ -526,7 +635,7 @@ export function ProductionRunList() {
             title: "General",
             fields: [
               { label: "Code", value: sideSheetEntity.code },
-              { label: "Date", value: formatSafeDate(sideSheetEntity.date) },
+              { label: "Date", value: formatDate(sideSheetEntity.date) },
               { label: "Status", value: <RunStatusBadge status={sideSheetEntity.status} /> },
               {
                 label: "Certification",
@@ -589,9 +698,10 @@ export function ProductionRunList() {
           key={sideSheetEntity?.id ?? "create"}
           productionRun={sideSheetEntity ?? undefined}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
-          onCancel={closeSideSheet}
-          isSubmitting={createRun.isPending || updateRun.isPending}
+          onCancel={attemptCloseSideSheet}
+          isSubmitting={createRun.isPending || updateRun.isPending || isFlushing}
           submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Production Run"}
+          deferredAttachments={deferredAttachments}
         >
           {sideSheetEntity && sideSheetMode === "edit" ? (
             <>

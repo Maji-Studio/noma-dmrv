@@ -116,6 +116,19 @@ registry data:
    noma keeps no journal copy to cross-check). The scope-conflict
    `SafeError` from ADR 0005/0018 prevents any zero-stub regression at
    submit time; the nightly coverage check asserts template coverage.
+5. **Evidence-ledger font tracing** — `registerEvidenceLedgerFonts`
+   (`src/lib/certification/evidence-ledger/fonts.ts`) reads bundled TTFs
+   via a dynamic `process.cwd()` path Next's static tracer cannot follow;
+   they are pulled in by `outputFileTracingIncludes` in `next.config.ts`.
+   If that glob misses, the renderer throws `ENOENT` and — because ledger
+   generation is best-effort try/catch in `submitRemoval` — the submit
+   **silently** succeeds with no ledger Source attached. Not exercisable
+   locally; local dev does not bundle. **On the first staging deploy,**
+   run a real submit and confirm a `transport_evidence_ledger` document +
+   Source exists (or the structured log line `generated evidence ledger`).
+   Durability shares fonts + render path, so transport passing confirms
+   both. If absent, inspect the function bundle for the `.ttf` files and
+   tighten the trace key to the actual submit route(s).
 
 ## Architecture (file layout)
 

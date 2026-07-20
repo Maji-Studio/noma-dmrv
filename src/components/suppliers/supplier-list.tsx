@@ -27,6 +27,7 @@ import { SupplierForm, type PendingSupplierLocation } from "./supplier-form";
 import type { SupplierFormData } from "@/schemas/suppliers";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { resolveSupplierLocationText } from "@/lib/supplier-location-display";
 
 // ============================================
 // Column Definitions
@@ -54,11 +55,16 @@ function createColumns(
       header: "Name",
     },
     {
-      accessorKey: "location",
+      id: "location",
       header: "Location",
+      accessorFn: (row) =>
+        resolveSupplierLocationText(row.location, row.defaultLocationDisplay) || "",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
-          {row.original.location || "\u2014"}
+          {resolveSupplierLocationText(
+            row.original.location,
+            row.original.defaultLocationDisplay,
+          ) || "\u2014"}
         </span>
       ),
     },
@@ -286,7 +292,13 @@ export function SupplierList() {
             fields: [
               { label: "Code", value: sideSheetEntity.code },
               { label: "Name", value: sideSheetEntity.name },
-              { label: "Location", value: sideSheetEntity.location },
+              {
+                label: "Location",
+                value: resolveSupplierLocationText(
+                  sideSheetEntity.location,
+                  sideSheetEntity.defaultLocationDisplay,
+                ),
+              },
               { label: "Source Region", value: sideSheetEntity.sourceRegion },
               { label: "Address", value: sideSheetEntity.address },
               {

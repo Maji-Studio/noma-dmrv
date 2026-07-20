@@ -1,0 +1,24 @@
+Visible Computer Use login and recovery validation — 2026-07-17
+
+Login form
+- Empty submit focused Email and exposed `Please enter a valid email address` plus `Password must be at least 8 characters`.
+- `not-an-email` plus a five-character password produced the inline errors and the browser email-format message; no authentication request was accepted.
+- A syntactically valid synthetic nonexistent address with a clearly fake password longer than eight characters produced the generic `Invalid email or password.` message.
+- The generic message did not reveal whether the account exists.
+
+Forgot-password form
+- The visible `Forgot password?` link opened `/forgot-password`.
+- Empty submit exposed `Please enter a valid email address`.
+- `not-an-email` produced the same inline validation plus the browser email-format message.
+- No valid address was submitted and no reset email was requested or sent.
+- `Back to login` returned to the login route.
+
+Credential/autofill boundary
+- Google Password Manager listed no staging credential.
+- The visible 1Password browser extension opened the 1Password desktop authorization prompt.
+- The prompt stated that the account password must be entered before Touch ID can be used.
+- The prompt was cancelled. No account password, staging password, or other secret was retrieved, entered, copied, logged, or preserved.
+
+Method boundary
+- All application and password-manager interaction used visible @oai/sky Computer Use.
+- No browser scripting, direct session/cookie/storage manipulation, API, or authentication bypass was used.

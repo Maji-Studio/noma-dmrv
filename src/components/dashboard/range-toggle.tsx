@@ -1,16 +1,17 @@
 /**
- * RangeToggle — the dashboard's period segmented control (30D / YTD / ALL),
+ * RangeToggle — the dashboard's period segmented control (Week / Month / All),
  * the inspiration mock's `.seg` recipe: joined mono uppercase buttons inside
- * one plum-20 hairline, active segment inverted to ink.
+ * one plum-20 hairline, active segment inverted to ink. Drives both the KPI
+ * band and the hero's mass-flow chips.
  */
 "use client";
 
 import type { DashboardRange } from "@/data-access/dashboard-overview";
 
 const RANGE_OPTIONS: { value: DashboardRange; label: string }[] = [
-  { value: "30d", label: "30D" },
-  { value: "ytd", label: "YTD" },
-  { value: "all", label: "All" },
+  { value: "week", label: "Week" },
+  { value: "month", label: "Month" },
+  { value: "all", label: "All time" },
 ];
 
 interface RangeToggleProps {
@@ -34,7 +35,7 @@ export function RangeToggle({ value, onChange }: RangeToggleProps) {
             aria-pressed={isActive}
             onClick={() => onChange(option.value)}
             className={[
-              "label-micro h-48 px-18 transition-colors",
+              "label-micro h-36 px-16 transition-colors",
               index < RANGE_OPTIONS.length - 1
                 ? "border-r-[1.5px] border-[var(--clr-dark-purple-20)]"
                 : "",
