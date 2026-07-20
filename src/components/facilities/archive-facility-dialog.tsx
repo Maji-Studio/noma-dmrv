@@ -102,9 +102,14 @@ export function ArchiveFacilityDialog({
               )}
             </div>
           ) : impact ? (
-            <p className="body-small text-[var(--color-text-tertiary)]">
-              This facility has no attached data.
-            </p>
+            <div className="flex flex-col gap-4">
+              <p className="body-small text-[var(--color-text-tertiary)]">
+                This facility has no attached data.
+              </p>
+              <p className="body-small text-[var(--color-text-tertiary)]">
+                Checked, none found: {emptyParts.join(", ")}.
+              </p>
+            </div>
           ) : (
             <p className="body-small text-[var(--color-signal-red)]">
               Couldn&apos;t load the impact preview — archiving is disabled.
