@@ -287,4 +287,29 @@ describe("updateSample reconciles carbon against the stored state (QA 2026-07-20
     });
     expect(updated.organicCarbonPercent).toBe(75);
   });
+
+  // The organic + inorganic branch was previously unexercised: every case above
+  // patches organic alone and asserts the first branch's message, so a flipped
+  // sum or a dropped `inorganic != null` short-circuit would go unnoticed.
+  // Seeded with total 80 / organic 78, so inorganic 5 puts the sum at 83.
+  it("rejects when stored organic plus patched inorganic exceeds the stored total", async () => {
+    const { id } = await createConcurrentSample(undefined);
+
+    await expect(
+      updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+        inorganicCarbonPercent: 5,
+      }),
+    ).rejects.toThrow(
+      /Organic plus inorganic carbon cannot exceed total carbon/,
+    );
+  });
+
+  it("accepts an explicit null inorganic patch (the null short-circuit)", async () => {
+    const { id } = await createConcurrentSample(undefined);
+
+    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+      inorganicCarbonPercent: null,
+    });
+    expect(updated.inorganicCarbonPercent).toBeNull();
+  });
 });
