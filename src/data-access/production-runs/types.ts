@@ -3,6 +3,7 @@
  */
 
 import type { ProductionRun, Sample } from "@/db/schema";
+import type { ProductionRunStatus } from "@/lib/production-runs/lifecycle";
 
 export interface ProductionRunFeedstockWithDetails {
   id: string;
@@ -17,7 +18,8 @@ export interface ProductionRunWithRelations {
   code: string;
   facilityId: string;
   date: string;
-  status: "draft" | "running" | "complete" | "void";
+  status: ProductionRunStatus;
+  cancellationReason: string | null;
   startTime: Date;
   // NULL = the run has started but not ended yet (an "open" run). #259.
   endTime: Date | null;

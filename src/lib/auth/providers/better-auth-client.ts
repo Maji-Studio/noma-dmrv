@@ -201,7 +201,16 @@ export async function signInWithPassword(
  */
 export async function signOut(): Promise<AuthResult> {
   try {
-    await authClient.signOut();
+    // Better Auth resolves HTTP failures as { error } instead of throwing, so
+    // the result must be inspected — otherwise a failed sign-out (session
+    // cookie still valid) would be reported as success.
+    const result = await authClient.signOut();
+    if (result.error) {
+      return {
+        success: false,
+        error: mapBetterAuthError(result.error),
+      };
+    }
     return { success: true };
   } catch (error) {
     return {

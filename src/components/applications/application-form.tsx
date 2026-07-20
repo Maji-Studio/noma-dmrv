@@ -11,7 +11,7 @@
 
 import { numericValue } from "@/lib/form-utils";
 import { formatLocalDate } from "@/lib/date-utils";
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 import { useEffect } from "react";
@@ -34,6 +34,7 @@ import {
   type SoilTemperatureSource,
 } from "@/schemas/applications";
 import type { Application } from "@/db/schema/application";
+import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { DurabilityOption } from "@/schemas/credit-batches";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import {
@@ -199,6 +200,7 @@ interface ApplicationFormProps {
    * might need.
    */
   durabilityOption?: DurabilityOption;
+  deferredAttachments?: UseDeferredAttachmentsResult;
 }
 
 export function ApplicationForm({
@@ -209,6 +211,7 @@ export function ApplicationForm({
   isSubmitting = false,
   submitLabel,
   durabilityOption = "200_year",
+  deferredAttachments,
 }: ApplicationFormProps) {
   const isEditMode = !!application;
   // Soil temperature feeds only the 200-year durable fraction; 1000-year
@@ -362,7 +365,7 @@ export function ApplicationForm({
     ) {
       setError("applicationDate", {
         type: "manual",
-        message: `Application date cannot be before the delivery date (${formatSafeDate(selectedDelivery.deliveryDate)})`,
+        message: `Application date cannot be before the delivery date (${formatDate(selectedDelivery.deliveryDate)})`,
       });
       return;
     }
@@ -604,7 +607,7 @@ export function ApplicationForm({
             <label
               key={method}
               className={[
-                "flex min-h-44 cursor-pointer flex-col gap-4 border px-14 py-12 transition-colors duration-300",
+                "flex min-h-44 cursor-pointer flex-col gap-4 border px-16 py-12 transition-colors duration-300",
                 evidenceMethod === method
                   ? "border-[var(--color-interaction)] bg-[var(--color-background-interaction-light)]"
                   : "border-[var(--color-border-tertiary)] bg-[var(--color-background-white)]",
@@ -653,6 +656,7 @@ export function ApplicationForm({
           applicationId={application?.id}
           mode={evidenceMethod ?? "visual"}
           disabled={isSubmitting}
+          deferredAttachments={deferredAttachments}
         />
       </FormSection>
 

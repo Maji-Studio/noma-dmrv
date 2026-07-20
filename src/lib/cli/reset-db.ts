@@ -1,6 +1,6 @@
 import { Pool } from 'pg';
 import { config } from 'dotenv';
-import { describeDatabaseTarget, getPgPoolConfig } from '../pg-pool-config';
+import { describeDatabaseTarget, getPgPoolConfig, isLocalDatabaseTarget } from '../pg-pool-config';
 
 // Load environment variables from .env.local
 config({ path: '.env.local' });
@@ -15,6 +15,14 @@ async function resetDatabase(): Promise<void> {
     console.log(`Connection target: ${describeDatabaseTarget(process.env.DATABASE_URL)}`);
   } catch {
     console.error('✗ Invalid DATABASE_URL format');
+    process.exit(1);
+  }
+
+  if (!isLocalDatabaseTarget(process.env.DATABASE_URL) && process.env.DB_RESET_ALLOW_REMOTE !== 'true') {
+    console.error(
+      '✗ DATABASE_URL does not point at localhost. Refusing to drop a remote database.\n' +
+        '  Set DB_RESET_ALLOW_REMOTE=true to override (staging/production resets must be deliberate).'
+    );
     process.exit(1);
   }
 

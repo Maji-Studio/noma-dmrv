@@ -9,7 +9,6 @@ import {
   type InvitationBootstrapState,
 } from "@/data-access/invitation-bootstrap";
 import { auth } from "@/lib/auth/better-auth";
-import { hashPassword } from "@/lib/auth/hash-password";
 import { SafeError, toActionError } from "@/lib/errors";
 import {
   invitationBootstrapSchema,
@@ -86,7 +85,7 @@ export async function bootstrapInvitationAccountAction(
       );
     }
 
-    const passwordHash = await hashPassword(password);
+    const passwordHash = await (await auth.$context).password.hash(password);
     const account = await createInvitedAccount({
       invitationId,
       name,

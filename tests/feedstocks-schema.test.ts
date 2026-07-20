@@ -58,4 +58,52 @@ describe("feedstockFormSchema", () => {
       );
     }
   });
+
+  it("requires a justification when allocations exceed the declared wet mass", () => {
+    const result = feedstockFormSchema.safeParse({
+      ...validFeedstockInput,
+      totalWetMassKg: 2000,
+      allocations: [
+        {
+          ...validFeedstockInput.allocations[0],
+          allocatedWetMassKg: 2100,
+        },
+      ],
+      overrideJustification: "   ",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["overrideJustification"],
+            message: expect.stringMatching(/justification/i),
+          }),
+        ]),
+      );
+    }
+  });
+
+  it("allows a justified over-allocation and comparison epsilon", () => {
+    expect(feedstockFormSchema.safeParse({
+      ...validFeedstockInput,
+      totalWetMassKg: 1000,
+      allocations: [{
+        ...validFeedstockInput.allocations[0],
+        allocatedWetMassKg: 1100,
+      }],
+      overrideJustification: "Scale reconciliation pending",
+    }).success).toBe(true);
+
+    expect(feedstockFormSchema.safeParse({
+      ...validFeedstockInput,
+      totalWetMassKg: 1000,
+      allocations: [{
+        ...validFeedstockInput.allocations[0],
+        allocatedWetMassKg: 1000.001,
+      }],
+      overrideJustification: "",
+    }).success).toBe(true);
+  });
 });

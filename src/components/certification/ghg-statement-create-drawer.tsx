@@ -45,6 +45,7 @@ import {
   overlappingEnd,
   partitionByWindow,
 } from "@/lib/isometric/utils/ghg-reporting-window";
+import { formatDate, formatDateRange } from "@/lib/format-utils";
 import {
   createGhgStatementSchema,
   type CreateGhgStatementInput,
@@ -315,7 +316,9 @@ function PeriodWindow({
 }) {
   return (
     <span className="font-mono text-[var(--color-text-primary)]">
-      {derivedStart ?? "Set by Isometric"} → {endOn}
+      {derivedStart
+        ? formatDateRange(derivedStart, endOn)
+        : `Ends ${formatDate(endOn)}`}
     </span>
   );
 }
@@ -419,7 +422,9 @@ function StepPreview({
           Isometric decides membership server-side and confirms it right after
           you create the statement — this is what it should contain, by
           completion date within the reporting window{" "}
-          {derivedStart ? `${derivedStart} → ${endOn}` : `up to ${endOn}`}.
+          {derivedStart
+            ? formatDateRange(derivedStart, endOn)
+            : `up to ${formatDate(endOn)}`}.
           Removals before the window roll into the previous statement. Expand a
           removal to see its credit batches.
         </InfoHint>

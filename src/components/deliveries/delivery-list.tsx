@@ -28,6 +28,7 @@ import {
   useDeliveryStats,
 } from "@/hooks/use-deliveries";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import type {
   DeliveryFormData,
@@ -36,7 +37,7 @@ import type {
 import type { DeliveryWithRelations } from "@/data-access/deliveries";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 
 // ============================================
 // Helper Functions
@@ -69,7 +70,7 @@ function createColumns(
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <CalendarIcon size={16} className="text-[var(--color-text-tertiary)]" />
-          <span>{formatSafeDate(row.original.deliveryDate)}</span>
+          <span>{formatDate(row.original.deliveryDate)}</span>
         </div>
       ),
     },
@@ -114,6 +115,8 @@ function createColumns(
       cell: ({ row }) => (
         <EntityCertifyReadinessBadge
           readiness={deriveEntityCertifyReadiness("delivery", row.original)}
+          readyLabel="Fields complete"
+          readinessNoun="delivery fields"
         />
       ),
     },
@@ -172,10 +175,13 @@ export function DeliveryList() {
   const updateDelivery = useUpdateDelivery();
   const deleteDelivery = useDeleteDelivery();
   const toast = useToast();
+  const deferredAttachments = useDeferredAttachments();
+  const [isFlushing, setIsFlushing] = useState(false);
 
   // Side sheet helpers
   const openCreate = () => {
     setFormError(null);
+    deferredAttachments.clear();
     setSideSheet({ entity: null, mode: "create" });
   };
 
@@ -192,6 +198,24 @@ export function DeliveryList() {
   const closeSideSheet = () => {
     setSideSheet(null);
     setFormError(null);
+    deferredAttachments.clear();
+  };
+
+  const unsavedAttachmentCount = deferredAttachments.attachments.filter(
+    (attachment) => attachment.status !== "uploaded",
+  ).length;
+  const confirmCreateClose = () => {
+    // An in-flight flush is mid-write; blocking Escape/backdrop/X keeps the
+    // completion handler from mutating a discarded-then-reopened form.
+    if (isFlushing) return false;
+    return (
+      sideSheet?.mode !== "create" ||
+      unsavedAttachmentCount === 0 ||
+      window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`)
+    );
+  };
+  const attemptCloseSideSheet = () => {
+    if (confirmCreateClose()) closeSideSheet();
   };
 
   // Handlers
@@ -203,17 +227,54 @@ export function DeliveryList() {
         return;
       }
       const createData = { ...data, facilityId: contextFacilityId } as CreateDeliveryData;
-      await createDelivery.mutateAsync(createData);
-      closeSideSheet();
+      const created = await createDelivery.mutateAsync(createData);
+      const createdDelivery: DeliveryWithRelations = {
+        ...created,
+        orderCode: null,
+        facilityName: null,
+        customerName: null,
+        biocharProductCode: null,
+        driverName: null,
+        vehicleName: null,
+      };
+      setIsFlushing(true);
+      const flushResult = await deferredAttachments.flush(
+        "delivery",
+        createdDelivery.id,
+      );
+      if (!flushResult.ok) {
+        setSideSheet({ entity: createdDelivery, mode: "edit" });
+        setFormError(
+          `Delivery created, but ${flushResult.failed.length} ${flushResult.failed.length === 1 ? "attachment" : "attachments"} failed to upload.`,
+        );
+        return;
+      }
+      deferredAttachments.clear();
+      setSideSheet(null);
       toast.success("Delivery created successfully");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to create delivery");
+    } finally {
+      setIsFlushing(false);
     }
   };
 
   const handleUpdate = async (data: DeliveryFormData) => {
     if (!sideSheet?.entity) return;
     setFormError(null);
+    if (
+      deferredAttachments.attachments.some(
+        // Any not-yet-`uploaded` entry is unresolved: "failed" awaits a retry,
+        // and "uploading" means a retry is mid-flight whose state a save would
+        // clobber. Both must block the save.
+        (attachment) => attachment.status !== "uploaded",
+      )
+    ) {
+      setFormError(
+        "Resolve or remove the failed attachments before saving this delivery.",
+      );
+      return;
+    }
     try {
       await updateDelivery.mutateAsync({ deliveryId: sideSheet.entity.id, ...data });
       closeSideSheet();
@@ -365,6 +426,7 @@ export function DeliveryList() {
       <EntitySideSheet
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
+        onCloseAttempt={confirmCreateClose}
         mode={sideSheetMode}
         onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
         title={sideSheetTitle}
@@ -377,7 +439,7 @@ export function DeliveryList() {
                   title: "General",
                   fields: [
                     { label: "Code", value: sideSheetEntity.code },
-                    { label: "Delivery Date", value: formatSafeDate(sideSheetEntity.deliveryDate) },
+                    { label: "Delivery Date", value: formatDate(sideSheetEntity.deliveryDate) },
                     {
                       label: "Status",
                       value: (
@@ -392,6 +454,8 @@ export function DeliveryList() {
                             "delivery",
                             sideSheetEntity,
                           )}
+                          readyLabel="Fields complete"
+                          readinessNoun="delivery fields"
                         />
                       ),
                     },
@@ -409,7 +473,10 @@ export function DeliveryList() {
                   title: "Mass",
                   fields: [
                     {
-                      label: "Delivered Wet Mass",
+                      label:
+                        sideSheetEntity.status === "delivered"
+                          ? "Delivered Wet Mass"
+                          : "Planned Wet Mass",
                       ...certificationDetailField("delivery", "deliveredWetMassKg"),
                       value:
                         sideSheetEntity.deliveredWetMassKg != null
@@ -441,6 +508,7 @@ export function DeliveryList() {
             <TransportEvidencePanel
               entityType="delivery"
               entityId={sideSheetEntity.id}
+              readOnly
             />
           ) : null
         }
@@ -450,9 +518,10 @@ export function DeliveryList() {
           key={sideSheetEntity?.id ?? "create"}
           delivery={sideSheet?.entity as Delivery | undefined}
           onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
-          onCancel={closeSideSheet}
-          isSubmitting={createDelivery.isPending || updateDelivery.isPending}
+          onCancel={attemptCloseSideSheet}
+          isSubmitting={createDelivery.isPending || updateDelivery.isPending || isFlushing}
           submitLabel={sideSheetMode === "create" ? "Create Delivery" : "Save Changes"}
+          deferredAttachments={deferredAttachments}
         />
       </EntitySideSheet>
 

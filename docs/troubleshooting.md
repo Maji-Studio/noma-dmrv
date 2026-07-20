@@ -1,631 +1,284 @@
 # Troubleshooting Guide
 
-Quick symptom-to-fix lookup for common issues. Keep this file concise and searchable.
+Symptom-to-fix lookup for issues that have actually bitten someone in this repo. Read it when something is broken and you want the known cause before you start bisecting. It is a bug record, not a tutorial — topic-owning docs are linked inline ([forms](./forms.md), [testing](./testing.md), [security](./security.md), [database](./database.md), [design-system](./design-system.md), [auth](./auth.md)) and win on any conflict.
 
 ## Development Server Issues
 
+### `pnpm dev` Is Not `next dev`
+
+`pnpm dev` → `pnpm dev:docker` → `docker compose up -d && pnpm db:wait && next dev -p 3100` (see `package.json`). Consequences:
+
+- Extra args do **not** reach Next. `pnpm dev -- -p 3101` is a no-op; the port is hard-coded in the script.
+- `pnpm dev:manual` is the bare `next dev -p 3100` escape hatch.
+- `pnpm dev:docker:init` is the reset-and-start variant (runs `db:reset` in between).
+- A local "database not running" symptom is usually a stopped container → `pnpm docker:up`, then `pnpm db:wait` (`src/lib/cli/wait-for-db.ts`).
+
 ### Port 3100 Already in Use
 
-**Symptoms**
-- Error: `EADDRINUSE: address already in use :::3100`
-- Dev server won't start
+**Symptoms** — `EADDRINUSE: address already in use :::3100`.
 
-**Fixes**
-```bash
-# Find and kill process on port 3100
-lsof -ti:3100 | xargs kill -9
-
-# Or use a different port
-pnpm dev -- -p 3101
-```
+**Fix** — `lsof -ti:3100 | xargs kill -9`, or run `pnpm dev:manual` after freeing the port. There is no supported port override.
 
 ### Next.js Cache Issues
 
-**Symptoms**
-- Stale UI after git pull/merge
-- Build errors after dependency updates
-- Changes not reflecting in browser
-- Type errors that don't make sense
+**Symptoms** — stale UI after git pull/merge; build errors after dependency updates; changes not reflecting; nonsense type errors.
 
-**Fixes**
-```bash
-# Clear Next.js cache
-rm -rf .next
-
-# Clear all caches and reinstall
-rm -rf .next node_modules .pnpm-store
-pnpm install
-
-# Restart dev server
-pnpm dev
-```
+**Fix** — `rm -rf .next` (then, if still broken, `rm -rf .next node_modules .pnpm-store && pnpm install`).
 
 ### Hot Reload Not Working
 
-**Symptoms**
-- Changes don't appear without manual refresh
-- Console shows connection errors
-
-**Fixes**
-- Check no firewall blocking localhost:3100
-- Try `WATCHPACK_POLLING=true pnpm dev` (uses polling instead of file watching)
-- Restart dev server
+Check no firewall blocks `localhost:3100`; try `WATCHPACK_POLLING=true pnpm dev:manual`; restart the dev server.
 
 ## Database Issues
 
-### Connection Pool Exhaustion
+### Pool Configuration (read before diagnosing any connection symptom)
 
-**Symptoms**
-- Error: `remaining connection slots are reserved for roles with the SUPERUSER attribute`
-- Error code: `53300`
-- App works initially, then crashes under load
+`src/db/index.ts` builds the pool from `getPgPoolConfig(env.DATABASE_URL)` plus:
 
-**Root Cause**
-- PostgreSQL has limited `max_connections` (typically 20-50 on VPS)
-- Each process creates connection pools
-- Default pool size (10) can quickly exhaust database
+- `max: env.DB_POOL_MAX ?? 1` — the default is **1**, not a library default of 10. Advice about "reducing the pool" is backwards here; local pool starvation is usually fixed by *raising* `DB_POOL_MAX`.
+- `idleTimeoutMillis: env.DB_POOL_IDLE_TIMEOUT_MS ?? 10_000`
+- `connectionTimeoutMillis: env.DB_POOL_CONNECTION_TIMEOUT_MS ?? 10_000` — so exhaustion surfaces as a **10-second hang**, not an immediate error.
+
+All three are env-driven (`src/config/env.ts`). Never hard-code them in `src/db/index.ts`.
+
+`withDedicatedLockConnection()` (same file) deliberately opens its own `pg.Client` **outside** the shared pool: lock-backed certification work holds the advisory lock while doing heavyweight nested work through the shared pool, so it must not consume a pooled connection. It is a second, invisible connection source when counting `pg_stat_activity` — and "cleaning up" the duplicate connection logic will deadlock certification.
+
+### Connection Pool Exhaustion / "too many clients already"
+
+**Symptoms** — `remaining connection slots are reserved for roles with the SUPERUSER attribute` (SQLSTATE `53300`); `too many clients already`; a ~10s hang before failure; works initially, fails under load.
 
 **Fixes**
 
-1. **Reduce pool size** (src/db/index.ts:8)
-   ```typescript
-   // Change from 10 to 3-5 for typical apps
-   const pool = new Pool({
-     connectionString: DATABASE_URL,
-     max: 5, // Reduced from default 10
-   });
-   ```
-
-2. **Increase database max_connections** (requires database admin)
+1. Count real usage — remember `withDedicatedLockConnection` connections are not pooled:
    ```sql
-   -- Check current limit
    SHOW max_connections;
-
-   -- Check current usage
    SELECT count(*) FROM pg_stat_activity;
-
-   -- Edit postgresql.conf and restart
-   max_connections = 100
    ```
-
-3. **Use PgBouncer** (recommended for production)
-   - Connection pooling middleware
-   - Allows hundreds of app connections with ~20 database connections
-   - Update DATABASE_URL to point to PgBouncer port (6432)
-
-### DATABASE_URL Not Found
-
-**Symptoms**
-- Error: `DATABASE_URL is undefined`
-- App crashes on startup
-- Scripts fail to connect
-
-**Fixes**
-- Ensure `.env.local` exists with `DATABASE_URL`
-- For standalone scripts, add `import "dotenv/config";` at top
-- Verify variable name is exact (case-sensitive)
-- Check no trailing spaces in .env.local
-
-### Migration Failures
-
-**Symptoms**
-- `pnpm db:migrate` or `pnpm db:push` fails with constraint errors
-- Schema out of sync with database
-
-**Fixes**
-```bash
-# For shared environments - generate migration and review SQL
-pnpm db:generate
-# Review migration file in drizzle/ folder
-pnpm db:migrate
-
-# For local development only - reset and rebuild from tracked migrations
-pnpm db:reset
-```
-
-**Prevention**
-- ❌ Never use `pnpm db:push` in staging or production
-- ✅ Always use `pnpm db:generate` + review migrations
-- ✅ Test migrations on staging first
+2. Tune `DB_POOL_MAX` in the environment (up or down) rather than editing `src/db/index.ts`.
+3. For production, front the database with PgBouncer and point `DATABASE_URL` at its port (6432).
 
 ### Connection Refused / Connection Timeout
 
-**Symptoms**
-- `ECONNREFUSED`
-- `connection timeout`
-- Can't connect to database
+**Symptoms** — `ECONNREFUSED`, `connection timeout`.
 
 **Fixes**
-- Verify PostgreSQL is running: `pg_isready`
-- Check DATABASE_URL format: `postgresql://user:pass@host:port/db?sslmode=require`
-- For local: ensure host is `localhost` or `127.0.0.1`
-- For remote: ensure `sslmode=require` parameter
-- Check firewall/security groups allow connections
-- Verify credentials are correct
+
+- Local Postgres runs in Docker: `pnpm docker:up` then `pnpm db:wait`. Do this before suspecting the URL.
+- **`sslmode` in `DATABASE_URL` is ignored.** `getPgPoolConfig` (`src/lib/pg-pool-config.ts`) strips `sslmode` from the URL before building the pool, because pg 8.18 derives SSL behaviour from the connection string and would override the explicit `ssl` option. Adding `?sslmode=require` has **no effect**.
+- SSL is decided by hostname: `localhost` / `127.0.0.1` / `::1` → `ssl: false`; anything else → `ssl: true`, unless `PG_ALLOW_UNVERIFIED_SSL=true` (→ `rejectUnauthorized: false`).
+- Then check firewall/security groups and credentials.
+
+### DATABASE_URL Not Found
+
+Ensure `.env.local` exists with `DATABASE_URL` (exact case, no trailing spaces). Standalone scripts need `import "dotenv/config";` at the top.
+
+### Migration Failures / Schema Out of Sync
+
+The repo is **migration-based** — `drizzle/` holds tracked numbered migrations.
+
+```bash
+pnpm db:generate      # generate, then review the SQL in drizzle/
+pnpm db:migrate       # apply
+pnpm db:verify-schema # confirm the live DB matches the schema
+pnpm db:reset         # local only — destructive
+```
+
+- ❌ Never `pnpm db:push` (or `drizzle-kit push --force`) on a shared environment. See [database.md](./database.md).
+- `pnpm db:reset` = `reset-db.ts && pnpm db:migrate && pnpm db:ensure-admin`. It replays tracked migrations and re-creates the admin user from `ADMIN_EMAIL` / `ADMIN_PASSWORD` (`requireEnvironmentVariable('ADMIN_PASSWORD')` throws if unset).
+- `db:reset` does **not** re-seed demo data — that is the separate `pnpm db:seed`. Resetting and then hunting for "missing" demo rows is a common wasted hour.
+
+### Duplicate Key on `code` Columns
+
+**Symptoms** — `duplicate key value violates unique constraint "facilities_organization_id_code_unique"` (likewise `reactors_organization_id_code_unique`, `storage_locations_organization_id_code_unique`).
+
+**Root Cause** — codes are unique **per organization**, not globally: the constraint is a composite on `(organizationId, code)` (`src/db/schema/facilities.ts`), per [ADR-0010: shared-schema org-column tenancy](./adr/0010-shared-schema-org-column-tenancy.md). A failure means a collision *within one organization* — usually leftover data from an interrupted test run. Do **not** "fix" it by making `code` globally unique; that violates the tenancy model.
+
+**Fix** — `pnpm db:reset` locally, or let the `cleanupTestData` fixture run to completion.
 
 ## Authentication Issues
 
+See [auth.md](./auth.md) for the flow and route protection.
+
+### Auth Change Didn't Take Effect (role/permission edits)
+
+Sessions live 7 days with a 24h refresh, and Better Auth is configured with a **5-minute cookie cache** (`session.cookieCache.maxAge`, `src/lib/auth/better-auth.ts`). Role or permission changes are therefore invisible for up to 5 minutes unless the user signs out and back in. This is the most common false "auth is broken" report.
+
+### Rate Limits (429 Too Many Requests)
+
+`rateLimit` in `src/lib/auth/better-auth.ts`: global 100 per 60s, plus custom rules — `/sign-in/email` 10 per 15 min, `/sign-up/email` 3 per hour, `/request-password-reset` 5 per 15 min, `/reset-password` 10 per 15 min.
+
+`DISABLE_RATE_LIMIT=true` in `.env.local` disables all of them at once (restart the server after adding it).
+
 ### Email Not Sending
 
-**Symptoms**
-- Invite emails not received
-- Password reset emails not arriving
-- No error in console
-
-**Fixes**
-- Verify `RESEND_API_KEY` is set in `.env.local`
-- Check `RESEND_FROM_EMAIL` is verified in Resend dashboard
-- Test API key: `curl -X POST https://api.resend.com/emails -H "Authorization: Bearer $RESEND_API_KEY"`
-- Check spam folder
-- View Resend dashboard for delivery status
-- For local development without Resend, leave `RESEND_API_KEY` and `RESEND_FROM_EMAIL` empty and use reset/verification URLs logged in server output.
+- Verify `RESEND_API_KEY` and that `RESEND_FROM_EMAIL` is verified in the Resend dashboard; check spam and the Resend delivery log.
+- For local dev, leave both empty and use the reset/verification URLs logged to the server output. See [mail-setup.md](./mail-setup.md).
 
 ### Can't Log In / Session Issues
 
-**Symptoms**
-- Redirected to login after successful login
-- Session expires immediately
-- "Unauthorized" errors
+**Common causes** — `BETTER_AUTH_SECRET` changed (invalidates all sessions); `NEXT_PUBLIC_APP_URL` doesn't match the actual URL; cookies blocked; mixed HTTP/HTTPS.
 
-**Fixes**
-```bash
-# Clear sessions
-pnpm db:studio
-# Delete all rows from `session` table
-
-# Regenerate auth secret
-openssl rand -base64 32
-# Update BETTER_AUTH_SECRET in .env.local
-
-# Restart dev server
-pnpm dev
-```
-
-**Common Causes**
-- `BETTER_AUTH_SECRET` changed (invalidates all sessions)
-- `NEXT_PUBLIC_APP_URL` doesn't match actual URL
-- Cookies blocked in browser
-- Mixed HTTP/HTTPS (cookies won't persist)
+**Fix** — delete rows from the `session` table (`pnpm db:studio`), regenerate the secret with `openssl rand -base64 32` if needed, restart.
 
 ### Password Reset Not Working
 
-**Symptoms**
-- Reset link expired
-- Token invalid errors
-
-**Fixes**
-- Tokens expire after 1 hour by default
-- Check email was sent (see Email Not Sending above)
-- Verify `NEXT_PUBLIC_APP_URL` matches actual app URL
-- Clear old tokens: Delete rows from `verification` table in db:studio
+Tokens expire after 1 hour. Verify the email was sent, that `NEXT_PUBLIC_APP_URL` matches the real app URL, and clear stale rows from the `verification` table.
 
 ### Can't Create Admin User
 
-**Symptoms**
-- Admin script fails
-- User created but not admin
-
-**Fixes**
-- Verify `ADMIN_EMAIL` and `ADMIN_PASSWORD` are set in `.env.local`
-- `ADMIN_PASSWORD` is required — the script no longer uses a default password
-- Emails are case-sensitive
-- Restart server after changing ADMIN_EMAIL
-- Check user's email in database matches exactly
+`ADMIN_EMAIL` and `ADMIN_PASSWORD` must both be set — there is no default password (`src/lib/cli/ensure-admin-core.ts` throws). Emails are matched case-sensitively; restart after changing `ADMIN_EMAIL`.
 
 ## Build & Deployment Issues
 
 ### Type Errors During Build
 
-**Symptoms**
-- `pnpm build` fails with TypeScript errors
-- Dev server works fine
-
-**Fixes**
-```bash
-# Clear TypeScript cache
-rm -rf .next tsconfig.tsbuildinfo
-
-# Verify types
-pnpm tsc --noEmit
-
-# Check for `any` types in strict mode
-# Fix by adding proper types
-```
-
-### Production Build Size Too Large
-
-**Symptoms**
-- Build exceeds size limits
-- Slow page loads
-
-**Fixes**
-- Analyze bundle: `pnpm build` (outputs size analysis)
-- Check for:
-  - Unused dependencies imported
-  - Large libraries not code-split
-  - Images not optimized
-- Use dynamic imports for heavy components:
-  ```typescript
-  const HeavyComponent = dynamic(() => import('./HeavyComponent'))
-  ```
+`rm -rf .next tsconfig.tsbuildinfo`, then `pnpm typecheck` (the first-class script; not `pnpm tsc --noEmit`).
 
 ### Environment Variables Not Working in Production
 
-**Symptoms**
-- `undefined` for env vars in production
-- Works locally
-
-**Fixes**
-- Client-side vars MUST start with `NEXT_PUBLIC_`
-- Server-side vars work without prefix
-- Rebuild after adding env vars
-- For Vercel/deployment platforms: set env vars in dashboard
-- Check `src/config/env.ts` validates all required vars
+Client-side vars must start with `NEXT_PUBLIC_`; rebuild after adding any env var; set them in the hosting platform dashboard. `src/config/env.ts` validates the required set.
 
 ### Debugging Against the Wrong Environment Assumptions
 
-**Symptoms**
-- "Works in staging but not locally" (or vice versa) with no code difference
-- Auth/DB debugging goes in circles; fixes target config that was never wrong
+**Symptoms** — "works in staging but not locally" with no code difference; auth/DB debugging goes in circles and fixes target config that was never wrong.
 
-**Why**
-The three 1Password env items (`local` / `staging` / `production` in vault `Environment Variables`) **intentionally differ** — local has its own `DATABASE_URL` (Docker Postgres), `NEXT_PUBLIC_APP_URL` (localhost:3100), dev admin credentials, and test toggles like `DISABLE_RATE_LIMIT`. Local is not a copy of staging.
+**Why** — the three 1Password env items (`local` / `staging` / `production`) **intentionally differ**. Local is not a copy of staging. The inventory is owned by [security.md](./security.md).
 
 **Fixes**
-- Before debugging env/auth issues, write down which environment you're in and which values you're assuming, then verify against the matching 1Password item
-- `pnpm env:check` reports drift between templates and 1Password
-- `pnpm env:local` re-injects `.env.local` from the `local` item
-- 1Password CLI (`op`) requires interactive desktop approval — agents/sandboxed shells can't sign in; run `op` commands manually when an agent is debugging
+
+- Write down which environment you are in and which values you are assuming, then verify against the matching 1Password item.
+- `pnpm env:check` reports drift between templates and 1Password; `pnpm env:local` re-injects `.env.local` from the `local` item.
+- The 1Password CLI (`op`) requires interactive desktop approval — agents and sandboxed shells **cannot** sign in. Ask the user to run `op` commands manually.
 
 ## Dependency Issues
 
 ### pnpm install Fails
 
-**Symptoms**
-- Peer dependency conflicts
-- Package not found
+`pnpm store prune`; then `rm -rf node_modules .pnpm-store pnpm-lock.yaml && pnpm install`. Never npm/yarn.
 
-**Fixes**
-```bash
-# Clear pnpm cache
-pnpm store prune
+### Module Not Found: `Cannot find module '@/...'`
 
-# Remove lock file and reinstall
-rm pnpm-lock.yaml
-pnpm install
-
-# For stubborn issues
-rm -rf node_modules .pnpm-store pnpm-lock.yaml
-pnpm install
-```
-
-### Module Not Found Errors
-
-**Symptoms**
-- `Cannot find module '@/...'`
-- Import errors for valid paths
-
-**Fixes**
-- Clear cache: `rm -rf .next`
-- Check `tsconfig.json` has correct paths:
-  ```json
-  {
-    "compilerOptions": {
-      "paths": {
-        "@/*": ["./src/*"]
-      }
-    }
-  }
-  ```
-- Restart TypeScript server in VSCode: Cmd+Shift+P → "Restart TS Server"
+Clear `.next`, check the `@/*` alias in `tsconfig.json`, and restart the TS server (VSCode: Cmd+Shift+P → "Restart TS Server").
 
 ## React Query Issues
 
 ### Stale Data Showing
 
-**Symptoms**
-- UI shows old data after mutation
-- Changes don't appear until refresh
-
-**Fixes**
-- Ensure mutations invalidate queries:
-  ```typescript
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['resource', projectId] })
-  }
-  ```
-- Check query keys match exactly
-- Reduce staleTime if needed (default 30s in hooks)
+- Mutations must invalidate: `queryClient.invalidateQueries({ queryKey: [...] })`, with query keys matching exactly.
+- `staleTime` is set once globally to `30_000` in `src/app/providers.tsx`; individual hooks override it (e.g. `src/hooks/use-production-processes.ts` uses `300000`). Check the hook before assuming 30s. `gcTime` is not configured anywhere in this repo.
 
 ### Infinite Refetching Loop
 
-**Symptoms**
-- Network tab shows constant requests
-- API rate limits hit
-
-**Fixes**
-- Check query key is stable (not creating new array each render)
-- Disable refetch options if not needed:
-  ```typescript
-  useQuery({
-    queryKey: ['data'],
-    queryFn: fetchData,
-    refetchOnWindowFocus: false,
-  })
-  ```
+Query key is unstable (a new array/object each render), or a refetch trigger is firing. Stabilise the key first; only then reach for `refetchOnWindowFocus: false`.
 
 ## Form Validation Issues
 
-### Zod Validation Not Working
-
-**Symptoms**
-- Form submits with invalid data
-- No validation errors shown
-
-**Fixes**
-- Check schema is imported and used
-- Ensure server action validates input:
-  ```typescript
-  export async function createItem(input: unknown) {
-    const parsed = createItemSchema.parse(input) // Will throw if invalid
-  }
-  ```
-- For React Hook Form: use `zodResolver(schema)`
+[forms.md](./forms.md) owns this topic — schema helpers, Zod 4 string formats, numeric input conventions.
 
 ### Number Fields: "expected number, received NaN"
 
-**Symptoms**
-- Empty optional number inputs show "Invalid input: expected number, received NaN"
-- Density, mass, GPS, or other numeric fields fail validation when left blank
+**Symptom** — empty optional number inputs fail with `Invalid input: expected number, received NaN`.
 
-**Root Cause**
-Using `valueAsNumber: true` in `register()` converts empty strings to `NaN` (via the DOM's `input.valueAsNumber`). `NaN` is type `number` in JS but Zod's `z.number()` rejects it, and it won't match `z.string()` or `z.null()` branches either.
+**Root Cause** — `valueAsNumber: true` in `register()` turns `""` into `NaN`, which is type `number` but rejected by `z.number()` and matched by no union branch.
 
-**Fix**
-Use `setValueAs` instead of `valueAsNumber` to convert empty strings to `null`:
-```typescript
-// BAD - empty input becomes NaN, fails all Zod union branches
-{...register("massKg", { valueAsNumber: true })}
-
-// GOOD - empty input becomes null, non-empty becomes number
-{...register("massKg", { setValueAs: (v: string) => v === "" ? null : Number(v) })}
-```
-
-And simplify the Zod schema (no need for string transform branch):
-```typescript
-// BAD - complex union to handle strings, numbers, and null
-massKg: z.union([
-  z.number().min(0),
-  z.string().transform(val => val === "" ? null : parseFloat(val))
-    .pipe(z.number().min(0).nullable()),
-  z.null(),
-]).optional().nullable()
-
-// GOOD - setValueAs handles conversion, schema just validates
-massKg: z.number().min(0, "Must be positive").nullable().optional()
-```
+**Fix** — never use `valueAsNumber` (it has zero occurrences in `src/`, keep it that way). Use the preprocess-based helpers in `src/schemas/helpers.ts`, which do the empty-string → `null`/`undefined` conversion in the schema: `optionalNumber`, `optionalPositiveNumber`, `optionalPercent`, `requiredNumber()`, `massKgSchema()` / `requiredPositiveMassKgSchema()` / `optionalMassKgSchema()`, and the raw `toNumberOrNull` / `toNumberOrUndefined` coercers.
 
 ### Optional UUID Fields: "Invalid UUID" on Empty Selection
 
-**Symptoms**
-- Optional entity select fields (e.g., linked production run, storage location) show "Invalid UUID" when left empty
-- Form defaults these fields to `""` which fails `z.string().uuid()`
+**Symptom** — optional entity selects (linked production run, storage location) report "Invalid UUID" when left empty, because the form defaults them to `""`.
 
-**Root Cause**
-Schema ordering: `z.string().uuid().optional().nullable().or(emptyToNull)` tries UUID validation first on `""`, which fails. While `.or(emptyToNull)` should catch it, the error reporting can be misleading.
+**Fix** — put `emptyToNull` **first** in the union so `""` is consumed before UUID validation runs:
 
-**Fix**
-Put `emptyToNull` first in the union so empty strings are handled before UUID validation:
 ```typescript
-import { emptyToNull } from "./helpers";
-
-// BAD - tries UUID first, fails on "", error leaks
+// BAD — tries UUID first, fails on "", error leaks to the user
 linkedId: z.string().uuid().optional().nullable().or(emptyToNull)
 
-// GOOD - catches "" first, then validates UUID
+// GOOD — catches "" first, then validates UUID
 linkedId: emptyToNull.or(z.string().uuid("Invalid selection")).nullable().optional()
 ```
 
-### Zod v4 `.uuid()` Rejects Seed Data IDs
+⚠️ The JSDoc example on `emptyToNull` itself (`src/schemas/helpers.ts`) shows the BAD ordering. **The JSDoc is wrong**; real call sites follow the rule above (e.g. `src/schemas/production-incidents.ts`). Trust the call sites, not the helper's comment.
 
-**Symptoms**
-- EntitySelect fields (facility, reactor, feedstock) show "Please select a valid facility/reactor/feedstock" on form submit
-- Values appear correctly selected in the UI but fail validation
-- Multiple UUID fields fail simultaneously
-- Error type is `invalid_format`, not `too_small`
+### Zod v4 `.uuid()` Rejects Non-RFC-4122 IDs
 
-**Root Cause**
-Zod v4's `.uuid()` enforces strict RFC 4122 validation, checking version (position 13 must be `1`-`8`) and variant (position 17 must be `8`-`b`) bits. Zod v3 only checked the hex format pattern. Demo seed data uses sequential pseudo-UUIDs like `00000000-0000-0000-0000-000000000160` which lack valid version/variant bits and fail this stricter check.
+**Symptoms** — EntitySelect fields show "Please select a valid facility/reactor/feedstock" on submit while the UI looks correctly filled; several UUID fields fail at once; error type is `invalid_format`, not `too_small`.
 
-**Fix — use a relaxed UUID-format regex in schemas**
+**Root Cause** — Zod v4's `.uuid()` enforces RFC 4122: position 13 must be the version (`1`-`8`) and position 17 the variant (`8`-`b`). Zod v3 only checked the hex shape. Flat sequential IDs like `00000000-0000-0000-0000-000000000160` fail.
 
-Replace `.uuid()` with a custom regex that accepts any 8-4-4-4-12 hex string:
+**Fix** — `.uuid()` stays in schemas (it is used ~186 times under `src/schemas`); **seed IDs must carry version/variant bits**. Follow the `demoId` helper in `src/db/seed-data.ts` (mirrored in `src/db/seed-certification-evidence.ts`):
+
 ```typescript
-// src/schemas/helpers.ts
-export const uuidFormat = z.string().regex(
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-  "Please select a valid option"
-);
+const demoId = (n: number) => `de000000-0000-4000-a000-${n.toString().padStart(12, '0')}`;
 ```
 
-Then use `uuidFormat` instead of `z.string().uuid()` in form schemas:
-```typescript
-// BAD — rejects valid DB rows with non-RFC-4122 IDs
-facilityId: z.string().uuid("Please select a valid facility")
+Re-seed after changing it (`pnpm db:seed`). There is no relaxed `uuidFormat` helper in this repo — do not import one.
 
-// GOOD — accepts any UUID-shaped string from the database
-facilityId: uuidFormat
-```
+### Zod Validation Not Firing At All
 
-**Alternative fix — make seed IDs RFC 4122 compliant**
-
-Add version `4` and variant `a` bits to the seed helper:
-```typescript
-// BAD — no version/variant bits, fails Zod v4
-const makeId = (n: number) => `00000000-0000-0000-0000-${n.toString().padStart(12, '0')}`;
-
-// GOOD — version=4, variant=a, passes Zod v4
-const makeId = (n: number) => `00000000-0000-4000-a000-${n.toString().padStart(12, '0')}`;
-```
-After fixing, re-seed the database: `pnpm db:reset`
-
-**Prevention**
-- After Zod major version upgrades, test seed IDs against the UUID schema
-- Prefer the relaxed regex if you can't guarantee all IDs are RFC 4122 compliant
+Check the schema is actually wired: `zodResolver(schema)` on the form, and the server action parses its input (`fn/` layer always validates with Zod).
 
 ## E2E Testing Issues
 
-### Rate Limiting Blocks Test Auth (429 Too Many Requests)
+[testing.md](./testing.md) owns E2E symptoms — rate limits and `DISABLE_RATE_LIMIT`, HTTP-API auth fixtures, first-load timeouts, and duplicate-key resets. Read it first; only the entries below are unique to this file.
 
-**Symptoms**
-- E2E tests fail with "Failed to sign in. Please try again."
-- Login page shows error after form submission
-- Server logs show `POST /api/auth/sign-in/email 429`
+Facts worth pinning because they are frequently misremembered:
 
-**Root Cause**
-Better Auth rate limits `/sign-in/email` to 10 attempts per 15 minutes. With 4 parallel Playwright workers each needing authentication, this limit is quickly exceeded.
-
-**Fix**
-Add `DISABLE_RATE_LIMIT=true` to `.env.local` for local development:
-```bash
-# .env.local
-DISABLE_RATE_LIMIT=true
-```
-Restart the dev server after adding this. The rate limit check is at `src/lib/auth/better-auth.ts:154`.
-
-### Auth Fixtures Use HTTP API Sign-In (Not UI)
-
-**Background**
-The auth fixtures (`tests/e2e/fixtures/auth-fixtures.ts`) authenticate via HTTP API (`POST /api/auth/sign-in/email`) instead of filling the login form through the browser UI. This is faster and more reliable because:
-
-- **scrypt is CPU-intensive**: Each password verification takes 8-10 seconds. With 4 parallel workers doing UI login simultaneously, the dev server gets overwhelmed and requests timeout.
-- **HTTP API auth** captures signed cookies from the response and injects them into the Playwright browser context, skipping UI interaction entirely.
-- **Origin header required**: Better Auth requires an `Origin` header matching `trustedOrigins`. The HTTP sign-in includes `Origin: ${baseURL}`.
-
-**Key function**: `createDirectAuthContext()` in `auth-fixtures.ts`
-
-### Tests Timeout on First Page Load (Dev Mode Compilation)
-
-**Symptoms**
-- Tests fail with "Target page, context or browser has been closed"
-- Tests pass on subsequent runs
-- Server logs show `Compiling...` during test execution
-
-**Root Cause**
-Next.js dev mode compiles pages on first request. With 4 workers hitting different routes simultaneously, compilation can take 10-30 seconds per page.
-
-**Fix**
-- Global timeout is set to 60s in `playwright.config.ts` to accommodate this
-- Run tests twice: first run warms up the dev server cache, second run is faster
-- For CI, consider using `pnpm build && pnpm start` instead of dev mode
-
-### Seed Data Collisions (Duplicate Key Errors)
-
-**Symptoms**
-- `duplicate key value violates unique constraint "facilities_code_unique"`
-- Tests fail on `seedChainData` in fixture setup
-
-**Root Cause**
-Leftover E2E data from previous test runs. The `testRunId` is unique per worker process, but cleanup may not complete if tests are interrupted. The `code` column has a unique constraint.
-
-**Fix**
-```bash
-# Reset the database to clear all stale test data
-pnpm db:reset
-```
-
-Or run tests again — the auto-cleanup in `cleanupTestData` fixture handles most cases.
+- Worker count is **not** fixed: `workers: process.env.CI ? ciWorkers : undefined` — Playwright's default locally. Reason about "parallel workers", never "4 workers".
+- Per-test timeout is `process.env.CI ? 60000 : 90000` (`playwright.config.ts`) — 60s in CI, 90s locally.
+- The worker auth fixture builds storage states via `createSignedAuthStorageState` (`tests/e2e/fixtures/auth-fixtures.ts`). `createDirectAuthContext` is a thin wrapper over it used by a single spec — do not treat it as the entry point.
+- `playwright.config` loads **`.env.test`, which is untracked**. Running E2E from a fresh git worktree without copying in both `.env.test` and `.env.local` makes every spec fail on a dead `DATABASE_URL`. This is the highest-frequency agent-facing E2E failure.
 
 ### E2E Schema Drift After Local Schema Changes
 
-**Symptoms**
-- E2E setup fails on insert with errors like `column "source_region" of relation "suppliers" does not exist`
-- Playwright passes on one machine and fails immediately on another
+**Symptoms** — fixture inserts fail with `column "source_region" of relation "suppliers" does not exist`; passes on one machine, fails immediately on another.
 
-**Root Cause**
-- The local Postgres instance is behind the repo’s current Drizzle schema, so fixture inserts no longer match the actual database.
+**Fix** — the local database is behind the tracked migrations.
 
-**Fix**
 ```bash
-# Bring the local database schema up to date
-pnpm drizzle-kit push --force
-
-# Then rerun Playwright
+pnpm db:verify-schema   # confirm the drift first
+pnpm db:migrate         # or pnpm db:reset if partially migrated
 pnpm test:e2e
 ```
 
-If the database has been left in a partially migrated state, use your normal local reset flow first and then re-apply the schema.
+Never reach for `drizzle-kit push --force` — it bypasses the tracked `drizzle/` migration set.
 
 ### Entity Names Collide with the Sidebar FacilitySelector (Strict Mode)
 
-**Symptoms**
-- `strict mode violation: getByText('…') resolved to 2 elements` — one a `<span>` button label, one an `<h3>` heading
-- Or, worse: a `not.toBeVisible()` assertion times out because the *sidebar* still shows the name after the list updated
+**Symptoms** — `strict mode violation: getByText('…') resolved to 2 elements` (a `<span>` button label and an `<h3>` heading); or a `not.toBeVisible()` assertion times out because the *sidebar* still shows the name after the list updated.
 
-**Root Cause**
-The sidebar `FacilitySelector` renders the selected facility's name, and the provider can auto-select a freshly-seeded test facility (fallback is `facilities[0]`, and `E2E …` names sort early). Any `page.getByText(<facility name>)` then matches both the sidebar and the card.
+**Root Cause** — the sidebar `FacilitySelector` renders the selected facility's name, and the provider can auto-select a freshly-seeded test facility (fallback is `facilities[0]`, and `E2E …` names sort early).
 
-**Fix**
-Scope to the role that only the card uses — `page.getByRole("heading", { name: facility.name })` — or scope within the card: `page.locator("article").filter({ hasText: facility.code })`.
+**Fix** — scope to a role only the card uses, `page.getByRole("heading", { name: facility.name })`, or scope within the card: `page.locator("article").filter({ hasText: facility.code })`.
 
 ### DB-State Assertions Right After a UI Signal Are Racy
 
-**Symptoms**
-- The UI confirmed an action (card disappeared, toast shown) but an immediate direct-DB read from the spec sees the old state (e.g., a freshly-stamped column still `NULL`)
-- Passes locally on re-run, flaky overall
+**Symptoms** — the UI confirmed the action (card gone, toast shown) but an immediate direct-DB read from the spec sees the old state (e.g. a freshly-stamped column still `NULL`). Passes on re-run; flaky overall.
 
-**Root Cause**
-The spec's DB read uses its own `pg` Pool — a separate connection from the app's. Combined with dev-mode latency and React Query refetch timing, "UI looks done" does not guarantee the spec's next statement observes the committed write yet.
+**Root Cause** — the spec's DB read uses its own `pg` Pool, a separate connection from the app's. "UI looks done" does not guarantee the spec's next statement observes the committed write.
 
-**Fix**
-Wrap direct-DB assertions in `expect.poll` instead of a one-shot read:
+**Fix** — wrap direct-DB assertions in `expect.poll`:
+
 ```ts
 await expect
   .poll(async () => (await readStamps()).archivedAt !== null, { timeout: 15000 })
   .toBe(true);
 ```
+
 See `tests/e2e/facility-archive.spec.ts` for the pattern in context.
 
 ## UI & Styling Issues
 
-### Native `<dialog>` centering & backdrop
+### Never Hand-Roll a Dialog
 
-**Symptoms**
-- A new `<dialog>` opened with `showModal()` renders top-left instead of centered.
-- Backdrop appears transparent / no dimming behind the modal.
+Compose `src/components/ui/modal/` (centered dialogs) or `SlideOverPanel`. Both are built on Base UI `Dialog`; there is no raw `<dialog>` / `showModal()` anywhere in `src/` and no global `dialog` CSS to inherit. See [design-system.md](./design-system.md) → Modal Component.
 
-**Root Cause**
-Tailwind v4 preflight applies `margin: 0` to the universal selector (`*, ::before, ::after, ::backdrop`), which overrides the UA stylesheet's `dialog[open] { margin: auto }` that centers modals. The UA `::backdrop` is also transparent by default.
+Modal dev-warns when rendered without `ariaLabelledBy` or `ariaLabel` — pass one.
 
-**Fix**
-Both rules are restored globally in `src/app/globals.css` — do **not** re-apply `m-auto` per dialog instance.
+### Dialog Opens with Stale Form State
 
-```css
-/* src/app/globals.css */
-dialog[open] {
-  margin: auto;
-}
+**Symptom** — opening a dialog shows the previous open's values, error state, or wizard step.
 
-dialog::backdrop {
-  background-color: rgb(0 0 0 / 0.5);
-}
-```
-
-**Better Fix**
-Compose the shared `<Modal>` primitive (`src/components/ui/modal/`) instead of writing raw `<dialog>` markup. It inherits the global centering rule plus consistent chrome (border, backdrop, width tokens, focus management, ESC handling). See `docs/design-system.md` → Modal Component.
-
-If you must use raw `<dialog>` (e.g., wrapping a third-party component), the global rule still applies — you don't need any per-instance centering classes.
-
-### Dialog dismisses with stale form state on next open
-
-**Symptoms**
-- Opening a dialog shows the previous open's form values, error state, or wizard step.
-
-**Cause**
-The `<dialog>` element is being kept mounted between opens. React state inside it persists across the close/open cycle.
-
-**Fix**
-Use the `<Modal>` primitive (`src/components/ui/modal/`) — it returns `null` while closed, unmounting the children and discarding state. Pair with the `onOpen` callback to reset any external state (form values, mutations) that should be fresh each open:
+**Why it normally works** — Base UI portals unmount children while closed, so each open starts fresh. State that lives *outside* the modal (RHF form instance, mutation state, step counter) does not reset on its own — reset it in `onOpen`:
 
 ```tsx
 <Modal
@@ -642,50 +295,25 @@ Use the `<Modal>` primitive (`src/components/ui/modal/`) — it returns `null` w
 </Modal>
 ```
 
+⚠️ `onOpen` is fired by a manual `useEffect` + `wasOpen` ref in `modal.tsx`, **not** by Base UI, because `onOpenChange` fires only for user-driven changes and never for the controlled `open` prop. "Simplifying" that effect into `onOpenChange` silently breaks every form-reset-on-open.
+
 ## Performance Issues
 
 ### Slow Page Loads
 
-**Symptoms**
-- Time to First Byte (TTFB) > 1s
-- Slow database queries
-
-**Fixes**
-- Check for N+1 queries in data-access layer
-- Add database indexes for frequently queried columns
-- Use `pnpm db:studio` to analyze query performance
-- Consider caching with React Query staleTime
-- Use `loading.tsx` for instant loading states
-
-### Memory Leaks
-
-**Symptoms**
-- Dev server slows down over time
-- Browser tab crashes
-
-**Fixes**
-- Check for event listeners not cleaned up
-- Use React Query's built-in garbage collection (default 5min)
-- Restart dev server periodically
-- Look for large state objects in React DevTools
+Check for N+1 queries in `data-access/`; add indexes for frequently queried columns; tune React Query `staleTime`; add `loading.tsx` for instant loading states; `dynamic(() => import('./HeavyComponent'))` for heavy client components.
 
 ## Date/Time Issues
 
 ### Date Fields Off by One Day
 
-**Symptoms**
-- Date picker shows yesterday's date when defaulting to "today"
-- Production run date is one day behind expected
-- Only happens in timezones behind UTC (e.g., UTC-5, UTC-8)
+**Symptoms** — the date picker defaults to yesterday; a production run date is one day behind. Only in timezones offset from UTC.
 
-**Root Cause**
-Using `new Date().toISOString().split("T")[0]` for `<input type="date">` default values. `toISOString()` converts to UTC, so 11 PM local time on March 3 in a negative-offset timezone (e.g., UTC-5) becomes March 4 04:00 UTC. Conversely, in positive-offset timezones (e.g., UTC+9), 1 AM March 4 becomes March 3 16:00 UTC.
+**Root Cause** — `new Date().toISOString().split("T")[0]` converts to UTC first, so 11 PM local on Mar 3 at UTC-5 becomes Mar 4 UTC (and 1 AM Mar 4 at UTC+9 becomes Mar 3 UTC).
 
-**Fix**
-Use `formatLocalDate` / `formatLocalDateTime` from `@/lib/date-utils`:
+**Fix** — use `formatLocalDate` / `formatLocalDateTime` from `@/lib/date-utils`:
+
 ```typescript
-import { formatLocalDate, formatLocalDateTime } from "@/lib/date-utils";
-
 // BAD — shifts date in non-UTC timezones
 date: new Date().toISOString().split("T")[0]
 
@@ -697,69 +325,17 @@ date: formatLocalDate(new Date())
 
 ### "Hydration failed"
 
-**Cause**: Server HTML doesn't match client HTML
-
-**Fixes**
-- Check for browser-only APIs used during render (localStorage, window)
-- Use `useEffect` for client-only code
-- Ensure no random values in JSX (dates, Math.random)
-- Use `suppressHydrationWarning` only as last resort
+Server HTML doesn't match client HTML. Check for browser-only APIs during render (`localStorage`, `window`), non-deterministic values in JSX (dates, `Math.random`), and move client-only work behind an effect. `suppressHydrationWarning` is a last resort.
 
 ### "Cannot access X before initialization"
 
-**Cause**: Circular dependency or hoisting issue
-
-**Fixes**
-- Check for circular imports between files
-- Move shared types to separate file
-- Use dynamic imports if needed
-
-### "too many clients already"
-
-**Cause**: Database connection pool exhausted
-
-**Fixes**: See "Connection Pool Exhaustion" section above
-
-## Getting Help
-
-If you're still stuck:
-
-1. **Check logs**
-   - Browser console (F12)
-   - Terminal where dev server runs
-   - Network tab for API errors
-
-2. **Search existing issues**
-   - [Next.js Issues](https://github.com/vercel/next.js/issues)
-   - [Better Auth Documentation](https://www.better-auth.com/docs)
-   - [Drizzle ORM Documentation](https://orm.drizzle.team/docs)
-
-3. **Create minimal reproduction**
-   - Isolate the issue
-   - Remove unrelated code
-   - Share error message and code
-
-## Prevention Checklist
-
-Before committing:
-- ✅ Run `pnpm build` to catch type errors
-- ✅ Run `pnpm lint` to catch code style issues
-- ✅ Test all CRUD operations
-- ✅ Check nothing in .env.local committed
-- ✅ Verify database migrations reviewed (if any)
-
-Before deploying:
-- ✅ Generate and review migrations (never use db:push)
-- ✅ Set all env vars in hosting platform
-- ✅ Test on staging environment
-- ✅ Check connection pool sizes appropriate for hosting plan
-- ✅ Verify admin emails configured
-- ✅ Test email sending (invites, password resets)
+Circular import or hoisting. Break the cycle — usually by moving shared types into their own file.
 
 ## Related Documentation
 
-- Architecture: `docs/architecture.md`
-- Database: `docs/database.md`
-- Authentication: `docs/auth.md`
-- Design System: `docs/design-system.md`
-- Template Usage: `TEMPLATE_USAGE.md`
+- Architecture & patterns → [architecture.md](./architecture.md) · Code style → [code-style.md](./code-style.md)
+- Database → [database.md](./database.md), [schema-overview.md](./schema-overview.md) · ADRs → [docs/adr/](./adr/)
+- Auth → [auth.md](./auth.md) · Env & secrets → [security.md](./security.md)
+- Forms → [forms.md](./forms.md) · Design system → [design-system.md](./design-system.md)
+- Testing → [testing.md](./testing.md) · Storage → [storage.md](./storage.md)
+- Next.js 16 caching → [modern-patterns.md](./modern-patterns.md) · Deferred work → [open-questions.md](./open-questions.md)

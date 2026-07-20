@@ -14,8 +14,8 @@
  * 1. Sample Info - credit batch, samplingTime, lab details
  * 2. Carbon Analysis - totalCarbonPercent, organicCarbonPercent, inorganicCarbonPercent
  * 3. Elemental - H, N, O, S percentages
- * 4. Proximate - ash, volatile matter, moisture
- * 5. Physical - bulkDensity, pH, surfaceArea, saltContent
+ * 4. Proximate - ash, moisture
+ * 5. Physical - bulkDensity, pH, saltContent
  * 6. Stability - H:C ratio, O:C ratio (durability tier shown, from the batch)
  * (+2 conditional, 1000-year batches) R₀ reflectance · TGA non-reactive carbon
  * 7. Nutrient Claims (conditional) - P, K, Mg, Ca, Fe
@@ -35,6 +35,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { FlaskIcon, FireIcon, AtomIcon, ScalesIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, makeCertFieldStatus } from "@/components/forms";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import { RATIO_INPUT_MAX, RATIO_MAX_MESSAGE } from "@/schemas/helpers";
 import {
   sampleFormSchema,
   calculateHToCOrgRatio,
@@ -50,6 +51,8 @@ import {
   SampleTransportSection,
 } from "./sample-trailing-sections";
 import type { SampleWithRelations } from "@/data-access/samples";
+import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import type { TransportLegFormData } from "@/schemas/transport-legs";
 
 // ============================================
 // Constants
@@ -77,6 +80,12 @@ interface SampleFormProps {
   isSubmitting?: boolean;
   /** Custom label for the submit button */
   submitLabel?: string;
+  deferredAttachments?: UseDeferredAttachmentsResult;
+  onRetryDeferredAttachments?: (key?: string) => Promise<unknown>;
+  onRemoveDeferredAttachment?: (key: string) => void;
+  deferredLegs?: TransportLegFormData[];
+  onDeferredLegsChange?: (legs: TransportLegFormData[]) => void;
+  onRetryDeferredLegs?: () => Promise<void>;
 }
 
 export function SampleForm({
@@ -86,6 +95,12 @@ export function SampleForm({
   onCancel,
   isSubmitting = false,
   submitLabel,
+  deferredAttachments,
+  onRetryDeferredAttachments,
+  onRemoveDeferredAttachment,
+  deferredLegs,
+  onDeferredLegsChange,
+  onRetryDeferredLegs,
 }: SampleFormProps) {
   const formId = useId();
   const isEditMode = !!sample;
@@ -110,10 +125,8 @@ export function SampleForm({
       totalSulfurPercent: sample?.totalSulfurPercent ?? undefined,
       ashContentPercent: sample?.ashContentPercent ?? undefined,
       moistureContentPercent: sample?.moistureContentPercent ?? undefined,
-      volatileMatterPercent: sample?.volatileMatterPercent ?? undefined,
       bulkDensityKgPerM3: sample?.bulkDensityKgPerM3 ?? undefined,
       ph: sample?.ph ?? undefined,
-      surfaceAreaM2PerG: sample?.surfaceAreaM2PerG ?? undefined,
       saltContentGPerKg: sample?.saltContentGPerKg ?? undefined,
       hToCOrgRatio: sample?.hToCOrgRatio ?? undefined,
       oToCOrgRatio: sample?.oToCOrgRatio ?? undefined,
@@ -141,6 +154,7 @@ export function SampleForm({
     control,
     watch,
     setValue,
+    setError,
     formState: { errors },
   } = useForm({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -285,6 +299,21 @@ export function SampleForm({
     // O/C_org eligibility gate has an input even under 1000-year.
     if (data.oToCOrgRatio == null && calculatedOToCRatio !== null) {
       data.oToCOrgRatio = parseFloat(calculatedOToCRatio.toFixed(4));
+    }
+    // Derived values are injected after the zod resolver ran, so re-check the
+    // numeric(7,6) cap here or an out-of-range auto-calculated ratio would
+    // only surface as a generic server error.
+    let derivedRatioOverCap = false;
+    if (data.hToCOrgRatio != null && data.hToCOrgRatio > RATIO_INPUT_MAX) {
+      setError("hToCOrgRatio", { type: "max", message: RATIO_MAX_MESSAGE });
+      derivedRatioOverCap = true;
+    }
+    if (data.oToCOrgRatio != null && data.oToCOrgRatio > RATIO_INPUT_MAX) {
+      setError("oToCOrgRatio", { type: "max", message: RATIO_MAX_MESSAGE });
+      derivedRatioOverCap = true;
+    }
+    if (derivedRatioOverCap) {
+      return;
     }
     onSubmit(data as unknown as SampleFormData);
   });
@@ -587,7 +616,7 @@ export function SampleForm({
         <FormSection
           title="Proximate Analysis"
           icon={<ScalesIcon size={14} weight="bold" />}
-          fields={["ashContentPercent", "volatileMatterPercent", "moistureContentPercent"]}
+          fields={["ashContentPercent", "moistureContentPercent"]}
         >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
@@ -609,48 +638,30 @@ export function SampleForm({
                 </FormField>
 
                 <FormField
-                  id="volatileMatterPercent"
-                  label="Volatile Matter (%)"
-                  error={errors.volatileMatterPercent?.message}
+                  id="moistureContentPercent"
+                  label="Moisture Content (%)"
+                  error={errors.moistureContentPercent?.message}
                 >
                   <FormInput
-                    id="volatileMatterPercent"
+                    id="moistureContentPercent"
                     type="number"
                     step="0.01"
-                    placeholder="e.g., 15.0"
+                    placeholder="e.g., 5.0"
                     disabled={isSubmitting}
-                    error={!!errors.volatileMatterPercent}
-                    {...register("volatileMatterPercent", {
+                    error={!!errors.moistureContentPercent}
+                    {...register("moistureContentPercent", {
                       setValueAs: numericValue,
                     })}
                   />
                 </FormField>
               </div>
-
-              <FormField
-                id="moistureContentPercent"
-                label="Moisture Content (%)"
-                error={errors.moistureContentPercent?.message}
-              >
-                <FormInput
-                  id="moistureContentPercent"
-                  type="number"
-                  step="0.01"
-                  placeholder="e.g., 5.0"
-                  disabled={isSubmitting}
-                  error={!!errors.moistureContentPercent}
-                  {...register("moistureContentPercent", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
         </FormSection>
 
         {/* ── Physical Properties ── */}
         <FormSection
           title="Physical Properties"
           icon={<CubeIcon size={14} weight="bold" />}
-          fields={["bulkDensityKgPerM3", "ph", "surfaceAreaM2PerG", "saltContentGPerKg"]}
+          fields={["bulkDensityKgPerM3", "ph", "saltContentGPerKg"]}
         >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
               <FormField
@@ -686,24 +697,6 @@ export function SampleForm({
                   disabled={isSubmitting}
                   error={!!errors.ph}
                   {...register("ph", {
-                    setValueAs: numericValue,
-                  })}
-                />
-              </FormField>
-
-              <FormField
-                id="surfaceAreaM2PerG"
-                label="Surface Area (m²/g)"
-                error={errors.surfaceAreaM2PerG?.message}
-              >
-                <FormInput
-                  id="surfaceAreaM2PerG"
-                  type="number"
-                  step="0.1"
-                  placeholder="e.g., 250"
-                  disabled={isSubmitting}
-                  error={!!errors.surfaceAreaM2PerG}
-                  {...register("surfaceAreaM2PerG", {
                     setValueAs: numericValue,
                   })}
                 />
@@ -954,8 +947,22 @@ export function SampleForm({
 
       {/* ── Trailing field-less steps — outside the <form> (their editors nest
              their own forms), numbered by the spine as the final two steps. ── */}
-      <SampleEvidenceSection sample={sample} isEditMode={isEditMode} />
-      <SampleTransportSection sample={sample} isEditMode={isEditMode} />
+      <SampleEvidenceSection
+        sample={sample}
+        isEditMode={isEditMode}
+        deferredAttachments={deferredAttachments}
+        onRetryAttachments={onRetryDeferredAttachments}
+        onRemoveAttachment={onRemoveDeferredAttachment}
+        isSubmitting={isSubmitting}
+      />
+      <SampleTransportSection
+        sample={sample}
+        isEditMode={isEditMode}
+        deferredLegs={deferredLegs}
+        onDeferredLegsChange={onDeferredLegsChange}
+        onRetryLegs={onRetryDeferredLegs}
+        isSubmitting={isSubmitting}
+      />
       </FormSpine>
 
       <FormActions

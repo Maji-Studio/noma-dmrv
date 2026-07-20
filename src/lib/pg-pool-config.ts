@@ -10,6 +10,10 @@ function parseDatabaseUrl(databaseUrl: string): URL {
   }
 }
 
+export function isLocalDatabaseTarget(databaseUrl: string): boolean {
+  return LOCAL_HOSTS.has(parseDatabaseUrl(databaseUrl).hostname);
+}
+
 export function describeDatabaseTarget(databaseUrl: string): string {
   const url = parseDatabaseUrl(databaseUrl);
 

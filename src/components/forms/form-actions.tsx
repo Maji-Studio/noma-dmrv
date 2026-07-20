@@ -13,6 +13,7 @@ interface FormActionsProps {
   onCancel?: () => void;
   isSubmitting?: boolean;
   submitLabel?: string;
+  submittingLabel?: string;
   defaultSubmitLabel?: string;
   /** Block submit while a precondition is unmet (e.g. an unchecked ack). */
   submitDisabled?: boolean;
@@ -25,16 +26,23 @@ interface FormActionsProps {
   formId?: string;
   /** Sticky footer (default) — disable for nested inline forms. */
   sticky?: boolean;
+  /** Use `button` when actions render inside an owning parent form. */
+  submitType?: "submit" | "button";
+  /** Click handler for a non-submit action button. */
+  onSubmitClick?: () => void;
 }
 
 export function FormActions({
   onCancel,
   isSubmitting = false,
   submitLabel,
+  submittingLabel = "Saving...",
   defaultSubmitLabel = "Save",
   submitDisabled = false,
   formId,
   sticky = true,
+  submitType = "submit",
+  onSubmitClick,
 }: FormActionsProps) {
   return (
     <div
@@ -50,12 +58,13 @@ export function FormActions({
       )}
     >
       <Button
-        type="submit"
+        type={submitType}
         variant="primary"
         form={formId}
+        onClick={onSubmitClick}
         disabled={isSubmitting || submitDisabled}
       >
-        {isSubmitting ? "Saving..." : submitLabel ?? defaultSubmitLabel}
+        {isSubmitting ? submittingLabel : submitLabel ?? defaultSubmitLabel}
       </Button>
       {onCancel && (
         <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>

@@ -1,10 +1,11 @@
 # Architecture
 
-## Design Goals
-
-- Keep the MRV app simple enough to extend quickly.
-- Keep data boundaries explicit so it scales without rewrites.
-- Enforce security at multiple layers (route + data-access).
+Cross-cutting structure of the noma-dmrv app: the layer stack, the tenancy and
+auth contracts every server action inherits, and the conventions specific
+surfaces (certification, dashboard, traceability) rely on. Read it before adding
+a `fn/` action, a `data-access/` query, or a new route group. Form detail lives
+in [forms.md](./forms.md); naming and React rules in
+[code-style.md](./code-style.md); "why" decisions in [ADRs](./adr/).
 
 ## Layers
 
@@ -12,483 +13,289 @@
 components (UI)
   -> hooks (React Query)
   -> fn (server actions)
-  -> data-access (authz + queries)
+  -> data-access (org scope + queries)
   -> db (Drizzle schema + connection)
 ```
 
-Rules:
+- UI never talks directly to `db`; no layer skipping.
+- `fn/` is `"use server"`, validates with Zod, returns `ActionResult<T>`.
+- `data-access/` owns query composition **and** org-scope enforcement.
 
-- UI never talks directly to `db`.
-- Server actions validate with Zod.
-- Data-access functions enforce authorization checks.
+## Tenancy — the actual authorization model
+
+**Organization, not facility, is the security boundary** (ADR
+[0010](./adr/0010-shared-schema-org-column-tenancy.md), and
+[organization.md](./organization.md)). Every domain table carries
+`organizationId`. Facility scope is a *view* filter; org scope is the *guard*.
+
+- A query filtered only on `facilityId` is a tenancy bug. Filter on
+  `organizationId` too, or prove the facility itself was org-checked.
+- `requireOrgContext()` (`src/lib/auth/server.ts`) resolves the active
+  `OrgContext` = `{ userId, organizationId, orgRole, isPlatformAdmin }`.
+- Guards in `src/data-access/utils.ts`, all taking `ctx: OrgContext`:
+  `requireOrgScope(ctx)`, `assertSameOrg(ctx, table, id, executor?)`,
+  `requireOrgFacility(ctx, facilityId)`. Role floors via `requireOrgRole(ctx, minRole)`.
+- **Inside a transaction, pass `tx` as `assertSameOrg`'s `executor`.** Reading
+  through the global pool from an open transaction starves the pool under
+  parallel load — each waiting tx holds a connection.
 
 ## Key Patterns
 
-Cross-cutting conventions every layer relies on. Form-specific detail lives in
-`docs/forms.md`; this section keeps the contracts.
+### `withAction()` — the only way to write a server action
 
-### ActionResult — every server function returns this
-
-Standard server-action return type, defined in `src/types/actions.ts`:
-
-```typescript
-type ActionResult<T> = { success: true; data: T } | { success: false; error: string };
-```
-
-### Auth guards — never skip
-
-Every `data-access/` function calls an auth guard before touching the database
-(`requireAuth()` lives in `src/data-access/utils.ts`):
+`src/fn/with-action.ts` is canonical. It calls `requireOrgContext()`, injects
+`ctx`, converts `ZodError` into a prefixed message, and formats `ActionResult`.
+Do **not** hand-roll try/catch or a manual auth call in `fn/`.
 
 ```typescript
-export async function createItem(userId: string, data: CreateItem) {
-  requireAuth(userId); // throws if userId is falsy
-  // safe to proceed
+export async function createItem(input: CreateItem) {
+  return withAction(async (ctx) => {
+    const data = createItemSchema.parse(input);
+    return createItemRecord(ctx, data); // data-access re-checks org scope
+  });
 }
 ```
+
+Rate limiting is opt-in per action: `withAction(fn, { rateLimit: { key, max,
+windowMs } })`, checked after auth so it keys on the resolved `userId`. Only
+expensive actions (certification submit) pass it.
+
+### `SafeError` vs `Error`
+
+`src/lib/errors.ts`. Only `SafeError` messages reach the operator verbatim;
+`toActionError` replaces anything else with the fallback. Throw `SafeError` for
+intentional business-rule messages, plain `Error` for genuine failures — a
+detail-rich plain `Error` is silently swallowed, and a leaky `SafeError` is a
+disclosure bug.
+
+### `ActionResult` — every server function returns this
+
+`src/types/actions.ts`. The failure branch may carry
+`conflict?: { entity, id, code }` so a form can deep-link the operator to the
+blocking record instead of only showing text. Forms are expected to honor it.
 
 ### Facility context
 
-Pages in `(app)` are facility-scoped: forms receive `facilityId` from context and
-**never ask the user to pick a facility in a form**. Full details in the
-[Facility Context](#facility-context) section below.
+Invariants (implementation: `src/hooks/use-facility-context.ts`): the active
+facility persists via `?facility=<id>` + localStorage through `nuqs`; sidebar
+hrefs carry it; **forms never ask the user to pick a facility** — they read it
+from context.
 
-### Quick-Add — inline creation of prerequisite entities
+### Quick-Add and cascading selects
 
-Lets a form create a missing prerequisite entity without leaving the page.
-
-- Schemas in `src/schemas/quick-add.ts` (minimal required fields only).
-- After create, call `seedEntityCache()` from
-  `@/components/forms/entity-select/cache-utils` to populate the dropdown.
-- `useOpenCreateIntent()` opens create dialogs from `?create=true` deep links.
-
-### Cascading / dependent selects
-
-`FormEntitySelect` auto-clears when parent values change via `dependsOn` (a single
-value or an array):
-
-```typescript
-<FormEntitySelect filterBy={{ feedstockTypeId, facilityId }} dependsOn={[feedstockTypeId, facilityId]} />
-```
-
-The underlying `useClearOnDependencyChange` hook is standalone. See `docs/forms.md`.
+Quick-Add lets a form create a missing prerequisite without leaving the page:
+schemas in `src/schemas/quick-add.ts` (minimal fields only); after create call
+`seedEntityCache()` from `@/components/forms/entity-select/cache-utils` to
+populate the dropdown; `useOpenCreateIntent()` opens create dialogs from
+`?create=true` deep links. `FormEntitySelect` auto-clears when parent values
+change via `dependsOn` (backed by the standalone `useClearOnDependencyChange`).
+See [forms.md](./forms.md).
 
 ### Structured logging — `@/lib/log` (server-only)
 
-```typescript
-import { logger } from "@/lib/log";
-logger.info({ userId, removalId }, "submission accepted");
-const log = logger.child({ requestId });   // bindings merged into every record
-```
+`logger.info({ userId, removalId }, "msg")`; `logger.child(bindings)` merges
+bindings into every record. Import only from `fn/`, `data-access/`, and the
+isometric client boundary — never a client component. NDJSON out, level via
+`LOG_LEVEL`. Redacts `email`/`token`/`secret`/`authorization` keys at any depth —
+a backstop, not a license to log PII. In-house (~50 lines) instead of pino due to
+a Turbopack/Vercel runtime bug.
 
-- **Server-only by contract** — import only from `fn/`, `data-access/`, and the
-  isometric client boundary. Never from a client component.
-- Emits newline-delimited JSON; level via `LOG_LEVEL`.
-- Redacts `email`/`token`/`secret`/`authorization`-type keys at any depth — but
-  still pass IDs, not PII (the redaction is a backstop, not a license).
-- `logger.child(bindings)` returns a logger whose bindings are merged into every
-  record it emits.
-- In-house (~50 lines) instead of pino due to a Turbopack/Vercel runtime bug; see
-  the file header for the rationale.
+## Routing & Auth
 
-## Routing Model
-
-- `src/app/(auth)/*`: public auth pages.
-- `src/app/(app)/*`: authenticated MRV workspace pages.
-- `src/app/(app)/admin/*`: admin-only pages.
-- `src/app/api/*`: API routes for auth, local storage, documents, and integration support.
-
-The app workspace is facility-scoped. `src/app/(app)/layout.tsx` enforces authentication and mounts `FacilityProvider`; pages and forms receive the active `facilityId` from context or explicit route/search params. The legacy starter `projects` / `[projectId]` route tree was removed in the 2026-06-08 schema slim-down.
-
-## Auth Architecture
-
-- `proxy.ts` runs request protection and includes API routes (Next.js 16 middleware replacement using Node.js runtime).
-- `/api/auth/*` is explicitly allowed through.
-- Better Auth config controls signup policy with `ALLOW_SELF_SIGNUP`.
-- Data-access checks remain the source of truth for authorization.
-
-### Proxy Middleware (Next.js 16)
-
-This app uses **Next.js 16's `proxy.ts`** instead of traditional `middleware.ts`:
-
-**Why proxy.ts?**
-- Runs in **Node.js runtime** (not Edge runtime)
-- Allows Better Auth to use Node.js `crypto` module
-- Same authentication logic as middleware
-- Better compatibility with server-side libraries
-
-**Location**: `src/proxy.ts` (delegates to `updateSession()` in `src/lib/auth/middleware.ts`)
-
-**Route Protection Logic**:
-```typescript
-// Unauthenticated users → Redirect to /sign-in
-// Authenticated users on auth pages → Redirect to app
-// Session refresh and cookie management
-```
-
-**Matcher Configuration**:
-- Runs on all routes EXCEPT:
-  - Static assets (`_next`, images, fonts)
-  - API routes handled separately
+- `src/app/(auth)/*` public · `src/app/(app)/*` authenticated workspace ·
+  `src/app/(app)/admin/*` admin-only · `src/app/api/*` API routes.
+- `src/app/(app)/layout.tsx` enforces auth and mounts `FacilityProvider`.
+- `src/proxy.ts` → `updateSession()` in `src/lib/auth/middleware.ts`. Node
+  runtime (not Edge) so Better Auth can use `crypto`. The matcher covers
+  everything except static assets — **including `/api`**; `/api/auth/*` is
+  explicitly allowed through.
+- Data-access org checks remain the source of truth for authorization; the proxy
+  is routing, not authz. See [auth.md](./auth.md).
+- Three API routes: `/api/auth/[...all]`, `/api/storage-local/[...key]`, and
+  `/api/documents/[id]` — the last resolves tenancy via `getOrgContext()`.
 
 ## State and Data Fetching
 
-- React Query provider is mounted once in `src/app/layout.tsx`.
-- Feature hooks in `src/hooks/` call server actions and invalidate cache keys.
-- Facility-scoped query keys include the active `facilityId` when the resource is facility-specific.
-- **Query keys**: `["resource", facilityId, ...specifics]`; invalidate related
-  queries after every mutation.
-- **Stale time**: 30s for current data, 5m for historical.
-- **Always check `src/hooks/` first** — every entity has a hook file
-  (`use-facilities.ts`, …). Never write an inline `useQuery` when a hook already
-  covers the server action; doing so duplicates keys and risks staleTime drift.
+- React Query provider mounted once in `src/app/layout.tsx`.
+- **Always check `src/hooks/` first** — every entity has a hook file. Never write
+  an inline `useQuery` when a hook already covers the server action.
+- Query keys come from typed factories per hook (e.g.
+  `facilityKeys.detailWithRelations(facilityId)`), not hand-built arrays.
+- `staleTime` is per-hook and deliberate (5s–5m, often a named module constant
+  like `DASHBOARD_OVERVIEW_STALE_TIME_MS`). There is no global default to copy —
+  read the neighbouring hook and match its intent.
+- Invalidate related keys after every mutation.
+- No `"use cache"`, no Cache Components — React Query owns all caching. See
+  [modern-patterns.md](./modern-patterns.md).
 
-### Caching Strategy
+## next.config.ts — three load-bearing settings
 
-This app uses client-side caching via React Query, not Next.js 16 Cache Components.
-
-**Configuration**: `cacheComponents: false` (default - not set in `next.config.ts`)
-
-**Why React Query over Cache Components:**
-- ✅ **Explicit control**: You decide what to cache and for how long
-- ✅ **User-specific**: React Query handles per-user cache keys naturally
-- ✅ **Invalidation**: Easy to invalidate on mutations with `queryClient.invalidateQueries()`
-- ✅ **Optimistic updates**: Built-in support for immediate UI feedback
-- ✅ **Security**: No risk of accidentally caching sensitive data server-side
-
-**What is cached:**
-- Client-side: React Query handles all data caching
-  - Stale time: 30s for current data, 5m for historical
-  - Query keys: `["resource", facilityId, ...specifics]` for facility-scoped resources
-  - Automatic invalidation on mutations
-
-**What is NOT cached:**
-- ❌ Server components (no `"use cache"` directive used)
-- ❌ API routes (all dynamic, no prerendering)
-- ❌ Auth checks (always fresh for security)
-
-**If you need server-side caching:**
-- Consider enabling `cacheComponents: true` in `next.config.ts`
-- See `docs/modern-patterns.md` for Next.js 16 Cache Components guide
-- Only cache expensive external API calls or admin-only operations
-- Never cache user-specific data or auth checks
-
-### API Routes Configuration
-
-All API routes in this app are dynamic by default (not prerendered at build time).
-
-**How API routes stay dynamic:**
-1. They call `getUser()` which accesses headers
-2. Next.js 16 automatically makes routes dynamic when they access request-specific data
-3. No need for `export const dynamic = 'force-dynamic'`
-
-**Standard API route pattern:**
-```typescript
-import { NextRequest, NextResponse } from "next/server";
-import { getUser } from "@/lib/auth/server";
-
-export async function GET() {
-  // Auth check makes this route dynamic automatically
-  const user = await getUser();
-  if (!user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Rest of handler...
-}
-```
-
-**If you enable Cache Components (`cacheComponents: true`):**
-- Use `connection()` from `next/server` at the start of handlers
-- See `docs/modern-patterns.md` for detailed examples
-
-**Routes are automatically dynamic when they:**
-- ✅ Call `getUser()` or `requireAuth()` (accesses headers)
-- ✅ Access `request.headers`, `request.nextUrl.searchParams`
-- ✅ Use `headers()`, `cookies()`, `draftMode()` from `next/headers`
-- ✅ Call `await connection()` explicitly
+- `reactCompiler: true` — this is what makes the "no manual memo" rule in
+  [code-style.md](./code-style.md) load-bearing rather than stylistic.
+- `logging: { serverFunctions: false }` — deliberate. Some server actions accept
+  write-only credentials as arguments and Next's dev logger would serialize
+  them. Re-enabling leaks secrets into local logs.
+- `outputFileTracingIncludes` broadly includes the evidence-ledger TTFs because
+  `src/lib/certification/evidence-ledger/fonts.ts` reads them via a runtime
+  `process.cwd()` path the static tracer cannot follow. Narrowing this glob
+  breaks Removal submission **in production only**.
 
 ## Database Boundaries
 
-- `src/db/schema/*` defines tables and types.
-- `src/data-access/*` owns query composition and permission checks.
-- Connection pooling defaults are centralized in `src/db/index.ts` with optional env tuning.
+`src/db/schema/*` defines tables and types; `src/data-access/*` owns queries and
+permission checks; pooling defaults are centralized in `src/db/index.ts`. See
+[database.md](./database.md) and [schema-overview.md](./schema-overview.md).
 
 ## Sampling Method Enforcement (Isometric)
 
-**ADR 0016 (Phase 1, 2026-06-19):** the sampling regime moved **off `reactors`**
-onto the new `production_processes` entity, keyed `(facility, feedstock)` and
-spanning reactors per Biochar Protocol §8.3.1. `reactors.sampling_method` and its
-Method-B baseline DB trigger (migration `0052`) were **dropped** (migration
-`0057`). The credit batch is now the protocol production batch (one feedstock,
-≤ 1 month under Isometric); lab samples attach per credit batch.
+The sampling regime lives on `production_processes.sampling_method` (default
+`method_a`), keyed `(facility, feedstock)` and spanning reactors — **not** on
+`reactors`. A process is find-or-created per `(facility, feedstock)` when a
+credit batch is created. Why: ADR
+[0016](./adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md)
+and [0017](./adr/0017-method-b-unlock-registry-computes-noma-gates-and-previews.md).
 
-- Sampling regime stored on `production_processes.sampling_method` (default
-  `method_a`); a process is find-or-created per `(facility, feedstock)` when a
-  credit batch is created.
-- DEC runs Method A everywhere. **ADR 0017 Track 1 shipped the Method-B
-  read-only compute** (per-process ≥30-sample baseline, credit-batch-grained
-  cadence); **Track 2 shipped the unlock** — the operator surface at
-  `/certification/production-processes` (registry-gated), `unlockMethodBForProcess`
-  with prerequisite capture + a process-grain DB trigger backstop, and the
-  non-authoritative unsampled-carbon/compliance-drift previews. The live
-  `_unsampled` submission POST stays gated behind a flag.
+Method B requires both gates:
 
-Method B requires:
+1. ≥30 prior Method-A samples in the process before unlocking `method_b`.
+2. Credit batches in the process satisfy sampled-batch cadence ≥ 1 per 10.
 
-1. At least 30 prior Method-A samples in the process before unlocking `method_b`.
-2. Credit batches in the process must satisfy sampled-batch cadence ≥ 1 per 10.
-
-> **Current Track 1 state:** Method B is inert but no longer reactor-grained.
-> `getMethodBEligibilityByProcess` / `countEligibleSamplesByProcess` provide the
-> baseline count, and `deriveSamplingRequirement` evaluates credit-batch cadence.
-
-Enforcement is intentionally layered:
-
-1. UI gating (disable/hide Method B when ineligible).
-2. Server validation in action/data-access layer.
-3. DB trigger guardrails for any direct/bypass writes (process-grain backstop
-   ships with ADR 0017 Track 2; the reactor-grain `0052` trigger was dropped).
+Enforcement is intentionally layered: UI gating → server validation in
+`fn/`/`data-access` (`unlockMethodBForProcess`) → a process-grain DB check
+constraint backstopping direct writes. The live `_unsampled` submission POST
+stays flag-gated.
 
 ## Certify Integration (Isometric)
 
-Outbound integration that submits MRV data to Isometric's Certify API
-and surfaces protocol/template metadata back into noma. Provider-agnostic
-schema (`certifier_*` tables) means the same persistence layer can host
-other registries later; Isometric-specific HTTP, transformers, and
-typings live under `src/lib/isometric/`.
-
-**Layered structure:**
+Outbound integration submitting MRV data to Isometric's Certify API. Schema is
+provider-agnostic (`certifier_*` tables) so another registry could be hosted
+later; Isometric-specific HTTP, transformers, and typings live under
+`src/lib/isometric/`.
 
 ```text
-components/certification/   # UI: Certify panel, GHG statements page
-       ↓
-hooks/use-certification.ts  # React Query hooks
-       ↓
-fn/certification/           # Server actions (split module):
-                            #   facility-mapping, certify-context,
-                            #   submit-removal, ghg-statements, overview,
-                            #   sources, health, shared, index
-       ↓
-data-access/certification.ts # Auth-guarded DB ops on certifier_* tables
-       ↓
-lib/isometric/              # Pure HTTP client + transformers + utils
-                            #   (no DB, no auth, no ActionResult)
-       ↓
-db/schema/certification.ts  # certifier_projects, certifier_sensors,
-                            #   certifier_ghg_statements, certifier_removals,
-                            #   certification_submissions,
-                            #   certifier_document_uploads,
-                            #   certifier_sync_events
+components/certification/  →  hooks/use-certification.ts  →  fn/certification/
+  →  data-access/certification.ts  →  lib/isometric/  →  db/schema/certification.ts
 ```
 
-**Idempotency:** every outbound POST runs through
-`certification_submissions` as both lock and ledger — `lockedAt` blocks
-concurrent in-flight retries, `payloadHash` (canonical-JSON sha256)
-identifies replayable submissions, `version` tracks supersedes. The
-retry-decision gate is centralized in
-`src/lib/isometric/utils/submission-claim.ts` (`decideSubmissionClaim`)
-and applied identically by `submitRemoval` (one ledger row per Removal,
-keyed `localEntityType:'removal'`, `localEntityId: certifierRemovals.id`
-— a facility-scoped row aggregating its member credit batches) and
-`submitGhgStatementToVerifier` (one ledger row per GHG Statement, keyed
-`localEntityType:'ghgStatement'`). Every HTTP attempt also appends a row
-to `certifier_sync_events` (append-only audit log; never used for
-state). See ADR 0003 for the Removal submission model.
+The one non-obvious rule: **`lib/isometric/` is pure** — no DB, no auth, no
+`ActionResult`.
 
-**Source-data immutability:** once a Removal, telemetry upload, or GHG
-Statement has a blocking submission ledger row (`draft`, `submitted`, or
-`accepted`), its upstream operational records are locked at the data-access
-boundary. The guard re-derives membership from the current credit-batch
-lineage before every mutation and blocks edits/deletes to production runs,
-samples, applications, deliveries, orders, biochar products, feedstocks, and
-credit-batch grouping records that would desync live MRV views from an
-immutable certification payload snapshot. Corrections must be represented as
-correction workflow records or a new submission version, not as in-place edits
-to locked source data.
+**Idempotency:** every outbound POST runs through `certification_submissions` as
+both lock and ledger — `lockedAt` blocks concurrent in-flight retries,
+`payloadHash` (canonical-JSON sha256) identifies replayable submissions,
+`version` tracks supersedes. The retry-decision gate is centralized in
+`src/lib/isometric/utils/submission-claim.ts` (`decideSubmissionClaim`) and
+applied identically by `submitRemoval` (one row per Removal, keyed
+`localEntityType:'removal'`) and `submitGhgStatementToVerifier` (one row per GHG
+Statement). Every HTTP attempt appends to `certifier_sync_events` (append-only
+audit; never used for state). See ADR
+[0003](./adr/0003-removal-as-submission-unit.md) and
+[0008](./adr/0008-submission-ledger-internal-seam.md).
 
-**UI surfaces:**
+**Source-data immutability:** once a Removal, telemetry upload, or GHG Statement
+has a blocking ledger row (`draft`, `submitted`, `accepted`), its upstream
+operational records are locked at the data-access boundary. The guard re-derives
+membership from current credit-batch lineage before every mutation and blocks
+edits/deletes to production runs, samples, applications, deliveries, orders,
+biochar products, feedstocks, and credit-batch grouping records. Corrections are
+new submission versions or correction-workflow records, never in-place edits.
 
-- Credit-batch detail and health surfaces show readiness, membership, and
-  blocker context. They do not submit directly; submission is consolidated
-  into the Certification workspace.
-- `/certification` route group (`src/app/(app)/certification/`) — a
-  first-class certification **workspace** (ADR 0007), reached from its own
-  titled **Certification** group in the sidebar with three concrete routes:
-  Removals · GHG Statements · Settings. The root `/certification` route is a
-  compatibility redirect to Removals, preserving `?facility=`. Removals and GHG
-  Statements are DataTables with read-only side-sheets (`?removal=` /
-  `?statement=`). New removals are created through the New-Removal wizard:
-  select ready ungrouped batches, review registry requirements, then submit.
-  Settings consolidates the facility↔project link and emission/LCA config (the
-  old `/admin/emission-estimates` redirects here). Provider-neutral by design —
-  Verra / Gold Standard / CSI surfaces may be added as sibling routes later;
-  today every surface is Isometric-specific.
-- Facility list side sheet — facility ↔ Isometric project mapping
-  (`src/components/certification/facility-certifier-section.tsx`).
+**Workspace:** `/certification` (ADR
+[0007](./adr/0007-certification-workspace-consolidation.md)) is a first-class
+sidebar group with four routes — Removals · GHG Statements · Production
+Processes · Settings. Root `/certification` redirects to Removals preserving
+`?facility=`. Removals has list, side-sheet (`?removal=`), detail
+(`/removals/[removalId]`) and review (`/[removalId]/review`) surfaces; new
+Removals are created through the New-Removal wizard. Settings holds the
+facility↔project link and emission/LCA config.
 
-**Phase status and deferred work** — see
-`docs/isometric/integration-plan.md`. Current notable deferrals:
-source-upload presigned-URL flow (Phase 3.5), webhook ingestion,
-PATCH-vs-supersede for Removals, and external amendment claiming.
+**`CertificationRegistryGuard`** (`src/components/certification/`) gates every
+`/certification/*` route on the facility having a registry link — mounted in the
+certification layout and independently on production-processes. **New
+certification routes must sit inside that guard.**
+
+Credit-batch detail and health surfaces show readiness/membership/blockers but
+never submit — submission is consolidated in the workspace. Phase status and
+deferred work: [isometric/integration-plan.md](./isometric/integration-plan.md)
+and [open-questions.md](./open-questions.md). Registry facts are authoritative
+only from the Isometric MCP — see [isometric/README.md](./isometric/README.md).
 
 ## Dashboard
 
-Facility-scoped operations dashboard at `/dashboard`.
+Facility-scoped operations dashboard at `/dashboard`
+(`src/app/(app)/dashboard/page.tsx` → `DashboardView`).
 
-- **Route**: `src/app/(app)/dashboard/page.tsx` -> `DashboardView`.
-- **Data**: `src/data-access/dashboard-overview.ts` is the one aggregate read
-  for the selected facility. It returns the KPI strip, 12-bucket sparkline
-  series, range deltas, feedstock mix, custody-flow ribbon, attention queue,
-  live "Now" signals, MRV pipeline, evidence health, and map preview points.
-- **Operations half**: `src/data-access/dashboard-operations.ts` is
-  range-independent and answers "where does this facility stand right now":
-  running/completed runs, in-flight registry/verifier submissions, structural
-  evidence gaps, and plottable facility/application/feedstock sites.
-- **Attention items**: computed from existing MRV records only. They have no
+- Reads split across `src/data-access/dashboard-overview.ts` (range-scoped KPI
+  strip, sparklines, deltas, feedstock mix, custody ribbon),
+  `dashboard-attention.ts`, `dashboard-stations.ts`, and
+  `dashboard-structural-gaps.ts`.
+- **Attention items** are computed from existing MRV records only. They have no
   independent lifecycle, assignee, or completion state; they disappear when the
   underlying record is fixed (see `CONTEXT.md`).
-- **Boundary**: dashboard queries still follow the standard
-  UI -> hooks -> fn -> data-access -> db flow and are facility-scoped at the
-  data-access layer.
+- Dashboard queries follow the standard layer flow and are org- and
+  facility-scoped at the data-access layer.
 
 ## Production Run Extensions
 
-The production-run detail page hosts three child entities:
+The production-run detail page hosts three child entities: **Readings**
+(time-series telemetry), **Samples** (in-process measurements with file upload),
+and **Incidents** (severity + corrective actions).
 
-- **Readings** — time-series telemetry (see Production Run Readings Import below).
-- **Samples** — in-process measurements with file upload.
-- **Incidents** — exceptions carrying a severity and corrective actions.
+Readings are document-backed, imported from a canonical CSV.
+`ProductionReadingsDocuments` stores files as
+`documents.entity_type='production_run'`, `document_type='sensor_data'` via the
+normal presigned flow ([storage.md](./storage.md)).
+`src/fn/production-run-reading-imports.ts` parses via
+`src/lib/production-readings/readings-csv.ts`: columns match **by header**
+(`timestamp_utc`, `temperature_c`, `pressure_bar`, optional
+`dryer_frequency_hz`/`reactor_frequency_hz`), every row carries a full UTC
+timestamp so a file may span days, and there is no filename convention or
+mapping step. Imported rows are clipped to the run's `start_time`/`end_time`
+window and replace existing readings **only within the span they cover**.
 
-Components live in `src/components/production-run-readings/` and
-`src/components/production-runs/`.
+## Traceability Visualization
 
-## Production Run Readings Import
-
-Production-run telemetry is document-backed and imported from a canonical CSV.
-
-- **Upload**: `ProductionReadingsDocuments` stores files as
-  `documents.entity_type='production_run'` and `document_type='sensor_data'`
-  through the normal presigned storage flow.
-- **Import**: `src/fn/production-run-reading-imports.ts` reads the uploaded
-  object and parses it with `src/lib/production-readings/readings-csv.ts`.
-  Columns are matched by header (`timestamp_utc`, `temperature_c`,
-  `pressure_bar`, optional `dryer_frequency_hz`/`reactor_frequency_hz`); every
-  row carries a full UTC timestamp, so a file may span multiple days. There is
-  no filename convention or column-mapping step.
-- **Persistence**: imports clip rows to the run's `start_time`/`end_time`
-  window and replace existing readings only within the span they cover, writing
-  rows to `production_run_readings`.
-- **Performance note**: readings can become high-cardinality. The current UI
-  caps table height, but server-side pagination/virtualization remains tracked
-  in `docs/open-questions.md`.
-
-## Chain of Custody Visualization
-
-Credit-batch anchored lineage view at `/chain-of-custody`, with dual
-deep-link selectors:
-
-- `?batch=<id>` opens the batch roll-up.
-- `?application=<id>` opens an application drill-down.
+Credit-batch anchored lineage at `/traceability` (canonical).
+`/chain-of-custody` is a legacy redirect that preserves search params and
+forwards — do not add a page there. Deep links: `?batch=<id>` opens the batch
+roll-up, `?application=<id>` an application drill-down.
 
 Batch roll-up merges every member application's rollback, dedupes production
-runs, and exposes **DAG | Map | Sankey**. Application drill-down exposes
-**Lineage | Map | Split | Trail**. The Sankey is a dry-mass balance with
-explicit exits for ineligible feedstock (derived from feedstock eligibility
-flags, issue #285), conversion loss, and in-storage mass; no net-CO2e figure
-is shown (registry-owned, ADR 0018).
+runs, and exposes **DAG | Map | Sankey**. Drill-down exposes **Lineage | Map |
+Split | Trail**. The Sankey is a dry-mass balance with explicit exits for
+ineligible feedstock, conversion loss, and in-storage mass; no net-CO2e figure
+(registry-owned, ADR [0018](./adr/0018-isometric-owns-project-emissions.md)).
+Anchor model: ADR
+[0011](./adr/0011-credit-batch-anchored-chain-of-custody.md).
 
-- **Components**: `src/components/chain-of-custody/` (page, graph, map,
-  sankey, trail, constants).
-- **Data**:
-  `src/data-access/chain-of-custody.ts`,
-  `src/data-access/chain-of-custody-batch.ts`, and
-  `src/data-access/chain-of-custody-trail.ts`.
-- **Layout**: dagre LR graph layout with React Flow canvas controls, minimap,
-  hover focus, and record-opening side sheets.
-- **Node types**: Feedstock, Reactor, Production Run, Biochar Product, Order,
-  Delivery, Application. Accent groups are Production, Infrastructure, and
-  Distribution.
-- **Facility scope**: selectors and resolved anchors are filtered against the
-  active facility so stale or foreign deep links cannot render another
-  facility's provenance.
-
-## Facility Context
-
-Global facility selection system that scopes all pages and forms to a single facility.
-
-**Components:**
-
-| File | Purpose |
-|------|---------|
-| `src/hooks/use-facility-context.ts` | `FacilityContext` + `useFacilityContext()` hook |
-| `src/components/navigation/facility-provider.tsx` | `FacilityProvider` — wraps `(app)` layout |
-| `src/components/navigation/facility-selector.tsx` | Sidebar dropdown for switching facilities |
-
-**How it works:**
-- `FacilityProvider` is mounted in `src/app/(app)/layout.tsx`
-- Selected facility persists via URL query param (`?facility=<id>`) + localStorage
-- Uses `nuqs` (`useQueryState`) for URL state management
-- `NuqsAdapter` is mounted in `src/app/providers.tsx`
-- Sidebar nav links append `?facility=<facilityId>` to all hrefs
-- Forms receive `facilityId` from context instead of asking the user to select it
-
-**Usage:**
-```typescript
-import { useFacilityContext } from "@/hooks/use-facility-context";
-
-const { facilityId, selectedFacility, facilities, setFacilityId } = useFacilityContext();
-```
-
-## Caching Best Practices
-
-**General Rules:**
-1. **Default to React Query** for data fetching - it's simpler and more predictable
-2. **Keep server components uncached** - let Next.js optimize naturally
-3. **Only cache expensive operations** - external API health checks, admin-only data
-4. **Never cache auth checks** - security requires fresh validation
-5. **Test cache behavior** - ensure invalidation works correctly
-
-**When React Query is enough (most cases):**
-- ✅ User-facing CRUD operations
-- ✅ Frequently changing data
-- ✅ User-specific data that varies per user
-- ✅ Data that needs optimistic updates
-
-**When to consider Cache Components:**
-- ✅ Expensive external API calls (health checks, public data)
-- ✅ Infrequently changing data
-- ✅ Admin-only system operations
-- ✅ Reduce load on external services
-
-**Key Takeaway**: noma-dmrv prioritizes simplicity and security over aggressive caching. React Query is sufficient for most app data. Only enable Cache Components if you have a specific need and understand the tradeoffs.
+- **Components**: `src/components/chain-of-custody/` — graph logic in
+  `use-chain-graph.ts` / `chain-node.tsx` / `chain-edge.tsx`, plus `map/`,
+  `sankey/`, `trail/`, `chain-constants.ts`.
+- **Data**: `src/data-access/chain-of-custody{,-batch,-trail}.ts`.
+- **Layout**: dagre LR layout on a React Flow canvas with minimap, hover focus,
+  and record-opening side sheets.
+- **Scope**: selectors and resolved anchors are filtered against the active
+  facility so stale or foreign deep links cannot render another facility's
+  provenance. Full detail in [traceability.md](./traceability.md).
 
 ## Shared Utilities
 
-Cross-cutting code is extracted to shared modules to avoid duplication:
-
-| Module | Purpose |
-|--------|---------|
-| `src/data-access/utils.ts` | `requireAuth()` — auth guard used by all data-access files |
-| `src/hooks/types.ts` | `MutationCallbacks`, `OptimisticUpdateOptions` — shared React Query mutation types |
-| `src/schemas/helpers.ts` | `emptyToNull`, `optionalNumber`, `optionalPercent`, `latitudeSchema`, `longitudeSchema`, `gpsCoordinatesSchema` — reusable Zod schemas |
-| `src/components/forms/entity-select/cache-utils.ts` | `seedEntityCache()` — populates React Query cache after quick-add dialogs |
-| `src/types/actions.ts` | `ActionResult<T>` — standard server action return type |
-
-When adding new entities, import from these shared modules instead of re-declaring locally.
+Import from these instead of re-declaring locally:
+`src/data-access/utils.ts` (org guards) · `src/fn/with-action.ts` ·
+`src/lib/errors.ts` · `src/hooks/types.ts` · `src/schemas/helpers.ts` (Zod
+helpers and numeric/mass/ratio constants — see [forms.md](./forms.md)) ·
+`src/components/forms/entity-select/cache-utils.ts` · `src/types/actions.ts`.
 
 ## CI/CD
 
-GitHub Actions workflows and repo automation:
-
-| Workflow / config | Purpose |
-|-------------------|---------|
-| `migrate.yml` | Auto-migrates on schema push to `main`/`staging`; manual reset/seed via `workflow_dispatch` |
-| `claude.yml` | AI PR review |
-| `e2e.yml` | Playwright end-to-end tests |
-| `isometric-health.yml` | Daily read-only Isometric sandbox ping |
-| `.coderabbit.yaml` | Auto-review on `main`/`staging` |
+`.github/workflows/`: `ci.yml` (lint/typecheck/build) · `migrate.yml`
+(auto-migrate on schema push to `main`/`staging`; manual reset/seed via
+`workflow_dispatch`) · `migration-gate.yml` (blocks schema drift) ·
+`enforce-main-source.yml` (branch-protection: `main` only from `staging`) ·
+`e2e.yml` and `e2e-live.yml` (Playwright, see [testing.md](./testing.md)) ·
+`isometric-health.yml` and `storage-health.yml` (daily read-only pings) ·
+`claude.yml` and `.coderabbit.yaml` (AI review).
 
 CI secrets come from 1Password via `1password/load-secrets-action` plus the
 `OP_SERVICE_ACCOUNT_TOKEN` repo secret; only `CLAUDE_CODE_OAUTH_TOKEN` remains a
-plain Actions secret. See `docs/security.md` → Secrets Management.
+plain Actions secret. See [security.md](./security.md) → Secrets Management.

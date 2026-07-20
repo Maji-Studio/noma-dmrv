@@ -1,50 +1,179 @@
 /**
- * Dashboard + credit-batch detail (visual design plan, Phase 5).
+ * Dashboard + credit-batch detail.
  *
- * Dashboard: KPI strip with sparkline slots, the Action center (record flags +
- * evidence gaps + live signal merged), feedstock mix, custody-flow ribbon, and
- * the period toggle — all facility-scoped.
+ * Dashboard (Flow Hero): the 4-stat KPI band, the isometric traceability hero
+ * with its Overview / Flow / Needs-attention views, the supporting row
+ * (needs-attention list, recent activity, certification block), and the
+ * Week / Month / All period toggle — all facility-scoped.
  * Credit batch detail: header KPI row (CO₂e stored · lab samples · runs),
  * certification checklist strip, read-only Details card, and the edit form
  * behind the header's "Edit batch" side sheet.
  */
 import { test, expect } from "./fixtures/auth-fixtures";
 import { seedCreditBatch } from "./fixtures/seed-chain-data";
+import { createDbConnection } from "./fixtures/db";
+import { DEC_ORG_ID } from "@/db/org-defaults";
+import {
+  facilities,
+  feedstocks,
+  supplierLocations,
+  suppliers,
+  transportLegs,
+} from "@/db/schema";
+import { eq } from "drizzle-orm";
 
-test.describe("Dashboard (Phase 5)", () => {
-  test("renders headline, KPI strip, panels, and the period toggle", async ({
+test.describe("Dashboard (Flow Hero)", () => {
+  test("renders headline, KPI band, hero views, supporting panels, and the period toggle", async ({
     adminPage,
     seededData,
   }) => {
     const page = adminPage;
     await page.goto(`/dashboard?facility=${seededData.facility.id}`);
 
-    await expect(
-      page.getByRole("heading", { name: seededData.facility.name }),
-    ).toBeVisible();
+    // Display headline with the facility riding in the eyebrow
+    await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+    await expect(page.getByText(seededData.facility.name).first()).toBeVisible();
 
-    // 5-card KPI strip
+    // 4-stat KPI band
     const kpis = page.getByTestId("dashboard-kpis");
     await expect(kpis).toBeVisible();
     await expect(kpis.getByText("Feedstock processed")).toBeVisible();
     await expect(kpis.getByText("Biochar produced")).toBeVisible();
-    await expect(kpis.getByText("Pyrolysis yield")).toBeVisible();
     await expect(kpis.getByText("Applied to soil")).toBeVisible();
     await expect(kpis.getByText("CO₂e stored")).toBeVisible();
 
-    // Panels (Action center merges record flags + evidence gaps + live signal)
-    await expect(page.getByText("Action center")).toBeVisible();
-    await expect(page.getByText("Feedstock mix")).toBeVisible();
-    await expect(page.getByText("Pipeline")).toBeVisible();
+    // Traceability hero with the smart-view segmented control
+    const hero = page.getByTestId("flow-hero");
+    await expect(hero).toBeVisible();
+    await expect(hero.getByText("Traceability — supplier to soil")).toBeVisible();
+    const attentionView = hero.getByRole("button", { name: "Needs attention" });
+    await attentionView.click();
+    await expect(attentionView).toHaveAttribute("aria-pressed", "true");
+    await hero.getByRole("button", { name: "Overview" }).click();
+
+    // Supporting row
+    await expect(page.getByText("Needs attention", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Recent activity")).toBeVisible();
+    await expect(page.getByText("Certification — credit batches")).toBeVisible();
 
     // Period toggle switches the active segment
-    const ytd = page.getByRole("button", { name: "YTD" });
-    await ytd.click();
-    await expect(ytd).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByRole("button", { name: "30D" })).toHaveAttribute(
+    const week = page.getByRole("button", { name: "Week" });
+    await week.click();
+    await expect(week).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "Month" })).toHaveAttribute(
       "aria-pressed",
       "false",
     );
+  });
+
+  test("structural certification gaps block false green while a zero-gap facility is all clear", async ({
+    adminPage,
+    seededData,
+  }) => {
+    const { db, pool } = createDbConnection();
+    const facilityId = crypto.randomUUID();
+    const supplierId = crypto.randomUUID();
+    const supplierLocationId = crypto.randomUUID();
+    const feedstockId = crypto.randomUUID();
+    const transportLegId = crypto.randomUUID();
+    const tag = crypto.randomUUID().slice(0, 8);
+
+    try {
+      await db.transaction(async (tx) => {
+        await tx.insert(facilities).values({
+          id: facilityId,
+          organizationId: DEC_ORG_ID,
+          code: `E2E-DASH-GAP-${tag}`,
+          name: `E2E Dashboard Gap ${tag}`,
+          gpsLatitude: -6.163,
+          gpsLongitude: 35.7516,
+        });
+        await tx.insert(suppliers).values({
+          id: supplierId,
+          organizationId: DEC_ORG_ID,
+          code: `E2E-DASH-SUP-${tag}`,
+          name: `E2E Dashboard Supplier ${tag}`,
+        });
+        await tx.insert(supplierLocations).values({
+          id: supplierLocationId,
+          organizationId: DEC_ORG_ID,
+          supplierId,
+          name: "Incomplete source location",
+          country: "TZ",
+          gpsLatitude: -6.8,
+          isDefault: true,
+        });
+        await tx.insert(feedstocks).values({
+          id: feedstockId,
+          organizationId: DEC_ORG_ID,
+          code: `E2E-DASH-FS-${tag}`,
+          facilityId,
+          status: "complete",
+          supplierId,
+          feedstockTypeId: seededData.feedstockType.id,
+          massWetKg: 100,
+          massDryKg: 90,
+          moistureContentPercent: 10,
+        });
+        await tx.insert(transportLegs).values({
+          id: transportLegId,
+          organizationId: DEC_ORG_ID,
+          entityType: "feedstock",
+          entityId: feedstockId,
+          originGpsLatitude: null,
+          originGpsLongitude: null,
+          destinationGpsLatitude: -6.163,
+          destinationGpsLongitude: 35.7516,
+          distanceKm: 25,
+          distanceSource: "manual",
+          transportMethodType: "road",
+          loadMassKg: 100,
+        });
+      });
+
+      const page = adminPage;
+      await page.goto(`/dashboard?facility=${facilityId}`);
+      const structuralGaps = page.getByTestId("structural-gap-list");
+      await expect(structuralGaps.getByText("Feedstock GPS missing")).toBeVisible();
+      await expect(
+        structuralGaps.getByText("Transport endpoint GPS missing"),
+      ).toBeVisible();
+      await expect(
+        structuralGaps.getByText("Transport distance lacks document evidence"),
+      ).toBeVisible();
+      await expect(structuralGaps.getByText("1 gap")).toHaveCount(3);
+      await expect(page.getByText("3 open", { exact: true }).first()).toBeVisible();
+      await expect(page.getByText("All clear")).toHaveCount(0);
+
+      await db.transaction(async (tx) => {
+        await tx
+          .update(supplierLocations)
+          .set({ gpsLongitude: 39.28 })
+          .where(eq(supplierLocations.id, supplierLocationId));
+        await tx
+          .update(transportLegs)
+          .set({
+            originGpsLatitude: -6.8,
+            originGpsLongitude: 39.28,
+            distanceSource: "document",
+          })
+          .where(eq(transportLegs.id, transportLegId));
+      });
+
+      await page.reload();
+      await expect(page.getByTestId("structural-gap-list")).toHaveCount(0);
+      await expect(page.getByText("All clear")).toBeVisible();
+      await expect(page.getByText("Every blocking check passes.")).toBeVisible();
+    } finally {
+      await db.delete(transportLegs).where(eq(transportLegs.id, transportLegId));
+      await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
+      await db
+        .delete(supplierLocations)
+        .where(eq(supplierLocations.id, supplierLocationId));
+      await db.delete(suppliers).where(eq(suppliers.id, supplierId));
+      await db.delete(facilities).where(eq(facilities.id, facilityId));
+      await pool.end();
+    }
   });
 });
 

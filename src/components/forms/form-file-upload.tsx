@@ -2,7 +2,9 @@
  * FormFileUpload component
  * Drag-and-drop file upload with optional real upload to documents storage.
  *
- * Two modes:
+ * Three modes:
+ *   - **Deferred**: holds parent-controlled real File objects until the parent
+ *     entity exists. No network calls are made from this mode.
  *   - **Mockup** (default, backward-compatible): captures FileEntry[] locally
  *     and emits via onChange. No network calls. Used in legacy forms that
  *     haven't migrated to the documents storage layer yet.
@@ -15,13 +17,16 @@
 import { useRef, useState } from "react";
 import { UploadSimpleIcon, FileIcon, XIcon, CheckCircleIcon, WarningCircleIcon, SpinnerIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
-import { formatFileSize } from "@/lib/format-utils";
+import { BYTES_PER_MB, formatFileSize } from "@/lib/format-utils";
 import { useFileUpload } from "@/hooks/use-file-upload";
+import type { DeferredFileEntry } from "@/hooks/use-deferred-attachments";
 import type {
   ApplicationBoundaryLogbookEvidenceType,
   ApplicationVisualEvidenceRole,
 } from "@/lib/certification/application-evidence";
 import type { DocumentType } from "@/schemas/documents";
+
+export type { DeferredFileEntry } from "@/hooks/use-deferred-attachments";
 
 interface FileEntry {
   name: string;
@@ -54,6 +59,27 @@ interface FormFileUploadProps {
   applicationLogbookEvidenceType?: ApplicationBoundaryLogbookEvidenceType;
   onUploaded?: (documentId: string) => void;
   onUploadError?: (error: string) => void;
+  deferred?: boolean;
+  deferredFiles?: DeferredFileEntry[];
+  onDeferredAdd?: (files: File[]) => void;
+  onDeferredRemove?: (key: string) => void;
+}
+
+function fileMatchesAccept(file: File, accept: string): boolean {
+  const normalizedType = file.type.toLowerCase();
+  const normalizedName = file.name.toLowerCase();
+
+  return accept
+    .split(",")
+    .map((rule) => rule.trim().toLowerCase())
+    .filter(Boolean)
+    .some((rule) => {
+      if (rule.startsWith(".")) return normalizedName.endsWith(rule);
+      if (rule.endsWith("/*")) {
+        return normalizedType.startsWith(rule.slice(0, -1));
+      }
+      return normalizedType === rule;
+    });
 }
 
 function getDropzoneClass(opts: {
@@ -88,14 +114,19 @@ export function FormFileUpload({
   applicationLogbookEvidenceType,
   onUploaded,
   onUploadError,
+  deferred = false,
+  deferredFiles = [],
+  onDeferredAdd,
+  onDeferredRemove,
 }: FormFileUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [uploads, setUploads] = useState<UploadedEntry[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [deferredError, setDeferredError] = useState<string | null>(null);
   const { upload } = useFileUpload();
 
-  const isRealMode = !!(entityType && entityId && documentType);
+  const isRealMode = !deferred && !!(entityType && entityId && documentType);
 
   function getMissingExif(metadata: Record<string, unknown>): string[] {
     const missingExif = metadata.missingExif;
@@ -163,6 +194,36 @@ export function FormFileUpload({
     if (!fileList) return;
     const arr = Array.from(fileList);
 
+    if (deferred) {
+      const queue = multiple ? arr : arr.slice(0, 1);
+      const maxBytes = maxSizeMb * BYTES_PER_MB;
+      const validationErrors: string[] = [];
+      const acceptedFiles = queue.filter((file) => {
+        if (file.size > maxBytes) {
+          validationErrors.push(
+            `${file.name} exceeds the ${maxSizeMb} MB limit.`,
+          );
+          return false;
+        }
+        if (!fileMatchesAccept(file, accept)) {
+          validationErrors.push(`${file.name} is not an accepted file type.`);
+          return false;
+        }
+        return true;
+      });
+
+      setDeferredError(
+        validationErrors.length > 0 ? validationErrors.join(" ") : null,
+      );
+      if (acceptedFiles.length === 0) return;
+
+      if (!multiple) {
+        for (const entry of deferredFiles) onDeferredRemove?.(entry.key);
+      }
+      onDeferredAdd?.(acceptedFiles);
+      return;
+    }
+
     if (isRealMode) {
       const queue = multiple ? arr : arr.slice(0, 1);
       if (!multiple) setUploads([]);
@@ -209,7 +270,11 @@ export function FormFileUpload({
         }}
         className={[
           "flex w-full flex-col items-center justify-center gap-8 border-2 border-dashed px-16 py-24 transition-colors duration-300",
-          getDropzoneClass({ disabled, dragOver: isDragOver, error }),
+          getDropzoneClass({
+            disabled,
+            dragOver: isDragOver,
+            error: error || (deferred && !!deferredError),
+          }),
         ].join(" ")}
       >
         <UploadSimpleIcon
@@ -237,8 +302,54 @@ export function FormFileUpload({
         multiple={multiple}
         disabled={disabled}
         className="sr-only"
-        onChange={(e) => handleFiles(e.target.files)}
+        onChange={(e) => {
+          handleFiles(e.target.files);
+          if (deferred) e.target.value = "";
+        }}
       />
+
+      {deferred && deferredError && (
+        <p
+          role="alert"
+          className="body-caption text-[var(--color-signal-red)]"
+        >
+          {deferredError}
+        </p>
+      )}
+
+      {deferred && deferredFiles.length > 0 && (
+        <ul className="space-y-4">
+          {deferredFiles.map(({ key, file }) => (
+            <li
+              key={key}
+              className="flex items-center gap-8 border border-[var(--color-border-tertiary)] px-12 py-8"
+            >
+              <FileIcon
+                size={16}
+                weight="bold"
+                className="shrink-0 text-[var(--color-text-tertiary)]"
+              />
+              <span className="body-small truncate text-[var(--color-text-primary)]">
+                {file.name}
+              </span>
+              <span className="body-caption shrink-0 text-[var(--color-text-tertiary)]">
+                {formatFileSize(file.size)}
+              </span>
+              <Button
+                type="button"
+                variant="noOutline"
+                size="icon"
+                disabled={disabled}
+                onClick={() => onDeferredRemove?.(key)}
+                className="ml-auto h-24 w-24 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]"
+                aria-label={`Remove ${file.name}`}
+              >
+                <XIcon size={14} weight="bold" />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {isRealMode && uploads.length > 0 && (
         <ul className="space-y-4">
@@ -289,6 +400,7 @@ export function FormFileUpload({
                   </span>
                 )}
               <Button
+                type="button"
                 variant="noOutline"
                 size="icon"
                 onClick={() => removeUpload(u.tempKey)}
@@ -302,7 +414,7 @@ export function FormFileUpload({
         </ul>
       )}
 
-      {!isRealMode && files.length > 0 && (
+      {!deferred && !isRealMode && files.length > 0 && (
         <ul className="space-y-4">
           {files.map((file, i) => (
             <li
@@ -321,6 +433,7 @@ export function FormFileUpload({
                 {formatFileSize(file.size)}
               </span>
               <Button
+                type="button"
                 variant="noOutline"
                 size="icon"
                 disabled={disabled}

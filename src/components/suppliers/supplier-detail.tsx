@@ -21,6 +21,7 @@ import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { SupplierLocationForm } from "./supplier-location-form";
 import type { SupplierLocationFormData } from "@/schemas/suppliers";
+import { resolveSupplierLocationDisplay } from "@/lib/supplier-location-display";
 
 interface SupplierDetailProps {
   supplierId: string;
@@ -143,7 +144,9 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
               Location
             </dt>
-            <dd className="body-medium mt-16">{supplier.location || "—"}</dd>
+            <dd className="body-medium mt-16">
+              {resolveSupplierLocationDisplay(supplier.location, locations) || "—"}
+            </dd>
           </div>
           <div>
             <dt className="flex items-center gap-6 text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">

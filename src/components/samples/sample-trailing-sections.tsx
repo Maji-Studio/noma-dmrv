@@ -9,15 +9,31 @@
 "use client";
 
 import { PaperclipIcon, TruckIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormSection } from "@/components/forms";
+import { FormFileUpload, FormSection } from "@/components/forms";
+import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
+import { Button } from "@/components/ui/button";
 import { SPINE_SECTION_TAG, type SpineMeta } from "@/components/forms/form-spine";
 import { TransportLegsEditor } from "@/components/transport-legs";
+import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import type { TransportLegFormData } from "@/schemas/transport-legs";
 import type { SampleWithRelations } from "@/data-access/samples";
 import { SampleDocumentsPanel } from "./sample-documents-panel";
 
 interface SampleTrailingSectionProps {
   sample?: SampleWithRelations;
   isEditMode: boolean;
+  deferredAttachments?: UseDeferredAttachmentsResult;
+  /**
+   * Retry/remove routed through the parent so it can reconcile its post-create
+   * error banner from the remaining failures. Falls back to mutating the
+   * deferred store directly when omitted.
+   */
+  onRetryAttachments?: (key?: string) => Promise<unknown>;
+  onRemoveAttachment?: (key: string) => void;
+  deferredLegs?: TransportLegFormData[];
+  onDeferredLegsChange?: (legs: TransportLegFormData[]) => void;
+  onRetryLegs?: () => Promise<void>;
+  isSubmitting?: boolean;
   /** Injected by FormSpine — do not set manually. */
   __spine?: SpineMeta;
 }
@@ -25,6 +41,10 @@ interface SampleTrailingSectionProps {
 export function SampleEvidenceSection({
   sample,
   isEditMode,
+  deferredAttachments,
+  onRetryAttachments,
+  onRemoveAttachment,
+  isSubmitting = false,
   __spine,
 }: SampleTrailingSectionProps) {
   return (
@@ -34,12 +54,32 @@ export function SampleEvidenceSection({
       __spine={__spine}
     >
       {isEditMode && sample ? (
-        <SampleDocumentsPanel sampleId={sample.id} />
+        <div className="flex flex-col gap-12">
+          {deferredAttachments && (
+            <FailedDeferredAttachments
+              attachments={deferredAttachments.attachments}
+              onRetry={
+                onRetryAttachments ??
+                ((key) => deferredAttachments.retry("sample", [sample.id], key))
+              }
+              onRemove={onRemoveAttachment ?? deferredAttachments.remove}
+              disabled={isSubmitting}
+            />
+          )}
+          <SampleDocumentsPanel sampleId={sample.id} />
+        </div>
       ) : (
-        <p className="body-small text-[var(--color-text-secondary)]">
-          Save the sample first, then reopen it to attach lab reports and
-          supporting evidence.
-        </p>
+        <FormFileUpload
+          id="sample-deferred-documents-upload"
+          accept="image/*,.pdf,.csv,.xlsx"
+          multiple
+          maxSizeMb={50}
+          disabled={isSubmitting}
+          deferred
+          deferredFiles={deferredAttachments?.attachments ?? []}
+          onDeferredAdd={(files) => deferredAttachments?.add(files, "lab_report")}
+          onDeferredRemove={(key) => deferredAttachments?.remove(key)}
+        />
       )}
     </FormSection>
   );
@@ -48,17 +88,68 @@ export function SampleEvidenceSection({
 export function SampleTransportSection({
   sample,
   isEditMode,
+  deferredLegs = [],
+  onDeferredLegsChange,
+  onRetryLegs,
+  isSubmitting = false,
   __spine,
 }: SampleTrailingSectionProps) {
   return (
     <FormSection title="Transport" icon={<TruckIcon size={14} weight="bold" />} __spine={__spine}>
       {isEditMode && sample ? (
-        <TransportLegsEditor entityType="sample" entityId={sample.id} />
+        <div className="flex flex-col gap-12">
+          {deferredLegs.length > 0 && (
+            <div className="flex flex-col gap-10 border border-[var(--color-status-error)] p-12">
+              <div className="flex flex-wrap items-center justify-between gap-8">
+                <p className="body-small font-medium text-[var(--color-status-error)]">
+                  {deferredLegs.length} transport {deferredLegs.length === 1 ? "leg" : "legs"} failed to save
+                </p>
+                <Button
+                  type="button"
+                  variant="weak"
+                  size="small"
+                  onClick={() => void onRetryLegs?.()}
+                  disabled={isSubmitting}
+                >
+                  Retry transport legs
+                </Button>
+              </div>
+              {deferredLegs.map((leg, index) => (
+                <div
+                  key={`${leg.originName ?? "origin"}-${leg.destinationName ?? "destination"}-${index}`}
+                  className="flex items-center justify-between gap-8 border border-[var(--color-border-tertiary)] px-12 py-8"
+                >
+                  <span className="body-small text-[var(--color-text-primary)]">
+                    {leg.originName || "Origin"} → {leg.destinationName || "Destination"} · {leg.distanceKm} km
+                  </span>
+                  <Button
+                    type="button"
+                    variant="noOutline"
+                    size="small"
+                    onClick={() => onDeferredLegsChange?.(deferredLegs.filter((_, itemIndex) => itemIndex !== index))}
+                    disabled={isSubmitting}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          <TransportLegsEditor
+            entityType="sample"
+            entityId={sample.id}
+            disabled={isSubmitting}
+          />
+        </div>
       ) : (
-        <p className="body-small text-[var(--color-text-secondary)]">
-          Save the sample first, then reopen it to record the lab
-          shipment&apos;s transport legs.
-        </p>
+        <TransportLegsEditor
+          entityType="sample"
+          entityId=""
+          deferred
+          deferredLegs={deferredLegs}
+          onDeferredChange={(legs) => onDeferredLegsChange?.(legs)}
+          disabled={isSubmitting}
+        />
       )}
     </FormSection>
   );

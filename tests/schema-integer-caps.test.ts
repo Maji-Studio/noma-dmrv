@@ -37,6 +37,35 @@ const validSampleBase = {
   organicCarbonPercent: 75,
 };
 
+const SAMPLE_PERCENT_FIELDS = [
+  "totalCarbonPercent",
+  "organicCarbonPercent",
+  "inorganicCarbonPercent",
+  "totalHydrogenPercent",
+  "totalNitrogenPercent",
+  "totalOxygenPercent",
+  "totalSulfurPercent",
+  "ashContentPercent",
+  "moistureContentPercent",
+  "randomReflectanceR0Percent",
+  "reactiveCarbonPercent",
+  "residualCarbonPercent",
+  "phosphorusPercent",
+  "potassiumPercent",
+  "magnesiumPercent",
+  "calciumPercent",
+  "ironPercent",
+] as const;
+
+const SAMPLE_NON_NEGATIVE_FIELDS = [
+  "weightGrams",
+  "volumeMl",
+  "bulkDensityKgPerM3",
+  "saltContentGPerKg",
+  "hToCOrgRatio",
+  "oToCOrgRatio",
+] as const;
+
 describe("residenceTimeMinutes PG integer cap", () => {
   it("rejects an overflowing value on create", () => {
     const result = createProductionRunSchema.safeParse({
@@ -121,5 +150,101 @@ describe("r0MeasurementCount PG integer cap", () => {
       r0MeasurementCount: PG_INTEGER_MAX,
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("sample chemistry ranges", () => {
+  it.each(SAMPLE_PERCENT_FIELDS)(
+    "rejects %s above 100 on create and update",
+    (field) => {
+      expect(
+        createSampleSchema.safeParse({
+          ...validSampleBase,
+          [field]: 101,
+        }).success,
+      ).toBe(false);
+      expect(
+        updateSampleSchema.safeParse({
+          sampleId: SAMPLE_ID,
+          [field]: 101,
+        }).success,
+      ).toBe(false);
+    },
+  );
+
+  it.each(SAMPLE_NON_NEGATIVE_FIELDS)(
+    "rejects negative %s on create and update",
+    (field) => {
+      expect(
+        createSampleSchema.safeParse({
+          ...validSampleBase,
+          [field]: -1,
+        }).success,
+      ).toBe(false);
+      expect(
+        updateSampleSchema.safeParse({
+          sampleId: SAMPLE_ID,
+          [field]: -1,
+        }).success,
+      ).toBe(false);
+    },
+  );
+
+  it("rejects percentage strings above 100 on create", () => {
+    const result = createSampleSchema.safeParse({
+      ...validSampleBase,
+      totalCarbonPercent: "101",
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects negative optional chemistry on create", () => {
+    const result = createSampleSchema.safeParse({
+      ...validSampleBase,
+      totalNitrogenPercent: "-1",
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("keeps empty optional chemistry fields nullable", () => {
+    const result = createSampleSchema.safeParse({
+      ...validSampleBase,
+      totalNitrogenPercent: "",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.totalNitrogenPercent).toBeNull();
+    }
+  });
+
+  it("keeps omitted optional chemistry fields omitted", () => {
+    const result = createSampleSchema.safeParse(validSampleBase);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).not.toHaveProperty("totalNitrogenPercent");
+    }
+  });
+
+  it("rejects out-of-range chemistry on update", () => {
+    const result = updateSampleSchema.safeParse({
+      sampleId: SAMPLE_ID,
+      organicCarbonPercent: 101,
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects pH above 14 and negative physical values", () => {
+    expect(
+      createSampleSchema.safeParse({ ...validSampleBase, ph: "14.1" }).success,
+    ).toBe(false);
+    expect(
+      updateSampleSchema.safeParse({ sampleId: SAMPLE_ID, weightGrams: -1 })
+        .success,
+    ).toBe(false);
   });
 });

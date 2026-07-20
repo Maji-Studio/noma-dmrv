@@ -28,8 +28,8 @@ interface ConfirmActionDialogProps {
   confirmLabel: string;
   /** Label while the action is in flight. Defaults to `confirmLabel` + "…". */
   busyLabel?: string;
-  /** Destructive actions (unlink, delete) get the red primary button. */
-  variant?: "default" | "destructive";
+  /** Irreversible actions (delete) get red; reversible actions can stay neutral. */
+  variant?: "default" | "neutral" | "destructive";
   /** Disables both buttons and shows the spinner on the primary. */
   isPending?: boolean;
   /** Renders the inline production EnvBanner above the title. */
@@ -54,6 +54,7 @@ export function ConfirmActionDialog({
   errorMessage,
 }: ConfirmActionDialogProps) {
   const isDestructive = variant === "destructive";
+  const isNeutral = variant === "neutral";
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} ariaLabelledBy={TITLE_ID} width="sm">
@@ -82,7 +83,7 @@ export function ConfirmActionDialog({
           </Button>
           <Button
             size="large"
-            variant={isDestructive ? "default" : "primary"}
+            variant={isDestructive || isNeutral ? "default" : "primary"}
             className={
               isDestructive
                 ? "bg-[var(--color-signal-red)] text-white border-[var(--color-signal-red)] hover:opacity-90"

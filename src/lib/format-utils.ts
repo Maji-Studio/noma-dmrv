@@ -6,15 +6,74 @@ import { format, isValid, parseISO } from "date-fns";
 import { parseLocalDateString } from "@/lib/date-utils";
 
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const DATE_FORMAT = "MMM d, yyyy";
+const DATE_TIME_FORMAT = "MMM d, yyyy, HH:mm";
+const SAME_YEAR_RANGE_START_FORMAT = "MMM d";
+const FALLBACK_DISPLAY = "—";
 const KG_PER_TONNE = 1000;
 const CO2E_TONNES_MAX_FRACTION_DIGITS = 3;
+
+type DateValue = string | Date | null | undefined;
+
+function parseDateValue(value: DateValue): Date | null {
+  if (!value) return null;
+
+  try {
+    const date =
+      typeof value === "string" && DATE_ONLY_PATTERN.test(value)
+        ? parseLocalDateString(value)
+        : typeof value === "string"
+          ? parseISO(value)
+          : value;
+
+    return isValid(date) ? date : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Format a calendar date for user-facing display. Bare `YYYY-MM-DD` values are
+ * parsed in local time so they cannot drift to the previous day west of UTC.
+ * Returns "—" for null, undefined, or invalid values.
+ */
+export function formatDate(value: DateValue): string {
+  const date = parseDateValue(value);
+  return date ? format(date, DATE_FORMAT) : FALLBACK_DISPLAY;
+}
+
+/**
+ * Format a date and time for user-facing display using a 24-hour clock.
+ * Returns "—" for null, undefined, or invalid values.
+ */
+export function formatDateTime(value: DateValue): string {
+  const date = parseDateValue(value);
+  return date ? format(date, DATE_TIME_FORMAT) : FALLBACK_DISPLAY;
+}
+
+/**
+ * Format a user-facing date range. Ranges within one calendar year omit the
+ * year from the start; cross-year ranges show both years in full.
+ * Returns "—" when either boundary is null, undefined, or invalid.
+ */
+export function formatDateRange(start: DateValue, end: DateValue): string {
+  const startDate = parseDateValue(start);
+  const endDate = parseDateValue(end);
+  if (!startDate || !endDate) return FALLBACK_DISPLAY;
+
+  if (startDate.getFullYear() === endDate.getFullYear()) {
+    return `${format(startDate, SAME_YEAR_RANGE_START_FORMAT)} – ${format(endDate, DATE_FORMAT)}`;
+  }
+
+  return `${format(startDate, DATE_FORMAT)} – ${format(endDate, DATE_FORMAT)}`;
+}
 
 /**
  * Format a mass value in kg, auto-converting to tonnes when >= 1000.
  * Returns "—" for null/undefined.
  */
 export function formatMass(kg: number | null | undefined): string {
-  if (kg == null) return "—";
+  if (kg == null) return FALLBACK_DISPLAY;
   if (kg >= 1000) return `${(kg / 1000).toFixed(1)} t`;
   return `${Math.round(kg).toLocaleString()} kg`;
 }
@@ -31,7 +90,7 @@ export function formatCo2e(
   kg: number | null | undefined,
   opts?: { signed?: boolean; unit?: string }
 ): string {
-  if (kg == null || Number.isNaN(kg)) return "—";
+  if (kg == null || Number.isNaN(kg)) return FALLBACK_DISPLAY;
   const { signed = false, unit } = opts ?? {};
   const abs = Math.abs(kg);
   const inTonnes = abs >= KG_PER_TONNE;
@@ -59,49 +118,9 @@ export function formatTonnes(
   value: number | null | undefined,
   opts?: { digits?: number; unit?: string }
 ): string {
-  if (value == null) return "—";
+  if (value == null) return FALLBACK_DISPLAY;
   const { digits = 2, unit = "t" } = opts ?? {};
   return `${value.toFixed(digits)} ${unit}`;
-}
-
-/**
- * Safely format a date string or Date object.
- * Returns "—" for invalid/null dates.
- */
-export function formatSafeDate(
-  dateStr: string | Date | null | undefined,
-  fmt = "MMM d, yyyy"
-): string {
-  if (!dateStr) return "—";
-  let date: Date;
-
-  try {
-    date =
-      typeof dateStr === "string" && DATE_ONLY_PATTERN.test(dateStr)
-        ? parseLocalDateString(dateStr)
-        : typeof dateStr === "string"
-          ? parseISO(dateStr)
-          : dateStr;
-  } catch {
-    return "—";
-  }
-
-  return isValid(date) ? format(date, fmt) : "—";
-}
-
-/**
- * Build a pagination label like "1-12 of 36 items".
- */
-export function getPaginationLabel(
-  page: number,
-  pageSize: number,
-  total: number,
-  entityLabel: string
-): string {
-  if (total === 0) return `No ${entityLabel}`;
-  const start = (page - 1) * pageSize + 1;
-  const end = Math.min(page * pageSize, total);
-  return `${start}-${end} of ${total} ${entityLabel}`;
 }
 
 /**
@@ -118,7 +137,7 @@ export function roundKmDisplay(km: number): string {
  * Returns "—" for null/undefined.
  */
 export function formatDistanceKm(km: number | null | undefined): string {
-  if (km == null) return "—";
+  if (km == null) return FALLBACK_DISPLAY;
   return `${roundKmDisplay(km)} km`;
 }
 
@@ -126,7 +145,7 @@ export const BYTES_PER_KB = 1024;
 export const BYTES_PER_MB = 1024 * 1024;
 
 export function formatFileSize(bytes: number | null | undefined): string {
-  if (bytes == null) return "—";
+  if (bytes == null) return FALLBACK_DISPLAY;
   if (bytes < BYTES_PER_KB) return `${bytes} B`;
   if (bytes < BYTES_PER_MB) return `${(bytes / BYTES_PER_KB).toFixed(1)} KB`;
   return `${(bytes / BYTES_PER_MB).toFixed(1)} MB`;

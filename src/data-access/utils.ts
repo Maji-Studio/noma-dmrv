@@ -3,6 +3,7 @@
  */
 
 import { db } from "@/db";
+import { facilities } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import { and, eq, getTableName } from "drizzle-orm";
@@ -51,6 +52,14 @@ export async function assertSameOrg(
       `${humanizeTableName(getTableName(table))} not found in this organization`,
     );
   }
+}
+
+/** Require a client-supplied facility to belong to the active organization. */
+export async function requireOrgFacility(
+  ctx: OrgContext,
+  facilityId: string,
+): Promise<void> {
+  await assertSameOrg(ctx, facilities, facilityId);
 }
 
 /** "credit_batches" → "Credit batch" — user-facing entity name for errors. */

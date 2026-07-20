@@ -1,260 +1,107 @@
 # Database
 
-PostgreSQL database with Drizzle ORM for the facility-scoped MRV domain.
+PostgreSQL + Drizzle ORM for the multi-tenant, facility-scoped MRV domain. Covers the org-scoping contract every query must honour, soft-delete semantics, numeric column families, migration mechanics, and the row-level guards. Read it before adding a table, a column, or any `src/data-access/` function. Table-by-table structure lives in [`schema-overview.md`](./schema-overview.md); layering rules in [`architecture.md`](./architecture.md).
 
-## Safety Rules
+## Org Scoping — the contract
 
-Use `pnpm` only.
+The app **is multi-tenant** ([ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md)): every domain table carries `organizationId NOT NULL`. Tenancy is enforced in `src/data-access/`, not by the route layer.
+
+- Every data-access function takes an `OrgContext`, calls `requireOrgScope(ctx)` (`src/data-access/utils.ts`), and filters `eq(table.organizationId, ctx.organizationId)`. Canonical example: `src/data-access/feedstocks.ts`.
+- There is **no `requireAuth()` in this layer** — `requireAuth` is a route guard (`src/lib/auth/server.ts`), called once in `src/app/(app)/layout.tsx`. A data-access function relying on it is an unscoped cross-tenant read.
+- `organizationId` is **always stamped server-side** from the session's active organization and **never accepted from client input** or a Zod payload. Taking it as an action parameter is privilege escalation.
+- The column is **deliberately denormalized** onto child tables even though it is derivable through the parent facility. Never "simplify" a child query into a join through `facilities` to obtain org — that is the missed-join leak class that already bit `getSupplierOptions`.
+- Facility-scoped tables use a **composite foreign key** `(facility_id, organization_id) → (facilities.id, facilities.organization_id)` as the DB-level backstop against pointing at another org's facility. New facility-scoped tables must replicate it, not a plain FK to `facilities.id`.
+- `userId` columns are attribution, not a boundary. Do not access the DB from UI or hooks — go through `fn/` then `data-access/`.
+- Related helpers in `utils.ts`: `assertSameOrg`, `requireOrgFacility`.
+
+## Row-Level Guards
+
+Frozen/locked rows are protected by dedicated modules in `src/data-access/`, not by DB constraints alone: `bin-stock-guards.ts`, `lock-bin-stocks.ts`, the `*-stock-locks.ts` family (`biochar-product`, `delivery`, `formulation`, `order`, `production-run`), `facility-durability-lock.ts`, `certification-lineage-guards.ts`, `unique-name-guards.ts`. A fresh `db.update()` that skips these silently bypasses the freeze — route mutations through the guarded helpers.
+
+## Numeric Column Families
+
+`src/db/schema/numeric-families.ts` (migration `0066`) exports `massKg`, `tonnes`, `ppm`, `fraction`, `percent` — all exact `numeric(p,s)`.
+
+- **Credit-bearing values** — masses, CO2e, contaminant ppm, ratios, percents — MUST use these helpers. Never `real()`; float rounding drifts verifier-facing figures.
+- Telemetry, in-process QC, and lab characterization columns stay `real`.
+- Over-precision now fails loudly with a Postgres `numeric field overflow` rather than rounding silently.
+
+## Schema Shape
+
+Source of truth: `src/db/schema/*.ts`, exported through `src/db/schema/index.ts`. Area-by-area breakdown: [`schema-overview.md`](./schema-overview.md). Shared domain enums live in `common.ts`.
+
+Schema defaults and create/update defaults must stay aligned, especially for JSONB columns.
+
+## Local Setup & Commands
 
 | Command | Use | Safety |
 |---|---|---|
 | `pnpm db:generate` | Generate SQL migrations from Drizzle schema changes. | Safe |
 | `pnpm db:migrate` | Apply generated migrations. | Safe after review |
 | `pnpm db:studio` | Open Drizzle Studio. | Safe |
-| `pnpm db:verify-schema` | Verify generated schema metadata. | Safe |
-| `pnpm db:push` | Push schema directly. | Local development only |
-| `pnpm db:reset` | Drop tables, push schema, ensure admin user. | Destructive |
+| `pnpm db:verify-schema` | Diff the live database against the Drizzle schema. | Safe |
+| `pnpm db:push` | Push schema directly. Schema experimentation only — never after a migration has been generated. | Local only |
+| `pnpm db:reset` | `reset-db.ts` → `db:migrate` → `db:ensure-admin`. Applies the **full migration chain** (not `push`), so it is the local rehearsal of the CI/production path — a broken migration surfaces here. | Destructive |
 
-Migration flow: change schema, run `pnpm db:generate`, review SQL, run targeted tests, then apply with `pnpm db:migrate` in shared environments.
-
-## Local Setup
-
-`pnpm dev` starts the local database through Docker when needed, waits for it, prepares the schema, and starts the Next.js dev server on port 3100.
-
-Manual controls:
-
-```bash
-pnpm docker:up
-pnpm dev:manual
-pnpm db:reset
-pnpm db:seed
-pnpm db:studio
-```
-
-Database connection is configured with `DATABASE_URL`. The main app pool in `src/db/index.ts` also reads:
-
-- `DB_POOL_MAX`
-- `DB_POOL_IDLE_TIMEOUT_MS`
-- `DB_POOL_CONNECTION_TIMEOUT_MS`
-
-CLI and maintenance scripts build short-lived pools through `src/lib/cli/*` helpers and do not share the main app pool.
-
-## Current Shape
-
-Source of truth: `src/db/schema/*.ts`, exported through `src/db/schema/index.ts`.
-
-| Area | Files | Notes |
-|---|---|---|
-| Auth | `auth.ts` | Better Auth tables: users, sessions, accounts, verification values. |
-| Facilities | `facilities.ts`, `storage-inventory.ts` | Facilities, reactors, storage locations, and inventory snapshots. |
-| Parties | `parties.ts` | Suppliers, customers, locations, drivers, operators. |
-| Feedstock | `feedstock.ts` | Feedstock deliveries, feedstock types, feedstock batches. |
-| Production | `production.ts` | Runs, readings, samples, incidents, run/feedstock junctions. |
-| Products | `products.ts` | Formulations, formulation ingredients, biochar products. |
-| Logistics | `logistics.ts` | Vehicles, orders, deliveries, transport legs. |
-| Application | `application.ts` | Soil applications and soil temperature measurements. |
-| Credits | `credits.ts` | Credit batches and credit-batch/application joins. |
-| Documentation | `documentation.ts` | Evidence documents and storage metadata. |
-| Certification | `certification.ts` | Certifier linkage, removals, GHG statements, submissions, document uploads, sync events, sensors. |
-| Compliance | `compliance.ts` | Stockpile events and power-procurement evidence. |
-| Geo | `geo.ts` | Server-side route geometry cache for map/chain-of-custody views. |
-| Shared enums | `common.ts` | Domain enums used by the schema files above. |
-
-After the 2026-06-08 schema slim-down plus the map/certification updates, the
-app has 46 table exports across 14 table-bearing schema files (16 files
-including `common.ts` and `index.ts`). Removed protocol-stub tables and the
-legacy starter `projects` / `items` cluster are documented in
-`docs/open-questions.md`.
-
-## Access Model
-
-The app is currently single-org and facility-scoped:
-
-- Authenticated users share the same operational MRV records.
-- `userId` columns are attribution fields, not tenant boundaries.
-- Data-access functions still call auth guards, usually `requireAuth()`.
-- Facility scoping is a product/workflow boundary, carried through selected facility context and explicit `facilityId` filters.
-- Do not add direct DB access in UI or hooks; go through `fn/` and `data-access/`.
-
-If multi-tenant facility ownership is introduced, every list/query/ensure helper in `src/data-access/` must be revisited with tenant or membership filters.
-
-## Layering
-
-```text
-components/      UI and forms
-  -> hooks/      React Query cache and mutations
-  -> fn/         server actions, Zod validation, orchestration
-  -> data-access/ auth-guarded queries and mutations
-  -> db/         Drizzle connection and schema
-```
-
-Rules:
-
-- Server actions return `ActionResult<T>`.
-- Server actions validate inputs with schemas from `src/schemas/`.
-- Data-access functions enforce authentication and authorization.
-- Query helpers live in `src/data-access/`; do not compose application queries in components.
-- Schema defaults and create/update defaults must stay aligned, especially for JSONB columns.
-
-## Common Query Pattern
-
-```ts
-// src/data-access/feedstocks.ts
-export async function listFeedstocksForFacility(
-  userId: string,
-  facilityId: string
-) {
-  await requireAuth();
-
-  return db.query.feedstocks.findMany({
-    where: eq(feedstocks.facilityId, facilityId),
-    orderBy: desc(feedstocks.createdAt),
-  });
-}
-```
-
-Prefer explicit facility filters for operational records. For global option lists, document why the query is intentionally unscoped.
+- **Fresh clone: run `pnpm dev:docker:init`.** Plain `pnpm dev` (= `docker:up && db:wait && next dev -p 3100`) does **not** prepare the schema; you get a server against an empty database. `dev:docker:init` inserts `db:reset`.
+- `pnpm dev:manual` starts Next.js alone; `pnpm docker:up` / `docker:down` / `docker:clean` manage the container; `pnpm db:seed` loads canonical seed data.
+- Connection via `DATABASE_URL`. The app pool (`src/db/index.ts`) also reads `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`, `DB_POOL_CONNECTION_TIMEOUT_MS`. CLI scripts build short-lived pools through `src/lib/cli/*` and do not share the app pool.
 
 ## Soft Delete — Facility Archive
 
-Facilities are never hard-deleted. `archiveFacility` (`src/data-access/facilities.ts`) stamps `archived_at` on the facility **and all 11 operational facility-scoped tables in one transaction**; `restoreFacility` clears the stamps. `NULL` = active. The pattern's invariants:
+Facilities are never hard-deleted. `archiveFacility` (`src/data-access/facilities.ts`) stamps `archived_at` on the facility **and all 11 operational facility-scoped tables in one transaction**; `restoreFacility` clears the stamps. `NULL` = active.
 
-- **Facility cascade is the only writer of `archived_at`.** A child row is archived iff its facility is archived. The cascade stamps only rows where `archived_at IS NULL` so a future per-entity archive can't be clobbered; restore clears indiscriminately (safe under the current single-writer rule).
-- **Every list / picker / options / stats query filters `isNull(table.archivedAt)`.** Detail-by-id reads do **not** filter — existing references to archived rows must still hydrate. When adding a new read query to a stamped table, seed the conditions array with the `isNull` filter.
+- **The cascade is org-scoped as well as facility-scoped** — every `UPDATE` filters `eq(table.organizationId, ctx.organizationId)` alongside `facilityId`. A new stamped table must carry both predicates.
+- **The facility cascade is the only writer of `archived_at`.** A child row is archived iff its facility is. Archive stamps only rows where `archived_at IS NULL`; restore clears **indiscriminately, with no `isNull` guard** — deliberate, and `src/data-access/facilities.ts` carries an in-code tripwire comment saying this must change if a per-entity archive writer is ever added.
+- **Every list / picker / options / stats query filters `isNull(table.archivedAt)`.** Detail-by-id reads do **not** — existing references to archived rows must still hydrate. Seed a new read query's conditions array with the `isNull` filter.
 - **Grandchildren have no own column** (samples, readings, applications, transport legs, …) — they hide transitively through their archived parent (applications filter via `deliveries.archived_at` in joins).
-- **Certifier mirror tables are deliberately unstamped** (`certifier_projects`, `certifier_ghg_statements`, `certifier_removals`) — they mirror registry state, and all their reads are facility-scoped, so they hide transitively. Archiving a facility with registry submissions is allowed with a warning (`getFacilityArchiveImpact.hasRegistrySubmissions`), never blocked.
+- **Certifier mirror tables are unstamped for `archived_at`** (`certifier_projects`, `certifier_ghg_statements`, `certifier_removals`) — they mirror registry state and hide transitively. They are **not** unscoped: each carries `organizationId NOT NULL` plus the composite FK to `facilities`, and still requires the org filter. Archiving a facility with registry submissions is allowed with a warning (`getFacilityArchiveImpact.hasRegistrySubmissions`), never blocked.
 - **Writes reject archived parents**: child creates/moves check the facility with `isNull(facilities.archivedAt)` and fail with "Facility not found or archived".
 - **Codes stay reserved** while archived (uniqueness checks ignore archive state) so restore can't collide.
 
-Stamped tables: `facilities`, `reactors`, `storage_locations`, `feedstock_deliveries`, `feedstocks`, `production_runs`, `biochar_products`, `orders`, `deliveries`, `credit_batches`, `stockpile_events`, `power_procurement_evidence` (migration `drizzle/0041`).
+Stamped tables: `facilities`, `reactors`, `storage_locations`, `feedstock_deliveries`, `feedstocks`, `production_runs`, `biochar_products`, `orders`, `deliveries`, `credit_batches`, `stockpile_events`, `power_procurement_evidence` (migration `drizzle/0041_outgoing_paper_doll.sql`).
 
 ## Migrations
 
-Generated SQL lives in `drizzle/`; metadata snapshots live in `drizzle/meta/`.
+Generated SQL lives in `drizzle/`; metadata snapshots in `drizzle/meta/`. **Migration history lives in `drizzle/`; the *why* for schema-shaping changes lives in [`docs/adr/`](./adr/).**
 
-### CI migration strategy (`.github/workflows/migrate.yml`)
-
-- Pushing schema-affecting changes to `staging` or `main` automatically runs `pnpm db:migrate` against the matching database, followed by `pnpm db:verify-schema`, which diffs the live database against the Drizzle schema definitions and fails the run on drift.
-- Destructive operations (reset + seed staging, reset staging empty, reset production) are never automatic — they run only via manual `workflow_dispatch` with a typed confirmation phrase.
-- Database credentials come from 1Password via `load-secrets-action` (see `docs/security.md`).
-
-### PR migration gate
-
-`.github/workflows/migration-gate.yml` builds the pull request's base-branch schema in a throwaway PostgreSQL database, seeds it with the canonical base-state data, then applies the merge candidate's new migrations and verifies the resulting schema. This catches data-versus-constraint conflicts reproduced by `src/db/seed-data.ts`; it cannot prove compatibility with every row in staging or production, where real data can differ from the canonical seed.
-
-Migrations that add `ADD CONSTRAINT`, `CREATE UNIQUE INDEX`, or `SET NOT NULL` to an existing table must repair conflicting rows in the same migration before enforcing the new rule. Use `drizzle/0079_volatile_plazm.sql` as the reference pattern: add the column nullable, `UPDATE` existing rows, then `SET NOT NULL`; similarly, backfill or deduplicate existing data before adding constraints or unique indexes.
-
-The repository's first production deployment is a different shape: no production
-database or legacy rows exist, so the real operation is "apply the whole chain to
-an empty database, then bootstrap the admin/organization/credentials". The seeded
-gate above never exercises that path.
-
-A `staging` → `main` promotion labelled `first-production-deployment` therefore
-runs a **second, additional** job, `fresh-database-gate`: it applies the complete
-migration chain to an empty throwaway database, runs the production bootstrap
-(twice, to prove idempotence), and verifies the schema. Both jobs are required,
-so the promotion cannot merge unless the seeded gate *and* the fresh gate are
-green.
-
-The fresh job is **additive, never a substitute** — this is the safety property.
-It cannot skip, weaken, or downgrade the seeded gate, so re-using the label on a
-later promotion is merely redundant work rather than a silent loss of coverage.
-That is why no one-time tripwire is needed: there is nothing to protect against.
-The label is also ignored unless the PR is genuinely `staging` → `main`.
+Flow: change schema → `pnpm db:generate` → review the emitted SQL → run targeted tests → `pnpm db:migrate` in shared environments.
 
 ### Migration files are immutable once applied
 
-**Never edit a migration file after it has been applied to any database** (staging, production, or a teammate's). `drizzle-kit migrate` tracks applied migrations by journal order/timestamp, not file content, so an edited migration is silently skipped on databases that already ran the original — CI reports "migrations applied successfully" while the new DDL never executes, and the drift only surfaces in the `db:verify-schema` step. If more schema changes are needed after a migration has been merged or applied, generate a new migration with `pnpm db:generate`. To repair drift that already happened, write a new migration with guarded DDL (`IF NOT EXISTS` / existence checks) so it is a no-op on databases that already have the objects.
+**Never edit a migration file after it has been applied to any database** (staging, production, or a teammate's). `drizzle-kit migrate` tracks applied migrations by journal order/timestamp, not file content, so an edited migration is silently skipped on databases that ran the original — CI reports success while the new DDL never executes, and the drift only surfaces in `db:verify-schema`. Need more changes? Generate a new migration. To repair drift that already happened, write a new migration with guarded DDL (`IF NOT EXISTS` / existence checks) so it no-ops where the objects exist.
 
-Recent notable migrations:
+### Constraint-repair pattern
 
-| Migration | Notes |
-|---|---|
-| `0033_brief_frank_castle` | Certification workflow refinements around facility registry configuration and CO2e storage. |
-| `0034_peaceful_firebird` | Certifier-readiness support and transport-leg constraints. |
-| `0035_deterministic_product_bin_formulation` | Data ownership and credit-batch handling updates. |
-| `0036_cultured_rattler` | UX-review schema constraints and indexes. |
-| `0037_sour_lethal_legion` | Schema slim-down: dropped unused protocol-stub tables plus legacy starter project/item tables. |
-| `0038_messy_bromley` | Provider/external-facility uniqueness for certifier project mappings. |
-| `0039_true_hellfire_club` | Customer/supplier locations, default-location flags, and delivery distance override fields. |
-| `0040_simple_spyke` | Adds `sensor_data` documents and removes the legacy production-run PLC file URL. |
-| `0041_outgoing_paper_doll` | Facility archive cascade columns on facility-scoped operational tables. |
-| `0042_fresh_richard_fisk` | Adds distance provenance (`distance_source`) to stored and derived transport distances. |
-| `0043_nice_dreadnoughts` | Adds `geo_route_cache` for server-side route geometry caching. |
-| `0044_lonely_oracle` | Adds default soil-temperature fields to facility certifier config and customer locations. |
-| `0045_pale_doctor_spectrum` | Adds feedstock-type usage and folds `ingredient_bin` into feedstock-bin capability. |
-| `0046_outgoing_stryfe` | Adds feedstock truck-weighing mass fields and range/order checks. |
-| `0047_unify-formulation-feedstock-types` | Migrates formulation ingredients to blend-usage feedstock types. |
-| `0048_application-evidence-method` | Adds application evidence method and backfills boundary references. |
-| `0049_backfill_facility_timezone` | Backfills and enforces non-null facility timezone with `UTC` default. |
-| `0066_silent_swarm` | Converts 44 credit-bearing columns across 12 tables (masses, CO2e, contaminant ppm, ratios, percents) from `real` to exact `numeric(p,s)` families, so verifier-facing figures can't drift from float rounding (issue #280). Telemetry and lab-characterization columns stay `real`. |
-| `0067_long_mephistopheles` | Drops the six stored `credit_batches` aggregate columns (applied weight, CO2e stored/emissions/counterfactual, feedstock mass, ineligible feedstock mass) and their CHECK constraints — replaced by read-time derivation (ADR 0019). |
-| `0068_organic_sinister_six` | Adds `credit_batches.production_emissions_claimed_by_removal_id` (FK → `certifier_removals`) + index — the claim that front-loads a batch's full production-emissions bucket onto a single Removal (ADR 0020). |
-| `0069_thankful_morg` | **Durability tier moves from per-batch to facility-scoped (ADR 0021).** Renames `facilities.default_durability_option` → `durability_option` (backfilled, `NOT NULL`, default `1000_year`), **drops** `credit_batches.durability_option`, and adds `samples.s_reflectance_fraction`. Destructive: the per-batch tier column is removed; tier is now read from the facility. |
-| `0070_..._facility_scoped_durability_evidence_triggers` | Hand-written trigger migration (db:generate can't emit function bodies): re-declares the three P0-06 durability-evidence trigger functions (from `0053`/`0054`) to derive the tier from the batch's facility (`facilities.durability_option`) via join, since `credit_batches.durability_option` no longer exists (ADR 0021). Bindings unchanged; snapshot is an intentional copy of `0069`. |
+Migrations adding `ADD CONSTRAINT`, `CREATE UNIQUE INDEX`, or `SET NOT NULL` to an existing table must repair conflicting rows **in the same migration** before enforcing the rule. Reference: `drizzle/0079_volatile_plazm.sql` — add the column nullable, `UPDATE` existing rows, then `SET NOT NULL`. Likewise backfill or deduplicate before adding constraints or unique indexes.
 
-When a migration is destructive, document the rationale in the related feature doc or `docs/open-questions.md` if the dropped surface may return later.
+When a migration is destructive, document the rationale in the related feature doc or [`open-questions.md`](./open-questions.md) if the dropped surface may return.
+
+### CI (`.github/workflows/migrate.yml`)
+
+- Schema-affecting pushes to `staging` or `main` run `pnpm db:migrate` against the matching database, then `pnpm db:verify-schema`, which fails the run on drift.
+- Destructive operations (reset + seed staging, reset staging empty, reset production) are never automatic — manual `workflow_dispatch` with a typed confirmation phrase only.
+- Credentials come from 1Password via `load-secrets-action` (see [`security.md`](./security.md)).
+
+### PR migration gate (`.github/workflows/migration-gate.yml`)
+
+Builds the PR base-branch schema in a throwaway database, seeds it from `src/db/seed-data.ts`, applies the merge candidate's new migrations, and verifies the result. It catches data-versus-constraint conflicts reproducible from the canonical seed; it cannot prove compatibility with every row in staging or production.
+
+A `staging` → `main` PR labelled `first-production-deployment` adds a second job, `fresh-database-gate`: full chain against an empty database, production bootstrap run twice to prove idempotence, then schema verify. It is **additive to the seeded gate, never a substitute**; both are required.
 
 ## Certification Tables
 
-`src/db/schema/certification.ts` is provider-neutral. Isometric-specific code lives under `src/lib/isometric/`.
+`src/db/schema/certification.ts` is provider-neutral; Isometric-specific code lives under `src/lib/isometric/`. Tables: `certifier_credentials` (registry credentials — handle as secrets, data-access in `src/data-access/certifier-credentials.ts`), `certifier_projects`, `certifier_sensors`, `certifier_ghg_statements`, `certifier_removals`, `certification_submissions`, `certifier_document_uploads`, `certifier_sync_events`. Purpose per table: [`schema-overview.md`](./schema-overview.md); submission-unit rationale: [ADR 0003](./adr/0003-removal-as-submission-unit.md), [ADR 0008](./adr/0008-submission-ledger-internal-seam.md).
 
-| Table | Purpose |
-|---|---|
-| `certifier_projects` | Maps a local facility to an external certifier project/template and holds facility-level emission-estimate config. |
-| `certifier_sensors` | Maps reactor measurement properties to external sensor IDs for telemetry uploads. |
-| `certifier_ghg_statements` | Period-anchored GHG Statement artifacts. |
-| `certifier_removals` | Local Removal submission units; one Removal can group multiple credit batches. |
-| `certification_submissions` | Versioned lock and idempotency ledger for outbound submissions. |
-| `certifier_document_uploads` | Local document to provider-uploaded evidence mapping. |
-| `certifier_sync_events` | Append-only outbound/inbound integration event log. |
+`certification_submissions` is the **freeze point** for certification source data. A blocking ledger status (`draft`, `submitted`, `accepted`) on a Removal, telemetry upload, or GHG Statement prevents in-place mutation of upstream production runs, lab samples, deliveries, biochar products, and feedstocks reached through current credit-batch lineage. The guard lives in data-access (`certification-lineage-guards.ts`) so stale UI membership cannot bypass it.
 
-`certifier_sources` was removed in `0037`; submission source references are derived at submit time unless a future source-management feature reintroduces local source rows.
+## Sampling Method — DB invariant
 
-`certification_submissions` is also the freeze point for certification source
-data. A blocking ledger status (`draft`, `submitted`, or `accepted`) on a
-Removal, telemetry data upload, or GHG Statement prevents in-place mutation of
-upstream production runs, lab samples, deliveries, biochar products, and
-feedstocks reached through current credit-batch lineage. The guard lives in
-data-access (`certification-lineage-guards.ts`) so browser state and stale UI
-membership cannot bypass it.
+Sampling method lives on `production_processes.sampling_method`, keyed `(facility, feedstock)` — see [ADR 0016](./adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md) and [ADR 0017](./adr/0017-method-b-unlock-registry-computes-noma-gates-and-previews.md) for the model and the Method-B gates.
 
-## Sampling Method Enforcement
+The DB-level backstop that lives nowhere else: migration `0060`'s `enforce_process_method_b_minimum_samples` trigger counts **only pre-unlock baseline samples** (`sampling_time < method_b_unlocked_at`), so post-unlock Method-B samples can't mask a later baseline regression. **Any app-side guard must mirror that same boundary.**
 
-**ADR 0016 (Phase 1):** sampling method moved off `reactors` onto
-`production_processes.sampling_method` (keyed `(facility, feedstock)`, spans
-reactors). `reactors.sampling_method` and its migration-`0052` Method-B trigger
-were dropped (migration `0057`). Lab `samples` now attach per credit batch
-(`samples.credit_batch_id`; `production_run_id` retained as optional in-process
-provenance). The credit batch carries `feedstock_type_id` (NOT NULL, derived
-from its member runs) + `production_process_id`, and an Isometric ≤ 1-month
-window (`certifier IS DISTINCT FROM 'isometric' OR (end_date - start_date) <= 31`).
+## Before Merging Schema Work
 
-Method B guardrails (process grain; ADR 0017 Track 1 shipped the read-only
-counter/cadence layer, Track 2 shipped the unlock, while DEC still operates
-Method A):
-
-1. A process needs at least 30 prior Method-A samples before unlocking `method_b`
-   (`getMethodBEligibilityByProcess` / `countEligibleSamplesByProcess`).
-2. Credit batches in a Method-B process need sampled-batch cadence ≥ 1 per 10
-   (`deriveSamplingRequirement`, credit-batch grain).
-
-Track 2 added the explicit unlock and prerequisite capture
-(`unlockMethodBForProcess` → `method_b_unlocked_at`, `agreed_baseline_size`,
-`random_sampling_plan_ref`, `moisture_pathway`) and the process-grain **DB trigger
-backstop** (migration `0060`, `enforce_process_method_b_minimum_samples`). The
-backstop counts only the **pre-unlock baseline** (`sampling_time <
-method_b_unlocked_at`) so post-unlock Method-B samples can't mask a later baseline
-regression; the app guard mirrors the same boundary. The `_unsampled` submission
-route is wired but its live POST stays gated behind
-`DURABILITY_MEASUREMENT_SAMPLES_LIVE` (wire format unconfirmed).
-
-## Verification Checklist
-
-Before merging schema-affecting work:
-
-1. Run `pnpm db:generate` and review the SQL.
-2. Run targeted unit tests for touched calculations or schemas.
-3. Run `pnpm typecheck`.
-4. Run `pnpm lint`.
-5. For certification changes, run the relevant Isometric unit tests and update `docs/isometric/changes.md`.
+1. Run `pnpm db:generate` and review the emitted SQL before committing.
+2. For certification changes, update `docs/isometric/changes.md`.

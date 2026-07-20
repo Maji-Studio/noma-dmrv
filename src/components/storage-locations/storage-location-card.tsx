@@ -10,7 +10,7 @@ import {
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
-import { formatMass } from "@/lib/format-utils";
+import { formatDateTime, formatMass } from "@/lib/format-utils";
 import {
   binAccentStyle,
   binCapacityPercent,
@@ -24,20 +24,6 @@ interface StorageLocationCardProps {
   onEdit: (storageLocation: StorageLocationWithFacility) => void;
   onDelete: (storageLocationId: string) => void;
   onReconcile: (storageLocation: StorageLocationWithFacility) => void;
-}
-
-function formatTimeAgo(date: Date) {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return "just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDays = Math.floor(diffHr / 24);
-  if (diffDays < 30) return `${diffDays}d ago`;
-  const diffMonths = Math.floor(diffDays / 30);
-  return `${diffMonths}mo ago`;
 }
 
 /** One muted line describing what kind of material the bin holds. */
@@ -77,12 +63,12 @@ export function StorageLocationCard({
       <div className="flex flex-col gap-12 p-16">
         {/* Header: code + last activity */}
         <div className="flex items-center justify-between gap-8">
-          <span className="inline-flex items-center bg-[var(--bin-soft)] px-8 py-3 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--bin-ink)]">
+          <span className="inline-flex items-center bg-[var(--bin-soft)] px-8 py-4 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--bin-ink)]">
             {storageLocation.code}
           </span>
           {lastActivity && (
             <span
-              className={`inline-flex shrink-0 items-center gap-4 body-caption ${
+              className={`inline-flex min-w-0 items-center gap-4 body-caption ${
                 lastActivity.type === "in"
                   ? "text-[var(--color-signal-green)]"
                   : "text-[var(--color-signal-orange)]"
@@ -92,11 +78,13 @@ export function StorageLocationCard({
               }${formatMass(lastActivity.massKg)}`}
             >
               {lastActivity.type === "in" ? (
-                <ArrowUpIcon size={12} weight="bold" />
+                <ArrowUpIcon className="shrink-0" size={12} weight="bold" />
               ) : (
-                <ArrowDownIcon size={12} weight="bold" />
+                <ArrowDownIcon className="shrink-0" size={12} weight="bold" />
               )}
-              {formatTimeAgo(lastActivity.date)}
+              <span className="truncate">
+                {formatDateTime(lastActivity.date)}
+              </span>
             </span>
           )}
         </div>

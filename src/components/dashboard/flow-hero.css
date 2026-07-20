@@ -1,0 +1,67 @@
+/**
+ * Flow Hero scene — animation + interaction styles that can't be expressed
+ * as Tailwind utilities (SVG keyframes, hover lift on SVG groups). All
+ * motion is decorative and fully disabled under prefers-reduced-motion.
+ */
+
+@keyframes fh-dash {
+  to {
+    stroke-dashoffset: -400;
+  }
+}
+
+@keyframes fh-smoke {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateY(-30px);
+    opacity: 0;
+  }
+}
+
+.fh-road {
+  animation: fh-dash 24s linear infinite;
+}
+
+.fh-smoke {
+  animation: fh-smoke 4.8s linear infinite;
+}
+
+/* Station groups lift on hover/focus — the scene's single shadow direction,
+   no scale. Transition also covers the view-switch opacity/filter fades. */
+.fh-station {
+  cursor: pointer;
+  outline: none;
+  transform: translateY(0);
+  transition:
+    opacity 0.4s,
+    filter 0.4s,
+    transform 0.25s;
+}
+
+.fh-station:hover,
+.fh-station:focus-visible {
+  transform: translateY(-4px);
+}
+
+.fh-station:focus-visible {
+  filter: drop-shadow(0 0 2px var(--edge-soft));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fh-road,
+  .fh-smoke {
+    animation: none;
+  }
+  .fh-smoke {
+    opacity: 0;
+  }
+  .fh-station {
+    transition: none;
+  }
+}

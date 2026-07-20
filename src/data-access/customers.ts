@@ -64,6 +64,10 @@ export interface CustomerLocationDetail extends CustomerLocation {
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { guardCustomerName } from "./unique-name-guards";
+import {
+  lockBiocharTransportRouteTopology,
+  syncBiocharLegsForCustomerLocation,
+} from "./transport-legs";
 
 // ============================================
 // Customer Read Operations
@@ -328,16 +332,6 @@ export async function createCustomer(
   }
 ): Promise<Customer> {
   requireOrgScope(ctx);
-
-  // Check for duplicate code
-  const [existing] = await db
-    .select({ id: customers.id })
-    .from(customers)
-    .where(and(eq(customers.code, data.code), eq(customers.organizationId, ctx.organizationId)));
-
-  if (existing) {
-    throw new SafeError("A customer with this code already exists");
-  }
 
   const [customer] = await guardCustomerName(ctx, data.name, () =>
     db
@@ -632,6 +626,16 @@ export async function updateCustomerLocation(
   if (data.isDefault !== undefined) updateData.isDefault = data.isDefault;
 
   return db.transaction(async (tx) => {
+    const routeAnchorCanChange =
+      data.name !== undefined ||
+      data.gpsLatitude !== undefined ||
+      data.gpsLongitude !== undefined ||
+      data.distanceFromFacilityKm !== undefined ||
+      data.distanceSource !== undefined;
+    if (routeAnchorCanChange) {
+      await lockBiocharTransportRouteTopology(ctx, tx);
+    }
+
     // Promoting this location to default demotes the customer's current default.
     if (data.isDefault === true) {
       await tx
@@ -651,6 +655,8 @@ export async function updateCustomerLocation(
       .set(updateData)
       .where(and(eq(customerLocations.id, locationId), eq(customerLocations.organizationId, ctx.organizationId)))
       .returning();
+
+    await syncBiocharLegsForCustomerLocation(ctx, tx, locationId);
 
     return updated;
   });

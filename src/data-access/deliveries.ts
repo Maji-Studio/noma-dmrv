@@ -3,9 +3,10 @@
  * CRUD operations for deliveries with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, sql, SQL, count, sum } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, sql, SQL, count } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
+import { sumNumeric } from "@/db/aggregate";
 import {
   deliveries,
   orders,
@@ -84,11 +85,19 @@ import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import {
+  retireDocumentsForEntities,
+  type DocumentEntityRef,
+} from "./documents";
+import {
   deliveryDrawsStock,
   lockCreateDeliveryStock,
   lockDeleteDeliveryStock,
   lockDeliveryUpdateStock,
 } from "./delivery-stock-locks";
+import {
+  lockBiocharTransportRouteTopology,
+  syncBiocharProductTransportLegs,
+} from "./transport-legs";
 
 // ============================================
 // Read Operations
@@ -443,8 +452,14 @@ export async function getDeliveryStats(
   const [stats] = await db
     .select({
       totalDeliveries: count(),
-      totalDeliveredWetMassKg: sum(deliveries.deliveredWetMassKg),
-      totalMassDryKg: sum(deliveries.massDryKg),
+      totalDeliveredWetMassKg: sumNumeric(
+        deliveries.deliveredWetMassKg,
+        sql`${deliveries.status} = 'delivered'`,
+      ),
+      totalMassDryKg: sumNumeric(
+        deliveries.massDryKg,
+        sql`${deliveries.status} = 'delivered'`,
+      ),
     })
     .from(deliveries)
     .where(whereClause);
@@ -466,8 +481,8 @@ export async function getDeliveryStats(
 
   return {
     totalDeliveries: Number(stats.totalDeliveries),
-    totalDeliveredWetMassKg: Number(stats.totalDeliveredWetMassKg) || 0,
-    totalMassDryKg: Number(stats.totalMassDryKg) || 0,
+    totalDeliveredWetMassKg: stats.totalDeliveredWetMassKg || 0,
+    totalMassDryKg: stats.totalMassDryKg || 0,
     upcomingCount: statusCountMap.get("upcoming") ?? 0,
     deliveredCount: statusCountMap.get("delivered") ?? 0,
   };
@@ -543,56 +558,48 @@ export async function createDelivery(
     throw new SafeError("Dry mass must be less than or equal to wet mass");
   }
 
-  // Check for duplicate code
-  const [existing] = await db
-    .select({ id: deliveries.id })
-    .from(deliveries)
-    .where(and(eq(deliveries.code, data.code), eq(deliveries.organizationId, ctx.organizationId)));
-
-  if (existing) {
-    throw new SafeError("A delivery with this code already exists");
-  }
-
-  // Verify order exists
-  const [order] = await db
-    .select({ id: orders.id, facilityId: orders.facilityId, biocharProductId: orders.biocharProductId })
-    .from(orders)
-    .where(and(eq(orders.id, data.orderId), eq(orders.organizationId, ctx.organizationId)));
-
-  if (!order) {
-    throw new SafeError("Order not found");
-  }
-
-  if (order.facilityId !== data.facilityId) {
-    throw new SafeError("Order belongs to a different facility");
-  }
-
-  const effectiveBiocharProductId = data.biocharProductId ?? order.biocharProductId;
-  if (effectiveBiocharProductId) {
-    const [product] = await db
-      .select({ facilityId: biocharProducts.facilityId })
-      .from(biocharProducts)
-      .where(and(eq(biocharProducts.id, effectiveBiocharProductId), eq(biocharProducts.organizationId, ctx.organizationId)));
-
-    if (!product) {
-      throw new SafeError("Biochar product not found");
-    }
-
-    if (product.facilityId !== data.facilityId) {
-      throw new SafeError("Biochar product belongs to a different facility");
-    }
-  }
-
   const effectiveStatus = data.status ?? "upcoming";
   if (data.driverId) await assertSameOrg(ctx, drivers, data.driverId);
   if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
 
   const delivery = await db.transaction(async (tx) => {
+    await lockBiocharTransportRouteTopology(ctx, tx);
+
+    const [order] = await tx
+      .select({
+        facilityId: orders.facilityId,
+        biocharProductId: orders.biocharProductId,
+      })
+      .from(orders)
+      .where(and(
+        eq(orders.id, data.orderId),
+        eq(orders.organizationId, ctx.organizationId),
+      ));
+    if (!order) {
+      throw new SafeError("Order not found");
+    }
+    if (order.facilityId !== data.facilityId) {
+      throw new SafeError("Order belongs to a different facility");
+    }
+
+    const effectiveBiocharProductId =
+      data.biocharProductId ?? order.biocharProductId;
+    const [product] = await tx
+      .select({ facilityId: biocharProducts.facilityId })
+      .from(biocharProducts)
+      .where(and(
+        eq(biocharProducts.id, effectiveBiocharProductId),
+        eq(biocharProducts.organizationId, ctx.organizationId),
+      ));
+    if (!product) {
+      throw new SafeError("Biochar product not found");
+    }
+    if (product.facilityId !== data.facilityId) {
+      throw new SafeError("Biochar product belongs to a different facility");
+    }
+
     // Hard-block shipping more than the product batch physically holds (#116).
-    if (
-      effectiveBiocharProductId &&
-      deliveryDrawsStock(effectiveStatus, data.deliveredWetMassKg)
-    ) {
+    if (deliveryDrawsStock(effectiveStatus, data.deliveredWetMassKg)) {
       await lockCreateDeliveryStock(ctx, tx, {
         biocharProductId: effectiveBiocharProductId,
         requestedWetKg: data.deliveredWetMassKg,
@@ -607,7 +614,7 @@ export async function createDelivery(
         orderId: data.orderId,
         facilityId: data.facilityId,
         deliveryDate: data.deliveryDate,
-        biocharProductId: effectiveBiocharProductId ?? null,
+        biocharProductId: effectiveBiocharProductId,
         driverId: data.driverId ?? null,
         vehicleId: data.vehicleId ?? null,
         status: effectiveStatus,
@@ -628,6 +635,10 @@ export async function createDelivery(
           : {}),
       })
       .returning(getDeliveryBaseSelection(deliveryColumns));
+
+    await syncBiocharProductTransportLegs(ctx, tx, [
+      effectiveBiocharProductId,
+    ]);
 
     return row;
   });
@@ -757,6 +768,12 @@ export async function updateDelivery(
   if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
 
   const updated = await db.transaction(async (tx) => {
+    const routeMembershipCanChange =
+      data.orderId !== undefined || data.biocharProductId !== undefined;
+    if (routeMembershipCanChange) {
+      await lockBiocharTransportRouteTopology(ctx, tx);
+    }
+
     // Certified-lineage precedence: a verifier-bound delivery may not be edited
     // at all, so that refusal has to reach the operator ahead of any stock
     // complaint about an edit they were never allowed to make.
@@ -767,7 +784,44 @@ export async function updateDelivery(
       "update",
     );
 
-    await lockDeliveryUpdateStock(ctx, tx, deliveryId, data);
+    const lockedDelivery = await lockDeliveryUpdateStock(
+      ctx,
+      tx,
+      deliveryId,
+      data,
+    );
+    const lockedEffectiveOrderId = data.orderId ?? lockedDelivery.orderId;
+    const lockedOrderIds = [...new Set([
+      lockedDelivery.orderId,
+      lockedEffectiveOrderId,
+    ])];
+    const lockedOrders = await tx
+      .select({ id: orders.id, biocharProductId: orders.biocharProductId })
+      .from(orders)
+      .where(and(
+        inArray(orders.id, lockedOrderIds),
+        eq(orders.organizationId, ctx.organizationId),
+      ))
+      .orderBy(orders.id)
+      .for("update");
+    const lockedExistingOrder = lockedOrders.find(
+      (order) => order.id === lockedDelivery.orderId,
+    );
+    const lockedEffectiveOrder = lockedOrders.find(
+      (order) => order.id === lockedEffectiveOrderId,
+    );
+    if (!lockedEffectiveOrder) {
+      throw new SafeError("Order not found");
+    }
+    const lockedExistingBiocharProductId =
+      lockedDelivery.biocharProductId ??
+      lockedExistingOrder?.biocharProductId ??
+      null;
+    const lockedEffectiveBiocharProductId =
+      data.biocharProductId !== undefined
+        ? data.biocharProductId ?? lockedEffectiveOrder.biocharProductId
+        : lockedDelivery.biocharProductId ??
+          lockedEffectiveOrder.biocharProductId;
 
     const [row] = await tx
       .update(deliveries)
@@ -792,6 +846,11 @@ export async function updateDelivery(
       .where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)))
       .returning(getDeliveryBaseSelection(deliveryColumns));
 
+    await syncBiocharProductTransportLegs(ctx, tx, [
+      lockedExistingBiocharProductId,
+      lockedEffectiveBiocharProductId,
+    ]);
+
     return row;
   });
 
@@ -812,6 +871,8 @@ export async function deleteDelivery(
   requireOrgScope(ctx);
 
   await db.transaction(async (tx) => {
+    await lockBiocharTransportRouteTopology(ctx, tx);
+
     // Same precedence as updateDelivery: refuse the locked-lineage delete before
     // taking stock locks or complaining about stock.
     await assertCanMutateCertifiedLineage(
@@ -821,7 +882,17 @@ export async function deleteDelivery(
       "delete",
     );
 
-    await lockDeleteDeliveryStock(ctx, tx, deliveryId);
+    const locked = await lockDeleteDeliveryStock(ctx, tx, deliveryId);
+    const [lockedOrder] = await tx
+      .select({ biocharProductId: orders.biocharProductId })
+      .from(orders)
+      .where(and(
+        eq(orders.id, locked.orderId),
+        eq(orders.organizationId, ctx.organizationId),
+      ));
+    const affectedBiocharProductId =
+      locked.biocharProductId ?? lockedOrder?.biocharProductId ?? null;
+    const deferredRetirements: DocumentEntityRef[] = [];
 
     const [{ value: applicationCount }] = await tx
       .select({ value: count() })
@@ -835,6 +906,13 @@ export async function deleteDelivery(
     }
 
     await tx.delete(deliveries).where(and(eq(deliveries.id, deliveryId), eq(deliveries.organizationId, ctx.organizationId)));
+    await syncBiocharProductTransportLegs(ctx, tx, [
+      affectedBiocharProductId,
+    ], deferredRetirements);
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "delivery", entityId: deliveryId },
+      ...deferredRetirements,
+    ]);
   });
 }
 

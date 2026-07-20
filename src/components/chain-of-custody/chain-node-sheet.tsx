@@ -13,7 +13,7 @@ import { ArrowUpRightIcon, TreeStructureIcon } from "@phosphor-icons/react/dist/
 import { Button } from "@/components/ui/button";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { DetailField, DetailRow, DetailSection } from "@/components/ui/detail-panel";
-import { STATUS_COLOR_FALLBACK, STATUS_COLORS } from "./chain-constants";
+import { getStatusState, getStatusStateColor } from "@/lib/status-state";
 import type { LineageDetailRow } from "./use-chain-graph";
 
 export interface ChainNodeSheetNode {
@@ -47,7 +47,8 @@ function StatusPill({ status }: { status: string | null | undefined }) {
   return (
     <span
       className="inline-flex items-center gap-6 whitespace-nowrap border-[1.5px] border-current px-6 py-2 font-mono text-[9px] font-medium uppercase tracking-[0.09em]"
-      style={{ color: STATUS_COLORS[status] ?? STATUS_COLOR_FALLBACK }}
+      data-status-state={getStatusState(status)}
+      style={{ color: getStatusStateColor(status) }}
     >
       <span aria-hidden className="size-[6px] bg-current" />
       {status.replaceAll("_", " ")}

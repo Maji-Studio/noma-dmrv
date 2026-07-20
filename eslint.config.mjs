@@ -27,6 +27,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Untracked QA run tooling (only markdown reports are committed —
+    // docs/organization.md); driver scripts are throwaway, not lintable code.
+    "docs/qa/artifacts/**",
   ]),
 ]);
 

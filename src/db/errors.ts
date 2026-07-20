@@ -41,11 +41,41 @@ export function isPgUniqueViolation(err: unknown, constraint: string): boolean {
 }
 
 /**
- * True when `err` is a Postgres check violation whose driver message contains
- * the supplied invariant-specific fragment. The message match keeps a caller
- * from relabeling unrelated 23514 failures as the same operator error.
+ * True when `err` is a Postgres check violation on the named constraint.
+ * Match the exact constraint so unrelated checks cannot be relabeled.
  */
 export function isPgCheckViolation(
+  err: unknown,
+  constraint: string,
+): boolean {
+  let current: unknown = err;
+  for (let depth = 0; current != null && depth < MAX_CAUSE_DEPTH; depth++) {
+    if (typeof current === "object") {
+      const e = current as {
+        code?: unknown;
+        constraint?: unknown;
+        cause?: unknown;
+      };
+      if (
+        e.code === PG_CHECK_VIOLATION &&
+        e.constraint === constraint
+      ) {
+        return true;
+      }
+      current = e.cause;
+    } else {
+      break;
+    }
+  }
+  return false;
+}
+
+/**
+ * True when a trigger-raised check violation contains an invariant-specific
+ * message. Use only for explicit `RAISE ... ERRCODE '23514'` errors that do not
+ * carry a database constraint name.
+ */
+export function isPgCheckViolationMessage(
   err: unknown,
   messageFragment: string,
 ): boolean {

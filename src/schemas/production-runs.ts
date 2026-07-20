@@ -16,6 +16,12 @@ import {
   toIntOrNull,
   toNumberOrNull,
 } from "./helpers";
+import {
+  allowedProductionRunStatusesFrom,
+  PRODUCTION_RUN_STATUSES,
+  type ProductionRunStatus,
+} from "@/lib/production-runs/lifecycle";
+import { dryOutputExceedsDryInput } from "@/lib/calculations/mass-dry";
 
 // ============================================
 // Time-window helpers (start/end date + time pairs)
@@ -23,6 +29,9 @@ import {
 
 const TIME_ONLY_RE = /^\d{2}:\d{2}$/;
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+export const CANCELLATION_REASON_MAX_LENGTH = 2000;
+const DRY_MASS_BALANCE_MESSAGE =
+  "Dry biochar output cannot exceed dry feedstock input";
 
 /**
  * Resolve a calendar-date value + a time value into a single instant, robust to
@@ -61,14 +70,8 @@ function hasEndTime(value: unknown): boolean {
 /**
  * Valid production run statuses
  */
-export const productionRunStatuses = [
-  "draft",
-  "running",
-  "complete",
-  "void",
-] as const;
-
-export type ProductionRunStatus = (typeof productionRunStatuses)[number];
+export const productionRunStatuses = PRODUCTION_RUN_STATUSES;
+export type { ProductionRunStatus };
 
 // ============================================
 // Production Run Form Schema (Client-side validation)
@@ -85,6 +88,7 @@ export const productionRunFormSchema = z.object({
 
   // Status
   status: z.enum(productionRunStatuses).default("draft"),
+  cancellationReason: z.string().max(CANCELLATION_REASON_MAX_LENGTH).optional().or(z.literal("")),
 
   // Timing — explicit date + time pairs. The run's start (date + time) is
   // required; the end pair is optional (a blank end = the run has not finished
@@ -143,7 +147,7 @@ export const productionRunFormSchema = z.object({
   electricityKwh: z.preprocess(toNumberOrNull, z.number().min(0, "Electricity must be non-negative").nullable()).optional(),
 
   // Biochar Output
-  biocharOutputKg: z.preprocess(toNumberOrNull, z.number().positive("Biochar output must be positive").max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).nullable()).optional(),
+  biocharOutputKg: z.preprocess(toNumberOrNull, z.number().nonnegative("Biochar output must be non-negative").max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).nullable()).optional(),
   biocharMoisturePercent: optionalPercent,
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
@@ -166,11 +170,39 @@ export const productionRunFormSchema = z.object({
 
     // A run cannot be marked Complete without an end time (a complete run has
     // finished). Mirrors the server-side data-access guard.
-    if (data.status === "complete" && !endPresent) {
+    if ((data.status === "complete" || data.status === "failed") && !endPresent) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["endTime"],
-        message: "A complete run needs an end date and time.",
+        message: `A ${data.status} run needs an end date and time.`,
+      });
+    }
+    if (data.status === "complete" && !(data.biocharOutputKg && data.biocharOutputKg > 0)) {
+      ctx.addIssue({ code: "custom", path: ["biocharOutputKg"], message: "A complete run needs positive biochar output." });
+    }
+    if (
+      (data.status === "complete" || data.status === "failed") &&
+      !(
+        data.feedstockWetMassKg &&
+        data.feedstockWetMassKg > 0 &&
+        data.feedstockStorageLocationId &&
+        data.feedstockMoisturePercent != null
+      )
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["feedstockWetMassKg"],
+        message: `A ${data.status} run needs a source bin, moisture %, and wet mass to compute consumed feedstock.`,
+      });
+    }
+    if (data.status === "cancelled" && !data.cancellationReason?.trim()) {
+      ctx.addIssue({ code: "custom", path: ["cancellationReason"], message: "Enter a cancellation reason." });
+    }
+    if (dryOutputExceedsDryInput(data)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["biocharOutputKg"],
+        message: DRY_MASS_BALANCE_MESSAGE,
       });
     }
   });
@@ -182,7 +214,13 @@ export const productionRunFormSchema = z.object({
 /**
  * Schema for creating a production run (server action)
  */
-export const createProductionRunSchema = productionRunFormSchema;
+export const createProductionRunSchema = productionRunFormSchema.refine(
+  (data) => allowedProductionRunStatusesFrom("draft").includes(data.status),
+  {
+    path: ["status"],
+    message: "A new production run can only start as Draft, Running, or Cancelled.",
+  },
+);
 
 /**
  * Schema for updating a production run (server action)
@@ -199,6 +237,8 @@ export const updateProductionRunSchema = z.object({
   facilityId: z.string().uuid().optional(),
   reactorId: z.string().uuid().optional(),
   status: z.enum(productionRunStatuses).optional(),
+  expectedUpdatedAt: z.coerce.date().optional(),
+  cancellationReason: z.string().max(CANCELLATION_REASON_MAX_LENGTH).nullable().optional(),
   startTime: z.union([
     z.date(),
     z.string().transform((val, ctx) => {
@@ -233,7 +273,7 @@ export const updateProductionRunSchema = z.object({
   dieselGensetLiters: z.number().min(0).optional().nullable(),
   preprocessingFuelLiters: z.number().min(0).optional().nullable(),
   electricityKwh: z.number().min(0).optional().nullable(),
-  biocharOutputKg: z.number().positive().max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).optional().nullable(),
+  biocharOutputKg: z.number().nonnegative().max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).optional().nullable(),
   biocharMoisturePercent: z.number().min(0).max(100).optional().nullable(),
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
@@ -344,7 +384,8 @@ export function formatProductionRunStatus(status: ProductionRunStatus): string {
     draft: "Draft",
     running: "Running",
     complete: "Complete",
-    void: "Void",
+    failed: "Failed",
+    cancelled: "Cancelled",
   };
   return labels[status];
 }

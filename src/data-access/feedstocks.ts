@@ -7,12 +7,12 @@
 
 import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lte, or, sql, SQL } from "drizzle-orm";
 import { db } from "@/db";
+import { countRows, sumNumeric } from "@/db/aggregate";
 import {
   feedstocks,
   feedstockTypes,
   facilities,
   storageLocations,
-  supplierLocations,
   suppliers,
   vehicles,
   productionRunFeedstocks,
@@ -20,17 +20,23 @@ import {
 import type { FeedstockFilterData } from "@/schemas/feedstocks";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
-import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
-import { deriveTransportLeg, positiveOrNull } from "@/lib/calculations/transport-leg";
+import {
+  deriveMassDryKg,
+  exceedsMassWithTolerance,
+} from "@/lib/calculations/mass-dry";
 import {
   deleteTransportLegsForEntity,
-  replaceDerivedTransportLeg,
+  syncFeedstockTransportLeg,
+  type FeedstockTransportOverride,
 } from "./transport-legs";
 import { SafeError } from "@/lib/errors";
+import { retireDocumentsForEntities } from "./documents";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
 
 const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin"] as const;
+const ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE =
+  "Enter a justification when allocated wet mass exceeds the declared delivery mass";
 
 function isFeedstockIntakeBinType(type: string): boolean {
   return FEEDSTOCK_INTAKE_BIN_TYPES.some((binType) => binType === type);
@@ -107,6 +113,28 @@ export interface CreateFeedstockInput {
   allocations: CreateFeedstockAllocation[];
   overrideJustification?: string | null;
   notes?: string | null;
+  transportDistanceKm?: number | null;
+  transportDistanceSource?: FeedstockTransportOverride["distanceSource"];
+  transportTripType?: FeedstockTransportOverride["tripType"];
+}
+
+export interface UpdateFeedstockInput {
+  facilityId?: string;
+  deliveryDate?: Date;
+  supplierId?: string;
+  vehicleId?: string | null;
+  gpsLatitude?: number | null;
+  gpsLongitude?: number | null;
+  feedstockTypeId?: string;
+  massDryKg?: number;
+  massWetKg?: number | null;
+  moistureContentPercent?: number | null;
+  storageLocationId?: string | null;
+  overrideJustification?: string | null;
+  notes?: string | null;
+  transportDistanceKm?: number | null;
+  transportDistanceSource?: FeedstockTransportOverride["distanceSource"];
+  transportTripType?: FeedstockTransportOverride["tripType"];
 }
 
 export interface CreateFeedstockResult {
@@ -286,20 +314,22 @@ export async function getFeedstockStats(
   const [stats] = await db
     .select({
       totalFeedstocks: count(),
-      totalDryMassKg: sql<number>`coalesce(sum(${feedstocks.massDryKg}), 0)`,
+      totalDryMassKg: sumNumeric(feedstocks.massDryKg),
       avgMoisturePercent: sql<number | null>`case when sum(case when ${feedstocks.moistureContentPercent} is not null then ${feedstocks.massWetKg} end) > 0 then sum(case when ${feedstocks.moistureContentPercent} is not null then ${feedstocks.moistureContentPercent} * ${feedstocks.massWetKg} end) / sum(case when ${feedstocks.moistureContentPercent} is not null then ${feedstocks.massWetKg} end) else null end`,
-      completeFeedstocks: sql<number>`count(*) filter (where ${feedstocks.status} = 'complete')`,
-      missingDataFeedstocks: sql<number>`count(*) filter (where ${feedstocks.status} = 'missing_data')`,
+      completeFeedstocks: countRows(sql`${feedstocks.status} = 'complete'`),
+      missingDataFeedstocks: countRows(
+        sql`${feedstocks.status} = 'missing_data'`,
+      ),
     })
     .from(feedstocks)
     .where(whereClause);
 
   return {
     totalFeedstocks: Number(stats.totalFeedstocks),
-    totalDryMassKg: Number(stats.totalDryMassKg),
+    totalDryMassKg: stats.totalDryMassKg,
     avgMoisturePercent: stats.avgMoisturePercent != null ? Number(stats.avgMoisturePercent) : null,
-    completeFeedstocks: Number(stats.completeFeedstocks),
-    missingDataFeedstocks: Number(stats.missingDataFeedstocks),
+    completeFeedstocks: stats.completeFeedstocks,
+    missingDataFeedstocks: stats.missingDataFeedstocks,
   };
 }
 
@@ -323,6 +353,13 @@ export async function createFeedstock(
   );
 
   const allocatedTotalWetKg = data.allocations.reduce((sum, a) => sum + a.allocatedWetMassKg, 0);
+  const allocationsExceedDelivery = exceedsMassWithTolerance(
+    allocatedTotalWetKg,
+    data.totalWetMassKg,
+  );
+  if (allocationsExceedDelivery && !data.overrideJustification?.trim()) {
+    throw new SafeError(ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE);
+  }
   const deliveryGroupId = data.allocations.length > 1 ? crypto.randomUUID() : null;
 
   // Confirm the feedstock type exists before locking compatible bins to it.
@@ -415,6 +452,12 @@ export async function createFeedstock(
 
       results.push(feedstock.id);
 
+      await syncFeedstockTransportLeg(ctx, tx, feedstock.id, {
+        distanceKm: data.transportDistanceKm,
+        distanceSource: data.transportDistanceSource,
+        tripType: data.transportTripType,
+      });
+
       // Lock feedstock type on bin (first-use lock)
       await tx
         .update(storageLocations)
@@ -437,7 +480,7 @@ export async function createFeedstock(
 
   // Generate warning if allocated wet mass > total delivery wet mass
   let warning: string | null = null;
-  if (allocatedTotalWetKg > data.totalWetMassKg) {
+  if (allocationsExceedDelivery) {
     warning = `Allocated wet mass (${allocatedTotalWetKg.toFixed(1)} kg) exceeds total delivery wet mass (${data.totalWetMassKg.toFixed(1)} kg).`;
   }
 
@@ -451,27 +494,19 @@ export async function createFeedstock(
 export async function updateFeedstock(
   ctx: OrgContext,
   feedstockId: string,
-  data: {
-    facilityId?: string;
-    deliveryDate?: Date;
-    supplierId?: string;
-    vehicleId?: string | null;
-    gpsLatitude?: number | null;
-    gpsLongitude?: number | null;
-    feedstockTypeId?: string;
-    massDryKg?: number;
-    massWetKg?: number | null;
-    moistureContentPercent?: number | null;
-    storageLocationId?: string | null;
-    overrideJustification?: string | null;
-    notes?: string | null;
-  }
+  data: UpdateFeedstockInput,
 ): Promise<FeedstockWithRelations> {
   requireOrgScope(ctx);
-  if (data.supplierId) await assertSameOrg(ctx, suppliers, data.supplierId);
-  if (data.vehicleId) await assertSameOrg(ctx, vehicles, data.vehicleId);
-  if (data.feedstockTypeId) await assertSameOrg(ctx, feedstockTypes, data.feedstockTypeId);
-  if (data.storageLocationId) await assertSameOrg(ctx, storageLocations, data.storageLocationId);
+  const {
+    transportDistanceKm,
+    transportDistanceSource,
+    transportTripType,
+    ...feedstockData
+  } = data;
+  if (feedstockData.supplierId) await assertSameOrg(ctx, suppliers, feedstockData.supplierId);
+  if (feedstockData.vehicleId) await assertSameOrg(ctx, vehicles, feedstockData.vehicleId);
+  if (feedstockData.feedstockTypeId) await assertSameOrg(ctx, feedstockTypes, feedstockData.feedstockTypeId);
+  if (feedstockData.storageLocationId) await assertSameOrg(ctx, storageLocations, feedstockData.storageLocationId);
 
   const [existing] = await db
     .select()
@@ -483,10 +518,10 @@ export async function updateFeedstock(
   }
 
   // Validate storage bin compatibility if changing storage location or feedstock type
-  if (data.storageLocationId || data.feedstockTypeId) {
-    const binId = data.storageLocationId ?? existing.storageLocationId;
-    const typeId = data.feedstockTypeId ?? existing.feedstockTypeId;
-    const facId = data.facilityId ?? existing.facilityId;
+  if (feedstockData.storageLocationId || feedstockData.feedstockTypeId) {
+    const binId = feedstockData.storageLocationId ?? existing.storageLocationId;
+    const typeId = feedstockData.feedstockTypeId ?? existing.feedstockTypeId;
+    const facId = feedstockData.facilityId ?? existing.facilityId;
 
     // Confirm the feedstock type exists before validating compatible bins.
     const [ft] = await db
@@ -549,16 +584,24 @@ export async function updateFeedstock(
       "update",
     );
 
-    const status = determineFeedstockStatus({ ...locked, ...data });
+    const status = determineFeedstockStatus({ ...locked, ...feedstockData });
+    const routeAnchorChanged =
+      (feedstockData.supplierId !== undefined &&
+        feedstockData.supplierId !== locked.supplierId) ||
+      (feedstockData.facilityId !== undefined &&
+        feedstockData.facilityId !== locked.facilityId);
+    const explicitDistanceSupplied = transportDistanceKm !== undefined;
+    const explicitDistanceSourceSupplied =
+      transportDistanceSource !== undefined;
     const effectiveStorageLocationId =
-      data.storageLocationId !== undefined
-        ? data.storageLocationId
+      feedstockData.storageLocationId !== undefined
+        ? feedstockData.storageLocationId
         : locked.storageLocationId;
     const stockDerivationChanged =
       status !== locked.status ||
-      (data.massDryKg !== undefined && data.massDryKg !== locked.massDryKg) ||
-      (data.storageLocationId !== undefined &&
-        data.storageLocationId !== locked.storageLocationId);
+      (feedstockData.massDryKg !== undefined && feedstockData.massDryKg !== locked.massDryKg) ||
+      (feedstockData.storageLocationId !== undefined &&
+        feedstockData.storageLocationId !== locked.storageLocationId);
 
     if (stockDerivationChanged) {
       await lockBinStocks(ctx, tx, [
@@ -570,11 +613,21 @@ export async function updateFeedstock(
     await tx
       .update(feedstocks)
       .set({
-        ...data,
+        ...feedstockData,
         status,
         updatedAt: new Date(),
       })
       .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
+
+    await syncFeedstockTransportLeg(ctx, tx, feedstockId, {
+      distanceKm: transportDistanceKm,
+      distanceSource: transportDistanceSource,
+      tripType: transportTripType,
+      resetDistanceToRoute:
+        routeAnchorChanged &&
+        !explicitDistanceSupplied &&
+        !explicitDistanceSourceSupplied,
+    });
   });
 
   return getFeedstockById(ctx, feedstockId);
@@ -644,13 +697,22 @@ export async function deleteFeedstock(
       await lockBinStocks(ctx, tx, [locked.storageLocationId]);
     }
 
-    await deleteTransportLegsForEntity(ctx, tx, "feedstock", feedstockId);
+    const transportLegDocuments = await deleteTransportLegsForEntity(
+      ctx,
+      tx,
+      "feedstock",
+      feedstockId,
+    );
     const result = await tx
       .delete(feedstocks)
       .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
     if (result.rowCount === 0) {
       throw new SafeError("Feedstock not found");
     }
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "feedstock", entityId: feedstockId },
+      ...transportLegDocuments,
+    ]);
   });
 }
 
@@ -701,103 +763,6 @@ export async function getFeedstockOptions(
     .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
     .where(and(isNull(feedstocks.archivedAt), eq(feedstocks.organizationId, ctx.organizationId)))
     .orderBy(desc(feedstocks.createdAt));
-}
-
-// ============================================
-// Transport leg (auto-derived: supplier → facility)
-// ============================================
-
-/**
- * Recompute and persist the feedstock's single transport leg from records we
- * already hold (supplier origin — default location's name/GPS preferred —
- * + facility destination + vehicle + wet cargo mass). Distance resolves in
- * priority order — feedstock-form override → the
- * supplier's DEFAULT location distance → supplier-level distance-to-facility —
- * and the leg inherits the winning level's `distanceSource` (map-integration
- * plan, decision 3). Call after every feedstock create/update.
- */
-export async function syncFeedstockTransportLeg(
-  ctx: OrgContext,
-  feedstockId: string,
-  distanceOverride?: {
-    distanceKm?: number | null;
-    distanceSource?: "map_estimate" | "manual" | "document" | null;
-    tripType?: "return" | "one_way" | null;
-  },
-): Promise<void> {
-  requireOrgScope(ctx);
-
-  const [row] = await db
-    .select({
-      supplierName: suppliers.name,
-      supplierGpsLatitude: suppliers.gpsLatitude,
-      supplierGpsLongitude: suppliers.gpsLongitude,
-      supplierDistanceToFacilityKm: suppliers.distanceToFacilityKm,
-      supplierDistanceSource: suppliers.distanceSource,
-      locationName: supplierLocations.name,
-      locationGpsLatitude: supplierLocations.gpsLatitude,
-      locationGpsLongitude: supplierLocations.gpsLongitude,
-      locationDistanceFromFacilityKm: supplierLocations.distanceFromFacilityKm,
-      locationDistanceSource: supplierLocations.distanceSource,
-      facilityName: facilities.name,
-      facilityGpsLatitude: facilities.gpsLatitude,
-      facilityGpsLongitude: facilities.gpsLongitude,
-      vehicleType: vehicles.vehicleType,
-      vehicleModelYear: vehicles.modelYear,
-      loadMassKg: feedstocks.massWetKg,
-    })
-    .from(feedstocks)
-    .leftJoin(suppliers, and(eq(feedstocks.supplierId, suppliers.id), eq(suppliers.organizationId, ctx.organizationId)))
-    .leftJoin(
-      supplierLocations,
-      and(
-        eq(supplierLocations.supplierId, suppliers.id),
-        eq(supplierLocations.isDefault, true),
-        eq(supplierLocations.organizationId, ctx.organizationId),
-      ),
-    )
-    .leftJoin(facilities, and(eq(feedstocks.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
-    .leftJoin(vehicles, and(eq(feedstocks.vehicleId, vehicles.id), eq(vehicles.organizationId, ctx.organizationId)))
-    .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
-
-  if (!row) return;
-
-  // Stored level: the default supplier location wins over the supplier-level
-  // default; each carries its own provenance.
-  const locationDistance = positiveOrNull(row.locationDistanceFromFacilityKm);
-  const storedDistanceKm = locationDistance ?? row.supplierDistanceToFacilityKm;
-  const storedDistanceSource =
-    locationDistance != null
-      ? row.locationDistanceSource
-      : row.supplierDistanceSource;
-
-  // Origin identity mirrors the distance priority: the default supplier
-  // location is the actual pickup point, so its name/GPS beat the supplier's.
-  // GPS falls back as a pair — a lone latitude or longitude is unusable.
-  const locationHasGps =
-    row.locationGpsLatitude != null && row.locationGpsLongitude != null;
-
-  const derived = deriveTransportLeg({
-    origin: {
-      name: row.locationName ?? row.supplierName,
-      gpsLatitude: locationHasGps ? row.locationGpsLatitude : row.supplierGpsLatitude,
-      gpsLongitude: locationHasGps ? row.locationGpsLongitude : row.supplierGpsLongitude,
-    },
-    destination: {
-      name: row.facilityName,
-      gpsLatitude: row.facilityGpsLatitude,
-      gpsLongitude: row.facilityGpsLongitude,
-    },
-    vehicle: { vehicleType: row.vehicleType, modelYear: row.vehicleModelYear },
-    loadMassKg: row.loadMassKg,
-    storedDistanceKm,
-    storedDistanceSource,
-    distanceKmOverride: distanceOverride?.distanceKm,
-    distanceSourceOverride: distanceOverride?.distanceSource,
-    tripType: distanceOverride?.tripType,
-  });
-
-  await replaceDerivedTransportLeg(ctx, "feedstock", feedstockId, derived);
 }
 
 // ============================================

@@ -10,7 +10,7 @@ import type { Application } from "@/db/schema/application";
 import {
   formatApplicationMethod,
 } from "@/schemas/applications";
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 import { formatApplicationKgFromTons } from "./mass-utils";
 
 interface ApplicationCardProps {
@@ -51,7 +51,7 @@ export function ApplicationCard({
         {/* Date + method */}
         <div>
           <h3 className="title-heading-3 text-[var(--color-text-primary)]">
-            {formatSafeDate(application.applicationDate)}
+            {formatDate(application.applicationDate)}
           </h3>
           {application.applicationMethodType && (
             <p className="mt-6 body-caption text-[var(--color-text-tertiary)]">

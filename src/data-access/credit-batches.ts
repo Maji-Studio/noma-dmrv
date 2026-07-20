@@ -39,6 +39,7 @@ import { requireOrgScope } from "./utils";
 import { findOrCreateProductionProcess } from "./production-processes";
 import {
   assertDeclaredFeedstockType,
+  lockCreditBatchProductionRuns,
   validateProductionRunIds,
 } from "./credit-batch-membership";
 import { gcRemovalIfOrphaned } from "./certifier-removals";
@@ -59,6 +60,11 @@ import { formatUtcDate } from "@/lib/date-utils";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
+import {
+  loadCreditBatchLineageFacts,
+  type CreditBatchLineageFacts,
+} from "./credit-batch-lineage-facts";
+import { retireDocumentsForEntities } from "./documents";
 
 export { getApplicationsForRuns } from "./credit-batch-production-runs";
 export type { ApplicationForRun } from "./credit-batch-production-runs";
@@ -261,15 +267,18 @@ export async function getCreditBatches(
     return [];
   }
 
-  const productionRunIdsByBatch = await getProductionRunIdsByBatchId(ctx, batchIds);
-  const rollupsByBatch = await getApplicationRollupsByBatchFromRuns(
+  const productionRunIdsByBatchId = await getProductionRunIdsByBatchId(
     ctx,
-    productionRunIdsByBatch,
+    batchIds,
+  );
+  const rollupsByBatchId = await getApplicationRollupsByBatchFromRuns(
+    ctx,
+    productionRunIdsByBatchId,
   );
 
   return batches.map((b) => {
-    const productionRunIds = productionRunIdsByBatch[b.creditBatch.id] ?? [];
-    const rollup = rollupsByBatch[b.creditBatch.id];
+    const productionRunIds = productionRunIdsByBatchId[b.creditBatch.id] ?? [];
+    const rollup = rollupsByBatchId[b.creditBatch.id];
     const applicationIds = rollup?.applicationIds ?? [];
     return {
       ...b.creditBatch,
@@ -291,17 +300,18 @@ export async function getCreditBatches(
  */
 export async function getCreditBatchById(
   ctx: OrgContext,
-  id: string
+  id: string,
+  options?: { skipPreview?: false; lineageFacts?: CreditBatchLineageFacts }
 ): Promise<CreditBatchWithRelations | null>;
 export async function getCreditBatchById(
   ctx: OrgContext,
   id: string,
-  options: { skipPreview: true }
+  options: { skipPreview: true; lineageFacts?: CreditBatchLineageFacts }
 ): Promise<CreditBatchWithOptionalPreview | null>;
 export async function getCreditBatchById(
   ctx: OrgContext,
   id: string,
-  options?: { skipPreview?: boolean }
+  options?: { skipPreview?: boolean; lineageFacts?: CreditBatchLineageFacts }
 ): Promise<CreditBatchWithRelations | CreditBatchWithOptionalPreview | null> {
   requireOrgScope(ctx);
   const [batch] = await db
@@ -321,14 +331,10 @@ export async function getCreditBatchById(
   const durabilityOption =
     batch.facilityDurabilityOption ?? DURABILITY_TIER_FALLBACK;
 
-  const productionRunIdsByBatch = await getProductionRunIdsByBatchId(ctx, [id]);
-  const productionRunIds = productionRunIdsByBatch[id] ?? [];
-  const rollupsByBatch = await getApplicationRollupsByBatchFromRuns(
-    ctx,
-    productionRunIdsByBatch,
-  );
-  const rollup = rollupsByBatch[id];
-  const applicationIds = rollup?.applicationIds ?? [];
+  const facts =
+    options?.lineageFacts ?? (await loadCreditBatchLineageFacts(ctx, [id]))[id];
+  const productionRunIds = facts?.productionRunIds ?? [];
+  const applicationIds = facts?.applicationIds ?? [];
 
   const result = {
     ...batch.creditBatch,
@@ -338,7 +344,7 @@ export async function getCreditBatchById(
     applicationIds,
     productionRunCount: productionRunIds.length,
     productionRunIds,
-    appliedWeightTons: rollup?.appliedWeightTons ?? 0,
+    appliedWeightTons: facts?.appliedWeightTons ?? 0,
     co2eStoredPreview: null,
     previewAvailable: false,
   };
@@ -352,7 +358,8 @@ export async function getCreditBatchById(
     co2eStoredPreview: await buildCo2eStoredPreview(
       ctx,
       { ...batch.creditBatch, durabilityOption },
-      applicationIds
+      applicationIds,
+      facts,
     ),
     previewAvailable: true,
   };
@@ -384,7 +391,6 @@ export async function createCreditBatch(
   const { productionRunIds, ...batchData } = data;
 
   const creditBatch = await db.transaction(async (tx) => {
-    const certifier = await resolveCreditBatchCertifier(ctx, tx, batchData.facilityId);
     assertCreditBatchProductionWindow(batchData.startDate, batchData.endDate);
 
     // ADR 0016 (amended 2026-07-04): the credit batch is the protocol production
@@ -394,6 +400,8 @@ export async function createCreditBatch(
     // declared feedstock type, then find-or-create the (facility, feedstock)
     // production process this batch is a <=1-month slice of.
     const runIds = productionRunIds ?? [];
+    const lockedRuns = await lockCreditBatchProductionRuns(ctx, tx, runIds);
+    const certifier = await resolveCreditBatchCertifier(ctx, tx, batchData.facilityId);
     const feedstockTypeId = batchData.feedstockTypeId;
     await validateProductionRunIds(
       ctx,
@@ -402,6 +410,8 @@ export async function createCreditBatch(
       batchData.facilityId,
       batchData.startDate,
       batchData.endDate,
+      undefined,
+      lockedRuns,
     );
     await assertDeclaredFeedstockType(ctx, tx, runIds, feedstockTypeId);
     const process = await findOrCreateProductionProcess(
@@ -545,6 +555,31 @@ export async function updateCreditBatch(
     updateData.siteManagementNotes = updateFields.siteManagementNotes || null;
 
   await db.transaction(async (tx) => {
+    // Discover the current membership without taking a batch/removal lock, then
+    // lock old + prospective members in one sorted run-row batch. Every writer
+    // follows run -> batch -> removal/certification order; production-run reopen
+    // also locks the run before checking membership.
+    const currentMembership = productionRunIds !== undefined
+      ? await tx
+          .select({ productionRunId: creditBatchProductionRuns.productionRunId })
+          .from(creditBatchProductionRuns)
+          .where(and(
+            eq(creditBatchProductionRuns.creditBatchId, id),
+            eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
+          ))
+      : [];
+    const membershipRunIds = productionRunIds !== undefined
+      ? [
+          ...currentMembership.map((link) => link.productionRunId),
+          ...productionRunIds,
+        ]
+      : [];
+    const lockedMembershipRuns = await lockCreditBatchProductionRuns(
+      ctx,
+      tx,
+      membershipRunIds,
+    );
+
     // Fetch existing batch inside transaction to avoid TOCTOU race
     const [existingBatch] = await tx
       .select({
@@ -560,6 +595,30 @@ export async function updateCreditBatch(
 
     if (!existingBatch) {
       throw new SafeError("Credit batch not found");
+    }
+
+    if (productionRunIds !== undefined) {
+      const lockedCurrentMembership = await tx
+        .select({ productionRunId: creditBatchProductionRuns.productionRunId })
+        .from(creditBatchProductionRuns)
+        .where(and(
+          eq(creditBatchProductionRuns.creditBatchId, id),
+          eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
+        ));
+      const discoveredIds = currentMembership
+        .map((link) => link.productionRunId)
+        .sort();
+      const lockedIds = lockedCurrentMembership
+        .map((link) => link.productionRunId)
+        .sort();
+      if (
+        discoveredIds.length !== lockedIds.length ||
+        discoveredIds.some((runId, index) => runId !== lockedIds[index])
+      ) {
+        throw new SafeError(
+          "Credit batch membership changed while this update was being prepared. Refresh and retry.",
+        );
+      }
     }
 
     await assertRemovalAllowsCreditBatchMutation(
@@ -598,6 +657,7 @@ export async function updateCreditBatch(
         effectiveStartDate,
         effectiveEndDate,
         id,
+        lockedMembershipRuns.filter((run) => productionRunIds.includes(run.id)),
       );
     }
 
@@ -756,6 +816,9 @@ export async function deleteCreditBatch(ctx: OrgContext, id: string): Promise<vo
     if (batch?.removalId) {
       await gcRemovalIfOrphaned(ctx, tx, batch.removalId);
     }
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "credit_batch", entityId: id },
+    ]);
   });
 }
 
@@ -805,6 +868,7 @@ export async function getCreditBatchProductionRunOptions(
   const conditions = [
     eq(productionRuns.organizationId, ctx.organizationId),
     eq(productionRuns.facilityId, params.facilityId),
+    eq(productionRuns.status, "complete"),
     isNull(productionRuns.archivedAt),
   ];
 

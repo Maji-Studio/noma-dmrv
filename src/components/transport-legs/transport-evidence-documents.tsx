@@ -40,6 +40,7 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 interface TransportEvidenceDocumentsProps {
   entityType: TransportEvidenceEntityType;
   entityId: string;
+  readOnly?: boolean;
 }
 
 /**
@@ -50,6 +51,7 @@ interface TransportEvidenceDocumentsProps {
 export function TransportEvidenceDocuments({
   entityType,
   entityId,
+  readOnly = false,
 }: TransportEvidenceDocumentsProps) {
   const toast = useToast();
   const { data: docs, isLoading, error } = useDocumentsForEntity(
@@ -126,58 +128,68 @@ export function TransportEvidenceDocuments({
               >
                 <ArrowSquareOutIcon size={16} weight="bold" />
               </a>
-              <Button
-                variant="destructive"
-                size="icon"
-                onClick={() => setDeletingId(doc.id)}
-                disabled={deleteMutation.isPending}
-                className="shrink-0"
-                aria-label={`Delete ${doc.fileName}`}
-              >
-                <TrashIcon size={16} weight="bold" />
-              </Button>
+              {!readOnly && (
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  onClick={() => setDeletingId(doc.id)}
+                  disabled={deleteMutation.isPending}
+                  className="shrink-0"
+                  aria-label={`Delete ${doc.fileName}`}
+                >
+                  <TrashIcon size={16} weight="bold" />
+                </Button>
+              )}
             </li>
           ))}
         </ul>
+      ) : readOnly ? (
+        <p className="body-small text-[var(--color-text-secondary)]">
+          No transport evidence attached.
+        </p>
       ) : null}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
-        {EVIDENCE_FIELDS.map(({ documentType, label }) => (
-          <FormField
-            key={documentType}
-            id={`transport-evidence-${entityId}-${documentType}`}
-            label={label}
-          >
-            <FormFileUpload
+      {!readOnly && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
+          {EVIDENCE_FIELDS.map(({ documentType, label }) => (
+            <FormField
+              key={documentType}
               id={`transport-evidence-${entityId}-${documentType}`}
-              accept="image/*,.pdf"
-              multiple={false}
-              maxSizeMb={25}
-              entityType={entityType}
-              entityId={entityId}
-              documentType={documentType}
-              onUploaded={() => {
-                setUploadError(null);
-                toast.success(`${label} uploaded`);
-              }}
-              onUploadError={(err) => setUploadError(err)}
-            />
-          </FormField>
-        ))}
-      </div>
+              label={label}
+            >
+              <FormFileUpload
+                id={`transport-evidence-${entityId}-${documentType}`}
+                accept="image/*,.pdf"
+                multiple={false}
+                maxSizeMb={25}
+                entityType={entityType}
+                entityId={entityId}
+                documentType={documentType}
+                onUploaded={() => {
+                  setUploadError(null);
+                  toast.success(`${label} uploaded`);
+                }}
+                onUploadError={(err) => setUploadError(err)}
+              />
+            </FormField>
+          ))}
+        </div>
+      )}
 
       {deleteError && <ServerError message={deleteError} />}
-      <DeleteConfirmDialog
-        isOpen={!!deletingId}
-        title="Delete Document"
-        message="Are you sure you want to delete this document? The file will be removed from storage."
-        onConfirm={handleDeleteConfirm}
-        onCancel={() => {
-          setDeletingId(null);
-          setDeleteError(null);
-        }}
-        isPending={deleteMutation.isPending}
-      />
+      {!readOnly && (
+        <DeleteConfirmDialog
+          isOpen={!!deletingId}
+          title="Delete Document"
+          message="Are you sure you want to delete this document? The file will be removed from storage."
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => {
+            setDeletingId(null);
+            setDeleteError(null);
+          }}
+          isPending={deleteMutation.isPending}
+        />
+      )}
     </div>
   );
 }
@@ -185,6 +197,7 @@ export function TransportEvidenceDocuments({
 interface TransportEvidencePanelProps {
   entityType: Exclude<TransportEvidenceEntityType, "transport_leg">;
   entityId: string;
+  readOnly?: boolean;
 }
 
 /**
@@ -194,6 +207,7 @@ interface TransportEvidencePanelProps {
 export function TransportEvidencePanel({
   entityType,
   entityId,
+  readOnly = false,
 }: TransportEvidencePanelProps) {
   return (
     <section className="space-y-16 border-t border-[var(--color-border-tertiary)] pt-16">
@@ -202,16 +216,15 @@ export function TransportEvidencePanel({
           Transport evidence
         </h3>
         <p className="body-small text-[var(--color-text-secondary)]">
-          Attach the bill of lading and weigh-scale ticket used to support this
-          journey. Uploaded files become Source candidates; mirror them from the
-          Removal&apos;s Supporting Sources panel before submission. These are the
-          document types currently supported here; the active module may require
-          additional journey evidence.
+          {readOnly
+            ? "Bill of lading and weigh-scale tickets supporting this journey."
+            : "Attach the bill of lading and weigh-scale ticket used to support this journey. Uploaded files become Source candidates; mirror them from the Removal's Supporting Sources panel before submission. These are the document types currently supported here; the active module may require additional journey evidence."}
         </p>
       </div>
       <TransportEvidenceDocuments
         entityType={entityType}
         entityId={entityId}
+        readOnly={readOnly}
       />
     </section>
   );

@@ -190,6 +190,7 @@ export function EntitySelect({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listboxRef = useRef<HTMLUListElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   // Debounce search for better performance
   const debouncedSearch = useDebounce(searchQuery, 200);
@@ -208,11 +209,21 @@ export function EntitySelect({
   });
 
   // Fetch selected entity details
-  const { data: selectedEntity } = useEntityById(entityType, value);
+  const { data: selectedEntity, isPending: isSelectedEntityPending } =
+    useEntityById(entityType, value);
 
-  const displayText = selectedEntity
-    ? (formatSelectedLabel ? formatSelectedLabel(selectedEntity) : selectedEntity.name)
+  const selectedOption =
+    selectedEntity?.id === value
+      ? selectedEntity
+      : options.find((option) => option.id === value);
+  const displayText = selectedOption
+    ? (formatSelectedLabel ? formatSelectedLabel(selectedOption) : selectedOption.name)
     : "";
+  // Only while the by-ID fetch is unresolved — once it settles without a
+  // match (deleted or inaccessible entity) the ordinary placeholder returns.
+  const isSelectionLoading = Boolean(
+    value && !selectedOption && isSelectedEntityPending,
+  );
 
   const handleCreatedEntity = useCallback(
     (entity: EntityOption) => {
@@ -342,9 +353,16 @@ export function EntitySelect({
           }
           break;
         case "Escape":
-          e.preventDefault();
-          setIsOpen(false);
-          setSearchQuery("");
+          if (isOpen) {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsOpen(false);
+            setSearchQuery("");
+            // Escape may fire from the search input, which unmounts on
+            // close — return focus to the trigger so keyboard users are
+            // not dropped onto the document body.
+            triggerRef.current?.focus();
+          }
           break;
         case "Tab":
           setIsOpen(false);
@@ -352,7 +370,7 @@ export function EntitySelect({
           break;
       }
     },
-    [options, clampedHighlightedIndex, handleSelect, resolvedCreateAction, shouldShowCreateAction]
+    [options, clampedHighlightedIndex, handleSelect, resolvedCreateAction, shouldShowCreateAction, isOpen]
   );
 
   const handleToggle = useCallback(() => {
@@ -370,6 +388,7 @@ export function EntitySelect({
       <div className="relative flex items-center">
         <button
           type="button"
+          ref={triggerRef}
           onClick={handleToggle}
           onKeyDown={handleKeyDown}
           disabled={disabled}
@@ -392,12 +411,15 @@ export function EntitySelect({
           <span
             className={cn(
               "truncate text-left",
-              value
+              value && !isSelectionLoading
                 ? "text-[var(--color-text-primary)]"
                 : "text-[var(--color-text-tertiary)]"
             )}
           >
-            {displayText || placeholder || defaultPlaceholder}
+            {displayText ||
+              (isSelectionLoading
+                ? "Loading selection…"
+                : placeholder || defaultPlaceholder)}
           </span>
           <ChevronDown
             className={cn(

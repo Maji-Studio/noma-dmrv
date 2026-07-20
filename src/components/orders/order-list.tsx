@@ -28,7 +28,7 @@ import {
   orderFulfillmentStatuses,
   type OrderFulfillmentStatus,
 } from "@/lib/orders/fulfillment";
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 
 // ============================================
 // Column Definitions
@@ -47,7 +47,7 @@ function createColumns(
     {
       accessorKey: "orderDate",
       header: "Date",
-      cell: ({ row }) => <span className="text-[var(--color-text-secondary)]">{formatSafeDate(row.original.orderDate)}</span>,
+      cell: ({ row }) => <span className="text-[var(--color-text-secondary)]">{formatDate(row.original.orderDate)}</span>,
     },
     {
       id: "customer",
@@ -364,7 +364,7 @@ export function OrderList() {
                   title: "General",
                   fields: [
                     { label: "Code", value: sideSheetEntity.code },
-                    { label: "Order Date", value: formatSafeDate(sideSheetEntity.orderDate) },
+                    { label: "Order Date", value: formatDate(sideSheetEntity.orderDate) },
                   ],
                 },
                 {

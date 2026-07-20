@@ -6,6 +6,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { MapPinIcon, PlusIcon, LeafIcon, XIcon } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
@@ -18,6 +19,7 @@ import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
 import { ApplicationForm } from "./application-form";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import {
@@ -25,12 +27,14 @@ import {
   type ApplicationDeliveryOption,
 } from "./mass-utils";
 import type { ApplicationListItem } from "@/data-access/applications";
+import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "@/lib/certification/application-evidence";
 import {
   useApplications,
   useApplicationDeliveryOptions,
   useCreateApplication,
   useUpdateApplication,
   useDeleteApplication,
+  applicationKeys,
 } from "@/hooks/use-applications";
 import type { ApplicationFormData } from "@/schemas/applications";
 import {
@@ -45,7 +49,7 @@ import {
 } from "@/schemas/applications";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 
 // ============================================
 // Column Definitions
@@ -67,7 +71,7 @@ function createColumns(
       accessorKey: "applicationDate",
       header: "Date",
       cell: ({ row }) => (
-        <span>{formatSafeDate(row.original.applicationDate)}</span>
+        <span>{formatDate(row.original.applicationDate)}</span>
       ),
     },
     {
@@ -214,32 +218,78 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const updateApplication = useUpdateApplication();
   const deleteApplication = useDeleteApplication();
   const toast = useToast();
+  const queryClient = useQueryClient();
+  const deferredAttachments = useDeferredAttachments();
+  const [isFlushing, setIsFlushing] = useState(false);
 
   // Handlers
   const handleCreate = async (data: ApplicationFormData) => {
     setCreateError(null);
     try {
       const result = await createApplication.mutateAsync(data);
-      if (result.success) {
-        setSideSheet(null);
-        toast.success("Application created successfully");
-      } else {
+      if (result.success === false) {
         setCreateError(result.error || "Failed to create application");
+        return;
       }
+      const createdApplication: ApplicationListItem = {
+        ...result.data,
+        customerName: null,
+        locationName: null,
+        durabilityOption,
+        // Fail closed until the authoritative list query recounts uploaded
+        // evidence after this create flow completes.
+        evidenceGapCount: APPLICATION_VISUAL_EVIDENCE_ROLES.length,
+      };
+      setIsFlushing(true);
+      const flushResult = await deferredAttachments.flush(
+        "application",
+        createdApplication.id,
+      );
+      if (!flushResult.ok) {
+        setSideSheet({ entity: createdApplication, mode: "edit" });
+        setCreateError(
+          `Application created, but ${flushResult.failed.length} ${flushResult.failed.length === 1 ? "attachment" : "attachments"} failed to upload.`,
+        );
+        return;
+      }
+      deferredAttachments.clear();
+      // The create mutation already invalidated the list, but that ran before
+      // the evidence flush finished — so the row's readiness/evidence-gap count
+      // was recomputed with zero uploads. Re-invalidate now that the deferred
+      // attachments have landed so the list reflects the true evidence state.
+      queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
+      setSideSheet(null);
+      toast.success("Application created successfully");
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "Failed to create application");
+    } finally {
+      setIsFlushing(false);
     }
   };
 
   const handleUpdate = async (data: ApplicationFormData) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
+    if (
+      deferredAttachments.attachments.some(
+        // Any not-yet-`uploaded` entry is unresolved: "failed" awaits a retry,
+        // and "uploading" means a retry is mid-flight whose state a save would
+        // clobber. Both must block the save.
+        (attachment) => attachment.status !== "uploaded",
+      )
+    ) {
+      setUpdateError(
+        "Resolve or remove the failed attachments before saving this application.",
+      );
+      return;
+    }
     try {
       const result = await updateApplication.mutateAsync({
         applicationId: sideSheet.entity.id,
         ...data,
       });
       if (result.success) {
+        deferredAttachments.clear();
         setSideSheet(null);
         toast.success("Application updated successfully");
       } else {
@@ -270,10 +320,37 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     }
   };
 
-  const openCreate = () => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: null, mode: "create" }); };
+  const openCreate = () => {
+    setCreateError(null);
+    setUpdateError(null);
+    deferredAttachments.clear();
+    setSideSheet({ entity: null, mode: "create" });
+  };
   const openView = (application: ApplicationListItem) => { setSideSheet({ entity: application, mode: "view" }); };
   const openEdit = (application: ApplicationListItem) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: application, mode: "edit" }); };
-  const closeSideSheet = () => { setSideSheet(null); setCreateError(null); setUpdateError(null); };
+  const closeSideSheet = () => {
+    setSideSheet(null);
+    setCreateError(null);
+    setUpdateError(null);
+    deferredAttachments.clear();
+  };
+
+  const unsavedAttachmentCount = deferredAttachments.attachments.filter(
+    (attachment) => attachment.status !== "uploaded",
+  ).length;
+  const confirmCreateClose = () => {
+    // An in-flight flush is mid-write; blocking Escape/backdrop/X keeps the
+    // completion handler from mutating a discarded-then-reopened form.
+    if (isFlushing) return false;
+    return (
+      sideSheet?.mode !== "create" ||
+      unsavedAttachmentCount === 0 ||
+      window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`)
+    );
+  };
+  const attemptCloseSideSheet = () => {
+    if (confirmCreateClose()) closeSideSheet();
+  };
 
   // Memoize columns
   const columns = createColumns(openEdit, handleDelete);
@@ -318,7 +395,14 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   // Derived values for the side sheet
   const sideSheetOpen = !!sideSheet;
   const sideSheetMode = sideSheet?.mode ?? "create";
-  const sideSheetEntity = sideSheet?.entity ?? null;
+  // The stored entity is a snapshot from when the sheet opened; prefer the
+  // refreshed row from the list query so evidence-driven readiness changes
+  // show while the sheet stays open. Fall back to the snapshot for rows the
+  // list has not caught up with yet (e.g. just-created applications).
+  const sideSheetEntity = sideSheet?.entity
+    ? (items.find((item) => item.id === sideSheet.entity?.id) ??
+      sideSheet.entity)
+    : null;
 
   const sideSheetTitle =
     sideSheetMode === "create" ? "Create Application" : sideSheetEntity?.code ?? "";
@@ -327,7 +411,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     sideSheetMode === "create"
       ? undefined
       : sideSheetEntity
-        ? formatSafeDate(sideSheetEntity.applicationDate)
+        ? formatDate(sideSheetEntity.applicationDate)
         : undefined;
 
   return (
@@ -452,6 +536,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       <EntitySideSheet
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
+        onCloseAttempt={confirmCreateClose}
         mode={sideSheetMode}
         onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
         title={sideSheetTitle}
@@ -465,7 +550,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               { label: "Code", value: sideSheetEntity.code },
               {
                 label: "Application Date",
-                value: formatSafeDate(sideSheetEntity.applicationDate),
+                value: formatDate(sideSheetEntity.applicationDate),
               },
               {
                 label: "Status",
@@ -556,8 +641,9 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           deliveries={deliveryOptions}
           durabilityOption={durabilityOption}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
-          onCancel={closeSideSheet}
-          isSubmitting={createApplication.isPending || updateApplication.isPending}
+          onCancel={attemptCloseSideSheet}
+          isSubmitting={createApplication.isPending || updateApplication.isPending || isFlushing}
+          deferredAttachments={deferredAttachments}
         />
       </EntitySideSheet>
     </div>

@@ -13,7 +13,8 @@ export const productionRunStatus = pgEnum('production_run_status', [
   'draft',
   'running',
   'complete',
-  'void',
+  'failed',
+  'cancelled',
 ]);
 
 export const biocharProductStatus = pgEnum('biochar_product_status', [

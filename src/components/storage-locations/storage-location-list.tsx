@@ -28,7 +28,7 @@ import {
 } from "@/hooks/use-storage-locations";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { formatMass, formatSafeDate } from "@/lib/format-utils";
+import { formatDate, formatMass } from "@/lib/format-utils";
 import { ServerError } from "@/components/forms";
 import {
   EntitySideSheet,
@@ -91,7 +91,7 @@ function formatPercent(value: number | null) {
 
 function formatDateOrFallback(value: Date | null) {
   if (!value) return "No completed applications";
-  return formatSafeDate(value);
+  return formatDate(value);
 }
 
 function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) {

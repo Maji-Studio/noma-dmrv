@@ -21,6 +21,7 @@ import {
   useFacilityCertifierSummary,
 } from "@/hooks/use-certification";
 import { isometricRegistry } from "@/lib/isometric/links";
+import { formatDate } from "@/lib/format-utils";
 import type { CertifierProjectRow } from "@/data-access/certification";
 import {
   FacilityCertifierDialog,
@@ -170,7 +171,7 @@ function CertifierMappingFields({
       </Field>
       <Field label="Linked at">
         <span className="body-small">
-          {new Date(mapping.createdAt).toLocaleDateString()}
+          {formatDate(mapping.createdAt)}
         </span>
       </Field>
       <Field label="Isometric facility (telemetry)">

@@ -6,9 +6,10 @@
  * legacy provenance only (pre-re-grain rows) and is no longer written.
  */
 
-import { and, asc, avg, count, desc, eq, gte, ilike, lte, or, sql, SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, lte, or, sql, SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db, type DbTransaction } from "@/db";
+import { avgNumeric } from "@/db/aggregate";
 import {
   creditBatches,
   samples,
@@ -17,6 +18,7 @@ import {
 } from "@/db/schema";
 import type { SampleFilterData } from "@/schemas/samples";
 import { deleteTransportLegsForEntity } from "./transport-legs";
+import { retireDocumentsForEntities } from "./documents";
 import type { OrgContext } from "@/lib/auth/server";
 
 // ============================================
@@ -55,12 +57,10 @@ export interface SampleWithRelations {
   // Proximate
   ashContentPercent: number | null;
   moistureContentPercent: number | null;
-  volatileMatterPercent: number | null;
 
   // Physical
   bulkDensityKgPerM3: number | null;
   ph: number | null;
-  surfaceAreaM2PerG: number | null;
   saltContentGPerKg: number | null;
 
   // Stability
@@ -118,7 +118,10 @@ export interface SampleStats {
 
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
-import { isPgCheckViolation, isPgUniqueViolation } from "@/db/errors";
+import {
+  isPgCheckViolationMessage,
+  isPgUniqueViolation,
+} from "@/db/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 
 // DB-enforced sample-code uniqueness (issue #395). Drizzle names the
@@ -141,7 +144,7 @@ async function guardSampleMutation<T>(fn: () => Promise<T>): Promise<T> {
     if (isPgUniqueViolation(err, SAMPLE_CODE_UNIQUE_CONSTRAINT)) {
       throw new SafeError("A sample with this code already exists");
     }
-    if (isPgCheckViolation(err, METHOD_B_BASELINE_VIOLATION_FRAGMENT)) {
+    if (isPgCheckViolationMessage(err, METHOD_B_BASELINE_VIOLATION_FRAGMENT)) {
       throw new SafeError(METHOD_B_BASELINE_FLOOR_MESSAGE);
     }
     throw err;
@@ -297,8 +300,6 @@ export async function getSamples(
   const items: SampleWithRelations[] = sampleList.map(
     ({ batchDurabilityOption, ...sample }) => ({
       ...sample,
-      volatileMatterPercent: null, // Not in current DB schema
-      surfaceAreaM2PerG: null, // Not in current DB schema
       // The durability tier lives on the credit batch (issue #309); infer from
       // R₀ presence only for legacy batchless rows.
       durabilityOption:
@@ -396,8 +397,6 @@ export async function getSampleById(
   const { batchDurabilityOption, ...rest } = sample;
   return {
     ...rest,
-    volatileMatterPercent: null,
-    surfaceAreaM2PerG: null,
     durabilityOption:
       batchDurabilityOption ??
       (rest.randomReflectanceR0Percent != null ? "1000_year" : "200_year"),
@@ -440,8 +439,8 @@ export async function getSampleStats(
   const [stats] = await db
     .select({
       totalSamples: count(),
-      avgCarbonPercent: avg(samples.totalCarbonPercent),
-      avgOrganicCarbonPercent: avg(samples.organicCarbonPercent),
+      avgCarbonPercent: avgNumeric(samples.totalCarbonPercent),
+      avgOrganicCarbonPercent: avgNumeric(samples.organicCarbonPercent),
     })
     .from(samples)
     .leftJoin(productionRuns, and(eq(samples.productionRunId, productionRuns.id), eq(productionRuns.organizationId, ctx.organizationId)))
@@ -467,10 +466,8 @@ export async function getSampleStats(
 
   return {
     totalSamples: total,
-    avgCarbonPercent: stats.avgCarbonPercent ? Number(stats.avgCarbonPercent) : null,
-    avgOrganicCarbonPercent: stats.avgOrganicCarbonPercent
-      ? Number(stats.avgOrganicCarbonPercent)
-      : null,
+    avgCarbonPercent: stats.avgCarbonPercent,
+    avgOrganicCarbonPercent: stats.avgOrganicCarbonPercent,
     samples200Year: total - samples1000,
     samples1000Year: samples1000,
   };
@@ -850,16 +847,6 @@ export async function deleteSample(
 ): Promise<void> {
   requireOrgScope(ctx);
 
-  // Verify sample exists
-  const [existing] = await db
-    .select({ id: samples.id })
-    .from(samples)
-    .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
-
-  if (!existing) {
-    throw new SafeError("Sample not found");
-  }
-
   await guardSampleMutation(() => db.transaction(async (tx) => {
     await assertCanMutateCertifiedLineage(
       ctx,
@@ -868,8 +855,23 @@ export async function deleteSample(
       "delete",
     );
 
-    await deleteTransportLegsForEntity(ctx, tx, "sample", sampleId);
-    await tx.delete(samples).where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)));
+    const transportLegDocuments = await deleteTransportLegsForEntity(
+      ctx,
+      tx,
+      "sample",
+      sampleId,
+    );
+    const deleted = await tx
+      .delete(samples)
+      .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)))
+      .returning({ id: samples.id });
+    if (deleted.length === 0) {
+      throw new SafeError("Sample not found");
+    }
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "sample", entityId: sampleId },
+      ...transportLegDocuments,
+    ]);
   }));
 }
 

@@ -11,6 +11,8 @@ import { formatLocalDateTime } from "@/lib/date-utils";
 import { FormField, FormInput, FormFileUpload, FormActions, FormSection } from "@/components/forms";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { FormTextarea } from "@/components/forms/form-textarea";
+import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
+import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import {
   productionSampleFormSchema,
   type ProductionSampleFormData,
@@ -27,6 +29,9 @@ interface ProductionSampleFormProps {
   onSubmit: (data: ProductionSampleFormData) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
+  deferredAttachments: UseDeferredAttachmentsResult;
+  onRetryDeferredAttachment: (key?: string) => Promise<unknown>;
+  onRemoveDeferredAttachment: (key: string) => void;
 }
 
 export function ProductionSampleForm({
@@ -35,6 +40,9 @@ export function ProductionSampleForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  deferredAttachments,
+  onRetryDeferredAttachment,
+  onRemoveDeferredAttachment,
 }: ProductionSampleFormProps) {
   const isEditMode = !!sample;
 
@@ -253,6 +261,15 @@ export function ProductionSampleForm({
       {/* Documentation */}
       <FormSection title="Documentation">
 
+        {isEditMode && (
+          <FailedDeferredAttachments
+            attachments={deferredAttachments.attachments}
+            onRetry={onRetryDeferredAttachment}
+            onRemove={onRemoveDeferredAttachment}
+            disabled={isSubmitting}
+          />
+        )}
+
         <FormField
           id="attachments"
           label="Attachments"
@@ -260,8 +277,23 @@ export function ProductionSampleForm({
         >
           <FormFileUpload
             id="attachments"
-            accept="image/*,.pdf,.csv"
+            accept="image/*,.pdf,.csv,.xlsx"
+            multiple
+            maxSizeMb={50}
             disabled={isSubmitting}
+            {...(isEditMode
+              ? {
+                  entityType: "production_sample",
+                  entityId: sample.id,
+                  documentType: "lab_report" as const,
+                }
+              : {
+                  deferred: true,
+                  deferredFiles: deferredAttachments.attachments,
+                  onDeferredAdd: (files: File[]) =>
+                    deferredAttachments.add(files, "lab_report"),
+                  onDeferredRemove: deferredAttachments.remove,
+                })}
           />
         </FormField>
 

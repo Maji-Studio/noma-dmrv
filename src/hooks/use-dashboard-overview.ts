@@ -15,8 +15,9 @@ export const dashboardOverviewKeys = {
 };
 
 /**
- * Facility dashboard overview (KPI strip, attention queue, feedstock mix,
- * custody flow). Disabled until a facility is selected.
+ * Facility dashboard overview (KPI band, traceability stations, mass flow,
+ * attention queue, activity, certification). Disabled until a facility is
+ * selected.
  */
 export function useDashboardOverview(
   facilityId: string | null,

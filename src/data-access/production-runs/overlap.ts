@@ -1,7 +1,7 @@
 /**
  * Same-reactor time-window overlap validation for production runs (issue #259).
  *
- * A reactor can only run one physical batch at a time, so two non-void runs on
+ * A reactor can only run one physical batch at a time, so two non-cancelled runs on
  * the same reactor must not overlap in time. This guard runs inside the create
  * and update transactions, serialized per-reactor by a transaction-scoped
  * advisory lock so the check-then-write can't race. The partial unique index
@@ -10,11 +10,14 @@
 
 import { and, eq, gt, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 import { productionRuns } from "@/db/schema";
+import { isPgUniqueViolation } from "@/db/errors";
 import { formatLocalDate, formatLocalTime } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import type { DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "../utils";
+
+const REACTOR_LOCK_SCOPE = "reactor";
 
 /** A reference to the run a candidate window collides with. */
 export interface RunConflict {
@@ -82,7 +85,7 @@ function overlapMessage(conflict: {
 
 /**
  * Acquire the per-reactor advisory lock and reject the candidate window if it
- * overlaps any existing non-void, non-archived run on the same reactor. Pass
+ * overlaps any existing non-cancelled, non-archived run on the same reactor. Pass
  * `selfId` on the edit path to exclude the run being edited.
  */
 export async function assertNoReactorRunOverlap(
@@ -99,12 +102,15 @@ export async function assertNoReactorRunOverlap(
   const { reactorId, startTime, endTime, selfId } = params;
 
   // Serialize concurrent writers on this reactor for the rest of the tx.
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${reactorId}))`);
+  const lockKey = `${REACTOR_LOCK_SCOPE}:${ctx.organizationId}:${reactorId}`;
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
+  );
 
   const conditions: SQL[] = [
     eq(productionRuns.organizationId, ctx.organizationId),
     eq(productionRuns.reactorId, reactorId),
-    ne(productionRuns.status, "void"),
+    ne(productionRuns.status, "cancelled"),
     isNull(productionRuns.archivedAt),
   ];
 
@@ -159,8 +165,8 @@ export async function assertNoReactorRunOverlap(
  * friendly overlap message instead of leaking a raw constraint error.
  */
 export function isReactorStartUniqueViolation(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    error.message.includes("production_runs_reactor_start_unique_idx")
+  return isPgUniqueViolation(
+    error,
+    "production_runs_reactor_start_unique_idx",
   );
 }

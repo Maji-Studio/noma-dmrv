@@ -1,6 +1,6 @@
 "use client";
 
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDateRange } from "@/lib/format-utils";
 import {
   CertificateIcon,
   CheckCircleIcon,
@@ -8,7 +8,7 @@ import {
   TrashIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { Button, StatusBadge } from "@/components/ui";
+import { RowActionsMenu, StatusBadge } from "@/components/ui";
 import {
   formatCreditBatchStatus,
   formatDurabilityOption,
@@ -93,8 +93,7 @@ export function CreditBatchCard({
         {/* Crediting period + facility */}
         <div>
           <h3 className="title-heading-3 text-[var(--color-text-primary)]">
-            {formatSafeDate(creditBatch.startDate)} —{" "}
-            {formatSafeDate(creditBatch.endDate)}
+            {formatDateRange(creditBatch.startDate, creditBatch.endDate)}
           </h3>
           <p className="mt-6 body-caption text-[var(--color-text-tertiary)]">
             {creditBatch.facility?.name ?? "No facility"}
@@ -172,28 +171,22 @@ export function CreditBatchCard({
           {certifierLabel === undefined ? "—" : (certifierLabel ?? "No certifier")}
         </span>
 
-        <div
-          className="flex items-center gap-8"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Button
-            size="small"
-            variant="default"
-            onClick={() => onEdit(creditBatch)}
-          >
-            <PencilSimpleIcon size={16} />
-            Edit
-          </Button>
-          <Button
-            size="small"
-            variant="default"
-            className="border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]"
-            onClick={() => onDelete(creditBatch.id)}
-            aria-label={`Delete credit batch ${creditBatch.code}`}
-          >
-            <TrashIcon size={16} />
-          </Button>
-        </div>
+        <RowActionsMenu
+          label={`Actions for credit batch ${creditBatch.code}`}
+          actions={[
+            {
+              label: "Edit",
+              icon: <PencilSimpleIcon size={16} />,
+              onSelect: () => onEdit(creditBatch),
+            },
+            {
+              label: "Delete",
+              destructive: true,
+              icon: <TrashIcon size={16} />,
+              onSelect: () => onDelete(creditBatch.id),
+            },
+          ]}
+        />
       </div>
     </article>
   );

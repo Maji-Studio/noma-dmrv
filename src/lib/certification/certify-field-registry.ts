@@ -255,7 +255,7 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       // Form field `totalWetMassKg` persists as `massWetKg`; `satisfaction`
       // checks the entity column while `formFields` drives the form badge.
       // The wet mass becomes the auto-derived feedstock leg's load mass
-      // (data-access/feedstocks.ts → syncFeedstockTransportLeg).
+      // (data-access/transport-legs.ts → syncFeedstockTransportLeg).
       key: "massWetKg",
       label: "Feedstock wet mass",
       kind: "entered",

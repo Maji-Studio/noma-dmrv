@@ -1,6 +1,7 @@
 import { desc, eq, count, sum, ne, and, isNull, SQL, sql } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
+import { numericAggregate } from "@/db/aggregate";
 import {
   applications,
   soilTemperatureMeasurements,
@@ -29,6 +30,8 @@ import type { DeliveryStatus } from "@/schemas/deliveries";
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { applicationEvidenceGapCountSql } from "./application-evidence-sql";
+import { retireDocumentsForEntities } from "./documents";
 
 // ============================================
 // Application Data Access Layer
@@ -254,6 +257,8 @@ async function resolveApplicationDryMassTons(
 export interface ApplicationListItem extends Application {
   customerName: string | null;
   locationName: string | null;
+  /** Join-derived count of missing visual roles or boundary evidence inputs. */
+  evidenceGapCount: number;
   /**
    * Facility durability tier (ADR 0021), join-derived via the delivery's
    * facility. Drives tier-aware certify readiness — soil temperature is a
@@ -318,6 +323,7 @@ export async function getApplications(
       customerName: customers.name,
       locationName: customerLocations.name,
       durabilityOption: facilities.durabilityOption,
+      evidenceGapCount: applicationEvidenceGapCountSql(),
     })
     .from(applications)
     .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
@@ -401,7 +407,9 @@ export async function getApplicationDeliveryOptions(
     db
       .select({
         deliveryId: applications.deliveryId,
-        totalAppliedKg: sql<number>`coalesce(sum(${applications.biocharAppliedTons}) * ${KG_PER_TONNE}, 0)`,
+        totalAppliedKg: numericAggregate(
+          sql<number>`coalesce(sum(${applications.biocharAppliedTons}) * ${KG_PER_TONNE}, 0)`,
+        ),
       })
       .from(applications)
       .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
@@ -410,7 +418,7 @@ export async function getApplicationDeliveryOptions(
   ]);
 
   const appliedByDeliveryId = new Map(
-    appliedRows.map((row) => [row.deliveryId, Number(row.totalAppliedKg)])
+    appliedRows.map((row) => [row.deliveryId, row.totalAppliedKg])
   );
 
   return rawDeliveries.map((delivery) => ({
@@ -703,6 +711,9 @@ export async function deleteApplication(ctx: OrgContext, id: string): Promise<vo
       .where(and(eq(soilTemperatureMeasurements.applicationId, id), eq(soilTemperatureMeasurements.organizationId, ctx.organizationId)));
 
     await tx.delete(applications).where(and(eq(applications.id, id), eq(applications.organizationId, ctx.organizationId)));
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "application", entityId: id },
+    ]);
     // Batch aggregates (applied weight, CO2e stored) are derived on read
     // (issue #285) — no write-back sync is needed after removing a member.
   });

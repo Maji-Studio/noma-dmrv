@@ -5,9 +5,9 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { numericValue } from "@/lib/form-utils";
-import { formatLocalDate } from "@/lib/date-utils";
+import { toDateInputValue } from "@/lib/date-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
@@ -24,6 +24,8 @@ import type { Delivery } from "@/db/schema";
 import { useOrdersForSelect } from "@/hooks/use-orders";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
+import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import { DeliveryEvidenceSection } from "./delivery-trailing-sections";
 
 // ============================================
 // Constants for select options
@@ -68,10 +70,12 @@ interface DeliveryFormProps {
   isSubmitting?: boolean;
   /** Custom label for the submit button */
   submitLabel?: string;
+  deferredAttachments?: UseDeferredAttachmentsResult;
 }
 
-export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, submitLabel }: DeliveryFormProps) {
+export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, submitLabel, deferredAttachments }: DeliveryFormProps) {
   const isEditMode = !!delivery;
+  const formId = useId();
   const { facilityId: contextFacilityId } = useFacilityContext();
 
   // The order picker fetches its own options (FormEntitySelect); this query
@@ -84,7 +88,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
   const defaultValues = {
     orderId: delivery?.orderId ?? "",
-    deliveryDate: delivery?.deliveryDate ?? formatLocalDate(new Date()),
+    deliveryDate: toDateInputValue(delivery?.deliveryDate),
     status: defaultStatus,
     deliveredWetMassKg: delivery?.deliveredWetMassKg ?? undefined,
     massDryKg: delivery?.massDryKg ?? undefined,
@@ -208,8 +212,11 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       : "One-way facility › destination distance, prefilled from the customer location; return trips are doubled at emissions time. Edit only when routing differs.";
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-20">
+    // The wrapper div absorbs the side-sheet Body's direct-child flex-col
+    // override so the sticky CTA row keeps its own layout (see sample-form).
+    <div className="space-y-20">
       <FormSpine control={control}>
+      <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       {/* Delivery Information Section */}
       <FormSection
         title="Delivery Information"
@@ -393,14 +400,24 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           </FormField>
         )}
       </FormSection>
+
+      </form>
+
+      <DeliveryEvidenceSection
+        delivery={delivery}
+        isEditMode={isEditMode}
+        deferredAttachments={deferredAttachments}
+        isSubmitting={isSubmitting}
+      />
       </FormSpine>
 
       <FormActions
+        formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />
-    </form>
+    </div>
   );
 }

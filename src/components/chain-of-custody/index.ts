@@ -1,1 +1,1 @@
-export { ChainOfCustodyPage } from "./chain-of-custody-page";
+export { TraceabilityPage } from "./traceability-page";

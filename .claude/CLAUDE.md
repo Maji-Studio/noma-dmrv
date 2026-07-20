@@ -5,7 +5,7 @@ Guidance for Claude Code. **These instructions OVERRIDE default behavior — fol
 ## DO NOT — Critical Rules
 
 - ❌ **NEVER use npm or yarn** — always `pnpm`.
-- ❌ **NEVER skip auth guards** — every `data-access/` function calls `requireAuth()` (`src/data-access/utils.ts`).
+- ❌ **NEVER skip org scoping** — every `data-access/` function takes `ctx: OrgContext` first, calls `requireOrgScope(ctx)` (`src/data-access/utils.ts`), and filters on `organizationId`. Filtering only on `facilityId` is a cross-tenant leak. (`requireAuth` is a *route* guard in `src/lib/auth/server.ts` — not this layer.)
 - ❌ **NEVER let a file exceed 1000 lines** — split into modular files.
 - ❌ **NEVER hard-code magic numbers** — constants at top of file or in `@/config`; use design tokens, never hardcoded values.
 - ❌ **NEVER commit `.env` files, secrets, API keys, or credentials** — not even in docs or tests.
@@ -31,7 +31,7 @@ Domain language lives in **`CONTEXT.md`** (repo root) — a pure glossary (Remov
 | `pnpm lint`                 | ESLint                                                 |
 | `pnpm db:generate`          | Generate migrations from schema changes (SAFE)         |
 | `pnpm db:push`              | Push schema directly (review first)                    |
-| `pnpm db:reset`             | Drop all tables, push, ensure admin user (DESTRUCTIVE) |
+| `pnpm db:reset`             | Drop all tables, run the **migration chain**, ensure admin user (DESTRUCTIVE; does not seed — `pnpm db:seed` is separate) |
 | `pnpm db:studio`            | Drizzle Studio (SAFE)                                  |
 | `pnpm test:e2e`             | Playwright E2E (starts or reuses the app server)       |
 
@@ -83,18 +83,21 @@ Rankings below are **higher = better**. Cost reflects what I actually pay (gpt-5
 
 ## Docs Index — read the target BEFORE doing the work (docs are NOT auto-indexed)
 
+- Be aware that we don't have a production system in place yet - DB Resets are fine, backfills are not needed - Let the user know if they need to reset the db on staging or production, reset it yourself on local
 - Before ANY **form/schema** work → `docs/forms.md` — `@/schemas/helpers` numeric helpers, Zod 4 string formats, never `valueAsNumber`.
 - Before **Isometric/certification/requirements** work → `docs/isometric/README.md` + `versions.json`, and call the isometric MCP `how_to` first. Local summaries are **non-authoritative** — verify against the registry.
-- Before **UI** work → `docs/design-system.md` — Canonical Page Shell, design tokens, `EmptyState` (never bare text).
-- Before **writing code** → `docs/code-style.md` — naming/file conventions, React Compiler rules (no manual memo, avoid `useEffect`), a11y.
-- Before **E2E** work → `docs/testing.md` — fixtures, HTTP-API auth, `DISABLE_RATE_LIMIT`, `.env.test`, `db:reset` on dup keys.
-- Before **env/auth debugging** → `docs/security.md` — env inventory, 1Password items differ, secrets management.
-- **Architecture / patterns** (ActionResult, facility context, React Query, quick-add, cascading selects, logging, CI/CD) → `docs/architecture.md`.
-- **Database** → `docs/database.md` + `docs/schema-overview.md` (60+ tables).
-- **Chain of Custody** (DAG | Map | Sankey, Trail) → `docs/chain-of-custody.md`.
+- Before **UI** work → `docs/design-system.md` — Canonical Page Shell, `EmptyState` (never bare text), a11y, and the token trap: default Tailwind spacing/radius classes are **deleted**, not remapped (`p-4` = 4px, `rounded-md` = nothing).
+- Before **writing code** → `docs/code-style.md` — naming/file conventions, the org-scoping seam + waiver syntax, React Compiler rules (no manual memo, avoid `useEffect`), local gates.
+- Before **any test** work → `docs/testing.md` — two layers (vitest `tests/*.test.ts` + Playwright E2E), fixtures, `.env.test`, E2E naming prefixes, `db:reset` on dup keys.
+- Before **writing a server action or data-access query** → `docs/architecture.md` — `withAction()`, `OrgContext`, `ActionResult` (+ `conflict`), React Query key factories, facility context, CI/CD.
+- Before **env / secrets / tenancy** work → `docs/security.md` — env inventory is `envSchema`, fail-closed prod gates, 1Password items differ.
+- **Auth guards, route protection, org context** → `docs/auth.md` — owns the guard vocabulary (redirect-vs-throw, `requireOrgScope` vs `requireAuth`).
+- **Database** (org-scoping contract, migrations, numeric families, row-level guards) → `docs/database.md`; **table-by-table map** → `docs/schema-overview.md`.
+- **Where a new file goes** (flat feature folders, global-vs-feature, docs hygiene) → `docs/organization.md`.
+- **Traceability** (DAG | Map | Sankey, Trail; credit-batch anchored) → `docs/traceability.md`.
 - **File uploads / object storage** → `docs/storage.md`.
-- **Auth flow / route protection** → `docs/auth.md`.
+- **Auth email not arriving** (Resend both-or-neither, local fallback) → `docs/mail-setup.md`.
 - **Stuck on a known gotcha** → `docs/troubleshooting.md`.
-- **Next.js 16 caching / patterns** → `docs/modern-patterns.md`.
+- **Library version drift vs training data** (Drizzle callback, Zod 4, async `params`; Cache Components are NOT enabled) → `docs/modern-patterns.md`.
 - **Adding a feature (checklist + reference entity)** → `TEMPLATE_USAGE.md`.
 - **Deferred work / open decisions** → `docs/open-questions.md`; **architecture decisions** → `docs/adr/`.

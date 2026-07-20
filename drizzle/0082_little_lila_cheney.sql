@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "facilities_organization_id_name_unique" ON "facilities" USING btree ("organization_id",lower(trim("name")));

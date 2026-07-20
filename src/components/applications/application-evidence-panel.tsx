@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowSquareOutIcon,
   CameraIcon,
@@ -9,6 +10,7 @@ import {
   WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { FormFileUpload, FormSelect, ServerError } from "@/components/forms";
+import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -18,6 +20,7 @@ import {
   useDocumentsForEntity,
   useUpdateApplicationEvidenceMetadata,
 } from "@/hooks/use-documents";
+import { applicationKeys } from "@/hooks/use-applications";
 import {
   APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_DESCRIPTIONS,
   APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS,
@@ -31,9 +34,10 @@ import {
   type ApplicationVisualEvidenceRole,
 } from "@/lib/certification/application-evidence";
 import { InfoHint } from "@/components/ui/tooltip";
-import { formatFileSize } from "@/lib/format-utils";
+import { formatDate, formatFileSize } from "@/lib/format-utils";
 import type { DocumentRow } from "@/data-access/documents";
 import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
+import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 
 const ENTITY_TYPE: DocumentEntityType = "application";
 const VISUAL_DOC_TYPE: DocumentType = "photo";
@@ -70,6 +74,7 @@ interface ApplicationEvidencePanelProps {
   applicationId?: string;
   mode: EvidenceMode;
   disabled?: boolean;
+  deferredAttachments?: UseDeferredAttachmentsResult;
 }
 
 function metadataRecord(value: unknown): Record<string, unknown> {
@@ -165,7 +170,7 @@ function EvidenceDocumentList({
               <span className="body-caption text-[var(--color-text-tertiary)]">
                 {formatFileSize(doc.fileSizeBytes)}
                 {doc.capturedAt
-                  ? ` · ${new Date(doc.capturedAt).toLocaleDateString()}`
+                  ? ` · ${formatDate(doc.capturedAt)}`
                   : ""}
                 {logbookEvidenceType
                   ? ` · ${APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS[logbookEvidenceType]}`
@@ -242,9 +247,19 @@ export function ApplicationEvidencePanel({
   applicationId,
   mode,
   disabled = false,
+  deferredAttachments,
 }: ApplicationEvidencePanelProps) {
   const toast = useToast();
+  const queryClient = useQueryClient();
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  // Evidence mutations only invalidate the per-entity document query, but the
+  // application list computes each row's readiness/evidence-gap count from the
+  // same documents. Refresh the list after any evidence change so a row does
+  // not linger as stale Incomplete/Ready.
+  const invalidateApplicationLists = () => {
+    queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
+  };
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [classifyingDocumentId, setClassifyingDocumentId] = useState<
     string | null
@@ -270,11 +285,30 @@ export function ApplicationEvidencePanel({
   const boundaryDocs = uploadedDocs.filter(isBoundaryEvidenceDocument);
   const visibleDocs = mode === "visual" ? visualDocs : boundaryDocs;
 
+  const handleLogbookEvidenceTypeChange = (
+    type: ApplicationBoundaryLogbookEvidenceType,
+  ) => {
+    setLogbookEvidenceType(type);
+    // Held boundary entries captured the classification at add-time; re-tag
+    // them so a late radio change does not upload the file misclassified.
+    for (const attachment of deferredAttachments?.attachments ?? []) {
+      if (
+        attachment.documentType === BOUNDARY_DOC_TYPE &&
+        attachment.status !== "uploaded"
+      ) {
+        deferredAttachments?.updateMeta(attachment.key, {
+          applicationLogbookEvidenceType: type,
+        });
+      }
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteId) return;
     setErrorMessage(null);
     try {
       await deleteMutation.mutateAsync(deleteId);
+      invalidateApplicationLists();
       toast.success("Evidence deleted");
       setDeleteId(null);
     } catch (err) {
@@ -295,6 +329,7 @@ export function ApplicationEvidencePanel({
         documentId,
         applicationEvidenceRole: role,
       });
+      invalidateApplicationLists();
       toast.success("Evidence classified");
     } catch (err) {
       setErrorMessage(
@@ -316,6 +351,7 @@ export function ApplicationEvidencePanel({
         documentId,
         applicationLogbookEvidenceType: type,
       });
+      invalidateApplicationLists();
       toast.success("Evidence classified");
     } catch (err) {
       setErrorMessage(
@@ -328,16 +364,126 @@ export function ApplicationEvidencePanel({
 
   if (!applicationId) {
     return (
-      <div className="border border-[var(--color-border-tertiary)] bg-[var(--color-background-sunken)] px-16 py-12">
+      <section className="flex flex-col gap-12 border border-[var(--color-border-secondary)] p-16">
+        <header className="flex items-center gap-8">
+          {mode === "visual" ? (
+            <CameraIcon size={18} weight="bold" />
+          ) : (
+            <FileIcon size={18} weight="bold" />
+          )}
+          <h3 className="title-heading-3">Evidence</h3>
+          <InfoHint side="top" label="What evidence is required">
+            {EVIDENCE_HINT[mode]}
+          </InfoHint>
+        </header>
         <p className="body-small text-[var(--color-text-secondary)]">
-          Evidence upload is available after the application is saved.
+          {EVIDENCE_INTRO[mode]}
         </p>
-      </div>
+        {mode === "visual" ? (
+          <div className="flex flex-col gap-12">
+            {APPLICATION_VISUAL_EVIDENCE_ROLES.map((role) => (
+              <div
+                key={role}
+                className="flex flex-col gap-10 border border-[var(--color-border-tertiary)] p-12"
+              >
+                <div className="flex flex-col gap-2">
+                  <h4 className="body-small-bold">
+                    {APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS[role]}
+                  </h4>
+                  <p className="body-caption text-[var(--color-text-tertiary)]">
+                    {APPLICATION_VISUAL_EVIDENCE_ROLE_DESCRIPTIONS[role]}
+                  </p>
+                </div>
+                <FormFileUpload
+                  id={`application-create-${role}-evidence-upload`}
+                  accept="image/*"
+                  multiple
+                  maxSizeMb={25}
+                  disabled={disabled}
+                  deferred
+                  deferredFiles={(deferredAttachments?.attachments ?? []).filter(
+                    (attachment) =>
+                      attachment.extraMeta?.applicationEvidenceRole === role,
+                  )}
+                  onDeferredAdd={(files) =>
+                    deferredAttachments?.add(files, VISUAL_DOC_TYPE, {
+                      applicationEvidenceRole: role,
+                    })
+                  }
+                  onDeferredRemove={(key) => deferredAttachments?.remove(key)}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-12">
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-wrap gap-8">
+                {APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES.map((type) => (
+                  <label
+                    key={type}
+                    className="inline-flex min-h-44 items-center gap-8 border border-[var(--color-border-secondary)] px-12 body-small"
+                  >
+                    <input
+                      type="radio"
+                      name="application-create-logbook-evidence-type"
+                      value={type}
+                      checked={logbookEvidenceType === type}
+                      onChange={() => handleLogbookEvidenceTypeChange(type)}
+                      disabled={disabled}
+                    />
+                    {APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS[type]}
+                  </label>
+                ))}
+              </div>
+              <p className="body-caption text-[var(--color-text-tertiary)]">
+                {APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_DESCRIPTIONS[logbookEvidenceType]}
+              </p>
+            </div>
+            <FormFileUpload
+              id="application-create-boundary-evidence-upload"
+              accept="application/pdf,.pdf"
+              multiple={false}
+              maxSizeMb={50}
+              disabled={disabled}
+              deferred
+              deferredFiles={(deferredAttachments?.attachments ?? []).filter(
+                (attachment) => attachment.documentType === BOUNDARY_DOC_TYPE,
+              )}
+              onDeferredAdd={(files) =>
+                deferredAttachments?.add(files, BOUNDARY_DOC_TYPE, {
+                  applicationLogbookEvidenceType: logbookEvidenceType,
+                })
+              }
+              onDeferredRemove={(key) => deferredAttachments?.remove(key)}
+            />
+          </div>
+        )}
+      </section>
     );
   }
 
   return (
     <section className="flex flex-col gap-12 border border-[var(--color-border-secondary)] p-16">
+      {deferredAttachments && (
+        <FailedDeferredAttachments
+          attachments={deferredAttachments.attachments}
+          onRetry={async (key) => {
+            const result = await deferredAttachments.retry(
+              ENTITY_TYPE,
+              [applicationId],
+              key,
+            );
+            // A retry can succeed partially; any landed upload changes the
+            // row's readiness, so refresh the list whenever something uploaded.
+            if (result.uploaded.length > 0) {
+              invalidateApplicationLists();
+            }
+          }}
+          onRemove={deferredAttachments.remove}
+          disabled={disabled}
+        />
+      )}
       <header className="flex items-center justify-between gap-12">
         <h3 className="title-heading-3 flex items-center gap-8">
           {mode === "visual" ? (
@@ -415,7 +561,10 @@ export function ApplicationEvidencePanel({
                   entityId={applicationId}
                   documentType={VISUAL_DOC_TYPE}
                   applicationEvidenceRole={role}
-                  onUploaded={() => setErrorMessage(null)}
+                  onUploaded={() => {
+                    setErrorMessage(null);
+                    invalidateApplicationLists();
+                  }}
                   onUploadError={(err) => setErrorMessage(err)}
                 />
               </div>
@@ -455,7 +604,7 @@ export function ApplicationEvidencePanel({
                     name={`application-${applicationId}-logbook-evidence-type`}
                     value={type}
                     checked={logbookEvidenceType === type}
-                    onChange={() => setLogbookEvidenceType(type)}
+                    onChange={() => handleLogbookEvidenceTypeChange(type)}
                     disabled={disabled}
                   />
                   {APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS[type]}
@@ -489,7 +638,10 @@ export function ApplicationEvidencePanel({
             entityId={applicationId}
             documentType={BOUNDARY_DOC_TYPE}
             applicationLogbookEvidenceType={logbookEvidenceType}
-            onUploaded={() => setErrorMessage(null)}
+            onUploaded={() => {
+              setErrorMessage(null);
+              invalidateApplicationLists();
+            }}
             onUploadError={(err) => setErrorMessage(err)}
           />
         </div>

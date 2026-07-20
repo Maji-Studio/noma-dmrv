@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { optionalDistanceSource } from "./distance-source";
 import { optionalTripType } from "./trip-type";
+import { exceedsMassWithTolerance } from "@/lib/calculations/mass-dry";
 import {
   emptyToNull,
   massKgSchema,
@@ -20,6 +21,8 @@ import {
 
 const MOISTURE_MIN = 0;
 const MOISTURE_MAX = 100;
+const ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE =
+  "Enter a justification when allocated wet mass exceeds the declared delivery mass";
 
 const requiredNonNegativeNumber = requiredMassKgSchema("Must be 0 or greater");
 
@@ -108,6 +111,22 @@ export const feedstockFormSchema = z.object({
     .max(2000, "Notes must be less than 2000 characters")
     .optional()
     .or(z.literal("")),
+}).superRefine((value, ctx) => {
+  const allocatedWetMassKg = value.allocations.reduce(
+    (sum, allocation) => sum + allocation.allocatedWetMassKg,
+    0,
+  );
+
+  if (
+    exceedsMassWithTolerance(allocatedWetMassKg, value.totalWetMassKg) &&
+    !value.overrideJustification?.trim()
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["overrideJustification"],
+      message: ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE,
+    });
+  }
 });
 
 // ============================================

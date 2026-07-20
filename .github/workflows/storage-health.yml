@@ -12,11 +12,11 @@ name: Storage health
 #
 # Storage secrets come from 1Password via the "Load storage secrets" step:
 #   op://Environment Variables/noma-dmrv env staging/{STORAGE_PROVIDER,
-#   STORAGE_BUCKET,STORAGE_REGION,STORAGE_ACCESS_KEY_ID,
+#   STORAGE_BUCKET,STORAGE_REGION,STORAGE_ENDPOINT,STORAGE_PREFIX,STORAGE_ACCESS_KEY_ID,
 #   STORAGE_SECRET_ACCESS_KEY}
-# (No STORAGE_ENDPOINT — staging is AWS S3, endpoint derived from region. The
-# keys here mirror .env.tpl exactly; add STORAGE_ENDPOINT only if staging ever
-# moves to DO Spaces and the 1Password item gains that field.)
+# (STORAGE_ENDPOINT is required — staging is DO Spaces, where the AWS SDK
+# cannot derive the host from the region. The keys here mirror .env.tpl
+# exactly.)
 # CI authenticates with a single repo secret, OP_SERVICE_ACCOUNT_TOKEN. When it
 # is absent the load + smoke steps are skipped so forks/PRs stay green rather
 # than failing on missing creds. The non-storage env vars below are
@@ -62,6 +62,8 @@ jobs:
           STORAGE_PROVIDER: op://Environment Variables/noma-dmrv env staging/STORAGE_PROVIDER
           STORAGE_BUCKET: op://Environment Variables/noma-dmrv env staging/STORAGE_BUCKET
           STORAGE_REGION: op://Environment Variables/noma-dmrv env staging/STORAGE_REGION
+          STORAGE_ENDPOINT: op://Environment Variables/noma-dmrv env staging/STORAGE_ENDPOINT
+          STORAGE_PREFIX: op://Environment Variables/noma-dmrv env staging/STORAGE_PREFIX
           STORAGE_ACCESS_KEY_ID: op://Environment Variables/noma-dmrv env staging/STORAGE_ACCESS_KEY_ID
           STORAGE_SECRET_ACCESS_KEY: op://Environment Variables/noma-dmrv env staging/STORAGE_SECRET_ACCESS_KEY
 

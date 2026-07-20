@@ -7,8 +7,9 @@
  * per-lane sums feed the storage-location derivation overlay.
  */
 
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
+import { sumNumeric } from "@/db/aggregate";
 import {
   binMovements,
   storageLocations,
@@ -20,7 +21,18 @@ import { laneForStorageType } from "@/schemas/bin-movements";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
-import { deriveBinLaneAvailableKg, lockBinStock } from "./bin-stock-guards";
+import { isPgCheckViolation } from "@/db/errors";
+import {
+  deriveBinLaneAvailableKg,
+  isOverdraw,
+  lockBinStock,
+  overdrawError,
+} from "./bin-stock-guards";
+
+export type DbReader = Pick<typeof db, "select">;
+
+const LOSS_NEGATIVITY_CONSTRAINT = "bin_movements_loss_is_negative";
+const LOSS_NEGATIVITY_MESSAGE = "A loss must be recorded as a negative mass delta";
 
 // ============================================
 // Types
@@ -64,21 +76,23 @@ export interface RecordStockTakeMovementInput {
 
 /**
  * Signed sum of movement deltas per (storage location, lane). Used by the
- * storage-location enrichment overlay to fold documented adjustments/losses
- * into derived stock. Guarded because it is a data-access read.
+ * shared lane-stock derivation to fold documented adjustments/losses into
+ * derived stock. Guarded because it is a data-access read. Transactional
+ * callers must pass their transaction as `executor`.
  */
 export async function getBinMovementLaneSums(
   ctx: OrgContext,
-  storageLocationIds: string[]
+  storageLocationIds: string[],
+  executor: DbReader = db,
 ): Promise<BinMovementLaneSum[]> {
   requireOrgScope(ctx);
   if (storageLocationIds.length === 0) return [];
 
-  const rows = await db
+  const rows = await executor
     .select({
       storageLocationId: binMovements.storageLocationId,
       lane: binMovements.lane,
-      totalDeltaKg: sql<number>`COALESCE(SUM(${binMovements.massDeltaKg}), 0)`,
+      totalDeltaKg: sumNumeric(binMovements.massDeltaKg),
     })
     .from(binMovements)
     .where(and(inArray(binMovements.storageLocationId, storageLocationIds), eq(binMovements.organizationId, ctx.organizationId)))
@@ -87,7 +101,7 @@ export async function getBinMovementLaneSums(
   return rows.map((row) => ({
     storageLocationId: row.storageLocationId,
     lane: row.lane,
-    totalDeltaKg: Number(row.totalDeltaKg),
+    totalDeltaKg: row.totalDeltaKg,
   }));
 }
 
@@ -120,11 +134,18 @@ export async function getBinMovements(
 // Create Operations (append-only — no update/delete)
 // ============================================
 
-async function createBinMovementInTransaction(
+/**
+ * Assert the target bin exists in this org and physically holds the lane's
+ * material. A bin holds one material, so a movement's lane must match the
+ * bin's type. Enforced at the trust boundary (every insert) and again before
+ * any balance derivation, so a bad target fails with its own error instead of
+ * a misleading stock error.
+ */
+async function assertBinLaneTarget(
   ctx: OrgContext,
   tx: DbTransaction,
-  input: CreateBinMovementInput,
-): Promise<BinMovement> {
+  input: Pick<CreateBinMovementInput, "storageLocationId" | "lane">,
+): Promise<void> {
   const [location] = await tx
     .select({ id: storageLocations.id, type: storageLocations.type })
     .from(storageLocations)
@@ -134,34 +155,42 @@ async function createBinMovementInTransaction(
     throw new SafeError("Storage location not found");
   }
 
-  // A bin physically holds one material, so a movement's lane must match the
-  // bin's type. Enforced here (the trust boundary) so it covers every caller —
-  // stock-take and loss alike — not just the paths that check it themselves.
   if (laneForStorageType(location.type) !== input.lane) {
     throw new SafeError("This lane does not match the bin's material type");
   }
+}
 
-  // A loss can only ever remove material (DB check mirrors this).
-  if (input.movementType === "loss" && input.massDeltaKg >= 0) {
-    throw new SafeError("A loss must be recorded as a negative mass delta");
+async function createBinMovementInTransaction(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  input: CreateBinMovementInput,
+): Promise<BinMovement> {
+  await assertBinLaneTarget(ctx, tx, input);
+
+  let movement: BinMovement;
+  try {
+    [movement] = await tx
+      .insert(binMovements)
+      .values({
+        organizationId: ctx.organizationId,
+        storageLocationId: input.storageLocationId,
+        lane: input.lane,
+        movementType: input.movementType,
+        massDeltaKg: input.massDeltaKg,
+        reason: input.reason,
+        createdBy: ctx.userId,
+        countedMassKg: input.countedMassKg ?? null,
+        derivedMassKgAtTime: input.derivedMassKgAtTime ?? null,
+        countedWetMassKg: input.countedWetMassKg ?? null,
+        moistureRatioUsed: input.moistureRatioUsed ?? null,
+      })
+      .returning();
+  } catch (error) {
+    if (isPgCheckViolation(error, LOSS_NEGATIVITY_CONSTRAINT)) {
+      throw new SafeError(LOSS_NEGATIVITY_MESSAGE);
+    }
+    throw error;
   }
-
-  const [movement] = await tx
-    .insert(binMovements)
-    .values({
-      organizationId: ctx.organizationId,
-      storageLocationId: input.storageLocationId,
-      lane: input.lane,
-      movementType: input.movementType,
-      massDeltaKg: input.massDeltaKg,
-      reason: input.reason,
-      createdBy: ctx.userId,
-      countedMassKg: input.countedMassKg ?? null,
-      derivedMassKgAtTime: input.derivedMassKgAtTime ?? null,
-      countedWetMassKg: input.countedWetMassKg ?? null,
-      moistureRatioUsed: input.moistureRatioUsed ?? null,
-    })
-    .returning();
 
   return movement;
 }
@@ -173,6 +202,21 @@ export async function createBinMovement(
   requireOrgScope(ctx);
   return db.transaction(async (tx) => {
     await lockBinStock(ctx, tx, input.storageLocationId);
+    if (input.movementType === "loss" && input.massDeltaKg < 0) {
+      // Validate the target first so a bad bin/lane fails with its own error
+      // rather than a misleading "not enough stock" for an empty derivation.
+      await assertBinLaneTarget(ctx, tx, input);
+      const available = await deriveBinLaneAvailableKg(
+        ctx,
+        tx,
+        input.storageLocationId,
+        input.lane,
+      );
+      const requested = Math.abs(input.massDeltaKg);
+      if (isOverdraw(requested, available)) {
+        throw overdrawError(input.lane, available, requested);
+      }
+    }
     return createBinMovementInTransaction(ctx, tx, input);
   });
 }
@@ -207,18 +251,4 @@ export async function recordStockTakeMovement(
       moistureRatioUsed: input.moistureRatioUsed ?? null,
     });
   });
-}
-
-// Re-exported for callers that group sums by location without depending on the
-// enrichment module's internals.
-export function groupLaneSumsByLocation(
-  sums: BinMovementLaneSum[]
-): Map<string, Partial<Record<BinMovementLane, number>>> {
-  const map = new Map<string, Partial<Record<BinMovementLane, number>>>();
-  for (const sum of sums) {
-    const existing = map.get(sum.storageLocationId) ?? {};
-    existing[sum.lane] = sum.totalDeltaKg;
-    map.set(sum.storageLocationId, existing);
-  }
-  return map;
 }

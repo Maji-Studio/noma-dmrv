@@ -327,6 +327,9 @@ export function makeBatchesWithSamples(
     {
       creditBatchId: CREDIT_BATCH_ID,
       creditBatchCode: "CB-TEST-001",
+      startDate: "2026-01-01",
+      endDate: "2026-01-31",
+      facilityTimezone: "UTC",
       productionProcessId: null,
       samplingMethod: "method_a",
       declaredHToCorgRatio: null,
@@ -352,6 +355,8 @@ export function durabilityBlockersFor(
     batches.map((batch) => ({
       creditBatchId: batch.creditBatchId,
       creditBatchCode: batch.creditBatchCode,
+      startDate: batch.startDate,
+      endDate: batch.endDate,
       productionProcessId: batch.productionProcessId,
       samplingMethod: batch.samplingMethod,
       replicates: batch.samples.map((s) => ({
@@ -359,6 +364,7 @@ export function durabilityBlockersFor(
         oToCOrgRatio: s.oToCOrgRatio,
       })),
       replicateProvenance: batch.samples.map((s) => ({
+        sampleCode: s.sampleCode,
         productionRunId: s.productionRunId ?? null,
         samplingDay: null,
       })),

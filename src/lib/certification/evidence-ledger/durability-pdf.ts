@@ -28,6 +28,7 @@ import {
   StyleSheet,
   renderToBuffer,
 } from "@react-pdf/renderer";
+import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import { registerEvidenceLedgerFonts } from "./fonts";
 import type {
   DurabilityLedgerModel,
@@ -420,9 +421,9 @@ function replicateRow(
 
 function batchSection(batch: LedgerBatch): ReactElement {
   const distrib =
-    batch.distinctDayCount >= 3
-      ? `${batch.distinctDayCount} distinct days`
-      : `${batch.distinctDayCount} distinct day(s) — review distribution`;
+    batch.distinctRunDayCount >= MINIMUM_REPLICATES_PER_BATCH
+      ? `${batch.distinctRunDayCount} distinct run/day sources`
+      : `${batch.distinctRunDayCount} distinct run/day source(s) — review distribution`;
   const header = v(styles.sectionHead, { minPresenceAhead: 80 },
     v(styles.rule, {}),
     t(styles.sectionName, `Credit batch ${batch.creditBatchCode}`),

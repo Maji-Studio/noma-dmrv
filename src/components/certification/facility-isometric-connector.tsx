@@ -278,7 +278,7 @@ export function FacilityIsometricConnector({
           <label className="flex items-start gap-12 body-small text-[var(--color-text-primary)] cursor-pointer">
             <input
               type="checkbox"
-              className="mt-3 shrink-0"
+              className="mt-2 shrink-0"
               checked={acknowledgeSharedProject}
               onChange={(event) =>
                 setAcknowledgeSharedProject(event.target.checked)
@@ -295,7 +295,7 @@ export function FacilityIsometricConnector({
           <label className="flex items-start gap-12 body-small text-[var(--color-text-primary)] cursor-pointer">
             <input
               type="checkbox"
-              className="mt-3 shrink-0"
+              className="mt-2 shrink-0"
               checked={confirmProduction}
               onChange={(event) => setConfirmProduction(event.target.checked)}
             />

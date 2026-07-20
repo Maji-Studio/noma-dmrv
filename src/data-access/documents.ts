@@ -1,9 +1,10 @@
-import { and, desc, eq, getTableColumns, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, inArray, isNull, or, sql } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import {
   applications,
   biocharProducts,
+  certifierDocumentUploads,
   certifierRemovals,
   creditBatches,
   deliveries,
@@ -20,6 +21,7 @@ import {
   transportLegs,
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
+import { getStorageProvider } from "@/lib/storage";
 import {
   DOCUMENT_ENTITY_TYPES,
   type DocumentEntityType,
@@ -41,6 +43,11 @@ let deliveryArchivedAtColumnAvailablePromise: Promise<boolean> | null = null;
 
 export type DocumentRow = typeof documents.$inferSelect;
 export type NewDocumentRow = typeof documents.$inferInsert;
+
+export interface DocumentEntityRef {
+  entityType: DocumentEntityType;
+  entityId: string;
+}
 
 const DOCUMENT_ENTITY_LABELS: Record<DocumentEntityType, string> = {
   sample: "Sample",
@@ -420,4 +427,99 @@ export async function deleteDocumentRow(
     .where(and(eq(documents.id, id), eq(documents.organizationId, ctx.organizationId)))
     .returning();
   return row ?? null;
+}
+
+/**
+ * Retire documents owned by entities that are about to be hard-deleted.
+ *
+ * Call this as the final operation inside the parent's delete transaction,
+ * after every FK-constrained database delete has succeeded. Document rows are
+ * locked before the mirror check, which makes the FK from
+ * certifier_document_uploads the race backstop while storage cleanup runs. A
+ * storage failure aborts the transaction, preserving both the parent and
+ * document rows for an idempotent retry.
+ */
+export async function retireDocumentsForEntities(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  entities: readonly DocumentEntityRef[],
+): Promise<void> {
+  requireOrgScope(ctx);
+  if (entities.length === 0) return;
+
+  const uniqueEntities = [
+    ...new Map(
+      entities.map((entity) => [
+        `${entity.entityType}:${entity.entityId}`,
+        entity,
+      ]),
+    ).values(),
+  ];
+  const ownershipConditions = uniqueEntities.map((entity) =>
+    and(
+      eq(documents.entityType, entity.entityType),
+      eq(documents.entityId, entity.entityId),
+    ),
+  );
+
+  const ownedDocuments = await tx
+    .select()
+    .from(documents)
+    .where(
+      and(
+        eq(documents.organizationId, ctx.organizationId),
+        or(...ownershipConditions),
+      ),
+    )
+    .for("update");
+
+  if (ownedDocuments.length === 0) return;
+
+  const documentIds = ownedDocuments.map((document) => document.id);
+  const [mirror] = await tx
+    .select({ documentId: certifierDocumentUploads.documentId })
+    .from(certifierDocumentUploads)
+    .where(
+      and(
+        eq(certifierDocumentUploads.organizationId, ctx.organizationId),
+        inArray(certifierDocumentUploads.documentId, documentIds),
+      ),
+    )
+    .limit(1);
+
+  if (mirror) {
+    throw new SafeError(
+      "Cannot delete this record while one of its documents is mirrored to a certification provider. Unlink the document from its certification source first.",
+    );
+  }
+
+  const managedDocuments = ownedDocuments.filter(
+    (document): document is DocumentRow & { storageKey: string } =>
+      document.storageKey !== null,
+  );
+  if (managedDocuments.length > 0) {
+    const provider = getStorageProvider();
+    for (const document of managedDocuments) {
+      try {
+        await provider.deleteObject(document.storageKey);
+      } catch (error) {
+        console.error("Failed to retire parent-owned storage object", {
+          documentId: document.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw new SafeError(
+          "Failed to delete an attached storage object. Earlier objects may already have been deleted; the record and document metadata were kept. Retry deletion to finish storage cleanup.",
+        );
+      }
+    }
+  }
+
+  await tx
+    .delete(documents)
+    .where(
+      and(
+        eq(documents.organizationId, ctx.organizationId),
+        inArray(documents.id, documentIds),
+      ),
+    );
 }

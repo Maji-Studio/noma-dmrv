@@ -4,10 +4,13 @@ import {
   ArrowsClockwiseIcon,
   ScalesIcon,
   TrendDownIcon,
+  WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useBinMovements } from "@/hooks/use-bin-movements";
 import type { BinMovementWithActor } from "@/data-access/bin-movements";
-import { formatMass, formatSafeDate } from "@/lib/format-utils";
+import { formatDateTime, formatMass } from "@/lib/format-utils";
 import {
   BIN_MOVEMENT_LANE_LABELS,
   type BinMovementLane,
@@ -53,7 +56,7 @@ function MovementRow({ movement }: { movement: BinMovementWithActor }) {
         <span
           className={`shrink-0 body-small font-mono ${
             positive
-              ? "text-[var(--color-signal-green)]"
+              ? "text-[var(--st-ok)]"
               : "text-[var(--color-signal-red)]"
           }`}
         >
@@ -79,7 +82,7 @@ function MovementRow({ movement }: { movement: BinMovementWithActor }) {
 
       <p className="body-caption text-[var(--color-text-tertiary)]">
         {movement.actorName ? `${movement.actorName} · ` : ""}
-        {formatSafeDate(movement.createdAt, "MMM d, yyyy · HH:mm")}
+        {formatDateTime(movement.createdAt)}
       </p>
     </li>
   );
@@ -100,17 +103,25 @@ export function BinMovementHistory({
       </h4>
 
       {isLoading ? (
-        <p className="body-caption text-[var(--color-text-tertiary)]">
-          Loading history…
-        </p>
+        <div role="status" aria-label="Loading reconciliation history">
+          <Skeleton className="h-16 w-[180px]" />
+        </div>
       ) : error ? (
-        <p className="body-caption text-[var(--color-signal-red)]">
-          Failed to load reconciliation history.
-        </p>
+        <div role="alert">
+          <EmptyState
+            icon={<WarningCircleIcon size={32} />}
+            title="Reconciliation history unavailable"
+            description="Failed to load reconciliation history."
+            padding="sm"
+          />
+        </div>
       ) : !movements || movements.length === 0 ? (
-        <p className="body-caption text-[var(--color-text-tertiary)]">
-          No stock-takes or losses recorded yet.
-        </p>
+        <EmptyState
+          icon={<ArrowsClockwiseIcon size={32} />}
+          title="No reconciliation history"
+          description="No stock-takes or losses recorded yet."
+          padding="sm"
+        />
       ) : (
         <ul className="flex flex-col">
           {movements.map((movement) => (

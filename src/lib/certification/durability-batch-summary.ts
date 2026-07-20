@@ -25,7 +25,7 @@
  */
 
 import type { Sample } from "@/db/schema";
-import { formatUtcDate } from "@/lib/date-utils";
+import { formatFacilityDate, formatUtcDate } from "@/lib/date-utils";
 import {
   evaluateReplicateCount,
   evaluateRunEligibility,
@@ -40,15 +40,44 @@ import {
 import { countDistinctProvenance } from "./durability-submission-gates";
 import type { SamplingMethod } from "./sampling-requirements";
 
-// ISO calendar day (YYYY-MM-DD) of a sampling timestamp. Typed `unknown` because
-// the column maps to `Date` but raw rows / fixtures can carry a string. Mirrors
-// the gate's `isoSamplingDay`, so the distribution check agrees with submission.
-function samplingDayOf(samplingTime: unknown): string | null {
-  if (samplingTime instanceof Date) return formatUtcDate(samplingTime) || null;
+// ISO calendar day (YYYY-MM-DD) of a sampling timestamp, resolved in the
+// facility's local timezone so this readiness surface classifies a sampling
+// instant on the SAME calendar day as the write guard (`assertSampleNotBeforeBatchWindow`)
+// and the submission gate (`isoSamplingDay`). Falls back to UTC only when the
+// timezone is absent (light fixtures). Typed `unknown` because the column maps
+// to `Date` but raw rows / fixtures can carry a string.
+function samplingDayOf(
+  samplingTime: unknown,
+  facilityTimezone: string | null | undefined,
+): string | null {
+  if (samplingTime instanceof Date) {
+    return formatDayInZone(samplingTime, facilityTimezone);
+  }
   if (typeof samplingTime === "string" && samplingTime.length >= 10) {
+    // A timestamp string (carries a time/offset component) must resolve through
+    // the SAME facility/UTC branch as a Date — otherwise an offset-bearing value
+    // like `2026-01-15T03:30:00.000Z` slices to the UTC day and diverges from the
+    // Date-backed local day. A bare date-only string is already a calendar day.
+    if (samplingTime.includes("T")) {
+      const parsed = new Date(samplingTime);
+      if (!Number.isNaN(parsed.getTime())) {
+        return formatDayInZone(parsed, facilityTimezone);
+      }
+    }
     return samplingTime.slice(0, 10);
   }
   return null;
+}
+
+/** Format a Date as its YYYY-MM-DD calendar day in the facility zone (UTC fallback). */
+function formatDayInZone(
+  date: Date,
+  facilityTimezone: string | null | undefined,
+): string | null {
+  const day = facilityTimezone
+    ? formatFacilityDate(date, facilityTimezone)
+    : formatUtcDate(date);
+  return day || null;
 }
 
 /**
@@ -58,6 +87,15 @@ function samplingDayOf(samplingTime: unknown): string | null {
  * compatible shape, so the DB loader feeds this directly without a server import.
  */
 export interface DurabilityBatchSummaryInput extends CreditBatchDurabilityInput {
+  /** ISO date-only production window when loaded from the DB. */
+  startDate?: string | null;
+  endDate?: string | null;
+  /**
+   * IANA facility timezone used to classify a sampling instant by its local
+   * calendar day — so the distribution/provenance count agrees with the write
+   * guard and submission gate. Absent (UTC fallback) only for light fixtures.
+   */
+  facilityTimezone?: string | null;
   /** The batch's process's CURRENT sampling method (default Method A). */
   samplingMethod: SamplingMethod;
   /** Member runs (id + code + dry mass) — code labels the replicate provenance. */
@@ -173,8 +211,14 @@ export function buildDurabilityBatchSummaries(
           isUsableNumber(s.hToCOrgRatio) && isUsableNumber(s.oToCOrgRatio),
       )
       .map((s) => ({
+        sampleCode: s.sampleCode,
         productionRunId: s.productionRunId,
-        samplingDay: samplingDayOf(s.samplingTime),
+        samplingDay: (() => {
+          const day = samplingDayOf(s.samplingTime, batch.facilityTimezone);
+          return day != null && batch.endDate != null && day > batch.endDate
+            ? null
+            : day;
+        })(),
       }));
     const distinctRunDayCount = countDistinctProvenance(provenance);
     const replicateCheck = evaluateReplicateCount(
@@ -182,7 +226,14 @@ export function buildDurabilityBatchSummaries(
     );
 
     const replicates: DurabilitySummaryReplicate[] = batch.samples.map(
-      (s, index) => buildReplicate(s, index, runCodeById, outlierIndexes),
+      (s, index) =>
+        buildReplicate(
+          s,
+          index,
+          runCodeById,
+          outlierIndexes,
+          batch.facilityTimezone,
+        ),
     );
 
     return {
@@ -221,6 +272,7 @@ function buildReplicate(
   index: number,
   runCodeById: Map<string, string>,
   outlierIndexes: Set<number>,
+  facilityTimezone: string | null | undefined,
 ): DurabilitySummaryReplicate {
   return {
     id: s.id,
@@ -230,7 +282,7 @@ function buildReplicate(
       s.productionRunId != null
         ? runCodeById.get(s.productionRunId) ?? null
         : null,
-    samplingDay: samplingDayOf(s.samplingTime),
+    samplingDay: samplingDayOf(s.samplingTime, facilityTimezone),
     labName: s.labName ?? null,
     hToCorg: isUsableNumber(s.hToCOrgRatio) ? s.hToCOrgRatio : null,
     oToCorg: isUsableNumber(s.oToCOrgRatio) ? s.oToCOrgRatio : null,

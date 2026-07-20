@@ -13,10 +13,12 @@
  *   (c) Replicate sufficiency — any SAMPLED batch must pool ≥ 3 replicates
  *       (§8.3.1) across its member runs/days.
  *
- * Plus one non-blocking WARNING: ≥3 replicates that all cluster on a single
- * run/day are not the "≥3 independent samples distributed across distinct
- * runs/days" §8.3.1 calls for. The code can't decide whether a clustered set is
- * a registry-agreed alternative, so it warns rather than blocks.
+ * Post-production sampling from stored material is permitted by §8.3.1 but is
+ * not evidence of within-batch temporal distribution. Such samples remain
+ * usable replicates while their day is excluded from the distribution check;
+ * operators receive a warning to confirm spatial distribution with the
+ * registry. A sample before the production window is physically impossible and
+ * blocks submission.
  *
  * Pure and client-safe — the submission orchestrator (`submit-removal.ts`)
  * assembles the per-batch facts and throws a single SafeError on the blockers.
@@ -41,6 +43,8 @@ import {
 
 /** Provenance of one pooled replicate, for the distribution (cluster) check. */
 export interface ReplicateProvenance {
+  /** Human-facing sample identifier used in window diagnostics. */
+  sampleCode: string;
   /** The production run the sample was physically drawn from (nullable post-0015). */
   productionRunId: string | null;
   /** ISO calendar day (YYYY-MM-DD) the sample was taken; null when unknown. */
@@ -50,6 +54,9 @@ export interface ReplicateProvenance {
 export interface BatchGateFacts {
   creditBatchId: string;
   creditBatchCode: string;
+  /** ISO date-only production window; null skips window checks fail-softly. */
+  startDate?: string | null;
+  endDate?: string | null;
   /**
    * The (facility, feedstock) production process this batch belongs to — runs
    * grouped by it for the Method B cadence check (d). Null falls back to the
@@ -73,6 +80,21 @@ export interface DurabilitySubmissionGateResult {
 }
 
 /**
+ * A stored-material sample taken AFTER a batch's production window end remains a
+ * valid replicate, but its later day cannot demonstrate within-batch temporal
+ * distribution — so it is normalized to a null day for the §8.3.1 distribution
+ * evidence. Days on/before endDate (or when endDate is unknown) pass through.
+ */
+export function normalizePostWindowSamplingDay(
+  samplingDay: string | null,
+  endDate: string | null | undefined,
+): string | null {
+  return endDate != null && samplingDay != null && samplingDay > endDate
+    ? null
+    : samplingDay;
+}
+
+/**
  * Distinct (run, day) provenance keys among a batch's pooled replicates — the
  * §8.3.1 "distributed across distinct runs/days" evidence. Replicates with
  * fully-null provenance can't be judged, so they add no key (a set of only
@@ -82,11 +104,22 @@ export interface DurabilitySubmissionGateResult {
 export function countDistinctProvenance(
   provenance: ReplicateProvenance[],
 ): number {
+  const runsWithKnownDays = new Set(
+    provenance.flatMap((p) =>
+      p.productionRunId != null && p.samplingDay != null
+        ? [p.productionRunId]
+        : [],
+    ),
+  );
   const keys = new Set(
     provenance
       .map((p) =>
         p.productionRunId == null && p.samplingDay == null
           ? null
+          : p.productionRunId != null &&
+              p.samplingDay == null &&
+              runsWithKnownDays.has(p.productionRunId)
+            ? null
           : `${p.productionRunId ?? "?"}::${p.samplingDay ?? "?"}`,
       )
       .filter((k): k is string => k != null),
@@ -116,12 +149,24 @@ function getReplicateClusterReason(
 // Otherwise an incomplete sample on a different run/day adds a phantom distinct
 // key and masks that the usable replicates all cluster on one run/day.
 function usableProvenance(batch: BatchGateFacts): ReplicateProvenance[] {
-  return batch.replicateProvenance.filter((_, i) => {
-    const r = batch.replicates[i];
-    return (
-      r != null && isUsableNumber(r.hToCOrgRatio) && isUsableNumber(r.oToCOrgRatio)
-    );
-  });
+  return batch.replicateProvenance
+    .filter((_, i) => {
+      const r = batch.replicates[i];
+      return (
+        r != null &&
+        isUsableNumber(r.hToCOrgRatio) &&
+        isUsableNumber(r.oToCOrgRatio)
+      );
+    })
+    .map((provenance) => ({
+      ...provenance,
+      // Stored-material samples remain valid replicates, but their later day
+      // cannot demonstrate temporal distribution within the production batch.
+      samplingDay: normalizePostWindowSamplingDay(
+        provenance.samplingDay,
+        batch.endDate,
+      ),
+    }));
 }
 
 /**
@@ -137,6 +182,21 @@ export function evaluateDurabilitySubmissionGates(
 
   for (const batch of batches) {
     const sampleRowCount = batch.replicates.length;
+
+    if (batch.startDate != null && batch.endDate != null) {
+      for (const sample of batch.replicateProvenance) {
+        if (sample.samplingDay == null) continue;
+        if (sample.samplingDay < batch.startDate) {
+          blockers.push(
+            `Sample ${sample.sampleCode} was taken on ${sample.samplingDay}, before credit batch ${batch.creditBatchCode}'s production window ${batch.startDate}–${batch.endDate}. The biochar did not yet exist; correct this data error before submission (§8.3.1).`,
+          );
+        } else if (sample.samplingDay > batch.endDate) {
+          warnings.push(
+            `Sample ${sample.sampleCode} was taken on ${sample.samplingDay}, after credit batch ${batch.creditBatchCode}'s production window ${batch.startDate}–${batch.endDate}. §8.3.1 permits sampling from stored material only when samples are spatially distributed across the stored batch; confirm this with the registry. This sampling day does not count as within-batch temporal distribution.`,
+          );
+        }
+      }
+    }
 
     // (b) Method A presence — every Method A batch must be sampled.
     if (sampleRowCount === 0) {

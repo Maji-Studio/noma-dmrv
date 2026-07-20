@@ -16,11 +16,12 @@ import {
   type Table as TanStackTable,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { CaretUpIcon, CaretDownIcon, MagnifyingGlassIcon, CaretLeftIcon, CaretRightIcon, CheckIcon } from "@phosphor-icons/react/dist/ssr";
+import { CaretUpIcon, CaretDownIcon, MagnifyingGlassIcon, CheckIcon } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Button } from "@/components/ui/button";
 import { TableRowSkeleton } from "@/components/ui/loading-skeleton";
+import { ListPagination } from "@/components/ui/list-pagination";
 
 /* ------------------------------------------------------------------ */
 /*  Data Table Context                                                  */
@@ -366,6 +367,7 @@ function DataTableRoot<TData, TValue>({
     (child) => !(React.isValidElement(child) && child.type === DataTablePagination),
   );
   const framed = variant !== "default";
+  const isEmpty = !isLoading && table.getRowModel().rows.length === 0;
 
   return (
     <DataTableContext.Provider value={contextValue as DataTableContextValue<unknown>}>
@@ -381,6 +383,12 @@ function DataTableRoot<TData, TValue>({
         )}
       >
         {headerChildren}
+        {isEmpty ? (
+          <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] py-48 px-16 text-center text-[var(--color-text-secondary)] md:border-0 md:bg-transparent md:px-12">
+            {emptyMessage}
+          </div>
+        ) : (
+          <>
         {/* Desktop: real table (hidden on mobile in favor of the card view) */}
         <div className="hidden md:block overflow-auto">
           <table
@@ -458,15 +466,6 @@ function DataTableRoot<TData, TValue>({
                     columns={table.getVisibleLeafColumns().length}
                   />
                 ))
-              ) : table.getRowModel().rows.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={columns.length}
-                    className="py-48 px-12 text-center text-[var(--color-text-secondary)]"
-                  >
-                    {emptyMessage}
-                  </td>
-                </tr>
               ) : (
                 table.getRowModel().rows.map((row) => (
                   <tr
@@ -529,10 +528,6 @@ function DataTableRoot<TData, TValue>({
                 <div className="mt-12 h-12 w-3/4 bg-[var(--color-background-medium)] animate-pulse" />
               </div>
             ))
-          ) : table.getRowModel().rows.length === 0 ? (
-            <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] py-48 px-16 text-center text-[var(--color-text-secondary)]">
-              {emptyMessage}
-            </div>
           ) : (
             table.getRowModel().rows.map((row) => (
               <div
@@ -591,6 +586,8 @@ function DataTableRoot<TData, TValue>({
             ))
           )}
         </div>
+          </>
+        )}
         {footerChildren}
       </div>
     </DataTableContext.Provider>
@@ -722,11 +719,6 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
 /*  DataTable Pagination                                                */
 /* ------------------------------------------------------------------ */
 
-// Size override for the first/prev/next/last nav buttons. 44px touch target
-// on mobile, condensed to the standard 32px icon size from `sm` up (matches
-// the a11y touch-target rule).
-const PAGINATION_NAV_BUTTON_CLASS = "h-44 w-44 sm:h-32 sm:w-32";
-
 interface DataTablePaginationProps {
   showRowsPerPage?: boolean;
   rowsPerPageOptions?: number[];
@@ -748,87 +740,23 @@ function DataTablePagination({
   const selectedCount = Object.keys(table.getState().rowSelection).length;
 
   return (
-    <div
-      className={cn(
-        // At md+ pagination sits inside the panel frame as its footer row.
-        "flex items-center justify-between gap-16 flex-wrap",
-        "md:px-16 md:py-10 md:[border-top:var(--panel-head-border)]",
-        className,
-      )}
-    >
-      <div className="flex items-center gap-16">
-        {showSelectedCount && selectedCount > 0 && (
+    <ListPagination
+      page={pageIndex + 1}
+      pageCount={pageCount}
+      pageSize={pageSize}
+      onPageChange={(page) => table.setPageIndex(page - 1)}
+      onPageSizeChange={(size) => table.setPageSize(size)}
+      rowsPerPageOptions={rowsPerPageOptions}
+      showRowsPerPage={showRowsPerPage}
+      className={className}
+      leadingContent={
+        showSelectedCount && selectedCount > 0 ? (
           <span className="body-small text-[var(--color-text-secondary)]">
             {selectedCount} of {totalRows} row(s) selected
           </span>
-        )}
-        {showRowsPerPage && (
-          <div className="flex items-center gap-8">
-            <span className="body-small text-[var(--color-text-secondary)]">Rows per page:</span>
-            <select
-              value={pageSize}
-              onChange={(e) => table.setPageSize(Number(e.target.value))}
-              className="h-32 px-8 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer"
-            >
-              {rowsPerPageOptions.map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
-      <div className="flex items-center gap-8">
-        <span className="body-small text-[var(--color-text-secondary)]">
-          Page {pageIndex + 1} of {pageCount || 1}
-        </span>
-        <div className="flex items-center gap-4">
-          <Button
-            variant="noOutline"
-            size="icon"
-            onClick={() => table.firstPage()}
-            disabled={!table.getCanPreviousPage()}
-            className={PAGINATION_NAV_BUTTON_CLASS}
-            aria-label="Go to first page"
-          >
-            <CaretLeftIcon size={14} weight="bold" className="pointer-events-none" />
-            <CaretLeftIcon size={14} weight="bold" className="-ml-8 pointer-events-none" />
-          </Button>
-          <Button
-            variant="noOutline"
-            size="icon"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-            className={PAGINATION_NAV_BUTTON_CLASS}
-            aria-label="Go to previous page"
-          >
-            <CaretLeftIcon size={14} weight="bold" className="pointer-events-none" />
-          </Button>
-          <Button
-            variant="noOutline"
-            size="icon"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-            className={PAGINATION_NAV_BUTTON_CLASS}
-            aria-label="Go to next page"
-          >
-            <CaretRightIcon size={14} weight="bold" className="pointer-events-none" />
-          </Button>
-          <Button
-            variant="noOutline"
-            size="icon"
-            onClick={() => table.lastPage()}
-            disabled={!table.getCanNextPage()}
-            className={PAGINATION_NAV_BUTTON_CLASS}
-            aria-label="Go to last page"
-          >
-            <CaretRightIcon size={14} weight="bold" className="pointer-events-none" />
-            <CaretRightIcon size={14} weight="bold" className="-ml-8 pointer-events-none" />
-          </Button>
-        </div>
-      </div>
-    </div>
+        ) : undefined
+      }
+    />
   );
 }
 

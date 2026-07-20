@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockCreateSample = vi.fn();
+const mockUpdateSample = vi.fn();
 const mockGetSampleById = vi.fn();
 const mockWithAutoCode = vi.fn();
+const mockGetCreditBatchById = vi.fn();
+const mockGetFacilityById = vi.fn();
 
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: vi.fn().mockResolvedValue({
@@ -21,16 +24,26 @@ vi.mock("@/data-access/samples", () => ({
   getSampleStats: vi.fn(),
   getSamples: vi.fn(),
   isSampleCodeAvailable: vi.fn(),
-  updateSample: vi.fn(),
+  updateSample: (...args: unknown[]) => mockUpdateSample(...args),
 }));
 
 vi.mock("@/data-access/code-generator", () => ({
   withAutoCode: (...args: unknown[]) => mockWithAutoCode(...args),
 }));
 
-import { createSampleFn, getSampleByIdFn } from "@/fn/samples";
+vi.mock("@/data-access/credit-batches", () => ({
+  getCreditBatchById: (...args: unknown[]) => mockGetCreditBatchById(...args),
+}));
+
+vi.mock("@/data-access/facilities", () => ({
+  getFacilityById: (...args: unknown[]) => mockGetFacilityById(...args),
+}));
+
+import { createSampleFn, getSampleByIdFn, updateSampleFn } from "@/fn/samples";
 
 const CREDIT_BATCH_ID = "22222222-2222-4222-8222-222222222222";
+const LATER_CREDIT_BATCH_ID = "55555555-5555-4555-8555-555555555555";
+const FACILITY_ID = "44444444-4444-4444-8444-444444444444";
 
 function baseSampleInput(overrides: Record<string, unknown> = {}) {
   return {
@@ -49,6 +62,18 @@ describe("createSampleFn", () => {
     mockCreateSample.mockReset();
     mockCreateSample.mockResolvedValue({ id: "sample-1" });
     mockWithAutoCode.mockReset();
+    mockGetCreditBatchById.mockReset();
+    mockGetCreditBatchById.mockResolvedValue({
+      code: "CB-001",
+      facilityId: FACILITY_ID,
+      startDate: "2026-01-01",
+      endDate: "2026-01-31",
+    });
+    mockGetFacilityById.mockReset();
+    mockGetFacilityById.mockResolvedValue({
+      id: FACILITY_ID,
+      timezone: "UTC",
+    });
     mockWithAutoCode.mockImplementation(
       async (
         _ctx: unknown,
@@ -80,13 +105,102 @@ describe("createSampleFn", () => {
   });
 
   it("rejects a sample without a credit batch (issue #309: exactly one batch)", async () => {
-    const { creditBatchId: _omitted, ...withoutBatch } = baseSampleInput();
+    const withoutBatch = { ...baseSampleInput() };
+    Reflect.deleteProperty(withoutBatch, "creditBatchId");
     const result = await createSampleFn(
       withoutBatch as Parameters<typeof createSampleFn>[0],
     );
 
     expect(result.success).toBe(false);
     expect(mockCreateSample).not.toHaveBeenCalled();
+  });
+
+  it("rejects a sample dated before the assigned credit-batch window", async () => {
+    const result = await createSampleFn(
+      baseSampleInput({ samplingTime: new Date("2025-12-31T23:59:59.000Z") }),
+    );
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain("2026-01-01–2026-01-31");
+    }
+    expect(mockCreateSample).not.toHaveBeenCalled();
+  });
+
+  it("accepts post-window sampling from stored material", async () => {
+    const result = await createSampleFn(
+      baseSampleInput({ samplingTime: new Date("2026-02-15T12:00:00.000Z") }),
+    );
+
+    expect(result.success).toBe(true);
+    expect(mockCreateSample).toHaveBeenCalledOnce();
+  });
+});
+
+describe("updateSampleFn", () => {
+  beforeEach(() => {
+    mockUpdateSample.mockReset();
+    mockUpdateSample.mockResolvedValue({ id: "sample-1" });
+    mockGetSampleById.mockReset();
+    mockGetSampleById.mockResolvedValue({
+      id: "sample-1",
+      creditBatchId: CREDIT_BATCH_ID,
+      samplingTime: new Date("2026-01-15T12:00:00.000Z"),
+    });
+    mockGetCreditBatchById.mockReset();
+    mockGetCreditBatchById.mockResolvedValue({
+      code: "CB-001",
+      facilityId: FACILITY_ID,
+      startDate: "2026-01-01",
+      endDate: "2026-01-31",
+    });
+    mockGetFacilityById.mockReset();
+    mockGetFacilityById.mockResolvedValue({
+      id: FACILITY_ID,
+      timezone: "UTC",
+    });
+  });
+
+  it("rejects moving an assigned sample before its batch window", async () => {
+    const result = await updateSampleFn({
+      sampleId: "33333333-3333-4333-8333-333333333333",
+      samplingTime: new Date("2025-12-31T23:59:59.000Z"),
+    });
+
+    expect(result.success).toBe(false);
+    expect(mockUpdateSample).not.toHaveBeenCalled();
+  });
+
+  it("rejects reassigning a sample to a later credit-batch window", async () => {
+    mockGetCreditBatchById.mockResolvedValueOnce({
+      code: "CB-002",
+      facilityId: FACILITY_ID,
+      startDate: "2026-02-01",
+      endDate: "2026-02-28",
+    });
+
+    const result = await updateSampleFn({
+      sampleId: "33333333-3333-4333-8333-333333333333",
+      creditBatchId: LATER_CREDIT_BATCH_ID,
+    });
+
+    expect(result.success).toBe(false);
+    expect(mockGetCreditBatchById).toHaveBeenCalledWith(
+      expect.anything(),
+      LATER_CREDIT_BATCH_ID,
+      { skipPreview: true },
+    );
+    expect(mockUpdateSample).not.toHaveBeenCalled();
+  });
+
+  it("allows moving an assigned sample after its batch window", async () => {
+    const result = await updateSampleFn({
+      sampleId: "33333333-3333-4333-8333-333333333333",
+      samplingTime: new Date("2026-02-15T12:00:00.000Z"),
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockUpdateSample).toHaveBeenCalledOnce();
   });
 });
 

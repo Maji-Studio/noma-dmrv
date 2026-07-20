@@ -16,12 +16,14 @@ import {
   orders,
   productionRuns,
   samples,
+  supplierLocations,
+  suppliers,
   transportLegs,
+  vehicles,
   type NewTransportLeg,
   type TransportLeg,
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
-import { logger } from "@/lib/log";
 import type { TransportEntityTypeValue } from "@/schemas/transport-legs";
 import {
   aggregateDistributionLegs,
@@ -35,6 +37,10 @@ import {
   type CertifiedLineageEntityType,
 } from "./certification-lineage-guards";
 import { requireOrgScope } from "./utils";
+import {
+  retireDocumentsForEntities,
+  type DocumentEntityRef,
+} from "./documents";
 
 export type TransportEntityType = TransportEntityTypeValue;
 
@@ -52,6 +58,11 @@ const CERTIFIED_LINEAGE_TARGET: Record<
   biochar: "biocharProduct",
   sample: "sample",
 };
+
+const BIOCHAR_TRANSPORT_AGGREGATE_LOCK_SCOPE =
+  "biochar-transport-aggregate";
+const BIOCHAR_TRANSPORT_ROUTE_TOPOLOGY_LOCK_SCOPE =
+  "biochar-transport-route-topology";
 
 // sample resolves indirectly via `production_runs.facility_id`; others have
 // a direct `facility_id` column.
@@ -280,10 +291,14 @@ export async function deleteTransportLeg(
       "delete",
     );
 
-    return tx
+    const rows = await tx
       .delete(transportLegs)
       .where(and(eq(transportLegs.id, id), eq(transportLegs.organizationId, ctx.organizationId)))
       .returning({ id: transportLegs.id });
+    await retireDocumentsForEntities(ctx, tx, [
+      { entityType: "transport_leg", entityId: id },
+    ]);
+    return rows;
   });
 
   if (result.length === 0) {
@@ -299,8 +314,18 @@ export async function deleteTransportLegsForEntity(
   tx: DbTransaction,
   entityType: TransportEntityType,
   entityId: string,
-): Promise<void> {
+): Promise<DocumentEntityRef[]> {
   requireOrgScope(ctx);
+  const legs = await tx
+    .select({ id: transportLegs.id })
+    .from(transportLegs)
+    .where(
+      and(
+        eq(transportLegs.entityType, entityType),
+        eq(transportLegs.entityId, entityId),
+        eq(transportLegs.organizationId, ctx.organizationId),
+      ),
+    );
   await tx
     .delete(transportLegs)
     .where(
@@ -310,10 +335,14 @@ export async function deleteTransportLegsForEntity(
         eq(transportLegs.organizationId, ctx.organizationId),
       ),
     );
+  return legs.map((leg) => ({
+    entityType: "transport_leg",
+    entityId: leg.id,
+  }));
 }
 
 // ============================================
-// Auto-derived legs (feedstock)
+// Auto-derived leg persistence
 // ============================================
 
 // Feedstock owns a SINGLE auto-derived leg, computed from records already held
@@ -321,18 +350,31 @@ export async function deleteTransportLegsForEntity(
 // We replace the derived row wholesale on every save: drop the existing derived
 // leg for the entity, then insert the new one when it has the hard requirements
 // (distance + load mass). Manual legs remain untouched.
-export async function replaceDerivedTransportLeg(
+async function replaceDerivedTransportLeg(
   ctx: OrgContext,
+  tx: DbTransaction,
   entityType: "feedstock" | "biochar",
   entityId: string,
   derived: DerivedTransportLeg,
+  deferredRetirements?: DocumentEntityRef[],
 ): Promise<void> {
   requireOrgScope(ctx);
-  await resolveEntityFacility(ctx, entityType, entityId);
 
   // No persistable derivation → clear any stale derived leg.
   if (!isDerivedLegPersistable(derived)) {
-    await db
+    const derivedLegs = await tx
+      .select({ id: transportLegs.id })
+      .from(transportLegs)
+      .where(
+        and(
+          eq(transportLegs.entityType, entityType),
+          eq(transportLegs.entityId, entityId),
+          eq(transportLegs.isDerived, true),
+          eq(transportLegs.organizationId, ctx.organizationId),
+        ),
+      )
+      .for("update");
+    await tx
       .delete(transportLegs)
       .where(
         and(
@@ -342,6 +384,15 @@ export async function replaceDerivedTransportLeg(
           eq(transportLegs.organizationId, ctx.organizationId),
         ),
       );
+    const retirements: DocumentEntityRef[] = derivedLegs.map((leg) => ({
+      entityType: "transport_leg",
+      entityId: leg.id,
+    }));
+    if (deferredRetirements) {
+      deferredRetirements.push(...retirements);
+    } else {
+      await retireDocumentsForEntities(ctx, tx, retirements);
+    }
     return;
   }
 
@@ -367,7 +418,7 @@ export async function replaceDerivedTransportLeg(
     tripType: derived.tripType,
   };
 
-  await db
+  await tx
     .insert(transportLegs)
     .values({ organizationId: ctx.organizationId, entityType, entityId, isDerived: true, ...fields })
     .onConflictDoUpdate({
@@ -378,12 +429,158 @@ export async function replaceDerivedTransportLeg(
 }
 
 // ============================================
+// Auto-derived legs (feedstock)
+// ============================================
+
+export interface FeedstockTransportOverride {
+  distanceKm?: number | null;
+  distanceSource?: "map_estimate" | "manual" | "document" | null;
+  tripType?: "return" | "one_way" | null;
+  /** Route anchors changed, so the previous route's distance is not reusable. */
+  resetDistanceToRoute?: boolean;
+}
+
+/**
+ * Recompute a feedstock's derived supplier-to-facility leg on the caller's
+ * transaction. The form-only distance override is consumed here and persisted
+ * only on the derived leg, so no duplicate feedstock column is required.
+ */
+export async function syncFeedstockTransportLeg(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  feedstockId: string,
+  distanceOverride?: FeedstockTransportOverride,
+): Promise<void> {
+  requireOrgScope(ctx);
+
+  const [row] = await tx
+    .select({
+      supplierName: suppliers.name,
+      supplierGpsLatitude: suppliers.gpsLatitude,
+      supplierGpsLongitude: suppliers.gpsLongitude,
+      supplierDistanceToFacilityKm: suppliers.distanceToFacilityKm,
+      supplierDistanceSource: suppliers.distanceSource,
+      locationName: supplierLocations.name,
+      locationGpsLatitude: supplierLocations.gpsLatitude,
+      locationGpsLongitude: supplierLocations.gpsLongitude,
+      locationDistanceFromFacilityKm: supplierLocations.distanceFromFacilityKm,
+      locationDistanceSource: supplierLocations.distanceSource,
+      facilityName: facilities.name,
+      facilityGpsLatitude: facilities.gpsLatitude,
+      facilityGpsLongitude: facilities.gpsLongitude,
+      vehicleType: vehicles.vehicleType,
+      vehicleModelYear: vehicles.modelYear,
+      loadMassKg: feedstocks.massWetKg,
+      existingDistanceKm: transportLegs.distanceKm,
+      existingDistanceSource: transportLegs.distanceSource,
+      existingTripType: transportLegs.tripType,
+    })
+    .from(feedstocks)
+    .leftJoin(suppliers, and(eq(feedstocks.supplierId, suppliers.id), eq(suppliers.organizationId, ctx.organizationId)))
+    .leftJoin(
+      supplierLocations,
+      and(
+        eq(supplierLocations.supplierId, suppliers.id),
+        eq(supplierLocations.isDefault, true),
+        eq(supplierLocations.organizationId, ctx.organizationId),
+      ),
+    )
+    .leftJoin(facilities, and(eq(feedstocks.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(vehicles, and(eq(feedstocks.vehicleId, vehicles.id), eq(vehicles.organizationId, ctx.organizationId)))
+    .leftJoin(
+      transportLegs,
+      and(
+        eq(transportLegs.entityType, "feedstock"),
+        eq(transportLegs.entityId, feedstocks.id),
+        eq(transportLegs.isDerived, true),
+        eq(transportLegs.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(and(eq(feedstocks.id, feedstockId), eq(feedstocks.organizationId, ctx.organizationId)));
+
+  if (!row) {
+    throw new SafeError("Feedstock not found");
+  }
+
+  const locationDistance = positiveOrNull(row.locationDistanceFromFacilityKm);
+  const storedDistanceKm = locationDistance ?? row.supplierDistanceToFacilityKm;
+  const storedDistanceSource =
+    locationDistance != null
+      ? row.locationDistanceSource
+      : row.supplierDistanceSource;
+  const locationHasGps =
+    row.locationGpsLatitude != null && row.locationGpsLongitude != null;
+  const preserveExistingDistance =
+    distanceOverride?.distanceKm === undefined &&
+    distanceOverride?.resetDistanceToRoute !== true;
+  const distanceKmOverride = distanceOverride?.resetDistanceToRoute
+    ? undefined
+    : distanceOverride?.distanceKm;
+  const distanceSourceOverride = distanceOverride?.resetDistanceToRoute
+    ? undefined
+    : distanceOverride?.distanceSource;
+
+  const derived = deriveTransportLeg({
+    origin: {
+      name: row.locationName ?? row.supplierName,
+      gpsLatitude: locationHasGps ? row.locationGpsLatitude : row.supplierGpsLatitude,
+      gpsLongitude: locationHasGps ? row.locationGpsLongitude : row.supplierGpsLongitude,
+    },
+    destination: {
+      name: row.facilityName,
+      gpsLatitude: row.facilityGpsLatitude,
+      gpsLongitude: row.facilityGpsLongitude,
+    },
+    vehicle: { vehicleType: row.vehicleType, modelYear: row.vehicleModelYear },
+    loadMassKg: row.loadMassKg,
+    storedDistanceKm,
+    storedDistanceSource,
+    distanceKmOverride: preserveExistingDistance
+      ? row.existingDistanceKm
+      : distanceKmOverride,
+    distanceSourceOverride:
+      distanceSourceOverride !== undefined
+        ? distanceSourceOverride
+        : preserveExistingDistance
+          ? row.existingDistanceSource
+          : undefined,
+    tripType:
+      distanceOverride?.tripType === undefined
+        ? row.existingTripType
+        : distanceOverride.tripType,
+  });
+
+  await replaceDerivedTransportLeg(ctx, tx, "feedstock", feedstockId, derived);
+}
+
+// ============================================
 // Auto-derived legs (biochar distribution)
 // ============================================
 
 /**
+ * Serialize mutations that can change which deliveries belong to a product or
+ * customer-location route. This is the first transaction lock tier: callers
+ * must acquire it before certification, stock, parent-row, and aggregate locks.
+ *
+ * The organization-wide scope is intentional. Customer-location resync first
+ * discovers affected products, so a narrower key could miss a concurrently
+ * inserted or repointed delivery before its product identity is known.
+ */
+export async function lockBiocharTransportRouteTopology(
+  ctx: OrgContext,
+  tx: DbTransaction,
+): Promise<void> {
+  requireOrgScope(ctx);
+  const lockKey =
+    `${BIOCHAR_TRANSPORT_ROUTE_TOPOLOGY_LOCK_SCOPE}:${ctx.organizationId}`;
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
+  );
+}
+
+/**
  * Recompute and persist a biochar product's SINGLE auto-derived distribution
- * leg (facility → customer sites) from its deliveries. A product can be
+ * leg (facility → customer sites) from its completed deliveries. A product can be
  * delivered many times to different distances; the one-derived-per-entity
  * invariant means we store ONE aggregated leg. Aggregation is exact for the
  * distance-based method (`Σ distanceⱼ × massⱼ`): we store the total delivered
@@ -394,13 +591,15 @@ export async function replaceDerivedTransportLeg(
  * source. Deliveries missing a positive distance or mass are skipped. Call
  * after every delivery create/update/delete. Manual legs are untouched.
  */
-export async function syncBiocharProductTransportLeg(
+async function syncLockedBiocharProductTransportLeg(
   ctx: OrgContext,
+  tx: DbTransaction,
   biocharProductId: string,
+  deferredRetirements?: DocumentEntityRef[],
 ): Promise<void> {
   requireOrgScope(ctx);
 
-  const [facility] = await db
+  const [facility] = await tx
     .select({
       name: facilities.name,
       gpsLatitude: facilities.gpsLatitude,
@@ -411,20 +610,13 @@ export async function syncBiocharProductTransportLeg(
     .where(and(eq(biocharProducts.id, biocharProductId), eq(biocharProducts.organizationId, ctx.organizationId)));
 
   if (!facility) {
-    // Polymorphic entity_id is not FK-constrained, so a missing facility means
-    // an orphaned or invalid product reference. Log the id so operators can
-    // trace it; control flow is unchanged (nothing to derive without a source).
-    logger.warn(
-      { biocharProductId },
-      "skipped derived transport leg: biochar product or its facility not found",
-    );
-    return;
+    throw new SafeError("Biochar product or its facility not found");
   }
 
   // The destination location lives on the order in the common flow; the
   // delivery may also carry its own override. Resolve via
   // COALESCE(delivery.customerLocationId, order.customerLocationId).
-  const rows = await db
+  const rows = await tx
     .select({
       loadMassKg: deliveries.deliveredWetMassKg,
       deliveryDistanceKmOverride: deliveries.distanceKmOverride,
@@ -445,7 +637,14 @@ export async function syncBiocharProductTransportLeg(
         eq(customerLocations.organizationId, ctx.organizationId),
       ),
     )
-    .where(and(eq(deliveries.biocharProductId, biocharProductId), eq(deliveries.organizationId, ctx.organizationId)));
+    .where(and(
+      eq(
+        sql`coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+        biocharProductId,
+      ),
+      eq(deliveries.organizationId, ctx.organizationId),
+      eq(deliveries.status, "delivered"),
+    ));
 
   // Per delivery: its own distance override (+ source) beats the destination
   // location's stored distance (+ source) — map-integration plan, decision 3.
@@ -487,7 +686,64 @@ export async function syncBiocharProductTransportLeg(
 
   // When no delivery qualifies, `derived` is not persistable and the replace
   // clears any stale derived leg.
-  await replaceDerivedTransportLeg(ctx, "biochar", biocharProductId, derived);
+  await replaceDerivedTransportLeg(
+    ctx,
+    tx,
+    "biochar",
+    biocharProductId,
+    derived,
+    deferredRetirements,
+  );
+}
+
+/**
+ * Recompute each affected product once on the shared transaction.
+ *
+ * The org/product transaction locks are acquired together in sorted order,
+ * before any product aggregate is read. This lets a waiter observe the prior
+ * transaction's committed delivery/location/order changes under READ COMMITTED
+ * and prevents two stale snapshots from overwriting the same derived leg.
+ * Topology-changing callers take the route-topology lock, followed by any
+ * certification/stock/parent row locks. These aggregate locks are the final
+ * lock tier and the aggregate reads do not lock parent rows.
+ */
+export async function syncBiocharProductTransportLegs(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  biocharProductIds: Array<string | null | undefined>,
+  deferredRetirements?: DocumentEntityRef[],
+): Promise<void> {
+  requireOrgScope(ctx);
+
+  const ids = [...new Set(
+    biocharProductIds.filter((id): id is string => Boolean(id)),
+  )].sort();
+
+  for (const id of ids) {
+    const lockKey = `${BIOCHAR_TRANSPORT_AGGREGATE_LOCK_SCOPE}:${ctx.organizationId}:${id}`;
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
+    );
+  }
+
+  for (const id of ids) {
+    await syncLockedBiocharProductTransportLeg(
+      ctx,
+      tx,
+      id,
+      deferredRetirements,
+    );
+  }
+}
+
+/** Recompute one product through the same lock-ordering entry point. */
+export async function syncBiocharProductTransportLeg(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  biocharProductId: string,
+): Promise<void> {
+  requireOrgScope(ctx);
+  await syncBiocharProductTransportLegs(ctx, tx, [biocharProductId]);
 }
 
 /**
@@ -498,14 +754,17 @@ export async function syncBiocharProductTransportLeg(
  */
 export async function syncBiocharLegsForCustomerLocation(
   ctx: OrgContext,
+  tx: DbTransaction,
   customerLocationId: string,
 ): Promise<void> {
   requireOrgScope(ctx);
 
   // Match deliveries whose resolved destination is this location — either the
   // delivery's own override or, in the common flow, its order's location.
-  const rows = await db
-    .selectDistinct({ biocharProductId: deliveries.biocharProductId })
+  const rows = await tx
+    .selectDistinct({
+      biocharProductId: sql<string | null>`coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+    })
     .from(deliveries)
     .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
     .where(
@@ -519,7 +778,5 @@ export async function syncBiocharLegsForCustomerLocation(
     .map((row) => row.biocharProductId)
     .filter((id): id is string => Boolean(id));
 
-  await Promise.all(
-    productIds.map((id) => syncBiocharProductTransportLeg(ctx, id)),
-  );
+  await syncBiocharProductTransportLegs(ctx, tx, productIds);
 }

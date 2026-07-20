@@ -5,20 +5,22 @@ import {
   getDashboardOverview,
   type DashboardOverview,
 } from "@/data-access/dashboard-overview";
+import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgContext } from "@/lib/auth/server";
 import type { ActionResult } from "@/types/actions";
 import { toLoggedActionError } from "./action-errors";
 
 const getDashboardOverviewSchema = z.object({
   facilityId: z.uuid(),
-  range: z.enum(["30d", "ytd", "all"]).default("30d"),
+  range: z.enum(["week", "month", "all"]).default("month"),
 });
 
 export type GetDashboardOverviewInput = z.input<typeof getDashboardOverviewSchema>;
 
 /**
- * Facility dashboard overview: KPI strip, needs-attention queue, feedstock
- * mix, and the custody-flow ribbon — one aggregate read per range selection.
+ * Facility dashboard overview: KPI band, traceability stations, mass flow,
+ * needs-attention queue, activity feed, and certification summary — one
+ * aggregate read per range selection.
  */
 export async function getDashboardOverviewFn(
   input: GetDashboardOverviewInput,
@@ -27,6 +29,7 @@ export async function getDashboardOverviewFn(
     const ctx = await requireOrgContext();
 
     const validated = getDashboardOverviewSchema.parse(input);
+    await requireOrgFacility(ctx, validated.facilityId);
 
     const overview = await getDashboardOverview(
       ctx,

@@ -32,6 +32,7 @@ export {
   createProductionRun,
   updateProductionRun,
   deleteProductionRun,
+  ProductionRunDependencyError,
 } from "./mutations";
 
 export { ProductionRunOverlapError } from "./overlap";

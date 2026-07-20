@@ -391,7 +391,7 @@ export function useDeleteProductionRun(
     mutationFn: async (productionRunId: string) => {
       const result = await deleteProductionRunFn({ productionRunId });
       if (!result.success) {
-        throw new Error(result.error);
+        throwProductionRunActionError(result);
       }
       return;
     },

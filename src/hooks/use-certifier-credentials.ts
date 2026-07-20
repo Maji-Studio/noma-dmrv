@@ -5,18 +5,13 @@ import {
   setOrgCertifierCredentialsFn,
 } from "@/fn/certifier-credentials";
 import type { CertifierCredentialsFormInput } from "@/schemas/organizations";
-import type { ActionResult } from "@/types/actions";
+import { unwrap } from "@/hooks/types";
 
 export const certifierCredentialKeys = {
   all: ["certifier-credentials"] as const,
   organization: (organizationId: string) =>
     [...certifierCredentialKeys.all, organizationId] as const,
 };
-
-function unwrap<T>(result: ActionResult<T>): T {
-  if (!result.success) throw new Error(result.error);
-  return result.data;
-}
 
 export function useOrgCertifierCredentialsStatus(organizationId: string) {
   return useQuery({
