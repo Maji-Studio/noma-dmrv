@@ -21,19 +21,11 @@ import { ProductionSampleForm } from "./production-sample-form";
 import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
 import type { ProductionSampleWithRelations } from "@/data-access/production-samples";
 import type { ProductionSampleFormData } from "@/schemas/production-samples";
+import { formatDateTime } from "@/lib/format-utils";
 
 // ============================================
 // Helpers
 // ============================================
-
-function formatTimestamp(d: Date): string {
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function formatNum(v: number | null, unit?: string): string {
   if (v == null) return "\u2014";
@@ -234,7 +226,7 @@ export function ProductionSampleTable({
                   <td className="py-8 pr-12 font-medium text-[var(--clr-dark-purple)]">
                     {s.sampleCode ?? "\u2014"}
                   </td>
-                  <td className="py-8 pr-12">{formatTimestamp(s.timestamp)}</td>
+                  <td className="py-8 pr-12">{formatDateTime(s.timestamp)}</td>
                   <td className="py-8 pr-12">{formatNum(s.temperatureC, "\u00B0C")}</td>
                   <td className="py-8 pr-12">{formatNum(s.weightGrams, "g")}</td>
                   <td className="py-8 pr-12">{formatNum(s.moistureContentPercent, "%")}</td>

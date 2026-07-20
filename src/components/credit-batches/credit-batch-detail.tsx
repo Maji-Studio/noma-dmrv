@@ -22,7 +22,7 @@ import {
   PencilSimpleIcon,
   StackIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { formatSafeDate, formatTonnes } from "@/lib/format-utils";
+import { formatDate, formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { ServerError } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -173,7 +173,7 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
   }
 
   const stored = co2eStoredKpi(creditBatch);
-  const period = `${formatSafeDate(creditBatch.startDate)} — ${formatSafeDate(creditBatch.endDate)}`;
+  const period = formatDateRange(creditBatch.startDate, creditBatch.endDate);
 
   return (
     <Shell>
@@ -250,11 +250,11 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
             <DetailRow>
               <DetailField
                 label="Start date"
-                value={formatSafeDate(creditBatch.startDate)}
+                value={formatDate(creditBatch.startDate)}
               />
               <DetailField
                 label="End date"
-                value={formatSafeDate(creditBatch.endDate)}
+                value={formatDate(creditBatch.endDate)}
               />
             </DetailRow>
             <DetailRow>

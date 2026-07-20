@@ -7,7 +7,7 @@ import {
   MapPinIcon,
   PencilSimpleIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { Button } from "@/components/ui";
+import { RowActionsMenu } from "@/components/ui";
 import type { FacilityWithRelations } from "@/data-access/facilities";
 import { formatMass } from "@/lib/format-utils";
 
@@ -93,35 +93,31 @@ export function FacilityCard({
           {facility.address || "No address"}
         </span>
 
-        <div className="flex items-center gap-8" onClick={(e) => e.stopPropagation()}>
-          {isArchived ? (
-            <Button
-              size="small"
-              variant="default"
-              aria-label={`Restore facility ${facility.code}`}
-              onClick={() => onRestore(facility.id)}
-            >
-              <ArrowCounterClockwiseIcon size={16} />
-              Restore
-            </Button>
-          ) : (
-            <>
-              <Button size="small" variant="default" onClick={() => onEdit(facility)}>
-                <PencilSimpleIcon size={16} />
-                Edit
-              </Button>
-              <Button
-                size="small"
-                variant="default"
-                aria-label={`Archive facility ${facility.code}`}
-                className="border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]"
-                onClick={() => onArchive(facility.id)}
-              >
-                <ArchiveIcon size={16} />
-              </Button>
-            </>
-          )}
-        </div>
+        <RowActionsMenu
+          label={`Actions for facility ${facility.code}`}
+          actions={
+            isArchived
+              ? [
+                  {
+                    label: "Restore",
+                    icon: <ArrowCounterClockwiseIcon size={16} />,
+                    onSelect: () => onRestore(facility.id),
+                  },
+                ]
+              : [
+                  {
+                    label: "Edit",
+                    icon: <PencilSimpleIcon size={16} />,
+                    onSelect: () => onEdit(facility),
+                  },
+                  {
+                    label: "Archive",
+                    icon: <ArchiveIcon size={16} />,
+                    onSelect: () => onArchive(facility.id),
+                  },
+                ]
+          }
+        />
       </div>
     </article>
   );

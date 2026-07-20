@@ -27,16 +27,18 @@ test.describe("Dialog focus restore", () => {
       timeout: 15000,
     });
 
-    // The archive button on a facility card opens a Modal-based
-    // ArchiveFacilityDialog. It is icon-only but carries an aria-label
-    // ("Archive facility <code>"), so locate it by accessible name.
+    // Archive is opened through the persistent card Actions trigger. The
+    // dialog should restore focus there after its transient menu item closes.
     const firstCard = page
       .locator("article")
       .filter({ hasText: seededData.facility.code })
       .first();
     await expect(firstCard).toBeVisible();
-    const archiveTrigger = firstCard.getByRole("button", { name: /archive/i });
-    await archiveTrigger.click();
+    const actionsTrigger = firstCard.getByRole("button", {
+      name: `Actions for facility ${seededData.facility.code}`,
+    });
+    await actionsTrigger.click();
+    await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
@@ -47,6 +49,6 @@ test.describe("Dialog focus restore", () => {
     await expect(dialog).toBeHidden();
 
     // The fix under test: focus returns to the button that opened the dialog.
-    await expect(archiveTrigger).toBeFocused();
+    await expect(actionsTrigger).toBeFocused();
   });
 });

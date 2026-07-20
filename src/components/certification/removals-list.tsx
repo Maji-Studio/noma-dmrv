@@ -32,6 +32,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useCertificationOverview } from "@/hooks/use-certification";
 import type { RemovalPreflightSummary } from "@/fn/certification";
 import { deriveRemovalStatus } from "@/lib/certification/status";
+import { formatDateRange } from "@/lib/format-utils";
 import { NewRemovalDialog } from "./new-removal-dialog";
 import { RemovalDetailSheet } from "./removal-detail-sheet";
 
@@ -104,7 +105,7 @@ function shortId(id: string): string {
 
 function reportingWindow(summary: RemovalPreflightSummary): string {
   return summary.startedOn && summary.completedOn
-    ? `${summary.startedOn} → ${summary.completedOn}`
+    ? formatDateRange(summary.startedOn, summary.completedOn)
     : "Set on submit";
 }
 

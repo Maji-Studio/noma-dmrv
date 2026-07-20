@@ -52,8 +52,26 @@ This design system combines Maji Studio's brand identity with Manukai's systemat
 - **Header Spacing:** `mb-32` (32px) header to content
 - **Border Radius:** `rounded-none` for most elements (brutalist); only UI primitives (StatusBadge, Card component, Accordion) use radius tokens
 - **Buttons:** Always use `Button` component — never raw `<button>` with manual styling
-- **Delete Buttons in Cards:** `Button size="small" variant="default"` with `border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]`
+- **Card Actions:** use `RowActionsMenu`; irreversible delete is the only
+  destructive/red action. Archive, restore, unlink, and other reversible
+  actions stay neutral.
 - **Disabled State:** `disabled:opacity-40` (via Button component)
+
+### Date and Time Display
+
+Interactive read surfaces use the shared formatters from
+`@/lib/format-utils` so dates have one timezone-safe vocabulary:
+
+- Date: `Jun 13, 2026` via `formatDate`.
+- Date-time: `Jun 13, 2026, 14:05` via `formatDateTime` (24-hour clock).
+- Same-year range: `Jun 1 – Jun 30, 2026` via `formatDateRange`.
+- Cross-year range: `Dec 15, 2026 – Jan 10, 2027` via `formatDateRange`.
+
+Pass bare `YYYY-MM-DD` calendar values directly to these helpers; `formatDate`
+and `formatDateRange` protect them from UTC day drift. Do not assemble display
+ranges manually or call `toLocaleDateString`, `Intl.DateTimeFormat`, or custom
+date-fns patterns in components. Native date/datetime input values and
+machine-facing API, export, and PDF contracts keep their required ISO formats.
 
 ---
 
@@ -1156,17 +1174,13 @@ All biochar entity cards (Facility, CreditBatch, StorageLocation, Application) f
   {/* Footer */}
   <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-20 py-12">
     <span className="body-caption text-[var(--color-text-tertiary)]">{footer}</span>
-    <div className="flex items-center gap-8" onClick={(e) => e.stopPropagation()}>
-      <Button size="small" variant="default" onClick={() => onEdit(entity)}>
-        <PencilSimple size={16} /> Edit
-      </Button>
-      <Button size="small" variant="default"
-        className="border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]"
-        onClick={() => onDelete(entity.id)}
-      >
-        <Trash size={16} />
-      </Button>
-    </div>
+    <RowActionsMenu
+      label={`Actions for ${entity.code}`}
+      actions={[
+        { label: "Edit", onSelect: () => onEdit(entity) },
+        { label: "Delete", destructive: true, onSelect: () => onDelete(entity.id) },
+      ]}
+    />
   </div>
 </article>
 ```
@@ -1175,9 +1189,14 @@ All biochar entity cards (Facility, CreditBatch, StorageLocation, Application) f
 - No border-radius — brutalist square corners
 - `border-secondary` default, `border-primary` on hover
 - Body `p-20`, footer `px-20 py-12`
-- Always use `Button` component for actions
+- Use `RowActionsMenu` for card actions; its wrapper keeps menu clicks from
+  triggering the card-body detail action
 - Code badges use area accent colors (purple, orange, rose, dark-purple)
 - Metric labels use `body-caption`, primary values use `title-heading-3`
+- Facilities and Credit Batches are the sanctioned KPI-rich card-list hubs.
+  They use `ListPagination`, the same rows-per-page plus
+  first/previous/next/last contract as `DataTable.Pagination`; ordinary entity
+  lists remain data tables.
 
 ### Modal Component
 

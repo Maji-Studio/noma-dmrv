@@ -20,7 +20,7 @@ interface RowAction {
   onSelect?: () => void;
   /** Navigate instead of invoking a handler — renders the item as a Link. */
   href?: string;
-  /** Red treatment for irreversible actions (Delete, Archive). */
+  /** Red treatment for irreversible actions (Delete). */
   destructive?: boolean;
   icon?: React.ReactNode;
   disabled?: boolean;

@@ -21,7 +21,7 @@ import {
   CheckCircleIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { formatSafeDate, formatTonnes } from "@/lib/format-utils";
+import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { InfoHint } from "@/components/ui/tooltip";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import { certificationSettingsHref } from "@/lib/certification/links";
@@ -82,7 +82,7 @@ function ReadyCard({
         />
       </div>
       <span className="body-caption text-[var(--color-text-tertiary)]">
-        {formatSafeDate(batch.startDate)} — {formatSafeDate(batch.endDate)}
+        {formatDateRange(batch.startDate, batch.endDate)}
       </span>
       <div className="grid grid-cols-3 gap-8">
         <Metric label="Weight" value={formatTonnes(batch.appliedWeightTons)} />
@@ -128,7 +128,7 @@ function IncompleteCard({
         </span>
       </div>
       <span className="body-caption text-[var(--color-text-tertiary)]">
-        {formatSafeDate(batch.startDate)} — {formatSafeDate(batch.endDate)}
+        {formatDateRange(batch.startDate, batch.endDate)}
       </span>
       <ul className="flex flex-col gap-10">
         {gaps.map((check) => {
