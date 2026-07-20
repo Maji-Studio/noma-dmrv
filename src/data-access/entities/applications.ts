@@ -31,7 +31,12 @@ function toApplicationOption(result: ApplicationOptionRow): EntityOption {
       result.facilityName,
       result.deliveryCode ? `Delivery ${result.deliveryCode}` : undefined,
       result.fieldIdentifier ?? undefined,
-      result.applicationDate ? formatDate(result.applicationDate) : undefined,
+      // `applicationDate` stores the chosen calendar day as a UTC-midnight
+      // instant; format its UTC day so the label never shifts with the
+      // server's timezone.
+      result.applicationDate
+        ? formatDate(result.applicationDate.toISOString().slice(0, 10))
+        : undefined,
       result.status,
     ]
       .filter(Boolean)
