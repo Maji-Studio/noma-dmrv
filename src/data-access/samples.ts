@@ -123,6 +123,7 @@ import {
   isPgUniqueViolation,
 } from "@/db/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { assertCarbonReconciliation } from "./samples/carbon-reconciliation";
 
 // DB-enforced sample-code uniqueness (issue #395). Drizzle names the
 // `.unique()` on `samples.sampleCode` this constraint.
@@ -655,10 +656,6 @@ export async function createSample(
   return getSampleById(ctx, sample.id);
 }
 
-// ============================================
-// Sample Update Operations
-// ============================================
-
 /**
  * Update an existing sample
  */
@@ -719,6 +716,9 @@ export async function updateSample(
     throw new SafeError("Sample not found");
   }
 
+  // Fast-fail before opening a transaction; the locked check below is authoritative.
+  assertCarbonReconciliation(existing, data);
+
   // Sample-code uniqueness is DB-enforced (issue #395). No racy pre-check —
   // a user-supplied duplicate is mapped to a friendly SafeError by the
   // `guardSampleMutation` wrapper around the write below.
@@ -778,6 +778,17 @@ export async function updateSample(
   if (data.ironPercent !== undefined) updateData.ironPercent = data.ironPercent;
 
   await guardSampleMutation(() => db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select()
+      .from(samples)
+      .where(and(eq(samples.id, sampleId), eq(samples.organizationId, ctx.organizationId)))
+      .for("update");
+
+    if (!locked) {
+      throw new SafeError("Sample not found");
+    }
+    assertCarbonReconciliation(locked, data);
+
     await assertCanMutateCertifiedLineage(
       ctx,
       tx,
@@ -800,31 +811,36 @@ export async function updateSample(
     }
 
     // Enforce the 1000-year evidence invariant against the EFFECTIVE
-    // post-update state (update merged over the existing row) and the
+    // post-update state (update merged over the LOCKED row) and the
     // effective batch — covers nulling out R₀/TGA in place as well as moving
     // the sample onto a 1000-year batch. Runs inside the transaction so the
     // write sees the same tier as the check. Legacy batchless rows skip
     // (their tier is inferred from R₀ presence on read).
+    // Merges over `locked`, not `existing`: `existing` is the pre-transaction
+    // snapshot, so two concurrent partial updates (one nulling R₀, one nulling
+    // sReflectance) would each still see the other field populated and both
+    // pass. Must stay consistent with assertCarbonReconciliation above, which
+    // is asserted against the same locked row.
     const effectiveCreditBatchId =
-      data.creditBatchId ?? existing.creditBatchId;
+      data.creditBatchId ?? locked.creditBatchId;
     if (effectiveCreditBatchId) {
       await requireBatchTierEvidence(ctx, tx, effectiveCreditBatchId, {
         randomReflectanceR0Percent:
           data.randomReflectanceR0Percent !== undefined
             ? data.randomReflectanceR0Percent
-            : existing.randomReflectanceR0Percent,
+            : locked.randomReflectanceR0Percent,
         sReflectanceFraction:
           data.sReflectanceFraction !== undefined
             ? data.sReflectanceFraction
-            : existing.sReflectanceFraction,
+            : locked.sReflectanceFraction,
         reactiveCarbonPercent:
           data.reactiveCarbonPercent !== undefined
             ? data.reactiveCarbonPercent
-            : existing.reactiveCarbonPercent,
+            : locked.reactiveCarbonPercent,
         residualCarbonPercent:
           data.residualCarbonPercent !== undefined
             ? data.residualCarbonPercent
-            : existing.residualCarbonPercent,
+            : locked.residualCarbonPercent,
       });
     }
 
