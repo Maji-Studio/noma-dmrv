@@ -5,12 +5,17 @@
  * "Ready" for certification with every form field filled but ZERO application
  * evidence, while the removal wizard blocked it on that same missing evidence.
  *
- * The fix folds the application-evidence gap into the one shared readiness
- * decision (`deriveEntityCertifyReadiness`, fed by `applicationEvidenceGapCountSql`),
- * so the list badge and the wizard can no longer disagree on this entity-local
- * fact. This spec drives the UI end to end: a form-complete-but-evidence-missing
- * application must badge Incomplete (naming the evidence gap), and once qualifying
- * geotagged evidence exists the same badge must flip to Ready.
+ * The fix folds the application-evidence gap into the shared readiness decision
+ * (`deriveEntityCertifyReadiness`, fed by `applicationEvidenceGapCountSql`), so
+ * the list badge is now evidence-aware for this entity-local fact. This spec
+ * guards the list-badge side of that: a form-complete-but-evidence-missing
+ * application must badge Incomplete (naming the evidence gap), and once
+ * qualifying geotagged evidence exists the same badge must flip to Ready.
+ *
+ * Scope note: this spec asserts only the list badge. The wizard's server-side
+ * gap computation (`buildApplicationEvidenceGaps`) is a separate implementation
+ * that shares the `application-evidence` constants but not the SQL path;
+ * guarding badge/wizard *agreement* is tracked in docs/open-questions.md.
  */
 import type { Page } from "@playwright/test";
 import { and, eq } from "drizzle-orm";
@@ -119,11 +124,41 @@ test.describe("Application certification readiness reads the shared evidence sou
   }) => {
     const fieldIdentifier = await seedFormCompleteApplication(page, seededData);
 
+    // Resolve this application's identity (id for the evidence insert, code to
+    // locate its row) once, up front — so row assertions target THIS entity by
+    // its visible code, not by table position. A stale row from a failed
+    // cleanup must never be asserted against by accident.
+    let applicationId: string;
+    let applicationCode: string;
+    {
+      const { db, pool } = createDbConnection();
+      try {
+        const [application] = await db
+          .select({
+            id: schema.applications.id,
+            code: schema.applications.code,
+          })
+          .from(schema.applications)
+          .where(
+            and(
+              eq(schema.applications.fieldIdentifier, fieldIdentifier),
+              eq(schema.applications.organizationId, DEC_ORG_ID),
+            ),
+          )
+          .limit(1);
+        expect(application?.id).toBeTruthy();
+        applicationId = application!.id;
+        applicationCode = application!.code;
+      } finally {
+        await pool.end();
+      }
+    }
+
     const applicationsUrl = `/applications?facility=${seededData.facility.id}`;
     await page.goto(applicationsUrl);
     await page.waitForLoadState("networkidle");
 
-    const row = page.locator("table tbody tr").first();
+    const row = page.locator("table tbody tr", { hasText: applicationCode });
     await expect(row).toBeVisible({ timeout: 10000 });
 
     // Every form field is filled, yet the certification badge must NOT read
@@ -137,8 +172,8 @@ test.describe("Application certification readiness reads the shared evidence sou
       page.locator('[aria-label="Ready for certification"]'),
     ).toHaveCount(0);
 
-    // The gap the badge reports is the evidence gap — the same fact the wizard
-    // blocks on, proving the two derive from one source.
+    // The gap the badge reports is the evidence gap — the same missing fact the
+    // wizard also blocks on (via its own gap computation; see the scope note).
     await incompleteBadge.hover();
     await expect(
       page.getByText("Geotagged photos or boundary evidence required to certify"),
@@ -148,25 +183,13 @@ test.describe("Application certification readiness reads the shared evidence sou
     // completed upload (uploaded photo docs carrying present-geotag metadata).
     const { db, pool } = createDbConnection();
     try {
-      const [application] = await db
-        .select({ id: schema.applications.id })
-        .from(schema.applications)
-        .where(
-          and(
-            eq(schema.applications.fieldIdentifier, fieldIdentifier),
-            eq(schema.applications.organizationId, DEC_ORG_ID),
-          ),
-        )
-        .limit(1);
-      expect(application?.id).toBeTruthy();
-
       await db.insert(schema.documents).values(
         APPLICATION_VISUAL_EVIDENCE_ROLES.map((role) => ({
           organizationId: DEC_ORG_ID,
           entityType: "application" as const,
-          entityId: application!.id,
+          entityId: applicationId,
           documentType: "photo" as const,
-          fileUrl: `https://evidence.example.test/${application!.id}/${role}.jpg`,
+          fileUrl: `https://evidence.example.test/${applicationId}/${role}.jpg`,
           fileName: `${role}.jpg`,
           uploadStatus: "uploaded" as const,
           metadata: { geotagStatus: "present", evidenceRole: role },
@@ -180,7 +203,9 @@ test.describe("Application certification readiness reads the shared evidence sou
     // the entity is certification-ready.
     await page.goto(applicationsUrl);
     await page.waitForLoadState("networkidle");
-    const reloadedRow = page.locator("table tbody tr").first();
+    const reloadedRow = page.locator("table tbody tr", {
+      hasText: applicationCode,
+    });
     await expect(
       reloadedRow.locator('[aria-label="Ready for certification"]'),
     ).toBeVisible({ timeout: 10000 });
