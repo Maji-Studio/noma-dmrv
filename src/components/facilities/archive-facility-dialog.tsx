@@ -124,7 +124,6 @@ export function ArchiveFacilityDialog({
           <Button
             size="large"
             variant="default"
-            className="bg-[var(--color-signal-red)] text-white border-[var(--color-signal-red)] hover:opacity-90"
             onClick={onConfirm}
             disabled={isPending || isLoading || !impact}
           >

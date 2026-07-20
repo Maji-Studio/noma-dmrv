@@ -8,6 +8,7 @@ export * from "./data-table";
 export * from "./dropdown-menu";
 export * from "./empty-state";
 export * from "./input";
+export * from "./list-pagination";
 export * from "./modal";
 export * from "./page-header";
 export * from "./row-actions-menu";

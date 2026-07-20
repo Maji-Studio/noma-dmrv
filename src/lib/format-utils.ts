@@ -124,33 +124,6 @@ export function formatTonnes(
 }
 
 /**
- * Safely format a date string or Date object.
- * Returns "—" for invalid/null dates.
- */
-export function formatSafeDate(
-  dateStr: DateValue,
-  fmt = DATE_FORMAT
-): string {
-  const date = parseDateValue(dateStr);
-  return date ? format(date, fmt) : FALLBACK_DISPLAY;
-}
-
-/**
- * Build a pagination label like "1-12 of 36 items".
- */
-export function getPaginationLabel(
-  page: number,
-  pageSize: number,
-  total: number,
-  entityLabel: string
-): string {
-  if (total === 0) return `No ${entityLabel}`;
-  const start = (page - 1) * pageSize + 1;
-  const end = Math.min(page * pageSize, total);
-  return `${start}-${end} of ${total} ${entityLabel}`;
-}
-
-/**
  * Round a distance in km to a single decimal, locale-grouped, with no unit.
  * Stored distances carry haversine noise (e.g. 61.52174); never surface those
  * raw. Use when the caller appends its own unit casing (e.g. the map's "KM").

@@ -94,7 +94,10 @@ test("read surfaces use canonical dates while native inputs keep ISO values", as
       "Dec 15, 2026 – Jan 10, 2027",
     );
 
-    await sameYearCard.getByRole("button", { name: "Edit", exact: true }).click();
+    await sameYearCard
+      .getByRole("button", { name: `Actions for credit batch ${sameYearCode}` })
+      .click();
+    await page.getByRole("menuitem", { name: "Edit" }).click();
     await waitForSideSheet(page);
     await expect(page.locator('input[name="startDate"]')).toHaveValue(SAME_YEAR_START);
     await expect(page.locator('input[name="endDate"]')).toHaveValue(SAME_YEAR_END);
