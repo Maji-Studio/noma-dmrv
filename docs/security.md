@@ -1,284 +1,228 @@
 # Security Best Practices
 
+What this covers: the security invariants an implementer must not violate — org
+tenancy scoping, error/log handling, env validation and fail-closed gates, and
+secrets management. Read it before touching `data-access/`, `src/config/env.ts`,
+or anything that reads a 1Password item. Route protection, guards and signup
+policy live in [auth.md](./auth.md); the tenancy rationale in
+[ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md).
+
 ## Non-Negotiables
 
-1. Never commit secrets.
-2. Validate user input with Zod.
-3. Enforce authorization in data-access layer.
-4. Avoid logging PII (email, names, tokens).
-5. Prefer Drizzle query builder over raw SQL.
+1. Never commit secrets — document env var **names** only, never values, in code,
+   comments, docs or tests.
+2. Validate user input with Zod (see [forms.md](./forms.md)).
+3. Enforce authorization in the data-access layer — every function calls an auth
+   guard and scopes by organization.
+4. Never log PII (emails, names, tokens) — log stable IDs. The server logger
+   redacts as a backstop, not a license ([architecture.md](./architecture.md)).
+5. Prefer the Drizzle query builder over raw SQL.
 
-## Auth and Authorization Model
+## Tenancy — the #1 invariant
 
-- Route-level protection runs through `proxy.ts` + `src/lib/auth/middleware.ts`.
-- `/api/auth/*` is publicly reachable for Better Auth endpoints.
-- Protected API routes return `401`/`403` JSON when unauthorized.
-- App pages require authentication through the app layout and data-access guards.
-- Admin pages require `requireAdmin()`.
-- Facility context scopes workflows, but it is not a tenant boundary today.
+Multi-tenancy **is implemented**. Every domain table carries
+`organizationId NOT NULL`, enforced across ~211 `src/data-access/` functions.
+Organization is the tenant boundary; facilities are org-owned and facility
+context scopes workflows *within* an org.
 
-## Signup Policy
-
-- `ALLOW_SELF_SIGNUP=false` disables public signup (`emailAndPassword.disableSignUp=true`).
-- `ALLOW_SELF_SIGNUP=true` enables public signup.
-
-## Guard Examples
-
-```ts
-// authenticated app access
-await requireAuth();
-
-// admin guard
-await requireAdmin();
-```
-
-## Data Ownership Posture
-
-noma-dmrv is currently single-org / shared-data. Authenticated users share the operational MRV records, and `userId` columns are attribution fields rather than ownership boundaries.
-
-Before introducing multi-tenant facility ownership, add membership/tenant filters to `src/data-access/` list/query/ensure helpers and cover them with tests.
-
-## Logging Rules
-
-Safe to log:
-
-- user IDs
-- request IDs
-- function names
-- sanitized error messages
-
-Never log:
-
-- emails
-- password/token values
-- API keys/secrets
+- **`organizationId` is always stamped server-side from the session's active
+  organization — never accepted from client input and never present in a Zod
+  form/payload schema.** Adding it to a schema is the default mistake.
+- Guards and helpers: `requireOrgScope`, `assertSameOrg`, `requireOrgFacility`
+  (`src/data-access/utils.ts`); `requireOrgContext`, `requireOrgRole`,
+  `requirePlatformAdmin` (`src/lib/auth/server.ts`). Full guard surface —
+  including `requireAuth` / `requireVerifiedAuth` / `requireAdmin` /
+  `requireAdminAction` — is documented in [auth.md](./auth.md).
+- **Platform Admins bypass org-membership checks entirely** (`requireOrgRole`
+  returns early when `ctx.isPlatformAdmin`). Org isolation is policy toward other
+  organizations, not toward the platform — the platform-admin path is not a leak.
+- The org column is deliberately denormalized so the enforcement point is a
+  uniform, greppable `WHERE organizationId = ctx.orgId`. **New data-access
+  functions must follow that uniform pattern, not derive org through a join
+  chain** — that missed-join leak class has already occurred once
+  (`getSupplierOptions`). See [ADR 0010](./adr/0010-shared-schema-org-column-tenancy.md)
+  and [organization.md](./organization.md).
+- `assertSameOrg` callers inside a transaction MUST pass their `tx` as
+  `executor`, or the pool starves under parallel load.
+- Coverage: `tests/e2e/org-isolation.spec.ts`,
+  `tests/e2e/organization-settings.spec.ts`.
 
 ## Server-Action Error Handling
 
 Raw Drizzle/Postgres error text (SQL plus bound parameter values) must never
-reach the client — bound values are arbitrary user-entered data (names,
-addresses, …) and can themselves be PII. `fn/` catch blocks route unexpected
-errors through `toLoggedActionError` (`src/fn/action-errors.ts`): the real
-error is logged server-side via the structured logger, and the client only
-ever receives a `SafeError` or Zod validation message, or a generic fallback
-otherwise. `sanitizeErrorMessage` (`src/lib/log`) additionally redacts
-everything from a query's `params:` marker onward before logging, so bound
-values never land in server logs either — only the parameterized SQL shape
-is kept for debuggability. Mass-input schemas use the shared caps in
-`src/schemas/helpers` (`MASS_INPUT_MAX_*`) so mass overflows are rejected by Zod
-before they can surface as raw DB errors; integer/count fields use
-`PG_INTEGER_MAX` where they map to Postgres integer columns.
+reach the client — bound values are arbitrary user-entered data and can
+themselves be PII. `fn/` catch blocks route unexpected errors through
+`toLoggedActionError` (`src/fn/action-errors.ts`): the real error is logged
+server-side, and the client only ever receives a `SafeError`, a Zod validation
+message, or a generic fallback. `sanitizeErrorMessage` (`src/lib/log`) redacts
+everything from a query's `params:` marker onward before logging, so bound values
+never land in server logs either — only the parameterized SQL shape.
 
-## Operational Defaults
-
-- Better Auth rate limits are enabled with stricter rules for auth-sensitive endpoints.
-- DB pool limits are centralized in `src/db/index.ts` and configurable via env.
+Mass-input schemas use the shared caps in `src/schemas/helpers.ts`
+(`MASS_INPUT_MAX_*`) so overflows are rejected by Zod before surfacing as raw DB
+errors; integer/count fields use `PG_INTEGER_MAX` where they map to Postgres
+integer columns.
 
 ## Environment Variables
 
-All env vars are validated with **Zod in `src/config/env.ts`**; a `superRefine`
-block enforces cross-field rules (e.g. Isometric token+secret are both-or-neither,
-`local-fs` / `stub` are rejected in production). The app refuses to boot on an
-invalid or missing-required var.
+**Canonical list: the `envSchema` object in `src/config/env.ts`.** Templates:
+`.env.local.tpl` (local 1Password item) and `.env.tpl` (staging item → Vercel
+sync). The app refuses to boot on an invalid or missing required var.
 
-**Document NAMES only, never values** — here, in code, in comments, or in tests.
+Non-obvious semantics only:
 
-Inventory by group (app-validated in `src/config/env.ts`):
+- **Both-or-neither pairs** (`superRefine`): `RESEND_API_KEY` +
+  `RESEND_FROM_EMAIL`; `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
+  (seed/CI-only, not runtime app credentials).
+- **`CREDENTIALS_ENCRYPTION_KEY`** — a hard boot requirement in production (see
+  CI carve-out below). Server-only 32-byte hex/base64 key.
+- **`BETTER_AUTH_SECRET`** and **`STORAGE_SIGNING_SECRET`** — min length 32. In
+  dev/test the local-fs provider falls back to an **ephemeral random signing
+  secret** with a warning, so locally-signed URLs silently break across restarts.
+- **`STORAGE_PREFIX`** — path-traversal validator: no leading `/`, no `//`, no
+  `..` or `.` segments, no trailing `/`, restricted charset.
+- **`STORAGE_ENDPOINT`** — DigitalOcean Spaces regions require it; env parse
+  fails closed rather than minting phantom `amazonaws.com` URLs. See
+  [storage.md](./storage.md).
+- **`DURABILITY_MEASUREMENT_SAMPLES_LIVE`** — sandbox-only; rejected otherwise.
+- **`GEO_PROVIDER`** — `ors` default, `stub` = hermetic test fixtures. See
+  [ADR 0009](./adr/0009-provider-agnostic-server-proxied-geo.md).
 
-- **Core:** `DATABASE_URL`, `NEXT_PUBLIC_APP_URL`, `BETTER_AUTH_SECRET` (32+ chars),
-  `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `ADMIN_EMAIL`, `ALLOW_SELF_SIGNUP`,
-  `NODE_ENV`
-- **Logging / DB pool:** `LOG_LEVEL`, `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`,
-  `DB_POOL_CONNECTION_TIMEOUT_MS`
-- **Storage:** `STORAGE_PROVIDER` (`s3-compatible` required in prod),
-  `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_BUCKET`,
-  `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_SIGNING_SECRET`,
-  `STORAGE_LOCAL_FS_ROOT`
-- **Isometric:** `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
-  (both-or-neither; seed and dedicated CI health inputs only),
-  `CREDENTIALS_ENCRYPTION_KEY` (optional at boot; required when storing or
-  reading per-organization registry credentials),
-  `ISOMETRIC_ENVIRONMENT`, `ISOMETRIC_UPLOAD_HOST_ALLOWLIST`,
-  `ISOMETRIC_STORAGE_REDIRECT_HOSTS` (document-redirect allowlist),
-  `DURABILITY_MEASUREMENT_SAMPLES_LIVE` (sandbox-only opt-in; rejected in
-  production)
-- **Geo / maps** (all optional — graceful degradation): `OPENROUTESERVICE_API_KEY`
-  (server-only geocode/routing), `NEXT_PUBLIC_MAPTILER_KEY` (public,
-  domain-locked basemap key), `GEO_PROVIDER` (`ors` default; `stub` = hermetic
-  test fixtures, rejected in prod)
-
-Not validated by `env.ts` — read directly from `process.env` by scripts/tests:
+Read directly from `process.env`, **not** validated by `env.ts`:
 
 - `ADMIN_PASSWORD` — consumed only by the admin-bootstrap CLI
   (`src/lib/cli/ensure-admin.ts`), never by the running app.
-- `DISABLE_RATE_LIMIT` — test-only toggle read in `src/lib/auth/better-auth.ts`;
-  required for E2E fixtures (see `docs/testing.md`).
+- `DISABLE_RATE_LIMIT` — rate limiting is **opt-out** via a bare
+  `process.env.DISABLE_RATE_LIMIT !== "true"` read
+  (`src/lib/auth/better-auth.ts`). A typo fails safe (limits stay ON), but only
+  the literal string `"true"` disables them; E2E fixtures depend on that exact
+  literal ([testing.md](./testing.md)).
 - `ISOMETRIC_DEMO_PROJECT_ID` — CI/staging smoke-test target.
+
+Both `ADMIN_PASSWORD` and `ISOMETRIC_DEMO_PROJECT_ID` **are** pulled locally via
+`.env.local.tpl`; they are absent from the deployment-facing `.env.tpl` only and
+must be set directly on the staging/production items.
+
+### CI carve-out on the production fail-closed gates
+
+All three production gates — `GEO_PROVIDER=stub`, non-`s3-compatible` storage,
+and missing `CREDENTIALS_ENCRYPTION_KEY` — are **skipped when `CI` is truthy**,
+because hermetic e2e builds a production bundle on purpose. CI local-fs storage
+is additionally only allowed against a localhost `NEXT_PUBLIC_APP_URL`. Real
+deployments never run with `CI` set, so the safeguards hold where they matter.
 
 ### The three environment items intentionally differ
 
 The `local`, `staging`, and `production` 1Password items are **not** copies of
 each other. `local` has its own `DATABASE_URL` (Docker Postgres),
 `NEXT_PUBLIC_APP_URL` (`localhost:3100`), dev admin credentials, and test
-toggles (`DISABLE_RATE_LIMIT`).
+toggles.
 
-Before debugging any env/auth issue, **state your assumptions about local vs.
-deployed config and confirm them against the right item.** The `op` CLI needs
-interactive desktop approval — a sandboxed shell can't reproduce 1Password auth,
-so ask the user to run `op` commands themselves (`! op …`) rather than
-diagnosing around a sign-in you can't perform.
-
-### Storage endpoint gotcha — non-AWS regions need `STORAGE_ENDPOINT`
-
-With `STORAGE_ENDPOINT` unset, the AWS SDK derives the host from
-`STORAGE_REGION` on `amazonaws.com`. A DigitalOcean Spaces region (`fra1`,
-`nyc3`, …) then mints presigned URLs against a hostname that does not exist
-(`bucket.s3.fra1.amazonaws.com` → `ENOTFOUND`) — every upload fails at the
-browser PUT. `src/config/env.ts` fails env parse when a known DO region is
-configured without an endpoint, so a misconfigured deploy refuses to boot
-instead of silently minting phantom URLs.
-
-Fixing an affected environment: add `STORAGE_ENDPOINT`
-(e.g. `https://fra1.digitaloceanspaces.com`) to the environment's 1Password
-item, sync it to the deploy platform, and add the field to
-`.github/workflows/storage-health.yml` and `.env.tpl` so the smoke test and
-drift check cover it. Do the env fix **before** deploying, or the parse
-guard will fail the app closed at boot. `pnpm storage:smoke` (run with the
-target environment's storage vars via `op run`) verifies the full presigned
-round-trip; it does not exercise browser CORS.
+**The `op` CLI needs interactive desktop approval — a sandboxed shell cannot
+reproduce 1Password auth.** Ask the user to run `op` commands themselves
+(`! op …`) rather than diagnosing around a sign-in you can't perform. Before
+debugging any env/auth issue, state your assumptions about local vs. deployed
+config and confirm them against the right item.
 
 ## Secrets Management
 
-Secrets live in **1Password** (vault `Environment Variables`), never in the repo. One item per environment, with fields named exactly like the env vars:
+Secrets live in **1Password** (vault `Environment Variables`), never in the repo.
+One item per environment — `noma-dmrv env {local,staging,production}` — with
+fields named exactly like the env vars. Three consumers:
 
-- `noma-dmrv env staging`, `noma-dmrv env production`, `noma-dmrv env local`
-
-Three consumers read those items:
-
-- **Local dev** — `pnpm env:local` (`scripts/env-local-inject.ts`) injects `.env.local.tpl` into `.env.local` via `op inject`. `.env.local.tpl` is tracked and holds `op://Environment Variables/noma-dmrv env local/<VAR>` references (machine-local values: localhost DB/app URLs, dev admin credentials, test toggles, geo keys); the injected `.env.local` is gitignored. `.env.tpl` is the separate, deployment-facing template — it references the staging item and feeds only the Vercel sync, never a local file.
-- **Vercel** — `pnpm env:vercel`
-  (`scripts/sync-env-to-vercel.ts`) pushes the production item into Vercel
-  Production and the staging item into Vercel Preview. Vercel Development is not
-  synced.
-- **GitHub Actions** — `e2e.yml`, `isometric-health.yml`, and `migrate.yml` resolve `op://` references via `1password/load-secrets-action`, authenticating with a single repo secret **`OP_SERVICE_ACCOUNT_TOKEN`** — a read-only 1Password Service Account scoped to the `Environment Variables` vault. It replaces all per-secret Actions secrets; `CLAUDE_CODE_OAUTH_TOKEN` is the only other one. Staging jobs read the staging item, production jobs the production item. The e2e/health load steps are gated on `OP_SERVICE_ACCOUNT_TOKEN != ''` so fork PRs (which can't read secrets) skip cleanly.
-
-### Per-organization Isometric credentials
-
-Runtime registry credentials are stored per organization in
-`certifier_credentials`. The access token and client secret are encrypted at
-rest with AES-256-GCM using `CREDENTIALS_ENCRYPTION_KEY`; only masked status
-(configured, access-token last four characters, and update time) may cross a
-server-action boundary. Platform Admins manage these write-only values from the
-organization admin area. Certification readiness and live submission fail
-closed when the active organization has no credential row.
-
-`CREDENTIALS_ENCRYPTION_KEY` is a server-only 32-byte hex or base64 key sourced
-from 1Password. It has been added to both `noma-dmrv env staging` and
-`noma-dmrv env production` and synced to Vercel. Keep the same key while
-stored rows exist; rotating it requires re-encrypting or replacing every
-organization's credentials.
-
-`ISOMETRIC_ACCESS_TOKEN` and `ISOMETRIC_CLIENT_SECRET` are no longer runtime app
-credentials. They remain seed/CI-only: `db:ensure-admin` uses the pair to seed
-the default organization's encrypted row when all three values (including the
-encryption key) are present. The read-only `isometric-health.yml` workflow uses
-its dedicated pair directly through `getIsometricClientFromEnv`; it has no app
-database and intentionally receives no `CREDENTIALS_ENCRYPTION_KEY`.
-
-The production bootstrap is a **manual, one-off job**, not part of the automatic
-deployment path. Pushes to `main` run `migrate-production`, which loads only
-`DATABASE_URL` — schema migrations never depend on the admin/registry fields, so
-a renamed 1Password field cannot block them. To initialize a fresh production
-database, dispatch `migrate.yml` on `main` with action `bootstrap-production` and
-the confirmation phrase `BOOTSTRAP PRODUCTION`. That job loads the admin and
-Isometric bootstrap fields and runs `db:ensure-admin` with `NODE_ENV=production`,
-creating the Platform Admin, the default organization, and the encrypted
-per-organization registry credentials, while explicitly skipping the shared
-local/test teammate.
-
-The bootstrap is idempotent and never clobbers live state: in production it
-leaves an existing admin credential account's password untouched and inserts
-registry credentials only when none exist, so operator rotations survive. It
-fails loudly instead of silently degrading — a missing or blank
-`ISOMETRIC_ACCESS_TOKEN`, `ISOMETRIC_CLIENT_SECRET`, or
-`CREDENTIALS_ENCRYPTION_KEY` throws rather than exiting 0 with no credential row.
-The Platform Admin must use the organization invitation flow to add the first
-real Owner.
+- **Local dev** — `pnpm env:local` (`scripts/env-local-inject.ts`) injects
+  `.env.local.tpl` into the gitignored `.env.local` via `op inject`.
+- **Vercel** — `pnpm env:vercel` (`scripts/sync-env-to-vercel.ts`) pushes the
+  production item to Vercel Production and staging to Vercel Preview. Vercel
+  Development is not synced.
+- **GitHub Actions** — `e2e-live.yml`, `isometric-health.yml`,
+  `storage-health.yml` and `migrate.yml` resolve `op://` references via
+  `1password/load-secrets-action`, authenticating with the single repo secret
+  **`OP_SERVICE_ACCOUNT_TOKEN`** (read-only Service Account scoped to that
+  vault). `CLAUDE_CODE_OAUTH_TOKEN` is the only other repo secret. Load steps are
+  gated on `OP_SERVICE_ACCOUNT_TOKEN != ''` so fork PRs skip cleanly. Plain
+  `e2e.yml` uses no 1Password secrets at all.
 
 Notes:
 
 - Rotating a secret = edit the 1Password item. No GitHub or Vercel change needed.
-- Vercel Production/Preview secrets are synced as sensitive, while
-  `NEXT_PUBLIC_*` variables are synced as non-sensitive. Local
-  `vercel build --target=preview` cannot reconstruct sensitive values from
-  Vercel; use local env injection for local builds.
-- Two CI-only fields are **not** in `.env.tpl`, so they aren't pulled locally and must be set directly on the items: `ISOMETRIC_DEMO_PROJECT_ID` (staging) and `ADMIN_PASSWORD` (both items).
-- **Optional vars may be missing from an item.** Both sync scripts pre-check the item's field names and skip template refs with no matching field (per-var warning) instead of letting `op inject` hard-fail. They abort only when a **required** field is missing — `REQUIRED_LOCAL_VARS` / `REQUIRED_DEPLOYED_VARS` in `scripts/env-tpl-utils.ts`, the vars `src/config/env.ts` cannot boot without. `pnpm env:check` reports the same split (missing-optional is advisory; missing-required exits 1).
-- `load-secrets-action` **fails the step** when a referenced `op://` field doesn't exist — it does not skip. Add the field before the workflow runs.
+- Vercel Production/Preview secrets sync as sensitive; `NEXT_PUBLIC_*` as
+  non-sensitive. Local `vercel build --target=preview` cannot reconstruct
+  sensitive values — use local env injection for local builds.
+- **Optional vars may be missing from an item.** Both sync scripts skip template
+  refs with no matching field (per-var warning) and abort only on a missing
+  **required** field (`REQUIRED_LOCAL_VARS` / `REQUIRED_DEPLOYED_VARS` in
+  `scripts/env-tpl-utils.ts`). `pnpm env:check` reports the same split.
+- `load-secrets-action` **fails the step** when a referenced `op://` field does
+  not exist — it does not skip. Add the field before the workflow runs.
+- Never put real keys in code, comments, or docs — use `<REDACTED_API_KEY>` in
+  examples. If a key leaks: rotate it in 1Password immediately, then scrub git
+  history with `git-filter-repo`.
 
-### Post-reset staging runbook — restore the Isometric integration
+### Per-organization Isometric credentials
 
-Both staging reset actions in `migrate.yml` (`reset-seed-staging` and
-`reset-empty-staging`) load only `DATABASE_URL` + `ADMIN_EMAIL`/`ADMIN_PASSWORD`
-— deliberately not the Isometric trio — so `db:ensure-admin` skips the
-credential-row seed. After every staging reset the app therefore has **no
-organization registry credentials and no facility→project link**: Certification
-Settings shows `Credentials: Not configured` and the Removals hub redirects to
-Settings (fail-closed, working as designed; observed in
-`docs/qa/2026-07-15-qa-staging-production-chain.md`, B1).
+Runtime registry credentials are stored per organization in
+`certifier_credentials`, encrypted at rest with AES-256-GCM using
+`CREDENTIALS_ENCRYPTION_KEY`. Only masked status (configured, access-token last
+four, update time) may cross a server-action boundary. Platform Admins manage
+these write-only values from the organization admin area. Certification readiness
+and live submission **fail closed** when the active organization has no
+credential row. Keep the same key while stored rows exist — rotating it requires
+re-encrypting or replacing every organization's credentials.
 
-Manual restore steps (Platform Admin, staging UI):
+`ISOMETRIC_ACCESS_TOKEN` / `ISOMETRIC_CLIENT_SECRET` are seed/CI-only:
+`db:ensure-admin` seeds the default organization's encrypted row when all three
+values are present, and `isometric-health.yml` uses its dedicated pair through
+`getIsometricClientFromEnv` (no app database, no encryption key by design). See
+[isometric/README.md](./isometric/README.md).
 
-1. **Credentials** — organization admin area → enter the sandbox access token
-   and client secret from the `noma-dmrv env staging` 1Password item
-   (`ISOMETRIC_ACCESS_TOKEN` / `ISOMETRIC_CLIENT_SECRET` fields). The deployed
-   env must already have `CREDENTIALS_ENCRYPTION_KEY` (it does; see above).
-2. **Project link** — Certification Settings → link the facility to the
-   sandbox project (`ISOMETRIC_DEMO_PROJECT_ID` field on the staging item) and
-   its removal template.
-3. **Verify** — Certification Settings health shows the credential as
-   configured and the Removals hub loads without redirecting.
+### Database dispatch actions (`migrate.yml`)
 
-Automating this in the reset workflows was considered and deliberately not
-built (decision 2026-07-15): the manual step keeps sandbox tokens out of the
-reset path and forces an explicit check that staging points at the intended
-sandbox project after a wipe.
+Pushes to `main` run `migrate-production`, which loads only `DATABASE_URL` — a
+renamed 1Password field cannot block schema migrations. Everything destructive is
+a manual `workflow_dispatch` with a typed confirmation phrase:
 
-### Never expose real keys
+| action | confirmation |
+| --- | --- |
+| `reset-seed-staging` | `RESET AND SEED STAGING` |
+| `reset-empty-staging` | `RESET STAGING (EMPTY)` |
+| `bootstrap-production` | `BOOTSTRAP PRODUCTION` |
+| `reset-production` | `RESET PRODUCTION` + `authorized` checkbox |
 
-- Never put real keys in code, comments, or docs — use the placeholder
-  `<REDACTED_API_KEY>` when an example needs one.
-- **If a key leaks:** rotate it immediately (edit the 1Password item), then
-  scrub it from git history with `git-filter-repo`.
-- Review PR diffs for accidental secret exposure before merging.
+`reset-production` wipes production and is the most dangerous operation in the
+repo — it requires the explicit `authorized` approval checkbox in addition to the
+phrase.
+
+`bootstrap-production` runs `db:ensure-admin` with `NODE_ENV=production`, creating
+the Platform Admin, the default organization and encrypted registry credentials,
+skipping the shared local/test teammate. It is idempotent and never clobbers live
+state (existing admin password untouched; credentials inserted only when none
+exist) and fails loudly rather than exiting 0 without a credential row. The
+Platform Admin must use the organization invitation flow to add the first real
+Owner.
+
+**Staging resets deliberately do not load the Isometric trio**, so after a reset
+the org has no registry credentials and no facility→project link: Certification
+Settings shows `Credentials: Not configured` and the Removals hub fails closed by
+redirecting to Settings. Restore manually via the organization admin area
+(credentials from the staging item) and Certification Settings (project link).
+
+## Operational Defaults
+
+- Better Auth rate limits are on by default, stricter for auth-sensitive
+  endpoints.
+- DB pool limits are centralized in `src/db/index.ts`, configurable via env.
 
 ## Dependency Supply Chain
 
-Two layers of protection against compromised npm packages (configured 2026-06-11):
-
-**Release-age cooldown** — `pnpm-workspace.yaml` sets `minimumReleaseAge: 4320` (3 days, in minutes). The resolver ignores versions published less than 3 days ago, so `pnpm update`/`pnpm install` never picks up a freshly published (potentially compromised) release. Most registry compromises are detected and yanked within hours. No workflow change: run `pnpm update` whenever — it just sees a 3-day-delayed registry.
-
-**Build-script gating** — `allowBuilds` in `pnpm-workspace.yaml` allowlists the only packages permitted to run install scripts (the most common malware payload vector). New packages needing build scripts must be added there deliberately.
-
-**Dependabot (security-only)** — Dependabot alerts + security updates are enabled on the repo. `.github/dependabot.yml` sets `open-pull-requests-limit: 0`, which disables routine version-bump PRs; only security-fix PRs are opened. Severity filtering (e.g. critical-only) is done via auto-triage rules in repo Settings → Advanced Security → Dependabot, not in `dependabot.yml`.
-
-Handling a security PR that needs code changes:
-
-- CI green → merge as-is.
-- CI red → `gh pr checkout <n>`, fix the code, push to the same branch (Dependabot stops rebasing once you push). Bump + adaptation merge together.
-- Major migration → close the Dependabot PR and do it as normal feature work; Dependabot auto-closes once the lockfile is no longer vulnerable.
-
-If a patched version is younger than the 3-day cooldown, add a temporary per-package exception instead of lowering the global setting:
-
-```yaml
-minimumReleaseAgeExclude:
-  - vulnerable-pkg # remove after updating
-```
-
-## Minimal Security Test Checklist
-
-- Unauthorized API requests are blocked.
-- Signup policy follows `ALLOW_SELF_SIGNUP`.
-- Admin routes reject non-admin users.
-- Data-access functions do not leak unauthenticated data.
-- Logs contain stable IDs, not emails, names, tokens, or secrets.
+- **Release-age cooldown** — `minimumReleaseAge` in `pnpm-workspace.yaml` makes
+  the resolver ignore freshly published versions, so `pnpm update`/`install`
+  cannot pick up a just-compromised release. Use a per-package
+  `minimumReleaseAgeExclude` entry if a security patch is younger than the
+  cooldown; never lower the global setting.
+- **Build-script gating** — `allowBuilds` in `pnpm-workspace.yaml` allowlists the
+  only packages permitted to run install scripts.
+- **Dependabot (security-only)** — `.github/dependabot.yml` sets
+  `open-pull-requests-limit: 0`, disabling routine version bumps; only
+  security-fix PRs open. Severity filtering lives in repo Settings → Advanced
+  Security auto-triage rules, not in `dependabot.yml`.
