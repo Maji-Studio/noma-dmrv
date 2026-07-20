@@ -175,7 +175,7 @@ test.describe("Deep-linked facility resolves on direct navigation (#473)", () =>
     // The resolved list surface renders (its create affordance only exists once
     // a facility is selected) — never the "Select a facility" gate.
     await expect(
-      page.getByRole("button", { name: "New Reactor", exact: true }),
+      page.getByRole("button", { name: "New Reactor", exact: true }).first(),
     ).toBeVisible({ timeout: 20000 });
     await expect(
       page.getByRole("heading", { name: "Select a facility", exact: true }),

@@ -29,7 +29,7 @@ import {
 } from "@/db/schema/credits";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { createCreditBatch } from "@/data-access/credit-batches";
-import { createSample } from "@/data-access/samples";
+import { createSample, updateSample } from "@/data-access/samples";
 import { withAutoCode } from "@/data-access/code-generator";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000395";
@@ -246,5 +246,70 @@ describe("sample_code uniqueness is DB-enforced (issue #395)", () => {
     for (const code of codes) {
       expect(code).toMatch(/^SAM-\d{2}-\d{3,}$/);
     }
+  });
+});
+
+describe("updateSample reconciles carbon against the stored state (QA 2026-07-20)", () => {
+  it("rejects a partial update whose effective organic carbon exceeds the stored total", async () => {
+    // Seeded with totalCarbonPercent 80 / organicCarbonPercent 78; patching
+    // only the organic value must be validated against the STORED total —
+    // the update schema alone cannot see it.
+    const { id } = await createConcurrentSample(undefined);
+
+    await expect(
+      updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+        organicCarbonPercent: 95,
+      }),
+    ).rejects.toThrow(/Organic carbon cannot exceed total carbon/);
+  });
+
+  it("rejects when all three carbon keys are explicitly present but undefined for the unrelated ones (mirrors the real fn payload shape)", async () => {
+    // Regression pin for the P1 fix: src/fn/samples.ts always spells out all
+    // three carbon keys on the object passed to updateSample, even when a
+    // value is undefined for that call. A `"key" in data` check is therefore
+    // always true and must not be reintroduced — this uses `!== undefined`
+    // semantics that must still fall back to the stored total.
+    const { id } = await createConcurrentSample(undefined);
+    await expect(
+      updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+        totalCarbonPercent: undefined,
+        organicCarbonPercent: 95,
+        inorganicCarbonPercent: undefined,
+      }),
+    ).rejects.toThrow(/Organic carbon cannot exceed total carbon/);
+  });
+
+  it("accepts a partial update that stays reconciled with the stored total", async () => {
+    const { id } = await createConcurrentSample(undefined);
+
+    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+      organicCarbonPercent: 75,
+    });
+    expect(updated.organicCarbonPercent).toBe(75);
+  });
+
+  // The organic + inorganic branch was previously unexercised: every case above
+  // patches organic alone and asserts the first branch's message, so a flipped
+  // sum or a dropped `inorganic != null` short-circuit would go unnoticed.
+  // Seeded with total 80 / organic 78, so inorganic 5 puts the sum at 83.
+  it("rejects when stored organic plus patched inorganic exceeds the stored total", async () => {
+    const { id } = await createConcurrentSample(undefined);
+
+    await expect(
+      updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+        inorganicCarbonPercent: 5,
+      }),
+    ).rejects.toThrow(
+      /Organic plus inorganic carbon cannot exceed total carbon/,
+    );
+  });
+
+  it("accepts an explicit null inorganic patch (the null short-circuit)", async () => {
+    const { id } = await createConcurrentSample(undefined);
+
+    const updated = await updateSample(makeTestOrgContext(TEST_USER_ID), id, {
+      inorganicCarbonPercent: null,
+    });
+    expect(updated.inorganicCarbonPercent).toBeNull();
   });
 });
