@@ -6,7 +6,7 @@ Guards live in `src/lib/auth/server.ts`; the client hook `useAuth` is exported f
 
 ## The redirect-vs-throw invariant
 
-`requireAuth()` / `requireVerifiedAuth()` / `requireAdmin()` call `redirect()`, which throws a `NEXT_REDIRECT` control-flow signal. Any try/catch — including `withAction` — swallows it and lets the caller through. **This is an auth bypass, not a cosmetic bug.**
+`requireAuth()` / `requireVerifiedAuth()` / `requireAdmin()` call `redirect()`, which throws a `NEXT_REDIRECT` control-flow signal. `withAction` catches it after the callback stops and converts it into a generic action failure, so the user sees a confusing error instead of a redirect and the redirecting guard silently does not do its job. A hand-written catch that continues execution would be a real auth bypass.
 
 - Layouts and pages → `requireAuth()`, `requireVerifiedAuth()`, `requireAdmin()` (redirecting).
 - Server actions and anything inside try/catch → `requireOrgContext()`, `requireAdminAction()` / `requirePlatformAdmin()` (throw `SafeError`). `requirePlatformAdmin` is an alias for `requireAdminAction`.
@@ -26,7 +26,7 @@ Next.js 16 uses `src/proxy.ts` (Node runtime, so Better Auth can use Node crypto
 
 `users.role` distinguishes a global Platform Admin (`admin`) from a normal user (`user`). Organization membership lives in `members` with the hierarchy Owner ⊃ Admin ⊃ Member. See [organization.md](./organization.md).
 
-- **Session cookie cache is on with `maxAge: 5 * 60`.** A role change, org switch, or revoked membership can take up to 5 minutes to show up in `session.session.activeOrganizationId`. This is the usual cause of "I fixed permissions but it still says unauthorized". `getUser()` deliberately re-reads `users.role` from the DB, so `requireAdmin` is not subject to this lag — org context is.
+- **Session cookie cache is on with `maxAge: 5 * 60`.** Changes to cached session fields — notably an org switch's `activeOrganizationId` — can take up to 5 minutes to show up. `getOrgContext()` re-reads membership on every call, so revocations are immediate. `getUser()` deliberately re-reads `users.role` from the DB, so `requireAdmin` is not subject to this lag.
 - **`getOrgContext()` returns `null`, it does not throw,** when an `activeOrganizationId` is set but the user is neither a member nor a Platform Admin. Do not read `null` as "signed out".
 - **`OrgContext.orgRole` is `null` for a Platform Admin acting inside an org they don't belong to.** Never compare or rank `ctx.orgRole` directly — that wrongly denies Platform Admins. Use `requireOrgRole(ctx, minRole)`, which short-circuits on `isPlatformAdmin` first.
 - **How `activeOrganizationId` gets set:** a `databaseHooks.session.create.before` hook auto-selects it only when the user has exactly one membership, or when a Platform Admin has zero memberships and exactly one organization exists. Everyone else lands with no active org and goes through the switcher. The Platform Admin branch is coupled to `MAX_ORGANIZATIONS_UNTIL_PR2` and stops being safe once a second org exists.
@@ -35,7 +35,7 @@ Next.js 16 uses `src/proxy.ts` (Node runtime, so Better Auth can use Node crypto
 
 ## Server actions
 
-`withAction` resolves `requireOrgContext()` for you and hands the callback `ctx`. Do not call it again by hand. Exported server actions end in `Fn` (e.g. `createFacilityFn`).
+`withAction` resolves `requireOrgContext()` for you and hands the callback `ctx`. Do not call it again by hand. Nearly all exported server actions end in `Fn` (e.g. `createFacilityFn`); `src/fn/organizations.ts` uses the `Action` suffix.
 
 ```ts
 export async function getProductionProcessSummariesByFacilityFn(facilityId: string) {

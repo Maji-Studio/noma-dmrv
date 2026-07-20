@@ -74,6 +74,7 @@ Non-obvious semantics only:
 - **Both-or-neither pairs** (`superRefine`): `RESEND_API_KEY` +
   `RESEND_FROM_EMAIL`; `ISOMETRIC_ACCESS_TOKEN` + `ISOMETRIC_CLIENT_SECRET`
   (seed/CI-only, not runtime app credentials).
+- **`ALLOW_SELF_SIGNUP` defaults to `false`**; setting it to `true` opens public signup.
 - **`CREDENTIALS_ENCRYPTION_KEY`** — a hard boot requirement in production (see
   CI carve-out below). Server-only 32-byte hex/base64 key.
 - **`BETTER_AUTH_SECRET`** and **`STORAGE_SIGNING_SECRET`** — min length 32. In

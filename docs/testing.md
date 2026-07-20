@@ -81,9 +81,9 @@ pages and contexts for admin/operator/labTechnician/viewer, plus `seededData`,
 
 ## Parallelism
 
-`fullyParallel: false`, workers default to 1 locally; CI runs **4 shards × 2 workers with
-1 retry**. Specs may assume serial execution *within* a shard but must not assume any
-global ordering across shards.
+`fullyParallel: false` serializes tests only within a single file. Locally,
+`workers` is unset (Playwright's default); CI runs **4 shards × 2 workers with 1
+retry**. Specs must not assume ordering across files, workers, or shards.
 
 ## Gotchas
 

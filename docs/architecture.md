@@ -57,8 +57,9 @@ export async function createItem(input: CreateItem) {
 ```
 
 Rate limiting is opt-in per action: `withAction(fn, { rateLimit: { key, max,
-windowMs } })`, checked after auth so it keys on the resolved `userId`. Only
-expensive actions (certification submit) pass it.
+windowMs } })`, checked after auth so it keys on the resolved `userId`. It
+applies to expensive or abuse-prone actions: certification submits and geo
+geocode/route are the current users.
 
 ### `SafeError` vs `Error`
 
@@ -138,7 +139,9 @@ a Turbopack/Vercel runtime bug.
 - `outputFileTracingIncludes` broadly includes the evidence-ledger TTFs because
   `src/lib/certification/evidence-ledger/fonts.ts` reads them via a runtime
   `process.cwd()` path the static tracer cannot follow. Narrowing this glob
-  breaks Removal submission **in production only**.
+  lets the Removal submit successfully in production but without its
+  evidence-ledger Source — silent compliance-evidence loss that is harder to
+  detect than a submission failure.
 
 ## Database Boundaries
 
@@ -180,17 +183,18 @@ components/certification/  →  hooks/use-certification.ts  →  fn/certificatio
 The one non-obvious rule: **`lib/isometric/` is pure** — no DB, no auth, no
 `ActionResult`.
 
-**Idempotency:** every outbound POST runs through `certification_submissions` as
-both lock and ledger — `lockedAt` blocks concurrent in-flight retries,
-`payloadHash` (canonical-JSON sha256) identifies replayable submissions,
-`version` tracks supersedes. The retry-decision gate is centralized in
+**Idempotency:** Removal and GHG-Statement submission POSTs run through
+`certification_submissions` as both lock and ledger — `lockedAt` blocks
+concurrent in-flight retries, `payloadHash` (canonical-JSON sha256) identifies
+replayable submissions, `version` tracks supersedes. The retry-decision gate is centralized in
 `src/lib/isometric/utils/submission-claim.ts` (`decideSubmissionClaim`) and
 applied identically by `submitRemoval` (one row per Removal, keyed
 `localEntityType:'removal'`) and `submitGhgStatementToVerifier` (one row per GHG
-Statement). Every HTTP attempt appends to `certifier_sync_events` (append-only
-audit; never used for state). See ADR
+Statement). Every submission HTTP attempt appends to `certifier_sync_events`
+(append-only audit; never used for state). See ADR
 [0003](./adr/0003-removal-as-submission-unit.md) and
-[0008](./adr/0008-submission-ledger-internal-seam.md).
+[0008](./adr/0008-submission-ledger-internal-seam.md). Source and sensor
+creation POST directly and reconcile through separate state.
 
 **Source-data immutability:** once a Removal, telemetry upload, or GHG Statement
 has a blocking ledger row (`draft`, `submitted`, `accepted`), its upstream
@@ -209,10 +213,11 @@ Processes · Settings. Root `/certification` redirects to Removals preserving
 Removals are created through the New-Removal wizard. Settings holds the
 facility↔project link and emission/LCA config.
 
-**`CertificationRegistryGuard`** (`src/components/certification/`) gates every
-`/certification/*` route on the facility having a registry link — mounted in the
-certification layout and independently on production-processes. **New
-certification routes must sit inside that guard.**
+**`CertificationRegistryGuard`** (`src/components/certification/`) gates the
+operational `/certification/*` routes on the facility having a registry link;
+Settings stays open. It is mounted in the certification layout and independently
+on production-processes. **New operational certification routes must sit inside
+that guard.**
 
 Credit-batch detail and health surfaces show readiness/membership/blockers but
 never submit — submission is consolidated in the workspace. Phase status and
