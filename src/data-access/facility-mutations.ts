@@ -9,6 +9,7 @@ import {
   withUniqueCodeGuard,
 } from "./code-generator";
 import { acquireFacilityDurabilityLock } from "./facility-durability-lock";
+import { guardFacilityName } from "./unique-name-guards";
 import { requireOrgScope } from "./utils";
 
 const TIER_LOCKING_BATCH_STATUSES = ["verified", "issued"] as const;
@@ -45,23 +46,25 @@ export async function createFacility(
 ): Promise<Facility> {
   requireOrgScope(ctx);
 
-  const [facility] = await db
-    .insert(facilities)
-    .values({
-      organizationId: ctx.organizationId,
-      code: data.code,
-      name: data.name,
-      country: data.country,
-      location: data.location ?? null,
-      address: data.address ?? null,
-      gpsLatitude: data.gpsLatitude ?? null,
-      gpsLongitude: data.gpsLongitude ?? null,
-      timezone: data.timezone,
-      contactEmail: data.contactEmail ?? null,
-      contactPhone: data.contactPhone ?? null,
-      durabilityOption: data.durabilityOption ?? "1000_year",
-    })
-    .returning();
+  const [facility] = await guardFacilityName(ctx, data.name, () =>
+    db
+      .insert(facilities)
+      .values({
+        organizationId: ctx.organizationId,
+        code: data.code,
+        name: data.name,
+        country: data.country,
+        location: data.location ?? null,
+        address: data.address ?? null,
+        gpsLatitude: data.gpsLatitude ?? null,
+        gpsLongitude: data.gpsLongitude ?? null,
+        timezone: data.timezone,
+        contactEmail: data.contactEmail ?? null,
+        contactPhone: data.contactPhone ?? null,
+        durabilityOption: data.durabilityOption ?? "1000_year",
+      })
+      .returning(),
+  );
 
   return facility;
 }
@@ -73,22 +76,29 @@ async function updateFacilityRow(
   data: FacilityUpdateData,
 ): Promise<Facility> {
   requireOrgScope(ctx);
-  const [updated] = await withUniqueCodeGuard(
-    ctx,
-    facilities,
-    facilities.code,
-    CODE_CONFLICT_MESSAGES.facility,
-    () =>
-      executor
-        .update(facilities)
-        .set({ ...data, updatedAt: new Date() })
-        .where(
-          and(
-            eq(facilities.id, facilityId),
-            eq(facilities.organizationId, ctx.organizationId),
-          ),
-        )
-        .returning(),
+  // A rename can collide with another facility's name in the same org; the name
+  // guard translates that unique-index violation, nested inside the code guard
+  // so each constraint maps to its own friendly message. `data.name` is absent
+  // when the update does not touch the name, in which case no name violation is
+  // possible and the guard is a passthrough.
+  const [updated] = await guardFacilityName(ctx, data.name ?? "", () =>
+    withUniqueCodeGuard(
+      ctx,
+      facilities,
+      facilities.code,
+      CODE_CONFLICT_MESSAGES.facility,
+      () =>
+        executor
+          .update(facilities)
+          .set({ ...data, updatedAt: new Date() })
+          .where(
+            and(
+              eq(facilities.id, facilityId),
+              eq(facilities.organizationId, ctx.organizationId),
+            ),
+          )
+          .returning(),
+    ),
   );
   if (!updated) throw new SafeError("Facility not found");
   return updated;
