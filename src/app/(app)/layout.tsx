@@ -3,7 +3,7 @@
  * Provides sidebar navigation and authenticated layout wrapper
  */
 import { getOrgContext, requireAuth } from "@/lib/auth/server";
-import { AppSidebar, FacilityGate, MobileNav } from "@/components/navigation";
+import { AppSidebar, MobileNav } from "@/components/navigation";
 import { FacilityProvider } from "@/components/navigation/facility-provider";
 import { SessionSignOutListener } from "@/components/auth/session-signout-listener";
 
@@ -30,9 +30,7 @@ export default async function AppLayout({
       <div className="min-h-screen flex flex-col md:flex-row">
         <AppSidebar />
         <MobileNav />
-        <main className="flex-1 min-w-0 overflow-auto">
-          <FacilityGate>{children}</FacilityGate>
-        </main>
+        <main className="flex-1 min-w-0 overflow-auto">{children}</main>
       </div>
     </FacilityProvider>
   );
