@@ -8,6 +8,7 @@ import { productionRuns, facilities, storageLocations } from "@/db/schema";
 import { productionRunDateExpr } from "@/data-access/production-runs/date-expr";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
+import { formatDate } from "@/lib/format-utils";
 import { requireOrgScope } from "../utils";
 
 // Deterministic integer formatting. Bare `Number.prototype.toLocaleString()`
@@ -17,12 +18,8 @@ const INTEGER_FORMATTER = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
-// `r.date` is a 'YYYY-MM-DD' date-column string. `new Date(str)` parses it as
-// UTC midnight and `toLocaleDateString()` then renders it in the server's
-// timezone/locale, which can shift the day by one and vary the format. The
-// stored ISO string is already unambiguous, so display it verbatim.
 function formatRunDate(date: string | null, fallback: string): string {
-  return date ?? fallback;
+  return date ? formatDate(date) : fallback;
 }
 
 export async function getProductionRunsEntity(ctx: OrgContext, params: {

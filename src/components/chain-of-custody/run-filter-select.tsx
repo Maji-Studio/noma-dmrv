@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { CaretDownIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 
 export interface RunFilterOption {
   id: string;
@@ -161,7 +161,7 @@ export function RunFilterSelect({
                 {run.code}
               </span>
               <span className="mt-2 block body-small text-[var(--color-text-secondary)]">
-                {formatSafeDate(run.date, "MMM d, yyyy")} ·{" "}
+                {formatDate(run.date)} ·{" "}
                 {run.applicationCount}{" "}
                 {run.applicationCount === 1 ? "application" : "applications"}
               </span>

@@ -1,7 +1,7 @@
 import dagre from "@dagrejs/dagre";
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 import type { ChainNodeData } from "./chain-node";
 import {
   DAGRE_CONFIG,
@@ -163,7 +163,7 @@ function computeEdgeShareLabels(edges: Edge[]): void {
 
 function formatDateOrNull(value: Date | string | null | undefined): string | null {
   if (!value) return null;
-  const formatted = formatSafeDate(value, "MMM d, yyyy");
+  const formatted = formatDate(value);
   return formatted === "—" ? null : formatted;
 }
 

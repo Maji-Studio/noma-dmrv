@@ -49,7 +49,7 @@ import {
 } from "@/schemas/applications";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 
 // ============================================
 // Column Definitions
@@ -71,7 +71,7 @@ function createColumns(
       accessorKey: "applicationDate",
       header: "Date",
       cell: ({ row }) => (
-        <span>{formatSafeDate(row.original.applicationDate)}</span>
+        <span>{formatDate(row.original.applicationDate)}</span>
       ),
     },
     {
@@ -411,7 +411,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     sideSheetMode === "create"
       ? undefined
       : sideSheetEntity
-        ? formatSafeDate(sideSheetEntity.applicationDate)
+        ? formatDate(sideSheetEntity.applicationDate)
         : undefined;
 
   return (
@@ -550,7 +550,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               { label: "Code", value: sideSheetEntity.code },
               {
                 label: "Application Date",
-                value: formatSafeDate(sideSheetEntity.applicationDate),
+                value: formatDate(sideSheetEntity.applicationDate),
               },
               {
                 label: "Status",

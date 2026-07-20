@@ -16,9 +16,8 @@ import { numericAggregate, sumNumeric } from "@/db/aggregate";
 import { biocharProducts, customers, deliveries, orders } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
+import { formatDate } from "@/lib/format-utils";
 import { requireOrgScope } from "../utils";
-import { formatLocalDate } from "@/lib/date-utils";
-
 
 // Deterministic integer formatting — pin the locale so the label can't vary
 // with the server's locale (same rationale as production-runs.ts).
@@ -80,7 +79,7 @@ function toEntityOption(r: {
     subtitle: [
       r.customerName,
       r.biocharProductCode,
-      formatLocalDate(r.orderDate),
+      formatDate(r.orderDate),
       `${INTEGER_FORMATTER.format(Math.round(remainingKg))} kg remaining`,
     ]
       .filter(Boolean)

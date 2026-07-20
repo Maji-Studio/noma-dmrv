@@ -34,7 +34,7 @@ import {
   type ApplicationVisualEvidenceRole,
 } from "@/lib/certification/application-evidence";
 import { InfoHint } from "@/components/ui/tooltip";
-import { formatFileSize } from "@/lib/format-utils";
+import { formatDate, formatFileSize } from "@/lib/format-utils";
 import type { DocumentRow } from "@/data-access/documents";
 import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
@@ -170,7 +170,7 @@ function EvidenceDocumentList({
               <span className="body-caption text-[var(--color-text-tertiary)]">
                 {formatFileSize(doc.fileSizeBytes)}
                 {doc.capturedAt
-                  ? ` · ${new Date(doc.capturedAt).toLocaleDateString()}`
+                  ? ` · ${formatDate(doc.capturedAt)}`
                   : ""}
                 {logbookEvidenceType
                   ? ` · ${APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS[logbookEvidenceType]}`

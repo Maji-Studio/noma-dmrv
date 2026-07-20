@@ -22,7 +22,7 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatSafeDate, formatMass } from "@/lib/format-utils";
+import { formatDate, formatMass } from "@/lib/format-utils";
 import { FeedstockForm } from "./feedstock-form";
 import {
   TransportEvidencePanel,
@@ -61,7 +61,7 @@ function createColumns(
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <CalendarIcon size={16} className="text-[var(--color-text-tertiary)]" />
-          <span>{formatSafeDate(row.original.deliveryDate)}</span>
+          <span>{formatDate(row.original.deliveryDate)}</span>
         </div>
       ),
     },
@@ -519,7 +519,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             title: "Delivery Information",
             fields: [
               { label: "Facility", value: sideSheetEntity.facilityName },
-              { label: "Delivery Date", value: formatSafeDate(sideSheetEntity.deliveryDate) },
+              { label: "Delivery Date", value: formatDate(sideSheetEntity.deliveryDate) },
               { label: "Supplier", value: sideSheetEntity.supplierName },
               { label: "Supplier Code", value: sideSheetEntity.supplierCode },
               { label: "Vehicle", value: sideSheetEntity.vehiclePlateNumber },

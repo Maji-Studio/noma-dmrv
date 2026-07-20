@@ -10,6 +10,7 @@
  */
 import { CaretDownIcon } from "@phosphor-icons/react/dist/ssr";
 import type { CertifierSyncEventRow } from "@/data-access/certification";
+import { formatDateTime } from "@/lib/format-utils";
 
 const COMPACT_DEFAULT_LIMIT = 5;
 
@@ -79,7 +80,7 @@ export function SyncEventLog({
                   {event.operation}
                 </span>
                 <span className="text-[var(--color-text-tertiary)]">
-                  {new Date(event.attemptedAt).toLocaleString()}
+                  {formatDateTime(event.attemptedAt)}
                 </span>
               </div>
               {event.errorMessage && (
@@ -121,7 +122,7 @@ export function SyncEventLog({
               className="border-b border-[var(--color-border-secondary)] last:border-b-0"
             >
               <Td className="font-mono text-[11px]">
-                {new Date(event.attemptedAt).toLocaleString()}
+                {formatDateTime(event.attemptedAt)}
               </Td>
               <Td className="font-mono text-[11px]">{event.operation}</Td>
               <Td>

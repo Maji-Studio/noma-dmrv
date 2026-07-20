@@ -11,7 +11,7 @@
 
 import { numericValue } from "@/lib/form-utils";
 import { formatLocalDate } from "@/lib/date-utils";
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
 import { useEffect } from "react";
@@ -365,7 +365,7 @@ export function ApplicationForm({
     ) {
       setError("applicationDate", {
         type: "manual",
-        message: `Application date cannot be before the delivery date (${formatSafeDate(selectedDelivery.deliveryDate)})`,
+        message: `Application date cannot be before the delivery date (${formatDate(selectedDelivery.deliveryDate)})`,
       });
       return;
     }

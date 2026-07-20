@@ -25,17 +25,11 @@ import {
   certifierCredentialsFormSchema,
   type CertifierCredentialsFormInput,
 } from "@/schemas/organizations";
+import { formatDateTime } from "@/lib/format-utils";
 
 interface OrganizationCertifierCredentialsProps {
   organizationId: string;
   organizationName: string;
-}
-
-function formatUpdatedAt(value: Date): string {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
 }
 
 export function OrganizationCertifierCredentials({
@@ -124,7 +118,7 @@ export function OrganizationCertifierCredentials({
             </span>
             {status.updatedAt && (
               <span className="body-caption text-[var(--color-text-secondary)]">
-                Updated {formatUpdatedAt(status.updatedAt)}
+                Updated {formatDateTime(status.updatedAt)}
               </span>
             )}
           </div>

@@ -6,7 +6,7 @@ import {
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDateRange } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 import {
   formatCreditBatchStatus,
@@ -123,8 +123,7 @@ export function CreditBatchCardSelector({
                   </div>
 
                   <p className="body-caption text-[var(--color-text-secondary)]">
-                    {formatSafeDate(batch.startDate)} —{" "}
-                    {formatSafeDate(batch.endDate)}
+                    {formatDateRange(batch.startDate, batch.endDate)}
                   </p>
 
                   <div className="flex items-center justify-between gap-8 body-caption text-[var(--color-text-tertiary)]">

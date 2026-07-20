@@ -1,6 +1,6 @@
 "use client";
 
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDateRange } from "@/lib/format-utils";
 import {
   CertificateIcon,
   CheckCircleIcon,
@@ -93,8 +93,7 @@ export function CreditBatchCard({
         {/* Crediting period + facility */}
         <div>
           <h3 className="title-heading-3 text-[var(--color-text-primary)]">
-            {formatSafeDate(creditBatch.startDate)} —{" "}
-            {formatSafeDate(creditBatch.endDate)}
+            {formatDateRange(creditBatch.startDate, creditBatch.endDate)}
           </h3>
           <p className="mt-6 body-caption text-[var(--color-text-tertiary)]">
             {creditBatch.facility?.name ?? "No facility"}

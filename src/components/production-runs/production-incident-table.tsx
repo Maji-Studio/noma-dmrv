@@ -23,15 +23,7 @@ import {
   type ProductionIncidentFormData,
 } from "@/schemas/production-incidents";
 import type { ProductionIncidentWithRelations } from "@/data-access/production-incidents";
-
-function formatTimestamp(d: Date): string {
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+import { formatDateTime } from "@/lib/format-utils";
 
 interface ProductionIncidentTableProps {
   productionRunId: string;
@@ -150,7 +142,7 @@ export function ProductionIncidentTable({
                   className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-background-medium)]"
                 >
                   <td className="py-8 pr-12 font-medium">
-                    {formatTimestamp(incident.incidentTime)}
+                    {formatDateTime(incident.incidentTime)}
                   </td>
                   <td className="py-8 pr-12">
                     {incident.severity ? formatProductionIncidentSeverity(incident.severity) : "\u2014"}

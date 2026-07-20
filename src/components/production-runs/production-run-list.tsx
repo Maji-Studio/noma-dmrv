@@ -42,7 +42,7 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatSafeDate } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
 import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
@@ -101,7 +101,7 @@ function createColumns(
     {
       accessorKey: "date",
       header: "Date",
-      cell: ({ row }) => formatSafeDate(row.original.date),
+      cell: ({ row }) => formatDate(row.original.date),
     },
     {
       id: "facility",
@@ -486,7 +486,7 @@ export function ProductionRunList() {
     sideSheetMode === "create"
       ? undefined
       : sideSheetEntity
-        ? formatSafeDate(sideSheetEntity.date)
+        ? formatDate(sideSheetEntity.date)
         : undefined;
 
   return (
@@ -627,7 +627,7 @@ export function ProductionRunList() {
             title: "General",
             fields: [
               { label: "Code", value: sideSheetEntity.code },
-              { label: "Date", value: formatSafeDate(sideSheetEntity.date) },
+              { label: "Date", value: formatDate(sideSheetEntity.date) },
               { label: "Status", value: <RunStatusBadge status={sideSheetEntity.status} /> },
               {
                 label: "Certification",

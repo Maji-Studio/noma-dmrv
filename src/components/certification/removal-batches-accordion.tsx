@@ -19,6 +19,7 @@ import { Accordion } from "@/components/ui/accordion";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { formatCreditBatchStatus } from "@/schemas/credit-batches";
 import type { RemovalCreditBatchSummary } from "@/fn/certification/ghg-statements";
+import { formatDate, formatDateRange } from "@/lib/format-utils";
 
 export interface RemovalAccordionEntry {
   removalId: string;
@@ -58,7 +59,7 @@ export function RemovalBatchesAccordion({
                 </span>
                 {entry.completedOn && (
                   <span className="body-caption text-[var(--color-text-tertiary)] shrink-0">
-                    {entry.completedOn}
+                    {formatDate(entry.completedOn)}
                   </span>
                 )}
                 {entry.badge}
@@ -97,7 +98,7 @@ export function RemovalBatchesAccordion({
                             {batch.code}
                           </span>
                           <span className="body-caption text-[var(--color-text-tertiary)]">
-                            {batch.startDate} → {batch.endDate}
+                            {formatDateRange(batch.startDate, batch.endDate)}
                           </span>
                         </span>
                         <StatusBadge

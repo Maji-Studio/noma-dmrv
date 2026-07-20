@@ -18,20 +18,11 @@ import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
+import { formatDateTime } from "@/lib/format-utils";
 
 // ============================================
 // Helpers
 // ============================================
-
-function formatTimestamp(d: Date | string): string {
-  const date = typeof d === "string" ? new Date(d) : d;
-  return date.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function formatNum(v: number | null, decimals = 1): string {
   if (v == null) return "—";
@@ -133,7 +124,7 @@ export function ProductionRunReadingTable({
                   className="border-b border-[var(--color-border-tertiary)] hover:bg-[var(--color-background-medium)]"
                 >
                   <td className="py-8 pr-12 font-medium">
-                    {formatTimestamp(r.timestamp)}
+                    {formatDateTime(r.timestamp)}
                   </td>
                   <td className="py-8 pr-12">{formatNum(r.temperatureC, 1)}</td>
                   <td className="py-8 pr-12">{formatNum(r.pressureBar, 2)}</td>

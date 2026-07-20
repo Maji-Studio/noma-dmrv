@@ -22,6 +22,7 @@ import { useToast } from "@/components/ui/toast";
 import { useSubmitRemoval } from "@/hooks/use-certification";
 import type { RemovalPreflightSummary } from "@/fn/certification";
 import { deriveRemovalStatus } from "@/lib/certification/status";
+import { formatDateRange } from "@/lib/format-utils";
 import { EnvBanner } from "./env-banner";
 import { RegistryRecordLink } from "./registry-record-link";
 import { RemovalCarbonBreakdown } from "./removal-carbon-breakdown";
@@ -130,7 +131,7 @@ export function RemovalDetailSheet({
 
   const window =
     summary.startedOn && summary.completedOn
-      ? `${summary.startedOn} → ${summary.completedOn}`
+      ? formatDateRange(summary.startedOn, summary.completedOn)
       : "Set on submit";
 
   const fireSubmit = (confirmProduction = false) => {

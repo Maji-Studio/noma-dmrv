@@ -55,6 +55,22 @@ This design system combines Maji Studio's brand identity with Manukai's systemat
 - **Delete Buttons in Cards:** `Button size="small" variant="default"` with `border-[var(--color-signal-red)] text-[var(--color-signal-red)] hover:bg-[var(--clr-red-10)]`
 - **Disabled State:** `disabled:opacity-40` (via Button component)
 
+### Date and Time Display
+
+Interactive read surfaces use the shared formatters from
+`@/lib/format-utils` so dates have one timezone-safe vocabulary:
+
+- Date: `Jun 13, 2026` via `formatDate`.
+- Date-time: `Jun 13, 2026, 14:05` via `formatDateTime` (24-hour clock).
+- Same-year range: `Jun 1 – Jun 30, 2026` via `formatDateRange`.
+- Cross-year range: `Dec 15, 2026 – Jan 10, 2027` via `formatDateRange`.
+
+Pass bare `YYYY-MM-DD` calendar values directly to these helpers; `formatDate`
+and `formatDateRange` protect them from UTC day drift. Do not assemble display
+ranges manually or call `toLocaleDateString`, `Intl.DateTimeFormat`, or custom
+date-fns patterns in components. Native date/datetime input values and
+machine-facing API, export, and PDF contracts keep their required ISO formats.
+
 ---
 
 ## Color System
