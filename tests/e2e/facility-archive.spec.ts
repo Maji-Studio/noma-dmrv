@@ -69,10 +69,16 @@ test.describe("Facility cascading archive", () => {
       timeout: 15000,
     });
     await page.getByLabel("Search facilities").fill(facility.name);
-    await expect(page.getByRole("heading", { name: facility.name })).toBeVisible({ timeout: 10000 });
+    const facilityCard = page.locator("article").filter({ hasText: facility.name });
+    await expect(facilityCard.getByRole("heading", { name: facility.name })).toBeVisible({
+      timeout: 10000,
+    });
 
     // --- Archive via the card action + confirm dialog ---
-    await page.getByRole("button", { name: `Archive facility ${facility.code}` }).click();
+    await facilityCard
+      .getByRole("button", { name: `Actions for facility ${facility.code}` })
+      .click();
+    await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
 
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText("Archive Facility")).toBeVisible();
@@ -80,10 +86,12 @@ test.describe("Facility cascading archive", () => {
     await expect(dialog.getByText(/1 storage bin/)).toBeVisible({
       timeout: 30000,
     });
-    await dialog.getByRole("button", { name: "Archive", exact: true }).click();
+    const archiveButton = dialog.getByRole("button", { name: "Archive", exact: true });
+    await expect(archiveButton).not.toHaveAttribute("class", /color-signal-red/);
+    await archiveButton.click();
 
     // --- Facility disappears from the active list ---
-    await expect(page.getByRole("heading", { name: facility.name })).not.toBeVisible({
+    await expect(facilityCard.getByRole("heading", { name: facility.name })).not.toBeVisible({
       timeout: 30000,
     });
 
@@ -100,12 +108,17 @@ test.describe("Facility cascading archive", () => {
 
     // --- Archived view shows the facility with a badge and a Restore action ---
     await page.getByRole("button", { name: "Archived", exact: true }).click();
-    await expect(page.getByRole("heading", { name: facility.name })).toBeVisible({ timeout: 10000 });
+    await expect(facilityCard.getByRole("heading", { name: facility.name })).toBeVisible({
+      timeout: 10000,
+    });
     await expect(page.getByText("Archived Facilities")).toBeVisible();
 
     // --- Restore brings facility + children back ---
-    await page.getByRole("button", { name: `Restore facility ${facility.code}` }).click();
-    await expect(page.getByRole("heading", { name: facility.name })).not.toBeVisible({
+    await facilityCard
+      .getByRole("button", { name: `Actions for facility ${facility.code}` })
+      .click();
+    await page.getByRole("menuitem", { name: "Restore", exact: true }).click();
+    await expect(facilityCard.getByRole("heading", { name: facility.name })).not.toBeVisible({
       timeout: 30000,
     });
 
@@ -121,6 +134,8 @@ test.describe("Facility cascading archive", () => {
 
     // --- Back on the active list it is visible again ---
     await page.getByRole("button", { name: "Archived", exact: true }).click();
-    await expect(page.getByRole("heading", { name: facility.name })).toBeVisible({ timeout: 10000 });
+    await expect(facilityCard.getByRole("heading", { name: facility.name })).toBeVisible({
+      timeout: 10000,
+    });
   });
 });

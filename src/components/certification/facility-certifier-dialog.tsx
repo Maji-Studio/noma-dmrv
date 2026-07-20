@@ -304,7 +304,7 @@ export function UnlinkConfirmDialog({
       onConfirm={onConfirm}
       isPending={isPending}
       errorMessage={errorMessage}
-      variant="destructive"
+      variant="neutral"
       title="Unlink Isometric project"
       confirmLabel="Unlink"
       busyLabel="Unlinking…"
