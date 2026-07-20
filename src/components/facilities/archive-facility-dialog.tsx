@@ -106,9 +106,11 @@ export function ArchiveFacilityDialog({
               <p className="body-small text-[var(--color-text-tertiary)]">
                 This facility has no attached data.
               </p>
-              <p className="body-small text-[var(--color-text-tertiary)]">
-                Checked, none found: {emptyParts.join(", ")}.
-              </p>
+              {emptyParts.length > 0 && (
+                <p className="body-small text-[var(--color-text-tertiary)]">
+                  Checked, none found: {emptyParts.join(", ")}.
+                </p>
+              )}
             </div>
           ) : (
             <p className="body-small text-[var(--color-signal-red)]">
