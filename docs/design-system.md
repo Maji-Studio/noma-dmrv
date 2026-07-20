@@ -158,6 +158,22 @@ Status ramp — the canonical palette for status badges, dots, and state text
 --st-bad: #e54552;              /* Failed, error, rejected */
 ```
 
+Semantic entity statuses resolve through one of five canonical state classes:
+
+| State class | Statuses | Status ramp |
+| --- | --- | --- |
+| Neutral | Draft, superseded, cancelled, missing data | `--st-off` |
+| In progress | Running, submitted, partial, ordered | `--st-run` |
+| Success | Complete, delivered, applied, verified, issued, ready | `--st-ok` |
+| Warning | Pending, upcoming, testing, scheduled, conditional | `--st-wait` |
+| Error | Failed, rejected, void, ineligible | `--st-bad` |
+
+The exhaustive application mapping lives in `src/lib/status-state.ts`. Entity
+status badges must use `StatusBadge`; specialized status renderers such as map
+or graph pills must use that shared mapping. Do not select `--st-*` tokens in a
+feature component based on an entity status. The palette remains available for
+non-status uses such as charts, feedback, accents, and UI primitive internals.
+
 Tinted canvas wash for graph/canvas figure-ground (chain of custody):
 
 ```css
