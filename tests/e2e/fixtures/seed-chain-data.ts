@@ -567,6 +567,31 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
         .from(schema.deliveries)
         .where(eq(schema.deliveries.facilityId, data.facility.id));
       if (facilityDeliveries.length > 0) {
+        const facilityApplications = await tx
+          .select({ id: schema.applications.id })
+          .from(schema.applications)
+          .where(
+            inArray(
+              schema.applications.deliveryId,
+              facilityDeliveries.map((delivery) => delivery.id)
+            )
+          );
+        if (facilityApplications.length > 0) {
+          // Application evidence documents FK nothing (entityId is untyped), so
+          // deleting the application leaves them orphaned — sweep them first,
+          // mirroring the production_run document sweep below.
+          await tx
+            .delete(schema.documents)
+            .where(
+              and(
+                eq(schema.documents.entityType, "application"),
+                inArray(
+                  schema.documents.entityId,
+                  facilityApplications.map((application) => application.id)
+                )
+              )
+            );
+        }
         await tx
           .delete(schema.applications)
           .where(

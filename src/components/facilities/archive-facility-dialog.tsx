@@ -55,6 +55,15 @@ export function ArchiveFacilityDialog({
       )
     : [];
 
+  // Categories that were counted and came back empty. Listing them makes the
+  // preview a complete ledger, so the operator can confirm every dependency
+  // class (applications, lab samples, …) was evaluated — not silently omitted.
+  const emptyParts = impact
+    ? IMPACT_LABELS.filter(([key]) => impact[key] === 0).map(
+        ([, , plural]) => plural
+      )
+    : [];
+
   return (
     <Modal
       isOpen={!!facilityId}
@@ -82,9 +91,16 @@ export function ArchiveFacilityDialog({
               Checking attached data…
             </p>
           ) : impactParts.length > 0 ? (
-            <p className="body-small text-[var(--color-text-secondary)]">
-              Also archives: {impactParts.join(", ")}.
-            </p>
+            <div className="flex flex-col gap-4">
+              <p className="body-small text-[var(--color-text-secondary)]">
+                Also archives: {impactParts.join(", ")}.
+              </p>
+              {emptyParts.length > 0 && (
+                <p className="body-small text-[var(--color-text-tertiary)]">
+                  Checked, none found: {emptyParts.join(", ")}.
+                </p>
+              )}
+            </div>
           ) : impact ? (
             <p className="body-small text-[var(--color-text-tertiary)]">
               This facility has no attached data.

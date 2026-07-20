@@ -25,6 +25,7 @@ const NON_NEGATIVE_NUMBER_MESSAGE = "Must be a non-negative number";
 const PH_MIN = 0;
 const PH_MAX = 14;
 const PH_RANGE_MESSAGE = `Must be between ${PH_MIN} and ${PH_MAX}`;
+export const CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS = 0.5;
 
 const percentNumber = z
   .number()
@@ -70,6 +71,43 @@ const optionalFraction = optionalNumber.refine(
   (value) => value == null || (value >= 0 && value <= 1),
   { message: "Must be between 0 and 1" },
 ).optional();
+
+function carbonReconciliationSuperRefine(
+  value: {
+    totalCarbonPercent?: number | null;
+    organicCarbonPercent?: number | null;
+    inorganicCarbonPercent?: number | null;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  if (
+    value.totalCarbonPercent != null &&
+    value.organicCarbonPercent != null &&
+    value.organicCarbonPercent - value.totalCarbonPercent >
+      CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["organicCarbonPercent"],
+      message: `Organic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points`,
+    });
+  }
+
+  if (
+    value.totalCarbonPercent != null &&
+    value.organicCarbonPercent != null &&
+    value.inorganicCarbonPercent != null &&
+    value.organicCarbonPercent + value.inorganicCarbonPercent -
+      value.totalCarbonPercent >
+      CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["inorganicCarbonPercent"],
+      message: `Organic plus inorganic carbon cannot exceed total carbon by more than ${CARBON_RECONCILIATION_TOLERANCE_PERCENTAGE_POINTS} percentage points`,
+    });
+  }
+}
 
 // ============================================
 // Sample Form Schema (Client-side validation)
@@ -198,6 +236,8 @@ export const sampleFormSchema = z
     ironPercent: optionalPercentInput,
   })
   .superRefine((value, ctx) => {
+    carbonReconciliationSuperRefine(value, ctx);
+
     // Conditional validation for 1000-year durability
     if (value.durabilityOption === "1000_year") {
       if (value.randomReflectanceR0Percent == null) {
@@ -320,7 +360,7 @@ export const updateSampleSchema = z.object({
   magnesiumPercent: percentNumber.optional().nullable(),
   calciumPercent: percentNumber.optional().nullable(),
   ironPercent: percentNumber.optional().nullable(),
-});
+}).superRefine(carbonReconciliationSuperRefine);
 
 /**
  * Schema for deleting a sample

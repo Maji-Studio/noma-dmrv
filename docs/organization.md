@@ -1,178 +1,77 @@
 # Organization Guide
 
-How to organize components, features, and shared code in noma-dmrv.
+Where a new file goes: component folder shape, the feature-specific vs global
+promotion rule, and documentation hygiene. Read it before creating a file or a
+`/docs` page. Naming and export conventions are owned by
+[code-style.md](./code-style.md); the layer stack and React Query conventions by
+[architecture.md](./architecture.md); the per-entity build checklist by
+[TEMPLATE_USAGE.md](../TEMPLATE_USAGE.md). This doc defers to all three.
 
-## File Naming
+## Component Folders Are Flat
 
-All files use kebab-case:
-
-```text
-feedstock-form.tsx
-use-feedstocks.ts
-create-dialog.tsx
-```
-
-Exports use standard JavaScript conventions:
-
-- Components: `PascalCase` (`export function FeedstockForm()`)
-- Hooks and functions: `camelCase` (`export function useFeedstocks()`)
-- Constants: `UPPER_SNAKE_CASE` (`export const MAX_PREVIEW_ROWS = 5`)
-
-Avoid abbreviations unless they are domain-standard.
-
-## Component Organization
-
-### Simple Feature Folders
-
-Use this when a feature is under roughly 500 lines, has fewer than three major components, and has no nested dialog/modal set.
+A feature folder is a flat list of files plus a barrel `index.ts`. This holds
+**at every size** — `src/components/credit-batches/` has 13 files (form, detail,
+list, card, panel, colocated tests) and is still flat.
 
 ```text
 src/components/[feature]/
 ├── index.ts
 ├── [feature]-list.tsx
-├── [feature]-card.tsx
-└── [feature]-form.tsx
+├── [feature]-form.tsx
+└── [feature]-card.tsx
 ```
 
-Current examples:
+There is no `components/` / `dialogs/` / `hooks/` subfolder split, and no
+line-count threshold that triggers one. Do not introduce one; it would be the
+only instance in the repo. The single sanctioned nested directory is a
+**component that is itself a directory** (`src/components/ui/button/`,
+`src/components/chain-of-custody/sankey/`) — used when one component needs
+several private files, not to group a feature's components by kind.
 
-- `src/components/credit-batches/`
-- `src/components/feedstocks/`
-- `src/components/transport-legs/`
-
-Barrel exports are fine at the folder boundary:
+Import through the barrel from outside the folder, directly from inside it —
+self-importing the barrel creates a cycle:
 
 ```ts
-// src/components/feedstocks/index.ts
-export { FeedstockForm } from "./feedstock-form";
-export { FeedstockList } from "./feedstock-list";
+import { FeedstockForm } from "@/components/feedstocks"; // outside
+import { WetMassWarning } from "./wet-mass-warning";     // inside
 ```
 
-Use the barrel from outside the folder:
-
-```ts
-import { FeedstockForm, FeedstockList } from "@/components/feedstocks";
-```
-
-Inside the same folder, use direct imports to avoid circular dependencies:
-
-```ts
-import { WetMassWarning } from "./wet-mass-warning";
-```
-
-### Growing Feature Folders
-
-Split a feature when it crosses one or more of these thresholds:
-
-- 500+ lines in the folder.
-- 3+ related components.
-- 2+ custom UI-state hooks.
-- Multiple dialogs, sheets, or modals.
-
-Use a main export plus an implementation folder:
-
-```text
-src/components/[feature]/
-├── [feature]-view.tsx
-└── [feature]/
-    ├── components/
-    ├── dialogs/
-    ├── hooks/
-    ├── constants.ts
-    └── utils.ts
-```
-
-Start simple. Split only when the current shape makes the feature harder to scan or test.
-
-## Dialogs, Modals, And Sheets
-
-Place feature-specific overlays near the feature:
-
-```text
-dialogs/
-├── create-feedstock-dialog.tsx
-├── edit-feedstock-dialog.tsx
-└── delete-feedstock-dialog.tsx
-```
-
-Naming:
-
-- `*-dialog.tsx`: forms and confirmations.
-- `*-modal.tsx`: content-heavy overlays.
-- `*-sheet.tsx`: side-sheet/detail surfaces.
-
-Global primitives stay in `src/components/ui/`.
+Feature-specific overlays live beside the feature as `*-dialog.tsx` (forms and
+confirmations) or `*-sheet.tsx` (side-sheet/detail surfaces). There is no
+`*-modal.tsx` convention — `Modal` is a shared primitive in
+`src/components/ui/modal/`, not a per-feature file. Global primitives stay in
+`src/components/ui/`.
 
 ## Global Vs Feature-Specific
 
-Start feature-specific. Promote after repeated use across features.
+Start feature-specific. Promote only after repeated use across features.
 
-| Need | Feature-specific location | Global location |
+| Need | Feature-specific | Global |
 |---|---|---|
-| UI state hook | `src/components/[feature]/hooks/` | `src/hooks/` only if shared across features |
-| Server data hook | `src/hooks/use-[feature].ts` | `src/hooks/` |
-| Utility | `src/components/[feature]/utils.ts` | `src/lib/` |
-| Form schema | N/A | `src/schemas/[feature].ts` |
+| UI state hook | beside the feature | `src/hooks/` only if shared |
+| Server data hook | N/A | `src/hooks/use-<feature>.ts` |
+| Utility | beside the feature | `src/lib/` |
+| Form schema | N/A | `src/schemas/<feature>.ts` |
 | UI primitive | N/A | `src/components/ui/` |
 | Type | near owner module | `src/types/` only if widely shared |
 
-## Layering
-
-Component organization follows the repo architecture:
-
-```text
-components/      UI
-  -> hooks/      React Query
-  -> fn/         server actions
-  -> data-access/ queries + auth guards
-  -> db/         Drizzle schema + connection
-```
-
-Distinguish UI-state hooks from server-data hooks:
-
-```ts
-// Feature UI state: keep near the feature.
-export function useFeedstockFilters() {
-  // search, table filters, local selections
-}
-```
-
-```ts
-// Server data: src/hooks/use-feedstocks.ts
-export function useFeedstocks(facilityId: string | null) {
-  return useQuery({
-    queryKey: ["feedstocks", facilityId],
-    queryFn: () => listFeedstocksAction(facilityId),
-    enabled: !!facilityId,
-  });
-}
-```
-
-## Feature Checklist
-
-When adding or changing a domain feature, keep related files aligned:
-
-1. `src/schemas/[feature].ts` for form/action schemas and `z.infer` types.
-2. `src/db/schema/[domain].ts` for persistent shape.
-3. `src/data-access/[feature].ts` for guarded queries and mutations.
-4. `src/fn/[feature].ts` for `"use server"` actions and orchestration.
-5. `src/hooks/use-[feature].ts` for React Query reads/mutations.
-6. `src/components/[feature]/` for forms, lists, and details.
-7. `tests/` or `tests/e2e/` coverage scaled to risk.
-
-Use current entity patterns such as facilities, feedstocks, and credit batches as references. Do not copy removed starter-template project/item patterns from git history.
+Keep the two hook kinds distinct: **UI-state** hooks (search, filters, local
+selection) sit with the feature, while **server-data** hooks belong in
+`src/hooks/` and are the only ones that touch React Query.
 
 ## Documentation Hygiene
 
-- Keep only **evergreen** design and architecture notes in `/docs` (product,
-  architecture, design-system, database, auth, troubleshooting, …).
-- Move implementation logs, quick fixes, dated debugging, superseded docs, and
-  dated plans/audit notes to `docs/archive/`.
-- **Before creating a doc, ask:** is it evergreen? does it duplicate an existing
-  doc? If it duplicates, update the existing doc instead of adding a new one.
-- Track deferred work as a **dated entry** in `docs/open-questions.md`, never as
-  a code `TODO`.
-- Resolve a deferred item by **removing its entry** from `docs/open-questions.md`
-  and recording the decision in the relevant evergreen feature doc (e.g.
-  `docs/isometric/README.md`) or an ADR — i.e. update the feature doc when a
-  decision becomes settled; dated implementation notes go to `docs/archive/`.
+- Only **evergreen** notes belong in `/docs`. Dated plans → `docs/plans/`;
+  implementation logs, superseded docs and debugging notes → `docs/archive/`.
+- QA runs commit **only their markdown reports** under `docs/qa/artifacts/`;
+  screenshots, videos, raw driver output, and scripts stay local
+  (enforced by `.gitignore`).
+- **Before creating a doc, ask:** is it evergreen, and does it duplicate an
+  existing one? If it duplicates, update the existing doc — a second copy is how
+  the two drift apart and start contradicting each other.
+- Every doc opens with a one-paragraph "what this covers / when to read it".
+- One topic, one owner. If a doc needs a fact another doc owns, link to it
+  rather than restating it.
+- Track deferred work as an entry in [open-questions.md](./open-questions.md),
+  never as a code `TODO`. Resolve it by **removing the entry** and recording the
+  decision in the owning evergreen doc or an [ADR](./adr/).
