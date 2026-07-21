@@ -195,12 +195,15 @@ export async function seedTestUsers(
         };
 
         if (userData.role !== "admin" && userData.projectRole) {
-          await tx.insert(schema.members).values({
-            id: `e2e-member-${role}-${testRunId}`,
-            organizationId: DEC_ORG_ID,
-            userId,
-            role: userData.projectRole,
-          });
+          await tx
+            .insert(schema.members)
+            .values({
+              id: `e2e-member-${role}-${testRunId}`,
+              organizationId: DEC_ORG_ID,
+              userId,
+              role: userData.projectRole,
+            })
+            .onConflictDoNothing();
         }
       }
     });
