@@ -567,6 +567,8 @@ const READY_APPLICATION_EVIDENCE_ROLES = [
 export interface SeededReadyBatch {
   creditBatchId: string;
   code: string;
+  applicationId: string;
+  applicationCode: string;
   cleanup: () => Promise<void>;
 }
 
@@ -600,6 +602,7 @@ export async function seedUngroupedReadyBatchWithChain(
     sampleTransportLeg: crypto.randomUUID(),
   };
   const creditBatchCode = `E2E-RDY-${testRunId}`;
+  const applicationCode = `E2E-APP-RDY-${testRunId}`;
   const today = new Date().toISOString().slice(0, 10);
 
   // One uniform distance-based leg per category, keyed to the chain entity the
@@ -715,7 +718,7 @@ export async function seedUngroupedReadyBatchWithChain(
       await tx.insert(schema.applications).values({
         organizationId: DEC_ORG_ID,
         id: id.application,
-        code: `E2E-APP-RDY-${testRunId}`,
+        code: applicationCode,
         deliveryId: id.delivery,
         applicationDate: new Date(),
         biocharAppliedTons: 0.1,
@@ -790,6 +793,8 @@ export async function seedUngroupedReadyBatchWithChain(
   return {
     creditBatchId: id.creditBatch,
     code: creditBatchCode,
+    applicationId: id.application,
+    applicationCode,
     cleanup: async () => {
       const conn = createDbConnection();
       try {
@@ -816,7 +821,12 @@ export async function seedUngroupedReadyBatchWithChain(
             );
           await tx
             .delete(schema.documents)
-            .where(inArray(schema.documents.id, id.applicationDocuments));
+            .where(
+              and(
+                eq(schema.documents.entityType, "application"),
+                eq(schema.documents.entityId, id.application),
+              ),
+            );
           await tx
             .delete(schema.applications)
             .where(eq(schema.applications.id, id.application));
