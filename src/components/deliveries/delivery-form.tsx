@@ -126,6 +126,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const watchMoisture = watch("moistureContentPercent");
   const watchOrderId = watch("orderId");
   const distanceKmOverride = watch("distanceKmOverride") as number | null | undefined;
+  const draftDistanceSource = watch("distanceSource");
 
   // Destination's stored distance (+ provenance) — the value the derived
   // transport leg falls back to when this delivery has no override
@@ -141,12 +142,16 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   // schemas/distance-source.ts header).
   const effectiveDistanceKm = distanceKmOverride ?? storedDistanceKm;
   const savedEffectiveDistanceSource = delivery
-    ? delivery.distanceKmOverride != null
+    ? delivery.distanceSource === "document"
+      ? "document"
+      : delivery.distanceKmOverride != null
       ? (delivery.distanceSource ?? "manual")
       : storedDistanceSource
     : null;
   const savedProvenanceLoaded = delivery
-    ? delivery.distanceKmOverride != null || selectedOrder !== undefined
+    ? delivery.distanceSource === "document" ||
+      delivery.distanceKmOverride != null ||
+      selectedOrder !== undefined
     : undefined;
 
   // Text draft so in-flight typing survives; resync when the effective value
@@ -436,6 +441,20 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         distanceSource={savedEffectiveDistanceSource}
         provenanceLoaded={savedProvenanceLoaded}
         focusTarget={focusTarget}
+        draftDistanceSource={
+          draftDistanceSource === "document"
+            ? "document"
+            : distanceKmOverride != null
+              ? (draftDistanceSource ?? "manual")
+              : storedDistanceSource
+        }
+        onSelectDocumentProvenance={() =>
+          setValue("distanceSource", "document", {
+            shouldDirty: true,
+            shouldTouch: true,
+            shouldValidate: true,
+          })
+        }
       />
       </FormSpine>
 

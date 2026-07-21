@@ -28,7 +28,7 @@ import {
 import { DEFAULT_TRIP_TYPE, TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import type { TransportLeg } from "@/db/schema";
-import { TransportEvidenceDocuments } from "./transport-evidence-documents";
+import { TransportEvidencePanel } from "./transport-evidence-documents";
 import { hasDocumentBackedDistanceProvenance } from "@/lib/certification/transport-evidence";
 
 interface TransportLegFormProps {
@@ -340,18 +340,19 @@ export function TransportLegForm({
 
       <FormSection title="Documentation">
         <p className="body-small text-[var(--color-text-secondary)]">
-          Verification evidence (Transportation v1.1 §6) — bill of lading and
-          weigh-scale ticket.
+          Classify each supporting file before upload. One accepted transport
+          evidence file is sufficient.
         </p>
         {isEditMode && leg && isSavedTransportLeg(leg) ? (
-          <TransportEvidenceDocuments
+          <TransportEvidencePanel
             entityType="transport_leg"
             entityId={leg.id}
+            distanceSource={leg.distanceSource}
           />
         ) : (
           <p className="body-small text-[var(--color-text-tertiary)] border border-dashed border-[var(--color-border-secondary)] px-12 py-16">
-            Save the leg first, then re-open it to attach the bill of lading and
-            weigh-scale ticket.
+            Save the leg first, then re-open it to attach classified transport
+            evidence.
           </p>
         )}
       </FormSection>

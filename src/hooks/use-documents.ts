@@ -11,6 +11,22 @@ import {
   type RequestUploadResult,
 } from "@/fn/documents";
 import type { DocumentVisibility } from "@/schemas/documents";
+import { feedstockKeys } from "./use-feedstocks";
+import { deliveryKeys } from "./use-deliveries";
+import { dashboardOverviewKeys } from "./use-dashboard-overview";
+
+function invalidateTransportEvidenceOwner(
+  queryClient: ReturnType<typeof useQueryClient>,
+  row: { entityType: string },
+) {
+  queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+  if (row.entityType === "feedstock") {
+    queryClient.invalidateQueries({ queryKey: feedstockKeys.all });
+  }
+  if (row.entityType === "delivery") {
+    queryClient.invalidateQueries({ queryKey: deliveryKeys.all });
+  }
+}
 
 export const documentKeys = {
   all: ["documents"] as const,
@@ -59,6 +75,7 @@ export function useConfirmUpload() {
       qc.invalidateQueries({
         queryKey: documentKeys.forEntity(row.entityType, row.entityId),
       });
+      invalidateTransportEvidenceOwner(qc, row);
     },
   });
 }
@@ -100,7 +117,10 @@ export function useUpdateApplicationEvidenceMetadata(
   });
 }
 
-export function useDeleteDocument(invalidateKey?: readonly unknown[]) {
+export function useDeleteDocument(
+  invalidateKey?: readonly unknown[],
+  owner?: { entityType: string },
+) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (documentId: string) => {
@@ -110,6 +130,7 @@ export function useDeleteDocument(invalidateKey?: readonly unknown[]) {
     },
     onSuccess: () => {
       if (invalidateKey) qc.invalidateQueries({ queryKey: invalidateKey });
+      if (owner) invalidateTransportEvidenceOwner(qc, owner);
     },
   });
 }

@@ -161,12 +161,6 @@ test.describe("Feedstock UI CRUD", () => {
     await expect(
       dialog.getByText("No transport evidence attached.")
     ).toBeVisible();
-    await expect(
-      dialog.getByText(
-        "Set or mark the distance source as Document, then attach the bill of lading or weigh-scale ticket that supports that distance. An upload alone does not change the saved distance provenance."
-      )
-    ).toHaveCount(0);
-
     // View mode is read-only: no upload dropzone, no per-file delete buttons.
     await expect(dialog.locator('input[type="file"]')).toHaveCount(0);
     await expect(
@@ -177,13 +171,25 @@ test.describe("Feedstock UI CRUD", () => {
     ).toHaveCount(0);
 
     // Switch to edit mode: the same sheet swaps to the edit form, whose
-    // trailing evidence section mounts the editable panel with dropzones.
+    // trailing evidence section mounts one classified multi-file uploader.
     await page.getByRole("button", { name: "Edit Feedstock" }).click();
+    await expect(dialog.locator('input[type="file"]')).toHaveCount(1, {
+      timeout: 15000,
+    });
     await expect(
-      dialog.getByText("Drop files here or click to upload").first()
-    ).toBeVisible({ timeout: 15000 });
+      dialog.getByText("Drop files here or click to upload")
+    ).toHaveCount(1);
     await expect(
-      dialog.locator('input[type="file"]').first()
-    ).toBeAttached();
+      dialog.getByText("Drop files here or click to upload"),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("radio", { name: "Bill of lading" }),
+    ).toBeChecked();
+    await expect(
+      dialog.getByRole("radio", { name: "Weigh-scale ticket" }),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("radio", { name: "Other transport evidence" }),
+    ).toBeVisible();
   });
 });

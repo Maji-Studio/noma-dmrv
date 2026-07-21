@@ -12,6 +12,7 @@ import type {
 } from "@/schemas/transport-legs";
 import type { TransportLeg } from "@/db/schema";
 import type { MutationCallbacks } from "./types";
+import { dashboardOverviewKeys } from "./use-dashboard-overview";
 
 // ============================================
 // Query Keys
@@ -70,6 +71,7 @@ export function useCreateTransportLeg(
           variables.entityId,
         ),
       });
+      await queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
@@ -96,6 +98,7 @@ export function useUpdateTransportLeg(
       await queryClient.invalidateQueries({
         queryKey: transportLegKeys.byEntity(entityType, entityId),
       });
+      await queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
@@ -121,6 +124,7 @@ export function useDeleteTransportLeg(
       await queryClient.invalidateQueries({
         queryKey: transportLegKeys.byEntity(entityType, entityId),
       });
+      await queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,

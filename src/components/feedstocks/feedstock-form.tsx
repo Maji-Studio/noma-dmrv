@@ -92,7 +92,8 @@ export function FeedstockForm({
     supplierId: feedstock?.supplierId ?? "",
     vehicleId: feedstock?.vehicleId ?? "",
     transportDistanceKm: undefined as number | undefined,
-    transportDistanceSource: null as DistanceSourceValue | null,
+    transportDistanceSource:
+      feedstock?.transportDistanceSource ?? (null as DistanceSourceValue | null),
     transportTripType: DEFAULT_TRIP_TYPE as TripTypeValue,
     feedstockTypeId: feedstock?.feedstockTypeId ?? "",
     totalWetMassKg: feedstock?.massWetKg ?? ("" as unknown as number),
@@ -142,6 +143,10 @@ export function FeedstockForm({
     control,
     name: "transportDistanceKm",
   }) as number | null | undefined;
+  const draftTransportDistanceSource = useWatch({
+    control,
+    name: "transportDistanceSource",
+  }) as DistanceSourceValue | null | undefined;
   const transportTripType = useWatch({
     control,
     name: "transportTripType",
@@ -209,7 +214,9 @@ export function FeedstockForm({
   // prefill effect resumes managing it (e.g. on a later supplier switch).
   const resetTransportDistance = () => {
     resetField("transportDistanceKm", { defaultValue: suggestedDistanceKm ?? undefined });
-    setValue("transportDistanceSource", suggestedDistanceSource ?? null, { shouldValidate: true });
+    resetField("transportDistanceSource", {
+      defaultValue: suggestedDistanceSource ?? null,
+    });
   };
 
   // Auto-set facility from context
@@ -222,17 +229,30 @@ export function FeedstockForm({
   // Prefill the distance (and its provenance) from the supplier/existing leg
   // unless the user edited it.
   useEffect(() => {
-    if (dirtyFields.transportDistanceKm) return;
     if (suggestedDistanceKm != null) {
-      setValue("transportDistanceKm", suggestedDistanceKm);
-      setValue("transportDistanceSource", suggestedDistanceSource);
+      if (!dirtyFields.transportDistanceKm) {
+        setValue("transportDistanceKm", suggestedDistanceKm);
+      }
+      if (!dirtyFields.transportDistanceSource) {
+        setValue("transportDistanceSource", suggestedDistanceSource);
+      }
     } else {
       // Suggestion gone (e.g. switched to a supplier without a stored
       // distance) — clear the previous autofill so it can't persist.
-      setValue("transportDistanceKm", undefined);
-      setValue("transportDistanceSource", null);
+      if (!dirtyFields.transportDistanceKm) {
+        setValue("transportDistanceKm", undefined);
+      }
+      if (!dirtyFields.transportDistanceSource) {
+        setValue("transportDistanceSource", null);
+      }
     }
-  }, [suggestedDistanceKm, suggestedDistanceSource, dirtyFields.transportDistanceKm, setValue]);
+  }, [
+    suggestedDistanceKm,
+    suggestedDistanceSource,
+    dirtyFields.transportDistanceKm,
+    dirtyFields.transportDistanceSource,
+    setValue,
+  ]);
 
   // Prefill the saved leg's trip type in edit mode (async), unless the user
   // already changed it. New feedstock defaults to Return via defaultValues.
@@ -618,6 +638,10 @@ export function FeedstockForm({
           retryEntityIds={retryEntityIds}
           isSubmitting={isSubmitting}
           focusTarget={focusTarget}
+          draftDistanceSource={draftTransportDistanceSource}
+          onSelectDocumentProvenance={() =>
+            setValue("transportDistanceSource", "document", SET_VALUE_OPTS)
+          }
         />
       </FormSpine>
 

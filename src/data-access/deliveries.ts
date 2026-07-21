@@ -20,11 +20,13 @@ import {
   type Delivery,
 } from "@/db/schema";
 import type { DeliveryFilterData, DeliveryStatus } from "@/schemas/deliveries";
+import {
+  effectiveDeliveryDistanceKm,
+  effectiveDeliveryDistanceSource,
+} from "./delivery-distance-projections";
+import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
 
-// ============================================
 // Types
-// ============================================
-
 export interface DeliveryWithRelations extends Delivery {
   status: DeliveryStatus;
   orderCode: string | null;
@@ -35,6 +37,7 @@ export interface DeliveryWithRelations extends Delivery {
   vehicleName: string | null;
   effectiveDistanceKm: number | null;
   effectiveDistanceSource: "map_estimate" | "manual" | "document" | null;
+  transportEvidenceDocumentCount: number;
 }
 
 export interface PaginatedDeliveries {
@@ -48,6 +51,7 @@ export interface PaginatedDeliveries {
 export interface DeliveryDetail extends Delivery {
   effectiveDistanceKm: number | null;
   effectiveDistanceSource: "map_estimate" | "manual" | "document" | null;
+  transportEvidenceDocumentCount: number;
   customerName: string | null;
   order: {
     id: string;
@@ -83,10 +87,7 @@ export interface DeliveryStats {
   deliveredCount: number;
 }
 
-// ============================================
-// Auth Guards
-// ============================================
-
+// Auth guards
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
@@ -191,24 +192,6 @@ function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
   };
 }
 
-function effectiveDeliveryDistanceSource(columns: DeliveryColumnAvailability) {
-  if (!columns.distanceKmOverride || !columns.distanceSource) {
-    return customerLocations.distanceSource;
-  }
-
-  return sql<"map_estimate" | "manual" | "document" | null>`case
-    when ${deliveries.distanceKmOverride} is not null
-      then coalesce(${deliveries.distanceSource}, 'manual')
-    else ${customerLocations.distanceSource}
-  end`;
-}
-
-function effectiveDeliveryDistanceKm(columns: DeliveryColumnAvailability) {
-  return columns.distanceKmOverride
-    ? sql<number | null>`coalesce(${deliveries.distanceKmOverride}, ${customerLocations.distanceFromFacilityKm})`
-    : customerLocations.distanceFromFacilityKm;
-}
-
 /** Archived-row filter, skipped while the column has not been migrated yet. */
 function activeDeliveriesCondition(columns: DeliveryColumnAvailability): SQL[] {
   return columns.archivedAt ? [isNull(deliveries.archivedAt)] : [];
@@ -306,6 +289,11 @@ export async function getDeliveries(
       vehicleName: vehicles.name,
       effectiveDistanceKm: effectiveDeliveryDistanceKm(deliveryColumns),
       effectiveDistanceSource: effectiveDeliveryDistanceSource(deliveryColumns),
+      transportEvidenceDocumentCount: transportEvidenceDocumentCount(
+        ctx.organizationId,
+        "delivery",
+        deliveries.id,
+      ),
     })
     .from(deliveries)
     .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
@@ -386,6 +374,11 @@ export async function getDeliveryWithRelations(
       vehicleIdentifier: vehicles.identifier,
       effectiveDistanceKm: effectiveDeliveryDistanceKm(deliveryColumns),
       effectiveDistanceSource: effectiveDeliveryDistanceSource(deliveryColumns),
+      transportEvidenceDocumentCount: transportEvidenceDocumentCount(
+        ctx.organizationId,
+        "delivery",
+        deliveries.id,
+      ),
     })
     .from(deliveries)
     .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
@@ -436,6 +429,8 @@ export async function getDeliveryWithRelations(
     updatedAt: deliveryRow.updatedAt,
     effectiveDistanceKm: deliveryRow.effectiveDistanceKm,
     effectiveDistanceSource: deliveryRow.effectiveDistanceSource,
+    transportEvidenceDocumentCount:
+      deliveryRow.transportEvidenceDocumentCount,
     customerName: deliveryRow.customerName,
     order: deliveryRow.orderId
       ? {

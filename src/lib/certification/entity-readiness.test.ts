@@ -199,6 +199,7 @@ describe("deriveEntityCertifyReadiness", () => {
       massWetKg: 1500,
       transportDistanceKm: 25,
       transportDistanceSource: "document",
+      transportEvidenceDocumentCount: 1,
     });
 
     expect(readiness).toEqual({ state: "ready", gaps: [] });
@@ -210,6 +211,7 @@ describe("deriveEntityCertifyReadiness", () => {
       massWetKg: null,
       transportDistanceKm: 25,
       transportDistanceSource: "document",
+      transportEvidenceDocumentCount: 1,
     });
 
     expect(readiness.state).toBe("incomplete");
@@ -224,14 +226,14 @@ describe("deriveEntityCertifyReadiness", () => {
       massWetKg: 1500,
       transportDistanceKm: 25,
       transportDistanceSource: "manual",
+      transportEvidenceDocumentCount: 1,
     });
 
     expect(readiness.state).toBe("incomplete");
     expect(readiness.gaps).toMatchObject([
       {
         kind: "field",
-        key: "transportDistanceProvenance",
-        fields: ["transportDistanceSource"],
+        key: "transportEvidence",
       },
     ]);
     expect(readiness.gaps.some((gap) => gap.key === "transportLeg")).toBe(false);
@@ -241,6 +243,8 @@ describe("deriveEntityCertifyReadiness", () => {
     const readiness = deriveEntityCertifyReadiness("delivery", {
       status: "upcoming",
       deliveredWetMassKg: 400,
+      effectiveDistanceSource: "document",
+      transportEvidenceDocumentCount: 1,
     });
 
     expect(readiness.state).toBe("incomplete");
@@ -253,9 +257,35 @@ describe("deriveEntityCertifyReadiness", () => {
     const readiness = deriveEntityCertifyReadiness("delivery", {
       status: "delivered",
       deliveredWetMassKg: 400,
+      effectiveDistanceSource: "document",
+      transportEvidenceDocumentCount: 1,
     });
 
     expect(readiness).toEqual({ state: "ready", gaps: [] });
+  });
+
+  it.each([
+    {
+      label: "provenance only",
+      effectiveDistanceSource: "document",
+      transportEvidenceDocumentCount: 0,
+    },
+    {
+      label: "document only",
+      effectiveDistanceSource: "manual",
+      transportEvidenceDocumentCount: 1,
+    },
+  ])("keeps a delivered delivery incomplete with $label", (input) => {
+    const readiness = deriveEntityCertifyReadiness("delivery", {
+      status: "delivered",
+      deliveredWetMassKg: 400,
+      ...input,
+    });
+
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      { kind: "field", key: "transportEvidence" },
+    ]);
   });
 
   it("marks an application with complete visual evidence ready", () => {

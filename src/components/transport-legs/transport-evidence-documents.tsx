@@ -7,8 +7,6 @@ import {
   TrashIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
-import { FormField } from "@/components/forms/form-field";
-import { FormFileUpload } from "@/components/forms/form-file-upload";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
@@ -18,29 +16,21 @@ import {
   useDeleteDocument,
   useDocumentsForEntity,
 } from "@/hooks/use-documents";
-import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
+import type { DocumentEntityType } from "@/schemas/documents";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { InfoHint } from "@/components/ui/tooltip";
-import { resolveCertFieldStatus } from "@/components/forms/cert-field-status";
-import { hasDocumentBackedDistanceProvenance } from "@/lib/certification/transport-evidence";
+import {
+  deriveTransportEvidenceCertStatus,
+  isTransportEvidenceDocumentType,
+  TRANSPORT_EVIDENCE_DOCUMENT_LABELS,
+} from "@/lib/certification/transport-evidence";
+import { ClassifiedTransportEvidenceUploader } from "./classified-transport-evidence-uploader";
 
 type TransportEvidenceEntityType = Extract<
   DocumentEntityType,
   "feedstock" | "delivery" | "transport_leg"
 >;
-
-// The two transportation-evidence document types currently modelled by noma.
-// This is not an exhaustive statement of the protocol's evidence requirements.
-const EVIDENCE_FIELDS: { documentType: DocumentType; label: string }[] = [
-  { documentType: "bill_of_lading", label: "Bill of lading" },
-  { documentType: "weighbridge_ticket", label: "Weigh-scale ticket" },
-];
-
-const DOC_TYPE_LABELS: Record<string, string> = {
-  bill_of_lading: "Bill of lading",
-  weighbridge_ticket: "Weigh-scale ticket",
-};
 
 interface TransportEvidenceDocumentsProps {
   entityType: TransportEvidenceEntityType;
@@ -64,7 +54,7 @@ export function TransportEvidenceDocuments({
     entityId,
   );
   const invalidateKey = documentKeys.forEntity(entityType, entityId);
-  const deleteMutation = useDeleteDocument(invalidateKey);
+  const deleteMutation = useDeleteDocument(invalidateKey, { entityType });
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -85,7 +75,9 @@ export function TransportEvidenceDocuments({
   };
 
   const uploadedDocs = (docs ?? []).filter(
-    (d) => d.uploadStatus === "uploaded" || d.fileUrl,
+    (document) =>
+      document.uploadStatus === "uploaded" &&
+      isTransportEvidenceDocumentType(document.documentType),
   );
 
   return (
@@ -120,7 +112,9 @@ export function TransportEvidenceDocuments({
                   {doc.fileName}
                 </span>
                 <span className="body-caption text-[var(--color-text-tertiary)]">
-                  {DOC_TYPE_LABELS[doc.documentType] ?? doc.documentType} ·{" "}
+                  {isTransportEvidenceDocumentType(doc.documentType)
+                    ? TRANSPORT_EVIDENCE_DOCUMENT_LABELS[doc.documentType]
+                    : doc.documentType} ·{" "}
                   {formatFileSize(doc.fileSizeBytes)}
                 </span>
               </div>
@@ -155,30 +149,12 @@ export function TransportEvidenceDocuments({
       ) : null}
 
       {!readOnly && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
-          {EVIDENCE_FIELDS.map(({ documentType, label }) => (
-            <FormField
-              key={documentType}
-              id={`transport-evidence-${entityId}-${documentType}`}
-              label={label}
-            >
-              <FormFileUpload
-                id={`transport-evidence-${entityId}-${documentType}`}
-                accept="image/*,.pdf"
-                multiple={false}
-                maxSizeMb={25}
-                entityType={entityType}
-                entityId={entityId}
-                documentType={documentType}
-                onUploaded={() => {
-                  setUploadError(null);
-                  toast.success(`${label} uploaded`);
-                }}
-                onUploadError={(err) => setUploadError(err)}
-              />
-            </FormField>
-          ))}
-        </div>
+        <ClassifiedTransportEvidenceUploader
+          id={`transport-evidence-${entityId}`}
+          entityType={entityType}
+          entityId={entityId}
+          onUploadError={(message) => setUploadError(message || null)}
+        />
       )}
 
       {deleteError && <ServerError message={deleteError} />}
@@ -200,7 +176,7 @@ export function TransportEvidenceDocuments({
 }
 
 interface TransportEvidencePanelProps {
-  entityType: Exclude<TransportEvidenceEntityType, "transport_leg">;
+  entityType: TransportEvidenceEntityType;
   entityId: string;
   readOnly?: boolean;
   /** Effective saved provenance of the distance represented by this surface. */
@@ -210,8 +186,8 @@ interface TransportEvidencePanelProps {
 }
 
 /**
- * Attachment-only evidence surface for auto-derived transport. Documents stay
- * on the stable parent entity, so a leg recalculation cannot orphan them.
+ * Composite evidence surface. Auto-derived transport stores documents on its
+ * stable parent; manually managed transport stores them on the saved leg.
  */
 export function TransportEvidencePanel({
   entityType,
@@ -220,10 +196,18 @@ export function TransportEvidencePanel({
   distanceSource,
   persisted = true,
 }: TransportEvidencePanelProps) {
-  const provenanceStatus = resolveCertFieldStatus(
+  const { data: documents } = useDocumentsForEntity(entityType, entityId);
+  const acceptedDocumentCount = documents?.filter(
+    (document) =>
+      document.uploadStatus === "uploaded" &&
+      isTransportEvidenceDocumentType(document.documentType),
+  ).length;
+  const evidenceStatus = deriveTransportEvidenceCertStatus({
     persisted,
-    hasDocumentBackedDistanceProvenance(distanceSource),
-  );
+    documentsLoaded: documents !== undefined,
+    source: distanceSource,
+    acceptedDocumentCount,
+  });
   return (
     <section className="space-y-16 border-t border-[var(--color-border-tertiary)] pt-16">
       <div className="flex items-center gap-6">
@@ -231,14 +215,14 @@ export function TransportEvidencePanel({
           Transport evidence
         </h3>
         <CertificationFieldTag
-          status={provenanceStatus}
-          description="Satisfied only when the saved distance source is marked Document"
+          status={evidenceStatus}
+          description="Satisfied when saved provenance is Document and at least one classified file is uploaded"
         />
         <InfoHint label="About transport evidence">
-          To satisfy certification, mark the saved distance source as Document
-          and attach supporting evidence. Uploading a file does not change the
-          source; mirror uploaded files from the Removal&apos;s Supporting Sources
-          panel before submission.
+          Transport evidence requires saved Document provenance plus at least
+          one uploaded bill of lading, weigh-scale ticket, or other transport
+          evidence file. One accepted file is enough. Uploading does not change
+          the saved provenance.
         </InfoHint>
       </div>
       <TransportEvidenceDocuments

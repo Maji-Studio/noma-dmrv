@@ -8,6 +8,7 @@ import { DOCUMENT_UPLOAD_MAX_BYTES } from "@/lib/documents/upload-policy";
 export const DOCUMENT_TYPES = [
   "weighbridge_ticket",
   "bill_of_lading",
+  "other_transport_evidence",
   "lab_report",
   "delivery_receipt",
   "invoice",
@@ -63,6 +64,7 @@ function uploadRule(mimeTypes: readonly string[]): UploadRule {
 export const UPLOAD_RULES: Record<DocumentType, UploadRule> = {
   weighbridge_ticket: uploadRule([...PDF_MIMES, ...IMAGE_MIMES]),
   bill_of_lading: uploadRule([...PDF_MIMES, ...IMAGE_MIMES]),
+  other_transport_evidence: uploadRule([...PDF_MIMES, ...IMAGE_MIMES]),
   lab_report: uploadRule([
     ...PDF_MIMES,
     ...IMAGE_MIMES,

@@ -48,7 +48,6 @@ export function SampleEvidenceSection({
   onRetryAttachments,
   onRemoveAttachment,
   isSubmitting = false,
-  focusTarget,
   __spine,
 }: SampleTrailingSectionProps) {
   return (
@@ -58,20 +57,7 @@ export function SampleEvidenceSection({
       __spine={__spine}
     >
       {isEditMode && sample ? (
-        <ActionableFocusTarget
-          target={
-            focusTarget === "transport-evidence"
-              ? "transport-evidence"
-              : "transport-route"
-          }
-          activeTarget={focusTarget}
-          actionLabel={
-            focusTarget === "transport-evidence"
-              ? "Edit the leg, mark its distance source as Document, and attach supporting evidence"
-              : "Complete the saved transport route information"
-          }
-          className="flex flex-col gap-12"
-        >
+        <div className="flex flex-col gap-12">
           {deferredAttachments && (
             <FailedDeferredAttachments
               attachments={deferredAttachments.attachments}
@@ -84,7 +70,7 @@ export function SampleEvidenceSection({
             />
           )}
           <SampleDocumentsPanel sampleId={sample.id} />
-        </ActionableFocusTarget>
+        </div>
       ) : (
         <FormFileUpload
           id="sample-deferred-documents-upload"
@@ -109,12 +95,26 @@ export function SampleTransportSection({
   onDeferredLegsChange,
   onRetryLegs,
   isSubmitting = false,
+  focusTarget,
   __spine,
 }: SampleTrailingSectionProps) {
   return (
     <FormSection title="Transport" icon={<TruckIcon size={14} weight="bold" />} __spine={__spine}>
       {isEditMode && sample ? (
-        <div className="flex flex-col gap-12">
+        <ActionableFocusTarget
+          target={
+            focusTarget === "transport-evidence"
+              ? "transport-evidence"
+              : "transport-route"
+          }
+          activeTarget={focusTarget}
+          actionLabel={
+            focusTarget === "transport-evidence"
+              ? "Edit the leg, select Document provenance, and upload one classified transport-evidence file"
+              : "Complete the saved transport route information"
+          }
+          className="flex flex-col gap-12"
+        >
           {deferredLegs.length > 0 && (
             <div className="flex flex-col gap-10 border border-[var(--color-status-error)] p-12">
               <div className="flex flex-wrap items-center justify-between gap-8">
@@ -157,7 +157,7 @@ export function SampleTransportSection({
             entityId={sample.id}
             disabled={isSubmitting}
           />
-        </div>
+        </ActionableFocusTarget>
       ) : (
         <TransportLegsEditor
           entityType="sample"

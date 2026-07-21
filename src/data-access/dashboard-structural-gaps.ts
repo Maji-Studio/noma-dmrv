@@ -5,7 +5,17 @@
  * transport provenance are cross-cutting certification inputs, so they block
  * the dashboard's all-clear state without changing any station badge.
  */
-import { and, count, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  isNotNull,
+  isNull,
+  ne,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { db } from "@/db";
 import {
   biocharProducts,
@@ -30,6 +40,7 @@ import {
   type EntityFocusTarget,
   ENTITY_FOCUS_TARGETS,
 } from "@/lib/entity-deep-link";
+import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
 
 export interface DashboardStructuralGapCounts {
   missingFacilityGps: number;
@@ -67,28 +78,85 @@ interface TransportGapRow {
   distanceEvidenceTargetId: string | null;
 }
 
-const transportGapSelection = {
-  endpointGpsGaps: sql<number>`count(*) filter (where
+function deliveryHasDocumentProvenance() {
+  return sql`case
+    when ${deliveries.distanceSource} = ${DOCUMENT_BACKED_DISTANCE_SOURCE}
+      then true
+    when ${deliveries.distanceKmOverride} is not null
+      then coalesce(${deliveries.distanceSource}, 'manual') = ${DOCUMENT_BACKED_DISTANCE_SOURCE}
+    else ${customerLocations.distanceSource} = ${DOCUMENT_BACKED_DISTANCE_SOURCE}
+  end`;
+}
+
+function contributingDeliveryCondition(
+  organizationId: string,
+  facilityId: string,
+) {
+  return sql`
+    ${deliveries.organizationId} = ${organizationId}
+    and ${deliveries.facilityId} = ${facilityId}
+    and ${deliveries.archivedAt} is null
+    and ${deliveries.status} = 'delivered'
+    and coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId}) = ${transportLegs.entityId}
+  `;
+}
+
+function biocharDistanceEvidenceMissing(
+  organizationId: string,
+  facilityId: string,
+) {
+  const contributing = contributingDeliveryCondition(organizationId, facilityId);
+  return sql`
+    ${transportLegs.distanceSource} is null
+    or ${transportLegs.distanceSource} <> ${DOCUMENT_BACKED_DISTANCE_SOURCE}
+    or not exists (
+      select 1
+      from ${deliveries}
+      left join ${orders}
+        on ${orders.id} = ${deliveries.orderId}
+       and ${orders.organizationId} = ${organizationId}
+      where ${contributing}
+    )
+    or exists (
+      select 1
+      from ${deliveries}
+      left join ${orders}
+        on ${orders.id} = ${deliveries.orderId}
+       and ${orders.organizationId} = ${organizationId}
+      left join ${customerLocations}
+        on ${customerLocations.id} = coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})
+       and ${customerLocations.organizationId} = ${organizationId}
+      where ${contributing}
+        and (
+          (${deliveryHasDocumentProvenance()}) is not true
+          or ${transportEvidenceDocumentCount(
+            organizationId,
+            "delivery",
+            deliveries.id,
+          )} = 0
+        )
+    )
+  `;
+}
+
+function transportGapSelection(distanceEvidenceMissing: SQL) {
+  return {
+    endpointGpsGaps: sql<number>`count(*) filter (where
     ${transportLegs.originGpsLatitude} is null
     or ${transportLegs.originGpsLongitude} is null
     or ${transportLegs.destinationGpsLatitude} is null
     or ${transportLegs.destinationGpsLongitude} is null
   )::int`,
-  distanceEvidenceGaps: sql<number>`count(*) filter (where
-    ${transportLegs.distanceSource} is null
-    or ${transportLegs.distanceSource} <> ${DOCUMENT_BACKED_DISTANCE_SOURCE}
-  )::int`,
-  endpointGpsTargetId: sql<string | null>`min(${transportLegs.entityId}::text) filter (where
+    distanceEvidenceGaps: sql<number>`count(*) filter (where ${distanceEvidenceMissing})::int`,
+    endpointGpsTargetId: sql<string | null>`min(${transportLegs.entityId}::text) filter (where
     ${transportLegs.originGpsLatitude} is null
     or ${transportLegs.originGpsLongitude} is null
     or ${transportLegs.destinationGpsLatitude} is null
     or ${transportLegs.destinationGpsLongitude} is null
   )`,
-  distanceEvidenceTargetId: sql<string | null>`min(${transportLegs.entityId}::text) filter (where
-    ${transportLegs.distanceSource} is null
-    or ${transportLegs.distanceSource} <> ${DOCUMENT_BACKED_DISTANCE_SOURCE}
-  )`,
-};
+    distanceEvidenceTargetId: sql<string | null>`min(${transportLegs.entityId}::text) filter (where ${distanceEvidenceMissing})`,
+  };
+}
 
 function addTransportGapRows(rows: TransportGapRow[]) {
   return {
@@ -252,7 +320,17 @@ export async function loadDashboardStructuralGapCounts(
         ),
       ),
     db
-      .select(transportGapSelection)
+      .select(
+        transportGapSelection(sql`
+          ${transportLegs.distanceSource} is null
+          or ${transportLegs.distanceSource} <> ${DOCUMENT_BACKED_DISTANCE_SOURCE}
+          or ${transportEvidenceDocumentCount(
+            orgId,
+            "feedstock",
+            feedstocks.id,
+          )} = 0
+        `),
+      )
       .from(transportLegs)
       .innerJoin(
         feedstocks,
@@ -270,7 +348,11 @@ export async function loadDashboardStructuralGapCounts(
         ),
       ),
     db
-      .select(transportGapSelection)
+      .select(
+        transportGapSelection(
+          biocharDistanceEvidenceMissing(orgId, facilityId),
+        ),
+      )
       .from(transportLegs)
       .innerJoin(
         biocharProducts,
@@ -288,7 +370,17 @@ export async function loadDashboardStructuralGapCounts(
         ),
       ),
     db
-      .select(transportGapSelection)
+      .select(
+        transportGapSelection(sql`
+          ${transportLegs.distanceSource} is null
+          or ${transportLegs.distanceSource} <> ${DOCUMENT_BACKED_DISTANCE_SOURCE}
+          or ${transportEvidenceDocumentCount(
+            orgId,
+            "transport_leg",
+            transportLegs.id,
+          )} = 0
+        `),
+      )
       .from(transportLegs)
       .innerJoin(
         samples,
@@ -369,12 +461,14 @@ export async function loadDashboardStructuralGapCounts(
             sql`coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
             distanceEvidenceTarget.entityId,
           ),
-          sql`case
-            when ${deliveries.distanceKmOverride} > 0
-              then coalesce(${deliveries.distanceSource}, 'manual') <> ${DOCUMENT_BACKED_DISTANCE_SOURCE}
-            else ${customerLocations.distanceSource} is null
-              or ${customerLocations.distanceSource} <> ${DOCUMENT_BACKED_DISTANCE_SOURCE}
-          end`,
+          sql`
+            (${deliveryHasDocumentProvenance()}) is not true
+            or ${transportEvidenceDocumentCount(
+              orgId,
+              "delivery",
+              deliveries.id,
+            )} = 0
+          `,
         ),
       )
       .limit(1);

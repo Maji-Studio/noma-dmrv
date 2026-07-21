@@ -314,6 +314,7 @@ export function DeliveryList() {
         vehicleName: null,
         effectiveDistanceKm: null,
         effectiveDistanceSource: null,
+        transportEvidenceDocumentCount: 0,
       };
       setIsFlushing(true);
       const flushResult = await deferredAttachments.flush(

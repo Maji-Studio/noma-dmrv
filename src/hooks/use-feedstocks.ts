@@ -25,6 +25,7 @@ import {
 } from "@/fn/feedstocks";
 import { storageLocationKeys } from "./use-storage-locations";
 import type { MutationCallbacks } from "./types";
+import { dashboardOverviewKeys } from "./use-dashboard-overview";
 
 // ============================================
 // Query Keys
@@ -137,6 +138,7 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
         predicate: (q) => q.queryKey[0] === "feedstocks" && q.queryKey[1] === "stats",
       });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
@@ -160,6 +162,7 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
         predicate: (q) => q.queryKey[0] === "feedstocks" && q.queryKey[1] === "stats",
       });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
@@ -181,6 +184,7 @@ export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, string>) 
         predicate: (q) => q.queryKey[0] === "feedstocks" && q.queryKey[1] === "stats",
       });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,

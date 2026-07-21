@@ -3,6 +3,7 @@ import {
   type CertifyEntityKind,
   type CertifyFieldDescriptor,
 } from "./certify-field-registry";
+import { hasCompleteTransportEvidence } from "./transport-evidence";
 
 export type EntityCertifyReadinessState = "ready" | "incomplete";
 
@@ -43,6 +44,19 @@ const APPLICATION_EVIDENCE_GAP: EntityCertifyGap = {
   label: "Application evidence",
   fields: ["evidenceGapCount"],
   detail: "Geotagged photos or boundary evidence required to certify",
+};
+
+const TRANSPORT_EVIDENCE_GAP: EntityCertifyGap = {
+  kind: "field",
+  key: "transportEvidence",
+  label: "Transport evidence",
+  fields: [
+    "transportDistanceSource",
+    "effectiveDistanceSource",
+    "transportEvidenceDocumentCount",
+  ],
+  detail:
+    "Saved Document provenance and at least one classified uploaded transport-evidence file are required to certify",
 };
 
 function fieldValue(
@@ -189,7 +203,32 @@ export function deriveEntityCertifyReadiness(
     }
   }
 
+  if (entityKind === "feedstock" || entityKind === "delivery") {
+    const source =
+      entityKind === "feedstock"
+        ? fieldValue(entity, "transportDistanceSource")
+        : fieldValue(entity, "effectiveDistanceSource");
+    const documentCount = fieldValue(
+      entity,
+      "transportEvidenceDocumentCount",
+    );
+    if (
+      !hasCompleteTransportEvidence(
+        source === "document" ? "document" : null,
+        typeof documentCount === "number" ? documentCount : undefined,
+      )
+    ) {
+      gaps.push(TRANSPORT_EVIDENCE_GAP);
+    }
+  }
+
   for (const descriptor of getCertifyFieldDescriptors(entityKind)) {
+    if (
+      entityKind === "feedstock" &&
+      descriptor.key === "transportDistanceProvenance"
+    ) {
+      continue;
+    }
     if (!conditionApplies(descriptor, entity)) continue;
     if (descriptorSatisfied(descriptor, entity)) continue;
     gaps.push(fieldGap(descriptor));

@@ -27,6 +27,7 @@ import {
 } from "@/fn/deliveries";
 
 import type { MutationCallbacks } from "./types";
+import { dashboardOverviewKeys } from "./use-dashboard-overview";
 
 // ============================================
 // Query Keys
@@ -201,6 +202,7 @@ export function useCreateDelivery(
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
       // Invalidate stats
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
       // Pre-populate the detail cache with the new delivery
       queryClient.setQueryData(deliveryKeys.detail(data.id), data);
 
@@ -299,6 +301,7 @@ export function useUpdateDelivery(
       });
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
 
       await callbacks?.onSuccess?.(data, variables);
     },

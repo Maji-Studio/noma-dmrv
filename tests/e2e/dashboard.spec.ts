@@ -16,6 +16,7 @@ import { DEC_ORG_ID } from "@/db/org-defaults";
 import {
   facilities,
   feedstocks,
+  documents,
   supplierLocations,
   suppliers,
   transportLegs,
@@ -76,6 +77,7 @@ test.describe("Dashboard (Flow Hero)", () => {
     const supplierLocationId = crypto.randomUUID();
     const feedstockId = crypto.randomUUID();
     const transportLegId = crypto.randomUUID();
+    const evidenceDocumentId = crypto.randomUUID();
     const tag = crypto.randomUUID().slice(0, 8);
 
     try {
@@ -161,16 +163,27 @@ test.describe("Dashboard (Flow Hero)", () => {
         ),
       ).toBeVisible();
       await expect(
-        feedstockSheet.getByText(
-          "Set or mark the distance source as Document, then attach the bill of lading or weigh-scale ticket that supports that distance. An upload alone does not change the saved distance provenance.",
-        ),
-      ).toHaveCount(0);
+        feedstockSheet.getByRole("radio", { name: "Bill of lading" }),
+      ).toBeChecked();
+      await expect(
+        feedstockSheet.getByRole("radio", { name: "Weigh-scale ticket" }),
+      ).toBeVisible();
+      await expect(
+        feedstockSheet.getByRole("radio", { name: "Other transport evidence" }),
+      ).toBeVisible();
+      await expect(
+        feedstockSheet.getByText("Drop files here or click to upload"),
+      ).toHaveCount(1);
+      await feedstockSheet
+        .getByRole("button", { name: "Use Document provenance" })
+        .click();
+      await expect(feedstockSheet.getByText(/Draft: Document/)).toBeVisible();
       await feedstockSheet
         .getByRole("button", { name: "About transport evidence" })
         .hover();
       await expect(
         page.getByText(
-          "To satisfy certification, mark the saved distance source as Document and attach supporting evidence. Uploading a file does not change the source; mirror uploaded files from the Removal's Supporting Sources panel before submission.",
+          "Transport evidence requires saved Document provenance plus at least one uploaded bill of lading, weigh-scale ticket, or other transport evidence file. One accepted file is enough. Uploading does not change the saved provenance.",
         ),
       ).toBeVisible();
 
@@ -189,6 +202,16 @@ test.describe("Dashboard (Flow Hero)", () => {
             distanceSource: "document",
           })
           .where(eq(transportLegs.id, transportLegId));
+        await tx.insert(documents).values({
+          id: evidenceDocumentId,
+          organizationId: DEC_ORG_ID,
+          entityType: "feedstock",
+          entityId: feedstockId,
+          documentType: "bill_of_lading",
+          fileName: "transport-evidence.pdf",
+          fileUrl: "https://example.invalid/transport-evidence.pdf",
+          uploadStatus: "uploaded",
+        });
       });
 
       await page.reload();
@@ -196,6 +219,7 @@ test.describe("Dashboard (Flow Hero)", () => {
       await expect(page.getByText("All clear")).toBeVisible();
       await expect(page.getByText("Every blocking check passes.")).toBeVisible();
     } finally {
+      await db.delete(documents).where(eq(documents.id, evidenceDocumentId));
       await db.delete(transportLegs).where(eq(transportLegs.id, transportLegId));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
       await db

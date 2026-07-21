@@ -34,6 +34,7 @@ import { SafeError } from "@/lib/errors";
 import { retireDocumentsForEntities } from "./documents";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
+import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
 
 const FEEDSTOCK_INTAKE_BIN_TYPES = ["feedstock_bin"] as const;
 const ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE =
@@ -81,6 +82,7 @@ export interface FeedstockWithRelations {
   transportDistanceKm: number | null;
   transportDistanceSource: "map_estimate" | "manual" | "document" | null;
   transportTripType: "return" | "one_way" | null;
+  transportEvidenceDocumentCount: number;
 }
 
 export interface PaginatedFeedstocks {
@@ -186,7 +188,14 @@ const feedstockSelectFields = {
 
 function feedstockBaseQuery(ctx: OrgContext) {
   return db
-    .select(feedstockSelectFields)
+    .select({
+      ...feedstockSelectFields,
+      transportEvidenceDocumentCount: transportEvidenceDocumentCount(
+        ctx.organizationId,
+        "feedstock",
+        feedstocks.id,
+      ),
+    })
     .from(feedstocks)
     .leftJoin(facilities, and(eq(feedstocks.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
     .leftJoin(suppliers, and(eq(feedstocks.supplierId, suppliers.id), eq(suppliers.organizationId, ctx.organizationId)))

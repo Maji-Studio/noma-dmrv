@@ -195,6 +195,14 @@ export function FormFileUpload({
     }
   }
 
+  async function startUploads(queue: File[]) {
+    // useFileUpload intentionally cancels its previous request. Keep a
+    // multi-select batch sequential so later files do not abort earlier ones.
+    for (const file of queue) {
+      await startUpload(file);
+    }
+  }
+
   function handleFiles(fileList: FileList | null) {
     if (!fileList) return;
     const arr = Array.from(fileList);
@@ -232,7 +240,7 @@ export function FormFileUpload({
     if (isRealMode) {
       const queue = multiple ? arr : arr.slice(0, 1);
       if (!multiple) setUploads([]);
-      for (const f of queue) void startUpload(f);
+      void startUploads(queue);
       return;
     }
 
@@ -324,7 +332,7 @@ export function FormFileUpload({
 
       {deferred && deferredFiles.length > 0 && (
         <ul className="space-y-4">
-          {deferredFiles.map(({ key, file }) => (
+          {deferredFiles.map(({ key, file, classificationLabel }) => (
             <li
               key={key}
               className="flex items-center gap-8 border border-[var(--color-border-tertiary)] px-12 py-8"
@@ -334,8 +342,15 @@ export function FormFileUpload({
                 weight="bold"
                 className="shrink-0 text-[var(--color-text-tertiary)]"
               />
-              <span className="body-small truncate text-[var(--color-text-primary)]">
-                {file.name}
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="body-small truncate text-[var(--color-text-primary)]">
+                  {file.name}
+                </span>
+                {classificationLabel && (
+                  <span className="body-caption text-[var(--color-text-tertiary)]">
+                    {classificationLabel}
+                  </span>
+                )}
               </span>
               <span className="body-caption shrink-0 text-[var(--color-text-tertiary)]">
                 {formatFileSize(file.size)}
@@ -346,7 +361,7 @@ export function FormFileUpload({
                 size="icon"
                 disabled={disabled}
                 onClick={() => onDeferredRemove?.(key)}
-                className="ml-auto h-24 w-24 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]"
+                className="h-24 w-24 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]"
                 aria-label={`Remove ${file.name}`}
               >
                 <XIcon size={14} weight="bold" />

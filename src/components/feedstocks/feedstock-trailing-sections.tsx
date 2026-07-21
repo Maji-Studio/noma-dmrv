@@ -6,14 +6,19 @@
 "use client";
 
 import { PaperclipIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormFileUpload, FormSection } from "@/components/forms";
+import { FormSection } from "@/components/forms";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import { SPINE_SECTION_TAG, type SpineMeta } from "@/components/forms/form-spine";
-import { TransportEvidencePanel } from "@/components/transport-legs";
+import {
+  ClassifiedTransportEvidenceUploader,
+  TransportDocumentProvenanceControl,
+  TransportEvidencePanel,
+} from "@/components/transport-legs";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
 
 interface FeedstockEvidenceSectionProps {
   feedstock?: FeedstockWithRelations;
@@ -26,6 +31,8 @@ interface FeedstockEvidenceSectionProps {
   retryEntityIds?: string[];
   isSubmitting?: boolean;
   focusTarget?: EntityFocusTarget | null;
+  draftDistanceSource?: DistanceSourceValue | null;
+  onSelectDocumentProvenance?: () => void;
   /** Injected by FormSpine — do not set manually. */
   __spine?: SpineMeta;
 }
@@ -37,6 +44,8 @@ export function FeedstockEvidenceSection({
   retryEntityIds,
   isSubmitting = false,
   focusTarget,
+  draftDistanceSource,
+  onSelectDocumentProvenance,
   __spine,
 }: FeedstockEvidenceSectionProps) {
   return (
@@ -68,6 +77,12 @@ export function FeedstockEvidenceSection({
               disabled={isSubmitting}
             />
           )}
+          <TransportDocumentProvenanceControl
+            savedSource={feedstock.transportDistanceSource}
+            draftSource={draftDistanceSource}
+            onSelectDocument={() => onSelectDocumentProvenance?.()}
+            disabled={isSubmitting}
+          />
           <TransportEvidencePanel
             entityType="feedstock"
             entityId={feedstock.id}
@@ -75,42 +90,12 @@ export function FeedstockEvidenceSection({
           />
         </ActionableFocusTarget>
       ) : (
-        <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
-          <FormField id="feedstock-deferred-bill-of-lading" label="Bill of lading">
-            <FormFileUpload
-              id="feedstock-deferred-bill-of-lading"
-              accept="image/*,.pdf"
-              multiple={false}
-              maxSizeMb={25}
-              disabled={isSubmitting}
-              deferred
-              deferredFiles={(deferredAttachments?.attachments ?? []).filter(
-                (attachment) => attachment.documentType === "bill_of_lading",
-              )}
-              onDeferredAdd={(files) =>
-                deferredAttachments?.add(files, "bill_of_lading")
-              }
-              onDeferredRemove={(key) => deferredAttachments?.remove(key)}
-            />
-          </FormField>
-          <FormField id="feedstock-deferred-weighbridge-ticket" label="Weigh-scale ticket">
-            <FormFileUpload
-              id="feedstock-deferred-weighbridge-ticket"
-              accept="image/*,.pdf"
-              multiple={false}
-              maxSizeMb={25}
-              disabled={isSubmitting}
-              deferred
-              deferredFiles={(deferredAttachments?.attachments ?? []).filter(
-                (attachment) => attachment.documentType === "weighbridge_ticket",
-              )}
-              onDeferredAdd={(files) =>
-                deferredAttachments?.add(files, "weighbridge_ticket")
-              }
-              onDeferredRemove={(key) => deferredAttachments?.remove(key)}
-            />
-          </FormField>
-        </div>
+        <ClassifiedTransportEvidenceUploader
+          id="feedstock-deferred-transport-evidence"
+          entityType="feedstock"
+          deferredAttachments={deferredAttachments}
+          disabled={isSubmitting}
+        />
       )}
     </FormSection>
   );

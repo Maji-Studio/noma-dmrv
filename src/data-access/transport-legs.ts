@@ -655,9 +655,11 @@ async function syncLockedBiocharProductTransportLeg(
         loadMassKg: row.loadMassKg,
         distanceKm: override ?? row.locationDistanceKm,
         distanceSource:
-          override != null
-            ? (row.deliveryDistanceSource ?? "manual")
-            : row.locationDistanceSource,
+          row.deliveryDistanceSource === "document"
+            ? "document"
+            : override != null
+              ? (row.deliveryDistanceSource ?? "manual")
+              : row.locationDistanceSource,
         locationName: row.locationName,
         locationGpsLatitude: row.locationGpsLatitude,
         locationGpsLongitude: row.locationGpsLongitude,
