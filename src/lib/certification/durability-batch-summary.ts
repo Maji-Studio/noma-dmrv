@@ -98,6 +98,14 @@ export interface DurabilityBatchSummaryInput extends CreditBatchDurabilityInput 
   facilityTimezone?: string | null;
   /** The batch's process's CURRENT sampling method (default Method A). */
   samplingMethod: SamplingMethod;
+  /**
+   * The process's Method-B unlock instant, or null while still on Method A. Once
+   * set, the baseline window is CLOSED — a future-dated sample can never join the
+   * ≥30 Method-A baseline (mirrors the server counter's gate in
+   * `production-processes.ts`). Optional so light fixtures stay minimal (null =
+   * window open).
+   */
+  methodBUnlockedAt?: Date | null;
   /** Member runs (id + code + dry mass) — code labels the replicate provenance. */
   runs: Array<{ id: string; code: string; biocharDryMassKg: number | null }>;
   /**
@@ -171,6 +179,23 @@ export interface DurabilityBatchSummary {
   submitted: DurabilitySummarySubmitted;
   /** Per-replicate display rows (raw lab chemistry), in pooled order. */
   replicates: DurabilitySummaryReplicate[];
+  /**
+   * Future-dated replicates, resolved SERVER-SIDE against the facility-local day
+   * (so the surfaces never disagree with the process baseline counter across
+   * timezones). `countsTowardBaseline` is false once the process has unlocked
+   * Method B — post-unlock a future sample can never join the ≥30 baseline, so
+   * the surface drops the "counts toward the baseline" claim.
+   */
+  future: DurabilitySummaryFuture;
+}
+
+export interface DurabilitySummaryFuture {
+  /** Replicates whose facility-local sampling day is after today. */
+  count: number;
+  /** Earliest such day (YYYY-MM-DD), or null when none. */
+  earliestDay: string | null;
+  /** Whether those future samples will still join the Method-B baseline. */
+  countsTowardBaseline: boolean;
 }
 
 /**
@@ -183,6 +208,7 @@ export interface DurabilityBatchSummary {
 export function buildDurabilityBatchSummaries(
   batches: DurabilityBatchSummaryInput[],
   attributionByRunId?: Map<string, number>,
+  asOfDate: Date = new Date(),
 ): DurabilityBatchSummary[] {
   const perBatch = buildPerBatchDurabilityData(batches, attributionByRunId);
   const perBatchById = new Map(perBatch.map((dp) => [dp.creditBatchId, dp]));
@@ -236,6 +262,21 @@ export function buildDurabilityBatchSummaries(
         ),
     );
 
+    // Resolve "today" in the facility zone so the future-dated cut matches the
+    // server baseline counter's exact-instant comparison instead of the viewer's
+    // browser day. Once Method B is unlocked the window is closed, so those
+    // samples never re-enter the baseline.
+    const todayIso = formatDayInZone(asOfDate, batch.facilityTimezone);
+    const futureReplicates = summarizeFutureReplicates(
+      { replicates },
+      todayIso ?? formatUtcDate(asOfDate),
+    );
+    const future: DurabilitySummaryFuture = {
+      count: futureReplicates.count,
+      earliestDay: futureReplicates.earliestDay,
+      countsTowardBaseline: batch.methodBUnlockedAt == null,
+    };
+
     return {
       creditBatchId: batch.creditBatchId,
       creditBatchCode: batch.creditBatchCode,
@@ -263,6 +304,7 @@ export function buildDurabilityBatchSummaries(
         productMassKg: dp?.productMassKg ?? 0,
       },
       replicates,
+      future,
     };
   });
 }

@@ -512,3 +512,86 @@ describe("summarizeFutureReplicates", () => {
     expect(summarizeFutureReplicates(summary, "2026-07-21").count).toBe(0);
   });
 });
+
+describe("buildDurabilityBatchSummaries future-sample facts", () => {
+  const asOf = new Date("2026-07-21T12:00:00.000Z");
+  const futureSample = () =>
+    sample({
+      id: "s-future",
+      sampleCode: "S-A-99",
+      samplingTime: new Date("2027-12-02T12:00:00.000Z"),
+      hToCOrgRatio: 0.3,
+      oToCOrgRatio: 0.04,
+    });
+
+  it("claims baseline countability for a future sample while still on Method A", () => {
+    const [summary] = buildDurabilityBatchSummaries(
+      [
+        batch({
+          creditBatchId: "cb-a",
+          creditBatchCode: "CB-A",
+          facilityTimezone: "UTC",
+          samplingMethod: "method_a",
+          methodBUnlockedAt: null,
+          samples: [...eligibleSamples(), futureSample()],
+        }),
+      ],
+      undefined,
+      asOf,
+    );
+
+    expect(summary.future.count).toBe(1);
+    expect(summary.future.earliestDay).toBe("2027-12-02");
+    expect(summary.future.countsTowardBaseline).toBe(true);
+  });
+
+  it("drops the baseline claim once the process has unlocked Method B", () => {
+    const [summary] = buildDurabilityBatchSummaries(
+      [
+        batch({
+          creditBatchId: "cb-a",
+          creditBatchCode: "CB-A",
+          facilityTimezone: "UTC",
+          samplingMethod: "method_b",
+          methodBUnlockedAt: new Date("2026-02-01T00:00:00.000Z"),
+          samples: [...eligibleSamples(), futureSample()],
+        }),
+      ],
+      undefined,
+      asOf,
+    );
+
+    expect(summary.future.count).toBe(1);
+    expect(summary.future.countsTowardBaseline).toBe(false);
+  });
+
+  it("resolves the future cut against the facility-local day, not UTC", () => {
+    // 2026-07-21T22:00Z is already 2026-07-22 in Kiritimati (UTC+14). A sample
+    // at 2026-07-22T06:00Z is 2026-07-22T20:00 local — the SAME local day as
+    // "today", so it is NOT future. A UTC comparison would wrongly flag it.
+    const [summary] = buildDurabilityBatchSummaries(
+      [
+        batch({
+          creditBatchId: "cb-a",
+          creditBatchCode: "CB-A",
+          facilityTimezone: "Pacific/Kiritimati",
+          samplingMethod: "method_a",
+          methodBUnlockedAt: null,
+          samples: [
+            sample({
+              id: "s-sameday",
+              sampleCode: "S-A-01",
+              samplingTime: new Date("2026-07-22T06:00:00.000Z"),
+              hToCOrgRatio: 0.3,
+              oToCOrgRatio: 0.04,
+            }),
+          ],
+        }),
+      ],
+      undefined,
+      new Date("2026-07-21T22:00:00.000Z"),
+    );
+
+    expect(summary.future.count).toBe(0);
+  });
+});

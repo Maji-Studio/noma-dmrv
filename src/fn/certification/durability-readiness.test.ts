@@ -31,6 +31,7 @@ function batch(
     runs: [],
     productionProcessId: "process-1",
     samplingMethod: "method_a",
+    methodBUnlockedAt: null,
     declaredHToCorgRatio: null,
     durabilityOption: "200_year",
   };
