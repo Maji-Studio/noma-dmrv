@@ -22,5 +22,10 @@ export function useOnboardingStatus(facilityId: string | null) {
       return result.data;
     },
     staleTime: ONBOARDING_STATUS_STALE_TIME_MS,
+    // The guide's CTAs round-trip to entity hubs; the dashboard remounts on
+    // return, and none of the entity mutations invalidate onboardingKeys.
+    // Refetching on every mount keeps the computed Setup steps honest without
+    // wiring invalidations into every create-entity hook.
+    refetchOnMount: "always",
   });
 }
