@@ -36,6 +36,8 @@ export interface CreditBatchWithSamples extends CreditBatchDurabilityInput {
   productionProcessId: string | null;
   /** The batch's effective sampling method at its immutable start boundary. */
   samplingMethod: SamplingMethod;
+  /** The process's Method-B unlock instant (null while on Method A). */
+  methodBUnlockedAt: Date | null;
   /** Operator-declared `credit_batches.h_to_c_org_ratio` (advisory; reconciled). */
   declaredHToCorgRatio: number | null;
   /** The batch's declared durability tier — its samples inherit it (issue #309). */
@@ -175,6 +177,11 @@ export async function getCreditBatchesWithSamples(
         batchStartDate: batch.startDate,
       });
     })(),
+    methodBUnlockedAt:
+      batch.productionProcessId == null
+        ? null
+        : samplingRegimeByProcess.get(batch.productionProcessId)
+            ?.methodBUnlockedAt ?? null,
     declaredHToCorgRatio: batch.declaredHToCorgRatio,
     durabilityOption: batch.durabilityOption ?? DURABILITY_TIER_FALLBACK,
     runs: runsByBatch.get(batch.id) ?? [],

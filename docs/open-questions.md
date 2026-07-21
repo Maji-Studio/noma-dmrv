@@ -1301,3 +1301,62 @@ Isometric client, Renovate vs Dependabot, pnpm supply-chain guidance — the swe
 produced no adversarially-verified claims in these areas. (Vitest 4 and
 Playwright 1.58+ were on this list and are both already adopted — `vitest`
 `^4.1.0`, `@playwright/test` `^1.58.2`.)
+
+## QA 2026-07-21 remediation follow-ups (opened 2026-07-21)
+
+Product decisions deferred from the staging UX audit + Isometric integration
+remediation PR (ledgers: `docs/qa/2026-07-21-staging-ux-audit.md`,
+`docs/qa/2026-07-21-staging-isometric-integration.md`). The PR shipped the
+Layer-1 fixes (named exclusion clocks, structured Removal setup gaps, removed
+inert lifecycle badge, typed archive confirmation, Method-B baseline lower
+bound); these are the decisions it deliberately did not make.
+
+### Are future-dated samples legitimate planned records? (`samples/future-dates`)
+
+- The remediation labels future-dated samples everywhere ("N future-dated —
+  counted from <date>") but does not block them at entry: the QA synthetic
+  chains themselves are future-dated, and the audit left block-vs-label as an
+  open decision.
+- **Resolve via:** decide whether sample entry should reject sampling times
+  after "now" (with an explicit planned-samples workflow if planning is a real
+  need), then enforce in `src/schemas/samples` + data-access (S).
+
+### Who owns the Credit Batch lifecycle? (`credit-batches/lifecycle`)
+
+- `credit_batches.status` still defaults every row to `pending` with no
+  transition path; the badge/filter were removed from the UI rather than
+  wired to anything. The enum (draft/pending/verified/issued/rejected) remains
+  in the schema and the dashboard's "period ended · awaiting verification"
+  attention item still keys on `status = 'pending'`.
+- **Resolve via:** define the lifecycle's owner (local readiness vs Isometric
+  submission/verification/issuance webhooks) and its transitions, then either
+  drive the column from that machine and restore the badge, or drop the column
+  (M).
+
+### Blueprint-key gaps: operator-fixable or admin diagnostic? (`certification/blueprint-key-gaps`)
+
+- The Removal wizard now names unresolved template blueprint keys instead of
+  issuing the false link/template instruction, but the copy can only say "ask
+  an administrator" — there is no in-app control that resolves a blueprint
+  mapping.
+- **Resolve via:** decide whether blueprint resolution belongs in Certification
+  Settings (operator-facing) or stays an admin/support escalation; if the
+  former, build the mapping surface (M).
+
+### Archive governance for registry-submitted lineages (`facilities/archive-governance`)
+
+- Archiving a facility with submitted Removals/GHG statements now requires the
+  typed facility code plus a warning, but is still allowed for any admin. The
+  audit proposed an admin-only governed path (reason, audit event, external
+  IDs) for submitted lineages.
+- **Resolve via:** decide whether submitted-lineage archive needs a separate
+  governed workflow or the typed-code gate suffices pre-launch (S).
+
+### Grouped cert-gap counts vs missing-field counts (`certification/gap-count-wording`)
+
+- One grouped "cert gap" can contain several missing fields (e.g. telemetry +
+  three photo roles). The counts are consistent across surfaces, but the
+  wording never says "1 gap group · 4 missing fields".
+- **Resolve via:** pick one convention (group count with expanded field list,
+  or field count everywhere) and apply it to the card tag, health strip, and
+  Removal wizard copy (S).

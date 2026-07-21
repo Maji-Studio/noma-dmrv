@@ -60,6 +60,16 @@ export interface EntitySelectProps {
   hideSearch?: boolean;
   /** Custom formatter for the selected value display */
   formatSelectedLabel?: (entity: EntityOption) => string;
+  /**
+   * Rendered when the (unsearched) option list is empty: names the upstream
+   * prerequisite that produces options and links straight to it, so an empty
+   * picker is a next step, not a dead end (QA 2026-07-21 F4/isometric).
+   */
+  emptyHint?: {
+    message: string;
+    href?: string;
+    linkLabel?: string;
+  };
 }
 
 export interface UseEntityOptionsParams {

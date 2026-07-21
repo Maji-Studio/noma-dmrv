@@ -209,15 +209,18 @@ export async function getFacilityStorageLocationsFn(
 }
 
 /**
- * Get unique countries from all facilities
+ * Get unique countries for the facility filter — active facilities by
+ * default, archived when requested (the filter must match the visible list).
  */
-export async function getFacilityCountriesFn(): Promise<
-  ActionResult<string[]>
-> {
+export async function getFacilityCountriesFn(
+  archived?: boolean,
+): Promise<ActionResult<string[]>> {
   try {
     const ctx = await requireOrgContext();
 
-    const countries = await getFacilityCountriesData(ctx);
+    const countries = await getFacilityCountriesData(ctx, {
+      archived: archived === true,
+    });
     return { success: true, data: countries };
   } catch (error) {
     return {

@@ -178,6 +178,7 @@ export function EntitySelect({
   alwaysShowSearch = false,
   hideSearch = false,
   formatSelectedLabel,
+  emptyHint,
 }: EntitySelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -324,6 +325,17 @@ export function EntitySelect({
     [onChange]
   );
 
+  // The empty-state renders a recovery link (`emptyHint.href`) only when the
+  // list is genuinely empty (not loading/errored, no active search). While it's
+  // showing, Tab must NOT close the dropdown — that would unmount the link before
+  // focus could land on it, leaving it keyboard-unreachable.
+  const showEmptyStateRecoveryLink =
+    !isLoading &&
+    !fetchError &&
+    options.length === 0 &&
+    searchQuery.length === 0 &&
+    !!emptyHint?.href;
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement | HTMLButtonElement>) => {
       const optionCount = options.length + (shouldShowCreateAction ? 1 : 0);
@@ -365,12 +377,16 @@ export function EntitySelect({
           }
           break;
         case "Tab":
-          setIsOpen(false);
-          setSearchQuery("");
+          // Let Tab move focus to the empty-state recovery link instead of
+          // closing (unmounting) the dropdown out from under it.
+          if (!showEmptyStateRecoveryLink) {
+            setIsOpen(false);
+            setSearchQuery("");
+          }
           break;
       }
     },
-    [options, clampedHighlightedIndex, handleSelect, resolvedCreateAction, shouldShowCreateAction, isOpen]
+    [options, clampedHighlightedIndex, handleSelect, resolvedCreateAction, shouldShowCreateAction, isOpen, showEmptyStateRecoveryLink]
   );
 
   const handleToggle = useCallback(() => {
@@ -485,8 +501,27 @@ export function EntitySelect({
               <li className="px-16 py-12 text-[var(--text-s)] text-[var(--color-signal-red)]">
                 Error loading options
               </li>
-            ) : options.length === 0 ? null
-            : (
+            ) : options.length === 0 ? (
+              // Explain WHY the list is empty and link the upstream fix; a
+              // search miss keeps the plain "no match" reading instead.
+              emptyHint && searchQuery.length === 0 ? (
+                <li className="flex flex-col gap-4 px-16 py-12">
+                  <span className="text-[var(--text-s)] text-[var(--color-text-secondary)]">
+                    {emptyHint.message}
+                  </span>
+                  {emptyHint.href && (
+                    <a
+                      href={emptyHint.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="self-start text-[var(--text-s)] font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
+                    >
+                      {emptyHint.linkLabel ?? "Open prerequisite"}
+                    </a>
+                  )}
+                </li>
+              ) : null
+            ) : (
               options.map((option, index) => (
                 <li
                   key={option.id}
