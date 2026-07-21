@@ -220,10 +220,15 @@ export async function getProductionProcessSummariesByFacility(
   const exclusionRows = await db
     .select({
       productionProcessId: creditBatches.productionProcessId,
-      futureSampleCount: sql<number>`count(*) filter (where ${samples.samplingTime} >= ${asOfDate} and ${samples.samplingTime} >= ${productionProcesses.establishedAt})`.mapWith(Number),
+      // Baseline window is [established_at, method_b_unlocked_at): once a process
+      // has unlocked Method B, future-dated samples land AFTER the unlock and are
+      // never baseline evidence (they mirror the DB backstop in migration 0083),
+      // so the "counted from <date>" note must not advertise them. A null unlock
+      // timestamp (still Method A) keeps every future-dated sample in view.
+      futureSampleCount: sql<number>`count(*) filter (where ${samples.samplingTime} >= ${asOfDate} and ${samples.samplingTime} >= ${productionProcesses.establishedAt} and (${productionProcesses.methodBUnlockedAt} is null or ${samples.samplingTime} < ${productionProcesses.methodBUnlockedAt}))`.mapWith(Number),
       // mapWith(column) reuses the timestamp decoder, so the min comes back as
       // a Date on the same UTC convention as the column reads.
-      nextCountableSamplingTime: sql<Date | null>`min(${samples.samplingTime}) filter (where ${samples.samplingTime} >= ${asOfDate} and ${samples.samplingTime} >= ${productionProcesses.establishedAt})`.mapWith(samples.samplingTime),
+      nextCountableSamplingTime: sql<Date | null>`min(${samples.samplingTime}) filter (where ${samples.samplingTime} >= ${asOfDate} and ${samples.samplingTime} >= ${productionProcesses.establishedAt} and (${productionProcesses.methodBUnlockedAt} is null or ${samples.samplingTime} < ${productionProcesses.methodBUnlockedAt}))`.mapWith(samples.samplingTime),
       preEstablishmentSampleCount: sql<number>`count(*) filter (where ${samples.samplingTime} < ${productionProcesses.establishedAt})`.mapWith(Number),
     })
     .from(samples)
