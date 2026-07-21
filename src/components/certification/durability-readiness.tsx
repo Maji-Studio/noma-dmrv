@@ -22,7 +22,7 @@ import {
   type DurabilityBatchSummary,
   type DurabilitySummaryEligibility,
 } from "@/lib/certification/durability-batch-summary";
-import { formatDate } from "@/lib/format-utils";
+import { formatDayString } from "@/lib/format-utils";
 import type { ValueWithStdDev } from "@/lib/isometric/utils/durability-aggregation";
 
 type Tone = "ok" | "wait" | "bad" | "off";
@@ -178,7 +178,7 @@ export function DurabilityReadinessSignals({
           icon={<WarningIcon size={14} weight="fill" />}
         >
           {future.countsTowardBaseline
-            ? `${future.count} future-dated — counts toward the Method-B baseline from ${formatDate(future.earliestDay)}`
+            ? `${future.count} future-dated — counts toward the Method-B baseline from ${formatDayString(future.earliestDay)}`
             : `${future.count} future-dated — not part of the Method-B baseline`}
         </ReadinessChip>
       )}

@@ -21,6 +21,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { InfoHint } from "@/components/ui/tooltip";
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { formatDayString } from "@/lib/format-utils";
 import {
   METHOD_B_MINIMUM_METHOD_A_SAMPLES,
   METHOD_B_SAMPLING_CADENCE_BATCHES,
@@ -93,7 +94,7 @@ function createColumns(
             {p.futureSampleCount > 0 && (
               <span className="body-caption text-[var(--st-wait)]">
                 {p.futureSampleCount} future-dated — counted from{" "}
-                {p.nextCountableSamplingDay}
+                {formatDayString(p.nextCountableSamplingDay)}
               </span>
             )}
             {p.preEstablishmentSampleCount > 0 && (
