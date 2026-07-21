@@ -27,6 +27,17 @@ export function allowedProductionRunStatusesFrom(
   return ALLOWED_TRANSITIONS[status];
 }
 
+export function shouldIncludeProductionRunEndTime(input: {
+  endFieldsTouched: boolean;
+  from: ProductionRunStatus;
+  to: ProductionRunStatus;
+}): boolean {
+  return (
+    input.endFieldsTouched ||
+    (!statusCountsAsPhysicalProduction(input.from) && statusCountsAsPhysicalProduction(input.to))
+  );
+}
+
 export function assertProductionRunTransition(
   from: ProductionRunStatus,
   to: ProductionRunStatus,
