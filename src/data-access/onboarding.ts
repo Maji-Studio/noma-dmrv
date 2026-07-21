@@ -16,6 +16,12 @@ const COMPLETE_PRODUCTION_RUN_STATUS = "complete";
 
 export interface OnboardingStatus {
   isOwnerOrAdmin: boolean;
+  /**
+   * True only for a real org membership of owner/admin rank — excludes the
+   * platform-admin fallback. The wizard auto-opens only for these users; a
+   * platform admin browsing a fresh org gets the guide, not a modal.
+   */
+  isOrgOwnerOrAdmin: boolean;
   facilityCount: number;
   supplierCount: number;
   facility: null | {
@@ -33,10 +39,9 @@ export async function getOnboardingStatus(
 ): Promise<OnboardingStatus> {
   requireOrgScope(ctx);
 
-  const isOwnerOrAdmin =
-    ctx.isPlatformAdmin ||
-    ctx.orgRole === "owner" ||
-    ctx.orgRole === "admin";
+  const isOrgOwnerOrAdmin =
+    ctx.orgRole === "owner" || ctx.orgRole === "admin";
+  const isOwnerOrAdmin = ctx.isPlatformAdmin || isOrgOwnerOrAdmin;
 
   if (facilityId === null) {
     const [[facilityCount], [supplierCount]] = await Promise.all([
@@ -52,6 +57,7 @@ export async function getOnboardingStatus(
 
     return {
       isOwnerOrAdmin,
+      isOrgOwnerOrAdmin,
       facilityCount: Number(facilityCount.count),
       supplierCount: Number(supplierCount.count),
       facility: null,
@@ -127,6 +133,7 @@ export async function getOnboardingStatus(
 
   return {
     isOwnerOrAdmin,
+    isOrgOwnerOrAdmin,
     facilityCount: Number(facilityCount.count),
     supplierCount: Number(supplierCount.count),
     facility: {

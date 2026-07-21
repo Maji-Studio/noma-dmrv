@@ -64,10 +64,14 @@ test.describe("First-run onboarding", () => {
       });
     });
 
-    const context = await createDirectAuthContext(browser, OWNER, baseURL!);
-    const page = await context.newPage();
-
+    // Everything after seeding sits inside try/finally — an API sign-in
+    // failure (e.g. auth rate limiting) must still tear the seeded org down,
+    // or reruns leak orgs into the shared dev DB.
+    let context: Awaited<ReturnType<typeof createDirectAuthContext>> | null =
+      null;
     try {
+      context = await createDirectAuthContext(browser, OWNER, baseURL!);
+      const page = await context.newPage();
       // 1. The wizard auto-opens on a zero-facility org.
       await page.goto("/dashboard");
       const wizard = page.getByRole("dialog", { name: "Set up your facility" });
@@ -174,7 +178,8 @@ test.describe("First-run onboarding", () => {
         page.getByRole("dialog", { name: "Set up your facility" }),
       ).not.toBeVisible();
     } finally {
-      await context.close();
+      // The harness may have already torn the context down on test timeout.
+      await context?.close().catch(() => {});
       const orgTables = [
         schema.certifierCredentials,
         schema.supplierLocations,

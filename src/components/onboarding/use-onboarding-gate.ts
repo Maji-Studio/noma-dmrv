@@ -108,8 +108,12 @@ export function useOnboardingGate(facilityId: string | null): OnboardingGate {
   // the Modal so creating the facility doesn't close it out from under the user.
   const [explicitOpen, setExplicitOpen] = useState<boolean | null>(null);
 
+  // Auto-open interrupts with a modal, so it's reserved for the true
+  // onboarding persona — a real org Owner/Admin. A platform admin browsing a
+  // fresh org gets the guide takeover instead and can open the wizard from
+  // its facility CTA.
   const autoOpenEligible =
-    !!status && status.isOwnerOrAdmin && status.facilityCount === 0;
+    !!status && status.isOrgOwnerOrAdmin && status.facilityCount === 0;
   const isOpen =
     explicitOpen === null ? autoOpenEligible && !dismissed : explicitOpen;
 

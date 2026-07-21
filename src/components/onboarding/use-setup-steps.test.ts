@@ -9,6 +9,7 @@ const FACILITY_ID = "3e0a4a86-1af9-4b39-a97e-08fbd8b0f1aa";
 function makeStatus(overrides?: Partial<OnboardingStatus>): OnboardingStatus {
   return {
     isOwnerOrAdmin: true,
+    isOrgOwnerOrAdmin: true,
     facilityCount: 1,
     supplierCount: 1,
     facility: {
