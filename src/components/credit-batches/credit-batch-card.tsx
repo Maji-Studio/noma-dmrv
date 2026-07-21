@@ -8,11 +8,9 @@ import {
   TrashIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { RowActionsMenu, StatusBadge } from "@/components/ui";
+import { RowActionsMenu } from "@/components/ui";
 import {
-  formatCreditBatchStatus,
   formatDurabilityOption,
-  type CreditBatchStatus,
   type DurabilityOption,
 } from "@/schemas/credit-batches";
 import type { CreditBatchHealthSummary } from "@/fn/certification";
@@ -73,21 +71,17 @@ export function CreditBatchCard({
       onClick={() => onView(creditBatch)}
     >
       <div className="flex flex-1 flex-col gap-16 p-20">
-        {/* Header: code badge + lifecycle status / cert readiness */}
+        {/* Header: code badge + cert readiness. The lifecycle status column is
+            deliberately absent — every batch sits at its DB default ("pending")
+            with no transition path, so the badge answered nothing the readiness
+            tag doesn't (QA 2026-07-21 F3). It returns when a real registry
+            lifecycle (submitted/accepted/rejected) exists. */}
         <div className="flex items-start justify-between gap-12">
           <span className="inline-flex items-center gap-6 border border-[var(--clr-dark-purple-20)] bg-[var(--clr-dark-purple-10)] px-10 py-4 text-[11px] uppercase tracking-[0.12em] text-[var(--clr-dark-purple)]">
             <CertificateIcon size={12} weight="bold" />
             {creditBatch.code}
           </span>
-          <div className="flex flex-col items-end gap-6">
-            <StatusBadge
-              status={creditBatch.status as CreditBatchStatus}
-              label={formatCreditBatchStatus(
-                creditBatch.status as CreditBatchStatus
-              )}
-            />
-            {health && <CertReadinessTag health={health} />}
-          </div>
+          {health && <CertReadinessTag health={health} />}
         </div>
 
         {/* Crediting period + facility */}

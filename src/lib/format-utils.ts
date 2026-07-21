@@ -42,6 +42,26 @@ export function formatDate(value: DateValue): string {
   return date ? format(date, DATE_FORMAT) : FALLBACK_DISPLAY;
 }
 
+const SHORT_MONTH_NAMES = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+] as const;
+
+/**
+ * Format an already-resolved `YYYY-MM-DD` day string for display ("Aug 1, 2026")
+ * WITHOUT reparsing it into an instant — the parts are read directly, so a
+ * facility-local day never drifts into the viewer's timezone. Use this for
+ * server-computed day strings (e.g. `nextCountableSamplingDay`); use `formatDate`
+ * for `Date`/timestamp values. Returns "—" for null, undefined, or malformed input.
+ */
+export function formatDayString(day: string | null | undefined): string {
+  if (!day || !DATE_ONLY_PATTERN.test(day)) return FALLBACK_DISPLAY;
+  const [year, month, dayOfMonth] = day.split("-").map(Number);
+  const monthName = SHORT_MONTH_NAMES[month - 1];
+  if (!monthName) return FALLBACK_DISPLAY;
+  return `${monthName} ${dayOfMonth}, ${year}`;
+}
+
 /**
  * Format a date and time for user-facing display using a 24-hour clock.
  * Returns "—" for null, undefined, or invalid values.

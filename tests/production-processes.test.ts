@@ -22,6 +22,8 @@ import {
   findOrCreateProductionProcess,
   getProcessComplianceDrift,
   getProductionProcessSummariesByFacility,
+  setProcessOperationalStart,
+  unlockMethodBForProcess,
 } from "@/data-access/production-processes";
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { deleteSample, updateSample } from "@/data-access/samples";
@@ -51,12 +53,37 @@ const METHOD_B_SAMPLE_WRITE_GUARDS_MIGRATION = resolve(
   process.cwd(),
   "drizzle/0062_process_method_b_sample_write_guards.sql",
 );
+// The minimum-samples trigger is split across two migrations: 0060 CREATEs the
+// trigger + base function; 0083 CREATE OR REPLACEs the function to add the
+// baseline window's LOWER bound (sampling_time >= established_at). CI provisions
+// the test DB with `drizzle-kit push` (schema only — hand-written trigger
+// migrations are NOT applied), so both files must be replayed here, in order, to
+// materialise the trigger. Both statements are idempotent (CREATE OR REPLACE /
+// DROP TRIGGER IF EXISTS), so this is safe on a fully-migrated DB too.
+const METHOD_B_MINIMUM_SAMPLES_TRIGGER_MIGRATION = resolve(
+  process.cwd(),
+  "drizzle/0060_process_method_b_minimum_samples_guard.sql",
+);
+const METHOD_B_MINIMUM_SAMPLES_LOWER_BOUND_MIGRATION = resolve(
+  process.cwd(),
+  "drizzle/0083_process_method_b_established_lower_bound.sql",
+);
+// 0084 extends the same [established_at, method_b_unlocked_at) window to the
+// sample/credit-batch WRITE-PATH companion (`assert_existing_...`); replayed
+// after 0062, which creates the after-write triggers that call it.
+const METHOD_B_WRITE_GUARD_LOWER_BOUND_MIGRATION = resolve(
+  process.cwd(),
+  "drizzle/0084_method_b_write_guard_established_lower_bound.sql",
+);
+// 0085 makes established_at immutable once Method B has unlocked; CI provisions
+// the test DB with `drizzle-kit push` (schema only), so replay the trigger here.
+const ESTABLISHED_AT_IMMUTABLE_MIGRATION = resolve(
+  process.cwd(),
+  "drizzle/0085_established_at_immutable_after_unlock.sql",
+);
 
-async function applyMethodBSampleWriteGuards(): Promise<void> {
-  const migrationSql = readFileSync(
-    METHOD_B_SAMPLE_WRITE_GUARDS_MIGRATION,
-    "utf8",
-  );
+async function applyMigrationFile(migrationPath: string): Promise<void> {
+  const migrationSql = readFileSync(migrationPath, "utf8");
   const statements = migrationSql
     .split("--> statement-breakpoint")
     .map((statement) => statement.trim())
@@ -67,10 +94,28 @@ async function applyMethodBSampleWriteGuards(): Promise<void> {
   }
 }
 
-async function createMethodBProcessWithBaseline(tag: string): Promise<{
+async function applyMethodBSampleWriteGuards(): Promise<void> {
+  await applyMigrationFile(METHOD_B_SAMPLE_WRITE_GUARDS_MIGRATION);
+  await applyMigrationFile(METHOD_B_WRITE_GUARD_LOWER_BOUND_MIGRATION);
+}
+
+async function applyMethodBMinimumSamplesGuard(): Promise<void> {
+  await applyMigrationFile(METHOD_B_MINIMUM_SAMPLES_TRIGGER_MIGRATION);
+  await applyMigrationFile(METHOD_B_MINIMUM_SAMPLES_LOWER_BOUND_MIGRATION);
+}
+
+async function applyEstablishedAtImmutableGuard(): Promise<void> {
+  await applyMigrationFile(ESTABLISHED_AT_IMMUTABLE_MIGRATION);
+}
+
+async function createMethodBProcessWithBaseline(
+  tag: string,
+  options: { preEstablishmentSampleCount?: number } = {},
+): Promise<{
   processId: string;
   batchId: string;
   sampleIds: string[];
+  preEstablishmentSampleIds: string[];
 }> {
   const suffix = `${Date.now().toString(36)}-${tag}`;
   const [process] = await db
@@ -117,6 +162,35 @@ async function createMethodBProcessWithBaseline(tag: string): Promise<{
   const sampleIds = insertedSamples.map((sample) => sample.id);
   createdIds.samples.push(...sampleIds);
 
+  // Optional back-dated padding: samples dated BEFORE established_at. They are
+  // never baseline evidence, so the ≥30 in-window set alone must carry the
+  // process — the padding only exists to prove the write-guard lower bound
+  // (0084) refuses to count it when an in-window row is later removed.
+  const preEstablishmentSampleIds: string[] = [];
+  const preEstablishmentSampleCount = options.preEstablishmentSampleCount ?? 0;
+  if (preEstablishmentSampleCount > 0) {
+    const preRows = await db
+      .insert(samples)
+      .values(
+        Array.from({ length: preEstablishmentSampleCount }, (_, index) => ({
+          organizationId: TEST_ORG_ID,
+          creditBatchId: batch.id,
+          sampleCode: `S-PROC-MB-PRE-${suffix}-${index}`,
+          samplingTime: new Date(
+            `2025-12-${String(index + 1).padStart(2, "0")}T12:00:00.000Z`,
+          ),
+          totalCarbonPercent: 80,
+          organicCarbonPercent: 75,
+          randomReflectanceR0Percent: METHOD_B_RANDOM_REFLECTANCE_R0_PERCENT,
+          sReflectanceFraction: METHOD_B_S_REFLECTANCE_FRACTION,
+          residualCarbonPercent: METHOD_B_RESIDUAL_CARBON_PERCENT,
+        })),
+      )
+      .returning({ id: samples.id });
+    preEstablishmentSampleIds.push(...preRows.map((row) => row.id));
+    createdIds.samples.push(...preEstablishmentSampleIds);
+  }
+
   await db
     .update(productionProcesses)
     .set({
@@ -128,13 +202,20 @@ async function createMethodBProcessWithBaseline(tag: string): Promise<{
     })
     .where(eq(productionProcesses.id, process.id));
 
-  return { processId: process.id, batchId: batch.id, sampleIds };
+  return {
+    processId: process.id,
+    batchId: batch.id,
+    sampleIds,
+    preEstablishmentSampleIds,
+  };
 }
 
 beforeAll(() => ensureTestOrg());
 
 beforeAll(async () => {
   await applyMethodBSampleWriteGuards();
+  await applyMethodBMinimumSamplesGuard();
+  await applyEstablishedAtImmutableGuard();
 
   const runId = Date.now().toString(36);
 
@@ -259,10 +340,18 @@ describe("findOrCreateProductionProcess", () => {
 
   it("uses the canonical process sample count in the summary surface", async () => {
     const runId = Date.now().toString(36);
-    const process = await findOrCreateProductionProcess(makeTestOrgContext(TEST_USER_ID), {
-      facilityId,
-      feedstockTypeId,
-    });
+    // A dedicated process whose operational start PREDATES the sample dates —
+    // the baseline window is [established_at, asOf), so samples dated before
+    // the process began never count (ADR 0017, 2026-07-12 amendment).
+    const [process] = await db
+      .insert(productionProcesses)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId,
+        feedstockTypeId,
+        establishedAt: new Date("2025-12-01T00:00:00.000Z"),
+      })
+      .returning();
     const [sampledBatch, unsampledBatch] = await db
       .insert(creditBatches)
       .values([
@@ -305,18 +394,31 @@ describe("findOrCreateProductionProcess", () => {
       .returning({ id: samples.id });
     createdIds.samples.push(...insertedSamples.map((sample) => sample.id));
 
-    const [futureSample] = await db
+    const excludedSamples = await db
       .insert(samples)
-      .values({
-        organizationId: TEST_ORG_ID,
-        creditBatchId: sampledBatch.id,
-        sampleCode: `S-PROC-${runId}-FUTURE`,
-        samplingTime: FAR_FUTURE_SAMPLING_TIME,
-        totalCarbonPercent: 80,
-        organicCarbonPercent: 75,
-      })
+      .values([
+        {
+          organizationId: TEST_ORG_ID,
+          creditBatchId: sampledBatch.id,
+          sampleCode: `S-PROC-${runId}-FUTURE`,
+          samplingTime: FAR_FUTURE_SAMPLING_TIME,
+          totalCarbonPercent: 80,
+          organicCarbonPercent: 75,
+        },
+        // Dated before the process's operational start — permanently outside
+        // the baseline window, unlike the future sample above which starts
+        // counting once its sampling date passes.
+        {
+          organizationId: TEST_ORG_ID,
+          creditBatchId: sampledBatch.id,
+          sampleCode: `S-PROC-${runId}-PRE-EST`,
+          samplingTime: new Date("2025-11-15T12:00:00.000Z"),
+          totalCarbonPercent: 80,
+          organicCarbonPercent: 75,
+        },
+      ])
       .returning({ id: samples.id });
-    createdIds.samples.push(futureSample.id);
+    createdIds.samples.push(...excludedSamples.map((sample) => sample.id));
 
     const countsByProcess = await countEligibleSamplesByProcess(
       makeTestOrgContext(TEST_USER_ID),
@@ -331,10 +433,199 @@ describe("findOrCreateProductionProcess", () => {
 
     expect(countsByProcess.get(process.id)).toBe(3);
     expect(summary?.eligibleSampleCount).toBe(3);
+    expect(summary?.futureSampleCount).toBe(1);
+    expect(summary?.nextCountableSamplingTime?.getTime()).toBe(
+      FAR_FUTURE_SAMPLING_TIME.getTime(),
+    );
+    // The surfaces render this facility-local day string, not the raw instant
+    // through a viewer-local formatter (QA 2026-07-21 round-2 P3).
+    expect(summary?.nextCountableSamplingDay).toBe("2999-01-01");
+    expect(summary?.preEstablishmentSampleCount).toBe(1);
     expect(summary?.totalBatches).toBe(2);
     expect(summary?.sampledBatches).toBe(1);
     expect(summary?.requiredSampledBatches).toBe(2);
     expect(summary?.cadenceMet).toBe(false);
+  });
+
+  it("excludes samples dated before the process's operational start even without an asOfDate", async () => {
+    const runId = `${Date.now().toString(36)}-lb`;
+    // Back-entered process: operationally started 2026-03-01, but its batch
+    // holds samples from before that start. Only the post-start sample counts
+    // (ADR 0017, 2026-07-12 amendment; CONTEXT.md "Method-B baseline").
+    const [process] = await db
+      .insert(productionProcesses)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId,
+        feedstockTypeId,
+        establishedAt: new Date("2026-03-01T00:00:00.000Z"),
+      })
+      .returning();
+    const [batch] = await db
+      .insert(creditBatches)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `CB-PROC-LB-${runId}`,
+        facilityId,
+        feedstockTypeId,
+        productionProcessId: process.id,
+        // ≤ 1 month (credit_batches_isometric_max_one_month) while straddling
+        // the process's 2026-03-01 operational start.
+        startDate: "2026-02-15",
+        endDate: "2026-03-14",
+        certifier: "isometric",
+      })
+      .returning({ id: creditBatches.id });
+    createdIds.creditBatches.push(batch.id);
+
+    const insertedSamples = await db
+      .insert(samples)
+      .values(
+        [
+          // Immediately before the operational start — excluded.
+          new Date("2026-02-28T23:59:59.000Z"),
+          // Exactly at the start — included (window is closed at the bottom).
+          new Date("2026-03-01T00:00:00.000Z"),
+        ].map((samplingTime, index) => ({
+          organizationId: TEST_ORG_ID,
+          creditBatchId: batch.id,
+          sampleCode: `S-PROC-LB-${runId}-${index}`,
+          samplingTime,
+          totalCarbonPercent: 80,
+          organicCarbonPercent: 75,
+        })),
+      )
+      .returning({ id: samples.id });
+    createdIds.samples.push(...insertedSamples.map((sample) => sample.id));
+
+    const countsByProcess = await countEligibleSamplesByProcess(
+      makeTestOrgContext(TEST_USER_ID),
+      db,
+      { facilityId },
+    );
+
+    expect(countsByProcess.get(process.id)).toBe(1);
+  });
+
+  it("blocks a direct Method-B flip backed solely by pre-establishment samples (DB trigger, 0083 lower bound)", async () => {
+    // Over-crediting backstop: the minimum-samples trigger counts the baseline in
+    // [established_at, method_b_unlocked_at). A back-entered process whose 30
+    // samples all predate its operational start has ZERO baseline evidence, so a
+    // direct SQL flip to Method B must be rejected — the upper bound from 0060
+    // alone would have miscounted these as a valid baseline (0083 closes that).
+    const runId = `${Date.now().toString(36)}-trig-lb`;
+    const [process] = await db
+      .insert(productionProcesses)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId,
+        feedstockTypeId,
+        establishedAt: new Date("2026-03-01T00:00:00.000Z"),
+      })
+      .returning({ id: productionProcesses.id });
+
+    const [batch] = await db
+      .insert(creditBatches)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `CB-PROC-TRIG-LB-${runId}`,
+        facilityId,
+        feedstockTypeId,
+        productionProcessId: process.id,
+        startDate: "2026-01-15",
+        endDate: "2026-02-13",
+        certifier: "isometric",
+      })
+      .returning({ id: creditBatches.id });
+    createdIds.creditBatches.push(batch.id);
+
+    // 30 samples, every one dated BEFORE the 2026-03-01 operational start.
+    const insertedSamples = await db
+      .insert(samples)
+      .values(
+        Array.from({ length: 30 }, (_, index) => ({
+          organizationId: TEST_ORG_ID,
+          creditBatchId: batch.id,
+          sampleCode: `S-PROC-TRIG-LB-${runId}-${index}`,
+          samplingTime: new Date(
+            `2026-02-${String(index + 1).padStart(2, "0")}T12:00:00.000Z`,
+          ),
+          totalCarbonPercent: 80,
+          organicCarbonPercent: 75,
+          randomReflectanceR0Percent: METHOD_B_RANDOM_REFLECTANCE_R0_PERCENT,
+          sReflectanceFraction: METHOD_B_S_REFLECTANCE_FRACTION,
+          residualCarbonPercent: METHOD_B_RESIDUAL_CARBON_PERCENT,
+        })),
+      )
+      .returning({ id: samples.id });
+    createdIds.samples.push(...insertedSamples.map((sample) => sample.id));
+
+    await expect(
+      db
+        .update(productionProcesses)
+        .set({
+          samplingMethod: "method_b",
+          // Unlock timestamp is AFTER every sample, so the 0060 upper bound alone
+          // would have counted all 30; the 0083 lower bound drops them to 0.
+          methodBUnlockedAt: new Date("2026-03-15T00:00:00.000Z"),
+          agreedBaselineSize: 30,
+          randomSamplingPlanRef: "test sampling plan",
+          moisturePathway: "measured_every_batch",
+        })
+        .where(eq(productionProcesses.id, process.id)),
+    ).rejects.toThrow(/Failed query/i);
+
+    const [after] = await db
+      .select({ samplingMethod: productionProcesses.samplingMethod })
+      .from(productionProcesses)
+      .where(eq(productionProcesses.id, process.id));
+    expect(after?.samplingMethod).toBe("method_a");
+  });
+
+  it("write guard ignores pre-establishment padding when a baseline sample is deleted (0084 lower bound)", async () => {
+    // 30 in-window baseline samples + 1 back-dated (pre-establishment) sample.
+    // Deleting one in-window sample leaves 29 in-window + 1 pre-establishment.
+    // Without the lower bound the after-write guard would count 30 and allow the
+    // delete; with 0084 it counts only the 29 in-window rows and blocks it.
+    const fixture = await createMethodBProcessWithBaseline("write-lb-delete", {
+      preEstablishmentSampleCount: 1,
+    });
+
+    await expect(
+      db.delete(samples).where(eq(samples.id, fixture.sampleIds[0])),
+    ).rejects.toThrow(/Failed query/i);
+
+    const [sample] = await db
+      .select({ id: samples.id })
+      .from(samples)
+      .where(eq(samples.id, fixture.sampleIds[0]));
+    expect(sample?.id).toBe(fixture.sampleIds[0]);
+  });
+
+  it("write guard ignores a baseline sample re-dated before the operational start (0084 lower bound)", async () => {
+    // Re-dating an in-window sample to before established_at moves it out of the
+    // baseline window: 29 in-window remain. Without the lower bound the guard
+    // would still count it (sampling_time < unlock) and allow the edit; with 0084
+    // the count drops to 29 and the update rolls back.
+    const fixture = await createMethodBProcessWithBaseline("write-lb-update", {
+      preEstablishmentSampleCount: 1,
+    });
+    const sampleId = fixture.sampleIds[0];
+
+    await expect(
+      db
+        .update(samples)
+        .set({ samplingTime: new Date("2025-12-20T12:00:00.000Z") })
+        .where(eq(samples.id, sampleId)),
+    ).rejects.toThrow(/Failed query/i);
+
+    const [after] = await db
+      .select({ samplingTime: samples.samplingTime })
+      .from(samples)
+      .where(eq(samples.id, sampleId));
+    expect(after?.samplingTime).toEqual(
+      new Date("2026-01-01T12:00:00.000Z"),
+    );
   });
 
   it("blocks deleting pre-unlock baseline samples from a Method-B process", async () => {
@@ -518,5 +809,128 @@ describe("findOrCreateProductionProcess", () => {
       .from(creditBatches)
       .where(eq(creditBatches.id, fixture.batchId));
     expect(batch?.productionProcessId).toBe(fixture.processId);
+  });
+});
+
+describe("setProcessOperationalStart", () => {
+  it("rejects an unauthenticated user", async () => {
+    const [proc] = await db
+      .insert(productionProcesses)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId,
+        feedstockTypeId,
+        establishedAt: new Date("2026-06-01T00:00:00.000Z"),
+      })
+      .returning({ id: productionProcesses.id });
+
+    await expect(
+      setProcessOperationalStart(makeTestOrgContext(""), {
+        processId: proc.id,
+        establishedAt: new Date("2026-01-01T00:00:00.000Z"),
+      }),
+    ).rejects.toThrow(/unauthorized/i);
+  });
+
+  it("rejects editing the operational start after Method B has unlocked", async () => {
+    const fixture = await createMethodBProcessWithBaseline("set-start-post-unlock");
+
+    await expect(
+      setProcessOperationalStart(makeTestOrgContext(TEST_USER_ID), {
+        processId: fixture.processId,
+        establishedAt: new Date("2025-06-01T00:00:00.000Z"),
+      }),
+    ).rejects.toThrow(/already unlocked Method B/i);
+  });
+
+  it("DB trigger blocks a direct established_at change on an unlocked process", async () => {
+    const fixture = await createMethodBProcessWithBaseline("set-start-trigger");
+
+    await expect(
+      db
+        .update(productionProcesses)
+        .set({ establishedAt: new Date("2025-06-01T00:00:00.000Z") })
+        .where(eq(productionProcesses.id, fixture.processId)),
+    ).rejects.toThrow(/Failed query/i);
+
+    const [after] = await db
+      .select({ establishedAt: productionProcesses.establishedAt })
+      .from(productionProcesses)
+      .where(eq(productionProcesses.id, fixture.processId));
+    expect(after?.establishedAt.getTime()).toBe(
+      new Date("2026-01-01T00:00:00.000Z").getTime(),
+    );
+  });
+
+  it("lets a back-entered facility correct its start, reach the baseline, and unlock", async () => {
+    const runId = `${Date.now().toString(36)}-backentry`;
+    // Auto-created with established_at AFTER real sampling began — the samples
+    // predate the process row, so none count and the facility is stranded.
+    const [process] = await db
+      .insert(productionProcesses)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId,
+        feedstockTypeId,
+        establishedAt: new Date("2026-06-01T00:00:00.000Z"),
+      })
+      .returning();
+    const [batch] = await db
+      .insert(creditBatches)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `CB-BACKENTRY-${runId}`,
+        facilityId,
+        feedstockTypeId,
+        productionProcessId: process.id,
+        startDate: "2026-01-01",
+        endDate: "2026-01-31",
+        certifier: "isometric",
+      })
+      .returning({ id: creditBatches.id });
+    createdIds.creditBatches.push(batch.id);
+    const inserted = await db
+      .insert(samples)
+      .values(
+        Array.from({ length: 30 }, (_, index) => ({
+          organizationId: TEST_ORG_ID,
+          creditBatchId: batch.id,
+          sampleCode: `S-BACKENTRY-${runId}-${index}`,
+          samplingTime: new Date(
+            `2026-01-${String(index + 1).padStart(2, "0")}T12:00:00.000Z`,
+          ),
+          totalCarbonPercent: 80,
+          organicCarbonPercent: 75,
+        })),
+      )
+      .returning({ id: samples.id });
+    createdIds.samples.push(...inserted.map((sample) => sample.id));
+
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    // Before correction: every sample predates established_at → excluded.
+    const before = await countEligibleSamplesByProcess(ctx, db, { facilityId });
+    expect(before.get(process.id) ?? 0).toBe(0);
+
+    // Correct the operational start to before real sampling began.
+    const updated = await setProcessOperationalStart(ctx, {
+      processId: process.id,
+      establishedAt: new Date("2026-01-01T00:00:00.000Z"),
+    });
+    expect(updated.establishedAt.getTime()).toBe(
+      new Date("2026-01-01T00:00:00.000Z").getTime(),
+    );
+
+    // After correction: all 30 samples now qualify.
+    const after = await countEligibleSamplesByProcess(ctx, db, { facilityId });
+    expect(after.get(process.id) ?? 0).toBe(30);
+
+    // And the process can now unlock Method B.
+    const unlocked = await unlockMethodBForProcess(ctx, {
+      processId: process.id,
+      agreedBaselineSize: 30,
+      randomSamplingPlanRef: "back-entry sampling plan",
+      moisturePathway: "measured_every_batch",
+    });
+    expect(unlocked.samplingMethod).toBe("method_b");
   });
 });

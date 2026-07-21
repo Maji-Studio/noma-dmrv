@@ -28,7 +28,6 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import {
   DetailField,
@@ -36,7 +35,6 @@ import {
   DetailSection,
 } from "@/components/ui/detail-panel";
 import {
-  formatCreditBatchStatus,
   formatDurabilityOption,
   type CreditBatchFormData,
 } from "@/schemas/credit-batches";
@@ -179,23 +177,18 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
     <Shell>
       <Breadcrumb code={creditBatch.code} />
 
-      {/* Header — status + the single Edit entry point for the whole page */}
+      {/* Header — the single Edit entry point for the whole page. No lifecycle
+          badge: every batch sits at the DB default with no transition path, so
+          the checklist below is the batch's real state (QA 2026-07-21 F3). */}
       <PageHeader
         area="verification"
         title={creditBatch.code}
         subtitle={`${creditBatch.facility?.name ?? "No facility"} · ${period}`}
         actions={
-          <div className="flex items-center gap-12">
-            <StatusBadge
-              status={creditBatch.status}
-              label={formatCreditBatchStatus(creditBatch.status)}
-              size="large"
-            />
-            <Button variant="default" onClick={() => setIsEditing(true)}>
-              <PencilSimpleIcon size={16} aria-hidden />
-              Edit batch
-            </Button>
-          </div>
+          <Button variant="default" onClick={() => setIsEditing(true)}>
+            <PencilSimpleIcon size={16} aria-hidden />
+            Edit batch
+          </Button>
         }
       />
 

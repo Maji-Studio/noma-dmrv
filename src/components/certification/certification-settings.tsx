@@ -164,15 +164,35 @@ export function CertificationSettings() {
             </SettingsSection>
           )}
 
-          {/* Environment & health — admin only, read-only, no secrets */}
+          {/* Integration diagnostics — admin only, read-only, no secrets.
+              Collapsed by default: credentials health and allowlists are
+              diagnostics, not operator configuration — on the first layer they
+              crowd out the one thing an operator came here to fix
+              (QA 2026-07-21 F5). */}
           {isAdmin && (
-            <SettingsSection
-              icon={PulseIcon}
-              title="Environment & health"
-              caption="Read-only integration status. Never exposes tokens or secrets."
-            >
-              <CertificationHealthPanel />
-            </SettingsSection>
+            <details className="group border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]">
+              <summary className="flex cursor-pointer list-none items-center gap-12 p-24 [&::-webkit-details-marker]:hidden">
+                <span className="flex size-32 items-center justify-center border border-[var(--color-border-tertiary)] text-[var(--color-text-primary)]">
+                  <PulseIcon size={18} weight="bold" />
+                </span>
+                <div className="flex flex-col gap-2">
+                  <h2 className="title-heading-3">Integration diagnostics</h2>
+                  <p className="body-caption text-[var(--color-text-tertiary)]">
+                    Read-only environment, credentials, and allowlist status.
+                    Never exposes tokens or secrets.
+                  </p>
+                </div>
+                <span className="ml-auto body-caption text-[var(--color-text-tertiary)] group-open:hidden">
+                  Show
+                </span>
+                <span className="ml-auto hidden body-caption text-[var(--color-text-tertiary)] group-open:inline">
+                  Hide
+                </span>
+              </summary>
+              <div className="border-t border-[var(--color-border-tertiary)] p-24">
+                <CertificationHealthPanel />
+              </div>
+            </details>
           )}
         </div>
       )}

@@ -257,6 +257,14 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           required
           disabled={isSubmitting || !contextFacilityId}
           filterBy={contextFacilityId ? { facilityId: contextFacilityId } : undefined}
+          emptyHint={{
+            message:
+              "No orders yet — a delivery fulfils an order, so record the customer order first.",
+            href: contextFacilityId
+              ? `/orders?facility=${encodeURIComponent(contextFacilityId)}`
+              : "/orders",
+            linkLabel: "Open orders",
+          }}
         />
       </FormSection>
 
