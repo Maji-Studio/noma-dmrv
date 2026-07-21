@@ -51,12 +51,17 @@ const METHOD_B_SAMPLE_WRITE_GUARDS_MIGRATION = resolve(
   process.cwd(),
   "drizzle/0062_process_method_b_sample_write_guards.sql",
 );
+// Migration 0083 adds the baseline window's LOWER bound (sampling_time >=
+// established_at) to the minimum-samples trigger. It only CREATE OR REPLACEs the
+// function body defined in 0060, so applying it is idempotent and safe on a
+// fully-migrated test DB.
+const METHOD_B_MINIMUM_SAMPLES_LOWER_BOUND_MIGRATION = resolve(
+  process.cwd(),
+  "drizzle/0083_process_method_b_established_lower_bound.sql",
+);
 
-async function applyMethodBSampleWriteGuards(): Promise<void> {
-  const migrationSql = readFileSync(
-    METHOD_B_SAMPLE_WRITE_GUARDS_MIGRATION,
-    "utf8",
-  );
+async function applyMigrationFile(migrationPath: string): Promise<void> {
+  const migrationSql = readFileSync(migrationPath, "utf8");
   const statements = migrationSql
     .split("--> statement-breakpoint")
     .map((statement) => statement.trim())
@@ -65,6 +70,14 @@ async function applyMethodBSampleWriteGuards(): Promise<void> {
   for (const statement of statements) {
     await db.execute(sql.raw(statement));
   }
+}
+
+async function applyMethodBSampleWriteGuards(): Promise<void> {
+  await applyMigrationFile(METHOD_B_SAMPLE_WRITE_GUARDS_MIGRATION);
+}
+
+async function applyMethodBMinimumSamplesLowerBound(): Promise<void> {
+  await applyMigrationFile(METHOD_B_MINIMUM_SAMPLES_LOWER_BOUND_MIGRATION);
 }
 
 async function createMethodBProcessWithBaseline(tag: string): Promise<{
@@ -135,6 +148,7 @@ beforeAll(() => ensureTestOrg());
 
 beforeAll(async () => {
   await applyMethodBSampleWriteGuards();
+  await applyMethodBMinimumSamplesLowerBound();
 
   const runId = Date.now().toString(36);
 
@@ -421,6 +435,81 @@ describe("findOrCreateProductionProcess", () => {
     );
 
     expect(countsByProcess.get(process.id)).toBe(1);
+  });
+
+  it("blocks a direct Method-B flip backed solely by pre-establishment samples (DB trigger, 0083 lower bound)", async () => {
+    // Over-crediting backstop: the minimum-samples trigger counts the baseline in
+    // [established_at, method_b_unlocked_at). A back-entered process whose 30
+    // samples all predate its operational start has ZERO baseline evidence, so a
+    // direct SQL flip to Method B must be rejected — the upper bound from 0060
+    // alone would have miscounted these as a valid baseline (0083 closes that).
+    const runId = `${Date.now().toString(36)}-trig-lb`;
+    const [process] = await db
+      .insert(productionProcesses)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId,
+        feedstockTypeId,
+        establishedAt: new Date("2026-03-01T00:00:00.000Z"),
+      })
+      .returning({ id: productionProcesses.id });
+
+    const [batch] = await db
+      .insert(creditBatches)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `CB-PROC-TRIG-LB-${runId}`,
+        facilityId,
+        feedstockTypeId,
+        productionProcessId: process.id,
+        startDate: "2026-01-15",
+        endDate: "2026-02-13",
+        certifier: "isometric",
+      })
+      .returning({ id: creditBatches.id });
+    createdIds.creditBatches.push(batch.id);
+
+    // 30 samples, every one dated BEFORE the 2026-03-01 operational start.
+    const insertedSamples = await db
+      .insert(samples)
+      .values(
+        Array.from({ length: 30 }, (_, index) => ({
+          organizationId: TEST_ORG_ID,
+          creditBatchId: batch.id,
+          sampleCode: `S-PROC-TRIG-LB-${runId}-${index}`,
+          samplingTime: new Date(
+            `2026-02-${String(index + 1).padStart(2, "0")}T12:00:00.000Z`,
+          ),
+          totalCarbonPercent: 80,
+          organicCarbonPercent: 75,
+          randomReflectanceR0Percent: METHOD_B_RANDOM_REFLECTANCE_R0_PERCENT,
+          sReflectanceFraction: METHOD_B_S_REFLECTANCE_FRACTION,
+          residualCarbonPercent: METHOD_B_RESIDUAL_CARBON_PERCENT,
+        })),
+      )
+      .returning({ id: samples.id });
+    createdIds.samples.push(...insertedSamples.map((sample) => sample.id));
+
+    await expect(
+      db
+        .update(productionProcesses)
+        .set({
+          samplingMethod: "method_b",
+          // Unlock timestamp is AFTER every sample, so the 0060 upper bound alone
+          // would have counted all 30; the 0083 lower bound drops them to 0.
+          methodBUnlockedAt: new Date("2026-03-15T00:00:00.000Z"),
+          agreedBaselineSize: 30,
+          randomSamplingPlanRef: "test sampling plan",
+          moisturePathway: "measured_every_batch",
+        })
+        .where(eq(productionProcesses.id, process.id)),
+    ).rejects.toThrow(/Failed query/i);
+
+    const [after] = await db
+      .select({ samplingMethod: productionProcesses.samplingMethod })
+      .from(productionProcesses)
+      .where(eq(productionProcesses.id, process.id));
+    expect(after?.samplingMethod).toBe("method_a");
   });
 
   it("blocks deleting pre-unlock baseline samples from a Method-B process", async () => {
