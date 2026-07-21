@@ -29,6 +29,13 @@ export interface SetupStepMeta {
   description: string;
   /** Button copy for the actionable step. */
   ctaLabel: string;
+  /**
+   * Legitimately optional: its done-ness still shows in the guide, but it does
+   * not block the dashboard from becoming operational. The registry link is
+   * skippable — a facility can produce and record removals long before (or
+   * without ever) connecting Isometric.
+   */
+  skippable?: boolean;
 }
 
 export const SETUP_STEPS: readonly SetupStepMeta[] = [
@@ -52,6 +59,7 @@ export const SETUP_STEPS: readonly SetupStepMeta[] = [
     shortLabel: "Registry",
     description: "Link this facility to its Isometric project.",
     ctaLabel: "Connect registry",
+    skippable: true,
   },
   {
     id: "supplier",

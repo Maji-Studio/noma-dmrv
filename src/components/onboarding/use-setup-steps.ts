@@ -24,6 +24,13 @@ export interface SetupProgress {
   doneCount: number;
   total: number;
   allComplete: boolean;
+  /**
+   * True once every non-skippable (required) step is done — the facility is
+   * operational even if an optional step (the registry link) is still open.
+   * Drives the Owner/Admin dashboard gate so an intentionally-unconnected
+   * registry doesn't pin the guide open forever.
+   */
+  requiredComplete: boolean;
   /** Index of the first not-done step — the single actionable one. `-1` when complete. */
   activeIndex: number;
 }
@@ -69,6 +76,7 @@ export function deriveSetupProgress(
     doneCount,
     total: SETUP_STEP_COUNT,
     allComplete: doneCount === SETUP_STEP_COUNT,
+    requiredComplete: steps.every((step) => step.skippable || step.done),
     activeIndex,
   };
 }

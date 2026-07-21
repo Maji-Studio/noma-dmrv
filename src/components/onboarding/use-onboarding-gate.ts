@@ -194,5 +194,13 @@ export function resolveMode({
     return operational ? "none" : "takeover-member";
   }
 
+  // Owner/Admin: the registry step is legitimately skippable (lines above), so
+  // once every REQUIRED step is done the facility is fully operational even if
+  // Isometric was never connected. Recede to the real dashboard — the guide
+  // still lists registry as incomplete, it just no longer takes over the page.
+  // Without this, an org that never connects a registry keeps a permanent 6/7
+  // strip/takeover, hiding HeroKpiBand/FlowHero forever.
+  if (progress.requiredComplete) return "none";
+
   return collapsed ? "strip" : "takeover-guide";
 }

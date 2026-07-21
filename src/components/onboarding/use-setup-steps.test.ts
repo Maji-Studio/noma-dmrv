@@ -126,11 +126,30 @@ describe("resolveMode", () => {
   });
 
   it("collapses to a strip for an Owner/Admin who hid the guide", () => {
+    // A REQUIRED step is still open (no feedstock intake) → the guide takes
+    // over, or recedes to the strip when the Owner/Admin has hidden it.
     const status = makeStatus({
-      facility: { ...makeStatus().facility!, registryConnected: false },
+      facility: { ...makeStatus().facility!, feedstockCount: 0 },
     });
     expect(mode(status)).toBe("takeover-guide");
     expect(mode(status, { collapsed: true })).toBe("strip");
+  });
+
+  it("recedes to the real dashboard once every required step is done, even with the registry skipped", () => {
+    // The registry link is legitimately optional: an Owner/Admin who completed
+    // every required step but never connected Isometric must still get the full
+    // dashboard, not a permanent 6/7 strip/takeover.
+    const registrySkipped = makeStatus({
+      facility: { ...makeStatus().facility!, registryConnected: false },
+    });
+    expect(deriveSetupProgress(registrySkipped, FACILITY_ID).allComplete).toBe(
+      false,
+    );
+    expect(
+      deriveSetupProgress(registrySkipped, FACILITY_ID).requiredComplete,
+    ).toBe(true);
+    expect(mode(registrySkipped)).toBe("none");
+    expect(mode(registrySkipped, { collapsed: true })).toBe("none");
   });
 
   it("blocks a Member only while the facility is pre-operational", () => {
