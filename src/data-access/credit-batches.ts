@@ -28,6 +28,7 @@ import {
   samples,
 } from "@/db/schema/production";
 import { feedstocks } from "@/db/schema/feedstock";
+import { feedstockTypes } from "@/db/schema/feedstock";
 import {
   DURABILITY_TIER_FALLBACK,
   type CreateCreditBatchData,
@@ -92,6 +93,7 @@ export interface CreditBatchWithRelations extends CreditBatch {
    * `batch.durabilityOption` read sites keep working unchanged.
    */
   durabilityOption: DurabilityOption;
+  feedstockTypeName: string | null;
   applicationCount: number;
   applicationIds: string[];
   productionRunCount: number;
@@ -255,9 +257,11 @@ export async function getCreditBatches(
       creditBatch: creditBatches,
       facilityName: facilities.name,
       facilityDurabilityOption: facilities.durabilityOption,
+      feedstockTypeName: feedstockTypes.name,
     })
     .from(creditBatches)
     .leftJoin(facilities, and(eq(creditBatches.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(feedstockTypes, and(eq(creditBatches.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
     .where(and(eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.facilityId, facilityId), isNull(creditBatches.archivedAt)))
     .orderBy(desc(creditBatches.createdAt));
 
@@ -284,6 +288,7 @@ export async function getCreditBatches(
       ...b.creditBatch,
       facility: b.facilityName ? { name: b.facilityName } : null,
       durabilityOption: b.facilityDurabilityOption ?? DURABILITY_TIER_FALLBACK,
+      feedstockTypeName: b.feedstockTypeName,
       applicationCount: applicationIds.length,
       applicationIds,
       productionRunCount: productionRunIds.length,
@@ -319,9 +324,11 @@ export async function getCreditBatchById(
       creditBatch: creditBatches,
       facilityName: facilities.name,
       facilityDurabilityOption: facilities.durabilityOption,
+      feedstockTypeName: feedstockTypes.name,
     })
     .from(creditBatches)
     .leftJoin(facilities, and(eq(creditBatches.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
+    .leftJoin(feedstockTypes, and(eq(creditBatches.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
     .where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)));
 
   if (!batch) {
@@ -340,6 +347,7 @@ export async function getCreditBatchById(
     ...batch.creditBatch,
     facility: batch.facilityName ? { name: batch.facilityName } : null,
     durabilityOption,
+    feedstockTypeName: batch.feedstockTypeName,
     applicationCount: applicationIds.length,
     applicationIds,
     productionRunCount: productionRunIds.length,
@@ -476,6 +484,10 @@ export async function createCreditBatch(
     .select({ name: facilities.name, durabilityOption: facilities.durabilityOption })
     .from(facilities)
     .where(and(eq(facilities.id, creditBatch.facilityId), eq(facilities.organizationId, ctx.organizationId)));
+  const [feedstockType] = await db
+    .select({ name: feedstockTypes.name })
+    .from(feedstockTypes)
+    .where(and(eq(feedstockTypes.id, creditBatch.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
   const durabilityOption = facility?.durabilityOption ?? DURABILITY_TIER_FALLBACK;
   const memberProductionRunIds = productionRunIds ?? [];
   const rollup =
@@ -491,6 +503,7 @@ export async function createCreditBatch(
     ...creditBatch,
     facility: facility ? { name: facility.name } : null,
     durabilityOption,
+    feedstockTypeName: feedstockType?.name ?? null,
     applicationCount: applicationIds.length,
     applicationIds,
     productionRunCount: memberProductionRunIds.length,

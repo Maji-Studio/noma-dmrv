@@ -1,0 +1,19 @@
+Visible Computer Use checkpoint, 2026-07-21
+
+GitHub Actions workflow: Database management #178
+Branch: staging
+Trigger: manual
+Run status: Success
+Run timestamp shown in UI: 2026-07-20 14:59 CEST
+Total duration: 2m 36s
+
+Visible job graph:
+- migrate-staging: skipped
+- migrate-production: skipped
+- bootstrap-production: skipped
+- reset-production: skipped
+- reset-seed-staging: skipped
+- reset-empty-staging: completed successfully, 2m 31s
+- verify-staging: skipped
+
+No workflow was run, re-run, or modified during this QA attempt.

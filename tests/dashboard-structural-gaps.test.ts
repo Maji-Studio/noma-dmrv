@@ -577,12 +577,12 @@ describe("dashboard structural certification gaps", () => {
       {
         key: "transportEndpointGps",
         count: 2,
-        href: `/biochar-products?facility=${fixture.gapFacilityId}&biocharProduct=${fixture.activeBiocharProductId}`,
+        href: `/biochar-products?facility=${fixture.gapFacilityId}&biocharProduct=${fixture.activeBiocharProductId}&mode=edit&focus=transport-route`,
       },
       {
         key: "transportDistanceEvidence",
         count: 2,
-        href: `/biochar-products?facility=${fixture.gapFacilityId}&biocharProduct=${fixture.activeBiocharProductId}`,
+        href: `/biochar-products?facility=${fixture.gapFacilityId}&biocharProduct=${fixture.activeBiocharProductId}&mode=edit&focus=transport-evidence`,
       },
     ]);
   });
@@ -609,8 +609,8 @@ describe("dashboard structural certification gaps", () => {
     );
 
     expect(gaps.map(({ href }) => href)).toEqual([
-      `/samples?facility=${facilityId}&sample=${fixture?.validBatchSampleId ?? "sample-id"}`,
-      `/feedstocks?facility=${facilityId}&feedstock=${fixture?.activeFeedstockId ?? "feedstock-id"}`,
+      `/samples?facility=${facilityId}&sample=${fixture?.validBatchSampleId ?? "sample-id"}&mode=edit&focus=transport-route`,
+      `/feedstocks?facility=${facilityId}&feedstock=${fixture?.activeFeedstockId ?? "feedstock-id"}&mode=edit&focus=transport-evidence`,
     ]);
   });
 

@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { TruckIcon, CalendarIcon, PackageIcon, DropIcon, PlusIcon } from "@phosphor-icons/react";
 import type { Delivery } from "@/db/schema";
@@ -26,6 +26,7 @@ import {
   useDeliveries,
   useUpdateDelivery,
   useDeliveryStats,
+  useDeliveryWithRelations,
 } from "@/hooks/use-deliveries";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
@@ -34,10 +35,21 @@ import type {
   DeliveryFormData,
   CreateDeliveryData,
 } from "@/schemas/deliveries";
-import type { DeliveryWithRelations } from "@/data-access/deliveries";
+import type {
+  DeliveryDetail,
+  DeliveryWithRelations,
+} from "@/data-access/deliveries";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatDate } from "@/lib/format-utils";
+import { formatDate, formatDistanceKm } from "@/lib/format-utils";
+import { DEFAULT_TRIP_TYPE, TRIP_TYPE_LABELS } from "@/schemas/trip-type";
+import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
+import { parseAsString, useQueryState } from "nuqs";
+import {
+  ENTITY_DEEP_LINK_FOCUS_PARAM,
+  ENTITY_DEEP_LINK_MODE_PARAM,
+  parseEntityFocusTarget,
+} from "@/lib/entity-deep-link";
 
 // ============================================
 // Helper Functions
@@ -46,6 +58,20 @@ import { formatDate } from "@/lib/format-utils";
 function formatMass(value: number | null): string {
   if (value === null || value === undefined) return "—";
   return `${value.toLocaleString()} kg`;
+}
+
+function deliveryDetailToRelations(
+  delivery: DeliveryDetail,
+): DeliveryWithRelations {
+  return {
+    ...delivery,
+    orderCode: delivery.order?.code ?? null,
+    facilityName: delivery.facility?.name ?? null,
+    customerName: delivery.customerName,
+    biocharProductCode: delivery.biocharProduct?.code ?? null,
+    driverName: delivery.driver?.name ?? null,
+    vehicleName: delivery.vehicle?.name ?? null,
+  };
 }
 
 // ============================================
@@ -144,6 +170,18 @@ function createColumns(
 // ============================================
 
 export function DeliveryList() {
+  const [focusedDeliveryId, setFocusedDeliveryId] = useQueryState(
+    "delivery",
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const [deepLinkMode, setDeepLinkMode] = useQueryState(
+    ENTITY_DEEP_LINK_MODE_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const [deepLinkFocus, setDeepLinkFocus] = useQueryState(
+    ENTITY_DEEP_LINK_FOCUS_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
   // Unified side sheet state
   const [sideSheet, setSideSheet] = useState<{
     entity: DeliveryWithRelations | null;
@@ -169,6 +207,10 @@ export function DeliveryList() {
     contextFacilityId ? { facilityId: contextFacilityId } : undefined,
     { enabled: !!contextFacilityId },
   );
+  const focusedDelivery = useDeliveryWithRelations(
+    focusedDeliveryId ?? "",
+    !!focusedDeliveryId,
+  );
 
   // Mutations
   const createDelivery = useCreateDelivery();
@@ -180,22 +222,33 @@ export function DeliveryList() {
 
   // Side sheet helpers
   const openCreate = () => {
+    setFocusedDeliveryId(null);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setFormError(null);
     deferredAttachments.clear();
     setSideSheet({ entity: null, mode: "create" });
   };
 
   const openView = (delivery: DeliveryWithRelations) => {
+    setFocusedDeliveryId(delivery.id);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setFormError(null);
     setSideSheet({ entity: delivery, mode: "view" });
   };
 
   const openEdit = (delivery: DeliveryWithRelations) => {
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setFormError(null);
     setSideSheet({ entity: delivery, mode: "edit" });
   };
 
   const closeSideSheet = () => {
+    setFocusedDeliveryId(null);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setSideSheet(null);
     setFormError(null);
     deferredAttachments.clear();
@@ -218,6 +271,29 @@ export function DeliveryList() {
     if (confirmCreateClose()) closeSideSheet();
   };
 
+  useEffect(() => {
+    if (!focusedDeliveryId || !focusedDelivery.data || sideSheet) return;
+    setSideSheet({
+      entity: deliveryDetailToRelations(focusedDelivery.data),
+      mode: deepLinkMode === "edit" ? "edit" : "view",
+    });
+  }, [deepLinkMode, focusedDelivery.data, focusedDeliveryId, sideSheet]);
+
+  useEffect(() => {
+    if (!focusedDeliveryId || !focusedDelivery.isError) return;
+    setFocusedDeliveryId(null);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
+    toast.error("Linked delivery could not be opened");
+  }, [
+    focusedDelivery.isError,
+    focusedDeliveryId,
+    setDeepLinkFocus,
+    setDeepLinkMode,
+    setFocusedDeliveryId,
+    toast,
+  ]);
+
   // Handlers
   const handleCreate = async (data: DeliveryFormData) => {
     setFormError(null);
@@ -236,6 +312,8 @@ export function DeliveryList() {
         biocharProductCode: null,
         driverName: null,
         vehicleName: null,
+        effectiveDistanceKm: null,
+        effectiveDistanceSource: null,
       };
       setIsFlushing(true);
       const flushResult = await deferredAttachments.flush(
@@ -333,6 +411,7 @@ export function DeliveryList() {
   const sideSheetOpen = !!sideSheet;
   const sideSheetMode = sideSheet?.mode ?? "create";
   const sideSheetEntity = sideSheet?.entity ?? null;
+  const activeFocusTarget = parseEntityFocusTarget(deepLinkFocus);
 
   const sideSheetTitle =
     sideSheetMode === "create"
@@ -436,24 +515,76 @@ export function DeliveryList() {
           sideSheetEntity
             ? [
                 {
-                  title: "General",
+                  title: "Delivery Information",
+                  fields: [
+                    { label: "Delivery Date", value: formatDate(sideSheetEntity.deliveryDate) },
+                    { label: "Status", value: <StatusBadge status={sideSheetEntity.status} /> },
+                    { label: "Order", value: sideSheetEntity.orderCode },
+                  ],
+                },
+                {
+                  title: "Mass & Moisture",
+                  fields: [
+                    {
+                      label: "Wet Mass (kg)",
+                      ...certificationDetailField("delivery", "deliveredWetMassKg"),
+                      value:
+                        sideSheetEntity.deliveredWetMassKg != null
+                          ? `${sideSheetEntity.deliveredWetMassKg.toLocaleString()} kg`
+                          : null,
+                    },
+                    { label: "Moisture (%)", value: sideSheetEntity.moistureContentPercent != null ? `${sideSheetEntity.moistureContentPercent}%` : null },
+                    {
+                      label: "Dry Mass (derived)",
+                      value:
+                        sideSheetEntity.massDryKg != null
+                          ? `${sideSheetEntity.massDryKg.toLocaleString()} kg`
+                          : null,
+                    },
+                  ],
+                },
+                {
+                  title: "Transport",
+                  fields: [
+                    { label: "One-way distance (per leg, km)", value: formatDistanceKm(sideSheetEntity.effectiveDistanceKm) },
+                    { label: "Trip type", value: TRIP_TYPE_LABELS[sideSheetEntity.tripType ?? DEFAULT_TRIP_TYPE] },
+                    ...(sideSheetEntity.distanceKmOverride != null
+                      ? [{ label: "Distance note", value: sideSheetEntity.distanceNote }]
+                      : []),
+                    {
+                      label: "Distance source",
+                      value: sideSheetEntity.effectiveDistanceSource
+                        ? DISTANCE_SOURCE_LABELS[sideSheetEntity.effectiveDistanceSource]
+                        : null,
+                    },
+                  ],
+                },
+                {
+                  title: "Transport Evidence",
+                  fields: [],
+                  content: (
+                    <TransportEvidencePanel
+                      entityType="delivery"
+                      entityId={sideSheetEntity.id}
+                      readOnly
+                      distanceSource={sideSheetEntity.effectiveDistanceSource}
+                    />
+                  ),
+                },
+                {
+                  title: "Record Relationships & Metadata",
                   fields: [
                     { label: "Code", value: sideSheetEntity.code },
-                    { label: "Delivery Date", value: formatDate(sideSheetEntity.deliveryDate) },
-                    {
-                      label: "Status",
-                      value: (
-                        <StatusBadge status={sideSheetEntity.status} />
-                      ),
-                    },
+                    { label: "Customer", value: sideSheetEntity.customerName },
+                    { label: "Facility", value: sideSheetEntity.facilityName },
+                    { label: "Biochar Product", value: sideSheetEntity.biocharProductCode },
+                    { label: "Driver", value: sideSheetEntity.driverName },
+                    { label: "Vehicle", value: sideSheetEntity.vehicleName },
                     {
                       label: "Certification",
                       value: (
                         <EntityCertifyReadinessBadge
-                          readiness={deriveEntityCertifyReadiness(
-                            "delivery",
-                            sideSheetEntity,
-                          )}
+                          readiness={deriveEntityCertifyReadiness("delivery", sideSheetEntity)}
                           readyLabel="Fields complete"
                           readinessNoun="delivery fields"
                         />
@@ -461,56 +592,8 @@ export function DeliveryList() {
                     },
                   ],
                 },
-                {
-                  title: "Details",
-                  fields: [
-                    { label: "Order", value: sideSheetEntity.orderCode },
-                    { label: "Customer", value: sideSheetEntity.customerName },
-                    { label: "Facility", value: sideSheetEntity.facilityName },
-                  ],
-                },
-                {
-                  title: "Mass",
-                  fields: [
-                    {
-                      label:
-                        sideSheetEntity.status === "delivered"
-                          ? "Delivered Wet Mass"
-                          : "Planned Wet Mass",
-                      ...certificationDetailField("delivery", "deliveredWetMassKg"),
-                      value:
-                        sideSheetEntity.deliveredWetMassKg != null
-                          ? `${sideSheetEntity.deliveredWetMassKg.toLocaleString()} kg`
-                          : null,
-                    },
-                    {
-                      label: "Dry Mass",
-                      value:
-                        sideSheetEntity.massDryKg != null
-                          ? `${sideSheetEntity.massDryKg.toLocaleString()} kg`
-                          : null,
-                    },
-                    { label: "Biochar Product", value: sideSheetEntity.biocharProductCode },
-                  ],
-                },
-                {
-                  title: "Transport",
-                  fields: [
-                    { label: "Driver", value: sideSheetEntity.driverName },
-                    { label: "Vehicle", value: sideSheetEntity.vehicleName },
-                  ],
-                },
               ]
             : undefined
-        }
-        viewModeChildren={
-          sideSheetMode === "view" && sideSheetEntity ? (
-            <TransportEvidencePanel
-              entityType="delivery"
-              entityId={sideSheetEntity.id}
-              readOnly
-            />
-          ) : null
         }
       >
         {formError && <ServerError message={formError} />}
@@ -522,6 +605,7 @@ export function DeliveryList() {
           isSubmitting={createDelivery.isPending || updateDelivery.isPending || isFlushing}
           submitLabel={sideSheetMode === "create" ? "Create Delivery" : "Save Changes"}
           deferredAttachments={deferredAttachments}
+          focusTarget={sideSheetMode === "edit" ? activeFocusTarget : null}
         />
       </EntitySideSheet>
 

@@ -50,6 +50,8 @@ import { FacilityCard } from "./facility-card";
 import { ArchiveFacilityDialog } from "./archive-facility-dialog";
 import type { FacilityFormData, FacilityFilterData } from "@/schemas/facilities";
 import type { FacilityWithRelations } from "@/data-access/facilities";
+import { formatTimezoneLabel } from "@/lib/date-utils";
+import { formatDurabilityOption } from "@/schemas/credit-batches";
 
 export function FacilityList() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -238,13 +240,18 @@ export function FacilityList() {
   const sideSheetSections = sideSheetEntity
     ? [
         {
-          title: "General Information",
+          title: "Facility Information",
           fields: [
-            { label: "Code", value: sideSheetEntity.code },
-            { label: "Name", value: sideSheetEntity.name },
-            { label: "Location", value: sideSheetEntity.location },
+            { label: "Facility Name", value: sideSheetEntity.name },
             { label: "Country", value: sideSheetEntity.country },
+            { label: "Timezone", value: formatTimezoneLabel(sideSheetEntity.timezone) },
+            { label: "Location", value: sideSheetEntity.location },
             { label: "Address", value: sideSheetEntity.address },
+            { label: "Facility position latitude", value: sideSheetEntity.gpsLatitude },
+            { label: "Facility position longitude", value: sideSheetEntity.gpsLongitude },
+            { label: "Contact Email", value: sideSheetEntity.contactEmail },
+            { label: "Contact Phone", value: sideSheetEntity.contactPhone },
+            { label: "Durability Tier", value: formatDurabilityOption(sideSheetEntity.durabilityOption) },
           ],
         },
         {
@@ -281,6 +288,10 @@ export function FacilityList() {
               value: formatMass(sideSheetEntity.inventorySummary.productKg),
             },
           ],
+        },
+        {
+          title: "Record Metadata",
+          fields: [{ label: "Code", value: sideSheetEntity.code }],
         },
       ]
     : undefined;

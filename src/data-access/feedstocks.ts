@@ -16,6 +16,7 @@ import {
   suppliers,
   vehicles,
   productionRunFeedstocks,
+  transportLegs,
 } from "@/db/schema";
 import type { FeedstockFilterData } from "@/schemas/feedstocks";
 import type { OrgContext } from "@/lib/auth/server";
@@ -77,6 +78,9 @@ export interface FeedstockWithRelations {
   feedstockTypeCategory: string | null;
   storageLocationName: string | null;
   storageLocationCode: string | null;
+  transportDistanceKm: number | null;
+  transportDistanceSource: "map_estimate" | "manual" | "document" | null;
+  transportTripType: "return" | "one_way" | null;
 }
 
 export interface PaginatedFeedstocks {
@@ -175,6 +179,9 @@ const feedstockSelectFields = {
   feedstockTypeCategory: feedstockTypes.category,
   storageLocationName: storageLocations.name,
   storageLocationCode: storageLocations.code,
+  transportDistanceKm: transportLegs.distanceKm,
+  transportDistanceSource: transportLegs.distanceSource,
+  transportTripType: transportLegs.tripType,
 } as const;
 
 function feedstockBaseQuery(ctx: OrgContext) {
@@ -185,7 +192,16 @@ function feedstockBaseQuery(ctx: OrgContext) {
     .leftJoin(suppliers, and(eq(feedstocks.supplierId, suppliers.id), eq(suppliers.organizationId, ctx.organizationId)))
     .leftJoin(vehicles, and(eq(feedstocks.vehicleId, vehicles.id), eq(vehicles.organizationId, ctx.organizationId)))
     .leftJoin(feedstockTypes, and(eq(feedstocks.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
-    .leftJoin(storageLocations, and(eq(feedstocks.storageLocationId, storageLocations.id), eq(storageLocations.organizationId, ctx.organizationId)));
+    .leftJoin(storageLocations, and(eq(feedstocks.storageLocationId, storageLocations.id), eq(storageLocations.organizationId, ctx.organizationId)))
+    .leftJoin(
+      transportLegs,
+      and(
+        eq(transportLegs.entityType, "feedstock"),
+        eq(transportLegs.entityId, feedstocks.id),
+        eq(transportLegs.isDerived, true),
+        eq(transportLegs.organizationId, ctx.organizationId),
+      ),
+    );
 }
 
 // ============================================

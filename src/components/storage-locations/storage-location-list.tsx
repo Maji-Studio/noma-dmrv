@@ -530,17 +530,16 @@ export function StorageLocationList() {
           sideSheet?.mode === "view" && sideSheet.entity
             ? [
                 {
-                  title: "Overview",
+                  title: "Storage Details",
                   fields: [
-                    { label: "Code", value: sideSheet.entity.code },
-                    { label: "Name", value: sideSheet.entity.name },
                     {
-                      label: "Type",
+                      label: "Storage Type",
                       value: formatStorageLocationType(sideSheet.entity.type),
                     },
+                    { label: "Bin Name", value: sideSheet.entity.name },
                     {
-                      label: "Capacity",
-                      value: sideSheet.entity.capacityKg
+                      label: "Capacity (kg)",
+                      value: sideSheet.entity.capacityKg != null
                         ? formatMass(sideSheet.entity.capacityKg)
                         : null,
                     },
@@ -548,11 +547,25 @@ export function StorageLocationList() {
                       label: "Storage Method",
                       value: sideSheet.entity.storageMethod,
                     },
+                    ...(sideSheet.entity.type === "feedstock_bin"
+                      ? [{ label: "Feedstock Type", value: sideSheet.entity.feedstockTypeName }]
+                      : []),
+                    ...(sideSheet.entity.type === "product_bin"
+                      ? [{ label: "Formulation", value: sideSheet.entity.formulationName }]
+                      : []),
+                    { label: "Description", value: sideSheet.entity.storageDescription },
                   ],
                 },
                 {
                   title: "Inventory",
                   fields: buildStorageDetailFields(sideSheet.entity),
+                },
+                {
+                  title: "Record Metadata",
+                  fields: [
+                    { label: "Code", value: sideSheet.entity.code },
+                    { label: "Facility", value: sideSheet.entity.facilityName },
+                  ],
                 },
               ]
             : undefined

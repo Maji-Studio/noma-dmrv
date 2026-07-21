@@ -28,9 +28,16 @@ import { TransportLegsSummary } from "@/components/transport-legs";
 import { BiocharProductForm } from "./biochar-product-form";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
 import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
+import {
+  ENTITY_DEEP_LINK_FOCUS_PARAM,
+  ENTITY_DEEP_LINK_MODE_PARAM,
+  parseEntityFocusTarget,
+} from "@/lib/entity-deep-link";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { formatDate } from "@/lib/format-utils";
+import { fromCompositionJsonb } from "@/lib/biochar-composition";
+import { EntityDetailValue } from "@/components/ui/entity-detail-value";
 
 // ============================================
 // Helpers
@@ -153,6 +160,14 @@ export function BiocharProductList() {
     "biocharProduct",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
+  const [deepLinkMode, setDeepLinkMode] = useQueryState(
+    ENTITY_DEEP_LINK_MODE_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const [deepLinkFocus, setDeepLinkFocus] = useQueryState(
+    ENTITY_DEEP_LINK_FOCUS_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
   const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -174,9 +189,15 @@ export function BiocharProductList() {
   const products = productsData?.items ?? [];
   const deepLinkedSideSheet =
     focusedProductId && focusedProduct.data
-      ? ({ mode: "view", entity: focusedProduct.data } as const)
+      ? ({
+          mode: deepLinkMode === "edit" ? "edit" : "view",
+          entity: focusedProduct.data,
+        } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const activeFocusTarget = sideSheet
+    ? null
+    : parseEntityFocusTarget(deepLinkFocus);
 
   useEffect(() => {
     if (!focusedProductId) return;
@@ -240,17 +261,23 @@ export function BiocharProductList() {
 
   const openCreate = () => {
     setFocusedProductId(null);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setFormError(null);
     setSideSheet({ mode: "create", entity: null });
   };
   const openView = (product: BiocharProductWithRelations) => {
     setFocusedProductId(product.id);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setFormError(null);
     setSideSheet({ mode: "view", entity: product });
   };
-  const openEdit = (product: BiocharProductWithRelations) => { setFormError(null); setSideSheet({ mode: "edit", entity: product }); };
+  const openEdit = (product: BiocharProductWithRelations) => { setDeepLinkMode(null); setDeepLinkFocus(null); setFormError(null); setSideSheet({ mode: "edit", entity: product }); };
   const closeSideSheet = () => {
     setFocusedProductId(null);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setSideSheet(null);
     setFormError(null);
   };
@@ -380,23 +407,38 @@ export function BiocharProductList() {
         editLabel="Edit Product"
         sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? [
           {
-            title: "Product",
+            title: "Source",
             fields: [
-              { label: "Code", value: displaySideSheet.entity.code },
-              { label: "Production Date", value: formatDate(displaySideSheet.entity.productionDate) },
-              { label: "Formulation", value: displaySideSheet.entity.formulation?.name ?? PURE_BIOCHAR_LABEL },
-              { label: "Wet Mass", value: formatMass(displaySideSheet.entity.massKg) },
-              { label: "Moisture", value: displaySideSheet.entity.moistureContentPercent != null ? `${displaySideSheet.entity.moistureContentPercent}%` : undefined },
-              { label: "Water Added", value: displaySideSheet.entity.waterAddedKg != null ? formatMass(displaySideSheet.entity.waterAddedKg) : undefined },
-              { label: "Dry Mass", value: formatMass(deriveBiocharProductDryMass(displaySideSheet.entity)) },
-              { label: "Density", value: displaySideSheet.entity.densityKgM3 != null ? `${displaySideSheet.entity.densityKgM3} kg/m³` : undefined },
+              { label: "Production Run", value: displaySideSheet.entity.linkedProductionRun?.code },
+              { label: "Wet Mass (kg)", value: formatMass(displaySideSheet.entity.massKg) },
+              { label: "Dry Mass (derived)", value: formatMass(deriveBiocharProductDryMass(displaySideSheet.entity)) },
+              { label: "Moisture Content (%)", value: displaySideSheet.entity.moistureContentPercent != null ? `${displaySideSheet.entity.moistureContentPercent}%` : null },
+              { label: "Water Added (kg)", value: displaySideSheet.entity.waterAddedKg != null ? formatMass(displaySideSheet.entity.waterAddedKg) : null },
+              { label: "Density (kg/m3)", value: displaySideSheet.entity.densityKgM3 != null ? `${displaySideSheet.entity.densityKgM3} kg/m³` : null },
             ],
           },
           {
-            title: "Source & Storage",
+            title: "Destination & Product",
             fields: [
-              { label: "Production Run", value: displaySideSheet.entity.linkedProductionRun?.code },
+              { label: "Formulation", value: displaySideSheet.entity.formulation?.name ?? PURE_BIOCHAR_LABEL },
+              ...fromCompositionJsonb(displaySideSheet.entity.composition).map((ingredient) => ({
+                label: ingredient.feedstockTypeName,
+                value: (
+                  <EntityDetailValue
+                    entityType="storageLocation"
+                    id={ingredient.storageLocationId}
+                  />
+                ),
+              })),
               { label: "Product Bin", value: displaySideSheet.entity.storageLocation?.name },
+            ],
+          },
+          {
+            title: "Record Metadata",
+            fields: [
+              { label: "Code", value: displaySideSheet.entity.code },
+              { label: "Production Date", value: formatDate(displaySideSheet.entity.productionDate) },
+              { label: "Status", value: displaySideSheet.entity.status },
               { label: "Facility", value: displaySideSheet.entity.facility?.name },
             ],
           },
@@ -422,6 +464,9 @@ export function BiocharProductList() {
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}
           submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Product"}
+          focusTarget={
+            displaySideSheet?.mode === "edit" ? activeFocusTarget : null
+          }
         />
       </EntitySideSheet>
     </div>

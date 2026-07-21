@@ -161,6 +161,11 @@ test.describe("Feedstock UI CRUD", () => {
     await expect(
       dialog.getByText("No transport evidence attached.")
     ).toBeVisible();
+    await expect(
+      dialog.getByText(
+        "Set or mark the distance source as Document, then attach the bill of lading or weigh-scale ticket that supports that distance. An upload alone does not change the saved distance provenance."
+      )
+    ).toHaveCount(0);
 
     // View mode is read-only: no upload dropzone, no per-file delete buttons.
     await expect(dialog.locator('input[type="file"]')).toHaveCount(0);

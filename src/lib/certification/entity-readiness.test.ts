@@ -197,6 +197,8 @@ describe("deriveEntityCertifyReadiness", () => {
     const readiness = deriveEntityCertifyReadiness("feedstock", {
       status: "complete",
       massWetKg: 1500,
+      transportDistanceKm: 25,
+      transportDistanceSource: "document",
     });
 
     expect(readiness).toEqual({ state: "ready", gaps: [] });
@@ -206,12 +208,33 @@ describe("deriveEntityCertifyReadiness", () => {
     const readiness = deriveEntityCertifyReadiness("feedstock", {
       status: "complete",
       massWetKg: null,
+      transportDistanceKm: 25,
+      transportDistanceSource: "document",
     });
 
     expect(readiness.state).toBe("incomplete");
     expect(readiness.gaps).toMatchObject([
       { kind: "field", key: "massWetKg", fields: ["massWetKg"] },
     ]);
+  });
+
+  it("reports document provenance separately from a present feedstock distance", () => {
+    const readiness = deriveEntityCertifyReadiness("feedstock", {
+      status: "complete",
+      massWetKg: 1500,
+      transportDistanceKm: 25,
+      transportDistanceSource: "manual",
+    });
+
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      {
+        kind: "field",
+        key: "transportDistanceProvenance",
+        fields: ["transportDistanceSource"],
+      },
+    ]);
+    expect(readiness.gaps.some((gap) => gap.key === "transportLeg")).toBe(false);
   });
 
   it("reports an upcoming delivery as a lifecycle gap", () => {

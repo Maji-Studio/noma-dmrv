@@ -67,12 +67,11 @@ test.describe("Transport trip type (#316)", () => {
     await waitForSideSheet(page);
     const dialog = page.locator('[role="dialog"]');
 
-    // Relabeled distance copy + Return default.
-    await expect(
-      dialog.getByText("One-way distance (per leg, km)")
-    ).toBeVisible();
+    // Compact distance copy + global option label + Return default.
+    await expect(dialog.getByText("Distance (km)")).toBeVisible();
     const tripType = dialog.locator('select[name="transportTripType"]');
     await expect(tripType).toHaveValue("return");
+    await expect(tripType.locator('option[value="one_way"]')).toHaveText("One-way");
 
     // Minimal valid feedstock. The distance is required for a persistable
     // derived leg — trip type rides on that leg, so without a distance there
@@ -91,6 +90,9 @@ test.describe("Transport trip type (#316)", () => {
       seededData.feedstockType.name
     );
     await page.fill('input[name="transportDistanceKm"]', "40");
+    await expect(dialog.getByTestId("transport-distance-total")).toHaveText(
+      "Total: 80 km"
+    );
     await page.fill('input[name="totalWetMassKg"]', "100");
     await page.fill('input[name="moisturePercent"]', "25");
     await selectEntity(
@@ -102,6 +104,7 @@ test.describe("Transport trip type (#316)", () => {
 
     // Override to One-way, then save.
     await tripType.selectOption("one_way");
+    await expect(dialog.getByTestId("transport-distance-total")).toHaveCount(0);
     await dialog.locator('button:has-text("Create Feedstock")').click();
     await waitForSideSheetClose(page);
 

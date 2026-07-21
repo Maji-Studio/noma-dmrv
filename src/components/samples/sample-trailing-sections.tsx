@@ -18,6 +18,8 @@ import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachme
 import type { TransportLegFormData } from "@/schemas/transport-legs";
 import type { SampleWithRelations } from "@/data-access/samples";
 import { SampleDocumentsPanel } from "./sample-documents-panel";
+import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
+import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 
 interface SampleTrailingSectionProps {
   sample?: SampleWithRelations;
@@ -34,6 +36,7 @@ interface SampleTrailingSectionProps {
   onDeferredLegsChange?: (legs: TransportLegFormData[]) => void;
   onRetryLegs?: () => Promise<void>;
   isSubmitting?: boolean;
+  focusTarget?: EntityFocusTarget | null;
   /** Injected by FormSpine — do not set manually. */
   __spine?: SpineMeta;
 }
@@ -45,6 +48,7 @@ export function SampleEvidenceSection({
   onRetryAttachments,
   onRemoveAttachment,
   isSubmitting = false,
+  focusTarget,
   __spine,
 }: SampleTrailingSectionProps) {
   return (
@@ -54,7 +58,20 @@ export function SampleEvidenceSection({
       __spine={__spine}
     >
       {isEditMode && sample ? (
-        <div className="flex flex-col gap-12">
+        <ActionableFocusTarget
+          target={
+            focusTarget === "transport-evidence"
+              ? "transport-evidence"
+              : "transport-route"
+          }
+          activeTarget={focusTarget}
+          actionLabel={
+            focusTarget === "transport-evidence"
+              ? "Edit the leg, mark its distance source as Document, and attach supporting evidence"
+              : "Complete the saved transport route information"
+          }
+          className="flex flex-col gap-12"
+        >
           {deferredAttachments && (
             <FailedDeferredAttachments
               attachments={deferredAttachments.attachments}
@@ -67,7 +84,7 @@ export function SampleEvidenceSection({
             />
           )}
           <SampleDocumentsPanel sampleId={sample.id} />
-        </div>
+        </ActionableFocusTarget>
       ) : (
         <FormFileUpload
           id="sample-deferred-documents-upload"

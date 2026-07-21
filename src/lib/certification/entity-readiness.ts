@@ -89,6 +89,13 @@ function descriptorSatisfied(
     );
   }
 
+  if (descriptor.satisfaction?.mode === "equals") {
+    return (
+      fieldValue(entity, descriptor.satisfaction.field) ===
+      descriptor.satisfaction.value
+    );
+  }
+
   if (descriptor.kind === "derived") return true;
 
   return descriptorFields(descriptor).every((field) =>
@@ -101,7 +108,9 @@ function fieldGap(descriptor: CertifyFieldDescriptor): EntityCertifyGap {
     descriptor.satisfaction?.mode === "anyOf" ||
     descriptor.satisfaction?.mode === "allOf"
       ? descriptor.satisfaction.fields
-      : descriptorFields(descriptor);
+      : descriptor.satisfaction?.mode === "equals"
+        ? [descriptor.satisfaction.field]
+        : descriptorFields(descriptor);
   const requirement =
     descriptor.condition != null
       ? `${descriptor.label} is required for ${descriptor.condition.label}`

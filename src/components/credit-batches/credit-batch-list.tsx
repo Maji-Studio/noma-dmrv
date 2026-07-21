@@ -10,7 +10,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { formatDateRange } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 import {
   CertificateIcon,
   CurrencyCircleDollarIcon,
@@ -58,6 +58,7 @@ import {
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { EntityDetailValue } from "@/components/ui/entity-detail-value";
 
 // ============================================
 // Helpers
@@ -295,46 +296,50 @@ export function CreditBatchList() {
   const sideSheetSections = sideSheetEntity
     ? [
         {
-          title: "General",
+          title: "Overview",
+          fields: [
+            { label: "Feedstock Type", value: sideSheetEntity.feedstockTypeName },
+            { label: "Start Date", value: formatDate(sideSheetEntity.startDate) },
+            { label: "End Date", value: formatDate(sideSheetEntity.endDate) },
+          ],
+        },
+        {
+          title: "Production runs",
+          fields: sideSheetEntity.productionRunIds.length > 0
+            ? sideSheetEntity.productionRunIds.map((productionRunId, index) => ({
+                label: `Production Run ${index + 1}`,
+                value: <EntityDetailValue entityType="productionRun" id={productionRunId} />,
+              }))
+            : [{ label: "Production Run", value: null }],
+        },
+        {
+          title: "Durability",
+          fields: [{
+            label: "Durability Option",
+            value: sideSheetEntity.durabilityOption
+              ? formatDurabilityOption(sideSheetEntity.durabilityOption as DurabilityOption)
+              : null,
+          }],
+        },
+        {
+          title: "Site Management",
+          fields: [{ label: "Notes", value: sideSheetEntity.siteManagementNotes }],
+        },
+        {
+          title: "Registry & accounting",
+          fields: [
+            { label: "Buffer pool", value: sideSheetEntity.bufferPoolPercent != null ? `${sideSheetEntity.bufferPoolPercent}%` : null },
+            { label: "Registry", value: sideSheetEntity.registry },
+            { label: "Weight", value: sideSheetEntity.appliedWeightTons != null ? `${sideSheetEntity.appliedWeightTons.toFixed(2)} t` : null },
+            { label: "Value", value: sideSheetEntity.value != null ? `${sideSheetEntity.value}${sideSheetEntity.currency ? ` ${sideSheetEntity.currency}` : ""}` : null },
+          ],
+        },
+        {
+          title: "Record Metadata & Metrics",
           fields: [
             { label: "Code", value: sideSheetEntity.code },
-            {
-              label: "Certification",
-              value: facilityCertifierLabel,
-            },
-          ],
-        },
-        {
-          title: "Details",
-          fields: [
-            {
-              label: "Facility",
-              value: sideSheetEntity.facility?.name,
-            },
-            {
-              label: "Crediting Period",
-              value: formatDateRange(sideSheetEntity.startDate, sideSheetEntity.endDate),
-            },
-            {
-              label: "Durability Option",
-              value: sideSheetEntity.durabilityOption
-                ? formatDurabilityOption(
-                    sideSheetEntity.durabilityOption as DurabilityOption
-                  )
-                : null,
-            },
-          ],
-        },
-        {
-          title: "Metrics",
-          fields: [
-            {
-              label: "Total Biochar Weight",
-              value:
-                sideSheetEntity.appliedWeightTons != null
-                  ? `${sideSheetEntity.appliedWeightTons.toFixed(2)} t`
-                  : null,
-            },
+            { label: "Facility", value: sideSheetEntity.facility?.name },
+            { label: "Certification", value: facilityCertifierLabel },
             {
               label: "Total CO₂e stored",
               value:
@@ -353,11 +358,6 @@ export function CreditBatchList() {
                     ? sideSheetEntity.co2eStoredPreview.missingInputs.join(", ")
                     : "Complete",
             },
-          ],
-        },
-        {
-          title: "Applications",
-          fields: [
             {
               label: "Application Count",
               value: String(sideSheetEntity.applicationCount ?? 0),

@@ -12,6 +12,8 @@ import { SPINE_SECTION_TAG, type SpineMeta } from "@/components/forms/form-spine
 import { TransportEvidencePanel } from "@/components/transport-legs";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
+import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 
 interface FeedstockEvidenceSectionProps {
   feedstock?: FeedstockWithRelations;
@@ -23,6 +25,7 @@ interface FeedstockEvidenceSectionProps {
    */
   retryEntityIds?: string[];
   isSubmitting?: boolean;
+  focusTarget?: EntityFocusTarget | null;
   /** Injected by FormSpine — do not set manually. */
   __spine?: SpineMeta;
 }
@@ -33,6 +36,7 @@ export function FeedstockEvidenceSection({
   deferredAttachments,
   retryEntityIds,
   isSubmitting = false,
+  focusTarget,
   __spine,
 }: FeedstockEvidenceSectionProps) {
   return (
@@ -42,7 +46,12 @@ export function FeedstockEvidenceSection({
       __spine={__spine}
     >
       {isEditMode && feedstock ? (
-        <div className="flex flex-col gap-12">
+        <ActionableFocusTarget
+          target="transport-evidence"
+          activeTarget={focusTarget}
+          actionLabel="Mark the saved distance source as Document and attach supporting evidence"
+          className="flex flex-col gap-12"
+        >
           {deferredAttachments && (
             <FailedDeferredAttachments
               attachments={deferredAttachments.attachments}
@@ -62,8 +71,9 @@ export function FeedstockEvidenceSection({
           <TransportEvidencePanel
             entityType="feedstock"
             entityId={feedstock.id}
+            distanceSource={feedstock.transportDistanceSource}
           />
-        </div>
+        </ActionableFocusTarget>
       ) : (
         <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
           <FormField id="feedstock-deferred-bill-of-lading" label="Bill of lading">

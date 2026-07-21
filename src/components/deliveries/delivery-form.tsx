@@ -26,6 +26,8 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import { DeliveryEvidenceSection } from "./delivery-trailing-sections";
+import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
+import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 
 // ============================================
 // Constants for select options
@@ -71,9 +73,10 @@ interface DeliveryFormProps {
   /** Custom label for the submit button */
   submitLabel?: string;
   deferredAttachments?: UseDeferredAttachmentsResult;
+  focusTarget?: EntityFocusTarget | null;
 }
 
-export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, submitLabel, deferredAttachments }: DeliveryFormProps) {
+export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, submitLabel, deferredAttachments, focusTarget }: DeliveryFormProps) {
   const isEditMode = !!delivery;
   const formId = useId();
   const { facilityId: contextFacilityId } = useFacilityContext();
@@ -137,6 +140,14 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   // propagating to deliveries that never overrode (null-override invariant,
   // schemas/distance-source.ts header).
   const effectiveDistanceKm = distanceKmOverride ?? storedDistanceKm;
+  const savedEffectiveDistanceSource = delivery
+    ? delivery.distanceKmOverride != null
+      ? (delivery.distanceSource ?? "manual")
+      : storedDistanceSource
+    : null;
+  const savedProvenanceLoaded = delivery
+    ? delivery.distanceKmOverride != null || selectedOrder !== undefined
+    : undefined;
 
   // Text draft so in-flight typing survives; resync when the effective value
   // changes from outside (order switch, prefill) — adjust-state-during-render.
@@ -336,6 +347,11 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         icon={<MapPinIcon size={14} weight="bold" />}
         fields={["distanceKmOverride", "tripType", "distanceNote"]}
       >
+        <ActionableFocusTarget
+          target="transport-route"
+          activeTarget={focusTarget}
+          actionLabel="Complete the saved transport route information"
+        >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="distanceKmOverride"
@@ -407,6 +423,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             />
           </FormField>
         )}
+        </ActionableFocusTarget>
       </FormSection>
 
       </form>
@@ -416,6 +433,9 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         isEditMode={isEditMode}
         deferredAttachments={deferredAttachments}
         isSubmitting={isSubmitting}
+        distanceSource={savedEffectiveDistanceSource}
+        provenanceLoaded={savedProvenanceLoaded}
+        focusTarget={focusTarget}
       />
       </FormSpine>
 

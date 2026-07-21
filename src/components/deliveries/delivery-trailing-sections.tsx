@@ -12,12 +12,18 @@ import { SPINE_SECTION_TAG, type SpineMeta } from "@/components/forms/form-spine
 import { TransportEvidencePanel } from "@/components/transport-legs";
 import type { Delivery } from "@/db/schema";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
+import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
+import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 
 interface DeliveryEvidenceSectionProps {
   delivery?: Delivery;
   isEditMode: boolean;
   deferredAttachments?: UseDeferredAttachmentsResult;
   isSubmitting?: boolean;
+  distanceSource?: DistanceSourceValue | null;
+  provenanceLoaded?: boolean;
+  focusTarget?: EntityFocusTarget | null;
   /** Injected by FormSpine — do not set manually. */
   __spine?: SpineMeta;
 }
@@ -27,6 +33,9 @@ export function DeliveryEvidenceSection({
   isEditMode,
   deferredAttachments,
   isSubmitting = false,
+  distanceSource,
+  provenanceLoaded,
+  focusTarget,
   __spine,
 }: DeliveryEvidenceSectionProps) {
   return (
@@ -36,7 +45,12 @@ export function DeliveryEvidenceSection({
       __spine={__spine}
     >
       {isEditMode && delivery ? (
-        <div className="flex flex-col gap-12">
+        <ActionableFocusTarget
+          target="transport-evidence"
+          activeTarget={focusTarget}
+          actionLabel="Mark the saved distance source as Document and attach supporting evidence"
+          className="flex flex-col gap-12"
+        >
           {deferredAttachments && (
             <FailedDeferredAttachments
               attachments={deferredAttachments.attachments}
@@ -50,8 +64,10 @@ export function DeliveryEvidenceSection({
           <TransportEvidencePanel
             entityType="delivery"
             entityId={delivery.id}
+            distanceSource={distanceSource}
+            persisted={provenanceLoaded}
           />
-        </div>
+        </ActionableFocusTarget>
       ) : (
         <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
           <FormField id="delivery-deferred-bill-of-lading" label="Bill of lading">

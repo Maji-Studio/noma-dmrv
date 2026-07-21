@@ -19,6 +19,11 @@ import {
   useDocumentsForEntity,
 } from "@/hooks/use-documents";
 import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
+import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
+import { InfoHint } from "@/components/ui/tooltip";
+import { resolveCertFieldStatus } from "@/components/forms/cert-field-status";
+import { hasDocumentBackedDistanceProvenance } from "@/lib/certification/transport-evidence";
 
 type TransportEvidenceEntityType = Extract<
   DocumentEntityType,
@@ -198,6 +203,10 @@ interface TransportEvidencePanelProps {
   entityType: Exclude<TransportEvidenceEntityType, "transport_leg">;
   entityId: string;
   readOnly?: boolean;
+  /** Effective saved provenance of the distance represented by this surface. */
+  distanceSource?: DistanceSourceValue | null;
+  /** Undefined while saved provenance is still loading. */
+  persisted?: boolean;
 }
 
 /**
@@ -208,18 +217,29 @@ export function TransportEvidencePanel({
   entityType,
   entityId,
   readOnly = false,
+  distanceSource,
+  persisted = true,
 }: TransportEvidencePanelProps) {
+  const provenanceStatus = resolveCertFieldStatus(
+    persisted,
+    hasDocumentBackedDistanceProvenance(distanceSource),
+  );
   return (
     <section className="space-y-16 border-t border-[var(--color-border-tertiary)] pt-16">
-      <div className="space-y-6">
+      <div className="flex items-center gap-6">
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
           Transport evidence
         </h3>
-        <p className="body-small text-[var(--color-text-secondary)]">
-          {readOnly
-            ? "Bill of lading and weigh-scale tickets supporting this journey."
-            : "Attach the bill of lading and weigh-scale ticket used to support this journey. Uploaded files become Source candidates; mirror them from the Removal's Supporting Sources panel before submission. These are the document types currently supported here; the active module may require additional journey evidence."}
-        </p>
+        <CertificationFieldTag
+          status={provenanceStatus}
+          description="Satisfied only when the saved distance source is marked Document"
+        />
+        <InfoHint label="About transport evidence">
+          To satisfy certification, mark the saved distance source as Document
+          and attach supporting evidence. Uploading a file does not change the
+          source; mirror uploaded files from the Removal&apos;s Supporting Sources
+          panel before submission.
+        </InfoHint>
       </div>
       <TransportEvidenceDocuments
         entityType={entityType}

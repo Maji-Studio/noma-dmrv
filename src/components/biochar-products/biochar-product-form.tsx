@@ -31,6 +31,9 @@ import {
   useBiocharComposition,
 } from "@/lib/biochar-composition";
 import { IngredientBinRows } from "./ingredient-bin-rows";
+import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
+import type { EntityFocusTarget } from "@/lib/entity-deep-link";
+import Link from "next/link";
 
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
@@ -156,6 +159,7 @@ interface BiocharProductFormProps {
    * its own forms. Nothing ever renders after the CTA.
    */
   children?: React.ReactNode;
+  focusTarget?: EntityFocusTarget | null;
 }
 
 export function BiocharProductForm({
@@ -165,6 +169,7 @@ export function BiocharProductForm({
   isSubmitting = false,
   submitLabel,
   children,
+  focusTarget,
 }: BiocharProductFormProps) {
   const formId = useId();
   const isEditMode = !!product;
@@ -307,6 +312,29 @@ export function BiocharProductForm({
 
   return (
     <div className="space-y-20">
+      {focusTarget && (
+        <ActionableFocusTarget
+          target={focusTarget}
+          activeTarget={focusTarget}
+          actionLabel="Update the delivery that supplies this derived transport leg"
+        >
+          <p className="body-small text-[var(--color-text-secondary)]">
+            Product transport is derived from its delivered deliveries. Mark
+            the contributing delivery distance source as Document and attach
+            supporting evidence there.
+          </p>
+          <Link
+            href={
+              selectedFacilityId
+                ? `/deliveries?facility=${encodeURIComponent(selectedFacilityId)}`
+                : "/deliveries"
+            }
+            className="label-micro mt-8 inline-flex text-[var(--color-interaction)]"
+          >
+            Open deliveries
+          </Link>
+        </ActionableFocusTarget>
+      )}
       <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       {/* Transfer Preview — a derived recap of the transfer, not a data-entry
           step, so it sits above the numbered spine and only when it has data. */}

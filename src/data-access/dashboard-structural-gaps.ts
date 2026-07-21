@@ -9,9 +9,12 @@ import { and, count, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   biocharProducts,
+  customerLocations,
   creditBatches,
+  deliveries,
   facilities,
   feedstocks,
+  orders,
   productionRuns,
   samples,
   supplierLocations,
@@ -21,6 +24,12 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { requireOrgScope } from "./utils";
+import { DOCUMENT_BACKED_DISTANCE_SOURCE } from "@/lib/certification/transport-evidence";
+import {
+  buildEntityDeepLink,
+  type EntityFocusTarget,
+  ENTITY_FOCUS_TARGETS,
+} from "@/lib/entity-deep-link";
 
 export interface DashboardStructuralGapCounts {
   missingFacilityGps: number;
@@ -33,7 +42,7 @@ export interface DashboardStructuralGapCounts {
 }
 
 export interface TransportGapTarget {
-  entityType: "feedstock" | "biochar" | "sample";
+  entityType: "feedstock" | "biochar" | "sample" | "delivery";
   entityId: string;
 }
 
@@ -51,15 +60,12 @@ export interface DashboardStructuralGap {
 }
 
 interface TransportGapRow {
-  entityType: TransportGapTarget["entityType"];
+  entityType: Exclude<TransportGapTarget["entityType"], "delivery">;
   endpointGpsGaps: number;
   distanceEvidenceGaps: number;
   endpointGpsTargetId: string | null;
   distanceEvidenceTargetId: string | null;
 }
-
-const DOCUMENT_BACKED_DISTANCE_SOURCE =
-  "document" satisfies (typeof transportLegs.distanceSource.enumValues)[number];
 
 const transportGapSelection = {
   endpointGpsGaps: sql<number>`count(*) filter (where
@@ -115,6 +121,7 @@ function resolveTransportGapTarget(
 function parentEditorHref(
   facilityId: string,
   target: TransportGapTarget | null,
+  focus: EntityFocusTarget,
 ): string {
   const params = new URLSearchParams({ facility: facilityId });
   if (!target) return `/feedstocks?${params.toString()}`;
@@ -123,10 +130,16 @@ function parentEditorHref(
     feedstock: { path: "/feedstocks", queryKey: "feedstock" },
     biochar: { path: "/biochar-products", queryKey: "biocharProduct" },
     sample: { path: "/samples", queryKey: "sample" },
+    delivery: { path: "/deliveries", queryKey: "delivery" },
   } as const;
   const route = targetRoutes[target.entityType];
-  params.set(route.queryKey, target.entityId);
-  return `${route.path}?${params.toString()}`;
+  return buildEntityDeepLink({
+    path: route.path,
+    facilityId,
+    entityQueryKey: route.queryKey,
+    entityId: target.entityId,
+    focus,
+  });
 }
 
 export function buildDashboardStructuralGaps(
@@ -155,7 +168,11 @@ export function buildDashboardStructuralGaps(
       key: "transportEndpointGps" as const,
       label: "Transport endpoint GPS missing",
       count: counts.transportEndpointGpsGaps,
-      href: parentEditorHref(facilityId, counts.transportEndpointGpsTarget),
+      href: parentEditorHref(
+        facilityId,
+        counts.transportEndpointGpsTarget,
+        ENTITY_FOCUS_TARGETS.transportRoute,
+      ),
     },
     {
       key: "transportDistanceEvidence" as const,
@@ -164,6 +181,7 @@ export function buildDashboardStructuralGaps(
       href: parentEditorHref(
         facilityId,
         counts.transportDistanceEvidenceTarget,
+        ENTITY_FOCUS_TARGETS.transportEvidence,
       ),
     },
   ].filter((gap) => gap.count > 0);
@@ -319,6 +337,55 @@ export async function loadDashboardStructuralGapCounts(
     { ...biocharTransport, entityType: "biochar" },
     { ...sampleTransport, entityType: "sample" },
   ]);
+  let distanceEvidenceTarget = transport.distanceEvidenceTarget;
+  if (distanceEvidenceTarget?.entityType === "biochar") {
+    const [deliveryTarget] = await db
+      .select({ id: deliveries.id })
+      .from(deliveries)
+      .leftJoin(
+        orders,
+        and(
+          eq(deliveries.orderId, orders.id),
+          eq(orders.organizationId, orgId),
+        ),
+      )
+      .leftJoin(
+        customerLocations,
+        and(
+          eq(
+            customerLocations.id,
+            sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+          ),
+          eq(customerLocations.organizationId, orgId),
+        ),
+      )
+      .where(
+        and(
+          eq(deliveries.organizationId, orgId),
+          eq(deliveries.facilityId, facilityId),
+          isNull(deliveries.archivedAt),
+          eq(deliveries.status, "delivered"),
+          eq(
+            sql`coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+            distanceEvidenceTarget.entityId,
+          ),
+          sql`case
+            when ${deliveries.distanceKmOverride} > 0
+              then coalesce(${deliveries.distanceSource}, 'manual') <> ${DOCUMENT_BACKED_DISTANCE_SOURCE}
+            else ${customerLocations.distanceSource} is null
+              or ${customerLocations.distanceSource} <> ${DOCUMENT_BACKED_DISTANCE_SOURCE}
+          end`,
+        ),
+      )
+      .limit(1);
+
+    if (deliveryTarget) {
+      distanceEvidenceTarget = {
+        entityType: "delivery",
+        entityId: deliveryTarget.id,
+      };
+    }
+  }
 
   return {
     missingFacilityGps: Number(facilityGps?.count ?? 0),
@@ -327,6 +394,6 @@ export async function loadDashboardStructuralGapCounts(
     transportDistanceEvidenceGaps: transport.distanceEvidenceGaps,
     missingFeedstockGpsSupplierId: feedstockGps?.supplierId ?? null,
     transportEndpointGpsTarget: transport.endpointGpsTarget,
-    transportDistanceEvidenceTarget: transport.distanceEvidenceTarget,
+    transportDistanceEvidenceTarget: distanceEvidenceTarget,
   };
 }

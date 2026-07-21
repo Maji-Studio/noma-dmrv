@@ -145,6 +145,37 @@ test.describe("Dashboard (Flow Hero)", () => {
       await expect(page.getByText("3 open", { exact: true }).first()).toBeVisible();
       await expect(page.getByText("All clear")).toHaveCount(0);
 
+      const evidenceLink = structuralGaps.getByRole("link", {
+        name: /Transport distance lacks document evidence/,
+      });
+      await expect(evidenceLink).toHaveAttribute(
+        "href",
+        `/feedstocks?facility=${facilityId}&feedstock=${feedstockId}&mode=edit&focus=transport-evidence`,
+      );
+      await evidenceLink.click();
+      const feedstockSheet = page.getByRole("dialog");
+      await expect(feedstockSheet.getByText("Save Changes")).toBeVisible();
+      await expect(
+        feedstockSheet.getByText(
+          "Mark the saved distance source as Document and attach supporting evidence",
+        ),
+      ).toBeVisible();
+      await expect(
+        feedstockSheet.getByText(
+          "Set or mark the distance source as Document, then attach the bill of lading or weigh-scale ticket that supports that distance. An upload alone does not change the saved distance provenance.",
+        ),
+      ).toHaveCount(0);
+      await feedstockSheet
+        .getByRole("button", { name: "About transport evidence" })
+        .hover();
+      await expect(
+        page.getByText(
+          "To satisfy certification, mark the saved distance source as Document and attach supporting evidence. Uploading a file does not change the source; mirror uploaded files from the Removal's Supporting Sources panel before submission.",
+        ),
+      ).toBeVisible();
+
+      await page.goto(`/dashboard?facility=${facilityId}`);
+
       await db.transaction(async (tx) => {
         await tx
           .update(supplierLocations)

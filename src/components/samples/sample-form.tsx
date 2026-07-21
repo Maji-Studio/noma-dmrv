@@ -53,6 +53,7 @@ import {
 import type { SampleWithRelations } from "@/data-access/samples";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { TransportLegFormData } from "@/schemas/transport-legs";
+import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 
 // ============================================
 // Constants
@@ -86,6 +87,7 @@ interface SampleFormProps {
   deferredLegs?: TransportLegFormData[];
   onDeferredLegsChange?: (legs: TransportLegFormData[]) => void;
   onRetryDeferredLegs?: () => Promise<void>;
+  focusTarget?: EntityFocusTarget | null;
 }
 
 export function SampleForm({
@@ -101,6 +103,7 @@ export function SampleForm({
   deferredLegs,
   onDeferredLegsChange,
   onRetryDeferredLegs,
+  focusTarget,
 }: SampleFormProps) {
   const formId = useId();
   const isEditMode = !!sample;
@@ -961,6 +964,7 @@ export function SampleForm({
         deferredLegs={deferredLegs}
         onDeferredLegsChange={onDeferredLegsChange}
         onRetryLegs={onRetryDeferredLegs}
+        focusTarget={focusTarget}
         isSubmitting={isSubmitting}
       />
       </FormSpine>
