@@ -16,7 +16,6 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { FlowArrowIcon, CheckCircleIcon, LockOpenIcon } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
-import { formatDate } from "@/lib/format-utils";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { InfoHint } from "@/components/ui/tooltip";
@@ -93,7 +92,7 @@ function createColumns(
             {p.futureSampleCount > 0 && (
               <span className="body-caption text-[var(--st-wait)]">
                 {p.futureSampleCount} future-dated — counted from{" "}
-                {formatDate(p.nextCountableSamplingTime)}
+                {p.nextCountableSamplingDay}
               </span>
             )}
             {p.preEstablishmentSampleCount > 0 && (

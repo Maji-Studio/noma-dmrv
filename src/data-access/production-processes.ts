@@ -11,11 +11,13 @@ import { and, count, desc, eq, gte, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   creditBatches,
+  facilities,
   feedstockTypes,
   productionProcesses,
   samples,
   type ProductionProcess,
 } from "@/db/schema";
+import { formatFacilityDate, formatUtcDate } from "@/lib/date-utils";
 import {
   METHOD_B_MINIMUM_METHOD_A_SAMPLES,
   PROCESS_ROLLING_WINDOW_MONTHS,
@@ -157,6 +159,13 @@ export interface ProductionProcessSummary {
   /** Earliest future sampling time — when the next excluded sample starts counting. */
   nextCountableSamplingTime: Date | null;
   /**
+   * The same instant as a facility-local `YYYY-MM-DD` day, for display. The
+   * surfaces show this — never `nextCountableSamplingTime` through a viewer-local
+   * formatter — so the "counted from" day matches the facility-local day the
+   * durability chip shows and never drifts by one across timezones.
+   */
+  nextCountableSamplingDay: string | null;
+  /**
    * Linked samples dated before the process's operational `established_at` —
    * permanently excluded from the baseline (ADR 0017, 2026-07-12 amendment).
    */
@@ -205,6 +214,26 @@ export async function getProductionProcessSummariesByFacility(
     .orderBy(desc(productionProcesses.establishedAt));
 
   if (processRows.length === 0) return [];
+
+  // Facility timezone resolves the "counted from" instant to a facility-local
+  // calendar day, so the process surfaces agree with the durability chip and
+  // never drift a day under a viewer-local formatter (UTC fallback).
+  const [facilityRow] = await db
+    .select({ timezone: facilities.timezone })
+    .from(facilities)
+    .where(
+      and(
+        eq(facilities.id, facilityId),
+        eq(facilities.organizationId, ctx.organizationId),
+      ),
+    );
+  const facilityTimezone = facilityRow?.timezone ?? null;
+  const facilityLocalDay = (instant: Date | null): string | null =>
+    instant == null
+      ? null
+      : facilityTimezone
+        ? formatFacilityDate(instant, facilityTimezone)
+        : formatUtcDate(instant);
 
   const asOfDate = new Date();
   const eligibleSamplesByProcess = await countEligibleSamplesByProcess(ctx, db, {
@@ -313,6 +342,9 @@ export async function getProductionProcessSummariesByFacility(
       eligibleSampleCount,
       futureSampleCount: exclusions?.futureSampleCount ?? 0,
       nextCountableSamplingTime: exclusions?.nextCountableSamplingTime ?? null,
+      nextCountableSamplingDay: facilityLocalDay(
+        exclusions?.nextCountableSamplingTime ?? null,
+      ),
       preEstablishmentSampleCount: exclusions?.preEstablishmentSampleCount ?? 0,
       baselineTarget: METHOD_B_MINIMUM_METHOD_A_SAMPLES,
       meetsBaseline: eligibleSampleCount >= METHOD_B_MINIMUM_METHOD_A_SAMPLES,

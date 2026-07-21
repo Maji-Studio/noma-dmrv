@@ -262,18 +262,20 @@ export function buildDurabilityBatchSummaries(
         ),
     );
 
-    // Resolve "today" in the facility zone so the future-dated cut matches the
-    // server baseline counter's exact-instant comparison instead of the viewer's
-    // browser day. Once Method B is unlocked the window is closed, so those
-    // samples never re-enter the baseline.
-    const todayIso = formatDayInZone(asOfDate, batch.facilityTimezone);
-    const futureReplicates = summarizeFutureReplicates(
-      { replicates },
-      todayIso ?? formatUtcDate(asOfDate),
+    // Classify future-dated samples on the SAME exact-instant clock the server
+    // baseline counter uses (`samplingTime >= asOfDate`), so a sample dated later
+    // the same facility-local day is flagged here exactly as it is excluded there
+    // — a day-only cut would silently drop it. The displayed cue stays the
+    // facility-local calendar day. Once Method B is unlocked the window is closed,
+    // so those samples never re-enter the baseline.
+    const futureSamples = summarizeFutureSamples(
+      batch.samples,
+      asOfDate,
+      batch.facilityTimezone,
     );
     const future: DurabilitySummaryFuture = {
-      count: futureReplicates.count,
-      earliestDay: futureReplicates.earliestDay,
+      count: futureSamples.count,
+      earliestDay: futureSamples.earliestDay,
       countsTowardBaseline: batch.methodBUnlockedAt == null,
     };
 
@@ -309,25 +311,44 @@ export function buildDurabilityBatchSummaries(
   });
 }
 
+/** Coerce a raw sampling timestamp (Date or ISO string) to an instant. */
+function toInstant(samplingTime: unknown): Date | null {
+  if (samplingTime instanceof Date) {
+    return Number.isNaN(samplingTime.getTime()) ? null : samplingTime;
+  }
+  if (typeof samplingTime === "string" && samplingTime.length > 0) {
+    const parsed = new Date(samplingTime);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
 /**
- * Count a summary's replicates whose sampling day lies after `todayIso`
- * (YYYY-MM-DD). Future-dated samples DO satisfy the batch's chemistry roll-up
- * above, but the Method-B baseline counter on Production Processes runs on an
- * "as of now" clock and correctly excludes them until their sampling date
- * passes — so the surfaces that show this roll-up name that exclusion instead
- * of silently disagreeing with the process counter (QA 2026-07-21 F1).
- * Advisory only: the authoritative exclusion happens server-side in
- * `countEligibleSamplesByProcess`.
+ * Count the samples whose sampling INSTANT is at or after `asOfDate` — the exact
+ * same clock the server baseline counter uses (`samplingTime >= asOfDate` in
+ * `countEligibleSamplesByProcess`), so a sample dated later the same calendar day
+ * is flagged here exactly as it is excluded there (a day-only cut would miss it).
+ * `earliestDay` is that sample's facility-local calendar day, for display. These
+ * samples DO satisfy the batch's chemistry roll-up but don't yet count toward the
+ * process's Method-B baseline (QA 2026-07-21 F1) — advisory only; the
+ * authoritative exclusion happens server-side.
  */
-export function summarizeFutureReplicates(
-  summary: Pick<DurabilityBatchSummary, "replicates">,
-  todayIso: string,
+export function summarizeFutureSamples(
+  samples: ReadonlyArray<{ samplingTime: unknown }>,
+  asOfDate: Date,
+  facilityTimezone: string | null | undefined,
 ): { count: number; earliestDay: string | null } {
-  const futureDays = summary.replicates
-    .map((r) => r.samplingDay)
-    .filter((day): day is string => day != null && day > todayIso)
-    .sort();
-  return { count: futureDays.length, earliestDay: futureDays[0] ?? null };
+  const futureInstants = samples
+    .map((s) => toInstant(s.samplingTime))
+    .filter((instant): instant is Date => instant != null && instant >= asOfDate)
+    .sort((a, b) => a.getTime() - b.getTime());
+  return {
+    count: futureInstants.length,
+    earliestDay:
+      futureInstants.length > 0
+        ? formatDayInZone(futureInstants[0], facilityTimezone)
+        : null,
+  };
 }
 
 function buildReplicate(

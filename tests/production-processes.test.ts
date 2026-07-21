@@ -424,6 +424,9 @@ describe("findOrCreateProductionProcess", () => {
     expect(summary?.nextCountableSamplingTime?.getTime()).toBe(
       FAR_FUTURE_SAMPLING_TIME.getTime(),
     );
+    // The surfaces render this facility-local day string, not the raw instant
+    // through a viewer-local formatter (QA 2026-07-21 round-2 P3).
+    expect(summary?.nextCountableSamplingDay).toBe("2999-01-01");
     expect(summary?.preEstablishmentSampleCount).toBe(1);
     expect(summary?.totalBatches).toBe(2);
     expect(summary?.sampledBatches).toBe(1);

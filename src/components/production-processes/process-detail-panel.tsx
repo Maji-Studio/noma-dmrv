@@ -89,7 +89,7 @@ export function ProcessDetailPanel({
                           {process.eligibleSampleCount} / {process.baselineTarget}{" "}
                           baseline samples
                           {process.futureSampleCount > 0 &&
-                            ` (${process.futureSampleCount} future-dated — counted from ${formatDate(process.nextCountableSamplingTime)})`}
+                            ` (${process.futureSampleCount} future-dated — counted from ${process.nextCountableSamplingDay})`}
                         </span>
                       )
                     }
