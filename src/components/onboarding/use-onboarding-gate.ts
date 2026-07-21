@@ -152,7 +152,9 @@ export function useOnboardingGate(facilityId: string | null): OnboardingGate {
   };
 }
 
-function resolveMode({
+// Exported for the colocated unit test — the dashboard consumes it via
+// `useOnboardingGate` only.
+export function resolveMode({
   isLoading,
   status,
   facilityId,
@@ -178,7 +180,15 @@ function resolveMode({
 
   if (progress.allComplete) return "none";
 
-  if (!status.isOwnerOrAdmin) return "takeover-member";
+  // A Member is only blocked while the facility is genuinely pre-operational
+  // (no reactor yet). Later Setup steps — registry (platform-admin gated and
+  // legitimately skippable), supplier, first runs — can stay open for a long
+  // time on a producing facility, and a Member must not be locked out of the
+  // dashboard for them.
+  if (!status.isOwnerOrAdmin) {
+    const operational = (status.facility?.reactorCount ?? 0) > 0;
+    return operational ? "none" : "takeover-member";
+  }
 
   return collapsed ? "strip" : "takeover-guide";
 }
