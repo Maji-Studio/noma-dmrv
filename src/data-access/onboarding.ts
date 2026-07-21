@@ -1,4 +1,4 @@
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import {
   certifierProjects,
@@ -48,7 +48,12 @@ export async function getOnboardingStatus(
       db
         .select({ count: count() })
         .from(facilities)
-        .where(eq(facilities.organizationId, ctx.organizationId)),
+        .where(
+          and(
+            eq(facilities.organizationId, ctx.organizationId),
+            isNull(facilities.archivedAt),
+          ),
+        ),
       db
         .select({ count: count() })
         .from(suppliers)
@@ -78,7 +83,12 @@ export async function getOnboardingStatus(
     db
       .select({ count: count() })
       .from(facilities)
-      .where(eq(facilities.organizationId, ctx.organizationId)),
+      .where(
+        and(
+          eq(facilities.organizationId, ctx.organizationId),
+          isNull(facilities.archivedAt),
+        ),
+      ),
     db
       .select({ count: count() })
       .from(suppliers)
@@ -90,6 +100,7 @@ export async function getOnboardingStatus(
         and(
           eq(reactors.organizationId, ctx.organizationId),
           eq(reactors.facilityId, facilityId),
+          isNull(reactors.archivedAt),
         ),
       ),
     db
@@ -108,6 +119,7 @@ export async function getOnboardingStatus(
         and(
           eq(feedstocks.organizationId, ctx.organizationId),
           eq(feedstocks.facilityId, facilityId),
+          isNull(feedstocks.archivedAt),
         ),
       ),
     db
@@ -118,6 +130,7 @@ export async function getOnboardingStatus(
           eq(productionRuns.organizationId, ctx.organizationId),
           eq(productionRuns.facilityId, facilityId),
           eq(productionRuns.status, COMPLETE_PRODUCTION_RUN_STATUS),
+          isNull(productionRuns.archivedAt),
         ),
       ),
     db
@@ -127,6 +140,7 @@ export async function getOnboardingStatus(
         and(
           eq(creditBatches.organizationId, ctx.organizationId),
           eq(creditBatches.facilityId, facilityId),
+          isNull(creditBatches.archivedAt),
         ),
       ),
   ]);
