@@ -191,9 +191,10 @@ export const formulationSelectSchema = z.object({
 /**
  * Ratios persist as `numeric(7,6)` (6 decimals), so 4 decimals of a percent
  * round-trip exactly. Both converters round to that precision to keep
- * percent ⇄ ratio conversion stable across edit round-trips.
+ * percent ⇄ ratio conversion stable across edit round-trips. Exported so the
+ * form's input `step` and auto-balance rounding stay in lockstep with it.
  */
-const PERCENT_DECIMALS = 10_000;
+export const PERCENT_DECIMALS = 10_000;
 const RATIO_DECIMALS = 1_000_000;
 
 /** Ratio (0–1) → display percent (0–100), null-safe. */
@@ -230,21 +231,6 @@ export function exceedsFormulationPercentSum(
       ratio: percentToRatio(ingredient?.sharePercent),
     })),
   );
-}
-
-/** Combined biochar + ingredient share in percent, missing shares as 0. */
-export function formulationPercentSum(
-  biocharPercent: number | null | undefined,
-  ingredients:
-    | ReadonlyArray<{ sharePercent?: number | null }>
-    | null
-    | undefined,
-): number {
-  const ingredientSum = (ingredients ?? []).reduce(
-    (total, ingredient) => total + (ingredient?.sharePercent ?? 0),
-    0,
-  );
-  return (biocharPercent ?? 0) + ingredientSum;
 }
 
 export const PERCENT_SUM_EXCEEDED_MESSAGE =

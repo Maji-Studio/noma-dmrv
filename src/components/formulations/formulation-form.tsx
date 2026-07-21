@@ -11,7 +11,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { nullableNumericValue } from "@/lib/form-utils";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FormEntitySelect, FormField, FormInput, FormTextarea, FormSection, FormActions } from "@/components/forms";
@@ -22,6 +21,7 @@ import {
   percentFormToRatioPayload,
   ratioToPercent,
   FORMULATION_LINE_FEEDSTOCK_USAGE,
+  PERCENT_DECIMALS,
   type FormulationFormData,
   type FormulationPercentFormData,
 } from "@/schemas/formulations";
@@ -36,20 +36,31 @@ const EMPTY_INGREDIENT = {
 const PERCENT_DISPLAY_TOLERANCE = 0.1;
 
 /**
- * Shares keep 4 decimals — the exact precision the percent ⇄ ratio converters
- * preserve (`numeric(7,6)` ratios). The input `step` must match, or a stored
- * value like 33.3333 trips native step-mismatch validation and blocks submit;
- * auto-balance must round to the same precision so the balanced sum stays a
- * valid 100%.
+ * Shares keep the converters' 4-decimal percent precision (`PERCENT_DECIMALS`).
+ * The input `step` must match, or a stored value like 33.3333 trips native
+ * step-mismatch validation and blocks submit; auto-balance rounds to the same
+ * precision so the balanced sum stays a valid 100%.
  */
-const SHARE_PERCENT_STEP = "0.0001";
-const SHARE_PERCENT_DECIMALS = 10_000;
+const SHARE_PERCENT_STEP = String(1 / PERCENT_DECIMALS);
 
 /** A fresh formulation starts as pure biochar; adding ingredients rebalances. */
 const DEFAULT_BIOCHAR_PERCENT = 100;
 
 function formatPercent(value: number): string {
   return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
+/**
+ * Raw share inputs hold strings until the schema coerces on submit — the live
+ * bar and auto-balance must parse them the same way (`""`/invalid → 0).
+ */
+function watchedShareToNumber(value: unknown): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
 }
 
 // ============================================
@@ -189,20 +200,15 @@ export function FormulationForm({
   // Watch shares for auto-balance, the allocation bar, and the total.
   const biocharPercent = useWatch({ control, name: "biocharPercent" });
   const ingredients = useWatch({ control, name: "ingredients" });
-  const biocharNum = typeof biocharPercent === "number" ? biocharPercent : 0;
+  const biocharNum = watchedShareToNumber(biocharPercent);
   const ingredientSum = (ingredients ?? []).reduce(
-    (sum, ingredient) =>
-      sum +
-      (typeof ingredient?.sharePercent === "number"
-        ? ingredient.sharePercent
-        : 0),
+    (sum, ingredient) => sum + watchedShareToNumber(ingredient?.sharePercent),
     0,
   );
   const totalPercent = biocharNum + ingredientSum;
   const remainderPercent = Math.max(
     0,
-    Math.round((100 - ingredientSum) * SHARE_PERCENT_DECIMALS) /
-      SHARE_PERCENT_DECIMALS,
+    Math.round((100 - ingredientSum) * PERCENT_DECIMALS) / PERCENT_DECIMALS,
   );
 
   // Biochar auto-balances to the remaining share until the operator edits it
@@ -301,7 +307,6 @@ export function FormulationForm({
                 disabled={isSubmitting}
                 error={!!errors.biocharPercent}
                 {...register("biocharPercent", {
-                  setValueAs: nullableNumericValue,
                   onChange: () => {
                     setAutoBalance(false);
                   },
@@ -370,9 +375,7 @@ export function FormulationForm({
                   placeholder="e.g., 30"
                   disabled={isSubmitting}
                   error={!!errors.ingredients?.[index]?.sharePercent}
-                  {...register(`ingredients.${index}.sharePercent`, {
-                    setValueAs: nullableNumericValue,
-                  })}
+                  {...register(`ingredients.${index}.sharePercent`)}
                 />
               </FormField>
             </div>

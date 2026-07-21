@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   createFormulationSchema,
   exceedsFormulationRatioSum,
-  formulationPercentSum,
   formulationPercentFormSchema,
   formulationRatioSum,
   percentFormToRatioPayload,
@@ -117,15 +116,6 @@ describe("percent ⇄ ratio conversion", () => {
     expect(percentToRatio(undefined)).toBeNull();
     expect(ratioToPercent(null)).toBeNull();
     expect(ratioToPercent(Number.NaN)).toBeNull();
-  });
-});
-
-describe("formulationPercentSum", () => {
-  it("sums biochar and ingredient shares, missing as zero", () => {
-    expect(formulationPercentSum(null, null)).toBe(0);
-    expect(
-      formulationPercentSum(70, [{ sharePercent: 20 }, { sharePercent: null }]),
-    ).toBe(90);
   });
 });
 
