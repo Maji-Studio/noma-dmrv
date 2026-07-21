@@ -51,10 +51,17 @@ const METHOD_B_SAMPLE_WRITE_GUARDS_MIGRATION = resolve(
   process.cwd(),
   "drizzle/0062_process_method_b_sample_write_guards.sql",
 );
-// Migration 0083 adds the baseline window's LOWER bound (sampling_time >=
-// established_at) to the minimum-samples trigger. It only CREATE OR REPLACEs the
-// function body defined in 0060, so applying it is idempotent and safe on a
-// fully-migrated test DB.
+// The minimum-samples trigger is split across two migrations: 0060 CREATEs the
+// trigger + base function; 0083 CREATE OR REPLACEs the function to add the
+// baseline window's LOWER bound (sampling_time >= established_at). CI provisions
+// the test DB with `drizzle-kit push` (schema only — hand-written trigger
+// migrations are NOT applied), so both files must be replayed here, in order, to
+// materialise the trigger. Both statements are idempotent (CREATE OR REPLACE /
+// DROP TRIGGER IF EXISTS), so this is safe on a fully-migrated DB too.
+const METHOD_B_MINIMUM_SAMPLES_TRIGGER_MIGRATION = resolve(
+  process.cwd(),
+  "drizzle/0060_process_method_b_minimum_samples_guard.sql",
+);
 const METHOD_B_MINIMUM_SAMPLES_LOWER_BOUND_MIGRATION = resolve(
   process.cwd(),
   "drizzle/0083_process_method_b_established_lower_bound.sql",
@@ -76,7 +83,8 @@ async function applyMethodBSampleWriteGuards(): Promise<void> {
   await applyMigrationFile(METHOD_B_SAMPLE_WRITE_GUARDS_MIGRATION);
 }
 
-async function applyMethodBMinimumSamplesLowerBound(): Promise<void> {
+async function applyMethodBMinimumSamplesGuard(): Promise<void> {
+  await applyMigrationFile(METHOD_B_MINIMUM_SAMPLES_TRIGGER_MIGRATION);
   await applyMigrationFile(METHOD_B_MINIMUM_SAMPLES_LOWER_BOUND_MIGRATION);
 }
 
@@ -148,7 +156,7 @@ beforeAll(() => ensureTestOrg());
 
 beforeAll(async () => {
   await applyMethodBSampleWriteGuards();
-  await applyMethodBMinimumSamplesLowerBound();
+  await applyMethodBMinimumSamplesGuard();
 
   const runId = Date.now().toString(36);
 
