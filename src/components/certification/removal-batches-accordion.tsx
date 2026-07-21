@@ -16,8 +16,6 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
 import { Accordion } from "@/components/ui/accordion";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { formatCreditBatchStatus } from "@/schemas/credit-batches";
 import type { RemovalCreditBatchSummary } from "@/fn/certification/ghg-statements";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
 
@@ -93,6 +91,8 @@ export function RemovalBatchesAccordion({
                         key={batch.id}
                         className="flex items-center justify-between gap-8 border border-[var(--color-border-tertiary)] bg-[var(--color-background-light)] px-8 py-6"
                       >
+                        {/* No lifecycle badge — an inert DB default with no
+                            transition path (QA 2026-07-21 F3). */}
                         <span className="flex min-w-0 flex-col gap-1">
                           <span className="body-caption font-mono text-[var(--color-text-primary)] truncate">
                             {batch.code}
@@ -101,11 +101,6 @@ export function RemovalBatchesAccordion({
                             {formatDateRange(batch.startDate, batch.endDate)}
                           </span>
                         </span>
-                        <StatusBadge
-                          status={batch.status}
-                          label={formatCreditBatchStatus(batch.status)}
-                          size="small"
-                        />
                       </li>
                     ))}
                   </ul>

@@ -1,6 +1,10 @@
 /**
  * CreditBatchList component
- * Card grid layout with search, status filter, and pagination
+ * Card grid layout with search and pagination. There is deliberately no
+ * lifecycle-status column or filter: every batch sits at the DB default
+ * ("pending") with no transition path, so a status surface only competed with
+ * the real readiness signal (QA 2026-07-21 F3). Reintroduce one when a registry
+ * lifecycle actually drives it.
  */
 "use client";
 
@@ -29,7 +33,6 @@ import {
   ListPagination,
   PageHeader,
 } from "@/components/ui";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { ServerError } from "@/components/forms";
 import { CreditBatchForm } from "./credit-batch-form";
 import { CreditBatchCard } from "./credit-batch-card";
@@ -47,12 +50,9 @@ import {
 } from "@/hooks/use-certification";
 import type { CreditBatchFormData } from "@/schemas/credit-batches";
 import {
-  creditBatchStatuses,
   formatCertifierProvider,
-  formatCreditBatchStatus,
   formatDurabilityOption,
   type CertifierProvider,
-  type CreditBatchStatus,
   type DurabilityOption,
 } from "@/schemas/credit-batches";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
@@ -73,7 +73,6 @@ const EMPTY_CREDIT_BATCHES: CreditBatchWithRelations[] = [];
 export function CreditBatchList() {
   // Filter & pagination state
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
@@ -114,12 +113,8 @@ export function CreditBatchList() {
       );
     }
 
-    if (statusFilter) {
-      items = items.filter((b) => b.status === statusFilter);
-    }
-
     return items;
-  }, [allItems, searchQuery, statusFilter]);
+  }, [allItems, searchQuery]);
 
   // Client-side pagination
   const totalFiltered = filteredItems.length;
@@ -260,11 +255,10 @@ export function CreditBatchList() {
 
   const clearFilters = () => {
     setSearchQuery("");
-    setStatusFilter("");
     setCurrentPage(1);
   };
 
-  const hasActiveFilters = Boolean(searchQuery || statusFilter);
+  const hasActiveFilters = Boolean(searchQuery);
 
   if (!contextFacilityId) {
     return (
@@ -306,14 +300,6 @@ export function CreditBatchList() {
           title: "General",
           fields: [
             { label: "Code", value: sideSheetEntity.code },
-            {
-              label: "Status",
-              value: (
-                <StatusBadge
-                  status={sideSheetEntity.status as CreditBatchStatus}
-                />
-              ),
-            },
             {
               label: "Certification",
               value: facilityCertifierLabel,
@@ -426,7 +412,7 @@ export function CreditBatchList() {
       {/* Filter Bar */}
       <section className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20">
         <div className="flex flex-col gap-16 xl:flex-row xl:items-end xl:justify-between">
-          <div className="grid flex-1 gap-12 md:grid-cols-[minmax(0,1fr)_200px]">
+          <div className="grid flex-1 gap-12">
             <div className="relative">
               <MagnifyingGlassIcon
                 size={18}
@@ -444,22 +430,6 @@ export function CreditBatchList() {
                 aria-label="Search credit batches"
               />
             </div>
-
-            <select
-              value={statusFilter}
-              onChange={(event) => {
-                setStatusFilter(event.target.value);
-                setCurrentPage(1);
-              }}
-              className="h-40 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small"
-            >
-              <option value="">All Statuses</option>
-              {creditBatchStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {formatCreditBatchStatus(status)}
-                </option>
-              ))}
-            </select>
           </div>
 
           <div className="flex flex-wrap items-center gap-8">

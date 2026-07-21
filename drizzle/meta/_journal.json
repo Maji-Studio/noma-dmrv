@@ -582,6 +582,27 @@
       "when": 1784550507193,
       "tag": "0082_little_lila_cheney",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1784644628896,
+      "tag": "0083_process_method_b_established_lower_bound",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1784650000000,
+      "tag": "0084_method_b_write_guard_established_lower_bound",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1784650100000,
+      "tag": "0085_established_at_immutable_after_unlock",
+      "breakpoints": true
     }
   ]
 }

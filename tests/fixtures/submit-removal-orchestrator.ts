@@ -330,6 +330,7 @@ export function makeBatchesWithSamples(
       startDate: "2026-01-01",
       endDate: "2026-01-31",
       facilityTimezone: "UTC",
+      methodBUnlockedAt: null,
       productionProcessId: null,
       samplingMethod: "method_a",
       declaredHToCorgRatio: null,
