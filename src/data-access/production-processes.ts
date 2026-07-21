@@ -7,7 +7,7 @@
  * operator surface; Track 2 adds the Method-B unlock action.
  */
 
-import { and, count, desc, eq, gte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   creditBatches,
@@ -42,11 +42,13 @@ import {
 } from "@/lib/calculations/unsampled-carbon";
 import type {
   MoisturePathway,
+  SetOperationalStartInput,
   UnlockMethodBInput,
 } from "@/schemas/production-process";
 import { countEligibleSamplesByProcess } from "./isometric";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 type Executor = DbTransaction | typeof db;
 const PRODUCTION_PROCESS_CURRENT_LOCK_SCOPE = "production-process-current";
@@ -436,6 +438,73 @@ export async function unlockMethodBForProcess(
       })
       .where(and(eq(productionProcesses.id, input.processId), eq(productionProcesses.organizationId, ctx.organizationId)))
       .returning();
+
+    return updated;
+  });
+}
+
+/**
+ * Set a production process's true operational start (`established_at`) — the
+ * correction for a back-entered facility whose real sampling predates the row
+ * the system auto-created (ADR 0017, 2026-07-12 amendment). Because the baseline
+ * window is `[established_at, …)`, an operational start dated after sampling
+ * began strands legitimate samples outside the count; moving it back lets them
+ * qualify so the facility can reach Method B.
+ *
+ * Editable ONLY while the process is still on Method A. After Method B unlocks,
+ * the baseline window is fixed history: a change would retroactively redraw which
+ * samples were the ≥30 baseline. Three layers reject a post-unlock edit — this
+ * row-locked check, the `isNull(method_b_unlocked_at)` UPDATE predicate (closes
+ * the check→update race), and the DB trigger (migration 0085, against direct SQL).
+ * Organization scope is enforced here; the fn layer gates the owner/admin role.
+ */
+export async function setProcessOperationalStart(
+  ctx: OrgContext,
+  input: SetOperationalStartInput,
+): Promise<ProductionProcess> {
+  requireOrgScope(ctx);
+
+  return db.transaction(async (tx) => {
+    const [process] = await tx
+      .select()
+      .from(productionProcesses)
+      .where(
+        and(
+          eq(productionProcesses.id, input.processId),
+          eq(productionProcesses.organizationId, ctx.organizationId),
+        ),
+      )
+      .for("update")
+      .limit(1);
+
+    if (!process) {
+      throw new SafeError("Production process not found.");
+    }
+    if (process.methodBUnlockedAt != null) {
+      throw new SafeError(
+        "This production process has already unlocked Method B — its baseline window is fixed history and the operational start can no longer change.",
+      );
+    }
+
+    const [updated] = await tx
+      .update(productionProcesses)
+      .set({ establishedAt: input.establishedAt, updatedAt: new Date() })
+      .where(
+        and(
+          eq(productionProcesses.id, input.processId),
+          eq(productionProcesses.organizationId, ctx.organizationId),
+          // DB-layer backstop: never touch a row that unlocked Method B between
+          // the SELECT above and this UPDATE.
+          isNull(productionProcesses.methodBUnlockedAt),
+        ),
+      )
+      .returning();
+
+    if (!updated) {
+      throw new SafeError(
+        "This production process has already unlocked Method B — its operational start can no longer change.",
+      );
+    }
 
     return updated;
   });

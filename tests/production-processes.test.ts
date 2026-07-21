@@ -22,6 +22,8 @@ import {
   findOrCreateProductionProcess,
   getProcessComplianceDrift,
   getProductionProcessSummariesByFacility,
+  setProcessOperationalStart,
+  unlockMethodBForProcess,
 } from "@/data-access/production-processes";
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { deleteSample, updateSample } from "@/data-access/samples";
@@ -73,6 +75,12 @@ const METHOD_B_WRITE_GUARD_LOWER_BOUND_MIGRATION = resolve(
   process.cwd(),
   "drizzle/0084_method_b_write_guard_established_lower_bound.sql",
 );
+// 0085 makes established_at immutable once Method B has unlocked; CI provisions
+// the test DB with `drizzle-kit push` (schema only), so replay the trigger here.
+const ESTABLISHED_AT_IMMUTABLE_MIGRATION = resolve(
+  process.cwd(),
+  "drizzle/0085_established_at_immutable_after_unlock.sql",
+);
 
 async function applyMigrationFile(migrationPath: string): Promise<void> {
   const migrationSql = readFileSync(migrationPath, "utf8");
@@ -94,6 +102,10 @@ async function applyMethodBSampleWriteGuards(): Promise<void> {
 async function applyMethodBMinimumSamplesGuard(): Promise<void> {
   await applyMigrationFile(METHOD_B_MINIMUM_SAMPLES_TRIGGER_MIGRATION);
   await applyMigrationFile(METHOD_B_MINIMUM_SAMPLES_LOWER_BOUND_MIGRATION);
+}
+
+async function applyEstablishedAtImmutableGuard(): Promise<void> {
+  await applyMigrationFile(ESTABLISHED_AT_IMMUTABLE_MIGRATION);
 }
 
 async function createMethodBProcessWithBaseline(
@@ -203,6 +215,7 @@ beforeAll(() => ensureTestOrg());
 beforeAll(async () => {
   await applyMethodBSampleWriteGuards();
   await applyMethodBMinimumSamplesGuard();
+  await applyEstablishedAtImmutableGuard();
 
   const runId = Date.now().toString(36);
 
@@ -796,5 +809,128 @@ describe("findOrCreateProductionProcess", () => {
       .from(creditBatches)
       .where(eq(creditBatches.id, fixture.batchId));
     expect(batch?.productionProcessId).toBe(fixture.processId);
+  });
+});
+
+describe("setProcessOperationalStart", () => {
+  it("rejects an unauthenticated user", async () => {
+    const [proc] = await db
+      .insert(productionProcesses)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId,
+        feedstockTypeId,
+        establishedAt: new Date("2026-06-01T00:00:00.000Z"),
+      })
+      .returning({ id: productionProcesses.id });
+
+    await expect(
+      setProcessOperationalStart(makeTestOrgContext(""), {
+        processId: proc.id,
+        establishedAt: new Date("2026-01-01T00:00:00.000Z"),
+      }),
+    ).rejects.toThrow(/unauthorized/i);
+  });
+
+  it("rejects editing the operational start after Method B has unlocked", async () => {
+    const fixture = await createMethodBProcessWithBaseline("set-start-post-unlock");
+
+    await expect(
+      setProcessOperationalStart(makeTestOrgContext(TEST_USER_ID), {
+        processId: fixture.processId,
+        establishedAt: new Date("2025-06-01T00:00:00.000Z"),
+      }),
+    ).rejects.toThrow(/already unlocked Method B/i);
+  });
+
+  it("DB trigger blocks a direct established_at change on an unlocked process", async () => {
+    const fixture = await createMethodBProcessWithBaseline("set-start-trigger");
+
+    await expect(
+      db
+        .update(productionProcesses)
+        .set({ establishedAt: new Date("2025-06-01T00:00:00.000Z") })
+        .where(eq(productionProcesses.id, fixture.processId)),
+    ).rejects.toThrow(/Failed query/i);
+
+    const [after] = await db
+      .select({ establishedAt: productionProcesses.establishedAt })
+      .from(productionProcesses)
+      .where(eq(productionProcesses.id, fixture.processId));
+    expect(after?.establishedAt.getTime()).toBe(
+      new Date("2026-01-01T00:00:00.000Z").getTime(),
+    );
+  });
+
+  it("lets a back-entered facility correct its start, reach the baseline, and unlock", async () => {
+    const runId = `${Date.now().toString(36)}-backentry`;
+    // Auto-created with established_at AFTER real sampling began — the samples
+    // predate the process row, so none count and the facility is stranded.
+    const [process] = await db
+      .insert(productionProcesses)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId,
+        feedstockTypeId,
+        establishedAt: new Date("2026-06-01T00:00:00.000Z"),
+      })
+      .returning();
+    const [batch] = await db
+      .insert(creditBatches)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `CB-BACKENTRY-${runId}`,
+        facilityId,
+        feedstockTypeId,
+        productionProcessId: process.id,
+        startDate: "2026-01-01",
+        endDate: "2026-01-31",
+        certifier: "isometric",
+      })
+      .returning({ id: creditBatches.id });
+    createdIds.creditBatches.push(batch.id);
+    const inserted = await db
+      .insert(samples)
+      .values(
+        Array.from({ length: 30 }, (_, index) => ({
+          organizationId: TEST_ORG_ID,
+          creditBatchId: batch.id,
+          sampleCode: `S-BACKENTRY-${runId}-${index}`,
+          samplingTime: new Date(
+            `2026-01-${String(index + 1).padStart(2, "0")}T12:00:00.000Z`,
+          ),
+          totalCarbonPercent: 80,
+          organicCarbonPercent: 75,
+        })),
+      )
+      .returning({ id: samples.id });
+    createdIds.samples.push(...inserted.map((sample) => sample.id));
+
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    // Before correction: every sample predates established_at → excluded.
+    const before = await countEligibleSamplesByProcess(ctx, db, { facilityId });
+    expect(before.get(process.id) ?? 0).toBe(0);
+
+    // Correct the operational start to before real sampling began.
+    const updated = await setProcessOperationalStart(ctx, {
+      processId: process.id,
+      establishedAt: new Date("2026-01-01T00:00:00.000Z"),
+    });
+    expect(updated.establishedAt.getTime()).toBe(
+      new Date("2026-01-01T00:00:00.000Z").getTime(),
+    );
+
+    // After correction: all 30 samples now qualify.
+    const after = await countEligibleSamplesByProcess(ctx, db, { facilityId });
+    expect(after.get(process.id) ?? 0).toBe(30);
+
+    // And the process can now unlock Method B.
+    const unlocked = await unlockMethodBForProcess(ctx, {
+      processId: process.id,
+      agreedBaselineSize: 30,
+      randomSamplingPlanRef: "back-entry sampling plan",
+      moisturePathway: "measured_every_batch",
+    });
+    expect(unlocked.samplingMethod).toBe("method_b");
   });
 });
