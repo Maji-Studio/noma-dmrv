@@ -55,7 +55,7 @@ The session ended with a deliberate sign-out. Back navigation correctly stayed f
 | Expected | Order remains Partial or otherwise visibly shows 20 kg undelivered. |
 | Actual | Order detail shows `Fulfilled` and `Delivered 1 of 1`. |
 | Impact | Operators can treat an under-delivered commitment as complete; filters, reporting, downstream decisions, and customer records become materially misleading. |
-| Evidence | [Order quantity and fulfillment discrepancy](artifacts/2026-07-21-ui-only-operational-stress/order-quantity-fulfillment-discrepancy-sanitized.jpg) |
+| Evidence | Order quantity and fulfillment discrepancy screenshot (captured during the run, not committed) |
 | Reproducibility | 1/1 with the only order/delivery pair created in the empty environment |
 | Root cause | **Source-confirmed.** `src/data-access/orders.ts:124-149` aggregates total and delivered delivery-row counts and returns `fulfilled` when those counts match. `src/lib/orders/fulfillment.ts:21-34` mirrors the same count-only rule. Neither path compares order quantity to delivered mass. |
 | Suggested fix | Define fulfillment from non-archived delivered mass against ordered quantity, with an explicit tolerance and over-delivery rule. Display delivered mass, remaining mass, and delivery count separately. Add partial, exact, over-delivery, archived-delivery, and mixed-status tests. |
@@ -80,7 +80,7 @@ Visible Computer Use steps:
 | Expected | Each file uploads, receives a persisted document record, remains visible after save/reopen, and is downloadable. |
 | Actual | Both fields showed `Network Error` against `fra1.digitaloceanspaces.com`; retrying one failed again. Save correctly refused unresolved failed attachments. Removing both failed queue items allowed the already-created delivery to be saved without documents. |
 | Impact | Delivery evidence cannot be attached, weakening traceability and blocking evidence-complete certification workflows. |
-| Evidence | [Delivery upload network failure](artifacts/2026-07-21-ui-only-operational-stress/delivery-evidence-upload-network-failure-sanitized.jpg) |
+| Evidence | Delivery upload network failure screenshot (captured during the run, not committed) |
 | Reproducibility | 3 failed attempts: two initial uploads plus one retry |
 | Root cause | **Source path confirmed; environment cause not fully confirmed.** `src/hooks/use-file-upload.ts:208-240` requests a presigned upload, performs a browser PUT to the returned object-store URL, then confirms the document. The visible failure occurred at the object-storage host before confirmation. Likely causes include bucket CORS, presigned headers/signature, or staging object-store configuration. |
 | Suggested fix | Validate staging bucket CORS and presigned headers from the deployed browser origin, surface request stage/status without sensitive URLs, and add a staging smoke test that uploads then reopens/downloads a small image. |
@@ -108,7 +108,7 @@ Visible Computer Use steps:
 | Expected | After successful quick-add, the parent storage form visibly selects the new type and downstream compatible-bin selectors immediately include the saved bin. |
 | Actual | The type was created but the parent selector did not reliably display the selection. Exact search later showed `Error loading options`. In the A workflow the compatible intake bin was absent until the value was cleared and the type was explicitly found by scrolling/clicking. |
 | Impact | A normal prerequisite chain can appear broken after successful creation, encouraging duplicate master data or blocking intake setup. |
-| Evidence | Persisted records are visible in [Facility B bins](artifacts/2026-07-21-ui-only-operational-stress/facility-b-storage-bins-sanitized.jpg) and [Facility A intake](artifacts/2026-07-21-ui-only-operational-stress/facility-a-feedstock-intake-sanitized.jpg); no separate error screenshot retained. |
+| Evidence | Persisted records were visible in Facility B bins and Facility A intake screenshots (captured during the run, not committed); no separate error screenshot retained. |
 | Reproducibility | 2/2 parent workflows showed missing or blank hydration behavior |
 | Root cause | **Source-suggested, not fully confirmed.** `src/components/forms/entity-select/entity-select.tsx:211-233` derives the label from a separate by-ID/options query, while `handleCreatedEntity` only calls `onChange(entity.id)` and does not seed or invalidate either query cache. `src/hooks/use-entities.ts:20-34` keeps option results fresh for 30 seconds. The separate visible `Error loading options` needs deployed-request diagnosis. |
 | Suggested fix | Seed both entity detail and relevant option caches with the returned `EntityOption`, then invalidate option queries after quick-add. Keep the parent selection label directly from the created entity until refetch succeeds. Add a create-in-parent integration test. |
@@ -161,7 +161,7 @@ Visible Computer Use steps:
 | Expected | The created delivery's recovery/detail sheet retains and displays its saved relationships. |
 | Actual | Order, Customer, Facility, and Product displayed as em dashes even though the edit selector retained `OR-26-001` and the refreshed list later showed the relationship. |
 | Impact | Operators cannot reliably verify what a partially recovered delivery is linked to and may edit the wrong relationship. |
-| Evidence | The blank relation state was observed alongside [the upload failure](artifacts/2026-07-21-ui-only-operational-stress/delivery-evidence-upload-network-failure-sanitized.jpg). |
+| Evidence | The blank relation state was observed alongside the upload failure screenshot (captured during the run, not committed). |
 | Reproducibility | 1/1 failed-upload recovery |
 | Root cause | **Source-confirmed.** After create, `src/components/deliveries/delivery-list.tsx:221-249` constructs `createdDelivery` with `orderCode`, `facilityName`, `customerName`, and `biocharProductCode` explicitly set to `null`; on attachment failure it puts that object into edit mode. The sheet renders those flattened fields at lines 465-493 instead of refetching the relation-rich row. |
 | Suggested fix | Fetch `useDeliveryWithRelations(created.id)` before entering recovery mode, or preserve relation labels from submitted selections. Never replace known relation data with null placeholders after a successful create. |
@@ -187,7 +187,7 @@ Visible Computer Use steps:
 | Expected | A loading skeleton/status persists until the selected facility's bins resolve. |
 | Actual | The page shows `0 bins` and `No storage bins yet` for approximately 4–7 seconds before replacing it with the real three-bin inventory. No loading explanation accompanies the empty state. |
 | Impact | Operators may create duplicate bins or conclude inventory was lost immediately after a facility switch. |
-| Evidence | Final states: [Facility A storage](artifacts/2026-07-21-ui-only-operational-stress/facility-a-isolated-storage-sanitized.jpg) and [Facility B reconciled storage](artifacts/2026-07-21-ui-only-operational-stress/facility-b-post-reconciliation-inventory-sanitized.jpg). No false-empty screenshot retained. |
+| Evidence | Final states: Facility A storage and Facility B reconciled storage screenshots (captured during the run, not committed). No false-empty screenshot retained. |
 | Reproducibility | Repeated on both populated facilities and direct navigation |
 | Root cause | **Source-confirmed.** `storageLocationsData?.items ?? []` produces an empty array while the query is pending (`src/components/storage-locations/storage-location-list.tsx:219-229`), and lines 432-450 render the empty state solely from `storageLocations.length === 0`, without checking `isLoading`. Stat cards receive the loading flag, but the primary content does not. |
 | Suggested fix | Gate the empty state behind `!isLoading`; render lane/list skeletons while pending and retain prior facility data only if clearly labeled. Add a delayed-query facility-switch test. |
@@ -237,7 +237,7 @@ Visible Computer Use steps:
 | Expected | The checkbox and table column remain synchronized; a second toggle restores the column. |
 | Actual | The Facility column disappeared, but `FacilityName` remained visibly checked and exposed as checked in accessibility state. Clicking again did not restore it. Refresh restored the default column set. |
 | Impact | Operators cannot tell which columns are active and may omit context from reviews or exports until they refresh. |
-| Evidence | [Column visibility desynchronization](artifacts/2026-07-21-ui-only-operational-stress/table-column-visibility-desync-sanitized.jpg) |
+| Evidence | Column visibility desynchronization screenshot (captured during the run, not committed) |
 | Reproducibility | 1/1; refresh restored default |
 | Root cause | Not confirmed. The control uses a custom visible span plus a screen-reader-only native checkbox (`src/components/ui/data-table/index.tsx:687-709`). State is routed through a callback closed over `columnVisibility` (`:289-296`). The deployed desynchronization needs a focused component reproduction. |
 | Suggested fix | Use the native checkbox as the visible control or a tested accessible checkbox primitive, and update visibility with functional state based on the latest table state. Add click and keyboard toggle tests that assert both header visibility and checked state. |
@@ -341,7 +341,7 @@ Facility B adjustment details:
 - Product loss: −5 kg; reason `qa synthetic packaging loss b`.
 - Application `AP-26-001` records 40 kg wet / 36 kg dry applied from the delivered material and does not subtract product inventory a second time. The UI separately displayed `Applied 36 kg · 1 application`.
 
-Evidence: [Facility A isolated storage](artifacts/2026-07-21-ui-only-operational-stress/facility-a-isolated-storage-sanitized.jpg), [Facility B final reconciliation](artifacts/2026-07-21-ui-only-operational-stress/facility-b-final-inventory-reconciliation-sanitized.jpg), and [Facility B post-reconciliation inventory](artifacts/2026-07-21-ui-only-operational-stress/facility-b-post-reconciliation-inventory-sanitized.jpg).
+Evidence: Facility A isolated storage, Facility B final reconciliation, and Facility B post-reconciliation inventory screenshots (captured during the run, not committed).
 
 Transfer coverage: no facility-to-facility or bin-to-bin transfer workflow was available in the visible UI. Loss and stocktake were the only visible movement actions used. Transfer accounting is therefore untested, not passed.
 
@@ -480,23 +480,9 @@ After the deliberate sign-out, Safari returned to `/login?from=%2Fcustomers`. Br
 
 ## Evidence index
 
-- [Reset success](artifacts/2026-07-21-ui-only-operational-stress/reset-empty-staging-success-sanitized.jpg)
-- [Visible reset transcription](artifacts/2026-07-21-ui-only-operational-stress/reset-empty-staging-visible-evidence.txt)
-- [Two facilities persisted](artifacts/2026-07-21-ui-only-operational-stress/two-facilities-persisted-sanitized.jpg)
-- [Facility B bins](artifacts/2026-07-21-ui-only-operational-stress/facility-b-storage-bins-sanitized.jpg)
-- [Facility B intake](artifacts/2026-07-21-ui-only-operational-stress/facility-b-feedstock-intake-sanitized.jpg)
-- [Facility B completed production run](artifacts/2026-07-21-ui-only-operational-stress/facility-b-completed-production-run-sanitized.jpg)
-- [Facility B production-run list](artifacts/2026-07-21-ui-only-operational-stress/facility-b-completed-production-run-list-sanitized.jpg)
-- [Delivery upload failure](artifacts/2026-07-21-ui-only-operational-stress/delivery-evidence-upload-network-failure-sanitized.jpg)
-- [Facility B final reconciliation](artifacts/2026-07-21-ui-only-operational-stress/facility-b-final-inventory-reconciliation-sanitized.jpg)
-- [Facility B post-reconciliation inventory](artifacts/2026-07-21-ui-only-operational-stress/facility-b-post-reconciliation-inventory-sanitized.jpg)
-- [Facility A intake](artifacts/2026-07-21-ui-only-operational-stress/facility-a-feedstock-intake-sanitized.jpg)
-- [Facility A isolated storage](artifacts/2026-07-21-ui-only-operational-stress/facility-a-isolated-storage-sanitized.jpg)
-- [Facility B populated dashboard](artifacts/2026-07-21-ui-only-operational-stress/facility-b-populated-dashboard-sanitized.jpg)
-- [Order fulfillment discrepancy](artifacts/2026-07-21-ui-only-operational-stress/order-quantity-fulfillment-discrepancy-sanitized.jpg)
-- [Column visibility desynchronization](artifacts/2026-07-21-ui-only-operational-stress/table-column-visibility-desync-sanitized.jpg)
+Screenshots covering reset success, the visible reset transcription, both facilities persisting, Facility A/B storage and intake states, the Facility B production run and dashboard, the delivery upload failure, Facility B reconciliation, the order fulfillment discrepancy, and the column visibility desynchronization were captured during this run but were not committed to the repository.
 
-All retained screenshots are cropped/sanitized and contain synthetic staging data only. No credential or personal account surface was retained.
+All captured screenshots were cropped/sanitized and contained synthetic staging data only. No credential or personal account surface was retained.
 
 ## Computer Use and safety attestation
 
