@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { BYTES_PER_MB } from "@/lib/format-utils";
 import {
   APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES,
   APPLICATION_VISUAL_EVIDENCE_ROLES,
 } from "@/lib/certification/application-evidence";
+import { DOCUMENT_UPLOAD_MAX_BYTES } from "@/lib/documents/upload-policy";
 
 export const DOCUMENT_TYPES = [
   "weighbridge_ticket",
@@ -42,8 +42,6 @@ export const DOCUMENT_ENTITY_TYPES = [
 ] as const;
 export type DocumentEntityType = (typeof DOCUMENT_ENTITY_TYPES)[number];
 
-const MB = BYTES_PER_MB;
-
 const IMAGE_MIMES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 const VIDEO_MIMES = ["video/mp4", "video/webm"];
 const PDF_MIMES = ["application/pdf"];
@@ -58,19 +56,27 @@ interface UploadRule {
   mimeTypes: readonly string[];
 }
 
+function uploadRule(mimeTypes: readonly string[]): UploadRule {
+  return { maxBytes: DOCUMENT_UPLOAD_MAX_BYTES, mimeTypes };
+}
+
 export const UPLOAD_RULES: Record<DocumentType, UploadRule> = {
-  weighbridge_ticket: { maxBytes: 25 * MB, mimeTypes: [...PDF_MIMES, ...IMAGE_MIMES] },
-  bill_of_lading: { maxBytes: 25 * MB, mimeTypes: [...PDF_MIMES, ...IMAGE_MIMES] },
-  lab_report: { maxBytes: 50 * MB, mimeTypes: [...PDF_MIMES, ...IMAGE_MIMES, ...TABULAR_MIMES] },
-  delivery_receipt: { maxBytes: 25 * MB, mimeTypes: [...PDF_MIMES, ...IMAGE_MIMES] },
-  invoice: { maxBytes: 25 * MB, mimeTypes: [...PDF_MIMES] },
-  pdd: { maxBytes: 50 * MB, mimeTypes: [...PDF_MIMES] },
-  affidavit: { maxBytes: 25 * MB, mimeTypes: [...PDF_MIMES] },
-  calibration_certificate: { maxBytes: 25 * MB, mimeTypes: [...PDF_MIMES, ...IMAGE_MIMES] },
-  photo: { maxBytes: 25 * MB, mimeTypes: IMAGE_MIMES },
-  video: { maxBytes: 100 * MB, mimeTypes: VIDEO_MIMES },
-  pdf: { maxBytes: 50 * MB, mimeTypes: PDF_MIMES },
-  sensor_data: { maxBytes: 25 * MB, mimeTypes: TABULAR_MIMES },
+  weighbridge_ticket: uploadRule([...PDF_MIMES, ...IMAGE_MIMES]),
+  bill_of_lading: uploadRule([...PDF_MIMES, ...IMAGE_MIMES]),
+  lab_report: uploadRule([
+    ...PDF_MIMES,
+    ...IMAGE_MIMES,
+    ...TABULAR_MIMES,
+  ]),
+  delivery_receipt: uploadRule([...PDF_MIMES, ...IMAGE_MIMES]),
+  invoice: uploadRule(PDF_MIMES),
+  pdd: uploadRule(PDF_MIMES),
+  affidavit: uploadRule(PDF_MIMES),
+  calibration_certificate: uploadRule([...PDF_MIMES, ...IMAGE_MIMES]),
+  photo: uploadRule(IMAGE_MIMES),
+  video: uploadRule(VIDEO_MIMES),
+  pdf: uploadRule(PDF_MIMES),
+  sensor_data: uploadRule(TABULAR_MIMES),
 };
 
 export function isAllowedMime(

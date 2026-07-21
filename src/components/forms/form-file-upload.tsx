@@ -18,6 +18,10 @@ import { useRef, useState } from "react";
 import { UploadSimpleIcon, FileIcon, XIcon, CheckCircleIcon, WarningCircleIcon, SpinnerIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { BYTES_PER_MB, formatFileSize } from "@/lib/format-utils";
+import {
+  clampDocumentUploadMaxMb,
+  DOCUMENT_UPLOAD_MAX_MB,
+} from "@/lib/documents/upload-policy";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import type { DeferredFileEntry } from "@/hooks/use-deferred-attachments";
 import type {
@@ -105,7 +109,7 @@ export function FormFileUpload({
   multiple = true,
   disabled = false,
   error = false,
-  maxSizeMb = 10,
+  maxSizeMb = DOCUMENT_UPLOAD_MAX_MB,
   onChange,
   entityType,
   entityId,
@@ -125,6 +129,7 @@ export function FormFileUpload({
   const [isDragOver, setIsDragOver] = useState(false);
   const [deferredError, setDeferredError] = useState<string | null>(null);
   const { upload } = useFileUpload();
+  const effectiveMaxSizeMb = clampDocumentUploadMaxMb(maxSizeMb);
 
   const isRealMode = !deferred && !!(entityType && entityId && documentType);
 
@@ -196,12 +201,12 @@ export function FormFileUpload({
 
     if (deferred) {
       const queue = multiple ? arr : arr.slice(0, 1);
-      const maxBytes = maxSizeMb * BYTES_PER_MB;
+      const maxBytes = effectiveMaxSizeMb * BYTES_PER_MB;
       const validationErrors: string[] = [];
       const acceptedFiles = queue.filter((file) => {
         if (file.size > maxBytes) {
           validationErrors.push(
-            `${file.name} exceeds the ${maxSizeMb} MB limit.`,
+            `${file.name} exceeds the ${effectiveMaxSizeMb} MB limit.`,
           );
           return false;
         }
@@ -290,7 +295,7 @@ export function FormFileUpload({
           Drop files here or click to upload
         </span>
         <span className="body-caption text-[var(--color-text-tertiary)]">
-          Max {maxSizeMb} MB per file
+          Max {effectiveMaxSizeMb} MB per file
         </span>
       </button>
 

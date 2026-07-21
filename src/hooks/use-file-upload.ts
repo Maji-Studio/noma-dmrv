@@ -23,7 +23,7 @@ interface EvidenceExif {
  * caller's `isFlushing` guard latched and traps the user behind the side-sheet
  * close guard. `XMLHttpRequest.timeout` is a *total*-request deadline, not an
  * inactivity/stall timer (it does not reset on upload progress), so this must
- * stay generous: a 50 MB evidence file on a slow-but-healthy link needs many
+ * stay generous: a 10 MB evidence file on a slow-but-healthy link may need
  * minutes, and cutting it off would look like a spurious failure. Ten minutes
  * comfortably covers our largest evidence uploads while still capping a truly
  * stuck flush.
