@@ -105,7 +105,7 @@ export function FeedstockProcessChip({
           aria-valuenow={count}
           aria-valuemin={0}
           aria-valuemax={target}
-          aria-label="Eligible samples toward Method B"
+          aria-label="Baseline samples toward Method B"
         >
           <div
             className="h-full bg-[var(--clr-purple)]"
