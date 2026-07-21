@@ -14,6 +14,7 @@
 import { useProductionProcessesByFacility } from "@/hooks/use-production-processes";
 import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
 import { deriveBatchSamplingMethod } from "@/lib/certification/sampling-requirements";
+import { formatDate } from "@/lib/format-utils";
 
 export function FeedstockProcessChip({
   facilityId,
@@ -66,10 +67,14 @@ export function FeedstockProcessChip({
       : isMethodB
         ? "Measured durability — Method B is unlocked for this process."
         : !process
-          ? `New production process — 0/${target} eligible samples toward Method B.`
+          ? `New production process — 0/${target} baseline samples toward Method B.`
           : meetsBaseline
-            ? `${count}/${target} eligible samples — ready to unlock Method B.`
-            : `${count}/${target} eligible samples toward Method B.`;
+            ? `${count}/${target} baseline samples — ready to unlock Method B.`
+            : `${count}/${target} baseline samples toward Method B.`;
+  // The baseline counter runs on an "as of now" clock — future-dated samples
+  // satisfy batch chemistry yet don't count here until their sampling date
+  // passes. Name that exclusion so the two figures never look contradictory.
+  const futureCount = process?.futureSampleCount ?? 0;
 
   return (
     <div className="flex flex-col gap-8 mt-8 p-12 border border-[var(--color-border-tertiary)] bg-[var(--color-background-sunken)]">
@@ -87,6 +92,12 @@ export function FeedstockProcessChip({
           {detail}
         </span>
       </div>
+      {!isMethodB && futureCount > 0 && (
+        <span className="body-caption text-[var(--st-wait)]">
+          {futureCount} future-dated sample{futureCount === 1 ? "" : "s"} not
+          counted until {formatDate(process?.nextCountableSamplingTime ?? null)}
+        </span>
+      )}
       {!isMethodB && (
         <div
           className="h-4 bg-[var(--color-background-medium)]"

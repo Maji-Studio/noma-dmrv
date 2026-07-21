@@ -267,6 +267,27 @@ export function buildDurabilityBatchSummaries(
   });
 }
 
+/**
+ * Count a summary's replicates whose sampling day lies after `todayIso`
+ * (YYYY-MM-DD). Future-dated samples DO satisfy the batch's chemistry roll-up
+ * above, but the Method-B baseline counter on Production Processes runs on an
+ * "as of now" clock and correctly excludes them until their sampling date
+ * passes — so the surfaces that show this roll-up name that exclusion instead
+ * of silently disagreeing with the process counter (QA 2026-07-21 F1).
+ * Advisory only: the authoritative exclusion happens server-side in
+ * `countEligibleSamplesByProcess`.
+ */
+export function summarizeFutureReplicates(
+  summary: Pick<DurabilityBatchSummary, "replicates">,
+  todayIso: string,
+): { count: number; earliestDay: string | null } {
+  const futureDays = summary.replicates
+    .map((r) => r.samplingDay)
+    .filter((day): day is string => day != null && day > todayIso)
+    .sort();
+  return { count: futureDays.length, earliestDay: futureDays[0] ?? null };
+}
+
 function buildReplicate(
   s: Sample,
   index: number,

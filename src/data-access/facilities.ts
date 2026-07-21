@@ -813,16 +813,28 @@ export async function isFacilityCodeAvailable(
 }
 
 /**
- * Get unique countries from all facilities
- * Useful for filter dropdowns
+ * Get unique countries for the facility filter dropdown. Scoped to the
+ * collection being filtered — active facilities by default, archived when
+ * `archived` is true — so the archived view can never show a country list
+ * that excludes a visible archived facility's country.
  */
-export async function getFacilityCountries(ctx: OrgContext): Promise<string[]> {
+export async function getFacilityCountries(
+  ctx: OrgContext,
+  options?: { archived?: boolean },
+): Promise<string[]> {
   requireOrgScope(ctx);
 
   const results = await db
     .selectDistinct({ country: facilities.country })
     .from(facilities)
-    .where(and(eq(facilities.organizationId, ctx.organizationId), isNull(facilities.archivedAt)))
+    .where(
+      and(
+        eq(facilities.organizationId, ctx.organizationId),
+        options?.archived
+          ? isNotNull(facilities.archivedAt)
+          : isNull(facilities.archivedAt),
+      ),
+    )
     .orderBy(asc(facilities.country));
 
   return results.map((r) => r.country);

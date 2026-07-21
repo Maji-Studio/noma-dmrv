@@ -16,6 +16,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { FlowArrowIcon, CheckCircleIcon, LockOpenIcon } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
+import { formatDate } from "@/lib/format-utils";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { InfoHint } from "@/components/ui/tooltip";
@@ -75,7 +76,7 @@ function createColumns(
         return (
           <div className="flex flex-col gap-2">
             <span className="body-small tabular-nums">
-              {p.eligibleSampleCount} / {p.baselineTarget} eligible samples
+              {p.eligibleSampleCount} / {p.baselineTarget} baseline samples
             </span>
             {p.meetsBaseline ? (
               <span className="body-caption text-[var(--st-ok)]">
@@ -84,6 +85,21 @@ function createColumns(
             ) : (
               <span className="body-caption text-[var(--color-text-tertiary)]">
                 {p.baselineTarget - p.eligibleSampleCount} more to qualify
+              </span>
+            )}
+            {/* Name the counter's exclusions — a batch can show these samples
+                as chemistry-complete while this counter correctly omits them,
+                and without the reason the two surfaces look contradictory. */}
+            {p.futureSampleCount > 0 && (
+              <span className="body-caption text-[var(--st-wait)]">
+                {p.futureSampleCount} future-dated — counted from{" "}
+                {formatDate(p.nextCountableSamplingTime)}
+              </span>
+            )}
+            {p.preEstablishmentSampleCount > 0 && (
+              <span className="body-caption text-[var(--st-wait)]">
+                {p.preEstablishmentSampleCount} dated before the process
+                started — never counted
               </span>
             )}
           </div>

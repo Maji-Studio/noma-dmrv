@@ -27,6 +27,7 @@ import {
   deleteProductionRunFn,
   addProductionRunReadingFn,
 } from "@/fn/production-runs";
+import { creditBatchKeys } from "@/hooks/use-credit-batches";
 import { facilityKeys } from "@/hooks/use-facilities";
 import { reactorKeys } from "@/hooks/use-reactors";
 import { ProductionRunConflictError } from "@/lib/production-runs/overlap-conflict";
@@ -231,6 +232,12 @@ export function useCreateProductionRun(
       queryClient.invalidateQueries({
         queryKey: reactorKeys.detail(data.reactorId),
       });
+      // A run's status/window feeds the credit-batch form's completed-run
+      // selector — invalidate its cached options so the form never serves a
+      // stale empty result after a run changes (QA 2026-07-21 F5).
+      queryClient.invalidateQueries({
+        queryKey: creditBatchKeys.productionRunOptionsPrefix(),
+      });
 
       // Pre-populate the detail cache with the new run
       queryClient.setQueryData(productionRunKeys.detail(data.id), data);
@@ -338,6 +345,12 @@ export function useUpdateProductionRun(
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
       queryClient.invalidateQueries({ queryKey: productionRunKeys.statsPrefix() });
+      // Completing a run makes it selectable by the credit-batch form — its
+      // cached run options must not keep serving the pre-completion empty
+      // result for another staleTime window (QA 2026-07-21 F5).
+      queryClient.invalidateQueries({
+        queryKey: creditBatchKeys.productionRunOptionsPrefix(),
+      });
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -446,6 +459,10 @@ export function useDeleteProductionRun(
       queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
       // Invalidate stats
       queryClient.invalidateQueries({ queryKey: productionRunKeys.statsPrefix() });
+      // A deleted run must drop out of the credit-batch form's cached options
+      queryClient.invalidateQueries({
+        queryKey: creditBatchKeys.productionRunOptionsPrefix(),
+      });
       // Invalidate facility data
       if (facilityId) {
         queryClient.invalidateQueries({

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Sample } from "@/db/schema";
 import {
   buildDurabilityBatchSummaries,
+  summarizeFutureReplicates,
   type DurabilityBatchSummaryInput,
 } from "./durability-batch-summary";
 
@@ -448,5 +449,66 @@ describe("buildDurabilityBatchSummaries facility-local sampling day", () => {
     ]);
 
     expect(summary.replicates[0].samplingDay).toBe("2026-01-15");
+  });
+});
+
+describe("summarizeFutureReplicates", () => {
+  it("counts replicates dated after today and reports the earliest future day", () => {
+    const [summary] = buildDurabilityBatchSummaries([
+      batch({
+        creditBatchId: "cb-a",
+        creditBatchCode: "CB-A",
+        samples: [
+          ...eligibleSamples(),
+          sample({
+            id: "s-future",
+            sampleCode: "S-A-99",
+            samplingTime: new Date("2027-12-02T12:00:00.000Z"),
+            hToCOrgRatio: 0.3,
+            oToCOrgRatio: 0.04,
+          }),
+        ],
+      }),
+    ]);
+
+    expect(summarizeFutureReplicates(summary, "2026-07-21")).toEqual({
+      count: 1,
+      earliestDay: "2027-12-02",
+    });
+  });
+
+  it("returns zero with no earliest day when every replicate is past-dated", () => {
+    const [summary] = buildDurabilityBatchSummaries([
+      batch({
+        creditBatchId: "cb-a",
+        creditBatchCode: "CB-A",
+        samples: eligibleSamples(),
+      }),
+    ]);
+
+    expect(summarizeFutureReplicates(summary, "2026-07-21")).toEqual({
+      count: 0,
+      earliestDay: null,
+    });
+  });
+
+  it("treats a replicate dated exactly today as not future", () => {
+    const [summary] = buildDurabilityBatchSummaries([
+      batch({
+        creditBatchId: "cb-a",
+        creditBatchCode: "CB-A",
+        samples: [
+          sample({
+            id: "s-today",
+            sampleCode: "S-A-01",
+            samplingTime: new Date("2026-07-21T09:00:00.000Z"),
+            hToCOrgRatio: 0.3,
+            oToCOrgRatio: 0.04,
+          }),
+        ],
+      }),
+    ]);
+
+    expect(summarizeFutureReplicates(summary, "2026-07-21").count).toBe(0);
   });
 });

@@ -259,10 +259,18 @@ describe("findOrCreateProductionProcess", () => {
 
   it("uses the canonical process sample count in the summary surface", async () => {
     const runId = Date.now().toString(36);
-    const process = await findOrCreateProductionProcess(makeTestOrgContext(TEST_USER_ID), {
-      facilityId,
-      feedstockTypeId,
-    });
+    // A dedicated process whose operational start PREDATES the sample dates —
+    // the baseline window is [established_at, asOf), so samples dated before
+    // the process began never count (ADR 0017, 2026-07-12 amendment).
+    const [process] = await db
+      .insert(productionProcesses)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId,
+        feedstockTypeId,
+        establishedAt: new Date("2025-12-01T00:00:00.000Z"),
+      })
+      .returning();
     const [sampledBatch, unsampledBatch] = await db
       .insert(creditBatches)
       .values([
@@ -305,18 +313,31 @@ describe("findOrCreateProductionProcess", () => {
       .returning({ id: samples.id });
     createdIds.samples.push(...insertedSamples.map((sample) => sample.id));
 
-    const [futureSample] = await db
+    const excludedSamples = await db
       .insert(samples)
-      .values({
-        organizationId: TEST_ORG_ID,
-        creditBatchId: sampledBatch.id,
-        sampleCode: `S-PROC-${runId}-FUTURE`,
-        samplingTime: FAR_FUTURE_SAMPLING_TIME,
-        totalCarbonPercent: 80,
-        organicCarbonPercent: 75,
-      })
+      .values([
+        {
+          organizationId: TEST_ORG_ID,
+          creditBatchId: sampledBatch.id,
+          sampleCode: `S-PROC-${runId}-FUTURE`,
+          samplingTime: FAR_FUTURE_SAMPLING_TIME,
+          totalCarbonPercent: 80,
+          organicCarbonPercent: 75,
+        },
+        // Dated before the process's operational start — permanently outside
+        // the baseline window, unlike the future sample above which starts
+        // counting once its sampling date passes.
+        {
+          organizationId: TEST_ORG_ID,
+          creditBatchId: sampledBatch.id,
+          sampleCode: `S-PROC-${runId}-PRE-EST`,
+          samplingTime: new Date("2025-11-15T12:00:00.000Z"),
+          totalCarbonPercent: 80,
+          organicCarbonPercent: 75,
+        },
+      ])
       .returning({ id: samples.id });
-    createdIds.samples.push(futureSample.id);
+    createdIds.samples.push(...excludedSamples.map((sample) => sample.id));
 
     const countsByProcess = await countEligibleSamplesByProcess(
       makeTestOrgContext(TEST_USER_ID),
@@ -331,10 +352,75 @@ describe("findOrCreateProductionProcess", () => {
 
     expect(countsByProcess.get(process.id)).toBe(3);
     expect(summary?.eligibleSampleCount).toBe(3);
+    expect(summary?.futureSampleCount).toBe(1);
+    expect(summary?.nextCountableSamplingTime?.getTime()).toBe(
+      FAR_FUTURE_SAMPLING_TIME.getTime(),
+    );
+    expect(summary?.preEstablishmentSampleCount).toBe(1);
     expect(summary?.totalBatches).toBe(2);
     expect(summary?.sampledBatches).toBe(1);
     expect(summary?.requiredSampledBatches).toBe(2);
     expect(summary?.cadenceMet).toBe(false);
+  });
+
+  it("excludes samples dated before the process's operational start even without an asOfDate", async () => {
+    const runId = `${Date.now().toString(36)}-lb`;
+    // Back-entered process: operationally started 2026-03-01, but its batch
+    // holds samples from before that start. Only the post-start sample counts
+    // (ADR 0017, 2026-07-12 amendment; CONTEXT.md "Method-B baseline").
+    const [process] = await db
+      .insert(productionProcesses)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId,
+        feedstockTypeId,
+        establishedAt: new Date("2026-03-01T00:00:00.000Z"),
+      })
+      .returning();
+    const [batch] = await db
+      .insert(creditBatches)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `CB-PROC-LB-${runId}`,
+        facilityId,
+        feedstockTypeId,
+        productionProcessId: process.id,
+        // ≤ 1 month (credit_batches_isometric_max_one_month) while straddling
+        // the process's 2026-03-01 operational start.
+        startDate: "2026-02-15",
+        endDate: "2026-03-14",
+        certifier: "isometric",
+      })
+      .returning({ id: creditBatches.id });
+    createdIds.creditBatches.push(batch.id);
+
+    const insertedSamples = await db
+      .insert(samples)
+      .values(
+        [
+          // Immediately before the operational start — excluded.
+          new Date("2026-02-28T23:59:59.000Z"),
+          // Exactly at the start — included (window is closed at the bottom).
+          new Date("2026-03-01T00:00:00.000Z"),
+        ].map((samplingTime, index) => ({
+          organizationId: TEST_ORG_ID,
+          creditBatchId: batch.id,
+          sampleCode: `S-PROC-LB-${runId}-${index}`,
+          samplingTime,
+          totalCarbonPercent: 80,
+          organicCarbonPercent: 75,
+        })),
+      )
+      .returning({ id: samples.id });
+    createdIds.samples.push(...insertedSamples.map((sample) => sample.id));
+
+    const countsByProcess = await countEligibleSamplesByProcess(
+      makeTestOrgContext(TEST_USER_ID),
+      db,
+      { facilityId },
+    );
+
+    expect(countsByProcess.get(process.id)).toBe(1);
   });
 
   it("blocks deleting pre-unlock baseline samples from a Method-B process", async () => {

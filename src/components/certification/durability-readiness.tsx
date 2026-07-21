@@ -18,10 +18,12 @@ import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
   O_TO_C_ORG_ELIGIBILITY_MAX,
 } from "@/lib/calculations/biochar-eligibility";
-import type {
-  DurabilityBatchSummary,
-  DurabilitySummaryEligibility,
+import {
+  summarizeFutureReplicates,
+  type DurabilityBatchSummary,
+  type DurabilitySummaryEligibility,
 } from "@/lib/certification/durability-batch-summary";
+import { formatDate } from "@/lib/format-utils";
 import type { ValueWithStdDev } from "@/lib/isometric/utils/durability-aggregation";
 
 type Tone = "ok" | "wait" | "bad" | "off";
@@ -68,7 +70,13 @@ export function formatDurabilityStat(
   return stat.stdDev == null ? mean : `${mean} ± ${stat.stdDev.toFixed(digits)}`;
 }
 
-/** Eligibility chip — the §3 Table 2 verdict (fails closed when indeterminate). */
+/**
+ * Eligibility chip — the §3 Table 2 verdict (fails closed when indeterminate).
+ * Labelled "chemistry eligible" rather than a bare "Eligible": this judges the
+ * batch's pooled chemistry only, on a different clock and predicate from the
+ * Method-B "baseline samples" counter on Production Processes — a bare
+ * "Eligible" here reads as compliance progress there (QA 2026-07-21 F1).
+ */
 function eligibilityChip(
   eligibility: DurabilitySummaryEligibility,
   hasUsableReplicates: boolean,
@@ -77,14 +85,14 @@ function eligibilityChip(
     return {
       tone: "ok",
       icon: <CheckCircleIcon size={14} weight="fill" />,
-      label: "Eligible",
+      label: "Chemistry eligible",
     };
   }
   if (eligibility.eligible === false) {
     return {
       tone: "bad",
       icon: <XCircleIcon size={14} weight="fill" />,
-      label: "Ineligible",
+      label: "Chemistry ineligible",
     };
   }
   // null — indeterminate. Distinguish "no chemistry yet" from "partial chemistry".
@@ -92,7 +100,7 @@ function eligibilityChip(
     ? {
         tone: "wait",
         icon: <WarningIcon size={14} weight="fill" />,
-        label: "Eligibility indeterminate",
+        label: "Chemistry indeterminate",
       }
     : {
         tone: "off",
@@ -116,6 +124,11 @@ export function DurabilityReadinessSignals({
     summary.eligibility,
     usableReplicateCount > 0,
   );
+  // Local calendar day — advisory clock for the future-dated note below; the
+  // authoritative exclusion is the server-side baseline counter's.
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const future = summarizeFutureReplicates(summary, todayIso);
 
   return (
     <div
@@ -155,6 +168,19 @@ export function DurabilityReadinessSignals({
       <ReadinessChip tone={eligibility.tone} icon={eligibility.icon}>
         {eligibility.label}
       </ReadinessChip>
+
+      {/* Future-dated samples count for batch chemistry but not (yet) toward
+          the process's Method-B baseline — say so here, where the operator
+          would otherwise read "chemistry eligible" as baseline progress. */}
+      {future.count > 0 && (
+        <ReadinessChip
+          tone="wait"
+          icon={<WarningIcon size={14} weight="fill" />}
+        >
+          {future.count} future-dated — counts toward the Method-B baseline
+          from {formatDate(future.earliestDay)}
+        </ReadinessChip>
+      )}
     </div>
   );
 }

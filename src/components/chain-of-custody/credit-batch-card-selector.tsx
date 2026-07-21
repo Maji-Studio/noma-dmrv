@@ -8,11 +8,7 @@ import {
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { formatDateRange } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
-import {
-  formatCreditBatchStatus,
-  type CreditBatchStatus,
-} from "@/schemas/credit-batches";
-import { EmptyState, StatusBadge } from "@/components/ui";
+import { EmptyState } from "@/components/ui";
 
 const CREDIT_BATCH_CARD_WIDTH_CLASS = "w-[272px] sm:w-[288px]";
 
@@ -109,17 +105,12 @@ export function CreditBatchCardSelector({
                     className="sr-only"
                   />
 
+                  {/* No lifecycle badge — the status column is an inert DB
+                      default with no transition path (QA 2026-07-21 F3). */}
                   <div className="flex min-w-0 items-start justify-between gap-8">
                     <span className="min-w-0 truncate font-mono text-[11px] font-medium uppercase tracking-[0.1em] text-[var(--color-text-primary)]">
                       {batch.code}
                     </span>
-                    <StatusBadge
-                      size="small"
-                      status={batch.status as CreditBatchStatus}
-                      label={formatCreditBatchStatus(
-                        batch.status as CreditBatchStatus,
-                      )}
-                    />
                   </div>
 
                   <p className="body-caption text-[var(--color-text-secondary)]">

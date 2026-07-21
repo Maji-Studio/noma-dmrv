@@ -87,7 +87,9 @@ export function ProcessDetailPanel({
                       ) : (
                         <span className="tabular-nums">
                           {process.eligibleSampleCount} / {process.baselineTarget}{" "}
-                          eligible samples
+                          baseline samples
+                          {process.futureSampleCount > 0 &&
+                            ` (${process.futureSampleCount} future-dated — counted from ${formatDate(process.nextCountableSamplingTime)})`}
                         </span>
                       )
                     }
