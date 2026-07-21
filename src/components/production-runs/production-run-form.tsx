@@ -33,7 +33,10 @@ import {
   type ProductionRunFormData,
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
-import { allowedProductionRunStatusesFrom } from "@/lib/production-runs/lifecycle";
+import {
+  allowedProductionRunStatusesFrom,
+  shouldIncludeProductionRunEndTime,
+} from "@/lib/production-runs/lifecycle";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { StorageLocationType } from "@/schemas/storage-locations";
@@ -391,17 +394,22 @@ export function ProductionRunForm({
         ? data.endDate
         : formatLocalDate(data.endDate as Date)
       : startDateStr;
-    // Three-state end time: explicit clear → null; a touched (dirty) value →
-    // that Date; anything else (untouched, whether pre-filled or blank) →
-    // undefined = "unchanged", so a no-op edit never rewrites the stored end.
+    // Three-state end time: explicit clear → null; a touched value or newly
+    // entered physical outcome → that Date; otherwise undefined = "unchanged",
+    // so a no-op edit of an already terminal run never rewrites the stored end.
     const endTouched = !!dirtyFields.endDate || !!dirtyFields.endTime;
+    const includeEndTime = shouldIncludeProductionRunEndTime({
+      endFieldsTouched: endTouched,
+      from: transitionFrom,
+      to: data.status,
+    });
     const combined: ProductionRunSubmitData = {
       ...data,
       expectedUpdatedAt: productionRun?.updatedAt,
       startTime: combineDateAndTime(startDateStr, data.startTime as string),
       endTime: endTimeCleared
         ? null
-        : data.endTime && endTouched
+        : data.endTime && includeEndTime
           ? combineDateAndTime(endDateStr, data.endTime as string)
           : undefined,
     };
