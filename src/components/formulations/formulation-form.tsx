@@ -35,6 +35,16 @@ const EMPTY_INGREDIENT = {
 /** Display tolerance (in percent) for the "fully allocated" state. */
 const PERCENT_DISPLAY_TOLERANCE = 0.1;
 
+/**
+ * Shares keep 4 decimals — the exact precision the percent ⇄ ratio converters
+ * preserve (`numeric(7,6)` ratios). The input `step` must match, or a stored
+ * value like 33.3333 trips native step-mismatch validation and blocks submit;
+ * auto-balance must round to the same precision so the balanced sum stays a
+ * valid 100%.
+ */
+const SHARE_PERCENT_STEP = "0.0001";
+const SHARE_PERCENT_DECIMALS = 10_000;
+
 /** A fresh formulation starts as pure biochar; adding ingredients rebalances. */
 const DEFAULT_BIOCHAR_PERCENT = 100;
 
@@ -191,7 +201,8 @@ export function FormulationForm({
   const totalPercent = biocharNum + ingredientSum;
   const remainderPercent = Math.max(
     0,
-    Math.round((100 - ingredientSum) * 100) / 100,
+    Math.round((100 - ingredientSum) * SHARE_PERCENT_DECIMALS) /
+      SHARE_PERCENT_DECIMALS,
   );
 
   // Biochar auto-balances to the remaining share until the operator edits it
@@ -283,7 +294,7 @@ export function FormulationForm({
               <FormInput
                 id="biocharPercent"
                 type="number"
-                step="0.1"
+                step={SHARE_PERCENT_STEP}
                 min="0"
                 max="100"
                 placeholder="e.g., 70"
@@ -353,7 +364,7 @@ export function FormulationForm({
                 <FormInput
                   id={`ingredients.${index}.sharePercent`}
                   type="number"
-                  step="0.1"
+                  step={SHARE_PERCENT_STEP}
                   min="0"
                   max="100"
                   placeholder="e.g., 30"

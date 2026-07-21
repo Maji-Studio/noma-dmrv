@@ -236,6 +236,23 @@ beforeAll(async () => {
     };
   }
 
+  /** Composition covering formulation A's single ingredient line. */
+  function formulationAComposition() {
+    return {
+      ingredients: [
+        {
+          formulationIngredientId: formulationIngredientAId,
+          feedstockTypeId: blendTypeAId,
+          feedstockTypeName: "PBF Blend Type A",
+          feedstockTypeCategory: "compost",
+          ratio: 0.2,
+          massKg: 100,
+          storageLocationId: null,
+        },
+      ],
+    };
+  }
+
   it("claims an unassigned bin for the product's formulation on first use", async () => {
     const binId = await makeProductBin(null);
 
@@ -243,6 +260,7 @@ beforeAll(async () => {
       ...baseProductInput(),
       formulationId: formulationAId,
       storageLocationId: binId,
+      composition: formulationAComposition(),
     });
     createdProductIds.push(product.id);
 
@@ -252,6 +270,8 @@ beforeAll(async () => {
       .where(eq(storageLocations.id, binId));
 
     expect(bin.formulationId).toBe(formulationAId);
+    // The recipe's biochar ratio is frozen onto the product at creation.
+    expect(product.biocharRatio).toBe(0.6);
   });
 
   it("rejects a product whose formulation differs from the bin's reservation", async () => {
@@ -262,8 +282,22 @@ beforeAll(async () => {
         ...baseProductInput(),
         formulationId: formulationAId, // mismatched
         storageLocationId: binId,
+        composition: formulationAComposition(),
       })
     ).rejects.toThrow("reserved for a different formulation");
+  });
+
+  it("rejects a formulated product whose composition omits a recipe line", async () => {
+    const binId = await makeProductBin(null);
+
+    await expect(
+      createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
+        ...baseProductInput(),
+        formulationId: formulationAId,
+        storageLocationId: binId,
+        // no composition — formulation A has one ingredient line
+      })
+    ).rejects.toThrow("must include every ingredient");
   });
 
   it("allows a pure-biochar product in an unassigned bin and leaves it unclaimed", async () => {
@@ -282,6 +316,8 @@ beforeAll(async () => {
       .where(eq(storageLocations.id, binId));
 
     expect(bin.formulationId).toBeNull();
+    // Pure-biochar products carry no ratio snapshot (effective 1 via COALESCE).
+    expect(product.biocharRatio).toBeNull();
   });
 
   it("rejects pyrolysis-usage feedstock bins as formulation ingredient bins", async () => {

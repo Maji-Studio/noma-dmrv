@@ -210,7 +210,6 @@ export function BiocharProductForm({
     formulationId: selectedFormulationId,
     facilityId: selectedFacilityId,
     productMassKg: massKgNumForComposition,
-    initialFormulationId: product?.formulation?.id,
   });
 
   // Fetch linked run preview for transfer flow

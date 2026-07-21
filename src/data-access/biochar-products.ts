@@ -576,9 +576,12 @@ export async function createBiocharProduct(
         code: data.code,
         facilityId: data.facilityId,
         formulationId,
-        // Snapshot the recipe's biochar ratio at creation time — later
-        // formulation edits must not rewrite this product's stock math.
-        biocharRatio,
+        // Snapshot the recipe's effective biochar ratio at creation time —
+        // later formulation edits must not rewrite this product's stock math.
+        // A formulated product with no recipe ratio freezes the effective 1
+        // (never null, which would read as a legacy row and follow the live
+        // ratio); only pure-biochar products store null.
+        biocharRatio: formulationId ? biocharRatio ?? 1 : null,
         productionDate,
         status: data.status ?? "testing",
         linkedProductionRunId: data.linkedProductionRunId ?? null,
@@ -814,7 +817,12 @@ export async function updateBiocharProduct(
               eq(formulations.organizationId, ctx.organizationId),
             ))
         : [];
-      biocharRatioSnapshot = ratioRow?.biocharRatio ?? null;
+      // Freeze the effective ratio: a formulation without a ratio snapshots 1
+      // (null would read as a legacy row and follow the live ratio); only a
+      // pure-biochar reassignment stores null.
+      biocharRatioSnapshot = transactionFormulationId
+        ? ratioRow?.biocharRatio ?? 1
+        : null;
     }
 
     if (transactionLinkedRunId) {
