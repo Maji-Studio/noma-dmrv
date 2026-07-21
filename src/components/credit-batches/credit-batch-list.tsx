@@ -57,6 +57,7 @@ import {
 } from "@/schemas/credit-batches";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 
 // ============================================
@@ -240,6 +241,7 @@ export function CreditBatchList() {
     setUpdateError(null);
     setSideSheet({ entity: null, mode: "create" });
   };
+  useOpenCreateIntent(openCreate);
   // Opening a batch goes to its detail page (health check + edit), the redesign
   // replacement for the read-only view side-sheet.
   const openView = (batch: CreditBatchWithRelations) => {
