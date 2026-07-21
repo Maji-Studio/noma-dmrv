@@ -60,8 +60,8 @@ function setupGapCopy(gap: FacilitySetupGap): {
     case "credentials":
       return {
         message:
-          "The organization's Isometric API credentials aren't configured, so the registry can't be reached.",
-        action: { label: "Open certification settings", toSettings: true },
+          "The organization's Isometric API credentials aren't configured, so the registry can't be reached. An organization owner or admin needs to set them up before this facility can be linked.",
+        action: null,
       };
     case "default_template":
       return {

@@ -34,6 +34,19 @@ describe("deriveFacilitySetupGaps", () => {
     ).toEqual([{ kind: "credentials" }]);
   });
 
+  it("reports credentials before the project link when both are missing", () => {
+    // The connector disables project linking until credentials exist, so a
+    // credential-less org must never be told to link a facility first.
+    expect(
+      deriveFacilitySetupGaps({
+        ...COMPLETE,
+        hasOrgCredentials: false,
+        mapping: null,
+        defaultTemplate: null,
+      }),
+    ).toEqual([{ kind: "credentials" }]);
+  });
+
   it("reports an unset default template", () => {
     expect(
       deriveFacilitySetupGaps({ ...COMPLETE, defaultTemplate: null }),
