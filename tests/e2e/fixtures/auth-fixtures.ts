@@ -29,9 +29,15 @@ import {
   type SeededChainData,
 } from "./seed-chain-data";
 import { enterDefaultOrganization } from "./organization-helpers";
+import { DEC_ORG_ID } from "../../../src/db/org-defaults";
 
 // Types for user roles
-export type UserRole = "admin" | "operator" | "lab_technician" | "viewer";
+export type UserRole =
+  | "admin"
+  | "org_admin"
+  | "operator"
+  | "lab_technician"
+  | "viewer";
 export type ProjectRole = "owner" | "admin" | "member" | "viewer";
 
 // Test user configuration
@@ -47,10 +53,12 @@ export interface TestUser {
 // Fixture types
 export interface AuthFixtures {
   adminPage: Page;
+  orgAdminPage: Page;
   operatorPage: Page;
   labTechnicianPage: Page;
   viewerPage: Page;
   adminContext: BrowserContext;
+  orgAdminContext: BrowserContext;
   operatorContext: BrowserContext;
   labTechnicianContext: BrowserContext;
   viewerContext: BrowserContext;
@@ -94,6 +102,13 @@ const defaultTestUsers: Record<UserRole, Omit<TestUser, "id">> = {
     role: "admin",
     password: "TestPassword123!",
     projectRole: "owner",
+  },
+  org_admin: {
+    email: `test-org-admin-${testRunId}@e2e.local`,
+    name: "E2E Organization Admin",
+    role: "user",
+    password: "TestPassword123!",
+    projectRole: "admin",
   },
   operator: {
     email: `test-operator-${testRunId}@e2e.local`,
@@ -178,6 +193,15 @@ export async function seedTestUsers(
           ...userData,
           id: userId,
         };
+
+        if (userData.role !== "admin" && userData.projectRole) {
+          await tx.insert(schema.members).values({
+            id: `e2e-member-${role}-${testRunId}`,
+            organizationId: DEC_ORG_ID,
+            userId,
+            role: userData.projectRole,
+          });
+        }
       }
     });
 
@@ -466,6 +490,7 @@ export const test = base.extend<AuthFixtures, { workerAuthData: WorkerAuthData }
 
         const authStates: Record<UserRole, AuthStorageState> = {
           admin: await createSignedAuthStorageState(users.admin, baseURL),
+          org_admin: await createSignedAuthStorageState(users.org_admin, baseURL),
           operator: await createSignedAuthStorageState(users.operator, baseURL),
           lab_technician: await createSignedAuthStorageState(
             users.lab_technician,
@@ -524,6 +549,15 @@ export const test = base.extend<AuthFixtures, { workerAuthData: WorkerAuthData }
     await context.close();
   },
 
+  orgAdminContext: async ({ browser, workerAuthData }, use) => {
+    const context = await browser.newContext({
+      storageState: workerAuthData.authStates.org_admin,
+    });
+
+    await use(context);
+    await context.close();
+  },
+
   operatorContext: async ({ browser, workerAuthData }, use) => {
     const context = await browser.newContext({
       storageState: workerAuthData.authStates.operator,
@@ -554,6 +588,12 @@ export const test = base.extend<AuthFixtures, { workerAuthData: WorkerAuthData }
   adminPage: async ({ adminContext }, use) => {
     const page = await adminContext.newPage();
     await enterDefaultOrganization(page);
+    await use(page);
+    await page.close();
+  },
+
+  orgAdminPage: async ({ orgAdminContext }, use) => {
+    const page = await orgAdminContext.newPage();
     await use(page);
     await page.close();
   },

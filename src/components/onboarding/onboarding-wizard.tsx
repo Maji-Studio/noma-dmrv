@@ -188,7 +188,10 @@ export function OnboardingWizard({ wizard, status }: OnboardingWizardProps) {
 
       case STEP.registry:
         return activeFacilityId ? (
-          <WizardRegistryStep facilityId={activeFacilityId} />
+          <WizardRegistryStep
+            facilityId={activeFacilityId}
+            canManage={status?.isOwnerOrAdmin ?? false}
+          />
         ) : (
           <ConfirmationPanel
             title="Add a facility first"
