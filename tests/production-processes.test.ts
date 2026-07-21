@@ -66,6 +66,13 @@ const METHOD_B_MINIMUM_SAMPLES_LOWER_BOUND_MIGRATION = resolve(
   process.cwd(),
   "drizzle/0083_process_method_b_established_lower_bound.sql",
 );
+// 0084 extends the same [established_at, method_b_unlocked_at) window to the
+// sample/credit-batch WRITE-PATH companion (`assert_existing_...`); replayed
+// after 0062, which creates the after-write triggers that call it.
+const METHOD_B_WRITE_GUARD_LOWER_BOUND_MIGRATION = resolve(
+  process.cwd(),
+  "drizzle/0084_method_b_write_guard_established_lower_bound.sql",
+);
 
 async function applyMigrationFile(migrationPath: string): Promise<void> {
   const migrationSql = readFileSync(migrationPath, "utf8");
@@ -81,6 +88,7 @@ async function applyMigrationFile(migrationPath: string): Promise<void> {
 
 async function applyMethodBSampleWriteGuards(): Promise<void> {
   await applyMigrationFile(METHOD_B_SAMPLE_WRITE_GUARDS_MIGRATION);
+  await applyMigrationFile(METHOD_B_WRITE_GUARD_LOWER_BOUND_MIGRATION);
 }
 
 async function applyMethodBMinimumSamplesGuard(): Promise<void> {
@@ -88,10 +96,14 @@ async function applyMethodBMinimumSamplesGuard(): Promise<void> {
   await applyMigrationFile(METHOD_B_MINIMUM_SAMPLES_LOWER_BOUND_MIGRATION);
 }
 
-async function createMethodBProcessWithBaseline(tag: string): Promise<{
+async function createMethodBProcessWithBaseline(
+  tag: string,
+  options: { preEstablishmentSampleCount?: number } = {},
+): Promise<{
   processId: string;
   batchId: string;
   sampleIds: string[];
+  preEstablishmentSampleIds: string[];
 }> {
   const suffix = `${Date.now().toString(36)}-${tag}`;
   const [process] = await db
@@ -138,6 +150,35 @@ async function createMethodBProcessWithBaseline(tag: string): Promise<{
   const sampleIds = insertedSamples.map((sample) => sample.id);
   createdIds.samples.push(...sampleIds);
 
+  // Optional back-dated padding: samples dated BEFORE established_at. They are
+  // never baseline evidence, so the ≥30 in-window set alone must carry the
+  // process — the padding only exists to prove the write-guard lower bound
+  // (0084) refuses to count it when an in-window row is later removed.
+  const preEstablishmentSampleIds: string[] = [];
+  const preEstablishmentSampleCount = options.preEstablishmentSampleCount ?? 0;
+  if (preEstablishmentSampleCount > 0) {
+    const preRows = await db
+      .insert(samples)
+      .values(
+        Array.from({ length: preEstablishmentSampleCount }, (_, index) => ({
+          organizationId: TEST_ORG_ID,
+          creditBatchId: batch.id,
+          sampleCode: `S-PROC-MB-PRE-${suffix}-${index}`,
+          samplingTime: new Date(
+            `2025-12-${String(index + 1).padStart(2, "0")}T12:00:00.000Z`,
+          ),
+          totalCarbonPercent: 80,
+          organicCarbonPercent: 75,
+          randomReflectanceR0Percent: METHOD_B_RANDOM_REFLECTANCE_R0_PERCENT,
+          sReflectanceFraction: METHOD_B_S_REFLECTANCE_FRACTION,
+          residualCarbonPercent: METHOD_B_RESIDUAL_CARBON_PERCENT,
+        })),
+      )
+      .returning({ id: samples.id });
+    preEstablishmentSampleIds.push(...preRows.map((row) => row.id));
+    createdIds.samples.push(...preEstablishmentSampleIds);
+  }
+
   await db
     .update(productionProcesses)
     .set({
@@ -149,7 +190,12 @@ async function createMethodBProcessWithBaseline(tag: string): Promise<{
     })
     .where(eq(productionProcesses.id, process.id));
 
-  return { processId: process.id, batchId: batch.id, sampleIds };
+  return {
+    processId: process.id,
+    batchId: batch.id,
+    sampleIds,
+    preEstablishmentSampleIds,
+  };
 }
 
 beforeAll(() => ensureTestOrg());
@@ -518,6 +564,52 @@ describe("findOrCreateProductionProcess", () => {
       .from(productionProcesses)
       .where(eq(productionProcesses.id, process.id));
     expect(after?.samplingMethod).toBe("method_a");
+  });
+
+  it("write guard ignores pre-establishment padding when a baseline sample is deleted (0084 lower bound)", async () => {
+    // 30 in-window baseline samples + 1 back-dated (pre-establishment) sample.
+    // Deleting one in-window sample leaves 29 in-window + 1 pre-establishment.
+    // Without the lower bound the after-write guard would count 30 and allow the
+    // delete; with 0084 it counts only the 29 in-window rows and blocks it.
+    const fixture = await createMethodBProcessWithBaseline("write-lb-delete", {
+      preEstablishmentSampleCount: 1,
+    });
+
+    await expect(
+      db.delete(samples).where(eq(samples.id, fixture.sampleIds[0])),
+    ).rejects.toThrow(/Failed query/i);
+
+    const [sample] = await db
+      .select({ id: samples.id })
+      .from(samples)
+      .where(eq(samples.id, fixture.sampleIds[0]));
+    expect(sample?.id).toBe(fixture.sampleIds[0]);
+  });
+
+  it("write guard ignores a baseline sample re-dated before the operational start (0084 lower bound)", async () => {
+    // Re-dating an in-window sample to before established_at moves it out of the
+    // baseline window: 29 in-window remain. Without the lower bound the guard
+    // would still count it (sampling_time < unlock) and allow the edit; with 0084
+    // the count drops to 29 and the update rolls back.
+    const fixture = await createMethodBProcessWithBaseline("write-lb-update", {
+      preEstablishmentSampleCount: 1,
+    });
+    const sampleId = fixture.sampleIds[0];
+
+    await expect(
+      db
+        .update(samples)
+        .set({ samplingTime: new Date("2025-12-20T12:00:00.000Z") })
+        .where(eq(samples.id, sampleId)),
+    ).rejects.toThrow(/Failed query/i);
+
+    const [after] = await db
+      .select({ samplingTime: samples.samplingTime })
+      .from(samples)
+      .where(eq(samples.id, sampleId));
+    expect(after?.samplingTime).toEqual(
+      new Date("2026-01-01T12:00:00.000Z"),
+    );
   });
 
   it("blocks deleting pre-unlock baseline samples from a Method-B process", async () => {
