@@ -1,10 +1,16 @@
 /**
  * FormulationForm component
- * Reusable formulation form with React Hook Form integration
- * Supports dynamic ingredient rows via useFieldArray
+ *
+ * Percent-first blend composition entry: the operator types whole percents
+ * (never decimals), biochar auto-balances to the remaining share until edited
+ * by hand, and a live allocation bar shows how the blend partitions. Ratios
+ * (0–1) remain the storage/server vocabulary — `percentFormToRatioPayload`
+ * converts on submit, so callers keep the existing `FormulationFormData`
+ * contract.
  */
 "use client";
 
+import { useEffect, useState } from "react";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,22 +18,106 @@ import { FormEntitySelect, FormField, FormInput, FormTextarea, FormSection, Form
 import { Button } from "@/components/ui";
 import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import {
-  formulationFormSchema,
-  formulationRatioSum,
-  exceedsFormulationRatioSum,
-  RATIO_SUM_MAX,
+  formulationPercentFormSchema,
+  percentFormToRatioPayload,
+  ratioToPercent,
   FORMULATION_LINE_FEEDSTOCK_USAGE,
   type FormulationFormData,
+  type FormulationPercentFormData,
 } from "@/schemas/formulations";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
 
 const EMPTY_INGREDIENT = {
   feedstockTypeId: "",
-  ratio: null,
+  sharePercent: null,
 };
 
-/** Tolerance for the "sums to exactly 100%" green display state. */
-const RATIO_DISPLAY_TOLERANCE = 0.001;
+/** Display tolerance (in percent) for the "fully allocated" state. */
+const PERCENT_DISPLAY_TOLERANCE = 0.1;
+
+/** A fresh formulation starts as pure biochar; adding ingredients rebalances. */
+const DEFAULT_BIOCHAR_PERCENT = 100;
+
+function formatPercent(value: number): string {
+  return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
+// ============================================
+// Allocation Bar
+// ============================================
+
+function AllocationBar({
+  biocharPercent,
+  ingredientPercent,
+}: {
+  biocharPercent: number;
+  ingredientPercent: number;
+}) {
+  const total = biocharPercent + ingredientPercent;
+  const isOver = total > 100 + PERCENT_DISPLAY_TOLERANCE;
+  const isFull = !isOver && Math.abs(total - 100) <= PERCENT_DISPLAY_TOLERANCE;
+  const unallocated = isOver || isFull ? 0 : 100 - total;
+
+  // When over-allocated the segments scale to fill the bar; the border and
+  // total flip to the error tone instead of drawing a fake >100% width.
+  const scale = isOver ? 100 / total : 1;
+
+  return (
+    <div className="space-y-8">
+      <div
+        className={`flex h-8 w-full overflow-hidden border ${
+          isOver
+            ? "border-[var(--st-bad)]"
+            : "border-[var(--color-border-tertiary)]"
+        }`}
+        role="img"
+        aria-label={`Blend allocation: biochar ${formatPercent(biocharPercent)}%, ingredients ${formatPercent(ingredientPercent)}%, unallocated ${formatPercent(unallocated)}%`}
+      >
+        {biocharPercent > 0 && (
+          <div
+            className="h-full bg-[var(--acc-prod)]"
+            style={{ width: `${biocharPercent * scale}%` }}
+          />
+        )}
+        {ingredientPercent > 0 && (
+          <div
+            className="h-full bg-[var(--acc-infra)]"
+            style={{ width: `${ingredientPercent * scale}%` }}
+          />
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-16 gap-y-4">
+        <span className="body-caption text-[var(--color-text-secondary)] inline-flex items-center gap-6">
+          <span aria-hidden className="inline-block w-8 h-8 bg-[var(--acc-prod)]" />
+          Biochar {formatPercent(biocharPercent)}%
+        </span>
+        <span className="body-caption text-[var(--color-text-secondary)] inline-flex items-center gap-6">
+          <span aria-hidden className="inline-block w-8 h-8 bg-[var(--acc-infra)]" />
+          Ingredients {formatPercent(ingredientPercent)}%
+        </span>
+        {unallocated > PERCENT_DISPLAY_TOLERANCE && (
+          <span className="body-caption text-[var(--color-text-tertiary)] inline-flex items-center gap-6">
+            <span aria-hidden className="inline-block w-8 h-8 border border-[var(--color-border-tertiary)]" />
+            Unallocated {formatPercent(unallocated)}%
+          </span>
+        )}
+        <span
+          className={`body-caption ml-auto font-medium ${
+            isOver
+              ? "text-[var(--st-bad)]"
+              : isFull
+                ? "text-[var(--st-ok)]"
+                : "text-[var(--color-text-secondary)]"
+          }`}
+        >
+          Total {formatPercent(total)}%
+          {isOver && " — exceeds 100%"}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 // ============================================
 // Component
@@ -54,19 +144,26 @@ export function FormulationForm({
     register,
     handleSubmit,
     control,
+    setValue,
     formState: { errors },
-  } = useForm<FormulationFormData>({
-    resolver: zodResolver(formulationFormSchema),
+  } = useForm({
+    resolver: zodResolver(formulationPercentFormSchema),
     defaultValues: {
       name: formulation?.name ?? "",
-      biocharRatio: formulation?.biocharRatio ?? null,
+      biocharPercent: isEditMode
+        ? ratioToPercent(formulation?.biocharRatio)
+        : DEFAULT_BIOCHAR_PERCENT,
       description: formulation?.description ?? "",
       ingredients: formulation?.ingredients?.map((ing) => ({
         feedstockTypeId: ing.feedstockTypeId,
-        ratio: ing.ratio ?? null,
+        sharePercent: ratioToPercent(ing.ratio),
       })) ?? [],
     },
   });
+
+  // Cast control for FormEntitySelect compatibility (z.preprocess makes input types `unknown`)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const formControl = control as any;
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -76,17 +173,49 @@ export function FormulationForm({
   const defaultSubmitLabel = isEditMode ? "Update Formulation" : "Create Formulation";
 
   const handleFormSubmit = handleSubmit((data) => {
-    return onSubmit(data as FormulationFormData);
+    return onSubmit(percentFormToRatioPayload(data as FormulationPercentFormData));
   });
 
-  // Watch ratios for the live total-ratio indicator
-  const biocharRatio = useWatch({ control, name: "biocharRatio" });
+  // Watch shares for auto-balance, the allocation bar, and the total.
+  const biocharPercent = useWatch({ control, name: "biocharPercent" });
   const ingredients = useWatch({ control, name: "ingredients" });
-  const totalRatio = formulationRatioSum(biocharRatio, ingredients);
-  const ratioSumExceeded = exceedsFormulationRatioSum(biocharRatio, ingredients);
-  const ratioSumAtTarget =
-    !ratioSumExceeded &&
-    Math.abs(totalRatio - RATIO_SUM_MAX) < RATIO_DISPLAY_TOLERANCE;
+  const biocharNum = typeof biocharPercent === "number" ? biocharPercent : 0;
+  const ingredientSum = (ingredients ?? []).reduce(
+    (sum, ingredient) =>
+      sum +
+      (typeof ingredient?.sharePercent === "number"
+        ? ingredient.sharePercent
+        : 0),
+    0,
+  );
+  const totalPercent = biocharNum + ingredientSum;
+  const remainderPercent = Math.max(
+    0,
+    Math.round((100 - ingredientSum) * 100) / 100,
+  );
+
+  // Biochar auto-balances to the remaining share until the operator edits it
+  // by hand (typing in the field switches to manual; "Balance to 100%"
+  // switches back). Edit mode starts manual so saved shares are respected.
+  const [autoBalance, setAutoBalance] = useState(!isEditMode);
+  useEffect(() => {
+    if (!autoBalance) return;
+    setValue("biocharPercent", remainderPercent, {
+      shouldDirty: false,
+      shouldValidate: false,
+    });
+  }, [autoBalance, remainderPercent, setValue]);
+
+  const isBalanced = Math.abs(totalPercent - 100) <= PERCENT_DISPLAY_TOLERANCE;
+  const showBalanceButton = !isBalanced && ingredientSum <= 100;
+
+  const handleBalance = () => {
+    setAutoBalance(true);
+    setValue("biocharPercent", remainderPercent, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
@@ -111,33 +240,10 @@ export function FormulationForm({
         </div>
       </FormSection>
 
-      {/* Biochar Ratio Section */}
-      <FormSection title="Biochar Ratio">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="biocharRatio"
-            label="Biochar Ratio (0–1)"
-            error={errors.biocharRatio?.message}
-            helperText="Value between 0 and 1 (e.g., 0.7 displays as 70%)"
-          >
-            <FormInput
-              id="biocharRatio"
-              type="number"
-              step="0.01"
-              min="0"
-              max="1"
-              placeholder="e.g., 0.7"
-              disabled={isSubmitting}
-              error={!!errors.biocharRatio}
-              {...register("biocharRatio", { setValueAs: nullableNumericValue })}
-            />
-          </FormField>
-        </div>
-      </FormSection>
-
-      {/* Ingredients Section */}
+      {/* Blend Composition — biochar and ingredients partition one whole */}
       <FormSection
-        title="Ingredients"
+        title="Blend Composition"
+        hint="Shares are percentages of the solid blend. Water is tracked on the product, so the total may stay under 100%."
         actions={
           <Button
             type="button"
@@ -151,9 +257,53 @@ export function FormulationForm({
           </Button>
         }
       >
+        {/* Biochar row — the base material, styled like an ingredient row */}
+        <div className="border border-[var(--color-border-tertiary)] p-16 space-y-12">
+          <div className="flex items-center justify-between">
+            <span className="body-small font-medium text-[var(--color-text-secondary)]">
+              Biochar
+            </span>
+            <span className="body-caption text-[var(--color-text-tertiary)]">
+              Base material
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-12 gap-y-12">
+            <p className="md:col-span-2 body-small text-[var(--color-text-tertiary)] self-center">
+              Pyrolyzed carbon from your production runs.
+            </p>
+            <FormField
+              id="biocharPercent"
+              label="Share (%)"
+              error={errors.biocharPercent?.message}
+              helperText={
+                autoBalance ? "Auto-fills the remaining share" : undefined
+              }
+            >
+              <FormInput
+                id="biocharPercent"
+                type="number"
+                step="0.1"
+                min="0"
+                max="100"
+                placeholder="e.g., 70"
+                disabled={isSubmitting}
+                error={!!errors.biocharPercent}
+                {...register("biocharPercent", {
+                  setValueAs: nullableNumericValue,
+                  onChange: () => {
+                    setAutoBalance(false);
+                  },
+                })}
+              />
+            </FormField>
+          </div>
+        </div>
+
         {fields.length === 0 && (
           <p className="body-small text-[var(--color-text-tertiary)] py-8">
-            No ingredients added. Click &quot;Add Ingredient&quot; to add amendment components.
+            No ingredients added — this is a pure-biochar formulation. Click
+            &quot;Add Ingredient&quot; to blend in amendment components.
           </p>
         )}
 
@@ -180,7 +330,7 @@ export function FormulationForm({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-x-12 gap-y-12">
               <div className="md:col-span-2">
                 <FormEntitySelect
-                  control={control}
+                  control={formControl}
                   name={`ingredients.${index}.feedstockTypeId`}
                   label="Blend Material"
                   entityType="feedstockType"
@@ -196,20 +346,20 @@ export function FormulationForm({
               </div>
 
               <FormField
-                id={`ingredients.${index}.ratio`}
-                label="Ratio"
-                error={errors.ingredients?.[index]?.ratio?.message}
+                id={`ingredients.${index}.sharePercent`}
+                label="Share (%)"
+                error={errors.ingredients?.[index]?.sharePercent?.message}
               >
                 <FormInput
-                  id={`ingredients.${index}.ratio`}
+                  id={`ingredients.${index}.sharePercent`}
                   type="number"
-                  step="0.01"
+                  step="0.1"
                   min="0"
-                  max="1"
-                  placeholder="e.g., 0.3"
+                  max="100"
+                  placeholder="e.g., 30"
                   disabled={isSubmitting}
-                  error={!!errors.ingredients?.[index]?.ratio}
-                  {...register(`ingredients.${index}.ratio`, {
+                  error={!!errors.ingredients?.[index]?.sharePercent}
+                  {...register(`ingredients.${index}.sharePercent`, {
                     setValueAs: nullableNumericValue,
                   })}
                 />
@@ -218,25 +368,23 @@ export function FormulationForm({
           </div>
         ))}
 
-        {/* Ratio Sum Indicator */}
-        {(biocharRatio != null || fields.length > 0) && (
-          <div
-            className={`body-small px-12 py-8 border ${
-              ratioSumAtTarget
-                ? "border-[var(--color-signal-green)] text-[var(--color-signal-green)] bg-[var(--color-signal-green)]/5"
-                : ratioSumExceeded
-                  ? "border-[var(--color-signal-red)] text-[var(--color-signal-red)] bg-[var(--color-signal-red)]/5"
-                  : "border-[var(--color-border-tertiary)] text-[var(--color-text-secondary)]"
-            }`}
-          >
-            Total ratio: {(totalRatio * 100).toFixed(0)}%
-            {ratioSumExceeded && (
-              <span className="ml-8">
-                — exceeds 100%, reduce ratios before saving
-              </span>
-            )}
-            {!ratioSumExceeded && !ratioSumAtTarget && totalRatio > 0 && (
-              <span className="ml-8">(does not sum to 100%)</span>
+        {/* Live allocation overview */}
+        {(biocharNum > 0 || fields.length > 0) && (
+          <div className="space-y-8">
+            <AllocationBar
+              biocharPercent={biocharNum}
+              ingredientPercent={ingredientSum}
+            />
+            {showBalanceButton && (
+              <Button
+                type="button"
+                variant="default"
+                size="small"
+                onClick={handleBalance}
+                disabled={isSubmitting}
+              >
+                Balance to 100%
+              </Button>
             )}
           </div>
         )}

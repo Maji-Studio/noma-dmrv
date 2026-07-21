@@ -3,7 +3,7 @@
  * CRUD operations for biochar products with auth guards, pagination, filtering, and relations
  */
 
-import { and, asc, desc, eq, ilike, isNull, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, isNull, or, SQL, count } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
 import {
@@ -184,6 +184,7 @@ export async function getBiocharProducts(
       productionDate: biocharProducts.productionDate,
       status: biocharProducts.status,
       formulationId: biocharProducts.formulationId,
+      biocharRatio: biocharProducts.biocharRatio,
       linkedProductionRunId: biocharProducts.linkedProductionRunId,
       composition: biocharProducts.composition,
       massKg: biocharProducts.massKg,
@@ -226,6 +227,7 @@ export async function getBiocharProducts(
     productionDate: row.productionDate,
     status: row.status,
     formulationId: row.formulationId,
+    biocharRatio: row.biocharRatio,
     linkedProductionRunId: row.linkedProductionRunId,
     composition: row.composition,
     massKg: row.massKg,
@@ -291,6 +293,7 @@ export async function getBiocharProductById(
       productionDate: biocharProducts.productionDate,
       status: biocharProducts.status,
       formulationId: biocharProducts.formulationId,
+      biocharRatio: biocharProducts.biocharRatio,
       linkedProductionRunId: biocharProducts.linkedProductionRunId,
       composition: biocharProducts.composition,
       massKg: biocharProducts.massKg,
@@ -329,6 +332,7 @@ export async function getBiocharProductById(
     productionDate: row.productionDate,
     status: row.status,
     formulationId: row.formulationId,
+    biocharRatio: row.biocharRatio,
     linkedProductionRunId: row.linkedProductionRunId,
     composition: row.composition,
     massKg: row.massKg,
@@ -572,6 +576,9 @@ export async function createBiocharProduct(
         code: data.code,
         facilityId: data.facilityId,
         formulationId,
+        // Snapshot the recipe's biochar ratio at creation time — later
+        // formulation edits must not rewrite this product's stock math.
+        biocharRatio,
         productionDate,
         status: data.status ?? "testing",
         linkedProductionRunId: data.linkedProductionRunId ?? null,
@@ -787,7 +794,28 @@ export async function updateBiocharProduct(
       transactionStorageId,
       transactionMassKg,
       transactionComposition,
+      transactionBiocharRatio,
     } = stockState;
+
+    // Re-snapshot the recipe's biochar ratio only when the product is pointed
+    // at a different formulation — editing a formulation never rewrites the
+    // stock math of products already created from it.
+    const formulationChanged =
+      data.formulationId !== undefined &&
+      data.formulationId !== locked.formulationId;
+    let biocharRatioSnapshot: number | null | undefined;
+    if (formulationChanged) {
+      const [ratioRow] = transactionFormulationId
+        ? await tx
+            .select({ biocharRatio: formulations.biocharRatio })
+            .from(formulations)
+            .where(and(
+              eq(formulations.id, transactionFormulationId),
+              eq(formulations.organizationId, ctx.organizationId),
+            ))
+        : [];
+      biocharRatioSnapshot = ratioRow?.biocharRatio ?? null;
+    }
 
     if (transactionLinkedRunId) {
       const [lockedRun] = await tx
@@ -866,12 +894,16 @@ export async function updateBiocharProduct(
       transactionStorageId,
       transactionMassKg,
       transactionComposition,
+      transactionBiocharRatio: formulationChanged
+        ? biocharRatioSnapshot ?? null
+        : transactionBiocharRatio,
     });
 
     const [row] = await tx
       .update(biocharProducts)
       .set({
         ...data,
+        ...(biocharRatioSnapshot !== undefined && { biocharRatio: biocharRatioSnapshot }),
         ...(derivedProductionDate && { productionDate: derivedProductionDate }),
         updatedAt: new Date(),
       })
@@ -951,50 +983,5 @@ export async function deleteBiocharProduct(
   });
 }
 
-// ============================================
-// Utility Operations
-// ============================================
-
-/**
- * Check if a biochar product code is available
- */
-export async function isBiocharProductCodeAvailable(
-  ctx: OrgContext,
-  code: string,
-  excludeProductId?: string
-): Promise<boolean> {
-  requireOrgScope(ctx);
-
-  const conditions: SQL[] = [eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.code, code)];
-
-  if (excludeProductId) {
-    conditions.push(sql`${biocharProducts.id} != ${excludeProductId}`);
-  }
-
-  // org-scope-ok: organization predicate is composed in conditions above.
-  const [existing] = await db
-    .select({ id: biocharProducts.id })
-    .from(biocharProducts)
-    .where(and(...conditions));
-
-  return !existing;
-}
-
-/**
- * Get biochar product options for dropdowns
- * Returns minimal data needed for select inputs
- */
-export async function getBiocharProductOptions(
-  ctx: OrgContext
-): Promise<Array<{ id: string; code: string }>> {
-  requireOrgScope(ctx);
-
-  return db
-    .select({
-      id: biocharProducts.id,
-      code: biocharProducts.code,
-    })
-    .from(biocharProducts)
-    .where(and(eq(biocharProducts.organizationId, ctx.organizationId), isNull(biocharProducts.archivedAt)))
-    .orderBy(desc(biocharProducts.productionDate));
-}
+// Code-availability and dropdown-option lookups live in
+// `./biochar-product-lookups` (split to keep this file under the line cap).

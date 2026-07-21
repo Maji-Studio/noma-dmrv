@@ -17,13 +17,21 @@
 import { useEffect, useRef } from "react";
 import {
   useFieldArray,
+  useWatch,
   type Control,
   type FieldValues,
   type UseFormReturn,
 } from "react-hook-form";
 import { useFormulation } from "@/hooks/use-formulations";
-import { reconcileComposition, deriveBinRemovalKg } from "./composition";
+import {
+  deriveMassDeviationPercent,
+  deriveSuggestedIngredientMassKg,
+  reconcileComposition,
+} from "./composition";
 import type { CompositionRow, IngredientBin } from "./types";
+
+/** Mass inputs step 0.01 kg — round auto-filled suggestions to match. */
+const SUGGESTED_MASS_DECIMALS = 100;
 
 export interface UseBiocharCompositionArgs {
   formulationId: string | null | undefined;
@@ -115,17 +123,78 @@ export function useBiocharComposition(
   const biocharRatio = formulation?.biocharRatio ?? null;
   const productMass = typeof productMassKg === "number" ? productMassKg : null;
 
-  const rows: CompositionRow[] = ingredientFields.map((field, index) => ({
-    key: field.id,
-    index,
-    formulationIngredientId: field.formulationIngredientId,
-    feedstockTypeId: field.feedstockTypeId,
-    feedstockTypeName: field.feedstockTypeName,
-    feedstockTypeCategory: field.feedstockTypeCategory,
-    ratio: field.ratio ?? null,
-    removalKg: deriveBinRemovalKg(productMass, biocharRatio, field.ratio ?? null),
-    storageLocationFieldName: `ingredientBins.${index}.storageLocationId` as const,
-  }));
+  // Prefill each row's mass from the recipe suggestion. A suggestion only
+  // ever writes over an empty field or its own previous auto-filled value —
+  // a mass the user typed (dirty) or one hydrated from a saved product is
+  // never touched, so the recipe stays orientation, not enforcement.
+  const autoFilledMassRef = useRef<Record<string, number>>({});
+  const { dirtyFields } = form.formState;
+  useEffect(() => {
+    const ingredients = formulation?.ingredients;
+    if (!ingredients) return;
+    const live = (form.getValues("ingredientBins") as IngredientBin[] | undefined) ?? [];
+    live.forEach((row, i) => {
+      if (!row) return;
+      const ingredient = ingredients.find(
+        (ing: { id: string }) => ing.id === row.formulationIngredientId,
+      );
+      const suggested = deriveSuggestedIngredientMassKg(
+        productMass,
+        formulation?.biocharRatio ?? null,
+        ingredient?.ratio ?? null,
+      );
+      if (suggested == null) return;
+      const rounded =
+        Math.round(suggested * SUGGESTED_MASS_DECIMALS) / SUGGESTED_MASS_DECIMALS;
+      const isDirty = !!dirtyFields?.ingredientBins?.[i]?.massKg;
+      const previousAuto = autoFilledMassRef.current[row.formulationIngredientId];
+      const isEmptyOrAuto = row.massKg == null || row.massKg === previousAuto;
+      if (isDirty || !isEmptyOrAuto || row.massKg === rounded) return;
+      autoFilledMassRef.current[row.formulationIngredientId] = rounded;
+      form.setValue(`ingredientBins.${i}.massKg`, rounded, {
+        shouldDirty: false,
+        shouldValidate: false,
+      });
+    });
+  }, [formulation, productMass, form, dirtyFields]);
+
+  // Live values (not the field-array snapshot) so the deviation hint tracks
+  // the user's typing.
+  const liveBins = useWatch({ control, name: "ingredientBins" }) as
+    | IngredientBin[]
+    | undefined;
+
+  const rows: CompositionRow[] = ingredientFields.map((field, index) => {
+    const suggestedMassKg = deriveSuggestedIngredientMassKg(
+      productMass,
+      biocharRatio,
+      field.ratio ?? null,
+    );
+    const liveMassRaw = liveBins?.[index]?.massKg as
+      | number
+      | string
+      | null
+      | undefined;
+    const liveMassKg =
+      typeof liveMassRaw === "number"
+        ? liveMassRaw
+        : liveMassRaw != null && liveMassRaw !== ""
+          ? Number(liveMassRaw)
+          : null;
+    return {
+      key: field.id,
+      index,
+      formulationIngredientId: field.formulationIngredientId,
+      feedstockTypeId: field.feedstockTypeId,
+      feedstockTypeName: field.feedstockTypeName,
+      feedstockTypeCategory: field.feedstockTypeCategory,
+      ratio: field.ratio ?? null,
+      suggestedMassKg,
+      deviationPercent: deriveMassDeviationPercent(liveMassKg, suggestedMassKg),
+      massKgFieldName: `ingredientBins.${index}.massKg` as const,
+      storageLocationFieldName: `ingredientBins.${index}.storageLocationId` as const,
+    };
+  });
 
   return {
     rows,
