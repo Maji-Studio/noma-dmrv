@@ -276,6 +276,18 @@ which supersedes the journal half of ADR 0005.
   **Sources** field — the registry is the sole system-of-record for period
   emissions (matters most for `pyrolyzer_direct`).
 
+## 2026-07-22 (ADR 0022 — computed Method-B eligibility)
+
+- Removed stored process sampling regime/unlock state and the associated
+  sample-floor/write triggers. A production process now stores only its epoch
+  and an all-or-none prerequisite record.
+- Added immutable `credit_batches.sampling` (`sampled`/`unsampled`). New
+  unsampled batches require an Isometric organization connection, a facility
+  project mapping, recorded prerequisites, and enough eligible sampled-batch
+  samples since the current epoch.
+- Blueprint routing now follows the stored batch choice. Eligibility remains a
+  live decision for new batches and does not rewrite existing ones.
+
 ## 2026-06-20 (ADR 0017 Track 2 — Method-B unlock backend + operator UI)
 
 Track 2 activates the Method-B unlock end-to-end (ADR 0017; implementation record

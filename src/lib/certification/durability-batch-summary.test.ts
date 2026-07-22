@@ -28,7 +28,7 @@ function batch(
     Pick<DurabilityBatchSummaryInput, "creditBatchId" | "creditBatchCode">,
 ): DurabilityBatchSummaryInput {
   return {
-    samplingMethod: "method_a",
+    sampling: "sampled",
     samples: [],
     runs: [{ id: "run-a", code: "PR-A", biocharDryMassKg: 1000 }],
     ...overrides,
@@ -519,8 +519,7 @@ describe("buildDurabilityBatchSummaries future-sample facts", () => {
           creditBatchId: "cb-a",
           creditBatchCode: "CB-A",
           facilityTimezone: "UTC",
-          samplingMethod: "method_a",
-          methodBUnlockedAt: null,
+          sampling: "sampled",
           samples: [...eligibleSamples(), futureSample()],
         }),
       ],
@@ -533,15 +532,14 @@ describe("buildDurabilityBatchSummaries future-sample facts", () => {
     expect(summary.future.countsTowardBaseline).toBe(true);
   });
 
-  it("drops the baseline claim once the process has unlocked Method B", () => {
+  it("does not claim that samples on an unsampled batch join the baseline", () => {
     const [summary] = buildDurabilityBatchSummaries(
       [
         batch({
           creditBatchId: "cb-a",
           creditBatchCode: "CB-A",
           facilityTimezone: "UTC",
-          samplingMethod: "method_b",
-          methodBUnlockedAt: new Date("2026-02-01T00:00:00.000Z"),
+          sampling: "unsampled",
           samples: [...eligibleSamples(), futureSample()],
         }),
       ],
@@ -563,8 +561,7 @@ describe("buildDurabilityBatchSummaries future-sample facts", () => {
           creditBatchId: "cb-a",
           creditBatchCode: "CB-A",
           facilityTimezone: "Pacific/Kiritimati",
-          samplingMethod: "method_a",
-          methodBUnlockedAt: null,
+          sampling: "sampled",
           samples: [
             sample({
               id: "s-tz",

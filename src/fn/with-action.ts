@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { requireOrgContext } from "@/lib/auth/server";
 import type { OrgContext } from "@/lib/auth/server";
-import { toActionError } from "@/lib/errors";
+import { ActionConflictError, toActionError } from "@/lib/errors";
 import { checkRateLimit } from "@/lib/rate-limit/in-memory";
 import type { ActionResult } from "@/types/actions";
 import { logActionError } from "./action-errors";
@@ -57,6 +57,13 @@ export async function withAction<T>(
       return {
         success: false,
         error: `${zodErrorPrefix}: ${error.issues.map((e) => e.message).join(", ")}`,
+      };
+    }
+    if (error instanceof ActionConflictError) {
+      return {
+        success: false,
+        error: error.message,
+        conflict: error.conflict,
       };
     }
     logActionError(error, {

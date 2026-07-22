@@ -3,9 +3,8 @@
  * Reusable reactor form with React Hook Form integration
  * Used in both create and edit slide-overs for reactors
  *
- * NOTE (ADR 0016): the sampling method is no longer declared on the reactor — it
- * lives on the production process (feedstock × conditions), which spans reactors.
- * The picker + Method-B eligibility were removed here accordingly.
+ * NOTE (ADR 0022): sampling is an immutable credit-batch choice, not a reactor
+ * property. The picker and Method-B validation therefore do not belong here.
  */
 "use client";
 

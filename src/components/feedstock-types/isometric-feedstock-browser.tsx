@@ -10,6 +10,8 @@
 "use client";
 
 import Link from "next/link";
+import { SealCheckIcon } from "@phosphor-icons/react";
+import { EmptyState } from "@/components/ui";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   useFacilityCertifierSummary,
@@ -79,7 +81,12 @@ export function IsometricFeedstockBrowser({
 
   if (catalogue.data.length === 0) {
     return (
-      <Message>No feedstock types found on the Isometric registry.</Message>
+      <EmptyState
+        padding="md"
+        icon={<SealCheckIcon size={40} />}
+        title="No registry feedstock types"
+        description="No feedstock types were returned by the Isometric catalogue."
+      />
     );
   }
 

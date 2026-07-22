@@ -143,10 +143,10 @@ export const soilTemperatureSource = pgEnum('soil_temperature_source', [
   'global_database', // From approved global temperature dataset
 ]);
 
-// Biochar sampling pathways (Biochar Protocol §8.3.1)
-export const samplingMethod = pgEnum('sampling_method', [
-  'method_a', // Sample every production batch
-  'method_b', // Sample at least 1 in 10 production batches
+// Immutable per-credit-batch sampling choice (ADR 0022).
+export const creditBatchSampling = pgEnum('credit_batch_sampling', [
+  'sampled',
+  'unsampled',
 ]);
 
 // Moisture-determination pathway a production process declares when it

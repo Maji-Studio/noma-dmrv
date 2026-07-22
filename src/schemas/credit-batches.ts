@@ -17,6 +17,9 @@ export const creditBatchStatuses = [
 ] as const;
 export type CreditBatchStatus = (typeof creditBatchStatuses)[number];
 
+export const creditBatchSamplingChoices = ["sampled", "unsampled"] as const;
+export type CreditBatchSampling = (typeof creditBatchSamplingChoices)[number];
+
 /**
  * Certifier provider options
  */
@@ -69,6 +72,7 @@ export const creditBatchFormSchema = z
       .uuid("Invalid feedstock type"),
     startDate: z.coerce.date({ message: "Start date is required" }),
     endDate: z.coerce.date({ message: "End date is required" }),
+    sampling: z.enum(creditBatchSamplingChoices).default("sampled"),
 
     // === Section 2: Production cohort (membership) ===
     productionRunIds: z
@@ -208,6 +212,7 @@ export const updateCreditBatchSchema = z.object({
   value: z.number().min(0).optional().nullable(),
   currency: z.enum(currencyCodes).optional(),
   siteManagementNotes: z.string().max(2000).optional().nullable(),
+  sampling: z.never({ error: "Sampling cannot be changed after creation" }).optional(),
 });
 
 /**

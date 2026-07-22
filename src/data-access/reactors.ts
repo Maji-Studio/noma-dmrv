@@ -3,7 +3,7 @@
  * CRUD operations for reactors with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, isNull, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
@@ -39,10 +39,6 @@ import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { guardReactorIdentifier } from "./unique-name-guards";
 import { retireDocumentsForEntities } from "./documents";
-
-// ADR 0016 removed the reactor-level sampling method. Reactor surfaces still
-// need a stable Method-A value while Method B is process-scoped.
-const LEGACY_REACTOR_SAMPLING_METHOD = "method_a" as const;
 
 // ============================================
 // Read Operations
@@ -227,33 +223,6 @@ export async function getReactorById(
 }
 
 /**
- * Map each reactor id to its CURRENT sampling method. Used by the durability
- * submission gates (D6) to decide, per production run, whether a Method A run
- * must be sampled. Reactor ids absent from the table are simply omitted; the
- * caller defaults a missing run conservatively to Method A.
- *
- * ADR 0016 (Phase 1): the sampling method is no longer a reactor column — it
- * lives on the production process — and DEC runs Method A everywhere. This
- * therefore returns Method A for every existing reactor. Phase 2 re-keys the
- * gates to source the method from the production process directly.
- */
-export async function getSamplingMethodsByReactorIds(
-  ctx: OrgContext,
-  reactorIds: string[]
-): Promise<Map<string, "method_a" | "method_b">> {
-  requireOrgScope(ctx);
-
-  if (reactorIds.length === 0) return new Map();
-
-  const rows = await db
-    .select({ id: reactors.id })
-    .from(reactors)
-    .where(and(inArray(reactors.id, reactorIds), eq(reactors.organizationId, ctx.organizationId)));
-
-  return new Map(rows.map((r) => [r.id, LEGACY_REACTOR_SAMPLING_METHOD]));
-}
-
-/**
  * Get reactors by facility ID
  * Returns reactors for a specific facility
  */
@@ -310,8 +279,7 @@ export async function createReactor(
     throw new SafeError("Facility not found or archived");
   }
 
-  // ADR 0016: a reactor no longer declares a sampling method (it lives on the
-  // production process). Nothing Method-B to validate at reactor creation.
+  // ADR 0022: sampling is a credit-batch choice, not a reactor property.
 
   const [reactor] = await guardReactorIdentifier(ctx, data.identifier, () =>
     db
@@ -386,9 +354,7 @@ export async function updateReactor(
     }
   }
 
-  // ADR 0016: a reactor no longer declares a sampling method (it lives on the
-  // production process), so there is no Method-B eligibility to re-validate on
-  // a reactor update.
+  // ADR 0022: sampling is a credit-batch choice, not a reactor property.
 
   // A rename OR a facility move can collide with the per-facility identifier
   // index, so guard the update too.
