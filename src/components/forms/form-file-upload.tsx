@@ -129,6 +129,7 @@ export function FormFileUpload({
   const [isDragOver, setIsDragOver] = useState(false);
   const [deferredError, setDeferredError] = useState<string | null>(null);
   const { upload } = useFileUpload();
+  const uploadChainRef = useRef<Promise<void>>(Promise.resolve());
   const effectiveMaxSizeMb = clampDocumentUploadMaxMb(maxSizeMb);
 
   const isRealMode = !deferred && !!(entityType && entityId && documentType);
@@ -203,27 +204,43 @@ export function FormFileUpload({
     }
   }
 
+  // A second drop/selection while a batch is in flight must not start a
+  // parallel loop — useFileUpload would cancel the active request and fail
+  // the earlier file. Chain every batch through one shared promise.
+  function enqueueUploads(queue: File[]) {
+    uploadChainRef.current = uploadChainRef.current.then(() =>
+      startUploads(queue),
+    );
+  }
+
+  function validateFiles(queue: File[]): {
+    accepted: File[];
+    errors: string[];
+  } {
+    const maxBytes = effectiveMaxSizeMb * BYTES_PER_MB;
+    const errors: string[] = [];
+    const accepted = queue.filter((file) => {
+      if (file.size > maxBytes) {
+        errors.push(`${file.name} exceeds the ${effectiveMaxSizeMb} MB limit.`);
+        return false;
+      }
+      if (!fileMatchesAccept(file, accept)) {
+        errors.push(`${file.name} is not an accepted file type.`);
+        return false;
+      }
+      return true;
+    });
+    return { accepted, errors };
+  }
+
   function handleFiles(fileList: FileList | null) {
     if (!fileList) return;
     const arr = Array.from(fileList);
 
     if (deferred) {
       const queue = multiple ? arr : arr.slice(0, 1);
-      const maxBytes = effectiveMaxSizeMb * BYTES_PER_MB;
-      const validationErrors: string[] = [];
-      const acceptedFiles = queue.filter((file) => {
-        if (file.size > maxBytes) {
-          validationErrors.push(
-            `${file.name} exceeds the ${effectiveMaxSizeMb} MB limit.`,
-          );
-          return false;
-        }
-        if (!fileMatchesAccept(file, accept)) {
-          validationErrors.push(`${file.name} is not an accepted file type.`);
-          return false;
-        }
-        return true;
-      });
+      const { accepted: acceptedFiles, errors: validationErrors } =
+        validateFiles(queue);
 
       setDeferredError(
         validationErrors.length > 0 ? validationErrors.join(" ") : null,
@@ -239,8 +256,13 @@ export function FormFileUpload({
 
     if (isRealMode) {
       const queue = multiple ? arr : arr.slice(0, 1);
+      // Same size/type policy as deferred mode — oversized files must not
+      // reach the server just because the entity already exists.
+      const { accepted, errors } = validateFiles(queue);
+      if (errors.length > 0) onUploadError?.(errors.join(" "));
+      if (accepted.length === 0) return;
       if (!multiple) setUploads([]);
-      void startUploads(queue);
+      enqueueUploads(accepted);
       return;
     }
 

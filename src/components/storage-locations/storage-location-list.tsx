@@ -538,7 +538,9 @@ export function StorageLocationList() {
                     },
                     { label: "Bin Name", value: sideSheet.entity.name },
                     {
-                      label: "Capacity (kg)",
+                      // formatMass switches to tonnes at 1,000 kg — a unit
+                      // suffix in the label would contradict the value.
+                      label: "Capacity",
                       value: sideSheet.entity.capacityKg != null
                         ? formatMass(sideSheet.entity.capacityKg)
                         : null,

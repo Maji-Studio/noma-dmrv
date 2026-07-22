@@ -21,6 +21,7 @@ import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { InfoHint } from "@/components/ui/tooltip";
 import {
+  isAcceptedTransportEvidenceDocument,
   deriveTransportEvidenceCertStatus,
   isTransportEvidenceDocumentType,
   TRANSPORT_EVIDENCE_DOCUMENT_LABELS,
@@ -75,9 +76,7 @@ export function TransportEvidenceDocuments({
   };
 
   const uploadedDocs = (docs ?? []).filter(
-    (document) =>
-      document.uploadStatus === "uploaded" &&
-      isTransportEvidenceDocumentType(document.documentType),
+    isAcceptedTransportEvidenceDocument,
   );
 
   return (
@@ -198,9 +197,7 @@ export function TransportEvidencePanel({
 }: TransportEvidencePanelProps) {
   const { data: documents } = useDocumentsForEntity(entityType, entityId);
   const acceptedDocumentCount = documents?.filter(
-    (document) =>
-      document.uploadStatus === "uploaded" &&
-      isTransportEvidenceDocumentType(document.documentType),
+    isAcceptedTransportEvidenceDocument,
   ).length;
   const evidenceStatus = deriveTransportEvidenceCertStatus({
     persisted,

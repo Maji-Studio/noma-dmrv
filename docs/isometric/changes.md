@@ -25,8 +25,9 @@ Readiness is composite and reflects saved state: the effective distance source
 must be `document` and at least one accepted transport-evidence document must
 exist. Either fact alone remains incomplete. Persisted complete fields stay
 green in view and edit modes; incomplete evidence is orange and dashboard
-attention links focus the actionable transport section. Migration 0084 adds
-`other_transport_evidence` to `documentation_type`.
+attention links focus the actionable transport section. Migration 0087 adds
+`other_transport_evidence` to `documentation_type` (renumbered from 0084
+during the staging sync).
 
 This is an operator-readiness and evidence-classification change. It does not
 change Isometric payload mappings or make a new protocol claim.

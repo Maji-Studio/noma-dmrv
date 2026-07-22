@@ -234,11 +234,19 @@ export function BiocharProductList() {
   };
 
   const handleUpdate = async (data: BiocharProductFormData) => {
-    if (sideSheet?.mode !== "edit") return;
+    // Deep-linked edits render via `displaySideSheet` while `sideSheet` state
+    // is still null — resolving the target here keeps dashboard edit links
+    // saveable, not just list-opened sheets.
+    const editing =
+      displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
+    if (!editing) return;
     setFormError(null);
     try {
-      await updateProduct.mutateAsync({ productId: sideSheet.entity.id, ...data });
+      await updateProduct.mutateAsync({ productId: editing.id, ...data });
       setSideSheet(null);
+      setFocusedProductId(null);
+      setDeepLinkMode(null);
+      setDeepLinkFocus(null);
       toast.success("Biochar product updated successfully");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to update biochar product");

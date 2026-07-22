@@ -37,6 +37,17 @@ export function isTransportEvidenceDocumentType(
   );
 }
 
+/** The one place that defines an "accepted" transport-evidence document row. */
+export function isAcceptedTransportEvidenceDocument(document: {
+  uploadStatus: string;
+  documentType: string;
+}): boolean {
+  return (
+    document.uploadStatus === "uploaded" &&
+    isTransportEvidenceDocumentType(document.documentType)
+  );
+}
+
 export function hasAcceptedTransportEvidence(
   acceptedDocumentCount: number | null | undefined,
 ): boolean {

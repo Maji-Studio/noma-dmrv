@@ -79,11 +79,14 @@ interface TransportGapRow {
 }
 
 function deliveryHasDocumentProvenance() {
+  // Middle branch: a trip-specific override whose source isn't `document`
+  // (first branch already matched that) is NOT document-backed — it must not
+  // fall through to the inherited customer-location source below.
   return sql`case
     when ${deliveries.distanceSource} = ${DOCUMENT_BACKED_DISTANCE_SOURCE}
       then true
     when ${deliveries.distanceKmOverride} is not null
-      then coalesce(${deliveries.distanceSource}, 'manual') = ${DOCUMENT_BACKED_DISTANCE_SOURCE}
+      then false
     else ${customerLocations.distanceSource} = ${DOCUMENT_BACKED_DISTANCE_SOURCE}
   end`;
 }
