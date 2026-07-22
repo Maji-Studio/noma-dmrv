@@ -24,7 +24,6 @@ import {
 import {
   computeClampedDryMass,
   deriveMassDryKg,
-  dryOutputExceedsDryInput,
 } from "@/lib/calculations/mass-dry";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "../utils";
@@ -59,8 +58,10 @@ import { retireDocumentsForEntities } from "../documents";
 
 const END_AFTER_START_CONSTRAINT = "production_runs_end_after_start";
 const END_AFTER_START_MESSAGE = "End time must be after the start time";
-const DRY_MASS_BALANCE_MESSAGE =
-  "Dry biochar output cannot exceed dry feedstock input";
+const PREFLIGHT_OUTCOME_VIOLATIONS = [
+  "end-not-after-start",
+  "dry-mass-balance-exceeded",
+] as const;
 
 export class ProductionRunDependencyError extends SafeError {
   readonly conflict: { entity: string; id: string; code: string };
@@ -72,24 +73,6 @@ export class ProductionRunDependencyError extends SafeError {
     super(message);
     this.name = "ProductionRunDependencyError";
     this.conflict = conflict;
-  }
-}
-
-function assertDryMassBalance(input: Parameters<typeof dryOutputExceedsDryInput>[0]): void {
-  if (dryOutputExceedsDryInput(input)) {
-    throw new SafeError(DRY_MASS_BALANCE_MESSAGE);
-  }
-}
-
-/**
- * Reject a time window that is malformed or inconsistent with the run's status.
- * Re-checks, in data-access, the rules the form schema enforces client-side
- * (issue #259): an end time must be after the start, and a Complete run needs an
- * end time.
- */
-function assertRunWindowConsistent(startTime: Date, endTime: Date | null): void {
-  if (endTime && endTime.getTime() <= startTime.getTime()) {
-    throw new SafeError("End time must be after the start time");
   }
 }
 
@@ -239,7 +222,24 @@ export async function createProductionRun(
 
   const status = data.status ?? "draft";
   assertProductionRunTransition("draft", status);
-  assertRunWindowConsistent(data.startTime, data.endTime);
+  assertProductionRunOutcome(
+    {
+      status,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      endTimePresent: data.endTime !== null,
+      cancellationReason: data.cancellationReason,
+      biocharOutputKg: data.biocharOutputKg,
+      biocharMoisturePercent: data.biocharMoisturePercent,
+      feedstockWetMassKg: data.feedstockWetMassKg,
+      feedstockMoisturePercent: data.feedstockMoisturePercent,
+      feedstock: {
+        basis: "form-inputs",
+        storageLocationId: data.feedstockStorageLocationId,
+      },
+    },
+    { only: PREFLIGHT_OUTCOME_VIOLATIONS },
+  );
 
   // Compute dry mass from wet mass + moisture
   const computedDryMass =
@@ -249,7 +249,6 @@ export async function createProductionRun(
 
   // Compute biochar dry mass from wet output + moisture, clamped to wet mass
   const biocharDryMass = computeClampedDryMass(data.biocharOutputKg, data.biocharMoisturePercent);
-  assertDryMassBalance(data);
 
   // Create production run + M:M allocation in a transaction
   let run: typeof productionRuns.$inferSelect;
@@ -334,8 +333,12 @@ export async function createProductionRun(
       status,
       startTime: data.startTime,
       endTime: data.endTime,
-      consumedFeedstockKg,
+      endTimePresent: data.endTime !== null,
       biocharOutputKg: data.biocharOutputKg ?? null,
+      biocharMoisturePercent: data.biocharMoisturePercent,
+      feedstockWetMassKg: data.feedstockWetMassKg,
+      feedstockMoisturePercent: data.feedstockMoisturePercent,
+      feedstock: { basis: "consumed-mass", consumedFeedstockKg },
       cancellationReason: data.cancellationReason ?? null,
     });
 
@@ -434,12 +437,16 @@ export async function updateProductionRun(
     }
   }
 
-  // Resolve the effective time window (merging unchanged fields) so the window
-  // and overlap guards see the run as it will be after this edit.
+  // Preserve the original pre-transaction ordering for window and dry-mass
+  // errors while routing both rules through the lifecycle decision function.
   const effectiveStartTime = data.startTime ?? existing.startTime;
   const effectiveEndTime =
     data.endTime !== undefined ? data.endTime : existing.endTime;
-  assertRunWindowConsistent(effectiveStartTime, effectiveEndTime);
+  const effectiveStatus = data.status ?? existing.status;
+  const effectiveFeedstockStorageId =
+    data.feedstockStorageLocationId !== undefined
+      ? data.feedstockStorageLocationId
+      : existing.feedstockStorageLocationId;
 
   // Update production run + M:M re-allocation in a transaction
   const updateData: Record<string, unknown> = {
@@ -464,12 +471,27 @@ export async function updateProductionRun(
   const effectiveMoisture = data.feedstockMoisturePercent !== undefined ? data.feedstockMoisturePercent : existing.feedstockMoisturePercent;
   const effectiveBiocharWet = data.biocharOutputKg !== undefined ? data.biocharOutputKg : existing.biocharOutputKg;
   const effectiveBiocharMoisture = data.biocharMoisturePercent !== undefined ? data.biocharMoisturePercent : existing.biocharMoisturePercent;
-  assertDryMassBalance({
-    feedstockWetMassKg: effectiveWetMass,
-    feedstockMoisturePercent: effectiveMoisture,
-    biocharOutputKg: effectiveBiocharWet,
-    biocharMoisturePercent: effectiveBiocharMoisture,
-  });
+  assertProductionRunOutcome(
+    {
+      status: effectiveStatus,
+      startTime: effectiveStartTime,
+      endTime: effectiveEndTime,
+      endTimePresent: effectiveEndTime !== null,
+      cancellationReason:
+        data.cancellationReason !== undefined
+          ? data.cancellationReason
+          : existing.cancellationReason,
+      biocharOutputKg: effectiveBiocharWet,
+      biocharMoisturePercent: effectiveBiocharMoisture,
+      feedstockWetMassKg: effectiveWetMass,
+      feedstockMoisturePercent: effectiveMoisture,
+      feedstock: {
+        basis: "form-inputs",
+        storageLocationId: effectiveFeedstockStorageId,
+      },
+    },
+    { only: PREFLIGHT_OUTCOME_VIOLATIONS },
+  );
   if (data.feedstockWetMassKg !== undefined || data.feedstockMoisturePercent !== undefined) {
     updateData.feedstockMassDryKg =
       effectiveWetMass != null && effectiveMoisture != null
@@ -544,26 +566,36 @@ export async function updateProductionRun(
         : locked.cancellationReason;
 
     assertProductionRunTransition(locked.status, lockedTargetStatus);
-    assertRunWindowConsistent(lockedTargetStartTime, lockedTargetEndTime);
-    // Re-assert on the LOCKED row: the pre-transaction check ran against a
-    // snapshot, so two concurrent partial updates (one lowering input, one
-    // raising output) could each pass individually yet serialize into an
-    // output-above-input row without this.
-    assertDryMassBalance({
-      feedstockWetMassKg:
-        data.feedstockWetMassKg !== undefined
-          ? data.feedstockWetMassKg
-          : locked.feedstockWetMassKg,
-      feedstockMoisturePercent:
-        data.feedstockMoisturePercent !== undefined
-          ? data.feedstockMoisturePercent
-          : locked.feedstockMoisturePercent,
-      biocharOutputKg: lockedTargetBiocharOutput,
-      biocharMoisturePercent:
-        data.biocharMoisturePercent !== undefined
-          ? data.biocharMoisturePercent
-          : locked.biocharMoisturePercent,
-    });
+    assertProductionRunOutcome(
+      {
+        status: lockedTargetStatus,
+        startTime: lockedTargetStartTime,
+        endTime: lockedTargetEndTime,
+        endTimePresent: lockedTargetEndTime !== null,
+        cancellationReason: lockedTargetCancellationReason,
+        biocharOutputKg: lockedTargetBiocharOutput,
+        biocharMoisturePercent:
+          data.biocharMoisturePercent !== undefined
+            ? data.biocharMoisturePercent
+            : locked.biocharMoisturePercent,
+        feedstockWetMassKg:
+          data.feedstockWetMassKg !== undefined
+            ? data.feedstockWetMassKg
+            : locked.feedstockWetMassKg,
+        feedstockMoisturePercent:
+          data.feedstockMoisturePercent !== undefined
+            ? data.feedstockMoisturePercent
+            : locked.feedstockMoisturePercent,
+        feedstock: {
+          basis: "form-inputs",
+          storageLocationId:
+            data.feedstockStorageLocationId !== undefined
+              ? data.feedstockStorageLocationId
+              : locked.feedstockStorageLocationId,
+        },
+      },
+      { only: PREFLIGHT_OUTCOME_VIOLATIONS },
+    );
 
     if (lockedTargetStatus !== locked.status && lockedTargetStatus !== "complete") {
       const [linkedProduct] = await tx
@@ -730,8 +762,24 @@ export async function updateProductionRun(
       status: lockedTargetStatus,
       startTime: lockedTargetStartTime,
       endTime: lockedTargetEndTime,
-      consumedFeedstockKg: Number(consumption?.total ?? 0),
+      endTimePresent: lockedTargetEndTime !== null,
       biocharOutputKg: lockedTargetBiocharOutput,
+      biocharMoisturePercent:
+        data.biocharMoisturePercent !== undefined
+          ? data.biocharMoisturePercent
+          : locked.biocharMoisturePercent,
+      feedstockWetMassKg:
+        data.feedstockWetMassKg !== undefined
+          ? data.feedstockWetMassKg
+          : locked.feedstockWetMassKg,
+      feedstockMoisturePercent:
+        data.feedstockMoisturePercent !== undefined
+          ? data.feedstockMoisturePercent
+          : locked.feedstockMoisturePercent,
+      feedstock: {
+        basis: "consumed-mass",
+        consumedFeedstockKg: Number(consumption?.total ?? 0),
+      },
       cancellationReason: lockedTargetCancellationReason,
     });
       }),
