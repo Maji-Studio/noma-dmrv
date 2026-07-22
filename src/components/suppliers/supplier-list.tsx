@@ -29,6 +29,7 @@ import type { SupplierFormData } from "@/schemas/suppliers";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
 import { resolveSupplierLocationText } from "@/lib/supplier-location-display";
 import { buildPartyLocationDetailFields } from "@/components/party-location-detail-fields";
+import { buildSupplierFallbackDistanceField } from "./supplier-detail-fields";
 
 // ============================================
 // Column Definitions
@@ -320,6 +321,9 @@ export function SupplierList() {
               { label: "Location", value: sideSheetEntity.location },
               { label: "Source Region", value: sideSheetEntity.sourceRegion },
               { label: "Address", value: sideSheetEntity.address },
+              buildSupplierFallbackDistanceField(
+                sideSheetEntity.distanceToFacilityKm,
+              ),
             ],
           },
         ] : undefined}
