@@ -27,7 +27,6 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { SupplierForm, type PendingSupplierLocation } from "./supplier-form";
 import type { SupplierFormData } from "@/schemas/suppliers";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
-import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { resolveSupplierLocationText } from "@/lib/supplier-location-display";
 import { buildPartyLocationDetailFields } from "@/components/party-location-detail-fields";
 
@@ -322,24 +321,6 @@ export function SupplierList() {
               { label: "Source Region", value: sideSheetEntity.sourceRegion },
               { label: "Address", value: sideSheetEntity.address },
             ],
-          },
-          {
-            title: "Legacy Route Metadata",
-            fields: [
-              {
-                label: "Location display",
-                value: resolveSupplierLocationText(sideSheetEntity.location, sideSheetEntity.defaultLocationDisplay),
-              },
-              {
-                label: "Distance to Facility",
-                ...certificationDetailField("supplier", "distanceToFacilityKm"),
-                value: sideSheetEntity.distanceToFacilityKm != null ? `${sideSheetEntity.distanceToFacilityKm} km` : null,
-              },
-            ],
-          },
-          {
-            title: "Record Metadata",
-            fields: [{ label: "Code", value: sideSheetEntity.code }],
           },
         ] : undefined}
       >

@@ -616,29 +616,6 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             ),
           },
           {
-            title: "Record Metadata",
-            fields: [
-              { label: "Code", value: sideSheetEntity.code },
-              { label: "Facility", value: sideSheetEntity.facilityName },
-              { label: "Supplier Code", value: sideSheetEntity.supplierCode },
-              { label: "Feedstock Category", value: sideSheetEntity.feedstockTypeCategory ? <span className="capitalize">{sideSheetEntity.feedstockTypeCategory}</span> : null },
-              { label: "Status", value: <span className="capitalize">{sideSheetEntity.status.replace("_", " ")}</span> },
-              {
-                label: "Certification",
-                value: (
-                  <EntityCertifyReadinessBadge
-                    readiness={deriveEntityCertifyReadiness(
-                      "feedstock",
-                      sideSheetEntity,
-                    )}
-                    readyLabel="Fields complete"
-                    readinessNoun="feedstock fields"
-                  />
-                ),
-              },
-            ],
-          },
-          {
             title: "Derived Transport",
             fields: [],
             content: <TransportLegsSummary entityType="feedstock" entityId={sideSheetEntity.id} />,

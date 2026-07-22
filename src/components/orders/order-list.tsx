@@ -384,10 +384,8 @@ export function OrderList() {
                   ],
                 },
                 {
-                  title: "Fulfillment & Metadata",
+                  title: "Fulfillment",
                   fields: [
-                    { label: "Code", value: sideSheetEntity.code },
-                    { label: "Facility", value: sideSheetEntity.facilityName },
                     {
                       label: "Fulfillment",
                       value: (

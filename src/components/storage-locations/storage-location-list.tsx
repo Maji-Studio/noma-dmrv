@@ -561,30 +561,21 @@ export function StorageLocationList() {
                 {
                   title: "Inventory",
                   fields: buildStorageDetailFields(sideSheet.entity),
-                },
-                {
-                  title: "Record Metadata",
-                  fields: [
-                    { label: "Code", value: sideSheet.entity.code },
-                    { label: "Facility", value: sideSheet.entity.facilityName },
-                  ],
+                  content: (
+                    <div className="flex flex-col gap-16">
+                      <Button
+                        variant="default"
+                        onClick={() => openReconcile(sideSheet.entity)}
+                      >
+                        <ArrowsClockwiseIcon size={18} weight="bold" />
+                        Reconcile stock
+                      </Button>
+                      <BinMovementHistory storageLocationId={sideSheet.entity.id} />
+                    </div>
+                  ),
                 },
               ]
             : undefined
-        }
-        viewModeChildren={
-          sideSheet?.mode === "view" && sideSheet.entity ? (
-            <div className="flex flex-col gap-16">
-              <Button
-                variant="default"
-                onClick={() => openReconcile(sideSheet.entity)}
-              >
-                <ArrowsClockwiseIcon size={18} weight="bold" />
-                Reconcile stock
-              </Button>
-              <BinMovementHistory storageLocationId={sideSheet.entity.id} />
-            </div>
-          ) : undefined
         }
       >
         {formError && (

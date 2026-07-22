@@ -16,9 +16,7 @@ import * as React from "react";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
 import {
-  DetailSection,
-  DetailRow,
-  DetailField,
+  DetailSpine,
   type DetailPanelSection,
 } from "@/components/ui/detail-panel";
 
@@ -85,19 +83,6 @@ interface EntitySideSheetProps {
   children: React.ReactNode;
   /** Panel width */
   size?: "default" | "narrow" | "wide" | "full";
-}
-
-/* -------------------------------------------------------------------------------------------------
- * Helpers
- * -----------------------------------------------------------------------------------------------*/
-
-/** Chunk an array of fields into rows of 2 */
-function chunkFields<T>(fields: T[]): T[][] {
-  const rows: T[][] = [];
-  for (let i = 0; i < fields.length; i += 2) {
-    rows.push(fields.slice(i, i + 2));
-  }
-  return rows;
 }
 
 /* -------------------------------------------------------------------------------------------------
@@ -178,28 +163,7 @@ function EntitySideSheet({
         >
           {isViewMode ? (
             <>
-              {sections?.map((section, sectionIdx) => (
-                <DetailSection
-                  key={section.title}
-                  title={section.title}
-                  divider={sectionIdx > 0}
-                >
-                  {chunkFields(section.fields).map((row, rowIdx) => (
-                    <DetailRow key={rowIdx}>
-                      {row.map((field) => (
-                        <DetailField
-                          key={field.label}
-                          label={field.label}
-                          value={field.value}
-                          certifyRequired={field.certifyRequired}
-                          certifyStatus={field.certifyStatus}
-                        />
-                      ))}
-                    </DetailRow>
-                  ))}
-                  {section.content}
-                </DetailSection>
-              ))}
+              {sections && <DetailSpine sections={sections} numbered />}
               {viewModeChildren}
             </>
           ) : (

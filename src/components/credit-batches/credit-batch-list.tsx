@@ -334,13 +334,6 @@ export function CreditBatchList() {
             { label: "Registry", value: sideSheetEntity.registry },
             { label: "Weight", value: sideSheetEntity.appliedWeightTons != null ? `${sideSheetEntity.appliedWeightTons.toFixed(2)} t` : null },
             { label: "Value", value: sideSheetEntity.value != null ? `${sideSheetEntity.value}${sideSheetEntity.currency ? ` ${sideSheetEntity.currency}` : ""}` : null },
-          ],
-        },
-        {
-          title: "Record Metadata & Metrics",
-          fields: [
-            { label: "Code", value: sideSheetEntity.code },
-            { label: "Facility", value: sideSheetEntity.facility?.name },
             { label: "Certification", value: facilityCertifierLabel },
             {
               label: "Total CO₂e stored",
@@ -365,6 +358,11 @@ export function CreditBatchList() {
               value: String(sideSheetEntity.applicationCount ?? 0),
             },
           ],
+        },
+        {
+          title: "Certification",
+          fields: [],
+          content: <CertifyPanel creditBatchId={sideSheetEntity.id} />,
         },
       ]
     : undefined;
@@ -520,11 +518,6 @@ export function CreditBatchList() {
         editLabel="Edit Credit Batch"
         size="wide"
         sections={sideSheetSections}
-        viewModeChildren={
-          sideSheetEntity && sideSheetMode === "view" ? (
-            <CertifyPanel creditBatchId={sideSheetEntity.id} />
-          ) : null
-        }
       >
         {(createError || updateError) && (
           <div className="mb-24">

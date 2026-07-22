@@ -676,17 +676,6 @@ export function ProductionRunList() {
               </div>
             ),
           },
-          {
-            title: "Record Metadata",
-            fields: [
-              { label: "Code", value: sideSheetEntity.code },
-              { label: "Facility", value: sideSheetEntity.facilityName },
-              {
-                label: "Certification",
-                value: <EntityCertifyReadinessBadge readiness={deriveEntityCertifyReadiness("productionRun", sideSheetEntity)} />,
-              },
-            ],
-          },
         ] : undefined}
       >
         {(createError || updateError) && <div className="mb-24"><ServerError message={createError || updateError || ""} /></div>}

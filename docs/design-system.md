@@ -314,9 +314,11 @@ detail pages follow `credit-batches/[id]/page.tsx` — `requireOrgContext` → u
 - Tables/panels never sit flush on the warm field — use the `--panel-*` recipe.
 - Side sheets: header title = entity code (or `Create X` in create mode — **no
   filler subtitle in create mode**); view/edit subtitle = the identifying
-  secondary. Sections use `FormSection` / `DetailSection` — see
-  [forms.md](./forms.md). The panel is `w-full` below `sm`, then locks to its
-  size token. `DetailRow` pairs stack below `sm`, side-by-side at `sm`+.
+  secondary. Edit sections use `FormSection`; read sections use `DetailSection`
+  through the shared numbered `DetailSpine`, with matching titles, order, and
+  grouping — see [forms.md](./forms.md). The panel is `w-full` below `sm`, then
+  locks to its size token. `DetailRow` pairs stack below `sm`, side-by-side at
+  `sm`+.
 
 **The one sanctioned exception is the Dashboard**: it keeps the container/gap
 shell but opens with a display headline ("Dashboard" as `title-heading-2` under

@@ -111,7 +111,7 @@ Dynamic repeatable rows use RHF `useFieldArray` — reference: `src/components/f
 
 ### FormSection
 
-The visual contract (SectionLabel + `space-y-16` fields + `pt-16` hairline divider, mirrored by `DetailSection` on read-only sheets) is owned by [design-system.md](./design-system.md). Never hand-roll a section wrapper. Caveats that live here:
+The visual contract (SectionLabel + `space-y-16` fields + `pt-16` hairline divider, mirrored by `DetailSection` on plain read-only panels) is owned by [design-system.md](./design-system.md). `EntitySideSheet` read mode renders its configured `DetailSection`s through the shared numbered `DetailSpine`, using the same passive rail chrome as `FormSpine`. Never hand-roll a section wrapper or rail. Caveats that live here:
 
 - `divider` (default `true`) — the first section of a plain form passes `divider={false}`. **`divider` is ignored entirely inside a `FormSpine`**, which owns its own rail chrome; that is why the spine example below omits it.
 - `hint` / `certifyRequired` forward to `SectionLabel`; `actions` adds right-aligned header chrome (an "Add" button, a badge).
@@ -134,6 +134,8 @@ The only CTA row — left-aligned, primary action first, sticky by default, noth
 ### FormSpine
 
 `FormSpine` is for long, process-shaped side-sheet forms where operators need orientation across several sections. It is a passive rail, not a wizard: all sections stay visible and the parent form still owns submit and validation.
+
+The read-mode `sections` passed to `EntitySideSheet` must mirror the form's section titles, order, and field grouping. Keep useful derived or read-only content inside its matching section, or in a clearly named trailing section when the form has a recap or extension. Do not add generic `Record Metadata`, `Relationships & Metadata`, or similar sections: the sheet header already owns the record identity, and non-form identifiers do not belong in the mirrored process flow.
 
 ```typescript
 <form className="space-y-20" onSubmit={handleSubmit(onSubmit)}>
