@@ -26,6 +26,7 @@ import {
 import { storageLocationKeys } from "./use-storage-locations";
 import type { MutationCallbacks } from "./types";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
+import { certificationKeys } from "./use-certification";
 
 // ============================================
 // Query Keys
@@ -139,6 +140,9 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
       });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      // Feedstock writes resync the derived transport leg (distance/provenance),
+      // an input to certification readiness.
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
       callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
@@ -163,6 +167,9 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
       });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      // Feedstock writes resync the derived transport leg (distance/provenance),
+      // an input to certification readiness.
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
       callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
@@ -185,6 +192,9 @@ export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, string>) 
       });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
       queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      // Feedstock writes resync the derived transport leg (distance/provenance),
+      // an input to certification readiness.
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
       callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
