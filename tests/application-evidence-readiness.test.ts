@@ -218,14 +218,18 @@ describe("buildApplicationEvidenceGaps", () => {
     expect(gaps).toEqual([BOUNDARY_LOGBOOK_GAP]);
   });
 
-  it("reports no gaps for applications with no evidence method selected", async () => {
+  it("treats applications with no evidence method selected as visual", async () => {
     mockedListDocuments.mockResolvedValue([]);
 
     const gaps = await buildApplicationEvidenceGaps(makeTestOrgContext(USER_ID), [
       lineage({ evidenceMethod: undefined }),
     ]);
 
-    expect(gaps).toEqual([]);
+    expect(gaps).toEqual([
+      "Application APP-1: geotagged stockpile photo",
+      "Application APP-1: geotagged spreading photo",
+      "Application APP-1: geotagged incorporation photo",
+    ]);
   });
 });
 
