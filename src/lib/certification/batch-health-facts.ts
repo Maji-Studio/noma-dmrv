@@ -75,6 +75,7 @@ export function toBatchHealthFacts(
   return {
     carbonMissingInputs: carbonMissingInputs(ctx, batchId),
     entityReadinessGaps: ctx.entityReadinessGaps ?? [],
+    entityReadinessIssues: ctx.entityReadinessIssues ?? [],
     hasSubmittableRuns: ctx.hasSubmittableRuns,
     productionReadinessGap: ctx.productionReadinessGap ?? null,
     facilitySetupComplete: isFacilitySetupComplete(ctx),

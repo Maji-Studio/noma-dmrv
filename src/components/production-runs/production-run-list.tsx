@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { parseAsString, useQueryState } from "nuqs";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
@@ -42,6 +42,7 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate } from "@/lib/format-utils";
 import { formatLocalTime } from "@/lib/date-utils";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
@@ -173,6 +174,24 @@ export function ProductionRunList() {
     "run",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
+  const [affectedRunIdsParam, setAffectedRunIdsParam] = useQueryState(
+    "ids",
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const affectedRunFilter = parseExactIdFilter(affectedRunIdsParam);
+  const affectedRunIds = affectedRunFilter.ids;
+  useEffect(() => {
+    if (
+      affectedRunIdsParam &&
+      affectedRunFilter.normalized !== affectedRunIdsParam
+    ) {
+      void setAffectedRunIdsParam(affectedRunFilter.normalized);
+    }
+  }, [
+    affectedRunFilter.normalized,
+    affectedRunIdsParam,
+    setAffectedRunIdsParam,
+  ]);
   const handledInvalidRunIdRef = useRef<string | null>(null);
 
   // Filter state
@@ -191,18 +210,16 @@ export function ProductionRunList() {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const filters: Partial<ProductionRunFilterData> = useMemo(
-    () => ({
-      search: searchQuery || undefined,
-      facilityId: facilityId || undefined,
-      status: (statusFilter as ProductionRunStatus) || undefined,
-      page: currentPage,
-      pageSize,
-      sortBy: "date",
-      sortOrder: "desc",
-    }),
-    [searchQuery, facilityId, statusFilter, currentPage, pageSize]
-  );
+  const filters: Partial<ProductionRunFilterData> = {
+    ids: affectedRunIds.length > 0 ? affectedRunIds : undefined,
+    search: searchQuery || undefined,
+    facilityId: facilityId || undefined,
+    status: (statusFilter as ProductionRunStatus) || undefined,
+    page: currentPage,
+    pageSize,
+    sortBy: "date",
+    sortOrder: "desc",
+  };
 
   const { data: runsData, isLoading, error: fetchError } = useProductionRuns(filters, {
     enabled: !!facilityId,
@@ -381,8 +398,13 @@ export function ProductionRunList() {
   };
   useOpenCreateIntent(openCreate);
 
-  const clearFilters = () => { setSearchQuery(""); setStatusFilter(""); setCurrentPage(1); };
-  const hasActiveFilters = searchQuery || statusFilter;
+  const clearFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("");
+    setAffectedRunIdsParam(null);
+    setCurrentPage(1);
+  };
+  const hasActiveFilters = searchQuery || statusFilter || affectedRunIds.length > 0;
 
   const columns = createColumns(openEdit, handleDelete);
 
@@ -533,6 +555,11 @@ export function ProductionRunList() {
         }
       >
         <DataTable.Toolbar>
+          {affectedRunIds.length > 0 && (
+            <span className="inline-flex h-32 items-center border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-10 body-caption font-medium text-[var(--st-wait)]">
+              {affectedRunIds.length} affected production {affectedRunIds.length === 1 ? "run" : "runs"}
+            </span>
+          )}
           <div className="relative max-w-[320px] flex-1">
             <MagnifyingGlassIcon size={18} className="absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none" />
             <input

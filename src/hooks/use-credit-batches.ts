@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   getCreditBatchesFn,
   getCreditBatchByIdFn,
@@ -12,10 +17,20 @@ import type {
   CreditBatchFormData,
   UpdateCreditBatchData,
 } from "@/schemas/credit-batches";
+import type { CreditBatchCo2eStoredPreview } from "@/data-access/credit-batches";
 
 // Credit-batch data changes infrequently within a session; 30s keeps the UI
 // fresh without re-fetching on every mount.
 const CREDIT_BATCH_STALE_TIME_MS = 30_000;
+const CREDIT_BATCH_PREVIEW_CHUNK_SIZE = 50;
+
+function chunkIds(ids: string[], size: number): string[][] {
+  const chunks: string[][] = [];
+  for (let index = 0; index < ids.length; index += size) {
+    chunks.push(ids.slice(index, index + size));
+  }
+  return chunks;
+}
 
 /**
  * Query key factory for credit batches
@@ -90,19 +105,27 @@ export function useCreditBatch(id: string) {
 
 export function useCreditBatchCo2eStoredPreviews(batchIds: string[]) {
   const sortedIds = [...batchIds].sort();
-
-  return useQuery({
-    queryKey: creditBatchKeys.previews(sortedIds),
-    queryFn: async () => {
-      const result = await getCo2eStoredPreviewsFn(sortedIds);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: sortedIds.length > 0,
-    staleTime: CREDIT_BATCH_STALE_TIME_MS,
+  const chunks = chunkIds(sortedIds, CREDIT_BATCH_PREVIEW_CHUNK_SIZE);
+  const results = useQueries({
+    queries: chunks.map((ids) => ({
+      queryKey: creditBatchKeys.previews(ids),
+      queryFn: async () => {
+        const result = await getCo2eStoredPreviewsFn(ids);
+        if (!result.success) throw new Error(result.error);
+        return result.data;
+      },
+      staleTime: CREDIT_BATCH_STALE_TIME_MS,
+    })),
   });
+
+  return {
+    data: results.reduce<Record<string, CreditBatchCo2eStoredPreview>>(
+      (previews, result) => Object.assign(previews, result.data ?? {}),
+      {},
+    ),
+    isLoading: results.some((result) => result.isLoading),
+    error: results.find((result) => result.error)?.error ?? null,
+  };
 }
 
 export function useCreditBatchProductionRunOptions(params: {

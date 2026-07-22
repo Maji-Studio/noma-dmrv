@@ -112,6 +112,75 @@ describe("deriveBatchHealth", () => {
     expect(entity.detail).toContain("Electricity reading");
   });
 
+  it("counts one actionable issue per resolution destination", () => {
+    const result = deriveBatchHealth(
+      facts({
+        entityReadinessGaps: [
+          "Production run PR-1: Electricity reading",
+          "Production run PR-2: Meter evidence",
+          "Sample S-1: Lab report",
+        ],
+        entityReadinessIssues: [
+          {
+            key: "production-runs",
+            label: "Production-run evidence",
+            fixTarget: "productionRuns",
+            affectedRecords: [
+              { id: "run-1", code: "PR-1", missing: ["Electricity reading"] },
+              { id: "run-2", code: "PR-2", missing: ["Meter evidence"] },
+            ],
+          },
+          {
+            key: "lab-samples",
+            label: "Lab-sample evidence",
+            fixTarget: "labSamples",
+            affectedRecords: [
+              { id: "sample-1", code: "S-1", missing: ["Lab report"] },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const issues = result.checks.filter(
+      (check) => check.key === "entityReadiness" && check.status === "unmet",
+    );
+    expect(result.issueCount).toBe(2);
+    expect(issues.map((issue) => issue.fixTarget)).toEqual([
+      "productionRuns",
+      "labSamples",
+    ]);
+    expect(issues[0]?.affectedRecords?.map((record) => record.code)).toEqual([
+      "PR-1",
+      "PR-2",
+    ]);
+  });
+
+  it("merges overlapping carbon and sample gaps into one lab action", () => {
+    const result = deriveBatchHealth(
+      facts({
+        carbonMissingInputs: ["Organic carbon content"],
+        entityReadinessGaps: ["Sample S-1: Organic carbon"],
+        entityReadinessIssues: [
+          {
+            key: "lab-samples",
+            label: "Lab-sample evidence",
+            fixTarget: "labSamples",
+            affectedRecords: [
+              { id: "sample-1", code: "S-1", missing: ["Organic carbon"] },
+            ],
+          },
+        ],
+      }),
+    );
+
+    const open = result.checks.filter((check) => check.status === "unmet");
+    expect(result.issueCount).toBe(1);
+    expect(open).toHaveLength(1);
+    expect(open[0]?.fixTarget).toBe("labSamples");
+    expect(open[0]?.affectedRecords?.[0]?.code).toBe("S-1");
+  });
+
   it("flags a missing transport category by name", () => {
     const result = deriveBatchHealth(
       facts({

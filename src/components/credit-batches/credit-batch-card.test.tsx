@@ -36,7 +36,6 @@ describe("CreditBatchCard", () => {
     const onDelete = vi.fn();
     const view = CreditBatchCard({
       creditBatch,
-      certifierLabel: null,
       onView,
       onEdit,
       onDelete,

@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   getApplicationsFn,
   getApplicationByIdFn,
@@ -9,6 +14,8 @@ import {
 } from "@/fn/applications";
 import { creditBatchKeys } from "@/hooks/use-credit-batches";
 import type { ApplicationFormData, UpdateApplicationData } from "@/schemas/applications";
+
+const EXACT_ID_CHUNK_SIZE = 100;
 
 /**
  * Query key factory for applications
@@ -28,21 +35,49 @@ export const applicationKeys = {
  * Query hook for fetching applications with pagination
  */
 export function useApplications(
-  options?: { page?: number; pageSize?: number; facilityId?: string },
+  options?: { page?: number; pageSize?: number; facilityId?: string; ids?: string[] },
   queryOptions?: { enabled?: boolean },
 ) {
-  return useQuery({
-    queryKey: applicationKeys.list(options),
-    queryFn: async () => {
-      const result = await getApplicationsFn(options);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    staleTime: 30000, // 30 seconds
-    enabled: queryOptions?.enabled,
+  const exactIds = options?.ids ?? [];
+  const requests = exactIds.length > 0
+    ? Array.from(
+        { length: Math.ceil(exactIds.length / EXACT_ID_CHUNK_SIZE) },
+        (_, index) => {
+          const ids = exactIds.slice(
+            index * EXACT_ID_CHUNK_SIZE,
+            (index + 1) * EXACT_ID_CHUNK_SIZE,
+          );
+          return { ...options, ids, page: 1, pageSize: ids.length };
+        },
+      )
+    : [options];
+  const results = useQueries({
+    queries: requests.map((request) => ({
+      queryKey: applicationKeys.list(request),
+      queryFn: async () => {
+        const result = await getApplicationsFn(request);
+        if (!result.success) throw new Error(result.error);
+        return result.data;
+      },
+      staleTime: 30000,
+      enabled: queryOptions?.enabled,
+    })),
   });
+
+  const items = results.flatMap((result) => result.data?.items ?? []);
+  return {
+    data: exactIds.length > 0
+      ? {
+          items,
+          total: items.length,
+          page: 1,
+          pageSize: Math.max(items.length, 1),
+          totalPages: items.length > 0 ? 1 : 0,
+        }
+      : results[0]?.data,
+    isLoading: results.some((result) => result.isLoading),
+    error: results.find((result) => result.error)?.error ?? null,
+  };
 }
 
 export function useApplicationDeliveryOptions(

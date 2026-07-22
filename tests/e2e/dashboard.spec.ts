@@ -266,7 +266,7 @@ test.describe("Dashboard (Flow Hero)", () => {
 });
 
 test.describe("Credit batch detail (Phase 5)", () => {
-  test("header KPI row, checklist strip, and read-only details with edit sheet", async ({
+  test("compact overview, readiness panels, and edit sheet", async ({
     adminPage,
     seededData,
   }) => {
@@ -278,21 +278,27 @@ test.describe("Credit batch detail (Phase 5)", () => {
     const page = adminPage;
     await page.goto(`/credit-batches/${batch.id}`);
 
-    // Detail header: code as title, status badge alongside
+    // Detail header: code and period, without repeating the facility name.
     await expect(page.getByRole("heading", { name: batch.code })).toBeVisible();
+    await expect(
+      page.locator(".container-max").getByText(seededData.facility.name),
+    ).toHaveCount(0);
 
-    // KPI row: CO₂e stored · lab samples toward the ≥3 minimum · runs
-    const kpis = page.getByTestId("batch-kpis");
-    await expect(kpis.getByText("CO₂e stored")).toBeVisible();
-    await expect(kpis.getByText("Lab samples")).toBeVisible();
-    await expect(kpis.getByText("Production runs")).toBeVisible();
+    // Compact overview keeps operational cohort fields at the top.
+    const details = page.locator("#batch-details");
+    await expect(details.getByText("Feedstock", { exact: true })).toBeVisible();
+    await expect(details.getByText("CO₂e stored", { exact: true })).toBeVisible();
+    await expect(details.getByText("Durability", { exact: true })).toBeVisible();
+    await expect(details.getByText("Production runs", { exact: true })).toBeVisible();
 
-    // Certification checklist strip
+    // Readiness and lab samples are the two primary panels below the overview.
     await expect(page.getByTestId("batch-health-strip")).toBeVisible();
-    await expect(page.getByText("Certification checklist")).toBeVisible();
+    await expect(page.getByText("Certification readiness")).toBeVisible();
+    await expect(page.getByText("Lab samples", { exact: true })).toBeVisible();
 
-    // Read-only details card — the edit form (date inputs) is not mounted
-    await expect(page.getByText("Registry & accounting")).toBeVisible();
+    // Registry/accounting fields are deliberately absent; the form mounts only
+    // after the one page-level edit action is used.
+    await expect(page.getByText("Registry & accounting")).toHaveCount(0);
     await expect(page.locator("#startDate")).toHaveCount(0);
 
     // Header edit opens the side-sheet form; cancel closes it again
