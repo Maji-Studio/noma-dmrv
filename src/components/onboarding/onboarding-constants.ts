@@ -138,7 +138,12 @@ const ROUTE_SEGMENT: Record<
   credit: "credit-batches",
 };
 
-/** Session-scoped: a wizard dismiss suppresses auto-open until the tab closes. */
+/**
+ * Prefix only — `useOnboardingGate` appends `:<sessionId>:<organizationId>` so
+ * a dismiss never outlives the login session or leaks across organizations in
+ * the same tab. Suppresses auto-open until the tab closes or the user logs in
+ * again, whichever comes first.
+ */
 export const ONBOARDING_WIZARD_DISMISSED_KEY =
   "noma:onboarding-wizard-dismissed";
 

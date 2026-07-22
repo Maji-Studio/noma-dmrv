@@ -13,7 +13,9 @@ test.describe("Isometric credentials self-service", () => {
   }) => {
     // The shared dev org may already hold REAL sandbox credentials. Snapshot
     // the row and restore it afterwards so the test never destroys local state,
-    // and tolerate either starting state (configured or not).
+    // and remove it BEFORE the page loads so no page in this test ever calls
+    // Isometric with real credentials (the mapping section fetches the project
+    // catalog on load and again when credentials change).
     const { db, pool } = createDbConnection();
     const whereOrg = and(
       eq(certifierCredentials.organizationId, DEC_ORG_ID),
@@ -26,6 +28,9 @@ test.describe("Isometric credentials self-service", () => {
       .limit(1);
 
     try {
+      if (original) {
+        await db.delete(certifierCredentials).where(whereOrg);
+      }
       await page.goto(
         `/certification/settings?facility=${seededData.facility.id}`,
       );
@@ -52,9 +57,11 @@ test.describe("Isometric credentials self-service", () => {
       await expect(
         credentialsSection.getByText("Access token …4321"),
       ).toBeVisible();
-      await expect(
-        page.getByRole("button", { name: "Link Isometric project" }),
-      ).toBeVisible();
+      // No assertion on the project picker here: setting credentials refetches
+      // the mapping payload, which calls the real Isometric API — with these
+      // fake credentials that read fails, and asserting on its outcome would
+      // make the test network-dependent. The credentials-then-link flow is
+      // covered by the @live specs.
 
       await credentialsSection.getByRole("button", { name: "Remove" }).click();
       const removeDialog = page.getByRole("dialog", {

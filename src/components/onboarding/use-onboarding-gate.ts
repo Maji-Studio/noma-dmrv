@@ -7,13 +7,14 @@
  * Roles: Owner/Admin drive setup and see the wizard + guide; a plain Member in
  * a half-provisioned facility sees a calm "setup in progress" state instead.
  * The wizard auto-opens only for an Owner/Admin whose org has zero facilities,
- * and a dismiss suppresses re-open for the browser session (it re-opens next
- * session until a facility exists).
+ * and a dismiss suppresses re-open for the current login session in the
+ * current org (it re-opens on the next login until a facility exists).
  */
 "use client";
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { authClient } from "@/lib/auth/client";
 import { onboardingKeys, useOnboardingStatus } from "@/hooks/use-onboarding";
 import type { OnboardingStatus } from "@/data-access/onboarding";
 import {
@@ -89,8 +90,23 @@ function writeBooleanFlag(
 export function useOnboardingGate(facilityId: string | null): OnboardingGate {
   const queryClient = useQueryClient();
   const { data: status, isLoading } = useOnboardingStatus(facilityId);
+  const { data: sessionData } = authClient.useSession();
 
   const progress = deriveSetupProgress(status, facilityId);
+
+  // A dismiss suppresses auto-open for THIS login session in THIS organization
+  // only — sessionStorage outlives sign-out/sign-in and org switches in the
+  // same tab, so a bare key would silence the wizard for the next login or a
+  // different zero-facility org (the plan requires it to re-open on the next
+  // login). `activeOrganizationId` is a Better Auth org-plugin additionalField
+  // absent from the inferred client session type, asserted the same way as in
+  // facility-provider.tsx.
+  const authSession = sessionData?.session as
+    | { id: string; activeOrganizationId?: string | null }
+    | undefined;
+  const dismissKey = authSession
+    ? `${ONBOARDING_WIZARD_DISMISSED_KEY}:${authSession.id}:${authSession.activeOrganizationId ?? "none"}`
+    : null;
 
   // Persisted preferences read lazily. Hydration-safe: both only influence the
   // rendered output once the status query has resolved (post-hydration) — until
@@ -99,9 +115,16 @@ export function useOnboardingGate(facilityId: string | null): OnboardingGate {
   const [collapsed, setCollapsedState] = useState(() =>
     readBooleanFlag("local", ONBOARDING_GUIDE_COLLAPSED_KEY),
   );
-  const [dismissed, setDismissed] = useState(() =>
-    readBooleanFlag("session", ONBOARDING_WIZARD_DISMISSED_KEY),
-  );
+  // Re-read whenever the scoped key changes (session resolves, org switches) —
+  // the render-adjustment pattern, so no effect is needed.
+  const [readKey, setReadKey] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+  if (readKey !== dismissKey) {
+    setReadKey(dismissKey);
+    setDismissed(
+      dismissKey ? readBooleanFlag("session", dismissKey) : false,
+    );
+  }
   // `null` defers to the auto-open derivation; a boolean is an explicit
   // open/close that overrides it. Derived, not effect-driven — the wizard is
   // "the org has no facility and the user hasn't dismissed it", latched open by
@@ -127,7 +150,7 @@ export function useOnboardingGate(facilityId: string | null): OnboardingGate {
     open: () => setExplicitOpen(true),
     latchOpen: () => setExplicitOpen(true),
     dismiss: () => {
-      writeBooleanFlag("session", ONBOARDING_WIZARD_DISMISSED_KEY, true);
+      if (dismissKey) writeBooleanFlag("session", dismissKey, true);
       setDismissed(true);
       setExplicitOpen(false);
       // Setup progress advanced inside the wizard (we defer the refetch to now
