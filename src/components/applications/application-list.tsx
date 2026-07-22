@@ -5,7 +5,8 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { parseAsString, useQueryState } from "nuqs";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { MapPinIcon, PlusIcon, LeafIcon, XIcon } from "@phosphor-icons/react";
@@ -19,7 +20,7 @@ import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
+import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { ApplicationForm } from "./application-form";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
@@ -29,6 +30,7 @@ import {
 } from "./mass-utils";
 import type { ApplicationListItem } from "@/data-access/applications";
 import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "@/lib/certification/application-evidence";
+import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import {
   useApplications,
   useApplicationDeliveryOptions,
@@ -185,6 +187,29 @@ interface ApplicationListProps {
 
 export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const { facilityId: contextFacilityId, selectedFacility } = useFacilityContext();
+  const [affectedApplicationIdsParam, setAffectedApplicationIdsParam] =
+    useQueryState(
+      "ids",
+      parseAsString.withOptions({ shallow: true, history: "replace" }),
+    );
+  const affectedApplicationFilter = parseExactIdFilter(
+    affectedApplicationIdsParam,
+  );
+  const affectedApplicationIds = affectedApplicationFilter.ids;
+  useEffect(() => {
+    if (
+      affectedApplicationIdsParam &&
+      affectedApplicationFilter.normalized !== affectedApplicationIdsParam
+    ) {
+      void setAffectedApplicationIdsParam(
+        affectedApplicationFilter.normalized,
+      );
+    }
+  }, [
+    affectedApplicationFilter.normalized,
+    affectedApplicationIdsParam,
+    setAffectedApplicationIdsParam,
+  ]);
   // Facility durability tier (ADR 0021). Soil temperature is a 200-year-only
   // input, so the form section and detail row are hidden under 1000-year.
   // Fall back to 200-year while facility context resolves: showing the field
@@ -210,7 +235,15 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
 
   // Data fetching
   const { data: applications, isLoading, error } = useApplications(
-    contextFacilityId ? { facilityId: contextFacilityId } : undefined,
+    contextFacilityId
+      ? {
+          facilityId: contextFacilityId,
+          ids:
+            affectedApplicationIds.length > 0
+              ? affectedApplicationIds
+              : undefined,
+        }
+      : undefined,
     { enabled: !!contextFacilityId },
   );
   const { data: scopedDeliveries } = useApplicationDeliveryOptions(
@@ -222,17 +255,13 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const deleteApplication = useDeleteApplication();
   const toast = useToast();
   const queryClient = useQueryClient();
-  const deferredAttachments = useDeferredAttachments();
-  const [isFlushing, setIsFlushing] = useState(false);
-
-  // Handlers
-  const handleCreate = async (data: ApplicationFormData) => {
-    setCreateError(null);
-    try {
+  const createWithEvidence = useCreateWithEvidence({
+    entityType: "application",
+    entityNoun: "Application",
+    executeCreate: async (data: ApplicationFormData) => {
       const result = await createApplication.mutateAsync(data);
       if (result.success === false) {
-        setCreateError(result.error || "Failed to create application");
-        return;
+        throw new Error(result.error || "Failed to create application");
       }
       const createdApplication: ApplicationListItem = {
         ...result.data,
@@ -244,56 +273,40 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         // evidence after this create flow completes.
         evidenceGapCount: APPLICATION_VISUAL_EVIDENCE_ROLES.length,
       };
-      setIsFlushing(true);
-      const flushResult = await deferredAttachments.flush(
-        "application",
-        createdApplication.id,
-      );
-      if (!flushResult.ok) {
-        setSideSheet({ entity: createdApplication, mode: "edit" });
-        setCreateError(
-          `Application created, but ${flushResult.failed.length} ${flushResult.failed.length === 1 ? "attachment" : "attachments"} failed to upload.`,
-        );
-        return;
-      }
-      deferredAttachments.clear();
-      // The create mutation already invalidated the list, but that ran before
-      // the evidence flush finished — so the row's readiness/evidence-gap count
-      // was recomputed with zero uploads. Re-invalidate now that the deferred
-      // attachments have landed so the list reflects the true evidence state.
-      queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
-      setSideSheet(null);
-      toast.success("Application created successfully");
-    } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "Failed to create application");
-    } finally {
-      setIsFlushing(false);
-    }
-  };
+      return { entities: [createdApplication], result };
+    },
+    setError: setCreateError,
+    setUpdateError,
+    getCreateErrorMessage: (error) =>
+      error instanceof Error ? error.message : "Failed to create application",
+    unresolvedUpdateMessage:
+      "Resolve or remove the failed attachments before saving this application.",
+    openEditOnFailure: (application) =>
+      setSideSheet({ entity: application, mode: "edit" }),
+    closeOnSuccess: () => setSideSheet(null),
+    onFlushSuccess: () => {
+      // The create mutation invalidates before evidence lands; recount after
+      // the flush so readiness reflects the uploaded evidence.
+      void queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
+    },
+    onSuccess: () => toast.success("Application created successfully"),
+  });
+  const { deferredAttachments, isFlushing } = createWithEvidence;
+
+  // Handlers
+  const handleCreate = createWithEvidence.handleCreate;
 
   const handleUpdate = async (data: ApplicationFormData) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
-    if (
-      deferredAttachments.attachments.some(
-        // Any not-yet-`uploaded` entry is unresolved: "failed" awaits a retry,
-        // and "uploading" means a retry is mid-flight whose state a save would
-        // clobber. Both must block the save.
-        (attachment) => attachment.status !== "uploaded",
-      )
-    ) {
-      setUpdateError(
-        "Resolve or remove the failed attachments before saving this application.",
-      );
-      return;
-    }
+    if (createWithEvidence.guardUpdate()) return;
     try {
       const result = await updateApplication.mutateAsync({
         applicationId: sideSheet.entity.id,
         ...data,
       });
       if (result.success) {
-        deferredAttachments.clear();
+        createWithEvidence.reset();
         setSideSheet(null);
         toast.success("Application updated successfully");
       } else {
@@ -327,31 +340,20 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const openCreate = () => {
     setCreateError(null);
     setUpdateError(null);
-    deferredAttachments.clear();
+    createWithEvidence.reset();
     setSideSheet({ entity: null, mode: "create" });
   };
   const openView = (application: ApplicationListItem) => { setSideSheet({ entity: application, mode: "view" }); };
-  const openEdit = (application: ApplicationListItem) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: application, mode: "edit" }); };
+  const openEdit = (application: ApplicationListItem) => { setCreateError(null); setUpdateError(null); createWithEvidence.reset(); setSideSheet({ entity: application, mode: "edit" }); };
   const closeSideSheet = () => {
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
-    deferredAttachments.clear();
+    createWithEvidence.reset();
   };
 
-  const unsavedAttachmentCount = deferredAttachments.attachments.filter(
-    (attachment) => attachment.status !== "uploaded",
-  ).length;
-  const confirmCreateClose = () => {
-    // An in-flight flush is mid-write; blocking Escape/backdrop/X keeps the
-    // completion handler from mutating a discarded-then-reopened form.
-    if (isFlushing) return false;
-    return (
-      sideSheet?.mode !== "create" ||
-      unsavedAttachmentCount === 0 ||
-      window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`)
-    );
-  };
+  const confirmCreateClose = () =>
+    createWithEvidence.confirmClose(sideSheet?.mode === "create");
   const attemptCloseSideSheet = () => {
     if (confirmCreateClose()) closeSideSheet();
   };
@@ -372,8 +374,13 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     // hides the very rows it visibly labels Visual.
     (!evidenceFilter || (a.evidenceMethod ?? "visual") === evidenceFilter)
   );
-  const hasActiveFilters = !!statusFilter || !!evidenceFilter;
-  const clearFilters = () => { setStatusFilter(""); setEvidenceFilter(""); };
+  const hasActiveFilters =
+    !!statusFilter || !!evidenceFilter || affectedApplicationIds.length > 0;
+  const clearFilters = () => {
+    setStatusFilter("");
+    setEvidenceFilter("");
+    setAffectedApplicationIdsParam(null);
+  };
 
   if (!contextFacilityId) {
     return (
@@ -489,6 +496,14 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         }
       >
         <DataTable.Toolbar>
+          {affectedApplicationIds.length > 0 && (
+            <span className="inline-flex h-32 items-center border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-10 body-caption font-medium text-[var(--st-wait)]">
+              {affectedApplicationIds.length} affected{" "}
+              {affectedApplicationIds.length === 1
+                ? "application"
+                : "applications"}
+            </span>
+          )}
           <DataTable.Search placeholder="Search applications..." />
           <select
             value={statusFilter}

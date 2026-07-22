@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  processSamplingMethodSchema,
   creditBatchConditionSchema,
   applicationSoilTemperatureSchema,
   sampleConditionSchema,
@@ -79,53 +78,6 @@ describe("Isometric conditional required validation", () => {
     expect(result.success).toBe(false);
     if (result.success) return;
     expect(result.error.issues.length).toBeGreaterThan(0);
-  });
-
-  it("requires process_id when selecting sampling method on a process", () => {
-    const result = processSamplingMethodSchema.safeParse({
-      sampling_method: "method_b",
-    });
-
-    expect(result.success).toBe(false);
-    if (result.success) return;
-
-    expect(result.error.issues.map((issue) => issue.path.join("."))).toContain(
-      "process_id"
-    );
-  });
-
-  it("accepts Method A for a process", () => {
-    const result = processSamplingMethodSchema.safeParse({
-      process_id: "00000000-0000-0000-0000-000000000101",
-      sampling_method: "method_a",
-    });
-
-    expect(result.success).toBe(true);
-  });
-
-  it("accepts Method B when prior Method A samples meet threshold", () => {
-    const result = processSamplingMethodSchema.safeParse({
-      sampling_method: "method_b",
-      process_id: "00000000-0000-0000-0000-000000000101",
-      prior_method_a_sample_count: 30,
-    });
-
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects Method B when prior Method A samples are below threshold", () => {
-    const result = processSamplingMethodSchema.safeParse({
-      sampling_method: "method_b",
-      process_id: "00000000-0000-0000-0000-000000000101",
-      prior_method_a_sample_count: 29,
-    });
-
-    expect(result.success).toBe(false);
-    if (result.success) return;
-
-    expect(result.error.issues.map((issue) => issue.message)).toContain(
-      "sampling_method=method_b requires at least 30 prior samples under Method A"
-    );
   });
 
 });

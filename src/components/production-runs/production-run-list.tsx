@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { parseAsString, useQueryState } from "nuqs";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
@@ -27,7 +27,7 @@ import {
   useProductionRunStats,
 } from "@/hooks/use-production-runs";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
+import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { useImportProductionRunReadings } from "@/hooks/use-production-run-reading-imports";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
@@ -42,6 +42,7 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
+import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate } from "@/lib/format-utils";
 import { formatLocalTime } from "@/lib/date-utils";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
@@ -173,6 +174,24 @@ export function ProductionRunList() {
     "run",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
+  const [affectedRunIdsParam, setAffectedRunIdsParam] = useQueryState(
+    "ids",
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const affectedRunFilter = parseExactIdFilter(affectedRunIdsParam);
+  const affectedRunIds = affectedRunFilter.ids;
+  useEffect(() => {
+    if (
+      affectedRunIdsParam &&
+      affectedRunFilter.normalized !== affectedRunIdsParam
+    ) {
+      void setAffectedRunIdsParam(affectedRunFilter.normalized);
+    }
+  }, [
+    affectedRunFilter.normalized,
+    affectedRunIdsParam,
+    setAffectedRunIdsParam,
+  ]);
   const handledInvalidRunIdRef = useRef<string | null>(null);
 
   // Filter state
@@ -191,18 +210,16 @@ export function ProductionRunList() {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const filters: Partial<ProductionRunFilterData> = useMemo(
-    () => ({
-      search: searchQuery || undefined,
-      facilityId: facilityId || undefined,
-      status: (statusFilter as ProductionRunStatus) || undefined,
-      page: currentPage,
-      pageSize,
-      sortBy: "date",
-      sortOrder: "desc",
-    }),
-    [searchQuery, facilityId, statusFilter, currentPage, pageSize]
-  );
+  const filters: Partial<ProductionRunFilterData> = {
+    ids: affectedRunIds.length > 0 ? affectedRunIds : undefined,
+    search: searchQuery || undefined,
+    facilityId: facilityId || undefined,
+    status: (statusFilter as ProductionRunStatus) || undefined,
+    page: currentPage,
+    pageSize,
+    sortBy: "date",
+    sortOrder: "desc",
+  };
 
   const { data: runsData, isLoading, error: fetchError } = useProductionRuns(filters, {
     enabled: !!facilityId,
@@ -217,9 +234,7 @@ export function ProductionRunList() {
   const updateRun = useUpdateProductionRun();
   const deleteRun = useDeleteProductionRun();
   const toast = useToast();
-  const deferredAttachments = useDeferredAttachments();
   const importReadings = useImportProductionRunReadings();
-  const [isFlushing, setIsFlushing] = useState(false);
 
   const runs = runsData?.items ?? [];
   const totalPages = runsData?.totalPages ?? 0;
@@ -240,28 +255,39 @@ export function ProductionRunList() {
     toast.success(`${message}. Still needed to certify: ${gapLabels}${suffix}`);
   };
 
-  const handleCreate = async (data: ProductionRunSubmitData) => {
-    setCreateError(null);
-    try {
+  const createWithEvidence = useCreateWithEvidence({
+    entityType: "production_run",
+    entityNoun: "Production run",
+    executeCreate: async (data: ProductionRunSubmitData) => {
       const run = await createRun.mutateAsync(data as ProductionRunFormData);
-      setIsFlushing(true);
-      const flushResult = await deferredAttachments.flush(
-        "production_run",
-        run.id,
-      );
-      // Import every readings CSV that DID upload first — even on a partial
-      // failure. A deferred readings CSV is uploaded as a document but not yet
-      // imported, and deferred retry skips already-`uploaded` entries, so an
-      // import deferred past the failure return would never run and the run
-      // would keep those readings' file without their rows (matching the same
-      // import that onUploaded={runImport} triggers on a direct upload).
-      const readingsDocs = flushResult.uploaded.filter(
+      return { entities: [run], result: run };
+    },
+    setError: setCreateError,
+    setUpdateError,
+    getCreateErrorMessage: (error) => {
+      // Let the form surface an overlap conflict inline (on the start field,
+      // with a link to the conflicting run); show other errors as a banner.
+      if (getRunConflict(error)) throw error;
+      return error instanceof Error
+        ? error.message
+        : "Failed to create production run";
+    },
+    unresolvedUpdateMessage:
+      "Resolve or remove the failed readings file before saving this production run.",
+    openEditOnFailure: (run) =>
+      setSideSheet({ entity: run, mode: "edit" }),
+    closeOnSuccess: () => setSideSheet(null),
+    onAfterFlush: async ({ flushResult }) => {
+      // Import every readings CSV that uploaded, including on a partial upload
+      // failure. Deferred retry skips uploaded entries, so delaying these
+      // imports would leave their documents without readings rows.
+      const readingsDocuments = flushResult.uploaded.filter(
         (attachment) =>
           attachment.documentType === "sensor_data" && attachment.documentId,
       );
       let importFailedCount = 0;
       const importFailureMessages: string[] = [];
-      for (const attachment of readingsDocs) {
+      for (const attachment of readingsDocuments) {
         try {
           const importResult = await importReadings.mutateAsync(
             attachment.documentId as string,
@@ -274,63 +300,43 @@ export function ProductionRunList() {
           }
         }
       }
+
       const uploadFailedCount = flushResult.failed.length;
-      if (uploadFailedCount > 0 || importFailedCount > 0) {
-        // The import fn records a durable "failed" flag on the document, so the
-        // edit-mode readings panel surfaces its Re-import affordance. Keep the
-        // deferred entries only when uploads still need a retry; otherwise the
-        // failure is import-only and the deferred queue is already settled.
-        if (uploadFailedCount === 0) deferredAttachments.clear();
-        setSideSheet({ entity: run, mode: "edit" });
-        const messages: string[] = [];
-        if (uploadFailedCount > 0) {
-          messages.push(
-            `${uploadFailedCount} ${uploadFailedCount === 1 ? "attachment" : "attachments"} failed to upload`,
-          );
-        }
-        if (importFailedCount > 0) {
-          messages.push(
-            `${importFailedCount} readings ${importFailedCount === 1 ? "file" : "files"} could not be imported`,
-          );
-        }
-        const firstImportFailureMessage = importFailureMessages[0];
-        const importFailureDetail = firstImportFailureMessage
-          ? ` Import error: ${firstImportFailureMessage}`
-          : "";
-        setCreateError(
-          `Production run created, but ${messages.join(" and ")}. Resolve ${messages.length > 1 || importFailedCount > 1 || uploadFailedCount > 1 ? "them" : "it"} below.${importFailureDetail}`,
+      if (uploadFailedCount === 0 && importFailedCount === 0) return;
+
+      const messages: string[] = [];
+      if (uploadFailedCount > 0) {
+        messages.push(
+          `${uploadFailedCount} ${uploadFailedCount === 1 ? "attachment" : "attachments"} failed to upload`,
         );
-        return;
       }
-      deferredAttachments.clear();
-      setSideSheet(null);
-      showSavedToast("Production run created successfully", run);
-    } catch (error) {
-      // Let the form surface an overlap conflict inline (on the start field,
-      // with a link to the conflicting run); show other errors as a banner.
-      if (getRunConflict(error)) throw error;
-      setCreateError(error instanceof Error ? error.message : "Failed to create production run");
-    } finally {
-      setIsFlushing(false);
-    }
-  };
+      if (importFailedCount > 0) {
+        messages.push(
+          `${importFailedCount} readings ${importFailedCount === 1 ? "file" : "files"} could not be imported`,
+        );
+      }
+      const firstImportFailureMessage = importFailureMessages[0];
+      const importFailureDetail = firstImportFailureMessage
+        ? ` Import error: ${firstImportFailureMessage}`
+        : "";
+      return {
+        failureMessage: `Production run created, but ${messages.join(" and ")}. Resolve ${messages.length > 1 || importFailedCount > 1 || uploadFailedCount > 1 ? "them" : "it"} below.${importFailureDetail}`,
+        // Import-only failures are durable on the document and need no upload
+        // retry queue; upload failures retain the queue for retry in edit mode.
+        clearAttachmentsOnFailure: uploadFailedCount === 0,
+      };
+    },
+    onSuccess: ({ result }) =>
+      showSavedToast("Production run created successfully", result),
+  });
+  const { deferredAttachments, isFlushing } = createWithEvidence;
+
+  const handleCreate = createWithEvidence.handleCreate;
 
   const handleUpdate = async (data: ProductionRunSubmitData) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
-    if (
-      deferredAttachments.attachments.some(
-        // Any not-yet-`uploaded` entry is unresolved: "failed" awaits a retry,
-        // and "uploading" means a readings retry is mid-flight whose state a
-        // save would clobber. Both must block the save.
-        (attachment) => attachment.status !== "uploaded",
-      )
-    ) {
-      setUpdateError(
-        "Resolve or remove the failed readings file before saving this production run.",
-      );
-      return;
-    }
+    if (createWithEvidence.guardUpdate()) return;
     try {
       const { startTime, endTime } = data;
       const run = await updateRun.mutateAsync({
@@ -348,7 +354,7 @@ export function ProductionRunList() {
                 ? endTime
                 : new Date(endTime),
       });
-      deferredAttachments.clear();
+      createWithEvidence.reset();
       setSideSheet(null);
       showSavedToast("Production run updated successfully", run);
     } catch (error) {
@@ -378,22 +384,27 @@ export function ProductionRunList() {
     setFocusedRunId(null);
     setCreateError(null);
     setUpdateError(null);
-    deferredAttachments.clear();
+    createWithEvidence.reset();
     setSideSheet({ entity: null, mode: "create" });
   };
   const openView = (run: ProductionRunWithRelations) => { setFocusedRunId(run.id); setSideSheet({ entity: run, mode: "view" }); };
-  const openEdit = (run: ProductionRunWithRelations) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: run, mode: "edit" }); };
+  const openEdit = (run: ProductionRunWithRelations) => { setCreateError(null); setUpdateError(null); createWithEvidence.reset(); setSideSheet({ entity: run, mode: "edit" }); };
   const closeSideSheet = () => {
     setFocusedRunId(null);
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
-    deferredAttachments.clear();
+    createWithEvidence.reset();
   };
   useOpenCreateIntent(openCreate);
 
-  const clearFilters = () => { setSearchQuery(""); setStatusFilter(""); setCurrentPage(1); };
-  const hasActiveFilters = searchQuery || statusFilter;
+  const clearFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("");
+    setAffectedRunIdsParam(null);
+    setCurrentPage(1);
+  };
+  const hasActiveFilters = searchQuery || statusFilter || affectedRunIds.length > 0;
 
   const columns = createColumns(openEdit, handleDelete);
 
@@ -438,19 +449,8 @@ export function ProductionRunList() {
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
 
-  const unsavedAttachmentCount = deferredAttachments.attachments.filter(
-    (attachment) => attachment.status !== "uploaded",
-  ).length;
-  const confirmCreateClose = () => {
-    // An in-flight flush is mid-write; blocking Escape/backdrop/X keeps the
-    // completion handler from mutating a discarded-then-reopened form.
-    if (isFlushing) return false;
-    return (
-      displaySideSheet?.mode !== "create" ||
-      unsavedAttachmentCount === 0 ||
-      window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`)
-    );
-  };
+  const confirmCreateClose = () =>
+    createWithEvidence.confirmClose(displaySideSheet?.mode === "create");
   const attemptCloseSideSheet = () => {
     if (confirmCreateClose()) closeSideSheet();
   };
@@ -555,6 +555,11 @@ export function ProductionRunList() {
         }
       >
         <DataTable.Toolbar>
+          {affectedRunIds.length > 0 && (
+            <span className="inline-flex h-32 items-center border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-10 body-caption font-medium text-[var(--st-wait)]">
+              {affectedRunIds.length} affected production {affectedRunIds.length === 1 ? "run" : "runs"}
+            </span>
+          )}
           <div className="relative max-w-[320px] flex-1">
             <MagnifyingGlassIcon size={18} className="absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none" />
             <input

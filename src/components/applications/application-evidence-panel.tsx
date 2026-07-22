@@ -39,7 +39,7 @@ import type { DocumentRow } from "@/data-access/documents";
 import type { DocumentEntityType, DocumentType } from "@/schemas/documents";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 
-const ENTITY_TYPE: DocumentEntityType = "application";
+const ENTITY_TYPE = "application" satisfies DocumentEntityType;
 const VISUAL_DOC_TYPE: DocumentType = "photo";
 const BOUNDARY_DOC_TYPE: DocumentType = "pdf";
 
@@ -276,7 +276,9 @@ export function ApplicationEvidencePanel({
   const invalidateKey = applicationId
     ? documentKeys.forEntity(ENTITY_TYPE, applicationId)
     : undefined;
-  const deleteMutation = useDeleteDocument(invalidateKey);
+  const deleteMutation = useDeleteDocument(invalidateKey, {
+    entityType: ENTITY_TYPE,
+  });
   const classifyMutation =
     useUpdateApplicationEvidenceMetadata(invalidateKey);
 

@@ -155,19 +155,24 @@ Embodied emissions must be reproducible from explicit materials/equipment invent
 ### Why this is simple and sufficient
 One normalized table supports reproducibility, verification, and audit trails without over-modeling suppliers/products.
 
-## Topic 7: Cross-Row Guardrails (DB Triggers)
+## Topic 7: Cross-Row Guardrails
 
 ### What it means
 Some rules depend on aggregate history or state transitions and cannot be guaranteed by single-row checks.
 
-### Required trigger guardrails
-1. Method B minimum samples before unlocking `production_processes.sampling_method = method_b` (ADR 0017 Track 1 now computes the process-grained baseline; Track 2 adds the unlock backstop).
-2. Method B cadence check on `credit_batches` transition to `verified`/`issued`.
-3. Durability field immutability once `credit_batches.status` is `verified` or `issued`.
+### Required guardrails
+1. Unsampled credit-batch creation requires the live Method-B eligibility check
+   from ADR 0022. This is an app-layer decision because eligibility is computed,
+   not stored.
+2. The sampled/unsampled choice is immutable after credit-batch creation.
+3. Durability field immutability once `credit_batches.status` is `verified` or
+   `issued`.
 
 ### Why timestamps are not enough
 - `last_edit_date` only records change; it does not block invalid writes.
-- Trigger guardrails prevent bypass writes from direct SQL, scripts, or backfills.
+- Use DB constraints or triggers only for rules expressible from stored state;
+  keep live registry- and count-dependent decisions in the transaction that
+  performs the guarded write.
 
 ## LCA Export Alignment (From Project PDF)
 

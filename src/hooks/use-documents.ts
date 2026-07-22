@@ -14,7 +14,7 @@ import type { DocumentVisibility } from "@/schemas/documents";
 import { feedstockKeys } from "./use-feedstocks";
 import { deliveryKeys } from "./use-deliveries";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
-import { certificationKeys } from "./use-certification";
+import { invalidateCertificationReadiness } from "./use-certification";
 import { transportLegKeys } from "./use-transport-legs";
 
 function invalidateTransportEvidenceOwner(
@@ -26,7 +26,7 @@ function invalidateTransportEvidenceOwner(
   // New Removal wizard) and the leg lists' embedded evidence counts — leaving
   // either fresh for its stale window shows pre-mutation readiness, including
   // stale green after a deletion.
-  queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+  invalidateCertificationReadiness(queryClient);
   queryClient.invalidateQueries({ queryKey: transportLegKeys.all });
   if (row.entityType === "feedstock") {
     queryClient.invalidateQueries({ queryKey: feedstockKeys.all });
@@ -34,6 +34,20 @@ function invalidateTransportEvidenceOwner(
   if (row.entityType === "delivery") {
     queryClient.invalidateQueries({ queryKey: deliveryKeys.all });
   }
+}
+
+type DocumentDeletionOwner = {
+  entityType: "application" | "feedstock" | "delivery" | "transport_leg";
+};
+
+export function invalidateDeletedDocumentOwner(
+  queryClient: ReturnType<typeof useQueryClient>,
+  owner: DocumentDeletionOwner,
+) {
+  if (owner.entityType === "application") {
+    return invalidateCertificationReadiness(queryClient);
+  }
+  invalidateTransportEvidenceOwner(queryClient, owner);
 }
 
 export const documentKeys = {
@@ -121,13 +135,14 @@ export function useUpdateApplicationEvidenceMetadata(
       qc.invalidateQueries({
         queryKey: invalidateKey ?? documentKeys.forEntity(row.entityType, row.entityId),
       });
+      invalidateCertificationReadiness(qc);
     },
   });
 }
 
 export function useDeleteDocument(
   invalidateKey?: readonly unknown[],
-  owner?: { entityType: string },
+  owner?: DocumentDeletionOwner,
 ) {
   const qc = useQueryClient();
   return useMutation({
@@ -138,7 +153,7 @@ export function useDeleteDocument(
     },
     onSuccess: () => {
       if (invalidateKey) qc.invalidateQueries({ queryKey: invalidateKey });
-      if (owner) invalidateTransportEvidenceOwner(qc, owner);
+      if (owner) invalidateDeletedDocumentOwner(qc, owner);
     },
   });
 }

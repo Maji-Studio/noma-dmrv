@@ -35,16 +35,6 @@ vi.mock("@/fn/certification/sources", async () => {
     resolveSourceIdsForRemoval: vi.fn(async () => []),
   };
 });
-// D3 durability gates read each run's reactor sampling method. Default the
-// fixture reactor to Method A; the fixture run carries a fully eligible,
-// ≥3-replicate sample set so the gates pass.
-vi.mock("@/data-access/reactors", () => {
-  return {
-    getSamplingMethodsByReactorIds: vi.fn(
-      async () => new Map([["rct-test-1", "method_a"]]),
-    ),
-  };
-});
 vi.mock("@/lib/isometric", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/isometric")>();
   return {
@@ -330,9 +320,7 @@ export function makeBatchesWithSamples(
       startDate: "2026-01-01",
       endDate: "2026-01-31",
       facilityTimezone: "UTC",
-      methodBUnlockedAt: null,
-      productionProcessId: null,
-      samplingMethod: "method_a",
+      sampling: "sampled",
       declaredHToCorgRatio: null,
       durabilityOption: "200_year" as const,
       runs: runs.map((r) => ({
@@ -358,8 +346,7 @@ export function durabilityBlockersFor(
       creditBatchCode: batch.creditBatchCode,
       startDate: batch.startDate,
       endDate: batch.endDate,
-      productionProcessId: batch.productionProcessId,
-      samplingMethod: batch.samplingMethod,
+      sampling: batch.sampling,
       replicates: batch.samples.map((s) => ({
         hToCOrgRatio: s.hToCOrgRatio,
         oToCOrgRatio: s.oToCOrgRatio,
