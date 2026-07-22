@@ -239,6 +239,58 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness.gaps.some((gap) => gap.key === "transportLeg")).toBe(false);
   });
 
+  it("marks a document-backed transport leg with an accepted upload ready", () => {
+    const readiness = deriveEntityCertifyReadiness("transportLeg", {
+      distanceKm: 25,
+      loadMassKg: 900,
+      distanceSource: "document",
+      transportEvidenceDocumentCount: 1,
+    });
+
+    expect(readiness).toEqual({ state: "ready", gaps: [] });
+  });
+
+  it("reports a transport leg with Document provenance but no upload", () => {
+    const readiness = deriveEntityCertifyReadiness("transportLeg", {
+      distanceKm: 25,
+      loadMassKg: 900,
+      distanceSource: "document",
+      transportEvidenceDocumentCount: 0,
+    });
+
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      { kind: "field", key: "transportEvidence" },
+    ]);
+  });
+
+  it("fails closed when a transport leg row omits its evidence count", () => {
+    const readiness = deriveEntityCertifyReadiness("transportLeg", {
+      distanceKm: 25,
+      loadMassKg: 900,
+      distanceSource: "document",
+    });
+
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      { kind: "field", key: "transportEvidence" },
+    ]);
+  });
+
+  it("reports a manual-provenance transport leg as missing evidence", () => {
+    const readiness = deriveEntityCertifyReadiness("transportLeg", {
+      distanceKm: 25,
+      loadMassKg: 900,
+      distanceSource: "manual",
+      transportEvidenceDocumentCount: 2,
+    });
+
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      { kind: "field", key: "transportEvidence" },
+    ]);
+  });
+
   it("reports an upcoming delivery as a lifecycle gap", () => {
     const readiness = deriveEntityCertifyReadiness("delivery", {
       status: "upcoming",

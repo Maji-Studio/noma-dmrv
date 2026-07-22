@@ -557,7 +557,16 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
               {
                 label: "Distance (km)",
                 ...certificationDetailField("feedstock", "transportDistanceKm"),
-                value: formatDistanceKm(sideSheetEntity.transportDistanceKm),
+                // Status from the raw column, not the formatted string — the
+                // "—" fallback is truthy and would falsely read as satisfied.
+                certifyStatus: resolveCertFieldStatus(
+                  true,
+                  sideSheetEntity.transportDistanceKm !== null,
+                ),
+                value:
+                  sideSheetEntity.transportDistanceKm !== null
+                    ? formatDistanceKm(sideSheetEntity.transportDistanceKm)
+                    : null,
               },
               { label: "Trip type", value: TRIP_TYPE_LABELS[sideSheetEntity.transportTripType ?? DEFAULT_TRIP_TYPE] },
               {

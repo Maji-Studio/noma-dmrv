@@ -222,10 +222,38 @@ export function deriveEntityCertifyReadiness(
     }
   }
 
+  // A raw leg's Document provenance means nothing without an accepted upload —
+  // the same composite rule the entity-level projections apply. Callers load
+  // legs via `getTransportLegsWithEvidenceForEntities` so the count is present;
+  // a missing count fails closed (gap), never silently green.
+  if (entityKind === "transportLeg") {
+    const source = fieldValue(entity, "distanceSource");
+    const documentCount = fieldValue(
+      entity,
+      "transportEvidenceDocumentCount",
+    );
+    if (
+      !hasCompleteTransportEvidence(
+        source === "document" ? "document" : null,
+        typeof documentCount === "number" ? documentCount : undefined,
+      )
+    ) {
+      gaps.push(TRANSPORT_EVIDENCE_GAP);
+    }
+  }
+
   for (const descriptor of getCertifyFieldDescriptors(entityKind)) {
     if (
       entityKind === "feedstock" &&
       descriptor.key === "transportDistanceProvenance"
+    ) {
+      continue;
+    }
+    // The composite transport-evidence check above owns this requirement; the
+    // bare equals-Document descriptor would clear the gap without any file.
+    if (
+      entityKind === "transportLeg" &&
+      descriptor.key === "distanceProvenance"
     ) {
       continue;
     }

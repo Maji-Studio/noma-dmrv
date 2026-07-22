@@ -3,7 +3,7 @@
 // facility via `resolveEntityFacility`. Swap for `requireFacilityAccess` once
 // a facility-membership model lands.
 
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
 import {
@@ -41,6 +41,10 @@ import {
   retireDocumentsForEntities,
   type DocumentEntityRef,
 } from "./documents";
+import {
+  biocharTransportEvidenceDocumentCount,
+  transportEvidenceDocumentCount,
+} from "./transport-evidence-projections";
 
 export type TransportEntityType = TransportEntityTypeValue;
 
@@ -112,16 +116,52 @@ async function resolveEntityFacility(
 // Read Operations
 // ============================================
 
+export type TransportLegWithEvidence = TransportLeg & {
+  transportEvidenceDocumentCount: number;
+};
+
+// Accepted transport-evidence count for a leg row, per the category's
+// ownership scheme: feedstock evidence lives on the feedstock entity, sample
+// evidence on the leg row itself, and biochar evidence on the deliveries the
+// auto-derived leg aggregates.
+function legEvidenceDocumentCount(
+  organizationId: string,
+  entityType: TransportEntityType,
+) {
+  return entityType === "feedstock"
+    ? transportEvidenceDocumentCount(
+        organizationId,
+        "feedstock",
+        transportLegs.entityId,
+      )
+    : entityType === "sample"
+      ? transportEvidenceDocumentCount(
+          organizationId,
+          "transport_leg",
+          transportLegs.id,
+        )
+      : biocharTransportEvidenceDocumentCount(
+          organizationId,
+          transportLegs.entityId,
+        );
+}
+
 export async function getTransportLegsForEntity(
   ctx: OrgContext,
   entityType: TransportEntityType,
   entityId: string,
-): Promise<TransportLeg[]> {
+): Promise<TransportLegWithEvidence[]> {
   requireOrgScope(ctx);
   await resolveEntityFacility(ctx, entityType, entityId);
 
   return db
-    .select()
+    .select({
+      ...getTableColumns(transportLegs),
+      transportEvidenceDocumentCount: legEvidenceDocumentCount(
+        ctx.organizationId,
+        entityType,
+      ),
+    })
     .from(transportLegs)
     .where(
       and(
@@ -146,6 +186,36 @@ export async function getTransportLegsForEntities(
 
   return db
     .select()
+    .from(transportLegs)
+    .where(
+      and(
+        eq(transportLegs.entityType, entityType),
+        inArray(transportLegs.entityId, entityIds),
+        eq(transportLegs.organizationId, ctx.organizationId),
+      ),
+    )
+    .orderBy(asc(transportLegs.createdAt));
+}
+
+// Same access contract as `getTransportLegsForEntities` (parents validated
+// upstream), plus the accepted transport-evidence document count each leg's
+// readiness check needs.
+export async function getTransportLegsWithEvidenceForEntities(
+  ctx: OrgContext,
+  entityType: TransportEntityType,
+  entityIds: string[],
+): Promise<TransportLegWithEvidence[]> {
+  requireOrgScope(ctx);
+  if (entityIds.length === 0) return [];
+
+  return db
+    .select({
+      ...getTableColumns(transportLegs),
+      transportEvidenceDocumentCount: legEvidenceDocumentCount(
+        ctx.organizationId,
+        entityType,
+      ),
+    })
     .from(transportLegs)
     .where(
       and(

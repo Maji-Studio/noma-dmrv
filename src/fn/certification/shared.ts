@@ -4,7 +4,7 @@ import {
   appendSyncEvent,
   type AppendSyncEventInput,
 } from "@/data-access/certification";
-import { getTransportLegsForEntities } from "@/data-access/transport-legs";
+import { getTransportLegsWithEvidenceForEntities } from "@/data-access/transport-legs";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import { IsometricApiError, type TransportLegsByCategory } from "@/lib/isometric";
@@ -95,9 +95,9 @@ export async function loadTransportLegsByCategory(
   entityIds: TransportEntityIdsByCategory,
 ): Promise<TransportLegsByCategory> {
   const [feedstock, biochar, sample] = await Promise.all([
-    getTransportLegsForEntities(orgCtx, "feedstock", entityIds.feedstockIds),
-    getTransportLegsForEntities(orgCtx, "biochar", entityIds.biocharProductIds),
-    getTransportLegsForEntities(orgCtx, "sample", entityIds.sampleIds),
+    getTransportLegsWithEvidenceForEntities(orgCtx, "feedstock", entityIds.feedstockIds),
+    getTransportLegsWithEvidenceForEntities(orgCtx, "biochar", entityIds.biocharProductIds),
+    getTransportLegsWithEvidenceForEntities(orgCtx, "sample", entityIds.sampleIds),
   ]);
   return { feedstock, biochar, sample };
 }

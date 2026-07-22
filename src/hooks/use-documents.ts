@@ -14,12 +14,20 @@ import type { DocumentVisibility } from "@/schemas/documents";
 import { feedstockKeys } from "./use-feedstocks";
 import { deliveryKeys } from "./use-deliveries";
 import { dashboardOverviewKeys } from "./use-dashboard-overview";
+import { certificationKeys } from "./use-certification";
+import { transportLegKeys } from "./use-transport-legs";
 
 function invalidateTransportEvidenceOwner(
   queryClient: ReturnType<typeof useQueryClient>,
   row: { entityType: string },
 ) {
   queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+  // Evidence feeds certification readiness (removal overview, batch health,
+  // New Removal wizard) and the leg lists' embedded evidence counts — leaving
+  // either fresh for its stale window shows pre-mutation readiness, including
+  // stale green after a deletion.
+  queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+  queryClient.invalidateQueries({ queryKey: transportLegKeys.all });
   if (row.entityType === "feedstock") {
     queryClient.invalidateQueries({ queryKey: feedstockKeys.all });
   }

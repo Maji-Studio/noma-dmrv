@@ -20,6 +20,7 @@ import type {
   TransportLegFormData,
 } from "@/schemas/transport-legs";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
+import { hasCompleteTransportEvidence } from "@/lib/certification/transport-evidence";
 import type { TransportLeg } from "@/db/schema";
 import { TransportLegForm } from "./transport-leg-form";
 import { deriveTransportLegCertStatuses } from "./transport-leg-cert-status";
@@ -246,7 +247,7 @@ export function TransportLegsEditor({
                     Provenance
                     <CertificationFieldTag
                       status={certStatuses.provenance}
-                      description="Distance source must be marked Document to satisfy this requirement"
+                      description="Distance source must be marked Document and at least one transport-evidence file uploaded to satisfy this requirement"
                     />
                   </span>
                 </th>
@@ -275,9 +276,26 @@ export function TransportLegsEditor({
                     {leg.distanceKm} km
                   </td>
                   <td className="py-8 pr-12 text-[var(--color-text-secondary)]">
-                    {leg.distanceSource
-                      ? DISTANCE_SOURCE_LABELS[leg.distanceSource]
-                      : "—"}
+                    <span className="flex items-center gap-6">
+                      {leg.distanceSource
+                        ? DISTANCE_SOURCE_LABELS[leg.distanceSource]
+                        : "—"}
+                      {/* Per-row marker so the operator can tell WHICH leg is
+                          missing evidence when several are listed (the header
+                          tag only aggregates). */}
+                      {isSavedTransportLeg(leg) &&
+                        !deferred &&
+                        !hasCompleteTransportEvidence(
+                          leg.distanceSource,
+                          (leg as { transportEvidenceDocumentCount?: number })
+                            .transportEvidenceDocumentCount,
+                        ) && (
+                          <CertificationFieldTag
+                            status="missing"
+                            description="This leg needs Document provenance and at least one uploaded transport-evidence file"
+                          />
+                        )}
+                    </span>
                   </td>
                   <td className="py-8 pr-12">{formatMethod(leg.transportMethodType)}</td>
                   <td className="py-8 pr-12">
