@@ -19,7 +19,7 @@ import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
+import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { ApplicationForm } from "./application-form";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
@@ -222,17 +222,13 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const deleteApplication = useDeleteApplication();
   const toast = useToast();
   const queryClient = useQueryClient();
-  const deferredAttachments = useDeferredAttachments();
-  const [isFlushing, setIsFlushing] = useState(false);
-
-  // Handlers
-  const handleCreate = async (data: ApplicationFormData) => {
-    setCreateError(null);
-    try {
+  const createWithEvidence = useCreateWithEvidence({
+    entityType: "application",
+    entityNoun: "Application",
+    executeCreate: async (data: ApplicationFormData) => {
       const result = await createApplication.mutateAsync(data);
       if (result.success === false) {
-        setCreateError(result.error || "Failed to create application");
-        return;
+        throw new Error(result.error || "Failed to create application");
       }
       const createdApplication: ApplicationListItem = {
         ...result.data,
@@ -244,56 +240,40 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         // evidence after this create flow completes.
         evidenceGapCount: APPLICATION_VISUAL_EVIDENCE_ROLES.length,
       };
-      setIsFlushing(true);
-      const flushResult = await deferredAttachments.flush(
-        "application",
-        createdApplication.id,
-      );
-      if (!flushResult.ok) {
-        setSideSheet({ entity: createdApplication, mode: "edit" });
-        setCreateError(
-          `Application created, but ${flushResult.failed.length} ${flushResult.failed.length === 1 ? "attachment" : "attachments"} failed to upload.`,
-        );
-        return;
-      }
-      deferredAttachments.clear();
-      // The create mutation already invalidated the list, but that ran before
-      // the evidence flush finished — so the row's readiness/evidence-gap count
-      // was recomputed with zero uploads. Re-invalidate now that the deferred
-      // attachments have landed so the list reflects the true evidence state.
-      queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
-      setSideSheet(null);
-      toast.success("Application created successfully");
-    } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "Failed to create application");
-    } finally {
-      setIsFlushing(false);
-    }
-  };
+      return { entities: [createdApplication], result };
+    },
+    setError: setCreateError,
+    setUpdateError,
+    getCreateErrorMessage: (error) =>
+      error instanceof Error ? error.message : "Failed to create application",
+    unresolvedUpdateMessage:
+      "Resolve or remove the failed attachments before saving this application.",
+    openEditOnFailure: (application) =>
+      setSideSheet({ entity: application, mode: "edit" }),
+    closeOnSuccess: () => setSideSheet(null),
+    onFlushSuccess: () => {
+      // The create mutation invalidates before evidence lands; recount after
+      // the flush so readiness reflects the uploaded evidence.
+      void queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
+    },
+    onSuccess: () => toast.success("Application created successfully"),
+  });
+  const { deferredAttachments, isFlushing } = createWithEvidence;
+
+  // Handlers
+  const handleCreate = createWithEvidence.handleCreate;
 
   const handleUpdate = async (data: ApplicationFormData) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
-    if (
-      deferredAttachments.attachments.some(
-        // Any not-yet-`uploaded` entry is unresolved: "failed" awaits a retry,
-        // and "uploading" means a retry is mid-flight whose state a save would
-        // clobber. Both must block the save.
-        (attachment) => attachment.status !== "uploaded",
-      )
-    ) {
-      setUpdateError(
-        "Resolve or remove the failed attachments before saving this application.",
-      );
-      return;
-    }
+    if (createWithEvidence.guardUpdate()) return;
     try {
       const result = await updateApplication.mutateAsync({
         applicationId: sideSheet.entity.id,
         ...data,
       });
       if (result.success) {
-        deferredAttachments.clear();
+        createWithEvidence.reset();
         setSideSheet(null);
         toast.success("Application updated successfully");
       } else {
@@ -327,31 +307,20 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const openCreate = () => {
     setCreateError(null);
     setUpdateError(null);
-    deferredAttachments.clear();
+    createWithEvidence.reset();
     setSideSheet({ entity: null, mode: "create" });
   };
   const openView = (application: ApplicationListItem) => { setSideSheet({ entity: application, mode: "view" }); };
-  const openEdit = (application: ApplicationListItem) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: application, mode: "edit" }); };
+  const openEdit = (application: ApplicationListItem) => { setCreateError(null); setUpdateError(null); createWithEvidence.reset(); setSideSheet({ entity: application, mode: "edit" }); };
   const closeSideSheet = () => {
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
-    deferredAttachments.clear();
+    createWithEvidence.reset();
   };
 
-  const unsavedAttachmentCount = deferredAttachments.attachments.filter(
-    (attachment) => attachment.status !== "uploaded",
-  ).length;
-  const confirmCreateClose = () => {
-    // An in-flight flush is mid-write; blocking Escape/backdrop/X keeps the
-    // completion handler from mutating a discarded-then-reopened form.
-    if (isFlushing) return false;
-    return (
-      sideSheet?.mode !== "create" ||
-      unsavedAttachmentCount === 0 ||
-      window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`)
-    );
-  };
+  const confirmCreateClose = () =>
+    createWithEvidence.confirmClose(sideSheet?.mode === "create");
   const attemptCloseSideSheet = () => {
     if (confirmCreateClose()) closeSideSheet();
   };

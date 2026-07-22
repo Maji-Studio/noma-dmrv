@@ -4,6 +4,7 @@ import {
   deriveSuggestedIngredientMassKg,
   deriveMassDeviationPercent,
   fromCompositionJsonb,
+  shouldPrefillSuggestedMasses,
   toCompositionJsonb,
 } from "@/lib/biochar-composition";
 import type { IngredientBin } from "@/lib/biochar-composition";
@@ -181,20 +182,68 @@ describe("reconcileComposition", () => {
 });
 
 describe("deriveSuggestedIngredientMassKg", () => {
-  it("computes (productMassKg / biocharRatio) * ingredientRatio", () => {
-    expect(deriveSuggestedIngredientMassKg(800, 0.8, 0.2)).toBeCloseTo(200, 6);
-    expect(deriveSuggestedIngredientMassKg(500, 1, 0.5)).toBeCloseTo(250, 6);
+  it("computes productMassKg * ingredientRatio", () => {
+    expect(deriveSuggestedIngredientMassKg(500, 0.5)).toBeCloseTo(250, 6);
+  });
+
+  it("suggests 160 kg for a 0.2 ingredient in an 800 kg product", () => {
+    expect(deriveSuggestedIngredientMassKg(800, 0.2)).toBeCloseTo(160, 6);
   });
 
   it("returns null when any input is null, undefined, zero, or negative", () => {
-    expect(deriveSuggestedIngredientMassKg(null, 0.8, 0.2)).toBeNull();
-    expect(deriveSuggestedIngredientMassKg(800, null, 0.2)).toBeNull();
-    expect(deriveSuggestedIngredientMassKg(800, 0.8, null)).toBeNull();
-    expect(deriveSuggestedIngredientMassKg(undefined, 0.8, 0.2)).toBeNull();
-    expect(deriveSuggestedIngredientMassKg(0, 0.8, 0.2)).toBeNull();
-    expect(deriveSuggestedIngredientMassKg(800, 0, 0.2)).toBeNull();
-    expect(deriveSuggestedIngredientMassKg(800, 0.8, 0)).toBeNull();
-    expect(deriveSuggestedIngredientMassKg(-1, 0.8, 0.2)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(null, 0.2)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(800, null)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(undefined, 0.2)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(0, 0.2)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(800, 0)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(-1, 0.2)).toBeNull();
+  });
+});
+
+describe("shouldPrefillSuggestedMasses", () => {
+  it("allows suggestions while creating a new product composition", () => {
+    expect(
+      shouldPrefillSuggestedMasses({
+        isEditMode: false,
+        initialFormulationId: null,
+        selectedFormulationId: ING_A,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not fabricate a null saved mass during an unrelated edit", () => {
+    const savedWithNullMass: IngredientBin[] = [
+      {
+        formulationIngredientId: ING_A,
+        feedstockTypeId: FT_A,
+        feedstockTypeName: "Compost",
+        feedstockTypeCategory: "compost",
+        ratio: 0.2,
+        massKg: null,
+        storageLocationId: BIN_A,
+      },
+    ];
+
+    expect(
+      shouldPrefillSuggestedMasses({
+        isEditMode: true,
+        initialFormulationId: ING_C,
+        selectedFormulationId: ING_C,
+      }),
+    ).toBe(false);
+    expect(toCompositionJsonb(savedWithNullMass, { mode: "update" })).toEqual({
+      ingredients: [expect.objectContaining({ massKg: null })],
+    });
+  });
+
+  it("allows suggestions after an explicit formulation reassignment", () => {
+    expect(
+      shouldPrefillSuggestedMasses({
+        isEditMode: true,
+        initialFormulationId: ING_A,
+        selectedFormulationId: ING_B,
+      }),
+    ).toBe(true);
   });
 });
 

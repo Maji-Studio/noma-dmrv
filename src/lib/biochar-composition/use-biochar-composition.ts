@@ -37,6 +37,7 @@ export interface UseBiocharCompositionArgs {
   formulationId: string | null | undefined;
   facilityId: string | null | undefined;
   productMassKg: number | null | undefined;
+  prefillSuggestedMasses: boolean;
 }
 
 export interface UseBiocharCompositionResult {
@@ -62,7 +63,12 @@ export function useBiocharComposition(
   form: LooseForm,
   args: UseBiocharCompositionArgs,
 ): UseBiocharCompositionResult {
-  const { formulationId, facilityId, productMassKg } = args;
+  const {
+    formulationId,
+    facilityId,
+    productMassKg,
+    prefillSuggestedMasses,
+  } = args;
 
   const control = form.control as Control<FieldValues>;
   const { fields, replace } = useFieldArray({ control, name: "ingredientBins" });
@@ -115,19 +121,20 @@ export function useBiocharComposition(
     });
   }, [facilityId, form]);
 
-  const biocharRatio = formulation?.biocharRatio ?? null;
   const productMass = typeof productMassKg === "number" ? productMassKg : null;
 
-  // Prefill each row's mass from the recipe suggestion. A suggestion only
-  // ever writes over an empty field or its own previous auto-filled value
-  // (tracked per ingredient in the ref) — a mass the user typed or one
-  // hydrated from a saved product never matches that identity and is never
-  // touched, so the recipe stays orientation, not enforcement. RHF dirty
+  // Prefill newly-created composition rows from the recipe suggestion. A
+  // suggestion only ever writes over an empty field or its own previous
+  // auto-filled value (tracked per ingredient in the ref) — a mass the user
+  // typed or one hydrated from a saved product is never touched. Existing
+  // compositions do not opt into this effect, so a saved null mass remains an
+  // explicit missing fact rather than silently becoming a persisted guess. RHF dirty
   // state is deliberately not consulted: `useFieldArray.replace` marks whole
   // rows dirty relative to the defaults, which would block prefill entirely
   // on a freshly selected formulation.
   const autoFilledMassRef = useRef<Record<string, number>>({});
   useEffect(() => {
+    if (!prefillSuggestedMasses) return;
     const ingredients = formulation?.ingredients;
     if (!ingredients) return;
     const live = (form.getValues("ingredientBins") as IngredientBin[] | undefined) ?? [];
@@ -138,7 +145,6 @@ export function useBiocharComposition(
       );
       const suggested = deriveSuggestedIngredientMassKg(
         productMass,
-        formulation?.biocharRatio ?? null,
         ingredient?.ratio ?? null,
       );
       if (suggested == null) return;
@@ -153,7 +159,7 @@ export function useBiocharComposition(
         shouldValidate: false,
       });
     });
-  }, [formulation, productMass, form]);
+  }, [formulation, productMass, form, prefillSuggestedMasses]);
 
   // Live values (not the field-array snapshot) so the deviation hint tracks
   // the user's typing.
@@ -164,7 +170,6 @@ export function useBiocharComposition(
   const rows: CompositionRow[] = ingredientFields.map((field, index) => {
     const suggestedMassKg = deriveSuggestedIngredientMassKg(
       productMass,
-      biocharRatio,
       field.ratio ?? null,
     );
     const liveMassRaw = liveBins?.[index]?.massKg as
