@@ -9,11 +9,19 @@ export interface CreditBatchFilterValues {
   readiness: CreditBatchReadinessFilter;
 }
 
-export function readinessErrorBlocksList(
+export function readinessErrorWithholdsResults(
   readiness: CreditBatchReadinessFilter,
   error: Error | null,
 ): boolean {
   return readiness !== "all" && error !== null;
+}
+
+export function readinessErrorMessage(
+  readiness: CreditBatchReadinessFilter,
+): string {
+  return readiness === "all"
+    ? "Certification readiness unavailable. Batches are still shown without readiness badges."
+    : "Certification readiness unavailable. Retry or clear the readiness filter to view batches.";
 }
 
 /**

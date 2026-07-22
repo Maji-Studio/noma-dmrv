@@ -90,13 +90,31 @@ export function useCreditBatchCo2eStoredPreviews(batchIds: string[]) {
     })),
   });
 
+  const resolved = resolveCreditBatchCo2ePreviews(results);
+
   return {
-    data: results.reduce<Record<string, CreditBatchCo2eStoredPreview>>(
-      (previews, result) => Object.assign(previews, result.data ?? {}),
-      {},
-    ),
+    ...resolved,
     isLoading: results.some((result) => result.isLoading),
-    error: results.find((result) => result.error)?.error ?? null,
+    isFetching: results.some((result) => result.isFetching),
+    refetch: () => Promise.all(results.map((result) => result.refetch())),
+  };
+}
+
+export function resolveCreditBatchCo2ePreviews(
+  results: ReadonlyArray<{
+    data?: Record<string, CreditBatchCo2eStoredPreview>;
+    error: Error | null;
+  }>,
+) {
+  const error = results.find((result) => result.error)?.error ?? null;
+  return {
+    data: error
+      ? undefined
+      : results.reduce<Record<string, CreditBatchCo2eStoredPreview>>(
+          (previews, result) => Object.assign(previews, result.data ?? {}),
+          {},
+        ),
+    error,
   };
 }
 

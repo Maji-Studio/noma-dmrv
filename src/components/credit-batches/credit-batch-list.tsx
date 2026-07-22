@@ -38,7 +38,8 @@ import {
 } from "./credit-batch-filters";
 import {
   filterCreditBatches,
-  readinessErrorBlocksList,
+  readinessErrorWithholdsResults,
+  readinessErrorMessage,
 } from "./credit-batch-filtering";
 import {
   useCreditBatches,
@@ -165,8 +166,13 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
 
   // Keep preview query chunks stable while operators adjust filters; totals are
   // still calculated from the filtered subset below.
-  const { data: co2eStoredPreviews = {}, isLoading: previewsLoading } =
-    useCreditBatchCo2eStoredPreviews(allBatchIds);
+  const {
+    data: co2eStoredPreviews = {},
+    isLoading: previewsLoading,
+    isFetching: previewsFetching,
+    error: previewsError,
+    refetch: refetchPreviews,
+  } = useCreditBatchCo2eStoredPreviews(allBatchIds);
   const hydratedFilteredItems = filteredItems.map((batch) => {
     const preview = co2eStoredPreviews[batch.id];
     return preview
@@ -189,9 +195,10 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
     .map((b) => b.co2eStoredPreview)
     .filter((preview): preview is NonNullable<typeof preview> => Boolean(preview));
   const hasPendingCo2e =
-    previewsLoading ||
-    visibleCo2ePreviews.length < hydratedFilteredItems.length ||
-    visibleCo2ePreviews.some((preview) => preview.missingInputs.length > 0);
+    !previewsError &&
+    (previewsLoading ||
+      visibleCo2ePreviews.length < hydratedFilteredItems.length ||
+      visibleCo2ePreviews.some((preview) => preview.missingInputs.length > 0));
   const totalCo2e = visibleCo2ePreviews.reduce(
     (sum, preview) => sum + (preview.co2eStoredTonnes ?? 0),
     0
@@ -321,18 +328,10 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
     );
   }
 
-  if (healthError && readinessErrorBlocksList(readinessFilter, healthError)) {
-    return (
-      <div className="container-max py-32">
-        <ServerError
-          message={
-            healthError.message ||
-            "Failed to load certification readiness for these batches"
-          }
-        />
-      </div>
-    );
-  }
+  const readinessResultsUnavailable = readinessErrorWithholdsResults(
+    readinessFilter,
+    healthError,
+  );
 
   // Derived values for the side sheet
   const sideSheetOpen = !!sideSheet;
@@ -363,12 +362,34 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
           <CertificateIcon size={16} weight="bold" aria-hidden />
           {listLoading
             ? "Loading batches…"
-            : `${totalFiltered} ${totalFiltered === 1 ? "batch" : "batches"}`}
+            : readinessResultsUnavailable
+              ? "Readiness unavailable"
+              : `${totalFiltered} ${totalFiltered === 1 ? "batch" : "batches"}`}
         </span>
-        <span className="inline-flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
-          <LeafIcon size={16} weight="bold" aria-hidden />
-          {previewsLoading ? "Calculating CO₂e…" : `${totalCo2e.toFixed(2)} t CO₂e stored`}
-        </span>
+        {previewsError ? (
+          <span
+            className="inline-flex items-center gap-8 body-small text-[var(--st-wait)]"
+            role="alert"
+          >
+            <WarningIcon size={14} weight="fill" aria-hidden />
+            CO₂e unavailable
+            <Button
+              variant="weak"
+              size="small"
+              busy={previewsFetching}
+              onClick={() => void refetchPreviews()}
+            >
+              Retry
+            </Button>
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
+            <LeafIcon size={16} weight="bold" aria-hidden />
+            {previewsLoading
+              ? "Calculating CO₂e…"
+              : `${totalCo2e.toFixed(2)} t CO₂e stored`}
+          </span>
+        )}
         {hasPendingCo2e && !previewsLoading && (
           <span className="inline-flex items-center gap-6 body-caption text-[var(--st-wait)]">
             <WarningIcon size={14} weight="fill" aria-hidden />
@@ -409,7 +430,7 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
         onClear={clearFilters}
       />
 
-      {healthError && readinessFilter === "all" && (
+      {healthError && (
         <div
           className="flex flex-col gap-12 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-16 py-12 sm:flex-row sm:items-center sm:justify-between"
           role="alert"
@@ -421,8 +442,7 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
               className="shrink-0 text-[var(--st-wait)]"
               aria-hidden
             />
-            Certification readiness unavailable. Batches are still shown
-            without readiness badges.
+            {readinessErrorMessage(readinessFilter)}
           </span>
           <Button
             variant="weak"
@@ -436,7 +456,7 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
       )}
 
       {/* Card Grid or Empty State */}
-      {listLoading ? (
+      {readinessResultsUnavailable ? null : listLoading ? (
         <div
           className="bg-[var(--panel-bg)] [border:var(--panel-border)] p-32 body-small text-[var(--color-text-tertiary)]"
           aria-busy="true"

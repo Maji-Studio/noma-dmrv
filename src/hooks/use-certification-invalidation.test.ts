@@ -27,11 +27,15 @@ describe("invalidateCertificationReadiness", () => {
       creditBatchPreviews: true,
     });
 
+    expect(invalidateQueries).toHaveBeenCalledTimes(3);
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: certificationKeys.all,
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: creditBatchKeys.previewsPrefix(),
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: creditBatchKeys.details(),
     });
   });
 });

@@ -134,6 +134,9 @@ export function invalidateCertificationReadiness(
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.previewsPrefix(),
       }),
+      queryClient.invalidateQueries({
+        queryKey: creditBatchKeys.details(),
+      }),
     );
   }
   return Promise.all(invalidations);

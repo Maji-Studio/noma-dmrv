@@ -36,6 +36,20 @@ function invalidateTransportEvidenceOwner(
   }
 }
 
+type DocumentDeletionOwner = {
+  entityType: "application" | "feedstock" | "delivery" | "transport_leg";
+};
+
+export function invalidateDeletedDocumentOwner(
+  queryClient: ReturnType<typeof useQueryClient>,
+  owner: DocumentDeletionOwner,
+) {
+  if (owner.entityType === "application") {
+    return invalidateCertificationReadiness(queryClient);
+  }
+  invalidateTransportEvidenceOwner(queryClient, owner);
+}
+
 export const documentKeys = {
   all: ["documents"] as const,
   forEntity: (entityType: string, entityId: string) =>
@@ -128,7 +142,7 @@ export function useUpdateApplicationEvidenceMetadata(
 
 export function useDeleteDocument(
   invalidateKey?: readonly unknown[],
-  owner?: { entityType: string },
+  owner?: DocumentDeletionOwner,
 ) {
   const qc = useQueryClient();
   return useMutation({
@@ -139,7 +153,7 @@ export function useDeleteDocument(
     },
     onSuccess: () => {
       if (invalidateKey) qc.invalidateQueries({ queryKey: invalidateKey });
-      if (owner) invalidateTransportEvidenceOwner(qc, owner);
+      if (owner) invalidateDeletedDocumentOwner(qc, owner);
     },
   });
 }
