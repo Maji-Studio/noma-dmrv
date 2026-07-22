@@ -61,6 +61,9 @@ describe("OrgBrand", () => {
 
     expect(html).toContain('role="status"');
     expect(html).toContain('aria-label="Loading organization"');
+    expect(html).toContain("w-128");
+    expect(html).not.toContain("w-112");
+    expect(html).not.toContain("w-120");
     expect(html).not.toContain("noma dMRV");
     expect(html).not.toContain("<a");
     expect(html).not.toContain("<button");
