@@ -607,6 +607,7 @@ export function ProductionRunList() {
       />
 
       <EntitySideSheet
+        numberedSections
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         onCloseAttempt={confirmCreateClose}

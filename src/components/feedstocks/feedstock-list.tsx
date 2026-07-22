@@ -497,6 +497,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
 
       {/* Side Sheet */}
       <EntitySideSheet
+        numberedSections
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         onCloseAttempt={confirmCreateClose}

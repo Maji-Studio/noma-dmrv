@@ -626,6 +626,7 @@ export function SampleList() {
       />
 
       <EntitySideSheet
+        numberedSections
         open={!!displaySideSheet}
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}
         onCloseAttempt={confirmCreateClose}

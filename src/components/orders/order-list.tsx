@@ -350,6 +350,7 @@ export function OrderList() {
 
       {/* Unified Side Sheet */}
       <EntitySideSheet
+        numberedSections
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheetMode}

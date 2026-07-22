@@ -478,6 +478,7 @@ export function DeliveryList() {
 
       {/* Unified Side Sheet */}
       <EntitySideSheet
+        numberedSections
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         onCloseAttempt={confirmCreateClose}

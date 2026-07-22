@@ -66,6 +66,8 @@ interface EntitySideSheetProps {
   subtitle?: string;
   /** View-mode section config — rendered as read-only detail fields */
   sections?: DetailPanelSection[];
+  /** Mirror a paired edit form's FormSpine numbering in read mode. */
+  numberedSections?: boolean;
   /**
    * Optional view-mode body extension. When provided, renders below the
    * default `sections` so callers can mount interactive content (extra
@@ -100,6 +102,7 @@ function EntitySideSheet({
   title,
   subtitle,
   sections,
+  numberedSections = false,
   viewModeChildren,
   editLabel = "Edit",
   canEdit = true,
@@ -166,7 +169,12 @@ function EntitySideSheet({
         >
           {isViewMode ? (
             <>
-              {sections && <DetailSpine sections={sections} numbered />}
+              {sections && (
+                <EntitySideSheetSections
+                  sections={sections}
+                  numbered={numberedSections}
+                />
+              )}
               {viewModeChildren}
             </>
           ) : (
@@ -199,9 +207,19 @@ function EntitySideSheet({
 }
 EntitySideSheet.displayName = "EntitySideSheet";
 
+function EntitySideSheetSections({
+  sections,
+  numbered = false,
+}: {
+  sections: DetailPanelSection[];
+  numbered?: boolean;
+}) {
+  return <DetailSpine sections={sections} numbered={numbered} />;
+}
+
 /* -------------------------------------------------------------------------------------------------
  * Export
  * -----------------------------------------------------------------------------------------------*/
 
-export { EntitySideSheet };
+export { EntitySideSheet, EntitySideSheetSections };
 export type { EntitySideSheetProps, SideSheetMode };
