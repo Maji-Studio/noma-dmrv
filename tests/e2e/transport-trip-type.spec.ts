@@ -182,8 +182,12 @@ test.describe("Transport trip type (#316)", () => {
     await page.goto(`/customers/${seededData.customer.id}`);
     await page.waitForLoadState("networkidle");
     await page.getByRole("button", { name: "Add Location" }).click();
+    // The locations table header now carries the same copy (QA detail-view
+    // pass), so target the form INPUT via its accessible name.
     await expect(
-      page.getByText("One-way distance from facility (per leg, km)")
+      page.getByRole("spinbutton", {
+        name: "One-way distance from facility (per leg, km)",
+      })
     ).toBeVisible({ timeout: 10000 });
   });
 });
