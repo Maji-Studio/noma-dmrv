@@ -5,7 +5,8 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { parseAsString, useQueryState } from "nuqs";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { MapPinIcon, PlusIcon, LeafIcon, XIcon } from "@phosphor-icons/react";
@@ -29,6 +30,7 @@ import {
 } from "./mass-utils";
 import type { ApplicationListItem } from "@/data-access/applications";
 import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "@/lib/certification/application-evidence";
+import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import {
   useApplications,
   useApplicationDeliveryOptions,
@@ -185,6 +187,29 @@ interface ApplicationListProps {
 
 export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const { facilityId: contextFacilityId, selectedFacility } = useFacilityContext();
+  const [affectedApplicationIdsParam, setAffectedApplicationIdsParam] =
+    useQueryState(
+      "ids",
+      parseAsString.withOptions({ shallow: true, history: "replace" }),
+    );
+  const affectedApplicationFilter = parseExactIdFilter(
+    affectedApplicationIdsParam,
+  );
+  const affectedApplicationIds = affectedApplicationFilter.ids;
+  useEffect(() => {
+    if (
+      affectedApplicationIdsParam &&
+      affectedApplicationFilter.normalized !== affectedApplicationIdsParam
+    ) {
+      void setAffectedApplicationIdsParam(
+        affectedApplicationFilter.normalized,
+      );
+    }
+  }, [
+    affectedApplicationFilter.normalized,
+    affectedApplicationIdsParam,
+    setAffectedApplicationIdsParam,
+  ]);
   // Facility durability tier (ADR 0021). Soil temperature is a 200-year-only
   // input, so the form section and detail row are hidden under 1000-year.
   // Fall back to 200-year while facility context resolves: showing the field
@@ -210,7 +235,15 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
 
   // Data fetching
   const { data: applications, isLoading, error } = useApplications(
-    contextFacilityId ? { facilityId: contextFacilityId } : undefined,
+    contextFacilityId
+      ? {
+          facilityId: contextFacilityId,
+          ids:
+            affectedApplicationIds.length > 0
+              ? affectedApplicationIds
+              : undefined,
+        }
+      : undefined,
     { enabled: !!contextFacilityId },
   );
   const { data: scopedDeliveries } = useApplicationDeliveryOptions(
@@ -341,8 +374,13 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
     // hides the very rows it visibly labels Visual.
     (!evidenceFilter || (a.evidenceMethod ?? "visual") === evidenceFilter)
   );
-  const hasActiveFilters = !!statusFilter || !!evidenceFilter;
-  const clearFilters = () => { setStatusFilter(""); setEvidenceFilter(""); };
+  const hasActiveFilters =
+    !!statusFilter || !!evidenceFilter || affectedApplicationIds.length > 0;
+  const clearFilters = () => {
+    setStatusFilter("");
+    setEvidenceFilter("");
+    setAffectedApplicationIdsParam(null);
+  };
 
   if (!contextFacilityId) {
     return (
@@ -458,6 +496,14 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         }
       >
         <DataTable.Toolbar>
+          {affectedApplicationIds.length > 0 && (
+            <span className="inline-flex h-32 items-center border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-10 body-caption font-medium text-[var(--st-wait)]">
+              {affectedApplicationIds.length} affected{" "}
+              {affectedApplicationIds.length === 1
+                ? "application"
+                : "applications"}
+            </span>
+          )}
           <DataTable.Search placeholder="Search applications..." />
           <select
             value={statusFilter}

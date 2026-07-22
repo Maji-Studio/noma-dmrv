@@ -74,11 +74,18 @@ async function expectRemovalEvidenceGap(
     `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
   );
   const checklist = page.getByTestId("batch-health-strip");
-  await expect(checklist).toContainText(
-    `Application ${batch.applicationCode}: boundary logbook evidence`,
-    { timeout: COLD_COMPILE_TIMEOUT_MS },
-  );
+  await expect(
+    checklist.getByText("Application evidence", { exact: true }),
+  ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
+  await expect(
+    checklist.getByRole("button", {
+      name: new RegExp(`^${batch.applicationCode}: boundary logbook evidence`),
+    }),
+  ).toBeVisible();
   await expect(checklist.getByText("1 issue open")).toBeVisible();
+  await expect(
+    checklist.getByRole("link", { name: "Fix 1 application" }),
+  ).toBeVisible();
 }
 
 test.describe("application certification readiness", () => {

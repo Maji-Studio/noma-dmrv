@@ -1,6 +1,6 @@
 /**
  * CreditBatchList component
- * Card grid layout with search and pagination. There is deliberately no
+ * Card grid layout with operational filters and pagination. There is deliberately no
  * lifecycle-status column or filter: every batch sits at the DB default
  * ("pending") with no transition path, so a status surface only competed with
  * the real readiness signal (QA 2026-07-21 F3). Reintroduce one when a registry
@@ -8,23 +8,19 @@
  */
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatDate } from "@/lib/format-utils";
 import {
   CertificateIcon,
-  CurrencyCircleDollarIcon,
   LeafIcon,
-  MagnifyingGlassIcon,
   PlusIcon,
-  XIcon,
+  WarningIcon,
 } from "@phosphor-icons/react";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import {
   EntitySideSheet,
   type SideSheetMode,
 } from "@/components/ui/entity-side-sheet";
-import { StatCard } from "@/components/ui/stat-card";
 import { useToast } from "@/components/ui/toast";
 import {
   Button,
@@ -36,7 +32,15 @@ import {
 import { ServerError } from "@/components/forms";
 import { CreditBatchForm } from "./credit-batch-form";
 import { CreditBatchCard } from "./credit-batch-card";
-import { CertifyPanel } from "@/components/certification";
+import {
+  CreditBatchFilters,
+  type CreditBatchReadinessFilter,
+} from "./credit-batch-filters";
+import {
+  filterCreditBatches,
+  readinessErrorWithholdsResults,
+  readinessErrorMessage,
+} from "./credit-batch-filtering";
 import {
   useCreditBatches,
   useCreditBatchCo2eStoredPreviews,
@@ -44,22 +48,12 @@ import {
   useUpdateCreditBatch,
   useDeleteCreditBatch,
 } from "@/hooks/use-credit-batches";
-import {
-  useCreditBatchHealthSummaries,
-  useFacilityCertifierSummary,
-} from "@/hooks/use-certification";
+import { useCreditBatchHealthSummaries } from "@/hooks/use-certification";
 import type { CreditBatchFormData } from "@/schemas/credit-batches";
-import {
-  formatCertifierProvider,
-  formatDurabilityOption,
-  type CertifierProvider,
-  type DurabilityOption,
-} from "@/schemas/credit-batches";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { EntityDetailValue } from "@/components/ui/entity-detail-value";
 
 // ============================================
 // Helpers
@@ -73,7 +67,11 @@ const EMPTY_CREDIT_BATCHES: CreditBatchWithRelations[] = [];
 
 export function CreditBatchList({ canManage = false }: { canManage?: boolean }) {
   // Filter & pagination state
-  const [searchQuery, setSearchQuery] = useState("");
+  const [startDateFilter, setStartDateFilter] = useState("");
+  const [endDateFilter, setEndDateFilter] = useState("");
+  const [selectedFeedstockIds, setSelectedFeedstockIds] = useState<string[]>([]);
+  const [readinessFilter, setReadinessFilter] =
+    useState<CreditBatchReadinessFilter>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
@@ -92,7 +90,7 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
   const { facilityId: contextFacilityId } = useFacilityContext();
 
   // Data fetching — facility-scoped so batches never leak across facilities
-  const { data: creditBatches, isLoading, error } = useCreditBatches(
+  const { data: creditBatches, isLoading: batchesLoading, error } = useCreditBatches(
     contextFacilityId ?? undefined
   );
   const createCreditBatch = useCreateCreditBatch();
@@ -100,75 +98,111 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
   const deleteCreditBatch = useDeleteCreditBatch();
   const toast = useToast();
 
-  // Client-side filtering
+  // Facility-scoped facets. A credit batch has exactly one feedstock, so the
+  // feedstock multi-select is an OR filter across the selected catalogue ids.
   const allItems = creditBatches ?? EMPTY_CREDIT_BATCHES;
-  const filteredItems = useMemo(() => {
-    let items = allItems;
-
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      items = items.filter(
-        (b) =>
-          b.code.toLowerCase().includes(q) ||
-          (b.facility?.name ?? "").toLowerCase().includes(q)
-      );
-    }
-
-    return items;
-  }, [allItems, searchQuery]);
-
-  // Client-side pagination
-  const totalFiltered = filteredItems.length;
-  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
-  const safeCurrentPage = Math.min(currentPage, totalPages);
-  const paginatedItems = filteredItems.slice(
-    (safeCurrentPage - 1) * pageSize,
-    safeCurrentPage * pageSize
+  const allBatchIds = allItems.map((batch) => batch.id);
+  const facetFilteredItems = filterCreditBatches(allItems, {}, {
+    startDate: startDateFilter,
+    endDate: endDateFilter,
+    feedstockTypeIds: selectedFeedstockIds,
+    readiness: "all",
+  });
+  const facetTotalPages = Math.max(
+    1,
+    Math.ceil(facetFilteredItems.length / pageSize),
   );
-  const previewIds = paginatedItems.map((b) => b.id);
+  const facetPage = Math.min(currentPage, facetTotalPages);
+  const visibleFacetIds = facetFilteredItems
+    .slice((facetPage - 1) * pageSize, facetPage * pageSize)
+    .map((batch) => batch.id);
+  // Card pills need only the visible page. A readiness filter necessarily
+  // widens the request to the date/feedstock candidate set so filtering stays
+  // accurate without walking every batch on ordinary list loads.
+  const healthBatchIds = readinessFilter === "all"
+    ? visibleFacetIds
+    : facetFilteredItems.map((batch) => batch.id);
+  const {
+    data: batchHealthSummaries = {},
+    isLoading: healthLoading,
+    isFetching: healthFetching,
+    error: healthError,
+    refetch: refetchHealth,
+  } =
+    useCreditBatchHealthSummaries(
+      contextFacilityId ?? undefined,
+      healthBatchIds,
+    );
+  const listLoading =
+    batchesLoading || (readinessFilter !== "all" && healthLoading);
+  const filteredItems = filterCreditBatches(
+    facetFilteredItems,
+    Object.fromEntries(
+      healthBatchIds.map((id) => [
+        id,
+        batchHealthSummaries[id]?.state,
+      ]),
+    ),
+    {
+      startDate: "",
+      endDate: "",
+      feedstockTypeIds: [],
+      readiness: readinessFilter,
+    },
+  );
+  const feedstockOptions = Array.from(
+    new Map(
+      allItems
+        .filter((batch) => batch.feedstockTypeName)
+        .map((batch) => [
+          batch.feedstockTypeId,
+          {
+            id: batch.feedstockTypeId,
+            name: batch.feedstockTypeName as string,
+          },
+        ]),
+    ).values(),
+  ).sort((a, b) => a.name.localeCompare(b.name));
+
+  // Keep preview query chunks stable while operators adjust filters; totals are
+  // still calculated from the filtered subset below.
   const {
     data: co2eStoredPreviews = {},
     isLoading: previewsLoading,
-  } = useCreditBatchCo2eStoredPreviews(previewIds);
-  // Per-batch certification readiness for the visible page, so each card can
-  // surface a cert tag (incl. missing application evidence) that links into the
-  // detail page's submission gate. Same classifier, never disagrees.
-  const { data: batchHealthSummaries = {} } = useCreditBatchHealthSummaries(
-    contextFacilityId ?? undefined,
-    previewIds,
-  );
-  const { data: certifierSummary, isLoading: certifierLoading } =
-    useFacilityCertifierSummary(contextFacilityId ?? "", !!contextFacilityId);
-  // `undefined` while the mapping is still loading (so cards don't flash "No
-  // certifier"), `null` once we know there is genuinely no mapping.
-  const facilityCertifierLabel = certifierSummary?.mapping
-    ? formatCertifierProvider(
-        certifierSummary.mapping.provider as CertifierProvider,
-      )
-    : certifierLoading
-      ? undefined
-      : null;
-  const hydratedPaginatedItems = paginatedItems.map((batch) => {
+    isFetching: previewsFetching,
+    error: previewsError,
+    refetch: refetchPreviews,
+  } = useCreditBatchCo2eStoredPreviews(allBatchIds);
+  const hydratedFilteredItems = filteredItems.map((batch) => {
     const preview = co2eStoredPreviews[batch.id];
     return preview
       ? { ...batch, co2eStoredPreview: preview, previewAvailable: true }
       : batch;
   });
 
-  // Stats (from all items, not filtered)
-  const totalBatches = allItems.length;
-  const visibleCo2ePreviews = hydratedPaginatedItems
+  // Client-side pagination
+  const totalFiltered = filteredItems.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedItems = hydratedFilteredItems.slice(
+    (safeCurrentPage - 1) * pageSize,
+    safeCurrentPage * pageSize
+  );
+
+  // Compact list summary — no monetary value, which is registry-owned and not
+  // an operational signal on a production cohort.
+  const visibleCo2ePreviews = hydratedFilteredItems
     .map((b) => b.co2eStoredPreview)
     .filter((preview): preview is NonNullable<typeof preview> => Boolean(preview));
   const hasPendingCo2e =
-    previewsLoading ||
-    visibleCo2ePreviews.length < hydratedPaginatedItems.length ||
-    visibleCo2ePreviews.some((preview) => preview.missingInputs.length > 0);
+    !previewsError &&
+    (previewsLoading ||
+      visibleCo2ePreviews.length < hydratedFilteredItems.length ||
+      visibleCo2ePreviews.some((preview) => preview.missingInputs.length > 0));
   const totalCo2e = visibleCo2ePreviews.reduce(
     (sum, preview) => sum + (preview.co2eStoredTonnes ?? 0),
     0
   );
-  const totalValue = allItems.reduce((sum, b) => sum + (b.value ?? 0), 0);
 
   // Handlers
   const handleCreate = async (data: CreditBatchFormData) => {
@@ -257,11 +291,19 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
   };
 
   const clearFilters = () => {
-    setSearchQuery("");
+    setStartDateFilter("");
+    setEndDateFilter("");
+    setSelectedFeedstockIds([]);
+    setReadinessFilter("all");
     setCurrentPage(1);
   };
 
-  const hasActiveFilters = Boolean(searchQuery);
+  const hasActiveFilters = Boolean(
+    startDateFilter ||
+      endDateFilter ||
+      selectedFeedstockIds.length > 0 ||
+      readinessFilter !== "all",
+  );
 
   if (!contextFacilityId) {
     return (
@@ -286,6 +328,11 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
     );
   }
 
+  const readinessResultsUnavailable = readinessErrorWithholdsResults(
+    readinessFilter,
+    healthError,
+  );
+
   // Derived values for the side sheet
   const sideSheetOpen = !!sideSheet;
   const sideSheetMode = sideSheet?.mode ?? "create";
@@ -293,83 +340,6 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
 
   const sideSheetTitle =
     sideSheetMode === "create" ? "Create Credit Batch" : sideSheetEntity?.code ?? "";
-
-  const sideSheetSubtitle =
-    sideSheetMode === "create" ? undefined : sideSheetEntity?.facility?.name;
-
-  const sideSheetSections = sideSheetEntity
-    ? [
-        {
-          title: "Overview",
-          fields: [
-            { label: "Feedstock Type", value: sideSheetEntity.feedstockTypeName },
-            { label: "Start Date", value: formatDate(sideSheetEntity.startDate) },
-            { label: "End Date", value: formatDate(sideSheetEntity.endDate) },
-          ],
-        },
-        {
-          title: "Production runs",
-          fields: sideSheetEntity.productionRunIds.length > 0
-            ? sideSheetEntity.productionRunIds.map((productionRunId, index) => ({
-                label: `Production Run ${index + 1}`,
-                value: <EntityDetailValue entityType="productionRun" id={productionRunId} />,
-              }))
-            : [{ label: "Production Run", value: null }],
-        },
-        {
-          title: "Durability",
-          fields: [{
-            label: "Durability Option",
-            value: sideSheetEntity.durabilityOption
-              ? formatDurabilityOption(sideSheetEntity.durabilityOption as DurabilityOption)
-              : null,
-          }],
-        },
-        {
-          title: "Site Management",
-          fields: [{ label: "Notes", value: sideSheetEntity.siteManagementNotes }],
-        },
-        {
-          title: "Registry & accounting",
-          fields: [
-            { label: "Buffer pool", value: sideSheetEntity.bufferPoolPercent != null ? `${sideSheetEntity.bufferPoolPercent}%` : null },
-            { label: "Registry", value: sideSheetEntity.registry },
-            { label: "Weight", value: sideSheetEntity.appliedWeightTons != null ? `${sideSheetEntity.appliedWeightTons.toFixed(2)} t` : null },
-            { label: "Value", value: sideSheetEntity.value != null ? `${sideSheetEntity.value}${sideSheetEntity.currency ? ` ${sideSheetEntity.currency}` : ""}` : null },
-          ],
-        },
-        {
-          title: "Record Metadata & Metrics",
-          fields: [
-            { label: "Code", value: sideSheetEntity.code },
-            { label: "Facility", value: sideSheetEntity.facility?.name },
-            { label: "Certification", value: facilityCertifierLabel },
-            {
-              label: "Total CO₂e stored",
-              value:
-                sideSheetEntity.co2eStoredPreview?.co2eStoredTonnes != null
-                  ? `${sideSheetEntity.co2eStoredPreview.co2eStoredTonnes.toFixed(2)} t CO₂e`
-                  : sideSheetEntity.co2eStoredPreview
-                    ? "Pending inputs"
-                    : "Open the batch detail to calculate",
-            },
-            {
-              label: "Preview Inputs",
-              value:
-                !sideSheetEntity.co2eStoredPreview
-                  ? "Open the batch detail to calculate"
-                  : sideSheetEntity.co2eStoredPreview.missingInputs.length > 0
-                    ? sideSheetEntity.co2eStoredPreview.missingInputs.join(", ")
-                    : "Complete",
-            },
-            {
-              label: "Application Count",
-              value: String(sideSheetEntity.applicationCount ?? 0),
-            },
-          ],
-        },
-      ]
-    : undefined;
 
   return (
     <div className="container-max page-shell">
@@ -386,67 +356,114 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
         }
       />
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
-        <StatCard
-          title="Total Batches"
-          value={totalBatches}
-          icon={<CertificateIcon size={24} weight="bold" />}
-          description="Carbon credit batches"
-          isLoading={isLoading}
-        />
-        <StatCard
-          title="CO₂e stored"
-          value={hasPendingCo2e ? "Pending" : `${totalCo2e.toFixed(2)} t`}
-          icon={<LeafIcon size={24} weight="bold" />}
-          description="Current page carbon stored"
-          isLoading={isLoading || previewsLoading}
-        />
-        <StatCard
-          title="Total Value"
-          value={totalValue.toLocaleString()}
-          icon={<CurrencyCircleDollarIcon size={24} weight="bold" />}
-          description="Combined batch value"
-          isLoading={isLoading}
-        />
+      {/* Compact operational summary */}
+      <div className="flex flex-wrap items-center gap-x-20 gap-y-8 border-y border-[var(--color-border-tertiary)] py-12">
+        <span className="inline-flex items-center gap-6 body-small font-medium text-[var(--color-text-primary)]">
+          <CertificateIcon size={16} weight="bold" aria-hidden />
+          {listLoading
+            ? "Loading batches…"
+            : readinessResultsUnavailable
+              ? "Readiness unavailable"
+              : `${totalFiltered} ${totalFiltered === 1 ? "batch" : "batches"}`}
+        </span>
+        {previewsError ? (
+          <span
+            className="inline-flex items-center gap-8 body-small text-[var(--st-wait)]"
+            role="alert"
+          >
+            <WarningIcon size={14} weight="fill" aria-hidden />
+            CO₂e unavailable
+            <Button
+              variant="weak"
+              size="small"
+              busy={previewsFetching}
+              onClick={() => void refetchPreviews()}
+            >
+              Retry
+            </Button>
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
+            <LeafIcon size={16} weight="bold" aria-hidden />
+            {previewsLoading
+              ? "Calculating CO₂e…"
+              : `${totalCo2e.toFixed(2)} t CO₂e stored`}
+          </span>
+        )}
+        {hasPendingCo2e && !previewsLoading && (
+          <span className="inline-flex items-center gap-6 body-caption text-[var(--st-wait)]">
+            <WarningIcon size={14} weight="fill" aria-hidden />
+            Some batches have pending inputs
+          </span>
+        )}
       </div>
 
-      {/* Filter Bar */}
-      <section className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20">
-        <div className="flex flex-col gap-16 xl:flex-row xl:items-end xl:justify-between">
-          <div className="grid flex-1 gap-12">
-            <div className="relative">
-              <MagnifyingGlassIcon
-                size={18}
-                className="pointer-events-none absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)]"
-              />
-              <input
-                type="text"
-                placeholder="Search by code or facility..."
-                value={searchQuery}
-                onChange={(event) => {
-                  setSearchQuery(event.target.value);
-                  setCurrentPage(1);
-                }}
-                className="h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] pl-36 pr-12 body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-                aria-label="Search credit batches"
-              />
-            </div>
-          </div>
+      <CreditBatchFilters
+        startDate={startDateFilter}
+        endDate={endDateFilter}
+        readiness={readinessFilter}
+        feedstocks={feedstockOptions}
+        selectedFeedstockIds={selectedFeedstockIds}
+        hasActiveFilters={hasActiveFilters}
+        onStartDateChange={(value) => {
+          setStartDateFilter(value);
+          setCurrentPage(1);
+        }}
+        onEndDateChange={(value) => {
+          setEndDateFilter(value);
+          setCurrentPage(1);
+        }}
+        onReadinessChange={(value) => {
+          setReadinessFilter(value);
+          setCurrentPage(1);
+        }}
+        onAddFeedstock={(id) => {
+          setSelectedFeedstockIds((current) => [...current, id]);
+          setCurrentPage(1);
+        }}
+        onRemoveFeedstock={(id) => {
+          setSelectedFeedstockIds((current) =>
+            current.filter((feedstockId) => feedstockId !== id),
+          );
+          setCurrentPage(1);
+        }}
+        onClear={clearFilters}
+      />
 
-          <div className="flex flex-wrap items-center gap-8">
-            {hasActiveFilters && (
-              <Button variant="noOutline" size="small" onClick={clearFilters}>
-                <XIcon size={16} weight="bold" />
-                Clear
-              </Button>
-            )}
-          </div>
+      {healthError && (
+        <div
+          className="flex flex-col gap-12 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-16 py-12 sm:flex-row sm:items-center sm:justify-between"
+          role="alert"
+        >
+          <span className="inline-flex items-center gap-8 body-small text-[var(--color-text-secondary)]">
+            <WarningIcon
+              size={16}
+              weight="fill"
+              className="shrink-0 text-[var(--st-wait)]"
+              aria-hidden
+            />
+            {readinessErrorMessage(readinessFilter)}
+          </span>
+          <Button
+            variant="weak"
+            size="small"
+            busy={healthFetching}
+            onClick={() => void refetchHealth()}
+          >
+            Retry
+          </Button>
         </div>
-      </section>
+      )}
 
       {/* Card Grid or Empty State */}
-      {paginatedItems.length === 0 ? (
+      {readinessResultsUnavailable ? null : listLoading ? (
+        <div
+          className="bg-[var(--panel-bg)] [border:var(--panel-border)] p-32 body-small text-[var(--color-text-tertiary)]"
+          aria-busy="true"
+        >
+          Loading credit batches…
+        </div>
+      ) : paginatedItems.length === 0 ? (
         <EmptyState
           padding="lg"
           icon={<CertificateIcon size={48} />}
@@ -457,7 +474,7 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
           }
           description={
             hasActiveFilters
-              ? "Try adjusting your search or filters."
+              ? "Try adjusting or clearing the filters."
               : "Create your first credit batch to get started."
           }
           action={
@@ -472,12 +489,12 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
       ) : (
         <>
           <div className="grid grid-cols-1 gap-24 xl:grid-cols-2 2xl:grid-cols-3">
-            {hydratedPaginatedItems.map((batch) => (
+            {paginatedItems.map((batch) => (
               <CreditBatchCard
                 key={batch.id}
                 creditBatch={batch}
-                certifierLabel={facilityCertifierLabel}
-                health={batchHealthSummaries[batch.id]}
+                health={healthError ? undefined : batchHealthSummaries[batch.id]}
+                isHealthLoading={healthLoading && !healthError}
                 onView={openView}
                 onEdit={openEdit}
                 onDelete={handleDelete}
@@ -514,19 +531,19 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheetMode}
-        onModeChange={(mode) =>
-          setSideSheet((prev) => (prev ? { ...prev, mode } : null))
-        }
+        onModeChange={(mode) => {
+          if (mode === "view" && sideSheetEntity) {
+            setSideSheet(null);
+            openView(sideSheetEntity);
+            return;
+          }
+          setSideSheet((previous) =>
+            previous ? { ...previous, mode } : null,
+          );
+        }}
         title={sideSheetTitle}
-        subtitle={sideSheetSubtitle}
         editLabel="Edit Credit Batch"
         size="wide"
-        sections={sideSheetSections}
-        viewModeChildren={
-          sideSheetEntity && sideSheetMode === "view" ? (
-            <CertifyPanel creditBatchId={sideSheetEntity.id} />
-          ) : null
-        }
       >
         {(createError || updateError) && (
           <div className="mb-24">

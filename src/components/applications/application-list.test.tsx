@@ -3,6 +3,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("nuqs", () => ({
+  parseAsString: { withOptions: () => ({}) },
+  useQueryState: () => [null, vi.fn()],
+}));
 vi.mock("@/hooks/use-facility-context", () => ({
   useFacilityContext: () => ({ facilityId: null, selectedFacility: null }),
 }));

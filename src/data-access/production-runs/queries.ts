@@ -64,6 +64,7 @@ export async function getProductionRuns(
   requireOrgScope(ctx);
 
   const {
+    ids,
     search,
     facilityId,
     reactorId,
@@ -81,6 +82,10 @@ export async function getProductionRuns(
     eq(productionRuns.organizationId, ctx.organizationId),
     isNull(productionRuns.archivedAt),
   ];
+
+  if (ids?.length) {
+    conditions.push(inArray(productionRuns.id, ids));
+  }
 
   if (search) {
     const searchPattern = `%${search}%`;

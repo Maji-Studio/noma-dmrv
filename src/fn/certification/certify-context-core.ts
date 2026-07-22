@@ -68,8 +68,7 @@ import {
   safeListIfConfigured,
   type TransportLegsByCategory,
 } from "./shared";
-import { buildApplicationEvidenceGaps } from "./application-evidence-readiness";
-import { buildEntityReadinessGaps } from "./certify-readiness-gaps";
+import { buildCertifyEntityReadiness } from "./certify-entity-readiness";
 import { loadDurabilityBatchData } from "./durability-readiness";
 import { buildSubmissionWarnings } from "./submission-warnings";
 import {
@@ -157,10 +156,10 @@ export interface RemovalCertifyContext {
   // no-applications / broken-product-link cases out of the generic production
   // bucket on health and readiness surfaces.
   productionReadinessGap: ProductionReadinessGap | null;
-  // Compact labels from the per-entity certifier-readiness layer. The raw
-  // entity rows stay server-side; Review/pre-flight only needs gap labels. The
-  // submit pipeline gates on this same list, so [] means entity-ready.
+  // Compact labels from the per-entity certifier-readiness layer; the submit
+  // pipeline gates on this same list, so [] means entity-ready.
   entityReadinessGaps: string[];
+  entityReadinessIssues?: import("@/lib/certification/batch-health").BatchEntityReadinessIssue[];
   // Fail-closed durability sampling/eligibility blockers (D3) — the EXACT list
   // the submit pipeline blocks on, so readiness predicts the gate. [] ⇒ ready.
   durabilityGateBlockers: string[];
@@ -322,18 +321,21 @@ interface RemovalScope {
 async function resolveScopeForCreditBatch(
   orgCtx: OrgContext,
   creditBatchId: string,
-  lineageFacts?: CreditBatchLineageFacts,
+  options?: {
+    singleBatch?: boolean;
+    lineageFacts?: CreditBatchLineageFacts;
+  },
 ): Promise<RemovalScope> {
   // Preloaded once so the CO₂e preview and lineage projection share one load.
   const facts =
-    lineageFacts ??
+    options?.lineageFacts ??
     (await loadCreditBatchLineageFacts(orgCtx, [creditBatchId]))[creditBatchId];
   const batch = await getCreditBatchById(orgCtx, creditBatchId, {
     lineageFacts: facts,
   });
   if (!batch) throw new SafeError("Credit batch not found");
 
-  if (!batch.removalId) {
+  if (!batch.removalId || options?.singleBatch) {
     const runById = new Map(facts.runs.map((run) => [run.id, run]));
     return {
       facilityId: batch.facilityId,
@@ -678,15 +680,14 @@ export async function buildRemovalContext(
   const entityIds = collectTransportEntityIds(lineages, batchesWithSamples);
   const transportLegs = await loadTransportLegsByCategory(orgCtx, entityIds);
   const transportCoverage = buildCoverage(transportLegs, entityIds);
-  const entityReadinessGaps = [
-    ...buildEntityReadinessGaps(
-      runs,
-      batchesWithSamples,
-      transportLegs,
-      facilityFacts.requiredTransportCategories,
-    ),
-    ...(await buildApplicationEvidenceGaps(orgCtx, lineages)),
-  ];
+  const entityReadiness = await buildCertifyEntityReadiness({
+    orgCtx,
+    lineages,
+    runs,
+    batchesWithSamples,
+    transportLegs,
+    requiredTransportCategories: facilityFacts.requiredTransportCategories,
+  });
   // One mass-accounting walk: the per-run attribution the submit pipeline
   // scopes by AND the Review-flow summary, so the two can never diverge.
   const { attributionByRunId, runSummary } = buildMassAccounting(
@@ -743,7 +744,8 @@ export async function buildRemovalContext(
     transportCoverage,
     hasSubmittableRuns: runs.length > 0 && !productionReadinessGap,
     productionReadinessGap,
-    entityReadinessGaps,
+    entityReadinessGaps: entityReadiness.gaps,
+    entityReadinessIssues: entityReadiness.issues,
     durabilityGateBlockers,
     submissionWarnings,
     runSummary,
@@ -795,6 +797,7 @@ function projectUiContext(
     hasSubmittableRuns: ctx.hasSubmittableRuns,
     productionReadinessGap: ctx.productionReadinessGap,
     entityReadinessGaps: ctx.entityReadinessGaps,
+    entityReadinessIssues: ctx.entityReadinessIssues ?? [],
     durabilityGateBlockers: ctx.durabilityGateBlockers,
     submissionWarnings: ctx.submissionWarnings,
     runSummary: ctx.runSummary,
@@ -816,13 +819,12 @@ export async function loadRemovalCertifyContext(
   );
 }
 
-// UI context for the credit-batch Certify panel. Resolves the removal the
-// batch belongs to (or a 1:1 preview when it is not yet grouped).
 export async function loadCertifyContextForCreditBatchForUser(
   orgCtx: OrgContext,
   creditBatchId: string,
+  options?: { singleBatch?: boolean },
 ): Promise<RemovalCertifyContext> {
-  const scope = await resolveScopeForCreditBatch(orgCtx, creditBatchId);
+  const scope = await resolveScopeForCreditBatch(orgCtx, creditBatchId, options);
   const facilityFacts = await loadFacilityCertifierFacts(
     orgCtx,
     scope.facilityId,
@@ -831,7 +833,6 @@ export async function loadCertifyContextForCreditBatchForUser(
     await buildRemovalContext(orgCtx, scope, facilityFacts),
   );
 }
-
 export async function loadCertifyContextForCreditBatch(
   creditBatchId: string,
 ): Promise<ActionResult<RemovalCertifyContext>> {
@@ -839,7 +840,6 @@ export async function loadCertifyContextForCreditBatch(
     loadCertifyContextForCreditBatchForUser(orgCtx, creditBatchId),
   );
 }
-
 // Same as `loadCertifyContextForCreditBatchForUser` but reuses caller-supplied
 // facility facts instead of loading them per call. A multi-batch confirm (the
 // New-Removal wizard) loads `loadFacilityCertifierFacts` — which includes the
@@ -854,11 +854,10 @@ export async function buildCreditBatchContextWithFacts(
   facilityFacts: FacilityCertifierFacts,
   lineageFacts?: CreditBatchLineageFacts,
 ): Promise<RemovalCertifyContext> {
-  const scope = await resolveScopeForCreditBatch(
-    orgCtx,
-    creditBatchId,
+  const scope = await resolveScopeForCreditBatch(orgCtx, creditBatchId, {
+    singleBatch: true,
     lineageFacts,
-  );
+  });
   return projectUiContext(
     await buildRemovalContext(orgCtx, scope, facilityFacts),
   );

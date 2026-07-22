@@ -3,11 +3,10 @@
  * Reusable credit batch form with React Hook Form integration
  *
  * Form sections:
- * 1. Overview — startDate, endDate
+ * 1. Batch definition — feedstock, startDate, endDate, notes
  * 2. Production cohort — selected production runs in the production window
- * 3. Durability — read-only; inherited from the facility's default option (PDD-level decision)
- * 4. Registry & accounting — buffer pool %, registry, derived applied weight,
- *    value (read-only; emissions/counterfactual are registry-owned, ADR 0018)
+ * Facility durability and registry/accounting values are intentionally absent:
+ * neither is a batch input.
  */
 "use client";
 
@@ -28,11 +27,9 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, SectionLabel, FormActions } from "@/components/forms";
 import { Button } from "@/components/ui";
-import { DurabilityTierSelect } from "@/components/certification";
 import {
   creditBatchFormSchema,
   type CreditBatchFormData,
-  type DurabilityOption,
 } from "@/schemas/credit-batches";
 import type { CreditBatch } from "@/db/schema/credits";
 import type { CreditBatchProductionRunOption } from "@/data-access/credit-batches";
@@ -44,72 +41,12 @@ import { MethodBPrerequisitesSetup } from "./method-b-prerequisites-setup";
 const COHORT_LIST_HEIGHT_CLASS = "max-h-[320px]";
 
 // ============================================
-// Section helpers
-// ============================================
-
-function ReadOnlyBadge() {
-  return (
-    <span className="inline-flex items-center px-8 py-2 body-caption text-[var(--color-text-tertiary)] bg-[var(--color-background-medium)] border border-[var(--color-border-tertiary)]">
-      Auto-populated
-    </span>
-  );
-}
-
-// ============================================
 // Format helpers
 // ============================================
 
 function formatTons(value: number | null): string {
   if (value == null) return "—";
   return `${value.toFixed(2)} t`;
-}
-
-function formatMaybe(
-  value: number | string | null | undefined,
-  suffix = ""
-): string {
-  if (value == null || value === "") return "—";
-  return `${value}${suffix}`;
-}
-
-// ============================================
-// Read-only display field
-// ============================================
-
-/**
- * Renders an auto-populated value as a static label/value pair rather than a
- * disabled <input>. Disabled inputs read as "editable but locked"; a plain
- * value row makes it unambiguous that the system owns this field.
- */
-function ReadOnlyField({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-}) {
-  const isEmpty = value === "—";
-  return (
-    <div className="flex flex-col gap-2">
-      <dt className="body-caption text-[var(--color-text-tertiary)]">{label}</dt>
-      <dd
-        className={`body-medium tabular-nums ${
-          isEmpty
-            ? "text-[var(--color-text-quaternary)]"
-            : "text-[var(--color-text-primary)]"
-        }`}
-      >
-        {value}
-      </dd>
-      {hint && (
-        <dd className="body-caption text-[var(--color-text-quaternary)]">
-          {hint}
-        </dd>
-      )}
-    </div>
-  );
 }
 
 // ============================================
@@ -285,8 +222,6 @@ interface CreditBatchFormProps {
     productionRunIds?: string[];
     /** Derived Σ member applications' applied tons (issue #285). */
     appliedWeightTons?: number;
-    /** Facility-derived durability tier (ADR 0021) — shown read-only. */
-    durabilityOption?: DurabilityOption;
   };
   /** Form submission handler */
   onSubmit: (data: CreditBatchFormData) => Promise<void> | void;
@@ -315,7 +250,7 @@ export function CreditBatchForm({
   canManage = false,
 }: CreditBatchFormProps) {
   const isEditMode = !!creditBatch;
-  const { facilityId: contextFacilityId, selectedFacility } = useFacilityContext();
+  const { facilityId: contextFacilityId } = useFacilityContext();
 
   const {
     register,
@@ -350,14 +285,6 @@ export function CreditBatchForm({
   const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
   const watchedSampling = useWatch({ control, name: "sampling" });
   const watchedProductionRunIds = useWatch({ control, name: "productionRunIds" });
-  // Tier is inherited from the facility (ADR 0021), shown read-only here — never
-  // a batch input. Prefer the batch's own join-derived tier (edit mode); fall
-  // back to the active facility's tier (create mode). Pages are facility-scoped,
-  // so the active facility is the batch's facility.
-  const durabilityOption: DurabilityOption =
-    (creditBatch?.durabilityOption as DurabilityOption | undefined) ??
-    (selectedFacility?.durabilityOption as DurabilityOption | undefined) ??
-    "1000_year";
   const effectiveFacilityId = watchedFacilityId || contextFacilityId || "";
   const declaredFeedstockTypeId = watchedFeedstockTypeId || "";
   const selectedSampling = watchedSampling === "unsampled" ? "unsampled" : "sampled";
@@ -554,8 +481,8 @@ export function CreditBatchForm({
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
-      {/* ── Overview ── */}
-      <FormSection title="Overview" divider={false}>
+      {/* ── Batch definition ── */}
+      <FormSection title="Batch definition" divider={false}>
 
         <div className="space-y-8">
           <FormEntitySelect
@@ -630,6 +557,21 @@ export function CreditBatchForm({
           </FormField>
         </div>
 
+        <FormField
+          id="siteManagementNotes"
+          label="Notes"
+          error={errors.siteManagementNotes?.message}
+        >
+          <FormTextarea
+            id="siteManagementNotes"
+            placeholder="Add optional notes about this credit batch…"
+            disabled={isSubmitting}
+            rows={3}
+            error={!!errors.siteManagementNotes}
+            {...register("siteManagementNotes")}
+          />
+        </FormField>
+
       </FormSection>
 
       {/* ── Production cohort ── */}
@@ -677,77 +619,6 @@ export function CreditBatchForm({
 
       {/* ── Cohort input ledger (live front-loaded production inputs) ── */}
       <CohortInputLedger runs={selectedRuns} />
-
-      {/* ── Durability ── */}
-      <FormSection
-        title="Durability"
-        hint={
-          <>
-            The durability crediting tier is declared once per facility and
-            inherited by every batch and sample here (ADR 0021). It must match
-            the facility&apos;s removal template. Change it in the
-            facility&apos;s settings, not per batch.
-          </>
-        }
-      >
-        <DurabilityTierSelect value={durabilityOption} readOnly />
-      </FormSection>
-
-      {/* ── Site Management Notes ── */}
-      <FormSection title="Site Management">
-
-        <FormField
-          id="siteManagementNotes"
-          label="Notes"
-          error={errors.siteManagementNotes?.message}
-          helperText="Irrigation, tillage, fertilizer summary"
-        >
-          <FormTextarea
-            id="siteManagementNotes"
-            placeholder="Enter site management notes..."
-            disabled={isSubmitting}
-            rows={4}
-            error={!!errors.siteManagementNotes}
-            {...register("siteManagementNotes")}
-          />
-        </FormField>
-      </FormSection>
-
-      {/* ── Registry & accounting (read-only, system-populated) ── */}
-      <FormSection
-        title={<>Registry &amp; accounting</>}
-        hint="Calculated by Isometric verification and registry issuance — not editable here."
-        actions={<ReadOnlyBadge />}
-        className="space-y-12"
-      >
-        <dl className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-24 gap-y-20 p-20 bg-[var(--color-background-sunken)] border border-[var(--color-border-tertiary)]">
-          <ReadOnlyField
-            label="Buffer pool"
-            value={formatMaybe(creditBatch?.bufferPoolPercent ?? null, "%")}
-            hint="Risk-based (2–20%)"
-          />
-          <ReadOnlyField
-            label="Registry"
-            value={formatMaybe(creditBatch?.registry)}
-          />
-          <ReadOnlyField
-            label="Weight"
-            value={formatTons(creditBatch?.appliedWeightTons ?? null)}
-            hint="Applied to soil (derived)"
-          />
-          <ReadOnlyField
-            label="Value"
-            value={
-              creditBatch?.value != null
-                ? `${creditBatch.value}${
-                    creditBatch.currency ? ` ${creditBatch.currency}` : ""
-                  }`
-                : "—"
-            }
-            hint="Credit value"
-          />
-        </dl>
-      </FormSection>
 
       <FormActions
         sticky={stickyActions}

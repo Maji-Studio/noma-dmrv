@@ -313,6 +313,9 @@ export const deleteProductionRunSchema = z.object({
  * Used for search, pagination, and filtering
  */
 export const productionRunFilterSchema = z.object({
+  // Exact-record deep link from certification readiness.
+  ids: z.array(z.uuid()).max(100).optional(),
+
   // Text search across code
   search: z
     .string()

@@ -18,9 +18,12 @@ export async function loadBatchHealth(
   creditBatchId: string,
 ): Promise<ActionResult<BatchHealth>> {
   return withAction(async (orgCtx) => {
+    // Keep health at the batch grain after grouping; the submission workspace
+    // intentionally continues to use the aggregate removal context.
     const ctx = await loadCertifyContextForCreditBatchForUser(
       orgCtx,
       creditBatchId,
+      { singleBatch: true },
     );
     return deriveBatchHealth(toBatchHealthFacts(ctx, creditBatchId));
   });

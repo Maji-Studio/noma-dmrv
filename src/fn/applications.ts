@@ -38,13 +38,14 @@ const getApplicationsOptionsSchema = z.object({
   page: z.number().int().min(1).optional(),
   pageSize: z.number().int().min(1).max(100).optional(),
   facilityId: z.string().uuid().optional(),
+  ids: z.array(z.uuid()).max(100).optional(),
 }).optional();
 
 /**
  * Get applications with pagination
  */
 export async function getApplicationsFn(
-  options?: { page?: number; pageSize?: number; facilityId?: string }
+  options?: { page?: number; pageSize?: number; facilityId?: string; ids?: string[] }
 ): Promise<ActionResult<{ items: ApplicationListItem[]; total: number; page: number; pageSize: number; totalPages: number }>> {
   try {
     const ctx = await requireOrgContext();

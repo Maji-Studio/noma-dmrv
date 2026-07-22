@@ -4,7 +4,13 @@
  * submission flow (N credit batches → 1 Isometric Removal — ADR 0003).
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   createGhgStatementDraft,
   createRemovalWithBatchesAction,
@@ -32,6 +38,7 @@ import {
   saveFacilityEmissionConfig,
   submitGhgStatementToVerifier,
   submitRemovalAction,
+  type CreditBatchHealthSummary,
 } from "@/fn/certification";
 import type {
   CreateGhgStatementInput,
@@ -41,6 +48,7 @@ import type {
   SubmitGhgStatementDialogInput,
   SubmitRemovalInput,
 } from "@/schemas/certification";
+import { creditBatchKeys } from "./credit-batch-query-keys";
 
 // Stale-time policy for certification queries. `LOCKED_REFETCH_INTERVAL_MS`
 // drives the in-flight polling cadence in `useCertifyContextForCreditBatch`
@@ -49,6 +57,7 @@ import type {
 const DEFAULT_STALE_MS = 30_000;
 const PROJECT_TEMPLATES_STALE_MS = 60_000;
 const LOCKED_REFETCH_INTERVAL_MS = 60_000;
+const BATCH_HEALTH_SUMMARY_CHUNK_SIZE = 50;
 
 export const certificationKeys = {
   all: ["certification"] as const,
@@ -111,6 +120,27 @@ export const certificationKeys = {
     [...certificationKeys.all, "overview", facilityId] as const,
   health: () => [...certificationKeys.all, "health"] as const,
 };
+
+/** Refresh cached readiness and, when relevant, derived CO₂e previews. */
+export function invalidateCertificationReadiness(
+  queryClient: QueryClient,
+  options?: { creditBatchPreviews?: boolean },
+) {
+  const invalidations = [
+    queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
+  ];
+  if (options?.creditBatchPreviews) {
+    invalidations.push(
+      queryClient.invalidateQueries({
+        queryKey: creditBatchKeys.previewsPrefix(),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: creditBatchKeys.details(),
+      }),
+    );
+  }
+  return Promise.all(invalidations);
+}
 
 // Server-owned readiness payload for the Removals hub. Heavier than the other
 // reads (walks lineage/coverage per removal), so it leans on React Query
@@ -324,8 +354,8 @@ export function useBatchDurabilitySummary(
 }
 
 // Per-batch certification-readiness verdicts for the Credit Batches overview
-// cards, keyed by batch id. Mirrors `useCreditBatchCo2eStoredPreviews`: the
-// list passes the visible page's ids so only on-screen cards are evaluated.
+// cards and readiness filter, keyed by batch id. The list passes the complete
+// facility-scoped set; bounded chunks keep each action request within its cap.
 // Reuses the same `deriveBatchHealth` classifier as `useBatchHealth`, so a
 // card's cert tag and the detail page's submission gate can never disagree.
 // Mutations to a batch / its lineage invalidate `certificationKeys.all`, which
@@ -335,23 +365,41 @@ export function useCreditBatchHealthSummaries(
   batchIds: string[],
 ) {
   const sortedIds = [...batchIds].sort();
-  return useQuery({
-    queryKey: certificationKeys.batchHealthSummaries(
-      facilityId ?? "",
-      sortedIds,
-    ),
-    queryFn: async () => {
-      if (!facilityId) return {};
-      const result = await loadCreditBatchHealthSummaries(
-        facilityId,
-        sortedIds,
-      );
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-    enabled: !!facilityId && sortedIds.length > 0,
-    staleTime: DEFAULT_STALE_MS,
+  const chunks: string[][] = [];
+  for (
+    let index = 0;
+    index < sortedIds.length;
+    index += BATCH_HEALTH_SUMMARY_CHUNK_SIZE
+  ) {
+    chunks.push(sortedIds.slice(index, index + BATCH_HEALTH_SUMMARY_CHUNK_SIZE));
+  }
+  const results = useQueries({
+    queries: chunks.map((ids) => ({
+      queryKey: certificationKeys.batchHealthSummaries(
+        facilityId ?? "",
+        ids,
+      ),
+      queryFn: async () => {
+        if (!facilityId) return {};
+        const result = await loadCreditBatchHealthSummaries(facilityId, ids);
+        if (!result.success) throw new Error(result.error);
+        return result.data;
+      },
+      enabled: !!facilityId,
+      staleTime: DEFAULT_STALE_MS,
+    })),
   });
+
+  return {
+    data: results.reduce<Record<string, CreditBatchHealthSummary>>(
+      (summaries, result) => Object.assign(summaries, result.data ?? {}),
+      {},
+    ),
+    isLoading: results.some((result) => result.isLoading),
+    isFetching: results.some((result) => result.isFetching),
+    error: results.find((result) => result.error)?.error ?? null,
+    refetch: () => Promise.all(results.map((result) => result.refetch())),
+  };
 }
 
 // Removal-keyed Certify context for the guided Review flow. Like the

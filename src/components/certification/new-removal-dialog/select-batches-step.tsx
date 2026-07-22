@@ -178,13 +178,16 @@ function IncompleteCard({
         {formatDateRange(batch.startDate, batch.endDate)}
       </span>
       <ul className="flex flex-col gap-10">
-        {gaps.map((check) => {
+        {gaps.map((check, index) => {
           // The exact fix workflow for this gap — the same target map the batch
           // page's health strip uses (batch→samples, run→readings, application→
           // deliveries), so a gap resolves identically wherever it's shown.
-          const fix = batchHealthFixLinkFor(check, facilityId);
+          const fix = batchHealthFixLinkFor(check, facilityId, batch.id);
           return (
-            <li key={check.key} className="flex flex-col gap-4">
+            <li
+              key={`${check.key}:${check.issueKey ?? index}`}
+              className="flex flex-col gap-4"
+            >
               {/* One plain-language requirement string, identical to the batch
                   page's checklist (Phase 0) — never the affirmative "…complete"
                   label next to a "Missing:" line. Protocol reasoning sits behind

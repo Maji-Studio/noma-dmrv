@@ -85,7 +85,12 @@ describe("batchHealthFixLinkFor", () => {
   const check = (
     key: BatchHealthCheck["key"],
     fixTarget?: BatchHealthCheck["fixTarget"],
-  ): Pick<BatchHealthCheck, "key" | "fixTarget"> => ({ key, fixTarget });
+    affectedRecords?: BatchHealthCheck["affectedRecords"],
+  ): Pick<BatchHealthCheck, "key" | "fixTarget" | "affectedRecords"> => ({
+    key,
+    fixTarget,
+    affectedRecords,
+  });
 
   it("routes a carbon check with no explicit fixTarget to Lab Samples", () => {
     const link = batchHealthFixLinkFor(check("carbon"), facilityId);
@@ -116,6 +121,21 @@ describe("batchHealthFixLinkFor", () => {
   it("routes a production check with no fixTarget to productionRuns with the facility", () => {
     const link = batchHealthFixLinkFor(check("production"), facilityId);
     expect(link.href).toBe(`/production-runs?facility=${facilityId}`);
+  });
+
+  it("filters a production-run issue to only the affected runs", () => {
+    const link = batchHealthFixLinkFor(
+      check("entityReadiness", "productionRuns", [
+        { id: "run-1", code: "PR-1", missing: ["Electricity"] },
+        { id: "run-2", code: "PR-2", missing: ["Meter evidence"] },
+      ]),
+      facilityId,
+    );
+
+    expect(link.label).toBe("Fix 2 production runs");
+    expect(link.href).toBe(
+      `/production-runs?facility=${facilityId}&ids=run-1%2Crun-2`,
+    );
   });
 
   it("routes a transport check to deliveries with the facility", () => {
