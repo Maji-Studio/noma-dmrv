@@ -25,6 +25,7 @@ import {
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
 import { loadCertifyContextForCreditBatchForUser } from "@/fn/certification/certify-context-core";
+import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "@/lib/certification/application-evidence";
 
 vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchById: vi.fn(),
@@ -104,6 +105,22 @@ const APPLICATION_FOR_PR_1 = {
   productionRunId: "pr-1",
   biocharAppliedTons: 1,
 };
+
+/**
+ * Evidence-complete visual document set for the normalized lineage application
+ * (`app-1`). Applications without an evidenceMethod follow the visual path, so
+ * tests that assert on non-evidence readiness gaps mock these to keep their
+ * assertions focused.
+ */
+function satisfiedVisualEvidenceDocuments(applicationId: string) {
+  return APPLICATION_VISUAL_EVIDENCE_ROLES.map((role) => ({
+    entityId: applicationId,
+    documentType: "photo",
+    uploadStatus: "uploaded",
+    fileUrl: null,
+    metadata: { geotagStatus: "present", evidenceRole: role },
+  })) as never[];
+}
 
 const DEFAULT_FACT_DATE = new Date("2026-01-20T00:00:00Z");
 
@@ -845,6 +862,9 @@ describe("requiredTransportCategories", () => {
       }
       return [];
     });
+    mockedListDocuments.mockResolvedValue(
+      satisfiedVisualEvidenceDocuments("app-1"),
+    );
 
     const result = await loadCertifyContextForCreditBatchForUser(
       makeTestOrgContext(USER_ID),
@@ -927,6 +947,9 @@ describe("requiredTransportCategories", () => {
         ],
       } as never,
     ]);
+    mockedListDocuments.mockResolvedValue(
+      satisfiedVisualEvidenceDocuments("app-1"),
+    );
 
     const result = await loadCertifyContextForCreditBatchForUser(
       makeTestOrgContext(USER_ID),
