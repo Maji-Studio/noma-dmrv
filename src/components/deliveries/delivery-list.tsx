@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { TruckIcon, CalendarIcon, PackageIcon, DropIcon, PlusIcon } from "@phosphor-icons/react";
 import type { Delivery } from "@/db/schema";
@@ -29,7 +29,7 @@ import {
   useDeliveryWithRelations,
 } from "@/hooks/use-deliveries";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
+import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import type {
   DeliveryFormData,
@@ -217,8 +217,52 @@ export function DeliveryList() {
   const updateDelivery = useUpdateDelivery();
   const deleteDelivery = useDeleteDelivery();
   const toast = useToast();
-  const deferredAttachments = useDeferredAttachments();
-  const [isFlushing, setIsFlushing] = useState(false);
+  const createWithEvidence = useCreateWithEvidence({
+    entityType: "delivery",
+    entityNoun: "Delivery",
+    executeCreate: async (data: DeliveryFormData) => {
+      if (!contextFacilityId) {
+        throw new Error("No facility selected. Please select a facility first.");
+      }
+      const createData = {
+        ...data,
+        facilityId: contextFacilityId,
+      } as CreateDeliveryData;
+      const created = await createDelivery.mutateAsync(createData);
+      const createdDelivery: DeliveryWithRelations = {
+        ...created,
+        orderCode: null,
+        facilityName: null,
+        customerName: null,
+        biocharProductCode: null,
+        driverName: null,
+        vehicleName: null,
+        effectiveDistanceKm: null,
+        effectiveDistanceSource: null,
+        transportEvidenceDocumentCount: 0,
+      };
+      return { entities: [createdDelivery], result: createdDelivery };
+    },
+    setError: setFormError,
+    setUpdateError: setFormError,
+    getCreateErrorMessage: (error) =>
+      error instanceof Error ? error.message : "Failed to create delivery",
+    unresolvedUpdateMessage:
+      "Resolve or remove the failed attachments before saving this delivery.",
+    openEditOnFailure: (delivery) =>
+      setSideSheet({ entity: delivery, mode: "edit" }),
+    closeOnSuccess: () => setSideSheet(null),
+    onSuccess: () => toast.success("Delivery created successfully"),
+  });
+  const { deferredAttachments, isFlushing } = createWithEvidence;
+  const deepLinkedSideSheet =
+    focusedDeliveryId && focusedDelivery.data
+      ? {
+          entity: deliveryDetailToRelations(focusedDelivery.data),
+          mode: deepLinkMode === "edit" ? "edit" as const : "view" as const,
+        }
+      : null;
+  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
 
   // Side sheet helpers
   const openCreate = () => {
@@ -226,7 +270,7 @@ export function DeliveryList() {
     setDeepLinkMode(null);
     setDeepLinkFocus(null);
     setFormError(null);
-    deferredAttachments.clear();
+    createWithEvidence.reset();
     setSideSheet({ entity: null, mode: "create" });
   };
 
@@ -242,6 +286,7 @@ export function DeliveryList() {
     setDeepLinkMode(null);
     setDeepLinkFocus(null);
     setFormError(null);
+    createWithEvidence.reset();
     setSideSheet({ entity: delivery, mode: "edit" });
   };
 
@@ -251,33 +296,14 @@ export function DeliveryList() {
     setDeepLinkFocus(null);
     setSideSheet(null);
     setFormError(null);
-    deferredAttachments.clear();
+    createWithEvidence.reset();
   };
 
-  const unsavedAttachmentCount = deferredAttachments.attachments.filter(
-    (attachment) => attachment.status !== "uploaded",
-  ).length;
-  const confirmCreateClose = () => {
-    // An in-flight flush is mid-write; blocking Escape/backdrop/X keeps the
-    // completion handler from mutating a discarded-then-reopened form.
-    if (isFlushing) return false;
-    return (
-      sideSheet?.mode !== "create" ||
-      unsavedAttachmentCount === 0 ||
-      window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`)
-    );
-  };
+  const confirmCreateClose = () =>
+    createWithEvidence.confirmClose(displaySideSheet?.mode === "create");
   const attemptCloseSideSheet = () => {
     if (confirmCreateClose()) closeSideSheet();
   };
-
-  useEffect(() => {
-    if (!focusedDeliveryId || !focusedDelivery.data || sideSheet) return;
-    setSideSheet({
-      entity: deliveryDetailToRelations(focusedDelivery.data),
-      mode: deepLinkMode === "edit" ? "edit" : "view",
-    });
-  }, [deepLinkMode, focusedDelivery.data, focusedDeliveryId, sideSheet]);
 
   useEffect(() => {
     if (!focusedDeliveryId || !focusedDelivery.isError) return;
@@ -296,66 +322,18 @@ export function DeliveryList() {
 
   // Handlers
   const handleCreate = async (data: DeliveryFormData) => {
-    setFormError(null);
-    try {
-      if (!contextFacilityId) {
-        setFormError("No facility selected. Please select a facility first.");
-        return;
-      }
-      const createData = { ...data, facilityId: contextFacilityId } as CreateDeliveryData;
-      const created = await createDelivery.mutateAsync(createData);
-      const createdDelivery: DeliveryWithRelations = {
-        ...created,
-        orderCode: null,
-        facilityName: null,
-        customerName: null,
-        biocharProductCode: null,
-        driverName: null,
-        vehicleName: null,
-        effectiveDistanceKm: null,
-        effectiveDistanceSource: null,
-        transportEvidenceDocumentCount: 0,
-      };
-      setIsFlushing(true);
-      const flushResult = await deferredAttachments.flush(
-        "delivery",
-        createdDelivery.id,
-      );
-      if (!flushResult.ok) {
-        setSideSheet({ entity: createdDelivery, mode: "edit" });
-        setFormError(
-          `Delivery created, but ${flushResult.failed.length} ${flushResult.failed.length === 1 ? "attachment" : "attachments"} failed to upload.`,
-        );
-        return;
-      }
-      deferredAttachments.clear();
-      setSideSheet(null);
-      toast.success("Delivery created successfully");
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to create delivery");
-    } finally {
-      setIsFlushing(false);
-    }
+    await createWithEvidence.handleCreate(data);
   };
 
   const handleUpdate = async (data: DeliveryFormData) => {
-    if (!sideSheet?.entity) return;
+    if (!displaySideSheet?.entity) return;
     setFormError(null);
-    if (
-      deferredAttachments.attachments.some(
-        // Any not-yet-`uploaded` entry is unresolved: "failed" awaits a retry,
-        // and "uploading" means a retry is mid-flight whose state a save would
-        // clobber. Both must block the save.
-        (attachment) => attachment.status !== "uploaded",
-      )
-    ) {
-      setFormError(
-        "Resolve or remove the failed attachments before saving this delivery.",
-      );
-      return;
-    }
+    if (createWithEvidence.guardUpdate()) return;
     try {
-      await updateDelivery.mutateAsync({ deliveryId: sideSheet.entity.id, ...data });
+      await updateDelivery.mutateAsync({
+        deliveryId: displaySideSheet.entity.id,
+        ...data,
+      });
       closeSideSheet();
       toast.success("Delivery updated successfully");
     } catch (error) {
@@ -379,11 +357,7 @@ export function DeliveryList() {
     }
   };
 
-  // Memoize columns
-  const columns = useMemo(
-    () => createColumns((delivery) => openEdit(delivery), handleDelete),
-    [openEdit, handleDelete],
-  );
+  const columns = createColumns(openEdit, handleDelete);
 
   const deliveries = deliveriesData?.items ?? [];
 
@@ -409,9 +383,9 @@ export function DeliveryList() {
   }
 
   // Derived values for the side sheet
-  const sideSheetOpen = !!sideSheet;
-  const sideSheetMode = sideSheet?.mode ?? "create";
-  const sideSheetEntity = sideSheet?.entity ?? null;
+  const sideSheetOpen = !!displaySideSheet;
+  const sideSheetMode = displaySideSheet?.mode ?? "create";
+  const sideSheetEntity = displaySideSheet?.entity ?? null;
   const activeFocusTarget = parseEntityFocusTarget(deepLinkFocus);
 
   const sideSheetTitle =
@@ -508,7 +482,11 @@ export function DeliveryList() {
         onOpenChange={(open) => !open && closeSideSheet()}
         onCloseAttempt={confirmCreateClose}
         mode={sideSheetMode}
-        onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
+        onModeChange={(mode) =>
+          setSideSheet(
+            displaySideSheet ? { ...displaySideSheet, mode } : null,
+          )
+        }
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit Delivery"
@@ -600,7 +578,7 @@ export function DeliveryList() {
         {formError && <ServerError message={formError} />}
         <DeliveryForm
           key={sideSheetEntity?.id ?? "create"}
-          delivery={sideSheet?.entity as Delivery | undefined}
+          delivery={sideSheetEntity as Delivery | undefined}
           onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
           onCancel={attemptCloseSideSheet}
           isSubmitting={createDelivery.isPending || updateDelivery.isPending || isFlushing}
