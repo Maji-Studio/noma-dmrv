@@ -41,8 +41,8 @@ export interface CompositionRow {
   ratio: number | null;
   /**
    * Recipe-implied mass for the current product mass. Orientation only: it
-   * prefills the editable mass field and anchors the deviation hint, but the
-   * entered mass is what persists — never validated against the recipe.
+   * may prefill a newly-created composition and anchors the deviation hint,
+   * but the entered mass is what persists — never validated against the recipe.
    */
   suggestedMassKg: number | null;
   /** Signed % deviation of the entered mass vs the suggestion; null until both are known. */

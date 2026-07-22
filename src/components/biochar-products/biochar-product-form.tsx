@@ -28,6 +28,7 @@ import type { BiocharProductWithRelations } from "@/data-access/biochar-products
 import { getProductionRunBiocharPreviewFn } from "@/fn/production-runs";
 import {
   fromCompositionJsonb,
+  shouldPrefillSuggestedMasses,
   useBiocharComposition,
 } from "@/lib/biochar-composition";
 import { IngredientBinRows } from "./ingredient-bin-rows";
@@ -173,6 +174,8 @@ export function BiocharProductForm({
 }: BiocharProductFormProps) {
   const formId = useId();
   const isEditMode = !!product;
+  const initialFormulationId =
+    product?.formulation?.id ?? product?.formulationId ?? null;
   const { facilityId: contextFacilityId } = useFacilityContext();
   const storageLocationDialog = useQuickAddDialog();
 
@@ -182,7 +185,7 @@ export function BiocharProductForm({
     mode: "onTouched",
     defaultValues: {
       facilityId: product?.facility?.id ?? contextFacilityId ?? "",
-      formulationId: product?.formulation?.id ?? "",
+      formulationId: initialFormulationId ?? "",
       linkedProductionRunId: product?.linkedProductionRun?.id ?? product?.linkedProductionRunId ?? "",
       storageLocationId: product?.storageLocation?.id ?? "",
       status: product?.status ?? "testing",
@@ -215,6 +218,11 @@ export function BiocharProductForm({
     formulationId: selectedFormulationId,
     facilityId: selectedFacilityId,
     productMassKg: massKgNumForComposition,
+    prefillSuggestedMasses: shouldPrefillSuggestedMasses({
+      isEditMode,
+      initialFormulationId,
+      selectedFormulationId,
+    }),
   });
 
   // Fetch linked run preview for transfer flow
