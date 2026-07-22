@@ -1,9 +1,9 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { certifierCredentials } from "@/db/schema/certification";
-import { requirePlatformAdmin } from "@/lib/auth/server";
-import type { OrgContext } from "@/lib/auth/server";
+import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { decryptSecret, encryptSecret } from "@/lib/crypto/secrets";
+import { SafeError } from "@/lib/errors";
 import { requireOrgScope } from "./utils";
 
 type CertifierCredentialRow = typeof certifierCredentials.$inferSelect;
@@ -22,10 +22,25 @@ export type CertifierCredentialsStatus = {
   updatedAt: Date | null;
 };
 
+function assertCanManageOrgCredentials(
+  ctx: OrgContext,
+  organizationId: string,
+): void {
+  requireOrgScope(ctx);
+  if (ctx.isPlatformAdmin) return;
+  if (ctx.organizationId !== organizationId) {
+    throw new SafeError(
+      "You can only manage credentials for your active organization.",
+    );
+  }
+  requireOrgRole(ctx, "admin");
+}
+
 export async function upsertCertifierCredentials(
-  input: UpsertCertifierCredentialsInput
+  ctx: OrgContext,
+  input: UpsertCertifierCredentialsInput,
 ): Promise<void> {
-  await requirePlatformAdmin();
+  assertCanManageOrgCredentials(ctx, input.organizationId);
   const accessTokenEncrypted = encryptSecret(input.accessToken);
   const clientSecretEncrypted = encryptSecret(input.clientSecret);
 
@@ -51,10 +66,11 @@ export async function upsertCertifierCredentials(
 }
 
 export async function getCertifierCredentialsStatus(
+  ctx: OrgContext,
   organizationId: string,
-  provider: CertifierProvider
+  provider: CertifierProvider,
 ): Promise<CertifierCredentialsStatus> {
-  await requirePlatformAdmin();
+  assertCanManageOrgCredentials(ctx, organizationId);
   const [row] = await db
     .select({
       accessTokenEncrypted: certifierCredentials.accessTokenEncrypted,
@@ -81,10 +97,11 @@ export async function getCertifierCredentialsStatus(
 }
 
 export async function deleteCertifierCredentials(
+  ctx: OrgContext,
   organizationId: string,
-  provider: CertifierProvider
+  provider: CertifierProvider,
 ): Promise<void> {
-  await requirePlatformAdmin();
+  assertCanManageOrgCredentials(ctx, organizationId);
   await db
     .delete(certifierCredentials)
     .where(

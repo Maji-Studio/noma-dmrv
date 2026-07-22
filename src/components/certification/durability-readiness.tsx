@@ -19,11 +19,10 @@ import {
   O_TO_C_ORG_ELIGIBILITY_MAX,
 } from "@/lib/calculations/biochar-eligibility";
 import {
-  summarizeFutureReplicates,
   type DurabilityBatchSummary,
   type DurabilitySummaryEligibility,
 } from "@/lib/certification/durability-batch-summary";
-import { formatDate } from "@/lib/format-utils";
+import { formatDayString } from "@/lib/format-utils";
 import type { ValueWithStdDev } from "@/lib/isometric/utils/durability-aggregation";
 
 type Tone = "ok" | "wait" | "bad" | "off";
@@ -124,11 +123,10 @@ export function DurabilityReadinessSignals({
     summary.eligibility,
     usableReplicateCount > 0,
   );
-  // Local calendar day — advisory clock for the future-dated note below; the
-  // authoritative exclusion is the server-side baseline counter's.
-  const now = new Date();
-  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  const future = summarizeFutureReplicates(summary, todayIso);
+  // Server-computed against the facility-local day and the process unlock state
+  // (see `buildDurabilityBatchSummaries`) — never recompute the exclusion from
+  // the viewer's browser clock, which drifts a day across timezones.
+  const future = summary.future;
 
   return (
     <div
@@ -171,14 +169,17 @@ export function DurabilityReadinessSignals({
 
       {/* Future-dated samples count for batch chemistry but not (yet) toward
           the process's Method-B baseline — say so here, where the operator
-          would otherwise read "chemistry eligible" as baseline progress. */}
+          would otherwise read "chemistry eligible" as baseline progress. Once
+          Method B is unlocked the baseline window is closed, so drop the
+          "counts toward the baseline" claim and state the neutral fact. */}
       {future.count > 0 && (
         <ReadinessChip
           tone="wait"
           icon={<WarningIcon size={14} weight="fill" />}
         >
-          {future.count} future-dated — counts toward the Method-B baseline
-          from {formatDate(future.earliestDay)}
+          {future.countsTowardBaseline
+            ? `${future.count} future-dated — counts toward the Method-B baseline from ${formatDayString(future.earliestDay)}`
+            : `${future.count} future-dated — not part of the Method-B baseline`}
         </ReadinessChip>
       )}
     </div>

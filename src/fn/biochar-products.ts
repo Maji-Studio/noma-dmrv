@@ -12,12 +12,14 @@ import {
   deleteBiocharProduct,
   getBiocharProducts as getBiocharProductsData,
   getBiocharProductById as getBiocharProductByIdData,
-  isBiocharProductCodeAvailable as isBiocharProductCodeAvailableData,
-  getBiocharProductOptions as getBiocharProductOptionsData,
   updateBiocharProduct,
   type PaginatedBiocharProducts,
   type BiocharProductWithRelations,
 } from "@/data-access/biochar-products";
+import {
+  isBiocharProductCodeAvailable as isBiocharProductCodeAvailableData,
+  getBiocharProductOptions as getBiocharProductOptionsData,
+} from "@/data-access/biochar-product-lookups";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
   createBiocharProductSchema,

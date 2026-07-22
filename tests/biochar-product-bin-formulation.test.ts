@@ -14,7 +14,10 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
-import { createBiocharProduct } from "@/data-access/biochar-products";
+import {
+  createBiocharProduct,
+  updateBiocharProduct,
+} from "@/data-access/biochar-products";
 import { facilities, reactors, storageLocations } from "@/db/schema/facilities";
 import { feedstockTypes } from "@/db/schema/feedstock";
 import { productionRuns } from "@/db/schema/production";
@@ -236,6 +239,23 @@ beforeAll(async () => {
     };
   }
 
+  /** Composition covering formulation A's single ingredient line. */
+  function formulationAComposition() {
+    return {
+      ingredients: [
+        {
+          formulationIngredientId: formulationIngredientAId,
+          feedstockTypeId: blendTypeAId,
+          feedstockTypeName: "PBF Blend Type A",
+          feedstockTypeCategory: "compost",
+          ratio: 0.2,
+          massKg: 100,
+          storageLocationId: null,
+        },
+      ],
+    };
+  }
+
   it("claims an unassigned bin for the product's formulation on first use", async () => {
     const binId = await makeProductBin(null);
 
@@ -243,6 +263,7 @@ beforeAll(async () => {
       ...baseProductInput(),
       formulationId: formulationAId,
       storageLocationId: binId,
+      composition: formulationAComposition(),
     });
     createdProductIds.push(product.id);
 
@@ -252,6 +273,8 @@ beforeAll(async () => {
       .where(eq(storageLocations.id, binId));
 
     expect(bin.formulationId).toBe(formulationAId);
+    // The recipe's biochar ratio is frozen onto the product at creation.
+    expect(product.biocharRatio).toBe(0.6);
   });
 
   it("rejects a product whose formulation differs from the bin's reservation", async () => {
@@ -262,8 +285,22 @@ beforeAll(async () => {
         ...baseProductInput(),
         formulationId: formulationAId, // mismatched
         storageLocationId: binId,
+        composition: formulationAComposition(),
       })
     ).rejects.toThrow("reserved for a different formulation");
+  });
+
+  it("rejects a formulated product whose composition omits a recipe line", async () => {
+    const binId = await makeProductBin(null);
+
+    await expect(
+      createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
+        ...baseProductInput(),
+        formulationId: formulationAId,
+        storageLocationId: binId,
+        // no composition — formulation A has one ingredient line
+      })
+    ).rejects.toThrow("must include every ingredient");
   });
 
   it("allows a pure-biochar product in an unassigned bin and leaves it unclaimed", async () => {
@@ -282,6 +319,8 @@ beforeAll(async () => {
       .where(eq(storageLocations.id, binId));
 
     expect(bin.formulationId).toBeNull();
+    // Pure-biochar products carry no ratio snapshot (effective 1 via COALESCE).
+    expect(product.biocharRatio).toBeNull();
   });
 
   it("rejects pyrolysis-usage feedstock bins as formulation ingredient bins", async () => {
@@ -334,5 +373,71 @@ beforeAll(async () => {
         },
       })
     ).rejects.toThrow("Feedstock bin must match the formulation material");
+  });
+
+  it("keeps the snapshot ratio when the formulation's live ratio changes", async () => {
+    const binId = await makeProductBin(null);
+    const product = await createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
+      ...baseProductInput(),
+      formulationId: formulationAId,
+      storageLocationId: binId,
+      composition: formulationAComposition(),
+    });
+    createdProductIds.push(product.id);
+    expect(product.biocharRatio).toBe(0.6);
+
+    // Recipe edit AFTER the product exists — the frozen snapshot must not move.
+    await db
+      .update(formulations)
+      .set({ biocharRatio: 0.9 })
+      .where(eq(formulations.id, formulationAId));
+    try {
+      const [row] = await db
+        .select({ biocharRatio: biocharProducts.biocharRatio })
+        .from(biocharProducts)
+        .where(eq(biocharProducts.id, product.id));
+      expect(row.biocharRatio).toBe(0.6);
+
+      // An unrelated field update must not re-derive the snapshot either.
+      await updateBiocharProduct(makeTestOrgContext(TEST_USER_ID), product.id, {
+        moistureContentPercent: 5,
+      });
+      const [afterUpdate] = await db
+        .select({ biocharRatio: biocharProducts.biocharRatio })
+        .from(biocharProducts)
+        .where(eq(biocharProducts.id, product.id));
+      expect(afterUpdate.biocharRatio).toBe(0.6);
+    } finally {
+      await db
+        .update(formulations)
+        .set({ biocharRatio: 0.6 })
+        .where(eq(formulations.id, formulationAId));
+    }
+  });
+
+  it("re-snapshots the ratio when the product is reassigned to another formulation", async () => {
+    const binId = await makeProductBin(null);
+    const product = await createBiocharProduct(makeTestOrgContext(TEST_USER_ID), {
+      ...baseProductInput(),
+      formulationId: formulationAId,
+      storageLocationId: binId,
+      composition: formulationAComposition(),
+    });
+    createdProductIds.push(product.id);
+    expect(product.biocharRatio).toBe(0.6);
+
+    // Reassign to formulation B (ratio 0.4, no recipe lines) in a fresh bin.
+    const binBId = await makeProductBin(null);
+    await updateBiocharProduct(makeTestOrgContext(TEST_USER_ID), product.id, {
+      formulationId: formulationBId,
+      storageLocationId: binBId,
+      composition: { ingredients: [] },
+    });
+
+    const [row] = await db
+      .select({ biocharRatio: biocharProducts.biocharRatio })
+      .from(biocharProducts)
+      .where(eq(biocharProducts.id, product.id));
+    expect(row.biocharRatio).toBe(0.4);
   });
 });

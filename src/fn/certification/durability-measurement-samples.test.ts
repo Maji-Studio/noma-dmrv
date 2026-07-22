@@ -29,6 +29,7 @@ function batch(
     facilityTimezone: "UTC",
     productionProcessId: "pp_1",
     samplingMethod: "method_a",
+    methodBUnlockedAt: null,
     declaredHToCorgRatio: null,
     durabilityOption: "200_year",
     ...overrides,

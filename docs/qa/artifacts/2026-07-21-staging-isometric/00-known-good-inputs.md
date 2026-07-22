@@ -526,7 +526,7 @@ value here is how a QA run produces a number that looks right and means nothing.
 **Expected registry output for the §4.2/§5.1 value set — a check figure, not an
 input:**
 
-```
+```text
 a + b·ln(15.0)  = −0.383 + 0.350 × 2.70805 = 0.564818
 × H/C_org 0.318 = 0.179613
 + c (−0.048)    = 0.131613

@@ -13,16 +13,21 @@
  */
 "use client";
 
-import { LockOpenIcon, ArrowsClockwiseIcon } from "@phosphor-icons/react";
+import {
+  LockOpenIcon,
+  ArrowsClockwiseIcon,
+  PencilSimpleIcon,
+} from "@phosphor-icons/react";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
 import { DetailSection, DetailRow, DetailField } from "@/components/ui/detail-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { InfoHint } from "@/components/ui/tooltip";
 import {
   METHOD_B_SAMPLING_CADENCE_BATCHES,
 } from "@/config/certification";
 import { MOISTURE_PATHWAY_LABELS } from "@/schemas/production-process";
-import { formatDate } from "@/lib/format-utils";
+import { formatDate, formatDayString } from "@/lib/format-utils";
 import type { ProductionProcessSummary } from "@/data-access/production-processes";
 import { MethodPill } from "./method-pill";
 import { MethodBExplainer } from "./method-b-explainer";
@@ -35,8 +40,11 @@ interface ProcessDetailPanelProps {
   onOpenChange: (open: boolean) => void;
   /** Facility is on Isometric → show the protocol-cited explainer (D5). */
   isIsometric: boolean;
+  /** Org owner/admin (server-resolved) → show the operational-start edit control. */
+  canManage: boolean;
   onUnlock: (process: ProductionProcessSummary) => void;
   onStartNewProcess: (process: ProductionProcessSummary) => void;
+  onEditOperationalStart: (process: ProductionProcessSummary) => void;
 }
 
 export function ProcessDetailPanel({
@@ -44,8 +52,10 @@ export function ProcessDetailPanel({
   open,
   onOpenChange,
   isIsometric,
+  canManage,
   onUnlock,
   onStartNewProcess,
+  onEditOperationalStart,
 }: ProcessDetailPanelProps) {
   const isMethodB = process?.samplingMethod === "method_b";
   const isEligible = !!process && !isMethodB && process.meetsBaseline;
@@ -74,8 +84,28 @@ export function ProcessDetailPanel({
                     value={<MethodPill method={process.samplingMethod} />}
                   />
                   <DetailField
-                    label="Established"
-                    value={formatDate(process.establishedAt)}
+                    label="Operational start"
+                    value={
+                      <span className="inline-flex items-center gap-8">
+                        {formatDate(process.establishedAt)}
+                        {canManage && !isMethodB && (
+                          <Button
+                            variant="weak"
+                            size="small"
+                            onClick={() => onEditOperationalStart(process)}
+                          >
+                            <PencilSimpleIcon size={14} weight="bold" />
+                            Edit
+                          </Button>
+                        )}
+                        {canManage && isMethodB && (
+                          <InfoHint label="Why the operational start is locked">
+                            Fixed once Method B is unlocked — the baseline window
+                            is history and can no longer move.
+                          </InfoHint>
+                        )}
+                      </span>
+                    }
                   />
                 </DetailRow>
                 <DetailRow>
@@ -89,7 +119,7 @@ export function ProcessDetailPanel({
                           {process.eligibleSampleCount} / {process.baselineTarget}{" "}
                           baseline samples
                           {process.futureSampleCount > 0 &&
-                            ` (${process.futureSampleCount} future-dated — counted from ${formatDate(process.nextCountableSamplingTime)})`}
+                            ` (${process.futureSampleCount} future-dated — counted from ${formatDayString(process.nextCountableSamplingDay)})`}
                         </span>
                       )
                     }

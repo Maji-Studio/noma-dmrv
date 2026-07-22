@@ -325,6 +325,17 @@ export function EntitySelect({
     [onChange]
   );
 
+  // The empty-state renders a recovery link (`emptyHint.href`) only when the
+  // list is genuinely empty (not loading/errored, no active search). While it's
+  // showing, Tab must NOT close the dropdown — that would unmount the link before
+  // focus could land on it, leaving it keyboard-unreachable.
+  const showEmptyStateRecoveryLink =
+    !isLoading &&
+    !fetchError &&
+    options.length === 0 &&
+    searchQuery.length === 0 &&
+    !!emptyHint?.href;
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement | HTMLButtonElement>) => {
       const optionCount = options.length + (shouldShowCreateAction ? 1 : 0);
@@ -366,12 +377,16 @@ export function EntitySelect({
           }
           break;
         case "Tab":
-          setIsOpen(false);
-          setSearchQuery("");
+          // Let Tab move focus to the empty-state recovery link instead of
+          // closing (unmounting) the dropdown out from under it.
+          if (!showEmptyStateRecoveryLink) {
+            setIsOpen(false);
+            setSearchQuery("");
+          }
           break;
       }
     },
-    [options, clampedHighlightedIndex, handleSelect, resolvedCreateAction, shouldShowCreateAction, isOpen]
+    [options, clampedHighlightedIndex, handleSelect, resolvedCreateAction, shouldShowCreateAction, isOpen, showEmptyStateRecoveryLink]
   );
 
   const handleToggle = useCallback(() => {

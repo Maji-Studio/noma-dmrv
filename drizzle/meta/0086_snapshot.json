@@ -1,6 +1,6 @@
 {
-  "id": "b1032c86-e4aa-4836-9846-957de990935b",
-  "prevId": "6ecec2a3-3046-4a7a-b129-15c2f64a2058",
+  "id": "71c9064d-07a1-4ed9-b20a-891afe88d37f",
+  "prevId": "8f99a4cc-b325-46c9-a7e3-57024c7c25ac",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -7289,6 +7289,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "biochar_ratio": {
+          "name": "biochar_ratio",
+          "type": "numeric(7, 6)",
+          "primaryKey": false,
+          "notNull": false
+        },
         "linked_production_run_id": {
           "name": "linked_production_run_id",
           "type": "uuid",
@@ -7443,7 +7449,12 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "biochar_products_biochar_ratio_range": {
+          "name": "biochar_products_biochar_ratio_range",
+          "value": "\"biochar_products\".\"biochar_ratio\" is null or (\"biochar_products\".\"biochar_ratio\" >= 0 and \"biochar_products\".\"biochar_ratio\" <= 1)"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.formulation_ingredients": {
@@ -8831,7 +8842,6 @@
       "values": [
         "weighbridge_ticket",
         "bill_of_lading",
-        "other_transport_evidence",
         "lab_report",
         "delivery_receipt",
         "invoice",

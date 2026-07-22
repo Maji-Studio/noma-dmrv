@@ -435,6 +435,7 @@ function makeContext(
         creditBatchId: "cb-bd-1",
         creditBatchCode: "CB-BD-001",
         facilityTimezone: "UTC",
+        methodBUnlockedAt: null,
         productionProcessId: null,
         samplingMethod: "method_a",
         declaredHToCorgRatio: null,

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Sample } from "@/db/schema";
 import {
   buildDurabilityBatchSummaries,
-  summarizeFutureReplicates,
+  summarizeFutureSamples,
   type DurabilityBatchSummaryInput,
 } from "./durability-batch-summary";
 
@@ -452,63 +452,135 @@ describe("buildDurabilityBatchSummaries facility-local sampling day", () => {
   });
 });
 
-describe("summarizeFutureReplicates", () => {
-  it("counts replicates dated after today and reports the earliest future day", () => {
-    const [summary] = buildDurabilityBatchSummaries([
-      batch({
-        creditBatchId: "cb-a",
-        creditBatchCode: "CB-A",
-        samples: [
-          ...eligibleSamples(),
-          sample({
-            id: "s-future",
-            sampleCode: "S-A-99",
-            samplingTime: new Date("2027-12-02T12:00:00.000Z"),
-            hToCOrgRatio: 0.3,
-            oToCOrgRatio: 0.04,
-          }),
-        ],
-      }),
-    ]);
+describe("summarizeFutureSamples", () => {
+  const asOf = new Date("2026-07-21T12:00:00.000Z");
 
-    expect(summarizeFutureReplicates(summary, "2026-07-21")).toEqual({
-      count: 1,
-      earliestDay: "2027-12-02",
-    });
+  it("counts samples at or after the instant and reports the earliest facility-local day", () => {
+    const result = summarizeFutureSamples(
+      [
+        { samplingTime: new Date("2026-01-14T00:00:00.000Z") },
+        { samplingTime: new Date("2027-12-02T12:00:00.000Z") },
+      ],
+      asOf,
+      "UTC",
+    );
+
+    expect(result).toEqual({ count: 1, earliestDay: "2027-12-02" });
   });
 
-  it("returns zero with no earliest day when every replicate is past-dated", () => {
-    const [summary] = buildDurabilityBatchSummaries([
-      batch({
-        creditBatchId: "cb-a",
-        creditBatchCode: "CB-A",
-        samples: eligibleSamples(),
-      }),
-    ]);
+  it("returns zero with no earliest day when every sample is strictly past", () => {
+    const result = summarizeFutureSamples(
+      [{ samplingTime: new Date("2026-07-21T09:00:00.000Z") }],
+      asOf,
+      "UTC",
+    );
 
-    expect(summarizeFutureReplicates(summary, "2026-07-21")).toEqual({
-      count: 0,
-      earliestDay: null,
-    });
+    expect(result).toEqual({ count: 0, earliestDay: null });
   });
 
-  it("treats a replicate dated exactly today as not future", () => {
-    const [summary] = buildDurabilityBatchSummaries([
-      batch({
-        creditBatchId: "cb-a",
-        creditBatchCode: "CB-A",
-        samples: [
-          sample({
-            id: "s-today",
-            sampleCode: "S-A-01",
-            samplingTime: new Date("2026-07-21T09:00:00.000Z"),
-            hToCOrgRatio: 0.3,
-            oToCOrgRatio: 0.04,
-          }),
-        ],
-      }),
-    ]);
+  it("flags a sample later the same calendar day (exact-instant, not day-only)", () => {
+    // 18:00Z is after the 12:00Z cut yet the SAME UTC day — a day-only compare
+    // would miss it, diverging from the server counter's exact-instant exclusion.
+    const result = summarizeFutureSamples(
+      [{ samplingTime: new Date("2026-07-21T18:00:00.000Z") }],
+      asOf,
+      "UTC",
+    );
 
-    expect(summarizeFutureReplicates(summary, "2026-07-21").count).toBe(0);
+    expect(result).toEqual({ count: 1, earliestDay: "2026-07-21" });
+  });
+
+  it("treats a sample exactly at the instant as future (>=, matching the counter)", () => {
+    const result = summarizeFutureSamples(
+      [{ samplingTime: new Date("2026-07-21T12:00:00.000Z") }],
+      asOf,
+      "UTC",
+    );
+
+    expect(result.count).toBe(1);
+  });
+});
+
+describe("buildDurabilityBatchSummaries future-sample facts", () => {
+  const asOf = new Date("2026-07-21T12:00:00.000Z");
+  const futureSample = () =>
+    sample({
+      id: "s-future",
+      sampleCode: "S-A-99",
+      samplingTime: new Date("2027-12-02T12:00:00.000Z"),
+      hToCOrgRatio: 0.3,
+      oToCOrgRatio: 0.04,
+    });
+
+  it("claims baseline countability for a future sample while still on Method A", () => {
+    const [summary] = buildDurabilityBatchSummaries(
+      [
+        batch({
+          creditBatchId: "cb-a",
+          creditBatchCode: "CB-A",
+          facilityTimezone: "UTC",
+          samplingMethod: "method_a",
+          methodBUnlockedAt: null,
+          samples: [...eligibleSamples(), futureSample()],
+        }),
+      ],
+      undefined,
+      asOf,
+    );
+
+    expect(summary.future.count).toBe(1);
+    expect(summary.future.earliestDay).toBe("2027-12-02");
+    expect(summary.future.countsTowardBaseline).toBe(true);
+  });
+
+  it("drops the baseline claim once the process has unlocked Method B", () => {
+    const [summary] = buildDurabilityBatchSummaries(
+      [
+        batch({
+          creditBatchId: "cb-a",
+          creditBatchCode: "CB-A",
+          facilityTimezone: "UTC",
+          samplingMethod: "method_b",
+          methodBUnlockedAt: new Date("2026-02-01T00:00:00.000Z"),
+          samples: [...eligibleSamples(), futureSample()],
+        }),
+      ],
+      undefined,
+      asOf,
+    );
+
+    expect(summary.future.count).toBe(1);
+    expect(summary.future.countsTowardBaseline).toBe(false);
+  });
+
+  it("classifies on the exact instant but displays the facility-local day", () => {
+    // Sample at 2027-01-01T20:00Z is after `asOf`, so it is future by instant.
+    // In Kiritimati (UTC+14) that instant is 2027-01-02T10:00 local, so the
+    // DISPLAYED day is 2027-01-02 — the facility-local day, not the UTC day.
+    const [summary] = buildDurabilityBatchSummaries(
+      [
+        batch({
+          creditBatchId: "cb-a",
+          creditBatchCode: "CB-A",
+          facilityTimezone: "Pacific/Kiritimati",
+          samplingMethod: "method_a",
+          methodBUnlockedAt: null,
+          samples: [
+            sample({
+              id: "s-tz",
+              sampleCode: "S-A-01",
+              samplingTime: new Date("2027-01-01T20:00:00.000Z"),
+              hToCOrgRatio: 0.3,
+              oToCOrgRatio: 0.04,
+            }),
+          ],
+        }),
+      ],
+      undefined,
+      asOf,
+    );
+
+    expect(summary.future.count).toBe(1);
+    expect(summary.future.earliestDay).toBe("2027-01-02");
   });
 });

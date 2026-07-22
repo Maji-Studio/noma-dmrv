@@ -10,9 +10,14 @@
  * behind the header's "Edit batch" side sheet.
  */
 import { test, expect } from "./fixtures/auth-fixtures";
-import { seedCreditBatch } from "./fixtures/seed-chain-data";
+import {
+  seedCreditBatch,
+  seedCreditBatchProductionLineage,
+} from "./fixtures/seed-chain-data";
+import { seedCertifierMapping } from "./fixtures/certification-helpers";
 import { createDbConnection } from "./fixtures/db";
 import { DEC_ORG_ID } from "@/db/org-defaults";
+import { onboardingGuideCollapsedKey } from "@/components/onboarding/onboarding-constants";
 import {
   facilities,
   feedstocks,
@@ -28,6 +33,18 @@ test.describe("Dashboard (Flow Hero)", () => {
     adminPage,
     seededData,
   }) => {
+    // This spec describes an operating facility's dashboard, so satisfy every
+    // Setup step (registry link + complete run + credit batch on top of the
+    // seeded chain) — otherwise the getting-started guide takes over the body.
+    // Fixture teardown sweeps the certifier row along with the chain.
+    await seedCertifierMapping(seededData.facility.id, {
+      externalProjectId: `e2e-dash-${crypto.randomUUID().slice(0, 8)}`,
+    });
+    await seedCreditBatchProductionLineage(
+      seededData,
+      crypto.randomUUID().slice(0, 8),
+    );
+
     const page = adminPage;
     await page.goto(`/dashboard?facility=${seededData.facility.id}`);
 
@@ -70,6 +87,7 @@ test.describe("Dashboard (Flow Hero)", () => {
   test("structural certification gaps block false green while a zero-gap facility is all clear", async ({
     adminPage,
     seededData,
+    testUsers,
   }) => {
     const { db, pool } = createDbConnection();
     const facilityId = crypto.randomUUID();
@@ -134,6 +152,21 @@ test.describe("Dashboard (Flow Hero)", () => {
       });
 
       const page = adminPage;
+      // This ad-hoc facility is deliberately half-provisioned (no reactor,
+      // registry, run, or batch), so the getting-started guide would take over
+      // the dashboard body. Collapse it the way an operator would — the guide
+      // recedes to a strip and the real dashboard renders.
+      // The preference key is scoped per user + active org; cover both active-org
+      // states the admin session may be in (entered DEC vs none).
+      await page.addInitScript(
+        (keys: string[]) => {
+          for (const key of keys) window.localStorage.setItem(key, "true");
+        },
+        [
+          onboardingGuideCollapsedKey(testUsers.admin.id, DEC_ORG_ID),
+          onboardingGuideCollapsedKey(testUsers.admin.id, null),
+        ],
+      );
       await page.goto(`/dashboard?facility=${facilityId}`);
       const structuralGaps = page.getByTestId("structural-gap-list");
       await expect(structuralGaps.getByText("Feedstock GPS missing")).toBeVisible();

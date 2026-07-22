@@ -33,15 +33,17 @@ export interface FacilitySetupGapFacts {
  * Derive the ordered setup gaps from the facility certifier facts. An empty
  * array means facility setup is complete (the wizard's old boolean is exactly
  * `deriveFacilitySetupGaps(facts).length === 0`). Prerequisites short-circuit
- * the way `loadFacilityCertifierFacts` does: without a project link (or
- * credentials) the template facts are vacuous, so only the root gap is
- * reported — never a misleading cascade.
+ * the way `loadFacilityCertifierFacts` does, most-fundamental first: org
+ * credentials gate reaching the registry AT ALL — the project-link connector
+ * disables itself until they exist — so a credential-less org must be told to
+ * configure credentials, never to link a facility it structurally can't link.
+ * Only then does the missing project link, then the template facts, surface.
  */
 export function deriveFacilitySetupGaps(
   facts: FacilitySetupGapFacts,
 ): FacilitySetupGap[] {
-  if (!facts.mapping) return [{ kind: "project_link" }];
   if (!facts.hasOrgCredentials) return [{ kind: "credentials" }];
+  if (!facts.mapping) return [{ kind: "project_link" }];
   if (facts.missingDefaultTemplateId) {
     return [
       { kind: "template_resolution", templateId: facts.missingDefaultTemplateId },

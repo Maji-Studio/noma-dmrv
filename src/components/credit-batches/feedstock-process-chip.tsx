@@ -14,7 +14,7 @@
 import { useProductionProcessesByFacility } from "@/hooks/use-production-processes";
 import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
 import { deriveBatchSamplingMethod } from "@/lib/certification/sampling-requirements";
-import { formatDate } from "@/lib/format-utils";
+import { formatDayString } from "@/lib/format-utils";
 
 export function FeedstockProcessChip({
   facilityId,
@@ -92,10 +92,10 @@ export function FeedstockProcessChip({
           {detail}
         </span>
       </div>
-      {!isMethodB && futureCount > 0 && (
+      {!isMethodB && futureCount > 0 && process?.nextCountableSamplingDay && (
         <span className="body-caption text-[var(--st-wait)]">
           {futureCount} future-dated sample{futureCount === 1 ? "" : "s"} not
-          counted until {formatDate(process?.nextCountableSamplingTime ?? null)}
+          counted until {formatDayString(process.nextCountableSamplingDay)}
         </span>
       )}
       {!isMethodB && (
@@ -105,7 +105,7 @@ export function FeedstockProcessChip({
           aria-valuenow={count}
           aria-valuemin={0}
           aria-valuemax={target}
-          aria-label="Eligible samples toward Method B"
+          aria-label="Baseline samples toward Method B"
         >
           <div
             className="h-full bg-[var(--clr-purple)]"

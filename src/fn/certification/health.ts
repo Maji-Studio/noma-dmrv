@@ -41,6 +41,7 @@ export async function loadCertificationHealth(): Promise<
   return withAction(async (orgCtx) => {
     await requireAdminAction();
     const credentials = await getCertifierCredentialsStatus(
+      orgCtx,
       orgCtx.organizationId,
       "isometric",
     );

@@ -7,15 +7,17 @@
  * operator surface; Track 2 adds the Method-B unlock action.
  */
 
-import { and, count, desc, eq, gte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   creditBatches,
+  facilities,
   feedstockTypes,
   productionProcesses,
   samples,
   type ProductionProcess,
 } from "@/db/schema";
+import { formatFacilityDate, formatUtcDate } from "@/lib/date-utils";
 import {
   METHOD_B_MINIMUM_METHOD_A_SAMPLES,
   PROCESS_ROLLING_WINDOW_MONTHS,
@@ -40,11 +42,13 @@ import {
 } from "@/lib/calculations/unsampled-carbon";
 import type {
   MoisturePathway,
+  SetOperationalStartInput,
   UnlockMethodBInput,
 } from "@/schemas/production-process";
 import { countEligibleSamplesByProcess } from "./isometric";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 type Executor = DbTransaction | typeof db;
 const PRODUCTION_PROCESS_CURRENT_LOCK_SCOPE = "production-process-current";
@@ -157,6 +161,13 @@ export interface ProductionProcessSummary {
   /** Earliest future sampling time — when the next excluded sample starts counting. */
   nextCountableSamplingTime: Date | null;
   /**
+   * The same instant as a facility-local `YYYY-MM-DD` day, for display. The
+   * surfaces show this — never `nextCountableSamplingTime` through a viewer-local
+   * formatter — so the "counted from" day matches the facility-local day the
+   * durability chip shows and never drifts by one across timezones.
+   */
+  nextCountableSamplingDay: string | null;
+  /**
    * Linked samples dated before the process's operational `established_at` —
    * permanently excluded from the baseline (ADR 0017, 2026-07-12 amendment).
    */
@@ -206,6 +217,26 @@ export async function getProductionProcessSummariesByFacility(
 
   if (processRows.length === 0) return [];
 
+  // Facility timezone resolves the "counted from" instant to a facility-local
+  // calendar day, so the process surfaces agree with the durability chip and
+  // never drift a day under a viewer-local formatter (UTC fallback).
+  const [facilityRow] = await db
+    .select({ timezone: facilities.timezone })
+    .from(facilities)
+    .where(
+      and(
+        eq(facilities.id, facilityId),
+        eq(facilities.organizationId, ctx.organizationId),
+      ),
+    );
+  const facilityTimezone = facilityRow?.timezone ?? null;
+  const facilityLocalDay = (instant: Date | null): string | null =>
+    instant == null
+      ? null
+      : facilityTimezone
+        ? formatFacilityDate(instant, facilityTimezone)
+        : formatUtcDate(instant);
+
   const asOfDate = new Date();
   const eligibleSamplesByProcess = await countEligibleSamplesByProcess(ctx, db, {
     facilityId,
@@ -220,10 +251,15 @@ export async function getProductionProcessSummariesByFacility(
   const exclusionRows = await db
     .select({
       productionProcessId: creditBatches.productionProcessId,
-      futureSampleCount: sql<number>`count(*) filter (where ${samples.samplingTime} >= ${asOfDate} and ${samples.samplingTime} >= ${productionProcesses.establishedAt})`.mapWith(Number),
+      // Baseline window is [established_at, method_b_unlocked_at): once a process
+      // has unlocked Method B, future-dated samples land AFTER the unlock and are
+      // never baseline evidence (they mirror the DB backstop in migration 0083),
+      // so the "counted from <date>" note must not advertise them. A null unlock
+      // timestamp (still Method A) keeps every future-dated sample in view.
+      futureSampleCount: sql<number>`count(*) filter (where ${samples.samplingTime} >= ${asOfDate} and ${samples.samplingTime} >= ${productionProcesses.establishedAt} and (${productionProcesses.methodBUnlockedAt} is null or ${samples.samplingTime} < ${productionProcesses.methodBUnlockedAt}))`.mapWith(Number),
       // mapWith(column) reuses the timestamp decoder, so the min comes back as
       // a Date on the same UTC convention as the column reads.
-      nextCountableSamplingTime: sql<Date | null>`min(${samples.samplingTime}) filter (where ${samples.samplingTime} >= ${asOfDate} and ${samples.samplingTime} >= ${productionProcesses.establishedAt})`.mapWith(samples.samplingTime),
+      nextCountableSamplingTime: sql<Date | null>`min(${samples.samplingTime}) filter (where ${samples.samplingTime} >= ${asOfDate} and ${samples.samplingTime} >= ${productionProcesses.establishedAt} and (${productionProcesses.methodBUnlockedAt} is null or ${samples.samplingTime} < ${productionProcesses.methodBUnlockedAt}))`.mapWith(samples.samplingTime),
       preEstablishmentSampleCount: sql<number>`count(*) filter (where ${samples.samplingTime} < ${productionProcesses.establishedAt})`.mapWith(Number),
     })
     .from(samples)
@@ -308,6 +344,9 @@ export async function getProductionProcessSummariesByFacility(
       eligibleSampleCount,
       futureSampleCount: exclusions?.futureSampleCount ?? 0,
       nextCountableSamplingTime: exclusions?.nextCountableSamplingTime ?? null,
+      nextCountableSamplingDay: facilityLocalDay(
+        exclusions?.nextCountableSamplingTime ?? null,
+      ),
       preEstablishmentSampleCount: exclusions?.preEstablishmentSampleCount ?? 0,
       baselineTarget: METHOD_B_MINIMUM_METHOD_A_SAMPLES,
       meetsBaseline: eligibleSampleCount >= METHOD_B_MINIMUM_METHOD_A_SAMPLES,
@@ -399,6 +438,73 @@ export async function unlockMethodBForProcess(
       })
       .where(and(eq(productionProcesses.id, input.processId), eq(productionProcesses.organizationId, ctx.organizationId)))
       .returning();
+
+    return updated;
+  });
+}
+
+/**
+ * Set a production process's true operational start (`established_at`) — the
+ * correction for a back-entered facility whose real sampling predates the row
+ * the system auto-created (ADR 0017, 2026-07-12 amendment). Because the baseline
+ * window is `[established_at, …)`, an operational start dated after sampling
+ * began strands legitimate samples outside the count; moving it back lets them
+ * qualify so the facility can reach Method B.
+ *
+ * Editable ONLY while the process is still on Method A. After Method B unlocks,
+ * the baseline window is fixed history: a change would retroactively redraw which
+ * samples were the ≥30 baseline. Three layers reject a post-unlock edit — this
+ * row-locked check, the `isNull(method_b_unlocked_at)` UPDATE predicate (closes
+ * the check→update race), and the DB trigger (migration 0085, against direct SQL).
+ * Organization scope is enforced here; the fn layer gates the owner/admin role.
+ */
+export async function setProcessOperationalStart(
+  ctx: OrgContext,
+  input: SetOperationalStartInput,
+): Promise<ProductionProcess> {
+  requireOrgScope(ctx);
+
+  return db.transaction(async (tx) => {
+    const [process] = await tx
+      .select()
+      .from(productionProcesses)
+      .where(
+        and(
+          eq(productionProcesses.id, input.processId),
+          eq(productionProcesses.organizationId, ctx.organizationId),
+        ),
+      )
+      .for("update")
+      .limit(1);
+
+    if (!process) {
+      throw new SafeError("Production process not found.");
+    }
+    if (process.methodBUnlockedAt != null) {
+      throw new SafeError(
+        "This production process has already unlocked Method B — its baseline window is fixed history and the operational start can no longer change.",
+      );
+    }
+
+    const [updated] = await tx
+      .update(productionProcesses)
+      .set({ establishedAt: input.establishedAt, updatedAt: new Date() })
+      .where(
+        and(
+          eq(productionProcesses.id, input.processId),
+          eq(productionProcesses.organizationId, ctx.organizationId),
+          // DB-layer backstop: never touch a row that unlocked Method B between
+          // the SELECT above and this UPDATE.
+          isNull(productionProcesses.methodBUnlockedAt),
+        ),
+      )
+      .returning();
+
+    if (!updated) {
+      throw new SafeError(
+        "This production process has already unlocked Method B — its operational start can no longer change.",
+      );
+    }
 
     return updated;
   });

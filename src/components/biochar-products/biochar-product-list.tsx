@@ -33,6 +33,7 @@ import {
   ENTITY_DEEP_LINK_MODE_PARAM,
   parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
+import { fromCompositionJsonb } from "@/lib/biochar-composition";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { formatDate } from "@/lib/format-utils";
@@ -417,6 +418,17 @@ export function BiocharProductList() {
               { label: "Density (kg/m3)", value: displaySideSheet.entity.densityKgM3 != null ? `${displaySideSheet.entity.densityKgM3} kg/m³` : null },
             ],
           },
+          ...(() => {
+            const ingredients = fromCompositionJsonb(displaySideSheet.entity.composition);
+            if (ingredients.length === 0) return [];
+            return [{
+              title: "Blend Ingredients",
+              fields: ingredients.map((ingredient) => ({
+                label: ingredient.feedstockTypeName,
+                value: ingredient.massKg != null ? formatMass(ingredient.massKg) : undefined,
+              })),
+            }];
+          })(),
           {
             title: "Destination & Product",
             fields: [

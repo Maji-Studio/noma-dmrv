@@ -16,12 +16,12 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { FlowArrowIcon, CheckCircleIcon, LockOpenIcon } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader } from "@/components/ui";
-import { formatDate } from "@/lib/format-utils";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { InfoHint } from "@/components/ui/tooltip";
 import { ServerError } from "@/components/forms";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { formatDayString } from "@/lib/format-utils";
 import {
   METHOD_B_MINIMUM_METHOD_A_SAMPLES,
   METHOD_B_SAMPLING_CADENCE_BATCHES,
@@ -34,6 +34,7 @@ import { MethodPill } from "./method-pill";
 import { ProcessDetailPanel } from "./process-detail-panel";
 import { UnlockMethodBDialog } from "./unlock-method-b-dialog";
 import { StartNewProcessDialog } from "./start-new-process-dialog";
+import { SetOperationalStartDialog } from "./set-operational-start-dialog";
 
 function createColumns(
   onUnlock: (process: ProductionProcessSummary) => void,
@@ -93,7 +94,7 @@ function createColumns(
             {p.futureSampleCount > 0 && (
               <span className="body-caption text-[var(--st-wait)]">
                 {p.futureSampleCount} future-dated — counted from{" "}
-                {formatDate(p.nextCountableSamplingTime)}
+                {formatDayString(p.nextCountableSamplingDay)}
               </span>
             )}
             {p.preEstablishmentSampleCount > 0 && (
@@ -168,7 +169,16 @@ function createColumns(
   ];
 }
 
-export function ProductionProcessList() {
+/**
+ * @param canManage Org owner/admin (or Platform Admin), resolved server-side by
+ *   the page — gates the operational-start edit affordance. The server action
+ *   re-checks the role regardless.
+ */
+export function ProductionProcessList({
+  canManage = false,
+}: {
+  canManage?: boolean;
+}) {
   const { facilityId } = useFacilityContext();
   const {
     data: processes,
@@ -191,6 +201,7 @@ export function ProductionProcessList() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [unlockId, setUnlockId] = useState<string | null>(null);
   const [resetId, setResetId] = useState<string | null>(null);
+  const [editStartId, setEditStartId] = useState<string | null>(null);
 
   const rows = processes ?? [];
   const byId = (id: string | null) => rows.find((p) => p.id === id) ?? null;
@@ -283,8 +294,10 @@ export function ProductionProcessList() {
         open={!!detailId}
         onOpenChange={(open) => !open && setDetailId(null)}
         isIsometric={isIsometric}
+        canManage={canManage}
         onUnlock={(process) => setUnlockId(process.id)}
         onStartNewProcess={(process) => setResetId(process.id)}
+        onEditOperationalStart={(process) => setEditStartId(process.id)}
       />
 
       <UnlockMethodBDialog
@@ -301,6 +314,12 @@ export function ProductionProcessList() {
           setDetailId(null);
         }}
         process={byId(resetId)}
+      />
+
+      <SetOperationalStartDialog
+        isOpen={!!editStartId}
+        onClose={() => setEditStartId(null)}
+        process={byId(editStartId)}
       />
     </div>
   );
