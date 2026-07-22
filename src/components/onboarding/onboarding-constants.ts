@@ -139,18 +139,34 @@ const ROUTE_SEGMENT: Record<
 };
 
 /**
- * Prefix only — `useOnboardingGate` appends `:<sessionId>:<organizationId>` so
- * a dismiss never outlives the login session or leaks across organizations in
- * the same tab. Suppresses auto-open until the tab closes or the user logs in
- * again, whichever comes first.
+ * Prefix — see `onboardingWizardDismissedKey`. Session-scoped so a dismiss
+ * never outlives the login session or leaks across organizations in the same
+ * tab: it suppresses auto-open until the tab closes or the user logs in again,
+ * whichever comes first.
  */
 export const ONBOARDING_WIZARD_DISMISSED_KEY =
   "noma:onboarding-wizard-dismissed";
 
 /**
- * Prefix only — `useOnboardingGate` appends `:<userId>:<organizationId>`.
- * Persistent (localStorage): collapse the getting-started guide to a slim
- * strip, per user per organization.
+ * Prefix — see `onboardingGuideCollapsedKey`. Persistent (localStorage):
+ * collapse the getting-started guide to a slim strip, per user per
+ * organization.
  */
 export const ONBOARDING_GUIDE_COLLAPSED_KEY =
   "noma:onboarding-guide-collapsed";
+
+/** sessionStorage key for a wizard dismiss, scoped to one login session + org. */
+export function onboardingWizardDismissedKey(
+  sessionId: string,
+  organizationId: string | null | undefined,
+): string {
+  return `${ONBOARDING_WIZARD_DISMISSED_KEY}:${sessionId}:${organizationId ?? "none"}`;
+}
+
+/** localStorage key for the guide-collapse preference, scoped per user + org. */
+export function onboardingGuideCollapsedKey(
+  userId: string,
+  organizationId: string | null | undefined,
+): string {
+  return `${ONBOARDING_GUIDE_COLLAPSED_KEY}:${userId}:${organizationId ?? "none"}`;
+}

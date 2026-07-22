@@ -18,8 +18,8 @@ import { authClient } from "@/lib/auth/client";
 import { onboardingKeys, useOnboardingStatus } from "@/hooks/use-onboarding";
 import type { OnboardingStatus } from "@/data-access/onboarding";
 import {
-  ONBOARDING_GUIDE_COLLAPSED_KEY,
-  ONBOARDING_WIZARD_DISMISSED_KEY,
+  onboardingGuideCollapsedKey,
+  onboardingWizardDismissedKey,
 } from "./onboarding-constants";
 import { deriveSetupProgress, type SetupProgress } from "./use-setup-steps";
 
@@ -105,15 +105,15 @@ export function useOnboardingGate(facilityId: string | null): OnboardingGate {
     | { id: string; activeOrganizationId?: string | null }
     | undefined;
   const userId = sessionData?.user?.id ?? null;
-  const organizationId = authSession?.activeOrganizationId ?? "none";
+  const organizationId = authSession?.activeOrganizationId ?? null;
   const dismissKey = authSession
-    ? `${ONBOARDING_WIZARD_DISMISSED_KEY}:${authSession.id}:${organizationId}`
+    ? onboardingWizardDismissedKey(authSession.id, organizationId)
     : null;
   // The collapse preference is persistent (localStorage) but must not leak
   // across accounts or organizations sharing a browser, so it scopes by user
   // (not session — it survives re-login by design) and org.
   const collapsedKey = userId
-    ? `${ONBOARDING_GUIDE_COLLAPSED_KEY}:${userId}:${organizationId}`
+    ? onboardingGuideCollapsedKey(userId, organizationId)
     : null;
 
   // Persisted preferences read lazily, re-read whenever their scoped key
