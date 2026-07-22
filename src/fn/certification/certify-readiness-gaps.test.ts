@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import type { TransportLeg } from "@/db/schema";
 import { buildEntityReadinessResult } from "./certify-readiness-gaps";
+
+const TRANSPORT_LEG_ID = "00000000-0000-4000-a000-000000000001";
 
 function productionRun(
   id: string,
@@ -52,5 +55,29 @@ describe("buildEntityReadinessResult", () => {
     );
     expect(result.gaps.join(" ")).toContain("PR-AFFECTED");
     expect(result.gaps.join(" ")).not.toContain("run-affected");
+  });
+
+  it("uses a friendly transport label in flat readiness gaps", () => {
+    const transportLeg = {
+      id: TRANSPORT_LEG_ID,
+      distanceKm: 25,
+      loadMassKg: 900,
+      distanceSource: "manual",
+      transportEvidenceDocumentCount: 0,
+    } as unknown as TransportLeg;
+
+    const result = buildEntityReadinessResult(
+      [],
+      [],
+      { feedstock: [transportLeg], biochar: [], sample: [] },
+      ["feedstock"],
+    );
+
+    expect(result.gaps.join(" ")).toContain("feedstock transport 1");
+    expect(result.gaps.join(" ")).not.toContain(TRANSPORT_LEG_ID);
+    expect(result.issues[0]?.affectedRecords[0]).toMatchObject({
+      id: TRANSPORT_LEG_ID,
+      code: "feedstock transport 1",
+    });
   });
 });

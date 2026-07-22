@@ -121,11 +121,12 @@ export function buildEntityReadinessResult(
   for (const category of requiredTransportCategories) {
     const legs = transportLegs[category];
     legs.forEach((leg, index) => {
+      const legCode = `${category} transport ${index + 1}`;
       addEntityGaps(
-        `${category} transport leg ${leg.id}`,
+        legCode,
         {
           id: leg.id,
-          code: `${category} transport ${index + 1}`,
+          code: legCode,
           missing: [],
         },
         {
