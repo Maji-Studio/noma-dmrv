@@ -34,6 +34,7 @@ type LockedBiocharProduct = Pick<
   BiocharProduct,
   | "facilityId"
   | "formulationId"
+  | "biocharRatio"
   | "linkedProductionRunId"
   | "storageLocationId"
   | "massKg"
@@ -57,6 +58,13 @@ export interface BiocharProductStockState {
   transactionStorageId: string | null;
   transactionMassKg: number | null;
   transactionComposition: Record<string, unknown> | null;
+  /**
+   * The product's snapshotted biochar ratio for this transaction. `null` when
+   * unknown (formulation being reassigned, or a legacy pre-snapshot row) — the
+   * draw check then falls back to the live formulation ratio, matching the
+   * roll-ups' COALESCE(product snapshot, live formulation ratio, 1).
+   */
+  transactionBiocharRatio: number | null;
 }
 
 /** Wet product mass scaled to the source bin's biochar-equivalent draw. */
@@ -91,6 +99,11 @@ function deriveBiocharProductStockState(
       data.composition !== undefined
         ? data.composition
         : (product.composition as Record<string, unknown> | null),
+    transactionBiocharRatio:
+      data.formulationId !== undefined &&
+      data.formulationId !== product.formulationId
+        ? null
+        : product.biocharRatio,
   };
 }
 
@@ -214,18 +227,25 @@ export async function assertBiocharProductUpdateDraw(
     ));
   if (!effectiveRun?.biocharStorageLocationId) return;
 
-  const [ratioRow] = state.transactionFormulationId
-    ? await tx
-        .select({ biocharRatio: formulations.biocharRatio })
-        .from(formulations)
-        .where(and(
-          eq(formulations.id, state.transactionFormulationId),
-          eq(formulations.organizationId, ctx.organizationId),
-        ))
-    : [];
+  // Snapshot-first: the product's own biochar ratio governs its draw. Fall
+  // back to the live formulation ratio only when the snapshot is unresolved
+  // (formulation reassignment in flight, or a legacy pre-snapshot row) —
+  // mirroring the stock roll-ups' COALESCE chain so overdraw checks and
+  // derived stock can never disagree.
+  let biocharRatio = state.transactionBiocharRatio;
+  if (biocharRatio == null && state.transactionFormulationId) {
+    const [ratioRow] = await tx
+      .select({ biocharRatio: formulations.biocharRatio })
+      .from(formulations)
+      .where(and(
+        eq(formulations.id, state.transactionFormulationId),
+        eq(formulations.organizationId, ctx.organizationId),
+      ));
+    biocharRatio = ratioRow?.biocharRatio ?? null;
+  }
   const requestedBiocharKg = biocharEquivalentKg(
     state.transactionMassKg,
-    ratioRow?.biocharRatio ?? null,
+    biocharRatio,
   );
   await assertBiocharDrawWithinStock(ctx, tx, {
     biocharStorageLocationId: effectiveRun.biocharStorageLocationId,

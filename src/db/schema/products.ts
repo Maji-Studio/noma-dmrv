@@ -95,6 +95,12 @@ export const biocharProducts = pgTable('biochar_products', {
   // --- Composition ---
   // Nullable: a NULL formulation means a pure-biochar product (no amendment blend).
   formulationId: uuid('formulation_id').references(() => formulations.id),
+  // Snapshot of the formulation's biocharRatio taken when the product is
+  // created (or its formulation reassigned). Stock math and roll-ups read this
+  // snapshot, not the live formulation, so later recipe edits never rewrite an
+  // existing product's biochar-equivalent draw. NULL falls back to the live
+  // formulation ratio (legacy rows), then 1 (pure biochar).
+  biocharRatio: fraction('biochar_ratio'),
   linkedProductionRunId: uuid('linked_production_run_id'),
   composition: jsonb('composition').notNull().default(sql`'{}'::jsonb`),
 
@@ -120,6 +126,10 @@ export const biocharProducts = pgTable('biochar_products', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
   unique('biochar_products_organization_id_code_unique').on(table.organizationId, table.code),
+  check(
+    'biochar_products_biochar_ratio_range',
+    sql`${table.biocharRatio} is null or (${table.biocharRatio} >= 0 and ${table.biocharRatio} <= 1)`
+  ),
   foreignKey({
     columns: [table.facilityId, table.organizationId],
     foreignColumns: [facilities.id, facilities.organizationId],
