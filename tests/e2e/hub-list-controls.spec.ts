@@ -76,8 +76,12 @@ test.describe("Hub list controls", () => {
 
     await adminPage.goto(`/credit-batches?facility=${seededData.facility.id}`);
     await adminPage.getByLabel("Search credit batches").fill(`HUB-${tag}`);
+    // The list orders by createdAt desc and the parallel seeds share
+    // timestamps, so WHICH batch lands on page 1 is arbitrary — assert any
+    // tagged card here; batches[0] is asserted after the page-size expansion
+    // puts all rows on one page.
     await expect(
-      adminPage.locator("article").filter({ hasText: batches[0].code }),
+      adminPage.locator("article").filter({ hasText: `HUB-${tag}` }).first(),
     ).toBeVisible({ timeout: 15000 });
 
     const pageSize = adminPage.getByLabel("Rows per page");
