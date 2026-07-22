@@ -36,12 +36,13 @@ import {
 import { getProductionRunById } from "./queries";
 import type { ProductionRunWithRelations } from "./types";
 import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
-import { assertFeedstockDrawWithinStock } from "../bin-stock-guards";
 import { lockBinStocks } from "../lock-bin-stocks";
 import {
+  assertProductionRunCreateFeedstockDrawWithinStock,
   assertProductionRunStockSnapshot,
   assertProductionRunBiocharStockNotOverdrawn,
-  deriveProductionRunBiocharStockState,
+  assertProductionRunUpdateFeedstockDrawWithinStock,
+  deriveProductionRunUpdateBiocharStockState,
   lockProductionRunUpdateStock,
 } from "../production-run-stock-locks";
 import {
@@ -308,8 +309,7 @@ export async function createProductionRun(
     // Auto-populate M:M feedstock relationships from bin contents
     let consumedFeedstockKg = 0;
     if (data.feedstockStorageLocationId && computedDryMass) {
-      // Hard-block a draw that exceeds the bin's derived on-hand stock (#116).
-      await assertFeedstockDrawWithinStock(ctx, tx, {
+      await assertProductionRunCreateFeedstockDrawWithinStock(ctx, tx, {
         storageLocationId: data.feedstockStorageLocationId,
         requestedDryKg: computedDryMass,
       });
@@ -625,18 +625,13 @@ export async function updateProductionRun(
       data.biocharStorageLocationId !== undefined
         ? data.biocharStorageLocationId
         : locked.biocharStorageLocationId;
-    const biocharStockChanged =
-      (data.biocharOutputKg !== undefined &&
-        data.biocharOutputKg !== locked.biocharOutputKg) ||
-      (data.biocharStorageLocationId !== undefined &&
-        data.biocharStorageLocationId !== locked.biocharStorageLocationId);
-
-    const biocharStockState = biocharStockChanged
-      ? await deriveProductionRunBiocharStockState(ctx, tx, [
-          locked.biocharStorageLocationId,
-          effectiveBiocharStorageId,
-        ])
-      : [];
+    const biocharStockState =
+      await deriveProductionRunUpdateBiocharStockState(
+        ctx,
+        tx,
+        locked,
+        data,
+      );
 
     if (
       effectiveFeedstockStorageId &&
@@ -706,14 +701,10 @@ export async function updateProductionRun(
         locked.feedstockMassDryKg;
 
       if (effectiveFeedstockStorageId && dryMassKg) {
-        // Hard-block an over-draw (#116). The run's prior allocation was just
-        // deleted; exclude it so the replacement draw is measured against the
-        // stock this run is not currently holding.
-        await assertFeedstockDrawWithinStock(ctx, tx, {
+        await assertProductionRunUpdateFeedstockDrawWithinStock(ctx, tx, {
+          productionRunId,
           storageLocationId: effectiveFeedstockStorageId,
           requestedDryKg: dryMassKg,
-          excludeRunId: productionRunId,
-          binLockAlreadyHeld: true,
         });
         const allocated = await allocateFeedstockMass(ctx, effectiveFeedstockStorageId, dryMassKg, tx);
         await tx.insert(productionRunFeedstocks).values(
