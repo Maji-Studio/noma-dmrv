@@ -94,6 +94,91 @@ describe("runCreateWithEvidenceChoreography", () => {
     );
     expect(clear).not.toHaveBeenCalled();
   });
+
+  // The onAfterFlush contract carried by production-run-list: a post-flush step
+  // (readings-CSV import) can fail the choreography even when every upload
+  // succeeded, and decides whether the retry queue is still needed.
+  it("clears the settled queue on an import-only failure (uploads ok, onAfterFlush overrides)", async () => {
+    const setError = vi.fn<(message: string | null) => void>();
+    const openEdit = vi.fn();
+    const close = vi.fn();
+    const toast = vi.fn();
+    const clear = vi.fn();
+
+    await runCreateWithEvidenceChoreography({
+      input: undefined,
+      entityType: "production_run",
+      entityNoun: "Production run",
+      executeCreate: async () => ({
+        entities: [{ id: "run-1" }],
+        result: undefined,
+      }),
+      flushMany: async () => ({ ok: true, uploaded: [], failed: [] }),
+      clearAttachments: clear,
+      retainCreatedEntityIds: vi.fn(),
+      setFlushing: vi.fn(),
+      setError,
+      getCreateErrorMessage: () => "create failed",
+      openEditOnFailure: openEdit,
+      closeOnSuccess: close,
+      onAfterFlush: () => ({
+        failureMessage:
+          "Production run created, but 1 readings file could not be imported.",
+        // Import failures are durable on the document; no upload retry needed.
+        clearAttachmentsOnFailure: true,
+      }),
+      onSuccess: toast,
+    });
+
+    expect(clear).toHaveBeenCalledTimes(1);
+    expect(openEdit).toHaveBeenCalledWith({ id: "run-1" });
+    expect(setError).toHaveBeenLastCalledWith(
+      "Production run created, but 1 readings file could not be imported.",
+    );
+    expect(close).not.toHaveBeenCalled();
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("keeps the retry queue on a combined failure and lets onAfterFlush override the message", async () => {
+    const setError = vi.fn<(message: string | null) => void>();
+    const openEdit = vi.fn();
+    const clear = vi.fn();
+
+    await runCreateWithEvidenceChoreography({
+      input: undefined,
+      entityType: "production_run",
+      entityNoun: "Production run",
+      executeCreate: async () => ({
+        entities: [{ id: "run-1" }],
+        result: undefined,
+      }),
+      flushMany: async () => ({
+        ok: false,
+        uploaded: [],
+        failed: [{} as DeferredAttachment],
+      }),
+      clearAttachments: clear,
+      retainCreatedEntityIds: vi.fn(),
+      setFlushing: vi.fn(),
+      setError,
+      getCreateErrorMessage: () => "create failed",
+      openEditOnFailure: openEdit,
+      closeOnSuccess: vi.fn(),
+      onAfterFlush: () => ({
+        failureMessage:
+          "Production run created, but 1 attachment failed to upload and 1 readings file could not be imported.",
+        // Uploads still need a retry: the queue must survive.
+        clearAttachmentsOnFailure: false,
+      }),
+      onSuccess: vi.fn(),
+    });
+
+    expect(clear).not.toHaveBeenCalled();
+    expect(openEdit).toHaveBeenCalledWith({ id: "run-1" });
+    expect(setError).toHaveBeenLastCalledWith(
+      "Production run created, but 1 attachment failed to upload and 1 readings file could not be imported.",
+    );
+  });
 });
 
 describe("guardCreateWithEvidenceUpdate", () => {
@@ -120,6 +205,21 @@ describe("guardCreateWithEvidenceUpdate", () => {
         setError: vi.fn(),
       }),
     ).toBe(false);
+  });
+
+  // The sample-list interplay: deferred transport legs count as unresolved
+  // input even when the attachment queue itself is fully uploaded.
+  it("blocks an update on additional unresolved input despite uploaded attachments", () => {
+    const setError = vi.fn();
+    const blocked = guardCreateWithEvidenceUpdate({
+      attachments: [attachmentWithStatus("uploaded")],
+      hasAdditionalUnresolved: true,
+      message: "Resolve attachments",
+      setError,
+    });
+
+    expect(blocked).toBe(true);
+    expect(setError).toHaveBeenCalledWith("Resolve attachments");
   });
 });
 
