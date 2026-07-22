@@ -6,12 +6,11 @@ import {
 } from "@/data-access/documents";
 import {
   APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS,
+  APPLICATION_DOCUMENT_ENTITY_TYPE,
   APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS,
   getMissingApplicationEvidenceRequirements,
   type ApplicationEvidenceGapDescriptor,
 } from "@/lib/certification/application-evidence";
-
-const APPLICATION_DOCUMENT_ENTITY_TYPE = "application";
 
 function applicationEvidenceGapMessage(
   applicationCode: string,

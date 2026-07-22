@@ -2,13 +2,12 @@ import { sql, type SQL } from "drizzle-orm";
 import { applications } from "@/db/schema/application";
 import { documents } from "@/db/schema/documentation";
 import {
+  APPLICATION_DOCUMENT_ENTITY_TYPE,
   APPLICATION_EVIDENCE_RULE_SPEC,
   type ApplicationEvidenceDocumentMatcher,
   type ApplicationEvidenceRequirement,
   type ApplicationEvidenceUploadedDocumentPredicate,
 } from "@/lib/certification/application-evidence";
-
-const APPLICATION_ENTITY_TYPE = "application";
 
 function uploadedDocumentSql(
   predicate: ApplicationEvidenceUploadedDocumentPredicate,
@@ -58,7 +57,7 @@ function missingDocumentSql(
   return sql`not exists (
     select 1
     from ${documents}
-    where ${documents.entityType} = ${APPLICATION_ENTITY_TYPE}
+    where ${documents.entityType} = ${APPLICATION_DOCUMENT_ENTITY_TYPE}
       and ${documents.entityId} = ${applications.id}
       and ${documents.organizationId} = ${applications.organizationId}
       and ${documentMatcherSql(matcher)}

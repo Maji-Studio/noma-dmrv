@@ -12,7 +12,10 @@ import {
 } from "@/data-access/credit-batch-lineage-facts";
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
-import { listDocumentsForEntityIds } from "@/data-access/documents";
+import {
+  listDocumentsForEntityIds,
+  type DocumentRow,
+} from "@/data-access/documents";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
 import { getTransportLegsWithEvidenceForEntities } from "@/data-access/transport-legs";
@@ -112,14 +115,14 @@ const APPLICATION_FOR_PR_1 = {
  * tests that assert on non-evidence readiness gaps mock these to keep their
  * assertions focused.
  */
-function satisfiedVisualEvidenceDocuments(applicationId: string) {
+function satisfiedVisualEvidenceDocuments(applicationId: string): DocumentRow[] {
   return APPLICATION_VISUAL_EVIDENCE_ROLES.map((role) => ({
     entityId: applicationId,
     documentType: "photo",
     uploadStatus: "uploaded",
     fileUrl: null,
     metadata: { geotagStatus: "present", evidenceRole: role },
-  })) as never[];
+  })) as unknown as DocumentRow[];
 }
 
 const DEFAULT_FACT_DATE = new Date("2026-01-20T00:00:00Z");

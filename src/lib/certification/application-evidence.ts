@@ -98,6 +98,9 @@ export function isApplicationBoundaryLogbookEvidenceType(
  * here so the taxonomy cannot silently drift when evidence rules change again.
  */
 
+/** `documents.entityType` value the evidence rule is scoped to, in both adapters. */
+export const APPLICATION_DOCUMENT_ENTITY_TYPE = "application" as const;
+
 /** Visual evidence (§8.5.1) is attested by geotagged photos of this document type. */
 export const APPLICATION_VISUAL_EVIDENCE_DOCUMENT_TYPE = "photo" as const;
 
