@@ -271,6 +271,14 @@ so they are never double-counted across entries (ADR 0020).
 _Avoid_: batch, issuance; "production batch" as a separate entity —
 the credit batch *is* noma's production batch.
 
+**Certification readiness**:
+The current assessment of whether a **credit batch** has the evidence and
+linked data needed for certification. An open readiness issue is one
+actionable group with one direct resolution destination; it is not a credit
+batch lifecycle state.
+_Avoid_: batch status, certification status; grouping missing data that must be
+fixed in different destinations into one issue.
+
 **Removal**:
 The Isometric **submission unit** — a facility-scoped registry record
 of verified, applied-biochar CO₂e accounting, held locally by a

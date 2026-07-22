@@ -113,9 +113,9 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
 
     const card = page.locator("article").filter({ hasText: lineage.creditBatchCode });
     await expect(card).toBeVisible({ timeout: 10000 });
-    const weightValue = card.getByText("Weight", { exact: true }).locator(
-      "xpath=following-sibling::p[1]",
-    );
+    const weightValue = card
+      .getByText("Applied biochar", { exact: true })
+      .locator("xpath=following-sibling::p[1]");
     // The applications form's "biocharAppliedTons" input is entered in kg
     // (applicationTonsToKg converts for display) but the schema field — and
     // this rollup — is in tonnes, so 5000 kg in reads back as "5.00 t".
@@ -146,9 +146,9 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
     await page.waitForLoadState("networkidle");
 
     const cardAfter = page.locator("article").filter({ hasText: lineage.creditBatchCode });
-    const weightValueAfter = cardAfter.getByText("Weight", { exact: true }).locator(
-      "xpath=following-sibling::p[1]",
-    );
+    const weightValueAfter = cardAfter
+      .getByText("Applied biochar", { exact: true })
+      .locator("xpath=following-sibling::p[1]");
     await expect(weightValueAfter).toHaveText("3.00 t", { timeout: 10000 });
   });
 });

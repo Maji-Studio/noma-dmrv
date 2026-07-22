@@ -1,7 +1,11 @@
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
-import { RowActionsMenu, type RowActionsMenuProps } from "@/components/ui";
+import {
+  RowActionsMenu,
+  StatusBadge,
+  type RowActionsMenuProps,
+} from "@/components/ui";
 import { CreditBatchCard } from "./credit-batch-card";
 
 type ElementProps = Record<string, unknown> & { children?: ReactNode };
@@ -16,6 +20,16 @@ function findRowActions(node: ReactNode): ReactElement<RowActionsMenuProps> | un
     return children.map(findRowActions).find(Boolean);
   }
   return findRowActions(children);
+}
+
+function findStatusBadges(node: ReactNode): ReactElement<ElementProps>[] {
+  if (!isValidElement<ElementProps>(node)) return [];
+  const matches = node.type === StatusBadge ? [node] : [];
+  const children = node.props.children;
+  if (Array.isArray(children)) {
+    return [...matches, ...children.flatMap(findStatusBadges)];
+  }
+  return [...matches, ...findStatusBadges(children)];
 }
 
 const creditBatch = {
@@ -36,7 +50,6 @@ describe("CreditBatchCard", () => {
     const onDelete = vi.fn();
     const view = CreditBatchCard({
       creditBatch,
-      certifierLabel: null,
       onView,
       onEdit,
       onDelete,
@@ -54,5 +67,26 @@ describe("CreditBatchCard", () => {
       ["Edit", undefined],
       ["Delete", true],
     ]);
+  });
+
+  it("omits a readiness badge after a failed summary load", () => {
+    const unavailable = CreditBatchCard({
+      creditBatch,
+      onView: vi.fn(),
+      onEdit: vi.fn(),
+      onDelete: vi.fn(),
+    });
+    const loading = CreditBatchCard({
+      creditBatch,
+      isHealthLoading: true,
+      onView: vi.fn(),
+      onEdit: vi.fn(),
+      onDelete: vi.fn(),
+    });
+
+    expect(findStatusBadges(unavailable)).toHaveLength(0);
+    expect(findStatusBadges(loading)[0]?.props.label).toBe(
+      "Checking readiness…",
+    );
   });
 });

@@ -65,6 +65,23 @@ export interface BatchHealthCheck {
   detail?: string;
   /** UI hint for the most specific workflow that resolves an unmet check. */
   fixTarget?: BatchHealthFixTarget;
+  /** Stable discriminator when one requirement expands into workflow issues. */
+  issueKey?: string;
+  /** Records that must be fixed in this check's single destination. */
+  affectedRecords?: BatchHealthAffectedRecord[];
+}
+
+export interface BatchHealthAffectedRecord {
+  id: string;
+  code: string;
+  missing: string[];
+}
+
+export interface BatchEntityReadinessIssue {
+  key: string;
+  label: string;
+  fixTarget: BatchHealthFixTarget;
+  affectedRecords: BatchHealthAffectedRecord[];
 }
 
 /**
@@ -75,7 +92,9 @@ export interface BatchHealthCheck {
 type BatchHealthCheckBase = Omit<
   BatchHealthCheck,
   "requirementLabel" | "whyDetail"
->;
+> & {
+  requirementLabel?: string;
+};
 
 export interface BatchTransportFact {
   category: TransportCategory;
@@ -98,6 +117,8 @@ export interface BatchHealthFacts {
    * operator resolves them from the batch's cards before grouping.
    */
   entityReadinessGaps: string[];
+  /** The same gaps grouped by the one workflow where each issue is resolved. */
+  entityReadinessIssues?: BatchEntityReadinessIssue[];
   /** The batch's application lineage resolves at least one production run. */
   hasSubmittableRuns: boolean;
   /** Specific reason production lineage is not submittable, when known. */
@@ -128,6 +149,7 @@ const PRODUCTION_LABEL = "Production data linked";
 const TRANSPORT_LABEL = "Transport legs present";
 const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_PREVIEW_LIMIT = 3;
+const MERGED_CHECK_SEPARATOR = " · ";
 
 function describeCategories(categories: TransportCategory[]): string {
   return categories.join(", ");
@@ -142,6 +164,7 @@ function carbonCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
     label: CARBON_LABEL,
     status: "unmet",
     detail: `Missing: ${facts.carbonMissingInputs.join(", ")}`,
+    fixTarget: "labSamples",
   };
 }
 
@@ -190,30 +213,125 @@ function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
         label: TRANSPORT_LABEL,
         status: "unmet",
         detail: `Missing ${describeCategories(missing)} transport legs`,
+        fixTarget: "deliveries",
       };
 }
 
-function entityReadinessCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
+function resolutionDestination(check: BatchHealthCheck): string {
+  switch (check.fixTarget) {
+    case "deliveries":
+    case "deliveryDistances":
+      return "deliveries";
+    case "productionRuns":
+    case "sourceData":
+      return "productionRuns";
+    default:
+      return check.fixTarget ?? check.key;
+  }
+}
+
+function mergeAffectedRecords(
+  left: BatchHealthAffectedRecord[] | undefined,
+  right: BatchHealthAffectedRecord[] | undefined,
+): BatchHealthAffectedRecord[] | undefined {
+  const records = new Map<string, BatchHealthAffectedRecord>();
+  for (const record of [...(left ?? []), ...(right ?? [])]) {
+    const current = records.get(record.id);
+    records.set(record.id, {
+      ...record,
+      missing: Array.from(
+        new Set([...(current?.missing ?? []), ...record.missing]),
+      ),
+    });
+  }
+  return records.size > 0 ? Array.from(records.values()) : undefined;
+}
+
+function mergeCheckText(
+  left: string | undefined,
+  right: string | undefined,
+): string | undefined {
+  const parts = [left, right]
+    .flatMap((value) => value?.split(MERGED_CHECK_SEPARATOR) ?? [])
+    .filter(Boolean);
+  const unique = Array.from(new Set(parts));
+  return unique.length > 0 ? unique.join(MERGED_CHECK_SEPARATOR) : undefined;
+}
+
+/** One open row and primary action per resolution destination. */
+function mergeUnmetChecksByDestination(
+  checks: BatchHealthCheck[],
+): BatchHealthCheck[] {
+  const merged: BatchHealthCheck[] = [];
+  const indexByDestination = new Map<string, number>();
+
+  for (const check of checks) {
+    if (check.status !== "unmet") {
+      merged.push(check);
+      continue;
+    }
+    const destination = resolutionDestination(check);
+    const existingIndex = indexByDestination.get(destination);
+    if (existingIndex === undefined) {
+      indexByDestination.set(destination, merged.length);
+      merged.push(check);
+      continue;
+    }
+
+    const existing = merged[existingIndex];
+    merged[existingIndex] = {
+      ...existing,
+      label: mergeCheckText(existing.label, check.label) ?? existing.label,
+      requirementLabel:
+        mergeCheckText(existing.requirementLabel, check.requirementLabel) ??
+        existing.requirementLabel,
+      whyDetail: mergeCheckText(existing.whyDetail, check.whyDetail),
+      issueKey: [existing.issueKey ?? existing.key, check.issueKey ?? check.key]
+        .join("+"),
+      detail: mergeCheckText(existing.detail, check.detail),
+      affectedRecords: mergeAffectedRecords(
+        existing.affectedRecords,
+        check.affectedRecords,
+      ),
+    };
+  }
+  return merged;
+}
+
+function entityReadinessChecks(facts: BatchHealthFacts): BatchHealthCheckBase[] {
   if (facts.entityReadinessGaps.length === 0) {
-    return {
+    return [{
       key: "entityReadiness",
       label: ENTITY_READINESS_LABEL,
       status: "met",
       detail: "No entity field gaps detected for submission.",
-    };
+    }];
+  }
+  const issues = facts.entityReadinessIssues;
+  if (issues && issues.length > 0) {
+    return issues.map((issue) => ({
+      key: "entityReadiness",
+      issueKey: issue.key,
+      label: ENTITY_READINESS_LABEL,
+      requirementLabel: issue.label,
+      status: "unmet",
+      detail: `${issue.affectedRecords.length} ${issue.affectedRecords.length === 1 ? "record needs" : "records need"} attention`,
+      fixTarget: issue.fixTarget,
+      affectedRecords: issue.affectedRecords,
+    }));
   }
   const suffix =
     facts.entityReadinessGaps.length > ENTITY_READINESS_PREVIEW_LIMIT
       ? ", ..."
       : "";
-  return {
+  return [{
     key: "entityReadiness",
     label: ENTITY_READINESS_LABEL,
     status: "unmet",
     detail: `Missing: ${facts.entityReadinessGaps
       .slice(0, ENTITY_READINESS_PREVIEW_LIMIT)
       .join(", ")}${suffix}`,
-  };
+  }];
 }
 
 /**
@@ -228,12 +346,14 @@ function entityReadinessCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
  * uniformity) live in `deriveRemovalReadiness`, not here.
  */
 export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
-  const checks = [
-    carbonCheck(facts),
-    productionCheck(facts),
-    transportCheck(facts),
-    entityReadinessCheck(facts),
-  ].map(withRequirementMeta);
+  const checks = mergeUnmetChecksByDestination(
+    [
+      carbonCheck(facts),
+      productionCheck(facts),
+      transportCheck(facts),
+      ...entityReadinessChecks(facts),
+    ].map(withRequirementMeta),
+  );
   const issueCount = checks.filter((c) => c.status === "unmet").length;
   return {
     state: issueCount > 0 ? "incomplete" : "ready",
@@ -250,7 +370,7 @@ function withRequirementMeta(check: BatchHealthCheckBase): BatchHealthCheck {
   const meta = CERT_REQUIREMENT_META[check.key];
   return {
     ...check,
-    requirementLabel: meta.requirementLabel,
+    requirementLabel: check.requirementLabel ?? meta.requirementLabel,
     whyDetail: meta.whyDetail,
   };
 }

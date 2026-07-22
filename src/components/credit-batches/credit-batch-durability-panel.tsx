@@ -15,10 +15,14 @@
  */
 "use client";
 
-import { FlaskIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  CaretDownIcon,
+  FlaskIcon,
+  WarningIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui/empty-state";
 import { InfoHint } from "@/components/ui/tooltip";
-import { formatTonnes } from "@/lib/format-utils";
+import { formatDate, formatTonnes } from "@/lib/format-utils";
 import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 import type {
   DurabilityBatchSummary,
@@ -34,7 +38,7 @@ function Section({ children }: { children: React.ReactNode }) {
   return (
     <section
       data-testid="credit-batch-durability-panel"
-      className="flex flex-col gap-20 bg-[var(--panel-bg)] [border:var(--panel-border)] p-32"
+      className="flex flex-col gap-16 bg-[var(--panel-bg)] [border:var(--panel-border)] p-24"
     >
       <div className="flex flex-col gap-4">
         <h2 className="title-heading-3 flex items-center gap-6 text-[var(--color-text-primary)]">
@@ -50,8 +54,7 @@ function Section({ children }: { children: React.ReactNode }) {
           </InfoHint>
         </h2>
         <p className="body-small text-[var(--color-text-secondary)]">
-          Lab chemistry from this batch&apos;s production runs. The registry
-          needs at least three samples, taken on different runs or days.
+          Sample coverage and chemistry eligibility for this batch.
         </p>
       </div>
       {children}
@@ -162,6 +165,46 @@ function ReplicateTable({ summary }: { summary: DurabilityBatchSummary }) {
   );
 }
 
+function SampleSummaryRows({ summary }: { summary: DurabilityBatchSummary }) {
+  return (
+    <div className="divide-y divide-[var(--color-border-tertiary)] border-y border-[var(--color-border-tertiary)]">
+      {summary.replicates.map((replicate) => (
+        <div
+          key={replicate.id}
+          className="flex items-center justify-between gap-12 py-8"
+        >
+          <span className="inline-flex min-w-0 items-center gap-6 body-small font-medium text-[var(--color-text-primary)]">
+            {replicate.outlier && (
+              <WarningIcon
+                size={13}
+                weight="fill"
+                className="shrink-0 text-[var(--st-wait)]"
+                aria-label="Chemistry outlier"
+              />
+            )}
+            {replicate.sampleCode}
+          </span>
+          <span className="truncate text-right body-caption text-[var(--color-text-tertiary)]">
+            {sampleProvenanceLabel(replicate)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function sampleProvenanceLabel(
+  replicate: Pick<
+    DurabilitySummaryReplicate,
+    "productionRunCode" | "samplingDay"
+  >,
+): string {
+  const source = replicate.productionRunCode ?? "Batch sample";
+  return replicate.samplingDay
+    ? `${source} · ${formatDate(replicate.samplingDay)}`
+    : source;
+}
+
 export function CreditBatchDurabilityPanel({
   creditBatchId,
 }: {
@@ -209,42 +252,54 @@ export function CreditBatchDurabilityPanel({
   return (
     <Section>
       <DurabilityReadinessSignals summary={summary} />
+      <SampleSummaryRows summary={summary} />
 
-      {/* The batch-level figures the measurement-sample submission sends.
-          The pooled eligibility means are NOT repeated as prose here — the
-          H/C_org stat below and the eligibility chip above already carry them,
-          and the ceilings live in the header's InfoHint. */}
-      <div className="flex flex-col gap-8">
-        <span className="label-micro text-[var(--color-text-tertiary)]">
-          Submitted to registry (mean ± s.d.)
-        </span>
-        <div className="grid grid-cols-2 gap-12 sm:grid-cols-4">
-          <SubmittedStat
-            label="H/C_org (molar)"
-            value={formatDurabilityStat(summary.submitted.hToCorg, 3)}
+      <details className="group border border-[var(--color-border-tertiary)]">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-12 px-12 py-10 body-small font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]">
+          View chemistry details
+          <CaretDownIcon
+            size={14}
+            className="transition-transform group-open:rotate-180"
+            aria-hidden
           />
-          <SubmittedStat
-            label="Total carbon"
-            value={formatDurabilityStat(summary.submitted.totalCarbonPercent, 1)}
-            hint="%"
-          />
-          <SubmittedStat
-            label="Inorganic carbon"
-            value={formatDurabilityStat(
-              summary.submitted.inorganicCarbonPercent,
-              1,
-            )}
-            hint="% (measured or Eq.2)"
-          />
-          <SubmittedStat
-            label="Product mass"
-            value={formatTonnes(summary.submitted.productMassKg / 1000)}
-            hint="biochar dry mass"
-          />
+        </summary>
+        <div className="flex flex-col gap-16 border-t border-[var(--color-border-tertiary)] p-12">
+          {/* The batch-level figures the measurement-sample submission sends. */}
+          <div className="flex flex-col gap-8">
+            <span className="label-micro text-[var(--color-text-tertiary)]">
+              Submitted to registry (mean ± s.d.)
+            </span>
+            <div className="grid grid-cols-2 gap-8">
+              <SubmittedStat
+                label="H/C_org (molar)"
+                value={formatDurabilityStat(summary.submitted.hToCorg, 3)}
+              />
+              <SubmittedStat
+                label="Total carbon"
+                value={formatDurabilityStat(
+                  summary.submitted.totalCarbonPercent,
+                  1,
+                )}
+                hint="%"
+              />
+              <SubmittedStat
+                label="Inorganic carbon"
+                value={formatDurabilityStat(
+                  summary.submitted.inorganicCarbonPercent,
+                  1,
+                )}
+                hint="% (measured or Eq.2)"
+              />
+              <SubmittedStat
+                label="Product mass"
+                value={formatTonnes(summary.submitted.productMassKg / 1000)}
+                hint="biochar dry mass"
+              />
+            </div>
+          </div>
+          <ReplicateTable summary={summary} />
         </div>
-      </div>
-
-      <ReplicateTable summary={summary} />
+      </details>
     </Section>
   );
 }

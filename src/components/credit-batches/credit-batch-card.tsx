@@ -8,23 +8,15 @@ import {
   TrashIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { RowActionsMenu } from "@/components/ui";
-import {
-  formatDurabilityOption,
-  type DurabilityOption,
-} from "@/schemas/credit-batches";
+import { RowActionsMenu, StatusBadge } from "@/components/ui";
 import type { CreditBatchHealthSummary } from "@/fn/certification";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 
 interface CreditBatchCardProps {
   creditBatch: CreditBatchWithRelations;
-  /**
-   * Facility-level registry mapping; batches inherit their certifier.
-   * `undefined` while the mapping is still loading, `null` when there is none.
-   */
-  certifierLabel: string | null | undefined;
   /** Per-batch certification readiness (undefined while loading). */
   health?: CreditBatchHealthSummary;
+  isHealthLoading?: boolean;
   onView: (creditBatch: CreditBatchWithRelations) => void;
   onEdit: (creditBatch: CreditBatchWithRelations) => void;
   onDelete: (creditBatchId: string) => void;
@@ -39,24 +31,26 @@ interface CreditBatchCardProps {
 function CertReadinessTag({ health }: { health: CreditBatchHealthSummary }) {
   if (health.state === "ready") {
     return (
-      <span className="inline-flex items-center gap-4 body-caption text-[var(--color-signal-green)]">
-        <CheckCircleIcon size={14} weight="fill" aria-hidden />
-        Ready to certify
-      </span>
+      <StatusBadge
+        status="ready"
+        label="Ready to certify"
+        icon={<CheckCircleIcon size={14} weight="fill" />}
+      />
     );
   }
   return (
-    <span className="inline-flex items-center gap-4 body-caption text-[var(--color-signal-orange)]">
-      <WarningIcon size={14} weight="fill" aria-hidden />
-      {health.issueCount} cert {health.issueCount === 1 ? "gap" : "gaps"}
-    </span>
+    <StatusBadge
+      status="pending"
+      label={`${health.issueCount} ${health.issueCount === 1 ? "issue" : "issues"} open`}
+      icon={<WarningIcon size={14} weight="fill" />}
+    />
   );
 }
 
 export function CreditBatchCard({
   creditBatch,
-  certifierLabel,
   health,
+  isHealthLoading = false,
   onView,
   onEdit,
   onDelete,
@@ -81,36 +75,29 @@ export function CreditBatchCard({
             <CertificateIcon size={12} weight="bold" />
             {creditBatch.code}
           </span>
-          {health && <CertReadinessTag health={health} />}
+          {health ? (
+            <CertReadinessTag health={health} />
+          ) : isHealthLoading ? (
+            <StatusBadge status="pending" label="Checking readiness…" />
+          ) : null}
         </div>
 
-        {/* Crediting period + facility */}
-        <div>
+        {/* Feedstock is the production cohort's identity; facility is already
+            fixed by the page context and deliberately not repeated here. */}
+        <div className="flex flex-col gap-4">
           <h3 className="title-heading-3 text-[var(--color-text-primary)]">
-            {formatDateRange(creditBatch.startDate, creditBatch.endDate)}
+            {creditBatch.feedstockTypeName ?? "Feedstock not set"}
           </h3>
-          <p className="mt-6 body-caption text-[var(--color-text-tertiary)]">
-            {creditBatch.facility?.name ?? "No facility"}
+          <p className="body-small text-[var(--color-text-secondary)]">
+            {formatDateRange(creditBatch.startDate, creditBatch.endDate)}
           </p>
         </div>
 
-        {/* 3-col metrics */}
-        <div className="grid grid-cols-3 gap-12">
+        {/* Certification-relevant outputs */}
+        <div className="grid grid-cols-2 gap-12 border-t border-[var(--color-border-tertiary)] pt-14">
           <div>
             <p className="body-caption text-[var(--color-text-tertiary)]">
-              Durability
-            </p>
-            <p className="body-small text-[var(--color-text-primary)]">
-              {creditBatch.durabilityOption
-                ? formatDurabilityOption(
-                    creditBatch.durabilityOption as DurabilityOption
-                  )
-                : "—"}
-            </p>
-          </div>
-          <div>
-            <p className="body-caption text-[var(--color-text-tertiary)]">
-              Weight
+              Applied biochar
             </p>
             <p className="title-heading-3">
               {creditBatch.appliedWeightTons != null
@@ -125,7 +112,7 @@ export function CreditBatchCard({
             <p
               className={`title-heading-3 ${
                 co2eStored != null
-                  ? "text-[var(--color-signal-green)]"
+                  ? "text-[var(--st-ok)]"
                   : ""
               }`}
             >
@@ -144,25 +131,15 @@ export function CreditBatchCard({
             </span>
           </div>
         )}
-
-        {/* Value + secondary counts */}
-        <div className="flex items-center gap-16 body-caption text-[var(--color-text-tertiary)]">
-          {creditBatch.value != null && (
-            <span>
-              {creditBatch.value.toLocaleString()}{" "}
-              {creditBatch.currency ?? ""}
-            </span>
-          )}
-          {(creditBatch.productionRunCount ?? 0) > 0 && (
-            <span>{creditBatch.productionRunCount} production runs</span>
-          )}
-        </div>
       </div>
 
       {/* Footer */}
       <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-20 py-12">
         <span className="body-caption text-[var(--color-text-tertiary)]">
-          {certifierLabel === undefined ? "—" : (certifierLabel ?? "No certifier")}
+          {creditBatch.productionRunCount}{" "}
+          {creditBatch.productionRunCount === 1
+            ? "production run"
+            : "production runs"}
         </span>
 
         <RowActionsMenu

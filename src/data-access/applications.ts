@@ -1,4 +1,4 @@
-import { desc, eq, count, sum, ne, and, isNull, SQL, sql } from "drizzle-orm";
+import { desc, eq, count, sum, ne, and, inArray, isNull, SQL, sql } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
 import { numericAggregate } from "@/db/aggregate";
@@ -271,7 +271,7 @@ export interface ApplicationListItem extends Application {
 
 export async function getApplications(
   ctx: OrgContext,
-  options?: { page?: number; pageSize?: number; facilityId?: string }
+  options?: { page?: number; pageSize?: number; facilityId?: string; ids?: string[] }
 ): Promise<{ items: ApplicationListItem[]; total: number; page: number; pageSize: number; totalPages: number }> {
   requireOrgScope(ctx);
 
@@ -286,6 +286,9 @@ export async function getApplications(
 
   if (options?.facilityId) {
     conditions.push(eq(deliveries.facilityId, options.facilityId));
+  }
+  if (options?.ids?.length) {
+    conditions.push(inArray(applications.id, options.ids));
   }
 
   const whereClause = and(...conditions);

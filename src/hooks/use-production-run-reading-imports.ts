@@ -7,6 +7,7 @@ import {
 } from "@/fn/production-run-reading-imports";
 import { productionRunKeys } from "@/hooks/use-production-runs";
 import { productionRunReadingKeys } from "@/hooks/use-production-run-readings";
+import { invalidateCertificationReadiness } from "@/hooks/use-certification";
 
 export function useImportProductionRunReadings() {
   const queryClient = useQueryClient();
@@ -34,6 +35,7 @@ export function useImportProductionRunReadings() {
       queryClient.invalidateQueries({
         queryKey: productionRunKeys.readings(data.productionRunId),
       });
+      invalidateCertificationReadiness(queryClient);
     },
   });
 }

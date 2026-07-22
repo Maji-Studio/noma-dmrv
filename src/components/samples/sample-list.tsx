@@ -194,7 +194,11 @@ export function SampleList() {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [creditBatchFilter, setCreditBatchFilter] = useState<string>("");
+  const [creditBatchFilterParam, setCreditBatchFilter] = useQueryState(
+    "creditBatch",
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const creditBatchFilter = creditBatchFilterParam ?? "";
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
@@ -483,7 +487,7 @@ export function SampleList() {
     }
   };
 
-  const clearFilters = () => { setSearchQuery(""); setCreditBatchFilter(""); setCurrentPage(1); };
+  const clearFilters = () => { setSearchQuery(""); setCreditBatchFilter(null); setCurrentPage(1); };
   const hasActiveFilters = searchQuery || creditBatchFilter;
 
   const editingEntity =
@@ -589,7 +593,7 @@ export function SampleList() {
           <div className="flex items-center gap-8">
             <select
               value={creditBatchFilter}
-              onChange={(e) => { setCreditBatchFilter(e.target.value); setCurrentPage(1); }}
+              onChange={(e) => { setCreditBatchFilter(e.target.value || null); setCurrentPage(1); }}
               className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer"
               aria-label="Filter by credit batch"
             >
