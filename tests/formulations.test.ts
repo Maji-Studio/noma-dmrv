@@ -6,11 +6,17 @@ import {
   facilities,
   feedstockTypes,
   formulations,
+  formulationIngredients,
 } from "@/db/schema";
 import {
   createFormulation,
   updateFormulation,
 } from "@/data-access/formulations";
+import {
+  createFormulationSchema,
+  updateFormulationSchema,
+  DUPLICATE_BLEND_MATERIAL_MESSAGE,
+} from "@/schemas/formulations";
 import {
   fromCompositionJsonb,
   reconcileComposition,
@@ -142,5 +148,111 @@ describe("updateFormulation ingredient identity", () => {
       fromCompositionJsonb(storedProduct.composition),
     );
     expect(reconciled.map(({ massKg }) => massKg)).toEqual([25, 15]);
+  });
+});
+
+describe("formulation unique blend material constraint", () => {
+  const createdFormulationIds: string[] = [];
+  const createdFeedstockTypeIds: string[] = [];
+
+  beforeAll(() => ensureTestOrg());
+
+  afterAll(async () => {
+    if (createdFormulationIds.length > 0) {
+      await db
+        .delete(formulations)
+        .where(inArray(formulations.id, createdFormulationIds));
+    }
+    if (createdFeedstockTypeIds.length > 0) {
+      await db
+        .delete(feedstockTypes)
+        .where(inArray(feedstockTypes.id, createdFeedstockTypeIds));
+    }
+  });
+
+  it("rejects duplicate (formulationId, feedstockTypeId) ingredient rows at the DB", async () => {
+    const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+    const [feedstockType] = await db
+      .insert(feedstockTypes)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FT-DUP-${tag}`,
+        name: `Blend Dup ${tag}`,
+        category: "ingredient",
+        usage: "blend",
+      })
+      .returning({ id: feedstockTypes.id });
+    createdFeedstockTypeIds.push(feedstockType.id);
+
+    const formulation = await createFormulation(makeTestOrgContext(), {
+      code: `FM-DUP-${tag}`,
+      name: `Dup formulation ${tag}`,
+      biocharRatio: 0.6,
+      ingredients: [{ feedstockTypeId: feedstockType.id, ratio: 0.2 }],
+    });
+    createdFormulationIds.push(formulation.id);
+
+    // A second line for the same blend material violates the composite unique
+    // constraint that keeps updateFormulation reconciliation deterministic.
+    // Drizzle wraps the pg error; the constraint name lives on `.cause`.
+    let caught: unknown;
+    try {
+      await db.insert(formulationIngredients).values({
+        organizationId: TEST_ORG_ID,
+        formulationId: formulation.id,
+        feedstockTypeId: feedstockType.id,
+        ratio: 0.1,
+        sortOrder: 1,
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeDefined();
+    const cause = (caught as { cause?: { message?: string } })?.cause;
+    expect(cause?.message).toMatch(
+      /formulation_ingredients_formulation_feedstock_unique/,
+    );
+  });
+
+  it("rejects a duplicate-material payload in the create and update schemas", () => {
+    const feedstockTypeId = crypto.randomUUID();
+    const duplicatePayload = {
+      name: "Duplicate blend",
+      biocharRatio: 0.5,
+      ingredients: [
+        { feedstockTypeId, ratio: 0.2 },
+        { feedstockTypeId, ratio: 0.1 },
+      ],
+    };
+
+    const createResult = createFormulationSchema.safeParse(duplicatePayload);
+    expect(createResult.success).toBe(false);
+    expect(
+      createResult.error?.issues.some(
+        (issue) => issue.message === DUPLICATE_BLEND_MATERIAL_MESSAGE,
+      ),
+    ).toBe(true);
+
+    const updateResult = updateFormulationSchema.safeParse({
+      formulationId: crypto.randomUUID(),
+      ...duplicatePayload,
+    });
+    expect(updateResult.success).toBe(false);
+    expect(
+      updateResult.error?.issues.some(
+        (issue) => issue.message === DUPLICATE_BLEND_MATERIAL_MESSAGE,
+      ),
+    ).toBe(true);
+
+    // Distinct materials still parse cleanly.
+    const okResult = createFormulationSchema.safeParse({
+      name: "Distinct blend",
+      biocharRatio: 0.5,
+      ingredients: [
+        { feedstockTypeId: crypto.randomUUID(), ratio: 0.2 },
+        { feedstockTypeId: crypto.randomUUID(), ratio: 0.1 },
+      ],
+    });
+    expect(okResult.success).toBe(true);
   });
 });
