@@ -13,6 +13,14 @@ describe("parseExactIdFilter", () => {
     });
   });
 
+  it("canonicalizes UUID case before deduplicating", () => {
+    expect(parseExactIdFilter(`${FIRST_ID.toUpperCase()},${FIRST_ID}`)).toEqual({
+      ids: [FIRST_ID],
+      normalized: FIRST_ID,
+      hadInvalidValues: false,
+    });
+  });
+
   it("drops malformed values without making the destination fail", () => {
     expect(parseExactIdFilter(`bad-id,${FIRST_ID},`)).toEqual({
       ids: [FIRST_ID],

@@ -25,7 +25,8 @@ export function parseExactIdFilter(value: string | null): ExactIdFilter {
       hadInvalidValues = true;
       continue;
     }
-    if (!ids.includes(candidate)) ids.push(candidate);
+    const canonicalId = candidate.toLowerCase();
+    if (!ids.includes(canonicalId)) ids.push(canonicalId);
   }
 
   return {
