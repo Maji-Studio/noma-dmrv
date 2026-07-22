@@ -42,7 +42,8 @@ vi.mock("@/lib/certification/facility-setup-gaps", () => ({
 const mockedListUngrouped = vi.mocked(listUngroupedCreditBatches);
 const mockedLoadLineageFacts = vi.mocked(loadCreditBatchLineageFacts);
 const mockedGetPreviews = vi.mocked(getCo2eStoredPreviews);
-const FANOUT_BOUNDARY_BATCH_COUNT = 9;
+const FANOUT_CONCURRENCY = 8;
+const FANOUT_BOUNDARY_BATCH_COUNT = FANOUT_CONCURRENCY + 1;
 
 describe("buildSelectableBatchesData", () => {
   beforeEach(() => {
@@ -169,21 +170,23 @@ describe("buildSelectableBatchesData", () => {
     );
 
     await vi.waitFor(() => {
-      expect(buildCreditBatchContext).toHaveBeenCalledTimes(8);
+      expect(buildCreditBatchContext).toHaveBeenCalledTimes(FANOUT_CONCURRENCY);
     });
-    for (const batchId of batchIds.slice(0, 8).reverse()) {
+    for (const batchId of batchIds.slice(0, FANOUT_CONCURRENCY).reverse()) {
       pendingResolvers.get(batchId)?.();
     }
     await vi.waitFor(() => {
-      expect(buildCreditBatchContext).toHaveBeenCalledTimes(9);
+      expect(buildCreditBatchContext).toHaveBeenCalledTimes(
+        FANOUT_BOUNDARY_BATCH_COUNT,
+      );
     });
-    pendingResolvers.get(batchIds[8])?.();
+    pendingResolvers.get(batchIds[FANOUT_CONCURRENCY])?.();
 
     const result = await resultPromise;
 
     expect(completionOrder).toEqual([
-      ...batchIds.slice(0, 8).reverse(),
-      batchIds[8],
+      ...batchIds.slice(0, FANOUT_CONCURRENCY).reverse(),
+      batchIds[FANOUT_CONCURRENCY],
     ]);
     expect(
       buildCreditBatchContext.mock.calls.map(([, batchId]) => batchId),
