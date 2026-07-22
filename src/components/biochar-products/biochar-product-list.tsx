@@ -37,7 +37,6 @@ import { fromCompositionJsonb } from "@/lib/biochar-composition";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { formatDate } from "@/lib/format-utils";
-import { fromCompositionJsonb } from "@/lib/biochar-composition";
 import { EntityDetailValue } from "@/components/ui/entity-detail-value";
 
 // ============================================
