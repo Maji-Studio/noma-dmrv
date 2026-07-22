@@ -85,7 +85,7 @@ export function IngredientBinField({
               error={fieldState.error?.message}
               helperText={
                 row.suggestedMassKg != null
-                  ? `Recipe: ${formatKgShort(row.suggestedMassKg)} kg`
+                  ? `Suggested: ${formatKgShort(row.suggestedMassKg)} kg — enter to confirm`
                   : undefined
               }
             >

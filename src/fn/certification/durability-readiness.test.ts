@@ -29,9 +29,7 @@ function batch(
     facilityTimezone,
     samples,
     runs: [],
-    productionProcessId: "process-1",
-    samplingMethod: "method_a",
-    methodBUnlockedAt: null,
+    sampling: "sampled",
     declaredHToCorgRatio: null,
     durabilityOption: "200_year",
   };

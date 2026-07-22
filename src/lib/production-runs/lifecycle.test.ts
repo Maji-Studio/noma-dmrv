@@ -3,6 +3,7 @@ import {
   assertProductionRunOutcome,
   assertProductionRunTransition,
   getProductionRunOutcomeViolations,
+  shouldClearProductionRunEndTime,
   shouldIncludeProductionRunEndTime,
   type ProductionRunOutcomeInput,
 } from "./lifecycle";
@@ -63,6 +64,29 @@ describe("production-run lifecycle", () => {
       ).toBe(true);
     },
   );
+
+  it.each(["complete", "failed"] as const)(
+    "clears the saved end time when reopening a %s run",
+    (from) => {
+      expect(
+        shouldClearProductionRunEndTime({
+          from,
+          to: "running",
+          existingEndTime: new Date("2026-01-01T11:00:00Z"),
+        }),
+      ).toBe(true);
+    },
+  );
+
+  it("does not clear an end time for a non-reopening update", () => {
+    expect(
+      shouldClearProductionRunEndTime({
+        from: "complete",
+        to: "complete",
+        existingEndTime: new Date("2026-01-01T11:00:00Z"),
+      }),
+    ).toBe(false);
+  });
 
   it.each(["complete", "failed"] as const)(
     "does not rewrite the end time when an existing %s run remains terminal",

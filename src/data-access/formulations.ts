@@ -290,7 +290,7 @@ export async function createFormulation(
 // ============================================
 
 /**
- * Update an existing formulation with ingredients (transactional delete-and-reinsert)
+ * Update an existing formulation with ingredients while preserving stable line ids.
  */
 export async function updateFormulation(
   ctx: OrgContext,
@@ -405,27 +405,75 @@ export async function updateFormulation(
 
     let ingredients: FormulationIngredientWithFeedstockType[] = [];
 
-    // If ingredients are provided, delete-and-reinsert
+    // Match recipe lines by their stable feedstock-type identity. Updating a
+    // ratio or sort order preserves the line id referenced by saved product
+    // compositions; only genuinely added/removed materials create/drop ids.
     if (ingredientData !== undefined) {
-      await tx
-        .delete(formulationIngredients)
+      const existingIngredients = await tx
+        .select({
+          id: formulationIngredients.id,
+          feedstockTypeId: formulationIngredients.feedstockTypeId,
+        })
+        .from(formulationIngredients)
         .where(and(
           eq(formulationIngredients.formulationId, formulationId),
           eq(formulationIngredients.organizationId, ctx.organizationId),
-        ));
+        ))
+        .orderBy(asc(formulationIngredients.sortOrder))
+        .for("update");
+      const availableByFeedstockType = new Map<
+        string,
+        typeof existingIngredients
+      >();
+      for (const ingredient of existingIngredients) {
+        const matches =
+          availableByFeedstockType.get(ingredient.feedstockTypeId) ?? [];
+        matches.push(ingredient);
+        availableByFeedstockType.set(ingredient.feedstockTypeId, matches);
+      }
 
-      if (ingredientData.length > 0) {
-        await tx
-          .insert(formulationIngredients)
-          .values(
-            ingredientData.map((ing, index) => ({
-              organizationId: ctx.organizationId,
-              formulationId: formulationId,
-              feedstockTypeId: ing.feedstockTypeId,
-              ratio: ing.ratio ?? null,
+      const retainedIngredientIds = new Set<string>();
+      for (const [index, ingredient] of ingredientData.entries()) {
+        const existingIngredient = availableByFeedstockType
+          .get(ingredient.feedstockTypeId)
+          ?.shift();
+        if (existingIngredient) {
+          retainedIngredientIds.add(existingIngredient.id);
+          await tx
+            .update(formulationIngredients)
+            .set({
+              ratio: ingredient.ratio ?? null,
               sortOrder: index,
-            }))
-          );
+            })
+            .where(and(
+              eq(formulationIngredients.id, existingIngredient.id),
+              eq(formulationIngredients.formulationId, formulationId),
+              eq(formulationIngredients.organizationId, ctx.organizationId),
+            ));
+        } else {
+          await tx
+            .insert(formulationIngredients)
+            .values({
+              organizationId: ctx.organizationId,
+              formulationId,
+              feedstockTypeId: ingredient.feedstockTypeId,
+              ratio: ingredient.ratio ?? null,
+              sortOrder: index,
+            });
+        }
+      }
+
+      const removedIngredientIds = existingIngredients
+        .filter(({ id }) => !retainedIngredientIds.has(id))
+        .map(({ id }) => id);
+      if (removedIngredientIds.length > 0) {
+        await tx
+          .delete(formulationIngredients)
+          .where(and(
+            inArray(formulationIngredients.id, removedIngredientIds),
+            eq(formulationIngredients.formulationId, formulationId),
+            eq(formulationIngredients.organizationId, ctx.organizationId),
+          ));
       }
 
       ingredients = await tx.query.formulationIngredients.findMany({

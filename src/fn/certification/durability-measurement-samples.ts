@@ -42,7 +42,6 @@ import {
   selectSequestrationBlueprintKey,
   SEQUESTRATION_BLUEPRINT_SAMPLED,
 } from "@/lib/isometric/transformers/measurement-sample";
-import type { SamplingMethod } from "@/lib/certification/sampling-requirements";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import { SafeError } from "@/lib/errors";
 import {
@@ -94,12 +93,10 @@ export interface BuildDurabilityMeasurementSampleSubmissionsArgs {
  * facility-reference sample. Pure — no I/O.
  *
  * A SAMPLED batch routes to the `_c_org` blueprint carrying its pooled chemistry
- * + mass. An UNSAMPLED batch (valid ONLY under Method B) routes to the
+ * + mass. An UNSAMPLED batch (validated against computed Method-B eligibility
+ * when it is created) routes to the
  * `_unsampled` blueprint carrying mass only — the registry derives its carbon +
- * durable fraction from the process's sampled history (D8). An unsampled batch on
- * Method A is an impossible state (the durability gates require every Method A
- * batch sampled); `selectSequestrationBlueprintKey` throws on it, failing closed
- * rather than masking an upstream gate regression. The whole step stays behind
+ * durable fraction from the process's sampled history (D8). The whole step stays behind
  * `DURABILITY_MEASUREMENT_SAMPLES_LIVE`; the `_unsampled` wire format is a sandbox
  * confirm (see `buildBiocharUnsampledBatchSample`).
  */
@@ -113,9 +110,8 @@ export function buildDurabilityMeasurementSampleSubmissions(
   const sourceBatchById = new Map(
     args.batches.map((batch) => [batch.creditBatchId, batch]),
   );
-  // The process's current method per batch (the unsampled route is Method B only).
-  const samplingMethodByBatch = new Map<string, SamplingMethod>(
-    args.batches.map((b) => [b.creditBatchId, b.samplingMethod]),
+  const samplingByBatch = new Map(
+    args.batches.map((batch) => [batch.creditBatchId, batch.sampling]),
   );
 
   const submissions: DurabilityMeasurementSampleSubmission[] = [];
@@ -127,9 +123,22 @@ export function buildDurabilityMeasurementSampleSubmissions(
       creditBatchId: batch.creditBatchId,
     });
 
-    const samplingMethod =
-      samplingMethodByBatch.get(batch.creditBatchId) ?? "method_a";
     const sourceBatch = sourceBatchById.get(batch.creditBatchId);
+    const sampling = samplingByBatch.get(batch.creditBatchId) ?? "sampled";
+    if (sampling === "unsampled") {
+      submissions.push({
+        operationKey: `pb-unsampled:${batch.creditBatchId}`,
+        supplierRefId,
+        body: buildBiocharUnsampledBatchSample({
+          batch,
+          projectId: args.externalProjectId,
+          supplierRefId,
+          measuredAt: args.measuredAt,
+        }),
+        label: `unsampled production batch ${batch.creditBatchCode}`,
+      });
+      continue;
+    }
     if (sourceBatch?.durabilityOption === "1000_year") {
       // Replicate order flows verbatim into the submission body's `values`
       // list and therefore into the semantic change-detection hash
@@ -179,13 +188,10 @@ export function buildDurabilityMeasurementSampleSubmissions(
       continue;
     }
 
-    // The blueprint IS the Method A/B distinction (D6) and the single source of
-    // routing truth — dispatch on it, not a second `batch.sampled` re-check. It
-    // throws for an unsampled Method-A batch (impossible state — fail closed)
-    // rather than masking an upstream gate regression.
+    // The blueprint is the registry-facing sampled/unsampled distinction (D6);
+    // dispatch from the immutable stored batch choice.
     const blueprintKey = selectSequestrationBlueprintKey({
-      sampled: batch.sampled,
-      samplingMethod,
+      sampling,
     });
 
     if (blueprintKey === SEQUESTRATION_BLUEPRINT_SAMPLED) {
@@ -202,18 +208,6 @@ export function buildDurabilityMeasurementSampleSubmissions(
         supplierRefId,
         body,
         label: `production batch ${batch.creditBatchCode}`,
-      });
-    } else {
-      submissions.push({
-        operationKey: `pb-unsampled:${batch.creditBatchId}`,
-        supplierRefId,
-        body: buildBiocharUnsampledBatchSample({
-          batch,
-          projectId: args.externalProjectId,
-          supplierRefId,
-          measuredAt: args.measuredAt,
-        }),
-        label: `unsampled production batch ${batch.creditBatchCode}`,
       });
     }
   }

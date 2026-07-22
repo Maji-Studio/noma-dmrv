@@ -87,6 +87,19 @@ export function shouldIncludeProductionRunEndTime(input: {
   );
 }
 
+/** Explicitly clear a terminal run's end time when reopening it. */
+export function shouldClearProductionRunEndTime(input: {
+  from: ProductionRunStatus;
+  to: ProductionRunStatus;
+  existingEndTime: Date | string | null | undefined;
+}): boolean {
+  return (
+    statusCountsAsPhysicalProduction(input.from) &&
+    input.to === "running" &&
+    input.existingEndTime != null
+  );
+}
+
 export function assertProductionRunTransition(
   from: ProductionRunStatus,
   to: ProductionRunStatus,

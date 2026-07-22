@@ -83,6 +83,43 @@ function ratioSumRefinement(
 }
 
 // ============================================
+// Unique Blend Material Constraint
+// ============================================
+
+export const DUPLICATE_BLEND_MATERIAL_MESSAGE =
+  "Each blend material can only be added once. Remove the duplicate line.";
+
+/**
+ * Shared refinement rejecting a formulation that lists the same blend material
+ * on more than one line. Duplicate `feedstockTypeId` lines made the
+ * updateFormulation reconciliation (match-by-feedstockTypeId) non-deterministic
+ * and could orphan a saved product composition referencing the dropped line, so
+ * uniqueness is enforced here, in the DB, and in the form. The error is pointed
+ * at the second (and later) offending line's material field.
+ */
+function duplicateBlendMaterialRefinement(
+  data: {
+    ingredients?: ReadonlyArray<{ feedstockTypeId?: string | null }>;
+  },
+  ctx: z.RefinementCtx,
+) {
+  const seen = new Set<string>();
+  (data.ingredients ?? []).forEach((ingredient, index) => {
+    const feedstockTypeId = ingredient?.feedstockTypeId;
+    if (!feedstockTypeId) return;
+    if (seen.has(feedstockTypeId)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["ingredients", index, "feedstockTypeId"],
+        message: DUPLICATE_BLEND_MATERIAL_MESSAGE,
+      });
+    } else {
+      seen.add(feedstockTypeId);
+    }
+  });
+}
+
+// ============================================
 // Ratio Validation (0 to 1)
 // ============================================
 
@@ -131,7 +168,8 @@ export const formulationFormSchema = z
 
     ingredients: z.array(formulationIngredientSchema).optional(),
   })
-  .superRefine(ratioSumRefinement);
+  .superRefine(ratioSumRefinement)
+  .superRefine(duplicateBlendMaterialRefinement);
 
 // ============================================
 // Server Action Schemas - Formulation
@@ -153,7 +191,8 @@ export const updateFormulationSchema = z
     description: z.string().max(1000).optional().nullable().or(z.literal("")),
     ingredients: z.array(formulationIngredientSchema).optional(),
   })
-  .superRefine(ratioSumRefinement);
+  .superRefine(ratioSumRefinement)
+  .superRefine(duplicateBlendMaterialRefinement);
 
 export const deleteFormulationSchema = z.object({
   formulationId: z.string().uuid("Invalid formulation ID"),
@@ -262,7 +301,8 @@ export const formulationPercentFormSchema = z
         message: PERCENT_SUM_EXCEEDED_MESSAGE,
       });
     }
-  });
+  })
+  .superRefine(duplicateBlendMaterialRefinement);
 
 export type FormulationPercentFormData = z.infer<
   typeof formulationPercentFormSchema

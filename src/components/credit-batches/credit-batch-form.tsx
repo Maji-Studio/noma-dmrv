@@ -14,6 +14,9 @@
 import { formatUtcDate, toDateInputValue } from "@/lib/date-utils";
 import { formatDate } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useFacilityCertifierSummary } from "@/hooks/use-certification";
+import { useFeedstockTypeList } from "@/hooks/use-feedstock-types";
+import { useMethodBEligibility } from "@/hooks/use-production-processes";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 
 import { useEffect, useRef, useState } from "react";
@@ -35,7 +38,8 @@ import type { CreditBatch } from "@/db/schema/credits";
 import type { CreditBatchProductionRunOption } from "@/data-access/credit-batches";
 import { useCreditBatchProductionRunOptions } from "@/hooks/use-credit-batches";
 import { CohortInputLedger } from "./cohort-input-ledger";
-import { FeedstockProcessChip } from "./feedstock-process-chip";
+import { CreditBatchSamplingControl } from "./credit-batch-sampling-control";
+import { MethodBPrerequisitesSetup } from "./method-b-prerequisites-setup";
 
 const COHORT_LIST_HEIGHT_CLASS = "max-h-[320px]";
 
@@ -296,6 +300,8 @@ interface CreditBatchFormProps {
   submitLabel?: string;
   /** Sticky CTA row (side sheet) — pass false when embedded in a page card. */
   stickyActions?: boolean;
+  /** Owner/admin capability, computed on the server by the page. */
+  canManage?: boolean;
 }
 
 export function CreditBatchForm({
@@ -306,6 +312,7 @@ export function CreditBatchForm({
   isSubmitting = false,
   submitLabel,
   stickyActions = true,
+  canManage = false,
 }: CreditBatchFormProps) {
   const isEditMode = !!creditBatch;
   const { facilityId: contextFacilityId, selectedFacility } = useFacilityContext();
@@ -323,6 +330,7 @@ export function CreditBatchForm({
       feedstockTypeId: creditBatch?.feedstockTypeId ?? "",
       startDate: toDateInputValue(creditBatch?.startDate),
       endDate: toDateInputValue(creditBatch?.endDate),
+      sampling: creditBatch?.sampling ?? "sampled",
       productionRunIds: creditBatch?.productionRunIds ?? [],
       siteManagementNotes: creditBatch?.siteManagementNotes ?? "",
     },
@@ -340,6 +348,7 @@ export function CreditBatchForm({
   const watchedEndDate = useWatch({ control, name: "endDate" });
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedFeedstockTypeId = useWatch({ control, name: "feedstockTypeId" });
+  const watchedSampling = useWatch({ control, name: "sampling" });
   const watchedProductionRunIds = useWatch({ control, name: "productionRunIds" });
   // Tier is inherited from the facility (ADR 0021), shown read-only here — never
   // a batch input. Prefer the batch's own join-derived tier (edit mode); fall
@@ -351,6 +360,29 @@ export function CreditBatchForm({
     "1000_year";
   const effectiveFacilityId = watchedFacilityId || contextFacilityId || "";
   const declaredFeedstockTypeId = watchedFeedstockTypeId || "";
+  const selectedSampling = watchedSampling === "unsampled" ? "unsampled" : "sampled";
+  const certifierSummary = useFacilityCertifierSummary(
+    effectiveFacilityId,
+    !!effectiveFacilityId,
+  );
+  const feedstockTypesQuery = useFeedstockTypeList();
+  const selectedFeedstockType = feedstockTypesQuery.data?.find(
+    (feedstockType) => feedstockType.id === declaredFeedstockTypeId,
+  );
+  const showSamplingControl =
+    Boolean(certifierSummary.data?.mapping) &&
+    selectedFeedstockType?.usage === "pyrolysis";
+  const methodBEligibility = useMethodBEligibility(
+    effectiveFacilityId,
+    declaredFeedstockTypeId,
+    showSamplingControl && !isEditMode,
+  );
+  const displayedSampling =
+    isEditMode ||
+    selectedSampling === "sampled" ||
+    methodBEligibility.data?.unsampledAllowed
+      ? selectedSampling
+      : "sampled";
 
   const startDate = parseWatchedDate(watchedStartDate);
   const endDate = parseWatchedDate(watchedEndDate);
@@ -471,7 +503,12 @@ export function CreditBatchForm({
     : "Create Credit Batch";
 
   const handleFormSubmit = handleSubmit((data) => {
-    onSubmit(data as CreditBatchFormData);
+    const sampling =
+      isEditMode ||
+      (showSamplingControl && methodBEligibility.data?.unsampledAllowed)
+        ? data.sampling
+        : "sampled";
+    onSubmit({ ...data, sampling } as CreditBatchFormData);
   });
 
   const renderProductionRunOption = (run: CreditBatchProductionRunOption) => {
@@ -530,14 +567,34 @@ export function CreditBatchForm({
             disabled={isSubmitting}
             required
             filterBy={{ usage: "pyrolysis" }}
-            helperText="The batch is one feedstock — this sets its production process and Method A/B, and scopes which runs you can add."
-          />
-          <FeedstockProcessChip
-            facilityId={effectiveFacilityId || undefined}
-            feedstockTypeId={declaredFeedstockTypeId || undefined}
-            batchStartDate={startDate ?? undefined}
+            helperText="The batch is one feedstock and scopes which runs you can add."
           />
         </div>
+
+        <CreditBatchSamplingControl
+          visible={showSamplingControl}
+          isEditMode={isEditMode}
+          value={displayedSampling}
+          onChange={(sampling) =>
+            setValue("sampling", sampling, {
+              shouldDirty: true,
+              shouldTouch: true,
+              shouldValidate: true,
+            })
+          }
+          eligibility={methodBEligibility.data}
+          isLoading={methodBEligibility.isLoading}
+          canManage={canManage}
+          disabled={isSubmitting}
+          prerequisitesSetup={
+            methodBEligibility.data?.productionProcessId ? (
+              <MethodBPrerequisitesSetup
+                processId={methodBEligibility.data.productionProcessId}
+                agreedBaselineSize={methodBEligibility.data.agreedBaselineSize}
+              />
+            ) : undefined
+          }
+        />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField

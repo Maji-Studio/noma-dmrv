@@ -584,6 +584,18 @@ describe("Credit Batch Production-Run Validation", () => {
     expect(result.productionProcessId).toBeTruthy();
   });
 
+  it("rejects an unsampled batch without an Isometric connection", async () => {
+    await expect(
+      createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
+        ...baseBatchData,
+        code: "CB-VAL-UNSAMPLED-NO-CONNECTION",
+        facilityId: facilityA.id,
+        productionRunIds: [secondRunInFacilityA.id],
+        sampling: "unsampled",
+      }),
+    ).rejects.toThrow(/require an Isometric connection/i);
+  });
+
   it("rejects a batch whose runs blend more than one feedstock type", async () => {
     await expect(
       createCreditBatch(makeTestOrgContext(TEST_USER_ID), {

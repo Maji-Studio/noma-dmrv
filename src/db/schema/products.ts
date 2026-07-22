@@ -70,6 +70,13 @@ export const formulationIngredients = pgTable(
   },
   (table) => [
     index('formulation_ingredients_organization_id_idx').on(table.organizationId),
+    // One line per blend material: duplicate feedstockTypeId lines made the
+    // updateFormulation reconciliation (match-by-feedstockTypeId) non-deterministic
+    // and could orphan a saved product composition referencing the dropped line.
+    unique('formulation_ingredients_formulation_feedstock_unique').on(
+      table.formulationId,
+      table.feedstockTypeId
+    ),
     check(
       'formulation_ingredients_ratio_range',
       sql`${table.ratio} is null or (${table.ratio} >= 0 and ${table.ratio} <= 1)`

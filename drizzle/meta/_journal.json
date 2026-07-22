@@ -617,6 +617,20 @@
       "when": 1784704394224,
       "tag": "0087_broken_fallen_one",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1784719673563,
+      "tag": "0088_wise_nehzno",
+      "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1784725952640,
+      "tag": "0089_cloudy_night_thrasher",
+      "breakpoints": true
     }
   ]
 }

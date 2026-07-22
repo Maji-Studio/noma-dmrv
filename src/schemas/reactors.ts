@@ -17,19 +17,6 @@ export const reactorTypes = [
 
 export type ReactorType = (typeof reactorTypes)[number];
 
-/**
- * Sampling methods from the Isometric Protocol (§8.3.1).
- * Method A: sample every production batch.
- * Method B: sample at least 1 in 10 production batches (requires 30 prior Method A samples).
- *
- * NOTE (ADR 0016): the sampling method is declared per PRODUCTION PROCESS
- * (feedstock × conditions), NOT per reactor — these are kept here only as the
- * shared protocol vocabulary consumed by the process + submission layers.
- */
-export const samplingMethods = ["method_a", "method_b"] as const;
-
-export type SamplingMethod = (typeof samplingMethods)[number];
-
 // ============================================
 // Reactor Form Schema (Client-side validation)
 // ============================================
@@ -170,15 +157,3 @@ export function formatReactorType(type: string): string {
   };
   return labels[type] || type;
 }
-
-/**
- * Format sampling method for display
- */
-export function formatSamplingMethod(method: SamplingMethod): string {
-  const labels: Record<SamplingMethod, string> = {
-    method_a: "Method A (Every Batch)",
-    method_b: "Method B (Every 10th Batch)",
-  };
-  return labels[method];
-}
-
