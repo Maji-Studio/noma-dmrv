@@ -5,9 +5,14 @@ import {
   type DocumentRow,
 } from "@/data-access/documents";
 import { buildApplicationEvidenceGaps } from "@/fn/certification/application-evidence-readiness";
+import {
+  APPLICATION_EVIDENCE_FIXTURES,
+  NULLISH_EVIDENCE_METHOD_FIXTURES,
+  type ApplicationEvidenceFixture,
+  type NullishEvidenceMethodFixture,
+} from "../../../tests/helpers/application-evidence-fixtures";
 import { makeTestOrgContext } from "../../../tests/helpers/test-org";
 import {
-  APPLICATION_VISUAL_EVIDENCE_ROLES,
   getMissingApplicationEvidenceRequirements,
   type ApplicationEvidenceDocument,
 } from "./application-evidence";
@@ -20,157 +25,26 @@ const TEST_USER_ID = "test-user-application-evidence-contract";
 const APPLICATION_ID = "application-evidence-contract";
 const APPLICATION_CODE = "AP-EVIDENCE-CONTRACT";
 const UPLOADED_FILE_URL = "https://example.test/evidence.jpg";
-const NO_GAPS = 0;
-const SINGLE_GAP = 1;
-const ALL_VISUAL_ROLE_GAPS = APPLICATION_VISUAL_EVIDENCE_ROLES.length;
-const ONE_VISUAL_ROLE_SATISFIED_GAPS = ALL_VISUAL_ROLE_GAPS - 1;
-const BOUNDARY_BOTH_INPUT_GAPS = 2;
 
-interface FixtureDocument {
-  documentType: "photo" | "weighbridge_ticket" | "affidavit" | "pdf";
-  metadata: Record<string, unknown>;
-  pending?: boolean;
-}
+type ContractFixture = ApplicationEvidenceFixture | NullishEvidenceMethodFixture;
 
-interface ApplicationEvidenceFixture {
-  key: string;
-  evidenceMethod: "visual" | "boundary" | null | undefined;
-  gisBoundaryReference: string | null;
-  documents: FixtureDocument[];
-  expectedGapCount: number;
-}
-
-const APPLICATION_EVIDENCE_FIXTURES: ApplicationEvidenceFixture[] = [
-  {
-    key: "visual-all-roles",
-    evidenceMethod: "visual",
-    gisBoundaryReference: null,
-    documents: APPLICATION_VISUAL_EVIDENCE_ROLES.map((role) => ({
-      documentType: "photo",
-      metadata: { geotagStatus: "present", evidenceRole: role },
-    })),
-    expectedGapCount: NO_GAPS,
-  },
-  {
-    key: "visual-one-role",
-    evidenceMethod: "visual",
-    gisBoundaryReference: null,
-    documents: [
-      {
-        documentType: "photo",
-        metadata: { geotagStatus: "present", evidenceRole: "stockpile" },
-      },
-    ],
-    expectedGapCount: ONE_VISUAL_ROLE_SATISFIED_GAPS,
-  },
-  {
-    key: "visual-none",
-    evidenceMethod: "visual",
-    gisBoundaryReference: null,
-    documents: [],
-    expectedGapCount: ALL_VISUAL_ROLE_GAPS,
-  },
-  {
-    key: "visual-geotag-missing",
-    evidenceMethod: "visual",
-    gisBoundaryReference: null,
-    documents: [
-      {
-        documentType: "photo",
-        metadata: { geotagStatus: "missing", evidenceRole: "stockpile" },
-      },
-    ],
-    expectedGapCount: ALL_VISUAL_ROLE_GAPS,
-  },
-  {
-    key: "visual-pending-upload",
-    evidenceMethod: "visual",
-    gisBoundaryReference: null,
-    documents: [
-      {
-        documentType: "photo",
-        metadata: { geotagStatus: "present", evidenceRole: "stockpile" },
-        pending: true,
-      },
-    ],
-    expectedGapCount: ALL_VISUAL_ROLE_GAPS,
-  },
-  {
-    key: "boundary-complete-weighbridge",
-    evidenceMethod: "boundary",
-    gisBoundaryReference: "field-boundary-1",
-    documents: [{ documentType: "weighbridge_ticket", metadata: {} }],
-    expectedGapCount: NO_GAPS,
-  },
-  {
-    key: "boundary-complete-affidavit",
-    evidenceMethod: "boundary",
-    gisBoundaryReference: "field-boundary-2",
-    documents: [{ documentType: "affidavit", metadata: {} }],
-    expectedGapCount: NO_GAPS,
-  },
-  {
-    key: "boundary-complete-typed-pdf",
-    evidenceMethod: "boundary",
-    gisBoundaryReference: "field-boundary-3",
-    documents: [
-      {
-        documentType: "pdf",
-        metadata: { logbookEvidenceType: "inventory" },
-      },
-    ],
-    expectedGapCount: NO_GAPS,
-  },
-  {
-    key: "boundary-untyped-pdf",
-    evidenceMethod: "boundary",
-    gisBoundaryReference: "field-boundary-4",
-    documents: [{ documentType: "pdf", metadata: {} }],
-    expectedGapCount: SINGLE_GAP,
-  },
-  {
-    key: "boundary-blank-ref",
-    evidenceMethod: "boundary",
-    gisBoundaryReference: "   ",
-    documents: [{ documentType: "affidavit", metadata: {} }],
-    expectedGapCount: SINGLE_GAP,
-  },
-  {
-    key: "boundary-ref-no-logbook",
-    evidenceMethod: "boundary",
-    gisBoundaryReference: "field-boundary-5",
-    documents: [],
-    expectedGapCount: SINGLE_GAP,
-  },
-  {
-    key: "boundary-none",
-    evidenceMethod: "boundary",
-    gisBoundaryReference: null,
-    documents: [],
-    expectedGapCount: BOUNDARY_BOTH_INPUT_GAPS,
-  },
-  {
-    key: "null-method-defaults-to-visual",
-    evidenceMethod: null,
-    gisBoundaryReference: null,
-    documents: [],
-    expectedGapCount: ALL_VISUAL_ROLE_GAPS,
-  },
-  {
-    key: "undefined-method-defaults-to-visual",
-    evidenceMethod: undefined,
-    gisBoundaryReference: null,
-    documents: [],
-    expectedGapCount: ALL_VISUAL_ROLE_GAPS,
-  },
+/**
+ * The DB-representable matrix is shared with the SQL parity suite
+ * (`tests/application-evidence-gap-sql.test.ts`); the nullish-method cases are
+ * contract-only — the column is a NOT NULL enum, so only this suite can pin
+ * the null/undefined ⇒ visual dispatch.
+ */
+const CONTRACT_FIXTURES: ContractFixture[] = [
+  ...APPLICATION_EVIDENCE_FIXTURES,
+  ...NULLISH_EVIDENCE_METHOD_FIXTURES,
 ];
 
 const mockedListDocuments = vi.mocked(listDocumentsForEntityIds);
 
 function evidenceDocuments(
-  fixture: ApplicationEvidenceFixture,
+  fixture: ContractFixture,
 ): ApplicationEvidenceDocument[] {
-  return fixture.documents.map((document) => ({
+  return fixture.docs.map((document) => ({
     documentType: document.documentType,
     uploadStatus: document.pending ? "pending" : "uploaded",
     fileUrl: document.pending ? null : UPLOADED_FILE_URL,
@@ -178,9 +52,7 @@ function evidenceDocuments(
   }));
 }
 
-function lineageFor(
-  fixture: ApplicationEvidenceFixture,
-): ChainOfCustodyData {
+function lineageFor(fixture: ContractFixture): ChainOfCustodyData {
   return {
     facility: { id: "facility", code: "FAC", name: "Facility" },
     application: {
@@ -217,7 +89,7 @@ describe("application evidence adapter contract", () => {
     vi.resetAllMocks();
   });
 
-  it.each(APPLICATION_EVIDENCE_FIXTURES)(
+  it.each(CONTRACT_FIXTURES)(
     "$key",
     async (fixture) => {
       const documents = evidenceDocuments(fixture);
