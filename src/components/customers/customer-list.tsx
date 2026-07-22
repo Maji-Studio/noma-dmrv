@@ -339,10 +339,6 @@ export function CustomerList() {
                     { label: "Address", value: sideSheetEntity.address },
                   ],
                 },
-                {
-                  title: "Record Metadata",
-                  fields: [{ label: "Code", value: sideSheetEntity.code }],
-                },
               ]
             : undefined
         }

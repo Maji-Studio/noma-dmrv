@@ -339,14 +339,6 @@ export function ReactorList() {
               { label: "Nominal Throughput (tph)", value: sideSheetEntity.nominalThroughputTph },
             ],
           },
-          {
-            title: "Relationships & Metadata",
-            fields: [
-              { label: "Code", value: sideSheetEntity.code },
-              { label: "Facility Name", value: sideSheetEntity.facilityName },
-              { label: "Facility Code", value: sideSheetEntity.facilityCode },
-            ],
-          },
         ] : undefined}
       >
         {(createError || updateError) && (

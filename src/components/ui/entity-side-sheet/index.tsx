@@ -16,9 +16,7 @@ import * as React from "react";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
 import {
-  DetailSection,
-  DetailRow,
-  DetailField,
+  DetailSpine,
   type DetailPanelSection,
 } from "@/components/ui/detail-panel";
 
@@ -68,6 +66,8 @@ interface EntitySideSheetProps {
   subtitle?: string;
   /** View-mode section config — rendered as read-only detail fields */
   sections?: DetailPanelSection[];
+  /** Mirror a paired edit form's FormSpine numbering in read mode. */
+  numberedSections?: boolean;
   /**
    * Optional view-mode body extension. When provided, renders below the
    * default `sections` so callers can mount interactive content (extra
@@ -90,19 +90,6 @@ interface EntitySideSheetProps {
 }
 
 /* -------------------------------------------------------------------------------------------------
- * Helpers
- * -----------------------------------------------------------------------------------------------*/
-
-/** Chunk an array of fields into rows of 2 */
-function chunkFields<T>(fields: T[]): T[][] {
-  const rows: T[][] = [];
-  for (let i = 0; i < fields.length; i += 2) {
-    rows.push(fields.slice(i, i + 2));
-  }
-  return rows;
-}
-
-/* -------------------------------------------------------------------------------------------------
  * EntitySideSheet
  * -----------------------------------------------------------------------------------------------*/
 
@@ -115,6 +102,7 @@ function EntitySideSheet({
   title,
   subtitle,
   sections,
+  numberedSections = false,
   viewModeChildren,
   editLabel = "Edit",
   canEdit = true,
@@ -181,28 +169,12 @@ function EntitySideSheet({
         >
           {isViewMode ? (
             <>
-              {sections?.map((section, sectionIdx) => (
-                <DetailSection
-                  key={section.title}
-                  title={section.title}
-                  divider={sectionIdx > 0}
-                >
-                  {chunkFields(section.fields).map((row, rowIdx) => (
-                    <DetailRow key={rowIdx}>
-                      {row.map((field) => (
-                        <DetailField
-                          key={field.label}
-                          label={field.label}
-                          value={field.value}
-                          certifyRequired={field.certifyRequired}
-                          certifyStatus={field.certifyStatus}
-                        />
-                      ))}
-                    </DetailRow>
-                  ))}
-                  {section.content}
-                </DetailSection>
-              ))}
+              {sections && (
+                <EntitySideSheetSections
+                  sections={sections}
+                  numbered={numberedSections}
+                />
+              )}
               {viewModeChildren}
             </>
           ) : (
@@ -235,9 +207,19 @@ function EntitySideSheet({
 }
 EntitySideSheet.displayName = "EntitySideSheet";
 
+function EntitySideSheetSections({
+  sections,
+  numbered = false,
+}: {
+  sections: DetailPanelSection[];
+  numbered?: boolean;
+}) {
+  return <DetailSpine sections={sections} numbered={numbered} />;
+}
+
 /* -------------------------------------------------------------------------------------------------
  * Export
  * -----------------------------------------------------------------------------------------------*/
 
-export { EntitySideSheet };
+export { EntitySideSheet, EntitySideSheetSections };
 export type { EntitySideSheetProps, SideSheetMode };

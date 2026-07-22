@@ -217,14 +217,14 @@ export function FormulationList() {
     const ingredientCount = entity.ingredients?.length ?? 0;
     const ingredientFields = ingredientCount > 0
       ? entity.ingredients.flatMap((ingredient, index) => {
-          const prefix = ingredientCount > 1 ? `Ingredient ${index + 1} · ` : "";
+          const prefix = ingredientCount > 1 ? `Ingredient ${index + 1}` : "Ingredient";
           return [
             {
-              label: `${prefix}Blend Material`,
+              label: `${prefix} · Blend Material`,
               value: ingredient.feedstockType.name,
             },
             {
-              label: `${prefix}Ratio`,
+              label: `${prefix} · Share (%)`,
               value: formatRatio(ingredient.ratio),
             },
           ];
@@ -239,27 +239,20 @@ export function FormulationList() {
         ],
       },
       {
-        title: "Biochar Ratio",
+        title: "Blend Composition",
         fields: [
-          { label: "Biochar Ratio (0–1)", value: entity.biocharRatio },
+          { label: "Biochar · Share (%)", value: formatRatio(entity.biocharRatio) },
+          ...ingredientFields,
         ],
-      },
-      {
-        title: "Ingredients",
-        fields: ingredientFields,
         content: ingredientCount === 0 ? (
           <p className="body-small text-[var(--color-text-tertiary)] py-8">
-            No ingredients added.
+            No ingredients added — this is a pure-biochar formulation.
           </p>
         ) : undefined,
       },
       {
         title: "Additional Information",
         fields: [{ label: "Description", value: entity.description }],
-      },
-      {
-        title: "Record Metadata",
-        fields: [{ label: "Code", value: entity.code }],
       },
     ];
   })();

@@ -626,6 +626,7 @@ export function SampleList() {
       />
 
       <EntitySideSheet
+        numberedSections
         open={!!displaySideSheet}
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}
         onCloseAttempt={confirmCreateClose}
@@ -728,17 +729,6 @@ export function SampleList() {
             title: "Transport",
             fields: [],
             content: <TransportLegsSummary entityType="sample" entityId={displaySideSheet.entity.id} />,
-          },
-          {
-            title: "Record Metadata",
-            fields: [
-              { label: "Sample Code", value: displaySideSheet.entity.sampleCode },
-              { label: "Facility", value: displaySideSheet.entity.facilityName },
-              {
-                label: "Sample chemistry",
-                value: <EntityCertifyReadinessBadge readiness={deriveEntityCertifyReadiness("sample", displaySideSheet.entity)} readyLabel="Chemistry complete" readinessNoun="sample chemistry" />,
-              },
-            ],
           },
         ] : undefined}
       >

@@ -350,6 +350,7 @@ export function OrderList() {
 
       {/* Unified Side Sheet */}
       <EntitySideSheet
+        numberedSections
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheetMode}
@@ -384,10 +385,8 @@ export function OrderList() {
                   ],
                 },
                 {
-                  title: "Fulfillment & Metadata",
+                  title: "Fulfillment",
                   fields: [
-                    { label: "Code", value: sideSheetEntity.code },
-                    { label: "Facility", value: sideSheetEntity.facilityName },
                     {
                       label: "Fulfillment",
                       value: (
