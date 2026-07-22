@@ -1,10 +1,11 @@
 /**
  * OrgBrand — the sidebar brand header, doubling as the Organization switcher.
  *
- * One row, two behaviors: single-org members get the plain brand link to the
- * dashboard (no tenancy chrome at all), while multi-org members and Platform
- * Admins (who can enter any org) get the same row as a listbox trigger — the
- * org name is shown exactly once, and a caret is the only extra affordance.
+ * One row, two behaviors: users with at most one accessible organization get
+ * the plain brand link to the dashboard (no tenancy chrome at all), while users
+ * with multiple accessible organizations get the same row as a listbox trigger
+ * — the org name is shown exactly once, and a caret is the only extra
+ * affordance.
  * Switching resets facility selection and clears the query cache, because
  * every data view changes.
  */
@@ -20,6 +21,7 @@ import {
   useAllOrganizations,
   useEnterOrganization,
 } from "@/hooks/use-organizations";
+import { shouldShowOrganizationSwitcher } from "./org-brand-switching";
 
 type SwitchableOrg = { id: string; name: string };
 
@@ -77,7 +79,7 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
     ? (allOrgs ?? []).map((org) => ({ id: org.id, name: org.name }))
     : (memberOrgs ?? []).map((org) => ({ id: org.id, name: org.name }));
 
-  const canSwitch = isAdmin || switchable.length > 1;
+  const canSwitch = shouldShowOrganizationSwitcher(switchable);
 
   const activeOrgName =
     activeOrg?.name?.trim() ||
