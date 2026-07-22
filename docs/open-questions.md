@@ -203,7 +203,7 @@ Pure starter residue; org scoping came later via ADR 0010.
   `src/components/onboarding/registry-picker.tsx` deliberately renders styled
   text wordmarks instead: we hold no approved logo files, and bundling
   unofficial reproductions of third-party registry branding is worse than no
-  logo. Flagged by the 2026-07-22 codex review of PR #500.
+  logo.
 - **To resolve:** DEC obtains approved logo assets (and usage permission) for
   both registries, or amends the plan to accept text wordmarks. Swap the
   wordmark spans in `registry-picker.tsx` for the assets when they arrive.

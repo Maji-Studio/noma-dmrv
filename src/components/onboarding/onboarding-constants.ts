@@ -147,6 +147,10 @@ const ROUTE_SEGMENT: Record<
 export const ONBOARDING_WIZARD_DISMISSED_KEY =
   "noma:onboarding-wizard-dismissed";
 
-/** Per-user, persistent: collapse the getting-started guide to a slim strip. */
+/**
+ * Prefix only — `useOnboardingGate` appends `:<userId>:<organizationId>`.
+ * Persistent (localStorage): collapse the getting-started guide to a slim
+ * strip, per user per organization.
+ */
 export const ONBOARDING_GUIDE_COLLAPSED_KEY =
   "noma:onboarding-guide-collapsed";

@@ -104,23 +104,36 @@ export function useOnboardingGate(facilityId: string | null): OnboardingGate {
   const authSession = sessionData?.session as
     | { id: string; activeOrganizationId?: string | null }
     | undefined;
+  const userId = sessionData?.user?.id ?? null;
+  const organizationId = authSession?.activeOrganizationId ?? "none";
   const dismissKey = authSession
-    ? `${ONBOARDING_WIZARD_DISMISSED_KEY}:${authSession.id}:${authSession.activeOrganizationId ?? "none"}`
+    ? `${ONBOARDING_WIZARD_DISMISSED_KEY}:${authSession.id}:${organizationId}`
+    : null;
+  // The collapse preference is persistent (localStorage) but must not leak
+  // across accounts or organizations sharing a browser, so it scopes by user
+  // (not session — it survives re-login by design) and org.
+  const collapsedKey = userId
+    ? `${ONBOARDING_GUIDE_COLLAPSED_KEY}:${userId}:${organizationId}`
     : null;
 
-  // Persisted preferences read lazily. Hydration-safe: both only influence the
-  // rendered output once the status query has resolved (post-hydration) — until
-  // then the gate mode is "none" and the guide/strip aren't rendered — so the
+  // Persisted preferences read lazily, re-read whenever their scoped key
+  // changes (session resolves, org switches) — the render-adjustment pattern,
+  // so no effect is needed. Hydration-safe: both only influence the rendered
+  // output once the status query has resolved (post-hydration) — until then
+  // the gate mode is "none" and the guide/strip aren't rendered — so the
   // server's `false` first paint never mismatches the client.
-  const [collapsed, setCollapsedState] = useState(() =>
-    readBooleanFlag("local", ONBOARDING_GUIDE_COLLAPSED_KEY),
-  );
-  // Re-read whenever the scoped key changes (session resolves, org switches) —
-  // the render-adjustment pattern, so no effect is needed.
-  const [readKey, setReadKey] = useState<string | null>(null);
+  const [readCollapsedKey, setReadCollapsedKey] = useState<string | null>(null);
+  const [collapsed, setCollapsedState] = useState(false);
+  if (readCollapsedKey !== collapsedKey) {
+    setReadCollapsedKey(collapsedKey);
+    setCollapsedState(
+      collapsedKey ? readBooleanFlag("local", collapsedKey) : false,
+    );
+  }
+  const [readDismissKey, setReadDismissKey] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
-  if (readKey !== dismissKey) {
-    setReadKey(dismissKey);
+  if (readDismissKey !== dismissKey) {
+    setReadDismissKey(dismissKey);
     setDismissed(
       dismissKey ? readBooleanFlag("session", dismissKey) : false,
     );
@@ -141,7 +154,7 @@ export function useOnboardingGate(facilityId: string | null): OnboardingGate {
     explicitOpen === null ? autoOpenEligible && !dismissed : explicitOpen;
 
   const setCollapsed = (next: boolean) => {
-    writeBooleanFlag("local", ONBOARDING_GUIDE_COLLAPSED_KEY, next);
+    if (collapsedKey) writeBooleanFlag("local", collapsedKey, next);
     setCollapsedState(next);
   };
 
