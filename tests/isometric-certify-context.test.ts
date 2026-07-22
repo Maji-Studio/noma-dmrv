@@ -27,7 +27,11 @@ import {
   type IsometricProject,
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
-import { loadCertifyContextForCreditBatchForUser } from "@/fn/certification/certify-context-core";
+import {
+  buildCreditBatchContextWithFacts,
+  loadCertifyContextForCreditBatchForUser,
+  type FacilityCertifierFacts,
+} from "@/fn/certification/certify-context-core";
 import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "@/lib/certification/application-evidence";
 
 vi.mock("@/data-access/credit-batches", () => ({
@@ -990,5 +994,59 @@ describe("requiredTransportCategories", () => {
       CREDIT_BATCH_ID,
     );
     expect(result.requiredTransportCategories).toEqual([]);
+  });
+});
+
+// Pins the lineage-facts short-circuit inside resolveScopeForCreditBatch: when
+// the wizard's set-based load supplies facts, the per-batch path must NOT run
+// its own loadCreditBatchLineageFacts (PR #510 review 2/2, P2-2 — the
+// selectable-batches contract test injects a mocked context builder, so the
+// real short-circuit is only exercised here).
+describe("buildCreditBatchContextWithFacts with preloaded lineage facts", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockedGetRuns.mockResolvedValue([]);
+    mockedGetBatchesWithSamples.mockResolvedValue([]);
+    mockedListDocuments.mockResolvedValue([]);
+    mockedGetLegs.mockResolvedValue([]);
+  });
+
+  it("does not reload lineage facts when they are supplied", async () => {
+    mockedGetCreditBatch.mockResolvedValue({
+      id: CREDIT_BATCH_ID,
+      code: "CB-1",
+      facilityId: FACILITY_ID,
+      removalId: null,
+      productionRunIds: [],
+      productionEmissionsClaimedByRemovalId: null,
+      durabilityOption: "200_year",
+    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
+    const facilityFacts = {
+      hasOrgCredentials: true,
+      mapping: mapping(),
+      project: null,
+      defaultTemplate: null,
+      missingDefaultTemplateId: null,
+      blueprintsForTemplate: [],
+      unresolvedBlueprintKeys: [],
+      requiredTransportCategories: [],
+    } as unknown as FacilityCertifierFacts;
+    const preloadedFacts = {
+      batchId: CREDIT_BATCH_ID,
+      applicationIds: [],
+      appliedWeightTons: 0,
+      runs: [],
+      applications: [],
+    } as never;
+
+    const context = await buildCreditBatchContextWithFacts(
+      makeTestOrgContext(USER_ID),
+      CREDIT_BATCH_ID,
+      facilityFacts,
+      preloadedFacts,
+    );
+
+    expect(mockedLoadLineageFacts).not.toHaveBeenCalled();
+    expect(context.facilityId).toBe(FACILITY_ID);
   });
 });

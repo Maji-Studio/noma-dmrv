@@ -1,6 +1,7 @@
 import type { DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
+  assertFeedstockDrawWithinStock,
   deriveBiocharAvailableKg,
   isOverdraw,
   overdrawError,
@@ -26,6 +27,21 @@ interface ProductionRunStockUpdate {
 interface BiocharBinStockState {
   storageLocationId: string;
   availableKg: number;
+}
+
+/** Hard-block a new run's feedstock draw against its source bin. */
+export async function assertProductionRunCreateFeedstockDrawWithinStock(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  params: {
+    storageLocationId: string;
+    requestedDryKg: number;
+  },
+): Promise<void> {
+  await assertFeedstockDrawWithinStock(ctx, tx, {
+    storageLocationId: params.storageLocationId,
+    requestedDryKg: params.requestedDryKg,
+  });
 }
 
 /** Discover the complete affected bin set and lock it before the run row. */
@@ -106,6 +122,36 @@ export async function deriveProductionRunBiocharStockState(
   return stockState;
 }
 
+/** Snapshot biochar lanes only when a run update changes their stock. */
+export async function deriveProductionRunUpdateBiocharStockState(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  locked: {
+    biocharStorageLocationId: string | null;
+    biocharOutputKg: number | null;
+  },
+  data: Pick<
+    ProductionRunStockUpdate,
+    "biocharStorageLocationId" | "biocharOutputKg"
+  >,
+): Promise<BiocharBinStockState[]> {
+  const biocharStockChanged =
+    (data.biocharOutputKg !== undefined &&
+      data.biocharOutputKg !== locked.biocharOutputKg) ||
+    (data.biocharStorageLocationId !== undefined &&
+      data.biocharStorageLocationId !== locked.biocharStorageLocationId);
+  if (!biocharStockChanged) return [];
+
+  const effectiveBiocharStorageId =
+    data.biocharStorageLocationId !== undefined
+      ? data.biocharStorageLocationId
+      : locked.biocharStorageLocationId;
+  return deriveProductionRunBiocharStockState(ctx, tx, [
+    locked.biocharStorageLocationId,
+    effectiveBiocharStorageId,
+  ]);
+}
+
 /** Re-derive changed run lanes and reject any incremental overdraw. */
 export async function assertProductionRunBiocharStockNotOverdrawn(
   ctx: OrgContext,
@@ -130,4 +176,22 @@ export async function assertProductionRunBiocharStockNotOverdrawn(
       );
     }
   }
+}
+
+/** Validate a replacement run allocation while its source-bin lock is held. */
+export async function assertProductionRunUpdateFeedstockDrawWithinStock(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  params: {
+    productionRunId: string;
+    storageLocationId: string;
+    requestedDryKg: number;
+  },
+): Promise<void> {
+  await assertFeedstockDrawWithinStock(ctx, tx, {
+    storageLocationId: params.storageLocationId,
+    requestedDryKg: params.requestedDryKg,
+    excludeRunId: params.productionRunId,
+    binLockAlreadyHeld: true,
+  });
 }
