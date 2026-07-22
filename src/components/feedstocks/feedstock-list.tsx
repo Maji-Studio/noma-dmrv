@@ -35,7 +35,10 @@ import {
   useUpdateFeedstock,
   useDeleteFeedstock,
 } from "@/hooks/use-feedstocks";
-import type { FeedstockFormData } from "@/schemas/feedstocks";
+import {
+  createFeedstockSchema,
+  type FeedstockFormData,
+} from "@/schemas/feedstocks";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import {
@@ -248,7 +251,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     entityType: "feedstock",
     entityNoun: "Feedstock",
     executeCreate: async (data: FeedstockFormData) => {
-      const result = await createFeedstock.mutateAsync(data);
+      const result = await createFeedstock.mutateAsync(
+        createFeedstockSchema.parse(data),
+      );
       if (!result.feedstocks[0]) {
         throw new Error("Feedstock creation returned no feedstock");
       }
