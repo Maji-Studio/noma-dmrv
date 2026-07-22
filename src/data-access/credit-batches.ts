@@ -8,7 +8,6 @@ import {
   isNull,
   lte,
   or,
-  sql,
 } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
@@ -32,12 +31,17 @@ import { feedstockTypes } from "@/db/schema/feedstock";
 import {
   DURABILITY_TIER_FALLBACK,
   type CreateCreditBatchData,
+  type CreditBatchSampling,
   type DurabilityOption,
   type UpdateCreditBatchData,
 } from "@/schemas/credit-batches";
 
 import { requireOrgScope } from "./utils";
-import { findOrCreateProductionProcess } from "./production-processes";
+import {
+  findOrCreateProductionProcess,
+  getMethodBEligibilityForProcess,
+} from "./production-processes";
+import { hasCertifierCredentials } from "./certifier-credentials";
 import {
   assertDeclaredFeedstockType,
   lockCreditBatchProductionRuns,
@@ -61,6 +65,7 @@ import { formatUtcDate } from "@/lib/date-utils";
 import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
+import { assertUnsampledBatchEligibility } from "@/lib/certification/credit-batch-sampling";
 import {
   loadCreditBatchLineageFacts,
   type CreditBatchLineageFacts,
@@ -393,10 +398,18 @@ export async function getCreditBatchByCode(
  */
 export async function createCreditBatch(
   ctx: OrgContext,
-  data: CreateCreditBatchData & { code: string }
+  data: Omit<CreateCreditBatchData, "sampling"> & {
+    code: string;
+    sampling?: CreditBatchSampling;
+  }
 ): Promise<CreditBatchWithRelations> {
   requireOrgScope(ctx);
   const { productionRunIds, ...batchData } = data;
+  const sampling = data.sampling ?? "sampled";
+  const hasIsometricCredentials =
+    sampling === "unsampled"
+      ? await hasCertifierCredentials(ctx, "isometric")
+      : false;
 
   const creditBatch = await db.transaction(async (tx) => {
     assertCreditBatchProductionWindow(batchData.startDate, batchData.endDate);
@@ -427,6 +440,20 @@ export async function createCreditBatch(
       { facilityId: batchData.facilityId, feedstockTypeId },
       tx,
     );
+    if (sampling === "unsampled") {
+      if (certifier !== "isometric" || !hasIsometricCredentials) {
+        throw new SafeError(
+          "Unsampled credit batches require an Isometric connection for the organization and facility.",
+        );
+      }
+      const eligibility = await getMethodBEligibilityForProcess(
+        ctx,
+        process,
+        tx,
+        new Date(),
+      );
+      assertUnsampledBatchEligibility(eligibility);
+    }
 
     // Insert the credit batch
     const [batch] = await tx
@@ -440,6 +467,7 @@ export async function createCreditBatch(
         startDate: formatUtcDate(batchData.startDate),
         endDate: formatUtcDate(batchData.endDate),
         certifier,
+        sampling,
         // durabilityOption is no longer a batch column — inherited from the
         // facility (ADR 0021).
         hToCorgRatio: batchData.hToCorgRatio ?? null,
@@ -960,40 +988,4 @@ export async function getCreditBatchProductionRunOptions(
     ...row,
     feedstockTypeIds: typesByRun.get(row.id) ?? [],
   }));
-}
-
-/**
- * Check if a date range overlaps with existing credit batches for the same facility.
- * Returns the overlapping batch if found, null otherwise.
- */
-export async function checkCreditBatchDateOverlap(
-  ctx: OrgContext,
-  facilityId: string,
-  startDate: Date,
-  endDate: Date,
-  excludeId?: string,
-): Promise<CreditBatch | null> {
-  requireOrgScope(ctx);
-  const startStr = formatUtcDate(startDate);
-  const endStr = formatUtcDate(endDate);
-
-  const conditions = [
-    eq(creditBatches.organizationId, ctx.organizationId),
-    eq(creditBatches.facilityId, facilityId),
-    lte(creditBatches.startDate, endStr),
-    gte(creditBatches.endDate, startStr),
-  ];
-
-  if (excludeId) {
-    conditions.push(sql`${creditBatches.id} != ${excludeId}`);
-  }
-
-  // org-scope-ok: organization predicate is composed in conditions above.
-  const [overlapping] = await db
-    .select()
-    .from(creditBatches)
-    .where(and(...conditions))
-    .limit(1);
-
-  return overlapping ?? null;
 }

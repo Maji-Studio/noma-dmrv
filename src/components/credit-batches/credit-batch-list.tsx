@@ -71,7 +71,7 @@ const EMPTY_CREDIT_BATCHES: CreditBatchWithRelations[] = [];
 // Component
 // ============================================
 
-export function CreditBatchList() {
+export function CreditBatchList({ canManage = false }: { canManage?: boolean }) {
   // Filter & pagination state
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -195,9 +195,11 @@ export function CreditBatchList() {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
     try {
+      const { sampling, ...mutableData } = data;
+      void sampling;
       const result = await updateCreditBatch.mutateAsync({
         creditBatchId: sideSheet.entity.id,
-        ...data,
+        ...mutableData,
       });
       if (result.success) {
         setSideSheet(null);
@@ -547,6 +549,7 @@ export function CreditBatchList() {
           isSubmitting={
             createCreditBatch.isPending || updateCreditBatch.isPending
           }
+          canManage={canManage}
         />
       </EntitySideSheet>
     </div>

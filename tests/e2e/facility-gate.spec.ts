@@ -128,27 +128,6 @@ test("facility-scoped lists render one operator gate and no inactive controls", 
     fullPage: true,
   });
 
-  await page.goto("/certification/production-processes");
-  await expect(
-    page.getByRole("heading", {
-      name: "Production Processes",
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "Select a facility", exact: true }),
-  ).toHaveCount(1);
-  await expect(
-    page.getByRole("button", { name: "Unlock", exact: true }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByText("Start new process", { exact: true }),
-  ).toHaveCount(0);
-  await expect(page.locator("table")).toHaveCount(0);
-  await page.screenshot({
-    path: testInfo.outputPath("production-processes-select-facility.png"),
-    fullPage: true,
-  });
 });
 
 // Regression for #473: a direct/deep-linked `?facility=<id>` must resolve the

@@ -1,6 +1,9 @@
 # Method B unlock: the registry computes the unsampled estimate; noma gates, routes, and previews
 
-Status: accepted (2026-06-20)
+Status: accepted (2026-06-20); Track 2 (the unlock ceremony — stored
+`samplingMethod`/`methodBUnlockedAt`, trigger/lock backstops) **superseded by
+ADR 0022** (2026-07-22). Track 1 (registry computes, noma gates and previews)
+stands, now gated on computed eligibility instead of a stored unlock.
 
 > **Refines ADR 0016** (credit batch = production batch; a production process scopes Method A/B).
 > It does **not** supersede it. ADR 0016 laid the inert seam

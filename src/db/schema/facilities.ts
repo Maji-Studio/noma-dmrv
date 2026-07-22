@@ -83,9 +83,8 @@ export const reactors = pgTable(
       .notNull(),
     // Isometric Protocol: Reactor design requirements (Section 9.2)
     reactorType: text('reactor_type').notNull(), // fixed-bed, auger, rotary-kiln
-    // NOTE: sampling_method moved OFF reactors onto production_processes (ADR
-    // 0016) — the protocol scopes the Method A/B regime to (feedstock × conditions),
-    // which spans reactors; reactor identity is not part of that boundary.
+    // Sampling is not a reactor property; each credit batch stores its own
+    // sampled/unsampled choice within a facility/feedstock process (ADR 0022).
     nominalThroughputTph: real('nominal_throughput_tph'),
     specifications: jsonb('specifications'), // { description, manufacturer, ... }
     // Stamped by the facility archive cascade; NULL = active
