@@ -51,26 +51,68 @@ export function reconcileComposition(
 }
 
 /**
- * Removal kg for a single ingredient = (productMassKg / biocharRatio) * ingredientRatio.
- * Returns null whenever any input is missing or non-positive.
+ * Recipe-suggested mass for a single ingredient =
+ * productMassKg * ingredientRatio.
+ * Orientation only — prefills the editable mass field; the entered mass is
+ * authoritative. Formulation ratios partition the total solid blend, so the
+ * product mass is already the correct basis. Returns null whenever either
+ * input is missing or non-positive.
  */
-export function deriveBinRemovalKg(
+export function deriveSuggestedIngredientMassKg(
   productMassKg: number | null | undefined,
-  biocharRatio: number | null | undefined,
   ingredientRatio: number | null | undefined,
 ): number | null {
   if (
     !Number.isFinite(productMassKg) ||
-    !Number.isFinite(biocharRatio) ||
     !Number.isFinite(ingredientRatio)
   ) {
     return null;
   }
   const mass = productMassKg as number;
-  const biochar = biocharRatio as number;
   const ingredient = ingredientRatio as number;
-  if (mass <= 0 || biochar <= 0 || ingredient <= 0) return null;
-  return (mass / biochar) * ingredient;
+  if (mass <= 0 || ingredient <= 0) return null;
+  return mass * ingredient;
+}
+
+/**
+ * Suggestions may become form values only while creating a composition. An
+ * existing product keeps saved null masses empty unless the operator explicitly
+ * assigns a different formulation, whose ingredient rows have no saved facts.
+ */
+export function shouldPrefillSuggestedMasses(input: {
+  isEditMode: boolean;
+  initialFormulationId: string | null | undefined;
+  selectedFormulationId: string | null | undefined;
+}): boolean {
+  if (!input.selectedFormulationId) return false;
+  return (
+    !input.isEditMode ||
+    input.selectedFormulationId !== input.initialFormulationId
+  );
+}
+
+/**
+ * Threshold (in percent) past which the entered ingredient mass shows a soft
+ * "vs recipe" hint. Never blocks submission — the recipe is orientation, not
+ * a constraint.
+ */
+export const INGREDIENT_MASS_DEVIATION_WARN_PERCENT = 10;
+
+/**
+ * Signed percent deviation of the entered mass against the recipe suggestion.
+ * Null when either side is missing or the suggestion is non-positive.
+ */
+export function deriveMassDeviationPercent(
+  actualMassKg: number | null | undefined,
+  suggestedMassKg: number | null | undefined,
+): number | null {
+  if (!Number.isFinite(actualMassKg) || !Number.isFinite(suggestedMassKg)) {
+    return null;
+  }
+  const actual = actualMassKg as number;
+  const suggested = suggestedMassKg as number;
+  if (suggested <= 0 || actual < 0) return null;
+  return ((actual - suggested) / suggested) * 100;
 }
 
 /**

@@ -28,6 +28,10 @@
  *
  * Skips when DATABASE_URL is unreachable, matching the other DB-backed specs.
  */
+import {
+  APPLICATION_EVIDENCE_FIXTURES,
+  type ApplicationEvidenceFixture,
+} from "./helpers/application-evidence-fixtures";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
@@ -44,7 +48,6 @@ import { customers } from "@/db/schema/parties";
 import { biocharProducts, formulations } from "@/db/schema/products";
 import { productionProcesses } from "@/db/schema/production-processes";
 import { productionRuns } from "@/db/schema/production";
-import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "@/lib/certification/application-evidence";
 
 const TEST_USER_ID = "test-user-evidence-gap-sql";
 const APPLICATION_DOCUMENT_ENTITY_TYPE = "application";
@@ -56,154 +59,18 @@ const PENDING_STORAGE = {
 } as const;
 const LIST_PAGE_SIZE = 100;
 
-// Expected-gap constants, derived from the taxonomy so a bare integer can never
-// drift away from the rule it stands for.
-const NO_GAPS = 0;
-const SINGLE_GAP = 1;
-const ALL_VISUAL_ROLE_GAPS = APPLICATION_VISUAL_EVIDENCE_ROLES.length; // 3
-const ONE_VISUAL_ROLE_SATISFIED_GAPS = ALL_VISUAL_ROLE_GAPS - 1; // 2
-const BOUNDARY_BOTH_INPUT_GAPS = 2; // missing GIS reference + missing logbook
-
-interface SeededDoc {
-  documentType:
-    | "photo"
-    | "weighbridge_ticket"
-    | "affidavit"
-    | "pdf";
-  metadata: Record<string, unknown>;
-  /** Pending (not-yet-uploaded) docs must not satisfy any evidence role. */
-  pending?: boolean;
-}
-
-interface AppSpec {
-  key: string;
-  evidenceMethod: "visual" | "boundary";
-  gisBoundaryReference: string | null;
-  docs: SeededDoc[];
-  expectedGapCount: number;
-}
-
 /**
- * One application per branch. Each `expectedGapCount` is asserted both against
- * the SQL and against the JS twin.
+ * One application per branch, shared with the pure/in-memory contract suite
+ * (`src/lib/certification/application-evidence.test.ts`) so the two matrices
+ * cannot drift. Each `expectedGapCount` is asserted both against the SQL and
+ * against the JS twin.
  */
-const APP_SPECS: AppSpec[] = [
-  // --- Visual method (§8.5.1): all three geotagged roles required ---
-  {
-    key: "visual-all-roles",
-    evidenceMethod: "visual",
-    gisBoundaryReference: null,
-    docs: APPLICATION_VISUAL_EVIDENCE_ROLES.map((role) => ({
-      documentType: "photo",
-      metadata: { geotagStatus: "present", evidenceRole: role },
-    })),
-    expectedGapCount: NO_GAPS,
-  },
-  {
-    key: "visual-one-role",
-    evidenceMethod: "visual",
-    gisBoundaryReference: null,
-    docs: [
-      {
-        documentType: "photo",
-        metadata: { geotagStatus: "present", evidenceRole: "stockpile" },
-      },
-    ],
-    expectedGapCount: ONE_VISUAL_ROLE_SATISFIED_GAPS,
-  },
-  {
-    key: "visual-none",
-    evidenceMethod: "visual",
-    gisBoundaryReference: null,
-    docs: [],
-    expectedGapCount: ALL_VISUAL_ROLE_GAPS,
-  },
-  {
-    // A photo whose geotag is absent must not satisfy its role.
-    key: "visual-geotag-missing",
-    evidenceMethod: "visual",
-    gisBoundaryReference: null,
-    docs: [
-      {
-        documentType: "photo",
-        metadata: { geotagStatus: "missing", evidenceRole: "stockpile" },
-      },
-    ],
-    expectedGapCount: ALL_VISUAL_ROLE_GAPS,
-  },
-  {
-    // A geotagged photo that has not finished uploading must not count.
-    key: "visual-pending-upload",
-    evidenceMethod: "visual",
-    gisBoundaryReference: null,
-    docs: [
-      {
-        documentType: "photo",
-        metadata: { geotagStatus: "present", evidenceRole: "stockpile" },
-        pending: true,
-      },
-    ],
-    expectedGapCount: ALL_VISUAL_ROLE_GAPS,
-  },
-  // --- Boundary method (§8.5.2): non-blank GIS reference + a logbook doc ---
-  {
-    key: "boundary-complete-weighbridge",
-    evidenceMethod: "boundary",
-    gisBoundaryReference: "field-boundary-1",
-    docs: [{ documentType: "weighbridge_ticket", metadata: {} }],
-    expectedGapCount: NO_GAPS,
-  },
-  {
-    key: "boundary-complete-affidavit",
-    evidenceMethod: "boundary",
-    gisBoundaryReference: "field-boundary-2",
-    docs: [{ documentType: "affidavit", metadata: {} }],
-    expectedGapCount: NO_GAPS,
-  },
-  {
-    // Generic PDF counts only when its logbookEvidenceType metadata qualifies.
-    key: "boundary-complete-typed-pdf",
-    evidenceMethod: "boundary",
-    gisBoundaryReference: "field-boundary-3",
-    docs: [{ documentType: "pdf", metadata: { logbookEvidenceType: "inventory" } }],
-    expectedGapCount: NO_GAPS,
-  },
-  {
-    // Untyped PDF does not attest logbook quantities.
-    key: "boundary-untyped-pdf",
-    evidenceMethod: "boundary",
-    gisBoundaryReference: "field-boundary-4",
-    docs: [{ documentType: "pdf", metadata: {} }],
-    expectedGapCount: SINGLE_GAP,
-  },
-  {
-    // Blank (whitespace) GIS reference is treated as missing even with a logbook.
-    key: "boundary-blank-ref",
-    evidenceMethod: "boundary",
-    gisBoundaryReference: "   ",
-    docs: [{ documentType: "affidavit", metadata: {} }],
-    expectedGapCount: SINGLE_GAP,
-  },
-  {
-    key: "boundary-ref-no-logbook",
-    evidenceMethod: "boundary",
-    gisBoundaryReference: "field-boundary-5",
-    docs: [],
-    expectedGapCount: SINGLE_GAP,
-  },
-  {
-    key: "boundary-none",
-    evidenceMethod: "boundary",
-    gisBoundaryReference: null,
-    docs: [],
-    expectedGapCount: BOUNDARY_BOTH_INPUT_GAPS,
-  },
-];
+const APP_SPECS = APPLICATION_EVIDENCE_FIXTURES;
 
 interface SeededApplication {
   id: string;
   code: string;
-  spec: AppSpec;
+  spec: ApplicationEvidenceFixture;
 }
 
 interface Fixture {

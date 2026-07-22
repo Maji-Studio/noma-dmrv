@@ -121,6 +121,28 @@ export async function validateCompositionIngredientBins(
     }
   }
 
+  // A formulated product must record every recipe line — ingredient masses
+  // are required entries, so a composition that omits formulation lines is
+  // rejected here even if the client submitted before the formulation's
+  // ingredient list had loaded.
+  if (formulationId) {
+    const formulationLines = await tx
+      .select({ id: formulationIngredients.id })
+      .from(formulationIngredients)
+      .where(and(
+        eq(formulationIngredients.formulationId, formulationId),
+        eq(formulationIngredients.organizationId, ctx.organizationId),
+      ));
+    const providedIds = new Set(
+      ingredientRefs.map((ref) => ref.formulationIngredientId),
+    );
+    if (formulationLines.some((line) => !providedIds.has(line.id))) {
+      throw new SafeError(
+        "Composition must include every ingredient of the selected formulation. Re-select the formulation and enter each ingredient's mass.",
+      );
+    }
+  }
+
   const binRefs = ingredientRefs.filter(
     (ref): ref is CompositionIngredientRef & { storageLocationId: string } =>
       Boolean(ref.storageLocationId),

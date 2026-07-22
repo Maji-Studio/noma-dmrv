@@ -5,7 +5,7 @@
  * Exercises `getProductionProcessSummariesByFacility` end-to-end through the UI:
  * a seeded production process with ONE credit batch carrying THREE eligible
  * replicate samples must surface on /certification/production-processes as
- * "3 / 30 eligible samples" with its cadence met.
+ * "3 / 30 baseline samples" with its cadence met.
  *
  * This is the DB-backed regression for the re-grain: the baseline counter is
  * scoped to the production process (via credit_batches.production_process_id),
@@ -57,7 +57,7 @@ test.describe("production processes", () => {
       // own three replicate samples toward the ≥30 baseline — process-scoped,
       // not pooled, not zero.
       const processRow = adminPage.getByRole("button", {
-        name: /3 \/ 30 eligible samples/i,
+        name: /3 \/ 30 baseline samples/i,
       });
       await expect(processRow).toBeVisible();
 

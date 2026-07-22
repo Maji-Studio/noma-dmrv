@@ -130,6 +130,8 @@ export async function getStorageLocations(
       updatedAt: storageLocations.updatedAt,
       facilityCode: facilities.code,
       facilityName: facilities.name,
+      feedstockTypeName: feedstockTypes.name,
+      formulationName: formulations.name,
     })
     .from(storageLocations)
     .leftJoin(
@@ -137,6 +139,20 @@ export async function getStorageLocations(
       and(
         eq(storageLocations.facilityId, facilities.id),
         eq(facilities.organizationId, ctx.organizationId),
+      ),
+    )
+    .leftJoin(
+      feedstockTypes,
+      and(
+        eq(storageLocations.feedstockTypeId, feedstockTypes.id),
+        eq(feedstockTypes.organizationId, ctx.organizationId),
+      ),
+    )
+    .leftJoin(
+      formulations,
+      and(
+        eq(storageLocations.formulationId, formulations.id),
+        eq(formulations.organizationId, ctx.organizationId),
       ),
     )
     .where(whereClause)
@@ -205,6 +221,8 @@ export async function getStorageLocationWithFacility(
       updatedAt: storageLocations.updatedAt,
       facilityCode: facilities.code,
       facilityName: facilities.name,
+      feedstockTypeName: feedstockTypes.name,
+      formulationName: formulations.name,
     })
     .from(storageLocations)
     .leftJoin(
@@ -212,6 +230,20 @@ export async function getStorageLocationWithFacility(
       and(
         eq(storageLocations.facilityId, facilities.id),
         eq(facilities.organizationId, ctx.organizationId),
+      ),
+    )
+    .leftJoin(
+      feedstockTypes,
+      and(
+        eq(storageLocations.feedstockTypeId, feedstockTypes.id),
+        eq(feedstockTypes.organizationId, ctx.organizationId),
+      ),
+    )
+    .leftJoin(
+      formulations,
+      and(
+        eq(storageLocations.formulationId, formulations.id),
+        eq(formulations.organizationId, ctx.organizationId),
       ),
     )
     .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));

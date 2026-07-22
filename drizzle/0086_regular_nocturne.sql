@@ -1,0 +1,2 @@
+ALTER TABLE "biochar_products" ADD COLUMN "biochar_ratio" numeric(7, 6);--> statement-breakpoint
+ALTER TABLE "biochar_products" ADD CONSTRAINT "biochar_products_biochar_ratio_range" CHECK ("biochar_products"."biochar_ratio" is null or ("biochar_products"."biochar_ratio" >= 0 and "biochar_products"."biochar_ratio" <= 1));

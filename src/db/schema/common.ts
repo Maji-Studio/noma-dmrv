@@ -89,6 +89,7 @@ export const applicationEvidenceMethod = pgEnum('application_evidence_method', [
 export const documentationType = pgEnum('documentation_type', [
   'weighbridge_ticket',
   'bill_of_lading',
+  'other_transport_evidence',
   'lab_report',
   'delivery_receipt',
   'invoice',
@@ -185,7 +186,7 @@ export const transportMethod = pgEnum('transport_method', [
 export const distanceSource = pgEnum('distance_source', [
   'map_estimate', // CALC'd via OpenRouteService road routing
   'manual', // hand-typed by the operator
-  'document', // backed by a bill of lading / weigh ticket
+  'document', // backed by classified transport evidence
 ]);
 
 // Transport trip type (Isometric GHG Accounting Module v1.1, "Transportation

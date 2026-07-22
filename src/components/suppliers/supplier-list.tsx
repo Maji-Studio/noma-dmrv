@@ -13,6 +13,7 @@ import {
   useCreateSupplierWithLocations,
   useDeleteSupplier,
   useSuppliers,
+  useSupplierLocationsBySupplier,
   useUpdateSupplier,
 } from "@/hooks/use-suppliers";
 import { DataTable } from "@/components/ui/data-table";
@@ -28,6 +29,7 @@ import type { SupplierFormData } from "@/schemas/suppliers";
 import type { SupplierWithRelations } from "@/data-access/suppliers";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { resolveSupplierLocationText } from "@/lib/supplier-location-display";
+import { buildPartyLocationDetailFields } from "@/components/party-location-detail-fields";
 
 // ============================================
 // Column Definitions
@@ -113,6 +115,10 @@ export function SupplierList() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { data: suppliersData, isLoading, error: fetchError } = useSuppliers();
+  const { data: sideSheetLocations = [] } = useSupplierLocationsBySupplier(
+    sideSheet?.entity?.id ?? "",
+    !!sideSheet?.entity,
+  );
   const createSupplier = useCreateSupplierWithLocations();
   const updateSupplier = useUpdateSupplier();
   const deleteSupplier = useDeleteSupplier();
@@ -288,35 +294,52 @@ export function SupplierList() {
         editLabel="Edit Supplier"
         sections={sideSheetEntity ? [
           {
-            title: "General Information",
+            title: "Required Information",
             fields: [
-              { label: "Code", value: sideSheetEntity.code },
-              { label: "Name", value: sideSheetEntity.name },
-              {
-                label: "Location",
-                value: resolveSupplierLocationText(
-                  sideSheetEntity.location,
-                  sideSheetEntity.defaultLocationDisplay,
-                ),
-              },
-              { label: "Source Region", value: sideSheetEntity.sourceRegion },
-              { label: "Address", value: sideSheetEntity.address },
-              {
-                label: "Distance to Facility",
-                ...certificationDetailField("supplier", "distanceToFacilityKm"),
-                value: sideSheetEntity.distanceToFacilityKm != null
-                  ? `${sideSheetEntity.distanceToFacilityKm} km`
-                  : null,
-              },
+              { label: "Supplier Name", value: sideSheetEntity.name },
             ],
           },
           {
-            title: "Contact",
+            title: "Locations",
+            fields: buildPartyLocationDetailFields(sideSheetLocations, {
+              distanceLabel: "One-way distance to facility (per leg, km)",
+              defaultLabel: "Default source location",
+              positionLabel: "Source location position",
+            }),
+          },
+          {
+            title: "Contact Information",
             fields: [
               { label: "Contact Name", value: sideSheetEntity.contactName },
               { label: "Contact Email", value: sideSheetEntity.contactEmail },
               { label: "Contact Phone", value: sideSheetEntity.contactPhone },
             ],
+          },
+          {
+            title: "Sourcing Information",
+            fields: [
+              { label: "Location", value: sideSheetEntity.location },
+              { label: "Source Region", value: sideSheetEntity.sourceRegion },
+              { label: "Address", value: sideSheetEntity.address },
+            ],
+          },
+          {
+            title: "Legacy Route Metadata",
+            fields: [
+              {
+                label: "Location display",
+                value: resolveSupplierLocationText(sideSheetEntity.location, sideSheetEntity.defaultLocationDisplay),
+              },
+              {
+                label: "Distance to Facility",
+                ...certificationDetailField("supplier", "distanceToFacilityKm"),
+                value: sideSheetEntity.distanceToFacilityKm != null ? `${sideSheetEntity.distanceToFacilityKm} km` : null,
+              },
+            ],
+          },
+          {
+            title: "Record Metadata",
+            fields: [{ label: "Code", value: sideSheetEntity.code }],
           },
         ] : undefined}
       >

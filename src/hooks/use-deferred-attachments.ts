@@ -11,6 +11,7 @@ import type { DocumentType } from "@/schemas/documents";
 export interface DeferredFileEntry {
   key: string;
   file: File;
+  classificationLabel?: string;
 }
 
 export interface DeferredAttachmentExtraMeta {

@@ -133,10 +133,44 @@ test.describe("Production Run + Sample UI CRUD", () => {
       page.locator("table tbody tr, [role='row']").first()
     ).toBeVisible({ timeout: 10000 });
   });
+
+  test("opens production sample and incident forms as dialogs", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    await createProductionRun(page, seededData);
+    await editFirstRow(page);
+
+    const runSideSheet = page.locator('[role="dialog"]').first();
+
+    await runSideSheet.getByRole("button", { name: "Add Sample" }).click();
+    const sampleDialog = page.getByTestId("production-sample-dialog");
+    await expect(sampleDialog).toBeVisible();
+    await expect(page.locator('[role="dialog"]')).toHaveCount(2);
+    await expect(
+      sampleDialog.getByRole("heading", { name: "Add Production Sample" }),
+    ).toBeVisible();
+    await sampleDialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(sampleDialog).toBeHidden();
+    await expect(page.locator('[role="dialog"]')).toHaveCount(1);
+
+    await runSideSheet.getByRole("button", { name: "Add Incident" }).click();
+    const incidentDialog = page.getByTestId("production-incident-dialog");
+    await expect(incidentDialog).toBeVisible();
+    await expect(page.locator('[role="dialog"]')).toHaveCount(2);
+    await expect(
+      incidentDialog.getByRole("heading", {
+        name: "Add Production Incident",
+      }),
+    ).toBeVisible();
+    await incidentDialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(incidentDialog).toBeHidden();
+    await expect(page.locator('[role="dialog"]')).toHaveCount(1);
+    await expect(runSideSheet).toBeVisible();
+  });
 });
 
-// Shared helpers for the time-window specs below (#259 overlap guard and
-// #413 end-time clear both drive the run form through the same flows).
+// Shared helpers for the production-run lifecycle and time-window specs below.
 const overlapText = /overlaps run|unfinished run/i;
 
 async function openRunForm(
@@ -443,8 +477,8 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
   });
 });
 
-test.describe("Production Run end-time clear (#413)", () => {
-  test("explicit clear reopens the run; untouched end fields stay unchanged", async ({
+test.describe("Production Run end-time editing", () => {
+  test("untouched end fields stay unchanged and direct edits persist", async ({
     adminPage: page,
     seededData,
   }) => {
@@ -493,35 +527,22 @@ test.describe("Production Run end-time clear (#413)", () => {
     await editFirstRow(page);
     await expect(dialog.locator('input[name="endDate"]')).toHaveValue("2027-06-05");
     await expect(dialog.locator('input[name="endTime"]')).toHaveValue("12:00");
+    await expect(
+      dialog.getByRole("button", { name: /clear end time/i }),
+    ).toHaveCount(0);
 
-    // Explicitly clear the end time. Reopening a completed run also moves it
-    // back to Running so the form remains internally consistent and saveable.
-    await dialog.getByRole("button", { name: /clear end time/i }).click();
-    await expect(dialog.locator('select[name="status"]')).toHaveValue("running");
-    await expect(dialog.locator('input[name="endDate"]')).toHaveValue("");
-    await expect(dialog.locator('input[name="endTime"]')).toHaveValue("");
+    // A correction is made directly in the end-time field without changing
+    // the run's completed lifecycle state.
+    await dialog.locator('input[name="endTime"]').fill("13:00");
     await saveEdit(page);
     await waitForSideSheetClose(page);
 
-    // The clear persisted: the edit form now shows no end date/time.
+    // The corrected time persisted and the run remains Complete.
     await page.reload();
     await editFirstRow(page);
-    await expect(dialog.locator('input[name="endDate"]')).toHaveValue("");
-    await expect(dialog.locator('input[name="endTime"]')).toHaveValue("");
-
-    // Server-side proof the run is truly open again: an open run occupies
-    // [start, ∞) on its reactor, so a later same-day run must now be rejected
-    // by the overlap guard. (Had the end time survived as 12:00 — or been
-    // mangled into some bogus date — this 14:00–15:00 window would save fine.)
-    await openRunForm(page, seededData, {
-      startDate: "2027-06-05",
-      startTime: "14:00",
-      endDate: "2027-06-05",
-      endTime: "15:00",
-      status: "draft",
-    });
-    await submitCreate(page);
-    await expect(dialog.getByText(overlapText)).toBeVisible({ timeout: 10000 });
+    await expect(dialog.locator('input[name="endDate"]')).toHaveValue("2027-06-05");
+    await expect(dialog.locator('input[name="endTime"]')).toHaveValue("13:00");
+    await expect(dialog.locator('select[name="status"]')).toHaveValue("complete");
   });
 
   test("create form has no clear-end-time control", async ({
@@ -534,8 +555,7 @@ test.describe("Production Run end-time clear (#413)", () => {
 
     const dialog = page.locator('[role="dialog"]');
     await expect(dialog.locator('input[name="endTime"]')).toBeVisible();
-    // The explicit clear affordance is an edit-mode concept (blank end fields
-    // on create already mean "no end yet"); it must not leak into create.
+    // Reopening is not exposed as an incidental end-field control.
     await expect(
       dialog.getByRole("button", { name: /clear end time/i }),
     ).toHaveCount(0);

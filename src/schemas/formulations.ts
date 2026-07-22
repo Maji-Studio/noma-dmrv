@@ -1,9 +1,14 @@
 /**
  * Formulation Validation Schemas
  * Zod schemas for formulation forms, server actions, and filtering
+ *
+ * Two vocabularies on purpose: the UI speaks percent (0–100, whole-number
+ * friendly), storage and server contracts speak ratio (0–1, `numeric(7,6)`).
+ * The percent form schema + converters at the bottom own the translation.
  */
 
 import { z } from "zod";
+import { optionalPercent } from "./helpers";
 
 // ============================================
 // Constants
@@ -78,6 +83,43 @@ function ratioSumRefinement(
 }
 
 // ============================================
+// Unique Blend Material Constraint
+// ============================================
+
+export const DUPLICATE_BLEND_MATERIAL_MESSAGE =
+  "Each blend material can only be added once. Remove the duplicate line.";
+
+/**
+ * Shared refinement rejecting a formulation that lists the same blend material
+ * on more than one line. Duplicate `feedstockTypeId` lines made the
+ * updateFormulation reconciliation (match-by-feedstockTypeId) non-deterministic
+ * and could orphan a saved product composition referencing the dropped line, so
+ * uniqueness is enforced here, in the DB, and in the form. The error is pointed
+ * at the second (and later) offending line's material field.
+ */
+function duplicateBlendMaterialRefinement(
+  data: {
+    ingredients?: ReadonlyArray<{ feedstockTypeId?: string | null }>;
+  },
+  ctx: z.RefinementCtx,
+) {
+  const seen = new Set<string>();
+  (data.ingredients ?? []).forEach((ingredient, index) => {
+    const feedstockTypeId = ingredient?.feedstockTypeId;
+    if (!feedstockTypeId) return;
+    if (seen.has(feedstockTypeId)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["ingredients", index, "feedstockTypeId"],
+        message: DUPLICATE_BLEND_MATERIAL_MESSAGE,
+      });
+    } else {
+      seen.add(feedstockTypeId);
+    }
+  });
+}
+
+// ============================================
 // Ratio Validation (0 to 1)
 // ============================================
 
@@ -126,7 +168,8 @@ export const formulationFormSchema = z
 
     ingredients: z.array(formulationIngredientSchema).optional(),
   })
-  .superRefine(ratioSumRefinement);
+  .superRefine(ratioSumRefinement)
+  .superRefine(duplicateBlendMaterialRefinement);
 
 // ============================================
 // Server Action Schemas - Formulation
@@ -148,7 +191,8 @@ export const updateFormulationSchema = z
     description: z.string().max(1000).optional().nullable().or(z.literal("")),
     ingredients: z.array(formulationIngredientSchema).optional(),
   })
-  .superRefine(ratioSumRefinement);
+  .superRefine(ratioSumRefinement)
+  .superRefine(duplicateBlendMaterialRefinement);
 
 export const deleteFormulationSchema = z.object({
   formulationId: z.string().uuid("Invalid formulation ID"),
@@ -178,6 +222,106 @@ export const formulationSelectSchema = z.object({
   code: z.string(),
   name: z.string(),
 });
+
+// ============================================
+// Percent-Based Form Entry (UI vocabulary)
+// ============================================
+
+/**
+ * Ratios persist as `numeric(7,6)` (6 decimals), so 4 decimals of a percent
+ * round-trip exactly. Both converters round to that precision to keep
+ * percent ⇄ ratio conversion stable across edit round-trips. Exported so the
+ * form's input `step` and auto-balance rounding stay in lockstep with it.
+ */
+export const PERCENT_DECIMALS = 10_000;
+const RATIO_DECIMALS = 1_000_000;
+
+/** Ratio (0–1) → display percent (0–100), null-safe. */
+export function ratioToPercent(ratio: number | null | undefined): number | null {
+  if (ratio == null || !Number.isFinite(ratio)) return null;
+  return Math.round(ratio * 100 * PERCENT_DECIMALS) / PERCENT_DECIMALS;
+}
+
+/** Entered percent (0–100) → stored ratio (0–1), null-safe. */
+export function percentToRatio(percent: number | null | undefined): number | null {
+  if (percent == null || !Number.isFinite(percent)) return null;
+  return Math.round((percent / 100) * RATIO_DECIMALS) / RATIO_DECIMALS;
+}
+
+export const formulationIngredientPercentSchema = z.object({
+  feedstockTypeId: z
+    .string()
+    .min(1, "Blend material is required")
+    .uuid("Select a valid blend material"),
+  sharePercent: optionalPercent,
+});
+
+/** True when the combined biochar + ingredient shares exceed 100%. */
+export function exceedsFormulationPercentSum(
+  biocharPercent: number | null | undefined,
+  ingredients:
+    | ReadonlyArray<{ sharePercent?: number | null }>
+    | null
+    | undefined,
+): boolean {
+  return exceedsFormulationRatioSum(
+    percentToRatio(biocharPercent),
+    (ingredients ?? []).map((ingredient) => ({
+      ratio: percentToRatio(ingredient?.sharePercent),
+    })),
+  );
+}
+
+export const PERCENT_SUM_EXCEEDED_MESSAGE =
+  "Biochar and ingredient shares add up to more than 100% of the blend. Reduce them so the total is 100% or less.";
+
+export const formulationPercentFormSchema = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(1, "Formulation name is required")
+      .max(255, "Formulation name must be less than 255 characters"),
+
+    biocharPercent: optionalPercent,
+
+    description: z
+      .string()
+      .max(1000, "Description must be less than 1000 characters")
+      .optional()
+      .or(z.literal("")),
+
+    ingredients: z.array(formulationIngredientPercentSchema).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (exceedsFormulationPercentSum(data.biocharPercent, data.ingredients)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["biocharPercent"],
+        message: PERCENT_SUM_EXCEEDED_MESSAGE,
+      });
+    }
+  })
+  .superRefine(duplicateBlendMaterialRefinement);
+
+export type FormulationPercentFormData = z.infer<
+  typeof formulationPercentFormSchema
+>;
+
+/** Map the percent-entry form payload to the ratio-based server contract. */
+export function percentFormToRatioPayload(
+  data: FormulationPercentFormData,
+): FormulationFormData {
+  return {
+    name: data.name,
+    biocharRatio: percentToRatio(data.biocharPercent),
+    description: data.description,
+    ingredients: data.ingredients?.map((ingredient) => ({
+      feedstockTypeId: ingredient.feedstockTypeId,
+      ratio: percentToRatio(ingredient.sharePercent),
+    })),
+  };
+}
 
 // ============================================
 // Type Inference

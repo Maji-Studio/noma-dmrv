@@ -52,6 +52,12 @@ export interface EntitySelectProps {
   onCreateNew?: () => void;
   /** Filter options (e.g., facilityId for filtering reactors by facility) */
   filterBy?: Record<string, string>;
+  /**
+   * Option ids to hide from the list — e.g. blend materials already picked on
+   * other formulation lines, so each material can only be chosen once. The
+   * current `value` is never hidden.
+   */
+  excludeIds?: readonly string[];
   /** Auto-select when there is exactly one option available */
   autoSelectSingle?: boolean;
   /** Always show the search input while dropdown is open */
@@ -60,6 +66,16 @@ export interface EntitySelectProps {
   hideSearch?: boolean;
   /** Custom formatter for the selected value display */
   formatSelectedLabel?: (entity: EntityOption) => string;
+  /**
+   * Rendered when the (unsearched) option list is empty: names the upstream
+   * prerequisite that produces options and links straight to it, so an empty
+   * picker is a next step, not a dead end (QA 2026-07-21 F4/isometric).
+   */
+  emptyHint?: {
+    message: string;
+    href?: string;
+    linkLabel?: string;
+  };
 }
 
 export interface UseEntityOptionsParams {

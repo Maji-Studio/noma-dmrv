@@ -48,6 +48,8 @@ export interface StorageLocationLastActivity {
 export interface StorageLocationWithFacility extends StorageLocation {
   facilityCode: string;
   facilityName: string;
+  feedstockTypeName: string | null;
+  formulationName: string | null;
   feedstockInventory: {
     batchCount: number;
     pendingBatchCount: number;
@@ -101,6 +103,8 @@ export type BaseStorageLocationRow = {
   updatedAt: Date;
   facilityCode: string | null;
   facilityName: string | null;
+  feedstockTypeName: string | null;
+  formulationName: string | null;
 };
 
 function splitAggregateLabels(value: string | null): string[] {
@@ -219,7 +223,7 @@ export async function enrichStorageLocationRows(
             biocharEquivalentKg: numericAggregate(sql<number>`
               COALESCE(
                 SUM(
-                  COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)
+                  COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${biocharProducts.biocharRatio}, ${formulations.biocharRatio}, 1)
                 ),
                 0
               )
@@ -350,7 +354,7 @@ export async function enrichStorageLocationRows(
             SELECT biochar_storage_location_id, 'in', created_at, biochar_output_kg, code
             FROM production_runs WHERE organization_id = ${ctx.organizationId} AND biochar_storage_location_id IN (${storageLocationIdsSql})
             UNION ALL
-            SELECT pr.biochar_storage_location_id, 'out', bp.created_at, bp.mass_kg * COALESCE(f.biochar_ratio, 1), bp.code
+            SELECT pr.biochar_storage_location_id, 'out', bp.created_at, bp.mass_kg * COALESCE(bp.biochar_ratio, f.biochar_ratio, 1), bp.code
             FROM biochar_products bp
             JOIN production_runs pr ON bp.linked_production_run_id = pr.id AND pr.organization_id = ${ctx.organizationId}
             LEFT JOIN formulations f ON bp.formulation_id = f.id AND f.organization_id = ${ctx.organizationId}

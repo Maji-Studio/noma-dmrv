@@ -12,10 +12,13 @@ import {
 } from "@/data-access/credit-batch-lineage-facts";
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
-import { listDocumentsForEntityIds } from "@/data-access/documents";
+import {
+  listDocumentsForEntityIds,
+  type DocumentRow,
+} from "@/data-access/documents";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
-import { getTransportLegsForEntities } from "@/data-access/transport-legs";
+import { getTransportLegsWithEvidenceForEntities } from "@/data-access/transport-legs";
 import {
   listComponentBlueprints,
   listProjects,
@@ -25,6 +28,7 @@ import {
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
 import { loadCertifyContextForCreditBatchForUser } from "@/fn/certification/certify-context-core";
+import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "@/lib/certification/application-evidence";
 
 vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchById: vi.fn(),
@@ -66,7 +70,7 @@ vi.mock("@/data-access/documents", () => ({
 }));
 
 vi.mock("@/data-access/transport-legs", () => ({
-  getTransportLegsForEntities: vi.fn(),
+  getTransportLegsWithEvidenceForEntities: vi.fn(),
 }));
 
 vi.mock("@/lib/isometric", async () => {
@@ -90,7 +94,7 @@ const mockedLoadLineageFacts = vi.mocked(loadCreditBatchLineageFacts);
 const mockedGetRuns = vi.mocked(getProductionRunsWithSamples);
 const mockedGetBatchesWithSamples = vi.mocked(getCreditBatchesWithSamples);
 const mockedListDocuments = vi.mocked(listDocumentsForEntityIds);
-const mockedGetLegs = vi.mocked(getTransportLegsForEntities);
+const mockedGetLegs = vi.mocked(getTransportLegsWithEvidenceForEntities);
 const mockedListProjects = vi.mocked(listProjects);
 const mockedListTemplates = vi.mocked(listGhgEntryTemplates);
 const mockedListBlueprints = vi.mocked(listComponentBlueprints);
@@ -104,6 +108,22 @@ const APPLICATION_FOR_PR_1 = {
   productionRunId: "pr-1",
   biocharAppliedTons: 1,
 };
+
+/**
+ * Evidence-complete visual document set for the normalized lineage application
+ * (`app-1`). Applications without an evidenceMethod follow the visual path, so
+ * tests that assert on non-evidence readiness gaps mock these to keep their
+ * assertions focused.
+ */
+function satisfiedVisualEvidenceDocuments(applicationId: string): DocumentRow[] {
+  return APPLICATION_VISUAL_EVIDENCE_ROLES.map((role) => ({
+    entityId: applicationId,
+    documentType: "photo",
+    uploadStatus: "uploaded",
+    fileUrl: null,
+    metadata: { geotagStatus: "present", evidenceRole: role },
+  })) as unknown as DocumentRow[];
+}
 
 const DEFAULT_FACT_DATE = new Date("2026-01-20T00:00:00Z");
 
@@ -845,6 +865,9 @@ describe("requiredTransportCategories", () => {
       }
       return [];
     });
+    mockedListDocuments.mockResolvedValue(
+      satisfiedVisualEvidenceDocuments("app-1"),
+    );
 
     const result = await loadCertifyContextForCreditBatchForUser(
       makeTestOrgContext(USER_ID),
@@ -927,6 +950,9 @@ describe("requiredTransportCategories", () => {
         ],
       } as never,
     ]);
+    mockedListDocuments.mockResolvedValue(
+      satisfiedVisualEvidenceDocuments("app-1"),
+    );
 
     const result = await loadCertifyContextForCreditBatchForUser(
       makeTestOrgContext(USER_ID),

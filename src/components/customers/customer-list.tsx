@@ -13,6 +13,7 @@ import {
   useCreateCustomer,
   useCreateCustomerLocation,
   useDeleteCustomer,
+  useCustomerLocations,
   useCustomers,
   useUpdateCustomer,
 } from "@/hooks/use-customers";
@@ -27,6 +28,7 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { CustomerForm, type PendingLocation } from "./customer-form";
 import type { CustomerFormData } from "@/schemas/customers";
 import type { CustomerWithRelations } from "@/data-access/customers";
+import { buildPartyLocationDetailFields } from "@/components/party-location-detail-fields";
 
 // ============================================
 // Column Definitions
@@ -107,6 +109,10 @@ export function CustomerList() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const { data: customersData, isLoading, error: fetchError } = useCustomers();
+  const { data: sideSheetLocations = [] } = useCustomerLocations(
+    sideSheet?.entity?.id ?? "",
+    !!sideSheet?.entity,
+  );
   const createCustomer = useCreateCustomer();
   const createLocation = useCreateCustomerLocation();
   const updateCustomer = useUpdateCustomer();
@@ -305,26 +311,37 @@ export function CustomerList() {
           sideSheetEntity
             ? [
                 {
-                  title: "General Information",
+                  title: "Required Information",
                   fields: [
-                    { label: "Code", value: sideSheetEntity.code },
-                    { label: "Name", value: sideSheetEntity.name },
+                    { label: "Customer Name", value: sideSheetEntity.name },
+                  ],
+                },
+                {
+                  title: "Locations",
+                  fields: buildPartyLocationDetailFields(sideSheetLocations, {
+                    distanceLabel: "One-way distance from facility (per leg, km)",
+                    defaultLabel: "Default destination",
+                    positionLabel: "Application site position",
+                    includeSoilTemperature: true,
+                  }),
+                },
+                {
+                  title: "Contact Information",
+                  fields: [
+                    { label: "Contact Email", value: sideSheetEntity.contactEmail },
+                    { label: "Contact Phone", value: sideSheetEntity.contactPhone },
+                  ],
+                },
+                {
+                  title: "Business Information",
+                  fields: [
                     { label: "Crop Type", value: sideSheetEntity.cropType },
                     { label: "Address", value: sideSheetEntity.address },
                   ],
                 },
                 {
-                  title: "Contact Information",
-                  fields: [
-                    { label: "Email", value: sideSheetEntity.contactEmail },
-                    { label: "Phone", value: sideSheetEntity.contactPhone },
-                  ],
-                },
-                {
-                  title: "Locations",
-                  fields: [
-                    { label: "Count", value: String(sideSheetEntity.locationCount) },
-                  ],
+                  title: "Record Metadata",
+                  fields: [{ label: "Code", value: sideSheetEntity.code }],
                 },
               ]
             : undefined

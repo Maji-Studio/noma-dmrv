@@ -18,7 +18,7 @@ import {
 } from "@/hooks/use-samples";
 import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
+import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { useCreateTransportLeg } from "@/hooks/use-transport-legs";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
@@ -33,6 +33,11 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { formatDate, formatDateTime } from "@/lib/format-utils";
+import {
+  ENTITY_DEEP_LINK_FOCUS_PARAM,
+  ENTITY_DEEP_LINK_MODE_PARAM,
+  parseEntityFocusTarget,
+} from "@/lib/entity-deep-link";
 import { SampleForm } from "./sample-form";
 import {
   formatDurabilityOption,
@@ -44,6 +49,18 @@ import type { TransportLegFormData } from "@/schemas/transport-legs";
 import { SampleDocumentsPanel } from "./sample-documents-panel";
 
 const READINESS_PREVIEW_LIMIT = 3;
+
+/** One template for the create-failure banner so its two call sites (post-flush
+ * failure and inline retry recount) can never drift apart. Null when resolved. */
+function buildAttachmentFailureBanner(total: number): string | null {
+  return total > 0
+    ? `Sample created, but ${total} ${total === 1 ? "attachment" : "attachments"} failed to save.`
+    : null;
+}
+
+function formatPercent(value: number | null, digits = 2) {
+  return value == null ? null : `${value.toFixed(digits)}%`;
+}
 
 // ============================================
 // Durability Badge
@@ -168,6 +185,14 @@ export function SampleList() {
     "sample",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
+  const [deepLinkMode, setDeepLinkMode] = useQueryState(
+    ENTITY_DEEP_LINK_MODE_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const [deepLinkFocus, setDeepLinkFocus] = useQueryState(
+    ENTITY_DEEP_LINK_FOCUS_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [creditBatchFilter, setCreditBatchFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -205,10 +230,8 @@ export function SampleList() {
   const updateSample = useUpdateSample();
   const deleteSample = useDeleteSample();
   const toast = useToast();
-  const deferredAttachments = useDeferredAttachments();
   const createTransportLeg = useCreateTransportLeg();
   const [deferredLegs, setDeferredLegs] = useState<TransportLegFormData[]>([]);
-  const [isFlushing, setIsFlushing] = useState(false);
 
   const samples = samplesData?.items ?? [];
   const totalPages = samplesData?.totalPages ?? 0;
@@ -229,9 +252,15 @@ export function SampleList() {
 
   const deepLinkedSideSheet =
     focusedSampleId && focusedSample.data
-      ? ({ mode: "view", entity: focusedSample.data } as const)
+      ? ({
+          mode: deepLinkMode === "edit" ? "edit" : "view",
+          entity: focusedSample.data,
+        } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const activeFocusTarget = sideSheet
+    ? null
+    : parseEntityFocusTarget(deepLinkFocus);
   const showSavedToast = (message: string, sample: SampleWithRelations) => {
     const readiness = deriveEntityCertifyReadiness("sample", sample);
     if (readiness.state === "ready") {
@@ -246,12 +275,24 @@ export function SampleList() {
     toast.success(`${message}. Still needed to certify: ${gapLabels}${suffix}`);
   };
 
-  const handleCreate = async (data: SampleFormData) => {
-    setFormError(null);
-    try {
+  const createWithEvidence = useCreateWithEvidence({
+    entityType: "sample",
+    entityNoun: "Sample",
+    executeCreate: async (data: SampleFormData) => {
       const sample = await createSample.mutateAsync(data);
-      setIsFlushing(true);
-      const attachmentResult = await deferredAttachments.flush("sample", sample.id);
+      return { entities: [sample], result: sample };
+    },
+    setError: setFormError,
+    setUpdateError: setFormError,
+    getCreateErrorMessage: (error) =>
+      error instanceof Error ? error.message : "Failed to create sample",
+    unresolvedUpdateMessage:
+      "Resolve or remove the failed attachments and transport legs before saving this sample.",
+    openEditOnFailure: (sample) =>
+      setSideSheet({ mode: "edit", entity: sample }),
+    closeOnSuccess: () => setSideSheet(null),
+    onAfterFlush: async ({ created, flushResult }) => {
+      const sample = created.result;
       const failedLegs: TransportLegFormData[] = [];
       for (const leg of deferredLegs) {
         try {
@@ -266,24 +307,18 @@ export function SampleList() {
       }
       setDeferredLegs(failedLegs);
 
-      const failedCount = attachmentResult.failed.length + failedLegs.length;
-      if (failedCount > 0) {
-        setSideSheet({ mode: "edit", entity: sample });
-        setFormError(
-          `Sample created, but ${failedCount} ${failedCount === 1 ? "attachment" : "attachments"} failed to save.`,
-        );
-        return;
-      }
+      const failedCount = flushResult.failed.length + failedLegs.length;
+      if (failedCount === 0) return;
+      return {
+        failureMessage: buildAttachmentFailureBanner(failedCount) ?? undefined,
+      };
+    },
+    onSuccess: ({ result }) =>
+      showSavedToast("Sample created successfully", result),
+  });
+  const { deferredAttachments, isFlushing } = createWithEvidence;
 
-      deferredAttachments.clear();
-      setSideSheet(null);
-      showSavedToast("Sample created successfully", sample);
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to create sample");
-    } finally {
-      setIsFlushing(false);
-    }
-  };
+  const handleCreate = createWithEvidence.handleCreate;
 
   // Keep the post-create "failed to save" banner in sync when the user retries
   // or removes individual failures inline: recompute it from the remaining
@@ -292,12 +327,7 @@ export function SampleList() {
     failedAttachments: number,
     failedLegs: number,
   ) => {
-    const total = failedAttachments + failedLegs;
-    setFormError(
-      total > 0
-        ? `Sample created, but ${total} ${total === 1 ? "attachment" : "attachments"} failed to save.`
-        : null,
-    );
+    setFormError(buildAttachmentFailureBanner(failedAttachments + failedLegs));
   };
 
   const handleRetryDeferredAttachments = async (key?: string) => {
@@ -345,9 +375,8 @@ export function SampleList() {
 
   const retryDeferredLegs = async () => {
     if (sideSheet?.mode !== "edit" || deferredLegs.length === 0) return;
-    setIsFlushing(true);
-    const failedLegs: TransportLegFormData[] = [];
-    try {
+    await createWithEvidence.runWhileFlushing(async () => {
+      const failedLegs: TransportLegFormData[] = [];
       for (const leg of deferredLegs) {
         try {
           await createTransportLeg.mutateAsync({
@@ -365,34 +394,19 @@ export function SampleList() {
           ? `Sample was saved, but ${failedLegs.length} transport ${failedLegs.length === 1 ? "leg" : "legs"} still failed to save.`
           : null,
       );
-    } finally {
-      setIsFlushing(false);
-    }
+    });
   };
 
   const handleUpdate = async (data: SampleFormData) => {
     if (sideSheet?.mode !== "edit") return;
     setFormError(null);
-    if (
-      deferredLegs.length > 0 ||
-      deferredAttachments.attachments.some(
-        // Any not-yet-`uploaded` entry is unresolved: "failed" awaits a retry,
-        // and "uploading" means an attachment retry is mid-flight whose state a
-        // save would clobber. Both must block the save.
-        (attachment) => attachment.status !== "uploaded",
-      )
-    ) {
-      setFormError(
-        "Resolve or remove the failed attachments and transport legs before saving this sample.",
-      );
-      return;
-    }
+    if (createWithEvidence.guardUpdate(deferredLegs.length > 0)) return;
     try {
       const sample = await updateSample.mutateAsync({
         sampleId: sideSheet.entity.id,
         ...data,
       });
-      deferredAttachments.clear();
+      createWithEvidence.reset();
       setDeferredLegs([]);
       setSideSheet(null);
       showSavedToast("Sample updated successfully", sample);
@@ -419,42 +433,42 @@ export function SampleList() {
 
   const openCreate = () => {
     setFocusedSampleId(null);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setFormError(null);
-    deferredAttachments.clear();
+    createWithEvidence.reset();
     setDeferredLegs([]);
     setSideSheet({ mode: "create", entity: null });
   };
   const openView = (sample: SampleWithRelations) => {
     setFocusedSampleId(sample.id);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setFormError(null);
     setSideSheet({ mode: "view", entity: sample });
   };
-  const openEdit = useCallback((sample: SampleWithRelations) => {
+  const openEdit = (sample: SampleWithRelations) => {
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setFormError(null);
+    createWithEvidence.reset();
     setSideSheet({ mode: "edit", entity: sample });
-  }, []);
+  };
   const closeSideSheet = () => {
     setFocusedSampleId(null);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setSideSheet(null);
     setFormError(null);
-    deferredAttachments.clear();
+    createWithEvidence.reset();
     setDeferredLegs([]);
   };
 
-  const unsavedAttachmentCount =
-    deferredAttachments.attachments.filter(
-      (attachment) => attachment.status !== "uploaded",
-    ).length + deferredLegs.length;
-  const confirmCreateClose = () => {
-    // An in-flight flush is mid-write; blocking Escape/backdrop/X keeps the
-    // completion handler from mutating a discarded-then-reopened form.
-    if (isFlushing) return false;
-    return (
-      displaySideSheet?.mode !== "create" ||
-      unsavedAttachmentCount === 0 ||
-      window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`)
+  const confirmCreateClose = () =>
+    createWithEvidence.confirmClose(
+      displaySideSheet?.mode === "create",
+      deferredLegs.length,
     );
-  };
   const attemptCloseSideSheet = () => {
     if (confirmCreateClose()) closeSideSheet();
   };
@@ -477,7 +491,7 @@ export function SampleList() {
   const isSubmitting =
     createSample.isPending || updateSample.isPending || isFlushing;
 
-  const columns = useMemo(() => createColumns(openEdit, handleDelete), [openEdit, handleDelete]);
+  const columns = createColumns(openEdit, handleDelete);
 
   if (!contextFacilityId) {
     return (
@@ -618,80 +632,111 @@ export function SampleList() {
         editLabel="Edit Sample"
         sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? [
           {
-            title: "General",
+            title: "Sample Information",
             fields: [
-              { label: "Sample Code", value: displaySideSheet.entity.sampleCode },
-              { label: "Sampling Time", value: formatDateTime(displaySideSheet.entity.samplingTime) },
               { label: "Credit Batch", value: displaySideSheet.entity.creditBatchCode },
-              { label: "Facility", value: displaySideSheet.entity.facilityName },
-              {
-                label: "Sample chemistry",
-                value: (
-                  <EntityCertifyReadinessBadge
-                    readiness={deriveEntityCertifyReadiness(
-                      "sample",
-                      displaySideSheet.entity,
-                    )}
-                    readyLabel="Chemistry complete"
-                    readinessNoun="sample chemistry"
-                  />
-                ),
-              },
+              { label: "Sampling Time", value: formatDateTime(displaySideSheet.entity.samplingTime) },
+              { label: "Analysis Date", value: formatDate(displaySideSheet.entity.analysisDate) },
+              { label: "Lab Name", value: displaySideSheet.entity.labName },
+              { label: "Lab Accreditation", value: displaySideSheet.entity.labAccreditation },
+              { label: "Sample Weight (g)", value: displaySideSheet.entity.weightGrams },
+              { label: "Sample Volume (mL)", value: displaySideSheet.entity.volumeMl },
             ],
           },
           {
             title: "Carbon Analysis",
             fields: [
-              { label: "Total Carbon", value: displaySideSheet.entity.totalCarbonPercent != null ? `${displaySideSheet.entity.totalCarbonPercent.toFixed(1)}%` : null },
-              { label: "Organic Carbon", ...certificationDetailField("sample", "organicCarbonPercent"), value: displaySideSheet.entity.organicCarbonPercent != null ? `${displaySideSheet.entity.organicCarbonPercent.toFixed(1)}%` : null },
-              { label: "Inorganic Carbon", value: displaySideSheet.entity.inorganicCarbonPercent != null ? `${displaySideSheet.entity.inorganicCarbonPercent.toFixed(1)}%` : null },
-              { label: "H:Corg Ratio", ...certificationDetailField("sample", "hToCOrgRatio"), value: displaySideSheet.entity.hToCOrgRatio != null ? displaySideSheet.entity.hToCOrgRatio.toFixed(3) : null },
+              { label: "Total Carbon (%)", value: formatPercent(displaySideSheet.entity.totalCarbonPercent) },
+              { label: "Organic Carbon (%)", ...certificationDetailField("sample", "organicCarbonPercent"), value: formatPercent(displaySideSheet.entity.organicCarbonPercent) },
+              { label: "Inorganic Carbon (%)", value: formatPercent(displaySideSheet.entity.inorganicCarbonPercent) },
             ],
           },
           {
-            title: "Durability",
+            title: "Elemental Analysis",
             fields: [
-              { label: "Durability Option", value: formatDurabilityOption(displaySideSheet.entity.durabilityOption) },
-              { label: "Random Reflectance R0", ...certificationDetailField("sample", "randomReflectanceR0Percent"), value: displaySideSheet.entity.randomReflectanceR0Percent != null ? `${displaySideSheet.entity.randomReflectanceR0Percent.toFixed(1)}%` : null },
-              { label: "Reactive Carbon", ...certificationDetailField("sample", "reactiveCarbonPercent"), value: displaySideSheet.entity.reactiveCarbonPercent != null ? `${displaySideSheet.entity.reactiveCarbonPercent.toFixed(1)}%` : null },
-              { label: "Residual Carbon", ...certificationDetailField("sample", "residualCarbonPercent"), value: displaySideSheet.entity.residualCarbonPercent != null ? `${displaySideSheet.entity.residualCarbonPercent.toFixed(1)}%` : null },
+              { label: "Hydrogen (%)", value: formatPercent(displaySideSheet.entity.totalHydrogenPercent) },
+              { label: "Nitrogen (%)", value: formatPercent(displaySideSheet.entity.totalNitrogenPercent) },
+              { label: "Oxygen (%)", value: formatPercent(displaySideSheet.entity.totalOxygenPercent) },
+              { label: "Sulfur (%)", value: formatPercent(displaySideSheet.entity.totalSulfurPercent) },
+            ],
+          },
+          {
+            title: "Proximate Analysis",
+            fields: [
+              { label: "Ash Content (%)", value: formatPercent(displaySideSheet.entity.ashContentPercent) },
+              { label: "Moisture Content (%)", value: formatPercent(displaySideSheet.entity.moistureContentPercent) },
             ],
           },
           {
             title: "Physical Properties",
             fields: [
-              { label: "Bulk Density", value: displaySideSheet.entity.bulkDensityKgPerM3 != null ? `${displaySideSheet.entity.bulkDensityKgPerM3} kg/m\u00B3` : null },
+              { label: "Bulk Density (kg/m³)", value: displaySideSheet.entity.bulkDensityKgPerM3 },
               { label: "pH", value: displaySideSheet.entity.ph != null ? String(displaySideSheet.entity.ph) : null },
+              { label: "Salt Content (g/kg)", value: displaySideSheet.entity.saltContentGPerKg },
             ],
           },
           {
-            title: "Lab Information",
+            title: "Stability Ratios",
             fields: [
-              { label: "Lab Name", value: displaySideSheet.entity.labName },
-              { label: "Lab Accreditation", value: displaySideSheet.entity.labAccreditation },
-              { label: "Analysis Date", value: formatDate(displaySideSheet.entity.analysisDate) },
+              { label: "Inherited Durability", value: formatDurabilityOption(displaySideSheet.entity.durabilityOption) },
+              { label: "H:C org Ratio", ...certificationDetailField("sample", "hToCOrgRatio"), value: displaySideSheet.entity.hToCOrgRatio?.toFixed(4) ?? null },
+              { label: "O:C org Ratio", value: displaySideSheet.entity.oToCOrgRatio?.toFixed(4) ?? null },
+            ],
+          },
+          ...(displaySideSheet.entity.durabilityOption === "1000_year" ? [
+            {
+              title: "1000-Year Durability · R₀ Reflectance",
+              fields: [
+                { label: "Mean Random Reflectance R₀ (%)", ...certificationDetailField("sample", "randomReflectanceR0Percent"), value: formatPercent(displaySideSheet.entity.randomReflectanceR0Percent) },
+                { label: "R₀ Readings at or above 2% (%)", ...certificationDetailField("sample", "sReflectanceFraction"), value: displaySideSheet.entity.sReflectanceFraction == null ? null : formatPercent(displaySideSheet.entity.sReflectanceFraction * 100) },
+                { label: "Measurement Count", value: displaySideSheet.entity.r0MeasurementCount },
+                { label: "R₀ Analysis Date", value: formatDate(displaySideSheet.entity.r0AnalysisDate) },
+              ],
+            },
+            {
+              title: "TGA Non-Reactive Carbon",
+              fields: [
+                { label: "Reactive Carbon (%)", ...certificationDetailField("sample", "reactiveCarbonPercent"), value: formatPercent(displaySideSheet.entity.reactiveCarbonPercent) },
+                { label: "Residual (Non-Reactive) Carbon (%)", ...certificationDetailField("sample", "residualCarbonPercent"), value: formatPercent(displaySideSheet.entity.residualCarbonPercent) },
+                { label: "TGA Analysis Date", value: formatDate(displaySideSheet.entity.tgaAnalysisDate) },
+              ],
+            },
+          ] : []),
+          {
+            title: "Nutrient Claims",
+            fields: [
+              { label: "Enable nutrient claims", value: displaySideSheet.entity.nutrientClaimEnabled ? "Yes" : "No" },
+              ...(displaySideSheet.entity.nutrientClaimEnabled ? [
+                { label: "Phosphorus (%)", value: formatPercent(displaySideSheet.entity.phosphorusPercent) },
+                { label: "Potassium (%)", value: formatPercent(displaySideSheet.entity.potassiumPercent) },
+                { label: "Magnesium (%)", value: formatPercent(displaySideSheet.entity.magnesiumPercent) },
+                { label: "Calcium (%)", value: formatPercent(displaySideSheet.entity.calciumPercent) },
+                { label: "Iron (%)", value: formatPercent(displaySideSheet.entity.ironPercent) },
+              ] : []),
+            ],
+          },
+          {
+            title: "Evidence & Documents",
+            fields: [],
+            content: <SampleDocumentsPanel sampleId={displaySideSheet.entity.id} readOnly />,
+          },
+          {
+            title: "Transport",
+            fields: [],
+            content: <TransportLegsSummary entityType="sample" entityId={displaySideSheet.entity.id} />,
+          },
+          {
+            title: "Record Metadata",
+            fields: [
+              { label: "Sample Code", value: displaySideSheet.entity.sampleCode },
+              { label: "Facility", value: displaySideSheet.entity.facilityName },
+              {
+                label: "Sample chemistry",
+                value: <EntityCertifyReadinessBadge readiness={deriveEntityCertifyReadiness("sample", displaySideSheet.entity)} readyLabel="Chemistry complete" readinessNoun="sample chemistry" />,
+              },
             ],
           },
         ] : undefined}
-        viewModeChildren={
-          displaySideSheet?.mode === "view" && displaySideSheet.entity ? (
-            <>
-              <TransportLegsSummary
-                entityType="sample"
-                entityId={displaySideSheet.entity.id}
-              />
-              <section className="space-y-16 border-t border-[var(--color-border-tertiary)] pt-16">
-                <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-                  Evidence &amp; Documents
-                </h3>
-                <SampleDocumentsPanel
-                  sampleId={displaySideSheet.entity.id}
-                  readOnly
-                />
-              </section>
-            </>
-          ) : null
-        }
       >
         {formError && <div className="mb-24"><ServerError message={formError} /></div>}
         <SampleForm
@@ -707,6 +752,9 @@ export function SampleList() {
           deferredLegs={deferredLegs}
           onDeferredLegsChange={handleDeferredLegsChange}
           onRetryDeferredLegs={retryDeferredLegs}
+          focusTarget={
+            displaySideSheet?.mode === "edit" ? activeFocusTarget : null
+          }
         />
       </EntitySideSheet>
     </div>

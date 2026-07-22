@@ -7,7 +7,10 @@ export {
 
 export {
   reconcileComposition,
-  deriveBinRemovalKg,
+  deriveSuggestedIngredientMassKg,
+  deriveMassDeviationPercent,
+  shouldPrefillSuggestedMasses,
+  INGREDIENT_MASS_DEVIATION_WARN_PERCENT,
   fromCompositionJsonb,
   toCompositionJsonb,
 } from "./composition";

@@ -2,10 +2,12 @@
 
 import type { ActionResult } from "@/types/actions";
 import { requireOrgFacility } from "@/data-access/utils";
+import { requireOrgRole } from "@/lib/auth/server";
 import {
   getProcessComplianceDrift,
   getProductionProcessSummariesByFacility,
   getUnsampledCarbonPreviewForProcess,
+  setProcessOperationalStart,
   startNewProductionProcess,
   unlockMethodBForProcess,
   type ProcessCarbonPreview,
@@ -14,6 +16,7 @@ import {
 } from "@/data-access/production-processes";
 import type { ProductionProcess } from "@/db/schema";
 import {
+  setOperationalStartSchema,
   startNewProcessSchema,
   unlockMethodBSchema,
 } from "@/schemas/production-process";
@@ -45,6 +48,22 @@ export async function unlockMethodBFn(
   return withAction((ctx) =>
     unlockMethodBForProcess(ctx, unlockMethodBSchema.parse(input)),
   );
+}
+
+/**
+ * Set a production process's true operational start (`established_at`) so a
+ * back-entered facility whose samples predate the auto-created process can reach
+ * Method B (ADR 0017, 2026-07-12 amendment). Restricted to org owners/admins
+ * (Platform Admins pass); the data-access guard rejects the edit once Method B
+ * has unlocked and re-asserts org scope.
+ */
+export async function setProcessOperationalStartFn(
+  input: unknown,
+): Promise<ActionResult<ProductionProcess>> {
+  return withAction((ctx) => {
+    requireOrgRole(ctx, "admin");
+    return setProcessOperationalStart(ctx, setOperationalStartSchema.parse(input));
+  });
 }
 
 /**

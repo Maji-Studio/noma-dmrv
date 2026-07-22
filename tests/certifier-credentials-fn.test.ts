@@ -9,7 +9,7 @@ vi.mock("@/config/env", () => ({
 }));
 
 vi.mock("@/lib/auth/server", () => ({
-  requirePlatformAdmin: vi.fn(),
+  requireOrgContext: vi.fn(),
 }));
 
 vi.mock("@/data-access/certifier-credentials", () => ({
@@ -27,16 +27,22 @@ import {
   upsertCertifierCredentials,
 } from "@/data-access/certifier-credentials";
 import { setOrgCertifierCredentialsFn } from "@/fn/certifier-credentials";
-import { requirePlatformAdmin } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 
 const ORGANIZATION_ID = "org_test";
 const ACCESS_TOKEN = "access-token-sensitive-1234";
 const CLIENT_SECRET = "client-secret-sensitive";
+const ORG_CONTEXT = {
+  userId: "user_test",
+  organizationId: ORGANIZATION_ID,
+  orgRole: "admin",
+  isPlatformAdmin: false,
+} as const;
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockEnv.CREDENTIALS_ENCRYPTION_KEY = "a".repeat(64);
-  vi.mocked(requirePlatformAdmin).mockResolvedValue({} as never);
+  vi.mocked(requireOrgContext).mockResolvedValue(ORG_CONTEXT);
   vi.mocked(getCertifierCredentialsStatus).mockResolvedValue({
     configured: true,
     accessTokenLast4: "1234",
@@ -45,9 +51,9 @@ beforeEach(() => {
 });
 
 describe("setOrgCertifierCredentialsFn", () => {
-  it("requires Platform Admin before writing credentials", async () => {
-    vi.mocked(requirePlatformAdmin).mockRejectedValue(
-      new Error("Platform Admin access is required"),
+  it("requires an active organization context before writing credentials", async () => {
+    vi.mocked(requireOrgContext).mockRejectedValue(
+      new Error("Select an organization to continue"),
     );
 
     const result = await setOrgCertifierCredentialsFn({
@@ -70,8 +76,13 @@ describe("setOrgCertifierCredentialsFn", () => {
       clientSecret: CLIENT_SECRET,
     });
 
-    expect(requirePlatformAdmin).toHaveBeenCalledOnce();
-    expect(upsertCertifierCredentials).toHaveBeenCalledOnce();
+    expect(requireOrgContext).toHaveBeenCalledOnce();
+    expect(upsertCertifierCredentials).toHaveBeenCalledWith(ORG_CONTEXT, {
+      organizationId: ORGANIZATION_ID,
+      accessToken: ACCESS_TOKEN,
+      clientSecret: CLIENT_SECRET,
+      provider: "isometric",
+    });
     expect(result.success).toBe(true);
     expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN);
     expect(JSON.stringify(result)).not.toContain(CLIENT_SECRET);

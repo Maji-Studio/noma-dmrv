@@ -9,7 +9,7 @@ import { useController, type Control, type FieldPath, type FieldValues } from "r
 import { FormField } from "../form-field";
 import { useClearOnDependencyChange } from "@/hooks/use-clear-on-dependency-change";
 import { EntitySelect } from "./entity-select";
-import type { EntityType } from "./types";
+import type { EntitySelectProps, EntityType } from "./types";
 
 interface FormEntitySelectProps<
   TFieldValues extends FieldValues = FieldValues,
@@ -37,6 +37,8 @@ interface FormEntitySelectProps<
   onCreateNew?: () => void;
   /** Filter options (e.g., facilityId for filtering reactors by facility) */
   filterBy?: Record<string, string>;
+  /** Option ids to hide (e.g. materials already picked on other lines). */
+  excludeIds?: readonly string[];
   /** Whether the field is required */
   required?: boolean;
   /** Auto-select when there is exactly one option (defaults to true when required) */
@@ -58,6 +60,8 @@ interface FormEntitySelectProps<
    * <FormEntitySelect dependsOn={[watchedFeedstockTypeId, watchedFacilityId]} ... />
    */
   dependsOn?: string | null | (string | null | undefined)[];
+  /** Empty-list hint naming the upstream prerequisite (see EntitySelectProps). */
+  emptyHint?: EntitySelectProps["emptyHint"];
 }
 
 export function FormEntitySelect<
@@ -75,11 +79,13 @@ export function FormEntitySelect<
   createLabel,
   onCreateNew,
   filterBy,
+  excludeIds,
   required,
   autoSelectSingle,
   alwaysShowSearch = false,
   hideSearch = false,
   dependsOn,
+  emptyHint,
 }: FormEntitySelectProps<TFieldValues, TName>) {
   const id = useId();
   const { field, fieldState } = useController({ control, name });
@@ -105,9 +111,11 @@ export function FormEntitySelect<
         createLabel={createLabel}
         onCreateNew={onCreateNew}
         filterBy={filterBy}
+        excludeIds={excludeIds}
         autoSelectSingle={autoSelectSingle ?? required}
         alwaysShowSearch={alwaysShowSearch}
         hideSearch={hideSearch}
+        emptyHint={emptyHint}
       />
     </FormField>
   );

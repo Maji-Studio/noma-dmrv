@@ -214,34 +214,54 @@ export function FormulationList() {
     if (sideSheet?.mode !== "view" || !sideSheet.entity) return undefined;
     const entity = sideSheet.entity;
 
-    const sections = [
+    const ingredientCount = entity.ingredients?.length ?? 0;
+    const ingredientFields = ingredientCount > 0
+      ? entity.ingredients.flatMap((ingredient, index) => {
+          const prefix = ingredientCount > 1 ? `Ingredient ${index + 1} · ` : "";
+          return [
+            {
+              label: `${prefix}Blend Material`,
+              value: ingredient.feedstockType.name,
+            },
+            {
+              label: `${prefix}Ratio`,
+              value: formatRatio(ingredient.ratio),
+            },
+          ];
+        })
+      : [];
+
+    return [
       {
-        title: "General Information",
+        title: "Required Information",
         fields: [
-          { label: "Code", value: entity.code },
-          { label: "Name", value: entity.name },
-          { label: "Description", value: entity.description },
+          { label: "Formulation Name", value: entity.name },
         ],
       },
       {
-        title: "Composition",
+        title: "Biochar Ratio",
         fields: [
-          { label: "Biochar Ratio", value: formatRatio(entity.biocharRatio) },
+          { label: "Biochar Ratio (0–1)", value: entity.biocharRatio },
         ],
+      },
+      {
+        title: "Ingredients",
+        fields: ingredientFields,
+        content: ingredientCount === 0 ? (
+          <p className="body-small text-[var(--color-text-tertiary)] py-8">
+            No ingredients added.
+          </p>
+        ) : undefined,
+      },
+      {
+        title: "Additional Information",
+        fields: [{ label: "Description", value: entity.description }],
+      },
+      {
+        title: "Record Metadata",
+        fields: [{ label: "Code", value: entity.code }],
       },
     ];
-
-    if (entity.ingredients && entity.ingredients.length > 0) {
-      sections.push({
-        title: "Ingredients",
-        fields: entity.ingredients.map((ing) => ({
-          label: ing.feedstockType.name,
-          value: `${ing.feedstockType.category}${ing.ratio != null ? ` — ${(ing.ratio * 100).toFixed(0)}%` : ""}${ing.description ? ` (${ing.description})` : ""}`,
-        })),
-      });
-    }
-
-    return sections;
   })();
 
   return (

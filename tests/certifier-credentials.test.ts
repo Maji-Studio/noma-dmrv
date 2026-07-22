@@ -2,17 +2,9 @@
  * DB-backed lifecycle and authorization tests for per-organization registry
  * credentials. Requires the real Postgres configured by the test environment.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { ensureTestOrg, TEST_ORG_ID } from "./helpers/test-org";
-
-vi.mock("@/lib/auth/server", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/auth/server")>();
-  return {
-    ...actual,
-    requirePlatformAdmin: vi.fn(),
-  };
-});
+import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 import { db } from "@/db";
 import {
@@ -22,7 +14,6 @@ import {
   upsertCertifierCredentials,
 } from "@/data-access/certifier-credentials";
 import { certifierCredentials } from "@/db/schema/certification";
-import * as authServer from "@/lib/auth/server";
 
 const PROVIDER = "isometric" as const;
 
@@ -40,8 +31,6 @@ async function clearCredentials(): Promise<void> {
 beforeAll(() => ensureTestOrg());
 
 beforeEach(async () => {
-  vi.mocked(authServer.requirePlatformAdmin).mockReset();
-  vi.mocked(authServer.requirePlatformAdmin).mockResolvedValue({} as never);
   await clearCredentials();
 });
 
@@ -49,7 +38,8 @@ afterAll(clearCredentials);
 
 describe.sequential("certifier credentials data access", () => {
   it("upserts, reports masked status, replaces, decrypts, and deletes", async () => {
-    await upsertCertifierCredentials({
+    const ctx = makeTestOrgContext();
+    await upsertCertifierCredentials(ctx, {
       organizationId: TEST_ORG_ID,
       provider: PROVIDER,
       accessToken: "initial-access-1234",
@@ -57,6 +47,7 @@ describe.sequential("certifier credentials data access", () => {
     });
 
     const initialStatus = await getCertifierCredentialsStatus(
+      ctx,
       TEST_ORG_ID,
       PROVIDER
     );
@@ -72,7 +63,7 @@ describe.sequential("certifier credentials data access", () => {
       clientSecret: "initial-client-secret",
     });
 
-    await upsertCertifierCredentials({
+    await upsertCertifierCredentials(ctx, {
       organizationId: TEST_ORG_ID,
       provider: PROVIDER,
       accessToken: "rotated-access-9876",
@@ -80,7 +71,7 @@ describe.sequential("certifier credentials data access", () => {
     });
 
     await expect(
-      getCertifierCredentialsStatus(TEST_ORG_ID, PROVIDER)
+      getCertifierCredentialsStatus(ctx, TEST_ORG_ID, PROVIDER)
     ).resolves.toMatchObject({
       configured: true,
       accessTokenLast4: "9876",
@@ -92,9 +83,9 @@ describe.sequential("certifier credentials data access", () => {
       clientSecret: "rotated-client-secret",
     });
 
-    await deleteCertifierCredentials(TEST_ORG_ID, PROVIDER);
+    await deleteCertifierCredentials(ctx, TEST_ORG_ID, PROVIDER);
     await expect(
-      getCertifierCredentialsStatus(TEST_ORG_ID, PROVIDER)
+      getCertifierCredentialsStatus(ctx, TEST_ORG_ID, PROVIDER)
     ).resolves.toEqual({
       configured: false,
       accessTokenLast4: null,
@@ -106,27 +97,5 @@ describe.sequential("certifier credentials data access", () => {
     await expect(
       getDecryptedCertifierCredentials(TEST_ORG_ID, PROVIDER)
     ).resolves.toBeNull();
-    expect(authServer.requirePlatformAdmin).not.toHaveBeenCalled();
-  });
-
-  it("enforces the Platform Admin gate on every administrative operation", async () => {
-    const denied = new Error("Platform Admin access is required");
-    vi.mocked(authServer.requirePlatformAdmin).mockRejectedValue(denied);
-
-    await expect(
-      upsertCertifierCredentials({
-        organizationId: TEST_ORG_ID,
-        provider: PROVIDER,
-        accessToken: "blocked-token",
-        clientSecret: "blocked-secret",
-      })
-    ).rejects.toBe(denied);
-    await expect(
-      getCertifierCredentialsStatus(TEST_ORG_ID, PROVIDER)
-    ).rejects.toBe(denied);
-    await expect(
-      deleteCertifierCredentials(TEST_ORG_ID, PROVIDER)
-    ).rejects.toBe(denied);
-    expect(authServer.requirePlatformAdmin).toHaveBeenCalledTimes(3);
   });
 });

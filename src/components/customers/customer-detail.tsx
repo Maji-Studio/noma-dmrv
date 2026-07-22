@@ -36,6 +36,9 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
     gpsLatitude: number | null;
     gpsLongitude: number | null;
     address: string | null;
+    defaultSoilTemperatureC: number | null;
+    distanceFromFacilityKm: number | null;
+    isDefault: boolean;
   } | null>(null);
   const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -59,6 +62,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
         gpsLatitude: data.gpsLatitude,
         gpsLongitude: data.gpsLongitude,
         address: data.address || "",
+        defaultSoilTemperatureC: data.defaultSoilTemperatureC,
         distanceFromFacilityKm: data.distanceFromFacilityKm,
         isDefault: data.isDefault,
       });
@@ -84,6 +88,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
         gpsLatitude: data.gpsLatitude,
         gpsLongitude: data.gpsLongitude,
         address: data.address,
+        defaultSoilTemperatureC: data.defaultSoilTemperatureC,
         distanceFromFacilityKm: data.distanceFromFacilityKm,
         isDefault: data.isDefault,
       });
@@ -259,13 +264,22 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
                     City
                   </th>
                   <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                    GPS
+                    Address / Description
+                  </th>
+                  <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
+                    Application site position
+                  </th>
+                  <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
+                    Default soil temperature (°C)
                   </th>
                   <th className="px-16 py-12 text-left">
                     <span className="flex items-center gap-6 text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                      Distance
+                      One-way distance from facility (per leg, km)
                       <CertificationFieldTag />
                     </span>
+                  </th>
+                  <th className="px-16 py-12 text-left text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
+                    Default destination
                   </th>
                   <th className="px-16 py-12 text-right text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
                     Actions
@@ -288,15 +302,24 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
                       {location.city || "—"}
                     </td>
+                    <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
+                      {location.address || "—"}
+                    </td>
                     <td className="px-16 py-12 body-medium font-mono text-[var(--text-s)]">
                       {location.gpsLatitude !== null && location.gpsLongitude !== null
                         ? `${location.gpsLatitude.toFixed(4)}, ${location.gpsLongitude.toFixed(4)}`
                         : "—"}
                     </td>
                     <td className="px-16 py-12 body-medium">
+                      {location.defaultSoilTemperatureC ?? "—"}
+                    </td>
+                    <td className="px-16 py-12 body-medium">
                       {location.distanceFromFacilityKm != null
                         ? `${location.distanceFromFacilityKm} km`
                         : "—"}
+                    </td>
+                    <td className="px-16 py-12 body-medium">
+                      {location.isDefault ? "Yes" : "No"}
                     </td>
                     <td className="px-16 py-12 text-right">
                       <div className="flex items-center justify-end gap-16">

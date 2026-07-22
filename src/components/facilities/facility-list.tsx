@@ -50,6 +50,8 @@ import { FacilityCard } from "./facility-card";
 import { ArchiveFacilityDialog } from "./archive-facility-dialog";
 import type { FacilityFormData, FacilityFilterData } from "@/schemas/facilities";
 import type { FacilityWithRelations } from "@/data-access/facilities";
+import { formatTimezoneLabel } from "@/lib/date-utils";
+import { formatDurabilityOption } from "@/schemas/credit-batches";
 
 export function FacilityList() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -62,7 +64,11 @@ export function FacilityList() {
     entity: FacilityWithRelations | null;
     mode: SideSheetMode;
   } | null>(null);
-  const [archivingFacilityId, setArchivingFacilityId] = useState<string | null>(null);
+  const [archivingFacility, setArchivingFacility] = useState<{
+    id: string;
+    code: string;
+    name: string;
+  } | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [archiveError, setArchiveError] = useState<string | null>(null);
@@ -89,7 +95,9 @@ export function FacilityList() {
   );
 
   const { data: facilitiesData, isLoading, error: fetchError } = useFacilities(filters);
-  const { data: countries } = useFacilityCountries();
+  // Country options follow the visible collection — the archived view offers
+  // archived facilities' countries, not the active set's.
+  const { data: countries } = useFacilityCountries(showArchived);
 
   const createFacility = useCreateFacility();
   const updateFacility = useUpdateFacility();
@@ -140,14 +148,21 @@ export function FacilityList() {
     }
   };
 
-  const handleArchive = (facilityId: string) => setArchivingFacilityId(facilityId);
+  // The dialog needs the facility's identity (code + name), not just its id —
+  // it names the target and gates populated archives on a typed code.
+  const handleArchive = (facilityId: string) => {
+    const target = facilities.find((f) => f.id === facilityId);
+    setArchivingFacility(
+      target ? { id: target.id, code: target.code, name: target.name } : null,
+    );
+  };
 
   const handleArchiveConfirm = async () => {
-    if (!archivingFacilityId) return;
+    if (!archivingFacility) return;
     setArchiveError(null);
     try {
-      await archiveFacility.mutateAsync(archivingFacilityId);
-      setArchivingFacilityId(null);
+      await archiveFacility.mutateAsync(archivingFacility.id);
+      setArchivingFacility(null);
       toast.success("Facility archived — restore it any time from the archived view");
     } catch (error) {
       setArchiveError(error instanceof Error ? error.message : "Failed to archive facility");
@@ -197,6 +212,9 @@ export function FacilityList() {
 
   const toggleShowArchived = () => {
     setShowArchived((previous) => !previous);
+    // The two collections have independent country sets — a filter carried
+    // across the toggle could silently hide every row.
+    setCountryFilter("");
     setCurrentPage(1);
   };
 
@@ -222,13 +240,18 @@ export function FacilityList() {
   const sideSheetSections = sideSheetEntity
     ? [
         {
-          title: "General Information",
+          title: "Facility Information",
           fields: [
-            { label: "Code", value: sideSheetEntity.code },
-            { label: "Name", value: sideSheetEntity.name },
-            { label: "Location", value: sideSheetEntity.location },
+            { label: "Facility Name", value: sideSheetEntity.name },
             { label: "Country", value: sideSheetEntity.country },
+            { label: "Timezone", value: formatTimezoneLabel(sideSheetEntity.timezone) },
+            { label: "Location", value: sideSheetEntity.location },
             { label: "Address", value: sideSheetEntity.address },
+            { label: "Facility position latitude", value: sideSheetEntity.gpsLatitude },
+            { label: "Facility position longitude", value: sideSheetEntity.gpsLongitude },
+            { label: "Contact Email", value: sideSheetEntity.contactEmail },
+            { label: "Contact Phone", value: sideSheetEntity.contactPhone },
+            { label: "Durability Tier", value: formatDurabilityOption(sideSheetEntity.durabilityOption) },
           ],
         },
         {
@@ -265,6 +288,10 @@ export function FacilityList() {
               value: formatMass(sideSheetEntity.inventorySummary.productKg),
             },
           ],
+        },
+        {
+          title: "Record Metadata",
+          fields: [{ label: "Code", value: sideSheetEntity.code }],
         },
       ]
     : undefined;
@@ -425,10 +452,10 @@ export function FacilityList() {
       {archiveError && <ServerError message={archiveError} />}
 
       <ArchiveFacilityDialog
-        facilityId={archivingFacilityId}
+        facility={archivingFacility}
         onConfirm={handleArchiveConfirm}
         onCancel={() => {
-          setArchivingFacilityId(null);
+          setArchivingFacility(null);
           setArchiveError(null);
         }}
         isPending={archiveFacility.isPending}

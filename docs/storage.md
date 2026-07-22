@@ -127,6 +127,12 @@ document can hang off.
 
 Per-documentType size and MIME rules live in `src/schemas/documents.ts`
 (`UPLOAD_RULES`, `isAllowedMime`, `maxBytesFor`) — read them there, they change.
+All user-uploaded document types currently share a 10 MB cap defined once in
+`src/lib/documents/upload-policy.ts`; UI limits are clamped to that server policy.
+Future file reduction (for example image processing with Sharp) should be a
+preprocessing step that produces the final artifact before `requestUpload`, so
+both the request check and authoritative `confirmUpload` HEAD check apply to the
+bytes that are actually retained.
 The local-fs route additionally caps each upload at `min(token cap,
 LOCAL_FS_GLOBAL_MAX_BYTES)` (100 MB) as defense-in-depth.
 

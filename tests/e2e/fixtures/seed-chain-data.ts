@@ -448,6 +448,11 @@ export async function seedDurabilityBatch(
         id: productionProcessId,
         facilityId,
         feedstockTypeId,
+        // Operational start must PREDATE the samples, or the baseline counter's
+        // lower bound (`sampling_time >= established_at`, ADR 0017 2026-07-12)
+        // excludes all three and the row reads "0 / 30" instead of "3 / 30".
+        // Default is now(), which postdates these 1-2-day-old replicates.
+        establishedAt: dayOffset(3),
       });
       // Both runs share one reactor, so each needs a distinct start instant to
       // satisfy the (reactor, start_time) unique index (#259). day1/day2 are

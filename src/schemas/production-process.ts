@@ -10,7 +10,7 @@
 
 import { z } from "zod";
 import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
-import { toNumberOrUndefined } from "@/schemas/helpers";
+import { requiredDateOnly, toNumberOrUndefined } from "@/schemas/helpers";
 
 /** The three `R-ADXG-0` moisture-determination pathways (DB enum order). */
 export const MOISTURE_PATHWAYS = [
@@ -79,3 +79,28 @@ export const startNewProcessSchema = z.object({
 });
 
 export type StartNewProcessInput = z.infer<typeof startNewProcessSchema>;
+
+/**
+ * Set a production process's true operational start (`established_at`) — the
+ * correction path for a back-entered facility whose samples predate the row the
+ * system auto-created (ADR 0017, 2026-07-12 amendment). The baseline window is
+ * `[established_at, …)`, so an operational start dated after real sampling began
+ * silently excludes legitimate samples and can strand a facility below Method B.
+ *
+ * A calendar day, not an instant: `requiredDateOnly` parses at LOCAL midnight
+ * (never UTC — that walks the day back west of UTC). Editable only while the
+ * process is still on Method A; the data-access guard, an UPDATE WHERE clause,
+ * and a DB trigger all reject a change once Method B has unlocked. The start may
+ * not be in the future.
+ */
+export const setOperationalStartSchema = z
+  .object({
+    processId: z.uuid(),
+    establishedAt: requiredDateOnly,
+  })
+  .refine((value) => value.establishedAt.getTime() <= Date.now(), {
+    message: "The operational start can't be in the future.",
+    path: ["establishedAt"],
+  });
+
+export type SetOperationalStartInput = z.infer<typeof setOperationalStartSchema>;

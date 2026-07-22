@@ -9,7 +9,7 @@ import {
   type CertifierCredentialsStatus,
 } from "@/data-access/certifier-credentials";
 import { logActionError } from "@/fn/action-errors";
-import { requirePlatformAdmin } from "@/lib/auth/server";
+import { requireOrgContext } from "@/lib/auth/server";
 import { SafeError, toActionError } from "@/lib/errors";
 import {
   orgCertifierCredentialsTargetSchema,
@@ -53,13 +53,17 @@ export async function setOrgCertifierCredentialsFn(
   return toCredentialsResult(
     organizationId,
     async () => {
-      await requirePlatformAdmin();
+      const ctx = await requireOrgContext();
       const values = setOrgCertifierCredentialsSchema.parse(input);
       if (!env.CREDENTIALS_ENCRYPTION_KEY) {
         throw new SafeError("Credential encryption key is not configured");
       }
-      await upsertCertifierCredentials({ ...values, provider: PROVIDER });
-      return getCertifierCredentialsStatus(values.organizationId, PROVIDER);
+      await upsertCertifierCredentials(ctx, { ...values, provider: PROVIDER });
+      return getCertifierCredentialsStatus(
+        ctx,
+        values.organizationId,
+        PROVIDER,
+      );
     },
     "Failed to save Isometric credentials.",
   );
@@ -72,9 +76,9 @@ export async function getOrgCertifierCredentialsStatusFn(
   return toCredentialsResult(
     organizationId,
     async () => {
-      await requirePlatformAdmin();
+      const ctx = await requireOrgContext();
       const values = orgCertifierCredentialsTargetSchema.parse(input);
-      return getCertifierCredentialsStatus(values.organizationId, PROVIDER);
+      return getCertifierCredentialsStatus(ctx, values.organizationId, PROVIDER);
     },
     "Failed to load Isometric credential status.",
   );
@@ -87,9 +91,9 @@ export async function removeOrgCertifierCredentialsFn(
   return toCredentialsResult(
     organizationId,
     async () => {
-      await requirePlatformAdmin();
+      const ctx = await requireOrgContext();
       const values = orgCertifierCredentialsTargetSchema.parse(input);
-      await deleteCertifierCredentials(values.organizationId, PROVIDER);
+      await deleteCertifierCredentials(ctx, values.organizationId, PROVIDER);
       return { organizationId: values.organizationId };
     },
     "Failed to remove Isometric credentials.",

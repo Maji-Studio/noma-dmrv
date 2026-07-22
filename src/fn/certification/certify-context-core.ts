@@ -38,6 +38,7 @@ import {
   type BatchHealth,
 } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
+import { deriveFacilitySetupGaps, type FacilitySetupGap } from "@/lib/certification/facility-setup-gaps";
 import {
   buildMassAccounting,
   EMPTY_RUN_SUMMARY,
@@ -933,6 +934,8 @@ export interface SelectableBatchesData {
   // done. When false the wizard shows a "finish facility setup" banner and the
   // transport health check on each batch reads `skipped` (design doc §8).
   facilitySetupComplete: boolean;
+  // Names each unmet setup prerequisite (QA 2026-07-21 F2); empty ⇔ complete.
+  facilitySetupGaps: FacilitySetupGap[];
   // Whether a submit from this facility writes to the production registry —
   // drives the wizard's production confirmation gate.
   isProduction: boolean;
@@ -986,14 +989,11 @@ export async function loadSelectableBatchesForFacility(
       );
       batches.push(...chunk);
     }
-    const facilitySetupComplete =
-      !!facilityFacts.mapping &&
-      !!facilityFacts.defaultTemplate &&
-      !facilityFacts.missingDefaultTemplateId &&
-      facilityFacts.unresolvedBlueprintKeys.length === 0;
+    const facilitySetupGaps = deriveFacilitySetupGaps(facilityFacts);
     return {
       batches,
-      facilitySetupComplete,
+      facilitySetupComplete: facilitySetupGaps.length === 0,
+      facilitySetupGaps,
       isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
     };
   });

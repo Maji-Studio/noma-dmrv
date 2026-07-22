@@ -24,6 +24,7 @@ import {
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
 import type { GeoPoint } from "@/lib/geo/types";
+import type { CertFieldStatus } from "./cert-field-status";
 
 interface DistanceCalcFieldProps {
   id: string;
@@ -32,6 +33,7 @@ interface DistanceCalcFieldProps {
   error?: string;
   required?: boolean;
   certifyRequired?: boolean;
+  certifyStatus?: CertFieldStatus;
   disabled?: boolean;
   /**
    * Hide the source caption when the parent renders its own provenance UI
@@ -68,6 +70,7 @@ export function DistanceCalcField({
   error,
   required = false,
   certifyRequired = false,
+  certifyStatus,
   disabled = false,
   showSourceBadge = true,
   distanceKm,
@@ -139,6 +142,7 @@ export function DistanceCalcField({
       helperText={helperText}
       required={required}
       certifyRequired={certifyRequired}
+      certifyStatus={certifyStatus}
     >
       <div>
         <div className="flex items-stretch gap-6">

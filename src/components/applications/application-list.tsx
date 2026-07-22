@@ -19,8 +19,9 @@ import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
+import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { ApplicationForm } from "./application-form";
+import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import {
   formatApplicationKgFromTons,
@@ -43,9 +44,11 @@ import {
   formatApplicationEvidenceMethod,
   formatApplicationMethod,
   formatApplicationStatus,
+  formatSoilTemperatureSource,
   type ApplicationEvidenceMethod,
   type ApplicationMethod,
   type ApplicationStatus,
+  type SoilTemperatureSource,
 } from "@/schemas/applications";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
@@ -219,20 +222,17 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const deleteApplication = useDeleteApplication();
   const toast = useToast();
   const queryClient = useQueryClient();
-  const deferredAttachments = useDeferredAttachments();
-  const [isFlushing, setIsFlushing] = useState(false);
-
-  // Handlers
-  const handleCreate = async (data: ApplicationFormData) => {
-    setCreateError(null);
-    try {
+  const createWithEvidence = useCreateWithEvidence({
+    entityType: "application",
+    entityNoun: "Application",
+    executeCreate: async (data: ApplicationFormData) => {
       const result = await createApplication.mutateAsync(data);
       if (result.success === false) {
-        setCreateError(result.error || "Failed to create application");
-        return;
+        throw new Error(result.error || "Failed to create application");
       }
       const createdApplication: ApplicationListItem = {
         ...result.data,
+        deliveryCode: "",
         customerName: null,
         locationName: null,
         durabilityOption,
@@ -240,56 +240,40 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         // evidence after this create flow completes.
         evidenceGapCount: APPLICATION_VISUAL_EVIDENCE_ROLES.length,
       };
-      setIsFlushing(true);
-      const flushResult = await deferredAttachments.flush(
-        "application",
-        createdApplication.id,
-      );
-      if (!flushResult.ok) {
-        setSideSheet({ entity: createdApplication, mode: "edit" });
-        setCreateError(
-          `Application created, but ${flushResult.failed.length} ${flushResult.failed.length === 1 ? "attachment" : "attachments"} failed to upload.`,
-        );
-        return;
-      }
-      deferredAttachments.clear();
-      // The create mutation already invalidated the list, but that ran before
-      // the evidence flush finished — so the row's readiness/evidence-gap count
-      // was recomputed with zero uploads. Re-invalidate now that the deferred
-      // attachments have landed so the list reflects the true evidence state.
-      queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
-      setSideSheet(null);
-      toast.success("Application created successfully");
-    } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "Failed to create application");
-    } finally {
-      setIsFlushing(false);
-    }
-  };
+      return { entities: [createdApplication], result };
+    },
+    setError: setCreateError,
+    setUpdateError,
+    getCreateErrorMessage: (error) =>
+      error instanceof Error ? error.message : "Failed to create application",
+    unresolvedUpdateMessage:
+      "Resolve or remove the failed attachments before saving this application.",
+    openEditOnFailure: (application) =>
+      setSideSheet({ entity: application, mode: "edit" }),
+    closeOnSuccess: () => setSideSheet(null),
+    onFlushSuccess: () => {
+      // The create mutation invalidates before evidence lands; recount after
+      // the flush so readiness reflects the uploaded evidence.
+      void queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
+    },
+    onSuccess: () => toast.success("Application created successfully"),
+  });
+  const { deferredAttachments, isFlushing } = createWithEvidence;
+
+  // Handlers
+  const handleCreate = createWithEvidence.handleCreate;
 
   const handleUpdate = async (data: ApplicationFormData) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
-    if (
-      deferredAttachments.attachments.some(
-        // Any not-yet-`uploaded` entry is unresolved: "failed" awaits a retry,
-        // and "uploading" means a retry is mid-flight whose state a save would
-        // clobber. Both must block the save.
-        (attachment) => attachment.status !== "uploaded",
-      )
-    ) {
-      setUpdateError(
-        "Resolve or remove the failed attachments before saving this application.",
-      );
-      return;
-    }
+    if (createWithEvidence.guardUpdate()) return;
     try {
       const result = await updateApplication.mutateAsync({
         applicationId: sideSheet.entity.id,
         ...data,
       });
       if (result.success) {
-        deferredAttachments.clear();
+        createWithEvidence.reset();
         setSideSheet(null);
         toast.success("Application updated successfully");
       } else {
@@ -323,31 +307,20 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const openCreate = () => {
     setCreateError(null);
     setUpdateError(null);
-    deferredAttachments.clear();
+    createWithEvidence.reset();
     setSideSheet({ entity: null, mode: "create" });
   };
   const openView = (application: ApplicationListItem) => { setSideSheet({ entity: application, mode: "view" }); };
-  const openEdit = (application: ApplicationListItem) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: application, mode: "edit" }); };
+  const openEdit = (application: ApplicationListItem) => { setCreateError(null); setUpdateError(null); createWithEvidence.reset(); setSideSheet({ entity: application, mode: "edit" }); };
   const closeSideSheet = () => {
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
-    deferredAttachments.clear();
+    createWithEvidence.reset();
   };
 
-  const unsavedAttachmentCount = deferredAttachments.attachments.filter(
-    (attachment) => attachment.status !== "uploaded",
-  ).length;
-  const confirmCreateClose = () => {
-    // An in-flight flush is mid-write; blocking Escape/backdrop/X keeps the
-    // completion handler from mutating a discarded-then-reopened form.
-    if (isFlushing) return false;
-    return (
-      sideSheet?.mode !== "create" ||
-      unsavedAttachmentCount === 0 ||
-      window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`)
-    );
-  };
+  const confirmCreateClose = () =>
+    createWithEvidence.confirmClose(sideSheet?.mode === "create");
   const attemptCloseSideSheet = () => {
     if (confirmCreateClose()) closeSideSheet();
   };
@@ -413,6 +386,9 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       : sideSheetEntity
         ? formatDate(sideSheetEntity.applicationDate)
         : undefined;
+  const sideSheetDelivery = sideSheetEntity
+    ? deliveryOptions.find((delivery) => delivery.id === sideSheetEntity.deliveryId)
+    : undefined;
 
   return (
     <div className="container-max page-shell">
@@ -545,42 +521,19 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         size="wide"
         sections={sideSheetEntity ? [
           {
-            title: "General",
+            title: "Application Details",
             fields: [
-              { label: "Code", value: sideSheetEntity.code },
+              { label: "Application Date", value: formatDate(sideSheetEntity.applicationDate) },
+              { label: "Delivery", value: sideSheetEntity.deliveryCode || sideSheetDelivery?.code || null },
               {
-                label: "Application Date",
-                value: formatDate(sideSheetEntity.applicationDate),
-              },
-              {
-                label: "Status",
-                value: <StatusBadge status={sideSheetEntity.status} />,
-              },
-              {
-                label: "Certification",
-                value: (
-                  <EntityCertifyReadinessBadge
-                    readiness={deriveEntityCertifyReadiness(
-                      "application",
-                      sideSheetEntity,
-                    )}
-                  />
-                ),
-              },
-            ],
-          },
-          {
-            title: "Biochar",
-            fields: [
-              {
-                label: "Biochar Applied",
+                label: "Biochar Applied, Wet (kg)",
                 ...certificationDetailField("application", "biocharAppliedTons"),
                 value: sideSheetEntity.biocharAppliedTons != null
                   ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedTons)
                   : null,
               },
               {
-                label: "Biochar Applied Dry",
+                label: "Biochar Applied Dry (kg)",
                 ...certificationDetailField("application", "biocharAppliedDryTons"),
                 value: sideSheetEntity.biocharAppliedDryTons != null
                   ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedDryTons)
@@ -589,47 +542,71 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             ],
           },
           {
-            title: "Field",
+            title: "Field Details",
             fields: [
-              {
-                label: "Field Size",
-                value: sideSheetEntity.fieldSizeHa != null
-                  ? `${sideSheetEntity.fieldSizeHa.toFixed(2)} ha`
-                  : null,
-              },
+              { label: "Field Size (Ha)", value: sideSheetEntity.fieldSizeHa },
+              { label: "Field Identifier", value: sideSheetEntity.fieldIdentifier },
+              { label: "Crop Type", value: sideSheetEntity.cropType },
               {
                 label: "Application Method",
                 value: sideSheetEntity.applicationMethodType
                   ? formatApplicationMethod(sideSheetEntity.applicationMethodType as ApplicationMethod)
                   : null,
               },
+              { label: "Field position latitude", value: sideSheetEntity.gpsLatitude },
+              { label: "Field position longitude", value: sideSheetEntity.gpsLongitude },
+            ],
+          },
+          {
+            title: "Evidence Method",
+            fields: [
               {
                 label: "Evidence Method",
                 value: formatApplicationEvidenceMethod(
                   (sideSheetEntity.evidenceMethod ?? "visual") as ApplicationEvidenceMethod,
                 ),
               },
-              // Soil temperature is a 200-year-only durable-fraction input —
-              // hidden under 1000-year (ADR 0021). The tier prefers the row's
-              // own join-derived value, falling back to the active facility.
-              ...((sideSheetEntity.durabilityOption ?? durabilityOption) ===
-              "1000_year"
-                ? []
-                : [
-                    {
-                      label: "Soil Temperature",
-                      ...certificationDetailField(
-                        "application",
-                        "soilTemperatureC",
-                      ),
-                      value:
-                        sideSheetEntity.soilTemperatureC != null
-                          ? `${sideSheetEntity.soilTemperatureC} °C`
-                          : null,
-                    },
-                  ]),
-              { label: "Crop Type", value: sideSheetEntity.cropType },
-              { label: "Field Identifier", value: sideSheetEntity.fieldIdentifier },
+              ...((sideSheetEntity.evidenceMethod ?? "visual") === "boundary"
+                ? [{ label: "GIS Boundary Reference", value: sideSheetEntity.gisBoundaryReference }]
+                : []),
+            ],
+            content: (
+              <ApplicationEvidencePanel
+                applicationId={sideSheetEntity.id}
+                mode={(sideSheetEntity.evidenceMethod ?? "visual") as ApplicationEvidenceMethod}
+                readOnly
+              />
+            ),
+          },
+          ...((sideSheetEntity.durabilityOption ?? durabilityOption) === "1000_year" ? [] : [{
+            title: "Soil Temperature",
+            fields: [
+              {
+                label: "Temperature Source",
+                value: sideSheetEntity.soilTemperatureSource
+                  ? formatSoilTemperatureSource(sideSheetEntity.soilTemperatureSource as SoilTemperatureSource)
+                  : null,
+              },
+              {
+                label: "Soil Temperature (°C)",
+                ...certificationDetailField("application", "soilTemperatureC"),
+                value: sideSheetEntity.soilTemperatureC != null
+                  ? `${sideSheetEntity.soilTemperatureC} °C`
+                  : null,
+              },
+            ],
+          }]),
+          {
+            title: "Record Metadata",
+            fields: [
+              { label: "Code", value: sideSheetEntity.code },
+              { label: "Status", value: <StatusBadge status={sideSheetEntity.status} /> },
+              { label: "Customer", value: sideSheetEntity.customerName },
+              { label: "Location", value: sideSheetEntity.locationName },
+              {
+                label: "Certification",
+                value: <EntityCertifyReadinessBadge readiness={deriveEntityCertifyReadiness("application", sideSheetEntity)} />,
+              },
             ],
           },
         ] : undefined}

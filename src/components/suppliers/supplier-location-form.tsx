@@ -14,6 +14,7 @@ import {
   FormInput,
   FormTextarea,
   PositionPicker,
+  makeCertFieldStatus,
 } from "@/components/forms";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
@@ -48,6 +49,18 @@ export function SupplierLocationForm({
   submitLabel,
 }: SupplierLocationFormProps) {
   const isEditMode = !!location;
+  const defaultValues = {
+    name: location?.name ?? "",
+    country: location?.country ?? "",
+    stateRegion: location?.stateRegion ?? "",
+    city: location?.city ?? "",
+    gpsLatitude: location?.gpsLatitude ?? undefined,
+    gpsLongitude: location?.gpsLongitude ?? undefined,
+    address: location?.address ?? "",
+    distanceFromFacilityKm: location?.distanceFromFacilityKm ?? undefined,
+    distanceSource: location?.distanceSource ?? null,
+    isDefault: location?.isDefault ?? false,
+  };
 
   const {
     register,
@@ -57,19 +70,9 @@ export function SupplierLocationForm({
     formState: { errors },
   } = useForm({
     resolver: zodResolver(supplierLocationFormSchema),
-    defaultValues: {
-      name: location?.name ?? "",
-      country: location?.country ?? "",
-      stateRegion: location?.stateRegion ?? "",
-      city: location?.city ?? "",
-      gpsLatitude: location?.gpsLatitude ?? undefined,
-      gpsLongitude: location?.gpsLongitude ?? undefined,
-      address: location?.address ?? "",
-      distanceFromFacilityKm: location?.distanceFromFacilityKm ?? undefined,
-      distanceSource: location?.distanceSource ?? null,
-      isDefault: location?.isDefault ?? false,
-    },
+    defaultValues,
   });
+  const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
   const defaultSubmitLabel = isEditMode ? "Update Location" : "Add Location";
 
@@ -216,6 +219,7 @@ export function SupplierLocationForm({
             label="One-way distance to facility (per leg, km)"
             error={errors.distanceFromFacilityKm?.message}
             certifyRequired={isCertifyFormField("supplierLocation", "distanceFromFacilityKm")}
+            certifyStatus={certStatus("distanceFromFacilityKm")}
             helperText="One-way road distance from this source location to the facility. Return trips are doubled at emissions time (set the trip type on each feedstock delivery)."
             disabled={isSubmitting}
             distanceKm={distanceFromFacilityKm}

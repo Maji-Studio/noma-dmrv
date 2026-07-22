@@ -28,15 +28,14 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
+import { EntityDetailValue } from "@/components/ui/entity-detail-value";
 import {
   DetailField,
   DetailRow,
   DetailSection,
 } from "@/components/ui/detail-panel";
 import {
-  formatCreditBatchStatus,
   formatDurabilityOption,
   type CreditBatchFormData,
 } from "@/schemas/credit-batches";
@@ -179,23 +178,18 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
     <Shell>
       <Breadcrumb code={creditBatch.code} />
 
-      {/* Header — status + the single Edit entry point for the whole page */}
+      {/* Header — the single Edit entry point for the whole page. No lifecycle
+          badge: every batch sits at the DB default with no transition path, so
+          the checklist below is the batch's real state (QA 2026-07-21 F3). */}
       <PageHeader
         area="verification"
         title={creditBatch.code}
         subtitle={`${creditBatch.facility?.name ?? "No facility"} · ${period}`}
         actions={
-          <div className="flex items-center gap-12">
-            <StatusBadge
-              status={creditBatch.status}
-              label={formatCreditBatchStatus(creditBatch.status)}
-              size="large"
-            />
-            <Button variant="default" onClick={() => setIsEditing(true)}>
-              <PencilSimpleIcon size={16} aria-hidden />
-              Edit batch
-            </Button>
-          </div>
+          <Button variant="default" onClick={() => setIsEditing(true)}>
+            <PencilSimpleIcon size={16} aria-hidden />
+            Edit batch
+          </Button>
         }
       />
 
@@ -249,6 +243,12 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
           <DetailSection title="Overview" divider={false}>
             <DetailRow>
               <DetailField
+                label="Feedstock Type"
+                value={creditBatch.feedstockTypeName}
+              />
+            </DetailRow>
+            <DetailRow>
+              <DetailField
                 label="Start date"
                 value={formatDate(creditBatch.startDate)}
               />
@@ -257,24 +257,42 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
                 value={formatDate(creditBatch.endDate)}
               />
             </DetailRow>
+          </DetailSection>
+
+          <DetailSection title="Production runs">
+            {creditBatch.productionRunIds.length > 0 ? (
+              creditBatch.productionRunIds.map((productionRunId, index) => (
+                <DetailRow key={productionRunId}>
+                  <DetailField
+                    label={`Production Run ${index + 1}`}
+                    value={<EntityDetailValue entityType="productionRun" id={productionRunId} />}
+                  />
+                </DetailRow>
+              ))
+            ) : (
+              <DetailRow>
+                <DetailField label="Production Run" value={null} />
+              </DetailRow>
+            )}
+          </DetailSection>
+
+          <DetailSection title="Durability">
             <DetailRow>
               <DetailField
                 label="Durability option"
                 value={formatDurabilityOption(creditBatch.durabilityOption)}
               />
-              <DetailField
-                label="Site management notes"
-                value={creditBatch.siteManagementNotes}
-              />
+            </DetailRow>
+          </DetailSection>
+
+          <DetailSection title="Site Management">
+            <DetailRow>
+              <DetailField label="Notes" value={creditBatch.siteManagementNotes} />
             </DetailRow>
           </DetailSection>
 
           <DetailSection title="Registry & accounting">
             <DetailRow>
-              <DetailField
-                label="Applied weight"
-                value={formatTonnes(creditBatch.appliedWeightTons)}
-              />
               <DetailField
                 label="Buffer pool"
                 value={
@@ -283,11 +301,12 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
                     : "—"
                 }
               />
+              <DetailField label="Registry" value={creditBatch.registry} />
             </DetailRow>
             <DetailRow>
               <DetailField
-                label="Registry"
-                value={creditBatch.registry}
+                label="Weight"
+                value={formatTonnes(creditBatch.appliedWeightTons)}
               />
               <DetailField
                 label="Credit value"

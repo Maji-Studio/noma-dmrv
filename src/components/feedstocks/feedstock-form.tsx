@@ -13,10 +13,11 @@ import { ArrowCounterClockwiseIcon, CalendarIcon, MapPinIcon, NoteIcon, PlantIco
 import { numericValue } from "@/lib/form-utils";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { toDateInputValue } from "@/lib/date-utils";
+import { formatDistanceKm } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, ServerError, DryMassInput, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, ServerError, DryMassInput, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
 import {
@@ -24,7 +25,7 @@ import {
   type FeedstockFormData,
 } from "@/schemas/feedstocks";
 import { type DistanceSourceValue } from "@/schemas/distance-source";
-import { DEFAULT_TRIP_TYPE, TRIP_TYPE_OPTIONS, type TripTypeValue } from "@/schemas/trip-type";
+import { DEFAULT_TRIP_TYPE, roundTripDistanceFactor, TRIP_TYPE_OPTIONS, type TripTypeValue } from "@/schemas/trip-type";
 import { FormSelect } from "@/components/forms/form-select";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
@@ -36,6 +37,8 @@ import { BinAllocationRow } from "./bin-allocation-row";
 import { FeedstockEvidenceSection } from "./feedstock-trailing-sections";
 import { WetMassWarning } from "./wet-mass-warning";
 import { FEEDSTOCK_BIN_TYPES } from "@/schemas/storage-locations";
+import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
+import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
 
@@ -59,6 +62,7 @@ interface FeedstockFormProps {
   deferredAttachments?: UseDeferredAttachmentsResult;
   /** All rows a failed create produced, so evidence retry reaches each. */
   retryEntityIds?: string[];
+  focusTarget?: EntityFocusTarget | null;
 }
 
 export function FeedstockForm({
@@ -70,6 +74,7 @@ export function FeedstockForm({
   serverError,
   deferredAttachments,
   retryEntityIds,
+  focusTarget,
 }: FeedstockFormProps) {
   const isEditMode = !!feedstock;
   const formId = useId();
@@ -87,7 +92,8 @@ export function FeedstockForm({
     supplierId: feedstock?.supplierId ?? "",
     vehicleId: feedstock?.vehicleId ?? "",
     transportDistanceKm: undefined as number | undefined,
-    transportDistanceSource: null as DistanceSourceValue | null,
+    transportDistanceSource:
+      feedstock?.transportDistanceSource ?? (null as DistanceSourceValue | null),
     transportTripType: DEFAULT_TRIP_TYPE as TripTypeValue,
     feedstockTypeId: feedstock?.feedstockTypeId ?? "",
     totalWetMassKg: feedstock?.massWetKg ?? ("" as unknown as number),
@@ -137,6 +143,21 @@ export function FeedstockForm({
     control,
     name: "transportDistanceKm",
   }) as number | null | undefined;
+  const draftTransportDistanceSource = useWatch({
+    control,
+    name: "transportDistanceSource",
+  }) as DistanceSourceValue | null | undefined;
+  const transportTripType = useWatch({
+    control,
+    name: "transportTripType",
+  }) as TripTypeValue | null | undefined;
+  const totalTransportDistanceKm =
+    transportTripType === "return" &&
+    typeof transportDistanceKm === "number" &&
+    Number.isFinite(transportDistanceKm) &&
+    transportDistanceKm >= 0
+      ? transportDistanceKm * roundTripDistanceFactor(transportTripType)
+      : null;
 
   const defaultStorageBinType = "feedstock_bin";
 
@@ -159,13 +180,10 @@ export function FeedstockForm({
   // autofilled async), so its CERT chip tracks whether the saved leg carries a
   // distance rather than the form field. While the leg query is in flight, stay
   // neutral so we never flash a misleading "missing" before it loads.
-  const transportDistanceCertStatus: CertFieldStatus = !isEditMode
-    ? "neutral"
-    : existingLegs === undefined
-      ? "neutral"
-      : existingLegDistanceKm != null
-        ? "satisfied"
-        : "missing";
+  const transportDistanceCertStatus: CertFieldStatus = resolveCertFieldStatus(
+    !isEditMode || existingLegs === undefined ? undefined : true,
+    existingLegDistanceKm != null,
+  );
   const storedDistanceKm =
     defaultSupplierLocation?.distanceFromFacilityKm ??
     selectedSupplier?.distanceToFacilityKm ??
@@ -196,7 +214,9 @@ export function FeedstockForm({
   // prefill effect resumes managing it (e.g. on a later supplier switch).
   const resetTransportDistance = () => {
     resetField("transportDistanceKm", { defaultValue: suggestedDistanceKm ?? undefined });
-    setValue("transportDistanceSource", suggestedDistanceSource ?? null, { shouldValidate: true });
+    resetField("transportDistanceSource", {
+      defaultValue: suggestedDistanceSource ?? null,
+    });
   };
 
   // Auto-set facility from context
@@ -209,17 +229,30 @@ export function FeedstockForm({
   // Prefill the distance (and its provenance) from the supplier/existing leg
   // unless the user edited it.
   useEffect(() => {
-    if (dirtyFields.transportDistanceKm) return;
     if (suggestedDistanceKm != null) {
-      setValue("transportDistanceKm", suggestedDistanceKm);
-      setValue("transportDistanceSource", suggestedDistanceSource);
+      if (!dirtyFields.transportDistanceKm) {
+        setValue("transportDistanceKm", suggestedDistanceKm);
+      }
+      if (!dirtyFields.transportDistanceSource) {
+        setValue("transportDistanceSource", suggestedDistanceSource);
+      }
     } else {
       // Suggestion gone (e.g. switched to a supplier without a stored
       // distance) — clear the previous autofill so it can't persist.
-      setValue("transportDistanceKm", undefined);
-      setValue("transportDistanceSource", null);
+      if (!dirtyFields.transportDistanceKm) {
+        setValue("transportDistanceKm", undefined);
+      }
+      if (!dirtyFields.transportDistanceSource) {
+        setValue("transportDistanceSource", null);
+      }
     }
-  }, [suggestedDistanceKm, suggestedDistanceSource, dirtyFields.transportDistanceKm, setValue]);
+  }, [
+    suggestedDistanceKm,
+    suggestedDistanceSource,
+    dirtyFields.transportDistanceKm,
+    dirtyFields.transportDistanceSource,
+    setValue,
+  ]);
 
   // Prefill the saved leg's trip type in edit mode (async), unless the user
   // already changed it. New feedstock defaults to Return via defaultValues.
@@ -329,72 +362,91 @@ export function FeedstockForm({
           fields={["vehicleId", "transportDistanceKm", "transportTripType"]}
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-            <FormEntitySelect
-              control={formControl}
-              name="vehicleId"
-              label="Vehicle"
-              entityType="vehicle"
-              placeholder="Select vehicle..."
-              disabled={isSubmitting}
-              allowCreate
-              alwaysShowSearch
-              createLabel="Add new vehicle"
-              onCreateNew={() => vehicleDialog.open()}
-            />
+            <div className="md:col-span-2">
+              <FormEntitySelect
+                control={formControl}
+                name="vehicleId"
+                label="Vehicle"
+                entityType="vehicle"
+                placeholder="Select vehicle..."
+                disabled={isSubmitting}
+                allowCreate
+                alwaysShowSearch
+                createLabel="Add new vehicle"
+                onCreateNew={() => vehicleDialog.open()}
+              />
+            </div>
 
-            <FormField
-              id="transportDistanceKm"
-              label="One-way distance (per leg, km)"
-              error={errors.transportDistanceKm?.message}
-              certifyRequired={isFeedstockCertifyField("transportDistanceKm")}
-              certifyStatus={transportDistanceCertStatus}
-              helperText={
-                storedDistanceKm != null
-                  ? "One-way supplier › facility distance, autofilled from the supplier; return trips are doubled at emissions time. Override if the route differs."
-                  : "Set a one-way distance on the supplier (or its default location) to autofill this."
-              }
+            <ActionableFocusTarget
+              target="transport-route"
+              activeTarget={focusTarget}
+              actionLabel="Complete the saved transport route information"
             >
-              <div className="relative">
-                <FormInput
-                  id="transportDistanceKm"
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  placeholder="e.g., 85"
-                  disabled={isSubmitting}
-                  error={!!errors.transportDistanceKm}
-                  className={isDistanceOverride ? "pr-[104px]" : undefined}
-                  {...register("transportDistanceKm", {
-                    setValueAs: numericValue,
-                    onChange: (event) =>
-                      setValue(
-                        "transportDistanceSource",
-                        event.target.value === "" ? null : "manual",
-                        SET_VALUE_OPTS,
-                      ),
-                  })}
-                />
-                {isDistanceOverride && (
-                  <button
-                    type="button"
-                    onClick={resetTransportDistance}
-                    disabled={isSubmitting}
-                    aria-label="Reset to suggested distance"
-                    data-testid="transportDistanceKm-reset"
-                    className="absolute inset-y-0 right-0 flex items-center gap-6 pl-8 pr-12 text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-secondary)] disabled:opacity-50"
-                  >
-                    <span className="body-caption">override</span>
-                    <ArrowCounterClockwiseIcon size={14} weight="bold" />
-                  </button>
-                )}
-              </div>
-            </FormField>
+              <FormField
+                id="transportDistanceKm"
+                label="Distance (km)"
+                error={errors.transportDistanceKm?.message}
+                certifyRequired={isFeedstockCertifyField("transportDistanceKm")}
+                certifyStatus={transportDistanceCertStatus}
+                helperText={
+                  storedDistanceKm != null
+                    ? "One-way supplier › facility distance, autofilled from the supplier; return trips are doubled at emissions time. Override if the route differs."
+                    : "Set a one-way distance on the supplier (or its default location) to autofill this."
+                }
+              >
+                <div>
+                  <div className="relative">
+                    <FormInput
+                      id="transportDistanceKm"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      placeholder="e.g., 85"
+                      disabled={isSubmitting}
+                      error={!!errors.transportDistanceKm}
+                      className={isDistanceOverride ? "pr-[104px]" : undefined}
+                      {...register("transportDistanceKm", {
+                        setValueAs: numericValue,
+                        onChange: (event) =>
+                          setValue(
+                            "transportDistanceSource",
+                            event.target.value === "" ? null : "manual",
+                            SET_VALUE_OPTS,
+                          ),
+                      })}
+                    />
+                    {isDistanceOverride && (
+                      <button
+                        type="button"
+                        onClick={resetTransportDistance}
+                        disabled={isSubmitting}
+                        aria-label="Reset to suggested distance"
+                        data-testid="transportDistanceKm-reset"
+                        className="absolute inset-y-0 right-0 flex items-center gap-6 pl-8 pr-12 text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-secondary)] disabled:opacity-50"
+                      >
+                        <span className="body-caption">override</span>
+                        <ArrowCounterClockwiseIcon size={14} weight="bold" />
+                      </button>
+                    )}
+                  </div>
+                  {totalTransportDistanceKm != null && (
+                    <p
+                      className="body-caption text-[var(--color-text-tertiary)] mt-6"
+                      data-testid="transport-distance-total"
+                      aria-live="polite"
+                    >
+                      Total: {formatDistanceKm(totalTransportDistanceKm)}
+                    </p>
+                  )}
+                </div>
+              </FormField>
+            </ActionableFocusTarget>
 
             <FormField
               id="transportTripType"
               label="Trip type"
               error={errors.transportTripType?.message}
-              helperText="Return doubles the distance (vehicle comes back empty). Choose One-way only with an evidenced onward destination."
+              hint="Return counts the entered distance twice; One-way counts it once."
             >
               <FormSelect
                 id="transportTripType"
@@ -585,6 +637,11 @@ export function FeedstockForm({
           deferredAttachments={deferredAttachments}
           retryEntityIds={retryEntityIds}
           isSubmitting={isSubmitting}
+          focusTarget={focusTarget}
+          draftDistanceSource={draftTransportDistanceSource}
+          onSelectDocumentProvenance={() =>
+            setValue("transportDistanceSource", "document", SET_VALUE_OPTS)
+          }
         />
       </FormSpine>
 

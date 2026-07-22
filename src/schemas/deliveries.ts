@@ -6,7 +6,11 @@
 
 import { z } from "zod";
 import { deliveryDryMassSchema } from "./isometric";
-import { optionalDistanceSource } from "./distance-source";
+import {
+  optionalDistanceSource,
+  resolveDistanceSource,
+  type DistanceSourceValue,
+} from "./distance-source";
 import { optionalTripType } from "./trip-type";
 import { emptyToNull, optionalMassKgSchema } from "./helpers";
 
@@ -20,6 +24,19 @@ import { emptyToNull, optionalMassKgSchema } from "./helpers";
 export const deliveryStatuses = ["upcoming", "delivered"] as const;
 
 export type DeliveryStatus = (typeof deliveryStatuses)[number];
+
+/**
+ * A delivery may carry trip-specific documentary provenance while continuing
+ * to inherit the customer location's distance (a null distance override).
+ */
+export function resolveDeliveryDistanceSource(
+  distanceKmOverride: number | null | undefined,
+  source: DistanceSourceValue | null | undefined,
+): DistanceSourceValue | null | undefined {
+  return source === "document"
+    ? "document"
+    : resolveDistanceSource(distanceKmOverride, source);
+}
 
 // ============================================
 // Helper Schemas

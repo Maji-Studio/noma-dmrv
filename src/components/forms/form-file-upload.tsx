@@ -18,6 +18,10 @@ import { useRef, useState } from "react";
 import { UploadSimpleIcon, FileIcon, XIcon, CheckCircleIcon, WarningCircleIcon, SpinnerIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 import { BYTES_PER_MB, formatFileSize } from "@/lib/format-utils";
+import {
+  clampDocumentUploadMaxMb,
+  DOCUMENT_UPLOAD_MAX_MB,
+} from "@/lib/documents/upload-policy";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import type { DeferredFileEntry } from "@/hooks/use-deferred-attachments";
 import type {
@@ -105,7 +109,7 @@ export function FormFileUpload({
   multiple = true,
   disabled = false,
   error = false,
-  maxSizeMb = 10,
+  maxSizeMb = DOCUMENT_UPLOAD_MAX_MB,
   onChange,
   entityType,
   entityId,
@@ -125,6 +129,8 @@ export function FormFileUpload({
   const [isDragOver, setIsDragOver] = useState(false);
   const [deferredError, setDeferredError] = useState<string | null>(null);
   const { upload } = useFileUpload();
+  const uploadChainRef = useRef<Promise<void>>(Promise.resolve());
+  const effectiveMaxSizeMb = clampDocumentUploadMaxMb(maxSizeMb);
 
   const isRealMode = !deferred && !!(entityType && entityId && documentType);
 
@@ -190,27 +196,51 @@ export function FormFileUpload({
     }
   }
 
+  async function startUploads(queue: File[]) {
+    // useFileUpload intentionally cancels its previous request. Keep a
+    // multi-select batch sequential so later files do not abort earlier ones.
+    for (const file of queue) {
+      await startUpload(file);
+    }
+  }
+
+  // A second drop/selection while a batch is in flight must not start a
+  // parallel loop — useFileUpload would cancel the active request and fail
+  // the earlier file. Chain every batch through one shared promise.
+  function enqueueUploads(queue: File[]) {
+    uploadChainRef.current = uploadChainRef.current.then(() =>
+      startUploads(queue),
+    );
+  }
+
+  function validateFiles(queue: File[]): {
+    accepted: File[];
+    errors: string[];
+  } {
+    const maxBytes = effectiveMaxSizeMb * BYTES_PER_MB;
+    const errors: string[] = [];
+    const accepted = queue.filter((file) => {
+      if (file.size > maxBytes) {
+        errors.push(`${file.name} exceeds the ${effectiveMaxSizeMb} MB limit.`);
+        return false;
+      }
+      if (!fileMatchesAccept(file, accept)) {
+        errors.push(`${file.name} is not an accepted file type.`);
+        return false;
+      }
+      return true;
+    });
+    return { accepted, errors };
+  }
+
   function handleFiles(fileList: FileList | null) {
     if (!fileList) return;
     const arr = Array.from(fileList);
 
     if (deferred) {
       const queue = multiple ? arr : arr.slice(0, 1);
-      const maxBytes = maxSizeMb * BYTES_PER_MB;
-      const validationErrors: string[] = [];
-      const acceptedFiles = queue.filter((file) => {
-        if (file.size > maxBytes) {
-          validationErrors.push(
-            `${file.name} exceeds the ${maxSizeMb} MB limit.`,
-          );
-          return false;
-        }
-        if (!fileMatchesAccept(file, accept)) {
-          validationErrors.push(`${file.name} is not an accepted file type.`);
-          return false;
-        }
-        return true;
-      });
+      const { accepted: acceptedFiles, errors: validationErrors } =
+        validateFiles(queue);
 
       setDeferredError(
         validationErrors.length > 0 ? validationErrors.join(" ") : null,
@@ -226,8 +256,13 @@ export function FormFileUpload({
 
     if (isRealMode) {
       const queue = multiple ? arr : arr.slice(0, 1);
+      // Same size/type policy as deferred mode — oversized files must not
+      // reach the server just because the entity already exists.
+      const { accepted, errors } = validateFiles(queue);
+      if (errors.length > 0) onUploadError?.(errors.join(" "));
+      if (accepted.length === 0) return;
       if (!multiple) setUploads([]);
-      for (const f of queue) void startUpload(f);
+      enqueueUploads(accepted);
       return;
     }
 
@@ -290,7 +325,7 @@ export function FormFileUpload({
           Drop files here or click to upload
         </span>
         <span className="body-caption text-[var(--color-text-tertiary)]">
-          Max {maxSizeMb} MB per file
+          Max {effectiveMaxSizeMb} MB per file
         </span>
       </button>
 
@@ -319,7 +354,7 @@ export function FormFileUpload({
 
       {deferred && deferredFiles.length > 0 && (
         <ul className="space-y-4">
-          {deferredFiles.map(({ key, file }) => (
+          {deferredFiles.map(({ key, file, classificationLabel }) => (
             <li
               key={key}
               className="flex items-center gap-8 border border-[var(--color-border-tertiary)] px-12 py-8"
@@ -329,8 +364,15 @@ export function FormFileUpload({
                 weight="bold"
                 className="shrink-0 text-[var(--color-text-tertiary)]"
               />
-              <span className="body-small truncate text-[var(--color-text-primary)]">
-                {file.name}
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="body-small truncate text-[var(--color-text-primary)]">
+                  {file.name}
+                </span>
+                {classificationLabel && (
+                  <span className="body-caption text-[var(--color-text-tertiary)]">
+                    {classificationLabel}
+                  </span>
+                )}
               </span>
               <span className="body-caption shrink-0 text-[var(--color-text-tertiary)]">
                 {formatFileSize(file.size)}
@@ -341,7 +383,7 @@ export function FormFileUpload({
                 size="icon"
                 disabled={disabled}
                 onClick={() => onDeferredRemove?.(key)}
-                className="ml-auto h-24 w-24 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]"
+                className="h-24 w-24 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-signal-red)]"
                 aria-label={`Remove ${file.name}`}
               >
                 <XIcon size={14} weight="bold" />

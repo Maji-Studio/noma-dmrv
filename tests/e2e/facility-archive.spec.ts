@@ -81,13 +81,20 @@ test.describe("Facility cascading archive", () => {
     await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
 
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByText("Archive Facility")).toBeVisible();
+    // The dialog names the target facility (QA 2026-07-21 F4)
+    await expect(
+      dialog.getByText(`Archive facility ${facility.code}`),
+    ).toBeVisible();
     // Impact preview lists the attached bin
     await expect(dialog.getByText(/1 storage bin/)).toBeVisible({
       timeout: 30000,
     });
+    // A populated facility requires typing its code before Archive enables
     const archiveButton = dialog.getByRole("button", { name: "Archive", exact: true });
     await expect(archiveButton).not.toHaveAttribute("class", /color-signal-red/);
+    await expect(archiveButton).toBeDisabled();
+    await dialog.getByPlaceholder(facility.code).fill(facility.code);
+    await expect(archiveButton).toBeEnabled();
     await archiveButton.click();
 
     // --- Facility disappears from the active list ---

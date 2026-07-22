@@ -176,6 +176,49 @@ test.describe("Order + Delivery UI CRUD", () => {
   });
 
   // -------------------------------------------------------
+  // Deliveries — Deep link (derived side sheet, PR #507)
+  // -------------------------------------------------------
+
+  test("delivery deep link opens the sheet in view and edit mode, and saving closes it", async ({
+    adminPage,
+    seededData,
+    cleanupTestData,
+  }) => {
+    void cleanupTestData;
+    await createDeliveryViaUi(adminPage, seededData);
+
+    // A row click stores the focused delivery id in the URL — harvest it so
+    // the deep links below are cold navigations, not in-page state.
+    await adminPage.locator("table tbody tr").first().click();
+    await adminPage.waitForURL(/delivery=/, { timeout: 8000 });
+    const deliveryId = new URL(adminPage.url()).searchParams.get("delivery");
+    expect(deliveryId).toBeTruthy();
+
+    // Cold view deep link renders the sheet without a mode param.
+    await adminPage.goto(
+      `${DELIVERIES_URL}?facility=${seededData.facility.id}&delivery=${deliveryId}`
+    );
+    await adminPage.waitForSelector('[role="dialog"]', { timeout: 15000 });
+
+    // Cold edit deep link opens straight into the edit form; saving closes
+    // the sheet and clears the deep-link params (derived displaySideSheet).
+    await adminPage.goto(
+      `${DELIVERIES_URL}?facility=${seededData.facility.id}&delivery=${deliveryId}&mode=edit`
+    );
+    await adminPage.waitForSelector('[role="dialog"]', { timeout: 15000 });
+    const saveButton = adminPage.locator(
+      'button[type="submit"]:has-text("Save Changes")'
+    );
+    await expect(saveButton).toBeVisible({ timeout: 8000 });
+    await saveButton.click();
+    await adminPage.waitForSelector('[role="dialog"]', {
+      state: "hidden",
+      timeout: 10000,
+    });
+    await expect(adminPage).not.toHaveURL(/delivery=/, { timeout: 8000 });
+  });
+
+  // -------------------------------------------------------
   // Deliveries — Read (list verification)
   // -------------------------------------------------------
 

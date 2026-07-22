@@ -98,6 +98,14 @@ export interface DurabilityBatchSummaryInput extends CreditBatchDurabilityInput 
   facilityTimezone?: string | null;
   /** The batch's process's CURRENT sampling method (default Method A). */
   samplingMethod: SamplingMethod;
+  /**
+   * The process's Method-B unlock instant, or null while still on Method A. Once
+   * set, the baseline window is CLOSED — a future-dated sample can never join the
+   * ≥30 Method-A baseline (mirrors the server counter's gate in
+   * `production-processes.ts`). Optional so light fixtures stay minimal (null =
+   * window open).
+   */
+  methodBUnlockedAt?: Date | null;
   /** Member runs (id + code + dry mass) — code labels the replicate provenance. */
   runs: Array<{ id: string; code: string; biocharDryMassKg: number | null }>;
   /**
@@ -171,6 +179,23 @@ export interface DurabilityBatchSummary {
   submitted: DurabilitySummarySubmitted;
   /** Per-replicate display rows (raw lab chemistry), in pooled order. */
   replicates: DurabilitySummaryReplicate[];
+  /**
+   * Future-dated replicates, resolved SERVER-SIDE against the facility-local day
+   * (so the surfaces never disagree with the process baseline counter across
+   * timezones). `countsTowardBaseline` is false once the process has unlocked
+   * Method B — post-unlock a future sample can never join the ≥30 baseline, so
+   * the surface drops the "counts toward the baseline" claim.
+   */
+  future: DurabilitySummaryFuture;
+}
+
+export interface DurabilitySummaryFuture {
+  /** Replicates whose facility-local sampling day is after today. */
+  count: number;
+  /** Earliest such day (YYYY-MM-DD), or null when none. */
+  earliestDay: string | null;
+  /** Whether those future samples will still join the Method-B baseline. */
+  countsTowardBaseline: boolean;
 }
 
 /**
@@ -183,6 +208,7 @@ export interface DurabilityBatchSummary {
 export function buildDurabilityBatchSummaries(
   batches: DurabilityBatchSummaryInput[],
   attributionByRunId?: Map<string, number>,
+  asOfDate: Date = new Date(),
 ): DurabilityBatchSummary[] {
   const perBatch = buildPerBatchDurabilityData(batches, attributionByRunId);
   const perBatchById = new Map(perBatch.map((dp) => [dp.creditBatchId, dp]));
@@ -236,6 +262,23 @@ export function buildDurabilityBatchSummaries(
         ),
     );
 
+    // Classify future-dated samples on the SAME exact-instant clock the server
+    // baseline counter uses (`samplingTime >= asOfDate`), so a sample dated later
+    // the same facility-local day is flagged here exactly as it is excluded there
+    // — a day-only cut would silently drop it. The displayed cue stays the
+    // facility-local calendar day. Once Method B is unlocked the window is closed,
+    // so those samples never re-enter the baseline.
+    const futureSamples = summarizeFutureSamples(
+      batch.samples,
+      asOfDate,
+      batch.facilityTimezone,
+    );
+    const future: DurabilitySummaryFuture = {
+      count: futureSamples.count,
+      earliestDay: futureSamples.earliestDay,
+      countsTowardBaseline: batch.methodBUnlockedAt == null,
+    };
+
     return {
       creditBatchId: batch.creditBatchId,
       creditBatchCode: batch.creditBatchCode,
@@ -263,8 +306,49 @@ export function buildDurabilityBatchSummaries(
         productMassKg: dp?.productMassKg ?? 0,
       },
       replicates,
+      future,
     };
   });
+}
+
+/** Coerce a raw sampling timestamp (Date or ISO string) to an instant. */
+function toInstant(samplingTime: unknown): Date | null {
+  if (samplingTime instanceof Date) {
+    return Number.isNaN(samplingTime.getTime()) ? null : samplingTime;
+  }
+  if (typeof samplingTime === "string" && samplingTime.length > 0) {
+    const parsed = new Date(samplingTime);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
+/**
+ * Count the samples whose sampling INSTANT is at or after `asOfDate` — the exact
+ * same clock the server baseline counter uses (`samplingTime >= asOfDate` in
+ * `countEligibleSamplesByProcess`), so a sample dated later the same calendar day
+ * is flagged here exactly as it is excluded there (a day-only cut would miss it).
+ * `earliestDay` is that sample's facility-local calendar day, for display. These
+ * samples DO satisfy the batch's chemistry roll-up but don't yet count toward the
+ * process's Method-B baseline (QA 2026-07-21 F1) — advisory only; the
+ * authoritative exclusion happens server-side.
+ */
+export function summarizeFutureSamples(
+  samples: ReadonlyArray<{ samplingTime: unknown }>,
+  asOfDate: Date,
+  facilityTimezone: string | null | undefined,
+): { count: number; earliestDay: string | null } {
+  const futureInstants = samples
+    .map((s) => toInstant(s.samplingTime))
+    .filter((instant): instant is Date => instant != null && instant >= asOfDate)
+    .sort((a, b) => a.getTime() - b.getTime());
+  return {
+    count: futureInstants.length,
+    earliestDay:
+      futureInstants.length > 0
+        ? formatDayInZone(futureInstants[0], facilityTimezone)
+        : null,
+  };
 }
 
 function buildReplicate(

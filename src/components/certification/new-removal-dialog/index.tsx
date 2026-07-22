@@ -169,7 +169,7 @@ function WizardBody({
         {step === "select" && (
           <SelectBatchesStep
             batches={selectable.data?.batches ?? []}
-            facilitySetupComplete={facilitySetupComplete}
+            facilitySetupGaps={selectable.data?.facilitySetupGaps ?? []}
             facilityId={facilityId}
             selectedIds={selectedIds}
             onToggle={toggle}

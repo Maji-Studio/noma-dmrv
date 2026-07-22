@@ -5,8 +5,12 @@
  * pgEnum in `@/db/schema/common` (kept literal there so the client bundle
  * never imports drizzle for runtime values).
  *
- * Invariant: a null distance has a null source; a present distance written
- * without explicit provenance was typed by the operator → `manual`.
+ * General invariant: a null distance has a null source; a present distance
+ * written without explicit provenance was typed by the operator → `manual`.
+ * Delivery trips have one explicit exception: documentary provenance may be
+ * stored against the delivery while its distance override remains null, so the
+ * trip can evidence the inherited customer-location distance without mutating
+ * that shared location. See `resolveDeliveryDistanceSource`.
  * Orthogonal to a transport leg's `isDerived` flag, route geometry, and the
  * transport calculation method.
  */

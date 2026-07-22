@@ -3,6 +3,7 @@ import { formatLocalDate } from "@/lib/date-utils";
 import {
   createProductionRunSchema,
   productionRunFormSchema,
+  updateProductionRunSchema,
 } from "@/schemas/production-runs";
 import { runWindowsConflict } from "@/data-access/production-runs/overlap";
 
@@ -87,6 +88,16 @@ describe("production run window validation", () => {
   it("requires an end time for a complete run", () => {
     const parsed = createProductionRunSchema.safeParse({ ...base, status: "complete" });
     expect(parsed.success).toBe(false);
+  });
+
+  it("accepts an explicit null end time in an update payload", () => {
+    const parsed = updateProductionRunSchema.parse({
+      productionRunId: "33333333-3333-4333-8333-333333333333",
+      status: "running",
+      endTime: null,
+    });
+
+    expect(parsed.endTime).toBeNull();
   });
 });
 

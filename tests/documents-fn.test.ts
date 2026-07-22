@@ -8,6 +8,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SafeError } from "@/lib/errors";
+import { DOCUMENT_UPLOAD_MAX_BYTES } from "@/lib/documents/upload-policy";
 import { makeTestOrgContext } from "./helpers/test-org";
 
 vi.mock("@/lib/auth/server", () => ({
@@ -157,16 +158,30 @@ describe("requestUpload", () => {
     expect(insertDocument).not.toHaveBeenCalled();
   });
 
-  it("rejects size over per-documentType cap", async () => {
+  it("rejects a file one byte over the 10 MB cap", async () => {
     const result = await requestUpload({
       ...baseInput,
-      sizeBytes: 200 * 1024 * 1024,
+      sizeBytes: DOCUMENT_UPLOAD_MAX_BYTES + 1,
     });
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error).toMatch(/exceeds/);
     }
     expect(insertDocument).not.toHaveBeenCalled();
+  });
+
+  it("accepts a file exactly at the 10 MB cap", async () => {
+    vi.mocked(insertDocument).mockResolvedValueOnce({
+      id: "11111111-2222-4333-8444-555555555555",
+      uploadStatus: "pending",
+    } as never);
+
+    const result = await requestUpload({
+      ...baseInput,
+      sizeBytes: DOCUMENT_UPLOAD_MAX_BYTES,
+    });
+
+    expect(result.success).toBe(true);
   });
 
   it("inserts pending row and returns presigned URL on happy path", async () => {
@@ -263,7 +278,11 @@ describe("confirmUpload", () => {
 
   it("flips row to uploaded when head verifies", async () => {
     vi.mocked(getDocumentById).mockResolvedValueOnce(pendingRow as never);
-    provider.simulatePut(pendingRow.storageKey, 1024, "application/pdf");
+    provider.simulatePut(
+      pendingRow.storageKey,
+      DOCUMENT_UPLOAD_MAX_BYTES,
+      "application/pdf",
+    );
     vi.mocked(updateDocument).mockResolvedValueOnce({
       ...pendingRow,
       uploadStatus: "uploaded",
@@ -277,7 +296,7 @@ describe("confirmUpload", () => {
       pendingRow.id,
       expect.objectContaining({
         uploadStatus: "uploaded",
-        fileSizeBytes: 1024,
+        fileSizeBytes: DOCUMENT_UPLOAD_MAX_BYTES,
         mimeType: "application/pdf",
       })
     );
@@ -286,8 +305,11 @@ describe("confirmUpload", () => {
 
   it("rejects and deletes oversized objects", async () => {
     vi.mocked(getDocumentById).mockResolvedValueOnce(pendingRow as never);
-    // lab_report cap is 50MB; put 60MB instead.
-    provider.simulatePut(pendingRow.storageKey, 60 * 1024 * 1024, "application/pdf");
+    provider.simulatePut(
+      pendingRow.storageKey,
+      DOCUMENT_UPLOAD_MAX_BYTES + 1,
+      "application/pdf",
+    );
     vi.mocked(updateDocument).mockResolvedValueOnce({
       ...pendingRow,
       uploadStatus: "failed",
