@@ -38,7 +38,7 @@ import {
   type ValueWithStdDev,
 } from "@/lib/isometric/utils/durability-aggregation";
 import { countDistinctProvenance } from "./durability-submission-gates";
-import type { SamplingMethod } from "./sampling-requirements";
+import type { CreditBatchSampling } from "@/schemas/credit-batches";
 
 // ISO calendar day (YYYY-MM-DD) of a sampling timestamp, resolved in the
 // facility's local timezone so this readiness surface classifies a sampling
@@ -96,16 +96,8 @@ export interface DurabilityBatchSummaryInput extends CreditBatchDurabilityInput 
    * guard and submission gate. Absent (UTC fallback) only for light fixtures.
    */
   facilityTimezone?: string | null;
-  /** The batch's process's CURRENT sampling method (default Method A). */
-  samplingMethod: SamplingMethod;
-  /**
-   * The process's Method-B unlock instant, or null while still on Method A. Once
-   * set, the baseline window is CLOSED — a future-dated sample can never join the
-   * ≥30 Method-A baseline (mirrors the server counter's gate in
-   * `production-processes.ts`). Optional so light fixtures stay minimal (null =
-   * window open).
-   */
-  methodBUnlockedAt?: Date | null;
+  /** Immutable sampled/unsampled choice stored on the credit batch. */
+  sampling: CreditBatchSampling;
   /** Member runs (id + code + dry mass) — code labels the replicate provenance. */
   runs: Array<{ id: string; code: string; biocharDryMassKg: number | null }>;
   /**
@@ -160,7 +152,7 @@ export interface DurabilitySummarySubmitted {
 export interface DurabilityBatchSummary {
   creditBatchId: string;
   creditBatchCode: string;
-  samplingMethod: SamplingMethod;
+  sampling: CreditBatchSampling;
   /** The batch's declared durability tier — samples inherit it (issue #309). */
   durabilityOption: "200_year" | "1000_year";
   /** Raw lab sample rows pooled on this batch (across member runs/days). */
@@ -182,9 +174,8 @@ export interface DurabilityBatchSummary {
   /**
    * Future-dated replicates, resolved SERVER-SIDE against the facility-local day
    * (so the surfaces never disagree with the process baseline counter across
-   * timezones). `countsTowardBaseline` is false once the process has unlocked
-   * Method B — post-unlock a future sample can never join the ≥30 baseline, so
-   * the surface drops the "counts toward the baseline" claim.
+   * timezones). Only samples attached to a batch stored as sampled can join the
+   * baseline.
    */
   future: DurabilitySummaryFuture;
 }
@@ -266,8 +257,7 @@ export function buildDurabilityBatchSummaries(
     // baseline counter uses (`samplingTime >= asOfDate`), so a sample dated later
     // the same facility-local day is flagged here exactly as it is excluded there
     // — a day-only cut would silently drop it. The displayed cue stays the
-    // facility-local calendar day. Once Method B is unlocked the window is closed,
-    // so those samples never re-enter the baseline.
+    // facility-local calendar day.
     const futureSamples = summarizeFutureSamples(
       batch.samples,
       asOfDate,
@@ -276,13 +266,13 @@ export function buildDurabilityBatchSummaries(
     const future: DurabilitySummaryFuture = {
       count: futureSamples.count,
       earliestDay: futureSamples.earliestDay,
-      countsTowardBaseline: batch.methodBUnlockedAt == null,
+      countsTowardBaseline: batch.sampling === "sampled",
     };
 
     return {
       creditBatchId: batch.creditBatchId,
       creditBatchCode: batch.creditBatchCode,
-      samplingMethod: batch.samplingMethod,
+      sampling: batch.sampling,
       durabilityOption: batch.durabilityOption ?? "200_year",
       sampleCount: batch.samples.length,
       usableReplicateCount: eligibility.usableReplicateCount,

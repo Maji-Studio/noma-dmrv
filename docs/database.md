@@ -95,11 +95,13 @@ A `staging` → `main` PR labelled `first-production-deployment` adds a second j
 
 `certification_submissions` is the **freeze point** for certification source data. A blocking ledger status (`draft`, `submitted`, `accepted`) on a Removal, telemetry upload, or GHG Statement prevents in-place mutation of upstream production runs, lab samples, deliveries, biochar products, and feedstocks reached through current credit-batch lineage. The guard lives in data-access (`certification-lineage-guards.ts`) so stale UI membership cannot bypass it.
 
-## Sampling Method — DB invariant
+## Method-B storage boundary
 
-Sampling method lives on `production_processes.sampling_method`, keyed `(facility, feedstock)` — see [ADR 0016](./adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md) and [ADR 0017](./adr/0017-method-b-unlock-registry-computes-noma-gates-and-previews.md) for the model and the Method-B gates.
-
-The DB-level backstop that lives nowhere else: migration `0060`'s `enforce_process_method_b_minimum_samples` trigger counts **only pre-unlock baseline samples** (`sampling_time < method_b_unlocked_at`), so post-unlock Method-B samples can't mask a later baseline regression. **Any app-side guard must mirror that same boundary.**
+`production_processes` stores only an epoch plus the all-or-none Method-B
+prerequisites. `credit_batches.sampling` stores the immutable per-batch
+`sampled`/`unsampled` choice. Eligibility is computed in the data-access layer
+from eligible samples since the current epoch; it is not persisted or enforced
+by a database trigger. See [ADR 0022](./adr/0022-method-b-is-computed-eligibility-not-stored-unlock.md).
 
 ## Before Merging Schema Work
 

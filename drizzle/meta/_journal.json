@@ -624,6 +624,13 @@
       "when": 1784719673563,
       "tag": "0088_wise_nehzno",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1784725952640,
+      "tag": "0089_cloudy_night_thrasher",
+      "breakpoints": true
     }
   ]
 }

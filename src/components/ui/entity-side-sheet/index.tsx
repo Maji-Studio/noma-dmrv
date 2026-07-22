@@ -81,6 +81,8 @@ interface EntitySideSheetProps {
   viewModeChildren?: React.ReactNode;
   /** Label for the Edit button shown in view-mode footer */
   editLabel?: string;
+  /** Whether the view-mode footer exposes the edit action. */
+  canEdit?: boolean;
   /** The form component rendered in edit/create mode */
   children: React.ReactNode;
   /** Panel width */
@@ -115,6 +117,7 @@ function EntitySideSheet({
   sections,
   viewModeChildren,
   editLabel = "Edit",
+  canEdit = true,
   children,
   size = "wide",
 }: EntitySideSheetProps) {
@@ -210,13 +213,15 @@ function EntitySideSheet({
         {/* Footer — only in view mode */}
         {isViewMode && (
           <SlideOverPanel.Footer className="justify-stretch">
-            <Button
-              variant="primary"
-              className="flex-1"
-              onClick={() => onModeChange("edit")}
-            >
-              {editLabel}
-            </Button>
+            {canEdit && (
+              <Button
+                variant="primary"
+                className="flex-1"
+                onClick={() => onModeChange("edit")}
+              >
+                {editLabel}
+              </Button>
+            )}
             <SlideOverPanel.Close>
               <Button variant="default" className="flex-1">
                 Close

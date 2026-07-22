@@ -2,7 +2,7 @@
  * Feedstock-type options for searchable entity selection.
  */
 
-import { and, ilike, or, eq, type SQL } from "drizzle-orm";
+import { and, ilike, isNull, or, eq, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { feedstockTypes } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
@@ -17,7 +17,7 @@ export async function getFeedstockTypes(ctx: OrgContext, params: {
   requireOrgScope(ctx);
   const { search, usage, limit } = params;
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [isNull(feedstockTypes.archivedAt)];
   if (search) {
     const searchPattern = `%${search}%`;
     conditions.push(

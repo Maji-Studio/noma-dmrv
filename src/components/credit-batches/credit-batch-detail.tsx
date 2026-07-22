@@ -113,9 +113,11 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
   const handleUpdate = async (data: CreditBatchFormData) => {
     setUpdateError(null);
     try {
+      const { sampling, ...mutableData } = data;
+      void sampling;
       const result = await updateCreditBatch.mutateAsync({
         creditBatchId,
-        ...data,
+        ...mutableData,
       });
       if (result.success) {
         toast.success("Credit batch updated successfully");

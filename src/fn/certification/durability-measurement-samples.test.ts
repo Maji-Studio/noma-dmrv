@@ -27,9 +27,7 @@ function batch(
     samples: [],
     runs: [],
     facilityTimezone: "UTC",
-    productionProcessId: "pp_1",
-    samplingMethod: "method_a",
-    methodBUnlockedAt: null,
+    sampling: "sampled",
     declaredHToCorgRatio: null,
     durabilityOption: "200_year",
     ...overrides,
@@ -101,14 +99,14 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
     expect(soil.body.values[0].value.unit).toBe("degC");
   });
 
-  it("routes an unsampled Method-B batch to the _unsampled blueprint (mass-only), then soil", () => {
+  it("routes an unsampled batch to the _unsampled blueprint (mass-only), then soil", () => {
     const submissions = buildDurabilityMeasurementSampleSubmissions({
       ...common,
       batches: [
         batch({
           creditBatchId: "u",
           creditBatchCode: "CB-U",
-          samplingMethod: "method_b",
+          sampling: "unsampled",
           runs: [{ id: "run-u", code: "R-U", biocharDryMassKg: 1000 }],
         }),
       ],
@@ -124,21 +122,6 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
     expect(pb.body.values).toHaveLength(1);
     expect(pb.body.values[0].measurement_property.quantity_kind).toBe("mass");
     expect(pb.body.values[0].value.magnitude).toBe(1000);
-  });
-
-  it("throws on an unsampled Method-A batch (impossible state — fail closed)", () => {
-    expect(() =>
-      buildDurabilityMeasurementSampleSubmissions({
-        ...common,
-        batches: [
-          batch({
-            creditBatchId: "x",
-            creditBatchCode: "CB-X",
-            samplingMethod: "method_a",
-          }),
-        ],
-      }),
-    ).toThrow(/only valid under Method B/);
   });
 
   it("emits the full per-replicate 1000-year payload without a soil sample", () => {

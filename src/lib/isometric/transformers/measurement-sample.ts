@@ -36,7 +36,7 @@ import type {
   PerBatchDurabilityDatapoint,
   ValueWithStdDev,
 } from "../utils/durability-aggregation";
-import type { SamplingMethod } from "@/lib/certification/sampling-requirements";
+import type { CreditBatchSampling } from "@/schemas/credit-batches";
 
 type CreateMeasurementSampleRequest =
   components["schemas"]["CreateMeasurementSampleRequest"];
@@ -205,23 +205,11 @@ export function toHcMolarRatioPercent(ratio: number): number {
  * batches) submits to `_unsampled` (D6).
  */
 export function selectSequestrationBlueprintKey(args: {
-  sampled: boolean;
-  samplingMethod: SamplingMethod;
+  sampling: CreditBatchSampling;
 }): string {
-  if (args.sampled) return SEQUESTRATION_BLUEPRINT_SAMPLED;
-  // An unsampled batch is only valid under Method B (the registry derives its
-  // carbon + durable fraction from sampled history). `{ sampled: false,
-  // samplingMethod: "method_a" }` is an impossible state — the durability gates
-  // require every Method A run to be sampled — so fail closed rather than route
-  // it to the unsampled blueprint and mask an upstream gate regression.
-  if (args.samplingMethod !== "method_b") {
-    throw new Error(
-      `selectSequestrationBlueprintKey: an unsampled batch is only valid under Method B ` +
-        `(sampled=${args.sampled}, samplingMethod=${args.samplingMethod}). ` +
-        `Verify upstream durability gate evaluation before submission.`,
-    );
-  }
-  return SEQUESTRATION_BLUEPRINT_UNSAMPLED;
+  return args.sampling === "sampled"
+    ? SEQUESTRATION_BLUEPRINT_SAMPLED
+    : SEQUESTRATION_BLUEPRINT_UNSAMPLED;
 }
 
 // ── Measurement-sample body builders ─────────────────────────────────────────

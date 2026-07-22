@@ -13,7 +13,7 @@ import {
   unique,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
-import { creditBatchStatus } from './common';
+import { creditBatchSampling, creditBatchStatus } from './common';
 import { fraction, percent, ppm } from './numeric-families';
 import { facilities } from './facilities';
 import { feedstockTypes } from './feedstock';
@@ -41,17 +41,19 @@ export const creditBatches = pgTable(
     // --- Production-batch identity (ADR 0016) ---
     // The credit batch IS the Isometric protocol production batch: ONE
     // feedstock, facility-scoped, <=1 month under Isometric. feedstockTypeId is
-    // derived from — and asserted single across — the member runs at create /
-    // update time (a run blending >1 feedstock type is rejected loudly).
+    // declared at creation and asserted against every member run.
     feedstockTypeId: uuid('feedstock_type_id')
       .notNull()
       .references(() => feedstockTypes.id),
-    // The (facility, feedstock) sampling-regime campaign this batch is one
-    // <=1-month slice of. Auto-found-or-created when the batch is built.
+    // The (facility, feedstock) process epoch this batch is one <=1-month slice
+    // of. Auto-found-or-created when the batch is built.
     productionProcessId: uuid('production_process_id')
       .notNull()
       .references(() => productionProcesses.id),
     status: creditBatchStatus('status').default('pending').notNull(),
+    // Fixed at creation. Unsampled is accepted only after the current process
+    // clears its live Method-B eligibility gates (ADR 0022).
+    sampling: creditBatchSampling('sampling').default('sampled').notNull(),
 
     // --- Overview ---
     // Reactor traceable via FK chain: CreditBatch → Application → Delivery → BiocharProduct → ProductionRun → Reactor

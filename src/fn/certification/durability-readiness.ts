@@ -53,11 +53,11 @@ function isoSamplingDay(
 }
 
 /**
- * Evaluate the D3 durability gates (eligibility + Method-A-sampled + ≥3
+ * Evaluate the D3 durability gates (eligibility + sampled-choice evidence + ≥3
  * replicates + the distribution warning) over a removal's CREDIT BATCHES
  * (ADR 0016: the credit batch is the protocol production batch and the sampling
- * unit). The sampling method comes off each batch's production process (D6) —
- * no per-reactor lookup. The single computation behind BOTH the readiness
+ * unit). The immutable sampling choice comes from each batch (D6). The single
+ * computation behind BOTH the readiness
  * surfaces and the submit pipeline's hard block — `submitRemoval` throws on this
  * same `blockers` list, so the pre-flight can never disagree with the gate.
  * Returns empty lists when there are no batches (nothing to sample yet). Lives
@@ -72,8 +72,7 @@ export function buildDurabilityGates(
     creditBatchCode: batch.creditBatchCode,
     startDate: batch.startDate,
     endDate: batch.endDate,
-    productionProcessId: batch.productionProcessId,
-    samplingMethod: batch.samplingMethod,
+    sampling: batch.sampling,
     replicates: batch.samples.map((s) => ({
       hToCOrgRatio: s.hToCOrgRatio,
       oToCOrgRatio: s.oToCOrgRatio,

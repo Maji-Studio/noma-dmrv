@@ -1,116 +1,51 @@
 "use server";
 
-import type { ActionResult } from "@/types/actions";
-import { requireOrgFacility } from "@/data-access/utils";
-import { requireOrgRole } from "@/lib/auth/server";
+import { z } from "zod";
 import {
-  getProcessComplianceDrift,
-  getProductionProcessSummariesByFacility,
-  getUnsampledCarbonPreviewForProcess,
-  setProcessOperationalStart,
+  getMethodBEligibility,
+  recordMethodBPrerequisites,
   startNewProductionProcess,
-  unlockMethodBForProcess,
-  type ProcessCarbonPreview,
-  type ProcessComplianceDriftResult,
-  type ProductionProcessSummary,
+  type MethodBEligibility,
 } from "@/data-access/production-processes";
 import type { ProductionProcess } from "@/db/schema";
+import { requireOrgRole } from "@/lib/auth/server";
 import {
-  setOperationalStartSchema,
+  recordMethodBPrerequisitesSchema,
   startNewProcessSchema,
-  unlockMethodBSchema,
 } from "@/schemas/production-process";
+import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
 
-/**
- * Read-only operator view of a facility's production processes (ADR 0017
- * Track 1.5): sampling method, Method-B baseline progress, and cadence status
- * per (facility, feedstock) process.
- */
-export async function getProductionProcessSummariesByFacilityFn(
-  facilityId: string,
-): Promise<ActionResult<ProductionProcessSummary[]>> {
-  return withAction(async (ctx) => {
-    await requireOrgFacility(ctx, facilityId);
-    return getProductionProcessSummariesByFacility(ctx, facilityId);
-  });
-}
+const methodBEligibilityInputSchema = z.object({
+  facilityId: z.uuid(),
+  feedstockTypeId: z.uuid(),
+});
 
-/**
- * Unlock Method B for a production process (ADR 0017 Track 2): flip the sampling
- * method, stamp the unlock, and persist the three captured protocol
- * prerequisites. Validates the input, then the data-access layer re-asserts the
- * ≥30 baseline (app guard + DB trigger backstop).
- */
-export async function unlockMethodBFn(
+export async function getMethodBEligibilityFn(
   input: unknown,
-): Promise<ActionResult<ProductionProcess>> {
+): Promise<ActionResult<MethodBEligibility>> {
   return withAction((ctx) =>
-    unlockMethodBForProcess(ctx, unlockMethodBSchema.parse(input)),
+    getMethodBEligibility(ctx, methodBEligibilityInputSchema.parse(input)),
   );
 }
 
-/**
- * Set a production process's true operational start (`established_at`) so a
- * back-entered facility whose samples predate the auto-created process can reach
- * Method B (ADR 0017, 2026-07-12 amendment). Restricted to org owners/admins
- * (Platform Admins pass); the data-access guard rejects the edit once Method B
- * has unlocked and re-asserts org scope.
- */
-export async function setProcessOperationalStartFn(
+export async function recordMethodBPrerequisitesFn(
   input: unknown,
 ): Promise<ActionResult<ProductionProcess>> {
   return withAction((ctx) => {
     requireOrgRole(ctx, "admin");
-    return setProcessOperationalStart(ctx, setOperationalStartSchema.parse(input));
+    return recordMethodBPrerequisites(
+      ctx,
+      recordMethodBPrerequisitesSchema.parse(input),
+    );
   });
 }
 
-/**
- * Non-authoritative unsampled-carbon preview (Eq 4/5) for a production process
- * (ADR 0017 Track 2, item 6). Optional `asOfDateIso` anchors the eligible window
- * on a specific batch's production date; defaults to now. The registry computes
- * the credited number (D1) — this is an operator preview only.
- */
-export async function getUnsampledCarbonPreviewFn(
-  productionProcessId: string,
-  asOfDateIso?: string,
-): Promise<ActionResult<ProcessCarbonPreview>> {
-  return withAction((ctx) =>
-    getUnsampledCarbonPreviewForProcess(
-      ctx,
-      productionProcessId,
-      asOfDateIso ? new Date(asOfDateIso) : undefined,
-    ),
-  );
-}
-
-/**
- * The two trailing-window compliance counters for a process (ADR 0017 item 7):
- * missed required samplings + sub-3σ measurements. Warn-only.
- */
-export async function getProcessComplianceDriftFn(
-  productionProcessId: string,
-  asOfDateIso?: string,
-): Promise<ActionResult<ProcessComplianceDriftResult>> {
-  return withAction((ctx) =>
-    getProcessComplianceDrift(
-      ctx,
-      productionProcessId,
-      asOfDateIso ? new Date(asOfDateIso) : undefined,
-    ),
-  );
-}
-
-/**
- * Start a new production process (ADR 0017 item 7 / D6): the deliberate,
- * human-confirmed baseline reset back to Method A. Facility + feedstock come from
- * context; an optional note records the reason.
- */
 export async function startNewProductionProcessFn(
   input: unknown,
 ): Promise<ActionResult<ProductionProcess>> {
-  return withAction((ctx) =>
-    startNewProductionProcess(ctx, startNewProcessSchema.parse(input)),
-  );
+  return withAction((ctx) => {
+    requireOrgRole(ctx, "admin");
+    return startNewProductionProcess(ctx, startNewProcessSchema.parse(input));
+  });
 }

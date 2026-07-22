@@ -182,6 +182,7 @@ export interface CreateFeedstockTypeData {
   usage?: "pyrolysis" | "blend";
   description?: string | null;
   registryUrl?: string | null;
+  isometricFeedstockTypeId?: string | null;
 }
 
 /**
@@ -223,6 +224,7 @@ export async function createFeedstockType(
         usage,
         description: data.description ?? null,
         registryUrl: data.registryUrl ?? null,
+        isometricFeedstockTypeId: data.isometricFeedstockTypeId ?? null,
       })
       .returning();
 

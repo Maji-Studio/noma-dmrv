@@ -136,41 +136,57 @@ characterises over time, scoped to a facility. Many monthly **credit
 batches** belong to one production process; it **spans reactors**
 (physical reactor identity is *not* part of its boundary). A feedstock
 change, a pyrolysis-condition change, or a flagged carbon-content
-deviation starts a **new** production process. It owns the
-**Method A / Method B** regime and, under Isometric, the ≥30-sample
-baseline that unlocks Method B. Its established date is the
-operator-entered date on which this process actually began operating,
-not the date its database row was created; samples before that date never
-count toward its baseline. _Avoid_: keying it to a reactor or to a single
-credit batch; using record-creation time as the process start; "campaign",
-"production line" as separate terms.
+deviation starts a **new** production process — a deliberate operator
+decision that resets sample counting to zero. In the system it is a
+lightweight marker per facility and **feedstock type**: when the current
+process started, plus the recorded **Method-B prerequisites**; it stores
+no sampling regime — a batch's sampled/unsampled status is chosen per
+**credit batch**. It only matters when Isometric is the certifier. Its
+start date is the operator-entered date on which the process actually
+began operating, not the date its database row was created; samples
+before that date never count. _Avoid_: keying it to a reactor or to a
+single credit batch; using record-creation time as the process start;
+"campaign", "production line" as separate terms.
 
 **Method A / Method B**:
 The two biochar **sampling-frequency** regimes (Isometric Biochar
-Protocol §8.3.1), declared per **production process**. The sampling unit
-is the **credit batch** (the protocol production batch) — *not* the
-production run. *Method A* characterises **every** credit batch; *Method
-B* is a reduced cadence (≥1 sampled batch per 10) permitted only after a
-production process has accumulated a ≥30-sample Method-A baseline, after
-which the registry estimates each unsampled batch conservatively from
-that process's samples in the prior 6 months. A credit batch's regime is
-fixed when its production period begins: a later Method-B unlock never
-reclassifies an in-progress or historical batch. These name a *sampling*
-cadence only — they do **not** name any durability or persistence model.
-_Avoid_: declaring the method per reactor; the production run as the
+Protocol §8.3.1). The sampling unit is the **credit batch** (the
+protocol production batch) — *not* the production run. *Method A*
+characterises **every** credit batch; *Method B* is a reduced cadence
+(≥1 sampled batch per 10) under which the registry estimates each
+unsampled batch conservatively from the process's samples in the prior
+6 months. The regime is not stored anywhere: each credit batch is
+simply **sampled or unsampled**, chosen at batch creation, and
+*unsampled* is selectable only once the process's **Method-B baseline**
+is met and its **Method-B prerequisites** are recorded. A batch's
+choice is fixed when its production period begins: becoming
+Method-B-eligible later never reclassifies an in-progress or historical
+batch. These name a *sampling* cadence only — they do **not** name any
+durability or persistence model. _Avoid_: declaring the method per
+reactor or per process as stored state; the production run as the
 sampling unit; treating Method A/B as durability methods;
 "representative method"; retroactively applying Method B.
 
 **Method-B baseline**:
-The ≥30 qualifying Method-A **Samples** from one **production process**
-that permit its deliberate Method-B unlock. They must be dated on or after
-the process's operational established date and before its unlock. This is an
-unlock prerequisite, not the rolling 6-month population used to estimate a
-particular unsampled batch. The baseline-floor invariant may prevent deleting,
-moving, or redating a sample even before submission; it does not make ordinary
-draft corrections immutable. _Avoid_: calling the rolling eligible pool the
-baseline; counting rows from before the process began; treating unlock as a
-certification submission.
+The agreed number (floor: 30, set in consultation with Isometric) of
+qualifying Method-A **Samples** from one **production process** that makes
+*unsampled* credit batches selectable. Counted live from samples dated on
+or after the process's start date — not stored as an unlocked state; if
+the count falls back below the threshold, new unsampled batches become
+unavailable while existing batches keep their choice. This is an
+eligibility threshold, not the rolling 6-month population used to
+estimate a particular unsampled batch. _Avoid_: calling the rolling
+eligible pool the baseline; counting samples from before the process
+began; treating eligibility as a stored unlock.
+
+**Method-B prerequisites**:
+The three off-system agreements with Isometric that must be recorded on
+a **production process** before its first *unsampled* credit batch: the
+agreed baseline size (floor 30), the random-sampling-plan/PDD reference,
+and the declared moisture pathway. Recording them is an owner/admin
+action and is what enables Method B for that process — there is no
+separate unlock flag. A sample count can never infer them. _Avoid_:
+"unlock" as a distinct stored state; capturing these per credit batch.
 
 **Eligible sample**:
 A **Sample** counted toward a **production process**'s Method-B
