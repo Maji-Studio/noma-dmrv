@@ -12,6 +12,13 @@ import { useState } from "react";
 import { WarningOctagonIcon } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import {
+  OnboardingWizard,
+  SetupGuide,
+  SetupInProgressState,
+  SetupStrip,
+  useOnboardingGate,
+} from "@/components/onboarding";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useDashboardOverview } from "@/hooks/use-dashboard-overview";
 import type { DashboardRange } from "@/data-access/dashboard-overview";
@@ -29,6 +36,15 @@ export function DashboardView() {
   const { facilityId, selectedFacility } = useFacilityContext();
   const [range, setRange] = useState<DashboardRange>(DEFAULT_RANGE);
   const { data, isLoading, error } = useDashboardOverview(facilityId, range);
+
+  // First-run onboarding decides whether the setup surfaces take over the body
+  // (a fresh facility would render meaningless zeros), recede to a strip, or
+  // stay out of the way once setup is complete. The wizard is always mounted —
+  // the dashboard is the post-login landing.
+  const onboarding = useOnboardingGate(facilityId);
+  const isTakeover =
+    onboarding.mode === "takeover-guide" ||
+    onboarding.mode === "takeover-member";
 
   return (
     <div className="container-max page-shell">
@@ -54,49 +70,91 @@ export function DashboardView() {
               : "Select a facility to monitor its carbon removal."}
           </p>
         </div>
-        {facilityId && <RangeToggle value={range} onChange={setRange} />}
+        {facilityId && !isTakeover && (
+          <RangeToggle value={range} onChange={setRange} />
+        )}
       </header>
 
-      {!facilityId ? (
-        <SelectFacilityEmptyState description="Choose a facility from the sidebar to monitor its carbon removal." />
-      ) : error ? (
-        <EmptyState
-          padding="md"
-          icon={<WarningOctagonIcon size={40} />}
-          title="Couldn't load the dashboard"
-          description={error.message}
-        />
+      {isTakeover ? (
+        onboarding.mode === "takeover-member" ? (
+          <SetupInProgressState />
+        ) : (
+          <SetupGuide
+            progress={onboarding.progress}
+            onStartFacility={onboarding.wizard.open}
+            onCollapse={() => onboarding.setCollapsed(true)}
+          />
+        )
       ) : (
         <>
-          <HeroKpiBand kpis={data?.kpis} isLoading={isLoading} />
-
-          <FlowHero
-            stations={data?.stations}
-            massFlow={data?.massFlow}
-            runningRuns={data?.runningRuns ?? 0}
-            isLoading={isLoading}
-            facilityId={facilityId}
-          />
-
-          {/* Supporting row — only with data; an empty "all clear" list during
-              loading would read as a (false) signal. */}
-          {data && (
-            <div className="grid grid-cols-1 gap-24 lg:grid-cols-2 xl:grid-cols-3">
-              <AttentionList
-                attention={data.attention}
-                structuralGaps={data.structuralGaps}
-                total={data.attentionTotal}
-                flagsTotal={data.attentionFlagsTotal}
-              />
-              <ActivityFeed activity={data.activity} />
-              <CertificationBlock
-                certification={data.certification}
-                facilityId={facilityId}
-              />
-            </div>
+          {onboarding.mode === "strip" && (
+            <SetupStrip
+              progress={onboarding.progress}
+              onExpand={() => onboarding.setCollapsed(false)}
+            />
+          )}
+          {!facilityId ? (
+            <SelectFacilityEmptyState description="Choose a facility from the sidebar to monitor its carbon removal." />
+          ) : error ? (
+            <EmptyState
+              padding="md"
+              icon={<WarningOctagonIcon size={40} />}
+              title="Couldn't load the dashboard"
+              description={error.message}
+            />
+          ) : (
+            <DashboardBody
+              data={data}
+              isLoading={isLoading}
+              facilityId={facilityId}
+            />
           )}
         </>
       )}
+
+      <OnboardingWizard wizard={onboarding.wizard} status={onboarding.status} />
     </div>
+  );
+}
+
+function DashboardBody({
+  data,
+  isLoading,
+  facilityId,
+}: {
+  data: ReturnType<typeof useDashboardOverview>["data"];
+  isLoading: boolean;
+  facilityId: string;
+}) {
+  return (
+    <>
+      <HeroKpiBand kpis={data?.kpis} isLoading={isLoading} />
+
+      <FlowHero
+        stations={data?.stations}
+        massFlow={data?.massFlow}
+        runningRuns={data?.runningRuns ?? 0}
+        isLoading={isLoading}
+        facilityId={facilityId}
+      />
+
+      {/* Supporting row — only with data; an empty "all clear" list during
+          loading would read as a (false) signal. */}
+      {data && (
+        <div className="grid grid-cols-1 gap-24 lg:grid-cols-2 xl:grid-cols-3">
+          <AttentionList
+            attention={data.attention}
+            structuralGaps={data.structuralGaps}
+            total={data.attentionTotal}
+            flagsTotal={data.attentionFlagsTotal}
+          />
+          <ActivityFeed activity={data.activity} />
+          <CertificationBlock
+            certification={data.certification}
+            facilityId={facilityId}
+          />
+        </div>
+      )}
+    </>
   );
 }

@@ -196,6 +196,18 @@ Pure starter residue; org scoping came later via ADR 0010.
 - **To resolve:** UX decision with DEC; adjacent to #253 (cross-facility
   context reconciliation), which any switch-while-open flow must satisfy.
 
+### Onboarding registry picker needs approved Puro Earth / CSI logo assets (`onboarding/registry-picker-logos`, opened 2026-07-22)
+
+- The onboarding plan (`docs/plans/2026-07-21-onboarding.md`) asks the wizard's
+  registry step to show Puro Earth and CSI greyed **with their logos**.
+  `src/components/onboarding/registry-picker.tsx` deliberately renders styled
+  text wordmarks instead: we hold no approved logo files, and bundling
+  unofficial reproductions of third-party registry branding is worse than no
+  logo.
+- **To resolve:** DEC obtains approved logo assets (and usage permission) for
+  both registries, or amends the plan to accept text wordmarks. Swap the
+  wordmark spans in `registry-picker.tsx` for the assets when they arrive.
+
 ### White-label dashboards per Organization (`tenancy/white-label`, opened 2026-06-11)
 
 - **Deferred (2026-06-11 multi-tenancy grilling):** at launch each Organization

@@ -8,29 +8,31 @@
  * All three areas now live on a single stacked page (no tabs) so nothing hides
  * behind a near-empty sub-tab:
  *
- *   Registry connection — Isometric  (everyone reads; admins manage)
- *   Emission estimates               (admin only — ADR 0001/0015)
- *   Environment & health             (admin only — read-only, no secrets)
+ *   Registry credentials — Isometric (org Owners/Admins manage)
+ *   Registry connection — Isometric  (everyone reads; org Owners/Admins manage)
+ *   Emission estimates               (org Owners/Admins — ADR 0001/0015)
+ *   Environment & health             (platform admin only — read-only)
  *
  * Provider-neutral shell (Decision #1): a future registry slots in beside the
  * connection section. Facility comes from context (never a per-form picker).
- * The emissions/environment sections are gated client-side on role via
- * `useIsAdmin()` — a UX gate only; the layout is NEVER `requireAdmin`-ed
- * (operators use the hubs), and every privileged action is
- * `requireAdminAction`-guarded server-side.
+ * Management capability comes from the server-returned facility summary. The
+ * health panel remains a platform-admin surface.
  */
 "use client";
 
 import {
   FactoryIcon,
   GaugeIcon,
+  KeyIcon,
   PlugsIcon,
   PulseIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import type { ElementType, ReactNode } from "react";
 import { EmissionEstimatesForm } from "@/components/admin/emission-estimates-form";
+import { OrganizationCertifierCredentials } from "@/components/organizations/organization-certifier-credentials";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useIsAdmin } from "@/hooks/use-is-admin";
+import { useActiveOrganizationProfile } from "@/hooks/use-organizations";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { CertificationHealthPanel } from "./certification-health-panel";
 import { EnvBanner } from "./env-banner";
@@ -68,6 +70,7 @@ function SettingsSection({
 export function CertificationSettings() {
   const { facilityId, selectedFacility } = useFacilityContext();
   const isAdmin = useIsAdmin();
+  const { data: organization } = useActiveOrganizationProfile();
 
   // DB-only summary — no Isometric API. Provides the page EnvBanner's
   // environment and the emissions section's prefill mapping without pulling the
@@ -75,6 +78,7 @@ export function CertificationSettings() {
   // the viewer can manage).
   const { data: summary, isLoading: summaryLoading } =
     useFacilityCertifierSummary(facilityId ?? "", !!facilityId);
+  const viewerCanManage = summary?.viewerCanManage ?? false;
 
   return (
     <div className="container-max page-shell">
@@ -118,7 +122,20 @@ export function CertificationSettings() {
             isLoading={summaryLoading || !summary}
           />
 
-          {/* Registry connection — Isometric (everyone reads; admins manage) */}
+          {viewerCanManage && organization && (
+            <SettingsSection
+              icon={KeyIcon}
+              title="Registry credentials — Isometric"
+              caption="Write-only organization credentials used to connect to Isometric."
+            >
+              <OrganizationCertifierCredentials
+                organizationId={organization.id}
+                organizationName={organization.name ?? "your organization"}
+              />
+            </SettingsSection>
+          )}
+
+          {/* Registry connection — everyone reads; org Owners/Admins manage. */}
           <SettingsSection
             icon={PlugsIcon}
             title="Registry connection — Isometric"
@@ -127,16 +144,16 @@ export function CertificationSettings() {
             <FacilityCertifierSection
               key={`facility-certifier-${facilityId}`}
               facilityId={facilityId}
-              canManage={isAdmin}
+              canManage={viewerCanManage}
               embedded
             />
           </SettingsSection>
 
-          {/* Emission estimates — admin only (ADR 0001/0015).
+          {/* Emission estimates — org Owner/Admin only (ADR 0001/0015).
               EmissionEstimatesForm seeds its RHF defaultValues from `mapping`
               at mount, so it must not mount until the summary has loaded —
               otherwise saved values render blank. */}
-          {isAdmin && (
+          {viewerCanManage && (
             <SettingsSection
               icon={GaugeIcon}
               title="Emission estimates"

@@ -42,6 +42,10 @@ jobs:
       STORAGE_PROVIDER: local-fs
       STORAGE_LOCAL_FS_ROOT: .storage-e2e
       STORAGE_SIGNING_SECRET: local-storage-signing-secret-local-32
+      # Per-org certifier credentials are AES-encrypted at rest; the self-serve
+      # credentials specs write and read them back, so the app server needs a
+      # valid 32-byte key (64 hex chars). CI-only, hermetic, never a real secret.
+      CREDENTIALS_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
       # Isometric — PR CI is HERMETIC: no sandbox credentials are loaded, so
       # the isometric client is not configured, the app degrades to its
       # not_configured paths, and zero external HTTP calls are made. Specs that
@@ -114,6 +118,7 @@ jobs:
           STORAGE_PROVIDER=${STORAGE_PROVIDER}
           STORAGE_LOCAL_FS_ROOT=${STORAGE_LOCAL_FS_ROOT}
           STORAGE_SIGNING_SECRET=${STORAGE_SIGNING_SECRET}
+          CREDENTIALS_ENCRYPTION_KEY=${CREDENTIALS_ENCRYPTION_KEY}
           EOF
 
       # Migrations, not `drizzle-kit push`: hand-written trigger migrations

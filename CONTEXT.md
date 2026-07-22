@@ -417,6 +417,18 @@ independent lifecycle, assignee, or completion state; it disappears when
 the underlying record changes.
 _Avoid_: todo, task (unless a future manual work system is built).
 
+**Setup step**:
+A computed **first-run provisioning** gap surfaced in the getting-started
+guide while a new facility is being set up — for example a facility with no
+reactor, an unconnected registry, or an org with no supplier yet. Like an
+**Attention item** it has no independent lifecycle, assignee, or completion
+flag: it is derived from record existence and disappears when the underlying
+record is created, so the guide self-clears once the last Setup step is
+satisfied. Distinct from an **Attention item**, which surfaces *operational,
+recurring* MRV gaps (missing evidence, readiness blocks); a Setup step is a
+one-time *setup* gap. _Avoid_: onboarding checklist item with saved per-step
+state; conflating with **Attention item**.
+
 **Plausibility warning**:
 An advisory that recorded values are valid but fall outside an expected
 range or relationship. The record may be saved only with an acknowledgement
