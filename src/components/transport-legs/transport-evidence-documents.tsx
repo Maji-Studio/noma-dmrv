@@ -182,6 +182,8 @@ interface TransportEvidencePanelProps {
   distanceSource?: DistanceSourceValue | null;
   /** Undefined while saved provenance is still loading. */
   persisted?: boolean;
+  /** Omits repeated visible chrome when a parent section already supplies the heading. */
+  embedded?: boolean;
 }
 
 /**
@@ -194,6 +196,7 @@ export function TransportEvidencePanel({
   readOnly = false,
   distanceSource,
   persisted = true,
+  embedded = false,
 }: TransportEvidencePanelProps) {
   const { data: documents } = useDocumentsForEntity(entityType, entityId);
   const acceptedDocumentCount = documents?.filter(
@@ -206,11 +209,20 @@ export function TransportEvidencePanel({
     acceptedDocumentCount,
   });
   return (
-    <section className="space-y-16 border-t border-[var(--color-border-tertiary)] pt-16">
+    <section
+      className={
+        embedded
+          ? "space-y-16"
+          : "space-y-16 border-t border-[var(--color-border-tertiary)] pt-16"
+      }
+      aria-label={embedded ? "Transport evidence" : undefined}
+    >
       <div className="flex items-center gap-6">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Transport evidence
-        </h3>
+        {!embedded && (
+          <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+            Transport evidence
+          </h3>
+        )}
         <CertificationFieldTag
           status={evidenceStatus}
           description="Satisfied when saved provenance is Document and at least one classified file is uploaded"

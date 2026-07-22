@@ -406,6 +406,7 @@ export function BiocharProductList() {
       />
 
       <EntitySideSheet
+        numberedSections
         open={!!displaySideSheet}
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}
         mode={displaySideSheet?.mode ?? "create"}
@@ -425,55 +426,47 @@ export function BiocharProductList() {
               { label: "Density (kg/m3)", value: displaySideSheet.entity.densityKgM3 != null ? `${displaySideSheet.entity.densityKgM3} kg/m³` : null },
             ],
           },
-          ...(() => {
-            const ingredients = fromCompositionJsonb(displaySideSheet.entity.composition);
-            if (ingredients.length === 0) return [];
-            return [{
-              title: "Blend Ingredients",
-              fields: ingredients.map((ingredient) => ({
-                label: ingredient.feedstockTypeName,
-                value: ingredient.massKg != null ? formatMass(ingredient.massKg) : undefined,
-              })),
-            }];
-          })(),
           {
             title: "Destination & Product",
             fields: [
               { label: "Formulation", value: displaySideSheet.entity.formulation?.name ?? PURE_BIOCHAR_LABEL },
-              ...fromCompositionJsonb(displaySideSheet.entity.composition).map((ingredient) => ({
-                label: ingredient.feedstockTypeName,
-                value: (
-                  <EntityDetailValue
-                    entityType="storageLocation"
-                    id={ingredient.storageLocationId}
-                  />
-                ),
-              })),
+              ...fromCompositionJsonb(displaySideSheet.entity.composition).flatMap((ingredient, index) => {
+                const prefix = `Ingredient ${index + 1}`;
+                return [
+                  {
+                    label: `${prefix} · Blend Material`,
+                    value: ingredient.feedstockTypeName,
+                  },
+                  {
+                    label: `${prefix} · Mass`,
+                    value: ingredient.massKg != null ? formatMass(ingredient.massKg) : null,
+                  },
+                  {
+                    label: `${prefix} · Source Bin`,
+                    value: (
+                      <EntityDetailValue
+                        entityType="storageLocation"
+                        id={ingredient.storageLocationId}
+                      />
+                    ),
+                  },
+                ];
+              }),
               { label: "Product Bin", value: displaySideSheet.entity.storageLocation?.name },
             ],
           },
           {
-            title: "Record Metadata",
-            fields: [
-              { label: "Code", value: displaySideSheet.entity.code },
-              { label: "Production Date", value: formatDate(displaySideSheet.entity.productionDate) },
-              { label: "Status", value: displaySideSheet.entity.status },
-              { label: "Facility", value: displaySideSheet.entity.facility?.name },
-            ],
+            title: "Derived Transport",
+            fields: [],
+            content: (
+              <TransportLegsSummary
+                entityType="biochar"
+                entityId={displaySideSheet.entity.id}
+                emptyMessage="Derived automatically from this product's deliveries — record a delivery whose destination has a distance from the facility."
+              />
+            ),
           },
         ] : undefined}
-        viewModeChildren={
-          displaySideSheet?.mode === "view" && displaySideSheet.entity ? (
-            // Read-only: the distribution leg is auto-derived from this
-            // product's deliveries (customer-location distance + delivered
-            // mass) — there is nothing to manage by hand.
-            <TransportLegsSummary
-              entityType="biochar"
-              entityId={displaySideSheet.entity.id}
-              emptyMessage="Derived automatically from this product's deliveries — record a delivery whose destination has a distance from the facility."
-            />
-          ) : null
-        }
       >
         {formError && <div className="mb-24"><ServerError message={formError} /></div>}
         <BiocharProductForm

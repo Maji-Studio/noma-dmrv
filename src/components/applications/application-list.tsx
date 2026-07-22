@@ -556,6 +556,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
 
       {/* Unified Side Sheet */}
       <EntitySideSheet
+        numberedSections
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         onCloseAttempt={confirmCreateClose}
@@ -642,19 +643,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               },
             ],
           }]),
-          {
-            title: "Record Metadata",
-            fields: [
-              { label: "Code", value: sideSheetEntity.code },
-              { label: "Status", value: <StatusBadge status={sideSheetEntity.status} /> },
-              { label: "Customer", value: sideSheetEntity.customerName },
-              { label: "Location", value: sideSheetEntity.locationName },
-              {
-                label: "Certification",
-                value: <EntityCertifyReadinessBadge readiness={deriveEntityCertifyReadiness("application", sideSheetEntity)} />,
-              },
-            ],
-          },
         ] : undefined}
       >
         {(createError || updateError) && <div className="mb-24"><ServerError message={createError || updateError || ""} /></div>}

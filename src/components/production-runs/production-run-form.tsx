@@ -18,6 +18,7 @@ import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-
 import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, FileCsvIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, DryMassInput, FormActions, FormSection, FormSpine, SectionLabel, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
+import { productionRunTelemetryCertification } from "./production-run-detail-fields";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { FormSelect } from "@/components/forms/form-select";
 import {
@@ -319,11 +320,11 @@ export function ProductionRunForm({
     : productionRun?.status === "complete"
       ? "satisfied"
       : "missing";
-  const readingsCertStatus: CertFieldStatus = !isEditMode
-    ? "neutral"
-    : (productionRun?.readingsCount ?? 0) > 0
-      ? "satisfied"
-      : "missing";
+  const readingsCertification = productionRunTelemetryCertification(
+    productionRun?.status ?? "draft",
+    productionRun?.readingsCount ?? 0,
+    isEditMode,
+  );
 
   // Watch facility to filter reactors and storage locations
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
@@ -886,8 +887,8 @@ export function ProductionRunForm({
           id="readingsCsv"
           label="Readings CSV"
           helperText="Upload a readings CSV (timestamp_utc, temperature_c, pressure_bar, plus optional dryer/reactor frequency). A file may span multiple UTC days; rows inside the run's time window populate the readings table below."
-          certifyRequired
-          certifyStatus={readingsCertStatus}
+          certifyRequired={readingsCertification.certifyRequired}
+          certifyStatus={readingsCertification.certifyStatus}
         >
           <div className="space-y-12">
             <ProductionReadingsDocuments

@@ -21,6 +21,7 @@ import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, Form
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
 import {
+  createFeedstockSchema,
   feedstockFormSchema,
   type FeedstockFormData,
 } from "@/schemas/feedstocks";
@@ -88,7 +89,13 @@ export function FeedstockForm({
 
   const defaultValues = {
     facilityId: feedstock?.facilityId ?? contextFacilityId ?? "",
-    deliveryDate: toDateInputValue(feedstock?.deliveryDate ?? null),
+    // New records default to today. Legacy records without a delivery date
+    // must stay empty in edit mode so the form matches read mode and a save
+    // cannot silently introduce today's date.
+    deliveryDate:
+      feedstock && !feedstock.deliveryDate
+        ? undefined
+        : toDateInputValue(feedstock?.deliveryDate ?? null),
     supplierId: feedstock?.supplierId ?? "",
     vehicleId: feedstock?.vehicleId ?? "",
     transportDistanceKm: undefined as number | undefined,
@@ -114,7 +121,9 @@ export function FeedstockForm({
     resetField,
     formState: { errors, dirtyFields },
   } = useForm({
-    resolver: zodResolver(feedstockFormSchema),
+    resolver: zodResolver(
+      isEditMode ? feedstockFormSchema : createFeedstockSchema,
+    ),
     // onTouched so spine markers can flag errors on blur, not only on submit.
     mode: "onTouched",
     defaultValues,

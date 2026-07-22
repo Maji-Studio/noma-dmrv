@@ -33,6 +33,18 @@ const requiredMoisturePercent = requiredNumber().pipe(
     .max(MOISTURE_MAX, "Moisture must be between 0 and 100")
 );
 
+const deliveryDateSchema = z.union([
+  z.date(),
+  z.string().transform((val, ctx) => {
+    const date = new Date(val);
+    if (isNaN(date.getTime())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
+      return z.NEVER;
+    }
+    return date;
+  }),
+]);
+
 // ============================================
 // Bin Allocation Schema
 // ============================================
@@ -57,17 +69,9 @@ export const feedstockFormSchema = z.object({
     .string()
     .min(1, "Please select a facility")
     .uuid("Please select a valid facility"),
-  deliveryDate: z.union([
-    z.date(),
-    z.string().transform((val, ctx) => {
-      const date = new Date(val);
-      if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid date" });
-        return z.NEVER;
-      }
-      return date;
-    }),
-  ]),
+  // Optional only for editing legacy records created before delivery dates.
+  // The create schema below restores the required constraint.
+  deliveryDate: deliveryDateSchema.optional(),
   supplierId: z
     .string()
     .min(1, "Please select a supplier")
@@ -133,7 +137,9 @@ export const feedstockFormSchema = z.object({
 // Server Action Schemas
 // ============================================
 
-export const createFeedstockSchema = feedstockFormSchema;
+export const createFeedstockSchema = feedstockFormSchema.safeExtend({
+  deliveryDate: deliveryDateSchema,
+});
 
 export const updateFeedstockSchema = z.object({
   feedstockId: z.string().uuid("Invalid feedstock ID"),
