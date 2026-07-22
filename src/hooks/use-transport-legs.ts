@@ -4,8 +4,11 @@ import {
   deleteTransportLegFn,
   getTransportLegsForEntityFn,
   updateTransportLegFn,
-  type TransportLegWithEvidence,
 } from "@/fn/transport-legs";
+// Type-only: compile-time import across the fn layer is safe; a runtime
+// re-export from the "use server" module breaks Next's server-actions
+// transform (every export is wrapped as an action reference).
+import type { TransportLegWithEvidence } from "@/data-access/transport-legs";
 import type {
   CreateTransportLegData,
   TransportEntityTypeValue,

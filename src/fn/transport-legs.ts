@@ -20,8 +20,6 @@ import {
 import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { TransportLeg } from "@/db/schema";
 import type { ActionResult } from "@/types/actions";
-
-export type { TransportLegWithEvidence };
 import { z } from "zod";
 
 const listInputSchema = z.object({
