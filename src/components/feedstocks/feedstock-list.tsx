@@ -17,7 +17,7 @@ import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
+import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
@@ -244,69 +244,46 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const updateFeedstock = useUpdateFeedstock();
   const deleteFeedstock = useDeleteFeedstock();
   const toast = useToast();
-  const deferredAttachments = useDeferredAttachments();
-  const [isFlushing, setIsFlushing] = useState(false);
-  // Ids of every row the last create produced (a multi-bin split makes
-  // several). Retained so a post-failure evidence retry re-attaches held files
-  // to every row, not just the first shown in the reopened edit sheet.
-  const [createdFeedstockIds, setCreatedFeedstockIds] = useState<string[]>([]);
-
-  // Handlers
-  const handleCreate = async (data: FeedstockFormData) => {
-    setCreateError(null);
-    try {
+  const createWithEvidence = useCreateWithEvidence({
+    entityType: "feedstock",
+    entityNoun: "Feedstock",
+    executeCreate: async (data: FeedstockFormData) => {
       const result = await createFeedstock.mutateAsync(data);
-      const createdFeedstock = result.feedstocks[0];
-      if (!createdFeedstock) {
+      if (!result.feedstocks[0]) {
         throw new Error("Feedstock creation returned no feedstock");
       }
-      setIsFlushing(true);
-      // A multi-bin split creates one feedstock row per bin, each with its own
-      // auto-derived transport leg — so the held BoL/weighbridge evidence must
-      // attach to every row, not just the first, or rows 2..n ship without it.
-      const createdIds = result.feedstocks.map((feedstock) => feedstock.id);
-      setCreatedFeedstockIds(createdIds);
-      const flushResult = await deferredAttachments.flushMany(
-        "feedstock",
-        createdIds,
-      );
-      if (!flushResult.ok) {
-        setSideSheet({ entity: createdFeedstock, mode: "edit" });
-        setCreateError(
-          `Feedstock created, but ${flushResult.failed.length} ${flushResult.failed.length === 1 ? "attachment" : "attachments"} failed to upload.`,
-        );
-        return;
-      }
-      deferredAttachments.clear();
-      setSideSheet(null);
+      return { entities: result.feedstocks, result };
+    },
+    setError: setCreateError,
+    setUpdateError,
+    getCreateErrorMessage: (error) =>
+      error instanceof Error ? error.message : "Failed to create feedstock",
+    unresolvedUpdateMessage:
+      "Resolve or remove the failed attachments before saving this feedstock.",
+    openEditOnFailure: (feedstock) =>
+      setSideSheet({ entity: feedstock, mode: "edit" }),
+    closeOnSuccess: () => setSideSheet(null),
+    onSuccess: ({ result }) => {
       const transferMessage = buildFeedstockTransferToast(result.feedstocks);
-      const msg = result.warning
+      const message = result.warning
         ? `${transferMessage}. Warning: ${result.warning}`
         : transferMessage;
-      toast.success(msg);
-    } catch (error) {
-      setCreateError(error instanceof Error ? error.message : "Failed to create feedstock");
-    } finally {
-      setIsFlushing(false);
-    }
-  };
+      toast.success(message);
+    },
+  });
+  const {
+    deferredAttachments,
+    createdEntityIds: createdFeedstockIds,
+    isFlushing,
+  } = createWithEvidence;
+
+  // Handlers
+  const handleCreate = createWithEvidence.handleCreate;
 
   const handleUpdate = async (data: FeedstockFormData) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
-    if (
-      deferredAttachments.attachments.some(
-        // Any not-yet-`uploaded` entry is unresolved: "failed" awaits a retry,
-        // and "uploading" means a split-row retry is mid-flight whose state a
-        // save would clobber. Both must block the save.
-        (attachment) => attachment.status !== "uploaded",
-      )
-    ) {
-      setUpdateError(
-        "Resolve or remove the failed attachments before saving this feedstock.",
-      );
-      return;
-    }
+    if (createWithEvidence.guardUpdate()) return;
     try {
       await updateFeedstock.mutateAsync({
         feedstockId: sideSheet.entity.id,
@@ -328,7 +305,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         overrideJustification: data.overrideJustification || null,
         notes: data.notes || null,
       });
-      deferredAttachments.clear();
+      createWithEvidence.reset();
       setSideSheet(null);
       toast.success("Feedstock updated successfully");
     } catch (error) {
@@ -356,8 +333,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     setDeepLinkFocus(null);
     setCreateError(null);
     setUpdateError(null);
-    setCreatedFeedstockIds([]);
-    deferredAttachments.clear();
+    createWithEvidence.reset();
     setSideSheet({ entity: null, mode: "create" });
   };
   const openView = (feedstock: FeedstockWithRelations) => {
@@ -366,7 +342,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     setDeepLinkFocus(null);
     setSideSheet({ entity: feedstock, mode: "view" });
   };
-  const openEdit = (feedstock: FeedstockWithRelations) => { setDeepLinkMode(null); setDeepLinkFocus(null); setCreateError(null); setUpdateError(null); setCreatedFeedstockIds([]); setSideSheet({ entity: feedstock, mode: "edit" }); };
+  const openEdit = (feedstock: FeedstockWithRelations) => { setDeepLinkMode(null); setDeepLinkFocus(null); setCreateError(null); setUpdateError(null); createWithEvidence.reset(); setSideSheet({ entity: feedstock, mode: "edit" }); };
   const closeSideSheet = () => {
     setFocusedFeedstockId(null);
     setDeepLinkMode(null);
@@ -374,21 +350,12 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
-    setCreatedFeedstockIds([]);
-    deferredAttachments.clear();
+    createWithEvidence.reset();
   };
 
-  const unsavedAttachmentCount = deferredAttachments.attachments.filter(
-    (attachment) => attachment.status !== "uploaded",
-  ).length;
   const confirmCreateClose = () => {
-    // An in-flight flush is mid-write; blocking Escape/backdrop/X keeps the
-    // completion handler from mutating a discarded-then-reopened form.
-    if (isFlushing) return false;
-    return (
-      displaySideSheet?.mode !== "create" ||
-      unsavedAttachmentCount === 0 ||
-      window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`)
+    return createWithEvidence.confirmClose(
+      displaySideSheet?.mode === "create",
     );
   };
   const attemptCloseSideSheet = () => {
