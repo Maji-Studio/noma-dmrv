@@ -50,6 +50,14 @@ import { SampleDocumentsPanel } from "./sample-documents-panel";
 
 const READINESS_PREVIEW_LIMIT = 3;
 
+/** One template for the create-failure banner so its two call sites (post-flush
+ * failure and inline retry recount) can never drift apart. Null when resolved. */
+function buildAttachmentFailureBanner(total: number): string | null {
+  return total > 0
+    ? `Sample created, but ${total} ${total === 1 ? "attachment" : "attachments"} failed to save.`
+    : null;
+}
+
 function formatPercent(value: number | null, digits = 2) {
   return value == null ? null : `${value.toFixed(digits)}%`;
 }
@@ -302,7 +310,7 @@ export function SampleList() {
       const failedCount = flushResult.failed.length + failedLegs.length;
       if (failedCount === 0) return;
       return {
-        failureMessage: `Sample created, but ${failedCount} ${failedCount === 1 ? "attachment" : "attachments"} failed to save.`,
+        failureMessage: buildAttachmentFailureBanner(failedCount) ?? undefined,
       };
     },
     onSuccess: ({ result }) =>
@@ -319,12 +327,7 @@ export function SampleList() {
     failedAttachments: number,
     failedLegs: number,
   ) => {
-    const total = failedAttachments + failedLegs;
-    setFormError(
-      total > 0
-        ? `Sample created, but ${total} ${total === 1 ? "attachment" : "attachments"} failed to save.`
-        : null,
-    );
+    setFormError(buildAttachmentFailureBanner(failedAttachments + failedLegs));
   };
 
   const handleRetryDeferredAttachments = async (key?: string) => {
