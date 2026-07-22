@@ -610,6 +610,13 @@
       "when": 1784652725441,
       "tag": "0086_regular_nocturne",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1784704394224,
+      "tag": "0087_broken_fallen_one",
+      "breakpoints": true
     }
   ]
 }

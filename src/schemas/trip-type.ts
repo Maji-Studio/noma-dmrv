@@ -47,7 +47,7 @@ export function roundTripDistanceFactor(
 
 export const TRIP_TYPE_LABELS: Record<TripTypeValue, string> = {
   return: "Return (round trip)",
-  one_way: "One-way (evidenced destination)",
+  one_way: "One-way",
 };
 
 export const TRIP_TYPE_OPTIONS: readonly { value: TripTypeValue; label: string }[] =

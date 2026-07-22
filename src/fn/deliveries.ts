@@ -30,10 +30,10 @@ import { requireOrgContext } from "@/lib/auth/server";
 import {
   createDeliverySchema,
   deleteDeliverySchema,
+  resolveDeliveryDistanceSource,
   updateDeliverySchema,
   deliveryFilterSchema,
 } from "@/schemas/deliveries";
-import { resolveDistanceSource } from "@/schemas/distance-source";
 import type { ActionResult } from "@/types/actions";
 import { toLoggedActionError } from "./action-errors";
 
@@ -255,7 +255,7 @@ export async function createDeliveryFn(
           massDryKg: validated.massDryKg ?? null,
           moistureContentPercent: validated.moistureContentPercent ?? null,
           distanceKmOverride: validated.distanceKmOverride ?? null,
-          distanceSource: resolveDistanceSource(
+          distanceSource: resolveDeliveryDistanceSource(
             validated.distanceKmOverride ?? null,
             validated.distanceSource,
           ),
@@ -313,7 +313,7 @@ export async function updateDeliveryFn(
       massDryKg: validated.massDryKg,
       moistureContentPercent: validated.moistureContentPercent,
       distanceKmOverride: validated.distanceKmOverride,
-      distanceSource: resolveDistanceSource(
+      distanceSource: resolveDeliveryDistanceSource(
         validated.distanceKmOverride,
         validated.distanceSource,
       ),

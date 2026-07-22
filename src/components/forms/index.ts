@@ -18,7 +18,12 @@ export {
 export { SectionLabel } from "./section-label";
 export { FormSection } from "./form-section";
 export { FormSpine } from "./form-spine";
-export { makeCertFieldStatus, type CertFieldStatus } from "./cert-field-status";
+export {
+  isCertFieldValuePresent,
+  makeCertFieldStatus,
+  resolveCertFieldStatus,
+  type CertFieldStatus,
+} from "./cert-field-status";
 export { DistanceCalcField } from "./distance-calc-field";
 
 // Position Picker (map preview + address search + manual lat/lng)

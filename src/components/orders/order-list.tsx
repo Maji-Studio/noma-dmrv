@@ -361,23 +361,33 @@ export function OrderList() {
           sideSheetEntity
             ? [
                 {
-                  title: "General",
+                  title: "Order Information",
                   fields: [
-                    { label: "Code", value: sideSheetEntity.code },
                     { label: "Order Date", value: formatDate(sideSheetEntity.orderDate) },
                   ],
                 },
                 {
-                  title: "Details",
+                  title: "Customer Details",
                   fields: [
                     { label: "Customer", value: sideSheetEntity.customerName },
-                    { label: "Facility", value: sideSheetEntity.facilityName },
-                    { label: "Quantity", value: `${sideSheetEntity.quantityKg.toLocaleString()} kg` },
+                    { label: "Customer location", value: sideSheetEntity.customerLocationName },
                   ],
                 },
                 {
-                  title: "Deliveries",
+                  title: "Product Details",
                   fields: [
+                    { label: "Biochar Product", value: sideSheetEntity.biocharProductCode },
+                    { label: "Packaging", value: <span className="capitalize">{sideSheetEntity.packaging}</span> },
+                    { label: "Quantity (kg)", value: `${sideSheetEntity.quantityKg.toLocaleString()} kg` },
+                    { label: "Value", value: sideSheetEntity.value },
+                    { label: "Currency", value: sideSheetEntity.currency },
+                  ],
+                },
+                {
+                  title: "Fulfillment & Metadata",
+                  fields: [
+                    { label: "Code", value: sideSheetEntity.code },
+                    { label: "Facility", value: sideSheetEntity.facilityName },
                     {
                       label: "Fulfillment",
                       value: (

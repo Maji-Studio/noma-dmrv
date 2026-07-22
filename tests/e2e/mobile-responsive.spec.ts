@@ -172,18 +172,24 @@ test.describe("Mobile responsiveness (390×844)", () => {
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible({ timeout: 15000 });
 
-    // "Code" and "Identifier" are paired in one DetailRow. At desktop they sit
-    // side-by-side (same row); below `sm` the row must stack so a long value
-    // gets the full sheet width instead of a wrapping ~170px half-column. Assert
-    // the Identifier label renders clearly BELOW the Code label — i.e. stacked,
-    // not beside it. (Guards the DetailRow `flex-col sm:flex-row` contract.)
-    const codeBox = await sheet.getByText("Code", { exact: true }).boundingBox();
-    const idBox = await sheet.getByText("Identifier", { exact: true }).boundingBox();
-    expect(codeBox).not.toBeNull();
-    expect(idBox).not.toBeNull();
+    // "Reactor Type" and "Nominal Throughput (tph)" are paired in one
+    // DetailRow (the QA detail-view pass moved Code/Identifier into separate
+    // sections). At desktop they sit side-by-side (same row); below `sm` the
+    // row must stack so a long value gets the full sheet width instead of a
+    // wrapping ~170px half-column. Assert the second label renders clearly
+    // BELOW the first — i.e. stacked, not beside it. (Guards the DetailRow
+    // `flex-col sm:flex-row` contract.)
+    const typeBox = await sheet
+      .getByText("Reactor Type", { exact: true })
+      .boundingBox();
+    const throughputBox = await sheet
+      .getByText("Nominal Throughput (tph)", { exact: true })
+      .boundingBox();
+    expect(typeBox).not.toBeNull();
+    expect(throughputBox).not.toBeNull();
     expect(
-      idBox!.y,
-      "Identifier should stack below Code on a phone, not sit beside it",
-    ).toBeGreaterThan(codeBox!.y + 16);
+      throughputBox!.y,
+      "Nominal Throughput should stack below Reactor Type on a phone, not sit beside it",
+    ).toBeGreaterThan(typeBox!.y + 16);
   });
 });

@@ -48,6 +48,8 @@ export interface StorageLocationLastActivity {
 export interface StorageLocationWithFacility extends StorageLocation {
   facilityCode: string;
   facilityName: string;
+  feedstockTypeName: string | null;
+  formulationName: string | null;
   feedstockInventory: {
     batchCount: number;
     pendingBatchCount: number;
@@ -101,6 +103,8 @@ export type BaseStorageLocationRow = {
   updatedAt: Date;
   facilityCode: string | null;
   facilityName: string | null;
+  feedstockTypeName: string | null;
+  formulationName: string | null;
 };
 
 function splitAggregateLabels(value: string | null): string[] {

@@ -34,6 +34,11 @@ import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { Button } from "@/components/ui/button";
 import { SectionLabel } from "@/components/forms/section-label";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
+import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
+import {
+  isCertFieldValuePresent,
+  resolveCertFieldStatus,
+} from "@/components/forms/cert-field-status";
 
 /* -------------------------------------------------------------------------------------------------
  * DetailSection - Flat section with mono label, mirrors FormSection so the
@@ -95,16 +100,26 @@ interface DetailFieldProps {
   value: React.ReactNode;
   className?: string;
   certifyRequired?: boolean;
+  /** Override the value-derived saved status for composite requirements. */
+  certifyStatus?: CertFieldStatus;
 }
 
-function DetailField({ label, value, className, certifyRequired }: DetailFieldProps) {
+function DetailField({
+  label,
+  value,
+  className,
+  certifyRequired,
+  certifyStatus,
+}: DetailFieldProps) {
   const displayValue = value === null || value === undefined || value === "" ? "—" : value;
+  const resolvedCertifyStatus =
+    certifyStatus ?? resolveCertFieldStatus(true, isCertFieldValuePresent(value));
 
   return (
     <div className={cn("flex flex-1 flex-col gap-4 min-w-0", className)}>
       <span className="flex items-center gap-6 body-small text-[var(--color-text-secondary)]">
         {label}
-        {certifyRequired && <CertificationFieldTag />}
+        {certifyRequired && <CertificationFieldTag status={resolvedCertifyStatus} />}
       </span>
       <span className="body-medium font-medium text-[var(--color-text-primary)] break-words">
         {displayValue}
@@ -122,11 +137,14 @@ export interface DetailPanelField {
   label: string;
   value: React.ReactNode;
   certifyRequired?: boolean;
+  certifyStatus?: CertFieldStatus;
 }
 
 export interface DetailPanelSection {
   title: string;
   fields: DetailPanelField[];
+  /** Optional extension content that belongs inside this mirrored section. */
+  content?: React.ReactNode;
 }
 
 interface EntityDetailPanelProps {
@@ -174,10 +192,12 @@ function EntityDetailPanel({
                       label={field.label}
                       value={field.value}
                       certifyRequired={field.certifyRequired}
+                      certifyStatus={field.certifyStatus}
                     />
                   ))}
                 </DetailRow>
               ))}
+              {section.content}
             </DetailSection>
           ))}
         </SlideOverPanel.Body>

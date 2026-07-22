@@ -598,6 +598,7 @@ function InlineLocationForm({
         id="pending-loc-distance"
         label="One-way distance to facility (per leg, km)"
         certifyRequired={isCertifyFormField("supplierLocation", "distanceFromFacilityKm")}
+        certifyStatus="neutral"
         helperText="One-way road distance from this source location to the facility. Return trips are doubled at emissions time (set the trip type on each feedstock delivery)."
         distanceKm={formData.distanceFromFacilityKm}
         distanceSource={formData.distanceSource}

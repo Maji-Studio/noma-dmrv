@@ -192,10 +192,12 @@ function EntitySideSheet({
                           label={field.label}
                           value={field.value}
                           certifyRequired={field.certifyRequired}
+                          certifyStatus={field.certifyStatus}
                         />
                       ))}
                     </DetailRow>
                   ))}
+                  {section.content}
                 </DetailSection>
               ))}
               {viewModeChildren}

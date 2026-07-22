@@ -21,6 +21,7 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
 import { ApplicationForm } from "./application-form";
+import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import {
   formatApplicationKgFromTons,
@@ -43,9 +44,11 @@ import {
   formatApplicationEvidenceMethod,
   formatApplicationMethod,
   formatApplicationStatus,
+  formatSoilTemperatureSource,
   type ApplicationEvidenceMethod,
   type ApplicationMethod,
   type ApplicationStatus,
+  type SoilTemperatureSource,
 } from "@/schemas/applications";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
@@ -233,6 +236,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       }
       const createdApplication: ApplicationListItem = {
         ...result.data,
+        deliveryCode: "",
         customerName: null,
         locationName: null,
         durabilityOption,
@@ -413,6 +417,9 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       : sideSheetEntity
         ? formatDate(sideSheetEntity.applicationDate)
         : undefined;
+  const sideSheetDelivery = sideSheetEntity
+    ? deliveryOptions.find((delivery) => delivery.id === sideSheetEntity.deliveryId)
+    : undefined;
 
   return (
     <div className="container-max page-shell">
@@ -545,42 +552,19 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         size="wide"
         sections={sideSheetEntity ? [
           {
-            title: "General",
+            title: "Application Details",
             fields: [
-              { label: "Code", value: sideSheetEntity.code },
+              { label: "Application Date", value: formatDate(sideSheetEntity.applicationDate) },
+              { label: "Delivery", value: sideSheetEntity.deliveryCode || sideSheetDelivery?.code || null },
               {
-                label: "Application Date",
-                value: formatDate(sideSheetEntity.applicationDate),
-              },
-              {
-                label: "Status",
-                value: <StatusBadge status={sideSheetEntity.status} />,
-              },
-              {
-                label: "Certification",
-                value: (
-                  <EntityCertifyReadinessBadge
-                    readiness={deriveEntityCertifyReadiness(
-                      "application",
-                      sideSheetEntity,
-                    )}
-                  />
-                ),
-              },
-            ],
-          },
-          {
-            title: "Biochar",
-            fields: [
-              {
-                label: "Biochar Applied",
+                label: "Biochar Applied, Wet (kg)",
                 ...certificationDetailField("application", "biocharAppliedTons"),
                 value: sideSheetEntity.biocharAppliedTons != null
                   ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedTons)
                   : null,
               },
               {
-                label: "Biochar Applied Dry",
+                label: "Biochar Applied Dry (kg)",
                 ...certificationDetailField("application", "biocharAppliedDryTons"),
                 value: sideSheetEntity.biocharAppliedDryTons != null
                   ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedDryTons)
@@ -589,47 +573,71 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             ],
           },
           {
-            title: "Field",
+            title: "Field Details",
             fields: [
-              {
-                label: "Field Size",
-                value: sideSheetEntity.fieldSizeHa != null
-                  ? `${sideSheetEntity.fieldSizeHa.toFixed(2)} ha`
-                  : null,
-              },
+              { label: "Field Size (Ha)", value: sideSheetEntity.fieldSizeHa },
+              { label: "Field Identifier", value: sideSheetEntity.fieldIdentifier },
+              { label: "Crop Type", value: sideSheetEntity.cropType },
               {
                 label: "Application Method",
                 value: sideSheetEntity.applicationMethodType
                   ? formatApplicationMethod(sideSheetEntity.applicationMethodType as ApplicationMethod)
                   : null,
               },
+              { label: "Field position latitude", value: sideSheetEntity.gpsLatitude },
+              { label: "Field position longitude", value: sideSheetEntity.gpsLongitude },
+            ],
+          },
+          {
+            title: "Evidence Method",
+            fields: [
               {
                 label: "Evidence Method",
                 value: formatApplicationEvidenceMethod(
                   (sideSheetEntity.evidenceMethod ?? "visual") as ApplicationEvidenceMethod,
                 ),
               },
-              // Soil temperature is a 200-year-only durable-fraction input —
-              // hidden under 1000-year (ADR 0021). The tier prefers the row's
-              // own join-derived value, falling back to the active facility.
-              ...((sideSheetEntity.durabilityOption ?? durabilityOption) ===
-              "1000_year"
-                ? []
-                : [
-                    {
-                      label: "Soil Temperature",
-                      ...certificationDetailField(
-                        "application",
-                        "soilTemperatureC",
-                      ),
-                      value:
-                        sideSheetEntity.soilTemperatureC != null
-                          ? `${sideSheetEntity.soilTemperatureC} °C`
-                          : null,
-                    },
-                  ]),
-              { label: "Crop Type", value: sideSheetEntity.cropType },
-              { label: "Field Identifier", value: sideSheetEntity.fieldIdentifier },
+              ...((sideSheetEntity.evidenceMethod ?? "visual") === "boundary"
+                ? [{ label: "GIS Boundary Reference", value: sideSheetEntity.gisBoundaryReference }]
+                : []),
+            ],
+            content: (
+              <ApplicationEvidencePanel
+                applicationId={sideSheetEntity.id}
+                mode={(sideSheetEntity.evidenceMethod ?? "visual") as ApplicationEvidenceMethod}
+                readOnly
+              />
+            ),
+          },
+          ...((sideSheetEntity.durabilityOption ?? durabilityOption) === "1000_year" ? [] : [{
+            title: "Soil Temperature",
+            fields: [
+              {
+                label: "Temperature Source",
+                value: sideSheetEntity.soilTemperatureSource
+                  ? formatSoilTemperatureSource(sideSheetEntity.soilTemperatureSource as SoilTemperatureSource)
+                  : null,
+              },
+              {
+                label: "Soil Temperature (°C)",
+                ...certificationDetailField("application", "soilTemperatureC"),
+                value: sideSheetEntity.soilTemperatureC != null
+                  ? `${sideSheetEntity.soilTemperatureC} °C`
+                  : null,
+              },
+            ],
+          }]),
+          {
+            title: "Record Metadata",
+            fields: [
+              { label: "Code", value: sideSheetEntity.code },
+              { label: "Status", value: <StatusBadge status={sideSheetEntity.status} /> },
+              { label: "Customer", value: sideSheetEntity.customerName },
+              { label: "Location", value: sideSheetEntity.locationName },
+              {
+                label: "Certification",
+                value: <EntityCertifyReadinessBadge readiness={deriveEntityCertifyReadiness("application", sideSheetEntity)} />,
+              },
             ],
           },
         ] : undefined}

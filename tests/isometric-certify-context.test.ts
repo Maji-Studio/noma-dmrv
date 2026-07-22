@@ -15,7 +15,7 @@ import { getApplicationsForRuns } from "@/data-access/credit-batch-production-ru
 import { listDocumentsForEntityIds } from "@/data-access/documents";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
 import { getCreditBatchesWithSamples } from "@/data-access/credit-batch-samples";
-import { getTransportLegsForEntities } from "@/data-access/transport-legs";
+import { getTransportLegsWithEvidenceForEntities } from "@/data-access/transport-legs";
 import {
   listComponentBlueprints,
   listProjects,
@@ -66,7 +66,7 @@ vi.mock("@/data-access/documents", () => ({
 }));
 
 vi.mock("@/data-access/transport-legs", () => ({
-  getTransportLegsForEntities: vi.fn(),
+  getTransportLegsWithEvidenceForEntities: vi.fn(),
 }));
 
 vi.mock("@/lib/isometric", async () => {
@@ -90,7 +90,7 @@ const mockedLoadLineageFacts = vi.mocked(loadCreditBatchLineageFacts);
 const mockedGetRuns = vi.mocked(getProductionRunsWithSamples);
 const mockedGetBatchesWithSamples = vi.mocked(getCreditBatchesWithSamples);
 const mockedListDocuments = vi.mocked(listDocumentsForEntityIds);
-const mockedGetLegs = vi.mocked(getTransportLegsForEntities);
+const mockedGetLegs = vi.mocked(getTransportLegsWithEvidenceForEntities);
 const mockedListProjects = vi.mocked(listProjects);
 const mockedListTemplates = vi.mocked(listGhgEntryTemplates);
 const mockedListBlueprints = vi.mocked(listComponentBlueprints);

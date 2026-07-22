@@ -5,6 +5,10 @@ import {
   getTransportLegsForEntityFn,
   updateTransportLegFn,
 } from "@/fn/transport-legs";
+// Type-only: compile-time import across the fn layer is safe; a runtime
+// re-export from the "use server" module breaks Next's server-actions
+// transform (every export is wrapped as an action reference).
+import type { TransportLegWithEvidence } from "@/data-access/transport-legs";
 import type {
   CreateTransportLegData,
   TransportEntityTypeValue,
@@ -12,6 +16,8 @@ import type {
 } from "@/schemas/transport-legs";
 import type { TransportLeg } from "@/db/schema";
 import type { MutationCallbacks } from "./types";
+import { dashboardOverviewKeys } from "./use-dashboard-overview";
+import { certificationKeys } from "./use-certification";
 
 // ============================================
 // Query Keys
@@ -34,7 +40,7 @@ export function useTransportLegsForEntity(
 ) {
   return useQuery({
     queryKey: transportLegKeys.byEntity(entityType, entityId ?? ""),
-    queryFn: async (): Promise<TransportLeg[]> => {
+    queryFn: async (): Promise<TransportLegWithEvidence[]> => {
       if (!entityId) return [];
       const result = await getTransportLegsForEntityFn({ entityType, entityId });
       if (!result.success) {
@@ -70,6 +76,10 @@ export function useCreateTransportLeg(
           variables.entityId,
         ),
       });
+      await queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      // Leg distance/provenance edits change certification readiness; leaving
+      // the certification family fresh shows pre-mutation readiness for 30s.
+      await queryClient.invalidateQueries({ queryKey: certificationKeys.all });
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
@@ -96,6 +106,10 @@ export function useUpdateTransportLeg(
       await queryClient.invalidateQueries({
         queryKey: transportLegKeys.byEntity(entityType, entityId),
       });
+      await queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      // Leg distance/provenance edits change certification readiness; leaving
+      // the certification family fresh shows pre-mutation readiness for 30s.
+      await queryClient.invalidateQueries({ queryKey: certificationKeys.all });
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
@@ -121,6 +135,10 @@ export function useDeleteTransportLeg(
       await queryClient.invalidateQueries({
         queryKey: transportLegKeys.byEntity(entityType, entityId),
       });
+      await queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      // Leg distance/provenance edits change certification readiness; leaving
+      // the certification family fresh shows pre-mutation readiness for 30s.
+      await queryClient.invalidateQueries({ queryKey: certificationKeys.all });
       await callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,

@@ -1,6 +1,7 @@
 /**
  * ProductionSampleTable component
- * Inline table of production samples with inline add/edit form, rendered within production run detail
+ * Production sample table with dialog-based add/edit forms, rendered within
+ * production run detail.
  */
 "use client";
 
@@ -14,6 +15,7 @@ import {
 } from "@/hooks/use-production-samples";
 import { Button } from "@/components/ui";
 import { ServerError } from "@/components/forms";
+import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -53,8 +55,7 @@ export function ProductionSampleTable({
   const deferredAttachments = useDeferredAttachments();
   const [isFlushing, setIsFlushing] = useState(false);
 
-  // Inline form state: "closed" | { mode: "create" } | { mode: "edit", sample }
-  const [inlineForm, setInlineForm] = useState<
+  const [formDialog, setFormDialog] = useState<
     | { open: false }
     | { open: true; sample?: ProductionSampleWithRelations }
   >({ open: false });
@@ -64,21 +65,21 @@ export function ProductionSampleTable({
   const openCreate = () => {
     setFormError(null);
     deferredAttachments.clear();
-    setInlineForm({ open: true });
+    setFormDialog({ open: true });
   };
   const openEdit = (sample: ProductionSampleWithRelations) => {
     setFormError(null);
     deferredAttachments.clear();
-    setInlineForm({ open: true, sample });
+    setFormDialog({ open: true, sample });
   };
   const closeForm = () => {
-    setInlineForm({ open: false });
+    setFormDialog({ open: false });
     setFormError(null);
     deferredAttachments.clear();
   };
 
   const handleRetryDeferredAttachments = async (key?: string) => {
-    if (!inlineForm.open || !inlineForm.sample) return;
+    if (!formDialog.open || !formDialog.sample) return;
     const failedBefore = deferredAttachments.attachments.filter(
       (attachment) => attachment.status === "failed",
     ).length;
@@ -89,7 +90,7 @@ export function ProductionSampleTable({
     try {
       const result = await deferredAttachments.retry(
         "production_sample",
-        [inlineForm.sample.id],
+        [formDialog.sample.id],
         key,
       );
       if (result.ok && (key === undefined || failedBefore === 1)) {
@@ -111,7 +112,7 @@ export function ProductionSampleTable({
   const handleSubmit = async (data: ProductionSampleFormData) => {
     setFormError(null);
     try {
-      if (inlineForm.open && inlineForm.sample) {
+      if (formDialog.open && formDialog.sample) {
         if (
           deferredAttachments.attachments.some(
             (attachment) => attachment.status === "failed",
@@ -123,7 +124,7 @@ export function ProductionSampleTable({
           return;
         }
         await updateSample.mutateAsync({
-          productionSampleId: inlineForm.sample.id,
+          productionSampleId: formDialog.sample.id,
           ...data,
         });
         toast.success("Sample updated");
@@ -135,7 +136,7 @@ export function ProductionSampleTable({
           createdSample.id,
         );
         if (!flushResult.ok) {
-          setInlineForm({ open: true, sample: createdSample });
+          setFormDialog({ open: true, sample: createdSample });
           setFormError(
             `Production sample created, but ${flushResult.failed.length} ${flushResult.failed.length === 1 ? "attachment" : "attachments"} failed to upload.`,
           );
@@ -166,6 +167,9 @@ export function ProductionSampleTable({
 
   const isSubmitting =
     createSample.isPending || updateSample.isPending || isFlushing;
+  const closeDialog = () => {
+    if (!isSubmitting) closeForm();
+  };
 
   // NOTE: no certification replicate chip here. These are in-process production
   // samples; the ≥3-replicate / eligibility certification signal is judged on the
@@ -180,7 +184,7 @@ export function ProductionSampleTable({
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
           Production Samples
         </h3>
-        {!readOnly && !inlineForm.open && (
+        {!readOnly && !formDialog.open && (
           <Button variant="default" size="small" onClick={openCreate}>
             <PlusIcon size={16} weight="bold" />
             Add Sample
@@ -194,7 +198,7 @@ export function ProductionSampleTable({
       {/* Table */}
       {isLoading ? (
         <TableSkeleton columns={readOnly ? 7 : 8} rows={3} />
-      ) : !samples?.length && !inlineForm.open ? (
+      ) : !samples?.length && !formDialog.open ? (
         <p className="body-small text-[var(--color-text-tertiary)] py-16">
           {readOnly
             ? "No samples recorded yet."
@@ -240,7 +244,7 @@ export function ProductionSampleTable({
                           size="icon"
                           onClick={() => openEdit(s)}
                           aria-label="Edit sample"
-                          disabled={inlineForm.open}
+                          disabled={formDialog.open}
                         >
                           <PencilIcon size={16} />
                         </Button>
@@ -249,7 +253,7 @@ export function ProductionSampleTable({
                           size="icon"
                           onClick={() => setDeletingId(s.id)}
                           aria-label="Delete sample"
-                          disabled={inlineForm.open}
+                          disabled={formDialog.open}
                         >
                           <TrashIcon size={16} />
                         </Button>
@@ -263,25 +267,33 @@ export function ProductionSampleTable({
         </div>
       ) : null}
 
-      {/* Inline Add/Edit Form */}
-      {!readOnly && inlineForm.open && (
-        <div className="border border-[var(--color-border-primary)] bg-[var(--color-background-white)] p-24">
-          <h4 className="title-heading-4 mb-16">
-            {inlineForm.sample ? "Edit Sample" : "Add Production Sample"}
-          </h4>
-          {formError && <div className="mb-16"><ServerError message={formError} /></div>}
-          <ProductionSampleForm
-            key={inlineForm.sample?.id ?? "create"}
-            productionRunId={productionRunId}
-            sample={inlineForm.sample}
-            onSubmit={handleSubmit}
-            onCancel={closeForm}
-            isSubmitting={isSubmitting}
-            deferredAttachments={deferredAttachments}
-            onRetryDeferredAttachment={handleRetryDeferredAttachments}
-            onRemoveDeferredAttachment={handleRemoveDeferredAttachment}
-          />
-        </div>
+      {!readOnly && (
+        <QuickAddDialogShell
+          isOpen={formDialog.open}
+          onClose={closeDialog}
+          title={
+            formDialog.open && formDialog.sample
+              ? "Edit Production Sample"
+              : "Add Production Sample"
+          }
+          error={formError}
+          width="lg"
+          testId="production-sample-dialog"
+        >
+          {formDialog.open && (
+            <ProductionSampleForm
+              key={formDialog.sample?.id ?? "create"}
+              productionRunId={productionRunId}
+              sample={formDialog.sample}
+              onSubmit={handleSubmit}
+              onCancel={closeDialog}
+              isSubmitting={isSubmitting}
+              deferredAttachments={deferredAttachments}
+              onRetryDeferredAttachment={handleRetryDeferredAttachments}
+              onRemoveDeferredAttachment={handleRemoveDeferredAttachment}
+            />
+          )}
+        </QuickAddDialogShell>
       )}
 
       {/* Delete Confirmation */}

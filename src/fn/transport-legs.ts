@@ -4,6 +4,7 @@ import {
   createTransportLeg,
   deleteTransportLeg,
   getTransportLegsForEntity,
+  type TransportLegWithEvidence,
   updateTransportLeg,
   type TransportEntityType,
 } from "@/data-access/transport-legs";
@@ -29,7 +30,7 @@ const listInputSchema = z.object({
 export async function getTransportLegsForEntityFn(input: {
   entityType: TransportEntityType;
   entityId: string;
-}): Promise<ActionResult<TransportLeg[]>> {
+}): Promise<ActionResult<TransportLegWithEvidence[]>> {
   return withAction(async (ctx) => {
     const { entityType, entityId } = listInputSchema.parse(input);
     return getTransportLegsForEntity(ctx, entityType, entityId);

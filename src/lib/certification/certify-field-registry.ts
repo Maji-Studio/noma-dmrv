@@ -36,7 +36,13 @@ export interface CertifyFieldCondition {
 export type CertifyFieldSatisfaction =
   | { mode: "field" }
   | { mode: "allOf"; fields: readonly string[]; label: string }
-  | { mode: "anyOf"; fields: readonly string[]; label: string };
+  | { mode: "anyOf"; fields: readonly string[]; label: string }
+  | {
+      mode: "equals";
+      field: string;
+      value: string | number | boolean | null;
+      label: string;
+    };
 
 export interface CertifyFieldDescriptor {
   key: string;
@@ -274,7 +280,23 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       // The derived leg's distance resolves form override → supplier default
       // location → supplier-level distance; badge the form-side override.
       formFields: ["transportDistanceKm"],
+      satisfaction: {
+        mode: "anyOf",
+        fields: ["transportDistanceKm"],
+        label: "Transport distance",
+      },
       mappings: [mapping("feedstockTransportMassDistanceTonneKm")],
+    },
+    {
+      key: "transportDistanceProvenance",
+      label: "Transport distance provenance",
+      kind: "derived",
+      satisfaction: {
+        mode: "equals",
+        field: "transportDistanceSource",
+        value: "document",
+        label: "Distance source marked Document",
+      },
     },
   ],
   transportLeg: [
@@ -289,6 +311,18 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       label: "Load mass",
       kind: "entered",
       mappings: transportMassDistanceMappings,
+    },
+    {
+      key: "distanceProvenance",
+      label: "Transport distance provenance",
+      kind: "derived",
+      formFields: ["distanceSource"],
+      satisfaction: {
+        mode: "equals",
+        field: "distanceSource",
+        value: "document",
+        label: "Distance source marked Document",
+      },
     },
   ],
   // Issue #319 removed the litres→kWh genset conversion — diesel submits by
@@ -407,7 +441,12 @@ export function isCertifyEntityField(
 ): boolean {
   return CERTIFY_FIELD_REGISTRY[entityKind].some((field) => {
     const satisfactionFields =
-      field.satisfaction?.mode === "anyOf" ? field.satisfaction.fields : [];
+      field.satisfaction?.mode === "anyOf" ||
+      field.satisfaction?.mode === "allOf"
+        ? field.satisfaction.fields
+        : field.satisfaction?.mode === "equals"
+          ? [field.satisfaction.field]
+          : [];
     return (
       field.key === fieldName ||
       field.formFields?.includes(fieldName) ||

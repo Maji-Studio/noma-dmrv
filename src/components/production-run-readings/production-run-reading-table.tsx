@@ -20,6 +20,9 @@ import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
 import { formatDateTime } from "@/lib/format-utils";
 
+const TABLE_MAX_HEIGHT_CLASS = "max-h-[420px]";
+const COMPACT_TABLE_MAX_HEIGHT_CLASS = "max-h-[240px]";
+
 // ============================================
 // Helpers
 // ============================================
@@ -36,11 +39,14 @@ function formatNum(v: number | null, decimals = 1): string {
 interface ProductionRunReadingTableProps {
   productionRunId: string;
   readOnly?: boolean;
+  /** Keep the inline form preview short while preserving access to every row. */
+  compact?: boolean;
 }
 
 export function ProductionRunReadingTable({
   productionRunId,
   readOnly = false,
+  compact = false,
 }: ProductionRunReadingTableProps) {
   const {
     data: readings,
@@ -53,6 +59,10 @@ export function ProductionRunReadingTable({
   const [confirmingDeleteAll, setConfirmingDeleteAll] = useState(false);
 
   const readingCount = readings?.length ?? 0;
+
+  if (!isLoading && !error && readingCount === 0) {
+    return null;
+  }
 
   const handleDeleteAllConfirm = async () => {
     try {
@@ -76,7 +86,7 @@ export function ProductionRunReadingTable({
       {/* Header */}
       <div className="flex items-center justify-between gap-12">
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Production Reading Records
+          Imported readings{readingCount > 0 ? ` (${readingCount})` : ""}
         </h3>
         {!readOnly && readingCount > 0 && (
           <Button
@@ -96,14 +106,14 @@ export function ProductionRunReadingTable({
       {/* Table */}
       {isLoading ? (
         <TableSkeleton columns={5} rows={3} />
-      ) : !readings?.length ? (
-        <p className="body-small text-[var(--color-text-tertiary)] py-16">
-          {readOnly
-            ? "No readings recorded yet."
-            : "No readings recorded yet. Upload a readings CSV to import monitoring data."}
-        </p>
-      ) : (
-        <div className="overflow-auto max-h-[420px]">
+      ) : readings?.length ? (
+        <div
+          className={`overflow-auto ${
+            compact
+              ? COMPACT_TABLE_MAX_HEIGHT_CLASS
+              : TABLE_MAX_HEIGHT_CLASS
+          }`}
+        >
           <table className="w-full body-small">
             {/* Sticky header so the column labels stay visible once the body
                 scrolls past the capped height. bg matches the side-sheet paper
@@ -135,7 +145,7 @@ export function ProductionRunReadingTable({
             </tbody>
           </table>
         </div>
-      )}
+      ) : null}
 
       {/* Delete-all confirmation */}
       {!readOnly && (

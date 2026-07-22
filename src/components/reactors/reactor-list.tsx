@@ -327,16 +327,22 @@ export function ReactorList() {
         editLabel="Edit Reactor"
         sections={sideSheetEntity ? [
           {
-            title: "General Information",
+            title: "Required Information",
             fields: [
-              { label: "Code", value: sideSheetEntity.code },
               { label: "Identifier", value: sideSheetEntity.identifier },
-              { label: "Reactor Type", value: formatReactorType(sideSheetEntity.reactorType) },
             ],
           },
           {
-            title: "Facility",
+            title: "Reactor Configuration",
             fields: [
+              { label: "Reactor Type", value: formatReactorType(sideSheetEntity.reactorType) },
+              { label: "Nominal Throughput (tph)", value: sideSheetEntity.nominalThroughputTph },
+            ],
+          },
+          {
+            title: "Relationships & Metadata",
+            fields: [
+              { label: "Code", value: sideSheetEntity.code },
               { label: "Facility Name", value: sideSheetEntity.facilityName },
               { label: "Facility Code", value: sideSheetEntity.facilityCode },
             ],
