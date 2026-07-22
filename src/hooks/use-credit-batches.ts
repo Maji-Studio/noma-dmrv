@@ -18,6 +18,10 @@ import type {
   UpdateCreditBatchData,
 } from "@/schemas/credit-batches";
 import type { CreditBatchCo2eStoredPreview } from "@/data-access/credit-batches";
+import { creditBatchKeys } from "./credit-batch-query-keys";
+import { invalidateCertificationReadiness } from "./use-certification";
+
+export { creditBatchKeys } from "./credit-batch-query-keys";
 
 // Credit-batch data changes infrequently within a session; 30s keeps the UI
 // fresh without re-fetching on every mount.
@@ -31,38 +35,6 @@ function chunkIds(ids: string[], size: number): string[][] {
   }
   return chunks;
 }
-
-/**
- * Query key factory for credit batches
- */
-export const creditBatchKeys = {
-  all: ["creditBatches"] as const,
-  lists: () => [...creditBatchKeys.all, "list"] as const,
-  list: (filters?: Record<string, unknown>) =>
-    [...creditBatchKeys.lists(), filters] as const,
-  details: () => [...creditBatchKeys.all, "detail"] as const,
-  detail: (id: string) => [...creditBatchKeys.details(), id] as const,
-  previews: (ids: string[]) => [...creditBatchKeys.all, "previews", ids] as const,
-  // Prefix for EVERY cached production-run-options query — production-run
-  // mutations invalidate this so a newly completed run appears in the credit-
-  // batch form without waiting out the selector's staleTime.
-  productionRunOptionsPrefix: () =>
-    [...creditBatchKeys.all, "productionRunOptions"] as const,
-  productionRunOptions: (
-    facilityId?: string,
-    startDate?: string,
-    endDate?: string,
-    includeCreditBatchId?: string,
-  ) =>
-    [
-      ...creditBatchKeys.all,
-      "productionRunOptions",
-      facilityId,
-      startDate,
-      endDate,
-      includeCreditBatchId,
-    ] as const,
-};
 
 /**
  * Query hook for fetching a facility's credit batches. Facility-scoped: the
@@ -170,6 +142,7 @@ export function useCreateCreditBatch() {
     mutationFn: (data: CreditBatchFormData) => createCreditBatchFn(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
+      invalidateCertificationReadiness(queryClient);
     },
   });
 }
@@ -184,6 +157,9 @@ export function useUpdateCreditBatch() {
     mutationFn: (data: UpdateCreditBatchData) => updateCreditBatchFn(data),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
+      invalidateCertificationReadiness(queryClient, {
+        creditBatchPreviews: true,
+      });
       if (result.success && result.data) {
         queryClient.invalidateQueries({
           queryKey: creditBatchKeys.detail(result.data.id),
@@ -204,6 +180,7 @@ export function useDeleteCreditBatch() {
       deleteCreditBatchFn({ creditBatchId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
+      invalidateCertificationReadiness(queryClient);
     },
   });
 }

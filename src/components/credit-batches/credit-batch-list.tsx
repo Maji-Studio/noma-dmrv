@@ -36,7 +36,10 @@ import {
   CreditBatchFilters,
   type CreditBatchReadinessFilter,
 } from "./credit-batch-filters";
-import { filterCreditBatches } from "./credit-batch-filtering";
+import {
+  filterCreditBatches,
+  readinessErrorBlocksList,
+} from "./credit-batch-filtering";
 import {
   useCreditBatches,
   useCreditBatchCo2eStoredPreviews,
@@ -121,7 +124,9 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
   const {
     data: batchHealthSummaries = {},
     isLoading: healthLoading,
+    isFetching: healthFetching,
     error: healthError,
+    refetch: refetchHealth,
   } =
     useCreditBatchHealthSummaries(
       contextFacilityId ?? undefined,
@@ -316,7 +321,7 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
     );
   }
 
-  if (healthError) {
+  if (healthError && readinessErrorBlocksList(readinessFilter, healthError)) {
     return (
       <div className="container-max py-32">
         <ServerError
@@ -404,6 +409,32 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
         onClear={clearFilters}
       />
 
+      {healthError && readinessFilter === "all" && (
+        <div
+          className="flex flex-col gap-12 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-16 py-12 sm:flex-row sm:items-center sm:justify-between"
+          role="alert"
+        >
+          <span className="inline-flex items-center gap-8 body-small text-[var(--color-text-secondary)]">
+            <WarningIcon
+              size={16}
+              weight="fill"
+              className="shrink-0 text-[var(--st-wait)]"
+              aria-hidden
+            />
+            Certification readiness unavailable. Batches are still shown
+            without readiness badges.
+          </span>
+          <Button
+            variant="weak"
+            size="small"
+            busy={healthFetching}
+            onClick={() => void refetchHealth()}
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+
       {/* Card Grid or Empty State */}
       {listLoading ? (
         <div
@@ -442,7 +473,8 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
               <CreditBatchCard
                 key={batch.id}
                 creditBatch={batch}
-                health={batchHealthSummaries[batch.id]}
+                health={healthError ? undefined : batchHealthSummaries[batch.id]}
+                isHealthLoading={healthLoading && !healthError}
                 onView={openView}
                 onEdit={openEdit}
                 onDelete={handleDelete}

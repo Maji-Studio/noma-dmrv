@@ -9,6 +9,13 @@ export interface CreditBatchFilterValues {
   readiness: CreditBatchReadinessFilter;
 }
 
+export function readinessErrorBlocksList(
+  readiness: CreditBatchReadinessFilter,
+  error: Error | null,
+): boolean {
+  return readiness !== "all" && error !== null;
+}
+
 /**
  * Applies the list's operator filters. Date bounds use production-window
  * overlap, so a batch remains visible whenever any part of its period falls

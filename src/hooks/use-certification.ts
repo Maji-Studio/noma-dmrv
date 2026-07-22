@@ -5,6 +5,7 @@
  */
 
 import {
+  type QueryClient,
   useMutation,
   useQueries,
   useQuery,
@@ -47,6 +48,7 @@ import type {
   SubmitGhgStatementDialogInput,
   SubmitRemovalInput,
 } from "@/schemas/certification";
+import { creditBatchKeys } from "./credit-batch-query-keys";
 
 // Stale-time policy for certification queries. `LOCKED_REFETCH_INTERVAL_MS`
 // drives the in-flight polling cadence in `useCertifyContextForCreditBatch`
@@ -118,6 +120,24 @@ export const certificationKeys = {
     [...certificationKeys.all, "overview", facilityId] as const,
   health: () => [...certificationKeys.all, "health"] as const,
 };
+
+/** Refresh cached readiness and, when relevant, derived CO₂e previews. */
+export function invalidateCertificationReadiness(
+  queryClient: QueryClient,
+  options?: { creditBatchPreviews?: boolean },
+) {
+  const invalidations = [
+    queryClient.invalidateQueries({ queryKey: certificationKeys.all }),
+  ];
+  if (options?.creditBatchPreviews) {
+    invalidations.push(
+      queryClient.invalidateQueries({
+        queryKey: creditBatchKeys.previewsPrefix(),
+      }),
+    );
+  }
+  return Promise.all(invalidations);
+}
 
 // Server-owned readiness payload for the Removals hub. Heavier than the other
 // reads (walks lineage/coverage per removal), so it leans on React Query
@@ -373,7 +393,9 @@ export function useCreditBatchHealthSummaries(
       {},
     ),
     isLoading: results.some((result) => result.isLoading),
+    isFetching: results.some((result) => result.isFetching),
     error: results.find((result) => result.error)?.error ?? null,
+    refetch: () => Promise.all(results.map((result) => result.refetch())),
   };
 }
 

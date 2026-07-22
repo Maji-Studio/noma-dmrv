@@ -16,6 +16,7 @@ interface CreditBatchCardProps {
   creditBatch: CreditBatchWithRelations;
   /** Per-batch certification readiness (undefined while loading). */
   health?: CreditBatchHealthSummary;
+  isHealthLoading?: boolean;
   onView: (creditBatch: CreditBatchWithRelations) => void;
   onEdit: (creditBatch: CreditBatchWithRelations) => void;
   onDelete: (creditBatchId: string) => void;
@@ -49,6 +50,7 @@ function CertReadinessTag({ health }: { health: CreditBatchHealthSummary }) {
 export function CreditBatchCard({
   creditBatch,
   health,
+  isHealthLoading = false,
   onView,
   onEdit,
   onDelete,
@@ -75,9 +77,9 @@ export function CreditBatchCard({
           </span>
           {health ? (
             <CertReadinessTag health={health} />
-          ) : (
+          ) : isHealthLoading ? (
             <StatusBadge status="pending" label="Checking readiness…" />
-          )}
+          ) : null}
         </div>
 
         {/* Feedstock is the production cohort's identity; facility is already

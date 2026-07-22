@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
-import { filterCreditBatches } from "./credit-batch-filtering";
+import {
+  filterCreditBatches,
+  readinessErrorBlocksList,
+} from "./credit-batch-filtering";
 
 const batches = [
   {
@@ -57,5 +60,18 @@ describe("filterCreditBatches", () => {
     });
 
     expect(result.map((batch) => batch.id)).toEqual(["batch-straw"]);
+  });
+});
+
+describe("readinessErrorBlocksList", () => {
+  const error = new Error("readiness unavailable");
+
+  it("keeps the loaded list available when readiness is not filtering it", () => {
+    expect(readinessErrorBlocksList("all", error)).toBe(false);
+  });
+
+  it("blocks when an active readiness filter cannot be evaluated", () => {
+    expect(readinessErrorBlocksList("ready", error)).toBe(true);
+    expect(readinessErrorBlocksList("needs_attention", error)).toBe(true);
   });
 });

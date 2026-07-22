@@ -185,15 +185,24 @@ function SampleSummaryRows({ summary }: { summary: DurabilityBatchSummary }) {
             {replicate.sampleCode}
           </span>
           <span className="truncate text-right body-caption text-[var(--color-text-tertiary)]">
-            {replicate.productionRunCode ?? "Run unknown"}
-            {replicate.samplingDay
-              ? ` · ${formatDate(replicate.samplingDay)}`
-              : ""}
+            {sampleProvenanceLabel(replicate)}
           </span>
         </div>
       ))}
     </div>
   );
+}
+
+export function sampleProvenanceLabel(
+  replicate: Pick<
+    DurabilitySummaryReplicate,
+    "productionRunCode" | "samplingDay"
+  >,
+): string {
+  const source = replicate.productionRunCode ?? "Batch sample";
+  return replicate.samplingDay
+    ? `${source} · ${formatDate(replicate.samplingDay)}`
+    : source;
 }
 
 export function CreditBatchDurabilityPanel({

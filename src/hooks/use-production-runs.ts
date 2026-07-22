@@ -33,6 +33,7 @@ import {
   addProductionRunReadingFn,
 } from "@/fn/production-runs";
 import { creditBatchKeys } from "@/hooks/use-credit-batches";
+import { invalidateCertificationReadiness } from "@/hooks/use-certification";
 import { facilityKeys } from "@/hooks/use-facilities";
 import { reactorKeys } from "@/hooks/use-reactors";
 import { ProductionRunConflictError } from "@/lib/production-runs/overlap-conflict";
@@ -273,6 +274,7 @@ export function useCreateProductionRun(
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
+      invalidateCertificationReadiness(queryClient);
 
       // Pre-populate the detail cache with the new run
       queryClient.setQueryData(productionRunKeys.detail(data.id), data);
@@ -386,6 +388,7 @@ export function useUpdateProductionRun(
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
+      invalidateCertificationReadiness(queryClient);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -498,6 +501,7 @@ export function useDeleteProductionRun(
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
+      invalidateCertificationReadiness(queryClient);
       // Invalidate facility data
       if (facilityId) {
         queryClient.invalidateQueries({
@@ -570,6 +574,7 @@ export function useAddProductionRunReading(
       queryClient.invalidateQueries({
         queryKey: productionRunKeys.readings(variables.productionRunId),
       });
+      invalidateCertificationReadiness(queryClient);
 
       await callbacks?.onSuccess?.(data, variables);
     },

@@ -67,10 +67,7 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
   // Scope to this batch's facility — overlap validation is per-facility, and
   // credit batches must never be read across the facility boundary.
   const updateCreditBatch = useUpdateCreditBatch();
-  const {
-    data: productionRunOptions = [],
-    isLoading: productionRunsLoading,
-  } = useCreditBatchProductionRunOptions({
+  const productionRunOptionsQuery = useCreditBatchProductionRunOptions({
     facilityId: creditBatch?.facilityId,
     startDate: creditBatch?.startDate,
     endDate: creditBatch?.endDate,
@@ -150,7 +147,7 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
 
   const period = formatDateRange(creditBatch.startDate, creditBatch.endDate);
   const memberRunIds = new Set(creditBatch.productionRunIds);
-  const memberRuns = productionRunOptions.filter((run) =>
+  const memberRuns = (productionRunOptionsQuery.data ?? []).filter((run) =>
     memberRunIds.has(run.id),
   );
 
@@ -176,7 +173,10 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
       <CreditBatchOverview
         creditBatch={creditBatch}
         productionRuns={memberRuns}
-        isLoadingRuns={productionRunsLoading}
+        isLoadingRuns={productionRunOptionsQuery.isLoading}
+        runsError={productionRunOptionsQuery.error}
+        isRetryingRuns={productionRunOptionsQuery.isFetching}
+        onRetryRuns={() => void productionRunOptionsQuery.refetch()}
       />
 
       <div className="grid grid-cols-1 items-start gap-20 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
