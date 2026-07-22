@@ -174,6 +174,7 @@ export function EntitySelect({
   createLabel,
   onCreateNew,
   filterBy,
+  excludeIds,
   autoSelectSingle = false,
   alwaysShowSearch = false,
   hideSearch = false,
@@ -199,7 +200,7 @@ export function EntitySelect({
   // Fetch options based on search
   // Also fetch eagerly when autoSelectSingle is enabled (to detect single-option case)
   const {
-    data: options = [],
+    data: fetchedOptions = [],
     isLoading,
     error: fetchError,
   } = useEntityOptions({
@@ -208,6 +209,15 @@ export function EntitySelect({
     filterBy,
     enabled: !disabled && (isOpen || (autoSelectSingle && !value)),
   });
+
+  // Hide already-picked options (e.g. blend materials chosen on other lines),
+  // but never hide the current selection so it stays visible in its own field.
+  const options =
+    excludeIds && excludeIds.length > 0
+      ? fetchedOptions.filter(
+          (option) => option.id === value || !excludeIds.includes(option.id)
+        )
+      : fetchedOptions;
 
   // Fetch selected entity details
   const { data: selectedEntity, isPending: isSelectedEntityPending } =

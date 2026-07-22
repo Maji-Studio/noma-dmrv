@@ -357,6 +357,13 @@ export function FormulationForm({
                   allowCreate
                   createLabel="Add blend material"
                   filterBy={{ usage: FORMULATION_LINE_FEEDSTOCK_USAGE }}
+                  excludeIds={(ingredients ?? [])
+                    .map((ingredient, ingredientIndex) =>
+                      ingredientIndex === index
+                        ? undefined
+                        : ingredient?.feedstockTypeId,
+                    )
+                    .filter((id): id is string => !!id)}
                   alwaysShowSearch
                 />
               </div>

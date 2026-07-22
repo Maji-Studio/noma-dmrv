@@ -35,6 +35,7 @@ import {
 } from "@/schemas/production-runs";
 import {
   allowedProductionRunStatusesFrom,
+  shouldClearProductionRunEndTime,
   shouldIncludeProductionRunEndTime,
 } from "@/lib/production-runs/lifecycle";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
@@ -406,12 +407,19 @@ export function ProductionRunForm({
       from: transitionFrom,
       to: data.status,
     });
+    const clearEndTime = shouldClearProductionRunEndTime({
+      from: transitionFrom,
+      to: data.status,
+      existingEndTime: productionRun?.endTime,
+    });
     const combined: ProductionRunSubmitData = {
       ...data,
       expectedUpdatedAt: productionRun?.updatedAt,
       startTime: combineDateAndTime(startDateStr, data.startTime as string),
       endTime:
-        data.endTime && includeEndTime
+        clearEndTime
+          ? null
+          : data.endTime && includeEndTime
           ? combineDateAndTime(endDateStr, data.endTime as string)
           : undefined,
     };

@@ -37,6 +37,8 @@ interface FormEntitySelectProps<
   onCreateNew?: () => void;
   /** Filter options (e.g., facilityId for filtering reactors by facility) */
   filterBy?: Record<string, string>;
+  /** Option ids to hide (e.g. materials already picked on other lines). */
+  excludeIds?: readonly string[];
   /** Whether the field is required */
   required?: boolean;
   /** Auto-select when there is exactly one option (defaults to true when required) */
@@ -77,6 +79,7 @@ export function FormEntitySelect<
   createLabel,
   onCreateNew,
   filterBy,
+  excludeIds,
   required,
   autoSelectSingle,
   alwaysShowSearch = false,
@@ -108,6 +111,7 @@ export function FormEntitySelect<
         createLabel={createLabel}
         onCreateNew={onCreateNew}
         filterBy={filterBy}
+        excludeIds={excludeIds}
         autoSelectSingle={autoSelectSingle ?? required}
         alwaysShowSearch={alwaysShowSearch}
         hideSearch={hideSearch}
