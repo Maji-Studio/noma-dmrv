@@ -677,6 +677,7 @@ export function ProductionRunList() {
             title: "Readings CSV Import",
             fields: [
               buildProductionRunReadingsDetailField(
+                sideSheetEntity.status,
                 sideSheetEntity.readingsCount,
               ),
             ],

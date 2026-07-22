@@ -47,7 +47,7 @@ function OrgBrandLoading() {
       aria-busy="true"
     >
       <div className="size-28 shrink-0 animate-pulse bg-[var(--color-white-10)]" />
-      <div className="h-12 w-112 animate-pulse bg-[var(--color-white-10)]" />
+      <div className="h-12 w-120 animate-pulse bg-[var(--color-white-10)]" />
     </div>
   );
 }
