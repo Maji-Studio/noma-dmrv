@@ -4,7 +4,7 @@ import {
   loadCreditBatchLineageFacts,
   type CreditBatchLineageFacts,
 } from "@/data-access/credit-batch-lineage-facts";
-import { getApplicationRollupsByBatchIds } from "@/data-access/credit-batch-production-runs";
+import type { BatchApplicationRollup } from "@/data-access/credit-batch-production-runs";
 import {
   listUngroupedCreditBatches,
   type UngroupedCreditBatchRow,
@@ -74,10 +74,18 @@ export async function buildSelectableBatchesData(
     orgCtx,
     ungroupedIds,
   );
-  const applicationRollups = await getApplicationRollupsByBatchIds(
-    orgCtx,
-    ungroupedIds,
-  );
+  // Project the rollups from the facts already in hand — the by-ids helper
+  // would re-run the same lineage walk internally (review finding on #510).
+  const applicationRollups: Record<string, BatchApplicationRollup> =
+    Object.fromEntries(
+      Object.entries(lineageFactsByBatch).map(([batchId, facts]) => [
+        batchId,
+        {
+          applicationIds: facts.applicationIds,
+          appliedWeightTons: facts.appliedWeightTons,
+        },
+      ]),
+    );
   const co2ePreviews = await getCo2eStoredPreviews(orgCtx, ungroupedIds, {
     applicationRollups,
     lineageFactsByBatch,

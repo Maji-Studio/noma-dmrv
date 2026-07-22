@@ -329,6 +329,9 @@ export async function createProductionRun(
       consumedFeedstockKg = allocated.reduce((total, item) => total + item.massUsedKg, 0);
     }
 
+    // Unfiltered: window + dry-mass are eligible here but always pre-caught by
+    // the PREFLIGHT_OUTCOME_VIOLATIONS check above over the same inputs — keep
+    // that preflight scope or cancelled/draft runs start failing dry-mass here.
     assertProductionRunOutcome({
       status,
       startTime: data.startTime,
@@ -758,6 +761,10 @@ export async function updateProductionRun(
         eq(productionRunFeedstocks.organizationId, ctx.organizationId),
       ));
 
+    // Unfiltered: window + dry-mass are eligible here but always pre-caught by
+    // the locked PREFLIGHT_OUTCOME_VIOLATIONS re-check above over the same
+    // merged inputs — keep that preflight scope or cancelled/draft runs start
+    // failing dry-mass here.
     assertProductionRunOutcome({
       status: lockedTargetStatus,
       startTime: lockedTargetStartTime,

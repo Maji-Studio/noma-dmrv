@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getCo2eStoredPreviews } from "@/data-access/credit-batches";
 import { loadCreditBatchLineageFacts } from "@/data-access/credit-batch-lineage-facts";
-import { getApplicationRollupsByBatchIds } from "@/data-access/credit-batch-production-runs";
 import { listUngroupedCreditBatches } from "@/data-access/certifier-removals";
 import type { OrgContext } from "@/lib/auth/server";
 import { buildSelectableBatchesData } from "@/fn/certification/selectable-batches";
@@ -14,9 +13,11 @@ vi.mock("@/data-access/credit-batch-lineage-facts", () => ({
   loadCreditBatchLineageFacts: vi.fn(),
 }));
 
-vi.mock("@/data-access/credit-batch-production-runs", () => ({
-  getApplicationRollupsByBatchIds: vi.fn(),
-}));
+// Deliberately NOT mocked: @/data-access/credit-batch-production-runs. The
+// rollups must be projected from the already-loaded facts — a mocked
+// getApplicationRollupsByBatchIds hid a second lineage walk (review finding
+// on #510). If the implementation regresses to calling it, this suite fails
+// because the unmocked module needs a real DB context.
 
 vi.mock("@/data-access/credit-batches", () => ({
   getCo2eStoredPreviews: vi.fn(),
@@ -40,9 +41,6 @@ vi.mock("@/lib/certification/facility-setup-gaps", () => ({
 
 const mockedListUngrouped = vi.mocked(listUngroupedCreditBatches);
 const mockedLoadLineageFacts = vi.mocked(loadCreditBatchLineageFacts);
-const mockedGetApplicationRollups = vi.mocked(
-  getApplicationRollupsByBatchIds,
-);
 const mockedGetPreviews = vi.mocked(getCo2eStoredPreviews);
 
 describe("buildSelectableBatchesData", () => {
@@ -50,7 +48,7 @@ describe("buildSelectableBatchesData", () => {
     vi.resetAllMocks();
   });
 
-  it("loads lineage once and shares the facts with previews and batch contexts", async () => {
+  it("loads lineage once and shares the facts with previews, rollups, and batch contexts", async () => {
     const orgCtx: OrgContext = {
       userId: "user-1",
       organizationId: "org-1",
@@ -63,10 +61,20 @@ describe("buildSelectableBatchesData", () => {
       { id: "batch-2", code: "CB-2" },
     ];
     const lineageFactsByBatch = {
-      "batch-1": { batchId: "batch-1" },
-      "batch-2": { batchId: "batch-2" },
+      "batch-1": {
+        batchId: "batch-1",
+        applicationIds: ["app-1"],
+        appliedWeightTons: 1.25,
+      },
+      "batch-2": {
+        batchId: "batch-2",
+        applicationIds: ["app-2"],
+        appliedWeightTons: 2.5,
+      },
     };
-    const applicationRollups = {
+    // The rollups the implementation must PROJECT from the facts above —
+    // not fetch via getApplicationRollupsByBatchIds (second lineage walk).
+    const projectedRollups = {
       "batch-1": { applicationIds: ["app-1"], appliedWeightTons: 1.25 },
       "batch-2": { applicationIds: ["app-2"], appliedWeightTons: 2.5 },
     };
@@ -77,7 +85,6 @@ describe("buildSelectableBatchesData", () => {
 
     mockedListUngrouped.mockResolvedValue(batchRows as never);
     mockedLoadLineageFacts.mockResolvedValue(lineageFactsByBatch as never);
-    mockedGetApplicationRollups.mockResolvedValue(applicationRollups);
     mockedGetPreviews.mockResolvedValue(previews as never);
     const buildCreditBatchContext = vi.fn(async () => ({} as never));
 
@@ -96,7 +103,7 @@ describe("buildSelectableBatchesData", () => {
     expect(mockedGetPreviews).toHaveBeenCalledWith(
       orgCtx,
       ["batch-1", "batch-2"],
-      { applicationRollups, lineageFactsByBatch },
+      { applicationRollups: projectedRollups, lineageFactsByBatch },
     );
     expect(buildCreditBatchContext).toHaveBeenCalledTimes(2);
     expect(buildCreditBatchContext).toHaveBeenNthCalledWith(
