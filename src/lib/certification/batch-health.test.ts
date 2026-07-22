@@ -179,6 +179,18 @@ describe("deriveBatchHealth", () => {
     expect(open).toHaveLength(1);
     expect(open[0]?.fixTarget).toBe("labSamples");
     expect(open[0]?.affectedRecords?.[0]?.code).toBe("S-1");
+    expect(open[0]?.label).toBe(
+      "Carbon & durability inputs complete · Entity certifier fields complete",
+    );
+    expect(open[0]?.requirementLabel).toBe(
+      "Lab chemistry results · Lab-sample evidence",
+    );
+    expect(open[0]?.whyDetail).toContain(
+      CERT_REQUIREMENT_META.carbon.whyDetail,
+    );
+    expect(open[0]?.whyDetail).toContain(
+      CERT_REQUIREMENT_META.entityReadiness.whyDetail,
+    );
   });
 
   it("flags a missing transport category by name", () => {

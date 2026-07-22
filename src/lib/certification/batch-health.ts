@@ -149,6 +149,7 @@ const PRODUCTION_LABEL = "Production data linked";
 const TRANSPORT_LABEL = "Transport legs present";
 const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_PREVIEW_LIMIT = 3;
+const MERGED_CHECK_SEPARATOR = " · ";
 
 function describeCategories(categories: TransportCategory[]): string {
   return categories.join(", ");
@@ -246,6 +247,17 @@ function mergeAffectedRecords(
   return records.size > 0 ? Array.from(records.values()) : undefined;
 }
 
+function mergeCheckText(
+  left: string | undefined,
+  right: string | undefined,
+): string | undefined {
+  const parts = [left, right]
+    .flatMap((value) => value?.split(MERGED_CHECK_SEPARATOR) ?? [])
+    .filter(Boolean);
+  const unique = Array.from(new Set(parts));
+  return unique.length > 0 ? unique.join(MERGED_CHECK_SEPARATOR) : undefined;
+}
+
 /** One open row and primary action per resolution destination. */
 function mergeUnmetChecksByDestination(
   checks: BatchHealthCheck[],
@@ -267,14 +279,16 @@ function mergeUnmetChecksByDestination(
     }
 
     const existing = merged[existingIndex];
-    const details = Array.from(
-      new Set([existing.detail, check.detail].filter(Boolean)),
-    );
     merged[existingIndex] = {
       ...existing,
+      label: mergeCheckText(existing.label, check.label) ?? existing.label,
+      requirementLabel:
+        mergeCheckText(existing.requirementLabel, check.requirementLabel) ??
+        existing.requirementLabel,
+      whyDetail: mergeCheckText(existing.whyDetail, check.whyDetail),
       issueKey: [existing.issueKey ?? existing.key, check.issueKey ?? check.key]
         .join("+"),
-      detail: details.length > 0 ? details.join(" · ") : undefined,
+      detail: mergeCheckText(existing.detail, check.detail),
       affectedRecords: mergeAffectedRecords(
         existing.affectedRecords,
         check.affectedRecords,
