@@ -90,6 +90,29 @@ describe("OrgBrand", () => {
     expect(html).not.toContain('aria-haspopup="listbox"');
   });
 
+  it("settles to a dashboard link for an admin with one organization", () => {
+    state.isAdmin = true;
+    state.session = {
+      data: { session: { activeOrganizationId: "org-1" } },
+      isPending: false,
+    };
+    state.activeProfile = {
+      data: { id: "org-1", name: "Dark Earth Carbon" },
+      isPending: false,
+    };
+    state.memberOrganizations = { data: [], isPending: false };
+    state.allOrganizations = {
+      data: [{ id: "org-1", name: "Dark Earth Carbon" }],
+      isPending: false,
+    };
+
+    const html = renderToStaticMarkup(<OrgBrand />);
+
+    expect(html).toContain('href="/dashboard"');
+    expect(html).toContain("Dark Earth Carbon");
+    expect(html).not.toContain('aria-haspopup="listbox"');
+  });
+
   it("waits for and settles to the admin switcher for multiple organizations", () => {
     state.isAdmin = true;
     state.session = {
