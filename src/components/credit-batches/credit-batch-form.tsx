@@ -193,10 +193,25 @@ function CohortPickerSection({
           </span>
         </div>
       ) : totalCount === 0 && count === 0 ? (
-        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
+        <div className="flex items-start justify-between gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
           <span className="body-small text-[var(--color-text-tertiary)]">
             {noMatchMessage}
           </span>
+          {/* A successful-but-stale cached empty result would otherwise be a
+              dead end (e.g. a run completed seconds ago in another tab) —
+              give the operator an explicit refresh (QA 2026-07-21 F5). */}
+          {onRetry && (
+            <Button
+              type="button"
+              variant="noOutline"
+              size="small"
+              onClick={onRetry}
+              disabled={isRetrying}
+            >
+              <ArrowsClockwiseIcon size={14} />
+              {isRetrying ? "Refreshing…" : "Refresh"}
+            </Button>
+          )}
         </div>
       ) : totalCount === 0 ? (
         <div className="space-y-8">

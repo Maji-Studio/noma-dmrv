@@ -467,7 +467,7 @@ test.describe("production-process Method-B lifecycle", () => {
       );
 
       const lockedRow = page.getByRole("button", {
-        name: /9 \/ 30 eligible samples/i,
+        name: /9 \/ 30 baseline samples/i,
       });
       await expect(lockedRow).toBeVisible();
       await expect(lockedRow.getByText("21 more to qualify")).toBeVisible();
@@ -480,7 +480,7 @@ test.describe("production-process Method-B lifecycle", () => {
       await page.reload();
 
       const twentyNineRow = page.getByRole("button", {
-        name: /29 \/ 30 eligible samples/i,
+        name: /29 \/ 30 baseline samples/i,
       });
       await expect(twentyNineRow).toBeVisible();
       await expect(twentyNineRow.getByText("1 more to qualify")).toBeVisible();
@@ -496,7 +496,7 @@ test.describe("production-process Method-B lifecycle", () => {
       await page.reload();
 
       const eligibleRow = page.getByRole("button", {
-        name: /30 \/ 30 eligible samples/i,
+        name: /30 \/ 30 baseline samples/i,
       });
       await expect(eligibleRow).toBeVisible();
       await expect(
@@ -619,7 +619,7 @@ test.describe("production-process Method-B lifecycle", () => {
       await expect(page.getByText("Started a new production process")).toBeVisible();
       await expect(page.getByText(METHOD_B_PLAN_REFERENCE)).toBeHidden();
       const freshMethodARow = page.getByRole("button", {
-        name: /0 \/ 30 eligible samples/i,
+        name: /0 \/ 30 baseline samples/i,
       });
       await expect(freshMethodARow.getByText("Method A", { exact: true })).toBeVisible();
       await expect(freshMethodARow.getByText("30 more to qualify")).toBeVisible();

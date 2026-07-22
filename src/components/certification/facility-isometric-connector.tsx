@@ -9,10 +9,14 @@
  * the Settings dialog, so all server-side guards (project existence,
  * submission-pinned mappings, production confirm) apply unchanged.
  *
- * Renders nothing for non-admins: saving is admin-gated, and the heavier
- * management payload (available projects, link hints) must not be fetched
- * for viewers who can't act on it — they see the read-only
- * `FacilityCertifierSummary` in the facility view sheet instead.
+ * Renders nothing for viewers who can't manage the link: saving is org
+ * owner/admin-gated (`saveFacilityCertifierMapping` → requireOrgRole "admin"),
+ * and the heavier management payload (available projects, link hints) must not
+ * be fetched for viewers who can't act on it — they see the read-only
+ * `FacilityCertifierSummary` in the facility view sheet instead. Management
+ * capability comes from the server-computed `viewerCanManage` (same source as
+ * Certification → Settings), NOT a client platform-admin check, so org
+ * owners/admins the server already authorizes see this connector too.
  */
 "use client";
 
@@ -21,9 +25,9 @@ import Link from "next/link";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { FormField, FormSelect, ServerError } from "@/components/forms";
-import { useIsAdmin } from "@/hooks/use-is-admin";
 import {
   useFacilityCertifierMapping,
+  useFacilityCertifierSummary,
   useSaveFacilityCertifierMapping,
 } from "@/hooks/use-certification";
 import { isometricRegistry } from "@/lib/isometric/links";
@@ -46,10 +50,16 @@ interface FacilityIsometricConnectorProps {
 export function FacilityIsometricConnector({
   facilityId,
 }: FacilityIsometricConnectorProps) {
-  const isAdmin = useIsAdmin();
+  // Server-computed management capability (same source as Certification →
+  // Settings). Org owners/admins qualify, not just platform admins.
+  const { data: summary } = useFacilityCertifierSummary(
+    facilityId,
+    !!facilityId,
+  );
+  const viewerCanManage = summary?.viewerCanManage ?? false;
   const { data, isLoading, error } = useFacilityCertifierMapping(
     facilityId,
-    isAdmin,
+    viewerCanManage,
   );
   const saveMutation = useSaveFacilityCertifierMapping();
   const toast = useToast();
@@ -63,7 +73,7 @@ export function FacilityIsometricConnector({
   const [confirmProduction, setConfirmProduction] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
-  if (!isAdmin) return null;
+  if (!viewerCanManage) return null;
 
   const header = (
     <div className="flex items-center justify-between gap-12">

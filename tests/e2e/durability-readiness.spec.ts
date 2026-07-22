@@ -43,7 +43,7 @@ test.describe("200-year durability readiness", () => {
     const signals = panel.getByTestId("durability-readiness-signals");
     await expect(signals).toContainText("3 of 3 usable samples");
     await expect(signals).toContainText("distinct runs/days");
-    await expect(signals).toContainText("Eligible");
+    await expect(signals).toContainText("Chemistry eligible");
 
     // The raw replicates roll up into the batch.
     for (const code of batch.sampleCodes) {
@@ -82,6 +82,6 @@ test.describe("200-year durability readiness", () => {
     await expect(
       progress.getByTestId("durability-readiness-signals"),
     ).toContainText("3 of 3 usable samples");
-    await expect(progress).toContainText("Eligible");
+    await expect(progress).toContainText("Chemistry eligible");
   });
 });

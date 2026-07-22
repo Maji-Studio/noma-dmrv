@@ -28,6 +28,11 @@ export const creditBatchKeys = {
   details: () => [...creditBatchKeys.all, "detail"] as const,
   detail: (id: string) => [...creditBatchKeys.details(), id] as const,
   previews: (ids: string[]) => [...creditBatchKeys.all, "previews", ids] as const,
+  // Prefix for EVERY cached production-run-options query — production-run
+  // mutations invalidate this so a newly completed run appears in the credit-
+  // batch form without waiting out the selector's staleTime.
+  productionRunOptionsPrefix: () =>
+    [...creditBatchKeys.all, "productionRunOptions"] as const,
   productionRunOptions: (
     facilityId?: string,
     startDate?: string,

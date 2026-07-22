@@ -356,6 +356,14 @@ export function BiocharProductForm({
                 disabled={isSubmitting}
                 error={!!fieldState.error}
                 filterBy={selectedFacilityId ? { facilityId: selectedFacilityId, status: "complete" } : { status: "complete" }}
+                emptyHint={{
+                  message:
+                    "No completed production runs yet — only runs marked Complete can become a product. Finish the run first.",
+                  href: selectedFacilityId
+                    ? `/production-runs?facility=${encodeURIComponent(selectedFacilityId)}`
+                    : "/production-runs",
+                  linkLabel: "Open production runs",
+                }}
               />
             )}
           />

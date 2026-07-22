@@ -11,7 +11,7 @@ import {
   type LinkedFacilitySummary,
 } from "@/data-access/certification";
 import { requireOrgFacility } from "@/data-access/utils";
-import { requireAdminAction } from "@/lib/auth/server";
+import { requireOrgRole } from "@/lib/auth/server";
 import { SafeError } from "@/lib/errors";
 import {
   getIsometricClientForOrg,
@@ -57,6 +57,7 @@ export interface FacilityCertifierMapping {
 export interface FacilityCertifierSummary {
   mapping: CertifierProjectRow | null;
   isProduction: boolean;
+  viewerCanManage: boolean;
 }
 
 export async function loadFacilityCertifierSummary(
@@ -72,6 +73,10 @@ export async function loadFacilityCertifierSummary(
     return {
       mapping,
       isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
+      viewerCanManage:
+        orgCtx.isPlatformAdmin ||
+        orgCtx.orgRole === "owner" ||
+        orgCtx.orgRole === "admin",
     };
   });
 }
@@ -129,16 +134,19 @@ async function listProjectsWithConfiguration(
   }
 }
 
-// Admin-only: this action rewires which Isometric project every future
-// Removal / GHG-statement submission for the facility targets. The admin-
-// area UI redirect is a render-time guard only; the action itself must
-// reject non-admin callers.
+// Org Owner/Admin-only: this action rewires which Isometric project every
+// future Removal / GHG-statement submission for the facility targets.
+// Platform admins also pass through requireOrgRole.
 export async function saveFacilityCertifierMapping(
   input: SaveMappingInput,
 ): Promise<ActionResult<CertifierProjectRow>> {
   return withAction(async (orgCtx) => {
-    await requireAdminAction();
+    requireOrgRole(orgCtx, "admin");
     const parsed = saveMappingSchema.parse(input);
+    // certifier_projects.facilityId has no FK to facilities(id), so an org
+    // admin could otherwise insert a row pairing their organizationId with a
+    // foreign facility UUID (cross-org squatting on externalFacilityId).
+    await requireOrgFacility(orgCtx, parsed.facilityId);
 
     if (
       env.ISOMETRIC_ENVIRONMENT === "production" &&
@@ -194,13 +202,13 @@ export async function saveFacilityCertifierMapping(
   });
 }
 
-// Admin-only: unlinking strands every in-flight submission's audit trail
-// against an external project the operator can no longer reach.
+// Org Owner/Admin-only: unlinking strands every in-flight submission's audit
+// trail against an external project the operator can no longer reach.
 export async function deleteFacilityCertifierMapping(
   facilityId: string,
 ): Promise<ActionResult<void>> {
   return withAction(async (orgCtx) => {
-    await requireAdminAction();
+    requireOrgRole(orgCtx, "admin");
     await deleteCertifierProject(orgCtx, facilityId, ISOMETRIC_PROVIDER);
   });
 }
@@ -214,15 +222,14 @@ export async function loadIsometricProjectTemplates(
   });
 }
 
-// Admin-only: this per-facility emission-estimate config feeds the reference
-// soil temperature submitted with every 200-year removal (the genset yield is
-// a vestigial local estimate since issue #319), so the admin-area UI guard
-// alone is not sufficient.
+// Org Owner/Admin-only: this per-facility emission-estimate config feeds the
+// reference soil temperature submitted with every 200-year removal (the
+// genset yield is a vestigial local estimate since issue #319).
 export async function saveFacilityEmissionConfig(
   input: FacilityEmissionConfigFormData,
 ): Promise<ActionResult<CertifierProjectRow>> {
   return withAction(async (orgCtx) => {
-    await requireAdminAction();
+    requireOrgRole(orgCtx, "admin");
     const parsed = facilityEmissionConfigSchema.parse(input);
     return updateFacilityEmissionConfig(orgCtx, {
       facilityId: parsed.facilityId,

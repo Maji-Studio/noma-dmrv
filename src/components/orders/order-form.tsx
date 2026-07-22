@@ -258,6 +258,14 @@ export function OrderForm({
           required
           disabled={isSubmitting}
           filterBy={contextFacilityId ? { facilityId: contextFacilityId } : undefined}
+          emptyHint={{
+            message:
+              "No biochar products yet — create a product from a completed production run first.",
+            href: contextFacilityId
+              ? `/biochar-products?facility=${encodeURIComponent(contextFacilityId)}`
+              : "/biochar-products",
+            linkLabel: "Open biochar products",
+          }}
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">

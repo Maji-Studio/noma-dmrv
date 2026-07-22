@@ -7,15 +7,17 @@
  * operator surface; Track 2 adds the Method-B unlock action.
  */
 
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   creditBatches,
+  facilities,
   feedstockTypes,
   productionProcesses,
   samples,
   type ProductionProcess,
 } from "@/db/schema";
+import { formatFacilityDate, formatUtcDate } from "@/lib/date-utils";
 import {
   METHOD_B_MINIMUM_METHOD_A_SAMPLES,
   PROCESS_ROLLING_WINDOW_MONTHS,
@@ -40,11 +42,13 @@ import {
 } from "@/lib/calculations/unsampled-carbon";
 import type {
   MoisturePathway,
+  SetOperationalStartInput,
   UnlockMethodBInput,
 } from "@/schemas/production-process";
 import { countEligibleSamplesByProcess } from "./isometric";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
+import { SafeError } from "@/lib/errors";
 
 type Executor = DbTransaction | typeof db;
 const PRODUCTION_PROCESS_CURRENT_LOCK_SCOPE = "production-process-current";
@@ -146,6 +150,28 @@ export interface ProductionProcessSummary {
   moisturePathway: MoisturePathway | null;
   /** Lifetime eligible replicate samples (the ≥30 baseline counter). */
   eligibleSampleCount: number;
+  /**
+   * Linked samples excluded from the baseline because their sampling time is in
+   * the future ("as of now" upper bound). They exist and may satisfy batch
+   * chemistry, but count toward the baseline only once their sampling date
+   * passes — surfaced so the operator sees WHY the counter disagrees with a
+   * batch's sample roll-up instead of reverse-engineering the clock.
+   */
+  futureSampleCount: number;
+  /** Earliest future sampling time — when the next excluded sample starts counting. */
+  nextCountableSamplingTime: Date | null;
+  /**
+   * The same instant as a facility-local `YYYY-MM-DD` day, for display. The
+   * surfaces show this — never `nextCountableSamplingTime` through a viewer-local
+   * formatter — so the "counted from" day matches the facility-local day the
+   * durability chip shows and never drifts by one across timezones.
+   */
+  nextCountableSamplingDay: string | null;
+  /**
+   * Linked samples dated before the process's operational `established_at` —
+   * permanently excluded from the baseline (ADR 0017, 2026-07-12 amendment).
+   */
+  preEstablishmentSampleCount: number;
   /** The agreed baseline target (default 30, `G-F74T-0`). */
   baselineTarget: number;
   /** True once the lifetime count clears the baseline → Method-B-eligible. */
@@ -191,12 +217,71 @@ export async function getProductionProcessSummariesByFacility(
 
   if (processRows.length === 0) return [];
 
+  // Facility timezone resolves the "counted from" instant to a facility-local
+  // calendar day, so the process surfaces agree with the durability chip and
+  // never drift a day under a viewer-local formatter (UTC fallback).
+  const [facilityRow] = await db
+    .select({ timezone: facilities.timezone })
+    .from(facilities)
+    .where(
+      and(
+        eq(facilities.id, facilityId),
+        eq(facilities.organizationId, ctx.organizationId),
+      ),
+    );
+  const facilityTimezone = facilityRow?.timezone ?? null;
+  const facilityLocalDay = (instant: Date | null): string | null =>
+    instant == null
+      ? null
+      : facilityTimezone
+        ? formatFacilityDate(instant, facilityTimezone)
+        : formatUtcDate(instant);
+
+  const asOfDate = new Date();
   const eligibleSamplesByProcess = await countEligibleSamplesByProcess(ctx, db, {
     facilityId,
     // Match the transactional unlock guard: future-dated samples must not make
     // the operator surface advertise an unlock that the mutation will reject.
-    asOfDate: new Date(),
+    asOfDate,
   });
+
+  // Baseline-excluded samples, per process, with the reason split out so the
+  // surface can NAME the exclusion (future-dated vs pre-establishment) instead
+  // of showing a bare counter that silently disagrees with the batch roll-up.
+  const exclusionRows = await db
+    .select({
+      productionProcessId: creditBatches.productionProcessId,
+      // Baseline window is [established_at, method_b_unlocked_at): once a process
+      // has unlocked Method B, future-dated samples land AFTER the unlock and are
+      // never baseline evidence (they mirror the DB backstop in migration 0083),
+      // so the "counted from <date>" note must not advertise them. A null unlock
+      // timestamp (still Method A) keeps every future-dated sample in view.
+      futureSampleCount: sql<number>`count(*) filter (where ${samples.samplingTime} >= ${asOfDate} and ${samples.samplingTime} >= ${productionProcesses.establishedAt} and (${productionProcesses.methodBUnlockedAt} is null or ${samples.samplingTime} < ${productionProcesses.methodBUnlockedAt}))`.mapWith(Number),
+      // mapWith(column) reuses the timestamp decoder, so the min comes back as
+      // a Date on the same UTC convention as the column reads.
+      nextCountableSamplingTime: sql<Date | null>`min(${samples.samplingTime}) filter (where ${samples.samplingTime} >= ${asOfDate} and ${samples.samplingTime} >= ${productionProcesses.establishedAt} and (${productionProcesses.methodBUnlockedAt} is null or ${samples.samplingTime} < ${productionProcesses.methodBUnlockedAt}))`.mapWith(samples.samplingTime),
+      preEstablishmentSampleCount: sql<number>`count(*) filter (where ${samples.samplingTime} < ${productionProcesses.establishedAt})`.mapWith(Number),
+    })
+    .from(samples)
+    .innerJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
+    .innerJoin(
+      productionProcesses,
+      and(
+        eq(productionProcesses.id, creditBatches.productionProcessId),
+        eq(productionProcesses.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(
+      and(
+        eq(creditBatches.facilityId, facilityId),
+        eq(creditBatches.organizationId, ctx.organizationId),
+        eq(samples.organizationId, ctx.organizationId),
+      ),
+    )
+    .groupBy(creditBatches.productionProcessId);
+  const exclusionsByProcess = new Map(
+    exclusionRows.map((row) => [row.productionProcessId, row] as const),
+  );
 
   // Per credit batch: its pooled replicate-sample count, grouped by process.
   // GROUP BY the credit-batch PK functionally determines code/process_id.
@@ -238,6 +323,7 @@ export async function getProductionProcessSummariesByFacility(
         }) === process.samplingMethod,
     );
     const eligibleSampleCount = eligibleSamplesByProcess.get(process.id) ?? 0;
+    const exclusions = exclusionsByProcess.get(process.id);
     const requirement = deriveSamplingRequirement(
       process.samplingMethod,
       batches,
@@ -256,6 +342,12 @@ export async function getProductionProcessSummariesByFacility(
       randomSamplingPlanRef: process.randomSamplingPlanRef,
       moisturePathway: process.moisturePathway,
       eligibleSampleCount,
+      futureSampleCount: exclusions?.futureSampleCount ?? 0,
+      nextCountableSamplingTime: exclusions?.nextCountableSamplingTime ?? null,
+      nextCountableSamplingDay: facilityLocalDay(
+        exclusions?.nextCountableSamplingTime ?? null,
+      ),
+      preEstablishmentSampleCount: exclusions?.preEstablishmentSampleCount ?? 0,
       baselineTarget: METHOD_B_MINIMUM_METHOD_A_SAMPLES,
       meetsBaseline: eligibleSampleCount >= METHOD_B_MINIMUM_METHOD_A_SAMPLES,
       totalBatches: requirement.totalBatches,
@@ -351,6 +443,73 @@ export async function unlockMethodBForProcess(
   });
 }
 
+/**
+ * Set a production process's true operational start (`established_at`) — the
+ * correction for a back-entered facility whose real sampling predates the row
+ * the system auto-created (ADR 0017, 2026-07-12 amendment). Because the baseline
+ * window is `[established_at, …)`, an operational start dated after sampling
+ * began strands legitimate samples outside the count; moving it back lets them
+ * qualify so the facility can reach Method B.
+ *
+ * Editable ONLY while the process is still on Method A. After Method B unlocks,
+ * the baseline window is fixed history: a change would retroactively redraw which
+ * samples were the ≥30 baseline. Three layers reject a post-unlock edit — this
+ * row-locked check, the `isNull(method_b_unlocked_at)` UPDATE predicate (closes
+ * the check→update race), and the DB trigger (migration 0085, against direct SQL).
+ * Organization scope is enforced here; the fn layer gates the owner/admin role.
+ */
+export async function setProcessOperationalStart(
+  ctx: OrgContext,
+  input: SetOperationalStartInput,
+): Promise<ProductionProcess> {
+  requireOrgScope(ctx);
+
+  return db.transaction(async (tx) => {
+    const [process] = await tx
+      .select()
+      .from(productionProcesses)
+      .where(
+        and(
+          eq(productionProcesses.id, input.processId),
+          eq(productionProcesses.organizationId, ctx.organizationId),
+        ),
+      )
+      .for("update")
+      .limit(1);
+
+    if (!process) {
+      throw new SafeError("Production process not found.");
+    }
+    if (process.methodBUnlockedAt != null) {
+      throw new SafeError(
+        "This production process has already unlocked Method B — its baseline window is fixed history and the operational start can no longer change.",
+      );
+    }
+
+    const [updated] = await tx
+      .update(productionProcesses)
+      .set({ establishedAt: input.establishedAt, updatedAt: new Date() })
+      .where(
+        and(
+          eq(productionProcesses.id, input.processId),
+          eq(productionProcesses.organizationId, ctx.organizationId),
+          // DB-layer backstop: never touch a row that unlocked Method B between
+          // the SELECT above and this UPDATE.
+          isNull(productionProcesses.methodBUnlockedAt),
+        ),
+      )
+      .returning();
+
+    if (!updated) {
+      throw new SafeError(
+        "This production process has already unlocked Method B — its operational start can no longer change.",
+      );
+    }
+
+    return updated;
+  });
+}
+
 export interface ProcessCarbonPreview {
   productionProcessId: string;
   /** The as-of production date the eligible window was anchored on (ISO). */
@@ -363,7 +522,9 @@ export interface ProcessCarbonPreview {
  * Load a production process's credit-batch-linked samples (the raw pool both the
  * unsampled-carbon preview and the compliance-drift carbon counter window). The
  * inner join drops in-process samples (null `credit_batch_id`, internal-only per
- * ADR 0016). Returns raw rows — the trailing-window filter
+ * ADR 0016), and samples dated before the process's operational `established_at`
+ * are excluded — they never feed the eligible pool (ADR 0017, 2026-07-12
+ * amendment). Returns raw rows — the trailing-window filter
  * (`filterEligibleSamples`) belongs to the engine/read path, not this loader.
  */
 async function loadProcessSamples(
@@ -378,7 +539,20 @@ async function loadProcessSamples(
     })
     .from(samples)
     .innerJoin(creditBatches, and(eq(samples.creditBatchId, creditBatches.id), eq(creditBatches.organizationId, ctx.organizationId)))
-    .where(and(eq(creditBatches.productionProcessId, productionProcessId), eq(samples.organizationId, ctx.organizationId)));
+    .innerJoin(
+      productionProcesses,
+      and(
+        eq(productionProcesses.id, creditBatches.productionProcessId),
+        eq(productionProcesses.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(
+      and(
+        eq(creditBatches.productionProcessId, productionProcessId),
+        eq(samples.organizationId, ctx.organizationId),
+        gte(samples.samplingTime, productionProcesses.establishedAt),
+      ),
+    );
 }
 
 /**

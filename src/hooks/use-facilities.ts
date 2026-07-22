@@ -41,7 +41,9 @@ export const facilityKeys = {
   reactors: (id: string) => [...facilityKeys.all, id, "reactors"] as const,
   storageLocations: (id: string) =>
     [...facilityKeys.all, id, "storageLocations"] as const,
-  countries: () => [...facilityKeys.all, "countries"] as const,
+  countriesPrefix: () => [...facilityKeys.all, "countries"] as const,
+  countries: (archived: boolean) =>
+    [...facilityKeys.all, "countries", archived] as const,
   codeCheck: (code: string, excludeId?: string) =>
     [...facilityKeys.all, "codeCheck", code, excludeId] as const,
   archiveImpact: (id: string) =>
@@ -171,13 +173,14 @@ export function useFacilityStorageLocations(
 }
 
 /**
- * Hook to fetch unique countries from all facilities
+ * Hook to fetch unique facility countries for the filter dropdown — scoped to
+ * the active or archived collection so the options always match the list.
  */
-export function useFacilityCountries() {
+export function useFacilityCountries(archived = false) {
   return useQuery({
-    queryKey: facilityKeys.countries(),
+    queryKey: facilityKeys.countries(archived),
     queryFn: async () => {
-      const result = await getFacilityCountriesFn();
+      const result = await getFacilityCountriesFn(archived);
       if (!result.success) {
         throw new Error(result.error);
       }
@@ -237,7 +240,7 @@ export function useCreateFacility(
       // Invalidate all facility lists
       await queryClient.invalidateQueries({ queryKey: facilityKeys.lists() });
       // Invalidate countries in case a new country was added
-      await queryClient.invalidateQueries({ queryKey: facilityKeys.countries() });
+      await queryClient.invalidateQueries({ queryKey: facilityKeys.countriesPrefix() });
 
       // Pre-populate the detail cache with the new facility
       queryClient.setQueryData(facilityKeys.detail(data.id), data);
@@ -341,7 +344,7 @@ export function useUpdateFacility(
         queryKey: facilityKeys.detailWithRelations(data.id),
       });
       queryClient.invalidateQueries({ queryKey: facilityKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: facilityKeys.countries() });
+      queryClient.invalidateQueries({ queryKey: facilityKeys.countriesPrefix() });
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -561,7 +564,7 @@ export function useFacilityCacheInvalidation() {
 
     /** Invalidate countries list */
     invalidateCountries: () =>
-      queryClient.invalidateQueries({ queryKey: facilityKeys.countries() }),
+      queryClient.invalidateQueries({ queryKey: facilityKeys.countriesPrefix() }),
 
     /** Remove a specific facility from cache (use after deletion) */
     removeFromCache: (facilityId: string) => {
