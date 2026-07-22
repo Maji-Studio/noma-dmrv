@@ -12,6 +12,8 @@ import {
   FormSelect,
   PositionPicker,
   ServerError,
+  makeCertFieldStatus,
+  resolveCertFieldStatus,
 } from "@/components/forms";
 import {
   transportLegFormSchema,
@@ -26,7 +28,8 @@ import {
 import { DEFAULT_TRIP_TYPE, TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import type { TransportLeg } from "@/db/schema";
-import { TransportEvidenceDocuments } from "./transport-evidence-documents";
+import { TransportEvidencePanel } from "./transport-evidence-documents";
+import { hasDocumentBackedDistanceProvenance } from "@/lib/certification/transport-evidence";
 
 interface TransportLegFormProps {
   /** When provided, the form edits this leg; otherwise it creates a new one. */
@@ -111,6 +114,8 @@ export function TransportLegForm({
   embedded = false,
 }: TransportLegFormProps) {
   const isEditMode = !!leg;
+  const isPersisted = !!leg && isSavedTransportLeg(leg);
+  const defaultValues = legToFormDefaults(leg);
 
   const {
     register,
@@ -120,8 +125,9 @@ export function TransportLegForm({
     formState: { errors },
   } = useForm({
     resolver: zodResolver(transportLegFormSchema),
-    defaultValues: legToFormDefaults(leg),
+    defaultValues,
   });
+  const certStatus = makeCertFieldStatus(isPersisted ? defaultValues : undefined);
 
   // Provenance: hand-editing the distance reverts a CALC'd map estimate to
   // manual — the operator can explicitly re-mark it as document-backed.
@@ -229,6 +235,7 @@ export function TransportLegForm({
             label="Distance (km)"
             required
             certifyRequired={isTransportLegCertifyField("distanceKm")}
+            certifyStatus={certStatus("distanceKm")}
             error={errors.distanceKm?.message}
             disabled={isSubmitting}
             // The provenance select next to this field is the source UI.
@@ -256,6 +263,11 @@ export function TransportLegForm({
             label="Distance source"
             error={errors.distanceSource?.message}
             helperText="Use Document when the distance comes from shipping evidence."
+            certifyRequired={isTransportLegCertifyField("distanceSource")}
+            certifyStatus={resolveCertFieldStatus(
+              isPersisted ? true : undefined,
+              hasDocumentBackedDistanceProvenance(defaultValues.distanceSource),
+            )}
           >
             <FormSelect
               id="distanceSource"
@@ -298,6 +310,7 @@ export function TransportLegForm({
             error={errors.loadMassKg?.message}
             helperText="Mass moved on this leg. Used to weight transport emissions."
             certifyRequired={isTransportLegCertifyField("loadMassKg")}
+            certifyStatus={certStatus("loadMassKg")}
           >
             <FormInput
               id="loadMassKg"
@@ -327,18 +340,19 @@ export function TransportLegForm({
 
       <FormSection title="Documentation">
         <p className="body-small text-[var(--color-text-secondary)]">
-          Verification evidence (Transportation v1.1 §6) — bill of lading and
-          weigh-scale ticket.
+          Classify each supporting file before upload. One accepted transport
+          evidence file is sufficient.
         </p>
         {isEditMode && leg && isSavedTransportLeg(leg) ? (
-          <TransportEvidenceDocuments
+          <TransportEvidencePanel
             entityType="transport_leg"
             entityId={leg.id}
+            distanceSource={leg.distanceSource}
           />
         ) : (
           <p className="body-small text-[var(--color-text-tertiary)] border border-dashed border-[var(--color-border-secondary)] px-12 py-16">
-            Save the leg first, then re-open it to attach the bill of lading and
-            weigh-scale ticket.
+            Save the leg first, then re-open it to attach classified transport
+            evidence.
           </p>
         )}
       </FormSection>

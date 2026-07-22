@@ -1,0 +1,1 @@
+ALTER TYPE "public"."documentation_type" ADD VALUE 'other_transport_evidence' BEFORE 'lab_report';

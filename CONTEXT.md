@@ -407,6 +407,17 @@ a derived leg from its supplier/customer default. Orthogonal to a leg's
 `isDerived` flag. Without a configured routing key there is no
 `map_estimate` path — distance entry stays manual.
 
+**Transport evidence**:
+The composite certification requirement for a transported record: its saved
+**Distance source** is `document` and it has at least one successfully uploaded,
+classified file — a bill of lading, weigh-scale ticket, or other transport
+evidence. One accepted file is sufficient; the named document types are
+alternatives, not a checklist. Provenance and evidence remain separate facts:
+uploading a file never changes the saved Distance source, and selecting
+`document` never proves that a file exists. _Avoid_: inferring classification
+from a filename; calling evidence complete from `distance_source=document`
+alone; requiring both a bill of lading and a weigh-scale ticket.
+
 ### Operational oversight
 
 **Attention item**:

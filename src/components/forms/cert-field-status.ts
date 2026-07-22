@@ -14,11 +14,26 @@ import type { CertFieldStatus } from "@/components/ui/certification-field-tag";
 
 export type { CertFieldStatus };
 
-const isFilled = (v: unknown): boolean =>
-  v !== undefined &&
-  v !== null &&
-  v !== "" &&
-  !(typeof v === "number" && Number.isNaN(v));
+export const isCertFieldValuePresent = (value: unknown): boolean => {
+  if (value == null) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "number") return Number.isFinite(value);
+  return true;
+};
+
+/**
+ * Resolve any saved certification requirement, including composite/derived
+ * requirements that cannot be inferred from one field value. `persisted`
+ * stays undefined while the saved record is unknown (for example, while an
+ * async child query loads), so the UI makes no orange/green claim yet.
+ */
+export function resolveCertFieldStatus(
+  persisted: boolean | undefined,
+  satisfied: boolean,
+): CertFieldStatus {
+  if (persisted !== true) return "neutral";
+  return satisfied ? "satisfied" : "missing";
+}
 
 /**
  * Build a resolver that reports a CERT field's saved state. Pass the form's
@@ -31,6 +46,9 @@ export function makeCertFieldStatus(
 ): (fieldName: string) => CertFieldStatus {
   return (fieldName) => {
     if (!savedValues) return "neutral";
-    return isFilled(savedValues[fieldName]) ? "satisfied" : "missing";
+    return resolveCertFieldStatus(
+      true,
+      isCertFieldValuePresent(savedValues[fieldName]),
+    );
   };
 }

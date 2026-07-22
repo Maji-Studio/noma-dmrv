@@ -12,6 +12,7 @@ import {
   orders,
   facilities,
   customers,
+  customerLocations,
   applications,
   biocharProducts,
   drivers,
@@ -19,11 +20,13 @@ import {
   type Delivery,
 } from "@/db/schema";
 import type { DeliveryFilterData, DeliveryStatus } from "@/schemas/deliveries";
+import {
+  effectiveDeliveryDistanceKm,
+  effectiveDeliveryDistanceSource,
+} from "./delivery-distance-projections";
+import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
 
-// ============================================
 // Types
-// ============================================
-
 export interface DeliveryWithRelations extends Delivery {
   status: DeliveryStatus;
   orderCode: string | null;
@@ -32,6 +35,9 @@ export interface DeliveryWithRelations extends Delivery {
   biocharProductCode: string | null;
   driverName: string | null;
   vehicleName: string | null;
+  effectiveDistanceKm: number | null;
+  effectiveDistanceSource: "map_estimate" | "manual" | "document" | null;
+  transportEvidenceDocumentCount: number;
 }
 
 export interface PaginatedDeliveries {
@@ -43,6 +49,10 @@ export interface PaginatedDeliveries {
 }
 
 export interface DeliveryDetail extends Delivery {
+  effectiveDistanceKm: number | null;
+  effectiveDistanceSource: "map_estimate" | "manual" | "document" | null;
+  transportEvidenceDocumentCount: number;
+  customerName: string | null;
   order: {
     id: string;
     code: string;
@@ -77,10 +87,7 @@ export interface DeliveryStats {
   deliveredCount: number;
 }
 
-// ============================================
-// Auth Guards
-// ============================================
-
+// Auth guards
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
@@ -280,11 +287,28 @@ export async function getDeliveries(
       biocharProductCode: biocharProducts.code,
       driverName: drivers.name,
       vehicleName: vehicles.name,
+      effectiveDistanceKm: effectiveDeliveryDistanceKm(deliveryColumns),
+      effectiveDistanceSource: effectiveDeliveryDistanceSource(deliveryColumns),
+      transportEvidenceDocumentCount: transportEvidenceDocumentCount(
+        ctx.organizationId,
+        "delivery",
+        deliveries.id,
+      ),
     })
     .from(deliveries)
     .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
     .leftJoin(facilities, and(eq(deliveries.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
     .leftJoin(customers, and(eq(orders.customerId, customers.id), eq(customers.organizationId, ctx.organizationId)))
+    .leftJoin(
+      customerLocations,
+      and(
+        eq(
+          customerLocations.id,
+          sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+        ),
+        eq(customerLocations.organizationId, ctx.organizationId),
+      ),
+    )
     .leftJoin(biocharProducts, and(eq(deliveries.biocharProductId, biocharProducts.id), eq(biocharProducts.organizationId, ctx.organizationId)))
     .leftJoin(drivers, and(eq(deliveries.driverId, drivers.id), eq(drivers.organizationId, ctx.organizationId)))
     .leftJoin(vehicles, and(eq(deliveries.vehicleId, vehicles.id), eq(vehicles.organizationId, ctx.organizationId)))
@@ -341,15 +365,34 @@ export async function getDeliveryWithRelations(
       orderCode: orders.code,
       orderDate: orders.orderDate,
       orderQuantityKg: orders.quantityKg,
+      customerName: customers.name,
       facilityCode: facilities.code,
       facilityName: facilities.name,
       biocharProductCode: biocharProducts.code,
       driverName: drivers.name,
       vehicleName: vehicles.name,
       vehicleIdentifier: vehicles.identifier,
+      effectiveDistanceKm: effectiveDeliveryDistanceKm(deliveryColumns),
+      effectiveDistanceSource: effectiveDeliveryDistanceSource(deliveryColumns),
+      transportEvidenceDocumentCount: transportEvidenceDocumentCount(
+        ctx.organizationId,
+        "delivery",
+        deliveries.id,
+      ),
     })
     .from(deliveries)
     .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
+    .leftJoin(customers, and(eq(orders.customerId, customers.id), eq(customers.organizationId, ctx.organizationId)))
+    .leftJoin(
+      customerLocations,
+      and(
+        eq(
+          customerLocations.id,
+          sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+        ),
+        eq(customerLocations.organizationId, ctx.organizationId),
+      ),
+    )
     .leftJoin(facilities, and(eq(deliveries.facilityId, facilities.id), eq(facilities.organizationId, ctx.organizationId)))
     .leftJoin(biocharProducts, and(eq(deliveries.biocharProductId, biocharProducts.id), eq(biocharProducts.organizationId, ctx.organizationId)))
     .leftJoin(drivers, and(eq(deliveries.driverId, drivers.id), eq(drivers.organizationId, ctx.organizationId)))
@@ -384,6 +427,11 @@ export async function getDeliveryWithRelations(
     archivedAt: deliveryRow.archivedAt,
     createdAt: deliveryRow.createdAt,
     updatedAt: deliveryRow.updatedAt,
+    effectiveDistanceKm: deliveryRow.effectiveDistanceKm,
+    effectiveDistanceSource: deliveryRow.effectiveDistanceSource,
+    transportEvidenceDocumentCount:
+      deliveryRow.transportEvidenceDocumentCount,
+    customerName: deliveryRow.customerName,
     order: deliveryRow.orderId
       ? {
           id: deliveryRow.orderId,

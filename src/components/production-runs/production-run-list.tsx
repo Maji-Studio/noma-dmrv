@@ -43,6 +43,7 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { formatDate } from "@/lib/format-utils";
+import { formatLocalTime } from "@/lib/date-utils";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
 import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
@@ -610,85 +611,80 @@ export function ProductionRunList() {
         subtitle={sideSheetSubtitle}
         editLabel="Edit Production Run"
         size="wide"
-        viewModeChildren={sideSheetEntity ? (
-          <>
-            <ProductionRunReadingTable
-              productionRunId={sideSheetEntity.id}
-              readOnly
-            />
-            <ProductionReadingsDocuments
-              productionRunId={sideSheetEntity.id}
-              readOnly
-            />
-            <ProductionSampleTable
-              productionRunId={sideSheetEntity.id}
-              readOnly
-            />
-            <ProductionIncidentTable
-              productionRunId={sideSheetEntity.id}
-              readOnly
-            />
-          </>
-        ) : undefined}
         sections={sideSheetEntity ? [
           {
-            title: "General",
+            title: "Run Setup",
             fields: [
-              { label: "Code", value: sideSheetEntity.code },
-              { label: "Date", value: formatDate(sideSheetEntity.date) },
-              { label: "Status", value: <RunStatusBadge status={sideSheetEntity.status} /> },
-              {
-                label: "Certification",
-                value: (
-                  <EntityCertifyReadinessBadge
-                    readiness={deriveEntityCertifyReadiness(
-                      "productionRun",
-                      sideSheetEntity,
-                    )}
-                  />
-                ),
-              },
-            ],
-          },
-          {
-            title: "Location",
-            fields: [
-              { label: "Facility", value: sideSheetEntity.facilityName },
               { label: "Reactor", value: sideSheetEntity.reactorIdentifier },
+              { label: "Status", value: <RunStatusBadge status={sideSheetEntity.status} /> },
+              ...(sideSheetEntity.status === "cancelled"
+                ? [{ label: "Cancellation reason", value: sideSheetEntity.cancellationReason }]
+                : []),
+              { label: "Start Date", value: formatDate(sideSheetEntity.startTime) },
+              { label: "Start Time", value: formatLocalTime(sideSheetEntity.startTime) },
+              { label: "End Date", value: sideSheetEntity.endTime ? formatDate(sideSheetEntity.endTime) : null },
+              { label: "End Time", value: sideSheetEntity.endTime ? formatLocalTime(sideSheetEntity.endTime) : null },
+              { label: "Operator", value: sideSheetEntity.operatorName },
             ],
           },
           {
-            title: "Operations",
+            title: "Feedstock & Processing",
             fields: [
-              { label: "Operator", value: sideSheetEntity.operatorName },
-              { label: "Feeding Rate", value: sideSheetEntity.feedingRateKgHr != null ? `${sideSheetEntity.feedingRateKgHr} kg/hr` : null },
-              { label: "Residence Time", value: sideSheetEntity.residenceTimeMinutes != null ? `${sideSheetEntity.residenceTimeMinutes} min` : null },
+              { label: "Source Bin", value: sideSheetEntity.feedstockStorageLocationCode },
+              { label: "Wet Mass (kg)", ...certificationDetailField("productionRun", "feedstockWetMassKg"), value: sideSheetEntity.feedstockWetMassKg != null ? `${sideSheetEntity.feedstockWetMassKg.toLocaleString()} kg` : null },
+              { label: "Moisture Content (%)", ...certificationDetailField("productionRun", "feedstockMoisturePercent"), value: sideSheetEntity.feedstockMoisturePercent != null ? `${sideSheetEntity.feedstockMoisturePercent}%` : null },
+              { label: "Dry Mass (derived)", value: sideSheetEntity.feedstockMassDryKg != null ? `${sideSheetEntity.feedstockMassDryKg.toLocaleString()} kg` : null },
+              { label: "Feed Rate (kg/hr)", value: sideSheetEntity.feedingRateKgHr != null ? `${sideSheetEntity.feedingRateKgHr} kg/hr` : null },
+              { label: "Residence Time (min)", value: sideSheetEntity.residenceTimeMinutes != null ? `${sideSheetEntity.residenceTimeMinutes} min` : null },
             ],
           },
           {
             title: "Output",
             fields: [
-              { label: "Feedstock Wet Mass", ...certificationDetailField("productionRun", "feedstockWetMassKg"), value: sideSheetEntity.feedstockWetMassKg != null ? `${sideSheetEntity.feedstockWetMassKg.toLocaleString()} kg` : null },
-              { label: "Feedstock Moisture", ...certificationDetailField("productionRun", "feedstockMoisturePercent"), value: sideSheetEntity.feedstockMoisturePercent != null ? `${sideSheetEntity.feedstockMoisturePercent}%` : null },
-              { label: "Biochar Wet Mass", ...certificationDetailField("productionRun", "biocharOutputKg"), value: sideSheetEntity.biocharOutputKg != null ? `${sideSheetEntity.biocharOutputKg.toLocaleString()} kg` : null },
-              { label: "Biochar Moisture", ...certificationDetailField("productionRun", "biocharMoisturePercent"), value: sideSheetEntity.biocharMoisturePercent != null ? `${sideSheetEntity.biocharMoisturePercent}%` : null },
-              { label: "Biochar Dry Mass", value: sideSheetEntity.biocharDryMassKg != null ? `${sideSheetEntity.biocharDryMassKg.toLocaleString()} kg` : null },
+              { label: "Biochar Storage", value: sideSheetEntity.biocharStorageLocationCode },
+              { label: "Biochar Wet Mass (kg)", ...certificationDetailField("productionRun", "biocharOutputKg"), value: sideSheetEntity.biocharOutputKg != null ? `${sideSheetEntity.biocharOutputKg.toLocaleString()} kg` : null },
+              { label: "Biochar Moisture (%)", ...certificationDetailField("productionRun", "biocharMoisturePercent"), value: sideSheetEntity.biocharMoisturePercent != null ? `${sideSheetEntity.biocharMoisturePercent}%` : null },
+              { label: "Biochar Dry Mass (derived)", value: sideSheetEntity.biocharDryMassKg != null ? `${sideSheetEntity.biocharDryMassKg.toLocaleString()} kg` : null },
             ],
           },
           {
             title: "Energy",
             fields: [
-              { label: "Diesel Operation", ...certificationDetailField("productionRun", "dieselOperationLiters"), value: sideSheetEntity.dieselOperationLiters != null ? `${sideSheetEntity.dieselOperationLiters} L` : null },
-              { label: "Diesel Genset", ...certificationDetailField("productionRun", "dieselGensetLiters"), value: sideSheetEntity.dieselGensetLiters != null ? `${sideSheetEntity.dieselGensetLiters} L` : null },
-              { label: "Preprocessing Fuel", ...certificationDetailField("productionRun", "preprocessingFuelLiters"), value: sideSheetEntity.preprocessingFuelLiters != null ? `${sideSheetEntity.preprocessingFuelLiters} L` : null },
-              { label: "Electricity", ...certificationDetailField("productionRun", "electricityKwh"), value: sideSheetEntity.electricityKwh != null ? `${sideSheetEntity.electricityKwh} kWh` : null },
+              { label: "Startup / Plant Diesel (L)", ...certificationDetailField("productionRun", "dieselOperationLiters"), value: sideSheetEntity.dieselOperationLiters != null ? `${sideSheetEntity.dieselOperationLiters} L` : null },
+              { label: "Genset Diesel (L)", ...certificationDetailField("productionRun", "dieselGensetLiters"), value: sideSheetEntity.dieselGensetLiters != null ? `${sideSheetEntity.dieselGensetLiters} L` : null },
+              { label: "Preprocess Fuel (L)", ...certificationDetailField("productionRun", "preprocessingFuelLiters"), value: sideSheetEntity.preprocessingFuelLiters != null ? `${sideSheetEntity.preprocessingFuelLiters} L` : null },
+              { label: "Electricity (kWh)", ...certificationDetailField("productionRun", "electricityKwh"), value: sideSheetEntity.electricityKwh != null ? `${sideSheetEntity.electricityKwh} kWh` : null },
             ],
           },
           {
-            title: "Storage",
+            title: "Readings CSV Import",
+            fields: [],
+            content: (
+              <div className="space-y-20">
+                <ProductionReadingsDocuments productionRunId={sideSheetEntity.id} readOnly />
+                <ProductionRunReadingTable productionRunId={sideSheetEntity.id} readOnly />
+              </div>
+            ),
+          },
+          {
+            title: "Samples & Incidents",
+            fields: [],
+            content: (
+              <div className="space-y-20">
+                <ProductionSampleTable productionRunId={sideSheetEntity.id} readOnly />
+                <ProductionIncidentTable productionRunId={sideSheetEntity.id} readOnly />
+              </div>
+            ),
+          },
+          {
+            title: "Record Metadata",
             fields: [
-              { label: "Biochar Storage", value: sideSheetEntity.biocharStorageLocationCode },
-              { label: "Feedstock Storage", value: sideSheetEntity.feedstockStorageLocationCode },
+              { label: "Code", value: sideSheetEntity.code },
+              { label: "Facility", value: sideSheetEntity.facilityName },
+              {
+                label: "Certification",
+                value: <EntityCertifyReadinessBadge readiness={deriveEntityCertifyReadiness("productionRun", sideSheetEntity)} />,
+              },
             ],
           },
         ] : undefined}
@@ -705,7 +701,6 @@ export function ProductionRunList() {
         >
           {sideSheetEntity && sideSheetMode === "edit" ? (
             <>
-              <ProductionRunReadingTable productionRunId={sideSheetEntity.id} />
               <ProductionSampleTable productionRunId={sideSheetEntity.id} />
               <ProductionIncidentTable
                 productionRunId={sideSheetEntity.id}

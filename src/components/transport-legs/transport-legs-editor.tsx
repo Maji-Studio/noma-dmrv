@@ -20,8 +20,10 @@ import type {
   TransportLegFormData,
 } from "@/schemas/transport-legs";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
+import { hasCompleteTransportEvidence } from "@/lib/certification/transport-evidence";
 import type { TransportLeg } from "@/db/schema";
 import { TransportLegForm } from "./transport-leg-form";
+import { deriveTransportLegCertStatuses } from "./transport-leg-cert-status";
 
 interface TransportLegsEditorProps {
   entityType: TransportEntityTypeValue;
@@ -184,6 +186,10 @@ export function TransportLegsEditor({
     ? deferredLegs
     : (legs ?? []);
   const hasLegs = displayedLegs.length > 0;
+  const certStatuses = deriveTransportLegCertStatuses(
+    deferred ? deferredLegs : legs,
+    !deferred,
+  );
 
   return (
     <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
@@ -216,7 +222,7 @@ export function TransportLegsEditor({
 
       {/* Table */}
       {!deferred && isLoading ? (
-        <TableSkeleton columns={readOnly ? 4 : 5} rows={2} />
+        <TableSkeleton columns={readOnly ? 5 : 6} rows={2} />
       ) : !hasLegs && !inlineForm.open ? (
         <p className="body-small text-[var(--color-text-tertiary)] py-16">
           {emptyMessage ??
@@ -233,14 +239,23 @@ export function TransportLegsEditor({
                 <th className="py-8 pr-12 font-medium">
                   <span className="flex items-center gap-6">
                     Distance
-                    <CertificationFieldTag />
+                    <CertificationFieldTag status={certStatuses.distance} />
+                  </span>
+                </th>
+                <th className="py-8 pr-12 font-medium">
+                  <span className="flex items-center gap-6">
+                    Provenance
+                    <CertificationFieldTag
+                      status={certStatuses.provenance}
+                      description="Distance source must be marked Document and at least one transport-evidence file uploaded to satisfy this requirement"
+                    />
                   </span>
                 </th>
                 <th className="py-8 pr-12 font-medium">Method</th>
                 <th className="py-8 pr-12 font-medium">
                   <span className="flex items-center gap-6">
                     Load
-                    <CertificationFieldTag />
+                    <CertificationFieldTag status={certStatuses.load} />
                   </span>
                 </th>
                 {!readOnly && <th className="py-8 font-medium text-right">Actions</th>}
@@ -259,15 +274,28 @@ export function TransportLegsEditor({
                   </td>
                   <td className="py-8 pr-12">
                     {leg.distanceKm} km
-                    {leg.distanceSource ? (
-                      <span className="text-[var(--color-text-tertiary)]">
-                        {" "}· {DISTANCE_SOURCE_LABELS[leg.distanceSource]}
-                      </span>
-                    ) : deferred ? (
-                      <span className="text-[var(--color-text-tertiary)]">
-                        {" "}· —
-                      </span>
-                    ) : null}
+                  </td>
+                  <td className="py-8 pr-12 text-[var(--color-text-secondary)]">
+                    <span className="flex items-center gap-6">
+                      {leg.distanceSource
+                        ? DISTANCE_SOURCE_LABELS[leg.distanceSource]
+                        : "—"}
+                      {/* Per-row marker so the operator can tell WHICH leg is
+                          missing evidence when several are listed (the header
+                          tag only aggregates). */}
+                      {isSavedTransportLeg(leg) &&
+                        !deferred &&
+                        !hasCompleteTransportEvidence(
+                          leg.distanceSource,
+                          (leg as { transportEvidenceDocumentCount?: number })
+                            .transportEvidenceDocumentCount,
+                        ) && (
+                          <CertificationFieldTag
+                            status="missing"
+                            description="This leg needs Document provenance and at least one uploaded transport-evidence file"
+                          />
+                        )}
+                    </span>
                   </td>
                   <td className="py-8 pr-12">{formatMethod(leg.transportMethodType)}</td>
                   <td className="py-8 pr-12">

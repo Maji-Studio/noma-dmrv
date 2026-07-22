@@ -70,9 +70,10 @@ test.describe("Deferred create attachments", () => {
 
     await fillMinimalFeedstock(page, seededData);
 
-    // Deferred dropzone holds the file locally — nothing uploads yet.
+    // Deferred dropzone holds the file locally — nothing uploads yet. The
+    // classified uploader defaults its type radio to Bill of lading.
     await dialog
-      .locator("#feedstock-deferred-bill-of-lading")
+      .locator("#feedstock-deferred-transport-evidence")
       .setInputFiles(pdf("bol-deferred.pdf"));
     await expect(dialog.getByText("bol-deferred.pdf")).toBeVisible();
 
@@ -160,8 +161,13 @@ test.describe("Deferred create attachments", () => {
     const dialog = page.locator('[role="dialog"]');
 
     await fillMinimalFeedstock(page, seededData);
+    // Classify as a weigh-scale ticket, then drop the file on the single
+    // classified uploader.
     await dialog
-      .locator("#feedstock-deferred-weighbridge-ticket")
+      .getByRole("radio", { name: "Weigh-scale ticket" })
+      .check();
+    await dialog
+      .locator("#feedstock-deferred-transport-evidence")
       .setInputFiles(pdf("ticket-deferred.pdf"));
     await expect(dialog.getByText("ticket-deferred.pdf")).toBeVisible();
 

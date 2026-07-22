@@ -18,6 +18,8 @@ import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachme
 import type { TransportLegFormData } from "@/schemas/transport-legs";
 import type { SampleWithRelations } from "@/data-access/samples";
 import { SampleDocumentsPanel } from "./sample-documents-panel";
+import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
+import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 
 interface SampleTrailingSectionProps {
   sample?: SampleWithRelations;
@@ -34,6 +36,7 @@ interface SampleTrailingSectionProps {
   onDeferredLegsChange?: (legs: TransportLegFormData[]) => void;
   onRetryLegs?: () => Promise<void>;
   isSubmitting?: boolean;
+  focusTarget?: EntityFocusTarget | null;
   /** Injected by FormSpine — do not set manually. */
   __spine?: SpineMeta;
 }
@@ -92,12 +95,26 @@ export function SampleTransportSection({
   onDeferredLegsChange,
   onRetryLegs,
   isSubmitting = false,
+  focusTarget,
   __spine,
 }: SampleTrailingSectionProps) {
   return (
     <FormSection title="Transport" icon={<TruckIcon size={14} weight="bold" />} __spine={__spine}>
       {isEditMode && sample ? (
-        <div className="flex flex-col gap-12">
+        <ActionableFocusTarget
+          target={
+            focusTarget === "transport-evidence"
+              ? "transport-evidence"
+              : "transport-route"
+          }
+          activeTarget={focusTarget}
+          actionLabel={
+            focusTarget === "transport-evidence"
+              ? "Edit the leg, select Document provenance, and upload one classified transport-evidence file"
+              : "Complete the saved transport route information"
+          }
+          className="flex flex-col gap-12"
+        >
           {deferredLegs.length > 0 && (
             <div className="flex flex-col gap-10 border border-[var(--color-status-error)] p-12">
               <div className="flex flex-wrap items-center justify-between gap-8">
@@ -140,7 +157,7 @@ export function SampleTransportSection({
             entityId={sample.id}
             disabled={isSubmitting}
           />
-        </div>
+        </ActionableFocusTarget>
       ) : (
         <TransportLegsEditor
           entityType="sample"

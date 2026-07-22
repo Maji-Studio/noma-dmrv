@@ -33,6 +33,11 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { formatDate, formatDateTime } from "@/lib/format-utils";
+import {
+  ENTITY_DEEP_LINK_FOCUS_PARAM,
+  ENTITY_DEEP_LINK_MODE_PARAM,
+  parseEntityFocusTarget,
+} from "@/lib/entity-deep-link";
 import { SampleForm } from "./sample-form";
 import {
   formatDurabilityOption,
@@ -44,6 +49,10 @@ import type { TransportLegFormData } from "@/schemas/transport-legs";
 import { SampleDocumentsPanel } from "./sample-documents-panel";
 
 const READINESS_PREVIEW_LIMIT = 3;
+
+function formatPercent(value: number | null, digits = 2) {
+  return value == null ? null : `${value.toFixed(digits)}%`;
+}
 
 // ============================================
 // Durability Badge
@@ -168,6 +177,14 @@ export function SampleList() {
     "sample",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
+  const [deepLinkMode, setDeepLinkMode] = useQueryState(
+    ENTITY_DEEP_LINK_MODE_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const [deepLinkFocus, setDeepLinkFocus] = useQueryState(
+    ENTITY_DEEP_LINK_FOCUS_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [creditBatchFilter, setCreditBatchFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -229,9 +246,15 @@ export function SampleList() {
 
   const deepLinkedSideSheet =
     focusedSampleId && focusedSample.data
-      ? ({ mode: "view", entity: focusedSample.data } as const)
+      ? ({
+          mode: deepLinkMode === "edit" ? "edit" : "view",
+          entity: focusedSample.data,
+        } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const activeFocusTarget = sideSheet
+    ? null
+    : parseEntityFocusTarget(deepLinkFocus);
   const showSavedToast = (message: string, sample: SampleWithRelations) => {
     const readiness = deriveEntityCertifyReadiness("sample", sample);
     if (readiness.state === "ready") {
@@ -419,6 +442,8 @@ export function SampleList() {
 
   const openCreate = () => {
     setFocusedSampleId(null);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setFormError(null);
     deferredAttachments.clear();
     setDeferredLegs([]);
@@ -426,15 +451,21 @@ export function SampleList() {
   };
   const openView = (sample: SampleWithRelations) => {
     setFocusedSampleId(sample.id);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setFormError(null);
     setSideSheet({ mode: "view", entity: sample });
   };
   const openEdit = useCallback((sample: SampleWithRelations) => {
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setFormError(null);
     setSideSheet({ mode: "edit", entity: sample });
-  }, []);
+  }, [setDeepLinkFocus, setDeepLinkMode]);
   const closeSideSheet = () => {
     setFocusedSampleId(null);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setSideSheet(null);
     setFormError(null);
     deferredAttachments.clear();
@@ -618,80 +649,111 @@ export function SampleList() {
         editLabel="Edit Sample"
         sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? [
           {
-            title: "General",
+            title: "Sample Information",
             fields: [
-              { label: "Sample Code", value: displaySideSheet.entity.sampleCode },
-              { label: "Sampling Time", value: formatDateTime(displaySideSheet.entity.samplingTime) },
               { label: "Credit Batch", value: displaySideSheet.entity.creditBatchCode },
-              { label: "Facility", value: displaySideSheet.entity.facilityName },
-              {
-                label: "Sample chemistry",
-                value: (
-                  <EntityCertifyReadinessBadge
-                    readiness={deriveEntityCertifyReadiness(
-                      "sample",
-                      displaySideSheet.entity,
-                    )}
-                    readyLabel="Chemistry complete"
-                    readinessNoun="sample chemistry"
-                  />
-                ),
-              },
+              { label: "Sampling Time", value: formatDateTime(displaySideSheet.entity.samplingTime) },
+              { label: "Analysis Date", value: formatDate(displaySideSheet.entity.analysisDate) },
+              { label: "Lab Name", value: displaySideSheet.entity.labName },
+              { label: "Lab Accreditation", value: displaySideSheet.entity.labAccreditation },
+              { label: "Sample Weight (g)", value: displaySideSheet.entity.weightGrams },
+              { label: "Sample Volume (mL)", value: displaySideSheet.entity.volumeMl },
             ],
           },
           {
             title: "Carbon Analysis",
             fields: [
-              { label: "Total Carbon", value: displaySideSheet.entity.totalCarbonPercent != null ? `${displaySideSheet.entity.totalCarbonPercent.toFixed(1)}%` : null },
-              { label: "Organic Carbon", ...certificationDetailField("sample", "organicCarbonPercent"), value: displaySideSheet.entity.organicCarbonPercent != null ? `${displaySideSheet.entity.organicCarbonPercent.toFixed(1)}%` : null },
-              { label: "Inorganic Carbon", value: displaySideSheet.entity.inorganicCarbonPercent != null ? `${displaySideSheet.entity.inorganicCarbonPercent.toFixed(1)}%` : null },
-              { label: "H:Corg Ratio", ...certificationDetailField("sample", "hToCOrgRatio"), value: displaySideSheet.entity.hToCOrgRatio != null ? displaySideSheet.entity.hToCOrgRatio.toFixed(3) : null },
+              { label: "Total Carbon (%)", value: formatPercent(displaySideSheet.entity.totalCarbonPercent) },
+              { label: "Organic Carbon (%)", ...certificationDetailField("sample", "organicCarbonPercent"), value: formatPercent(displaySideSheet.entity.organicCarbonPercent) },
+              { label: "Inorganic Carbon (%)", value: formatPercent(displaySideSheet.entity.inorganicCarbonPercent) },
             ],
           },
           {
-            title: "Durability",
+            title: "Elemental Analysis",
             fields: [
-              { label: "Durability Option", value: formatDurabilityOption(displaySideSheet.entity.durabilityOption) },
-              { label: "Random Reflectance R0", ...certificationDetailField("sample", "randomReflectanceR0Percent"), value: displaySideSheet.entity.randomReflectanceR0Percent != null ? `${displaySideSheet.entity.randomReflectanceR0Percent.toFixed(1)}%` : null },
-              { label: "Reactive Carbon", ...certificationDetailField("sample", "reactiveCarbonPercent"), value: displaySideSheet.entity.reactiveCarbonPercent != null ? `${displaySideSheet.entity.reactiveCarbonPercent.toFixed(1)}%` : null },
-              { label: "Residual Carbon", ...certificationDetailField("sample", "residualCarbonPercent"), value: displaySideSheet.entity.residualCarbonPercent != null ? `${displaySideSheet.entity.residualCarbonPercent.toFixed(1)}%` : null },
+              { label: "Hydrogen (%)", value: formatPercent(displaySideSheet.entity.totalHydrogenPercent) },
+              { label: "Nitrogen (%)", value: formatPercent(displaySideSheet.entity.totalNitrogenPercent) },
+              { label: "Oxygen (%)", value: formatPercent(displaySideSheet.entity.totalOxygenPercent) },
+              { label: "Sulfur (%)", value: formatPercent(displaySideSheet.entity.totalSulfurPercent) },
+            ],
+          },
+          {
+            title: "Proximate Analysis",
+            fields: [
+              { label: "Ash Content (%)", value: formatPercent(displaySideSheet.entity.ashContentPercent) },
+              { label: "Moisture Content (%)", value: formatPercent(displaySideSheet.entity.moistureContentPercent) },
             ],
           },
           {
             title: "Physical Properties",
             fields: [
-              { label: "Bulk Density", value: displaySideSheet.entity.bulkDensityKgPerM3 != null ? `${displaySideSheet.entity.bulkDensityKgPerM3} kg/m\u00B3` : null },
+              { label: "Bulk Density (kg/m³)", value: displaySideSheet.entity.bulkDensityKgPerM3 },
               { label: "pH", value: displaySideSheet.entity.ph != null ? String(displaySideSheet.entity.ph) : null },
+              { label: "Salt Content (g/kg)", value: displaySideSheet.entity.saltContentGPerKg },
             ],
           },
           {
-            title: "Lab Information",
+            title: "Stability Ratios",
             fields: [
-              { label: "Lab Name", value: displaySideSheet.entity.labName },
-              { label: "Lab Accreditation", value: displaySideSheet.entity.labAccreditation },
-              { label: "Analysis Date", value: formatDate(displaySideSheet.entity.analysisDate) },
+              { label: "Inherited Durability", value: formatDurabilityOption(displaySideSheet.entity.durabilityOption) },
+              { label: "H:C org Ratio", ...certificationDetailField("sample", "hToCOrgRatio"), value: displaySideSheet.entity.hToCOrgRatio?.toFixed(4) ?? null },
+              { label: "O:C org Ratio", value: displaySideSheet.entity.oToCOrgRatio?.toFixed(4) ?? null },
+            ],
+          },
+          ...(displaySideSheet.entity.durabilityOption === "1000_year" ? [
+            {
+              title: "1000-Year Durability · R₀ Reflectance",
+              fields: [
+                { label: "Mean Random Reflectance R₀ (%)", ...certificationDetailField("sample", "randomReflectanceR0Percent"), value: formatPercent(displaySideSheet.entity.randomReflectanceR0Percent) },
+                { label: "R₀ Readings at or above 2% (%)", ...certificationDetailField("sample", "sReflectanceFraction"), value: displaySideSheet.entity.sReflectanceFraction == null ? null : formatPercent(displaySideSheet.entity.sReflectanceFraction * 100) },
+                { label: "Measurement Count", value: displaySideSheet.entity.r0MeasurementCount },
+                { label: "R₀ Analysis Date", value: formatDate(displaySideSheet.entity.r0AnalysisDate) },
+              ],
+            },
+            {
+              title: "TGA Non-Reactive Carbon",
+              fields: [
+                { label: "Reactive Carbon (%)", ...certificationDetailField("sample", "reactiveCarbonPercent"), value: formatPercent(displaySideSheet.entity.reactiveCarbonPercent) },
+                { label: "Residual (Non-Reactive) Carbon (%)", ...certificationDetailField("sample", "residualCarbonPercent"), value: formatPercent(displaySideSheet.entity.residualCarbonPercent) },
+                { label: "TGA Analysis Date", value: formatDate(displaySideSheet.entity.tgaAnalysisDate) },
+              ],
+            },
+          ] : []),
+          {
+            title: "Nutrient Claims",
+            fields: [
+              { label: "Enable nutrient claims", value: displaySideSheet.entity.nutrientClaimEnabled ? "Yes" : "No" },
+              ...(displaySideSheet.entity.nutrientClaimEnabled ? [
+                { label: "Phosphorus (%)", value: formatPercent(displaySideSheet.entity.phosphorusPercent) },
+                { label: "Potassium (%)", value: formatPercent(displaySideSheet.entity.potassiumPercent) },
+                { label: "Magnesium (%)", value: formatPercent(displaySideSheet.entity.magnesiumPercent) },
+                { label: "Calcium (%)", value: formatPercent(displaySideSheet.entity.calciumPercent) },
+                { label: "Iron (%)", value: formatPercent(displaySideSheet.entity.ironPercent) },
+              ] : []),
+            ],
+          },
+          {
+            title: "Evidence & Documents",
+            fields: [],
+            content: <SampleDocumentsPanel sampleId={displaySideSheet.entity.id} readOnly />,
+          },
+          {
+            title: "Transport",
+            fields: [],
+            content: <TransportLegsSummary entityType="sample" entityId={displaySideSheet.entity.id} />,
+          },
+          {
+            title: "Record Metadata",
+            fields: [
+              { label: "Sample Code", value: displaySideSheet.entity.sampleCode },
+              { label: "Facility", value: displaySideSheet.entity.facilityName },
+              {
+                label: "Sample chemistry",
+                value: <EntityCertifyReadinessBadge readiness={deriveEntityCertifyReadiness("sample", displaySideSheet.entity)} readyLabel="Chemistry complete" readinessNoun="sample chemistry" />,
+              },
             ],
           },
         ] : undefined}
-        viewModeChildren={
-          displaySideSheet?.mode === "view" && displaySideSheet.entity ? (
-            <>
-              <TransportLegsSummary
-                entityType="sample"
-                entityId={displaySideSheet.entity.id}
-              />
-              <section className="space-y-16 border-t border-[var(--color-border-tertiary)] pt-16">
-                <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-                  Evidence &amp; Documents
-                </h3>
-                <SampleDocumentsPanel
-                  sampleId={displaySideSheet.entity.id}
-                  readOnly
-                />
-              </section>
-            </>
-          ) : null
-        }
       >
         {formError && <div className="mb-24"><ServerError message={formError} /></div>}
         <SampleForm
@@ -707,6 +769,9 @@ export function SampleList() {
           deferredLegs={deferredLegs}
           onDeferredLegsChange={handleDeferredLegsChange}
           onRetryDeferredLegs={retryDeferredLegs}
+          focusTarget={
+            displaySideSheet?.mode === "edit" ? activeFocusTarget : null
+          }
         />
       </EntitySideSheet>
     </div>

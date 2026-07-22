@@ -22,7 +22,7 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatDate, formatMass } from "@/lib/format-utils";
+import { formatDate, formatDistanceKm, formatMass } from "@/lib/format-utils";
 import { FeedstockForm } from "./feedstock-form";
 import {
   TransportEvidencePanel,
@@ -38,6 +38,14 @@ import {
 import type { FeedstockFormData } from "@/schemas/feedstocks";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import {
+  ENTITY_DEEP_LINK_FOCUS_PARAM,
+  ENTITY_DEEP_LINK_MODE_PARAM,
+  parseEntityFocusTarget,
+} from "@/lib/entity-deep-link";
+import { resolveCertFieldStatus } from "@/components/forms/cert-field-status";
+import { DEFAULT_TRIP_TYPE, TRIP_TYPE_LABELS } from "@/schemas/trip-type";
+import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 
 // ============================================
 // Column Definitions
@@ -202,6 +210,14 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     "feedstock",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
+  const [deepLinkMode, setDeepLinkMode] = useQueryState(
+    ENTITY_DEEP_LINK_MODE_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const [deepLinkFocus, setDeepLinkFocus] = useQueryState(
+    ENTITY_DEEP_LINK_FOCUS_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
 
   // Side sheet state
   const [sideSheet, setSideSheet] = useState<{
@@ -336,6 +352,8 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
 
   const openCreate = () => {
     setFocusedFeedstockId(null);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setCreateError(null);
     setUpdateError(null);
     setCreatedFeedstockIds([]);
@@ -344,11 +362,15 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   };
   const openView = (feedstock: FeedstockWithRelations) => {
     setFocusedFeedstockId(feedstock.id);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setSideSheet({ entity: feedstock, mode: "view" });
   };
-  const openEdit = (feedstock: FeedstockWithRelations) => { setCreateError(null); setUpdateError(null); setCreatedFeedstockIds([]); setSideSheet({ entity: feedstock, mode: "edit" }); };
+  const openEdit = (feedstock: FeedstockWithRelations) => { setDeepLinkMode(null); setDeepLinkFocus(null); setCreateError(null); setUpdateError(null); setCreatedFeedstockIds([]); setSideSheet({ entity: feedstock, mode: "edit" }); };
   const closeSideSheet = () => {
     setFocusedFeedstockId(null);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
@@ -394,9 +416,15 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
 
   const deepLinkedSideSheet =
     focusedFeedstockId && focusedFeedstock.data
-      ? ({ entity: focusedFeedstock.data, mode: "view" } as const)
+      ? ({
+          entity: focusedFeedstock.data,
+          mode: deepLinkMode === "edit" ? "edit" : "view",
+        } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const activeFocusTarget = sideSheet
+    ? null
+    : parseEntityFocusTarget(deepLinkFocus);
 
   if (!contextFacilityId) {
     return (
@@ -518,11 +546,83 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           {
             title: "Delivery Information",
             fields: [
-              { label: "Facility", value: sideSheetEntity.facilityName },
               { label: "Delivery Date", value: formatDate(sideSheetEntity.deliveryDate) },
               { label: "Supplier", value: sideSheetEntity.supplierName },
-              { label: "Supplier Code", value: sideSheetEntity.supplierCode },
+            ],
+          },
+          {
+            title: "Transport Details",
+            fields: [
               { label: "Vehicle", value: sideSheetEntity.vehiclePlateNumber },
+              {
+                label: "Distance (km)",
+                ...certificationDetailField("feedstock", "transportDistanceKm"),
+                // Status from the raw column, not the formatted string — the
+                // "—" fallback is truthy and would falsely read as satisfied.
+                certifyStatus: resolveCertFieldStatus(
+                  true,
+                  sideSheetEntity.transportDistanceKm !== null,
+                ),
+                value:
+                  sideSheetEntity.transportDistanceKm !== null
+                    ? formatDistanceKm(sideSheetEntity.transportDistanceKm)
+                    : null,
+              },
+              { label: "Trip type", value: TRIP_TYPE_LABELS[sideSheetEntity.transportTripType ?? DEFAULT_TRIP_TYPE] },
+              {
+                label: "Distance source",
+                value: sideSheetEntity.transportDistanceSource
+                  ? DISTANCE_SOURCE_LABELS[sideSheetEntity.transportDistanceSource]
+                  : null,
+              },
+            ],
+          },
+          {
+            title: "Material",
+            fields: [
+              { label: "Feedstock Type", value: sideSheetEntity.feedstockTypeName },
+              {
+                label: "Total Wet Mass (kg)",
+                ...certificationDetailField("feedstock", "massWetKg"),
+                certifyStatus: resolveCertFieldStatus(true, sideSheetEntity.massWetKg !== null),
+                value: sideSheetEntity.massWetKg !== null ? formatMass(sideSheetEntity.massWetKg) : null,
+              },
+              { label: "Moisture Content (%)", value: sideSheetEntity.moistureContentPercent !== null ? `${sideSheetEntity.moistureContentPercent}%` : null },
+              { label: "Dry Mass (derived)", value: formatMass(sideSheetEntity.massDryKg) },
+            ],
+          },
+          {
+            title: "Bin Allocations",
+            fields: [
+              { label: "Storage Bin", value: sideSheetEntity.storageLocationCode ?? sideSheetEntity.storageLocationName },
+              { label: "Allocated Wet Mass (kg)", value: sideSheetEntity.massWetKg !== null ? formatMass(sideSheetEntity.massWetKg) : null },
+              { label: "Override Justification", value: sideSheetEntity.overrideJustification },
+            ],
+          },
+          {
+            title: "Documentation",
+            fields: [{ label: "Notes", value: sideSheetEntity.notes }],
+          },
+          {
+            title: "Transport Evidence",
+            fields: [],
+            content: (
+              <TransportEvidencePanel
+                entityType="feedstock"
+                entityId={sideSheetEntity.id}
+                readOnly
+                distanceSource={sideSheetEntity.transportDistanceSource}
+              />
+            ),
+          },
+          {
+            title: "Record Metadata",
+            fields: [
+              { label: "Code", value: sideSheetEntity.code },
+              { label: "Facility", value: sideSheetEntity.facilityName },
+              { label: "Supplier Code", value: sideSheetEntity.supplierCode },
+              { label: "Feedstock Category", value: sideSheetEntity.feedstockTypeCategory ? <span className="capitalize">{sideSheetEntity.feedstockTypeCategory}</span> : null },
+              { label: "Status", value: <span className="capitalize">{sideSheetEntity.status.replace("_", " ")}</span> },
               {
                 label: "Certification",
                 value: (
@@ -539,51 +639,11 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             ],
           },
           {
-            title: "Material",
-            fields: [
-              { label: "Feedstock Type", value: sideSheetEntity.feedstockTypeName },
-              { label: "Category", value: sideSheetEntity.feedstockTypeCategory ? <span className="capitalize">{sideSheetEntity.feedstockTypeCategory}</span> : null },
-              {
-                label: "Wet Mass",
-                ...certificationDetailField("feedstock", "massWetKg"),
-                value: sideSheetEntity.massWetKg !== null
-                  ? formatMass(sideSheetEntity.massWetKg)
-                  : <StatusBadge status="pending" label="Missing" size="small" />,
-              },
-              { label: "Moisture", value: sideSheetEntity.moistureContentPercent !== null ? `${sideSheetEntity.moistureContentPercent}%` : null },
-              { label: "Dry Mass", value: formatMass(sideSheetEntity.massDryKg) },
-            ],
+            title: "Derived Transport",
+            fields: [],
+            content: <TransportLegsSummary entityType="feedstock" entityId={sideSheetEntity.id} />,
           },
-          {
-            title: "Storage",
-            fields: [
-              { label: "Storage Bin", value: sideSheetEntity.storageLocationCode ?? sideSheetEntity.storageLocationName },
-            ],
-          },
-          ...(sideSheetEntity.overrideJustification ? [{
-            title: "Override",
-            fields: [{ label: "Justification", value: sideSheetEntity.overrideJustification }],
-          }] : []),
-          ...(sideSheetEntity.notes ? [{
-            title: "Notes",
-            fields: [{ label: "Notes", value: sideSheetEntity.notes }],
-          }] : []),
         ] : undefined}
-        viewModeChildren={
-          sideSheetMode === "view" && sideSheetEntity ? (
-            <>
-              <TransportLegsSummary
-                entityType="feedstock"
-                entityId={sideSheetEntity.id}
-              />
-              <TransportEvidencePanel
-                entityType="feedstock"
-                entityId={sideSheetEntity.id}
-                readOnly
-              />
-            </>
-          ) : null
-        }
       >
         <FeedstockForm
           key={sideSheetEntity?.id ?? "create"}
@@ -595,6 +655,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           serverError={createError || updateError || undefined}
           deferredAttachments={deferredAttachments}
           retryEntityIds={createdFeedstockIds}
+          focusTarget={sideSheetMode === "edit" ? activeFocusTarget : null}
         />
       </EntitySideSheet>
     </div>

@@ -1,6 +1,7 @@
 /**
  * ProductionIncidentTable component
- * Inline table of production incidents within a production run
+ * Production incident table with dialog-based add/edit forms within a
+ * production run.
  */
 "use client";
 
@@ -14,6 +15,7 @@ import {
 } from "@/hooks/use-production-incidents";
 import { Button } from "@/components/ui";
 import { ServerError } from "@/components/forms";
+import { QuickAddDialogShell } from "@/components/forms/entity-select/quick-add-dialog-shell";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { TableSkeleton } from "@/components/ui/loading-skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -46,7 +48,7 @@ export function ProductionIncidentTable({
   const deleteIncident = useDeleteProductionIncident(productionRunId);
   const toast = useToast();
 
-  const [inlineForm, setInlineForm] = useState<
+  const [formDialog, setFormDialog] = useState<
     | { open: false }
     | { open: true; incident?: ProductionIncidentWithRelations }
   >({ open: false });
@@ -55,20 +57,23 @@ export function ProductionIncidentTable({
 
   const openCreate = () => {
     setFormError(null);
-    setInlineForm({ open: true });
+    setFormDialog({ open: true });
   };
   const openEdit = (incident: ProductionIncidentWithRelations) => {
     setFormError(null);
-    setInlineForm({ open: true, incident });
+    setFormDialog({ open: true, incident });
   };
-  const closeForm = () => setInlineForm({ open: false });
+  const closeForm = () => {
+    setFormDialog({ open: false });
+    setFormError(null);
+  };
 
   const handleSubmit = async (data: ProductionIncidentFormData) => {
     setFormError(null);
     try {
-      if (inlineForm.open && inlineForm.incident) {
+      if (formDialog.open && formDialog.incident) {
         await updateIncident.mutateAsync({
-          productionIncidentId: inlineForm.incident.id,
+          productionIncidentId: formDialog.incident.id,
           ...data,
         });
         toast.success("Incident updated");
@@ -95,6 +100,9 @@ export function ProductionIncidentTable({
   };
 
   const isSubmitting = createIncident.isPending || updateIncident.isPending;
+  const closeDialog = () => {
+    if (!isSubmitting) closeForm();
+  };
 
   return (
     <div className="space-y-16 pt-16 border-t border-[var(--color-border-tertiary)]">
@@ -102,7 +110,7 @@ export function ProductionIncidentTable({
         <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
           Production Incidents
         </h3>
-        {!readOnly && !inlineForm.open && (
+        {!readOnly && !formDialog.open && (
           <Button variant="default" size="small" onClick={openCreate}>
             <PlusIcon size={16} weight="bold" />
             Add Incident
@@ -114,7 +122,7 @@ export function ProductionIncidentTable({
 
       {isLoading ? (
         <TableSkeleton columns={readOnly ? 5 : 6} rows={3} />
-      ) : !incidents?.length && !inlineForm.open ? (
+      ) : !incidents?.length && !formDialog.open ? (
         <p className="body-small py-16 text-[var(--color-text-tertiary)]">
           {readOnly
             ? "No incidents recorded yet."
@@ -160,7 +168,7 @@ export function ProductionIncidentTable({
                           size="icon"
                           onClick={() => openEdit(incident)}
                           aria-label="Edit incident"
-                          disabled={inlineForm.open}
+                          disabled={formDialog.open}
                         >
                           <PencilIcon size={16} />
                         </Button>
@@ -169,7 +177,7 @@ export function ProductionIncidentTable({
                           size="icon"
                           onClick={() => setDeletingId(incident.id)}
                           aria-label="Delete incident"
-                          disabled={inlineForm.open}
+                          disabled={formDialog.open}
                         >
                           <TrashIcon size={16} />
                         </Button>
@@ -183,24 +191,33 @@ export function ProductionIncidentTable({
         </div>
       ) : null}
 
-      {!readOnly && inlineForm.open && (
-        <div className="border border-[var(--color-border-primary)] bg-[var(--color-background-white)] p-24">
-          <h4 className="title-heading-4 mb-16">
-            {inlineForm.incident ? "Edit Incident" : "Add Production Incident"}
-          </h4>
-          {formError && <div className="mb-16"><ServerError message={formError} /></div>}
-          <ProductionIncidentForm
-            key={inlineForm.incident?.id ?? "create"}
-            productionRunId={productionRunId}
-            facilityId={facilityId}
-            defaultReactorId={defaultReactorId}
-            defaultOperatorId={defaultOperatorId}
-            incident={inlineForm.incident}
-            onSubmit={handleSubmit}
-            onCancel={closeForm}
-            isSubmitting={isSubmitting}
-          />
-        </div>
+      {!readOnly && (
+        <QuickAddDialogShell
+          isOpen={formDialog.open}
+          onClose={closeDialog}
+          title={
+            formDialog.open && formDialog.incident
+              ? "Edit Production Incident"
+              : "Add Production Incident"
+          }
+          error={formError}
+          width="lg"
+          testId="production-incident-dialog"
+        >
+          {formDialog.open && (
+            <ProductionIncidentForm
+              key={formDialog.incident?.id ?? "create"}
+              productionRunId={productionRunId}
+              facilityId={facilityId}
+              defaultReactorId={defaultReactorId}
+              defaultOperatorId={defaultOperatorId}
+              incident={formDialog.incident}
+              onSubmit={handleSubmit}
+              onCancel={closeDialog}
+              isSubmitting={isSubmitting}
+            />
+          )}
+        </QuickAddDialogShell>
       )}
 
       {!readOnly && (

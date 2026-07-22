@@ -75,6 +75,7 @@ interface ApplicationEvidencePanelProps {
   mode: EvidenceMode;
   disabled?: boolean;
   deferredAttachments?: UseDeferredAttachmentsResult;
+  readOnly?: boolean;
 }
 
 function metadataRecord(value: unknown): Record<string, unknown> {
@@ -130,7 +131,7 @@ function EvidenceDocumentList({
   deleteMutationPending: boolean;
   classifyMutationPending: boolean;
   classifyingDocumentId: string | null;
-  onDelete: (id: string) => void;
+  onDelete?: (id: string) => void;
   onSetVisualRole?: (id: string, role: ApplicationVisualEvidenceRole) => void;
   onSetLogbookEvidenceType?: (
     id: string,
@@ -226,7 +227,7 @@ function EvidenceDocumentList({
             >
               <ArrowSquareOutIcon size={16} weight="bold" />
             </a>
-            <Button
+            {onDelete && <Button
               variant="destructive"
               size="icon"
               onClick={() => onDelete(doc.id)}
@@ -235,7 +236,7 @@ function EvidenceDocumentList({
               aria-label={`Delete ${doc.fileName}`}
             >
               <TrashIcon size={16} weight="bold" />
-            </Button>
+            </Button>}
           </li>
         );
       })}
@@ -248,6 +249,7 @@ export function ApplicationEvidencePanel({
   mode,
   disabled = false,
   deferredAttachments,
+  readOnly = false,
 }: ApplicationEvidencePanelProps) {
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -548,10 +550,10 @@ export function ApplicationEvidencePanel({
                   deleteMutationPending={deleteMutation.isPending}
                   classifyMutationPending={classifyMutation.isPending}
                   classifyingDocumentId={classifyingDocumentId}
-                  onDelete={setDeleteId}
-                  onSetVisualRole={setVisualRole}
+                  onDelete={readOnly ? undefined : setDeleteId}
+                  onSetVisualRole={readOnly ? undefined : setVisualRole}
                 />
-                <FormFileUpload
+                {!readOnly && <FormFileUpload
                   id={`application-${applicationId}-${role}-evidence-upload`}
                   accept="image/*"
                   multiple
@@ -566,7 +568,7 @@ export function ApplicationEvidencePanel({
                     invalidateApplicationLists();
                   }}
                   onUploadError={(err) => setErrorMessage(err)}
-                />
+                />}
               </div>
             );
           })}
@@ -584,15 +586,15 @@ export function ApplicationEvidencePanel({
                 deleteMutationPending={deleteMutation.isPending}
                 classifyMutationPending={classifyMutation.isPending}
                 classifyingDocumentId={classifyingDocumentId}
-                onDelete={setDeleteId}
-                onSetVisualRole={setVisualRole}
+                onDelete={readOnly ? undefined : setDeleteId}
+                onSetVisualRole={readOnly ? undefined : setVisualRole}
               />
             </div>
           )}
         </div>
       ) : (
         <div className="flex flex-col gap-12">
-          <div className="flex flex-col gap-6">
+          {!readOnly && <div className="flex flex-col gap-6">
             <div className="flex flex-wrap gap-8">
               {APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES.map((type) => (
                 <label
@@ -618,17 +620,17 @@ export function ApplicationEvidencePanel({
                 ]
               }
             </p>
-          </div>
+          </div>}
           <EvidenceDocumentList
             docs={boundaryDocs}
             disabled={disabled}
             deleteMutationPending={deleteMutation.isPending}
             classifyMutationPending={classifyMutation.isPending}
             classifyingDocumentId={classifyingDocumentId}
-            onDelete={setDeleteId}
-            onSetLogbookEvidenceType={setLogbookEvidenceTypeForDocument}
+            onDelete={readOnly ? undefined : setDeleteId}
+            onSetLogbookEvidenceType={readOnly ? undefined : setLogbookEvidenceTypeForDocument}
           />
-          <FormFileUpload
+          {!readOnly && <FormFileUpload
             id={`application-${applicationId}-boundary-evidence-upload`}
             accept="application/pdf,.pdf"
             multiple={false}
@@ -643,11 +645,11 @@ export function ApplicationEvidencePanel({
               invalidateApplicationLists();
             }}
             onUploadError={(err) => setErrorMessage(err)}
-          />
+          />}
         </div>
       )}
 
-      <DeleteConfirmDialog
+      {!readOnly && <DeleteConfirmDialog
         isOpen={!!deleteId}
         title="Delete Evidence"
         message="Are you sure you want to delete this evidence file?"
@@ -657,7 +659,7 @@ export function ApplicationEvidencePanel({
           setErrorMessage(null);
         }}
         isPending={deleteMutation.isPending}
-      />
+      />}
     </section>
   );
 }

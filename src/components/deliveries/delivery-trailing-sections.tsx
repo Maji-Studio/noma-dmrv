@@ -6,18 +6,30 @@
 "use client";
 
 import { PaperclipIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormFileUpload, FormSection } from "@/components/forms";
+import { FormSection } from "@/components/forms";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
 import { SPINE_SECTION_TAG, type SpineMeta } from "@/components/forms/form-spine";
-import { TransportEvidencePanel } from "@/components/transport-legs";
+import {
+  ClassifiedTransportEvidenceUploader,
+  TransportDocumentProvenanceControl,
+  TransportEvidencePanel,
+} from "@/components/transport-legs";
 import type { Delivery } from "@/db/schema";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
+import type { DistanceSourceValue } from "@/schemas/distance-source";
+import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
+import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 
 interface DeliveryEvidenceSectionProps {
   delivery?: Delivery;
   isEditMode: boolean;
   deferredAttachments?: UseDeferredAttachmentsResult;
   isSubmitting?: boolean;
+  distanceSource?: DistanceSourceValue | null;
+  provenanceLoaded?: boolean;
+  focusTarget?: EntityFocusTarget | null;
+  draftDistanceSource?: DistanceSourceValue | null;
+  onSelectDocumentProvenance?: () => void;
   /** Injected by FormSpine — do not set manually. */
   __spine?: SpineMeta;
 }
@@ -27,6 +39,11 @@ export function DeliveryEvidenceSection({
   isEditMode,
   deferredAttachments,
   isSubmitting = false,
+  distanceSource,
+  provenanceLoaded,
+  focusTarget,
+  draftDistanceSource,
+  onSelectDocumentProvenance,
   __spine,
 }: DeliveryEvidenceSectionProps) {
   return (
@@ -36,7 +53,12 @@ export function DeliveryEvidenceSection({
       __spine={__spine}
     >
       {isEditMode && delivery ? (
-        <div className="flex flex-col gap-12">
+        <ActionableFocusTarget
+          target="transport-evidence"
+          activeTarget={focusTarget}
+          actionLabel="Mark the saved distance source as Document and attach supporting evidence"
+          className="flex flex-col gap-12"
+        >
           {deferredAttachments && (
             <FailedDeferredAttachments
               attachments={deferredAttachments.attachments}
@@ -47,48 +69,26 @@ export function DeliveryEvidenceSection({
               disabled={isSubmitting}
             />
           )}
+          <TransportDocumentProvenanceControl
+            savedSource={distanceSource}
+            draftSource={draftDistanceSource}
+            onSelectDocument={() => onSelectDocumentProvenance?.()}
+            disabled={isSubmitting}
+          />
           <TransportEvidencePanel
             entityType="delivery"
             entityId={delivery.id}
+            distanceSource={distanceSource}
+            persisted={provenanceLoaded ?? false}
           />
-        </div>
+        </ActionableFocusTarget>
       ) : (
-        <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">
-          <FormField id="delivery-deferred-bill-of-lading" label="Bill of lading">
-            <FormFileUpload
-              id="delivery-deferred-bill-of-lading"
-              accept="image/*,.pdf"
-              multiple={false}
-              maxSizeMb={25}
-              disabled={isSubmitting}
-              deferred
-              deferredFiles={(deferredAttachments?.attachments ?? []).filter(
-                (attachment) => attachment.documentType === "bill_of_lading",
-              )}
-              onDeferredAdd={(files) =>
-                deferredAttachments?.add(files, "bill_of_lading")
-              }
-              onDeferredRemove={(key) => deferredAttachments?.remove(key)}
-            />
-          </FormField>
-          <FormField id="delivery-deferred-weighbridge-ticket" label="Weigh-scale ticket">
-            <FormFileUpload
-              id="delivery-deferred-weighbridge-ticket"
-              accept="image/*,.pdf"
-              multiple={false}
-              maxSizeMb={25}
-              disabled={isSubmitting}
-              deferred
-              deferredFiles={(deferredAttachments?.attachments ?? []).filter(
-                (attachment) => attachment.documentType === "weighbridge_ticket",
-              )}
-              onDeferredAdd={(files) =>
-                deferredAttachments?.add(files, "weighbridge_ticket")
-              }
-              onDeferredRemove={(key) => deferredAttachments?.remove(key)}
-            />
-          </FormField>
-        </div>
+        <ClassifiedTransportEvidenceUploader
+          id="delivery-deferred-transport-evidence"
+          entityType="delivery"
+          deferredAttachments={deferredAttachments}
+          disabled={isSubmitting}
+        />
       )}
     </FormSection>
   );
