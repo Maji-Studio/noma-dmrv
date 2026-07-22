@@ -27,6 +27,8 @@ import {
 } from "@/fn/deliveries";
 
 import type { MutationCallbacks } from "./types";
+import { dashboardOverviewKeys } from "./use-dashboard-overview";
+import { certificationKeys } from "./use-certification";
 
 // ============================================
 // Query Keys
@@ -201,6 +203,10 @@ export function useCreateDelivery(
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
       // Invalidate stats
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      // Delivery writes resync the derived biochar distribution leg and its
+      // evidence set, inputs to certification readiness.
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
       // Pre-populate the detail cache with the new delivery
       queryClient.setQueryData(deliveryKeys.detail(data.id), data);
 
@@ -299,6 +305,10 @@ export function useUpdateDelivery(
       });
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      // Delivery writes resync the derived biochar distribution leg and its
+      // evidence set, inputs to certification readiness.
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -389,6 +399,9 @@ export function useDeleteDelivery(callbacks?: MutationCallbacks<void, string>) {
       // Invalidate lists and stats for consistency
       queryClient.invalidateQueries({ queryKey: deliveryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: deliveryKeys.statsPrefix() });
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      // Deleting a delivery shrinks the derived biochar leg's evidence set.
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
 
       await callbacks?.onSuccess?.(undefined, deliveryId);
     },

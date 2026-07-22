@@ -16,10 +16,12 @@ import {
   getProcessComplianceDriftFn,
   getProductionProcessSummariesByFacilityFn,
   getUnsampledCarbonPreviewFn,
+  setProcessOperationalStartFn,
   startNewProductionProcessFn,
   unlockMethodBFn,
 } from "@/fn/production-processes";
 import type {
+  SetOperationalStartInput,
   StartNewProcessInput,
   UnlockMethodBInput,
 } from "@/schemas/production-process";
@@ -126,6 +128,29 @@ export function useUnlockMethodB() {
   return useMutation({
     mutationFn: async (input: UnlockMethodBInput) => {
       const result = await unlockMethodBFn(input);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: productionProcessKeys.all });
+    },
+  });
+}
+
+/**
+ * Set a production process's operational start (`established_at`). On success,
+ * invalidate every production-process key: the facility summaries re-derive their
+ * baseline counts (samples now inside the corrected window count), and the
+ * per-process carbon-preview / compliance-drift reads re-run against the new
+ * window.
+ */
+export function useSetProcessOperationalStart() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: SetOperationalStartInput) => {
+      const result = await setProcessOperationalStartFn(input);
       if (!result.success) {
         throw new Error(result.error);
       }

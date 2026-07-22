@@ -7,8 +7,6 @@ import { z } from "zod";
 import {
   emptyToNull,
   massKgSchema,
-  optionalMassKgInputSchema,
-  optionalMassKgSchema,
   optionalPositiveNumber,
   requiredMassKgSchema,
   requiredNumber,
@@ -56,13 +54,19 @@ const ingredientBinBaseSchema = z.object({
   feedstockTypeId: z.string().uuid(),
   feedstockTypeName: z.string(),
   feedstockTypeCategory: z.string(),
+  // Recipe share snapshot — orientation only. The entered massKg is the
+  // record of what actually went into the blend; it is never validated
+  // against the ratio (deviation surfaces as a soft UI hint instead).
   ratio: z.number().min(0).max(1).optional().nullable(),
-  massKg: optionalMassKgSchema(),
+  massKg: massKgSchema("Ingredient mass must be 0 or greater"),
 });
 
 const ingredientBinFormSchema = ingredientBinBaseSchema.extend({
   storageLocationId: emptyToNull.or(z.string().uuid()).optional().nullable(),
-  massKg: optionalMassKgInputSchema(),
+  massKg: requiredNumber(
+    "Ingredient mass is required",
+    "Ingredient mass must be a number",
+  ).pipe(massKgSchema("Ingredient mass must be 0 or greater")),
 });
 
 const ingredientBinUpdateSchema = ingredientBinBaseSchema.extend({

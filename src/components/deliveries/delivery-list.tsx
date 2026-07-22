@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { TruckIcon, CalendarIcon, PackageIcon, DropIcon, PlusIcon } from "@phosphor-icons/react";
 import type { Delivery } from "@/db/schema";
@@ -26,18 +26,30 @@ import {
   useDeliveries,
   useUpdateDelivery,
   useDeliveryStats,
+  useDeliveryWithRelations,
 } from "@/hooks/use-deliveries";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
+import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import type {
   DeliveryFormData,
   CreateDeliveryData,
 } from "@/schemas/deliveries";
-import type { DeliveryWithRelations } from "@/data-access/deliveries";
+import type {
+  DeliveryDetail,
+  DeliveryWithRelations,
+} from "@/data-access/deliveries";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatDate } from "@/lib/format-utils";
+import { formatDate, formatDistanceKm } from "@/lib/format-utils";
+import { DEFAULT_TRIP_TYPE, TRIP_TYPE_LABELS } from "@/schemas/trip-type";
+import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
+import { parseAsString, useQueryState } from "nuqs";
+import {
+  ENTITY_DEEP_LINK_FOCUS_PARAM,
+  ENTITY_DEEP_LINK_MODE_PARAM,
+  parseEntityFocusTarget,
+} from "@/lib/entity-deep-link";
 
 // ============================================
 // Helper Functions
@@ -46,6 +58,20 @@ import { formatDate } from "@/lib/format-utils";
 function formatMass(value: number | null): string {
   if (value === null || value === undefined) return "—";
   return `${value.toLocaleString()} kg`;
+}
+
+function deliveryDetailToRelations(
+  delivery: DeliveryDetail,
+): DeliveryWithRelations {
+  return {
+    ...delivery,
+    orderCode: delivery.order?.code ?? null,
+    facilityName: delivery.facility?.name ?? null,
+    customerName: delivery.customerName,
+    biocharProductCode: delivery.biocharProduct?.code ?? null,
+    driverName: delivery.driver?.name ?? null,
+    vehicleName: delivery.vehicle?.name ?? null,
+  };
 }
 
 // ============================================
@@ -144,6 +170,18 @@ function createColumns(
 // ============================================
 
 export function DeliveryList() {
+  const [focusedDeliveryId, setFocusedDeliveryId] = useQueryState(
+    "delivery",
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const [deepLinkMode, setDeepLinkMode] = useQueryState(
+    ENTITY_DEEP_LINK_MODE_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const [deepLinkFocus, setDeepLinkFocus] = useQueryState(
+    ENTITY_DEEP_LINK_FOCUS_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
   // Unified side sheet state
   const [sideSheet, setSideSheet] = useState<{
     entity: DeliveryWithRelations | null;
@@ -169,64 +207,27 @@ export function DeliveryList() {
     contextFacilityId ? { facilityId: contextFacilityId } : undefined,
     { enabled: !!contextFacilityId },
   );
+  const focusedDelivery = useDeliveryWithRelations(
+    focusedDeliveryId ?? "",
+    !!focusedDeliveryId,
+  );
 
   // Mutations
   const createDelivery = useCreateDelivery();
   const updateDelivery = useUpdateDelivery();
   const deleteDelivery = useDeleteDelivery();
   const toast = useToast();
-  const deferredAttachments = useDeferredAttachments();
-  const [isFlushing, setIsFlushing] = useState(false);
-
-  // Side sheet helpers
-  const openCreate = () => {
-    setFormError(null);
-    deferredAttachments.clear();
-    setSideSheet({ entity: null, mode: "create" });
-  };
-
-  const openView = (delivery: DeliveryWithRelations) => {
-    setFormError(null);
-    setSideSheet({ entity: delivery, mode: "view" });
-  };
-
-  const openEdit = (delivery: DeliveryWithRelations) => {
-    setFormError(null);
-    setSideSheet({ entity: delivery, mode: "edit" });
-  };
-
-  const closeSideSheet = () => {
-    setSideSheet(null);
-    setFormError(null);
-    deferredAttachments.clear();
-  };
-
-  const unsavedAttachmentCount = deferredAttachments.attachments.filter(
-    (attachment) => attachment.status !== "uploaded",
-  ).length;
-  const confirmCreateClose = () => {
-    // An in-flight flush is mid-write; blocking Escape/backdrop/X keeps the
-    // completion handler from mutating a discarded-then-reopened form.
-    if (isFlushing) return false;
-    return (
-      sideSheet?.mode !== "create" ||
-      unsavedAttachmentCount === 0 ||
-      window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`)
-    );
-  };
-  const attemptCloseSideSheet = () => {
-    if (confirmCreateClose()) closeSideSheet();
-  };
-
-  // Handlers
-  const handleCreate = async (data: DeliveryFormData) => {
-    setFormError(null);
-    try {
+  const createWithEvidence = useCreateWithEvidence({
+    entityType: "delivery",
+    entityNoun: "Delivery",
+    executeCreate: async (data: DeliveryFormData) => {
       if (!contextFacilityId) {
-        setFormError("No facility selected. Please select a facility first.");
-        return;
+        throw new Error("No facility selected. Please select a facility first.");
       }
-      const createData = { ...data, facilityId: contextFacilityId } as CreateDeliveryData;
+      const createData = {
+        ...data,
+        facilityId: contextFacilityId,
+      } as CreateDeliveryData;
       const created = await createDelivery.mutateAsync(createData);
       const createdDelivery: DeliveryWithRelations = {
         ...created,
@@ -236,47 +237,103 @@ export function DeliveryList() {
         biocharProductCode: null,
         driverName: null,
         vehicleName: null,
+        effectiveDistanceKm: null,
+        effectiveDistanceSource: null,
+        transportEvidenceDocumentCount: 0,
       };
-      setIsFlushing(true);
-      const flushResult = await deferredAttachments.flush(
-        "delivery",
-        createdDelivery.id,
-      );
-      if (!flushResult.ok) {
-        setSideSheet({ entity: createdDelivery, mode: "edit" });
-        setFormError(
-          `Delivery created, but ${flushResult.failed.length} ${flushResult.failed.length === 1 ? "attachment" : "attachments"} failed to upload.`,
-        );
-        return;
-      }
-      deferredAttachments.clear();
-      setSideSheet(null);
-      toast.success("Delivery created successfully");
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to create delivery");
-    } finally {
-      setIsFlushing(false);
-    }
+      return { entities: [createdDelivery], result: createdDelivery };
+    },
+    setError: setFormError,
+    setUpdateError: setFormError,
+    getCreateErrorMessage: (error) =>
+      error instanceof Error ? error.message : "Failed to create delivery",
+    unresolvedUpdateMessage:
+      "Resolve or remove the failed attachments before saving this delivery.",
+    openEditOnFailure: (delivery) =>
+      setSideSheet({ entity: delivery, mode: "edit" }),
+    closeOnSuccess: () => setSideSheet(null),
+    onSuccess: () => toast.success("Delivery created successfully"),
+  });
+  const { deferredAttachments, isFlushing } = createWithEvidence;
+  const deepLinkedSideSheet =
+    focusedDeliveryId && focusedDelivery.data
+      ? {
+          entity: deliveryDetailToRelations(focusedDelivery.data),
+          mode: deepLinkMode === "edit" ? "edit" as const : "view" as const,
+        }
+      : null;
+  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+
+  // Side sheet helpers
+  const openCreate = () => {
+    setFocusedDeliveryId(null);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
+    setFormError(null);
+    createWithEvidence.reset();
+    setSideSheet({ entity: null, mode: "create" });
+  };
+
+  const openView = (delivery: DeliveryWithRelations) => {
+    setFocusedDeliveryId(delivery.id);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
+    setFormError(null);
+    setSideSheet({ entity: delivery, mode: "view" });
+  };
+
+  const openEdit = (delivery: DeliveryWithRelations) => {
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
+    setFormError(null);
+    createWithEvidence.reset();
+    setSideSheet({ entity: delivery, mode: "edit" });
+  };
+
+  const closeSideSheet = () => {
+    setFocusedDeliveryId(null);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
+    setSideSheet(null);
+    setFormError(null);
+    createWithEvidence.reset();
+  };
+
+  const confirmCreateClose = () =>
+    createWithEvidence.confirmClose(displaySideSheet?.mode === "create");
+  const attemptCloseSideSheet = () => {
+    if (confirmCreateClose()) closeSideSheet();
+  };
+
+  useEffect(() => {
+    if (!focusedDeliveryId || !focusedDelivery.isError) return;
+    setFocusedDeliveryId(null);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
+    toast.error("Linked delivery could not be opened");
+  }, [
+    focusedDelivery.isError,
+    focusedDeliveryId,
+    setDeepLinkFocus,
+    setDeepLinkMode,
+    setFocusedDeliveryId,
+    toast,
+  ]);
+
+  // Handlers
+  const handleCreate = async (data: DeliveryFormData) => {
+    await createWithEvidence.handleCreate(data);
   };
 
   const handleUpdate = async (data: DeliveryFormData) => {
-    if (!sideSheet?.entity) return;
+    if (!displaySideSheet?.entity) return;
     setFormError(null);
-    if (
-      deferredAttachments.attachments.some(
-        // Any not-yet-`uploaded` entry is unresolved: "failed" awaits a retry,
-        // and "uploading" means a retry is mid-flight whose state a save would
-        // clobber. Both must block the save.
-        (attachment) => attachment.status !== "uploaded",
-      )
-    ) {
-      setFormError(
-        "Resolve or remove the failed attachments before saving this delivery.",
-      );
-      return;
-    }
+    if (createWithEvidence.guardUpdate()) return;
     try {
-      await updateDelivery.mutateAsync({ deliveryId: sideSheet.entity.id, ...data });
+      await updateDelivery.mutateAsync({
+        deliveryId: displaySideSheet.entity.id,
+        ...data,
+      });
       closeSideSheet();
       toast.success("Delivery updated successfully");
     } catch (error) {
@@ -300,11 +357,7 @@ export function DeliveryList() {
     }
   };
 
-  // Memoize columns
-  const columns = useMemo(
-    () => createColumns((delivery) => openEdit(delivery), handleDelete),
-    [openEdit, handleDelete],
-  );
+  const columns = createColumns(openEdit, handleDelete);
 
   const deliveries = deliveriesData?.items ?? [];
 
@@ -330,9 +383,10 @@ export function DeliveryList() {
   }
 
   // Derived values for the side sheet
-  const sideSheetOpen = !!sideSheet;
-  const sideSheetMode = sideSheet?.mode ?? "create";
-  const sideSheetEntity = sideSheet?.entity ?? null;
+  const sideSheetOpen = !!displaySideSheet;
+  const sideSheetMode = displaySideSheet?.mode ?? "create";
+  const sideSheetEntity = displaySideSheet?.entity ?? null;
+  const activeFocusTarget = parseEntityFocusTarget(deepLinkFocus);
 
   const sideSheetTitle =
     sideSheetMode === "create"
@@ -428,7 +482,11 @@ export function DeliveryList() {
         onOpenChange={(open) => !open && closeSideSheet()}
         onCloseAttempt={confirmCreateClose}
         mode={sideSheetMode}
-        onModeChange={(mode) => setSideSheet((prev) => prev ? { ...prev, mode } : null)}
+        onModeChange={(mode) =>
+          setSideSheet(
+            displaySideSheet ? { ...displaySideSheet, mode } : null,
+          )
+        }
         title={sideSheetTitle}
         subtitle={sideSheetSubtitle}
         editLabel="Edit Delivery"
@@ -436,24 +494,76 @@ export function DeliveryList() {
           sideSheetEntity
             ? [
                 {
-                  title: "General",
+                  title: "Delivery Information",
+                  fields: [
+                    { label: "Delivery Date", value: formatDate(sideSheetEntity.deliveryDate) },
+                    { label: "Status", value: <StatusBadge status={sideSheetEntity.status} /> },
+                    { label: "Order", value: sideSheetEntity.orderCode },
+                  ],
+                },
+                {
+                  title: "Mass & Moisture",
+                  fields: [
+                    {
+                      label: "Wet Mass (kg)",
+                      ...certificationDetailField("delivery", "deliveredWetMassKg"),
+                      value:
+                        sideSheetEntity.deliveredWetMassKg != null
+                          ? `${sideSheetEntity.deliveredWetMassKg.toLocaleString()} kg`
+                          : null,
+                    },
+                    { label: "Moisture (%)", value: sideSheetEntity.moistureContentPercent != null ? `${sideSheetEntity.moistureContentPercent}%` : null },
+                    {
+                      label: "Dry Mass (derived)",
+                      value:
+                        sideSheetEntity.massDryKg != null
+                          ? `${sideSheetEntity.massDryKg.toLocaleString()} kg`
+                          : null,
+                    },
+                  ],
+                },
+                {
+                  title: "Transport",
+                  fields: [
+                    { label: "One-way distance (per leg, km)", value: formatDistanceKm(sideSheetEntity.effectiveDistanceKm) },
+                    { label: "Trip type", value: TRIP_TYPE_LABELS[sideSheetEntity.tripType ?? DEFAULT_TRIP_TYPE] },
+                    ...(sideSheetEntity.distanceKmOverride != null
+                      ? [{ label: "Distance note", value: sideSheetEntity.distanceNote }]
+                      : []),
+                    {
+                      label: "Distance source",
+                      value: sideSheetEntity.effectiveDistanceSource
+                        ? DISTANCE_SOURCE_LABELS[sideSheetEntity.effectiveDistanceSource]
+                        : null,
+                    },
+                  ],
+                },
+                {
+                  title: "Transport Evidence",
+                  fields: [],
+                  content: (
+                    <TransportEvidencePanel
+                      entityType="delivery"
+                      entityId={sideSheetEntity.id}
+                      readOnly
+                      distanceSource={sideSheetEntity.effectiveDistanceSource}
+                    />
+                  ),
+                },
+                {
+                  title: "Record Relationships & Metadata",
                   fields: [
                     { label: "Code", value: sideSheetEntity.code },
-                    { label: "Delivery Date", value: formatDate(sideSheetEntity.deliveryDate) },
-                    {
-                      label: "Status",
-                      value: (
-                        <StatusBadge status={sideSheetEntity.status} />
-                      ),
-                    },
+                    { label: "Customer", value: sideSheetEntity.customerName },
+                    { label: "Facility", value: sideSheetEntity.facilityName },
+                    { label: "Biochar Product", value: sideSheetEntity.biocharProductCode },
+                    { label: "Driver", value: sideSheetEntity.driverName },
+                    { label: "Vehicle", value: sideSheetEntity.vehicleName },
                     {
                       label: "Certification",
                       value: (
                         <EntityCertifyReadinessBadge
-                          readiness={deriveEntityCertifyReadiness(
-                            "delivery",
-                            sideSheetEntity,
-                          )}
+                          readiness={deriveEntityCertifyReadiness("delivery", sideSheetEntity)}
                           readyLabel="Fields complete"
                           readinessNoun="delivery fields"
                         />
@@ -461,67 +571,20 @@ export function DeliveryList() {
                     },
                   ],
                 },
-                {
-                  title: "Details",
-                  fields: [
-                    { label: "Order", value: sideSheetEntity.orderCode },
-                    { label: "Customer", value: sideSheetEntity.customerName },
-                    { label: "Facility", value: sideSheetEntity.facilityName },
-                  ],
-                },
-                {
-                  title: "Mass",
-                  fields: [
-                    {
-                      label:
-                        sideSheetEntity.status === "delivered"
-                          ? "Delivered Wet Mass"
-                          : "Planned Wet Mass",
-                      ...certificationDetailField("delivery", "deliveredWetMassKg"),
-                      value:
-                        sideSheetEntity.deliveredWetMassKg != null
-                          ? `${sideSheetEntity.deliveredWetMassKg.toLocaleString()} kg`
-                          : null,
-                    },
-                    {
-                      label: "Dry Mass",
-                      value:
-                        sideSheetEntity.massDryKg != null
-                          ? `${sideSheetEntity.massDryKg.toLocaleString()} kg`
-                          : null,
-                    },
-                    { label: "Biochar Product", value: sideSheetEntity.biocharProductCode },
-                  ],
-                },
-                {
-                  title: "Transport",
-                  fields: [
-                    { label: "Driver", value: sideSheetEntity.driverName },
-                    { label: "Vehicle", value: sideSheetEntity.vehicleName },
-                  ],
-                },
               ]
             : undefined
-        }
-        viewModeChildren={
-          sideSheetMode === "view" && sideSheetEntity ? (
-            <TransportEvidencePanel
-              entityType="delivery"
-              entityId={sideSheetEntity.id}
-              readOnly
-            />
-          ) : null
         }
       >
         {formError && <ServerError message={formError} />}
         <DeliveryForm
           key={sideSheetEntity?.id ?? "create"}
-          delivery={sideSheet?.entity as Delivery | undefined}
+          delivery={sideSheetEntity as Delivery | undefined}
           onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
           onCancel={attemptCloseSideSheet}
           isSubmitting={createDelivery.isPending || updateDelivery.isPending || isFlushing}
           submitLabel={sideSheetMode === "create" ? "Create Delivery" : "Save Changes"}
           deferredAttachments={deferredAttachments}
+          focusTarget={sideSheetMode === "edit" ? activeFocusTarget : null}
         />
       </EntitySideSheet>
 

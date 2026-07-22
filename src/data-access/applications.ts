@@ -255,6 +255,7 @@ async function resolveApplicationDryMassTons(
  * delivery's override, falling back to the order's customer location.
  */
 export interface ApplicationListItem extends Application {
+  deliveryCode: string;
   customerName: string | null;
   locationName: string | null;
   /** Join-derived count of missing visual roles or boundary evidence inputs. */
@@ -305,6 +306,7 @@ export async function getApplications(
       status: applications.status,
       applicationDate: applications.applicationDate,
       deliveryId: applications.deliveryId,
+      deliveryCode: deliveries.code,
       biocharAppliedTons: applications.biocharAppliedTons,
       biocharAppliedDryTons: applications.biocharAppliedDryTons,
       fieldSizeHa: applications.fieldSizeHa,

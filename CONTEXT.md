@@ -407,6 +407,17 @@ a derived leg from its supplier/customer default. Orthogonal to a leg's
 `isDerived` flag. Without a configured routing key there is no
 `map_estimate` path — distance entry stays manual.
 
+**Transport evidence**:
+The composite certification requirement for a transported record: its saved
+**Distance source** is `document` and it has at least one successfully uploaded,
+classified file — a bill of lading, weigh-scale ticket, or other transport
+evidence. One accepted file is sufficient; the named document types are
+alternatives, not a checklist. Provenance and evidence remain separate facts:
+uploading a file never changes the saved Distance source, and selecting
+`document` never proves that a file exists. _Avoid_: inferring classification
+from a filename; calling evidence complete from `distance_source=document`
+alone; requiring both a bill of lading and a weigh-scale ticket.
+
 ### Operational oversight
 
 **Attention item**:
@@ -416,6 +427,18 @@ a failed verifier submission, or an active production run. It has no
 independent lifecycle, assignee, or completion state; it disappears when
 the underlying record changes.
 _Avoid_: todo, task (unless a future manual work system is built).
+
+**Setup step**:
+A computed **first-run provisioning** gap surfaced in the getting-started
+guide while a new facility is being set up — for example a facility with no
+reactor, an unconnected registry, or an org with no supplier yet. Like an
+**Attention item** it has no independent lifecycle, assignee, or completion
+flag: it is derived from record existence and disappears when the underlying
+record is created, so the guide self-clears once the last Setup step is
+satisfied. Distinct from an **Attention item**, which surfaces *operational,
+recurring* MRV gaps (missing evidence, readiness blocks); a Setup step is a
+one-time *setup* gap. _Avoid_: onboarding checklist item with saved per-step
+state; conflating with **Attention item**.
 
 **Plausibility warning**:
 An advisory that recorded values are valid but fall outside an expected

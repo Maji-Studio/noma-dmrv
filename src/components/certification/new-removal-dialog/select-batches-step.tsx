@@ -25,17 +25,64 @@ import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { InfoHint } from "@/components/ui/tooltip";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import { certificationSettingsHref } from "@/lib/certification/links";
+import type { FacilitySetupGap } from "@/lib/certification/facility-setup-gaps";
 import { formatDurabilityOption } from "@/schemas/credit-batches";
 import type { SelectableBatch } from "@/fn/certification";
 
 interface SelectBatchesStepProps {
   batches: SelectableBatch[];
-  facilitySetupComplete: boolean;
+  facilitySetupGaps: FacilitySetupGap[];
   facilityId: string;
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
   isLoading: boolean;
   isError: boolean;
+}
+
+/**
+ * Plain-language copy for one structured setup gap: what exactly is unmet and
+ * where it is fixed. Only the gaps that ARE about the project link / template
+ * send the operator to certification settings — an unresolved blueprint on an
+ * already-linked facility names the blueprint keys instead of issuing a false
+ * "link this facility" instruction (QA 2026-07-21 F2).
+ */
+function setupGapCopy(gap: FacilitySetupGap): {
+  message: string;
+  action: { label: string; toSettings: true } | null;
+} {
+  switch (gap.kind) {
+    case "project_link":
+      return {
+        message:
+          "This facility isn't linked to an Isometric project yet. Link it before grouping batches.",
+        action: { label: "Link facility in certification settings", toSettings: true },
+      };
+    case "credentials":
+      return {
+        message:
+          "The organization's Isometric API credentials aren't configured, so the registry can't be reached. An organization owner or admin needs to set them up before this facility can be linked.",
+        action: null,
+      };
+    case "default_template":
+      return {
+        message:
+          "This facility is linked, but no default removal template is set for it.",
+        action: { label: "Choose a template in certification settings", toSettings: true },
+      };
+    case "template_resolution":
+      return {
+        message: `The configured removal template (${gap.templateId}) no longer resolves on the registry. Re-select a template.`,
+        action: { label: "Re-select template in certification settings", toSettings: true },
+      };
+    case "blueprint_keys":
+      return {
+        message:
+          `The facility's project and template are linked, but the template references ` +
+          `${gap.keys.length} component blueprint${gap.keys.length === 1 ? "" : "s"} the registry doesn't expose: ` +
+          `${gap.keys.join(", ")}. Ask an administrator to resolve the template's blueprint mapping with Isometric.`,
+        action: null,
+      };
+  }
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -185,7 +232,7 @@ function IncompleteCard({
 
 export function SelectBatchesStep({
   batches,
-  facilitySetupComplete,
+  facilitySetupGaps,
   facilityId,
   selectedIds,
   onToggle,
@@ -205,29 +252,39 @@ export function SelectBatchesStep({
         </InfoHint>
       </h3>
 
-      {!facilitySetupComplete && (
-        <div className="flex items-start gap-12 border-l-4 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8">
-          <WarningIcon
-            size={16}
-            weight="fill"
-            aria-hidden
-            className="mt-px shrink-0 text-[var(--color-signal-orange-strong)]"
-          />
-          <div className="flex flex-col gap-2">
-            <span className="body-small text-[var(--color-text-primary)]">
-              Link this facility to Isometric and set a removal template before
-              grouping batches.
-            </span>
-            <Link
-              href={certificationSettingsHref(facilityId)}
-              className="inline-flex items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
+      {/* Setup gaps render only once the readiness query has settled — a
+          loading default must not flash a false "finish setup" instruction. */}
+      {!isLoading &&
+        facilitySetupGaps.map((gap) => {
+          const copy = setupGapCopy(gap);
+          return (
+            <div
+              key={gap.kind}
+              className="flex items-start gap-12 border-l-4 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] px-12 py-8"
             >
-              Open certification settings
-              <ArrowSquareOutIcon size={12} aria-hidden />
-            </Link>
-          </div>
-        </div>
-      )}
+              <WarningIcon
+                size={16}
+                weight="fill"
+                aria-hidden
+                className="mt-px shrink-0 text-[var(--color-signal-orange-strong)]"
+              />
+              <div className="flex flex-col gap-2">
+                <span className="body-small text-[var(--color-text-primary)]">
+                  {copy.message}
+                </span>
+                {copy.action && (
+                  <Link
+                    href={certificationSettingsHref(facilityId)}
+                    className="inline-flex items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
+                  >
+                    {copy.action.label}
+                    <ArrowSquareOutIcon size={12} aria-hidden />
+                  </Link>
+                )}
+              </div>
+            </div>
+          );
+        })}
 
       {isLoading ? (
         <p className="body-small text-[var(--color-text-tertiary)]">

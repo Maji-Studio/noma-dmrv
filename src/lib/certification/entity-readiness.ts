@@ -3,6 +3,7 @@ import {
   type CertifyEntityKind,
   type CertifyFieldDescriptor,
 } from "./certify-field-registry";
+import { hasCompleteTransportEvidence } from "./transport-evidence";
 
 export type EntityCertifyReadinessState = "ready" | "incomplete";
 
@@ -43,6 +44,19 @@ const APPLICATION_EVIDENCE_GAP: EntityCertifyGap = {
   label: "Application evidence",
   fields: ["evidenceGapCount"],
   detail: "Geotagged photos or boundary evidence required to certify",
+};
+
+const TRANSPORT_EVIDENCE_GAP: EntityCertifyGap = {
+  kind: "field",
+  key: "transportEvidence",
+  label: "Transport evidence",
+  fields: [
+    "transportDistanceSource",
+    "effectiveDistanceSource",
+    "transportEvidenceDocumentCount",
+  ],
+  detail:
+    "Saved Document provenance and at least one classified uploaded transport-evidence file are required to certify",
 };
 
 function fieldValue(
@@ -89,6 +103,13 @@ function descriptorSatisfied(
     );
   }
 
+  if (descriptor.satisfaction?.mode === "equals") {
+    return (
+      fieldValue(entity, descriptor.satisfaction.field) ===
+      descriptor.satisfaction.value
+    );
+  }
+
   if (descriptor.kind === "derived") return true;
 
   return descriptorFields(descriptor).every((field) =>
@@ -101,7 +122,9 @@ function fieldGap(descriptor: CertifyFieldDescriptor): EntityCertifyGap {
     descriptor.satisfaction?.mode === "anyOf" ||
     descriptor.satisfaction?.mode === "allOf"
       ? descriptor.satisfaction.fields
-      : descriptorFields(descriptor);
+      : descriptor.satisfaction?.mode === "equals"
+        ? [descriptor.satisfaction.field]
+        : descriptorFields(descriptor);
   const requirement =
     descriptor.condition != null
       ? `${descriptor.label} is required for ${descriptor.condition.label}`
@@ -180,7 +203,60 @@ export function deriveEntityCertifyReadiness(
     }
   }
 
+  if (entityKind === "feedstock" || entityKind === "delivery") {
+    const source =
+      entityKind === "feedstock"
+        ? fieldValue(entity, "transportDistanceSource")
+        : fieldValue(entity, "effectiveDistanceSource");
+    const documentCount = fieldValue(
+      entity,
+      "transportEvidenceDocumentCount",
+    );
+    if (
+      !hasCompleteTransportEvidence(
+        source === "document" ? "document" : null,
+        typeof documentCount === "number" ? documentCount : undefined,
+      )
+    ) {
+      gaps.push(TRANSPORT_EVIDENCE_GAP);
+    }
+  }
+
+  // A raw leg's Document provenance means nothing without an accepted upload —
+  // the same composite rule the entity-level projections apply. Callers load
+  // legs via `getTransportLegsWithEvidenceForEntities` so the count is present;
+  // a missing count fails closed (gap), never silently green.
+  if (entityKind === "transportLeg") {
+    const source = fieldValue(entity, "distanceSource");
+    const documentCount = fieldValue(
+      entity,
+      "transportEvidenceDocumentCount",
+    );
+    if (
+      !hasCompleteTransportEvidence(
+        source === "document" ? "document" : null,
+        typeof documentCount === "number" ? documentCount : undefined,
+      )
+    ) {
+      gaps.push(TRANSPORT_EVIDENCE_GAP);
+    }
+  }
+
   for (const descriptor of getCertifyFieldDescriptors(entityKind)) {
+    if (
+      entityKind === "feedstock" &&
+      descriptor.key === "transportDistanceProvenance"
+    ) {
+      continue;
+    }
+    // The composite transport-evidence check above owns this requirement; the
+    // bare equals-Document descriptor would clear the gap without any file.
+    if (
+      entityKind === "transportLeg" &&
+      descriptor.key === "distanceProvenance"
+    ) {
+      continue;
+    }
     if (!conditionApplies(descriptor, entity)) continue;
     if (descriptorSatisfied(descriptor, entity)) continue;
     gaps.push(fieldGap(descriptor));

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   reconcileComposition,
-  deriveBinRemovalKg,
+  deriveSuggestedIngredientMassKg,
+  deriveMassDeviationPercent,
   fromCompositionJsonb,
+  shouldPrefillSuggestedMasses,
   toCompositionJsonb,
 } from "@/lib/biochar-composition";
 import type { IngredientBin } from "@/lib/biochar-composition";
@@ -179,21 +181,90 @@ describe("reconcileComposition", () => {
   });
 });
 
-describe("deriveBinRemovalKg", () => {
-  it("computes (productMassKg / biocharRatio) * ingredientRatio", () => {
-    expect(deriveBinRemovalKg(800, 0.8, 0.2)).toBeCloseTo(200, 6);
-    expect(deriveBinRemovalKg(500, 1, 0.5)).toBeCloseTo(250, 6);
+describe("deriveSuggestedIngredientMassKg", () => {
+  it("computes productMassKg * ingredientRatio", () => {
+    expect(deriveSuggestedIngredientMassKg(500, 0.5)).toBeCloseTo(250, 6);
+  });
+
+  it("suggests 160 kg for a 0.2 ingredient in an 800 kg product", () => {
+    expect(deriveSuggestedIngredientMassKg(800, 0.2)).toBeCloseTo(160, 6);
   });
 
   it("returns null when any input is null, undefined, zero, or negative", () => {
-    expect(deriveBinRemovalKg(null, 0.8, 0.2)).toBeNull();
-    expect(deriveBinRemovalKg(800, null, 0.2)).toBeNull();
-    expect(deriveBinRemovalKg(800, 0.8, null)).toBeNull();
-    expect(deriveBinRemovalKg(undefined, 0.8, 0.2)).toBeNull();
-    expect(deriveBinRemovalKg(0, 0.8, 0.2)).toBeNull();
-    expect(deriveBinRemovalKg(800, 0, 0.2)).toBeNull();
-    expect(deriveBinRemovalKg(800, 0.8, 0)).toBeNull();
-    expect(deriveBinRemovalKg(-1, 0.8, 0.2)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(null, 0.2)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(800, null)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(undefined, 0.2)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(0, 0.2)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(800, 0)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(-1, 0.2)).toBeNull();
+  });
+});
+
+describe("shouldPrefillSuggestedMasses", () => {
+  it("allows suggestions while creating a new product composition", () => {
+    expect(
+      shouldPrefillSuggestedMasses({
+        isEditMode: false,
+        initialFormulationId: null,
+        selectedFormulationId: ING_A,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not fabricate a null saved mass during an unrelated edit", () => {
+    const savedWithNullMass: IngredientBin[] = [
+      {
+        formulationIngredientId: ING_A,
+        feedstockTypeId: FT_A,
+        feedstockTypeName: "Compost",
+        feedstockTypeCategory: "compost",
+        ratio: 0.2,
+        massKg: null,
+        storageLocationId: BIN_A,
+      },
+    ];
+
+    expect(
+      shouldPrefillSuggestedMasses({
+        isEditMode: true,
+        initialFormulationId: ING_C,
+        selectedFormulationId: ING_C,
+      }),
+    ).toBe(false);
+    expect(toCompositionJsonb(savedWithNullMass, { mode: "update" })).toEqual({
+      ingredients: [expect.objectContaining({ massKg: null })],
+    });
+  });
+
+  it("allows suggestions after an explicit formulation reassignment", () => {
+    expect(
+      shouldPrefillSuggestedMasses({
+        isEditMode: true,
+        initialFormulationId: ING_A,
+        selectedFormulationId: ING_B,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("deriveMassDeviationPercent", () => {
+  it("computes the signed percent deviation vs the suggestion", () => {
+    expect(deriveMassDeviationPercent(220, 200)).toBeCloseTo(10, 6);
+    expect(deriveMassDeviationPercent(150, 200)).toBeCloseTo(-25, 6);
+    expect(deriveMassDeviationPercent(200, 200)).toBeCloseTo(0, 6);
+  });
+
+  it("treats an entered zero mass as a full -100% deviation", () => {
+    expect(deriveMassDeviationPercent(0, 200)).toBeCloseTo(-100, 6);
+  });
+
+  it("returns null when either side is missing or the suggestion is non-positive", () => {
+    expect(deriveMassDeviationPercent(null, 200)).toBeNull();
+    expect(deriveMassDeviationPercent(undefined, 200)).toBeNull();
+    expect(deriveMassDeviationPercent(200, null)).toBeNull();
+    expect(deriveMassDeviationPercent(200, 0)).toBeNull();
+    expect(deriveMassDeviationPercent(-1, 200)).toBeNull();
+    expect(deriveMassDeviationPercent(Number.NaN, 200)).toBeNull();
   });
 });
 

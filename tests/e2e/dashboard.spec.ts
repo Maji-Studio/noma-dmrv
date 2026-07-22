@@ -10,12 +10,18 @@
  * behind the header's "Edit batch" side sheet.
  */
 import { test, expect } from "./fixtures/auth-fixtures";
-import { seedCreditBatch } from "./fixtures/seed-chain-data";
+import {
+  seedCreditBatch,
+  seedCreditBatchProductionLineage,
+} from "./fixtures/seed-chain-data";
+import { seedCertifierMapping } from "./fixtures/certification-helpers";
 import { createDbConnection } from "./fixtures/db";
 import { DEC_ORG_ID } from "@/db/org-defaults";
+import { onboardingGuideCollapsedKey } from "@/components/onboarding/onboarding-constants";
 import {
   facilities,
   feedstocks,
+  documents,
   supplierLocations,
   suppliers,
   transportLegs,
@@ -27,6 +33,18 @@ test.describe("Dashboard (Flow Hero)", () => {
     adminPage,
     seededData,
   }) => {
+    // This spec describes an operating facility's dashboard, so satisfy every
+    // Setup step (registry link + complete run + credit batch on top of the
+    // seeded chain) — otherwise the getting-started guide takes over the body.
+    // Fixture teardown sweeps the certifier row along with the chain.
+    await seedCertifierMapping(seededData.facility.id, {
+      externalProjectId: `e2e-dash-${crypto.randomUUID().slice(0, 8)}`,
+    });
+    await seedCreditBatchProductionLineage(
+      seededData,
+      crypto.randomUUID().slice(0, 8),
+    );
+
     const page = adminPage;
     await page.goto(`/dashboard?facility=${seededData.facility.id}`);
 
@@ -69,6 +87,7 @@ test.describe("Dashboard (Flow Hero)", () => {
   test("structural certification gaps block false green while a zero-gap facility is all clear", async ({
     adminPage,
     seededData,
+    testUsers,
   }) => {
     const { db, pool } = createDbConnection();
     const facilityId = crypto.randomUUID();
@@ -76,6 +95,7 @@ test.describe("Dashboard (Flow Hero)", () => {
     const supplierLocationId = crypto.randomUUID();
     const feedstockId = crypto.randomUUID();
     const transportLegId = crypto.randomUUID();
+    const evidenceDocumentId = crypto.randomUUID();
     const tag = crypto.randomUUID().slice(0, 8);
 
     try {
@@ -132,6 +152,21 @@ test.describe("Dashboard (Flow Hero)", () => {
       });
 
       const page = adminPage;
+      // This ad-hoc facility is deliberately half-provisioned (no reactor,
+      // registry, run, or batch), so the getting-started guide would take over
+      // the dashboard body. Collapse it the way an operator would — the guide
+      // recedes to a strip and the real dashboard renders.
+      // The preference key is scoped per user + active org; cover both active-org
+      // states the admin session may be in (entered DEC vs none).
+      await page.addInitScript(
+        (keys: string[]) => {
+          for (const key of keys) window.localStorage.setItem(key, "true");
+        },
+        [
+          onboardingGuideCollapsedKey(testUsers.admin.id, DEC_ORG_ID),
+          onboardingGuideCollapsedKey(testUsers.admin.id, null),
+        ],
+      );
       await page.goto(`/dashboard?facility=${facilityId}`);
       const structuralGaps = page.getByTestId("structural-gap-list");
       await expect(structuralGaps.getByText("Feedstock GPS missing")).toBeVisible();
@@ -144,6 +179,48 @@ test.describe("Dashboard (Flow Hero)", () => {
       await expect(structuralGaps.getByText("1 gap")).toHaveCount(3);
       await expect(page.getByText("3 open", { exact: true }).first()).toBeVisible();
       await expect(page.getByText("All clear")).toHaveCount(0);
+
+      const evidenceLink = structuralGaps.getByRole("link", {
+        name: /Transport distance lacks document evidence/,
+      });
+      await expect(evidenceLink).toHaveAttribute(
+        "href",
+        `/feedstocks?facility=${facilityId}&feedstock=${feedstockId}&mode=edit&focus=transport-evidence`,
+      );
+      await evidenceLink.click();
+      const feedstockSheet = page.getByRole("dialog");
+      await expect(feedstockSheet.getByText("Save Changes")).toBeVisible();
+      await expect(
+        feedstockSheet.getByText(
+          "Mark the saved distance source as Document and attach supporting evidence",
+        ),
+      ).toBeVisible();
+      await expect(
+        feedstockSheet.getByRole("radio", { name: "Bill of lading" }),
+      ).toBeChecked();
+      await expect(
+        feedstockSheet.getByRole("radio", { name: "Weigh-scale ticket" }),
+      ).toBeVisible();
+      await expect(
+        feedstockSheet.getByRole("radio", { name: "Other transport evidence" }),
+      ).toBeVisible();
+      await expect(
+        feedstockSheet.getByText("Drop files here or click to upload"),
+      ).toHaveCount(1);
+      await feedstockSheet
+        .getByRole("button", { name: "Use Document provenance" })
+        .click();
+      await expect(feedstockSheet.getByText(/Draft: Document/)).toBeVisible();
+      await feedstockSheet
+        .getByRole("button", { name: "About transport evidence" })
+        .hover();
+      await expect(
+        page.getByText(
+          "Transport evidence requires saved Document provenance plus at least one uploaded bill of lading, weigh-scale ticket, or other transport evidence file. One accepted file is enough. Uploading does not change the saved provenance.",
+        ),
+      ).toBeVisible();
+
+      await page.goto(`/dashboard?facility=${facilityId}`);
 
       await db.transaction(async (tx) => {
         await tx
@@ -158,6 +235,16 @@ test.describe("Dashboard (Flow Hero)", () => {
             distanceSource: "document",
           })
           .where(eq(transportLegs.id, transportLegId));
+        await tx.insert(documents).values({
+          id: evidenceDocumentId,
+          organizationId: DEC_ORG_ID,
+          entityType: "feedstock",
+          entityId: feedstockId,
+          documentType: "bill_of_lading",
+          fileName: "transport-evidence.pdf",
+          fileUrl: "https://example.invalid/transport-evidence.pdf",
+          uploadStatus: "uploaded",
+        });
       });
 
       await page.reload();
@@ -165,6 +252,7 @@ test.describe("Dashboard (Flow Hero)", () => {
       await expect(page.getByText("All clear")).toBeVisible();
       await expect(page.getByText("Every blocking check passes.")).toBeVisible();
     } finally {
+      await db.delete(documents).where(eq(documents.id, evidenceDocumentId));
       await db.delete(transportLegs).where(eq(transportLegs.id, transportLegId));
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
       await db

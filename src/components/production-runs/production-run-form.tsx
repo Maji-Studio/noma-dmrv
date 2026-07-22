@@ -15,9 +15,9 @@ import Link from "next/link";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
-import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, FileCsvIcon, XIcon } from "@phosphor-icons/react/dist/ssr";
+import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, FileCsvIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, DryMassInput, FormActions, FormSection, FormSpine, SectionLabel, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
-import { Button } from "@/components/ui";
+import { ProductionRunReadingTable } from "@/components/production-run-readings";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { FormSelect } from "@/components/forms/form-select";
 import {
@@ -33,7 +33,11 @@ import {
   type ProductionRunFormData,
   type ProductionRunStatus,
 } from "@/schemas/production-runs";
-import { allowedProductionRunStatusesFrom } from "@/lib/production-runs/lifecycle";
+import {
+  allowedProductionRunStatusesFrom,
+  shouldClearProductionRunEndTime,
+  shouldIncludeProductionRunEndTime,
+} from "@/lib/production-runs/lifecycle";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { StorageLocationType } from "@/schemas/storage-locations";
@@ -293,7 +297,6 @@ export function ProductionRunForm({
     handleSubmit,
     control,
     setValue,
-    getValues,
     setError,
     clearErrors,
     formState: { errors, dirtyFields },
@@ -306,7 +309,6 @@ export function ProductionRunForm({
 
   // The run this run's window overlaps, if the server rejected the save (#259).
   const [overlapConflict, setOverlapConflict] = useState<RunConflict | null>(null);
-  const [endTimeCleared, setEndTimeCleared] = useState(false);
 
   // CERT chips reflect the saved record (frozen), neutral while creating.
   const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
@@ -315,6 +317,11 @@ export function ProductionRunForm({
   const runStatusCertStatus: CertFieldStatus = !isEditMode
     ? "neutral"
     : productionRun?.status === "complete"
+      ? "satisfied"
+      : "missing";
+  const readingsCertStatus: CertFieldStatus = !isEditMode
+    ? "neutral"
+    : (productionRun?.readingsCount ?? 0) > 0
       ? "satisfied"
       : "missing";
 
@@ -391,17 +398,28 @@ export function ProductionRunForm({
         ? data.endDate
         : formatLocalDate(data.endDate as Date)
       : startDateStr;
-    // Three-state end time: explicit clear → null; a touched (dirty) value →
-    // that Date; anything else (untouched, whether pre-filled or blank) →
-    // undefined = "unchanged", so a no-op edit never rewrites the stored end.
+    // A touched value or newly entered physical outcome submits that Date;
+    // otherwise undefined means "unchanged", so a no-op edit of an already
+    // terminal run never rewrites the stored end.
     const endTouched = !!dirtyFields.endDate || !!dirtyFields.endTime;
+    const includeEndTime = shouldIncludeProductionRunEndTime({
+      endFieldsTouched: endTouched,
+      from: transitionFrom,
+      to: data.status,
+    });
+    const clearEndTime = shouldClearProductionRunEndTime({
+      from: transitionFrom,
+      to: data.status,
+      existingEndTime: productionRun?.endTime,
+    });
     const combined: ProductionRunSubmitData = {
       ...data,
       expectedUpdatedAt: productionRun?.updatedAt,
       startTime: combineDateAndTime(startDateStr, data.startTime as string),
-      endTime: endTimeCleared
-        ? null
-        : data.endTime && endTouched
+      endTime:
+        clearEndTime
+          ? null
+          : data.endTime && includeEndTime
           ? combineDateAndTime(endDateStr, data.endTime as string)
           : undefined,
     };
@@ -532,43 +550,18 @@ export function ProductionRunForm({
               type="date"
               disabled={isSubmitting}
               error={!!errors.endDate}
-              {...register("endDate", { onChange: () => setEndTimeCleared(false) })}
+              {...register("endDate")}
             />
           </FormField>
 
           <FormField id="endTime" label="End Time" error={errors.endTime?.message}>
-            <div className="flex items-center gap-8">
-              <FormInput
-                id="endTime"
-                type="time"
-                disabled={isSubmitting}
-                error={!!errors.endTime}
-                {...register("endTime", { onChange: () => setEndTimeCleared(false) })}
-              />
-              {isEditMode && productionRun?.endTime != null && (
-                <Button
-                  type="button"
-                  variant="noOutline"
-                  size="small"
-                  disabled={isSubmitting}
-                  onClick={() => {
-                    if (
-                      getValues("status") === "complete" ||
-                      getValues("status") === "failed"
-                    ) {
-                      setValue("status", "running", SET_VALUE_OPTS);
-                    }
-                    setValue("endDate", "", SET_VALUE_OPTS);
-                    setValue("endTime", "", SET_VALUE_OPTS);
-                    clearErrors("endTime");
-                    setEndTimeCleared(true);
-                  }}
-                >
-                  <XIcon size={16} weight="bold" />
-                  Clear end time
-                </Button>
-              )}
-            </div>
+            <FormInput
+              id="endTime"
+              type="time"
+              disabled={isSubmitting}
+              error={!!errors.endTime}
+              {...register("endTime")}
+            />
           </FormField>
         </div>
 
@@ -798,12 +791,6 @@ export function ProductionRunForm({
           "electricityKwh",
         ]}
       >
-
-        <p className="body-caption text-[var(--color-text-tertiary)]">
-          These values feed the certification emissions calculation. Enter 0
-          where nothing was used — a blank field reads as missing, not zero.
-        </p>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="dieselOperationLiters"
@@ -900,12 +887,21 @@ export function ProductionRunForm({
           label="Readings CSV"
           helperText="Upload a readings CSV (timestamp_utc, temperature_c, pressure_bar, plus optional dryer/reactor frequency). A file may span multiple UTC days; rows inside the run's time window populate the readings table below."
           certifyRequired
+          certifyStatus={readingsCertStatus}
         >
-          <ProductionReadingsDocuments
-            productionRunId={productionRun?.id}
-            deferredAttachments={deferredAttachments}
-            disabled={isSubmitting}
-          />
+          <div className="space-y-12">
+            <ProductionReadingsDocuments
+              productionRunId={productionRun?.id}
+              deferredAttachments={deferredAttachments}
+              disabled={isSubmitting}
+            />
+            {productionRun?.id && (
+              <ProductionRunReadingTable
+                productionRunId={productionRun.id}
+                compact
+              />
+            )}
+          </div>
         </FormField>
       </FormSection>
       </FormSpine>

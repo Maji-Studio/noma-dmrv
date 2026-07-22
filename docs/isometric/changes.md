@@ -13,6 +13,25 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-07-21 (actionable transport-evidence readiness)
+
+Transport evidence now has one reusable operator workflow across feedstocks,
+deliveries, and manually managed transport legs. The UI uses one multi-file
+uploader with an explicit classification choice: bill of lading, weigh-scale
+ticket, or other transport evidence. These are alternatives; one successfully
+uploaded classified file is sufficient.
+
+Readiness is composite and reflects saved state: the effective distance source
+must be `document` and at least one accepted transport-evidence document must
+exist. Either fact alone remains incomplete. Persisted complete fields stay
+green in view and edit modes; incomplete evidence is orange and dashboard
+attention links focus the actionable transport section. Migration 0087 adds
+`other_transport_evidence` to `documentation_type` (renumbered from 0084
+during the staging sync).
+
+This is an operator-readiness and evidence-classification change. It does not
+change Isometric payload mappings or make a new protocol claim.
+
 ## 2026-07-10 (1000-year sandbox submission verified end to end)
 
 The 1000-year removal path has now passed a live Isometric sandbox submission

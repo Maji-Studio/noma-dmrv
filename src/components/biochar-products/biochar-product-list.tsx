@@ -28,9 +28,16 @@ import { TransportLegsSummary } from "@/components/transport-legs";
 import { BiocharProductForm } from "./biochar-product-form";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
 import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
+import {
+  ENTITY_DEEP_LINK_FOCUS_PARAM,
+  ENTITY_DEEP_LINK_MODE_PARAM,
+  parseEntityFocusTarget,
+} from "@/lib/entity-deep-link";
+import { fromCompositionJsonb } from "@/lib/biochar-composition";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { formatDate } from "@/lib/format-utils";
+import { EntityDetailValue } from "@/components/ui/entity-detail-value";
 
 // ============================================
 // Helpers
@@ -153,6 +160,14 @@ export function BiocharProductList() {
     "biocharProduct",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
+  const [deepLinkMode, setDeepLinkMode] = useQueryState(
+    ENTITY_DEEP_LINK_MODE_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const [deepLinkFocus, setDeepLinkFocus] = useQueryState(
+    ENTITY_DEEP_LINK_FOCUS_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
   const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -174,9 +189,15 @@ export function BiocharProductList() {
   const products = productsData?.items ?? [];
   const deepLinkedSideSheet =
     focusedProductId && focusedProduct.data
-      ? ({ mode: "view", entity: focusedProduct.data } as const)
+      ? ({
+          mode: deepLinkMode === "edit" ? "edit" : "view",
+          entity: focusedProduct.data,
+        } as const)
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const activeFocusTarget = sideSheet
+    ? null
+    : parseEntityFocusTarget(deepLinkFocus);
 
   useEffect(() => {
     if (!focusedProductId) return;
@@ -213,11 +234,19 @@ export function BiocharProductList() {
   };
 
   const handleUpdate = async (data: BiocharProductFormData) => {
-    if (sideSheet?.mode !== "edit") return;
+    // Deep-linked edits render via `displaySideSheet` while `sideSheet` state
+    // is still null — resolving the target here keeps dashboard edit links
+    // saveable, not just list-opened sheets.
+    const editing =
+      displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
+    if (!editing) return;
     setFormError(null);
     try {
-      await updateProduct.mutateAsync({ productId: sideSheet.entity.id, ...data });
+      await updateProduct.mutateAsync({ productId: editing.id, ...data });
       setSideSheet(null);
+      setFocusedProductId(null);
+      setDeepLinkMode(null);
+      setDeepLinkFocus(null);
       toast.success("Biochar product updated successfully");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to update biochar product");
@@ -240,17 +269,23 @@ export function BiocharProductList() {
 
   const openCreate = () => {
     setFocusedProductId(null);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setFormError(null);
     setSideSheet({ mode: "create", entity: null });
   };
   const openView = (product: BiocharProductWithRelations) => {
     setFocusedProductId(product.id);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setFormError(null);
     setSideSheet({ mode: "view", entity: product });
   };
-  const openEdit = (product: BiocharProductWithRelations) => { setFormError(null); setSideSheet({ mode: "edit", entity: product }); };
+  const openEdit = (product: BiocharProductWithRelations) => { setDeepLinkMode(null); setDeepLinkFocus(null); setFormError(null); setSideSheet({ mode: "edit", entity: product }); };
   const closeSideSheet = () => {
     setFocusedProductId(null);
+    setDeepLinkMode(null);
+    setDeepLinkFocus(null);
     setSideSheet(null);
     setFormError(null);
   };
@@ -380,23 +415,49 @@ export function BiocharProductList() {
         editLabel="Edit Product"
         sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? [
           {
-            title: "Product",
+            title: "Source",
             fields: [
-              { label: "Code", value: displaySideSheet.entity.code },
-              { label: "Production Date", value: formatDate(displaySideSheet.entity.productionDate) },
+              { label: "Production Run", value: displaySideSheet.entity.linkedProductionRun?.code },
+              { label: "Wet Mass (kg)", value: formatMass(displaySideSheet.entity.massKg) },
+              { label: "Dry Mass (derived)", value: formatMass(deriveBiocharProductDryMass(displaySideSheet.entity)) },
+              { label: "Moisture Content (%)", value: displaySideSheet.entity.moistureContentPercent != null ? `${displaySideSheet.entity.moistureContentPercent}%` : null },
+              { label: "Water Added (kg)", value: displaySideSheet.entity.waterAddedKg != null ? formatMass(displaySideSheet.entity.waterAddedKg) : null },
+              { label: "Density (kg/m3)", value: displaySideSheet.entity.densityKgM3 != null ? `${displaySideSheet.entity.densityKgM3} kg/m³` : null },
+            ],
+          },
+          ...(() => {
+            const ingredients = fromCompositionJsonb(displaySideSheet.entity.composition);
+            if (ingredients.length === 0) return [];
+            return [{
+              title: "Blend Ingredients",
+              fields: ingredients.map((ingredient) => ({
+                label: ingredient.feedstockTypeName,
+                value: ingredient.massKg != null ? formatMass(ingredient.massKg) : undefined,
+              })),
+            }];
+          })(),
+          {
+            title: "Destination & Product",
+            fields: [
               { label: "Formulation", value: displaySideSheet.entity.formulation?.name ?? PURE_BIOCHAR_LABEL },
-              { label: "Wet Mass", value: formatMass(displaySideSheet.entity.massKg) },
-              { label: "Moisture", value: displaySideSheet.entity.moistureContentPercent != null ? `${displaySideSheet.entity.moistureContentPercent}%` : undefined },
-              { label: "Water Added", value: displaySideSheet.entity.waterAddedKg != null ? formatMass(displaySideSheet.entity.waterAddedKg) : undefined },
-              { label: "Dry Mass", value: formatMass(deriveBiocharProductDryMass(displaySideSheet.entity)) },
-              { label: "Density", value: displaySideSheet.entity.densityKgM3 != null ? `${displaySideSheet.entity.densityKgM3} kg/m³` : undefined },
+              ...fromCompositionJsonb(displaySideSheet.entity.composition).map((ingredient) => ({
+                label: ingredient.feedstockTypeName,
+                value: (
+                  <EntityDetailValue
+                    entityType="storageLocation"
+                    id={ingredient.storageLocationId}
+                  />
+                ),
+              })),
+              { label: "Product Bin", value: displaySideSheet.entity.storageLocation?.name },
             ],
           },
           {
-            title: "Source & Storage",
+            title: "Record Metadata",
             fields: [
-              { label: "Production Run", value: displaySideSheet.entity.linkedProductionRun?.code },
-              { label: "Product Bin", value: displaySideSheet.entity.storageLocation?.name },
+              { label: "Code", value: displaySideSheet.entity.code },
+              { label: "Production Date", value: formatDate(displaySideSheet.entity.productionDate) },
+              { label: "Status", value: displaySideSheet.entity.status },
               { label: "Facility", value: displaySideSheet.entity.facility?.name },
             ],
           },
@@ -422,6 +483,9 @@ export function BiocharProductList() {
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}
           submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Product"}
+          focusTarget={
+            displaySideSheet?.mode === "edit" ? activeFocusTarget : null
+          }
         />
       </EntitySideSheet>
     </div>

@@ -27,7 +27,7 @@ import {
   useProductionRunStats,
 } from "@/hooks/use-production-runs";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useDeferredAttachments } from "@/hooks/use-deferred-attachments";
+import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { useImportProductionRunReadings } from "@/hooks/use-production-run-reading-imports";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
@@ -43,6 +43,7 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { formatDate } from "@/lib/format-utils";
+import { formatLocalTime } from "@/lib/date-utils";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
 import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
@@ -216,9 +217,7 @@ export function ProductionRunList() {
   const updateRun = useUpdateProductionRun();
   const deleteRun = useDeleteProductionRun();
   const toast = useToast();
-  const deferredAttachments = useDeferredAttachments();
   const importReadings = useImportProductionRunReadings();
-  const [isFlushing, setIsFlushing] = useState(false);
 
   const runs = runsData?.items ?? [];
   const totalPages = runsData?.totalPages ?? 0;
@@ -239,28 +238,39 @@ export function ProductionRunList() {
     toast.success(`${message}. Still needed to certify: ${gapLabels}${suffix}`);
   };
 
-  const handleCreate = async (data: ProductionRunSubmitData) => {
-    setCreateError(null);
-    try {
+  const createWithEvidence = useCreateWithEvidence({
+    entityType: "production_run",
+    entityNoun: "Production run",
+    executeCreate: async (data: ProductionRunSubmitData) => {
       const run = await createRun.mutateAsync(data as ProductionRunFormData);
-      setIsFlushing(true);
-      const flushResult = await deferredAttachments.flush(
-        "production_run",
-        run.id,
-      );
-      // Import every readings CSV that DID upload first — even on a partial
-      // failure. A deferred readings CSV is uploaded as a document but not yet
-      // imported, and deferred retry skips already-`uploaded` entries, so an
-      // import deferred past the failure return would never run and the run
-      // would keep those readings' file without their rows (matching the same
-      // import that onUploaded={runImport} triggers on a direct upload).
-      const readingsDocs = flushResult.uploaded.filter(
+      return { entities: [run], result: run };
+    },
+    setError: setCreateError,
+    setUpdateError,
+    getCreateErrorMessage: (error) => {
+      // Let the form surface an overlap conflict inline (on the start field,
+      // with a link to the conflicting run); show other errors as a banner.
+      if (getRunConflict(error)) throw error;
+      return error instanceof Error
+        ? error.message
+        : "Failed to create production run";
+    },
+    unresolvedUpdateMessage:
+      "Resolve or remove the failed readings file before saving this production run.",
+    openEditOnFailure: (run) =>
+      setSideSheet({ entity: run, mode: "edit" }),
+    closeOnSuccess: () => setSideSheet(null),
+    onAfterFlush: async ({ flushResult }) => {
+      // Import every readings CSV that uploaded, including on a partial upload
+      // failure. Deferred retry skips uploaded entries, so delaying these
+      // imports would leave their documents without readings rows.
+      const readingsDocuments = flushResult.uploaded.filter(
         (attachment) =>
           attachment.documentType === "sensor_data" && attachment.documentId,
       );
       let importFailedCount = 0;
       const importFailureMessages: string[] = [];
-      for (const attachment of readingsDocs) {
+      for (const attachment of readingsDocuments) {
         try {
           const importResult = await importReadings.mutateAsync(
             attachment.documentId as string,
@@ -273,63 +283,43 @@ export function ProductionRunList() {
           }
         }
       }
+
       const uploadFailedCount = flushResult.failed.length;
-      if (uploadFailedCount > 0 || importFailedCount > 0) {
-        // The import fn records a durable "failed" flag on the document, so the
-        // edit-mode readings panel surfaces its Re-import affordance. Keep the
-        // deferred entries only when uploads still need a retry; otherwise the
-        // failure is import-only and the deferred queue is already settled.
-        if (uploadFailedCount === 0) deferredAttachments.clear();
-        setSideSheet({ entity: run, mode: "edit" });
-        const messages: string[] = [];
-        if (uploadFailedCount > 0) {
-          messages.push(
-            `${uploadFailedCount} ${uploadFailedCount === 1 ? "attachment" : "attachments"} failed to upload`,
-          );
-        }
-        if (importFailedCount > 0) {
-          messages.push(
-            `${importFailedCount} readings ${importFailedCount === 1 ? "file" : "files"} could not be imported`,
-          );
-        }
-        const firstImportFailureMessage = importFailureMessages[0];
-        const importFailureDetail = firstImportFailureMessage
-          ? ` Import error: ${firstImportFailureMessage}`
-          : "";
-        setCreateError(
-          `Production run created, but ${messages.join(" and ")}. Resolve ${messages.length > 1 || importFailedCount > 1 || uploadFailedCount > 1 ? "them" : "it"} below.${importFailureDetail}`,
+      if (uploadFailedCount === 0 && importFailedCount === 0) return;
+
+      const messages: string[] = [];
+      if (uploadFailedCount > 0) {
+        messages.push(
+          `${uploadFailedCount} ${uploadFailedCount === 1 ? "attachment" : "attachments"} failed to upload`,
         );
-        return;
       }
-      deferredAttachments.clear();
-      setSideSheet(null);
-      showSavedToast("Production run created successfully", run);
-    } catch (error) {
-      // Let the form surface an overlap conflict inline (on the start field,
-      // with a link to the conflicting run); show other errors as a banner.
-      if (getRunConflict(error)) throw error;
-      setCreateError(error instanceof Error ? error.message : "Failed to create production run");
-    } finally {
-      setIsFlushing(false);
-    }
-  };
+      if (importFailedCount > 0) {
+        messages.push(
+          `${importFailedCount} readings ${importFailedCount === 1 ? "file" : "files"} could not be imported`,
+        );
+      }
+      const firstImportFailureMessage = importFailureMessages[0];
+      const importFailureDetail = firstImportFailureMessage
+        ? ` Import error: ${firstImportFailureMessage}`
+        : "";
+      return {
+        failureMessage: `Production run created, but ${messages.join(" and ")}. Resolve ${messages.length > 1 || importFailedCount > 1 || uploadFailedCount > 1 ? "them" : "it"} below.${importFailureDetail}`,
+        // Import-only failures are durable on the document and need no upload
+        // retry queue; upload failures retain the queue for retry in edit mode.
+        clearAttachmentsOnFailure: uploadFailedCount === 0,
+      };
+    },
+    onSuccess: ({ result }) =>
+      showSavedToast("Production run created successfully", result),
+  });
+  const { deferredAttachments, isFlushing } = createWithEvidence;
+
+  const handleCreate = createWithEvidence.handleCreate;
 
   const handleUpdate = async (data: ProductionRunSubmitData) => {
     if (!sideSheet?.entity) return;
     setUpdateError(null);
-    if (
-      deferredAttachments.attachments.some(
-        // Any not-yet-`uploaded` entry is unresolved: "failed" awaits a retry,
-        // and "uploading" means a readings retry is mid-flight whose state a
-        // save would clobber. Both must block the save.
-        (attachment) => attachment.status !== "uploaded",
-      )
-    ) {
-      setUpdateError(
-        "Resolve or remove the failed readings file before saving this production run.",
-      );
-      return;
-    }
+    if (createWithEvidence.guardUpdate()) return;
     try {
       const { startTime, endTime } = data;
       const run = await updateRun.mutateAsync({
@@ -347,7 +337,7 @@ export function ProductionRunList() {
                 ? endTime
                 : new Date(endTime),
       });
-      deferredAttachments.clear();
+      createWithEvidence.reset();
       setSideSheet(null);
       showSavedToast("Production run updated successfully", run);
     } catch (error) {
@@ -377,17 +367,17 @@ export function ProductionRunList() {
     setFocusedRunId(null);
     setCreateError(null);
     setUpdateError(null);
-    deferredAttachments.clear();
+    createWithEvidence.reset();
     setSideSheet({ entity: null, mode: "create" });
   };
   const openView = (run: ProductionRunWithRelations) => { setFocusedRunId(run.id); setSideSheet({ entity: run, mode: "view" }); };
-  const openEdit = (run: ProductionRunWithRelations) => { setCreateError(null); setUpdateError(null); setSideSheet({ entity: run, mode: "edit" }); };
+  const openEdit = (run: ProductionRunWithRelations) => { setCreateError(null); setUpdateError(null); createWithEvidence.reset(); setSideSheet({ entity: run, mode: "edit" }); };
   const closeSideSheet = () => {
     setFocusedRunId(null);
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
-    deferredAttachments.clear();
+    createWithEvidence.reset();
   };
   useOpenCreateIntent(openCreate);
 
@@ -437,19 +427,8 @@ export function ProductionRunList() {
       : null;
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
 
-  const unsavedAttachmentCount = deferredAttachments.attachments.filter(
-    (attachment) => attachment.status !== "uploaded",
-  ).length;
-  const confirmCreateClose = () => {
-    // An in-flight flush is mid-write; blocking Escape/backdrop/X keeps the
-    // completion handler from mutating a discarded-then-reopened form.
-    if (isFlushing) return false;
-    return (
-      displaySideSheet?.mode !== "create" ||
-      unsavedAttachmentCount === 0 ||
-      window.confirm(`Discard ${unsavedAttachmentCount} unsaved attachment(s)?`)
-    );
-  };
+  const confirmCreateClose = () =>
+    createWithEvidence.confirmClose(displaySideSheet?.mode === "create");
   const attemptCloseSideSheet = () => {
     if (confirmCreateClose()) closeSideSheet();
   };
@@ -610,85 +589,80 @@ export function ProductionRunList() {
         subtitle={sideSheetSubtitle}
         editLabel="Edit Production Run"
         size="wide"
-        viewModeChildren={sideSheetEntity ? (
-          <>
-            <ProductionRunReadingTable
-              productionRunId={sideSheetEntity.id}
-              readOnly
-            />
-            <ProductionReadingsDocuments
-              productionRunId={sideSheetEntity.id}
-              readOnly
-            />
-            <ProductionSampleTable
-              productionRunId={sideSheetEntity.id}
-              readOnly
-            />
-            <ProductionIncidentTable
-              productionRunId={sideSheetEntity.id}
-              readOnly
-            />
-          </>
-        ) : undefined}
         sections={sideSheetEntity ? [
           {
-            title: "General",
+            title: "Run Setup",
             fields: [
-              { label: "Code", value: sideSheetEntity.code },
-              { label: "Date", value: formatDate(sideSheetEntity.date) },
-              { label: "Status", value: <RunStatusBadge status={sideSheetEntity.status} /> },
-              {
-                label: "Certification",
-                value: (
-                  <EntityCertifyReadinessBadge
-                    readiness={deriveEntityCertifyReadiness(
-                      "productionRun",
-                      sideSheetEntity,
-                    )}
-                  />
-                ),
-              },
-            ],
-          },
-          {
-            title: "Location",
-            fields: [
-              { label: "Facility", value: sideSheetEntity.facilityName },
               { label: "Reactor", value: sideSheetEntity.reactorIdentifier },
+              { label: "Status", value: <RunStatusBadge status={sideSheetEntity.status} /> },
+              ...(sideSheetEntity.status === "cancelled"
+                ? [{ label: "Cancellation reason", value: sideSheetEntity.cancellationReason }]
+                : []),
+              { label: "Start Date", value: formatDate(sideSheetEntity.startTime) },
+              { label: "Start Time", value: formatLocalTime(sideSheetEntity.startTime) },
+              { label: "End Date", value: sideSheetEntity.endTime ? formatDate(sideSheetEntity.endTime) : null },
+              { label: "End Time", value: sideSheetEntity.endTime ? formatLocalTime(sideSheetEntity.endTime) : null },
+              { label: "Operator", value: sideSheetEntity.operatorName },
             ],
           },
           {
-            title: "Operations",
+            title: "Feedstock & Processing",
             fields: [
-              { label: "Operator", value: sideSheetEntity.operatorName },
-              { label: "Feeding Rate", value: sideSheetEntity.feedingRateKgHr != null ? `${sideSheetEntity.feedingRateKgHr} kg/hr` : null },
-              { label: "Residence Time", value: sideSheetEntity.residenceTimeMinutes != null ? `${sideSheetEntity.residenceTimeMinutes} min` : null },
+              { label: "Source Bin", value: sideSheetEntity.feedstockStorageLocationCode },
+              { label: "Wet Mass (kg)", ...certificationDetailField("productionRun", "feedstockWetMassKg"), value: sideSheetEntity.feedstockWetMassKg != null ? `${sideSheetEntity.feedstockWetMassKg.toLocaleString()} kg` : null },
+              { label: "Moisture Content (%)", ...certificationDetailField("productionRun", "feedstockMoisturePercent"), value: sideSheetEntity.feedstockMoisturePercent != null ? `${sideSheetEntity.feedstockMoisturePercent}%` : null },
+              { label: "Dry Mass (derived)", value: sideSheetEntity.feedstockMassDryKg != null ? `${sideSheetEntity.feedstockMassDryKg.toLocaleString()} kg` : null },
+              { label: "Feed Rate (kg/hr)", value: sideSheetEntity.feedingRateKgHr != null ? `${sideSheetEntity.feedingRateKgHr} kg/hr` : null },
+              { label: "Residence Time (min)", value: sideSheetEntity.residenceTimeMinutes != null ? `${sideSheetEntity.residenceTimeMinutes} min` : null },
             ],
           },
           {
             title: "Output",
             fields: [
-              { label: "Feedstock Wet Mass", ...certificationDetailField("productionRun", "feedstockWetMassKg"), value: sideSheetEntity.feedstockWetMassKg != null ? `${sideSheetEntity.feedstockWetMassKg.toLocaleString()} kg` : null },
-              { label: "Feedstock Moisture", ...certificationDetailField("productionRun", "feedstockMoisturePercent"), value: sideSheetEntity.feedstockMoisturePercent != null ? `${sideSheetEntity.feedstockMoisturePercent}%` : null },
-              { label: "Biochar Wet Mass", ...certificationDetailField("productionRun", "biocharOutputKg"), value: sideSheetEntity.biocharOutputKg != null ? `${sideSheetEntity.biocharOutputKg.toLocaleString()} kg` : null },
-              { label: "Biochar Moisture", ...certificationDetailField("productionRun", "biocharMoisturePercent"), value: sideSheetEntity.biocharMoisturePercent != null ? `${sideSheetEntity.biocharMoisturePercent}%` : null },
-              { label: "Biochar Dry Mass", value: sideSheetEntity.biocharDryMassKg != null ? `${sideSheetEntity.biocharDryMassKg.toLocaleString()} kg` : null },
+              { label: "Biochar Storage", value: sideSheetEntity.biocharStorageLocationCode },
+              { label: "Biochar Wet Mass (kg)", ...certificationDetailField("productionRun", "biocharOutputKg"), value: sideSheetEntity.biocharOutputKg != null ? `${sideSheetEntity.biocharOutputKg.toLocaleString()} kg` : null },
+              { label: "Biochar Moisture (%)", ...certificationDetailField("productionRun", "biocharMoisturePercent"), value: sideSheetEntity.biocharMoisturePercent != null ? `${sideSheetEntity.biocharMoisturePercent}%` : null },
+              { label: "Biochar Dry Mass (derived)", value: sideSheetEntity.biocharDryMassKg != null ? `${sideSheetEntity.biocharDryMassKg.toLocaleString()} kg` : null },
             ],
           },
           {
             title: "Energy",
             fields: [
-              { label: "Diesel Operation", ...certificationDetailField("productionRun", "dieselOperationLiters"), value: sideSheetEntity.dieselOperationLiters != null ? `${sideSheetEntity.dieselOperationLiters} L` : null },
-              { label: "Diesel Genset", ...certificationDetailField("productionRun", "dieselGensetLiters"), value: sideSheetEntity.dieselGensetLiters != null ? `${sideSheetEntity.dieselGensetLiters} L` : null },
-              { label: "Preprocessing Fuel", ...certificationDetailField("productionRun", "preprocessingFuelLiters"), value: sideSheetEntity.preprocessingFuelLiters != null ? `${sideSheetEntity.preprocessingFuelLiters} L` : null },
-              { label: "Electricity", ...certificationDetailField("productionRun", "electricityKwh"), value: sideSheetEntity.electricityKwh != null ? `${sideSheetEntity.electricityKwh} kWh` : null },
+              { label: "Startup / Plant Diesel (L)", ...certificationDetailField("productionRun", "dieselOperationLiters"), value: sideSheetEntity.dieselOperationLiters != null ? `${sideSheetEntity.dieselOperationLiters} L` : null },
+              { label: "Genset Diesel (L)", ...certificationDetailField("productionRun", "dieselGensetLiters"), value: sideSheetEntity.dieselGensetLiters != null ? `${sideSheetEntity.dieselGensetLiters} L` : null },
+              { label: "Preprocess Fuel (L)", ...certificationDetailField("productionRun", "preprocessingFuelLiters"), value: sideSheetEntity.preprocessingFuelLiters != null ? `${sideSheetEntity.preprocessingFuelLiters} L` : null },
+              { label: "Electricity (kWh)", ...certificationDetailField("productionRun", "electricityKwh"), value: sideSheetEntity.electricityKwh != null ? `${sideSheetEntity.electricityKwh} kWh` : null },
             ],
           },
           {
-            title: "Storage",
+            title: "Readings CSV Import",
+            fields: [],
+            content: (
+              <div className="space-y-20">
+                <ProductionReadingsDocuments productionRunId={sideSheetEntity.id} readOnly />
+                <ProductionRunReadingTable productionRunId={sideSheetEntity.id} readOnly />
+              </div>
+            ),
+          },
+          {
+            title: "Samples & Incidents",
+            fields: [],
+            content: (
+              <div className="space-y-20">
+                <ProductionSampleTable productionRunId={sideSheetEntity.id} readOnly />
+                <ProductionIncidentTable productionRunId={sideSheetEntity.id} readOnly />
+              </div>
+            ),
+          },
+          {
+            title: "Record Metadata",
             fields: [
-              { label: "Biochar Storage", value: sideSheetEntity.biocharStorageLocationCode },
-              { label: "Feedstock Storage", value: sideSheetEntity.feedstockStorageLocationCode },
+              { label: "Code", value: sideSheetEntity.code },
+              { label: "Facility", value: sideSheetEntity.facilityName },
+              {
+                label: "Certification",
+                value: <EntityCertifyReadinessBadge readiness={deriveEntityCertifyReadiness("productionRun", sideSheetEntity)} />,
+              },
             ],
           },
         ] : undefined}
@@ -705,7 +679,6 @@ export function ProductionRunList() {
         >
           {sideSheetEntity && sideSheetMode === "edit" ? (
             <>
-              <ProductionRunReadingTable productionRunId={sideSheetEntity.id} />
               <ProductionSampleTable productionRunId={sideSheetEntity.id} />
               <ProductionIncidentTable
                 productionRunId={sideSheetEntity.id}

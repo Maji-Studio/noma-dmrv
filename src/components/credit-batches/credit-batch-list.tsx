@@ -1,12 +1,16 @@
 /**
  * CreditBatchList component
- * Card grid layout with search, status filter, and pagination
+ * Card grid layout with search and pagination. There is deliberately no
+ * lifecycle-status column or filter: every batch sits at the DB default
+ * ("pending") with no transition path, so a status surface only competed with
+ * the real readiness signal (QA 2026-07-21 F3). Reintroduce one when a registry
+ * lifecycle actually drives it.
  */
 "use client";
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { formatDateRange } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 import {
   CertificateIcon,
   CurrencyCircleDollarIcon,
@@ -29,7 +33,6 @@ import {
   ListPagination,
   PageHeader,
 } from "@/components/ui";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { ServerError } from "@/components/forms";
 import { CreditBatchForm } from "./credit-batch-form";
 import { CreditBatchCard } from "./credit-batch-card";
@@ -47,17 +50,16 @@ import {
 } from "@/hooks/use-certification";
 import type { CreditBatchFormData } from "@/schemas/credit-batches";
 import {
-  creditBatchStatuses,
   formatCertifierProvider,
-  formatCreditBatchStatus,
   formatDurabilityOption,
   type CertifierProvider,
-  type CreditBatchStatus,
   type DurabilityOption,
 } from "@/schemas/credit-batches";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { SelectFacilityEmptyState } from "@/components/navigation";
+import { EntityDetailValue } from "@/components/ui/entity-detail-value";
 
 // ============================================
 // Helpers
@@ -72,7 +74,6 @@ const EMPTY_CREDIT_BATCHES: CreditBatchWithRelations[] = [];
 export function CreditBatchList() {
   // Filter & pagination state
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
@@ -113,12 +114,8 @@ export function CreditBatchList() {
       );
     }
 
-    if (statusFilter) {
-      items = items.filter((b) => b.status === statusFilter);
-    }
-
     return items;
-  }, [allItems, searchQuery, statusFilter]);
+  }, [allItems, searchQuery]);
 
   // Client-side pagination
   const totalFiltered = filteredItems.length;
@@ -240,6 +237,7 @@ export function CreditBatchList() {
     setUpdateError(null);
     setSideSheet({ entity: null, mode: "create" });
   };
+  useOpenCreateIntent(openCreate);
   // Opening a batch goes to its detail page (health check + edit), the redesign
   // replacement for the read-only view side-sheet.
   const openView = (batch: CreditBatchWithRelations) => {
@@ -258,11 +256,10 @@ export function CreditBatchList() {
 
   const clearFilters = () => {
     setSearchQuery("");
-    setStatusFilter("");
     setCurrentPage(1);
   };
 
-  const hasActiveFilters = Boolean(searchQuery || statusFilter);
+  const hasActiveFilters = Boolean(searchQuery);
 
   if (!contextFacilityId) {
     return (
@@ -301,54 +298,50 @@ export function CreditBatchList() {
   const sideSheetSections = sideSheetEntity
     ? [
         {
-          title: "General",
+          title: "Overview",
+          fields: [
+            { label: "Feedstock Type", value: sideSheetEntity.feedstockTypeName },
+            { label: "Start Date", value: formatDate(sideSheetEntity.startDate) },
+            { label: "End Date", value: formatDate(sideSheetEntity.endDate) },
+          ],
+        },
+        {
+          title: "Production runs",
+          fields: sideSheetEntity.productionRunIds.length > 0
+            ? sideSheetEntity.productionRunIds.map((productionRunId, index) => ({
+                label: `Production Run ${index + 1}`,
+                value: <EntityDetailValue entityType="productionRun" id={productionRunId} />,
+              }))
+            : [{ label: "Production Run", value: null }],
+        },
+        {
+          title: "Durability",
+          fields: [{
+            label: "Durability Option",
+            value: sideSheetEntity.durabilityOption
+              ? formatDurabilityOption(sideSheetEntity.durabilityOption as DurabilityOption)
+              : null,
+          }],
+        },
+        {
+          title: "Site Management",
+          fields: [{ label: "Notes", value: sideSheetEntity.siteManagementNotes }],
+        },
+        {
+          title: "Registry & accounting",
+          fields: [
+            { label: "Buffer pool", value: sideSheetEntity.bufferPoolPercent != null ? `${sideSheetEntity.bufferPoolPercent}%` : null },
+            { label: "Registry", value: sideSheetEntity.registry },
+            { label: "Weight", value: sideSheetEntity.appliedWeightTons != null ? `${sideSheetEntity.appliedWeightTons.toFixed(2)} t` : null },
+            { label: "Value", value: sideSheetEntity.value != null ? `${sideSheetEntity.value}${sideSheetEntity.currency ? ` ${sideSheetEntity.currency}` : ""}` : null },
+          ],
+        },
+        {
+          title: "Record Metadata & Metrics",
           fields: [
             { label: "Code", value: sideSheetEntity.code },
-            {
-              label: "Status",
-              value: (
-                <StatusBadge
-                  status={sideSheetEntity.status as CreditBatchStatus}
-                />
-              ),
-            },
-            {
-              label: "Certification",
-              value: facilityCertifierLabel,
-            },
-          ],
-        },
-        {
-          title: "Details",
-          fields: [
-            {
-              label: "Facility",
-              value: sideSheetEntity.facility?.name,
-            },
-            {
-              label: "Crediting Period",
-              value: formatDateRange(sideSheetEntity.startDate, sideSheetEntity.endDate),
-            },
-            {
-              label: "Durability Option",
-              value: sideSheetEntity.durabilityOption
-                ? formatDurabilityOption(
-                    sideSheetEntity.durabilityOption as DurabilityOption
-                  )
-                : null,
-            },
-          ],
-        },
-        {
-          title: "Metrics",
-          fields: [
-            {
-              label: "Total Biochar Weight",
-              value:
-                sideSheetEntity.appliedWeightTons != null
-                  ? `${sideSheetEntity.appliedWeightTons.toFixed(2)} t`
-                  : null,
-            },
+            { label: "Facility", value: sideSheetEntity.facility?.name },
+            { label: "Certification", value: facilityCertifierLabel },
             {
               label: "Total CO₂e stored",
               value:
@@ -367,11 +360,6 @@ export function CreditBatchList() {
                     ? sideSheetEntity.co2eStoredPreview.missingInputs.join(", ")
                     : "Complete",
             },
-          ],
-        },
-        {
-          title: "Applications",
-          fields: [
             {
               label: "Application Count",
               value: String(sideSheetEntity.applicationCount ?? 0),
@@ -424,7 +412,7 @@ export function CreditBatchList() {
       {/* Filter Bar */}
       <section className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20">
         <div className="flex flex-col gap-16 xl:flex-row xl:items-end xl:justify-between">
-          <div className="grid flex-1 gap-12 md:grid-cols-[minmax(0,1fr)_200px]">
+          <div className="grid flex-1 gap-12">
             <div className="relative">
               <MagnifyingGlassIcon
                 size={18}
@@ -442,22 +430,6 @@ export function CreditBatchList() {
                 aria-label="Search credit batches"
               />
             </div>
-
-            <select
-              value={statusFilter}
-              onChange={(event) => {
-                setStatusFilter(event.target.value);
-                setCurrentPage(1);
-              }}
-              className="h-40 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small"
-            >
-              <option value="">All Statuses</option>
-              {creditBatchStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {formatCreditBatchStatus(status)}
-                </option>
-              ))}
-            </select>
           </div>
 
           <div className="flex flex-wrap items-center gap-8">

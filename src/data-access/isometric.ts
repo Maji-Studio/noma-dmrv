@@ -1,4 +1,4 @@
-import { and, count, eq, lt } from "drizzle-orm";
+import { and, count, eq, gte, lt } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import { creditBatches, productionProcesses, samples } from "@/db/schema";
 import { METHOD_B_MINIMUM_METHOD_A_SAMPLES } from "@/config/certification";
@@ -21,6 +21,13 @@ export type MethodBEligibilitySummary = {
  * Canonical eligible-replicate counter for Method-B baseline progress. It is
  * keyed by production process so operator surfaces, unlock validation, and the
  * eventual Track-2 transactional backstop consume the same SQL definition.
+ *
+ * Both time bounds of the baseline window are enforced here (ADR 0017,
+ * 2026-07-12 process-start amendment): `samplingTime >= established_at` — a
+ * back-entered process never counts samples dated before its operational start
+ * — and, when `asOfDate` is given, `samplingTime < asOfDate` (the pre-unlock /
+ * as-of-now upper bound). The DB trigger (`process_method_b_minimum_samples`)
+ * re-asserts the same window against direct SQL.
  */
 export async function countEligibleSamplesByProcess(
   ctx: OrgContext,
@@ -32,6 +39,7 @@ export async function countEligibleSamplesByProcess(
     eq(creditBatches.facilityId, params.facilityId),
     eq(creditBatches.organizationId, ctx.organizationId),
     eq(samples.organizationId, ctx.organizationId),
+    gte(samples.samplingTime, productionProcesses.establishedAt),
   ];
   if (params.asOfDate) {
     conditions.push(lt(samples.samplingTime, params.asOfDate));
@@ -44,6 +52,13 @@ export async function countEligibleSamplesByProcess(
     })
     .from(samples)
     .innerJoin(creditBatches, eq(samples.creditBatchId, creditBatches.id))
+    .innerJoin(
+      productionProcesses,
+      and(
+        eq(productionProcesses.id, creditBatches.productionProcessId),
+        eq(productionProcesses.organizationId, ctx.organizationId),
+      ),
+    )
     .where(and(...conditions))
     .groupBy(creditBatches.productionProcessId);
 
@@ -64,9 +79,11 @@ export async function countEligibleSamplesByProcess(
  * cross-feedstock OVER-CREDIT bug. Scoping to the process isolates each
  * feedstock's baseline.
  *
- * The process id IS the "since established_at" boundary: a feedstock or
- * pyrolysis-condition change opens a NEW process (new id) whose baseline
- * restarts from zero, so samples of prior processes never leak in. Only
+ * The window is `established_at <= samplingTime < asOfDate`: process-id scoping
+ * keeps prior processes' samples out (a feedstock or pyrolysis-condition change
+ * opens a NEW process whose baseline restarts from zero), and the explicit
+ * `established_at` lower bound excludes samples dated before a back-entered
+ * process's operational start (ADR 0017, 2026-07-12 amendment). Only
  * credit-batch-linked samples count — in-process samples are internal-only
  * (ADR 0016) and the inner join drops the null-`creditBatchId` rows. `asOfDate`
  * bounds the count to samples taken before a given batch's production.

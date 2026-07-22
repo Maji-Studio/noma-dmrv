@@ -113,7 +113,7 @@ export function UnlockMethodBDialog({
           </h2>
           <p className="body-small text-[var(--color-text-secondary)]">
             {process
-              ? `${process.feedstockName} (${process.feedstockCode}) — ${process.eligibleSampleCount} eligible samples collected.`
+              ? `${process.feedstockName} (${process.feedstockCode}) — ${process.eligibleSampleCount} baseline samples collected.`
               : "Switch this production process to Method-B sampling."}
           </p>
         </header>

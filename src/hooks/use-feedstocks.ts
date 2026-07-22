@@ -25,6 +25,8 @@ import {
 } from "@/fn/feedstocks";
 import { storageLocationKeys } from "./use-storage-locations";
 import type { MutationCallbacks } from "./types";
+import { dashboardOverviewKeys } from "./use-dashboard-overview";
+import { certificationKeys } from "./use-certification";
 
 // ============================================
 // Query Keys
@@ -137,6 +139,10 @@ export function useCreateFeedstock(callbacks?: MutationCallbacks<CreateFeedstock
         predicate: (q) => q.queryKey[0] === "feedstocks" && q.queryKey[1] === "stats",
       });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      // Feedstock writes resync the derived transport leg (distance/provenance),
+      // an input to certification readiness.
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
       callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
@@ -160,6 +166,10 @@ export function useUpdateFeedstock(callbacks?: MutationCallbacks<FeedstockWithRe
         predicate: (q) => q.queryKey[0] === "feedstocks" && q.queryKey[1] === "stats",
       });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      // Feedstock writes resync the derived transport leg (distance/provenance),
+      // an input to certification readiness.
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
       callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,
@@ -181,6 +191,10 @@ export function useDeleteFeedstock(callbacks?: MutationCallbacks<void, string>) 
         predicate: (q) => q.queryKey[0] === "feedstocks" && q.queryKey[1] === "stats",
       });
       queryClient.invalidateQueries({ queryKey: storageLocationKeys.all });
+      queryClient.invalidateQueries({ queryKey: dashboardOverviewKeys.all });
+      // Feedstock writes resync the derived transport leg (distance/provenance),
+      // an input to certification readiness.
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
       callbacks?.onSuccess?.(data, variables);
     },
     onError: callbacks?.onError,

@@ -136,7 +136,7 @@ export async function deriveLaneStock(
         .select({
           storageLocationId: productionRuns.biocharStorageLocationId,
           total: numericAggregate(
-            sql<number>`COALESCE(SUM(COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)), 0)`,
+            sql<number>`COALESCE(SUM(COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${biocharProducts.biocharRatio}, ${formulations.biocharRatio}, 1)), 0)`,
           ),
         })
         .from(productionRuns)
