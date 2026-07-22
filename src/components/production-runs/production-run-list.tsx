@@ -52,6 +52,10 @@ import { ProductionIncidentTable } from "./production-incident-table";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { ProductionSampleTable } from "./production-sample-table";
 import {
+  buildProductionRunReadingsDetailField,
+  productionRunStatusCertStatus,
+} from "./production-run-detail-fields";
+import {
   type ProductionRunFormData,
   type ProductionRunFilterData,
   type ProductionRunStatus,
@@ -622,7 +626,14 @@ export function ProductionRunList() {
             title: "Run Setup",
             fields: [
               { label: "Reactor", value: sideSheetEntity.reactorIdentifier },
-              { label: "Status", value: <RunStatusBadge status={sideSheetEntity.status} /> },
+              {
+                label: "Status",
+                value: <RunStatusBadge status={sideSheetEntity.status} />,
+                certifyRequired: true,
+                certifyStatus: productionRunStatusCertStatus(
+                  sideSheetEntity.status,
+                ),
+              },
               ...(sideSheetEntity.status === "cancelled"
                 ? [{ label: "Cancellation reason", value: sideSheetEntity.cancellationReason }]
                 : []),
@@ -664,7 +675,11 @@ export function ProductionRunList() {
           },
           {
             title: "Readings CSV Import",
-            fields: [],
+            fields: [
+              buildProductionRunReadingsDetailField(
+                sideSheetEntity.readingsCount,
+              ),
+            ],
             content: (
               <div className="space-y-20">
                 <ProductionReadingsDocuments productionRunId={sideSheetEntity.id} readOnly />

@@ -321,9 +321,13 @@ export function SupplierList() {
               { label: "Location", value: sideSheetEntity.location },
               { label: "Source Region", value: sideSheetEntity.sourceRegion },
               { label: "Address", value: sideSheetEntity.address },
-              buildSupplierFallbackDistanceField(
-                sideSheetEntity.distanceToFacilityKm,
-              ),
+              buildSupplierFallbackDistanceField({
+                defaultLocationDistanceKm:
+                  sideSheetLocations.find((location) => location.isDefault)
+                    ?.distanceFromFacilityKm ?? null,
+                legacySupplierDistanceKm:
+                  sideSheetEntity.distanceToFacilityKm,
+              }),
             ],
           },
         ] : undefined}

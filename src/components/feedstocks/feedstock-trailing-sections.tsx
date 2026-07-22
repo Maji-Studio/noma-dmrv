@@ -86,6 +86,7 @@ export function FeedstockEvidenceSection({
           <TransportEvidencePanel
             entityType="feedstock"
             entityId={feedstock.id}
+            embedded
             distanceSource={feedstock.transportDistanceSource}
           />
         </ActionableFocusTarget>

@@ -2,18 +2,28 @@ import type { DetailPanelField } from "@/components/ui/detail-panel";
 import { resolveCertFieldStatus } from "@/components/forms/cert-field-status";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 
-/** Supplier-level distance remains the fallback when no supplier-location distance is saved. */
+interface SupplierFallbackDistanceInput {
+  defaultLocationDistanceKm: number | null;
+  legacySupplierDistanceKm: number | null;
+}
+
+/** The default structured location wins; the supplier column remains the legacy fallback. */
 export function buildSupplierFallbackDistanceField(
-  distanceToFacilityKm: number | null,
+  {
+    defaultLocationDistanceKm,
+    legacySupplierDistanceKm,
+  }: SupplierFallbackDistanceInput,
 ): DetailPanelField {
+  const effectiveDistanceKm =
+    defaultLocationDistanceKm ?? legacySupplierDistanceKm;
+
   return {
     label: "Distance to Facility",
     ...certificationDetailField("supplier", "distanceToFacilityKm"),
     certifyStatus: resolveCertFieldStatus(
       true,
-      distanceToFacilityKm !== null,
+      effectiveDistanceKm !== null,
     ),
-    value:
-      distanceToFacilityKm !== null ? `${distanceToFacilityKm} km` : null,
+    value: effectiveDistanceKm !== null ? `${effectiveDistanceKm} km` : null,
   };
 }

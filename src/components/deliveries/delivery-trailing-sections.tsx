@@ -78,6 +78,7 @@ export function DeliveryEvidenceSection({
           <TransportEvidencePanel
             entityType="delivery"
             entityId={delivery.id}
+            embedded
             distanceSource={distanceSource}
             persisted={provenanceLoaded ?? false}
           />

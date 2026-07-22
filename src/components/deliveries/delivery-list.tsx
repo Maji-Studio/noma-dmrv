@@ -547,6 +547,7 @@ export function DeliveryList() {
                       entityType="delivery"
                       entityId={sideSheetEntity.id}
                       readOnly
+                      embedded
                       distanceSource={sideSheetEntity.effectiveDistanceSource}
                     />
                   ),
