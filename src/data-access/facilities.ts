@@ -258,7 +258,7 @@ export async function getFacilities(
             totalAllocatedKg: numericAggregate(sql<number>`
               COALESCE(
                 SUM(
-                  COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)
+                  COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${biocharProducts.biocharRatio}, ${formulations.biocharRatio}, 1)
                 ),
                 0
               )

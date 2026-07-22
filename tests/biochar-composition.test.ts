@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   reconcileComposition,
-  deriveBinRemovalKg,
+  deriveSuggestedIngredientMassKg,
+  deriveMassDeviationPercent,
   fromCompositionJsonb,
   toCompositionJsonb,
 } from "@/lib/biochar-composition";
@@ -179,21 +180,42 @@ describe("reconcileComposition", () => {
   });
 });
 
-describe("deriveBinRemovalKg", () => {
+describe("deriveSuggestedIngredientMassKg", () => {
   it("computes (productMassKg / biocharRatio) * ingredientRatio", () => {
-    expect(deriveBinRemovalKg(800, 0.8, 0.2)).toBeCloseTo(200, 6);
-    expect(deriveBinRemovalKg(500, 1, 0.5)).toBeCloseTo(250, 6);
+    expect(deriveSuggestedIngredientMassKg(800, 0.8, 0.2)).toBeCloseTo(200, 6);
+    expect(deriveSuggestedIngredientMassKg(500, 1, 0.5)).toBeCloseTo(250, 6);
   });
 
   it("returns null when any input is null, undefined, zero, or negative", () => {
-    expect(deriveBinRemovalKg(null, 0.8, 0.2)).toBeNull();
-    expect(deriveBinRemovalKg(800, null, 0.2)).toBeNull();
-    expect(deriveBinRemovalKg(800, 0.8, null)).toBeNull();
-    expect(deriveBinRemovalKg(undefined, 0.8, 0.2)).toBeNull();
-    expect(deriveBinRemovalKg(0, 0.8, 0.2)).toBeNull();
-    expect(deriveBinRemovalKg(800, 0, 0.2)).toBeNull();
-    expect(deriveBinRemovalKg(800, 0.8, 0)).toBeNull();
-    expect(deriveBinRemovalKg(-1, 0.8, 0.2)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(null, 0.8, 0.2)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(800, null, 0.2)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(800, 0.8, null)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(undefined, 0.8, 0.2)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(0, 0.8, 0.2)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(800, 0, 0.2)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(800, 0.8, 0)).toBeNull();
+    expect(deriveSuggestedIngredientMassKg(-1, 0.8, 0.2)).toBeNull();
+  });
+});
+
+describe("deriveMassDeviationPercent", () => {
+  it("computes the signed percent deviation vs the suggestion", () => {
+    expect(deriveMassDeviationPercent(220, 200)).toBeCloseTo(10, 6);
+    expect(deriveMassDeviationPercent(150, 200)).toBeCloseTo(-25, 6);
+    expect(deriveMassDeviationPercent(200, 200)).toBeCloseTo(0, 6);
+  });
+
+  it("treats an entered zero mass as a full -100% deviation", () => {
+    expect(deriveMassDeviationPercent(0, 200)).toBeCloseTo(-100, 6);
+  });
+
+  it("returns null when either side is missing or the suggestion is non-positive", () => {
+    expect(deriveMassDeviationPercent(null, 200)).toBeNull();
+    expect(deriveMassDeviationPercent(undefined, 200)).toBeNull();
+    expect(deriveMassDeviationPercent(200, null)).toBeNull();
+    expect(deriveMassDeviationPercent(200, 0)).toBeNull();
+    expect(deriveMassDeviationPercent(-1, 200)).toBeNull();
+    expect(deriveMassDeviationPercent(Number.NaN, 200)).toBeNull();
   });
 });
 

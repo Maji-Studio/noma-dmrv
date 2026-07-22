@@ -51,10 +51,12 @@ export function reconcileComposition(
 }
 
 /**
- * Removal kg for a single ingredient = (productMassKg / biocharRatio) * ingredientRatio.
- * Returns null whenever any input is missing or non-positive.
+ * Recipe-suggested mass for a single ingredient =
+ * (productMassKg / biocharRatio) * ingredientRatio.
+ * Orientation only — prefills the editable mass field; the entered mass is
+ * authoritative. Returns null whenever any input is missing or non-positive.
  */
-export function deriveBinRemovalKg(
+export function deriveSuggestedIngredientMassKg(
   productMassKg: number | null | undefined,
   biocharRatio: number | null | undefined,
   ingredientRatio: number | null | undefined,
@@ -71,6 +73,30 @@ export function deriveBinRemovalKg(
   const ingredient = ingredientRatio as number;
   if (mass <= 0 || biochar <= 0 || ingredient <= 0) return null;
   return (mass / biochar) * ingredient;
+}
+
+/**
+ * Threshold (in percent) past which the entered ingredient mass shows a soft
+ * "vs recipe" hint. Never blocks submission — the recipe is orientation, not
+ * a constraint.
+ */
+export const INGREDIENT_MASS_DEVIATION_WARN_PERCENT = 10;
+
+/**
+ * Signed percent deviation of the entered mass against the recipe suggestion.
+ * Null when either side is missing or the suggestion is non-positive.
+ */
+export function deriveMassDeviationPercent(
+  actualMassKg: number | null | undefined,
+  suggestedMassKg: number | null | undefined,
+): number | null {
+  if (!Number.isFinite(actualMassKg) || !Number.isFinite(suggestedMassKg)) {
+    return null;
+  }
+  const actual = actualMassKg as number;
+  const suggested = suggestedMassKg as number;
+  if (suggested <= 0 || actual < 0) return null;
+  return ((actual - suggested) / suggested) * 100;
 }
 
 /**

@@ -169,7 +169,7 @@ function buildInventoryAggregates(ctx: OrgContext) {
     totalAllocatedKg: numericAggregate(sql<number>`
       COALESCE(
         SUM(
-          COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)
+          COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${biocharProducts.biocharRatio}, ${formulations.biocharRatio}, 1)
         ),
         0
       )
@@ -204,7 +204,7 @@ function buildInventoryAggregates(ctx: OrgContext) {
     biocharEquivalentKg: numericAggregate(sql<number>`
       COALESCE(
         SUM(
-          COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${formulations.biocharRatio}, 1)
+          COALESCE(${biocharProducts.massKg}, 0) * COALESCE(${biocharProducts.biocharRatio}, ${formulations.biocharRatio}, 1)
         ),
         0
       )

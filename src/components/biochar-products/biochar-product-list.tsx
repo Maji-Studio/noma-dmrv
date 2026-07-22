@@ -28,6 +28,7 @@ import { TransportLegsSummary } from "@/components/transport-legs";
 import { BiocharProductForm } from "./biochar-product-form";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
 import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
+import { fromCompositionJsonb } from "@/lib/biochar-composition";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { formatDate } from "@/lib/format-utils";
@@ -392,6 +393,17 @@ export function BiocharProductList() {
               { label: "Density", value: displaySideSheet.entity.densityKgM3 != null ? `${displaySideSheet.entity.densityKgM3} kg/m³` : undefined },
             ],
           },
+          ...(() => {
+            const ingredients = fromCompositionJsonb(displaySideSheet.entity.composition);
+            if (ingredients.length === 0) return [];
+            return [{
+              title: "Blend Ingredients",
+              fields: ingredients.map((ingredient) => ({
+                label: ingredient.feedstockTypeName,
+                value: ingredient.massKg != null ? formatMass(ingredient.massKg) : undefined,
+              })),
+            }];
+          })(),
           {
             title: "Source & Storage",
             fields: [
