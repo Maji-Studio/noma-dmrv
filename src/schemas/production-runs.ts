@@ -357,31 +357,6 @@ export const productionRunSelectSchema = z.object({
 });
 
 // ============================================
-// Production Run Reading Schema (Time-series data)
-// ============================================
-
-/**
- * Schema for production run readings (monitoring data)
- */
-export const productionRunReadingSchema = z.object({
-  productionRunId: z.string().uuid("Invalid production run ID"),
-  timestamp: z.union([
-    z.date(),
-    z.string().transform((val, ctx) => {
-      const date = new Date(val);
-      if (isNaN(date.getTime())) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid timestamp" });
-        return z.NEVER;
-      }
-      return date;
-    }),
-  ]),
-  temperatureC: z.preprocess(toNumberOrNull, z.number().nullable()).optional(),
-  pressureBar: z.preprocess(toNumberOrNull, z.number().nullable()).optional(),
-  gasFlowRate: z.preprocess(toNumberOrNull, z.number().nullable()).optional(),
-});
-
-// ============================================
 // Type Inference
 // ============================================
 
@@ -391,7 +366,6 @@ export type UpdateProductionRunData = z.infer<typeof updateProductionRunSchema>;
 export type DeleteProductionRunData = z.infer<typeof deleteProductionRunSchema>;
 export type ProductionRunFilterData = z.infer<typeof productionRunFilterSchema>;
 export type ProductionRunSelectData = z.infer<typeof productionRunSelectSchema>;
-export type ProductionRunReadingData = z.infer<typeof productionRunReadingSchema>;
 
 // ============================================
 // Helper Functions
