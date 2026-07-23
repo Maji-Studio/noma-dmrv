@@ -36,7 +36,9 @@ export function IsometricFeedstockBrowser({
   const summary = useFacilityCertifierSummary(facilityId ?? "", !!facilityId);
   const isConnected = !!summary.data?.mapping;
   const catalogue = useIsometricFeedstockTypes(isConnected);
-  const localFeedstockTypes = useFeedstockTypeList();
+  const localFeedstockTypes = useFeedstockTypeList(
+    Boolean(facilityId) && isConnected,
+  );
 
   if (!facilityId) {
     return (
