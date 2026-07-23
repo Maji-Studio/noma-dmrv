@@ -40,6 +40,12 @@ const FEEDSTOCK_SNAPSHOT_MESSAGE =
   "Feedstock stock-takes require counted wet stock and moisture content";
 const NON_FEEDSTOCK_SNAPSHOT_MESSAGE =
   "Wet-mass moisture snapshots are only valid for feedstock bins";
+const MASS_KG_SCALE_FACTOR = 1_000;
+const FRACTION_SCALE_FACTOR = 1_000_000;
+
+function roundToStorageScale(value: number, scaleFactor: number): number {
+  return Math.round(value * scaleFactor) / scaleFactor;
+}
 
 // ============================================
 // Types
@@ -255,6 +261,8 @@ export async function recordStockTakeMovement(
     await assertBinLaneTarget(ctx, tx, input);
 
     let countedMassKg = input.countedMassKg;
+    let countedWetMassKg: number | null = null;
+    let moistureRatioUsed: number | null = null;
     if (input.lane === "feedstock") {
       if (
         input.countedWetMassKg == null ||
@@ -267,9 +275,17 @@ export async function recordStockTakeMovement(
       ) {
         throw new SafeError(FEEDSTOCK_SNAPSHOT_MESSAGE);
       }
-      countedMassKg = deriveMassDryKg(
+      countedWetMassKg = roundToStorageScale(
         input.countedWetMassKg,
-        input.moistureRatioUsed * 100,
+        MASS_KG_SCALE_FACTOR,
+      );
+      moistureRatioUsed = roundToStorageScale(
+        input.moistureRatioUsed,
+        FRACTION_SCALE_FACTOR,
+      );
+      countedMassKg = deriveMassDryKg(
+        countedWetMassKg,
+        moistureRatioUsed * 100,
       );
     } else if (
       input.countedWetMassKg != null ||
@@ -299,8 +315,8 @@ export async function recordStockTakeMovement(
       reason: input.reason,
       countedMassKg,
       derivedMassKgAtTime,
-      countedWetMassKg: input.countedWetMassKg ?? null,
-      moistureRatioUsed: input.moistureRatioUsed ?? null,
+      countedWetMassKg,
+      moistureRatioUsed,
     });
   });
 }

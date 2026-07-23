@@ -14,6 +14,7 @@ import {
   recordStockTakeMovement,
   StockTakeIncreaseError,
 } from "@/data-access/bin-movements";
+import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import {
   ensureTestOrg,
   makeTestOrgContext,
@@ -160,11 +161,31 @@ describe("feedstock stock-take moisture integrity", () => {
         }),
       ).rejects.toThrow("stock-take boundary");
 
+      const preciseSnapshot = await recordStockTakeFn({
+        storageLocationId: bin.id,
+        lane: "feedstock",
+        reason: "Preserve canonical high-precision provenance",
+        countedMassKg: 0,
+        countedWetMassKg: 1.215,
+        moistureRatioUsed: 0.0012345,
+      });
+      expect(preciseSnapshot.success).toBe(true);
+      if (!preciseSnapshot.success) return;
+      expect(Number(preciseSnapshot.data.countedWetMassKg)).toBe(1.215);
+      expect(Number(preciseSnapshot.data.moistureRatioUsed)).toBe(0.001235);
+      expect(Number(preciseSnapshot.data.countedMassKg)).toBe(1.213);
+      expect(
+        deriveMassDryKg(
+          Number(preciseSnapshot.data.countedWetMassKg),
+          Number(preciseSnapshot.data.moistureRatioUsed) * 100,
+        ),
+      ).toBe(Number(preciseSnapshot.data.countedMassKg));
+
       const movements = await db
         .select({ id: binMovements.id })
         .from(binMovements)
         .where(eq(binMovements.storageLocationId, bin.id));
-      expect(movements).toHaveLength(2);
+      expect(movements).toHaveLength(3);
     } finally {
       await db
         .delete(binMovements)
