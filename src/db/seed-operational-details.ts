@@ -47,8 +47,10 @@ type OperationalSeedTimestamps = {
   run3Start: Date;
 };
 
+const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
+
 const hoursAfter = (date: Date, hours: number) =>
-  new Date(date.getTime() + hours * 60 * 60 * 1000);
+  new Date(date.getTime() + hours * MILLISECONDS_PER_HOUR);
 
 export async function seedOperationalDetails(
   tx: DbTransaction,
