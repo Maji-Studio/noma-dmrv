@@ -29,6 +29,17 @@ export class RecordLossFieldError extends Error {
   }
 }
 
+/** Client-side carrier for a structured stock-take action field error. */
+export class RecordStockTakeFieldError extends Error {
+  readonly field: "counted";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "RecordStockTakeFieldError";
+    this.field = "counted";
+  }
+}
+
 export const binMovementKeys = {
   all: ["binMovements"] as const,
   byLocation: (storageLocationId: string) =>
@@ -72,6 +83,9 @@ export function useRecordStockTake() {
     mutationFn: async (data: RecordStockTakeData) => {
       const result = await recordStockTakeFn(data);
       if (!result.success) {
+        if (result.field) {
+          throw new RecordStockTakeFieldError(result.error);
+        }
         throw new Error(result.error);
       }
       return result.data;

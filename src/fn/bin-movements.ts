@@ -6,9 +6,9 @@
  * On-demand bin reconciliation: stock-take adjustments and documented losses.
  * The ledger is append-only — there are no update/delete actions. Stock-take
  * deltas are computed server-side against fresh (movement-inclusive) derived
- * stock so the client can't submit a stale delta. For feedstock wet counts the
- * dry figure is likewise recomputed here from the wet count and moisture ratio,
- * so the persisted delta and the snapshot columns can never disagree.
+ * stock so the client can't submit a stale delta. For feedstock wet counts, the
+ * data-access boundary also recomputes dry mass from the wet count and moisture
+ * ratio, so the persisted delta and snapshot columns cannot disagree.
  */
 
 import { z } from "zod";
@@ -17,6 +17,7 @@ import {
   createBinMovement,
   getBinMovements as getBinMovementsData,
   recordStockTakeMovement,
+  StockTakeIncreaseError,
   type BinMovementWithActor,
 } from "@/data-access/bin-movements";
 import type { BinMovement } from "@/db/schema";
@@ -31,6 +32,10 @@ import { toLoggedActionError } from "./action-errors";
 export type RecordLossActionResult =
   | { success: true; data: BinMovement }
   | { success: false; error: string; field?: "lossMassKg" };
+
+export type RecordStockTakeActionResult =
+  | { success: true; data: BinMovement }
+  | { success: false; error: string; field?: "countedMassKg" };
 
 function binMovementActionError(
   error: unknown,
@@ -72,24 +77,17 @@ export async function getBinMovementsFn(
 
 export async function recordStockTakeFn(
   data: z.infer<typeof recordStockTakeSchema>
-): Promise<ActionResult<BinMovement>> {
+): Promise<RecordStockTakeActionResult> {
   try {
     const ctx = await requireOrgContext();
 
     const validated = recordStockTakeSchema.parse(data);
 
-    // Recompute the dry count server-side from the wet count + snapshot ratio so
-    // a stale/tampered client can't submit a dry value inconsistent with its own
-    // provenance. A direct dry count (no wet provenance) passes through as-is.
-    const countedMassKg =
-      validated.countedWetMassKg != null && validated.moistureRatioUsed != null
-        ? validated.countedWetMassKg * (1 - validated.moistureRatioUsed)
-        : validated.countedMassKg;
     const movement = await recordStockTakeMovement(ctx, {
       storageLocationId: validated.storageLocationId,
       lane: validated.lane,
       reason: validated.reason,
-      countedMassKg,
+      countedMassKg: validated.countedMassKg,
       countedWetMassKg: validated.countedWetMassKg ?? null,
       moistureRatioUsed: validated.moistureRatioUsed ?? null,
     });
@@ -100,6 +98,13 @@ export async function recordStockTakeFn(
       return {
         success: false,
         error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
+      };
+    }
+    if (error instanceof StockTakeIncreaseError) {
+      return {
+        success: false,
+        error: error.message,
+        field: "countedMassKg",
       };
     }
     return {

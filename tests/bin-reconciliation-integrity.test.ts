@@ -203,6 +203,8 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
             storageLocationId: bin.id,
             lane: "feedstock",
             countedMassKg: 90,
+            countedWetMassKg: 90,
+            moistureRatioUsed: 0,
             reason: `Concurrent stock-take ${index}`,
           }),
         ),
@@ -318,6 +320,8 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
           storageLocationId: bin.id,
           lane: "feedstock",
           countedMassKg: RECOUNTED_FEEDSTOCK_DRY_MASS_KG,
+          countedWetMassKg: RECOUNTED_FEEDSTOCK_DRY_MASS_KG,
+          moistureRatioUsed: 0,
           reason: "Concurrent stock-take against production run",
         }),
         createProductionRun(ctx, {
@@ -377,8 +381,12 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
       const [stockTakeResult, productionRunResult] = await concurrentResults;
 
       expect(stockTakeResult.status).toBe("fulfilled");
+      let stockTakeSucceeded = false;
       if (stockTakeResult.status === "fulfilled") {
-        expect(stockTakeResult.value.success).toBe(true);
+        stockTakeSucceeded = stockTakeResult.value.success;
+        if (!stockTakeResult.value.success) {
+          expect(stockTakeResult.value.field).toBe("countedMassKg");
+        }
       }
 
       const runSucceeded = productionRunResult.status === "fulfilled";
@@ -387,10 +395,11 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
         productionRunResult.reason instanceof Error &&
         productionRunResult.reason.message.includes("Not enough feedstock in this bin");
       expect(runSucceeded).not.toBe(runRejectedAsOverdraw);
+      expect(stockTakeSucceeded).not.toBe(runSucceeded);
 
       const enriched = await getStorageLocationWithFacility(ctx, bin.id);
       expect(enriched.feedstockInventory.currentDryMassKg).toBe(
-        RECOUNTED_FEEDSTOCK_DRY_MASS_KG,
+        stockTakeSucceeded ? RECOUNTED_FEEDSTOCK_DRY_MASS_KG : 0,
       );
       expect(enriched.feedstockInventory.currentDryMassKg).toBeGreaterThanOrEqual(0);
     } finally {
@@ -488,13 +497,15 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
         }),
       ).rejects.toThrow("50 kg available");
 
-      const restoredCount = await recordStockTakeFn({
-        storageLocationId: bin.id,
-        lane: "product",
-        countedMassKg: 100,
-        reason: "Restore product stock for delivery race",
-      });
-      expect(restoredCount.success).toBe(true);
+      await db
+        .insert(biocharProducts)
+        .values({
+          organizationId: TEST_ORG_ID,
+          facilityId: facility.id,
+          storageLocationId: bin.id,
+          code: `BP-DEL-RACE-SUPPLEMENTAL-${tag}`,
+          massKg: 50,
+        });
 
       const results = await Promise.allSettled(
         [1, 2].map((attempt) =>
@@ -528,6 +539,9 @@ describe("bin reconciliation integrity", { timeout: CONCURRENCY_TEST_TIMEOUT_MS 
       await db
         .delete(binMovements)
         .where(eq(binMovements.storageLocationId, bin.id));
+      await db
+        .delete(biocharProducts)
+        .where(eq(biocharProducts.code, `BP-DEL-RACE-SUPPLEMENTAL-${tag}`));
       await db.delete(orders).where(eq(orders.id, order.id));
       await db.delete(biocharProducts).where(eq(biocharProducts.id, product.id));
       await db.delete(storageLocations).where(eq(storageLocations.id, bin.id));

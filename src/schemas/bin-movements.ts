@@ -9,6 +9,7 @@
 
 import { z } from "zod";
 import {
+  optionalPercent,
   requiredMassKgSchema,
   requiredPositiveMassKgSchema,
   optionalMassKgInputSchema,
@@ -71,15 +72,26 @@ const reasonSchema = z
 // ============================================
 
 /**
- * Stock-take form. `counted` is what the operator physically counted, in the
- * lane's entry unit (wet kg for a feedstock bin with a moisture estimate,
- * otherwise the lane's native kg). The component converts wet → dry before
- * building the server payload.
+ * Stock-take form. `counted` is always wet kg for feedstock and the lane's
+ * native kg otherwise. Feedstock counts require a fresh moisture measurement;
+ * the component previews wet → dry while the server remains authoritative.
  */
-export const stockTakeFormSchema = z.object({
-  counted: requiredMassKgSchema("Counted stock is required"),
-  reason: reasonSchema,
-});
+export const stockTakeFormSchema = z
+  .object({
+    lane: z.enum(binMovementLanes),
+    counted: requiredMassKgSchema("Counted stock is required"),
+    moisturePercent: optionalPercent,
+    reason: reasonSchema,
+  })
+  .superRefine((data, ctx) => {
+    if (data.lane === "feedstock" && data.moisturePercent == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["moisturePercent"],
+        message: "Moisture content is required",
+      });
+    }
+  });
 export type StockTakeFormData = z.infer<typeof stockTakeFormSchema>;
 
 /** Loss form. `lossMassKg` is the (positive) amount removed. */
@@ -97,19 +109,48 @@ export type RecordLossFormData = z.infer<typeof recordLossFormSchema>;
 // Server Action Schemas
 // ============================================
 
-export const recordStockTakeSchema = z.object({
-  storageLocationId: z.uuid("Invalid storage location ID"),
-  lane: z.enum(binMovementLanes),
-  reason: reasonSchema,
-  // Counted stock in the lane's native unit (dry kg for feedstock).
-  countedMassKg: requiredMassKgSchema("Counted stock is required"),
-  // Feedstock-only provenance for the dry conversion (snapshot columns).
-  countedWetMassKg: optionalMassKgInputSchema(),
-  moistureRatioUsed: z.preprocess(
-    toNumberOrNull,
-    z.number().min(0).max(1).nullable().optional()
-  ),
-});
+export const recordStockTakeSchema = z
+  .object({
+    storageLocationId: z.uuid("Invalid storage location ID"),
+    lane: z.enum(binMovementLanes),
+    reason: reasonSchema,
+    // Preview value from the client. The data-access boundary recomputes this
+    // from the wet snapshot for feedstock stock-takes.
+    countedMassKg: requiredMassKgSchema("Counted stock is required"),
+    // Feedstock-only provenance for the authoritative dry conversion.
+    countedWetMassKg: optionalMassKgInputSchema(),
+    moistureRatioUsed: z.preprocess(
+      toNumberOrNull,
+      z.number().min(0).max(1).nullable().optional()
+    ),
+  })
+  .superRefine((data, ctx) => {
+    if (data.lane === "feedstock") {
+      if (data.countedWetMassKg == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["countedWetMassKg"],
+          message: "Counted wet stock is required for a feedstock bin",
+        });
+      }
+      if (data.moistureRatioUsed == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["moistureRatioUsed"],
+          message: "Moisture content is required for a feedstock bin",
+        });
+      }
+    } else if (
+      data.countedWetMassKg != null ||
+      data.moistureRatioUsed != null
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["countedWetMassKg"],
+        message: "Wet-mass moisture snapshots are only valid for feedstock bins",
+      });
+    }
+  });
 export type RecordStockTakeData = z.infer<typeof recordStockTakeSchema>;
 
 export const recordLossSchema = z.object({
