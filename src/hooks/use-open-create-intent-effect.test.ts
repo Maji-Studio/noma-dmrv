@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useOpenCreateIntent } from "./use-open-create-intent";
 
 const mocks = vi.hoisted(() => ({
+  effect: null as (() => void) | null,
   handledRef: { current: false },
   replaceState: vi.fn(),
   searchParams: new URLSearchParams(),
@@ -9,7 +10,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("react", () => ({
-  useEffect: (effect: () => void) => effect(),
+  useEffect: (effect: () => void) => {
+    mocks.effect = effect;
+  },
   useRef: () => mocks.handledRef,
   useState: <T>(initializer: T | (() => T)) => [
     typeof initializer === "function"
@@ -26,6 +29,7 @@ vi.mock("next/navigation", () => ({
 
 describe("useOpenCreateIntent client effect", () => {
   beforeEach(() => {
+    mocks.effect = null;
     mocks.handledRef.current = false;
     mocks.replaceState.mockReset();
     mocks.setIntent.mockReset();
@@ -42,7 +46,10 @@ describe("useOpenCreateIntent client effect", () => {
 
   it("opens once and consumes only create-intent parameters", async () => {
     useOpenCreateIntent({ contextParam: "createCreditBatch" });
-    useOpenCreateIntent({ contextParam: "createCreditBatch" });
+    const effect = mocks.effect;
+    expect(effect).not.toBeNull();
+    effect?.();
+    effect?.();
     await Promise.resolve();
 
     expect(mocks.setIntent).toHaveBeenCalledOnce();
