@@ -6,17 +6,17 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { organization } from "better-auth/plugins";
-import { count, eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { Resend } from "resend";
 import { env } from "@/config/env";
 import { db } from "@/db";
 import { seedOrgDefaults } from "@/db/org-defaults";
 import * as schema from "@/db/schema";
+import { selectActiveOrganizationId } from "@/lib/auth/organization-selection";
 import { logger } from "@/lib/log";
 
 /** Pending invitations expire after 7 days. */
 const INVITATION_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 7;
-const SINGLE_ORGANIZATION_COUNT = 1;
 
 /**
  * Build the URL an invitee follows to accept an org invitation. The invitation
@@ -252,55 +252,51 @@ export const auth = betterAuth({
   databaseHooks: {
     session: {
       create: {
-        // On sign-in, auto-select the active organization for a sole member,
-        // or for a Platform Admin when the PR-1 gate permits only one org.
+        // On sign-in, restore a still-accessible preference or choose the
+        // deterministic first currently accessible organization.
         before: async (session) => {
-          const memberships = await db
-            .select({ organizationId: schema.members.organizationId })
-            .from(schema.members)
-            .where(eq(schema.members.userId, session.userId))
-            .limit(2);
-          if (memberships.length === 1) {
-            return {
-              data: {
-                ...session,
-                activeOrganizationId: memberships[0].organizationId,
-              },
-            };
+          const [user] = await db
+            .select({
+              role: schema.users.role,
+              lastActiveOrganizationId:
+                schema.users.lastActiveOrganizationId,
+            })
+            .from(schema.users)
+            .where(eq(schema.users.id, session.userId))
+            .limit(1);
+          if (!user) {
+            return { data: session };
           }
-          if (memberships.length === 0) {
-            const [user] = await db
-              .select({ role: schema.users.role })
-              .from(schema.users)
-              .where(eq(schema.users.id, session.userId))
-              .limit(1);
-            if (user?.role === "admin") {
-              const [organizationCount] = await db
-                .select({ value: count() })
-                .from(schema.organizations);
-              if (
-                Number(organizationCount?.value ?? 0) ===
-                SINGLE_ORGANIZATION_COUNT
-              ) {
-                const [organizationRow] = await db
-                  .select({ id: schema.organizations.id })
+
+          const accessibleOrganizations =
+            user.role === "admin"
+              ? await db
+                  .select({ organizationId: schema.organizations.id })
                   .from(schema.organizations)
-                  .limit(1);
-                if (organizationRow) {
-                  // Coupled to MAX_ORGANIZATIONS_UNTIL_PR2 in data-access:
-                  // revisit when PR 2 allows a second org, because "the only
-                  // org" immediately stops being a safe Platform Admin default.
-                  return {
-                    data: {
-                      ...session,
-                      activeOrganizationId: organizationRow.id,
-                    },
-                  };
-                }
-              }
-            }
-          }
-          return { data: session };
+                  .orderBy(
+                    asc(schema.organizations.createdAt),
+                    asc(schema.organizations.id),
+                  )
+              : await db
+                  .select({ organizationId: schema.members.organizationId })
+                  .from(schema.members)
+                  .where(eq(schema.members.userId, session.userId))
+                  .orderBy(
+                    asc(schema.members.createdAt),
+                    asc(schema.members.id),
+                  );
+          const activeOrganizationId = selectActiveOrganizationId({
+            lastActiveOrganizationId: user.lastActiveOrganizationId,
+            accessibleOrganizationIds: accessibleOrganizations.map(
+              ({ organizationId }) => organizationId,
+            ),
+          });
+          return {
+            data: {
+              ...session,
+              activeOrganizationId,
+            },
+          };
         },
       },
     },

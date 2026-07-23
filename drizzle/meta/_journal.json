@@ -631,6 +631,13 @@
       "when": 1784725952640,
       "tag": "0089_cloudy_night_thrasher",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1784786209094,
+      "tag": "0090_curly_bloodstrike",
+      "breakpoints": true
     }
   ]
 }
