@@ -24,9 +24,9 @@ export { SubmitConfirmDialog } from "./submit-confirm-dialog";
 export { ConfirmActionDialog } from "./confirm-action-dialog";
 // GHG Statement flow (ADR 0003): an independent, period-anchored artifact
 // rolling up multiple Removals. Stage 5 migrated the hub to the app-native
-// DataTable + read-only side-sheet + period-first create drawer; the verifier
-// submit dialog is reused by the side-sheet.
+// DataTable + read-only detail Modal + period-first create dialog; the verifier
+// submit dialog is reused by the detail Modal.
 export { GhgStatementsList } from "./ghg-statements-list";
 export { GhgStatementDetailSheet } from "./ghg-statement-detail-sheet";
-export { GhgStatementCreateDrawer } from "./ghg-statement-create-drawer";
+export { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 export { GhgStatementSubmitDialog } from "./ghg-statement-submit-dialog";
