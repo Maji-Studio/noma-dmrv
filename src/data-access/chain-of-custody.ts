@@ -26,7 +26,7 @@ import { SafeError } from "@/lib/errors";
 import type {
   BatchLineageApplicationFact,
   BatchLineageRunFact,
-} from "./credit-batch-lineage-facts";
+} from "./credit-batch-accounting";
 
 const CHAIN_HREFS = {
   application: "/applications",
