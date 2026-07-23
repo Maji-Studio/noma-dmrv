@@ -4,14 +4,28 @@ import {
   buildCreditBatchContexts,
   type FacilityCertifierFacts,
 } from "@/fn/certification/certify-context-core";
+import {
+  loadLinkedGhgStatementStatus,
+} from "@/fn/certification/linked-ghg-statement-status";
 import { makeTestOrgContext } from "./helpers/test-org";
 
 vi.mock("@/data-access/credit-batch-accounting", () => ({
   loadCreditBatchAccounting: vi.fn(),
 }));
 
+vi.mock("@/fn/certification/linked-ghg-statement-status", () => ({
+  loadLinkedGhgStatementStatus: vi.fn(),
+}));
+
 const mockedLoadAccounting = vi.mocked(loadCreditBatchAccounting);
-const BATCH_IDS = ["batch-1", "batch-2"];
+const mockedLoadLinkedGhgStatementStatus = vi.mocked(
+  loadLinkedGhgStatementStatus,
+);
+const FANOUT_CONCURRENCY = 8;
+const BATCH_IDS = Array.from(
+  { length: FANOUT_CONCURRENCY + 1 },
+  (_, index) => `batch-${index + 1}`,
+);
 const FACILITY_ID = "facility-1";
 
 const facilityFacts = {
@@ -51,22 +65,56 @@ describe("buildCreditBatchContexts", () => {
     vi.resetAllMocks();
   });
 
-  it("loads accounting once for the complete wizard batch set", async () => {
+  it("loads accounting once and preserves order across the fanout boundary", async () => {
     mockedLoadAccounting.mockResolvedValue(
       Object.fromEntries(
         BATCH_IDS.map((batchId) => [batchId, accountingRecord(batchId)]),
       ) as never,
     );
+    const pendingResolvers = new Map<string, () => void>();
+    const completionOrder: string[] = [];
+    let invocationIndex = 0;
+    mockedLoadLinkedGhgStatementStatus.mockImplementation(
+      async () => {
+        const batchId = BATCH_IDS[invocationIndex++];
+        await new Promise<void>((resolve) => {
+          pendingResolvers.set(batchId, resolve);
+        });
+        completionOrder.push(batchId);
+        return null as never;
+      },
+    );
     const orgCtx = makeTestOrgContext("user-1");
 
-    const result = await buildCreditBatchContexts(
+    const resultPromise = buildCreditBatchContexts(
       orgCtx,
       BATCH_IDS,
       facilityFacts,
     );
 
+    await vi.waitFor(() => {
+      expect(mockedLoadLinkedGhgStatementStatus).toHaveBeenCalledTimes(
+        FANOUT_CONCURRENCY,
+      );
+    });
+    for (const batchId of BATCH_IDS.slice(0, FANOUT_CONCURRENCY).reverse()) {
+      pendingResolvers.get(batchId)?.();
+    }
+    await vi.waitFor(() => {
+      expect(mockedLoadLinkedGhgStatementStatus).toHaveBeenCalledTimes(
+        BATCH_IDS.length,
+      );
+    });
+    pendingResolvers.get(BATCH_IDS[FANOUT_CONCURRENCY])?.();
+
+    const result = await resultPromise;
+
     expect(mockedLoadAccounting).toHaveBeenCalledTimes(1);
     expect(mockedLoadAccounting).toHaveBeenCalledWith(orgCtx, BATCH_IDS);
+    expect(completionOrder).toEqual([
+      ...BATCH_IDS.slice(0, FANOUT_CONCURRENCY).reverse(),
+      BATCH_IDS[FANOUT_CONCURRENCY],
+    ]);
     expect(Object.keys(result.contextsByBatch)).toEqual(BATCH_IDS);
     expect(result.contextsByBatch["batch-1"].facilityId).toBe(FACILITY_ID);
   });
