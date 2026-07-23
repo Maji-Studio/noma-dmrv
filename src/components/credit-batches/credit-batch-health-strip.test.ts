@@ -104,7 +104,7 @@ describe("batchHealthFixLinkFor", () => {
     );
     expect(link.label).toBe("Open emission estimates");
     expect(link.href).toBe(
-      `/certification/settings?tab=emissions&facility=${facilityId}`,
+      `/certification/settings?facility=${facilityId}#emission-estimates`,
     );
   });
 

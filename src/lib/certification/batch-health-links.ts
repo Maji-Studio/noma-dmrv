@@ -7,7 +7,7 @@ import {
   buildEntityDeepLink,
   ENTITY_FOCUS_TARGETS,
 } from "@/lib/entity-deep-link";
-import { certificationSettingsHref } from "./links";
+import { certificationEmissionEstimatesHref } from "./links";
 
 export interface BatchHealthFixLink {
   label: string;
@@ -94,7 +94,7 @@ export function batchHealthFixLinkFor(
     case "certificationEmissions":
       return {
         label: "Open emission estimates",
-        href: certificationSettingsHref(facilityId, "emissions"),
+        href: certificationEmissionEstimatesHref(facilityId),
       };
     case "applications":
       // Applications auto-match by crediting period — there is no manual "link"
