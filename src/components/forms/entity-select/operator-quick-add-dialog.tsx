@@ -40,7 +40,6 @@ export function OperatorQuickAddDialog({
       isOpen={isOpen}
       onClose={onClose}
       title="Add New Operator"
-      error={error}
       width="sm"
       testId="operator-quick-add-dialog"
     >
@@ -48,6 +47,7 @@ export function OperatorQuickAddDialog({
         onSubmit={handleSubmit}
         onCancel={onClose}
         isSubmitting={isSubmitting}
+        errorMessage={error ?? undefined}
         submitLabel="Create Operator"
       />
     </QuickAddDialogShell>

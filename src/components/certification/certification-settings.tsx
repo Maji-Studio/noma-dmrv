@@ -34,23 +34,29 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useActiveOrganizationProfile } from "@/hooks/use-organizations";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
+import { CERTIFICATION_SETTINGS_EMISSION_ESTIMATES_ANCHOR } from "@/lib/certification/links";
 import { CertificationHealthPanel } from "./certification-health-panel";
 import { EnvBanner } from "./env-banner";
 import { FacilityCertifierSection } from "./facility-certifier-section";
 
 function SettingsSection({
+  id,
   icon: Icon,
   title,
   caption,
   children,
 }: {
+  id?: string;
   icon: ElementType;
   title: string;
   caption: string;
   children: ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-24 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-24">
+    <section
+      id={id}
+      className="flex flex-col gap-24 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-24"
+    >
       <div className="flex items-center gap-12 border-b border-[var(--color-border-tertiary)] pb-16">
         <span className="flex size-32 items-center justify-center border border-[var(--color-border-tertiary)] text-[var(--color-text-primary)]">
           <Icon size={18} weight="bold" />
@@ -155,6 +161,7 @@ export function CertificationSettings() {
               otherwise saved values render blank. */}
           {viewerCanManage && (
             <SettingsSection
+              id={CERTIFICATION_SETTINGS_EMISSION_ESTIMATES_ANCHOR}
               icon={GaugeIcon}
               title="Emission estimates"
               caption="Reference soil temperature for 200-year durability removals."

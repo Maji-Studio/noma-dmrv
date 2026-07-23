@@ -29,6 +29,7 @@ interface ProductionSampleFormProps {
   onSubmit: (data: ProductionSampleFormData) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
+  errorMessage?: string;
   deferredAttachments: UseDeferredAttachmentsResult;
   onRetryDeferredAttachment: (key?: string) => Promise<unknown>;
   onRemoveDeferredAttachment: (key: string) => void;
@@ -40,6 +41,7 @@ export function ProductionSampleForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  errorMessage,
   deferredAttachments,
   onRetryDeferredAttachment,
   onRemoveDeferredAttachment,
@@ -312,6 +314,7 @@ export function ProductionSampleForm({
         sticky={false}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={errorMessage}
         submitLabel={isEditMode ? "Save Changes" : "Add Sample"}
       />
     </form>

@@ -131,7 +131,7 @@ export function EnergySummary() {
         />
       </div>
 
-      <div className="flex flex-col gap-12">
+      <div className="content-measure-preview flex flex-col gap-12">
         <h2 className="title-heading-3">Submission preview</h2>
         <p className="body-small text-[var(--color-text-secondary)]">
           Energy submits as a single combined measurement point — one grid

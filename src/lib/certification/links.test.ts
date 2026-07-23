@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  CERTIFICATION_SETTINGS_EMISSION_ESTIMATES_ANCHOR,
+  certificationEmissionEstimatesHref,
   certificationRemovalsHref,
   certificationSettingsHref,
 } from "./links";
+
+describe("certificationEmissionEstimatesHref", () => {
+  it("targets the stacked emission-estimates section for the active facility", () => {
+    expect(certificationEmissionEstimatesHref("fac abc/123")).toBe(
+      `/certification/settings?facility=fac%20abc%2F123#${CERTIFICATION_SETTINGS_EMISSION_ESTIMATES_ANCHOR}`,
+    );
+  });
+});
 
 describe("certificationSettingsHref", () => {
   it("defaults to the connection tab", () => {

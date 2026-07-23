@@ -4,6 +4,17 @@
  * connection-settings deep link, previously hard-coded in three components).
  */
 
+export const CERTIFICATION_SETTINGS_EMISSION_ESTIMATES_ANCHOR =
+  "emission-estimates";
+
+export function certificationEmissionEstimatesHref(
+  facilityId: string,
+): string {
+  return `/certification/settings?facility=${encodeURIComponent(
+    facilityId,
+  )}#${CERTIFICATION_SETTINGS_EMISSION_ESTIMATES_ANCHOR}`;
+}
+
 /**
  * The facility's certification settings page, deep-linked to a tab. Defaults to
  * the "connection" (registry mapping) tab — the target every unmet

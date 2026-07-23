@@ -341,17 +341,13 @@ export function ReactorList() {
           },
         ] : undefined}
       >
-        {(createError || updateError) && (
-          <div className="mb-24">
-            <ServerError message={createError || updateError || ""} />
-          </div>
-        )}
         <ReactorForm
           key={sideSheetEntity?.id ?? "create"}
           reactor={sideSheetEntity as Reactor | undefined}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
           isSubmitting={createReactor.isPending || updateReactor.isPending}
+          errorMessage={createError || updateError || undefined}
           submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Reactor"}
         />
       </EntitySideSheet>

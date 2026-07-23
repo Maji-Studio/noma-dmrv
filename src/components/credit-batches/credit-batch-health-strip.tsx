@@ -6,10 +6,8 @@
  * The checklist only DETAILS the checks that still need work: each open check
  * is an action row stating the requirement and missing items, with a single
  * button that lands where the gap is actually resolved.
- * Cleared and not-yet-evaluable checks collapse into one compact summary line,
- * so the full four-check picture stays visible without four equal-weight
- * boxes. A `skipped` transport check is a facility-setup concern — it links to
- * certification settings and never counts as a batch issue.
+ * A `skipped` transport check is a facility-setup concern and never counts as
+ * a batch issue.
  */
 "use client";
 
@@ -19,7 +17,6 @@ import {
   ArrowRightIcon,
   ArrowSquareOutIcon,
   CheckCircleIcon,
-  CircleIcon,
   ShieldCheckIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
@@ -30,10 +27,7 @@ import { useBatchHealth } from "@/hooks/use-certification";
 import type { BatchHealth, BatchHealthCheck } from "@/lib/certification/batch-health";
 import type { CreditBatchProductionRunOption } from "@/data-access/credit-batches";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
-import {
-  batchHealthFixLinkFor,
-  skippedBatchHealthFixLink,
-} from "@/lib/certification/batch-health-links";
+import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import { cn } from "@/lib/utils";
 
 /** Stagger between open-row entrance reveals (ms). */
@@ -182,70 +176,7 @@ function OpenCheckRow({
   );
 }
 
-/**
- * Compact one-line account of the checks that don't need attention: met checks
- * (affirmative label, green tick) and skipped ones (neutral, with the
- * facility-setup link). Keeps the full picture visible without detailing it.
- */
-function ClearedSummary({
-  met,
-  skipped,
-  facilityId,
-}: {
-  met: BatchHealthCheck[];
-  skipped: BatchHealthCheck[];
-  facilityId: string;
-}) {
-  if (met.length === 0 && skipped.length === 0) {
-    return null;
-  }
-  const skippedFix = skippedBatchHealthFixLink(facilityId);
-
-  return (
-    <details className="border-t border-[var(--color-border-tertiary)] pt-10">
-      <summary className="cursor-pointer list-none body-caption font-medium text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]">
-        {met.length} {met.length === 1 ? "check" : "checks"} passed
-        {skipped.length > 0 ? ` · ${skipped.length} not evaluated` : ""}
-      </summary>
-      <div className="mt-10 flex flex-col gap-8">
-        {met.map((check) => (
-          <span
-            key={`${check.key}:${check.issueKey ?? "met"}`}
-            className="inline-flex items-center gap-6 body-caption text-[var(--color-text-tertiary)]"
-          >
-            <CheckCircleIcon
-              size={14}
-              weight="fill"
-              className="shrink-0 text-[var(--st-ok)]"
-            />
-            {check.requirementLabel}
-          </span>
-        ))}
-        {skipped.map((check) => (
-          <span
-            key={`${check.key}:${check.issueKey ?? "skipped"}`}
-            className="inline-flex items-center gap-6 body-caption text-[var(--color-text-tertiary)]"
-          >
-            <CircleIcon
-              size={14}
-              className="shrink-0 text-[var(--color-text-quaternary)]"
-            />
-            {check.requirementLabel}
-            <Link
-              href={skippedFix.href}
-              className="inline-flex items-center gap-4 font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
-            >
-              {skippedFix.label}
-              <ArrowSquareOutIcon size={12} aria-hidden />
-            </Link>
-          </span>
-        ))}
-      </div>
-    </details>
-  );
-}
-
-/** Right-aligned header status: cleared-count context + a state badge. */
+/** Right-aligned header status: a single state badge. */
 function GateStatus({ health }: { health: BatchHealth }) {
   if (health.state === "ready") {
     return (
@@ -256,18 +187,12 @@ function GateStatus({ health }: { health: BatchHealth }) {
       />
     );
   }
-  const clearedCount = health.checks.filter((c) => c.status === "met").length;
   return (
-    <div className="flex items-center gap-10">
-      <span className="label-micro text-[var(--color-text-tertiary)]">
-        {clearedCount} of {health.checks.length} cleared
-      </span>
-      <StatusBadge
-        status="pending"
-        label={`${health.issueCount} ${health.issueCount === 1 ? "issue" : "issues"} open`}
-        icon={<WarningIcon size={14} weight="fill" />}
-      />
-    </div>
+    <StatusBadge
+      status="pending"
+      label={`${health.issueCount} ${health.issueCount === 1 ? "issue" : "issues"} open`}
+      icon={<WarningIcon size={14} weight="fill" />}
+    />
   );
 }
 
@@ -285,48 +210,39 @@ function GateBody({
   feedstockName?: string | null;
 }) {
   const open = health.checks.filter((c) => c.status === "unmet");
-  const met = health.checks.filter((c) => c.status === "met");
-  const skipped = health.checks.filter((c) => c.status === "skipped");
 
   if (health.state === "ready") {
     return (
-      <div className="flex flex-col gap-16">
-        <div className="flex items-center gap-12 border border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] px-16 py-12">
-          <ShieldCheckIcon
-            size={20}
-            weight="fill"
-            className="shrink-0 text-[var(--st-ok)]"
-          />
-          <p className="body-small text-[var(--color-text-secondary)]">
-            <span className="font-medium text-[var(--color-text-primary)]">
-              All checks passed.
-            </span>{" "}
-            This batch has everything it needs to be submitted for
-            certification.
-          </p>
-        </div>
-        <ClearedSummary met={met} skipped={skipped} facilityId={facilityId} />
+      <div className="flex items-center gap-12 border border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] px-16 py-12">
+        <ShieldCheckIcon
+          size={20}
+          weight="fill"
+          className="shrink-0 text-[var(--st-ok)]"
+        />
+        <p className="body-small text-[var(--color-text-secondary)]">
+          <span className="font-medium text-[var(--color-text-primary)]">
+            All checks passed.
+          </span>{" "}
+          This batch has everything it needs to be submitted for certification.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-16">
-      <ul className="flex flex-col gap-10">
-        {open.map((check, index) => (
-          <OpenCheckRow
-            key={`${check.key}:${check.issueKey ?? index}`}
-            check={check}
-            facilityId={facilityId}
-            creditBatchId={creditBatchId}
-            index={index}
-            productionRuns={productionRuns}
-            feedstockName={feedstockName}
-          />
-        ))}
-      </ul>
-      <ClearedSummary met={met} skipped={skipped} facilityId={facilityId} />
-    </div>
+    <ul className="flex flex-col gap-10">
+      {open.map((check, index) => (
+        <OpenCheckRow
+          key={`${check.key}:${check.issueKey ?? index}`}
+          check={check}
+          facilityId={facilityId}
+          creditBatchId={creditBatchId}
+          index={index}
+          productionRuns={productionRuns}
+          feedstockName={feedstockName}
+        />
+      ))}
+    </ul>
   );
 }
 

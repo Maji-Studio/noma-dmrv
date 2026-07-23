@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { deriveFacilitySetupGaps } from "./facility-setup-gaps";
+import {
+  deriveFacilitySetupGaps,
+  facilityBlueprintLabel,
+} from "./facility-setup-gaps";
 
 const COMPLETE = {
   hasOrgCredentials: true,
@@ -71,5 +74,19 @@ describe("deriveFacilitySetupGaps", () => {
     expect(gaps).toEqual([
       { kind: "blueprint_keys", keys: ["biochar_soil", "transport_leg"] },
     ]);
+  });
+});
+
+describe("facilityBlueprintLabel", () => {
+  it("translates known registry keys for operators", () => {
+    expect(facilityBlueprintLabel("biochar_sequestration_1000_year")).toBe(
+      "1,000-year biochar sequestration",
+    );
+  });
+
+  it("falls back to readable words for an unknown key", () => {
+    expect(facilityBlueprintLabel("future_blueprint_key")).toBe(
+      "future blueprint key",
+    );
   });
 });

@@ -46,45 +46,42 @@ import {
   validateProductionRunIds,
 } from "./credit-batch-membership";
 import { gcRemovalIfOrphaned } from "./certifier-removals";
-import {
-  getApplicationRollupsByBatchFromRuns,
-  getApplicationsForRuns,
-  getProductionRunIdsByBatchId,
-  summarizeApplicationsForBatches,
-} from "./credit-batch-production-runs";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import {
-  buildCo2eStoredPreview,
   getFacilityCertifierWithExecutor,
+  loadCreditBatchAccounting,
+  loadCreditBatchRollups,
+  type CreditBatchAccounting,
   type CreditBatchCo2eStoredPreview,
-} from "./credit-batch-previews";
+  type CreditBatchRollup,
+} from "./credit-batch-accounting";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { assertUnsampledBatchEligibility } from "@/lib/certification/credit-batch-sampling";
-import {
-  loadCreditBatchLineageFacts,
-  type CreditBatchLineageFacts,
-} from "./credit-batch-lineage-facts";
 import { retireDocumentsForEntities } from "./documents";
 import { assertRemovalAllowsCreditBatchMutation } from "./credit-batch-certification-lock";
 
 export { getApplicationsForRuns } from "./credit-batch-production-runs";
 export type { ApplicationForRun } from "./credit-batch-production-runs";
-// Preview surface lives in ./credit-batch-previews (1000-line cap split);
-// re-exported here so consumers keep one import path for credit-batch reads.
 export {
   getCo2eStoredPreviews,
   getFacilityCertifier,
-} from "./credit-batch-previews";
+} from "./credit-batch-accounting";
 export type {
   ApplicationCo2eStoredPreview,
   CreditBatchCo2eStoredPreview,
-} from "./credit-batch-previews";
+} from "./credit-batch-accounting";
 
 // ============================================
 // Credit Batch Data Access Layer
 // ============================================
+
+function includesCo2ePreview(
+  accounting: CreditBatchRollup,
+): accounting is CreditBatchAccounting {
+  return "co2ePreview" in accounting;
+}
 
 export interface CreditBatchWithRelations extends CreditBatch {
   facility: { name: string } | null;
@@ -186,19 +183,13 @@ export async function getCreditBatches(
     return [];
   }
 
-  const productionRunIdsByBatchId = await getProductionRunIdsByBatchId(
-    ctx,
-    batchIds,
-  );
-  const rollupsByBatchId = await getApplicationRollupsByBatchFromRuns(
-    ctx,
-    productionRunIdsByBatchId,
-  );
+  const accountingByBatch = await loadCreditBatchRollups(ctx, batchIds);
 
   return batches.map((b) => {
-    const productionRunIds = productionRunIdsByBatchId[b.creditBatch.id] ?? [];
-    const rollup = rollupsByBatchId[b.creditBatch.id];
-    const applicationIds = rollup?.applicationIds ?? [];
+    const accounting = accountingByBatch[b.creditBatch.id];
+    const productionRunIds =
+      accounting?.lineageFacts.productionRunIds ?? [];
+    const applicationIds = accounting?.lineageFacts.applicationIds ?? [];
     return {
       ...b.creditBatch,
       facility: b.facilityName ? { name: b.facilityName } : null,
@@ -208,11 +199,37 @@ export async function getCreditBatches(
       applicationIds,
       productionRunCount: productionRunIds.length,
       productionRunIds,
-      appliedWeightTons: rollup?.appliedWeightTons ?? 0,
+      appliedWeightTons: accounting?.appliedWeightTons ?? 0,
       co2eStoredPreview: null,
       previewAvailable: false,
     };
   });
+}
+
+/**
+ * Resolve only the removal membership needed to choose certification scope.
+ * This avoids assembling full accounting for a grouped batch before the
+ * removal-wide accounting read.
+ */
+export async function getCreditBatchRemovalId(
+  ctx: OrgContext,
+  id: string,
+): Promise<string | null> {
+  requireOrgScope(ctx);
+  const [batch] = await db
+    .select({ removalId: creditBatches.removalId })
+    .from(creditBatches)
+    .where(
+      and(
+        eq(creditBatches.id, id),
+        eq(creditBatches.organizationId, ctx.organizationId),
+      ),
+    )
+    .limit(1);
+  if (!batch) {
+    throw new SafeError("Credit batch not found");
+  }
+  return batch.removalId;
 }
 
 /**
@@ -221,17 +238,17 @@ export async function getCreditBatches(
 export async function getCreditBatchById(
   ctx: OrgContext,
   id: string,
-  options?: { skipPreview?: false; lineageFacts?: CreditBatchLineageFacts }
+  options?: { skipPreview?: false }
 ): Promise<CreditBatchWithRelations | null>;
 export async function getCreditBatchById(
   ctx: OrgContext,
   id: string,
-  options: { skipPreview: true; lineageFacts?: CreditBatchLineageFacts }
+  options: { skipPreview: true }
 ): Promise<CreditBatchWithOptionalPreview | null>;
 export async function getCreditBatchById(
   ctx: OrgContext,
   id: string,
-  options?: { skipPreview?: boolean; lineageFacts?: CreditBatchLineageFacts }
+  options?: { skipPreview?: boolean }
 ): Promise<CreditBatchWithRelations | CreditBatchWithOptionalPreview | null> {
   requireOrgScope(ctx);
   const [batch] = await db
@@ -253,10 +270,14 @@ export async function getCreditBatchById(
   const durabilityOption =
     batch.facilityDurabilityOption ?? DURABILITY_TIER_FALLBACK;
 
-  const facts =
-    options?.lineageFacts ?? (await loadCreditBatchLineageFacts(ctx, [id]))[id];
-  const productionRunIds = facts?.productionRunIds ?? [];
-  const applicationIds = facts?.applicationIds ?? [];
+  const accounting = options?.skipPreview
+    ? (await loadCreditBatchRollups(ctx, [id]))[id]
+    : (await loadCreditBatchAccounting(ctx, [id]))[id];
+  if (!accounting) {
+    throw new SafeError("Credit batch accounting could not be loaded");
+  }
+  const productionRunIds = accounting.lineageFacts.productionRunIds;
+  const applicationIds = accounting.lineageFacts.applicationIds;
 
   const result = {
     ...batch.creditBatch,
@@ -267,7 +288,7 @@ export async function getCreditBatchById(
     applicationIds,
     productionRunCount: productionRunIds.length,
     productionRunIds,
-    appliedWeightTons: facts?.appliedWeightTons ?? 0,
+    appliedWeightTons: accounting.appliedWeightTons,
     co2eStoredPreview: null,
     previewAvailable: false,
   };
@@ -275,15 +296,13 @@ export async function getCreditBatchById(
   if (options?.skipPreview) {
     return result;
   }
+  if (!includesCo2ePreview(accounting)) {
+    throw new SafeError("Credit batch preview could not be loaded");
+  }
 
   return {
     ...result,
-    co2eStoredPreview: await buildCo2eStoredPreview(
-      ctx,
-      { ...batch.creditBatch, durabilityOption },
-      applicationIds,
-      facts,
-    ),
+    co2eStoredPreview: accounting.co2ePreview,
     previewAvailable: true,
   };
 }
@@ -444,15 +463,14 @@ export async function createCreditBatch(
     .from(feedstockTypes)
     .where(and(eq(feedstockTypes.id, creditBatch.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
   const durabilityOption = facility?.durabilityOption ?? DURABILITY_TIER_FALLBACK;
-  const memberProductionRunIds = resolvedProductionRunIds;
-  const rollup =
-    memberProductionRunIds.length > 0
-      ? summarizeApplicationsForBatches(
-          await getApplicationsForRuns(ctx, memberProductionRunIds),
-          { [creditBatch.id]: memberProductionRunIds },
-        )[creditBatch.id]
-      : undefined;
-  const applicationIds = rollup?.applicationIds ?? [];
+  const accounting = (await loadCreditBatchAccounting(ctx, [creditBatch.id]))[
+    creditBatch.id
+  ];
+  if (!accounting) {
+    throw new SafeError("Credit batch accounting could not be loaded");
+  }
+  const memberProductionRunIds = accounting.lineageFacts.productionRunIds;
+  const applicationIds = accounting.lineageFacts.applicationIds;
 
   return {
     ...creditBatch,
@@ -463,12 +481,8 @@ export async function createCreditBatch(
     applicationIds,
     productionRunCount: memberProductionRunIds.length,
     productionRunIds: memberProductionRunIds,
-    appliedWeightTons: rollup?.appliedWeightTons ?? 0,
-    co2eStoredPreview: await buildCo2eStoredPreview(
-      ctx,
-      { ...creditBatch, durabilityOption },
-      applicationIds
-    ),
+    appliedWeightTons: accounting.appliedWeightTons,
+    co2eStoredPreview: accounting.co2ePreview,
     previewAvailable: true,
   };
 }

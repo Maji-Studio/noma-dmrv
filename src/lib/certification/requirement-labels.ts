@@ -26,6 +26,7 @@
  */
 export type CertRequirementKey =
   | "carbon"
+  | "facilityEmissions"
   | "production"
   | "transport"
   | "transportUniformity"
@@ -57,6 +58,11 @@ export const CERT_REQUIREMENT_META: Record<
     requirementLabel: "Lab chemistry results",
     whyDetail:
       "The durability method needs lab chemistry for this batch's samples. For 1000-year credits that means mean random reflectance (R₀) and non-reactive carbon — each with its standard deviation — across at least three replicate samples. These figures set how much of the stored carbon can be claimed as permanent.",
+  },
+  facilityEmissions: {
+    requirementLabel: "Facility reference soil temperature",
+    whyDetail:
+      "The 200-year durability calculation uses the facility's reference soil temperature to estimate the durable carbon fraction. Configure it in certification emission estimates before certifying affected batches.",
   },
   production: {
     requirementLabel: "Linked production data",

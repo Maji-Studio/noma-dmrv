@@ -25,6 +25,7 @@ interface StorageLocationFormProps {
   onSubmit: (data: StorageLocationFormData) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
+  errorMessage?: string;
   submitLabel?: string;
   /** Pre-selected storage type (used by quick-add dialog) */
   defaultType?: StorageLocationType;
@@ -47,6 +48,7 @@ export function StorageLocationForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  errorMessage,
   submitLabel,
   defaultType,
   allowedTypes,
@@ -226,6 +228,7 @@ export function StorageLocationForm({
       <FormActions
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

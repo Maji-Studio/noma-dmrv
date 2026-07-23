@@ -178,7 +178,7 @@ src/components/certification/          # all UI: facility section + dialog,
                                        #   certification-settings,
                                        #   submission-status-badge, sync-event-log,
                                        #   removals-list, ghg-statements-list,
-                                       #   ghg-statement-create-drawer + submit-dialog,
+                                       #   ghg-statement-create-dialog + submit-dialog,
                                        #   new-removal-dialog/
 src/app/(app)/certification/           # route group: root redirect + removals +
                                        #   ghg-statements + settings

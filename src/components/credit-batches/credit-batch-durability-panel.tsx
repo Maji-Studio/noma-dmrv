@@ -15,12 +15,15 @@
  */
 "use client";
 
+import Link from "next/link";
 import {
   CaretDownIcon,
   FlaskIcon,
+  PlusIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui/empty-state";
+import { buttonVariants } from "@/components/ui/button";
 import { InfoHint } from "@/components/ui/tooltip";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
 import { useBatchDurabilitySummary } from "@/hooks/use-certification";
@@ -33,6 +36,7 @@ import {
   DurabilityReadinessSignals,
   formatDurabilityStat,
 } from "@/components/certification/durability-readiness";
+import { sampleCreateHref } from "@/components/samples/sample-create-intent";
 
 function Section({ children }: { children: React.ReactNode }) {
   return (
@@ -207,8 +211,10 @@ export function sampleProvenanceLabel(
 
 export function CreditBatchDurabilityPanel({
   creditBatchId,
+  facilityId,
 }: {
   creditBatchId: string;
+  facilityId: string;
 }) {
   const { data: summary, isLoading, error } =
     useBatchDurabilitySummary(creditBatchId);
@@ -244,6 +250,15 @@ export function CreditBatchDurabilityPanel({
           icon={<FlaskIcon size={40} weight="duotone" />}
           title="No lab samples yet"
           description="Lab samples recorded on this batch's production runs show up here. At least three samples, taken on different runs or days, are needed before this batch can be certified."
+          action={
+            <Link
+              href={sampleCreateHref(facilityId, creditBatchId)}
+              className={buttonVariants({ variant: "default", size: "small" })}
+            >
+              <PlusIcon size={16} aria-hidden />
+              Record a lab sample
+            </Link>
+          }
         />
       </Section>
     );

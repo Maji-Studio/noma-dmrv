@@ -205,7 +205,6 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
         {isAddingLocation && (
           <div className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
             <h3 className="title-heading-4 mb-24">Add New Location</h3>
-            {createError && <ServerError message={createError} />}
             <CustomerLocationForm
               onSubmit={handleCreateLocation}
               onCancel={() => {
@@ -213,6 +212,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
                 setCreateError(null);
               }}
               isSubmitting={createLocation.isPending}
+              errorMessage={createError ?? undefined}
               submitLabel="Add Location"
             />
           </div>
@@ -222,7 +222,6 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
         {editingLocation && (
           <div className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
             <h3 className="title-heading-4 mb-24">Edit Location</h3>
-            {updateError && <ServerError message={updateError} />}
             <CustomerLocationForm
               location={editingLocation as CustomerLocation}
               onSubmit={handleUpdateLocation}
@@ -231,6 +230,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
                 setUpdateError(null);
               }}
               isSubmitting={updateLocation.isPending}
+              errorMessage={updateError ?? undefined}
               submitLabel="Save Changes"
             />
           </div>

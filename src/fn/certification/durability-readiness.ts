@@ -19,6 +19,8 @@ export interface DurabilityGateResult {
 export interface DurabilityBatchData extends DurabilityGateResult {
   /** Member credit batches with pooled Samples, runs scoped to the applied set. */
   batchesWithSamples: CreditBatchWithSamples[];
+  /** Exact submission-gate blockers keyed to the batch that produced them. */
+  blockersByBatchId: Record<string, string[]>;
 }
 
 /**
@@ -39,8 +41,27 @@ export async function loadDurabilityBatchData(
     ...batch,
     runs: batch.runs.filter((run) => appliedRunIds.has(run.id)),
   }));
-  const gates = buildDurabilityGates(batchesWithSamples);
+  const gates = buildDurabilityBatchGates(batchesWithSamples);
   return { batchesWithSamples, ...gates };
+}
+
+export function buildDurabilityBatchGates(
+  batchesWithSamples: CreditBatchWithSamples[],
+): DurabilityGateResult & Pick<DurabilityBatchData, "blockersByBatchId"> {
+  const perBatchGates = batchesWithSamples.map((batch) => ({
+    creditBatchId: batch.creditBatchId,
+    gates: buildDurabilityGates([batch]),
+  }));
+  return {
+    blockers: perBatchGates.flatMap(({ gates }) => gates.blockers),
+    warnings: perBatchGates.flatMap(({ gates }) => gates.warnings),
+    blockersByBatchId: Object.fromEntries(
+      perBatchGates.map(({ creditBatchId, gates }) => [
+        creditBatchId,
+        gates.blockers,
+      ]),
+    ),
+  };
 }
 
 function isoSamplingDay(

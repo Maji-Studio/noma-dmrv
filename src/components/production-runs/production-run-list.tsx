@@ -700,13 +700,13 @@ export function ProductionRunList() {
           },
         ] : undefined}
       >
-        {(createError || updateError) && <div className="mb-24"><ServerError message={createError || updateError || ""} /></div>}
         <ProductionRunForm
           key={sideSheetEntity?.id ?? "create"}
           productionRun={sideSheetEntity ?? undefined}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={attemptCloseSideSheet}
           isSubmitting={createRun.isPending || updateRun.isPending || isFlushing}
+          errorMessage={createError || updateError || undefined}
           submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Production Run"}
           deferredAttachments={deferredAttachments}
         >

@@ -1,6 +1,6 @@
 /**
- * GhgStatementCreateDrawer — period-first GHG Statement creation, in a
- * SlideOverPanel (it's a multi-step form, so a side-sheet is the right chrome).
+ * GhgStatementCreateDialog — period-first GHG Statement creation in the shared
+ * centered Modal.
  * Three steps:
  *   1. Period   — pick the reporting-period end (`end_on`, the only date the
  *                 Isometric create API accepts). We display the *derived* start
@@ -16,8 +16,8 @@
  * Reporting periods are consecutive and non-overlapping: the operator can't pick
  * an end on or before an existing statement's end (mirrored server-side).
  *
- * The drawer mounts only while open (the list renders it conditionally), so the
- * RHF form and mutation start fresh each time — no Modal-style onOpen reset.
+ * Modal unmounts its children while closed, so the RHF form and mutation start
+ * fresh each time.
  */
 "use client";
 
@@ -30,9 +30,8 @@ import {
 } from "react-hook-form";
 import { CheckCircleIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, ServerError } from "@/components/forms";
-import { Button } from "@/components/ui";
+import { Button, Modal } from "@/components/ui";
 import { InfoHint } from "@/components/ui/tooltip";
-import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -45,7 +44,7 @@ import {
   overlappingEnd,
   partitionByWindow,
 } from "@/lib/isometric/utils/ghg-reporting-window";
-import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { formatDate } from "@/lib/format-utils";
 import {
   createGhgStatementSchema,
   type CreateGhgStatementInput,
@@ -54,7 +53,7 @@ import { EnvBanner } from "./env-banner";
 import { ProductionConfirmation } from "./production-confirmation";
 import { RemovalBatchesAccordion } from "./removal-batches-accordion";
 
-interface GhgStatementCreateDrawerProps {
+interface GhgStatementCreateDialogProps {
   facilityId: string;
   isProduction: boolean;
   open: boolean;
@@ -62,44 +61,44 @@ interface GhgStatementCreateDrawerProps {
 }
 
 const STEPS: StepFlowStep[] = [
-  { key: "period", label: "Period", description: "Confirm the period" },
-  { key: "preview", label: "Contents", description: "What it contains" },
-  { key: "confirm", label: "Confirm", description: "Create the statement" },
+  { key: "period", label: "Period", description: "Choose the end" },
+  { key: "preview", label: "Contents", description: "Preview removals" },
+  { key: "confirm", label: "Confirm", description: "Review and create" },
 ];
+
+const DIALOG_TITLE_ID = "ghg-statement-create-title";
+const DIALOG_DESCRIPTION_ID = "ghg-statement-create-description";
 
 // Period-derivation + window logic is shared with the server empty-statement
 // guard (`ghg-reporting-window.ts`) so the operator's preview and the registry
 // never disagree on what a period contains.
 
-export function GhgStatementCreateDrawer({
+export function GhgStatementCreateDialog({
   facilityId,
   isProduction,
   open,
   onClose,
-}: GhgStatementCreateDrawerProps) {
+}: GhgStatementCreateDialogProps) {
   return (
-    <SlideOverPanel.Root
-      open={open}
-      onOpenChange={(o) => !o && onClose()}
-      // Multi-step wizard: a stray backdrop click must not discard a
-      // half-built statement. Close button + ESC still dismiss.
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      ariaLabelledBy={DIALOG_TITLE_ID}
+      ariaDescribedBy={DIALOG_DESCRIPTION_ID}
+      width="xl"
       dismissOnClickOutside={false}
     >
-      <SlideOverPanel.Content size="wide">
-        {open && (
-          <DrawerBody
-            key={facilityId}
-            facilityId={facilityId}
-            isProduction={isProduction}
-            onClose={onClose}
-          />
-        )}
-      </SlideOverPanel.Content>
-    </SlideOverPanel.Root>
+      <DialogBody
+        key={facilityId}
+        facilityId={facilityId}
+        isProduction={isProduction}
+        onClose={onClose}
+      />
+    </Modal>
   );
 }
 
-function DrawerBody({
+function DialogBody({
   facilityId,
   isProduction,
   onClose,
@@ -153,7 +152,7 @@ function DrawerBody({
       const overlap = overlappingEnd(endOn, existingEnds);
       if (overlap) {
         setError("reportingPeriodEndOn", {
-          message: `This facility already has a statement ending ${overlap}. Reporting periods can't overlap — pick an end date after ${overlap}.`,
+          message: `A statement already ends ${overlap}. Choose a later date.`,
         });
         return;
       }
@@ -169,7 +168,7 @@ function DrawerBody({
   const onCreate = handleSubmit(async (data) => {
     if (isProduction && !data.confirmProduction) {
       setError("confirmProduction", {
-        message: "Tick the box to confirm this submits to the live production registry.",
+        message: "Confirm creation in the live Isometric registry.",
       });
       return;
     }
@@ -177,11 +176,11 @@ function DrawerBody({
       const result = await mutation.mutateAsync(data);
       if (result.warnings.length > 0) {
         toast.warning(
-          `GHG statement created with ${result.warnings.length} warning(s).`,
+          `Created with ${result.warnings.length} warning${result.warnings.length === 1 ? "" : "s"}.`,
         );
       } else {
         toast.success(
-          `GHG statement created — ${result.linkedRemovalIds.length} removal(s) linked.`,
+          `Created with ${result.linkedRemovalIds.length} linked removal${result.linkedRemovalIds.length === 1 ? "" : "s"}.`,
         );
       }
     } catch (err) {
@@ -195,17 +194,22 @@ function DrawerBody({
   const isLastStep = stepIndex === STEPS.length - 1;
 
   return (
-    <>
-      <SlideOverPanel.Header showClose>
-        <SlideOverPanel.Title>New GHG Statement</SlideOverPanel.Title>
-        <SlideOverPanel.Description>
+    <div className="flex flex-col gap-24">
+      <header className="flex flex-col gap-4 pr-40">
+        <h2 id={DIALOG_TITLE_ID} className="title-heading-3">
+          New GHG Statement
+        </h2>
+        <p
+          id={DIALOG_DESCRIPTION_ID}
+          className="body-small text-[var(--color-text-secondary)]"
+        >
           {result
-            ? "Created — review what Isometric linked"
-            : "Confirm what this reporting period contains before you create it"}
-        </SlideOverPanel.Description>
-      </SlideOverPanel.Header>
+            ? "Created in Isometric."
+            : "Choose a period, preview removals, then create."}
+        </p>
+      </header>
 
-      <SlideOverPanel.Body className="flex flex-col gap-24">
+      <div className="flex flex-col gap-24">
         {result ? (
           <ResultPanel
             externalId={result.externalId}
@@ -252,9 +256,9 @@ function DrawerBody({
             )}
           </StepFlow>
         )}
-      </SlideOverPanel.Body>
+      </div>
 
-      <SlideOverPanel.Footer>
+      <div className="sticky bottom-0 z-10 flex flex-wrap justify-end gap-12 border-t border-[var(--color-border-tertiary)] bg-[var(--color-background-white)] pt-16">
         {result ? (
           <Button variant="primary" onClick={onClose}>
             Done
@@ -300,14 +304,14 @@ function DrawerBody({
             )}
           </>
         )}
-      </SlideOverPanel.Footer>
-    </>
+      </div>
+    </div>
   );
 }
 
-// Renders the resolved [start → end] reporting window. The start is derived
-// (or set by Isometric for the first statement), never operator-entered.
-function PeriodWindow({
+// The start is read-only: Isometric sets it for the first statement, then
+// derives each later start from the previous statement's end.
+export function PeriodWindow({
   derivedStart,
   endOn,
 }: {
@@ -315,11 +319,24 @@ function PeriodWindow({
   endOn: string;
 }) {
   return (
-    <span className="font-mono text-[var(--color-text-primary)]">
-      {derivedStart
-        ? formatDateRange(derivedStart, endOn)
-        : `Ends ${formatDate(endOn)}`}
-    </span>
+    <dl className="grid grid-cols-1 gap-12 sm:grid-cols-2">
+      <div className="flex flex-col gap-2">
+        <dt className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+          Start
+        </dt>
+        <dd className="body-small font-mono text-[var(--color-text-primary)]">
+          {derivedStart ? formatDate(derivedStart) : "Set by Isometric"}
+        </dd>
+      </div>
+      <div className="flex flex-col gap-2">
+        <dt className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
+          End
+        </dt>
+        <dd className="body-small font-mono text-[var(--color-text-primary)]">
+          {formatDate(endOn)}
+        </dd>
+      </div>
+    </dl>
   );
 }
 
@@ -339,15 +356,14 @@ function StepPeriod({
       <h3 className="title-heading-4 flex items-center gap-6">
         Reporting period
         <InfoHint>
-          Isometric links every Removal whose completion date falls in the
-          period to this statement, and derives the period start from the
-          previous statement — you only set the end.
+          Only the end date is sent. Isometric links submitted Removals
+          completed within the period.
         </InfoHint>
       </h3>
       <p className="body-small text-[var(--color-text-secondary)]">
         A GHG statement bundles the removals you&apos;ve already submitted this
-        period so a verifier can review them. Pick the period end — the next
-        step shows exactly which removals fall inside.
+        period so a verifier can review them. Pick the period end — we&apos;ll
+        show you exactly which removals fall inside.
       </p>
       <FormField
         id="reportingPeriodEndOn"
@@ -363,7 +379,7 @@ function StepPeriod({
         />
       </FormField>
       {endOn && !error && (
-        <div className="flex flex-col gap-2 border-l-2 border-[var(--color-border-secondary)] pl-12">
+        <div className="flex flex-col gap-8 border-l-2 border-[var(--color-border-secondary)] pl-12">
           <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
             Reporting period
           </span>
@@ -419,16 +435,12 @@ function StepPreview({
       <h3 className="title-heading-4 flex items-center gap-6">
         Expected contents
         <InfoHint>
-          Isometric decides membership server-side and confirms it right after
-          you create the statement — this is what it should contain, by
-          completion date within the reporting window{" "}
-          {derivedStart
-            ? formatDateRange(derivedStart, endOn)
-            : `up to ${formatDate(endOn)}`}.
-          Removals before the window roll into the previous statement. Expand a
-          removal to see its credit batches.
+          Isometric confirms membership after creation from each Removal&apos;s
+          completion date. Expand a Removal to view its credit batches.
         </InfoHint>
       </h3>
+
+      <PeriodWindow derivedStart={derivedStart} endOn={endOn} />
 
       <div className="flex flex-col gap-8">
         <div className="flex flex-col gap-2">
@@ -436,7 +448,7 @@ function StepPreview({
             Expected in this statement ({inPeriod.length})
           </span>
           <span className="body-caption text-[var(--color-text-tertiary)]">
-            Confirmed after you create it.
+            Confirmed after creation.
           </span>
         </div>
         {inPeriod.length === 0 ? (
@@ -448,9 +460,8 @@ function StepPreview({
               className="mt-px shrink-0 text-[var(--color-signal-orange)]"
             />
             <p className="body-small text-[var(--color-text-primary)]">
-              This period has no submitted removals yet — a statement now would
-              be empty. Submit a removal first, or pick a period end that
-              includes one.
+              No submitted Removals fall in this period. Submit one or choose
+              an end date that includes one.
             </p>
           </div>
         ) : (
@@ -468,7 +479,7 @@ function StepPreview({
 
       <div className="flex flex-col gap-8 opacity-60">
         <span className="body-caption uppercase tracking-wide text-[var(--color-text-tertiary)]">
-          Open removals outside this period ({outside.length})
+          Other open removals ({outside.length})
         </span>
         {outside.length === 0 ? (
           <p className="body-caption text-[var(--color-text-tertiary)]">
@@ -507,13 +518,12 @@ function StepConfirm({
     <div className="flex flex-col gap-16">
       <h3 className="title-heading-4">Confirm &amp; create</h3>
       <p className="body-small text-[var(--color-text-secondary)]">
-        Create a GHG Statement for the reporting period{" "}
-        <PeriodWindow derivedStart={derivedStart} endOn={endOn} />. Isometric
-        derives the period start and links the matching Removals.
+        Isometric will create this period and link matching Removals.
       </p>
+      <PeriodWindow derivedStart={derivedStart} endOn={endOn} />
       {isProduction ? (
         <ProductionConfirmation
-          actionLabel="create a GHG statement on the production Isometric registry"
+          actionLabel="create this GHG Statement in the production Isometric registry"
           registerProps={registerProps}
           errorMessage={confirmError}
         />
@@ -543,16 +553,16 @@ function ResultPanel({
           className="mt-px shrink-0 text-[var(--color-signal-green)]"
         />
         <p className="body-small text-[var(--color-text-primary)]">
-          GHG statement <span className="font-mono">{externalId}</span> created.
-          Isometric linked{" "}
-          <strong className="body-small-bold">{linkedCount}</strong> removal(s).
+          <span className="font-mono">{externalId}</span> created with{" "}
+          <strong className="body-small-bold">{linkedCount}</strong>{" "}
+          removal{linkedCount === 1 ? "" : "s"}.
         </p>
       </div>
       {warnings.length > 0 && (
         <div className="flex flex-col gap-8 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
           <span className="inline-flex items-center gap-6 title-chapter-title text-[var(--color-signal-orange)]">
             <WarningIcon size={14} weight="fill" aria-hidden />
-            {warnings.length} warning(s)
+            {warnings.length} {warnings.length === 1 ? "warning" : "warnings"}
           </span>
           <ul className="flex flex-col gap-4">
             {warnings.map((w) => (
