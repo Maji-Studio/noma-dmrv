@@ -26,6 +26,7 @@ import {
   seedGroupedRemovalWithChain,
   seedUngroupedIncompleteBatch,
 } from "./fixtures/certification-helpers";
+import { SAMPLE_CREATE_CREDIT_BATCH_PARAM } from "@/components/samples/sample-create-intent";
 
 // DB-only link target; never reaches Isometric, so any string is fine.
 const FAKE_PROJECT_ID = "e2e-new-removal-fake-project";
@@ -61,7 +62,7 @@ test.describe("Certification — New-Removal wizard", () => {
       await expect(page).not.toHaveURL(/(?:\?|&)create=/);
 
       await page.goto(
-        `/samples?facility=${facilityId}&create=true&creditBatch=${batch.creditBatchId}`,
+        `/samples?facility=${facilityId}&create=true&${SAMPLE_CREATE_CREDIT_BATCH_PARAM}=${batch.creditBatchId}`,
       );
       const sampleDialog = page.getByRole("dialog");
       await expect(
@@ -73,7 +74,11 @@ test.describe("Certification — New-Removal wizard", () => {
       await expect(
         sampleDialog.getByText(batch.code, { exact: true }),
       ).toBeVisible();
-      await expect(page).not.toHaveURL(/(?:\?|&)(?:create|creditBatch)=/);
+      await expect(page).not.toHaveURL(
+        new RegExp(
+          `(?:\\?|&)(?:create|${SAMPLE_CREATE_CREDIT_BATCH_PARAM})=`,
+        ),
+      );
     } finally {
       await batch?.cleanup();
     }
