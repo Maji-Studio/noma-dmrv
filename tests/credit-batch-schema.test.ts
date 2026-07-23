@@ -58,20 +58,14 @@ describe("creditBatchFormSchema — production window", () => {
     }
   });
 
-  it("requires at least one production run", () => {
+  it("allows creating a batch before any production runs exist", () => {
     const result = creditBatchFormSchema.safeParse({
       ...validBase,
       productionRunIds: [],
       startDate: "2026-05-10",
       endDate: "2026-05-20",
     });
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      const issue = result.error.issues.find(
-        (i) => i.path[0] === "productionRunIds",
-      );
-      expect(issue?.message).toMatch(/at least one production run/i);
-    }
+    expect(result.success).toBe(true);
   });
 });
 

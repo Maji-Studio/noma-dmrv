@@ -14,31 +14,22 @@ import {
   listRemovalsForFacility,
   listUngroupedCreditBatches,
   type CertifierRemovalRow,
-  type UngroupedCreditBatchRow,
 } from "@/data-access/certifier-removals";
 import {
   projectChainOfCustodyFromBatchFacts,
   type ChainOfCustodyData,
 } from "@/data-access/chain-of-custody";
 import {
-  getCo2eStoredPreviews,
-  getCreditBatchById,
+  loadCreditBatchAccounting,
+  loadCreditBatchRollups,
+  type CreditBatchAccounting,
+  type CreditBatchAccountingByBatch,
   type CreditBatchCo2eStoredPreview,
-} from "@/data-access/credit-batches";
+  type CreditBatchRollup,
+} from "@/data-access/credit-batch-accounting";
+import { getCreditBatchRemovalId } from "@/data-access/credit-batches";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
-import {
-  getApplicationRollupsByBatchIds,
-} from "@/data-access/credit-batch-production-runs";
-import {
-  loadCreditBatchLineageFacts,
-} from "@/data-access/credit-batch-lineage-facts";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
-import {
-  deriveBatchHealth,
-  type BatchHealth,
-} from "@/lib/certification/batch-health";
-import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
-import { deriveFacilitySetupGaps, type FacilitySetupGap } from "@/lib/certification/facility-setup-gaps";
 import {
   buildMassAccounting,
   EMPTY_RUN_SUMMARY,
@@ -48,6 +39,7 @@ import {
   defaultProductionReadinessGap,
   type ProductionReadinessGap,
 } from "@/lib/certification/production-readiness";
+import { attributeSoilTemperatureBlockers } from "@/lib/certification/member-batch-gates";
 import { SafeError } from "@/lib/errors";
 import {
   aggregateTransportMassDistance,
@@ -77,22 +69,30 @@ import {
   safeListIfConfigured,
   type TransportLegsByCategory,
 } from "./shared";
-import { buildApplicationEvidenceGaps } from "./application-evidence-readiness";
-import { buildEntityReadinessGaps } from "./certify-readiness-gaps";
+import { buildCertifyEntityReadiness } from "./certify-entity-readiness";
 import { loadDurabilityBatchData } from "./durability-readiness";
 import { buildSubmissionWarnings } from "./submission-warnings";
 import {
   loadLinkedGhgStatementStatus,
   type LinkedGhgStatementStatus,
 } from "./linked-ghg-statement-status";
+import {
+  buildSelectableBatchesData,
+  type SelectableBatchesData,
+} from "./selectable-batches";
 
 export type { LinkedGhgStatementStatus } from "./linked-ghg-statement-status";
+export type { SelectableBatch, SelectableBatchesData } from "./selectable-batches";
 
-// Each removal/batch in a facility-level fan-out rebuilds its own context (a
-// chain of DB queries + registry lookups). Bound how many run at once so a
-// facility with many removals/batches can't burst an unbounded number of query
-// chains at the connection pool. Mirrors `READINESS_CONCURRENCY` in overview.ts.
+// Bound facility fan-out so per-removal DB/registry query chains cannot burst
+// the connection pool. Mirrors `READINESS_CONCURRENCY` in overview.ts.
 const FANOUT_CONCURRENCY = 8;
+
+function includesCo2ePreview(
+  accounting: CreditBatchRollup,
+): accounting is CreditBatchAccounting {
+  return "co2ePreview" in accounting;
+}
 
 export interface TransportCoverageBucket {
   count: number;
@@ -126,8 +126,10 @@ export interface MemberCreditBatch {
   id: string;
   code: string;
   co2eStoredPreview?: CreditBatchCo2eStoredPreview;
+  /** Exact submission blockers, separated by their remediation workflow. */
+  durabilityGateBlockers?: string[];
+  facilityEmissionsGateBlockers?: string[];
 }
-
 type DurabilityOption = "200_year" | "1000_year";
 
 // UI-facing removal context — the lean payload React Query caches.
@@ -158,10 +160,10 @@ export interface RemovalCertifyContext {
   // no-applications / broken-product-link cases out of the generic production
   // bucket on health and readiness surfaces.
   productionReadinessGap: ProductionReadinessGap | null;
-  // Compact labels from the per-entity certifier-readiness layer. The raw
-  // entity rows stay server-side; Review/pre-flight only needs gap labels. The
-  // submit pipeline gates on this same list, so [] means entity-ready.
+  // Compact labels from the per-entity certifier-readiness layer; the submit
+  // pipeline gates on this same list, so [] means entity-ready.
   entityReadinessGaps: string[];
+  entityReadinessIssues?: import("@/lib/certification/batch-health").BatchEntityReadinessIssue[];
   // Fail-closed durability sampling/eligibility blockers (D3) — the EXACT list
   // the submit pipeline blocks on, so readiness predicts the gate. [] ⇒ ready.
   durabilityGateBlockers: string[];
@@ -323,43 +325,57 @@ interface RemovalScope {
 async function resolveScopeForCreditBatch(
   orgCtx: OrgContext,
   creditBatchId: string,
+  options?: { singleBatch?: boolean },
 ): Promise<RemovalScope> {
-  // Preloaded once so the CO₂e preview and lineage projection share one load.
-  const facts = (await loadCreditBatchLineageFacts(orgCtx, [creditBatchId]))[
-    creditBatchId
-  ];
-  const batch = await getCreditBatchById(orgCtx, creditBatchId, {
-    lineageFacts: facts,
-  });
-  if (!batch) throw new SafeError("Credit batch not found");
-
-  if (!batch.removalId) {
-    const runById = new Map(facts.runs.map((run) => [run.id, run]));
-    return {
-      facilityId: batch.facilityId,
-      removalId: null,
-      removal: null,
-      memberBatches: [
-        {
-          id: batch.id,
-          code: batch.code,
-          productionRunIds: batch.productionRunIds,
-          applicationIds: facts.applicationIds,
-          durabilityOption: batch.durabilityOption,
-          productionEmissionsClaimedByRemovalId:
-            batch.productionEmissionsClaimedByRemovalId,
-          co2eStoredPreview: batch.co2eStoredPreview ?? undefined,
-        },
-      ],
-      lineages: facts.applications.map((application) =>
-        projectChainOfCustodyFromBatchFacts(
-          application,
-          runById.get(application.biocharProduct.linkedProductionRunId),
-        ),
-      ),
-    };
+  if (!options?.singleBatch) {
+    const removalId = await getCreditBatchRemovalId(orgCtx, creditBatchId);
+    if (removalId) {
+      return resolveScopeForRemoval(orgCtx, removalId);
+    }
   }
-  return resolveScopeForRemoval(orgCtx, batch.removalId);
+
+  const accounting = (
+    await loadCreditBatchAccounting(orgCtx, [creditBatchId])
+  )[creditBatchId];
+  if (!accounting) throw new SafeError("Credit batch not found");
+
+  if (!options?.singleBatch && accounting.batch.removalId) {
+    return resolveScopeForRemoval(orgCtx, accounting.batch.removalId);
+  }
+
+  return resolveSingleBatchScope(accounting);
+}
+
+function resolveSingleBatchScope(
+  accounting: CreditBatchAccounting,
+): RemovalScope {
+  const { batch, lineageFacts } = accounting;
+  const runById = new Map(
+    lineageFacts.runs.map((run) => [run.id, run]),
+  );
+  return {
+    facilityId: batch.facilityId,
+    removalId: null,
+    removal: null,
+    memberBatches: [
+      {
+        id: batch.id,
+        code: batch.code,
+        productionRunIds: lineageFacts.productionRunIds,
+        applicationIds: lineageFacts.applicationIds,
+        durabilityOption: batch.durabilityOption,
+        productionEmissionsClaimedByRemovalId:
+          batch.productionEmissionsClaimedByRemovalId,
+        co2eStoredPreview: accounting.co2ePreview,
+      },
+    ],
+    lineages: lineageFacts.applications.map((application) =>
+      projectChainOfCustodyFromBatchFacts(
+        application,
+        runById.get(application.biocharProduct.linkedProductionRunId),
+      ),
+    ),
+  };
 }
 
 // Resolves the removal scope from a removal id — every member credit batch.
@@ -373,28 +389,35 @@ export async function resolveScopeForRemoval(
 
   const batches = await getCreditBatchesByRemovalId(orgCtx, removalId);
   const batchIds = batches.map((batch) => batch.id);
-  const factsByBatch = await loadCreditBatchLineageFacts(orgCtx, batchIds);
-  const previewsByBatch = options?.skipPreview
-    ? {}
-    : await getCo2eStoredPreviews(orgCtx, batchIds, {
-        lineageFactsByBatch: factsByBatch,
-      });
+  const accountingByBatch = options?.skipPreview
+    ? await loadCreditBatchRollups(orgCtx, batchIds)
+    : await loadCreditBatchAccounting(orgCtx, batchIds);
   const memberBatches = batches.map((batch) => {
-      const facts = factsByBatch[batch.id];
+      const accounting = accountingByBatch[batch.id];
+      if (!accounting) {
+        throw new SafeError(`Credit batch ${batch.id} could not be loaded`);
+      }
+      const { lineageFacts, batch: accountingBatch } = accounting;
       return {
-        id: batch.id,
-        code: batch.code,
-        productionRunIds: facts.productionRunIds,
-        applicationIds: facts.applicationIds,
-        durabilityOption: batch.durabilityOption,
+        id: accountingBatch.id,
+        code: accountingBatch.code,
+        productionRunIds: lineageFacts.productionRunIds,
+        applicationIds: lineageFacts.applicationIds,
+        durabilityOption: accountingBatch.durabilityOption,
         productionEmissionsClaimedByRemovalId:
-          batch.productionEmissionsClaimedByRemovalId,
-        co2eStoredPreview: previewsByBatch[batch.id],
+          accountingBatch.productionEmissionsClaimedByRemovalId,
+        co2eStoredPreview:
+          !options?.skipPreview && includesCo2ePreview(accounting)
+            ? accounting.co2ePreview
+            : undefined,
       };
     });
-  const lineages = Object.values(factsByBatch).flatMap((facts) => {
-    const runById = new Map(facts.runs.map((run) => [run.id, run]));
-    return facts.applications.map((application) =>
+  const lineages = Object.values(accountingByBatch).flatMap((accounting) => {
+    const { lineageFacts } = accounting;
+    const runById = new Map(
+      lineageFacts.runs.map((run) => [run.id, run]),
+    );
+    return lineageFacts.applications.map((application) =>
       projectChainOfCustodyFromBatchFacts(
         application,
         runById.get(application.biocharProduct.linkedProductionRunId),
@@ -603,6 +626,62 @@ export async function buildRemovalContext(
   const applicationIds = Array.from(
     new Set(scope.memberBatches.flatMap((b) => b.applicationIds)),
   );
+  const lineages = scope.lineages;
+  const runIds = Array.from(
+    new Set(
+      lineages
+        .map((l) => l.productionRun?.id)
+        .filter((id): id is string => !!id),
+    ),
+  );
+  // Sample completeness is batch evidence, independent of application
+  // lineage. Evaluate it before the no-application return so callers see both
+  // blockers instead of discovering chemistry only after production is fixed.
+  const durabilityBatchData = await loadDurabilityBatchData(
+    orgCtx,
+    scope.memberBatches.map((b) => b.id),
+    new Set(runIds),
+  );
+  const {
+    batchesWithSamples,
+    blockers: durabilityBatchBlockers,
+    warnings: durabilityWarnings,
+  } = durabilityBatchData;
+  const memberBatchesWithDurability = memberBatches.map((batch) => ({
+    ...batch,
+    durabilityGateBlockers:
+      durabilityBatchData.blockersByBatchId[batch.id] ?? [],
+  }));
+  // The facility reference gates every 200-year member even before applications
+  // exist; an empty site list deliberately suppresses site-comparison warnings.
+  const facilityReferenceSoilTemperature =
+    resolveFacilityReferenceSoilTemperature({
+      declaredSoilTemperatureC: facilityFacts.mapping?.defaultSoilTemperatureC,
+      source: facilityFacts.mapping?.defaultSoilTemperatureSource,
+    });
+  const soilTemperatureGate = buildSoilTemperatureGate({
+    facilityReference: facilityReferenceSoilTemperature,
+    batches: batchesWithSamples.map((batch) => ({
+      durabilityOption: batch.durabilityOption,
+      runIds: batch.runs.map((run) => run.id),
+    })),
+    siteTemperatures:
+      applicationIds.length === 0
+        ? []
+        : lineages.map((l) => ({
+            runId: l.productionRun?.id ?? null,
+            soilTemperatureC: l.application.soilTemperatureC,
+          })),
+  });
+  const durabilityGateBlockers = [
+    ...durabilityBatchBlockers,
+    ...soilTemperatureGate.blockers,
+  ];
+  const memberBatchesWithSubmissionGates = attributeSoilTemperatureBlockers(
+    memberBatchesWithDurability,
+    batchesWithSamples,
+    soilTemperatureGate.blockers,
+  );
 
   // Nothing to submit when the removal carries no applications. Facility
   // template setup does NOT gate the lineage walk; otherwise setup gaps collapse
@@ -619,38 +698,30 @@ export async function buildRemovalContext(
       facilityId: scope.facilityId,
       removalId: scope.removalId,
       ...facilityFacts,
-      memberBatches,
+      memberBatches: memberBatchesWithSubmissionGates,
       transportCoverage: EMPTY_COVERAGE,
       hasSubmittableRuns: false,
       productionReadinessGap,
       entityReadinessGaps: [],
-      durabilityGateBlockers: [],
-      submissionWarnings: [],
+      durabilityGateBlockers,
+      submissionWarnings: [
+        ...durabilityWarnings,
+        ...soilTemperatureGate.warnings,
+      ],
       runSummary: EMPTY_RUN_SUMMARY,
       latestSubmission,
       linkedGhgStatement,
       isProduction,
       lineages: [],
       runs: [],
-      batchesWithSamples: [],
+      batchesWithSamples,
       attributionByRunId: new Map<string, number>(),
       memberBatchClaims,
       transportLegs: { feedstock: [], biochar: [], sample: [] },
-      facilityReferenceSoilTemperature: resolveFacilityReferenceSoilTemperature({
-        declaredSoilTemperatureC: facilityFacts.mapping?.defaultSoilTemperatureC,
-        source: facilityFacts.mapping?.defaultSoilTemperatureSource,
-      }),
+      facilityReferenceSoilTemperature,
     };
   }
 
-  const lineages = scope.lineages;
-  const runIds = Array.from(
-    new Set(
-      lineages
-        .map((l) => l.productionRun?.id)
-        .filter((id): id is string => !!id),
-    ),
-  );
   const runs =
     runIds.length > 0
       ? await getProductionRunsWithSamples(orgCtx, runIds)
@@ -665,65 +736,23 @@ export async function buildRemovalContext(
   // is the same fail-closed list the submit pipeline blocks on; the §8.3.1
   // distribution warning is advisory, so it joins the non-blocking submission
   // warnings.
-  const {
-    batchesWithSamples,
-    blockers: durabilityBatchBlockers,
-    warnings: durabilityWarnings,
-  } = await loadDurabilityBatchData(
-    orgCtx,
-    scope.memberBatches.map((b) => b.id),
-    new Set(runIds),
-  );
-
   const entityIds = collectTransportEntityIds(lineages, batchesWithSamples);
   const transportLegs = await loadTransportLegsByCategory(orgCtx, entityIds);
   const transportCoverage = buildCoverage(transportLegs, entityIds);
-  const entityReadinessGaps = [
-    ...buildEntityReadinessGaps(
-      runs,
-      batchesWithSamples,
-      transportLegs,
-      facilityFacts.requiredTransportCategories,
-    ),
-    ...(await buildApplicationEvidenceGaps(orgCtx, lineages)),
-  ];
+  const entityReadiness = await buildCertifyEntityReadiness({
+    orgCtx,
+    lineages,
+    runs,
+    batchesWithSamples,
+    transportLegs,
+    requiredTransportCategories: facilityFacts.requiredTransportCategories,
+  });
   // One mass-accounting walk: the per-run attribution the submit pipeline
   // scopes by AND the Review-flow summary, so the two can never diverge.
   const { attributionByRunId, runSummary } = buildMassAccounting(
     lineages,
     runs,
   );
-
-  // Facility reference soil temperature (Phase 2, ADR 0013): the authoritative
-  // value submitted as the `biochar_soil` measurement, 7 °C-floored. When there
-  // is a 200-year batch to submit, an unset reference is fail-closed — it joins
-  // the durability gate blockers so readiness predicts the submit-pipeline block.
-  const facilityReferenceSoilTemperature =
-    resolveFacilityReferenceSoilTemperature({
-      declaredSoilTemperatureC: facilityFacts.mapping?.defaultSoilTemperatureC,
-      source: facilityFacts.mapping?.defaultSoilTemperatureSource,
-    });
-
-  // Soil temperature credits only the 200-year durable fraction; 1000-year
-  // (R₀/TGA) batches have no temperature term. `buildSoilTemperatureGate` scopes
-  // both the fail-closed reference-temp blocker and the over-crediting advisory
-  // to the removal's 200-year batches (and to the sites those batches credit), so
-  // a 1000-year batch never trips either (a mixed removal still gates its members).
-  const soilTemperatureGate = buildSoilTemperatureGate({
-    facilityReference: facilityReferenceSoilTemperature,
-    batches: batchesWithSamples.map((batch) => ({
-      durabilityOption: batch.durabilityOption,
-      runIds: batch.runs.map((run) => run.id),
-    })),
-    siteTemperatures: lineages.map((l) => ({
-      runId: l.productionRun?.id ?? null,
-      soilTemperatureC: l.application.soilTemperatureC,
-    })),
-  });
-  const durabilityGateBlockers = [
-    ...durabilityBatchBlockers,
-    ...soilTemperatureGate.blockers,
-  ];
 
   const submissionWarnings = [
     ...buildSubmissionWarnings({
@@ -739,11 +768,12 @@ export async function buildRemovalContext(
     facilityId: scope.facilityId,
     removalId: scope.removalId,
     ...facilityFacts,
-    memberBatches,
+    memberBatches: memberBatchesWithSubmissionGates,
     transportCoverage,
     hasSubmittableRuns: runs.length > 0 && !productionReadinessGap,
     productionReadinessGap,
-    entityReadinessGaps,
+    entityReadinessGaps: entityReadiness.gaps,
+    entityReadinessIssues: entityReadiness.issues,
     durabilityGateBlockers,
     submissionWarnings,
     runSummary,
@@ -795,6 +825,7 @@ function projectUiContext(
     hasSubmittableRuns: ctx.hasSubmittableRuns,
     productionReadinessGap: ctx.productionReadinessGap,
     entityReadinessGaps: ctx.entityReadinessGaps,
+    entityReadinessIssues: ctx.entityReadinessIssues ?? [],
     durabilityGateBlockers: ctx.durabilityGateBlockers,
     submissionWarnings: ctx.submissionWarnings,
     runSummary: ctx.runSummary,
@@ -816,13 +847,12 @@ export async function loadRemovalCertifyContext(
   );
 }
 
-// UI context for the credit-batch Certify panel. Resolves the removal the
-// batch belongs to (or a 1:1 preview when it is not yet grouped).
 export async function loadCertifyContextForCreditBatchForUser(
   orgCtx: OrgContext,
   creditBatchId: string,
+  options?: { singleBatch?: boolean },
 ): Promise<RemovalCertifyContext> {
-  const scope = await resolveScopeForCreditBatch(orgCtx, creditBatchId);
+  const scope = await resolveScopeForCreditBatch(orgCtx, creditBatchId, options);
   const facilityFacts = await loadFacilityCertifierFacts(
     orgCtx,
     scope.facilityId,
@@ -831,7 +861,6 @@ export async function loadCertifyContextForCreditBatchForUser(
     await buildRemovalContext(orgCtx, scope, facilityFacts),
   );
 }
-
 export async function loadCertifyContextForCreditBatch(
   creditBatchId: string,
 ): Promise<ActionResult<RemovalCertifyContext>> {
@@ -839,24 +868,54 @@ export async function loadCertifyContextForCreditBatch(
     loadCertifyContextForCreditBatchForUser(orgCtx, creditBatchId),
   );
 }
+export interface CreditBatchContextSet {
+  accountingByBatch: CreditBatchAccountingByBatch;
+  contextsByBatch: Record<string, RemovalCertifyContext>;
+}
 
-// Same as `loadCertifyContextForCreditBatchForUser` but reuses caller-supplied
-// facility facts instead of loading them per call. A multi-batch confirm (the
-// New-Removal wizard) loads `loadFacilityCertifierFacts` — which includes the
-// facility's Isometric registry calls — ONCE for the shared facility, then
-// builds each batch's context with these facts rather than re-fetching them per
-// batch. Safe because `facilityId`/`removalId`/`memberBatches` come from the
-// per-batch scope; the facts only feed health-relevant fields the caller reads
-// after confirming the batch belongs to that facility.
-export async function buildCreditBatchContextWithFacts(
+// Multi-batch wizard seam: one set accounting load, then bounded context
+// composition from those complete records. No caller can inject lineage facts.
+export async function buildCreditBatchContexts(
   orgCtx: OrgContext,
-  creditBatchId: string,
+  creditBatchIds: string[],
   facilityFacts: FacilityCertifierFacts,
-): Promise<RemovalCertifyContext> {
-  const scope = await resolveScopeForCreditBatch(orgCtx, creditBatchId);
-  return projectUiContext(
-    await buildRemovalContext(orgCtx, scope, facilityFacts),
+): Promise<CreditBatchContextSet> {
+  const accountingByBatch = await loadCreditBatchAccounting(
+    orgCtx,
+    creditBatchIds,
   );
+  const contextEntries: Array<
+    readonly [string, RemovalCertifyContext]
+  > = [];
+  for (
+    let index = 0;
+    index < creditBatchIds.length;
+    index += FANOUT_CONCURRENCY
+  ) {
+    const chunk = await Promise.all(
+      creditBatchIds
+        .slice(index, index + FANOUT_CONCURRENCY)
+        .map(async (creditBatchId) => {
+          const accounting = accountingByBatch[creditBatchId];
+          if (!accounting) {
+            throw new SafeError(
+              `Credit batch ${creditBatchId} could not be loaded`,
+            );
+          }
+          const context = await buildRemovalContext(
+            orgCtx,
+            resolveSingleBatchScope(accounting),
+            facilityFacts,
+          );
+          return [creditBatchId, projectUiContext(context)] as const;
+        }),
+    );
+    contextEntries.push(...chunk);
+  }
+  return {
+    accountingByBatch,
+    contextsByBatch: Object.fromEntries(contextEntries),
+  };
 }
 
 export interface RemovalHubEntry {
@@ -917,84 +976,21 @@ export async function loadRemovalsForFacility(
   });
 }
 
-// One ungrouped credit batch with its per-batch health verdict — a selection
-// card in the New-Removal wizard's first step.
-export interface SelectableBatch extends UngroupedCreditBatchRow {
-  health: BatchHealth;
-  // Derived on read (issue #285): Σ member applications' biocharAppliedTons.
-  appliedWeightTons: number;
-  // Derived on read (issue #285): the same CO₂e stored preview figure the
-  // credit-batch detail page shows; null while preview inputs are incomplete.
-  co2eStoredTonnes: number | null;
-}
-
-export interface SelectableBatchesData {
-  batches: SelectableBatch[];
-  // Facility setup (project mapping + cleanly-resolving default template) is
-  // done. When false the wizard shows a "finish facility setup" banner and the
-  // transport health check on each batch reads `skipped` (design doc §8).
-  facilitySetupComplete: boolean;
-  // Names each unmet setup prerequisite (QA 2026-07-21 F2); empty ⇔ complete.
-  facilitySetupGaps: FacilitySetupGap[];
-  // Whether a submit from this facility writes to the production registry —
-  // drives the wizard's production confirmation gate.
-  isProduction: boolean;
-}
-
 // Selection-step payload for the New-Removal wizard: every ungrouped credit
 // batch in the facility paired with the SAME health verdict the credit-batch
-// detail page shows. Loads the facility certifier facts ONCE and reuses them
-// across every batch's context build (the facts are facility-scoped, so a
-// per-batch reload would just repeat the same remote calls). Server-authoritative
-// gating still happens at confirm time in `createRemovalWithBatchesAction`; this
-// only drives which cards are selectable.
+// detail page shows. Facility authorization and certifier facts stay in the
+// core action; the cohesive selectable-batch read flow lives in its split.
 export async function loadSelectableBatchesForFacility(
   facilityId: string,
 ): Promise<ActionResult<SelectableBatchesData>> {
   return withAction(async (orgCtx) => {
     await requireOrgFacility(orgCtx, facilityId);
     const facilityFacts = await loadFacilityCertifierFacts(orgCtx, facilityId);
-    const ungrouped = await listUngroupedCreditBatches(orgCtx, facilityId);
-    const ungroupedIds = ungrouped.map((row) => row.id);
-    // Derived per-batch figures (issue #285): applied weight from member
-    // applications, stored CO₂e from the same preview the batch page shows.
-    // Compute the rollups ONCE and hand them to the preview builder — it would
-    // otherwise re-walk the same run membership internally. The preview's own
-    // per-batch fan-out is bounded inside getCo2eStoredPreviews.
-    const applicationRollups = await getApplicationRollupsByBatchIds(
+    return buildSelectableBatchesData(
       orgCtx,
-      ungroupedIds,
+      facilityId,
+      facilityFacts,
+      buildCreditBatchContexts,
     );
-    const co2ePreviews = await getCo2eStoredPreviews(orgCtx, ungroupedIds, {
-      applicationRollups,
-    });
-    // Bounded chunks (order-preserving) rather than one unbounded Promise.all
-    // over every ungrouped batch — see FANOUT_CONCURRENCY.
-    const batches: SelectableBatch[] = [];
-    for (let i = 0; i < ungrouped.length; i += FANOUT_CONCURRENCY) {
-      const chunk = await Promise.all(
-        ungrouped.slice(i, i + FANOUT_CONCURRENCY).map(async (row) => {
-          const scope = await resolveScopeForCreditBatch(orgCtx, row.id);
-          const ctx = projectUiContext(
-            await buildRemovalContext(orgCtx, scope, facilityFacts),
-          );
-          return {
-            ...row,
-            health: deriveBatchHealth(toBatchHealthFacts(ctx, row.id)),
-            appliedWeightTons:
-              applicationRollups[row.id]?.appliedWeightTons ?? 0,
-            co2eStoredTonnes: co2ePreviews[row.id]?.co2eStoredTonnes ?? null,
-          };
-        }),
-      );
-      batches.push(...chunk);
-    }
-    const facilitySetupGaps = deriveFacilitySetupGaps(facilityFacts);
-    return {
-      batches,
-      facilitySetupComplete: facilitySetupGaps.length === 0,
-      facilitySetupGaps,
-      isProduction: env.ISOMETRIC_ENVIRONMENT === "production",
-    };
   });
 }

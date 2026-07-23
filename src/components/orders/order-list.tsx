@@ -350,6 +350,7 @@ export function OrderList() {
 
       {/* Unified Side Sheet */}
       <EntitySideSheet
+        numberedSections
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheetMode}
@@ -384,10 +385,8 @@ export function OrderList() {
                   ],
                 },
                 {
-                  title: "Fulfillment & Metadata",
+                  title: "Fulfillment",
                   fields: [
-                    { label: "Code", value: sideSheetEntity.code },
-                    { label: "Facility", value: sideSheetEntity.facilityName },
                     {
                       label: "Fulfillment",
                       value: (
@@ -409,13 +408,13 @@ export function OrderList() {
             : undefined
         }
       >
-        {formError && <div className="mb-24"><ServerError message={formError} /></div>}
         <OrderForm
           key={sideSheetEntity?.id ?? "create"}
           order={sideSheet?.entity as Order | undefined}
           onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
           onCancel={closeSideSheet}
           isSubmitting={createOrder.isPending || updateOrder.isPending}
+          errorMessage={formError ?? undefined}
           submitLabel={sideSheetMode === "create" ? "Create Order" : "Save Changes"}
         />
       </EntitySideSheet>

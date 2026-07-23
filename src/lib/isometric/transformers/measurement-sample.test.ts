@@ -71,24 +71,16 @@ describe("measurement-property + blueprint constants (coverage-check, plan §4)"
 describe("selectSequestrationBlueprintKey (D6 — blueprint IS the A/B distinction)", () => {
   it("routes a sampled batch to the c_org blueprint", () => {
     expect(
-      selectSequestrationBlueprintKey({ sampled: true, samplingMethod: "method_a" }),
-    ).toBe(SEQUESTRATION_BLUEPRINT_SAMPLED);
-    expect(
-      selectSequestrationBlueprintKey({ sampled: true, samplingMethod: "method_b" }),
+      selectSequestrationBlueprintKey({ sampling: "sampled" }),
     ).toBe(SEQUESTRATION_BLUEPRINT_SAMPLED);
   });
 
   it("routes an unsampled (Method B) batch to the unsampled blueprint", () => {
     expect(
-      selectSequestrationBlueprintKey({ sampled: false, samplingMethod: "method_b" }),
+      selectSequestrationBlueprintKey({ sampling: "unsampled" }),
     ).toBe(SEQUESTRATION_BLUEPRINT_UNSAMPLED);
   });
 
-  it("fails closed on the impossible unsampled + Method A combination", () => {
-    expect(() =>
-      selectSequestrationBlueprintKey({ sampled: false, samplingMethod: "method_a" }),
-    ).toThrow(/method b/i);
-  });
 });
 
 describe("toHcMolarRatioPercent (⚠️ sandbox-gated ×100 transform)", () => {

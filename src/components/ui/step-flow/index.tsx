@@ -8,7 +8,7 @@
  *  - `horizontal` (default) — a numbered rail across the top, for full-width
  *    routes (the removal Review flow).
  *  - `vertical` — a compact rail down the side, for narrow surfaces (the GHG
- *    statement create drawer, Stage 5).
+ *    statement create dialog, Stage 5).
  *
  * Visited steps (index ≤ `furthest`) are clickable when `onNavigate` is given,
  * so the operator can jump back without losing progress.

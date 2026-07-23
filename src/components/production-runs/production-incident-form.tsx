@@ -33,6 +33,7 @@ interface ProductionIncidentFormProps {
   onSubmit: (data: ProductionIncidentFormData) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
+  errorMessage?: string;
 }
 
 export function ProductionIncidentForm({
@@ -44,6 +45,7 @@ export function ProductionIncidentForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  errorMessage,
 }: ProductionIncidentFormProps) {
   const isEditMode = !!incident;
 
@@ -201,6 +203,7 @@ export function ProductionIncidentForm({
         sticky={false}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={errorMessage}
         submitLabel={isEditMode ? "Save Changes" : "Add Incident"}
       />
     </form>

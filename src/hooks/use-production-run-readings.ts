@@ -11,6 +11,7 @@ import {
   deleteAllProductionRunReadingsFn,
 } from "@/fn/production-run-readings";
 import { productionRunKeys } from "@/hooks/use-production-runs";
+import { invalidateCertificationReadiness } from "@/hooks/use-certification";
 import type { MutationCallbacks } from "./types";
 
 // ============================================
@@ -77,6 +78,7 @@ export function useDeleteAllProductionRunReadings(
       queryClient.invalidateQueries({
         queryKey: productionRunKeys.readings(productionRunId),
       });
+      invalidateCertificationReadiness(queryClient);
       await callbacks?.onSuccess?.(deletedCount, productionRunId);
     },
     onError: async (error, productionRunId) => {

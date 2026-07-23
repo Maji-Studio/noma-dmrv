@@ -26,10 +26,20 @@ function signedMass(deltaKg: number): string {
   return `${sign}${formatMass(Math.abs(deltaKg))}`;
 }
 
+function formatRecordedMoisture(ratio: number): string {
+  const percent = ratio * 100;
+  return `${percent.toFixed(1).replace(/\.0$/, "")}%`;
+}
+
 function MovementRow({ movement }: { movement: BinMovementWithActor }) {
   const isLoss = movement.movementType === "loss";
   const delta = Number(movement.massDeltaKg);
-  const positive = delta > 0;
+  const deltaColorClass =
+    delta > 0
+      ? "text-[var(--st-ok)]"
+      : delta < 0
+        ? "text-[var(--color-signal-red)]"
+        : "text-[var(--color-text-primary)]";
 
   return (
     <li className="flex flex-col gap-6 border-b border-[var(--color-border-tertiary)] py-12 last:border-b-0">
@@ -54,11 +64,7 @@ function MovementRow({ movement }: { movement: BinMovementWithActor }) {
           </span>
         </span>
         <span
-          className={`shrink-0 body-small font-mono ${
-            positive
-              ? "text-[var(--st-ok)]"
-              : "text-[var(--color-signal-red)]"
-          }`}
+          className={`shrink-0 body-small font-mono ${deltaColorClass}`}
         >
           {signedMass(delta)}
         </span>
@@ -70,7 +76,20 @@ function MovementRow({ movement }: { movement: BinMovementWithActor }) {
           <p className="body-caption text-[var(--color-text-tertiary)]">
             Counted {formatMass(Number(movement.countedMassKg))}
             {movement.countedWetMassKg != null && (
-              <> (from {formatMass(Number(movement.countedWetMassKg))} wet)</>
+              <>
+                {" "}
+                (from {formatMass(Number(movement.countedWetMassKg))} wet)
+              </>
+            )}
+            {movement.moistureRatioUsed != null && (
+              <>
+                {" "}
+                at{" "}
+                {formatRecordedMoisture(
+                  Number(movement.moistureRatioUsed),
+                )}{" "}
+                moisture
+              </>
             )}{" "}
             vs derived {formatMass(Number(movement.derivedMassKgAtTime))}
           </p>

@@ -314,9 +314,31 @@ detail pages follow `credit-batches/[id]/page.tsx` — `requireOrgContext` → u
 - Tables/panels never sit flush on the warm field — use the `--panel-*` recipe.
 - Side sheets: header title = entity code (or `Create X` in create mode — **no
   filler subtitle in create mode**); view/edit subtitle = the identifying
-  secondary. Sections use `FormSection` / `DetailSection` — see
-  [forms.md](./forms.md). The panel is `w-full` below `sm`, then locks to its
-  size token. `DetailRow` pairs stack below `sm`, side-by-side at `sm`+.
+  secondary. Edit sections use `FormSection`; read sections use `DetailSection`
+  through the shared `DetailSpine`, with matching titles, order, and grouping.
+  The read rail is numbered only when the paired edit form uses `FormSpine` —
+  see [forms.md](./forms.md). The panel is `w-full` below `sm`, then
+  locks to its size token. `DetailRow` pairs stack below `sm`, side-by-side at
+  `sm`+.
+
+### Content measure inside the page shell
+
+The page shell stays at the canonical container width. Opt in at the content
+block that needs a shorter scanning line:
+
+- **`.content-measure-form`** — full-page and direct/admin data-entry forms.
+  It is fluid up to the shared form measure (560px) and remains left-aligned in
+  page flow. Do not add it redundantly inside `EntitySideSheet`, `Modal`, or
+  auth cards; those containers already own their width.
+- **`.content-measure-preview`** — form-like summaries and readable previews
+  that need more room than inputs, including compact tables that belong to the
+  preview. It is fluid up to the shared preview measure (960px) and remains
+  left-aligned.
+
+Apply either utility to the complete semantic block, not individual fields or
+paragraphs. Data tables, dashboards, routed list content, list/card grids, KPI
+bands, traceability, and schema explorer surfaces retain the canonical page
+width. Never constrain all `<form>` elements globally.
 
 **The one sanctioned exception is the Dashboard**: it keeps the container/gap
 shell but opens with a display headline ("Dashboard" as `title-heading-2` under

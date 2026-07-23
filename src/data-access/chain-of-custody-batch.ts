@@ -28,7 +28,7 @@ import {
   type ChainGeoNode,
   type ChainOfCustodyGeoData,
 } from "./chain-of-custody-geo";
-import { loadCreditBatchLineageFacts } from "./credit-batch-lineage-facts";
+import { loadCreditBatchRollups } from "./credit-batch-accounting";
 import { requireOrgScope } from "./utils";
 
 export interface CreditBatchChainBatch {
@@ -87,9 +87,13 @@ async function resolveBatchScope(
     throw new SafeError("Credit batch not found");
   }
 
-  const facts = (await loadCreditBatchLineageFacts(ctx, [creditBatchId]))[
+  const accounting = (await loadCreditBatchRollups(ctx, [creditBatchId]))[
     creditBatchId
   ];
+  if (!accounting) {
+    throw new SafeError("Credit batch accounting could not be loaded");
+  }
+  const facts = accounting.lineageFacts;
   const runById = new Map(facts.runs.map((run) => [run.id, run]));
   const lineages = facts.applications.map((application) => ({
     applicationId: application.id,

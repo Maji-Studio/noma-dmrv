@@ -89,6 +89,8 @@ interface SupplierFormProps {
   onCancel?: () => void;
   /** Whether the form is currently submitting */
   isSubmitting?: boolean;
+  /** Submission-level error shown with the action footer */
+  errorMessage?: string;
   /** Custom label for the submit button */
   submitLabel?: string;
 }
@@ -99,6 +101,7 @@ export function SupplierForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  errorMessage,
   submitLabel,
 }: SupplierFormProps) {
   const isEditMode = !!supplier;
@@ -313,6 +316,7 @@ export function SupplierForm({
       <FormActions
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

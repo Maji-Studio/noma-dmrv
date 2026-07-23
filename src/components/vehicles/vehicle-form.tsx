@@ -20,6 +20,7 @@ interface VehicleFormProps {
   onSubmit: (data: VehicleFormData) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
+  errorMessage?: string;
   submitLabel?: string;
 }
 
@@ -28,6 +29,7 @@ export function VehicleForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  errorMessage,
   submitLabel,
 }: VehicleFormProps) {
   const isEditMode = !!vehicle;
@@ -160,6 +162,7 @@ export function VehicleForm({
       <FormActions
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={isEditMode ? "Update Vehicle" : "Create Vehicle"}
       />

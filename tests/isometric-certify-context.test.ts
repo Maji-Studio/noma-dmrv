@@ -7,10 +7,13 @@ import {
 import { hasCertifierCredentials } from "@/data-access/certifier-credentials";
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import {
-  loadCreditBatchLineageFacts,
   type CreditBatchLineageFacts,
-} from "@/data-access/credit-batch-lineage-facts";
-import { getCreditBatchById } from "@/data-access/credit-batches";
+  loadCreditBatchAccounting,
+} from "@/data-access/credit-batch-accounting";
+import {
+  getCreditBatchById,
+  getCreditBatchRemovalId,
+} from "@/data-access/credit-batches";
 import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
 import {
   listDocumentsForEntityIds,
@@ -27,11 +30,14 @@ import {
   type IsometricProject,
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
-import { loadCertifyContextForCreditBatchForUser } from "@/fn/certification/certify-context-core";
+import {
+  loadCertifyContextForCreditBatchForUser,
+} from "@/fn/certification/certify-context-core";
 import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "@/lib/certification/application-evidence";
 
 vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchById: vi.fn(),
+  getCreditBatchRemovalId: vi.fn(),
 }));
 
 vi.mock("@/data-access/credit-batch-production-runs", () => ({
@@ -53,8 +59,8 @@ vi.mock("@/data-access/chain-of-custody", async () => {
   return { ...actual, getChainOfCustodyData: vi.fn() };
 });
 
-vi.mock("@/data-access/credit-batch-lineage-facts", () => ({
-  loadCreditBatchLineageFacts: vi.fn(),
+vi.mock("@/data-access/credit-batch-accounting", () => ({
+  loadCreditBatchAccounting: vi.fn(),
 }));
 
 vi.mock("@/data-access/production-runs", () => ({
@@ -86,11 +92,12 @@ vi.mock("@/lib/isometric", async () => {
 });
 
 const mockedGetCreditBatch = vi.mocked(getCreditBatchById);
+const mockedGetCreditBatchRemovalId = vi.mocked(getCreditBatchRemovalId);
 const mockedGetApplicationsForRuns = vi.mocked(getApplicationsForRuns);
 const mockedGetMapping = vi.mocked(getCertifierProjectByFacility);
 const mockedHasCredentials = vi.mocked(hasCertifierCredentials);
 const mockedGetLineage = vi.mocked(getChainOfCustodyData);
-const mockedLoadLineageFacts = vi.mocked(loadCreditBatchLineageFacts);
+const mockedLoadAccounting = vi.mocked(loadCreditBatchAccounting);
 const mockedGetRuns = vi.mocked(getProductionRunsWithSamples);
 const mockedGetBatchesWithSamples = vi.mocked(getCreditBatchesWithSamples);
 const mockedListDocuments = vi.mocked(listDocumentsForEntityIds);
@@ -109,12 +116,6 @@ const APPLICATION_FOR_PR_1 = {
   biocharAppliedTons: 1,
 };
 
-/**
- * Evidence-complete visual document set for the normalized lineage application
- * (`app-1`). Applications without an evidenceMethod follow the visual path, so
- * tests that assert on non-evidence readiness gaps mock these to keep their
- * assertions focused.
- */
 function satisfiedVisualEvidenceDocuments(applicationId: string): DocumentRow[] {
   return APPLICATION_VISUAL_EVIDENCE_ROLES.map((role) => ({
     entityId: applicationId,
@@ -225,7 +226,7 @@ function factsFromMockedLineages(
 }
 
 function mockNormalizedLineageFacts(): void {
-  mockedLoadLineageFacts.mockImplementation(async (ctx, batchIds) => {
+  mockedLoadAccounting.mockImplementation(async (ctx, batchIds) => {
     const entries = await Promise.all(
       batchIds.map(async (batchId) => {
         const batch = await mockedGetCreditBatch(ctx, batchId, {
@@ -241,13 +242,32 @@ function mockNormalizedLineageFacts(): void {
             mockedGetLineage(ctx, application.applicationId),
           ),
         );
+        const lineageFacts = factsFromMockedLineages(
+          batchId,
+          productionRunIds,
+          lineages,
+        );
         return [
           batchId,
-          factsFromMockedLineages(batchId, productionRunIds, lineages),
+          {
+            batch: {
+              ...batch,
+              id: batchId,
+              code: batch?.code ?? "CB-1",
+              facilityId: batch?.facilityId ?? FACILITY_ID,
+              removalId: batch?.removalId ?? null,
+              durabilityOption: batch?.durabilityOption ?? "200_year",
+              productionEmissionsClaimedByRemovalId:
+                batch?.productionEmissionsClaimedByRemovalId ?? null,
+            },
+            lineageFacts,
+            appliedWeightTons: lineageFacts.appliedWeightTons,
+            co2ePreview: {},
+          },
         ] as const;
       }),
     );
-    return Object.fromEntries(entries);
+    return Object.fromEntries(entries) as never;
   });
 }
 
@@ -310,6 +330,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     vi.resetAllMocks();
     mockNormalizedLineageFacts();
     mockedHasCredentials.mockResolvedValue(true);
+    mockedGetCreditBatchRemovalId.mockResolvedValue(null);
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       code: "CB-1",
@@ -320,8 +341,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     mockedGetApplicationsForRuns.mockImplementation(async (_userId, runIds) =>
       runIds.includes("pr-1") ? [APPLICATION_FOR_PR_1] : [],
     );
-    // Default the transport-coverage walkers to empty so each test only
-    // overrides what it cares about.
     mockedGetLineage.mockResolvedValue(
       undefined as unknown as Awaited<ReturnType<typeof getChainOfCustodyData>>,
     );
@@ -352,6 +371,54 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(mockedListTemplates).not.toHaveBeenCalled();
     expect(mockedListBlueprints).not.toHaveBeenCalled();
     expect(mockedGetLegs).not.toHaveBeenCalled();
+    expect(mockedGetCreditBatchRemovalId).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: expect.any(String) }),
+      CREDIT_BATCH_ID,
+    );
+  });
+
+  it("evaluates batch and facility gates even when no applications are linked", async () => {
+    mockedGetCreditBatch.mockResolvedValue({
+      id: CREDIT_BATCH_ID,
+      code: "CB-1",
+      facilityId: FACILITY_ID,
+      productionRunIds: [],
+      durabilityOption: "200_year",
+      sampling: "sampled",
+    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
+    mockedGetBatchesWithSamples.mockResolvedValue([
+      {
+        creditBatchId: CREDIT_BATCH_ID,
+        creditBatchCode: "CB-1",
+        startDate: "2026-07-01",
+        endDate: "2026-07-31",
+        facilityTimezone: "UTC",
+        sampling: "sampled",
+        durabilityOption: "200_year",
+        samples: [],
+        runs: [],
+      },
+    ] as unknown as Awaited<ReturnType<typeof getCreditBatchesWithSamples>>);
+    mockedGetMapping.mockResolvedValue(null);
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      makeTestOrgContext(USER_ID),
+      CREDIT_BATCH_ID,
+    );
+
+    expect(result.productionReadinessGap?.kind).toBe("noApplications");
+    expect(result.durabilityGateBlockers).toEqual([
+      "Credit batch CB-1 is marked sampled but has no samples (§8.3).",
+      "Set this facility's reference soil temperature (admin → Emission estimates) before submitting a 200-year removal.",
+    ]);
+    expect(result.memberBatches[0]?.facilityEmissionsGateBlockers).toEqual([
+      "Set this facility's reference soil temperature (admin → Emission estimates) before submitting a 200-year removal.",
+    ]);
+    expect(result.submissionWarnings).toEqual([]);
+    expect(mockedGetBatchesWithSamples).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: expect.any(String) }),
+      [CREDIT_BATCH_ID],
+    );
   });
 
   it("reports missing organization credentials and skips remote calls", async () => {
@@ -580,7 +647,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       "key_a",
       "key_b",
     ]);
-    // No applications on the stub batch -> transport coverage is empty.
     expect(result.transportCoverage.feedstock.count).toBe(0);
     expect(result.productionReadinessGap).toMatchObject({
       kind: "noApplications",
@@ -589,8 +655,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       fixTarget: "applications",
     });
     expect(mockedGetLegs).not.toHaveBeenCalled();
-    // An ungrouped batch (no removal) has no linked GHG Statement and an empty
-    // run summary — the up-front loads short-circuit to null/zero.
     expect(result.linkedGhgStatement).toBeNull();
     expect(result.runSummary.runCount).toBe(0);
   });
@@ -640,14 +704,12 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         readingsCount: 1,
       } as never,
     ]);
-    // Samples anchor on the credit batch (issue #309) — the transport walk
-    // reads them from the batch pool, not from the runs.
     mockedGetBatchesWithSamples.mockResolvedValue([
       {
         creditBatchId: CREDIT_BATCH_ID,
         creditBatchCode: "CB-1",
         productionProcessId: null,
-        samplingMethod: "method_a",
+        sampling: "sampled",
         declaredHToCorgRatio: null,
         durabilityOption: "200_year",
         runs: [{ id: "pr-1", code: "PR-1", biocharDryMassKg: 35 }],
@@ -655,7 +717,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       } as never,
     ]);
 
-    // Per-category leg counts: 3 feedstock, 0 biochar, 1 sample.
     mockedGetLegs.mockImplementation(async (_user, entityType) => {
       if (entityType === "feedstock") {
         return [{ id: "tl-f1" }, { id: "tl-f2" }, { id: "tl-f3" }] as never;
@@ -676,19 +737,10 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(coverage.biochar.entityIds).toEqual(["bp-1"]);
     expect(coverage.sample.count).toBe(1);
     expect(coverage.sample.entityIds.sort()).toEqual(["s-1", "s-2"]);
-    // Three transport categories, one pooled load each.
     expect(mockedGetLegs).toHaveBeenCalledTimes(3);
   });
 });
 
-// ============================================================
-// requiredTransportCategories derivation
-// ============================================================
-
-// Builds a template whose first group bundles three components, each with a
-// single monitored `mass_distance` input on the `mass_distance_based_ci_emissions`
-// blueprint — matching the three transport rows in INPUT_MAPPING. The optional
-// `omit` list lets a test simulate a template that doesn't request a category.
 function transportTemplate(
   id: string,
   omit: ReadonlyArray<"feedstock" | "biochar" | "sample"> = [],
@@ -926,14 +978,12 @@ describe("requiredTransportCategories", () => {
         samples: [],
       } as never,
     ]);
-    // Samples anchor on the credit batch (issue #309); the sample inherits the
-    // batch's declared 1000-year tier for its readiness derivation.
     mockedGetBatchesWithSamples.mockResolvedValue([
       {
         creditBatchId: CREDIT_BATCH_ID,
         creditBatchCode: "CB-1",
         productionProcessId: null,
-        samplingMethod: "method_a",
+        sampling: "sampled",
         declaredHToCorgRatio: null,
         durabilityOption: "1000_year",
         runs: [{ id: "pr-1", code: "PR-1", biocharDryMassKg: 35 }],

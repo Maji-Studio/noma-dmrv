@@ -339,19 +339,10 @@ export function CustomerList() {
                     { label: "Address", value: sideSheetEntity.address },
                   ],
                 },
-                {
-                  title: "Record Metadata",
-                  fields: [{ label: "Code", value: sideSheetEntity.code }],
-                },
               ]
             : undefined
         }
       >
-        {(createError || updateError) && (
-          <div className="mb-24">
-            <ServerError message={createError || updateError || ""} />
-          </div>
-        )}
         <CustomerForm
           key={sideSheetEntity?.id ?? "create"}
           customer={sideSheet?.entity as Customer | undefined}
@@ -359,6 +350,7 @@ export function CustomerList() {
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
           isSubmitting={createCustomer.isPending || createLocation.isPending || updateCustomer.isPending}
+          errorMessage={createError || updateError || undefined}
           submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Customer"}
         />
       </EntitySideSheet>

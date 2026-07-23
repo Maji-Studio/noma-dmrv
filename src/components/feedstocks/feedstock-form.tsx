@@ -17,10 +17,11 @@ import { formatDistanceKm } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, ServerError, DryMassInput, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, DryMassInput, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
 import {
+  createFeedstockSchema,
   feedstockFormSchema,
   type FeedstockFormData,
 } from "@/schemas/feedstocks";
@@ -88,7 +89,13 @@ export function FeedstockForm({
 
   const defaultValues = {
     facilityId: feedstock?.facilityId ?? contextFacilityId ?? "",
-    deliveryDate: toDateInputValue(feedstock?.deliveryDate ?? null),
+    // New records default to today. Legacy records without a delivery date
+    // must stay empty in edit mode so the form matches read mode and a save
+    // cannot silently introduce today's date.
+    deliveryDate:
+      feedstock && !feedstock.deliveryDate
+        ? undefined
+        : toDateInputValue(feedstock?.deliveryDate ?? null),
     supplierId: feedstock?.supplierId ?? "",
     vehicleId: feedstock?.vehicleId ?? "",
     transportDistanceKm: undefined as number | undefined,
@@ -114,7 +121,9 @@ export function FeedstockForm({
     resetField,
     formState: { errors, dirtyFields },
   } = useForm({
-    resolver: zodResolver(feedstockFormSchema),
+    resolver: zodResolver(
+      isEditMode ? feedstockFormSchema : createFeedstockSchema,
+    ),
     // onTouched so spine markers can flag errors on blur, not only on submit.
     mode: "onTouched",
     defaultValues,
@@ -627,8 +636,6 @@ export function FeedstockForm({
           </div>
         </FormSection>
 
-        {/* Server Error */}
-        {serverError && <ServerError message={serverError} />}
         </form>
 
         <FeedstockEvidenceSection
@@ -649,6 +656,7 @@ export function FeedstockForm({
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={serverError}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
         // The update path rebuilds the derived transport leg from the

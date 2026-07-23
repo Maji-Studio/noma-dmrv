@@ -24,5 +24,5 @@ export async function ensureTestOrg(
   await dbOrTx
     .insert(organizations)
     .values({ id: TEST_ORG_ID, name: TEST_ORG_NAME, slug: TEST_ORG_SLUG })
-    .onConflictDoNothing({ target: organizations.id });
+    .onConflictDoNothing();
 }

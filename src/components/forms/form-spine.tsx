@@ -42,6 +42,16 @@ export interface SpineMeta {
   total: number;
 }
 
+/** Build the shared positional contract used by form and read-only spines. */
+export function createSpineMeta(index: number, total: number): SpineMeta {
+  return {
+    index,
+    first: index === 0,
+    last: index === total - 1,
+    total,
+  };
+}
+
 /**
  * Does a section currently hold a surfaced validation error? Scoped to the
  * section's own fields so it doesn't re-render on unrelated changes. Errors only
@@ -254,12 +264,7 @@ export function FormSpine({ control, children, className }: FormSpineProps) {
     let cursor = start;
     const mapped = React.Children.toArray(nodes).map((child) => {
       if (isSection(child)) {
-        const meta: SpineMeta = {
-          index: cursor,
-          first: cursor === 0,
-          last: cursor === total - 1,
-          total,
-        };
+        const meta = createSpineMeta(cursor, total);
         cursor += 1;
         return React.cloneElement(
           child as React.ReactElement<{ __spine?: SpineMeta }>,

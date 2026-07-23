@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   getCreditBatchesFn,
   getCreditBatchByIdFn,
@@ -12,42 +17,24 @@ import type {
   CreditBatchFormData,
   UpdateCreditBatchData,
 } from "@/schemas/credit-batches";
+import type { CreditBatchCo2eStoredPreview } from "@/data-access/credit-batches";
+import { creditBatchKeys } from "./credit-batch-query-keys";
+import { invalidateCertificationReadiness } from "./use-certification";
+
+export { creditBatchKeys } from "./credit-batch-query-keys";
 
 // Credit-batch data changes infrequently within a session; 30s keeps the UI
 // fresh without re-fetching on every mount.
 const CREDIT_BATCH_STALE_TIME_MS = 30_000;
+const CREDIT_BATCH_PREVIEW_CHUNK_SIZE = 50;
 
-/**
- * Query key factory for credit batches
- */
-export const creditBatchKeys = {
-  all: ["creditBatches"] as const,
-  lists: () => [...creditBatchKeys.all, "list"] as const,
-  list: (filters?: Record<string, unknown>) =>
-    [...creditBatchKeys.lists(), filters] as const,
-  details: () => [...creditBatchKeys.all, "detail"] as const,
-  detail: (id: string) => [...creditBatchKeys.details(), id] as const,
-  previews: (ids: string[]) => [...creditBatchKeys.all, "previews", ids] as const,
-  // Prefix for EVERY cached production-run-options query — production-run
-  // mutations invalidate this so a newly completed run appears in the credit-
-  // batch form without waiting out the selector's staleTime.
-  productionRunOptionsPrefix: () =>
-    [...creditBatchKeys.all, "productionRunOptions"] as const,
-  productionRunOptions: (
-    facilityId?: string,
-    startDate?: string,
-    endDate?: string,
-    includeCreditBatchId?: string,
-  ) =>
-    [
-      ...creditBatchKeys.all,
-      "productionRunOptions",
-      facilityId,
-      startDate,
-      endDate,
-      includeCreditBatchId,
-    ] as const,
-};
+function chunkIds(ids: string[], size: number): string[][] {
+  const chunks: string[][] = [];
+  for (let index = 0; index < ids.length; index += size) {
+    chunks.push(ids.slice(index, index + size));
+  }
+  return chunks;
+}
 
 /**
  * Query hook for fetching a facility's credit batches. Facility-scoped: the
@@ -90,19 +77,45 @@ export function useCreditBatch(id: string) {
 
 export function useCreditBatchCo2eStoredPreviews(batchIds: string[]) {
   const sortedIds = [...batchIds].sort();
-
-  return useQuery({
-    queryKey: creditBatchKeys.previews(sortedIds),
-    queryFn: async () => {
-      const result = await getCo2eStoredPreviewsFn(sortedIds);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    enabled: sortedIds.length > 0,
-    staleTime: CREDIT_BATCH_STALE_TIME_MS,
+  const chunks = chunkIds(sortedIds, CREDIT_BATCH_PREVIEW_CHUNK_SIZE);
+  const results = useQueries({
+    queries: chunks.map((ids) => ({
+      queryKey: creditBatchKeys.previews(ids),
+      queryFn: async () => {
+        const result = await getCo2eStoredPreviewsFn(ids);
+        if (!result.success) throw new Error(result.error);
+        return result.data;
+      },
+      staleTime: CREDIT_BATCH_STALE_TIME_MS,
+    })),
   });
+
+  const resolved = resolveCreditBatchCo2ePreviews(results);
+
+  return {
+    ...resolved,
+    isLoading: results.some((result) => result.isLoading),
+    isFetching: results.some((result) => result.isFetching),
+    refetch: () => Promise.all(results.map((result) => result.refetch())),
+  };
+}
+
+export function resolveCreditBatchCo2ePreviews(
+  results: ReadonlyArray<{
+    data?: Record<string, CreditBatchCo2eStoredPreview>;
+    error: Error | null;
+  }>,
+) {
+  const error = results.find((result) => result.error)?.error ?? null;
+  return {
+    data: error
+      ? undefined
+      : results.reduce<Record<string, CreditBatchCo2eStoredPreview>>(
+          (previews, result) => Object.assign(previews, result.data ?? {}),
+          {},
+        ),
+    error,
+  };
 }
 
 export function useCreditBatchProductionRunOptions(params: {
@@ -147,6 +160,10 @@ export function useCreateCreditBatch() {
     mutationFn: (data: CreditBatchFormData) => createCreditBatchFn(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
+      queryClient.invalidateQueries({
+        queryKey: creditBatchKeys.productionRunOptionsPrefix(),
+      });
+      invalidateCertificationReadiness(queryClient);
     },
   });
 }
@@ -161,6 +178,12 @@ export function useUpdateCreditBatch() {
     mutationFn: (data: UpdateCreditBatchData) => updateCreditBatchFn(data),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
+      queryClient.invalidateQueries({
+        queryKey: creditBatchKeys.productionRunOptionsPrefix(),
+      });
+      invalidateCertificationReadiness(queryClient, {
+        creditBatchPreviews: true,
+      });
       if (result.success && result.data) {
         queryClient.invalidateQueries({
           queryKey: creditBatchKeys.detail(result.data.id),
@@ -181,6 +204,7 @@ export function useDeleteCreditBatch() {
       deleteCreditBatchFn({ creditBatchId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
+      invalidateCertificationReadiness(queryClient);
     },
   });
 }

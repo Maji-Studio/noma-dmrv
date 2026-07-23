@@ -8,6 +8,7 @@ import {
   getInvitationBootstrapState as readInvitationBootstrapState,
   type InvitationBootstrapState,
 } from "@/data-access/invitation-bootstrap";
+import { persistLastActiveOrganization } from "@/data-access/organizations";
 import { auth } from "@/lib/auth/better-auth";
 import { SafeError, toActionError } from "@/lib/errors";
 import {
@@ -107,6 +108,7 @@ export async function bootstrapInvitationAccountAction(
       body: { organizationId },
       headers: await currentAuthHeaders(),
     });
+    await persistLastActiveOrganization(account.userId, organizationId);
     return { organizationId };
   }, INVITATION_BOOTSTRAP_FALLBACK);
 }

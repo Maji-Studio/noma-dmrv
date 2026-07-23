@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Sample } from "@/db/schema";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
-import { buildDurabilityGates } from "./durability-readiness";
+import {
+  buildDurabilityBatchGates,
+  buildDurabilityGates,
+} from "./durability-readiness";
 
 function sample(
   sampleCode: string,
@@ -29,9 +32,7 @@ function batch(
     facilityTimezone,
     samples,
     runs: [],
-    productionProcessId: "process-1",
-    samplingMethod: "method_a",
-    methodBUnlockedAt: null,
+    sampling: "sampled",
     declaredHToCorgRatio: null,
     durabilityOption: "200_year",
   };
@@ -62,5 +63,27 @@ describe("buildDurabilityGates facility-local sampling day", () => {
     expect(result.blockers).toContain(
       "Sample SAM-1 was taken on 2026-01-14, before credit batch CB-1's production window 2026-01-15–2026-01-31. The biochar did not yet exist; correct this data error before submission (§8.3.1).",
     );
+  });
+});
+
+describe("load-ready gate attribution", () => {
+  it("keeps each batch's blockers attributable to that batch", () => {
+    const first = batch("UTC", []);
+    const second = {
+      ...batch("UTC", []),
+      creditBatchId: "batch-2",
+      creditBatchCode: "CB-2",
+      sampling: "unsampled" as const,
+    };
+
+    const result = buildDurabilityBatchGates([first, second]);
+
+    expect(result.blockersByBatchId).toEqual({
+      "batch-1": [
+          "Credit batch CB-1 is marked sampled but has no samples (§8.3).",
+      ],
+      "batch-2": [],
+    });
+    expect(result.blockers).toEqual(result.blockersByBatchId["batch-1"]);
   });
 });

@@ -15,6 +15,7 @@ interface OperatorFormProps {
   onSubmit: (data: OperatorFormData) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
+  errorMessage?: string;
   submitLabel?: string;
 }
 
@@ -23,6 +24,7 @@ export function OperatorForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  errorMessage,
   submitLabel,
 }: OperatorFormProps) {
   const isEditMode = !!operator;
@@ -90,6 +92,7 @@ export function OperatorForm({
       <FormActions
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={isEditMode ? "Update Operator" : "Create Operator"}
       />

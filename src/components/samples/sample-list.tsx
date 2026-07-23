@@ -18,6 +18,7 @@ import {
 } from "@/hooks/use-samples";
 import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { useCreateTransportLeg } from "@/hooks/use-transport-legs";
 import { SelectFacilityEmptyState } from "@/components/navigation";
@@ -25,6 +26,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { EntitySideSheet, type SideSheetMode } from "@/components/ui/entity-side-sheet";
+import { Skeleton } from "@/components/ui/loading-skeleton";
 import { TransportLegsSummary } from "@/components/transport-legs";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
@@ -47,6 +49,11 @@ import {
 import type { SampleWithRelations } from "@/data-access/samples";
 import type { TransportLegFormData } from "@/schemas/transport-legs";
 import { SampleDocumentsPanel } from "./sample-documents-panel";
+import {
+  leaveSampleCreateIntent,
+  resolveSampleCreateCreditBatchId,
+  SAMPLE_CREATE_CREDIT_BATCH_PARAM,
+} from "./sample-create-intent";
 
 const READINESS_PREVIEW_LIMIT = 3;
 
@@ -179,8 +186,19 @@ type SideSheetState =
 // Component
 // ============================================
 
-export function SampleList() {
+export function SampleList({
+  initialCreate = false,
+  initialCreditBatchId,
+}: {
+  initialCreate?: boolean;
+  initialCreditBatchId?: string;
+}) {
   const { facilityId: contextFacilityId } = useFacilityContext();
+  const createIntent = useOpenCreateIntent({
+    initialOpen: initialCreate,
+    contextParam: SAMPLE_CREATE_CREDIT_BATCH_PARAM,
+    initialContext: initialCreditBatchId,
+  });
   const [focusedSampleId, setFocusedSampleId] = useQueryState(
     "sample",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
@@ -194,7 +212,11 @@ export function SampleList() {
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [creditBatchFilter, setCreditBatchFilter] = useState<string>("");
+  const [creditBatchFilterParam, setCreditBatchFilter] = useQueryState(
+    "creditBatch",
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const creditBatchFilter = creditBatchFilterParam ?? "";
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
@@ -221,9 +243,11 @@ export function SampleList() {
     !!contextFacilityId,
     contextFacilityId || undefined,
   );
-  const { data: creditBatchesData } = useCreditBatches(
-    contextFacilityId || undefined,
-  );
+  const {
+    data: creditBatchesData,
+    isLoading: creditBatchesLoading,
+    error: creditBatchesError,
+  } = useCreditBatches(contextFacilityId || undefined);
   const focusedSample = useSample(focusedSampleId ?? "", !!focusedSampleId);
 
   const createSample = useCreateSample();
@@ -257,7 +281,11 @@ export function SampleList() {
           entity: focusedSample.data,
         } as const)
       : null;
-  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+  const createIntentSideSheet = createIntent.isOpen
+    ? ({ mode: "create", entity: null } as const)
+    : null;
+  const displaySideSheet =
+    sideSheet ?? createIntentSideSheet ?? deepLinkedSideSheet;
   const activeFocusTarget = sideSheet
     ? null
     : parseEntityFocusTarget(deepLinkFocus);
@@ -289,8 +317,11 @@ export function SampleList() {
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments and transport legs before saving this sample.",
     openEditOnFailure: (sample) =>
-      setSideSheet({ mode: "edit", entity: sample }),
-    closeOnSuccess: () => setSideSheet(null),
+      leaveSampleCreateIntent(createIntent.clear, () =>
+        setSideSheet({ mode: "edit", entity: sample }),
+      ),
+    closeOnSuccess: () =>
+      leaveSampleCreateIntent(createIntent.clear, () => setSideSheet(null)),
     onAfterFlush: async ({ created, flushResult }) => {
       const sample = created.result;
       const failedLegs: TransportLegFormData[] = [];
@@ -432,6 +463,7 @@ export function SampleList() {
   };
 
   const openCreate = () => {
+    createIntent.clear();
     setFocusedSampleId(null);
     setDeepLinkMode(null);
     setDeepLinkFocus(null);
@@ -455,6 +487,7 @@ export function SampleList() {
     setSideSheet({ mode: "edit", entity: sample });
   };
   const closeSideSheet = () => {
+    createIntent.clear();
     setFocusedSampleId(null);
     setDeepLinkMode(null);
     setDeepLinkFocus(null);
@@ -483,11 +516,26 @@ export function SampleList() {
     }
   };
 
-  const clearFilters = () => { setSearchQuery(""); setCreditBatchFilter(""); setCurrentPage(1); };
+  const clearFilters = () => { setSearchQuery(""); setCreditBatchFilter(null); setCurrentPage(1); };
   const hasActiveFilters = searchQuery || creditBatchFilter;
 
   const editingEntity =
     displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
+  const preselectedCreditBatchId = resolveSampleCreateCreditBatchId(
+    createIntent.context,
+    creditBatchesData,
+  );
+  const isResolvingCreateContext =
+    displaySideSheet?.mode === "create" &&
+    !!createIntent.context &&
+    creditBatchesLoading;
+  const createContextError =
+    displaySideSheet?.mode === "create" &&
+    !!createIntent.context &&
+    !creditBatchesLoading &&
+    (!preselectedCreditBatchId || creditBatchesError)
+      ? "The selected credit batch could not be opened. Return to the batch detail and try again."
+      : null;
   const isSubmitting =
     createSample.isPending || updateSample.isPending || isFlushing;
 
@@ -589,7 +637,7 @@ export function SampleList() {
           <div className="flex items-center gap-8">
             <select
               value={creditBatchFilter}
-              onChange={(e) => { setCreditBatchFilter(e.target.value); setCurrentPage(1); }}
+              onChange={(e) => { setCreditBatchFilter(e.target.value || null); setCurrentPage(1); }}
               className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer"
               aria-label="Filter by credit batch"
             >
@@ -622,6 +670,7 @@ export function SampleList() {
       />
 
       <EntitySideSheet
+        numberedSections
         open={!!displaySideSheet}
         onOpenChange={(open) => { if (!open) closeSideSheet(); }}
         onCloseAttempt={confirmCreateClose}
@@ -725,37 +774,40 @@ export function SampleList() {
             fields: [],
             content: <TransportLegsSummary entityType="sample" entityId={displaySideSheet.entity.id} />,
           },
-          {
-            title: "Record Metadata",
-            fields: [
-              { label: "Sample Code", value: displaySideSheet.entity.sampleCode },
-              { label: "Facility", value: displaySideSheet.entity.facilityName },
-              {
-                label: "Sample chemistry",
-                value: <EntityCertifyReadinessBadge readiness={deriveEntityCertifyReadiness("sample", displaySideSheet.entity)} readyLabel="Chemistry complete" readinessNoun="sample chemistry" />,
-              },
-            ],
-          },
         ] : undefined}
       >
-        {formError && <div className="mb-24"><ServerError message={formError} /></div>}
-        <SampleForm
-          key={editingEntity?.id ?? "create"}
-          sample={editingEntity ?? undefined}
-          onSubmit={displaySideSheet?.mode === "edit" ? handleUpdate : handleCreate}
-          onCancel={attemptCloseSideSheet}
-          isSubmitting={isSubmitting}
-          submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Sample"}
-          deferredAttachments={deferredAttachments}
-          onRetryDeferredAttachments={handleRetryDeferredAttachments}
-          onRemoveDeferredAttachment={handleRemoveDeferredAttachment}
-          deferredLegs={deferredLegs}
-          onDeferredLegsChange={handleDeferredLegsChange}
-          onRetryDeferredLegs={retryDeferredLegs}
-          focusTarget={
-            displaySideSheet?.mode === "edit" ? activeFocusTarget : null
-          }
-        />
+        {isResolvingCreateContext ? (
+          <div
+            className="flex flex-col gap-16 py-8"
+            aria-label="Loading selected credit batch"
+          >
+            <Skeleton className="h-24 w-2/3" />
+            <Skeleton className="h-40 w-full" />
+            <Skeleton className="h-40 w-full" />
+          </div>
+        ) : createContextError ? (
+          <ServerError message={createContextError} />
+        ) : (
+          <SampleForm
+            key={editingEntity?.id ?? "create"}
+            sample={editingEntity ?? undefined}
+            creditBatchId={preselectedCreditBatchId}
+            onSubmit={displaySideSheet?.mode === "edit" ? handleUpdate : handleCreate}
+            onCancel={attemptCloseSideSheet}
+            isSubmitting={isSubmitting}
+            errorMessage={formError ?? undefined}
+            submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Sample"}
+            deferredAttachments={deferredAttachments}
+            onRetryDeferredAttachments={handleRetryDeferredAttachments}
+            onRemoveDeferredAttachment={handleRemoveDeferredAttachment}
+            deferredLegs={deferredLegs}
+            onDeferredLegsChange={handleDeferredLegsChange}
+            onRetryDeferredLegs={retryDeferredLegs}
+            focusTarget={
+              displaySideSheet?.mode === "edit" ? activeFocusTarget : null
+            }
+          />
+        )}
       </EntitySideSheet>
     </div>
   );

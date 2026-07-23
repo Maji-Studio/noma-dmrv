@@ -11,25 +11,44 @@ import {
   getMissingApplicationEvidenceRequirements,
   type ApplicationEvidenceGapDescriptor,
 } from "@/lib/certification/application-evidence";
+import type { BatchEntityReadinessIssue } from "@/lib/certification/batch-health";
+
+function applicationEvidenceMissingLabel(
+  gap: ApplicationEvidenceGapDescriptor,
+): string {
+  switch (gap.kind) {
+    case "visual-role":
+      return `geotagged ${APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS[gap.role].toLowerCase()} photo`;
+    case "boundary-reference":
+      return "GIS boundary reference";
+    case "boundary-logbook":
+      return `boundary logbook evidence (${Object.values(APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS).join(", ")})`;
+  }
+}
 
 function applicationEvidenceGapMessage(
   applicationCode: string,
   gap: ApplicationEvidenceGapDescriptor,
 ): string {
-  switch (gap.kind) {
-    case "visual-role":
-      return `Application ${applicationCode}: geotagged ${APPLICATION_VISUAL_EVIDENCE_ROLE_LABELS[gap.role].toLowerCase()} photo`;
-    case "boundary-reference":
-      return `Application ${applicationCode}: GIS boundary reference`;
-    case "boundary-logbook":
-      return `Application ${applicationCode}: boundary logbook evidence (${Object.values(APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS).join(", ")})`;
-  }
+  return `Application ${applicationCode}: ${applicationEvidenceMissingLabel(gap)}`;
 }
 
 export async function buildApplicationEvidenceGaps(
   orgCtx: OrgContext,
   lineages: ChainOfCustodyData[],
 ): Promise<string[]> {
+  return (await buildApplicationEvidenceReadiness(orgCtx, lineages)).gaps;
+}
+
+export interface ApplicationEvidenceReadinessResult {
+  gaps: string[];
+  issues: BatchEntityReadinessIssue[];
+}
+
+export async function buildApplicationEvidenceReadiness(
+  orgCtx: OrgContext,
+  lineages: ChainOfCustodyData[],
+): Promise<ApplicationEvidenceReadinessResult> {
   const applicationIds = lineages.map((lineage) => lineage.application.id);
   const documents = await listDocumentsForEntityIds(
     orgCtx,
@@ -44,6 +63,7 @@ export async function buildApplicationEvidenceGaps(
   }
 
   const gaps: string[] = [];
+  const affectedRecords: BatchEntityReadinessIssue["affectedRecords"] = [];
   for (const lineage of lineages) {
     const application = lineage.application;
     const applicationDocuments =
@@ -57,7 +77,29 @@ export async function buildApplicationEvidenceGaps(
         applicationEvidenceGapMessage(application.code, requirement.gap),
       );
     }
+    if (missingRequirements.length > 0) {
+      affectedRecords.push({
+        id: application.id,
+        code: application.code,
+        missing: missingRequirements.map((requirement) =>
+          applicationEvidenceMissingLabel(requirement.gap),
+        ),
+      });
+    }
   }
 
-  return gaps;
+  return {
+    gaps,
+    issues:
+      affectedRecords.length > 0
+        ? [
+            {
+              key: "applications",
+              label: "Application evidence",
+              fixTarget: "applications",
+              affectedRecords,
+            },
+          ]
+        : [],
+  };
 }

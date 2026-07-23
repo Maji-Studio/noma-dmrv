@@ -5,7 +5,6 @@ import {
   compactBatchHealthDetail,
   fallbackBatchHealthFixTarget,
   NEXT_ACTION_DETAIL_MAX_CHARS,
-  skippedBatchHealthFixLink,
 } from "@/lib/certification/batch-health-links";
 
 describe("compactBatchHealthDetail", () => {
@@ -85,12 +84,28 @@ describe("batchHealthFixLinkFor", () => {
   const check = (
     key: BatchHealthCheck["key"],
     fixTarget?: BatchHealthCheck["fixTarget"],
-  ): Pick<BatchHealthCheck, "key" | "fixTarget"> => ({ key, fixTarget });
+    affectedRecords?: BatchHealthCheck["affectedRecords"],
+  ): Pick<BatchHealthCheck, "key" | "fixTarget" | "affectedRecords"> => ({
+    key,
+    fixTarget,
+    affectedRecords,
+  });
 
   it("routes a carbon check with no explicit fixTarget to Lab Samples", () => {
     const link = batchHealthFixLinkFor(check("carbon"), facilityId);
     expect(link.label).toBe("Add lab sample data");
     expect(link.href).toBe(`/samples?facility=${facilityId}`);
+  });
+
+  it("routes facility emission blockers to certification emission estimates", () => {
+    const link = batchHealthFixLinkFor(
+      check("facilityEmissions", "certificationEmissions"),
+      facilityId,
+    );
+    expect(link.label).toBe("Open emission estimates");
+    expect(link.href).toBe(
+      `/certification/settings?facility=${facilityId}#emission-estimates`,
+    );
   });
 
   it("routes an explicit applications fixTarget to the applications page", () => {
@@ -116,6 +131,21 @@ describe("batchHealthFixLinkFor", () => {
   it("routes a production check with no fixTarget to productionRuns with the facility", () => {
     const link = batchHealthFixLinkFor(check("production"), facilityId);
     expect(link.href).toBe(`/production-runs?facility=${facilityId}`);
+  });
+
+  it("filters a production-run issue to only the affected runs", () => {
+    const link = batchHealthFixLinkFor(
+      check("entityReadiness", "productionRuns", [
+        { id: "run-1", code: "PR-1", missing: ["Electricity"] },
+        { id: "run-2", code: "PR-2", missing: ["Meter evidence"] },
+      ]),
+      facilityId,
+    );
+
+    expect(link.label).toBe("Fix 2 production runs");
+    expect(link.href).toBe(
+      `/production-runs?facility=${facilityId}&ids=run-1%2Crun-2`,
+    );
   });
 
   it("routes a transport check to deliveries with the facility", () => {
@@ -146,6 +176,25 @@ describe("batchHealthFixLinkFor", () => {
     expect(link.href).toBe(`/deliveries?facility=${facilityId}`);
   });
 
+  it("deep-links feedstock transport evidence to the affected feedstock", () => {
+    const feedstockId = "11111111-1111-4111-8111-111111111111";
+    const link = batchHealthFixLinkFor(
+      check("entityReadiness", "feedstocks", [
+        {
+          id: feedstockId,
+          code: "feedstock transport 1",
+          missing: ["Transport evidence"],
+        },
+      ]),
+      facilityId,
+    );
+
+    expect(link.label).toBe("Review feedstock transport");
+    expect(link.href).toBe(
+      `/feedstocks?facility=${facilityId}&feedstock=${feedstockId}&mode=edit&focus=transport-evidence`,
+    );
+  });
+
   it("prefers an explicit fixTarget over the fallback", () => {
     // carbon normally falls back to batchDetails, but an explicit override wins.
     const link = batchHealthFixLinkFor(
@@ -155,10 +204,4 @@ describe("batchHealthFixLinkFor", () => {
     expect(link.href).toContain("/production-runs");
   });
 
-  it("routes skipped checks to certification connection settings", () => {
-    expect(skippedBatchHealthFixLink(facilityId)).toEqual({
-      label: "Finish facility setup",
-      href: "/certification/settings?tab=connection&facility=fac-001",
-    });
-  });
 });

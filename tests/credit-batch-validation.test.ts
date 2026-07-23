@@ -8,7 +8,7 @@ import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-o
  * Requires a running database (uses DATABASE_URL from .env.test or test defaults).
  */
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { facilities, reactors } from "@/db/schema/facilities";
 import {
@@ -27,6 +27,7 @@ import {
   createCreditBatch,
   updateCreditBatch,
 } from "@/data-access/credit-batches";
+import { validateProductionRunIds } from "@/data-access/credit-batch-membership";
 import { updateProductionRun } from "@/data-access/production-runs";
 
 // Fake userId for requireAuth (just needs to be truthy)
@@ -75,13 +76,13 @@ beforeAll(async () => {
   // Create shared prerequisites
   const [customer] = await db
     .insert(customers)
-    .values({ organizationId: TEST_ORG_ID, name: "Test Customer VAL", code: `CU-VAL-${runId}` })
+    .values({ organizationId: TEST_ORG_ID, name: `Test Customer VAL ${runId}`, code: `CU-VAL-${runId}` })
     .returning({ id: customers.id });
   createdIds.customers.push(customer.id);
 
   const [formulation] = await db
     .insert(formulations)
-    .values({ organizationId: TEST_ORG_ID, name: "Raw Biochar VAL", code: `FM-VAL-${runId}` })
+    .values({ organizationId: TEST_ORG_ID, name: `Raw Biochar VAL ${runId}`, code: `FM-VAL-${runId}` })
     .returning({ id: formulations.id });
   createdIds.formulations.push(formulation.id);
 
@@ -137,8 +138,8 @@ beforeAll(async () => {
         code: `PR-VAL-A2-${runId}`,
         facilityId: facilityA.id,
         reactorId: reactorA.id,
-        startTime: new Date("2025-06-16T08:00:00Z"),
-        endTime: new Date("2025-06-16T12:00:00Z"),
+        startTime: new Date("2025-07-16T08:00:00Z"),
+        endTime: new Date("2025-07-16T12:00:00Z"),
         biocharDryMassKg: 4200,
       },
       {
@@ -146,8 +147,8 @@ beforeAll(async () => {
         code: `PR-VAL-A3-${runId}`,
         facilityId: facilityA.id,
         reactorId: reactorA.id,
-        startTime: new Date("2025-06-17T08:00:00Z"),
-        endTime: new Date("2025-06-17T12:00:00Z"),
+        startTime: new Date("2025-08-17T08:00:00Z"),
+        endTime: new Date("2025-08-17T12:00:00Z"),
         biocharDryMassKg: 4100,
       },
       {
@@ -155,8 +156,8 @@ beforeAll(async () => {
         code: `PR-VAL-A4-${runId}`,
         facilityId: facilityA.id,
         reactorId: reactorA.id,
-        startTime: new Date("2025-06-18T08:00:00Z"),
-        endTime: new Date("2025-06-18T12:00:00Z"),
+        startTime: new Date("2025-09-18T08:00:00Z"),
+        endTime: new Date("2025-09-18T12:00:00Z"),
         biocharDryMassKg: 4000,
       },
       {
@@ -164,8 +165,8 @@ beforeAll(async () => {
         code: `PR-VAL-A5-${runId}`,
         facilityId: facilityA.id,
         reactorId: reactorA.id,
-        startTime: new Date("2025-07-15T08:00:00Z"),
-        endTime: new Date("2025-07-15T12:00:00Z"),
+        startTime: new Date("2026-02-15T08:00:00Z"),
+        endTime: new Date("2026-02-15T12:00:00Z"),
         biocharDryMassKg: 3900,
       },
       {
@@ -184,8 +185,8 @@ beforeAll(async () => {
         code: `PR-VAL-A6-${runId}`,
         facilityId: facilityA.id,
         reactorId: reactorA.id,
-        startTime: new Date("2025-06-20T08:00:00Z"),
-        endTime: new Date("2025-06-20T12:00:00Z"),
+        startTime: new Date("2025-10-20T08:00:00Z"),
+        endTime: new Date("2025-10-20T12:00:00Z"),
         biocharDryMassKg: 3800,
       },
       {
@@ -194,8 +195,8 @@ beforeAll(async () => {
         code: `PR-VAL-A7-${runId}`,
         facilityId: facilityA.id,
         reactorId: reactorA.id,
-        startTime: new Date("2025-06-19T08:00:00Z"),
-        endTime: new Date("2025-06-19T12:00:00Z"),
+        startTime: new Date("2025-11-19T08:00:00Z"),
+        endTime: new Date("2025-11-19T12:00:00Z"),
         biocharDryMassKg: 3700,
       },
       {
@@ -206,8 +207,8 @@ beforeAll(async () => {
         code: `PR-VAL-A8-${runId}`,
         facilityId: facilityA.id,
         reactorId: reactorA.id,
-        startTime: new Date("2025-06-21T08:00:00Z"),
-        endTime: new Date("2025-06-21T12:00:00Z"),
+        startTime: new Date("2025-12-21T08:00:00Z"),
+        endTime: new Date("2025-12-21T12:00:00Z"),
         biocharDryMassKg: 3600,
       },
       {
@@ -215,8 +216,8 @@ beforeAll(async () => {
         code: `PR-VAL-RACE-${runId}`,
         facilityId: facilityA.id,
         reactorId: reactorA.id,
-        startTime: new Date("2025-06-22T08:00:00Z"),
-        endTime: new Date("2025-06-22T12:00:00Z"),
+        startTime: new Date("2026-01-22T08:00:00Z"),
+        endTime: new Date("2026-01-22T12:00:00Z"),
         feedstockMassDryKg: 400,
         biocharOutputKg: 100,
         biocharDryMassKg: 100,
@@ -506,6 +507,8 @@ afterAll(async () => {
 
 
 describe("Credit Batch Production-Run Validation", () => {
+  const batchCode = (label: string) =>
+    `${label}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
   const baseBatchData = {
     startDate: new Date("2025-06-01"),
     endDate: new Date("2025-06-30"),
@@ -521,12 +524,20 @@ describe("Credit Batch Production-Run Validation", () => {
     },
   };
 
+  function batchDataForMonth(month: string) {
+    const startDate = new Date(`${month}-01T00:00:00.000Z`);
+    const endDate = new Date(
+      Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 1, 0),
+    );
+    return { ...baseBatchData, startDate, endDate };
+  }
+
   it("rejects missing production run IDs", async () => {
     const fakeId = "00000000-0000-0000-0000-000000000999";
     await expect(
       createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
         ...baseBatchData,
-        code: "CB-VAL-MISSING",
+        code: batchCode("CB-VAL-MISSING"),
         facilityId: facilityA.id,
         productionRunIds: [fakeId],
       })
@@ -537,7 +548,7 @@ describe("Credit Batch Production-Run Validation", () => {
     await expect(
       createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
         ...baseBatchData,
-        code: "CB-VAL-XFAC",
+        code: batchCode("CB-VAL-XFAC"),
         facilityId: facilityA.id,
         productionRunIds: [runInFacilityB.id],
       })
@@ -546,12 +557,14 @@ describe("Credit Batch Production-Run Validation", () => {
 
   it("rejects duplicate production run IDs", async () => {
     await expect(
-      createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
-        ...baseBatchData,
-        code: "CB-VAL-DUP",
-        facilityId: facilityA.id,
-        productionRunIds: [runInFacilityA.id, runInFacilityA.id],
-      })
+      db.transaction((tx) =>
+        validateProductionRunIds(
+          makeTestOrgContext(TEST_USER_ID),
+          tx,
+          [runInFacilityA.id, runInFacilityA.id],
+          facilityA.id,
+        ),
+      ),
     ).rejects.toThrow("Duplicate production run IDs");
   });
 
@@ -559,7 +572,7 @@ describe("Credit Batch Production-Run Validation", () => {
     await expect(
       createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
         ...baseBatchData,
-        code: "CB-VAL-WINDOW",
+        code: batchCode("CB-VAL-WINDOW"),
         facilityId: facilityA.id,
         productionRunIds: [outOfWindowRunInFacilityA.id],
       })
@@ -569,7 +582,7 @@ describe("Credit Batch Production-Run Validation", () => {
   it("accepts valid same-facility runs matching the declared feedstock", async () => {
     const result = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
       ...baseBatchData,
-      code: "CB-VAL-OK",
+      code: batchCode("CB-VAL-OK"),
       facilityId: facilityA.id,
       productionRunIds: [runInFacilityA.id],
     });
@@ -584,11 +597,23 @@ describe("Credit Batch Production-Run Validation", () => {
     expect(result.productionProcessId).toBeTruthy();
   });
 
+  it("rejects an unsampled batch without an Isometric connection", async () => {
+    await expect(
+      createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
+        ...batchDataForMonth("2025-07"),
+        code: batchCode("CB-VAL-UNSAMPLED-NO-CONNECTION"),
+        facilityId: facilityA.id,
+        productionRunIds: [secondRunInFacilityA.id],
+        sampling: "unsampled",
+      }),
+    ).rejects.toThrow(/require an Isometric connection/i);
+  });
+
   it("rejects a batch whose runs blend more than one feedstock type", async () => {
     await expect(
       createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
-        ...baseBatchData,
-        code: "CB-VAL-MULTI",
+        ...batchDataForMonth("2025-10"),
+        code: batchCode("CB-VAL-MULTI"),
         facilityId: facilityA.id,
         productionRunIds: [multiFeedstockRunInFacilityA.id],
       }),
@@ -598,8 +623,8 @@ describe("Credit Batch Production-Run Validation", () => {
   it("rejects a batch whose run has no linked feedstock", async () => {
     await expect(
       createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
-        ...baseBatchData,
-        code: "CB-VAL-NOFEED",
+        ...batchDataForMonth("2025-11"),
+        code: batchCode("CB-VAL-NOFEED"),
         facilityId: facilityA.id,
         productionRunIds: [noFeedstockRunInFacilityA.id],
       }),
@@ -613,8 +638,8 @@ describe("Credit Batch Production-Run Validation", () => {
     // runs can never be silently accepted.
     await expect(
       createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
-        ...baseBatchData,
-        code: "CB-VAL-MISMATCH",
+        ...batchDataForMonth("2025-12"),
+        code: batchCode("CB-VAL-MISMATCH"),
         facilityId: facilityA.id,
         productionRunIds: [mismatchedFeedstockRunInFacilityA.id],
       }),
@@ -624,8 +649,8 @@ describe("Credit Batch Production-Run Validation", () => {
   it("rejects facility change when existing linked production runs belong to old facility", async () => {
     // Create a valid batch for facility A
     const batch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
-      ...baseBatchData,
-      code: "CB-VAL-FCHG",
+      ...batchDataForMonth("2025-07"),
+      code: batchCode("CB-VAL-FCHG"),
       facilityId: facilityA.id,
       productionRunIds: [secondRunInFacilityA.id],
     });
@@ -642,17 +667,21 @@ describe("Credit Batch Production-Run Validation", () => {
 
   it("rejects a production run that is already assigned to another batch", async () => {
     const firstBatch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
-      ...baseBatchData,
-      code: "CB-VAL-ASSIGNED-1",
+      ...batchDataForMonth("2025-09"),
+      code: batchCode("CB-VAL-ASSIGNED-1"),
       facilityId: facilityA.id,
       productionRunIds: [assignedGuardRunInFacilityA.id],
     });
     createdIds.creditBatches.push(firstBatch.id);
+    await db
+      .update(creditBatches)
+      .set({ archivedAt: new Date() })
+      .where(eq(creditBatches.id, firstBatch.id));
 
     await expect(
       createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
-        ...baseBatchData,
-        code: "CB-VAL-ASSIGNED-2",
+        ...batchDataForMonth("2025-09"),
+        code: batchCode("CB-VAL-ASSIGNED-2"),
         facilityId: facilityA.id,
         productionRunIds: [assignedGuardRunInFacilityA.id],
       })
@@ -662,8 +691,8 @@ describe("Credit Batch Production-Run Validation", () => {
   it("rejects cross-facility production run IDs on update", async () => {
     // Create a valid batch for facility A.
     const batch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
-      ...baseBatchData,
-      code: "CB-VAL-XUPD",
+      ...batchDataForMonth("2025-08"),
+      code: batchCode("CB-VAL-XUPD"),
       facilityId: facilityA.id,
       productionRunIds: [thirdRunInFacilityA.id],
     });
@@ -706,8 +735,8 @@ describe("Credit Batch Production-Run Validation", () => {
     try {
       await processLockReady;
       createPromise = createCreditBatch(ctx, {
-        ...baseBatchData,
-        code: `CB-VAL-RACE-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+        ...batchDataForMonth("2026-01"),
+        code: batchCode("CB-VAL-RACE"),
         facilityId: facilityA.id,
         productionRunIds: [concurrencyRunInFacilityA.id],
       });

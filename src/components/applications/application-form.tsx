@@ -190,6 +190,8 @@ interface ApplicationFormProps {
   onCancel?: () => void;
   /** Whether the form is currently submitting */
   isSubmitting?: boolean;
+  /** Submission-level error shown with the action footer */
+  errorMessage?: string;
   /** Custom label for the submit button */
   submitLabel?: string;
   /**
@@ -209,6 +211,7 @@ export function ApplicationForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  errorMessage,
   submitLabel,
   durabilityOption = "200_year",
   deferredAttachments,
@@ -714,6 +717,7 @@ export function ApplicationForm({
       <FormActions
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

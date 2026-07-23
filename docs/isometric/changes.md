@@ -13,6 +13,18 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-07-23 (GHG Statement creation dialog)
+
+The period-first GHG Statement creation flow now uses the shared centered
+`Modal` instead of a right-side drawer. The three-step behavior, validation,
+membership preview, production confirmation, and Isometric payload are
+unchanged.
+
+Creation and list copy is shorter. The period summary now labels `Start` and
+`End` separately: operators still choose only the inclusive end accepted by
+Isometric, while the start remains read-only (`Set by Isometric` for the first
+statement, then derived from the prior statement end).
+
 ## 2026-07-21 (actionable transport-evidence readiness)
 
 Transport evidence now has one reusable operator workflow across feedstocks,
@@ -275,6 +287,18 @@ which supersedes the journal half of ADR 0005.
   the Isometric UI and attaches the source LCA PDF to each Component's
   **Sources** field — the registry is the sole system-of-record for period
   emissions (matters most for `pyrolyzer_direct`).
+
+## 2026-07-22 (ADR 0022 — computed Method-B eligibility)
+
+- Removed stored process sampling regime/unlock state and the associated
+  sample-floor/write triggers. A production process now stores only its epoch
+  and an all-or-none prerequisite record.
+- Added immutable `credit_batches.sampling` (`sampled`/`unsampled`). New
+  unsampled batches require an Isometric organization connection, a facility
+  project mapping, recorded prerequisites, and enough eligible sampled-batch
+  samples since the current epoch.
+- Blueprint routing now follows the stored batch choice. Eligibility remains a
+  live decision for new batches and does not rewrite existing ones.
 
 ## 2026-06-20 (ADR 0017 Track 2 — Method-B unlock backend + operator UI)
 
