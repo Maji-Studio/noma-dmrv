@@ -35,6 +35,47 @@ const FAKE_PROJECT_ID = "e2e-new-removal-fake-project";
 const COLD_COMPILE_TIMEOUT_MS = 30_000;
 
 test.describe("Certification — New-Removal wizard", () => {
+  test("opens credit-batch and sample create sheets from hard-entry URLs", async ({
+    adminPage: page,
+    seededData,
+    cleanupTestData,
+  }) => {
+    void cleanupTestData;
+
+    const facilityId = seededData.facility.id;
+    const testRunId = seededData.facility.code.replace(/^E2E-FAC-/, "");
+    let batch: SeededIncompleteBatch | undefined;
+
+    try {
+      batch = await seedUngroupedIncompleteBatch(
+        { facilityId, feedstockTypeId: seededData.feedstockType.id },
+        testRunId,
+      );
+
+      await page.goto(`/credit-batches?facility=${facilityId}&create=true`);
+      await expect(
+        page.getByRole("dialog").getByText("Create Credit Batch", {
+          exact: true,
+        }),
+      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
+      await expect(page).not.toHaveURL(/(?:\?|&)create=/);
+
+      await page.goto(
+        `/samples?facility=${facilityId}&create=true&creditBatch=${batch.creditBatchId}`,
+      );
+      const sampleDialog = page.getByRole("dialog");
+      await expect(
+        sampleDialog.getByText("Create Sample", { exact: true }),
+      ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
+      await expect(
+        sampleDialog.getByText(batch.code, { exact: true }),
+      ).toBeVisible();
+      await expect(page).not.toHaveURL(/(?:\?|&)(?:create|creditBatch)=/);
+    } finally {
+      await batch?.cleanup();
+    }
+  });
+
   test("opens the wizard from the New removal CTA and closes it", async ({
     adminPage: page,
     seededData,
@@ -351,7 +392,7 @@ test.describe("Certification — New-Removal wizard (Phase 2 readiness workspace
       // With nothing ready, the step names the situation instead of dead-ending
       // on a disabled Continue…
       await expect(
-        dialog.getByText("No batches are ready to certify yet", { exact: false }),
+        dialog.getByText("No batches have complete data yet", { exact: false }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       // …and the not-ready batch is grouped under the disclosure (open by
       // default here, so its gaps are visible).
@@ -360,12 +401,13 @@ test.describe("Certification — New-Removal wizard (Phase 2 readiness workspace
       ).toBeVisible();
       await expect(dialog.getByText(batch.code)).toBeVisible();
 
-      // A runless batch's deterministic open gap is production lineage — its
-      // only missing carbon input (applicationIds) is filtered out, so carbon
-      // reads met (see NON_CARBON_MISSING_INPUTS). It renders as the shared
-      // plain requirement label…
+      // Production lineage and sample completeness are independent: fixing the
+      // application path must not reveal a previously hidden lab blocker.
       await expect(
         dialog.getByText("Linked production data").first(),
+      ).toBeVisible();
+      await expect(
+        dialog.getByText("Lab chemistry results").first(),
       ).toBeVisible();
       // …and carries its own deep link to the exact fix (this batch has no
       // application in its crediting period → Applications), mirroring the batch

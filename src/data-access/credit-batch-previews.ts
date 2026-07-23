@@ -25,12 +25,14 @@ import {
 } from "./credit-batch-production-runs";
 import { getCreditBatchesWithSamples } from "./credit-batch-samples";
 import {
+  BLUEPRINT_1000_YEAR_REPLICATES_INPUT,
   SOIL_STORAGE_MODULE_VERSION,
   computeApplicationCo2eStored,
   computeApplicationCo2eStoredBlueprint1000,
   type Blueprint1000YearReplicate,
 } from "@/lib/calculations/biochar-removal";
 import { weightedBatchChemistry } from "@/lib/isometric/utils/durability-aggregation";
+import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 
 export type CertifierProvider =
   (typeof certifierProjects.$inferSelect)["provider"];
@@ -80,6 +82,32 @@ export function extract1000YearBlueprintReplicates(
   );
 }
 
+/**
+ * Batch-level evidence gaps that remain true even when there is no application
+ * mass to calculate. Method-B batches intentionally carry no current-batch
+ * sample requirement.
+ */
+export function independentPreviewMissingInputs(
+  batch: {
+    durabilityOption: DurabilityOption;
+    sampling: CreditBatch["sampling"];
+  },
+  samples: Array<{
+    totalCarbonPercent: number | null;
+    sReflectanceFraction: number | null;
+  }>,
+): string[] {
+  if (
+    batch.sampling === "sampled" &&
+    batch.durabilityOption === "1000_year" &&
+    extract1000YearBlueprintReplicates(samples).length <
+      MINIMUM_REPLICATES_PER_BATCH
+  ) {
+    return [BLUEPRINT_1000_YEAR_REPLICATES_INPUT];
+  }
+  return [];
+}
+
 export async function getFacilityCertifierWithExecutor(
   ctx: OrgContext,
   executor: DbTransaction | typeof db,
@@ -117,6 +145,7 @@ export async function buildCo2eStoredPreview(
   // supplied alongside the raw batch row rather than read off it.
   batch: Pick<CreditBatch, "id" | "facilityId"> & {
     durabilityOption: DurabilityOption;
+    sampling: CreditBatch["sampling"];
   },
   applicationIds: string[],
   lineageFacts?: CreditBatchLineageFacts,
@@ -134,13 +163,25 @@ export async function buildCo2eStoredPreview(
     };
   }
 
+  // Samples belong to the credit batch, not to its application lineage. Load
+  // them before the no-application return so the preview exposes both
+  // independent gaps when production data and chemistry are missing.
+  const batchesWithSamples = await getCreditBatchesWithSamples(ctx, [
+    batch.id,
+  ]);
+  const batchSamples = batchesWithSamples[0]?.samples ?? [];
+  const independentMissingInputs = independentPreviewMissingInputs(
+    batch,
+    batchSamples,
+  );
+
   if (applicationIds.length === 0) {
     return {
       provider,
       co2eStoredTonnes: null,
       moduleVersion: null,
       applicationResults: [],
-      missingInputs: ["applicationIds"],
+      missingInputs: ["applicationIds", ...independentMissingInputs],
       warnings: [],
     };
   }
@@ -161,9 +202,6 @@ export async function buildCo2eStoredPreview(
   // Chemistry at the CREDIT-BATCH grain (issue #309): the batch's POOLED
   // replicate means — the same figures the durability data plane submits —
   // instead of run-weighted means, which don't see batch-anchored samples.
-  const batchesWithSamples = await getCreditBatchesWithSamples(ctx, [
-    batch.id,
-  ]);
   const { weightedOrganicCarbonPercent, weightedHToCorgRatio } =
     weightedBatchChemistry(batchesWithSamples);
   // 1000-year previews compute from the SAME blueprint inputs the registry

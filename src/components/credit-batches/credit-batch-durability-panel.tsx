@@ -36,6 +36,7 @@ import {
   DurabilityReadinessSignals,
   formatDurabilityStat,
 } from "@/components/certification/durability-readiness";
+import { sampleCreateHref } from "@/components/samples/sample-create-intent";
 
 function Section({ children }: { children: React.ReactNode }) {
   return (
@@ -251,7 +252,7 @@ export function CreditBatchDurabilityPanel({
           description="Lab samples recorded on this batch's production runs show up here. At least three samples, taken on different runs or days, are needed before this batch can be certified."
           action={
             <Link
-              href={`/samples?facility=${facilityId}&create=true`}
+              href={sampleCreateHref(facilityId, creditBatchId)}
               className={buttonVariants({ variant: "default", size: "small" })}
             >
               <PlusIcon size={16} aria-hidden />

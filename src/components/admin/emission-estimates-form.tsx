@@ -104,7 +104,7 @@ export function EmissionEstimatesForm({
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
-      className="flex flex-col gap-32 max-w-[560px]"
+      className="content-measure-form flex flex-col gap-32"
     >
       <input type="hidden" {...register("facilityId")} />
       {/* Genset energy yield is no longer user-configurable: issue #319 switched

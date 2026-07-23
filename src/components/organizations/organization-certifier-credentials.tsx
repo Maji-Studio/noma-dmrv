@@ -139,7 +139,10 @@ export function OrganizationCertifierCredentials({
         />
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-16">
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        className="content-measure-form flex flex-col gap-16"
+      >
         <div className="grid grid-cols-1 gap-16 md:grid-cols-2">
           <FormField
             id={`isometric-access-token-${organizationId}`}

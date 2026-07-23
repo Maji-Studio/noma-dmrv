@@ -3,7 +3,6 @@ import type {
   BatchHealthCheckKey,
   BatchHealthFixTarget,
 } from "./batch-health";
-import { certificationSettingsHref } from "./links";
 import {
   buildEntityDeepLink,
   ENTITY_FOCUS_TARGETS,
@@ -139,13 +138,4 @@ export function batchHealthFixLinkFor(
         href: `/production-runs?${query(undefined, false)}`,
       };
   }
-}
-
-export function skippedBatchHealthFixLink(
-  facilityId: string,
-): BatchHealthFixLink {
-  return {
-    label: "Finish facility setup",
-    href: certificationSettingsHref(facilityId),
-  };
 }

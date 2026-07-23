@@ -5,7 +5,6 @@ import {
   compactBatchHealthDetail,
   fallbackBatchHealthFixTarget,
   NEXT_ACTION_DETAIL_MAX_CHARS,
-  skippedBatchHealthFixLink,
 } from "@/lib/certification/batch-health-links";
 
 describe("compactBatchHealthDetail", () => {
@@ -194,10 +193,4 @@ describe("batchHealthFixLinkFor", () => {
     expect(link.href).toContain("/production-runs");
   });
 
-  it("routes skipped checks to certification connection settings", () => {
-    expect(skippedBatchHealthFixLink(facilityId)).toEqual({
-      label: "Finish facility setup",
-      href: "/certification/settings?tab=connection&facility=fac-001",
-    });
-  });
 });

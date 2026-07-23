@@ -14,6 +14,7 @@
  */
 
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
+import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import type { BatchHealthFacts } from "./batch-health";
 
 // Preview `missingInputs` keys owned by OTHER health checks (or by the
@@ -37,7 +38,7 @@ const CARBON_INPUT_LABELS: Record<string, string> = {
   hToCorgRatio: "H:Corg ratio",
   // 1000-year blueprint-parity preview gap: < 3 complete (total carbon +
   // s_fraction) replicates — see computeApplicationCo2eStoredBlueprint1000.
-  thousandYearReplicates: "Complete 1000-year sample replicates",
+  thousandYearReplicates: `At least ${MINIMUM_REPLICATES_PER_BATCH} usable 1000-year lab samples across distinct runs/days`,
   // 1000-year (Eq.6) petrography/TGA gaps — issue #142.
   meanRandomReflectancePercent: "Mean random reflectance (R₀)",
   stdRandomReflectance: "Std dev of R₀",
@@ -51,9 +52,16 @@ function carbonMissingInputs(
 ): string[] {
   const member = ctx.memberBatches.find((b) => b.id === batchId);
   const raw = member?.co2eStoredPreview?.missingInputs ?? [];
-  return raw
-    .filter((key) => !NON_CARBON_MISSING_INPUTS.has(key))
-    .map((key) => CARBON_INPUT_LABELS[key] ?? key);
+  return Array.from(
+    new Set(
+      [
+        ...raw
+          .filter((key) => !NON_CARBON_MISSING_INPUTS.has(key))
+          .map((key) => CARBON_INPUT_LABELS[key] ?? key),
+        ...(member?.durabilityGateBlockers ?? []),
+      ],
+    ),
+  );
 }
 
 // The facility's project mapping + default template resolve cleanly. Transport

@@ -124,6 +124,8 @@ export interface MemberCreditBatch {
   id: string;
   code: string;
   co2eStoredPreview?: CreditBatchCo2eStoredPreview;
+  /** Exact durability submission-gate blockers for this batch. */
+  durabilityGateBlockers?: string[];
 }
 
 type DurabilityOption = "200_year" | "1000_year";
@@ -605,6 +607,27 @@ export async function buildRemovalContext(
   const applicationIds = Array.from(
     new Set(scope.memberBatches.flatMap((b) => b.applicationIds)),
   );
+  const lineages = scope.lineages;
+  const runIds = Array.from(
+    new Set(
+      lineages
+        .map((l) => l.productionRun?.id)
+        .filter((id): id is string => !!id),
+    ),
+  );
+  // Sample completeness is batch evidence, independent of application
+  // lineage. Evaluate it before the no-application return so callers see both
+  // blockers instead of discovering chemistry only after production is fixed.
+  const durabilityBatchData = await loadDurabilityBatchData(
+    orgCtx,
+    scope.memberBatches.map((b) => b.id),
+    new Set(runIds),
+  );
+  const memberBatchesWithDurability = memberBatches.map((batch) => ({
+    ...batch,
+    durabilityGateBlockers:
+      durabilityBatchData.blockersByBatchId[batch.id] ?? [],
+  }));
 
   // Nothing to submit when the removal carries no applications. Facility
   // template setup does NOT gate the lineage walk; otherwise setup gaps collapse
@@ -621,20 +644,20 @@ export async function buildRemovalContext(
       facilityId: scope.facilityId,
       removalId: scope.removalId,
       ...facilityFacts,
-      memberBatches,
+      memberBatches: memberBatchesWithDurability,
       transportCoverage: EMPTY_COVERAGE,
       hasSubmittableRuns: false,
       productionReadinessGap,
       entityReadinessGaps: [],
-      durabilityGateBlockers: [],
-      submissionWarnings: [],
+      durabilityGateBlockers: durabilityBatchData.blockers,
+      submissionWarnings: durabilityBatchData.warnings,
       runSummary: EMPTY_RUN_SUMMARY,
       latestSubmission,
       linkedGhgStatement,
       isProduction,
       lineages: [],
       runs: [],
-      batchesWithSamples: [],
+      batchesWithSamples: durabilityBatchData.batchesWithSamples,
       attributionByRunId: new Map<string, number>(),
       memberBatchClaims,
       transportLegs: { feedstock: [], biochar: [], sample: [] },
@@ -645,14 +668,6 @@ export async function buildRemovalContext(
     };
   }
 
-  const lineages = scope.lineages;
-  const runIds = Array.from(
-    new Set(
-      lineages
-        .map((l) => l.productionRun?.id)
-        .filter((id): id is string => !!id),
-    ),
-  );
   const runs =
     runIds.length > 0
       ? await getProductionRunsWithSamples(orgCtx, runIds)
@@ -671,11 +686,7 @@ export async function buildRemovalContext(
     batchesWithSamples,
     blockers: durabilityBatchBlockers,
     warnings: durabilityWarnings,
-  } = await loadDurabilityBatchData(
-    orgCtx,
-    scope.memberBatches.map((b) => b.id),
-    new Set(runIds),
-  );
+  } = durabilityBatchData;
 
   const entityIds = collectTransportEntityIds(lineages, batchesWithSamples);
   const transportLegs = await loadTransportLegsByCategory(orgCtx, entityIds);
@@ -740,7 +751,7 @@ export async function buildRemovalContext(
     facilityId: scope.facilityId,
     removalId: scope.removalId,
     ...facilityFacts,
-    memberBatches,
+    memberBatches: memberBatchesWithDurability,
     transportCoverage,
     hasSubmittableRuns: runs.length > 0 && !productionReadinessGap,
     productionReadinessGap,

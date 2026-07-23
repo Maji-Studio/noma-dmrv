@@ -321,6 +321,25 @@ detail pages follow `credit-batches/[id]/page.tsx` — `requireOrgContext` → u
   locks to its size token. `DetailRow` pairs stack below `sm`, side-by-side at
   `sm`+.
 
+### Content measure inside the page shell
+
+The page shell stays at the canonical container width. Opt in at the content
+block that needs a shorter scanning line:
+
+- **`.content-measure-form`** — full-page and direct/admin data-entry forms.
+  It is fluid up to the shared form measure (560px) and remains left-aligned in
+  page flow. Do not add it redundantly inside `EntitySideSheet`, `Modal`, or
+  auth cards; those containers already own their width.
+- **`.content-measure-preview`** — form-like summaries and readable previews
+  that need more room than inputs, including compact tables that belong to the
+  preview. It is fluid up to the shared preview measure (960px) and remains
+  left-aligned.
+
+Apply either utility to the complete semantic block, not individual fields or
+paragraphs. Data tables, dashboards, routed list content, list/card grids, KPI
+bands, traceability, and schema explorer surfaces retain the canonical page
+width. Never constrain all `<form>` elements globally.
+
 **The one sanctioned exception is the Dashboard**: it keeps the container/gap
 shell but opens with a display headline ("Dashboard" as `title-heading-2` under
 a mono facility eyebrow) instead of `PageHeader`, its KPI strip is the 4-cell

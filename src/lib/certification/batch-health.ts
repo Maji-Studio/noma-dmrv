@@ -157,14 +157,17 @@ function describeCategories(categories: TransportCategory[]): string {
 }
 
 function carbonCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
-  if (facts.carbonMissingInputs.length === 0) {
+  const missingInputs = Array.from(
+    new Set(facts.carbonMissingInputs.filter(Boolean)),
+  );
+  if (missingInputs.length === 0) {
     return { key: "carbon", label: CARBON_LABEL, status: "met" };
   }
   return {
     key: "carbon",
     label: CARBON_LABEL,
     status: "unmet",
-    detail: `Missing: ${facts.carbonMissingInputs.join(", ")}`,
+    detail: `Missing: ${missingInputs.join(", ")}`,
     fixTarget: "labSamples",
   };
 }

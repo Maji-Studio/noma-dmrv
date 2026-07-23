@@ -6,10 +6,8 @@
  * The checklist only DETAILS the checks that still need work: each open check
  * is an action row stating the requirement and missing items, with a single
  * button that lands where the gap is actually resolved.
- * Cleared and not-yet-evaluable checks collapse into one compact summary line,
- * so the full four-check picture stays visible without four equal-weight
- * boxes. A `skipped` transport check is a facility-setup concern — it links to
- * certification settings and never counts as a batch issue.
+ * A `skipped` transport check is a facility-setup concern and never counts as
+ * a batch issue.
  */
 "use client";
 

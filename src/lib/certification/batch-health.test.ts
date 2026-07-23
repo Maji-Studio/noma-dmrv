@@ -279,4 +279,28 @@ describe("deriveBatchHealth", () => {
     expect(result.issueCount).toBe(3);
     expect(result.state).toBe("incomplete");
   });
+
+  it("keeps no-lineage and insufficient-sample gaps independent", () => {
+    const result = deriveBatchHealth(
+      facts({
+        carbonMissingInputs: [
+          "At least 3 usable 1000-year lab samples across distinct runs/days",
+          "At least 3 usable 1000-year lab samples across distinct runs/days",
+        ],
+        hasSubmittableRuns: false,
+        productionReadinessGap: {
+          kind: "noApplications",
+          detail: "No applications fall in this batch's crediting period.",
+          fixTarget: "applications",
+        },
+      }),
+    );
+
+    const open = result.checks.filter((check) => check.status === "unmet");
+    expect(result.issueCount).toBe(2);
+    expect(open.map((check) => check.key)).toEqual(["carbon", "production"]);
+    expect(checkFor(result, "carbon").detail).toBe(
+      "Missing: At least 3 usable 1000-year lab samples across distinct runs/days",
+    );
+  });
 });

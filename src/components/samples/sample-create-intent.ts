@@ -1,0 +1,23 @@
+export const SAMPLE_CREATE_CREDIT_BATCH_PARAM = "creditBatch";
+
+export function sampleCreateHref(
+  facilityId: string,
+  creditBatchId: string,
+): string {
+  const params = new URLSearchParams({
+    facility: facilityId,
+    create: "true",
+    [SAMPLE_CREATE_CREDIT_BATCH_PARAM]: creditBatchId,
+  });
+  return `/samples?${params.toString()}`;
+}
+
+export function resolveSampleCreateCreditBatchId(
+  requestedId: string | null | undefined,
+  activeFacilityBatches: ReadonlyArray<{ id: string }> | undefined,
+): string | undefined {
+  if (!requestedId || !activeFacilityBatches) return undefined;
+  return activeFacilityBatches.some((batch) => batch.id === requestedId)
+    ? requestedId
+    : undefined;
+}
