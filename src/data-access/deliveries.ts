@@ -292,7 +292,7 @@ export async function getDeliveries(
       transportEvidenceDocumentCount: transportEvidenceDocumentCount(
         ctx.organizationId,
         "delivery",
-        deliveries.id,
+        "deliveryId",
       ),
     })
     .from(deliveries)
@@ -377,7 +377,7 @@ export async function getDeliveryWithRelations(
       transportEvidenceDocumentCount: transportEvidenceDocumentCount(
         ctx.organizationId,
         "delivery",
-        deliveries.id,
+        "deliveryId",
       ),
     })
     .from(deliveries)

@@ -77,7 +77,6 @@ export const creditBatchFormSchema = z
     // === Section 2: Production cohort (membership) ===
     productionRunIds: z
       .array(z.string().uuid())
-      .min(1, "Select at least one production run")
       .default([]),
 
     // === Section 3: Durability ===
@@ -198,7 +197,6 @@ export const updateCreditBatchSchema = z.object({
   endDate: z.coerce.date().optional(),
   productionRunIds: z
     .array(z.string().uuid())
-    .min(1, "Select at least one production run")
     .optional(),
   // durabilityOption is inherited from the facility (ADR 0021), not a batch field.
   hToCorgRatio: z.number().min(0).max(1).optional().nullable(),

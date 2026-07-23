@@ -8,10 +8,16 @@ const mockGetSession = vi.fn();
 const mockSignInEmail = vi.fn();
 const mockAcceptInvitation = vi.fn();
 const mockSetActiveOrganization = vi.fn();
+const mockPersistLastActiveOrganization = vi.fn();
 
 vi.mock("@/data-access/invitation-bootstrap", () => ({
   getInvitationBootstrapState: (...args: unknown[]) => mockReadState(...args),
   createInvitedAccount: (...args: unknown[]) => mockCreateAccount(...args),
+}));
+
+vi.mock("@/data-access/organizations", () => ({
+  persistLastActiveOrganization: (...args: unknown[]) =>
+    mockPersistLastActiveOrganization(...args),
 }));
 
 vi.mock("@/lib/auth/better-auth", () => ({
@@ -139,6 +145,10 @@ describe("bootstrapInvitationAccountAction", () => {
     expect(mockAcceptInvitation).toHaveBeenCalledOnce();
     expect(mockSetActiveOrganization).toHaveBeenCalledWith(
       expect.objectContaining({ body: { organizationId: ORGANIZATION_ID } })
+    );
+    expect(mockPersistLastActiveOrganization).toHaveBeenCalledWith(
+      "user-123",
+      ORGANIZATION_ID
     );
     expect(result).toEqual({
       success: true,

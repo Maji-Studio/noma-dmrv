@@ -262,8 +262,10 @@ consistent pyrolysis conditions, < 1 month). A facility running
 several feedstocks in a month therefore has several **concurrent**
 credit batches, one per feedstock. The `startDate`/`endDate` window
 means production period, not application period. Batch membership is
-production runs — each run one feedstock, matching the batch; member
-applications are derived from lineage. On submission, one or more
+production runs — each completed run matching the batch's organization,
+facility, feedstock, and production window is attached automatically, so the
+batch may be declared before any runs exist; member applications are derived
+from lineage. On submission, one or more
 credit batches group into a single Isometric **Removal** (default 1:1
 per cohort). A credit batch's production emissions are claimed by
 exactly one Removal — recorded on the batch as the claiming Removal —

@@ -125,14 +125,19 @@ export function buildEntityReadinessResult(
       addEntityGaps(
         legCode,
         {
-          id: leg.id,
+          id: category === "feedstock" ? leg.entityId : leg.id,
           code: legCode,
           missing: [],
         },
         {
-          key: "transport-evidence",
-          label: "Transport evidence",
-          fixTarget: "deliveries",
+          key: `${category}-transport-evidence`,
+          label: `${category[0]?.toUpperCase()}${category.slice(1)} transport evidence`,
+          fixTarget:
+            category === "feedstock"
+              ? "feedstocks"
+              : category === "sample"
+                ? "labSamples"
+                : "deliveries",
         },
         deriveEntityCertifyReadiness("transportLeg", leg).gaps,
       );

@@ -169,7 +169,9 @@ test.describe("Organization foundation UI", () => {
       orgLink.getByText(ORGANIZATION_NAME, { exact: true }),
     ).toBeVisible();
     await expect(
-      sidebar.locator('button[aria-haspopup="listbox"]'),
+      sidebar
+        .locator('button[aria-haspopup="listbox"]')
+        .filter({ hasText: ORGANIZATION_NAME }),
     ).toHaveCount(0);
   });
 

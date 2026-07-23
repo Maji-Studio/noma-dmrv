@@ -36,6 +36,7 @@ export type BatchHealthFixTarget =
   | "batchDetails"
   | "deliveries"
   | "deliveryDistances"
+  | "feedstocks"
   | "productionRuns"
   | "biocharProducts"
   | "labSamples"

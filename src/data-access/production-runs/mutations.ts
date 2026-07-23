@@ -55,6 +55,7 @@ import {
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
 import { retireDocumentsForEntities } from "../documents";
+import { attachProductionRunToMatchingCreditBatch } from "../credit-batch-membership";
 
 const END_AFTER_START_CONSTRAINT = "production_runs_end_after_start";
 const END_AFTER_START_MESSAGE = "End time must be after the start time";
@@ -344,6 +345,8 @@ export async function createProductionRun(
       feedstock: { basis: "consumed-mass", consumedFeedstockKg },
       cancellationReason: data.cancellationReason ?? null,
     });
+
+    await attachProductionRunToMatchingCreditBatch(ctx, tx, created.id);
 
     return created;
     });
@@ -789,6 +792,11 @@ export async function updateProductionRun(
       },
       cancellationReason: lockedTargetCancellationReason,
     });
+    await attachProductionRunToMatchingCreditBatch(
+      ctx,
+      tx,
+      productionRunId,
+    );
       }),
     );
   } catch (error) {

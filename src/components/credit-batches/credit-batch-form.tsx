@@ -18,7 +18,7 @@ import { useFeedstockTypeList } from "@/hooks/use-feedstock-types";
 import { useMethodBEligibility } from "@/hooks/use-production-processes";
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -88,7 +88,7 @@ function CohortPickerSection({
   return (
     <div className="space-y-12 pt-16 border-t border-[var(--color-border-tertiary)]">
       <div className="flex items-center justify-between">
-        <SectionLabel hint="Select member production runs from the production window above.">
+        <SectionLabel hint="Completed runs matching this feedstock and production window are attached automatically.">
           {title}
         </SectionLabel>
         {hasDates && count > 0 && (
@@ -397,20 +397,12 @@ export function CreditBatchForm({
     setValue,
   ]);
 
-  // Create mode: the date window IS the batch boundary, so every eligible
-  // (unassigned) run in it is a member by default — opt-out, not opt-in. Re-fill
-  // only when the selectable set itself changes (new window/facility); tracking
-  // the last auto-filled key preserves the user's manual deselections within a
-  // window instead of clobbering them on every render.
-  const autoSelectedKeyRef = useRef<string | null>(null);
+  // Create mode: the declared boundary derives membership, so every eligible
+  // unassigned run in it is included and cannot be manually excluded.
   useEffect(() => {
     if (isEditMode || !productionRunOptionsLoaded) {
       return;
     }
-    if (autoSelectedKeyRef.current === selectableProductionRunIdsKey) {
-      return;
-    }
-    autoSelectedKeyRef.current = selectableProductionRunIdsKey;
     const nextSelected = selectableProductionRunIdsKey
       ? selectableProductionRunIdsKey.split(",")
       : [];
@@ -454,7 +446,7 @@ export function CreditBatchForm({
         <input
           type="checkbox"
           value={run.id}
-          disabled={isSubmitting || assignedElsewhere}
+          disabled={isSubmitting || assignedElsewhere || !isEditMode}
           className="h-16 w-16 shrink-0"
           {...register("productionRunIds")}
         />
@@ -584,7 +576,7 @@ export function CreditBatchForm({
         onRetry={() => refetchProductionRunOptions()}
         isRetrying={productionRunOptionsFetching}
         notReadyMessage="Select a feedstock type and set the production window to load runs."
-        noMatchMessage="No runs of this feedstock type fall within the production window."
+        noMatchMessage="No completed runs match yet. You can create the batch now; matching runs will attach automatically."
         noMatchWithSelectionMessage="No additional runs of this feedstock type fall within the production window."
       >
         {typedRunOptions.map(renderProductionRunOption)}
@@ -599,7 +591,7 @@ export function CreditBatchForm({
               <input
                 type="checkbox"
                 value={id}
-                disabled={isSubmitting}
+                disabled={isSubmitting || !isEditMode}
                 className="h-16 w-16 shrink-0"
                 {...register("productionRunIds")}
               />
