@@ -14,6 +14,9 @@ import {
   storageLocations,
 } from "@/db/schema";
 import {
+  attachProductionRunToMatchingCreditBatch,
+} from "@/data-access/credit-batch-membership";
+import {
   createCreditBatch,
   updateCreditBatch,
 } from "@/data-access/credit-batches";
@@ -38,6 +41,8 @@ describe("credit batch automatic production-run membership", () => {
   let feedstockTypeId = "";
   let storageLocationId = "";
   let feedstockId = "";
+  let alternateFeedstockTypeId = "";
+  let alternateFeedstockId = "";
   const creditBatchIds: string[] = [];
   const productionRunIds: string[] = [];
 
@@ -106,6 +111,33 @@ describe("credit batch automatic production-run membership", () => {
       })
       .returning({ id: feedstocks.id });
     feedstockId = feedstock.id;
+
+    const [alternateFeedstockType] = await db
+      .insert(feedstockTypes)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FT-CBAM-ALT-${tag}`,
+        name: `CB auto-membership alternate feedstock ${tag}`,
+        category: "agricultural",
+        usage: "pyrolysis",
+      })
+      .returning({ id: feedstockTypes.id });
+    alternateFeedstockTypeId = alternateFeedstockType.id;
+
+    const [alternateFeedstock] = await db
+      .insert(feedstocks)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FS-CBAM-ALT-${tag}`,
+        facilityId,
+        status: "complete",
+        feedstockTypeId: alternateFeedstockTypeId,
+        massDryKg: 100,
+        massWetKg: 125,
+        moistureContentPercent: 20,
+      })
+      .returning({ id: feedstocks.id });
+    alternateFeedstockId = alternateFeedstock.id;
   });
 
   afterAll(async () => {
@@ -140,6 +172,11 @@ describe("credit batch automatic production-run membership", () => {
     if (feedstockId) {
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
     }
+    if (alternateFeedstockId) {
+      await db
+        .delete(feedstocks)
+        .where(eq(feedstocks.id, alternateFeedstockId));
+    }
     if (storageLocationId) {
       await db
         .delete(storageLocations)
@@ -155,6 +192,11 @@ describe("credit batch automatic production-run membership", () => {
       await db
         .delete(feedstockTypes)
         .where(eq(feedstockTypes.id, feedstockTypeId));
+    }
+    if (alternateFeedstockTypeId) {
+      await db
+        .delete(feedstockTypes)
+        .where(eq(feedstockTypes.id, alternateFeedstockTypeId));
     }
   });
 
@@ -306,6 +348,73 @@ describe("credit batch automatic production-run membership", () => {
 
     expect(updated.productionRunIds).toEqual([]);
     expect(updated.siteManagementNotes).toBe("Declared before production");
+  });
+
+  it("skips automatic attachment for empty and mixed feedstock sets", async () => {
+    const emptyFeedstockRun = await createProductionRun(ctx, {
+      code: `PR-CBAM-EMPTY-FS-${tag}`,
+      facilityId,
+      reactorId,
+      status: "running",
+      startTime: new Date("2027-07-10T08:00:00.000Z"),
+      endTime: null,
+      feedstockWetMassKg: 100,
+      feedstockMoisturePercent: 20,
+      feedstockStorageLocationId: storageLocationId,
+    });
+    const mixedFeedstockRun = await createProductionRun(ctx, {
+      code: `PR-CBAM-MIXED-FS-${tag}`,
+      facilityId,
+      reactorId,
+      status: "running",
+      startTime: new Date("2027-07-11T08:00:00.000Z"),
+      endTime: null,
+      feedstockWetMassKg: 100,
+      feedstockMoisturePercent: 20,
+      feedstockStorageLocationId: storageLocationId,
+    });
+    productionRunIds.push(emptyFeedstockRun.id, mixedFeedstockRun.id);
+    await updateProductionRun(ctx, emptyFeedstockRun.id, {
+      status: "complete",
+      endTime: new Date("2027-07-10T12:00:00.000Z"),
+      biocharOutputKg: 30,
+      biocharMoisturePercent: 20,
+    });
+    await updateProductionRun(ctx, mixedFeedstockRun.id, {
+      status: "complete",
+      endTime: new Date("2027-07-11T12:00:00.000Z"),
+      biocharOutputKg: 30,
+      biocharMoisturePercent: 20,
+    });
+
+    await db
+      .delete(productionRunFeedstocks)
+      .where(eq(productionRunFeedstocks.productionRunId, emptyFeedstockRun.id));
+    await db.insert(productionRunFeedstocks).values({
+      organizationId: TEST_ORG_ID,
+      productionRunId: mixedFeedstockRun.id,
+      feedstockId: alternateFeedstockId,
+      massUsedKg: 1,
+    });
+
+    await expect(
+      db.transaction((tx) =>
+        attachProductionRunToMatchingCreditBatch(
+          ctx,
+          tx,
+          emptyFeedstockRun.id,
+        ),
+      ),
+    ).resolves.toBeNull();
+    await expect(
+      db.transaction((tx) =>
+        attachProductionRunToMatchingCreditBatch(
+          ctx,
+          tx,
+          mixedFeedstockRun.id,
+        ),
+      ),
+    ).resolves.toBeNull();
   });
 
   it("never loses membership when completion races batch declaration", async () => {

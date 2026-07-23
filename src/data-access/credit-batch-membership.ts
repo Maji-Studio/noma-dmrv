@@ -358,6 +358,31 @@ export async function resolveSingleFeedstockType(
   return typeIds[0];
 }
 
+async function resolveSingleRunFeedstockTypeOrNull(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  productionRunId: string,
+): Promise<string | null> {
+  const rows = await tx
+    .selectDistinct({ feedstockTypeId: feedstocks.feedstockTypeId })
+    .from(productionRunFeedstocks)
+    .innerJoin(
+      feedstocks,
+      and(
+        eq(productionRunFeedstocks.feedstockId, feedstocks.id),
+        eq(feedstocks.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(
+      and(
+        eq(productionRunFeedstocks.productionRunId, productionRunId),
+        eq(productionRunFeedstocks.organizationId, ctx.organizationId),
+      ),
+    );
+
+  return rows.length === 1 ? rows[0].feedstockTypeId : null;
+}
+
 /**
  * Guard that a batch's member runs match the feedstock type declared on the
  * form (ADR 0016 amendment 2026-07-04: feedstock type is now a declared input,
@@ -513,11 +538,12 @@ export async function attachProductionRunToMatchingCreditBatch(
     .limit(1);
   if (existingMembership) return existingMembership.creditBatchId;
 
-  const feedstockTypeId = await resolveSingleFeedstockType(
+  const feedstockTypeId = await resolveSingleRunFeedstockTypeOrNull(
     ctx,
     tx,
-    [productionRunId],
+    productionRunId,
   );
+  if (!feedstockTypeId) return null;
   // Batch declarations and run completions share this predicate lock. The
   // production-run transaction already holds the run row, so both paths order
   // their locks run -> process scope before reading/writing membership.
