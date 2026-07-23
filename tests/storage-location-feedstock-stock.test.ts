@@ -6,7 +6,6 @@ import { getStorageLocationWithFacility } from "@/data-access/storage-locations"
 import { getStorageLocationById as getStorageLocationOptionById } from "@/data-access/entities/storage-locations";
 import { facilities, storageLocations } from "@/db/schema/facilities";
 import { feedstocks, feedstockTypes } from "@/db/schema/feedstock";
-import { binMovements } from "@/db/schema/bin-movements";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
 
@@ -89,9 +88,6 @@ async function createFixture(runId: string): Promise<FeedstockStockFixture> {
 
 async function cleanupFixture(fixture: FeedstockStockFixture): Promise<void> {
   await db.transaction(async (tx) => {
-    await tx
-      .delete(binMovements)
-      .where(eq(binMovements.storageLocationId, fixture.storageLocationId));
     await tx.delete(feedstocks).where(inArray(feedstocks.id, fixture.feedstockIds));
     await tx.delete(storageLocations).where(eq(storageLocations.id, fixture.storageLocationId));
     await tx.delete(feedstockTypes).where(eq(feedstockTypes.id, fixture.feedstockTypeId));
@@ -134,67 +130,6 @@ describe("storage-location feedstock stock", () => {
 
       expect(option?.subtitle).toContain("80 kg remaining");
       expect(option?.subtitle).toContain("120 kg pending completion");
-    } finally {
-      await cleanupFixture(fixture);
-    }
-  });
-
-  it("uses the latest stock-take moisture and falls back to intake moisture", async () => {
-    const runId = crypto.randomUUID().slice(0, 8).toUpperCase();
-    const fixture = await createFixture(runId);
-
-    try {
-      const ctx = makeTestOrgContext(TEST_USER_ID);
-      const beforeStockTake = await getStorageLocationWithFacility(
-        ctx,
-        fixture.storageLocationId,
-      );
-
-      expect(
-        beforeStockTake.feedstockInventory.estimatedMoisturePercent,
-      ).toBe(20);
-      expect(beforeStockTake.feedstockInventory.estimatedWetMassKg).toBe(100);
-
-      await db.insert(binMovements).values([
-        {
-          organizationId: TEST_ORG_ID,
-          storageLocationId: fixture.storageLocationId,
-          lane: "feedstock",
-          movementType: "adjustment",
-          massDeltaKg: 0,
-          reason: "Older moisture snapshot",
-          countedMassKg: 80,
-          derivedMassKgAtTime: 80,
-          countedWetMassKg: 80 / 0.7,
-          moistureRatioUsed: 0.3,
-          createdAt: new Date("2026-07-20T08:00:00Z"),
-        },
-        {
-          organizationId: TEST_ORG_ID,
-          storageLocationId: fixture.storageLocationId,
-          lane: "feedstock",
-          movementType: "adjustment",
-          massDeltaKg: 0,
-          reason: "Latest moisture snapshot",
-          countedMassKg: 80,
-          derivedMassKgAtTime: 80,
-          countedWetMassKg: 80 / 0.65,
-          moistureRatioUsed: 0.35,
-          createdAt: new Date("2026-07-21T08:00:00Z"),
-        },
-      ]);
-
-      const afterStockTake = await getStorageLocationWithFacility(
-        ctx,
-        fixture.storageLocationId,
-      );
-
-      expect(
-        afterStockTake.feedstockInventory.estimatedMoisturePercent,
-      ).toBe(35);
-      expect(
-        afterStockTake.feedstockInventory.estimatedWetMassKg,
-      ).toBeCloseTo(80 / 0.65);
     } finally {
       await cleanupFixture(fixture);
     }

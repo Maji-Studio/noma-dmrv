@@ -12,7 +12,7 @@
  * "needs reconciliation" signal rather than hiding it.
  */
 
-import { and, count, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   countRows,
@@ -29,7 +29,6 @@ import {
   deliveries,
   orders,
   applications,
-  binMovements,
   type StorageLocation,
 } from "@/db/schema";
 import { deriveLaneStock } from "./lane-stock-derivation";
@@ -138,7 +137,6 @@ export async function enrichStorageLocationRows(
     productApplicationRows,
     lastActivityRows,
     laneStockRows,
-    feedstockStockTakeMoistureRows,
   ] = storageLocationIds.length > 0
     ? await db.transaction(async (tx) => Promise.all([
         tx
@@ -372,26 +370,6 @@ export async function enrichStorageLocationRows(
           ORDER BY storage_location_id, created_at DESC
         `),
         deriveLaneStock(ctx, tx, { storageLocationIds }),
-        tx
-          .selectDistinctOn([binMovements.storageLocationId], {
-            storageLocationId: binMovements.storageLocationId,
-            moistureRatioUsed: binMovements.moistureRatioUsed,
-          })
-          .from(binMovements)
-          .where(
-            and(
-              inArray(binMovements.storageLocationId, storageLocationIds),
-              eq(binMovements.organizationId, ctx.organizationId),
-              eq(binMovements.lane, "feedstock"),
-              eq(binMovements.movementType, "adjustment"),
-              isNotNull(binMovements.moistureRatioUsed),
-            ),
-          )
-          .orderBy(
-            binMovements.storageLocationId,
-            desc(binMovements.createdAt),
-            desc(binMovements.id),
-          ),
       ]), {
         isolationLevel: "repeatable read",
         accessMode: "read only",
@@ -412,7 +390,6 @@ export async function enrichStorageLocationRows(
             label: string;
           }>,
         },
-        [],
         [],
       ];
 
@@ -451,12 +428,6 @@ export async function enrichStorageLocationRows(
   const laneStockMap = new Map(
     laneStockRows.map((row) => [row.storageLocationId, row]),
   );
-  const feedstockStockTakeMoistureMap = new Map(
-    feedstockStockTakeMoistureRows.map((row) => [
-      row.storageLocationId,
-      Number(row.moistureRatioUsed),
-    ]),
-  );
 
   return rows.map((row) => {
     const feedstockInventoryRow = feedstockInventoryMap.get(row.id);
@@ -470,12 +441,10 @@ export async function enrichStorageLocationRows(
     const currentDryMassKg = laneStock?.feedstockStockDryKg ?? 0;
     // The moisture-ratio clamp stays — it bounds a ratio to [0, 1], it is not a
     // stock clamp.
-    const intakeMoistureRatio =
+    const moistureRatio =
       totalWetKg > 0 && totalDryKg >= 0
         ? Math.max(0, Math.min(1, (totalWetKg - totalDryKg) / totalWetKg))
         : null;
-    const moistureRatio =
-      feedstockStockTakeMoistureMap.get(row.id) ?? intakeMoistureRatio;
     const estimatedWetMassKg =
       moistureRatio != null && moistureRatio < 1
         ? currentDryMassKg / (1 - moistureRatio)

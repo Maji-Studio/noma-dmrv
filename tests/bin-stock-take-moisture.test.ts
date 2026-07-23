@@ -114,6 +114,18 @@ describe("feedstock stock-take moisture integrity", () => {
       expect(Number(recorded.data.countedWetMassKg)).toBe(100);
       expect(Number(recorded.data.moistureRatioUsed)).toBe(0.2);
 
+      const exactConfirmation = await recordStockTakeFn({
+        storageLocationId: bin.id,
+        lane: "feedstock",
+        reason: "Confirm unchanged physical count",
+        countedMassKg: 80,
+        countedWetMassKg: 100,
+        moistureRatioUsed: 0.2,
+      });
+      expect(exactConfirmation.success).toBe(true);
+      if (!exactConfirmation.success) return;
+      expect(Number(exactConfirmation.data.massDeltaKg)).toBe(0);
+
       const upwardAction = await recordStockTakeFn({
         storageLocationId: bin.id,
         lane: "feedstock",
@@ -152,7 +164,7 @@ describe("feedstock stock-take moisture integrity", () => {
         .select({ id: binMovements.id })
         .from(binMovements)
         .where(eq(binMovements.storageLocationId, bin.id));
-      expect(movements).toHaveLength(1);
+      expect(movements).toHaveLength(2);
     } finally {
       await db
         .delete(binMovements)

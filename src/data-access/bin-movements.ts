@@ -288,7 +288,7 @@ export async function recordStockTakeMovement(
       input.storageLocationId,
       input.lane,
     );
-    if (countedMassKg > derivedMassKgAtTime) {
+    if (isOverdraw(countedMassKg, derivedMassKgAtTime)) {
       throw new StockTakeIncreaseError();
     }
     return createBinMovementInTransaction(ctx, tx, {

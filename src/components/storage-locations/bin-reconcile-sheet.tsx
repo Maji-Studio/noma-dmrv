@@ -143,10 +143,6 @@ function StockTakeForm({
 
   const lane = laneForStorageType(storageLocation.type);
   const derivedMassKg = binCurrentMassKg(storageLocation);
-  const currentMoisturePercent =
-    lane === "feedstock"
-      ? storageLocation.feedstockInventory.estimatedMoisturePercent
-      : null;
   const isFeedstock = lane === "feedstock";
 
   const {
@@ -160,10 +156,6 @@ function StockTakeForm({
     defaultValues: {
       lane,
       reason: "",
-      moisturePercent:
-        currentMoisturePercent == null
-          ? undefined
-          : Number(currentMoisturePercent.toFixed(1)),
     },
   });
 
@@ -200,13 +192,6 @@ function StockTakeForm({
     const submittedDryMassKg = isWet
       ? deriveMassDryKg(counted, enteredMoisturePercent)
       : counted;
-    if (submittedDryMassKg > derivedMassKg) {
-      setError("counted", {
-        type: "validate",
-        message: "Counted stock cannot exceed the current derived stock",
-      });
-      return;
-    }
     try {
       await recordStockTake.mutateAsync({
         storageLocationId: storageLocation.id,
@@ -320,7 +305,8 @@ function StockTakeForm({
 
       {deltaKg != null && deltaKg > 0 && (
         <p className="body-caption text-[var(--color-signal-red)]">
-          Stock-takes cannot increase derived inventory.
+          This count is above the displayed stock. Submit to recheck it against
+          the current inventory.
         </p>
       )}
 
@@ -346,7 +332,6 @@ function StockTakeForm({
       <FormActions
         onCancel={onCancel}
         isSubmitting={recordStockTake.isPending}
-        submitDisabled={deltaKg != null && deltaKg > 0}
         submitLabel="Record stock-take"
       />
     </form>
