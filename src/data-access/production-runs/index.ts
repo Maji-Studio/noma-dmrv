@@ -39,7 +39,4 @@ export { ProductionRunOverlapError } from "./overlap";
 
 export { productionRunDateExpr } from "./date-expr";
 
-export {
-  getProductionRunReadings,
-  addProductionRunReading,
-} from "./readings";
+export { getProductionRunReadings } from "./readings";

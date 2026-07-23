@@ -483,9 +483,9 @@ export async function getSampleStats(
 // evidence invariant (issue #309): a stale form, a failed batch-summary query,
 // or a direct server-action call could otherwise persist a 1000-year sample
 // missing its mandatory R₀/TGA fields (PR #336 second-pass review). Also
-// subsumes the batch-existence check for both write paths. Reads through the
-// caller's transaction so the tier can't be promoted to 1000-year between the
-// check and the sample write.
+// subsumes the batch-existence check for both write paths. This runs inside the
+// caller's transaction; facility mutation guards separately enforce safe tier
+// changes.
 async function requireBatchTierEvidence(
   ctx: OrgContext,
   tx: DbTransaction,
