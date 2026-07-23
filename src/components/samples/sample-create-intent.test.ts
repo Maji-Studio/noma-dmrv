@@ -12,7 +12,8 @@ describe("sample create intent", () => {
     expect(url.pathname).toBe("/samples");
     expect(url.searchParams.get("facility")).toBe("facility-1");
     expect(url.searchParams.get("create")).toBe("true");
-    expect(url.searchParams.get("creditBatch")).toBe("batch-1");
+    expect(url.searchParams.get("createCreditBatch")).toBe("batch-1");
+    expect(url.searchParams.has("creditBatch")).toBe(false);
   });
 
   it("preselects only a batch returned by the active facility query", () => {

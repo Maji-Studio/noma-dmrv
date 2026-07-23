@@ -5,6 +5,7 @@
  */
 
 import { SampleList } from "@/components/samples";
+import { SAMPLE_CREATE_CREDIT_BATCH_PARAM } from "@/components/samples/sample-create-intent";
 import { isCreateIntentValue } from "@/lib/create-intent";
 
 export const metadata = {
@@ -18,9 +19,10 @@ export default async function SamplesPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const query = await searchParams;
-  const creditBatch = Array.isArray(query.creditBatch)
-    ? query.creditBatch[0]
-    : query.creditBatch;
+  const requestedCreditBatch = query[SAMPLE_CREATE_CREDIT_BATCH_PARAM];
+  const creditBatch = Array.isArray(requestedCreditBatch)
+    ? requestedCreditBatch[0]
+    : requestedCreditBatch;
 
   return (
     <SampleList

@@ -1,4 +1,4 @@
-export const SAMPLE_CREATE_CREDIT_BATCH_PARAM = "creditBatch";
+export const SAMPLE_CREATE_CREDIT_BATCH_PARAM = "createCreditBatch";
 
 export function sampleCreateHref(
   facilityId: string,

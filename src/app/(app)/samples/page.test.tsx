@@ -7,7 +7,8 @@ describe("SamplesPage", () => {
       searchParams: Promise.resolve({
         facility: "facility-1",
         create: "1",
-        creditBatch: "batch-1",
+        createCreditBatch: "batch-1",
+        creditBatch: "filter-batch",
       }),
     });
 
