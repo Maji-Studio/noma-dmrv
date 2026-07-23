@@ -637,6 +637,10 @@ export async function loadCreditBatchRollups(
   if (ids.length === 0) return {};
   return db.transaction((tx) =>
     loadCreditBatchRollupsWithExecutor(ctx, ids, tx),
+    {
+      isolationLevel: "repeatable read",
+      accessMode: "read only",
+    },
   );
 }
 
@@ -653,80 +657,86 @@ export async function loadCreditBatchAccounting(
   const ids = uniqueSorted(batchIds);
   if (ids.length === 0) return {};
 
-  return db.transaction(async (tx) => {
-    const rollupsByBatch = await loadCreditBatchRollupsWithExecutor(
-      ctx,
-      ids,
-      tx,
-    );
-    const rollups = ids.flatMap((id) => {
-      const rollup = rollupsByBatch[id];
-      return rollup ? [rollup] : [];
-    });
-    const allowedIds = rollups.map(({ batch }) => batch.id);
-    if (allowedIds.length === 0) return {};
+  return db.transaction(
+    async (tx) => {
+      const rollupsByBatch = await loadCreditBatchRollupsWithExecutor(
+        ctx,
+        ids,
+        tx,
+      );
+      const rollups = ids.flatMap((id) => {
+        const rollup = rollupsByBatch[id];
+        return rollup ? [rollup] : [];
+      });
+      const allowedIds = rollups.map(({ batch }) => batch.id);
+      if (allowedIds.length === 0) return {};
 
-    const sampleRows = await tx
-      .select()
-      .from(samples)
-      .where(
-        and(
-          inArray(samples.creditBatchId, allowedIds),
-          eq(samples.organizationId, ctx.organizationId),
-        ),
-      )
-      .orderBy(asc(samples.id));
-    const samplesByBatch = new Map<string, Sample[]>();
-    for (const sample of sampleRows) {
-      if (!sample.creditBatchId) continue;
-      const batchSamples = samplesByBatch.get(sample.creditBatchId) ?? [];
-      batchSamples.push(sample);
-      samplesByBatch.set(sample.creditBatchId, batchSamples);
-    }
-    const providersByFacility = await loadFacilityCertifiers(
-      ctx,
-      tx,
-      rollups.map(({ batch }) => batch.facilityId),
-    );
+      const sampleRows = await tx
+        .select()
+        .from(samples)
+        .where(
+          and(
+            inArray(samples.creditBatchId, allowedIds),
+            eq(samples.organizationId, ctx.organizationId),
+          ),
+        )
+        .orderBy(asc(samples.id));
+      const samplesByBatch = new Map<string, Sample[]>();
+      for (const sample of sampleRows) {
+        if (!sample.creditBatchId) continue;
+        const batchSamples = samplesByBatch.get(sample.creditBatchId) ?? [];
+        batchSamples.push(sample);
+        samplesByBatch.set(sample.creditBatchId, batchSamples);
+      }
+      const providersByFacility = await loadFacilityCertifiers(
+        ctx,
+        tx,
+        rollups.map(({ batch }) => batch.facilityId),
+      );
 
-    return Object.fromEntries(
-      rollups.map((rollup) => {
-        const { batch, lineageFacts } = rollup;
-        const batchSamples = samplesByBatch.get(batch.id) ?? [];
-        const weightedChemistry = weightedBatchChemistry([
-          {
-            creditBatchId: batch.id,
-            creditBatchCode: batch.code,
-            samples: batchSamples,
-            runs: lineageFacts.runs.map((run) => ({
-              id: run.id,
-              biocharDryMassKg: run.biocharDryMassKg,
-            })),
-          },
-        ]);
-        const chemistry: CreditBatchChemistry = {
-          ...weightedChemistry,
-          blueprint1000YearReplicates:
-            batch.durabilityOption === "1000_year"
-              ? extract1000YearBlueprintReplicates(batchSamples)
-              : [],
-        };
-        const provider = providersByFacility.get(batch.facilityId) ?? null;
-        return [
-          batch.id,
-          {
-            ...rollup,
-            co2ePreview: buildCo2eStoredPreview(
-              batch,
-              provider,
-              lineageFacts,
-              chemistry,
-            ),
-          },
-        ];
-      }),
-    );
-  });
+      return Object.fromEntries(
+        rollups.map((rollup) => {
+          const { batch, lineageFacts } = rollup;
+          const batchSamples = samplesByBatch.get(batch.id) ?? [];
+          const weightedChemistry = weightedBatchChemistry([
+            {
+              creditBatchId: batch.id,
+              creditBatchCode: batch.code,
+              samples: batchSamples,
+              runs: lineageFacts.runs.map((run) => ({
+                id: run.id,
+                biocharDryMassKg: run.biocharDryMassKg,
+              })),
+            },
+          ]);
+          const chemistry: CreditBatchChemistry = {
+            ...weightedChemistry,
+            blueprint1000YearReplicates:
+              batch.durabilityOption === "1000_year"
+                ? extract1000YearBlueprintReplicates(batchSamples)
+                : [],
+          };
+          const provider = providersByFacility.get(batch.facilityId) ?? null;
+          return [
+            batch.id,
+            {
+              ...rollup,
+              co2ePreview: buildCo2eStoredPreview(
+                batch,
+                provider,
+                lineageFacts,
+                chemistry,
+              ),
+            },
+          ];
+        }),
+      );
+    },
+    {
+      isolationLevel: "repeatable read",
+      accessMode: "read only",
+    },
+  );
 }
 
 /** Compatibility preview read backed exclusively by the deep accounting seam. */
