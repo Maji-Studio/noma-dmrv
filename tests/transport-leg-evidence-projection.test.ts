@@ -230,3 +230,95 @@ describe("getTransportLegsWithEvidenceForEntities — biochar delivery evidence"
     expect(await loadCount()).toBe(0);
   });
 });
+
+describe("getTransportLegsWithEvidenceForEntities — correlated direct evidence", () => {
+  const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
+  const feedstockEntityId = crypto.randomUUID();
+  const sampleEntityId = crypto.randomUUID();
+  const legIds: string[] = [];
+  const documentIds: string[] = [];
+
+  beforeAll(async () => {
+    await ensureTestOrg();
+
+    const insertedLegs = await db
+      .insert(transportLegs)
+      .values([
+        {
+          organizationId: TEST_ORG_ID,
+          entityType: "feedstock",
+          entityId: feedstockEntityId,
+          distanceKm: 25,
+          distanceSource: "document",
+          transportMethodType: "road",
+          loadMassKg: 100,
+        },
+        {
+          organizationId: TEST_ORG_ID,
+          entityType: "sample",
+          entityId: sampleEntityId,
+          distanceKm: 10,
+          distanceSource: "document",
+          transportMethodType: "road",
+          loadMassKg: 1,
+        },
+      ])
+      .returning({ id: transportLegs.id });
+    legIds.push(...insertedLegs.map((row) => row.id));
+  });
+
+  afterAll(async () => {
+    if (documentIds.length > 0) {
+      await db.delete(documents).where(inArray(documents.id, documentIds));
+    }
+    if (legIds.length > 0) {
+      await db.delete(transportLegs).where(inArray(transportLegs.id, legIds));
+    }
+  });
+
+  async function addEvidence(
+    entityType: "feedstock" | "transport_leg",
+    entityId: string,
+    suffix: string,
+  ) {
+    const [document] = await db
+      .insert(documents)
+      .values({
+        organizationId: TEST_ORG_ID,
+        entityType,
+        entityId,
+        documentType: "bill_of_lading",
+        fileName: `direct-${suffix}-${tag}.pdf`,
+        fileUrl: `https://example.invalid/direct-${suffix}-${tag}.pdf`,
+        uploadStatus: "uploaded",
+      })
+      .returning({ id: documents.id });
+    documentIds.push(document.id);
+  }
+
+  async function loadDirectCounts() {
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const [feedstockRows, sampleRows] = await Promise.all([
+      getTransportLegsWithEvidenceForEntities(
+        ctx,
+        "feedstock",
+        [feedstockEntityId],
+      ),
+      getTransportLegsWithEvidenceForEntities(ctx, "sample", [sampleEntityId]),
+    ]);
+    return {
+      feedstock: feedstockRows[0]?.transportEvidenceDocumentCount,
+      sample: sampleRows[0]?.transportEvidenceDocumentCount,
+    };
+  }
+
+  it("counts only evidence attached to the projected parent", async () => {
+    await addEvidence("feedstock", crypto.randomUUID(), "sibling-feedstock");
+    await addEvidence("transport_leg", crypto.randomUUID(), "sibling-leg");
+    expect(await loadDirectCounts()).toEqual({ feedstock: 0, sample: 0 });
+
+    await addEvidence("feedstock", feedstockEntityId, "target-feedstock");
+    await addEvidence("transport_leg", legIds[1], "target-leg");
+    expect(await loadDirectCounts()).toEqual({ feedstock: 1, sample: 1 });
+  });
+});

@@ -4,6 +4,10 @@ import type {
   BatchHealthFixTarget,
 } from "./batch-health";
 import { certificationSettingsHref } from "./links";
+import {
+  buildEntityDeepLink,
+  ENTITY_FOCUS_TARGETS,
+} from "@/lib/entity-deep-link";
 
 export interface BatchHealthFixLink {
   label: string;
@@ -108,6 +112,21 @@ export function batchHealthFixLinkFor(
         label: "Link production run",
         href: `/biochar-products?facility=${facilityId}`,
       };
+    case "feedstocks": {
+      const feedstockId = affectedIds[0];
+      return {
+        label: "Review feedstock transport",
+        href: feedstockId
+          ? buildEntityDeepLink({
+              path: "/feedstocks",
+              facilityId,
+              entityQueryKey: "feedstock",
+              entityId: feedstockId,
+              focus: ENTITY_FOCUS_TARGETS.transportEvidence,
+            })
+          : `/feedstocks?facility=${facilityId}`,
+      };
+    }
     case "deliveries":
     case "deliveryDistances":
       return {

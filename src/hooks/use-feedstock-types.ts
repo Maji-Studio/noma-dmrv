@@ -21,7 +21,7 @@ export const feedstockTypeKeys = {
   list: () => ["feedstock-types", "list"] as const,
 };
 
-export function useFeedstockTypeList() {
+export function useFeedstockTypeList(enabled = true) {
   return useQuery({
     queryKey: feedstockTypeKeys.list(),
     queryFn: async () => {
@@ -29,6 +29,7 @@ export function useFeedstockTypeList() {
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
+    enabled,
   });
 }
 

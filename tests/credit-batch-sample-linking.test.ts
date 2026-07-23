@@ -77,6 +77,14 @@ const baseBatchData = {
   feedstockTypeId: "",
 };
 
+function batchDataForMonth(month: string) {
+  const startDate = new Date(`${month}-01T00:00:00.000Z`);
+  const endDate = new Date(
+    Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 1, 0),
+  );
+  return { ...baseBatchData, startDate, endDate };
+}
+
 /** Create a sample through the write path — anchored on a credit batch. */
 async function makeSample(
   creditBatchId: string,
@@ -185,22 +193,23 @@ beforeAll(async () => {
     .insert(productionRuns)
     .values(
       [
-        "derive",
-        "backfill",
-        "reA",
-        "reB",
-        "reC",
-        "update",
-        "moveB",
-        "tierFrom",
-      ].map((tag, i) => ({
+        ["derive", "2025-01-15"],
+        ["backfill", "2025-05-15"],
+        ["reA", "2025-06-10"],
+        ["reB", "2025-06-11"],
+        ["reC", "2025-06-12"],
+        ["update", "2025-02-15"],
+        ["moveB", "2025-03-15"],
+        ["tierFrom", "2025-04-15"],
+      ].map(([tag, date]) => ({
         organizationId: TEST_ORG_ID,
         code: `PR-SL-${tag}-${runId}`,
         facilityId,
-        status: "complete" as const,
+        status:
+          tag === "reC" ? ("running" as const) : ("complete" as const),
         reactorId: reactor.id,
-        startTime: new Date(`2025-06-1${i}T08:00:00Z`),
-        endTime: new Date(`2025-06-1${i}T12:00:00Z`),
+        startTime: new Date(`${date}T08:00:00Z`),
+        endTime: tag === "reC" ? null : new Date(`${date}T12:00:00Z`),
         biocharDryMassKg: 4000,
       })),
     )
@@ -289,7 +298,7 @@ afterAll(async () => {
 describe("Sample side — anchor directly on the credit batch (issue #309)", () => {
   it("createSample links the sample to the given batch, with no run link", async () => {
     const batch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
-      ...baseBatchData,
+      ...batchDataForMonth("2025-01"),
       code: `CB-SL-DERIVE-${Date.now().toString(36)}`,
       facilityId,
       productionRunIds: [runDerive],
@@ -320,7 +329,7 @@ describe("Sample side — anchor directly on the credit batch (issue #309)", () 
 
   it("updateSample moves the sample to another batch", async () => {
     const batchA = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
-      ...baseBatchData,
+      ...batchDataForMonth("2025-02"),
       code: `CB-SL-MOVE-A-${Date.now().toString(36)}`,
       facilityId,
       productionRunIds: [runUpdate],
@@ -331,7 +340,7 @@ describe("Sample side — anchor directly on the credit batch (issue #309)", () 
     expect(await batchIdOfSample(sampleId)).toBe(batchA.id);
 
     const batchB = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
-      ...baseBatchData,
+      ...batchDataForMonth("2025-03"),
       code: `CB-SL-MOVE-B-${Date.now().toString(36)}`,
       facilityId,
       productionRunIds: [runMoveB],
@@ -422,7 +431,7 @@ describe("Server-side 1000-year evidence guard — batch tier is source of truth
     // evidence-less sample can be created on it before the move-onto-1000-year
     // update is rejected.
     const fromBatch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
-      ...baseBatchData,
+      ...batchDataForMonth("2025-04"),
       code: `CB-SL-TFROM-${suffix}`,
       facilityId,
       productionRunIds: [runTierFrom],
@@ -556,7 +565,7 @@ describe("Batch side — back-fill and re-point LEGACY run-linked samples", () =
     expect(await batchIdOfSample(sampleId)).toBeNull();
 
     const batch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
-      ...baseBatchData,
+      ...batchDataForMonth("2025-05"),
       code: `CB-SL-BACKFILL-${Date.now().toString(36)}`,
       facilityId,
       productionRunIds: [runBackfill],
@@ -569,12 +578,27 @@ describe("Batch side — back-fill and re-point LEGACY run-linked samples", () =
 
   it("updateCreditBatch unlinks a removed run's legacy sample and links an added run's", async () => {
     const batch = await createCreditBatch(makeTestOrgContext(TEST_USER_ID), {
-      ...baseBatchData,
+      ...batchDataForMonth("2025-06"),
       code: `CB-SL-REPOINT-${Date.now().toString(36)}`,
       facilityId,
       productionRunIds: [runReA, runReB],
     });
     createdIds.creditBatches.push(batch.id);
+
+    await db
+      .update(productionRuns)
+      .set({
+        startTime: new Date("2025-07-11T08:00:00Z"),
+        endTime: new Date("2025-07-11T12:00:00Z"),
+      })
+      .where(eq(productionRuns.id, runReB));
+    await db
+      .update(productionRuns)
+      .set({
+        status: "complete",
+        endTime: new Date("2025-06-12T12:00:00Z"),
+      })
+      .where(eq(productionRuns.id, runReC));
 
     const sampleA = await insertLegacySample(
       runReA,

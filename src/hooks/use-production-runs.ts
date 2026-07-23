@@ -382,11 +382,11 @@ export function useUpdateProductionRun(
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
       queryClient.invalidateQueries({ queryKey: productionRunKeys.statsPrefix() });
-      // Completing a run makes it selectable by the credit-batch form — its
-      // cached run options must not keep serving the pre-completion empty
-      // result for another staleTime window (QA 2026-07-21 F5).
+      // Completing a run can now attach it to a matching credit batch in the
+      // same transaction. Refresh every batch surface: membership counts,
+      // detail lineage, previews/readiness, and form options all change.
       queryClient.invalidateQueries({
-        queryKey: creditBatchKeys.productionRunOptionsPrefix(),
+        queryKey: creditBatchKeys.all,
       });
       invalidateCertificationReadiness(queryClient);
 

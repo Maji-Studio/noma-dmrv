@@ -166,6 +166,25 @@ describe("batchHealthFixLinkFor", () => {
     expect(link.href).toBe(`/deliveries?facility=${facilityId}`);
   });
 
+  it("deep-links feedstock transport evidence to the affected feedstock", () => {
+    const feedstockId = "11111111-1111-4111-8111-111111111111";
+    const link = batchHealthFixLinkFor(
+      check("entityReadiness", "feedstocks", [
+        {
+          id: feedstockId,
+          code: "feedstock transport 1",
+          missing: ["Transport evidence"],
+        },
+      ]),
+      facilityId,
+    );
+
+    expect(link.label).toBe("Review feedstock transport");
+    expect(link.href).toBe(
+      `/feedstocks?facility=${facilityId}&feedstock=${feedstockId}&mode=edit&focus=transport-evidence`,
+    );
+  });
+
   it("prefers an explicit fixTarget over the fallback", () => {
     // carbon normally falls back to batchDetails, but an explicit override wins.
     const link = batchHealthFixLinkFor(
