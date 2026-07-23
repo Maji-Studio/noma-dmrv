@@ -341,6 +341,10 @@ async function resolveScopeForCreditBatch(
   )[creditBatchId];
   if (!accounting) throw new SafeError("Credit batch not found");
 
+  if (!options?.singleBatch && accounting.batch.removalId) {
+    return resolveScopeForRemoval(orgCtx, accounting.batch.removalId);
+  }
+
   return resolveSingleBatchScope(accounting);
 }
 
