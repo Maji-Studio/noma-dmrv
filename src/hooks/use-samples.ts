@@ -519,9 +519,9 @@ export function useSampleCacheInvalidation() {
       }),
 
     /** Invalidate sample stats */
-    invalidateStats: (productionRunId?: string, facilityId?: string) =>
+    invalidateStats: (creditBatchId?: string, facilityId?: string) =>
       queryClient.invalidateQueries({
-        queryKey: sampleKeys.stats(productionRunId, facilityId),
+        queryKey: sampleKeys.stats(creditBatchId, facilityId),
       }),
 
     /** Remove a specific sample from cache (use after deletion) */

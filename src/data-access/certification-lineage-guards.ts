@@ -168,7 +168,9 @@ function lineageQuery(
 /**
  * Blocks upstream source-data mutation once the record is part of a live
  * certification artifact. The lineage path is re-derived from current DB state
- * instead of trusting UI context or stale denormalized membership.
+ * instead of trusting UI context or stale denormalized membership. When the
+ * initial lineage is empty there are no artifact rows to lock, so this falls
+ * back to the caller's ordinary transaction isolation.
  */
 export async function assertCanMutateCertifiedLineage(
   ctx: OrgContext,
