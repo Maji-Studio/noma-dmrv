@@ -44,7 +44,8 @@ import {
 import { hasCertifierCredentials } from "./certifier-credentials";
 import {
   assertDeclaredFeedstockType,
-  findMatchingUnassignedProductionRunIds,
+  lockCreditBatchDeclarationRuns,
+  lockCreditBatchForUpdate,
   lockCreditBatchProductionRuns,
   validateProductionRunIds,
 } from "./credit-batch-membership";
@@ -422,19 +423,25 @@ export async function createCreditBatch(
     // facility, window, prior assignment), then GUARD that they all match the
     // declared feedstock type, then find-or-create the (facility, feedstock)
     // production process this batch is a <=1-month slice of.
-    const runIds =
-      resolvedProductionRunIds.length > 0
-        ? resolvedProductionRunIds
-        : await findMatchingUnassignedProductionRunIds(ctx, tx, {
-            facilityId: batchData.facilityId,
-            feedstockTypeId: batchData.feedstockTypeId,
-            startDate: batchData.startDate,
-            endDate: batchData.endDate,
-          });
-    resolvedProductionRunIds = runIds;
-    const lockedRuns = await lockCreditBatchProductionRuns(ctx, tx, runIds);
+    const { runIds, lockedRuns } = await lockCreditBatchDeclarationRuns(
+      ctx,
+      tx,
+      {
+        facilityId: batchData.facilityId,
+        feedstockTypeId: batchData.feedstockTypeId,
+        startDate: batchData.startDate,
+        endDate: batchData.endDate,
+        requestedProductionRunIds: resolvedProductionRunIds,
+      },
+    );
     const certifier = await resolveCreditBatchCertifier(ctx, tx, batchData.facilityId);
     const feedstockTypeId = batchData.feedstockTypeId;
+    const process = await findOrCreateProductionProcess(
+      ctx,
+      { facilityId: batchData.facilityId, feedstockTypeId },
+      tx,
+    );
+    resolvedProductionRunIds = runIds;
     await validateProductionRunIds(
       ctx,
       tx,
@@ -446,11 +453,6 @@ export async function createCreditBatch(
       lockedRuns,
     );
     await assertDeclaredFeedstockType(ctx, tx, runIds, feedstockTypeId);
-    const process = await findOrCreateProductionProcess(
-      ctx,
-      { facilityId: batchData.facilityId, feedstockTypeId },
-      tx,
-    );
     if (sampling === "unsampled") {
       if (certifier !== "isometric" || !hasIsometricCredentials) {
         throw new SafeError(
@@ -632,22 +634,10 @@ export async function updateCreditBatch(
       membershipRunIds,
     );
 
-    // Fetch existing batch inside transaction to avoid TOCTOU race
-    const [existingBatch] = await tx
-      .select({
-        facilityId: creditBatches.facilityId,
-        startDate: creditBatches.startDate,
-        endDate: creditBatches.endDate,
-        removalId: creditBatches.removalId,
-        feedstockTypeId: creditBatches.feedstockTypeId,
-      })
-      .from(creditBatches)
-      .where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)))
-      .for("update");
-
-    if (!existingBatch) {
-      throw new SafeError("Credit batch not found");
-    }
+    const existingBatch = await lockCreditBatchForUpdate(ctx, tx, id, {
+      facilityId: updateFields.facilityId,
+      feedstockTypeId: updateFields.feedstockTypeId,
+    });
 
     if (productionRunIds !== undefined) {
       const lockedCurrentMembership = await tx
@@ -780,13 +770,15 @@ export async function updateCreditBatch(
         .delete(creditBatchProductionRuns)
         .where(and(eq(creditBatchProductionRuns.creditBatchId, id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)));
 
-      await tx.insert(creditBatchProductionRuns).values(
-        productionRunIds.map((productionRunId) => ({
-          organizationId: ctx.organizationId,
-          creditBatchId: id,
-          productionRunId,
-        }))
-      );
+      if (productionRunIds.length > 0) {
+        await tx.insert(creditBatchProductionRuns).values(
+          productionRunIds.map((productionRunId) => ({
+            organizationId: ctx.organizationId,
+            creditBatchId: id,
+            productionRunId,
+          }))
+        );
+      }
 
       // Re-point this batch's sample links to match the new member-run set
       // (ADR 0016): unlink samples whose run left the batch, then link the

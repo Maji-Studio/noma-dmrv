@@ -25,7 +25,7 @@ import {
 type Executor = DbTransaction | typeof db;
 const PRODUCTION_PROCESS_CURRENT_LOCK_SCOPE = "production-process-current";
 
-async function lockCurrentProductionProcess(
+export async function lockProductionProcessScope(
   executor: Executor,
   params: { facilityId: string; feedstockTypeId: string },
 ): Promise<void> {
@@ -68,7 +68,7 @@ export async function findOrCreateProductionProcess(
 
   await assertSameOrg(ctx, facilities, params.facilityId, executor);
   await assertSameOrg(ctx, feedstockTypes, params.feedstockTypeId, executor);
-  await lockCurrentProductionProcess(executor, params);
+  await lockProductionProcessScope(executor, params);
   const existing = await findCurrentProductionProcess(ctx, params, executor);
   if (existing) return existing;
 
@@ -92,7 +92,7 @@ export async function startNewProductionProcess(
   return db.transaction(async (tx) => {
     await assertSameOrg(ctx, facilities, input.facilityId, tx);
     await assertSameOrg(ctx, feedstockTypes, input.feedstockTypeId, tx);
-    await lockCurrentProductionProcess(tx, input);
+    await lockProductionProcessScope(tx, input);
     const [created] = await tx
       .insert(productionProcesses)
       .values({

@@ -23,6 +23,7 @@ import { assertCreditBatchProductionWindow } from "./credit-batch-production-win
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
+import { lockProductionProcessScope } from "./production-processes";
 
 export interface LockedCreditBatchProductionRun {
   id: string;
@@ -42,11 +43,12 @@ export async function lockCreditBatchProductionRuns(
   ctx: OrgContext,
   tx: DbTransaction,
   productionRunIds: readonly string[],
+  options?: { skipLocked?: boolean },
 ): Promise<LockedCreditBatchProductionRun[]> {
   const sortedRunIds = [...new Set(productionRunIds)].sort();
   if (sortedRunIds.length === 0) return [];
 
-  return tx
+  const query = tx
     .select({
       id: productionRuns.id,
       code: productionRuns.code,
@@ -59,8 +61,120 @@ export async function lockCreditBatchProductionRuns(
       inArray(productionRuns.id, sortedRunIds),
       eq(productionRuns.organizationId, ctx.organizationId),
     ))
-    .orderBy(productionRuns.id)
+    .orderBy(productionRuns.id);
+  return options?.skipLocked
+    ? query.for("update", { skipLocked: true })
+    : query.for("update");
+}
+
+export async function lockCreditBatchDeclarationRuns(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  params: {
+    facilityId: string;
+    feedstockTypeId: string;
+    startDate: string | Date;
+    endDate: string | Date;
+    requestedProductionRunIds: string[];
+  },
+): Promise<{
+  runIds: string[];
+  lockedRuns: LockedCreditBatchProductionRun[];
+}> {
+  const matchingBeforeLock = await findMatchingUnassignedProductionRunIds(
+    ctx,
+    tx,
+    params,
+  );
+  let runIds =
+    params.requestedProductionRunIds.length > 0
+      ? params.requestedProductionRunIds
+      : matchingBeforeLock;
+  let lockedRuns = await lockCreditBatchProductionRuns(ctx, tx, runIds);
+
+  await lockProductionProcessScope(tx, params);
+  const matchingAfterLock = await findMatchingUnassignedProductionRunIds(
+    ctx,
+    tx,
+    params,
+  );
+  const beforeIds = new Set(matchingBeforeLock);
+  const selectedIds = new Set(runIds);
+  const concurrentlyCompletedRunIds = matchingAfterLock.filter(
+    (runId) => !beforeIds.has(runId) && !selectedIds.has(runId),
+  );
+  if (concurrentlyCompletedRunIds.length > 0) {
+    const concurrentlyLocked = await lockCreditBatchProductionRuns(
+      ctx,
+      tx,
+      concurrentlyCompletedRunIds,
+      { skipLocked: true },
+    );
+    if (concurrentlyLocked.length !== concurrentlyCompletedRunIds.length) {
+      throw new SafeError(
+        "Matching production runs are being updated while this Credit batch is being declared. Refresh and retry.",
+      );
+    }
+    runIds = [...new Set([...runIds, ...concurrentlyCompletedRunIds])].sort();
+    lockedRuns = [...lockedRuns, ...concurrentlyLocked];
+  }
+  return { runIds, lockedRuns };
+}
+
+export interface LockedCreditBatchForUpdate {
+  facilityId: string;
+  startDate: string;
+  endDate: string;
+  removalId: string | null;
+  feedstockTypeId: string;
+}
+
+export async function lockCreditBatchForUpdate(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  id: string,
+  target: { facilityId?: string; feedstockTypeId?: string },
+): Promise<LockedCreditBatchForUpdate> {
+  const selectFields = {
+    facilityId: creditBatches.facilityId,
+    startDate: creditBatches.startDate,
+    endDate: creditBatches.endDate,
+    removalId: creditBatches.removalId,
+    feedstockTypeId: creditBatches.feedstockTypeId,
+  };
+  const [snapshot] = await tx
+    .select(selectFields)
+    .from(creditBatches)
+    .where(and(
+      eq(creditBatches.id, id),
+      eq(creditBatches.organizationId, ctx.organizationId),
+    ));
+  if (!snapshot) throw new SafeError("Credit batch not found");
+
+  await lockProductionProcessScope(tx, {
+    facilityId: target.facilityId ?? snapshot.facilityId,
+    feedstockTypeId: target.feedstockTypeId ?? snapshot.feedstockTypeId,
+  });
+  const [locked] = await tx
+    .select(selectFields)
+    .from(creditBatches)
+    .where(and(
+      eq(creditBatches.id, id),
+      eq(creditBatches.organizationId, ctx.organizationId),
+    ))
     .for("update");
+  if (!locked) throw new SafeError("Credit batch not found");
+  if (
+    locked.facilityId !== snapshot.facilityId ||
+    locked.feedstockTypeId !== snapshot.feedstockTypeId ||
+    locked.startDate !== snapshot.startDate ||
+    locked.endDate !== snapshot.endDate
+  ) {
+    throw new SafeError(
+      "The Credit batch cohort changed while this update was being prepared. Refresh and retry.",
+    );
+  }
+  return locked;
 }
 
 /**
@@ -402,6 +516,13 @@ export async function attachProductionRunToMatchingCreditBatch(
     tx,
     [productionRunId],
   );
+  // Batch declarations and run completions share this predicate lock. The
+  // production-run transaction already holds the run row, so both paths order
+  // their locks run -> process scope before reading/writing membership.
+  await lockProductionProcessScope(tx, {
+    facilityId: run.facilityId,
+    feedstockTypeId,
+  });
   const matchingBatches = await tx
     .select({
       id: creditBatches.id,
