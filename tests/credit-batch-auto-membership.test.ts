@@ -537,6 +537,14 @@ describe("credit batch automatic production-run membership", () => {
       feedstockMoisturePercent: 20,
       feedstockStorageLocationId: storageLocationId,
     });
+    productionRunIds.push(first.id);
+    await updateProductionRun(ctx, first.id, {
+      status: "complete",
+      endTime: new Date("2027-05-10T12:00:00.000Z"),
+      biocharOutputKg: 30,
+      biocharMoisturePercent: 20,
+    });
+
     const second = await createProductionRun(ctx, {
       code: `PR-CBAM-SUBSET-B-${tag}`,
       facilityId,
@@ -548,13 +556,7 @@ describe("credit batch automatic production-run membership", () => {
       feedstockMoisturePercent: 20,
       feedstockStorageLocationId: storageLocationId,
     });
-    productionRunIds.push(first.id, second.id);
-    await updateProductionRun(ctx, first.id, {
-      status: "complete",
-      endTime: new Date("2027-05-10T12:00:00.000Z"),
-      biocharOutputKg: 30,
-      biocharMoisturePercent: 20,
-    });
+    productionRunIds.push(second.id);
     await updateProductionRun(ctx, second.id, {
       status: "complete",
       endTime: new Date("2027-05-11T12:00:00.000Z"),
@@ -591,7 +593,7 @@ describe("credit batch automatic production-run membership", () => {
     const run = await createProductionRun(ctx, {
       code: `PR-CBAM-UPDATE-DISCOVERY-${tag}`,
       facilityId,
-      reactorId,
+      reactorId: cohortGuardReactorId,
       status: "running",
       startTime: new Date("2028-03-15T08:00:00.000Z"),
       endTime: null,
@@ -666,6 +668,14 @@ describe("credit batch automatic production-run membership", () => {
       feedstockMoisturePercent: 20,
       feedstockStorageLocationId: storageLocationId,
     });
+    productionRunIds.push(emptyFeedstockRun.id);
+    await updateProductionRun(ctx, emptyFeedstockRun.id, {
+      status: "complete",
+      endTime: new Date("2027-07-10T12:00:00.000Z"),
+      biocharOutputKg: 30,
+      biocharMoisturePercent: 20,
+    });
+
     const mixedFeedstockRun = await createProductionRun(ctx, {
       code: `PR-CBAM-MIXED-FS-${tag}`,
       facilityId,
@@ -677,13 +687,7 @@ describe("credit batch automatic production-run membership", () => {
       feedstockMoisturePercent: 20,
       feedstockStorageLocationId: storageLocationId,
     });
-    productionRunIds.push(emptyFeedstockRun.id, mixedFeedstockRun.id);
-    await updateProductionRun(ctx, emptyFeedstockRun.id, {
-      status: "complete",
-      endTime: new Date("2027-07-10T12:00:00.000Z"),
-      biocharOutputKg: 30,
-      biocharMoisturePercent: 20,
-    });
+    productionRunIds.push(mixedFeedstockRun.id);
     await updateProductionRun(ctx, mixedFeedstockRun.id, {
       status: "complete",
       endTime: new Date("2027-07-11T12:00:00.000Z"),
@@ -820,7 +824,7 @@ describe("credit batch automatic production-run membership", () => {
       facilityId,
       reactorId,
       status: "running",
-      startTime: new Date("2027-06-15T08:00:00.000Z"),
+      startTime: new Date("2027-10-15T08:00:00.000Z"),
       endTime: null,
       feedstockWetMassKg: 100,
       feedstockMoisturePercent: 20,
@@ -858,7 +862,7 @@ describe("credit batch automatic production-run membership", () => {
       await scopeLockReady;
       completionPromise = updateProductionRun(ctx, running.id, {
         status: "complete",
-        endTime: new Date("2027-06-15T12:00:00.000Z"),
+        endTime: new Date("2027-10-15T12:00:00.000Z"),
         biocharOutputKg: 30,
         biocharMoisturePercent: 20,
       });
@@ -888,8 +892,8 @@ describe("credit batch automatic production-run membership", () => {
         code: batchCode,
         facilityId,
         feedstockTypeId,
-        startDate: new Date("2027-06-01T00:00:00.000Z"),
-        endDate: new Date("2027-06-30T00:00:00.000Z"),
+        startDate: new Date("2027-10-01T00:00:00.000Z"),
+        endDate: new Date("2027-10-31T00:00:00.000Z"),
         productionRunIds: [],
         currency: "TZS",
       });
