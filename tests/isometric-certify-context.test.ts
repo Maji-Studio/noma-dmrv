@@ -10,7 +10,10 @@ import {
   type CreditBatchLineageFacts,
   loadCreditBatchAccounting,
 } from "@/data-access/credit-batch-accounting";
-import { getCreditBatchById } from "@/data-access/credit-batches";
+import {
+  getCreditBatchById,
+  getCreditBatchRemovalId,
+} from "@/data-access/credit-batches";
 import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
 import {
   listDocumentsForEntityIds,
@@ -34,6 +37,7 @@ import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "@/lib/certification/applicati
 
 vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchById: vi.fn(),
+  getCreditBatchRemovalId: vi.fn(),
 }));
 
 vi.mock("@/data-access/credit-batch-production-runs", () => ({
@@ -88,6 +92,7 @@ vi.mock("@/lib/isometric", async () => {
 });
 
 const mockedGetCreditBatch = vi.mocked(getCreditBatchById);
+const mockedGetCreditBatchRemovalId = vi.mocked(getCreditBatchRemovalId);
 const mockedGetApplicationsForRuns = vi.mocked(getApplicationsForRuns);
 const mockedGetMapping = vi.mocked(getCertifierProjectByFacility);
 const mockedHasCredentials = vi.mocked(hasCertifierCredentials);
@@ -325,6 +330,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     vi.resetAllMocks();
     mockNormalizedLineageFacts();
     mockedHasCredentials.mockResolvedValue(true);
+    mockedGetCreditBatchRemovalId.mockResolvedValue(null);
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       code: "CB-1",
@@ -365,6 +371,10 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(mockedListTemplates).not.toHaveBeenCalled();
     expect(mockedListBlueprints).not.toHaveBeenCalled();
     expect(mockedGetLegs).not.toHaveBeenCalled();
+    expect(mockedGetCreditBatchRemovalId).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: expect.any(String) }),
+      CREDIT_BATCH_ID,
+    );
   });
 
   it("reports missing organization credentials and skips remote calls", async () => {

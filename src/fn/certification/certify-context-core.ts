@@ -27,6 +27,7 @@ import {
   type CreditBatchCo2eStoredPreview,
   type CreditBatchRollup,
 } from "@/data-access/credit-batch-accounting";
+import { getCreditBatchRemovalId } from "@/data-access/credit-batches";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
 import {
@@ -328,15 +329,19 @@ async function resolveScopeForCreditBatch(
   creditBatchId: string,
   options?: { singleBatch?: boolean },
 ): Promise<RemovalScope> {
+  if (!options?.singleBatch) {
+    const removalId = await getCreditBatchRemovalId(orgCtx, creditBatchId);
+    if (removalId) {
+      return resolveScopeForRemoval(orgCtx, removalId);
+    }
+  }
+
   const accounting = (
     await loadCreditBatchAccounting(orgCtx, [creditBatchId])
   )[creditBatchId];
   if (!accounting) throw new SafeError("Credit batch not found");
 
-  if (!accounting.batch.removalId || options?.singleBatch) {
-    return resolveSingleBatchScope(accounting);
-  }
-  return resolveScopeForRemoval(orgCtx, accounting.batch.removalId);
+  return resolveSingleBatchScope(accounting);
 }
 
 function resolveSingleBatchScope(

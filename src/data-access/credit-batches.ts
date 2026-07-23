@@ -207,6 +207,32 @@ export async function getCreditBatches(
 }
 
 /**
+ * Resolve only the removal membership needed to choose certification scope.
+ * This avoids assembling full accounting for a grouped batch before the
+ * removal-wide accounting read.
+ */
+export async function getCreditBatchRemovalId(
+  ctx: OrgContext,
+  id: string,
+): Promise<string | null> {
+  requireOrgScope(ctx);
+  const [batch] = await db
+    .select({ removalId: creditBatches.removalId })
+    .from(creditBatches)
+    .where(
+      and(
+        eq(creditBatches.id, id),
+        eq(creditBatches.organizationId, ctx.organizationId),
+      ),
+    )
+    .limit(1);
+  if (!batch) {
+    throw new SafeError("Credit batch not found");
+  }
+  return batch.removalId;
+}
+
+/**
  * Get credit batch by ID with full details
  */
 export async function getCreditBatchById(
