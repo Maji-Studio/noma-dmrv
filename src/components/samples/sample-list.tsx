@@ -18,6 +18,7 @@ import {
 } from "@/hooks/use-samples";
 import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { useCreateTransportLeg } from "@/hooks/use-transport-legs";
 import { SelectFacilityEmptyState } from "@/components/navigation";
@@ -486,6 +487,8 @@ export function SampleList() {
       setSideSheet({ mode: "view", entity: displaySideSheet.entity });
     }
   };
+
+  useOpenCreateIntent(openCreate);
 
   const clearFilters = () => { setSearchQuery(""); setCreditBatchFilter(null); setCurrentPage(1); };
   const hasActiveFilters = searchQuery || creditBatchFilter;

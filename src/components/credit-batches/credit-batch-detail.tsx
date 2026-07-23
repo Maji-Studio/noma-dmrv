@@ -186,7 +186,10 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
           productionRuns={memberRuns}
           feedstockName={creditBatch.feedstockTypeName}
         />
-        <CreditBatchDurabilityPanel creditBatchId={creditBatchId} />
+        <CreditBatchDurabilityPanel
+          creditBatchId={creditBatchId}
+          facilityId={creditBatch.facilityId}
+        />
       </div>
 
       {/* Edit side sheet — the same form the list page mounts */}

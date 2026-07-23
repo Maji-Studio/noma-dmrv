@@ -128,12 +128,12 @@ export function CreditBatchOverview({
       </div>
 
       {creditBatch.siteManagementNotes?.trim() && (
-        <div className="border-t border-[var(--color-border-tertiary)] pt-14">
+        <div className="border-t border-[var(--color-border-tertiary)] pt-20">
           <OverviewValue label="Notes" value={creditBatch.siteManagementNotes} />
         </div>
       )}
 
-      <div className="flex flex-col gap-10 border-t border-[var(--color-border-tertiary)] pt-14">
+      <div className="flex flex-col gap-10 border-t border-[var(--color-border-tertiary)] pt-20">
         <div className="flex items-center justify-between gap-12">
           <h2 className="inline-flex items-center gap-7 body-small font-medium text-[var(--color-text-primary)]">
             <StackIcon size={16} weight="bold" aria-hidden />
