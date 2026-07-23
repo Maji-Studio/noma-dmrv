@@ -39,6 +39,7 @@ import {
   defaultProductionReadinessGap,
   type ProductionReadinessGap,
 } from "@/lib/certification/production-readiness";
+import { attributeSoilTemperatureBlockers } from "@/lib/certification/member-batch-gates";
 import { SafeError } from "@/lib/errors";
 import {
   aggregateTransportMassDistance,
@@ -81,15 +82,10 @@ import {
 } from "./selectable-batches";
 
 export type { LinkedGhgStatementStatus } from "./linked-ghg-statement-status";
-export type {
-  SelectableBatch,
-  SelectableBatchesData,
-} from "./selectable-batches";
+export type { SelectableBatch, SelectableBatchesData } from "./selectable-batches";
 
-// Each removal/batch in a facility-level fan-out rebuilds its own context (a
-// chain of DB queries + registry lookups). Bound how many run at once so a
-// facility with many removals/batches can't burst an unbounded number of query
-// chains at the connection pool. Mirrors `READINESS_CONCURRENCY` in overview.ts.
+// Bound facility fan-out so per-removal DB/registry query chains cannot burst
+// the connection pool. Mirrors `READINESS_CONCURRENCY` in overview.ts.
 const FANOUT_CONCURRENCY = 8;
 
 function includesCo2ePreview(
@@ -739,11 +735,8 @@ export async function buildRemovalContext(
       source: facilityFacts.mapping?.defaultSoilTemperatureSource,
     });
 
-  // Soil temperature credits only the 200-year durable fraction; 1000-year
-  // (R₀/TGA) batches have no temperature term. `buildSoilTemperatureGate` scopes
-  // both the fail-closed reference-temp blocker and the over-crediting advisory
-  // to the removal's 200-year batches (and to the sites those batches credit), so
-  // a 1000-year batch never trips either (a mixed removal still gates its members).
+  // Soil temperature credits only the 200-year durable fraction. The gate
+  // scopes blockers and advisories to those batches and their credited sites.
   const soilTemperatureGate = buildSoilTemperatureGate({
     facilityReference: facilityReferenceSoilTemperature,
     batches: batchesWithSamples.map((batch) => ({
@@ -759,6 +752,11 @@ export async function buildRemovalContext(
     ...durabilityBatchBlockers,
     ...soilTemperatureGate.blockers,
   ];
+  const memberBatchesWithSubmissionGates = attributeSoilTemperatureBlockers(
+    memberBatchesWithDurability,
+    batchesWithSamples,
+    soilTemperatureGate.blockers,
+  );
 
   const submissionWarnings = [
     ...buildSubmissionWarnings({
@@ -774,7 +772,7 @@ export async function buildRemovalContext(
     facilityId: scope.facilityId,
     removalId: scope.removalId,
     ...facilityFacts,
-    memberBatches: memberBatchesWithDurability,
+    memberBatches: memberBatchesWithSubmissionGates,
     transportCoverage,
     hasSubmittableRuns: runs.length > 0 && !productionReadinessGap,
     productionReadinessGap,
