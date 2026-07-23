@@ -13,7 +13,12 @@
  * spreading it (`{ ...theme.thText, fontSize: 6.5 }`) so the delta stays
  * visible at the definition site.
  */
-import { createElement as h, type ComponentType, type ReactElement } from "react";
+import {
+  createElement as h,
+  type ComponentType,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import { registerEvidenceLedgerFonts } from "./fonts";
 
@@ -53,10 +58,10 @@ export const Text_ = Text as ComponentType<Record<string, unknown>>;
 export const v = (
   style: Style,
   props: Record<string, unknown>,
-  ...kids: unknown[]
-): ReactElement => h(View_, { style, ...props }, ...(kids as ReactElement[]));
-export const t = (style: Style, text: unknown): ReactElement =>
-  h(Text_, { style }, text as string);
+  ...kids: ReactNode[]
+): ReactElement => h(View_, { style, ...props }, ...kids);
+export const t = (style: Style, text: ReactNode): ReactElement =>
+  h(Text_, { style }, text);
 
 // ── Shared chrome ────────────────────────────────────────────────────────────
 export const theme = StyleSheet.create({
