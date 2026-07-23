@@ -17,15 +17,15 @@ import {
   productionRuns,
   reactors,
 } from "@/db/schema";
-import { loadCreditBatchLineageFacts } from "@/data-access/credit-batch-lineage-facts";
+import { loadCreditBatchAccounting } from "@/data-access/credit-batch-accounting";
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getCreditBatchChainData } from "@/data-access/chain-of-custody-batch";
 import { ensureTestOrg, makeTestOrgContext, TEST_ORG_ID } from "./helpers/test-org";
 
 beforeAll(() => ensureTestOrg());
 
-describe("credit batch lineage facts", () => {
-  it("keeps multi-application Roll-up projections aligned in three queries", async () => {
+describe("credit batch accounting", () => {
+  it("keeps multi-application Roll-up projections aligned behind one deep read", async () => {
     const tag = crypto.randomUUID().slice(0, 8);
     const ids: string[] = [];
     const [facility] = await db.insert(facilities).values({ organizationId: TEST_ORG_ID, code: `LF-F-${tag}`, name: `Lineage ${tag}` }).returning();
@@ -48,11 +48,12 @@ describe("credit batch lineage facts", () => {
     ids.push(...runs.map((r) => r.id), ...stocks.map((s) => s.id), ...products.map((p) => p.id), ...ordersRows.map((o) => o.id), ...deliveryRows.map((d) => d.id), ...appRows.map((a) => a.id));
 
     try {
-      let queryCount = 0;
-      const facts = (await loadCreditBatchLineageFacts(makeTestOrgContext(), [batch.id], db, { onQuery: () => queryCount++ }))[batch.id];
+      const accounting = (
+        await loadCreditBatchAccounting(makeTestOrgContext(), [batch.id])
+      )[batch.id];
+      const facts = accounting.lineageFacts;
       const detail = await getCreditBatchById(makeTestOrgContext(), batch.id, { skipPreview: true });
       const chain = await getCreditBatchChainData(makeTestOrgContext(), batch.id);
-      expect(queryCount).toBe(3);
       expect(facts.productionRunIds).toHaveLength(2);
       expect(facts.applicationIds).toHaveLength(2);
       expect(facts.appliedWeightTons).toBe(3);
@@ -67,6 +68,8 @@ describe("credit batch lineage facts", () => {
       expect(detail?.applicationIds.sort()).toEqual(facts.applicationIds.sort());
       expect(detail?.productionRunIds.sort()).toEqual(facts.productionRunIds.sort());
       expect(detail?.appliedWeightTons).toBe(facts.appliedWeightTons);
+      expect(accounting.appliedWeightTons).toBe(facts.appliedWeightTons);
+      expect(accounting.chemistry.weightedOrganicCarbonPercent).toBeNull();
       expect(chain.lineages.map((lineage) => lineage.applicationId).sort()).toEqual(facts.applicationIds.sort());
       expect(chain.sankey.columns.length).toBeGreaterThan(0);
     } finally {

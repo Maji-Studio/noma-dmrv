@@ -20,15 +20,12 @@ import {
   type ChainOfCustodyData,
 } from "@/data-access/chain-of-custody";
 import {
-  getCo2eStoredPreviews,
-  getCreditBatchById,
+  loadCreditBatchAccounting,
+  type CreditBatchAccounting,
+  type CreditBatchAccountingByBatch,
   type CreditBatchCo2eStoredPreview,
-} from "@/data-access/credit-batches";
+} from "@/data-access/credit-batch-accounting";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
-import {
-  loadCreditBatchLineageFacts,
-  type CreditBatchLineageFacts,
-} from "@/data-access/credit-batch-lineage-facts";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
 import {
   buildMassAccounting,
@@ -321,47 +318,49 @@ interface RemovalScope {
 async function resolveScopeForCreditBatch(
   orgCtx: OrgContext,
   creditBatchId: string,
-  options?: {
-    singleBatch?: boolean;
-    lineageFacts?: CreditBatchLineageFacts;
-  },
+  options?: { singleBatch?: boolean },
 ): Promise<RemovalScope> {
-  // Preloaded once so the CO₂e preview and lineage projection share one load.
-  const facts =
-    options?.lineageFacts ??
-    (await loadCreditBatchLineageFacts(orgCtx, [creditBatchId]))[creditBatchId];
-  const batch = await getCreditBatchById(orgCtx, creditBatchId, {
-    lineageFacts: facts,
-  });
-  if (!batch) throw new SafeError("Credit batch not found");
+  const accounting = (
+    await loadCreditBatchAccounting(orgCtx, [creditBatchId])
+  )[creditBatchId];
+  if (!accounting) throw new SafeError("Credit batch not found");
 
-  if (!batch.removalId || options?.singleBatch) {
-    const runById = new Map(facts.runs.map((run) => [run.id, run]));
-    return {
-      facilityId: batch.facilityId,
-      removalId: null,
-      removal: null,
-      memberBatches: [
-        {
-          id: batch.id,
-          code: batch.code,
-          productionRunIds: batch.productionRunIds,
-          applicationIds: facts.applicationIds,
-          durabilityOption: batch.durabilityOption,
-          productionEmissionsClaimedByRemovalId:
-            batch.productionEmissionsClaimedByRemovalId,
-          co2eStoredPreview: batch.co2eStoredPreview ?? undefined,
-        },
-      ],
-      lineages: facts.applications.map((application) =>
-        projectChainOfCustodyFromBatchFacts(
-          application,
-          runById.get(application.biocharProduct.linkedProductionRunId),
-        ),
-      ),
-    };
+  if (!accounting.batch.removalId || options?.singleBatch) {
+    return resolveSingleBatchScope(accounting);
   }
-  return resolveScopeForRemoval(orgCtx, batch.removalId);
+  return resolveScopeForRemoval(orgCtx, accounting.batch.removalId);
+}
+
+function resolveSingleBatchScope(
+  accounting: CreditBatchAccounting,
+): RemovalScope {
+  const { batch, lineageFacts } = accounting;
+  const runById = new Map(
+    lineageFacts.runs.map((run) => [run.id, run]),
+  );
+  return {
+    facilityId: batch.facilityId,
+    removalId: null,
+    removal: null,
+    memberBatches: [
+      {
+        id: batch.id,
+        code: batch.code,
+        productionRunIds: lineageFacts.productionRunIds,
+        applicationIds: lineageFacts.applicationIds,
+        durabilityOption: batch.durabilityOption,
+        productionEmissionsClaimedByRemovalId:
+          batch.productionEmissionsClaimedByRemovalId,
+        co2eStoredPreview: accounting.co2ePreview,
+      },
+    ],
+    lineages: lineageFacts.applications.map((application) =>
+      projectChainOfCustodyFromBatchFacts(
+        application,
+        runById.get(application.biocharProduct.linkedProductionRunId),
+      ),
+    ),
+  };
 }
 
 // Resolves the removal scope from a removal id — every member credit batch.
@@ -375,28 +374,35 @@ export async function resolveScopeForRemoval(
 
   const batches = await getCreditBatchesByRemovalId(orgCtx, removalId);
   const batchIds = batches.map((batch) => batch.id);
-  const factsByBatch = await loadCreditBatchLineageFacts(orgCtx, batchIds);
-  const previewsByBatch = options?.skipPreview
-    ? {}
-    : await getCo2eStoredPreviews(orgCtx, batchIds, {
-        lineageFactsByBatch: factsByBatch,
-      });
+  const accountingByBatch = await loadCreditBatchAccounting(
+    orgCtx,
+    batchIds,
+  );
   const memberBatches = batches.map((batch) => {
-      const facts = factsByBatch[batch.id];
+      const accounting = accountingByBatch[batch.id];
+      if (!accounting) {
+        throw new SafeError(`Credit batch ${batch.id} could not be loaded`);
+      }
+      const { lineageFacts, batch: accountingBatch } = accounting;
       return {
-        id: batch.id,
-        code: batch.code,
-        productionRunIds: facts.productionRunIds,
-        applicationIds: facts.applicationIds,
-        durabilityOption: batch.durabilityOption,
+        id: accountingBatch.id,
+        code: accountingBatch.code,
+        productionRunIds: lineageFacts.productionRunIds,
+        applicationIds: lineageFacts.applicationIds,
+        durabilityOption: accountingBatch.durabilityOption,
         productionEmissionsClaimedByRemovalId:
-          batch.productionEmissionsClaimedByRemovalId,
-        co2eStoredPreview: previewsByBatch[batch.id],
+          accountingBatch.productionEmissionsClaimedByRemovalId,
+        co2eStoredPreview: options?.skipPreview
+          ? undefined
+          : accounting.co2ePreview,
       };
     });
-  const lineages = Object.values(factsByBatch).flatMap((facts) => {
-    const runById = new Map(facts.runs.map((run) => [run.id, run]));
-    return facts.applications.map((application) =>
+  const lineages = Object.values(accountingByBatch).flatMap((accounting) => {
+    const { lineageFacts } = accounting;
+    const runById = new Map(
+      lineageFacts.runs.map((run) => [run.id, run]),
+    );
+    return lineageFacts.applications.map((application) =>
       projectChainOfCustodyFromBatchFacts(
         application,
         runById.get(application.biocharProduct.linkedProductionRunId),
@@ -840,27 +846,54 @@ export async function loadCertifyContextForCreditBatch(
     loadCertifyContextForCreditBatchForUser(orgCtx, creditBatchId),
   );
 }
-// Same as `loadCertifyContextForCreditBatchForUser` but reuses caller-supplied
-// facility facts instead of loading them per call. A multi-batch confirm (the
-// New-Removal wizard) loads `loadFacilityCertifierFacts` — which includes the
-// facility's Isometric registry calls — ONCE for the shared facility, then
-// builds each batch's context with these facts rather than re-fetching them per
-// batch. Safe because `facilityId`/`removalId`/`memberBatches` come from the
-// per-batch scope; the facts only feed health-relevant fields the caller reads
-// after confirming the batch belongs to that facility.
-export async function buildCreditBatchContextWithFacts(
+export interface CreditBatchContextSet {
+  accountingByBatch: CreditBatchAccountingByBatch;
+  contextsByBatch: Record<string, RemovalCertifyContext>;
+}
+
+// Multi-batch wizard seam: one set accounting load, then bounded context
+// composition from those complete records. No caller can inject lineage facts.
+export async function buildCreditBatchContexts(
   orgCtx: OrgContext,
-  creditBatchId: string,
+  creditBatchIds: string[],
   facilityFacts: FacilityCertifierFacts,
-  lineageFacts?: CreditBatchLineageFacts,
-): Promise<RemovalCertifyContext> {
-  const scope = await resolveScopeForCreditBatch(orgCtx, creditBatchId, {
-    singleBatch: true,
-    lineageFacts,
-  });
-  return projectUiContext(
-    await buildRemovalContext(orgCtx, scope, facilityFacts),
+): Promise<CreditBatchContextSet> {
+  const accountingByBatch = await loadCreditBatchAccounting(
+    orgCtx,
+    creditBatchIds,
   );
+  const contextEntries: Array<
+    readonly [string, RemovalCertifyContext]
+  > = [];
+  for (
+    let index = 0;
+    index < creditBatchIds.length;
+    index += FANOUT_CONCURRENCY
+  ) {
+    const chunk = await Promise.all(
+      creditBatchIds
+        .slice(index, index + FANOUT_CONCURRENCY)
+        .map(async (creditBatchId) => {
+          const accounting = accountingByBatch[creditBatchId];
+          if (!accounting) {
+            throw new SafeError(
+              `Credit batch ${creditBatchId} could not be loaded`,
+            );
+          }
+          const context = await buildRemovalContext(
+            orgCtx,
+            resolveSingleBatchScope(accounting),
+            facilityFacts,
+          );
+          return [creditBatchId, projectUiContext(context)] as const;
+        }),
+    );
+    contextEntries.push(...chunk);
+  }
+  return {
+    accountingByBatch,
+    contextsByBatch: Object.fromEntries(contextEntries),
+  };
 }
 
 export interface RemovalHubEntry {
@@ -935,7 +968,7 @@ export async function loadSelectableBatchesForFacility(
       orgCtx,
       facilityId,
       facilityFacts,
-      buildCreditBatchContextWithFacts,
+      buildCreditBatchContexts,
     );
   });
 }

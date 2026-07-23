@@ -25,7 +25,7 @@ import type { LocalSubmissionStatus } from "@/lib/certification/status";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import {
-  buildCreditBatchContextWithFacts,
+  buildCreditBatchContexts,
   buildRemovalContext,
   loadFacilityCertifierFacts,
   resolveScopeForRemoval,
@@ -145,24 +145,18 @@ export async function loadCertificationOverview(
     // the same `deriveBatchHealth` verdict the New-Removal wizard uses. Built
     // from the facility facts resolved once above and bounded the same way the
     // removal loop is, so the landing page can't fan out an unbounded burst.
-    let readyToStartBatchCount = 0;
-    for (let i = 0; i < ungroupedBatches.length; i += READINESS_CONCURRENCY) {
-      const verdicts = await Promise.all(
-        ungroupedBatches
-          .slice(i, i + READINESS_CONCURRENCY)
-          .map(async (batch) => {
-            const ctx = await buildCreditBatchContextWithFacts(
-              orgCtx,
-              batch.id,
-              facilityFacts,
-            );
-            return deriveBatchHealth(toBatchHealthFacts(ctx, batch.id));
-          }),
+    const readyBatchIds = ungroupedBatches.map((batch) => batch.id);
+    const { contextsByBatch } = await buildCreditBatchContexts(
+      orgCtx,
+      readyBatchIds,
+      facilityFacts,
+    );
+    const readyToStartBatchCount = readyBatchIds.filter((batchId) => {
+      const health = deriveBatchHealth(
+        toBatchHealthFacts(contextsByBatch[batchId], batchId),
       );
-      readyToStartBatchCount += verdicts.filter(
-        (h) => h.state === "ready",
-      ).length;
-    }
+      return health.state === "ready";
+    }).length;
 
     return {
       removals,
@@ -226,28 +220,22 @@ export async function loadCreditBatchHealthSummaries(
       orgCtx,
       validFacilityId,
     );
+    const { contextsByBatch } = await buildCreditBatchContexts(
+      orgCtx,
+      ids,
+      facilityFacts,
+    );
     const summaries: Record<string, CreditBatchHealthSummary> = {};
-    for (let i = 0; i < ids.length; i += READINESS_CONCURRENCY) {
-      const verdicts = await Promise.all(
-        ids.slice(i, i + READINESS_CONCURRENCY).map(async (batchId) => {
-          const ctx = await buildCreditBatchContextWithFacts(
-            orgCtx,
-            batchId,
-            facilityFacts,
-          );
-          if (ctx.facilityId !== validFacilityId) {
-            throw new SafeError("Batch does not belong to requested facility");
-          }
-          const health = deriveBatchHealth(toBatchHealthFacts(ctx, batchId));
-          return [
-            batchId,
-            { state: health.state, issueCount: health.issueCount },
-          ] as const;
-        }),
-      );
-      for (const [batchId, summary] of verdicts) {
-        summaries[batchId] = summary;
+    for (const batchId of ids) {
+      const ctx = contextsByBatch[batchId];
+      if (ctx.facilityId !== validFacilityId) {
+        throw new SafeError("Batch does not belong to requested facility");
       }
+      const health = deriveBatchHealth(toBatchHealthFacts(ctx, batchId));
+      summaries[batchId] = {
+        state: health.state,
+        issueCount: health.issueCount,
+      };
     }
     return summaries;
   });

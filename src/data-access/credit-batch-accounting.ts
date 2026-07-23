@@ -1,8 +1,10 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "@/db";
 import {
   applications,
   biocharProducts,
+  certifierProjects,
+  creditBatches,
   creditBatchProductionRuns,
   deliveries,
   facilities,
@@ -14,10 +16,27 @@ import {
   productionRunFeedstocks,
   productionRuns,
   reactors,
+  samples,
   suppliers,
+  type CreditBatch,
+  type Sample,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import {
+  SOIL_STORAGE_MODULE_VERSION,
+  computeApplicationCo2eStored,
+  computeApplicationCo2eStoredBlueprint1000,
+  type Blueprint1000YearReplicate,
+} from "@/lib/calculations/biochar-removal";
 import { SafeError } from "@/lib/errors";
+import {
+  weightedBatchChemistry,
+  type WeightedBatchChemistry,
+} from "@/lib/isometric/utils/durability-aggregation";
+import {
+  DURABILITY_TIER_FALLBACK,
+  type DurabilityOption,
+} from "@/schemas/credit-batches";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { requireOrgScope } from "./utils";
 
@@ -98,26 +117,59 @@ export interface CreditBatchLineageFacts {
   appliedWeightTons: number;
 }
 
+export type CertifierProvider =
+  (typeof certifierProjects.$inferSelect)["provider"];
+
+export interface ApplicationCo2eStoredPreview {
+  applicationId: string;
+  applicationCode: string;
+  co2eStoredTonnes: number | null;
+  fDurable: number | null;
+  organicCarbonPercent: number | null;
+  effectiveSoilTemperatureC: number | null;
+  missingInputs: string[];
+  warnings: string[];
+}
+
+export interface CreditBatchCo2eStoredPreview {
+  provider: CertifierProvider | null;
+  co2eStoredTonnes: number | null;
+  moduleVersion: string | null;
+  applicationResults: ApplicationCo2eStoredPreview[];
+  missingInputs: string[];
+  warnings: string[];
+}
+
+export interface CreditBatchChemistry extends WeightedBatchChemistry {
+  blueprint1000YearReplicates: Blueprint1000YearReplicate[];
+}
+
+export interface CreditBatchAccounting {
+  batch: CreditBatch & { durabilityOption: DurabilityOption };
+  lineageFacts: CreditBatchLineageFacts;
+  appliedWeightTons: number;
+  chemistry: CreditBatchChemistry;
+  co2ePreview: CreditBatchCo2eStoredPreview;
+}
+
+export type CreditBatchAccountingByBatch = Record<
+  string,
+  CreditBatchAccounting
+>;
+
 const uniqueSorted = (values: string[]) => [...new Set(values)].sort();
+const unique = (values: string[]) => [...new Set(values)];
 
 /** Three set-based queries regardless of batch/application count. */
-export async function loadCreditBatchLineageFacts(
+async function loadLineageWithExecutor(
   ctx: OrgContext,
   batchIds: string[],
-  executor: Executor = db,
-  options?: { onQuery?: () => void },
+  executor: Executor,
 ): Promise<Record<string, CreditBatchLineageFacts>> {
   requireOrgScope(ctx);
   const ids = uniqueSorted(batchIds);
   if (ids.length === 0) return {};
 
-  if (executor === db) {
-    return db.transaction((tx) =>
-      loadCreditBatchLineageFacts(ctx, ids, tx, options),
-    );
-  }
-
-  options?.onQuery?.();
   const membershipRows = await executor
     .select({
       batchId: creditBatchProductionRuns.creditBatchId,
@@ -155,7 +207,6 @@ export async function loadCreditBatchLineageFacts(
     );
 
   const runIds = uniqueSorted(membershipRows.map((row) => row.runId));
-  if (runIds.length) options?.onQuery?.();
   const applicationRows = runIds.length
     ? await executor
         .select({
@@ -234,7 +285,6 @@ export async function loadCreditBatchLineageFacts(
         )
     : [];
 
-  if (runIds.length) options?.onQuery?.();
   const feedstockRows = runIds.length
     ? await executor
         .select({
@@ -326,4 +376,317 @@ export async function loadCreditBatchLineageFacts(
       appliedWeightTons: applications.reduce((total, app) => total + app.biocharAppliedTons, 0),
     }];
   }));
+}
+
+/**
+ * Extract a 1000-year batch's complete blueprint replicates from its lab
+ * Samples. The both-values filter mirrors the registry submission builder.
+ */
+export function extract1000YearBlueprintReplicates(
+  batchSamples: Array<{
+    totalCarbonPercent: number | null;
+    sReflectanceFraction: number | null;
+  }>,
+): Blueprint1000YearReplicate[] {
+  return batchSamples.flatMap((sample) =>
+    sample.totalCarbonPercent == null || sample.sReflectanceFraction == null
+      ? []
+      : [
+          {
+            totalCarbonPercent: sample.totalCarbonPercent,
+            sReflectanceFraction: sample.sReflectanceFraction,
+          },
+        ],
+  );
+}
+
+function buildCo2eStoredPreview(
+  batch: CreditBatch & { durabilityOption: DurabilityOption },
+  provider: CertifierProvider | null,
+  facts: CreditBatchLineageFacts,
+  chemistry: CreditBatchChemistry,
+): CreditBatchCo2eStoredPreview {
+  if (provider !== "isometric") {
+    return {
+      provider,
+      co2eStoredTonnes: null,
+      moduleVersion: null,
+      applicationResults: [],
+      missingInputs: [
+        provider ? "isometricCertifier" : "facilityCertifierProject",
+      ],
+      warnings: [],
+    };
+  }
+
+  if (facts.applicationIds.length === 0) {
+    return {
+      provider,
+      co2eStoredTonnes: null,
+      moduleVersion: null,
+      applicationResults: [],
+      missingInputs: ["applicationIds"],
+      warnings: [],
+    };
+  }
+
+  const runById = new Map(facts.runs.map((run) => [run.id, run]));
+  const appById = new Map(facts.applications.map((app) => [app.id, app]));
+  const lineageWarnings = facts.applications.flatMap((application) => {
+    const run = runById.get(
+      application.biocharProduct.linkedProductionRunId,
+    );
+    return run && run.feedstocks.length === 0
+      ? [
+          `${application.code}: The linked production run does not have any recorded feedstock allocations.`,
+        ]
+      : [];
+  });
+
+  const applicationResults = facts.applicationIds.map((applicationId) => {
+    const application = appById.get(applicationId);
+    const result =
+      batch.durabilityOption === "1000_year"
+        ? computeApplicationCo2eStoredBlueprint1000({
+            dryMassTonnes: application?.biocharAppliedDryTons ?? null,
+            replicates: chemistry.blueprint1000YearReplicates,
+          })
+        : computeApplicationCo2eStored({
+            durabilityOption: batch.durabilityOption,
+            dryMassTonnes: application?.biocharAppliedDryTons ?? null,
+            soilTemperatureC: application?.soilTemperatureC ?? null,
+            hToCorgRatio: chemistry.weightedHToCorgRatio,
+            organicCarbonPercent: chemistry.weightedOrganicCarbonPercent,
+          });
+
+    return {
+      applicationId,
+      applicationCode: application?.code ?? applicationId,
+      co2eStoredTonnes: result.co2eStoredTonnes,
+      fDurable: result.fDurable,
+      organicCarbonPercent: result.organicCarbonPercent,
+      effectiveSoilTemperatureC: result.effectiveSoilTemperatureC,
+      missingInputs: result.missingInputs,
+      warnings: result.warnings,
+    };
+  });
+
+  const complete = applicationResults.every(
+    (result) => result.co2eStoredTonnes != null,
+  );
+  return {
+    provider,
+    co2eStoredTonnes: complete
+      ? applicationResults.reduce(
+          (sum, result) => sum + (result.co2eStoredTonnes ?? 0),
+          0,
+        )
+      : null,
+    moduleVersion: SOIL_STORAGE_MODULE_VERSION,
+    applicationResults,
+    missingInputs: unique(
+      applicationResults.flatMap((result) => result.missingInputs),
+    ),
+    warnings: [
+      ...lineageWarnings,
+      ...applicationResults.flatMap((result) =>
+        result.warnings.map(
+          (warning) => `${result.applicationCode}: ${warning}`,
+        ),
+      ),
+    ],
+  };
+}
+
+async function loadFacilityCertifiers(
+  ctx: OrgContext,
+  executor: Executor,
+  facilityIds: string[],
+): Promise<Map<string, CertifierProvider>> {
+  requireOrgScope(ctx);
+  const ids = uniqueSorted(facilityIds);
+  if (ids.length === 0) return new Map();
+
+  const rows = await executor
+    .select({
+      facilityId: certifierProjects.facilityId,
+      provider: certifierProjects.provider,
+    })
+    .from(certifierProjects)
+    .where(
+      and(
+        inArray(certifierProjects.facilityId, ids),
+        eq(certifierProjects.organizationId, ctx.organizationId),
+      ),
+    )
+    .orderBy(
+      asc(certifierProjects.facilityId),
+      sql`case ${certifierProjects.provider} when 'isometric' then 0 when 'puro_earth' then 1 else 2 end`,
+    );
+
+  const providers = new Map<string, CertifierProvider>();
+  for (const row of rows) {
+    if (!providers.has(row.facilityId)) {
+      providers.set(row.facilityId, row.provider);
+    }
+  }
+  return providers;
+}
+
+export async function getFacilityCertifierWithExecutor(
+  ctx: OrgContext,
+  executor: Executor,
+  facilityId: string,
+): Promise<CertifierProvider | null> {
+  requireOrgScope(ctx);
+  return (
+    (await loadFacilityCertifiers(ctx, executor, [facilityId])).get(
+      facilityId,
+    ) ?? null
+  );
+}
+
+export async function getFacilityCertifier(
+  ctx: OrgContext,
+  facilityId: string,
+): Promise<CertifierProvider | null> {
+  requireOrgScope(ctx);
+  return getFacilityCertifierWithExecutor(ctx, db, facilityId);
+}
+
+/**
+ * Deep, set-based credit-batch accounting read. This is the only lineage walk:
+ * callers ask for accounting records and never preload or thread assembly
+ * facts back into another public query.
+ */
+export async function loadCreditBatchAccounting(
+  ctx: OrgContext,
+  batchIds: string[],
+): Promise<CreditBatchAccountingByBatch> {
+  requireOrgScope(ctx);
+  const ids = uniqueSorted(batchIds);
+  if (ids.length === 0) return {};
+
+  return db.transaction(async (tx) => {
+    const batchRows = await tx
+      .select({
+        creditBatch: creditBatches,
+        facilityDurabilityOption: facilities.durabilityOption,
+      })
+      .from(creditBatches)
+      .leftJoin(
+        facilities,
+        and(
+          eq(creditBatches.facilityId, facilities.id),
+          eq(facilities.organizationId, ctx.organizationId),
+        ),
+      )
+      .where(
+        and(
+          inArray(creditBatches.id, ids),
+          eq(creditBatches.organizationId, ctx.organizationId),
+        ),
+      );
+
+    const batchById = new Map(
+      batchRows.map((row) => [
+        row.creditBatch.id,
+        {
+          ...row.creditBatch,
+          durabilityOption:
+            row.facilityDurabilityOption ?? DURABILITY_TIER_FALLBACK,
+        },
+      ]),
+    );
+    const batches = ids.flatMap((id) => {
+      const batch = batchById.get(id);
+      return batch ? [batch] : [];
+    });
+    const allowedIds = batches.map((batch) => batch.id);
+    if (allowedIds.length === 0) return {};
+
+    const factsByBatch = await loadLineageWithExecutor(
+      ctx,
+      allowedIds,
+      tx,
+    );
+    const sampleRows = await tx
+      .select()
+      .from(samples)
+      .where(
+        and(
+          inArray(samples.creditBatchId, allowedIds),
+          eq(samples.organizationId, ctx.organizationId),
+        ),
+      )
+      .orderBy(asc(samples.id));
+    const samplesByBatch = new Map<string, Sample[]>();
+    for (const sample of sampleRows) {
+      if (!sample.creditBatchId) continue;
+      const batchSamples = samplesByBatch.get(sample.creditBatchId) ?? [];
+      batchSamples.push(sample);
+      samplesByBatch.set(sample.creditBatchId, batchSamples);
+    }
+    const providersByFacility = await loadFacilityCertifiers(
+      ctx,
+      tx,
+      batches.map((batch) => batch.facilityId),
+    );
+
+    return Object.fromEntries(
+      batches.map((batch) => {
+        const lineageFacts = factsByBatch[batch.id];
+        const batchSamples = samplesByBatch.get(batch.id) ?? [];
+        const weightedChemistry = weightedBatchChemistry([
+          {
+            creditBatchId: batch.id,
+            creditBatchCode: batch.code,
+            samples: batchSamples,
+            runs: lineageFacts.runs.map((run) => ({
+              id: run.id,
+              biocharDryMassKg: run.biocharDryMassKg,
+            })),
+          },
+        ]);
+        const chemistry: CreditBatchChemistry = {
+          ...weightedChemistry,
+          blueprint1000YearReplicates:
+            batch.durabilityOption === "1000_year"
+              ? extract1000YearBlueprintReplicates(batchSamples)
+              : [],
+        };
+        const provider = providersByFacility.get(batch.facilityId) ?? null;
+        return [
+          batch.id,
+          {
+            batch,
+            lineageFacts,
+            appliedWeightTons: lineageFacts.appliedWeightTons,
+            chemistry,
+            co2ePreview: buildCo2eStoredPreview(
+              batch,
+              provider,
+              lineageFacts,
+              chemistry,
+            ),
+          },
+        ];
+      }),
+    );
+  });
+}
+
+/** Compatibility preview read backed exclusively by the deep accounting seam. */
+export async function getCo2eStoredPreviews(
+  ctx: OrgContext,
+  batchIds: string[],
+): Promise<Record<string, CreditBatchCo2eStoredPreview>> {
+  requireOrgScope(ctx);
+  const accountingByBatch = await loadCreditBatchAccounting(ctx, batchIds);
+  return Object.fromEntries(
+    Object.entries(accountingByBatch).map(([batchId, accounting]) => [
+      batchId,
+      accounting.co2ePreview,
+    ]),
+  );
 }
