@@ -13,7 +13,7 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import {
-  buildCreditBatchContextWithFacts,
+  buildCreditBatchContexts,
   loadFacilityCertifierFacts,
 } from "./certify-context-core";
 
@@ -50,12 +50,13 @@ export async function createRemovalWithBatchesAction(
     // gate. Each ungrouped batch resolves a 1:1 scope, so `ctx.facilityId` /
     // `ctx.removalId` describe the batch alone: the same load that feeds the
     // classifier also confirms same-facility + ungrouped.
+    const { contextsByBatch } = await buildCreditBatchContexts(
+      orgCtx,
+      uniqueIds,
+      facilityFacts,
+    );
     for (const batchId of uniqueIds) {
-      const ctx = await buildCreditBatchContextWithFacts(
-        orgCtx,
-        batchId,
-        facilityFacts,
-      );
+      const ctx = contextsByBatch[batchId];
       const code =
         ctx.memberBatches.find((b) => b.id === batchId)?.code ??
         "A selected credit batch";
