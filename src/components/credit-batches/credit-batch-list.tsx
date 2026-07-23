@@ -63,6 +63,14 @@ const EMPTY_CREDIT_BATCHES: CreditBatchWithRelations[] = [];
 export const CREDIT_BATCH_DELETE_MESSAGE =
   "Delete this credit batch? This removes the grouping, releases its production runs so they can be grouped again, and clears direct membership from its lab samples. This can't be undone.";
 
+export function closeCreditBatchCreate(
+  clearCreateIntent: () => void,
+  closeSideSheet: () => void,
+) {
+  clearCreateIntent();
+  closeSideSheet();
+}
+
 // ============================================
 // Component
 // ============================================
@@ -219,7 +227,7 @@ export function CreditBatchList({
     try {
       const result = await createCreditBatch.mutateAsync(data);
       if (result.success) {
-        setSideSheet(null);
+        closeCreditBatchCreate(createIntent.clear, () => setSideSheet(null));
         toast.success("Credit batch created successfully");
       } else {
         setCreateError(result.error || "Failed to create credit batch");
