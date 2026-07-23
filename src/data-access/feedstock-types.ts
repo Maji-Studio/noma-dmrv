@@ -10,6 +10,7 @@ import {
   storageLocations,
   type FeedstockType,
 } from "@/db/schema";
+import { isPgUniqueViolation } from "@/db/errors";
 import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import { ActionConflictError, SafeError } from "@/lib/errors";
 import {
@@ -24,6 +25,11 @@ import type {
 } from "@/schemas/feedstock-types";
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { hasCertifierCredentials } from "./certifier-credentials";
+
+const ISOMETRIC_FEEDSTOCK_TYPE_CONSTRAINT =
+  "feedstock_types_organization_id_isometric_id_unique";
+const FEEDSTOCK_TYPE_NAME_USAGE_CONSTRAINT =
+  "feedstock_types_organization_id_name_usage_unique";
 
 export async function listFeedstockTypes(
   ctx: OrgContext,
@@ -212,18 +218,47 @@ export async function importIsometricFeedstockType(
       "Connect this organization to Isometric before importing feedstock types.",
     );
   }
-  const [created] = await db
-    .insert(feedstockTypes)
-    .values({
-      organizationId: ctx.organizationId,
-      code,
-      name: entry.name.trim(),
-      category,
-      usage: "pyrolysis",
-      isometricFeedstockTypeId: entry.id,
-    })
-    .returning();
-  return created;
+  const [existingImport] = await db
+    .select({ id: feedstockTypes.id })
+    .from(feedstockTypes)
+    .where(
+      and(
+        eq(feedstockTypes.organizationId, ctx.organizationId),
+        eq(feedstockTypes.isometricFeedstockTypeId, entry.id),
+      ),
+    )
+    .limit(1);
+  if (existingImport) {
+    throw new SafeError(
+      "This Isometric feedstock type has already been imported.",
+    );
+  }
+  try {
+    const [created] = await db
+      .insert(feedstockTypes)
+      .values({
+        organizationId: ctx.organizationId,
+        code,
+        name: entry.name.trim(),
+        category,
+        usage: "pyrolysis",
+        isometricFeedstockTypeId: entry.id,
+      })
+      .returning();
+    return created;
+  } catch (error) {
+    if (isPgUniqueViolation(error, ISOMETRIC_FEEDSTOCK_TYPE_CONSTRAINT)) {
+      throw new SafeError(
+        "This Isometric feedstock type has already been imported.",
+      );
+    }
+    if (isPgUniqueViolation(error, FEEDSTOCK_TYPE_NAME_USAGE_CONSTRAINT)) {
+      throw new SafeError(
+        "A pyrolysis feedstock type with this name already exists.",
+      );
+    }
+    throw error;
+  }
 }
 
 export async function listActiveFeedstockTypes(
