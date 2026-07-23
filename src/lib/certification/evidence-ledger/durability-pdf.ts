@@ -1,11 +1,10 @@
 /**
  * 200-Year Durability Evidence Ledger — react-pdf renderer.
  *
- * Sibling to the transport ledger (`pdf.ts`): same visual language (DM Sans /
- * DM Mono, plum ink, verification green, brutalist square corners, no
- * border-radius), built from a pure `DurabilityLedgerModel`. `createElement`
- * (no JSX) so this renders identically under Next's server bundle and a plain
- * Node/tsx verifier.
+ * Sibling to the transport ledger (`pdf.ts`): the design tokens and shared
+ * document chrome come from ./pdf-theme, built from a pure
+ * `DurabilityLedgerModel`. `createElement` (no JSX) so this renders identically
+ * under Next's server bundle and a plain Node/tsx verifier.
  *
  * The document's hero is the protocol eligibility gate written literally — molar
  * H/C_org < 0.5 AND O/C_org < 0.2, judged on each batch's pooled replicate mean.
@@ -19,46 +18,15 @@
  * tick glyph; the threshold rule is always stated as `< 0.50` and the measured
  * mean is tinted to show whether it satisfies it.
  */
-import { createElement as h, type ComponentType, type ReactElement } from "react";
-import {
-  Document,
-  Page,
-  Text,
-  View,
-  StyleSheet,
-  renderToBuffer,
-} from "@react-pdf/renderer";
+import { createElement as h, type ReactElement } from "react";
+import { Document, Page, StyleSheet, Text } from "@react-pdf/renderer";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
-import { registerEvidenceLedgerFonts } from "./fonts";
+import { C, MONO, SANS, Text_, renderLedgerToBuffer, t, theme, v } from "./pdf-theme";
 import type {
   DurabilityLedgerModel,
   LedgerBatch,
   LedgerStat,
 } from "./durability-types";
-
-// ── Tokens (shared with the transport ledger) ────────────────────────────────
-const C = {
-  ink: "#0f021a",
-  ink70: "rgba(15,2,26,0.7)",
-  ink55: "rgba(15,2,26,0.55)",
-  ink40: "rgba(15,2,26,0.4)",
-  ink25: "rgba(15,2,26,0.25)",
-  ink12: "rgba(15,2,26,0.12)",
-  paper: "#ffffff",
-  plum: "#480b73",
-  plumSoft: "rgba(72,11,115,0.45)",
-  sea: "rgba(72,11,115,0.05)",
-  sea2: "rgba(72,11,115,0.09)",
-  pink: "#a6216e",
-  burnt: "#bc4519",
-  burntSoft: "rgba(188,69,25,0.5)",
-  amber: "#8a5a00",
-  green: "#17744a",
-  greenLite: "#7fd3a9",
-} as const;
-
-const SANS = "DM Sans";
-const MONO = "DM Mono";
 
 // Replicate-table column widths (points). Sample column flexes; the rest are
 // fixed so the per-replicate values align under the submitted mean ± s.d. row.
@@ -81,69 +49,13 @@ function stat(value: LedgerStat | null, fmt: (n: number) => string): string {
     : `${fmt(value.mean)} ± ${fmt(value.stdDev)}`;
 }
 
-const styles = StyleSheet.create({
-  page: {
-    backgroundColor: C.paper,
-    color: C.ink,
-    fontFamily: SANS,
-    fontSize: 9,
-    paddingTop: 34,
-    paddingBottom: 46,
-    paddingHorizontal: 34,
-  },
-
-  // Masthead
-  masthead: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    paddingBottom: 9,
-    borderBottomWidth: 1.5,
-    borderBottomColor: C.ink,
-  },
-  wordmarkRow: { flexDirection: "row", alignItems: "baseline" },
-  wordmark: { fontFamily: SANS, fontWeight: 700, fontSize: 16, letterSpacing: -0.3 },
-  wordmarkSub: {
-    fontFamily: MONO,
-    fontSize: 7.5,
-    color: C.ink55,
-    letterSpacing: 1,
-    marginLeft: 7,
-  },
-  eyebrow: { fontFamily: MONO, fontSize: 8, color: C.plum, letterSpacing: 1.1, marginTop: 11 },
-  title: { fontFamily: SANS, fontWeight: 600, fontSize: 21, lineHeight: 1.08, marginTop: 7 },
-
-  metaCol: { alignItems: "flex-end", maxWidth: 210 },
-  metaPair: { alignItems: "flex-end", marginBottom: 6 },
-  metaLabel: {
-    fontFamily: MONO,
-    fontSize: 7,
-    color: C.ink40,
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-  },
-  metaVal: { fontFamily: MONO, fontSize: 9, color: C.ink, marginTop: 1 },
-
-  // Eligibility verdict band (the hero / claim)
-  claim: { marginTop: 14, borderWidth: 1.5, borderColor: C.ink },
-  claimHead: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    backgroundColor: C.sea,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: C.ink12,
-  },
-  claimHeadLabel: {
-    fontFamily: MONO,
-    fontSize: 8,
-    color: C.ink70,
-    letterSpacing: 1.1,
-    textTransform: "uppercase",
-  },
-  claimHeadEq: { fontFamily: MONO, fontSize: 8, color: C.ink55 },
-
+// Chrome (page, masthead, claim frame, section head, table frame, apparatus,
+// footer) comes from the shared theme; the entries below are durability-specific.
+// Deliberate divergences spread the theme entry so the delta stays explicit.
+const styles = {
+  ...theme,
+  ...StyleSheet.create({
+  // Eligibility verdict band body (the hero / claim)
   verdictColHead: {
     flexDirection: "row",
     paddingVertical: 4,
@@ -183,62 +95,23 @@ const styles = StyleSheet.create({
   claimFootText: { fontFamily: MONO, fontSize: 8, color: C.paper, letterSpacing: 0.5 },
   claimFootSub: { fontFamily: MONO, fontSize: 8, color: "rgba(255,255,255,0.6)" },
 
-  // Per-batch reconciliation section
-  section: { marginTop: 13 },
-  sectionHead: { flexDirection: "row", alignItems: "center", marginBottom: 5 },
-  rule: { width: 4, height: 13, marginRight: 8, backgroundColor: C.plum },
-  sectionName: { fontFamily: SANS, fontWeight: 600, fontSize: 11 },
-  sectionTag: {
-    fontFamily: MONO,
-    fontSize: 7.5,
-    color: C.ink40,
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-    marginLeft: 8,
-  },
-  sectionEqn: { fontFamily: MONO, fontSize: 7.5, color: C.ink40, marginLeft: "auto" },
+  // Per-batch reconciliation section — head/table chrome from theme, with
+  // three deliberate divergences: the section rule is always plum (no
+  // per-category triad here), the eight tight columns need smaller header type
+  // than the transport ledger, and two-line sample cells top-align their rows.
+  rule: { ...theme.rule, backgroundColor: C.plum },
+  thText: { ...theme.thText, fontSize: 6.5, letterSpacing: 0.6 },
+  tr: { ...theme.tr, alignItems: "flex-start" },
 
-  table: { borderWidth: 1.5, borderColor: C.ink25 },
-  th: {
-    flexDirection: "row",
-    backgroundColor: C.sea,
-    borderBottomWidth: 1,
-    borderBottomColor: C.ink12,
-    paddingVertical: 5,
-    paddingHorizontal: 7,
-  },
-  thText: {
-    fontFamily: MONO,
-    fontSize: 6.5,
-    color: C.ink55,
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-  },
-  tr: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: C.ink12,
-    paddingVertical: 6,
-    paddingHorizontal: 7,
-    alignItems: "flex-start",
-  },
   repRef: { fontFamily: MONO, fontSize: 8.5, color: C.ink70, fontWeight: 500 },
   repCode: { fontFamily: SANS, fontSize: 9 },
   repLab: { fontFamily: SANS, fontSize: 6.5, color: C.ink40, marginTop: 1 },
   day: { fontFamily: MONO, fontSize: 8, color: C.ink55 },
-  qty: { fontFamily: MONO, fontSize: 9, textAlign: "right" },
   qtyDerived: { color: C.plum },
   qtyMissing: { color: C.ink25 },
 
-  tfoot: {
-    flexDirection: "row",
-    backgroundColor: C.sea2,
-    borderTopWidth: 1.5,
-    borderTopColor: C.ink25,
-    paddingVertical: 7,
-    paddingHorizontal: 7,
-    alignItems: "flex-start",
-  },
+  // Two-line "Submitted / n=…" label: top-aligned, slightly taller footer.
+  tfoot: { ...theme.tfoot, paddingVertical: 7, alignItems: "flex-start" },
   subLabel: { fontFamily: MONO, fontSize: 7.5, color: C.ink70, letterSpacing: 0.6, textTransform: "uppercase" },
   subN: { fontFamily: MONO, fontSize: 6.5, color: C.ink40, marginTop: 1 },
   subVal: { fontFamily: MONO, fontWeight: 500, fontSize: 8.5, textAlign: "right" },
@@ -262,40 +135,10 @@ const styles = StyleSheet.create({
   soilLine: { fontFamily: MONO, fontSize: 8, color: C.ink70, marginTop: 3 },
   soilNote: { fontFamily: SANS, fontSize: 8, color: C.ink70, lineHeight: 1.45, marginTop: 3 },
 
-  // Apparatus
-  apparatus: {
-    marginTop: 18,
-    paddingTop: 11,
-    borderTopWidth: 1.5,
-    borderTopColor: C.ink,
-    flexDirection: "row",
-  },
-  noteCol: { flex: 1.55, paddingRight: 16 },
-  legendCol: { flex: 1 },
-  noteH: { fontFamily: MONO, fontSize: 7.5, color: C.ink55, letterSpacing: 1.1, textTransform: "uppercase", marginBottom: 4 },
-  noteBody: { fontFamily: SANS, fontSize: 8, color: C.ink70, lineHeight: 1.5 },
-  legendRow: { flexDirection: "row", marginBottom: 3 },
-  legendKey: { fontFamily: MONO, fontSize: 7, color: C.ink40, textTransform: "uppercase", width: 88 },
-  legendDesc: { fontFamily: MONO, fontSize: 7, color: C.ink70, flex: 1 },
-
-  footer: {
-    position: "absolute",
-    bottom: 22,
-    left: 34,
-    right: 34,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  footerText: { fontFamily: MONO, fontSize: 7, color: C.ink40, letterSpacing: 0.5 },
-});
-
-// element helpers ─────────────────────────────────────────────────────────────
-type Style = Record<string, unknown> | Array<Record<string, unknown> | false | undefined>;
-const View_ = View as ComponentType<Record<string, unknown>>;
-const Text_ = Text as ComponentType<Record<string, unknown>>;
-const v = (style: Style, props: Record<string, unknown>, ...kids: unknown[]): ReactElement =>
-  h(View_, { style, ...props }, ...(kids as ReactElement[]));
-const t = (style: Style, text: unknown): ReactElement => h(Text_, { style }, text as string);
+  // Long threshold keys ("H/C_org < 0.5"): 88pt column.
+  legendKey: { ...theme.legendKey, width: 88 },
+  }),
+};
 
 // Verdict colour from the eligibility state: green pass, burnt fail, amber
 // indeterminate (an indeterminate batch is gate-blocked before submission; the
@@ -540,8 +383,5 @@ function buildDocument(model: DurabilityLedgerModel): ReactElement {
 export async function renderDurabilityLedgerPdf(
   model: DurabilityLedgerModel,
 ): Promise<Buffer> {
-  registerEvidenceLedgerFonts();
-  return renderToBuffer(
-    buildDocument(model) as Parameters<typeof renderToBuffer>[0],
-  );
+  return renderLedgerToBuffer(buildDocument(model));
 }
