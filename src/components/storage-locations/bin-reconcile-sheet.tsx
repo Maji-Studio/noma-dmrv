@@ -8,7 +8,7 @@ import { FormField, FormInput, FormTextarea, ServerError } from "@/components/fo
 import { FormActions } from "@/components/forms/form-actions";
 import { useToast } from "@/components/ui/toast";
 import { formatMass } from "@/lib/format-utils";
-import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { canonicalizeFeedstockStockTake } from "@/lib/calculations/bin-stock-take";
 import {
   RecordLossFieldError,
   RecordStockTakeFieldError,
@@ -165,7 +165,7 @@ function StockTakeForm({
   });
   const countedNum = previewNumber(countedInput);
   const measuredMoisturePercent = previewNumber(measuredMoistureInput);
-  const countedDryKg =
+  const canonicalStockTake =
     countedNum == null
       ? null
       : isFeedstock
@@ -173,9 +173,15 @@ function StockTakeForm({
           measuredMoisturePercent != null &&
           measuredMoisturePercent >= 0 &&
           measuredMoisturePercent <= 100
-          ? deriveMassDryKg(countedNum, measuredMoisturePercent)
+          ? canonicalizeFeedstockStockTake(
+              countedNum,
+              measuredMoisturePercent / 100,
+            )
           : null
-        : countedNum;
+        : null;
+  const countedDryKg = isFeedstock
+    ? canonicalStockTake?.countedMassKg ?? null
+    : countedNum;
   const deltaKg = countedDryKg != null ? countedDryKg - derivedMassKg : null;
 
   const countedLabel = isFeedstock
@@ -188,18 +194,20 @@ function StockTakeForm({
     const counted = values.counted;
     const enteredMoisturePercent = values.moisturePercent;
     const isWet = isFeedstock && enteredMoisturePercent != null;
-    const moistureRatio = isWet ? enteredMoisturePercent / 100 : null;
-    const submittedDryMassKg = isWet
-      ? deriveMassDryKg(counted, enteredMoisturePercent)
-      : counted;
+    const submittedStockTake = isWet
+      ? canonicalizeFeedstockStockTake(
+          counted,
+          enteredMoisturePercent / 100,
+        )
+      : null;
     try {
       await recordStockTake.mutateAsync({
         storageLocationId: storageLocation.id,
         lane,
         reason: values.reason,
-        countedMassKg: submittedDryMassKg,
-        countedWetMassKg: isWet ? counted : null,
-        moistureRatioUsed: isWet ? moistureRatio : null,
+        countedMassKg: submittedStockTake?.countedMassKg ?? counted,
+        countedWetMassKg: submittedStockTake?.countedWetMassKg ?? null,
+        moistureRatioUsed: submittedStockTake?.moistureRatioUsed ?? null,
       });
       toast.success("Stock-take recorded");
       onRecorded?.();

@@ -21,7 +21,7 @@ import { laneForStorageType } from "@/schemas/bin-movements";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
-import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { canonicalizeFeedstockStockTake } from "@/lib/calculations/bin-stock-take";
 import { isPgCheckViolation } from "@/db/errors";
 import {
   deriveBinLaneAvailableKg,
@@ -40,12 +40,6 @@ const FEEDSTOCK_SNAPSHOT_MESSAGE =
   "Feedstock stock-takes require counted wet stock and moisture content";
 const NON_FEEDSTOCK_SNAPSHOT_MESSAGE =
   "Wet-mass moisture snapshots are only valid for feedstock bins";
-const MASS_KG_SCALE_FACTOR = 1_000;
-const FRACTION_SCALE_FACTOR = 1_000_000;
-
-function roundToStorageScale(value: number, scaleFactor: number): number {
-  return Math.round(value * scaleFactor) / scaleFactor;
-}
 
 // ============================================
 // Types
@@ -275,18 +269,13 @@ export async function recordStockTakeMovement(
       ) {
         throw new SafeError(FEEDSTOCK_SNAPSHOT_MESSAGE);
       }
-      countedWetMassKg = roundToStorageScale(
+      const canonicalStockTake = canonicalizeFeedstockStockTake(
         input.countedWetMassKg,
-        MASS_KG_SCALE_FACTOR,
-      );
-      moistureRatioUsed = roundToStorageScale(
         input.moistureRatioUsed,
-        FRACTION_SCALE_FACTOR,
       );
-      countedMassKg = deriveMassDryKg(
-        countedWetMassKg,
-        moistureRatioUsed * 100,
-      );
+      countedWetMassKg = canonicalStockTake.countedWetMassKg;
+      moistureRatioUsed = canonicalStockTake.moistureRatioUsed;
+      countedMassKg = canonicalStockTake.countedMassKg;
     } else if (
       input.countedWetMassKg != null ||
       input.moistureRatioUsed != null
