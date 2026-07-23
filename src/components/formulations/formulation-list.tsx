@@ -338,13 +338,13 @@ export function FormulationList() {
         editLabel="Edit Formulation"
         sections={viewSections}
       >
-        {formError && <div className="mb-24"><ServerError message={formError} /></div>}
         <FormulationForm
           key={editingEntity?.id ?? "create"}
           formulation={editingEntity ?? undefined}
           onSubmit={sideSheet?.mode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}
+          errorMessage={formError ?? undefined}
           submitLabel={sideSheet?.mode === "edit" ? "Save Changes" : "Create Formulation"}
         />
       </EntitySideSheet>

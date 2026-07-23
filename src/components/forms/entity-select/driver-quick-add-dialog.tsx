@@ -40,7 +40,6 @@ export function DriverQuickAddDialog({
       isOpen={isOpen}
       onClose={onClose}
       title="Add New Driver"
-      error={error}
       width="sm"
       testId="driver-quick-add-dialog"
     >
@@ -48,6 +47,7 @@ export function DriverQuickAddDialog({
         onSubmit={handleSubmit}
         onCancel={onClose}
         isSubmitting={isSubmitting}
+        errorMessage={error ?? undefined}
         submitLabel="Create Driver"
       />
     </QuickAddDialogShell>

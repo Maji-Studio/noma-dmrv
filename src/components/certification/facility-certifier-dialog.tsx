@@ -13,7 +13,6 @@ import {
   FormField,
   FormInput,
   FormSelect,
-  ServerError,
 } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -183,10 +182,6 @@ export function FacilityCertifierDialog({
           </p>
         </header>
 
-        {errors.root?.serverError?.message && (
-          <ServerError message={errors.root.serverError.message} />
-        )}
-
         <FormField
           id="externalProjectId"
           label="Isometric project"
@@ -274,6 +269,7 @@ export function FacilityCertifierDialog({
         <FormActions
           onCancel={onClose}
           isSubmitting={isSubmitting || saveMutation.isPending}
+          errorMessage={errors.root?.serverError?.message}
           submitDisabled={blockedOnShareAck}
           submitLabel={mapping ? "Save changes" : "Link project"}
         />

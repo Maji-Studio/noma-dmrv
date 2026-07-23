@@ -186,7 +186,10 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
           productionRuns={memberRuns}
           feedstockName={creditBatch.feedstockTypeName}
         />
-        <CreditBatchDurabilityPanel creditBatchId={creditBatchId} />
+        <CreditBatchDurabilityPanel
+          creditBatchId={creditBatchId}
+          facilityId={creditBatch.facilityId}
+        />
       </div>
 
       {/* Edit side sheet — the same form the list page mounts */}
@@ -201,11 +204,6 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
             <SlideOverPanel.Title>{creditBatch.code}</SlideOverPanel.Title>
           </SlideOverPanel.Header>
           <SlideOverPanel.Body noPaddingBottom fillHeight>
-            {updateError && (
-              <div className="mb-24">
-                <ServerError message={updateError} />
-              </div>
-            )}
             <CreditBatchForm
               key={creditBatch.id}
               creditBatch={creditBatch}
@@ -213,6 +211,7 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
               onClearServerError={() => setUpdateError(null)}
               onCancel={closeEdit}
               isSubmitting={updateCreditBatch.isPending}
+              errorMessage={updateError ?? undefined}
               submitLabel="Save changes"
             />
           </SlideOverPanel.Body>

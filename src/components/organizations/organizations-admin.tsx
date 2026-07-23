@@ -119,7 +119,7 @@ export function OrganizationsAdmin() {
         <h2 className="title-heading-3">Create organization</h2>
         <form
           onSubmit={handleSubmit(onCreate)}
-          className="flex flex-col gap-16 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20"
+          className="content-measure-form flex flex-col gap-16 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20"
         >
           <FormField
             id="org-name"

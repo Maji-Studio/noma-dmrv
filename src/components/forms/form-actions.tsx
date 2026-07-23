@@ -8,10 +8,13 @@
 
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { ServerError } from "./server-error";
 
 interface FormActionsProps {
   onCancel?: () => void;
   isSubmitting?: boolean;
+  /** Submission-level error rendered with the CTA footer. */
+  errorMessage?: string;
   submitLabel?: string;
   submittingLabel?: string;
   defaultSubmitLabel?: string;
@@ -35,6 +38,7 @@ interface FormActionsProps {
 export function FormActions({
   onCancel,
   isSubmitting = false,
+  errorMessage,
   submitLabel,
   submittingLabel = "Saving...",
   defaultSubmitLabel = "Save",
@@ -47,30 +51,33 @@ export function FormActions({
   return (
     <div
       className={cn(
-        "flex items-center justify-start gap-16 border-t border-[var(--color-border-secondary)]",
+        "flex flex-col gap-16 border-t border-[var(--color-border-secondary)]",
         sticky
-          // `mt-auto!` pins the row to the bottom of a fill-height flex-column
+          // `mt-auto!` pins the footer to the bottom of a fill-height flex-column
           // form on short forms (overriding the form's `space-y` margin); on
           // long forms there is no free space, so `sticky bottom-0` keeps the
-          // CTA in view while the body scrolls.
+          // action error and CTA in view while the body scrolls.
           ? "sticky bottom-0 mt-auto! -mx-24 px-24 py-20 bg-[var(--color-background-white)]"
           : "pt-20"
       )}
     >
-      <Button
-        type={submitType}
-        variant="primary"
-        form={formId}
-        onClick={onSubmitClick}
-        disabled={isSubmitting || submitDisabled}
-      >
-        {isSubmitting ? submittingLabel : submitLabel ?? defaultSubmitLabel}
-      </Button>
-      {onCancel && (
-        <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
-          Cancel
+      <ServerError message={errorMessage} />
+      <div className="flex items-center justify-start gap-16">
+        <Button
+          type={submitType}
+          variant="primary"
+          form={formId}
+          onClick={onSubmitClick}
+          disabled={isSubmitting || submitDisabled}
+        >
+          {isSubmitting ? submittingLabel : submitLabel ?? defaultSubmitLabel}
         </Button>
-      )}
+        {onCancel && (
+          <Button type="button" variant="default" onClick={onCancel} disabled={isSubmitting}>
+            Cancel
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

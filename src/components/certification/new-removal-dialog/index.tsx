@@ -218,7 +218,7 @@ function WizardBody({
   );
 }
 
-function Footer({
+export function Footer({
   step,
   selectable,
   confirmBusy,
@@ -239,7 +239,7 @@ function Footer({
   return (
     <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-secondary)] pt-16">
       <span className="body-caption text-[var(--color-text-tertiary)]">
-        {selectable.ready} of {selectable.total} batches ready ·{" "}
+        {selectable.ready} of {selectable.total} batches with complete data ·{" "}
         {selectable.selected} selected
       </span>
       <div className="flex items-center gap-12">

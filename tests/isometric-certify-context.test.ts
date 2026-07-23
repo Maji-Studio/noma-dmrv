@@ -377,6 +377,50 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     );
   });
 
+  it("evaluates batch and facility gates even when no applications are linked", async () => {
+    mockedGetCreditBatch.mockResolvedValue({
+      id: CREDIT_BATCH_ID,
+      code: "CB-1",
+      facilityId: FACILITY_ID,
+      productionRunIds: [],
+      durabilityOption: "200_year",
+      sampling: "sampled",
+    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
+    mockedGetBatchesWithSamples.mockResolvedValue([
+      {
+        creditBatchId: CREDIT_BATCH_ID,
+        creditBatchCode: "CB-1",
+        startDate: "2026-07-01",
+        endDate: "2026-07-31",
+        facilityTimezone: "UTC",
+        sampling: "sampled",
+        durabilityOption: "200_year",
+        samples: [],
+        runs: [],
+      },
+    ] as unknown as Awaited<ReturnType<typeof getCreditBatchesWithSamples>>);
+    mockedGetMapping.mockResolvedValue(null);
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      makeTestOrgContext(USER_ID),
+      CREDIT_BATCH_ID,
+    );
+
+    expect(result.productionReadinessGap?.kind).toBe("noApplications");
+    expect(result.durabilityGateBlockers).toEqual([
+      "Credit batch CB-1 is marked sampled but has no samples (§8.3).",
+      "Set this facility's reference soil temperature (admin → Emission estimates) before submitting a 200-year removal.",
+    ]);
+    expect(result.memberBatches[0]?.facilityEmissionsGateBlockers).toEqual([
+      "Set this facility's reference soil temperature (admin → Emission estimates) before submitting a 200-year removal.",
+    ]);
+    expect(result.submissionWarnings).toEqual([]);
+    expect(mockedGetBatchesWithSamples).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: expect.any(String) }),
+      [CREDIT_BATCH_ID],
+    );
+  });
+
   it("reports missing organization credentials and skips remote calls", async () => {
     mockedGetMapping.mockResolvedValue(mapping());
     mockedHasCredentials.mockResolvedValue(false);

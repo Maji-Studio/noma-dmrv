@@ -23,11 +23,13 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import {
+  BLUEPRINT_1000_YEAR_REPLICATES_INPUT,
   SOIL_STORAGE_MODULE_VERSION,
   computeApplicationCo2eStored,
   computeApplicationCo2eStoredBlueprint1000,
   type Blueprint1000YearReplicate,
 } from "@/lib/calculations/biochar-removal";
+import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import { SafeError } from "@/lib/errors";
 import {
   weightedBatchChemistry,
@@ -403,6 +405,31 @@ export function extract1000YearBlueprintReplicates(
   );
 }
 
+/**
+ * Batch-level evidence gaps that remain true even when there is no application
+ * mass to calculate. Method-B batches intentionally carry no current-batch
+ * sample requirement.
+ */
+export function independentPreviewMissingInputs(
+  batch: Pick<CreditBatch, "sampling"> & {
+    durabilityOption: DurabilityOption;
+  },
+  batchSamples: Array<{
+    totalCarbonPercent: number | null;
+    sReflectanceFraction: number | null;
+  }>,
+): string[] {
+  if (
+    batch.sampling === "sampled" &&
+    batch.durabilityOption === "1000_year" &&
+    extract1000YearBlueprintReplicates(batchSamples).length <
+      MINIMUM_REPLICATES_PER_BATCH
+  ) {
+    return [BLUEPRINT_1000_YEAR_REPLICATES_INPUT];
+  }
+  return [];
+}
+
 function buildCo2eStoredPreview(
   batch: CreditBatch & { durabilityOption: DurabilityOption },
   provider: CertifierProvider | null,
@@ -423,12 +450,16 @@ function buildCo2eStoredPreview(
   }
 
   if (facts.applicationIds.length === 0) {
+    const independentMissingInputs = independentPreviewMissingInputs(
+      batch,
+      chemistry.blueprint1000YearReplicates,
+    );
     return {
       provider,
       co2eStoredTonnes: null,
       moduleVersion: null,
       applicationResults: [],
-      missingInputs: ["applicationIds"],
+      missingInputs: ["applicationIds", ...independentMissingInputs],
       warnings: [],
     };
   }

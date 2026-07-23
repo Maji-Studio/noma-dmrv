@@ -578,18 +578,13 @@ export function StorageLocationList() {
             : undefined
         }
       >
-        {formError && (
-          <div className="mb-24">
-            <ServerError message={formError} />
-          </div>
-        )}
-
         <StorageLocationForm
           key={editingEntity?.id ?? "create"}
           storageLocation={editingEntity as StorageLocation | undefined}
           onSubmit={sideSheet?.mode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}
+          errorMessage={formError ?? undefined}
           submitLabel={sideSheet?.mode === "edit" ? "Save Changes" : "Create Storage Bin"}
         />
       </EntitySideSheet>

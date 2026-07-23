@@ -8,7 +8,6 @@ import {
   FormActions,
   FormField,
   FormInput,
-  ServerError,
 } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -140,7 +139,10 @@ export function OrganizationCertifierCredentials({
         />
       )}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-16">
+      <form
+        onSubmit={handleSubmit(onSubmit)}
+        className="content-measure-form flex flex-col gap-16"
+      >
         <div className="grid grid-cols-1 gap-16 md:grid-cols-2">
           <FormField
             id={`isometric-access-token-${organizationId}`}
@@ -171,9 +173,9 @@ export function OrganizationCertifierCredentials({
             />
           </FormField>
         </div>
-        <ServerError message={serverError} />
         <FormActions
           isSubmitting={setCredentials.isPending}
+          errorMessage={serverError}
           submitLabel={
             status?.configured ? "Replace credentials" : "Set credentials"
           }

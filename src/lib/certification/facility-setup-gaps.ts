@@ -29,6 +29,24 @@ export interface FacilitySetupGapFacts {
   unresolvedBlueprintKeys: string[];
 }
 
+const BLUEPRINT_OPERATOR_LABELS: Record<string, string> = {
+  biochar_sequestration_1000_year: "1,000-year biochar sequestration",
+  biochar_sequestration_200_year: "200-year biochar sequestration",
+};
+
+/** Translate registry identifiers into copy an operator can act on. */
+export function facilityBlueprintLabel(key: string): string {
+  return (
+    BLUEPRINT_OPERATOR_LABELS[key] ??
+    key
+      .split("_")
+      .filter(Boolean)
+      .join(" ")
+      .replace(/\b1000 year\b/i, "1,000-year")
+      .replace(/\b200 year\b/i, "200-year")
+  );
+}
+
 /**
  * Derive the ordered setup gaps from the facility certifier facts. An empty
  * array means facility setup is complete (the wizard's old boolean is exactly

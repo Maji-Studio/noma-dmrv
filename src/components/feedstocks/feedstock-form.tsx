@@ -17,7 +17,7 @@ import { formatDistanceKm } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, ServerError, DryMassInput, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, DryMassInput, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
 import {
@@ -636,8 +636,6 @@ export function FeedstockForm({
           </div>
         </FormSection>
 
-        {/* Server Error */}
-        {serverError && <ServerError message={serverError} />}
         </form>
 
         <FeedstockEvidenceSection
@@ -658,6 +656,7 @@ export function FeedstockForm({
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={serverError}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
         // The update path rebuilds the derived transport leg from the

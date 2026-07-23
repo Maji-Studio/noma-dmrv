@@ -59,6 +59,7 @@ interface FeedstockTypeFormProps {
   onSubmit: (data: FeedstockTypeFormData) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
+  errorMessage?: string;
   submitLabel?: string;
   defaultUsage?: FeedstockTypeUsage;
   /** When true, the usage select is constrained to the parent workflow's usage. */
@@ -72,6 +73,7 @@ export function FeedstockTypeForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  errorMessage,
   submitLabel,
   defaultUsage,
   lockUsage = false,
@@ -364,6 +366,7 @@ export function FeedstockTypeForm({
               <FormActions
                 onCancel={onCancel}
                 isSubmitting={isSubmitting}
+                errorMessage={errorMessage}
                 submitLabel={submitLabel}
                 defaultSubmitLabel={defaultSubmitLabel}
               />
@@ -411,6 +414,7 @@ export function FeedstockTypeForm({
                   <FormActions
                     onCancel={onCancel}
                     isSubmitting={isSubmitting}
+                    errorMessage={errorMessage}
                     submitLabel={submitLabel}
                     defaultSubmitLabel={defaultSubmitLabel}
                   />

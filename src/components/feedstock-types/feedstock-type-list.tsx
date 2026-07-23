@@ -525,17 +525,13 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
         editLabel="Edit Feedstock Type"
         canEdit={canManage}
       >
-        {formError && (
-          <div className="mb-24">
-            <ServerError message={formError} />
-          </div>
-        )}
         <FeedstockTypeForm
           key={sideSheetEntity?.id ?? "create"}
           feedstockType={sideSheet?.mode === "edit" ? sideSheetEntity ?? undefined : undefined}
           onSubmit={sideSheet?.mode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
           isSubmitting={createFeedstockType.isPending || updateFeedstockType.isPending}
+          errorMessage={formError ?? undefined}
           submitLabel={sideSheet?.mode === "edit" ? "Save Changes" : "Create Feedstock Type"}
         />
       </EntitySideSheet>

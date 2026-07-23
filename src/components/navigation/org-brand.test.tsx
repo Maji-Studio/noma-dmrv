@@ -9,18 +9,38 @@ const state = vi.hoisted(() => ({
       | { session: { activeOrganizationId: string | null } }
       | undefined,
     isPending: true,
+    error: undefined as unknown,
+  } as {
+    data?: { session: { activeOrganizationId: string | null } };
+    isPending: boolean;
+    error?: unknown;
   },
   activeProfile: {
     data: undefined as { id: string; name: string } | undefined,
     isPending: true,
+    error: undefined as unknown,
+  } as {
+    data?: { id: string; name: string };
+    isPending: boolean;
+    error?: unknown;
   },
   memberOrganizations: {
     data: undefined as { id: string; name: string }[] | undefined,
     isPending: true,
+    error: undefined as unknown,
+  } as {
+    data?: { id: string; name: string }[];
+    isPending: boolean;
+    error?: unknown;
   },
   allOrganizations: {
     data: undefined as { id: string; name: string }[] | undefined,
     isPending: true,
+    error: undefined as unknown,
+  } as {
+    data?: { id: string; name: string }[];
+    isPending: boolean;
+    error?: unknown;
   },
 }));
 
@@ -88,6 +108,28 @@ describe("OrgBrand", () => {
     expect(html).toContain('href="/dashboard"');
     expect(html).toContain("Dark Earth Carbon");
     expect(html).not.toContain('aria-haspopup="listbox"');
+  });
+
+  it("treats a terminal query error as settled and renders the best fallback", () => {
+    state.session = {
+      data: { session: { activeOrganizationId: "org-1" } },
+      isPending: false,
+    };
+    state.activeProfile = {
+      data: undefined,
+      isPending: true,
+      error: new Error("profile unavailable"),
+    };
+    state.memberOrganizations = {
+      data: [{ id: "org-1", name: "Dark Earth Carbon" }],
+      isPending: false,
+    };
+
+    const html = renderToStaticMarkup(<OrgBrand />);
+
+    expect(html).toContain('href="/dashboard"');
+    expect(html).toContain("Dark Earth Carbon");
+    expect(html).not.toContain('role="status"');
   });
 
   it("settles to a dashboard link for an admin with one organization", () => {

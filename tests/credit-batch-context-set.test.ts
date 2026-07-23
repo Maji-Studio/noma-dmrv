@@ -7,6 +7,7 @@ import {
 import {
   loadLinkedGhgStatementStatus,
 } from "@/fn/certification/linked-ghg-statement-status";
+import { loadDurabilityBatchData } from "@/fn/certification/durability-readiness";
 import { makeTestOrgContext } from "./helpers/test-org";
 
 vi.mock("@/data-access/credit-batch-accounting", () => ({
@@ -17,10 +18,15 @@ vi.mock("@/fn/certification/linked-ghg-statement-status", () => ({
   loadLinkedGhgStatementStatus: vi.fn(),
 }));
 
+vi.mock("@/fn/certification/durability-readiness", () => ({
+  loadDurabilityBatchData: vi.fn(),
+}));
+
 const mockedLoadAccounting = vi.mocked(loadCreditBatchAccounting);
 const mockedLoadLinkedGhgStatementStatus = vi.mocked(
   loadLinkedGhgStatementStatus,
 );
+const mockedLoadDurabilityBatchData = vi.mocked(loadDurabilityBatchData);
 const FANOUT_CONCURRENCY = 8;
 const BATCH_IDS = Array.from(
   { length: FANOUT_CONCURRENCY + 1 },
@@ -63,6 +69,12 @@ const accountingRecord = (batchId: string) => ({
 describe("buildCreditBatchContexts", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mockedLoadDurabilityBatchData.mockResolvedValue({
+      batchesWithSamples: [],
+      blockers: [],
+      warnings: [],
+      blockersByBatchId: {},
+    });
   });
 
   it("loads accounting once and preserves order across the fanout boundary", async () => {

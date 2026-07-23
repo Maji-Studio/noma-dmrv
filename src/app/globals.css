@@ -333,6 +333,8 @@
   /* ===== LAYOUT ===== */
   --breakpoint-xl: 1280px;
   --breakpoint-desktop: 100rem;
+  --content-measure-form: 35rem;
+  --content-measure-preview: 60rem;
 
   /* Default theme values — warm field page background, ink foreground */
   --background: var(--bg);
@@ -831,6 +833,24 @@ p,
   max-width: 120rem; /* 1920px */
   padding-left: 24px;
   padding-right: 24px;
+}
+
+/*
+ * Opt-in content measures inside the canonical full-width page shell.
+ * Both remain fluid on narrow screens and stay aligned to the start of flow.
+ */
+.content-measure-form {
+  width: 100%;
+  min-width: 0;
+  max-width: var(--content-measure-form);
+  margin-inline-end: auto;
+}
+
+.content-measure-preview {
+  width: 100%;
+  min-width: 0;
+  max-width: var(--content-measure-preview);
+  margin-inline-end: auto;
 }
 
 /*

@@ -554,6 +554,11 @@ const READY_ELECTRICITY_KWH = 0;
 const SAMPLE_TOTAL_CARBON_PCT = 80;
 const SAMPLE_ORGANIC_CARBON_PCT = 78;
 const SAMPLE_H_TO_CORG_RATIO = 0.4;
+const SAMPLE_O_TO_CORG_RATIO = 0.1;
+const READY_SAMPLE_REPLICATE_COUNT = 3;
+const READY_REFERENCE_SOIL_TEMPERATURE_C = 25;
+const READY_REFERENCE_SOIL_TEMPERATURE_SOURCE =
+  "E2E readiness fixture reference";
 const TRANSPORT_LEG_DISTANCE_KM = 50;
 const TRANSPORT_LEG_LOAD_MASS_KG = 100;
 const TRANSPORT_LEG_EMISSION_FACTOR = 0.1;
@@ -587,7 +592,9 @@ export async function seedUngroupedReadyBatchWithChain(
     productionRun: crypto.randomUUID(),
     productionRunFeedstock: crypto.randomUUID(),
     productionRunReading: crypto.randomUUID(),
-    sample: crypto.randomUUID(),
+    samples: Array.from({ length: READY_SAMPLE_REPLICATE_COUNT }, () =>
+      crypto.randomUUID(),
+    ),
     biocharProduct: crypto.randomUUID(),
     order: crypto.randomUUID(),
     delivery: crypto.randomUUID(),
@@ -604,6 +611,12 @@ export async function seedUngroupedReadyBatchWithChain(
   const creditBatchCode = `E2E-RDY-${testRunId}`;
   const applicationCode = `E2E-APP-RDY-${testRunId}`;
   const today = new Date().toISOString().slice(0, 10);
+  let createdFacilityMappingId: string | null = null;
+  let priorFacilityEmissionConfig: {
+    mappingId: string;
+    defaultSoilTemperatureC: number | null;
+    defaultSoilTemperatureSource: string | null;
+  } | null = null;
 
   // One uniform distance-based leg per category, keyed to the chain entity the
   // submission walk collects (feedstock id / biochar product id / sample id).
@@ -626,6 +639,60 @@ export async function seedUngroupedReadyBatchWithChain(
 
   try {
     await db.transaction(async (tx) => {
+      const [existingMapping] = await tx
+        .select({
+          id: schema.certifierProjects.id,
+          defaultSoilTemperatureC:
+            schema.certifierProjects.defaultSoilTemperatureC,
+          defaultSoilTemperatureSource:
+            schema.certifierProjects.defaultSoilTemperatureSource,
+        })
+        .from(schema.certifierProjects)
+        .where(
+          and(
+            eq(schema.certifierProjects.organizationId, DEC_ORG_ID),
+            eq(schema.certifierProjects.facilityId, refs.facilityId),
+            eq(schema.certifierProjects.provider, "isometric"),
+          ),
+        )
+        .limit(1);
+
+      if (existingMapping) {
+        priorFacilityEmissionConfig = {
+          mappingId: existingMapping.id,
+          defaultSoilTemperatureC: existingMapping.defaultSoilTemperatureC,
+          defaultSoilTemperatureSource:
+            existingMapping.defaultSoilTemperatureSource,
+        };
+        await tx
+          .update(schema.certifierProjects)
+          .set({
+            defaultSoilTemperatureC: READY_REFERENCE_SOIL_TEMPERATURE_C,
+            defaultSoilTemperatureSource:
+              READY_REFERENCE_SOIL_TEMPERATURE_SOURCE,
+          })
+          .where(
+            and(
+              eq(schema.certifierProjects.id, existingMapping.id),
+              eq(schema.certifierProjects.organizationId, DEC_ORG_ID),
+            ),
+          );
+      } else {
+        createdFacilityMappingId = crypto.randomUUID();
+        await tx.insert(schema.certifierProjects).values({
+          id: createdFacilityMappingId,
+          organizationId: DEC_ORG_ID,
+          facilityId: refs.facilityId,
+          provider: "isometric",
+          externalProjectId: `e2e-readiness-${testRunId}`,
+          protocolSlug: PROTOCOL_SLUG,
+          protocolVersion: PROTOCOL_VERSION,
+          defaultSoilTemperatureC: READY_REFERENCE_SOIL_TEMPERATURE_C,
+          defaultSoilTemperatureSource:
+            READY_REFERENCE_SOIL_TEMPERATURE_SOURCE,
+        });
+      }
+
       await tx.insert(schema.productionRuns).values({
         organizationId: DEC_ORG_ID,
         id: id.productionRun,
@@ -663,18 +730,6 @@ export async function seedUngroupedReadyBatchWithChain(
         productionRunId: id.productionRun,
         feedstockId: refs.feedstockId,
         massUsedKg: 400,
-      });
-      // Lab-grade sample carrying the carbon content + H:Corg the CO₂e preview
-      // aggregates over (not the credit batch's own hToCorgRatio column).
-      await tx.insert(schema.samples).values({
-        organizationId: DEC_ORG_ID,
-        id: id.sample,
-        productionRunId: id.productionRun,
-        sampleCode: `E2E-SMP-${testRunId}`,
-        samplingTime: new Date(),
-        totalCarbonPercent: SAMPLE_TOTAL_CARBON_PCT,
-        organicCarbonPercent: SAMPLE_ORGANIC_CARBON_PCT,
-        hToCOrgRatio: SAMPLE_H_TO_CORG_RATIO,
       });
       await tx.insert(schema.biocharProducts).values({
         organizationId: DEC_ORG_ID,
@@ -744,11 +799,6 @@ export async function seedUngroupedReadyBatchWithChain(
           metadata: { geotagStatus: "present", evidenceRole: role },
         }));
       await tx.insert(schema.documents).values(applicationEvidenceDocuments);
-      await tx.insert(schema.transportLegs).values([
-        leg(id.feedstockTransportLeg, "feedstock", refs.feedstockId),
-        leg(id.biocharTransportLeg, "biochar", id.biocharProduct),
-        leg(id.sampleTransportLeg, "sample", id.sample),
-      ]);
       // ADR 0016: the credit batch is single-feedstock (NOT NULL). Mirror the
       // run's own feedstock so the batch stays consistent with its membership.
       const [feedstockRow] = await tx
@@ -785,6 +835,27 @@ export async function seedUngroupedReadyBatchWithChain(
         creditBatchId: id.creditBatch,
         productionRunId: id.productionRun,
       });
+      // A sampled credit batch needs at least three complete H/Corg + O/Corg
+      // replicates pooled on the batch itself. The run link is provenance only.
+      await tx.insert(schema.samples).values(
+        id.samples.map((sampleId, index) => ({
+          organizationId: DEC_ORG_ID,
+          id: sampleId,
+          creditBatchId: id.creditBatch,
+          productionRunId: id.productionRun,
+          sampleCode: `E2E-SMP-${testRunId}-${index + 1}`,
+          samplingTime: new Date(),
+          totalCarbonPercent: SAMPLE_TOTAL_CARBON_PCT,
+          organicCarbonPercent: SAMPLE_ORGANIC_CARBON_PCT,
+          hToCOrgRatio: SAMPLE_H_TO_CORG_RATIO,
+          oToCOrgRatio: SAMPLE_O_TO_CORG_RATIO,
+        })),
+      );
+      await tx.insert(schema.transportLegs).values([
+        leg(id.feedstockTransportLeg, "feedstock", refs.feedstockId),
+        leg(id.biocharTransportLeg, "biochar", id.biocharProduct),
+        leg(id.sampleTransportLeg, "sample", id.samples[0]),
+      ]);
     });
   } finally {
     await pool.end();
@@ -804,6 +875,9 @@ export async function seedUngroupedReadyBatchWithChain(
             .where(
               eq(schema.creditBatchProductionRuns.creditBatchId, id.creditBatch),
             );
+          await tx
+            .delete(schema.samples)
+            .where(inArray(schema.samples.id, id.samples));
           await tx
             .delete(schema.creditBatches)
             .where(eq(schema.creditBatches.id, id.creditBatch));
@@ -838,9 +912,6 @@ export async function seedUngroupedReadyBatchWithChain(
             .delete(schema.biocharProducts)
             .where(eq(schema.biocharProducts.id, id.biocharProduct));
           await tx
-            .delete(schema.samples)
-            .where(eq(schema.samples.id, id.sample));
-          await tx
             .delete(schema.productionRunReadings)
             .where(
               eq(schema.productionRunReadings.id, id.productionRunReading),
@@ -853,6 +924,37 @@ export async function seedUngroupedReadyBatchWithChain(
           await tx
             .delete(schema.productionRuns)
             .where(eq(schema.productionRuns.id, id.productionRun));
+          if (createdFacilityMappingId) {
+            await tx
+              .delete(schema.certifierProjects)
+              .where(
+                and(
+                  eq(
+                    schema.certifierProjects.id,
+                    createdFacilityMappingId,
+                  ),
+                  eq(schema.certifierProjects.organizationId, DEC_ORG_ID),
+                ),
+              );
+          } else if (priorFacilityEmissionConfig) {
+            await tx
+              .update(schema.certifierProjects)
+              .set({
+                defaultSoilTemperatureC:
+                  priorFacilityEmissionConfig.defaultSoilTemperatureC,
+                defaultSoilTemperatureSource:
+                  priorFacilityEmissionConfig.defaultSoilTemperatureSource,
+              })
+              .where(
+                and(
+                  eq(
+                    schema.certifierProjects.id,
+                    priorFacilityEmissionConfig.mappingId,
+                  ),
+                  eq(schema.certifierProjects.organizationId, DEC_ORG_ID),
+                ),
+              );
+          }
         });
       } finally {
         await conn.pool.end();

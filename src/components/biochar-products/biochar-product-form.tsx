@@ -153,6 +153,7 @@ interface BiocharProductFormProps {
   onSubmit: (data: BiocharProductFormData) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
+  errorMessage?: string;
   submitLabel?: string;
   /**
    * Extension content (e.g. transport-legs editor) rendered between the form
@@ -168,6 +169,7 @@ export function BiocharProductForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  errorMessage,
   submitLabel,
   children,
   focusTarget,
@@ -606,6 +608,7 @@ export function BiocharProductForm({
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

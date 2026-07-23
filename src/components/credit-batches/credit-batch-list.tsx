@@ -60,12 +60,28 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 // ============================================
 
 const EMPTY_CREDIT_BATCHES: CreditBatchWithRelations[] = [];
+export const CREDIT_BATCH_DELETE_MESSAGE =
+  "Delete this credit batch? This removes the grouping, releases its production runs so they can be grouped again, and clears direct membership from its lab samples. This can't be undone.";
+
+export function closeCreditBatchCreate(
+  clearCreateIntent: () => void,
+  closeSideSheet: () => void,
+) {
+  clearCreateIntent();
+  closeSideSheet();
+}
 
 // ============================================
 // Component
 // ============================================
 
-export function CreditBatchList({ canManage = false }: { canManage?: boolean }) {
+export function CreditBatchList({
+  canManage = false,
+  initialCreate = false,
+}: {
+  canManage?: boolean;
+  initialCreate?: boolean;
+}) {
   // Filter & pagination state
   const [startDateFilter, setStartDateFilter] = useState("");
   const [endDateFilter, setEndDateFilter] = useState("");
@@ -85,6 +101,7 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
   // Error state
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const createIntent = useOpenCreateIntent({ initialOpen: initialCreate });
 
   const router = useRouter();
   const { facilityId: contextFacilityId } = useFacilityContext();
@@ -210,7 +227,7 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
     try {
       const result = await createCreditBatch.mutateAsync(data);
       if (result.success) {
-        setSideSheet(null);
+        closeCreditBatchCreate(createIntent.clear, () => setSideSheet(null));
         toast.success("Credit batch created successfully");
       } else {
         setCreateError(result.error || "Failed to create credit batch");
@@ -269,11 +286,11 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
   };
 
   const openCreate = () => {
+    createIntent.clear();
     setCreateError(null);
     setUpdateError(null);
     setSideSheet({ entity: null, mode: "create" });
   };
-  useOpenCreateIntent(openCreate);
   // Opening a batch goes to its detail page (health check + edit), the redesign
   // replacement for the read-only view side-sheet.
   const openView = (batch: CreditBatchWithRelations) => {
@@ -285,6 +302,7 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
     setSideSheet({ entity: batch, mode: "edit" });
   };
   const closeSideSheet = () => {
+    createIntent.clear();
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
@@ -334,7 +352,7 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
   );
 
   // Derived values for the side sheet
-  const sideSheetOpen = !!sideSheet;
+  const sideSheetOpen = !!sideSheet || createIntent.isOpen;
   const sideSheetMode = sideSheet?.mode ?? "create";
   const sideSheetEntity = sideSheet?.entity ?? null;
 
@@ -522,7 +540,7 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeletingBatchId(null)}
         title="Delete Credit Batch"
-        message="Delete this credit batch? Its applications stay in the system but will be unlinked from this batch, and you can re-link them to another batch later. This can't be undone."
+        message={CREDIT_BATCH_DELETE_MESSAGE}
         isPending={deleteCreditBatch.isPending}
       />
 
@@ -545,11 +563,6 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
         editLabel="Edit Credit Batch"
         size="wide"
       >
-        {(createError || updateError) && (
-          <div className="mb-24">
-            <ServerError message={createError || updateError || ""} />
-          </div>
-        )}
         <CreditBatchForm
           key={sideSheetEntity?.id ?? "create"}
           creditBatch={sideSheetEntity ?? undefined}
@@ -566,6 +579,7 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
           isSubmitting={
             createCreditBatch.isPending || updateCreditBatch.isPending
           }
+          errorMessage={createError || updateError || undefined}
           canManage={canManage}
         />
       </EntitySideSheet>

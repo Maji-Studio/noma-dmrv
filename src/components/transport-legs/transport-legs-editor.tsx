@@ -348,11 +348,6 @@ export function TransportLegsEditor({
           <h4 className="title-heading-4 mb-16">
             {inlineForm.leg ? "Edit transport leg" : "Add transport leg"}
           </h4>
-          {formError && (
-            <div className="mb-16">
-              <ServerError message={formError} />
-            </div>
-          )}
           <TransportLegForm
             key={
               inlineForm.leg && isSavedTransportLeg(inlineForm.leg)
@@ -365,6 +360,7 @@ export function TransportLegsEditor({
             onSubmit={handleSubmit}
             onCancel={closeForm}
             isSubmitting={isSubmitting || disabled}
+            errorMessage={formError ?? undefined}
             embedded={deferred}
           />
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { InfoHint } from "@/components/ui/tooltip";
 import type { MethodBEligibility } from "@/lib/certification/method-b-eligibility";
 import type { CreditBatchSampling } from "@/schemas/credit-batches";
 
@@ -63,8 +64,9 @@ export function CreditBatchSamplingControl({
 
   return (
     <fieldset className="flex flex-col gap-10" data-testid="sampling-control">
-      <legend className="body-small font-medium text-[var(--color-text-primary)]">
+      <legend className="inline-flex items-center gap-6 body-small font-medium text-[var(--color-text-primary)]">
         Sampling
+        <InfoHint label="About sampling eligibility">{hint}</InfoHint>
       </legend>
       <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
         <label className="flex min-h-44 cursor-pointer items-center gap-10 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-12 py-8 body-small">
@@ -102,7 +104,6 @@ export function CreditBatchSamplingControl({
           </span>
         </label>
       </div>
-      <p className="body-caption text-[var(--color-text-tertiary)]">{hint}</p>
       {countMet && !eligibility?.prerequisitesRecorded && canManage && prerequisitesSetup}
     </fieldset>
   );

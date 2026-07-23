@@ -4,6 +4,7 @@ import { createRemovalWithCreditBatches } from "@/data-access/certifier-removals
 import { requireOrgFacility } from "@/data-access/utils";
 import { deriveBatchHealth } from "@/lib/certification/batch-health";
 import { toBatchHealthFacts } from "@/lib/certification/batch-health-facts";
+import { deriveFacilitySetupGaps } from "@/lib/certification/facility-setup-gaps";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import {
@@ -45,6 +46,11 @@ export async function createRemovalWithBatchesAction(
     // certifier facts (incl. its Isometric registry calls) ONCE and reuse them
     // across the per-batch re-validation instead of re-fetching per batch.
     const facilityFacts = await loadFacilityCertifierFacts(orgCtx, facilityId);
+    if (deriveFacilitySetupGaps(facilityFacts).length > 0) {
+      throw new SafeError(
+        "Complete this facility's certification setup before grouping credit batches.",
+      );
+    }
 
     // Re-validate per batch against the live context — never trust the client's
     // gate. Each ungrouped batch resolves a 1:1 scope, so `ctx.facilityId` /

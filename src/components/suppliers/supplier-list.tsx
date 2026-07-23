@@ -348,7 +348,6 @@ export function SupplierList() {
           },
         ] : undefined}
       >
-        {(createError || updateError) && <div className="mb-24"><ServerError message={createError || updateError || ""} /></div>}
         <SupplierForm
           key={sideSheetEntity?.id ?? "create"}
           supplier={sideSheet?.entity as Supplier | undefined}
@@ -356,6 +355,7 @@ export function SupplierList() {
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
           isSubmitting={createSupplier.isPending || updateSupplier.isPending}
+          errorMessage={createError || updateError || undefined}
           submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Supplier"}
         />
       </EntitySideSheet>
