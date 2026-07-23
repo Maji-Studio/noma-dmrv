@@ -645,7 +645,6 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           }]),
         ] : undefined}
       >
-        {(createError || updateError) && <div className="mb-24"><ServerError message={createError || updateError || ""} /></div>}
         <ApplicationForm
           key={sideSheetEntity?.id ?? "create"}
           application={sideSheetEntity ?? undefined}
@@ -654,6 +653,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={attemptCloseSideSheet}
           isSubmitting={createApplication.isPending || updateApplication.isPending || isFlushing}
+          errorMessage={createError || updateError || undefined}
           deferredAttachments={deferredAttachments}
         />
       </EntitySideSheet>

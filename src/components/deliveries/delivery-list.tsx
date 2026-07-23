@@ -556,13 +556,13 @@ export function DeliveryList() {
             : undefined
         }
       >
-        {formError && <ServerError message={formError} />}
         <DeliveryForm
           key={sideSheetEntity?.id ?? "create"}
           delivery={sideSheetEntity as Delivery | undefined}
           onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
           onCancel={attemptCloseSideSheet}
           isSubmitting={createDelivery.isPending || updateDelivery.isPending || isFlushing}
+          errorMessage={formError ?? undefined}
           submitLabel={sideSheetMode === "create" ? "Create Delivery" : "Save Changes"}
           deferredAttachments={deferredAttachments}
           focusTarget={sideSheetMode === "edit" ? activeFocusTarget : null}

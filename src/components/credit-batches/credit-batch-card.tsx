@@ -75,11 +75,29 @@ export function CreditBatchCard({
             <CertificateIcon size={12} weight="bold" />
             {creditBatch.code}
           </span>
-          {health ? (
-            <CertReadinessTag health={health} />
-          ) : isHealthLoading ? (
-            <StatusBadge status="pending" label="Checking readiness…" />
-          ) : null}
+          <div className="flex items-center gap-8">
+            {health ? (
+              <CertReadinessTag health={health} />
+            ) : isHealthLoading ? (
+              <StatusBadge status="pending" label="Checking readiness…" />
+            ) : null}
+            <RowActionsMenu
+              label={`Actions for credit batch ${creditBatch.code}`}
+              actions={[
+                {
+                  label: "Edit",
+                  icon: <PencilSimpleIcon size={16} />,
+                  onSelect: () => onEdit(creditBatch),
+                },
+                {
+                  label: "Delete",
+                  destructive: true,
+                  icon: <TrashIcon size={16} />,
+                  onSelect: () => onDelete(creditBatch.id),
+                },
+              ]}
+            />
+          </div>
         </div>
 
         {/* Feedstock is the production cohort's identity; facility is already
@@ -94,30 +112,28 @@ export function CreditBatchCard({
         </div>
 
         {/* Certification-relevant outputs */}
-        <div className="grid grid-cols-2 gap-12 border-t border-[var(--color-border-tertiary)] pt-14">
-          <div>
-            <p className="body-caption text-[var(--color-text-tertiary)]">
+        <div className="grid grid-cols-2 gap-12 border-t border-[var(--color-border-tertiary)] pt-20">
+          <div className="flex flex-col gap-4">
+            <span className="body-caption text-[var(--color-text-tertiary)]">
               Applied biochar
-            </p>
-            <p className="title-heading-3">
+            </span>
+            <span className="title-heading-3 leading-none">
               {creditBatch.appliedWeightTons != null
                 ? `${creditBatch.appliedWeightTons.toFixed(2)} t`
                 : "—"}
-            </p>
+            </span>
           </div>
-          <div>
-            <p className="body-caption text-[var(--color-text-tertiary)]">
+          <div className="flex flex-col gap-4">
+            <span className="body-caption text-[var(--color-text-tertiary)]">
               CO₂e stored
-            </p>
-            <p
-              className={`title-heading-3 ${
-                co2eStored != null
-                  ? "text-[var(--st-ok)]"
-                  : ""
+            </span>
+            <span
+              className={`title-heading-3 leading-none ${
+                co2eStored != null ? "text-[var(--st-ok)]" : ""
               }`}
             >
               {co2eStored != null ? `${co2eStored.toFixed(2)} t` : "—"}
-            </p>
+            </span>
           </div>
         </div>
 
@@ -134,30 +150,13 @@ export function CreditBatchCard({
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between gap-12 border-t border-[var(--color-border-tertiary)] px-20 py-12">
+      <div className="flex items-center border-t border-[var(--color-border-tertiary)] px-20 py-12">
         <span className="body-caption text-[var(--color-text-tertiary)]">
           {creditBatch.productionRunCount}{" "}
           {creditBatch.productionRunCount === 1
             ? "production run"
             : "production runs"}
         </span>
-
-        <RowActionsMenu
-          label={`Actions for credit batch ${creditBatch.code}`}
-          actions={[
-            {
-              label: "Edit",
-              icon: <PencilSimpleIcon size={16} />,
-              onSelect: () => onEdit(creditBatch),
-            },
-            {
-              label: "Delete",
-              destructive: true,
-              icon: <TrashIcon size={16} />,
-              onSelect: () => onDelete(creditBatch.id),
-            },
-          ]}
-        />
       </div>
     </article>
   );

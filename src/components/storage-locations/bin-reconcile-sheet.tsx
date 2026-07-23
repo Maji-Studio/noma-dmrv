@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
-import { FormField, FormInput, FormTextarea, ServerError } from "@/components/forms";
+import { FormField, FormInput, FormTextarea } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { useToast } from "@/components/ui/toast";
 import { formatMass } from "@/lib/format-utils";
@@ -335,11 +335,10 @@ function StockTakeForm({
         />
       </FormField>
 
-      {serverError && <ServerError message={serverError} />}
-
       <FormActions
         onCancel={onCancel}
         isSubmitting={recordStockTake.isPending}
+        errorMessage={serverError ?? undefined}
         submitLabel="Record stock-take"
       />
     </form>
@@ -395,8 +394,6 @@ function LossForm({
 
   return (
     <form onSubmit={onSubmit} className="flex flex-1 flex-col space-y-20">
-      {serverError && <ServerError message={serverError} />}
-
       <FormField
         id="loss-amount"
         label="Amount lost (kg)"
@@ -436,6 +433,7 @@ function LossForm({
       <FormActions
         onCancel={onCancel}
         isSubmitting={recordLoss.isPending}
+        errorMessage={serverError ?? undefined}
         submitLabel="Record loss"
       />
     </form>

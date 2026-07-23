@@ -266,7 +266,6 @@ export function ProductionSampleTable({
               ? "Edit Production Sample"
               : "Add Production Sample"
           }
-          error={formError}
           width="lg"
           testId="production-sample-dialog"
         >
@@ -278,6 +277,7 @@ export function ProductionSampleTable({
               onSubmit={handleSubmit}
               onCancel={closeDialog}
               isSubmitting={isSubmitting}
+              errorMessage={formError ?? undefined}
               deferredAttachments={deferredAttachments}
               onRetryDeferredAttachment={handleRetryDeferredAttachments}
               onRemoveDeferredAttachment={handleRemoveDeferredAttachment}

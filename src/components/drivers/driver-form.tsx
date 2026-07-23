@@ -15,6 +15,7 @@ interface DriverFormProps {
   onSubmit: (data: DriverFormData) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
+  errorMessage?: string;
   submitLabel?: string;
 }
 
@@ -23,6 +24,7 @@ export function DriverForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  errorMessage,
   submitLabel,
 }: DriverFormProps) {
   const isEditMode = !!driver;
@@ -89,6 +91,7 @@ export function DriverForm({
       <FormActions
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={isEditMode ? "Update Driver" : "Create Driver"}
       />

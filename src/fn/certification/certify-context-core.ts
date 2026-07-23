@@ -39,6 +39,7 @@ import {
   defaultProductionReadinessGap,
   type ProductionReadinessGap,
 } from "@/lib/certification/production-readiness";
+import { attributeSoilTemperatureBlockers } from "@/lib/certification/member-batch-gates";
 import { SafeError } from "@/lib/errors";
 import {
   aggregateTransportMassDistance,
@@ -81,15 +82,10 @@ import {
 } from "./selectable-batches";
 
 export type { LinkedGhgStatementStatus } from "./linked-ghg-statement-status";
-export type {
-  SelectableBatch,
-  SelectableBatchesData,
-} from "./selectable-batches";
+export type { SelectableBatch, SelectableBatchesData } from "./selectable-batches";
 
-// Each removal/batch in a facility-level fan-out rebuilds its own context (a
-// chain of DB queries + registry lookups). Bound how many run at once so a
-// facility with many removals/batches can't burst an unbounded number of query
-// chains at the connection pool. Mirrors `READINESS_CONCURRENCY` in overview.ts.
+// Bound facility fan-out so per-removal DB/registry query chains cannot burst
+// the connection pool. Mirrors `READINESS_CONCURRENCY` in overview.ts.
 const FANOUT_CONCURRENCY = 8;
 
 function includesCo2ePreview(
@@ -130,8 +126,10 @@ export interface MemberCreditBatch {
   id: string;
   code: string;
   co2eStoredPreview?: CreditBatchCo2eStoredPreview;
+  /** Exact submission blockers, separated by their remediation workflow. */
+  durabilityGateBlockers?: string[];
+  facilityEmissionsGateBlockers?: string[];
 }
-
 type DurabilityOption = "200_year" | "1000_year";
 
 // UI-facing removal context — the lean payload React Query caches.
@@ -628,6 +626,62 @@ export async function buildRemovalContext(
   const applicationIds = Array.from(
     new Set(scope.memberBatches.flatMap((b) => b.applicationIds)),
   );
+  const lineages = scope.lineages;
+  const runIds = Array.from(
+    new Set(
+      lineages
+        .map((l) => l.productionRun?.id)
+        .filter((id): id is string => !!id),
+    ),
+  );
+  // Sample completeness is batch evidence, independent of application
+  // lineage. Evaluate it before the no-application return so callers see both
+  // blockers instead of discovering chemistry only after production is fixed.
+  const durabilityBatchData = await loadDurabilityBatchData(
+    orgCtx,
+    scope.memberBatches.map((b) => b.id),
+    new Set(runIds),
+  );
+  const {
+    batchesWithSamples,
+    blockers: durabilityBatchBlockers,
+    warnings: durabilityWarnings,
+  } = durabilityBatchData;
+  const memberBatchesWithDurability = memberBatches.map((batch) => ({
+    ...batch,
+    durabilityGateBlockers:
+      durabilityBatchData.blockersByBatchId[batch.id] ?? [],
+  }));
+  // The facility reference gates every 200-year member even before applications
+  // exist; an empty site list deliberately suppresses site-comparison warnings.
+  const facilityReferenceSoilTemperature =
+    resolveFacilityReferenceSoilTemperature({
+      declaredSoilTemperatureC: facilityFacts.mapping?.defaultSoilTemperatureC,
+      source: facilityFacts.mapping?.defaultSoilTemperatureSource,
+    });
+  const soilTemperatureGate = buildSoilTemperatureGate({
+    facilityReference: facilityReferenceSoilTemperature,
+    batches: batchesWithSamples.map((batch) => ({
+      durabilityOption: batch.durabilityOption,
+      runIds: batch.runs.map((run) => run.id),
+    })),
+    siteTemperatures:
+      applicationIds.length === 0
+        ? []
+        : lineages.map((l) => ({
+            runId: l.productionRun?.id ?? null,
+            soilTemperatureC: l.application.soilTemperatureC,
+          })),
+  });
+  const durabilityGateBlockers = [
+    ...durabilityBatchBlockers,
+    ...soilTemperatureGate.blockers,
+  ];
+  const memberBatchesWithSubmissionGates = attributeSoilTemperatureBlockers(
+    memberBatchesWithDurability,
+    batchesWithSamples,
+    soilTemperatureGate.blockers,
+  );
 
   // Nothing to submit when the removal carries no applications. Facility
   // template setup does NOT gate the lineage walk; otherwise setup gaps collapse
@@ -644,38 +698,30 @@ export async function buildRemovalContext(
       facilityId: scope.facilityId,
       removalId: scope.removalId,
       ...facilityFacts,
-      memberBatches,
+      memberBatches: memberBatchesWithSubmissionGates,
       transportCoverage: EMPTY_COVERAGE,
       hasSubmittableRuns: false,
       productionReadinessGap,
       entityReadinessGaps: [],
-      durabilityGateBlockers: [],
-      submissionWarnings: [],
+      durabilityGateBlockers,
+      submissionWarnings: [
+        ...durabilityWarnings,
+        ...soilTemperatureGate.warnings,
+      ],
       runSummary: EMPTY_RUN_SUMMARY,
       latestSubmission,
       linkedGhgStatement,
       isProduction,
       lineages: [],
       runs: [],
-      batchesWithSamples: [],
+      batchesWithSamples,
       attributionByRunId: new Map<string, number>(),
       memberBatchClaims,
       transportLegs: { feedstock: [], biochar: [], sample: [] },
-      facilityReferenceSoilTemperature: resolveFacilityReferenceSoilTemperature({
-        declaredSoilTemperatureC: facilityFacts.mapping?.defaultSoilTemperatureC,
-        source: facilityFacts.mapping?.defaultSoilTemperatureSource,
-      }),
+      facilityReferenceSoilTemperature,
     };
   }
 
-  const lineages = scope.lineages;
-  const runIds = Array.from(
-    new Set(
-      lineages
-        .map((l) => l.productionRun?.id)
-        .filter((id): id is string => !!id),
-    ),
-  );
   const runs =
     runIds.length > 0
       ? await getProductionRunsWithSamples(orgCtx, runIds)
@@ -690,16 +736,6 @@ export async function buildRemovalContext(
   // is the same fail-closed list the submit pipeline blocks on; the §8.3.1
   // distribution warning is advisory, so it joins the non-blocking submission
   // warnings.
-  const {
-    batchesWithSamples,
-    blockers: durabilityBatchBlockers,
-    warnings: durabilityWarnings,
-  } = await loadDurabilityBatchData(
-    orgCtx,
-    scope.memberBatches.map((b) => b.id),
-    new Set(runIds),
-  );
-
   const entityIds = collectTransportEntityIds(lineages, batchesWithSamples);
   const transportLegs = await loadTransportLegsByCategory(orgCtx, entityIds);
   const transportCoverage = buildCoverage(transportLegs, entityIds);
@@ -718,37 +754,6 @@ export async function buildRemovalContext(
     runs,
   );
 
-  // Facility reference soil temperature (Phase 2, ADR 0013): the authoritative
-  // value submitted as the `biochar_soil` measurement, 7 °C-floored. When there
-  // is a 200-year batch to submit, an unset reference is fail-closed — it joins
-  // the durability gate blockers so readiness predicts the submit-pipeline block.
-  const facilityReferenceSoilTemperature =
-    resolveFacilityReferenceSoilTemperature({
-      declaredSoilTemperatureC: facilityFacts.mapping?.defaultSoilTemperatureC,
-      source: facilityFacts.mapping?.defaultSoilTemperatureSource,
-    });
-
-  // Soil temperature credits only the 200-year durable fraction; 1000-year
-  // (R₀/TGA) batches have no temperature term. `buildSoilTemperatureGate` scopes
-  // both the fail-closed reference-temp blocker and the over-crediting advisory
-  // to the removal's 200-year batches (and to the sites those batches credit), so
-  // a 1000-year batch never trips either (a mixed removal still gates its members).
-  const soilTemperatureGate = buildSoilTemperatureGate({
-    facilityReference: facilityReferenceSoilTemperature,
-    batches: batchesWithSamples.map((batch) => ({
-      durabilityOption: batch.durabilityOption,
-      runIds: batch.runs.map((run) => run.id),
-    })),
-    siteTemperatures: lineages.map((l) => ({
-      runId: l.productionRun?.id ?? null,
-      soilTemperatureC: l.application.soilTemperatureC,
-    })),
-  });
-  const durabilityGateBlockers = [
-    ...durabilityBatchBlockers,
-    ...soilTemperatureGate.blockers,
-  ];
-
   const submissionWarnings = [
     ...buildSubmissionWarnings({
       defaultTemplate: facilityFacts.defaultTemplate,
@@ -763,7 +768,7 @@ export async function buildRemovalContext(
     facilityId: scope.facilityId,
     removalId: scope.removalId,
     ...facilityFacts,
-    memberBatches,
+    memberBatches: memberBatchesWithSubmissionGates,
     transportCoverage,
     hasSubmittableRuns: runs.length > 0 && !productionReadinessGap,
     productionReadinessGap,

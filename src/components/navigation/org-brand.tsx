@@ -106,9 +106,11 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
   const orgInitial = activeOrgName.charAt(0).toUpperCase();
 
   const organizationStatePending =
-    sessionQuery.isPending ||
-    activeOrgQuery.isPending ||
-    (isAdmin ? allOrgsQuery.isPending : memberOrgsQuery.isPending);
+    (sessionQuery.isPending && !sessionQuery.error) ||
+    (activeOrgQuery.isPending && !activeOrgQuery.error) ||
+    (isAdmin
+      ? allOrgsQuery.isPending && !allOrgsQuery.error
+      : memberOrgsQuery.isPending && !memberOrgsQuery.error);
 
   async function handleSelect(organizationId: string) {
     if (organizationId === activeOrganizationId) {

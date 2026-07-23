@@ -70,13 +70,15 @@ interface DeliveryFormProps {
   onCancel?: () => void;
   /** Whether the form is currently submitting */
   isSubmitting?: boolean;
+  /** Submission-level error shown with the action footer */
+  errorMessage?: string;
   /** Custom label for the submit button */
   submitLabel?: string;
   deferredAttachments?: UseDeferredAttachmentsResult;
   focusTarget?: EntityFocusTarget | null;
 }
 
-export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, submitLabel, deferredAttachments, focusTarget }: DeliveryFormProps) {
+export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = false, errorMessage, submitLabel, deferredAttachments, focusTarget }: DeliveryFormProps) {
   const isEditMode = !!delivery;
   const formId = useId();
   const { facilityId: contextFacilityId } = useFacilityContext();
@@ -462,6 +464,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

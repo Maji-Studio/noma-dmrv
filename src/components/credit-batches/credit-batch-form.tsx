@@ -3,8 +3,9 @@
  * Reusable credit batch form with React Hook Form integration
  *
  * Form sections:
- * 1. Batch definition — feedstock, startDate, endDate, notes
+ * 1. Batch definition — feedstock, startDate, endDate
  * 2. Production cohort — selected production runs in the production window
+ * 3. Additional information — notes always trail the operational fields
  * Facility durability and registry/accounting values are intentionally absent:
  * neither is a batch input.
  */
@@ -134,25 +135,10 @@ function CohortPickerSection({
           </span>
         </div>
       ) : totalCount === 0 && count === 0 ? (
-        <div className="flex items-start justify-between gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
+        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
           <span className="body-small text-[var(--color-text-tertiary)]">
             {noMatchMessage}
           </span>
-          {/* A successful-but-stale cached empty result would otherwise be a
-              dead end (e.g. a run completed seconds ago in another tab) —
-              give the operator an explicit refresh (QA 2026-07-21 F5). */}
-          {onRetry && (
-            <Button
-              type="button"
-              variant="noOutline"
-              size="small"
-              onClick={onRetry}
-              disabled={isRetrying}
-            >
-              <ArrowsClockwiseIcon size={14} />
-              {isRetrying ? "Refreshing…" : "Refresh"}
-            </Button>
-          )}
         </div>
       ) : totalCount === 0 ? (
         <div className="space-y-8">
@@ -231,6 +217,8 @@ interface CreditBatchFormProps {
   onCancel?: () => void;
   /** Whether the form is currently submitting */
   isSubmitting?: boolean;
+  /** Submission-level error shown with the action footer */
+  errorMessage?: string;
   /** Custom label for the submit button */
   submitLabel?: string;
   /** Sticky CTA row (side sheet) — pass false when embedded in a page card. */
@@ -245,6 +233,7 @@ export function CreditBatchForm({
   onClearServerError,
   onCancel,
   isSubmitting = false,
+  errorMessage,
   submitLabel,
   stickyActions = true,
   canManage = false,
@@ -486,7 +475,6 @@ export function CreditBatchForm({
             disabled={isSubmitting}
             required
             filterBy={{ usage: "pyrolysis" }}
-            helperText="The batch is one feedstock and scopes which runs you can add."
           />
         </div>
 
@@ -549,21 +537,6 @@ export function CreditBatchForm({
           </FormField>
         </div>
 
-        <FormField
-          id="siteManagementNotes"
-          label="Notes"
-          error={errors.siteManagementNotes?.message}
-        >
-          <FormTextarea
-            id="siteManagementNotes"
-            placeholder="Add optional notes about this credit batch…"
-            disabled={isSubmitting}
-            rows={3}
-            error={!!errors.siteManagementNotes}
-            {...register("siteManagementNotes")}
-          />
-        </FormField>
-
       </FormSection>
 
       {/* ── Production cohort ── */}
@@ -612,10 +585,29 @@ export function CreditBatchForm({
       {/* ── Cohort input ledger (live front-loaded production inputs) ── */}
       <CohortInputLedger runs={selectedRuns} />
 
+      {/* Free-form notes trail the operational inputs and their live preview. */}
+      <FormSection title="Additional information">
+        <FormField
+          id="siteManagementNotes"
+          label="Notes"
+          error={errors.siteManagementNotes?.message}
+        >
+          <FormTextarea
+            id="siteManagementNotes"
+            placeholder="Add optional notes about this credit batch…"
+            disabled={isSubmitting}
+            rows={3}
+            error={!!errors.siteManagementNotes}
+            {...register("siteManagementNotes")}
+          />
+        </FormField>
+      </FormSection>
+
       <FormActions
         sticky={stickyActions}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

@@ -5,7 +5,6 @@ import {
   compactBatchHealthDetail,
   fallbackBatchHealthFixTarget,
   NEXT_ACTION_DETAIL_MAX_CHARS,
-  skippedBatchHealthFixLink,
 } from "@/lib/certification/batch-health-links";
 
 describe("compactBatchHealthDetail", () => {
@@ -96,6 +95,17 @@ describe("batchHealthFixLinkFor", () => {
     const link = batchHealthFixLinkFor(check("carbon"), facilityId);
     expect(link.label).toBe("Add lab sample data");
     expect(link.href).toBe(`/samples?facility=${facilityId}`);
+  });
+
+  it("routes facility emission blockers to certification emission estimates", () => {
+    const link = batchHealthFixLinkFor(
+      check("facilityEmissions", "certificationEmissions"),
+      facilityId,
+    );
+    expect(link.label).toBe("Open emission estimates");
+    expect(link.href).toBe(
+      `/certification/settings?facility=${facilityId}#emission-estimates`,
+    );
   });
 
   it("routes an explicit applications fixTarget to the applications page", () => {
@@ -194,10 +204,4 @@ describe("batchHealthFixLinkFor", () => {
     expect(link.href).toContain("/production-runs");
   });
 
-  it("routes skipped checks to certification connection settings", () => {
-    expect(skippedBatchHealthFixLink(facilityId)).toEqual({
-      label: "Finish facility setup",
-      href: "/certification/settings?tab=connection&facility=fac-001",
-    });
-  });
 });

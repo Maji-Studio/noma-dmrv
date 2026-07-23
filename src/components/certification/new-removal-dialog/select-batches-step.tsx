@@ -25,7 +25,10 @@ import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { InfoHint } from "@/components/ui/tooltip";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import { certificationSettingsHref } from "@/lib/certification/links";
-import type { FacilitySetupGap } from "@/lib/certification/facility-setup-gaps";
+import {
+  facilityBlueprintLabel,
+  type FacilitySetupGap,
+} from "@/lib/certification/facility-setup-gaps";
 import { formatDurabilityOption } from "@/schemas/credit-batches";
 import type { SelectableBatch } from "@/fn/certification";
 
@@ -46,7 +49,7 @@ interface SelectBatchesStepProps {
  * already-linked facility names the blueprint keys instead of issuing a false
  * "link this facility" instruction (QA 2026-07-21 F2).
  */
-function setupGapCopy(gap: FacilitySetupGap): {
+export function setupGapCopy(gap: FacilitySetupGap): {
   message: string;
   action: { label: string; toSettings: true } | null;
 } {
@@ -74,14 +77,16 @@ function setupGapCopy(gap: FacilitySetupGap): {
         message: `The configured removal template (${gap.templateId}) no longer resolves on the registry. Re-select a template.`,
         action: { label: "Re-select template in certification settings", toSettings: true },
       };
-    case "blueprint_keys":
+    case "blueprint_keys": {
+      const labels = gap.keys.map(facilityBlueprintLabel);
       return {
         message:
           `The facility's project and template are linked, but the template references ` +
           `${gap.keys.length} component blueprint${gap.keys.length === 1 ? "" : "s"} the registry doesn't expose: ` +
-          `${gap.keys.join(", ")}. Ask an administrator to resolve the template's blueprint mapping with Isometric.`,
-        action: null,
+          `${labels.join(", ")}. Review the facility's certification setup or ask an administrator to resolve the mapping with Isometric.`,
+        action: { label: "Review certification settings", toSettings: true },
       };
+    }
   }
 }
 
@@ -144,7 +149,7 @@ function ReadyCard({
       </div>
       <span className="inline-flex items-center gap-6 body-caption font-medium text-[var(--color-signal-green)]">
         <CheckCircleIcon size={14} weight="fill" aria-hidden />
-        Ready to certify
+        Batch data ready
       </span>
     </label>
   );
@@ -321,7 +326,7 @@ export function SelectBatchesStep({
               point at the gaps, which are actionable one click each below. */}
           {readyBatches.length === 0 && (
             <p className="body-small text-[var(--color-text-secondary)]">
-              No batches are ready to certify yet. Resolve the gaps below and
+              No batches have complete data yet. Resolve the gaps below and
               they&apos;ll move up here.
             </p>
           )}
