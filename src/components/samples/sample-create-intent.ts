@@ -2,6 +2,14 @@ import { CREATE_INTENT_PARAM } from "@/lib/create-intent";
 
 export const SAMPLE_CREATE_CREDIT_BATCH_PARAM = "createCreditBatch";
 
+export function leaveSampleCreateIntent(
+  clearCreateIntent: () => void,
+  transition: () => void,
+) {
+  clearCreateIntent();
+  transition();
+}
+
 export function sampleCreateHref(
   facilityId: string,
   creditBatchId: string,

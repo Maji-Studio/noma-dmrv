@@ -50,6 +50,7 @@ import type { SampleWithRelations } from "@/data-access/samples";
 import type { TransportLegFormData } from "@/schemas/transport-legs";
 import { SampleDocumentsPanel } from "./sample-documents-panel";
 import {
+  leaveSampleCreateIntent,
   resolveSampleCreateCreditBatchId,
   SAMPLE_CREATE_CREDIT_BATCH_PARAM,
 } from "./sample-create-intent";
@@ -316,8 +317,11 @@ export function SampleList({
     unresolvedUpdateMessage:
       "Resolve or remove the failed attachments and transport legs before saving this sample.",
     openEditOnFailure: (sample) =>
-      setSideSheet({ mode: "edit", entity: sample }),
-    closeOnSuccess: () => setSideSheet(null),
+      leaveSampleCreateIntent(createIntent.clear, () =>
+        setSideSheet({ mode: "edit", entity: sample }),
+      ),
+    closeOnSuccess: () =>
+      leaveSampleCreateIntent(createIntent.clear, () => setSideSheet(null)),
     onAfterFlush: async ({ created, flushResult }) => {
       const sample = created.result;
       const failedLegs: TransportLegFormData[] = [];

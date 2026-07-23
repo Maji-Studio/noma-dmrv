@@ -1,10 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
+  leaveSampleCreateIntent,
   resolveSampleCreateCreditBatchId,
   sampleCreateHref,
 } from "./sample-create-intent";
 
 describe("sample create intent", () => {
+  it("clears intent before leaving create mode", () => {
+    const events: string[] = [];
+
+    leaveSampleCreateIntent(
+      () => events.push("clear"),
+      () => events.push("transition"),
+    );
+
+    expect(events).toEqual(["clear", "transition"]);
+  });
+
   it("encodes the active facility and credit batch in the recovery link", () => {
     const href = sampleCreateHref("facility-1", "batch-1");
     const url = new URL(href, "https://example.test");
