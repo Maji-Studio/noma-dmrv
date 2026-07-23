@@ -268,29 +268,48 @@ export const auth = betterAuth({
             return { data: session };
           }
 
-          const accessibleOrganizations =
-            user.role === "admin"
+          let activeOrganizationId: string | null;
+          if (user.role === "admin") {
+            const [preferredOrganization] = user.lastActiveOrganizationId
               ? await db
-                  .select({ organizationId: schema.organizations.id })
+                  .select({ id: schema.organizations.id })
+                  .from(schema.organizations)
+                  .where(
+                    eq(
+                      schema.organizations.id,
+                      user.lastActiveOrganizationId,
+                    ),
+                  )
+                  .limit(1)
+              : [];
+            const [fallbackOrganization] = preferredOrganization
+              ? []
+              : await db
+                  .select({ id: schema.organizations.id })
                   .from(schema.organizations)
                   .orderBy(
                     asc(schema.organizations.createdAt),
                     asc(schema.organizations.id),
                   )
-              : await db
-                  .select({ organizationId: schema.members.organizationId })
-                  .from(schema.members)
-                  .where(eq(schema.members.userId, session.userId))
-                  .orderBy(
-                    asc(schema.members.createdAt),
-                    asc(schema.members.id),
-                  );
-          const activeOrganizationId = selectActiveOrganizationId({
-            lastActiveOrganizationId: user.lastActiveOrganizationId,
-            accessibleOrganizationIds: accessibleOrganizations.map(
-              ({ organizationId }) => organizationId,
-            ),
-          });
+                  .limit(1);
+            activeOrganizationId =
+              preferredOrganization?.id ?? fallbackOrganization?.id ?? null;
+          } else {
+            const accessibleOrganizations = await db
+              .select({ organizationId: schema.members.organizationId })
+              .from(schema.members)
+              .where(eq(schema.members.userId, session.userId))
+              .orderBy(
+                asc(schema.members.createdAt),
+                asc(schema.members.id),
+              );
+            activeOrganizationId = selectActiveOrganizationId({
+              lastActiveOrganizationId: user.lastActiveOrganizationId,
+              accessibleOrganizationIds: accessibleOrganizations.map(
+                ({ organizationId }) => organizationId,
+              ),
+            });
+          }
           return {
             data: {
               ...session,
