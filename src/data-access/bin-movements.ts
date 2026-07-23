@@ -21,6 +21,7 @@ import { laneForStorageType } from "@/schemas/bin-movements";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { isPgCheckViolation } from "@/db/errors";
 import {
   deriveBinLaneAvailableKg,
@@ -33,6 +34,12 @@ export type DbReader = Pick<typeof db, "select">;
 
 const LOSS_NEGATIVITY_CONSTRAINT = "bin_movements_loss_is_negative";
 const LOSS_NEGATIVITY_MESSAGE = "A loss must be recorded as a negative mass delta";
+const STOCK_TAKE_INCREASE_MESSAGE =
+  "Counted stock cannot exceed the current derived stock. Stock-takes can only confirm or reduce inventory.";
+const FEEDSTOCK_SNAPSHOT_MESSAGE =
+  "Feedstock stock-takes require counted wet stock and moisture content";
+const NON_FEEDSTOCK_SNAPSHOT_MESSAGE =
+  "Wet-mass moisture snapshots are only valid for feedstock bins";
 
 // ============================================
 // Types
@@ -68,6 +75,13 @@ export interface RecordStockTakeMovementInput {
   countedMassKg: number;
   countedWetMassKg?: number | null;
   moistureRatioUsed?: number | null;
+}
+
+export class StockTakeIncreaseError extends SafeError {
+  constructor() {
+    super(STOCK_TAKE_INCREASE_MESSAGE);
+    this.name = "StockTakeIncreaseError";
+  }
 }
 
 // ============================================
@@ -200,6 +214,11 @@ export async function createBinMovement(
   input: CreateBinMovementInput,
 ): Promise<BinMovement> {
   requireOrgScope(ctx);
+  if (input.movementType !== "loss") {
+    throw new SafeError(
+      "Stock-take adjustments must be recorded through the stock-take boundary",
+    );
+  }
   return db.transaction(async (tx) => {
     await lockBinStock(ctx, tx, input.storageLocationId);
     if (input.movementType === "loss" && input.massDeltaKg < 0) {
@@ -233,19 +252,52 @@ export async function recordStockTakeMovement(
   requireOrgScope(ctx);
   return db.transaction(async (tx) => {
     await lockBinStock(ctx, tx, input.storageLocationId);
+    await assertBinLaneTarget(ctx, tx, input);
+
+    let countedMassKg = input.countedMassKg;
+    if (input.lane === "feedstock") {
+      if (
+        input.countedWetMassKg == null ||
+        input.moistureRatioUsed == null ||
+        !Number.isFinite(input.countedWetMassKg) ||
+        !Number.isFinite(input.moistureRatioUsed) ||
+        input.countedWetMassKg < 0 ||
+        input.moistureRatioUsed < 0 ||
+        input.moistureRatioUsed > 1
+      ) {
+        throw new SafeError(FEEDSTOCK_SNAPSHOT_MESSAGE);
+      }
+      countedMassKg = deriveMassDryKg(
+        input.countedWetMassKg,
+        input.moistureRatioUsed * 100,
+      );
+    } else if (
+      input.countedWetMassKg != null ||
+      input.moistureRatioUsed != null
+    ) {
+      throw new SafeError(NON_FEEDSTOCK_SNAPSHOT_MESSAGE);
+    }
+
+    if (!Number.isFinite(countedMassKg) || countedMassKg < 0) {
+      throw new SafeError("Counted stock must be a non-negative number");
+    }
+
     const derivedMassKgAtTime = await deriveBinLaneAvailableKg(
       ctx,
       tx,
       input.storageLocationId,
       input.lane,
     );
+    if (countedMassKg > derivedMassKgAtTime) {
+      throw new StockTakeIncreaseError();
+    }
     return createBinMovementInTransaction(ctx, tx, {
       storageLocationId: input.storageLocationId,
       lane: input.lane,
       movementType: "adjustment",
-      massDeltaKg: input.countedMassKg - derivedMassKgAtTime,
+      massDeltaKg: countedMassKg - derivedMassKgAtTime,
       reason: input.reason,
-      countedMassKg: input.countedMassKg,
+      countedMassKg,
       derivedMassKgAtTime,
       countedWetMassKg: input.countedWetMassKg ?? null,
       moistureRatioUsed: input.moistureRatioUsed ?? null,

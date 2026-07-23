@@ -1,27 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { FormField, FormInput, FormTextarea, ServerError } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { useToast } from "@/components/ui/toast";
-import { numericValue } from "@/lib/form-utils";
 import { formatMass } from "@/lib/format-utils";
+import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import {
   RecordLossFieldError,
+  RecordStockTakeFieldError,
   useRecordLoss,
   useRecordStockTake,
 } from "@/hooks/use-bin-movements";
 import {
-  BIN_MOVEMENT_LANE_LABELS,
   laneForStorageType,
   recordLossFormSchema,
   stockTakeFormSchema,
   type RecordLossFormData,
   type StockTakeFormData,
 } from "@/schemas/bin-movements";
+import { toNumberOrNull } from "@/schemas/helpers";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { binCurrentMassKg } from "./bin-display";
 
@@ -79,20 +80,51 @@ function ModeToggle({
   );
 }
 
-/** Read-only chip naming the single material lane this bin reconciles. */
-function LaneContext({
+function previewNumber(value: unknown): number | null {
+  const parsed = toNumberOrNull(value);
+  return typeof parsed === "number" && Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatMoisturePercent(value: number | null): string {
+  return value == null ? "Not available" : `${value.toFixed(1)}%`;
+}
+
+function CurrentStockContext({
   storageLocation,
 }: {
   storageLocation: StorageLocationWithFacility;
 }) {
-  const lane = laneForStorageType(storageLocation.type);
+  const isFeedstock =
+    laneForStorageType(storageLocation.type) === "feedstock";
+  const currentMoisturePercent = isFeedstock
+    ? storageLocation.feedstockInventory.estimatedMoisturePercent
+    : null;
+
   return (
-    <div className="flex items-center justify-between gap-8 border border-[var(--color-border-tertiary)] bg-[var(--color-background-light)] px-12 py-10">
-      <span className="body-caption text-[var(--color-text-tertiary)]">Lane</span>
-      <span className="body-small font-medium text-[var(--color-text-primary)]">
-        {BIN_MOVEMENT_LANE_LABELS[lane]}
-      </span>
-    </div>
+    <dl
+      aria-label="Current stock context"
+      className="border border-[var(--color-border-tertiary)]"
+    >
+      <div className="flex items-center justify-between gap-8 px-12 py-10">
+        <dt className="body-caption text-[var(--color-text-tertiary)]">
+          Current derived stock
+        </dt>
+        <dd className="body-small font-medium text-[var(--color-text-primary)]">
+          {formatMass(binCurrentMassKg(storageLocation))}
+          {isFeedstock ? " dry" : ""}
+        </dd>
+      </div>
+      {isFeedstock && (
+        <div className="flex items-center justify-between gap-8 border-t border-[var(--color-border-tertiary)] px-12 py-10">
+          <dt className="body-caption text-[var(--color-text-tertiary)]">
+            Current estimated moisture
+          </dt>
+          <dd className="body-small font-medium text-[var(--color-text-primary)]">
+            {formatMoisturePercent(currentMoisturePercent)}
+          </dd>
+        </div>
+      )}
+    </dl>
   );
 }
 
@@ -111,59 +143,86 @@ function StockTakeForm({
 
   const lane = laneForStorageType(storageLocation.type);
   const derivedMassKg = binCurrentMassKg(storageLocation);
-  const moisturePercent =
+  const currentMoisturePercent =
     lane === "feedstock"
       ? storageLocation.feedstockInventory.estimatedMoisturePercent
       : null;
-  const useWet = lane === "feedstock" && moisturePercent != null;
-  const moistureRatio = useWet ? (moisturePercent as number) / 100 : null;
+  const isFeedstock = lane === "feedstock";
 
   const {
     register,
     handleSubmit,
-    watch,
+    setError,
+    control,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(stockTakeFormSchema),
-    defaultValues: { reason: "" },
+    defaultValues: {
+      lane,
+      reason: "",
+      moisturePercent:
+        currentMoisturePercent == null
+          ? undefined
+          : Number(currentMoisturePercent.toFixed(1)),
+    },
   });
 
-  const countedInput = watch("counted");
-  const countedNum =
-    typeof countedInput === "number" && !Number.isNaN(countedInput)
-      ? countedInput
-      : null;
+  const [countedInput, measuredMoistureInput] = useWatch({
+    control,
+    name: ["counted", "moisturePercent"],
+  });
+  const countedNum = previewNumber(countedInput);
+  const measuredMoisturePercent = previewNumber(measuredMoistureInput);
   const countedDryKg =
     countedNum == null
       ? null
-      : useWet && moistureRatio != null
-        ? countedNum * (1 - moistureRatio)
+      : isFeedstock
+        ? countedNum >= 0 &&
+          measuredMoisturePercent != null &&
+          measuredMoisturePercent >= 0 &&
+          measuredMoisturePercent <= 100
+          ? deriveMassDryKg(countedNum, measuredMoisturePercent)
+          : null
         : countedNum;
   const deltaKg = countedDryKg != null ? countedDryKg - derivedMassKg : null;
 
-  const countedLabel = useWet
+  const countedLabel = isFeedstock
     ? "Counted stock (wet kg)"
-    : lane === "feedstock"
-      ? "Counted stock (dry kg)"
-      : "Counted stock (kg)";
+    : "Counted stock (kg)";
 
   const onSubmit = handleSubmit(async (raw) => {
     setServerError(null);
     const values = raw as StockTakeFormData;
     const counted = values.counted;
-    const isWet = useWet && moistureRatio != null;
+    const enteredMoisturePercent = values.moisturePercent;
+    const isWet = isFeedstock && enteredMoisturePercent != null;
+    const moistureRatio = isWet ? enteredMoisturePercent / 100 : null;
+    const submittedDryMassKg = isWet
+      ? deriveMassDryKg(counted, enteredMoisturePercent)
+      : counted;
+    if (submittedDryMassKg > derivedMassKg) {
+      setError("counted", {
+        type: "validate",
+        message: "Counted stock cannot exceed the current derived stock",
+      });
+      return;
+    }
     try {
       await recordStockTake.mutateAsync({
         storageLocationId: storageLocation.id,
         lane,
         reason: values.reason,
-        countedMassKg: isWet ? counted * (1 - moistureRatio) : counted,
+        countedMassKg: submittedDryMassKg,
         countedWetMassKg: isWet ? counted : null,
         moistureRatioUsed: isWet ? moistureRatio : null,
       });
       toast.success("Stock-take recorded");
       onRecorded?.();
     } catch (error) {
+      if (error instanceof RecordStockTakeFieldError) {
+        setError(error.field, { type: "server", message: error.message });
+        return;
+      }
       setServerError(
         error instanceof Error ? error.message : "Failed to record stock-take"
       );
@@ -172,24 +231,13 @@ function StockTakeForm({
 
   return (
     <form onSubmit={onSubmit} className="flex flex-1 flex-col space-y-20">
-      {serverError && <ServerError message={serverError} />}
-
-      <div className="flex items-center justify-between gap-8 border border-[var(--color-border-tertiary)] px-12 py-10">
-        <span className="body-caption text-[var(--color-text-tertiary)]">
-          Current derived stock
-        </span>
-        <span className="body-small font-medium text-[var(--color-text-primary)]">
-          {formatMass(derivedMassKg)}
-        </span>
-      </div>
-
       <FormField
         id="counted"
         label={countedLabel}
         error={errors.counted?.message}
         required
         helperText={
-          useWet
+          isFeedstock
             ? "Enter the physically weighed wet mass; it is converted to dry below."
             : undefined
         }
@@ -202,16 +250,53 @@ function StockTakeForm({
           placeholder="e.g., 620"
           disabled={recordStockTake.isPending}
           error={!!errors.counted}
-          {...register("counted", { setValueAs: numericValue })}
+          {...register("counted")}
         />
       </FormField>
 
-      {useWet && countedNum != null && countedDryKg != null && (
-        <p className="body-caption text-[var(--color-text-secondary)]">
-          {formatMass(countedNum)} wet ≈ {formatMass(countedDryKg)} dry at ~
-          {Math.round(moisturePercent as number)}% moisture
-        </p>
+      {isFeedstock && (
+        <FormField
+          id="moisture-percent"
+          label="Moisture content (%)"
+          error={errors.moisturePercent?.message}
+          required
+          helperText="Enter or confirm the moisture measured for this stock-take."
+        >
+          <FormInput
+            id="moisture-percent"
+            type="number"
+            step="any"
+            min="0"
+            max="100"
+            placeholder="e.g., 18"
+            disabled={recordStockTake.isPending}
+            error={!!errors.moisturePercent}
+            {...register("moisturePercent")}
+          />
+        </FormField>
       )}
+
+      {isFeedstock &&
+        countedNum != null &&
+        measuredMoisturePercent != null &&
+        countedDryKg != null && (
+          <div
+            aria-label="Wet-to-dry conversion preview"
+            className="flex items-center justify-between gap-8 border border-[var(--color-border-tertiary)] bg-[var(--color-background-light)] px-12 py-10"
+          >
+            <span className="body-caption text-[var(--color-text-tertiary)]">
+              Dry-equivalent count
+            </span>
+            <span className="body-small font-medium text-[var(--color-text-primary)]">
+              {formatMass(countedDryKg)} dry
+              <span className="body-caption font-normal text-[var(--color-text-tertiary)]">
+                {" "}
+                · {formatMass(countedNum)} wet at{" "}
+                {formatMoisturePercent(measuredMoisturePercent)}
+              </span>
+            </span>
+          </div>
+        )}
 
       {deltaKg != null && (
         <div className="flex items-center justify-between gap-8 border border-[var(--color-border-tertiary)] bg-[var(--color-background-light)] px-12 py-10">
@@ -221,7 +306,7 @@ function StockTakeForm({
           <span
             className={`body-small font-mono font-medium ${
               deltaKg > 0
-                ? "text-[var(--st-ok)]"
+                ? "text-[var(--color-signal-red)]"
                 : deltaKg < 0
                   ? "text-[var(--color-signal-red)]"
                   : "text-[var(--color-text-primary)]"
@@ -231,6 +316,12 @@ function StockTakeForm({
             {formatMass(Math.abs(deltaKg))}
           </span>
         </div>
+      )}
+
+      {deltaKg != null && deltaKg > 0 && (
+        <p className="body-caption text-[var(--color-signal-red)]">
+          Stock-takes cannot increase derived inventory.
+        </p>
       )}
 
       <FormField
@@ -253,6 +344,8 @@ function StockTakeForm({
       <FormActions
         onCancel={onCancel}
         isSubmitting={recordStockTake.isPending}
+        submitDisabled={deltaKg != null && deltaKg > 0}
+        errorMessage={serverError ?? undefined}
         submitLabel="Record stock-take"
       />
     </form>
@@ -325,7 +418,7 @@ function LossForm({
           placeholder="e.g., 50"
           disabled={recordLoss.isPending}
           error={!!errors.lossMassKg}
-          {...register("lossMassKg", { setValueAs: numericValue })}
+          {...register("lossMassKg")}
         />
       </FormField>
 
@@ -396,13 +489,13 @@ export function BinReconcileSheet({
         </SlideOverPanel.Header>
 
         {/* Single child: fillHeight stretches only the direct child, so the
-            toggle/lane/form live inside one flex column here. */}
+            toggle and form live inside one flex column here. */}
         <SlideOverPanel.Body noPaddingBottom fillHeight>
           {storageLocation && (
             <div className="flex flex-1 flex-col gap-20">
               {/* Keyed so switching bins resets each sub-form's state. */}
               <ModeToggle value={mode} onChange={setMode} />
-              <LaneContext storageLocation={storageLocation} />
+              <CurrentStockContext storageLocation={storageLocation} />
               {mode === "stock-take" ? (
                 <StockTakeForm
                   key={`stock-${storageLocation.id}`}
