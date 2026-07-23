@@ -33,6 +33,7 @@ import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { lockProductionProcessScope } from "./production-processes";
+import { isCreditBatchMembershipLockedBySubmission } from "./credit-batch-certification-lock";
 
 export interface LockedCreditBatchProductionRun {
   id: string;
@@ -629,10 +630,14 @@ export async function attachProductionRunToMatchingCreditBatch(
   }
 
   const [batch] = matchingBatches;
-  if (batch.removalId) {
-    throw new SafeError(
-      `Production run ${run.code} matches Credit batch ${batch.code}, but that batch is already grouped into a Removal. Ungroup it before completing the run.`,
-    );
+  if (
+    await isCreditBatchMembershipLockedBySubmission(
+      ctx,
+      tx,
+      batch.removalId,
+    )
+  ) {
+    return null;
   }
 
   await tx.insert(creditBatchProductionRuns).values({

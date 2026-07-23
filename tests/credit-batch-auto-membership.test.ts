@@ -4,6 +4,7 @@ import { db } from "@/db";
 import {
   creditBatches,
   creditBatchProductionRuns,
+  certifierRemovals,
   facilities,
   feedstocks,
   feedstockTypes,
@@ -44,6 +45,7 @@ describe("credit batch automatic production-run membership", () => {
   let alternateFeedstockTypeId = "";
   let alternateFeedstockId = "";
   const creditBatchIds: string[] = [];
+  const removalIds: string[] = [];
   const productionRunIds: string[] = [];
 
   beforeAll(async () => {
@@ -163,6 +165,11 @@ describe("credit batch automatic production-run membership", () => {
       await db
         .delete(creditBatches)
         .where(inArray(creditBatches.id, creditBatchIds));
+    }
+    if (removalIds.length > 0) {
+      await db
+        .delete(certifierRemovals)
+        .where(inArray(certifierRemovals.id, removalIds));
     }
     if (facilityId) {
       await db
@@ -455,6 +462,59 @@ describe("credit batch automatic production-run membership", () => {
         startDate: new Date("2027-08-10T00:00:00.000Z"),
       }),
     ).rejects.toThrow(/overlaps Credit batch/);
+  });
+
+  it("auto-attaches to a mutable Removal's credit batch", async () => {
+    const batch = await createCreditBatch(ctx, {
+      code: `CB-CBAM-REMOVAL-${tag}`,
+      facilityId,
+      feedstockTypeId,
+      startDate: new Date("2027-09-01T00:00:00.000Z"),
+      endDate: new Date("2027-09-30T00:00:00.000Z"),
+      productionRunIds: [],
+      currency: "TZS",
+    });
+    creditBatchIds.push(batch.id);
+    const [removal] = await db
+      .insert(certifierRemovals)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId,
+      })
+      .returning({ id: certifierRemovals.id });
+    removalIds.push(removal.id);
+    await db
+      .update(creditBatches)
+      .set({ removalId: removal.id })
+      .where(eq(creditBatches.id, batch.id));
+
+    const run = await createProductionRun(ctx, {
+      code: `PR-CBAM-REMOVAL-${tag}`,
+      facilityId,
+      reactorId,
+      status: "running",
+      startTime: new Date("2027-09-15T08:00:00.000Z"),
+      endTime: null,
+      feedstockWetMassKg: 100,
+      feedstockMoisturePercent: 20,
+      feedstockStorageLocationId: storageLocationId,
+    });
+    productionRunIds.push(run.id);
+
+    await expect(
+      updateProductionRun(ctx, run.id, {
+        status: "complete",
+        endTime: new Date("2027-09-15T12:00:00.000Z"),
+        biocharOutputKg: 30,
+        biocharMoisturePercent: 20,
+      }),
+    ).resolves.toBeDefined();
+
+    const [membership] = await db
+      .select({ creditBatchId: creditBatchProductionRuns.creditBatchId })
+      .from(creditBatchProductionRuns)
+      .where(eq(creditBatchProductionRuns.productionRunId, run.id));
+    expect(membership?.creditBatchId).toBe(batch.id);
   });
 
   it("never loses membership when completion races batch declaration", async () => {

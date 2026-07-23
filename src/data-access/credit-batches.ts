@@ -16,10 +16,6 @@ import {
   creditBatchProductionRuns,
   type CreditBatch,
 } from "@/db/schema/credits";
-import {
-  certificationSubmissions,
-  certifierRemovals,
-} from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
 import {
   productionRuns,
@@ -65,8 +61,6 @@ import {
   type CreditBatchCo2eStoredPreview,
 } from "./credit-batch-previews";
 import { formatUtcDate } from "@/lib/date-utils";
-import { acquireCertificationArtifactLocksSorted } from "@/lib/certification/submission-lock";
-import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
 import { SafeError } from "@/lib/errors";
 import { assertUnsampledBatchEligibility } from "@/lib/certification/credit-batch-sampling";
 import {
@@ -74,6 +68,7 @@ import {
   type CreditBatchLineageFacts,
 } from "./credit-batch-lineage-facts";
 import { retireDocumentsForEntities } from "./documents";
+import { assertRemovalAllowsCreditBatchMutation } from "./credit-batch-certification-lock";
 
 export { getApplicationsForRuns } from "./credit-batch-production-runs";
 export type { ApplicationForRun } from "./credit-batch-production-runs";
@@ -119,9 +114,6 @@ type CreditBatchWithOptionalPreview = Omit<
   co2eStoredPreview?: CreditBatchCo2eStoredPreview;
 };
 
-const CERTIFIER_PROVIDER = "isometric" as const;
-const REMOVAL_SCOPED_SUBMISSION_TYPES = ["removal", "dataUpload"] as const;
-
 export interface CreditBatchProductionRunOption {
   id: string;
   code: string;
@@ -164,90 +156,6 @@ async function resolveCreditBatchCertifier(
     );
   }
   return provider === "isometric" ? "isometric" : null;
-}
-
-async function assertRemovalAllowsCreditBatchMutation(
-  ctx: OrgContext,
-  tx: DbTransaction,
-  removalId: string | null,
-  mutation: "update" | "delete",
-): Promise<void> {
-  if (!removalId) return;
-
-  const [removal] = await tx
-    .select({
-      id: certifierRemovals.id,
-      ghgStatementId: certifierRemovals.ghgStatementId,
-    })
-    .from(certifierRemovals)
-    .where(and(eq(certifierRemovals.id, removalId), eq(certifierRemovals.organizationId, ctx.organizationId)))
-    .for("update")
-    .limit(1);
-  if (!removal) return;
-
-  await acquireCertificationArtifactLocksSorted(tx, [
-    {
-      provider: CERTIFIER_PROVIDER,
-      localEntityType: "removal",
-      localEntityId: removal.id,
-    },
-    ...(removal.ghgStatementId
-      ? [
-          {
-            provider: CERTIFIER_PROVIDER,
-            localEntityType: "ghgStatement",
-            localEntityId: removal.ghgStatementId,
-          },
-        ]
-      : []),
-  ]);
-
-  const [removalSubmission] = await tx
-    .select({ id: certificationSubmissions.id })
-    .from(certificationSubmissions)
-    .where(
-      and(
-        eq(certificationSubmissions.provider, CERTIFIER_PROVIDER),
-        eq(certificationSubmissions.localEntityType, "removal"),
-        eq(certificationSubmissions.localEntityId, removal.id),
-        inArray(
-          certificationSubmissions.submissionType,
-          REMOVAL_SCOPED_SUBMISSION_TYPES,
-        ),
-        inArray(certificationSubmissions.status, BLOCKING_SUBMISSION_STATUSES),
-        eq(certificationSubmissions.organizationId, ctx.organizationId),
-      ),
-    )
-    .limit(1);
-
-  let ghgStatementSubmission:
-    | { id: (typeof certificationSubmissions.$inferSelect)["id"] }
-    | undefined;
-  if (removal.ghgStatementId) {
-    [ghgStatementSubmission] = await tx
-      .select({ id: certificationSubmissions.id })
-      .from(certificationSubmissions)
-      .where(
-        and(
-          eq(certificationSubmissions.provider, CERTIFIER_PROVIDER),
-          eq(certificationSubmissions.localEntityType, "ghgStatement"),
-          eq(certificationSubmissions.submissionType, "ghg_statement"),
-          eq(certificationSubmissions.localEntityId, removal.ghgStatementId),
-          inArray(
-            certificationSubmissions.status,
-            BLOCKING_SUBMISSION_STATUSES,
-          ),
-          eq(certificationSubmissions.organizationId, ctx.organizationId),
-        ),
-      )
-      .limit(1);
-  }
-
-  if (!removalSubmission && !ghgStatementSubmission) return;
-
-  throw new SafeError(
-    `Cannot ${mutation} credit batch because it is part of a submitted certification artifact. Create a correction instead of editing locked source data.`,
-  );
 }
 
 /**
