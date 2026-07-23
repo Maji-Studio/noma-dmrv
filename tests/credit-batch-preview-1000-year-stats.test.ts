@@ -19,7 +19,7 @@ import {
 import {
   extract1000YearBlueprintReplicates,
   independentPreviewMissingInputs,
-} from "@/data-access/credit-batch-previews";
+} from "@/data-access/credit-batch-accounting";
 import {
   build1000YearSequestrationSample,
   CARBON_CONTENTS_MEASUREMENT_PROPERTY,

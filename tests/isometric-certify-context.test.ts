@@ -7,10 +7,13 @@ import {
 import { hasCertifierCredentials } from "@/data-access/certifier-credentials";
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import {
-  loadCreditBatchLineageFacts,
   type CreditBatchLineageFacts,
-} from "@/data-access/credit-batch-lineage-facts";
-import { getCreditBatchById } from "@/data-access/credit-batches";
+  loadCreditBatchAccounting,
+} from "@/data-access/credit-batch-accounting";
+import {
+  getCreditBatchById,
+  getCreditBatchRemovalId,
+} from "@/data-access/credit-batches";
 import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
 import {
   listDocumentsForEntityIds,
@@ -28,14 +31,13 @@ import {
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
 import {
-  buildCreditBatchContextWithFacts,
   loadCertifyContextForCreditBatchForUser,
-  type FacilityCertifierFacts,
 } from "@/fn/certification/certify-context-core";
 import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "@/lib/certification/application-evidence";
 
 vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchById: vi.fn(),
+  getCreditBatchRemovalId: vi.fn(),
 }));
 
 vi.mock("@/data-access/credit-batch-production-runs", () => ({
@@ -57,8 +59,8 @@ vi.mock("@/data-access/chain-of-custody", async () => {
   return { ...actual, getChainOfCustodyData: vi.fn() };
 });
 
-vi.mock("@/data-access/credit-batch-lineage-facts", () => ({
-  loadCreditBatchLineageFacts: vi.fn(),
+vi.mock("@/data-access/credit-batch-accounting", () => ({
+  loadCreditBatchAccounting: vi.fn(),
 }));
 
 vi.mock("@/data-access/production-runs", () => ({
@@ -90,11 +92,12 @@ vi.mock("@/lib/isometric", async () => {
 });
 
 const mockedGetCreditBatch = vi.mocked(getCreditBatchById);
+const mockedGetCreditBatchRemovalId = vi.mocked(getCreditBatchRemovalId);
 const mockedGetApplicationsForRuns = vi.mocked(getApplicationsForRuns);
 const mockedGetMapping = vi.mocked(getCertifierProjectByFacility);
 const mockedHasCredentials = vi.mocked(hasCertifierCredentials);
 const mockedGetLineage = vi.mocked(getChainOfCustodyData);
-const mockedLoadLineageFacts = vi.mocked(loadCreditBatchLineageFacts);
+const mockedLoadAccounting = vi.mocked(loadCreditBatchAccounting);
 const mockedGetRuns = vi.mocked(getProductionRunsWithSamples);
 const mockedGetBatchesWithSamples = vi.mocked(getCreditBatchesWithSamples);
 const mockedListDocuments = vi.mocked(listDocumentsForEntityIds);
@@ -113,12 +116,6 @@ const APPLICATION_FOR_PR_1 = {
   biocharAppliedTons: 1,
 };
 
-/**
- * Evidence-complete visual document set for the normalized lineage application
- * (`app-1`). Applications without an evidenceMethod follow the visual path, so
- * tests that assert on non-evidence readiness gaps mock these to keep their
- * assertions focused.
- */
 function satisfiedVisualEvidenceDocuments(applicationId: string): DocumentRow[] {
   return APPLICATION_VISUAL_EVIDENCE_ROLES.map((role) => ({
     entityId: applicationId,
@@ -229,7 +226,7 @@ function factsFromMockedLineages(
 }
 
 function mockNormalizedLineageFacts(): void {
-  mockedLoadLineageFacts.mockImplementation(async (ctx, batchIds) => {
+  mockedLoadAccounting.mockImplementation(async (ctx, batchIds) => {
     const entries = await Promise.all(
       batchIds.map(async (batchId) => {
         const batch = await mockedGetCreditBatch(ctx, batchId, {
@@ -245,13 +242,32 @@ function mockNormalizedLineageFacts(): void {
             mockedGetLineage(ctx, application.applicationId),
           ),
         );
+        const lineageFacts = factsFromMockedLineages(
+          batchId,
+          productionRunIds,
+          lineages,
+        );
         return [
           batchId,
-          factsFromMockedLineages(batchId, productionRunIds, lineages),
+          {
+            batch: {
+              ...batch,
+              id: batchId,
+              code: batch?.code ?? "CB-1",
+              facilityId: batch?.facilityId ?? FACILITY_ID,
+              removalId: batch?.removalId ?? null,
+              durabilityOption: batch?.durabilityOption ?? "200_year",
+              productionEmissionsClaimedByRemovalId:
+                batch?.productionEmissionsClaimedByRemovalId ?? null,
+            },
+            lineageFacts,
+            appliedWeightTons: lineageFacts.appliedWeightTons,
+            co2ePreview: {},
+          },
         ] as const;
       }),
     );
-    return Object.fromEntries(entries);
+    return Object.fromEntries(entries) as never;
   });
 }
 
@@ -314,6 +330,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     vi.resetAllMocks();
     mockNormalizedLineageFacts();
     mockedHasCredentials.mockResolvedValue(true);
+    mockedGetCreditBatchRemovalId.mockResolvedValue(null);
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       code: "CB-1",
@@ -324,8 +341,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     mockedGetApplicationsForRuns.mockImplementation(async (_userId, runIds) =>
       runIds.includes("pr-1") ? [APPLICATION_FOR_PR_1] : [],
     );
-    // Default the transport-coverage walkers to empty so each test only
-    // overrides what it cares about.
     mockedGetLineage.mockResolvedValue(
       undefined as unknown as Awaited<ReturnType<typeof getChainOfCustodyData>>,
     );
@@ -356,6 +371,10 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(mockedListTemplates).not.toHaveBeenCalled();
     expect(mockedListBlueprints).not.toHaveBeenCalled();
     expect(mockedGetLegs).not.toHaveBeenCalled();
+    expect(mockedGetCreditBatchRemovalId).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: expect.any(String) }),
+      CREDIT_BATCH_ID,
+    );
   });
 
   it("evaluates sampled-batch durability even when no applications are linked", async () => {
@@ -623,7 +642,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       "key_a",
       "key_b",
     ]);
-    // No applications on the stub batch -> transport coverage is empty.
     expect(result.transportCoverage.feedstock.count).toBe(0);
     expect(result.productionReadinessGap).toMatchObject({
       kind: "noApplications",
@@ -632,8 +650,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       fixTarget: "applications",
     });
     expect(mockedGetLegs).not.toHaveBeenCalled();
-    // An ungrouped batch (no removal) has no linked GHG Statement and an empty
-    // run summary — the up-front loads short-circuit to null/zero.
     expect(result.linkedGhgStatement).toBeNull();
     expect(result.runSummary.runCount).toBe(0);
   });
@@ -683,8 +699,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         readingsCount: 1,
       } as never,
     ]);
-    // Samples anchor on the credit batch (issue #309) — the transport walk
-    // reads them from the batch pool, not from the runs.
     mockedGetBatchesWithSamples.mockResolvedValue([
       {
         creditBatchId: CREDIT_BATCH_ID,
@@ -698,7 +712,6 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       } as never,
     ]);
 
-    // Per-category leg counts: 3 feedstock, 0 biochar, 1 sample.
     mockedGetLegs.mockImplementation(async (_user, entityType) => {
       if (entityType === "feedstock") {
         return [{ id: "tl-f1" }, { id: "tl-f2" }, { id: "tl-f3" }] as never;
@@ -719,19 +732,10 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(coverage.biochar.entityIds).toEqual(["bp-1"]);
     expect(coverage.sample.count).toBe(1);
     expect(coverage.sample.entityIds.sort()).toEqual(["s-1", "s-2"]);
-    // Three transport categories, one pooled load each.
     expect(mockedGetLegs).toHaveBeenCalledTimes(3);
   });
 });
 
-// ============================================================
-// requiredTransportCategories derivation
-// ============================================================
-
-// Builds a template whose first group bundles three components, each with a
-// single monitored `mass_distance` input on the `mass_distance_based_ci_emissions`
-// blueprint — matching the three transport rows in INPUT_MAPPING. The optional
-// `omit` list lets a test simulate a template that doesn't request a category.
 function transportTemplate(
   id: string,
   omit: ReadonlyArray<"feedstock" | "biochar" | "sample"> = [],
@@ -969,8 +973,6 @@ describe("requiredTransportCategories", () => {
         samples: [],
       } as never,
     ]);
-    // Samples anchor on the credit batch (issue #309); the sample inherits the
-    // batch's declared 1000-year tier for its readiness derivation.
     mockedGetBatchesWithSamples.mockResolvedValue([
       {
         creditBatchId: CREDIT_BATCH_ID,
@@ -1033,59 +1035,5 @@ describe("requiredTransportCategories", () => {
       CREDIT_BATCH_ID,
     );
     expect(result.requiredTransportCategories).toEqual([]);
-  });
-});
-
-// Pins the lineage-facts short-circuit inside resolveScopeForCreditBatch: when
-// the wizard's set-based load supplies facts, the per-batch path must NOT run
-// its own loadCreditBatchLineageFacts (PR #510 review 2/2, P2-2 — the
-// selectable-batches contract test injects a mocked context builder, so the
-// real short-circuit is only exercised here).
-describe("buildCreditBatchContextWithFacts with preloaded lineage facts", () => {
-  beforeEach(() => {
-    vi.resetAllMocks();
-    mockedGetRuns.mockResolvedValue([]);
-    mockedGetBatchesWithSamples.mockResolvedValue([]);
-    mockedListDocuments.mockResolvedValue([]);
-    mockedGetLegs.mockResolvedValue([]);
-  });
-
-  it("does not reload lineage facts when they are supplied", async () => {
-    mockedGetCreditBatch.mockResolvedValue({
-      id: CREDIT_BATCH_ID,
-      code: "CB-1",
-      facilityId: FACILITY_ID,
-      removalId: null,
-      productionRunIds: [],
-      productionEmissionsClaimedByRemovalId: null,
-      durabilityOption: "200_year",
-    } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
-    const facilityFacts = {
-      hasOrgCredentials: true,
-      mapping: mapping(),
-      project: null,
-      defaultTemplate: null,
-      missingDefaultTemplateId: null,
-      blueprintsForTemplate: [],
-      unresolvedBlueprintKeys: [],
-      requiredTransportCategories: [],
-    } as unknown as FacilityCertifierFacts;
-    const preloadedFacts = {
-      batchId: CREDIT_BATCH_ID,
-      applicationIds: [],
-      appliedWeightTons: 0,
-      runs: [],
-      applications: [],
-    } as never;
-
-    const context = await buildCreditBatchContextWithFacts(
-      makeTestOrgContext(USER_ID),
-      CREDIT_BATCH_ID,
-      facilityFacts,
-      preloadedFacts,
-    );
-
-    expect(mockedLoadLineageFacts).not.toHaveBeenCalled();
-    expect(context.facilityId).toBe(FACILITY_ID);
   });
 });

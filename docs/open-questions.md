@@ -582,7 +582,7 @@ itself is **built and enforced** — see the invariants section,
 
 - Non-overlapping reporting periods are enforced in `createGhgStatementDraft`
   (reject an `end_on` ≤ the latest other statement's end) and mirrored in the
-  create drawer. A read-then-write check, not a DB invariant.
+  create dialog. A read-then-write check, not a DB invariant.
 - A truly concurrent pair of creates with overlapping periods could both pass
   (TOCTOU). Low likelihood — periods are consecutive and the
   `(provider, facility, end_on)` unique constraint blocks exact dupes — but not
@@ -1055,7 +1055,7 @@ two oversized data-access files. Still open:
 - **Color-only severity convention in warning notices** (`a11y/wcag-1.4.1`).
   Mostly fixed — `check-row.tsx` now maps `unmet → WarningIcon` and
   `certify-panel.tsx` no longer carries the `signal-orange` border. The residual
-  is `src/components/certification/ghg-statement-create-drawer.tsx`, whose two
+  is `src/components/certification/ghg-statement-create-dialog.tsx`, whose two
   warning blocks encode severity only by a `--color-signal-orange` left border +
   matching text color. WCAG
   1.4.1 requires a non-color cue; SR-only text satisfies AT users but the
