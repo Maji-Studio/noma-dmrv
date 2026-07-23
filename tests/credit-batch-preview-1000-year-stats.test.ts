@@ -16,7 +16,7 @@ import {
   computeBlueprint1000YearDurability,
   type Blueprint1000YearReplicate,
 } from "@/lib/calculations/biochar-removal";
-import { extract1000YearBlueprintReplicates } from "@/data-access/credit-batch-previews";
+import { extract1000YearBlueprintReplicates } from "@/data-access/credit-batch-accounting";
 import {
   build1000YearSequestrationSample,
   CARBON_CONTENTS_MEASUREMENT_PROPERTY,

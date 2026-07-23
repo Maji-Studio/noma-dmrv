@@ -176,7 +176,7 @@ async function collectLineageEntities(
   if (memberBatchIds.length === 0) return [];
 
   const batches = await Promise.all(
-    memberBatchIds.map((id) => getCreditBatchById(orgCtx, id)),
+    memberBatchIds.map((id) => getCreditBatchById(orgCtx, id, { skipPreview: true })),
   );
   const seen = new Map<string, CandidateLineageEntity>();
   const add = (e: CandidateLineageEntity) => {

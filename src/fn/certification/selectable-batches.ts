@@ -1,10 +1,4 @@
 import { env } from "@/config/env";
-import { getCo2eStoredPreviews } from "@/data-access/credit-batches";
-import {
-  loadCreditBatchLineageFacts,
-  type CreditBatchLineageFacts,
-} from "@/data-access/credit-batch-lineage-facts";
-import type { BatchApplicationRollup } from "@/data-access/credit-batch-production-runs";
 import {
   listUngroupedCreditBatches,
   type UngroupedCreditBatchRow,
@@ -20,11 +14,9 @@ import {
 } from "@/lib/certification/facility-setup-gaps";
 import type { OrgContext } from "@/lib/auth/server";
 import type {
+  CreditBatchContextSet,
   FacilityCertifierFacts,
-  RemovalCertifyContext,
 } from "./certify-context-core";
-
-const FANOUT_CONCURRENCY = 8;
 
 // One ungrouped credit batch with its per-batch health verdict — a selection
 // card in the New-Removal wizard's first step.
@@ -50,69 +42,38 @@ export interface SelectableBatchesData {
   isProduction: boolean;
 }
 
-type BuildCreditBatchContext = (
+type BuildCreditBatchContexts = (
   orgCtx: OrgContext,
-  creditBatchId: string,
+  creditBatchIds: string[],
   facilityFacts: FacilityCertifierFacts,
-  lineageFacts?: CreditBatchLineageFacts,
-) => Promise<RemovalCertifyContext>;
+) => Promise<CreditBatchContextSet>;
 
 // Builds the New-Removal wizard's selection-step payload after the core action
-// has authorized the facility and loaded its certifier facts. Loads lineage
-// facts ONCE and reuses them across every batch's preview and context build.
+// has authorized the facility and loaded its certifier facts. Loads accounting
+// once and reuses the assembled records across every selection card.
 export async function buildSelectableBatchesData(
   orgCtx: OrgContext,
   facilityId: string,
   facilityFacts: FacilityCertifierFacts,
-  buildCreditBatchContext: BuildCreditBatchContext,
+  buildCreditBatchContexts: BuildCreditBatchContexts,
 ): Promise<SelectableBatchesData> {
   const ungrouped = await listUngroupedCreditBatches(orgCtx, facilityId);
   const ungroupedIds = ungrouped.map((row) => row.id);
-  // One set-based lineage load feeds both the CO₂e preview builder and every
-  // per-batch certify-context build below.
-  const lineageFactsByBatch = await loadCreditBatchLineageFacts(
+  const { accountingByBatch, contextsByBatch } = await buildCreditBatchContexts(
     orgCtx,
     ungroupedIds,
+    facilityFacts,
   );
-  // Project the rollups from the facts already in hand — the by-ids helper
-  // would re-run the same lineage walk internally (review finding on #510).
-  const applicationRollups: Record<string, BatchApplicationRollup> =
-    Object.fromEntries(
-      Object.entries(lineageFactsByBatch).map(([batchId, facts]) => [
-        batchId,
-        {
-          applicationIds: facts.applicationIds,
-          appliedWeightTons: facts.appliedWeightTons,
-        },
-      ]),
-    );
-  const co2ePreviews = await getCo2eStoredPreviews(orgCtx, ungroupedIds, {
-    applicationRollups,
-    lineageFactsByBatch,
+  const batches: SelectableBatch[] = ungrouped.map((row) => {
+    const accounting = accountingByBatch[row.id];
+    const context = contextsByBatch[row.id];
+    return {
+      ...row,
+      health: deriveBatchHealth(toBatchHealthFacts(context, row.id)),
+      appliedWeightTons: accounting?.appliedWeightTons ?? 0,
+      co2eStoredTonnes: accounting?.co2ePreview.co2eStoredTonnes ?? null,
+    };
   });
-  // Bounded chunks (order-preserving) rather than one unbounded Promise.all
-  // over every ungrouped batch — see FANOUT_CONCURRENCY.
-  const batches: SelectableBatch[] = [];
-  for (let i = 0; i < ungrouped.length; i += FANOUT_CONCURRENCY) {
-    const chunk = await Promise.all(
-      ungrouped.slice(i, i + FANOUT_CONCURRENCY).map(async (row) => {
-        const ctx = await buildCreditBatchContext(
-          orgCtx,
-          row.id,
-          facilityFacts,
-          lineageFactsByBatch[row.id],
-        );
-        return {
-          ...row,
-          health: deriveBatchHealth(toBatchHealthFacts(ctx, row.id)),
-          appliedWeightTons:
-            applicationRollups[row.id]?.appliedWeightTons ?? 0,
-          co2eStoredTonnes: co2ePreviews[row.id]?.co2eStoredTonnes ?? null,
-        };
-      }),
-    );
-    batches.push(...chunk);
-  }
   const facilitySetupGaps = deriveFacilitySetupGaps(facilityFacts);
   return {
     batches,
