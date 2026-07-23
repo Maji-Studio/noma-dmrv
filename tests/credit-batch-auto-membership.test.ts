@@ -40,6 +40,7 @@ describe("credit batch automatic production-run membership", () => {
   const ctx = makeTestOrgContext(TEST_USER_ID);
   let facilityId = "";
   let reactorId = "";
+  let cohortGuardReactorId = "";
   let feedstockTypeId = "";
   let storageLocationId = "";
   let feedstockId = "";
@@ -79,6 +80,18 @@ describe("credit batch automatic production-run membership", () => {
       })
       .returning({ id: reactors.id });
     reactorId = reactor.id;
+
+    const [cohortGuardReactor] = await db
+      .insert(reactors)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `RE-CBAM-GUARD-${tag}`,
+        identifier: `CB cohort-guard reactor ${tag}`,
+        facilityId,
+        reactorType: "auger",
+      })
+      .returning({ id: reactors.id });
+    cohortGuardReactorId = cohortGuardReactor.id;
 
     const [feedstockType] = await db
       .insert(feedstockTypes)
@@ -282,10 +295,16 @@ describe("credit batch automatic production-run membership", () => {
           ]),
         );
     }
-    if (reactorId && otherReactorId) {
+    if (reactorId && cohortGuardReactorId && otherReactorId) {
       await db
         .delete(reactors)
-        .where(inArray(reactors.id, [reactorId, otherReactorId]));
+        .where(
+          inArray(reactors.id, [
+            reactorId,
+            cohortGuardReactorId,
+            otherReactorId,
+          ]),
+        );
     }
     if (facilityId && otherFacilityId) {
       await db
@@ -363,7 +382,7 @@ describe("credit batch automatic production-run membership", () => {
     const run = await createProductionRun(ctx, {
       code: `PR-CBAM-EDIT-GUARD-${tag}`,
       facilityId,
-      reactorId,
+      reactorId: cohortGuardReactorId,
       status: "running",
       startTime: new Date("2028-01-15T08:00:00.000Z"),
       endTime: null,
@@ -555,6 +574,64 @@ describe("credit batch automatic production-run membership", () => {
     creditBatchIds.push(batch.id);
 
     expect(batch.productionRunIds.sort()).toEqual([first.id, second.id].sort());
+  });
+
+  it("discovers matching completed runs when an update moves the cohort boundary", async () => {
+    const batch = await createCreditBatch(ctx, {
+      code: `CB-CBAM-UPDATE-DISCOVERY-${tag}`,
+      facilityId,
+      feedstockTypeId,
+      startDate: new Date("2028-02-01T00:00:00.000Z"),
+      endDate: new Date("2028-02-28T00:00:00.000Z"),
+      productionRunIds: [],
+      currency: "TZS",
+    });
+    creditBatchIds.push(batch.id);
+
+    const run = await createProductionRun(ctx, {
+      code: `PR-CBAM-UPDATE-DISCOVERY-${tag}`,
+      facilityId,
+      reactorId,
+      status: "running",
+      startTime: new Date("2028-03-15T08:00:00.000Z"),
+      endTime: null,
+      feedstockWetMassKg: 100,
+      feedstockMoisturePercent: 20,
+      feedstockStorageLocationId: storageLocationId,
+    });
+    productionRunIds.push(run.id);
+    await updateProductionRun(ctx, run.id, {
+      status: "complete",
+      endTime: new Date("2028-03-15T12:00:00.000Z"),
+      biocharOutputKg: 30,
+      biocharMoisturePercent: 20,
+    });
+
+    const [sample] = await db
+      .insert(samples)
+      .values({
+        organizationId: TEST_ORG_ID,
+        productionRunId: run.id,
+        sampleCode: `S-CBAM-UPDATE-DISCOVERY-${tag}`,
+        samplingTime: new Date("2028-03-15T10:00:00.000Z"),
+        totalCarbonPercent: 80,
+        organicCarbonPercent: 78,
+      })
+      .returning({ id: samples.id });
+    sampleIds.push(sample.id);
+
+    const updated = await updateCreditBatch(ctx, batch.id, {
+      startDate: new Date("2028-03-01T00:00:00.000Z"),
+      endDate: new Date("2028-03-31T00:00:00.000Z"),
+      productionRunIds: [],
+    });
+
+    expect(updated.productionRunIds).toEqual([run.id]);
+    const [linkedSample] = await db
+      .select({ creditBatchId: samples.creditBatchId })
+      .from(samples)
+      .where(eq(samples.id, sample.id));
+    expect(linkedSample?.creditBatchId).toBe(batch.id);
   });
 
   it("updates a declared batch while it still has no production runs", async () => {

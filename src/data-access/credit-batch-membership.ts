@@ -86,6 +86,7 @@ export async function lockCreditBatchDeclarationRuns(
     startDate: string | Date;
     endDate: string | Date;
     requestedProductionRunIds: string[];
+    currentProductionRunIds?: string[];
   },
 ): Promise<{
   runIds: string[];
@@ -102,7 +103,10 @@ export async function lockCreditBatchDeclarationRuns(
       ...matchingBeforeLock,
     ]),
   ].sort();
-  let lockedRuns = await lockCreditBatchProductionRuns(ctx, tx, runIds);
+  let lockedRuns = await lockCreditBatchProductionRuns(ctx, tx, [
+    ...(params.currentProductionRunIds ?? []),
+    ...runIds,
+  ]);
 
   await lockProductionProcessScope(tx, params);
   const matchingAfterLock = await findMatchingUnassignedProductionRunIds(
