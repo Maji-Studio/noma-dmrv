@@ -51,7 +51,10 @@ import { productionRunDateExpr } from "./production-runs/date-expr";
 import {
   getFacilityCertifierWithExecutor,
   loadCreditBatchAccounting,
+  loadCreditBatchRollups,
+  type CreditBatchAccounting,
   type CreditBatchCo2eStoredPreview,
+  type CreditBatchRollup,
 } from "./credit-batch-accounting";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
@@ -73,6 +76,12 @@ export type {
 // ============================================
 // Credit Batch Data Access Layer
 // ============================================
+
+function includesCo2ePreview(
+  accounting: CreditBatchRollup,
+): accounting is CreditBatchAccounting {
+  return "co2ePreview" in accounting;
+}
 
 export interface CreditBatchWithRelations extends CreditBatch {
   facility: { name: string } | null;
@@ -174,7 +183,7 @@ export async function getCreditBatches(
     return [];
   }
 
-  const accountingByBatch = await loadCreditBatchAccounting(ctx, batchIds);
+  const accountingByBatch = await loadCreditBatchRollups(ctx, batchIds);
 
   return batches.map((b) => {
     const accounting = accountingByBatch[b.creditBatch.id];
@@ -235,7 +244,9 @@ export async function getCreditBatchById(
   const durabilityOption =
     batch.facilityDurabilityOption ?? DURABILITY_TIER_FALLBACK;
 
-  const accounting = (await loadCreditBatchAccounting(ctx, [id]))[id];
+  const accounting = options?.skipPreview
+    ? (await loadCreditBatchRollups(ctx, [id]))[id]
+    : (await loadCreditBatchAccounting(ctx, [id]))[id];
   if (!accounting) {
     throw new SafeError("Credit batch accounting could not be loaded");
   }
@@ -258,6 +269,9 @@ export async function getCreditBatchById(
 
   if (options?.skipPreview) {
     return result;
+  }
+  if (!includesCo2ePreview(accounting)) {
+    throw new SafeError("Credit batch preview could not be loaded");
   }
 
   return {

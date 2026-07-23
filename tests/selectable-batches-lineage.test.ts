@@ -42,7 +42,6 @@ function accountingRecord(
     co2ePreview: { co2eStoredTonnes },
     batch: { id: batchId },
     lineageFacts: { batchId },
-    chemistry: {},
   };
 }
 

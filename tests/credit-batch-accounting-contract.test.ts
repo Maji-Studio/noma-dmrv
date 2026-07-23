@@ -25,19 +25,22 @@ describe("credit-batch accounting read contract", () => {
     expect(accounting).toContain(
       "export async function loadCreditBatchAccounting(",
     );
+    expect(accounting).toContain(
+      "export async function loadCreditBatchRollups(",
+    );
     expect(accounting).toMatch(
       /loadCreditBatchAccounting\([\s\S]*?requireOrgScope\(ctx\)/,
     );
-    expect(detail).toContain("loadCreditBatchAccounting(ctx, [id])");
+    expect(detail).toContain("loadCreditBatchRollups(ctx, [id])");
     expect(certification).toMatch(
       /loadCreditBatchAccounting\(\s*orgCtx,\s*creditBatchIds,\s*\)/,
     );
-    expect(certification).toMatch(
-      /loadCreditBatchAccounting\(\s*orgCtx,\s*batchIds,\s*\)/,
+    expect(certification).toContain(
+      "loadCreditBatchRollups(orgCtx, batchIds)",
     );
     expect(selectable).toContain("buildCreditBatchContexts(");
     expect(traceability).toContain(
-      "loadCreditBatchAccounting(ctx, [creditBatchId])",
+      "loadCreditBatchRollups(ctx, [creditBatchId])",
     );
   });
 
@@ -76,5 +79,22 @@ describe("credit-batch accounting read contract", () => {
     expect(
       implementationFiles.join("\n").match(/function loadLineageWithExecutor/g),
     ).toHaveLength(1);
+  });
+
+  it("keeps the shallow rollup projection free of preview-only reads", () => {
+    const accounting = source(ACCOUNTING_PATH);
+    const shallowStart = accounting.indexOf(
+      "export async function loadCreditBatchRollups(",
+    );
+    const fullStart = accounting.indexOf(
+      "export async function loadCreditBatchAccounting(",
+    );
+    const shallowProjection = accounting.slice(shallowStart, fullStart);
+
+    expect(shallowStart).toBeGreaterThan(-1);
+    expect(fullStart).toBeGreaterThan(shallowStart);
+    expect(shallowProjection).not.toContain(".from(samples)");
+    expect(shallowProjection).not.toContain("loadFacilityCertifiers(");
+    expect(shallowProjection).not.toContain("buildCo2eStoredPreview(");
   });
 });

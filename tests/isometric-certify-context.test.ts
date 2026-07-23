@@ -257,7 +257,6 @@ function mockNormalizedLineageFacts(): void {
             },
             lineageFacts,
             appliedWeightTons: lineageFacts.appliedWeightTons,
-            chemistry: {},
             co2ePreview: {},
           },
         ] as const;

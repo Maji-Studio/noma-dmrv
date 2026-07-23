@@ -43,7 +43,6 @@ const accountingRecord = (batchId: string) => ({
     appliedWeightTons: 0,
   },
   appliedWeightTons: 0,
-  chemistry: {},
   co2ePreview: {},
 });
 

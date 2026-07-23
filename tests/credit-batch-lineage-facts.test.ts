@@ -69,7 +69,7 @@ describe("credit batch accounting", () => {
       expect(detail?.productionRunIds.sort()).toEqual(facts.productionRunIds.sort());
       expect(detail?.appliedWeightTons).toBe(facts.appliedWeightTons);
       expect(accounting.appliedWeightTons).toBe(facts.appliedWeightTons);
-      expect(accounting.chemistry.weightedOrganicCarbonPercent).toBeNull();
+      expect(accounting.co2ePreview.co2eStoredTonnes).toBeNull();
       expect(chain.lineages.map((lineage) => lineage.applicationId).sort()).toEqual(facts.applicationIds.sort());
       expect(chain.sankey.columns.length).toBeGreaterThan(0);
     } finally {

@@ -21,9 +21,11 @@ import {
 } from "@/data-access/chain-of-custody";
 import {
   loadCreditBatchAccounting,
+  loadCreditBatchRollups,
   type CreditBatchAccounting,
   type CreditBatchAccountingByBatch,
   type CreditBatchCo2eStoredPreview,
+  type CreditBatchRollup,
 } from "@/data-access/credit-batch-accounting";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import { getProductionRunsWithSamples } from "@/data-access/production-runs";
@@ -88,6 +90,12 @@ export type {
 // facility with many removals/batches can't burst an unbounded number of query
 // chains at the connection pool. Mirrors `READINESS_CONCURRENCY` in overview.ts.
 const FANOUT_CONCURRENCY = 8;
+
+function includesCo2ePreview(
+  accounting: CreditBatchRollup,
+): accounting is CreditBatchAccounting {
+  return "co2ePreview" in accounting;
+}
 
 export interface TransportCoverageBucket {
   count: number;
@@ -374,10 +382,9 @@ export async function resolveScopeForRemoval(
 
   const batches = await getCreditBatchesByRemovalId(orgCtx, removalId);
   const batchIds = batches.map((batch) => batch.id);
-  const accountingByBatch = await loadCreditBatchAccounting(
-    orgCtx,
-    batchIds,
-  );
+  const accountingByBatch = options?.skipPreview
+    ? await loadCreditBatchRollups(orgCtx, batchIds)
+    : await loadCreditBatchAccounting(orgCtx, batchIds);
   const memberBatches = batches.map((batch) => {
       const accounting = accountingByBatch[batch.id];
       if (!accounting) {
@@ -392,9 +399,10 @@ export async function resolveScopeForRemoval(
         durabilityOption: accountingBatch.durabilityOption,
         productionEmissionsClaimedByRemovalId:
           accountingBatch.productionEmissionsClaimedByRemovalId,
-        co2eStoredPreview: options?.skipPreview
-          ? undefined
-          : accounting.co2ePreview,
+        co2eStoredPreview:
+          !options?.skipPreview && includesCo2ePreview(accounting)
+            ? accounting.co2ePreview
+            : undefined,
       };
     });
   const lineages = Object.values(accountingByBatch).flatMap((accounting) => {

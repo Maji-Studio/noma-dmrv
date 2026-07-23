@@ -140,18 +140,21 @@ export interface CreditBatchCo2eStoredPreview {
   warnings: string[];
 }
 
-export interface CreditBatchChemistry extends WeightedBatchChemistry {
+interface CreditBatchChemistry extends WeightedBatchChemistry {
   blueprint1000YearReplicates: Blueprint1000YearReplicate[];
 }
 
-export interface CreditBatchAccounting {
+export interface CreditBatchRollup {
   batch: CreditBatch & { durabilityOption: DurabilityOption };
   lineageFacts: CreditBatchLineageFacts;
   appliedWeightTons: number;
-  chemistry: CreditBatchChemistry;
+}
+
+export interface CreditBatchAccounting extends CreditBatchRollup {
   co2ePreview: CreditBatchCo2eStoredPreview;
 }
 
+export type CreditBatchRollupsByBatch = Record<string, CreditBatchRollup>;
 export type CreditBatchAccountingByBatch = Record<
   string,
   CreditBatchAccounting
@@ -554,10 +557,93 @@ export async function getFacilityCertifier(
   return getFacilityCertifierWithExecutor(ctx, db, facilityId);
 }
 
+async function loadCreditBatchRollupsWithExecutor(
+  ctx: OrgContext,
+  batchIds: string[],
+  executor: Executor,
+): Promise<CreditBatchRollupsByBatch> {
+  requireOrgScope(ctx);
+  const ids = uniqueSorted(batchIds);
+  if (ids.length === 0) return {};
+
+  const batchRows = await executor
+    .select({
+      creditBatch: creditBatches,
+      facilityDurabilityOption: facilities.durabilityOption,
+    })
+    .from(creditBatches)
+    .leftJoin(
+      facilities,
+      and(
+        eq(creditBatches.facilityId, facilities.id),
+        eq(facilities.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(
+      and(
+        inArray(creditBatches.id, ids),
+        eq(creditBatches.organizationId, ctx.organizationId),
+      ),
+    );
+
+  const batchById = new Map(
+    batchRows.map((row) => [
+      row.creditBatch.id,
+      {
+        ...row.creditBatch,
+        durabilityOption:
+          row.facilityDurabilityOption ?? DURABILITY_TIER_FALLBACK,
+      },
+    ]),
+  );
+  const batches = ids.flatMap((id) => {
+    const batch = batchById.get(id);
+    return batch ? [batch] : [];
+  });
+  const allowedIds = batches.map((batch) => batch.id);
+  if (allowedIds.length === 0) return {};
+
+  const factsByBatch = await loadLineageWithExecutor(
+    ctx,
+    allowedIds,
+    executor,
+  );
+  return Object.fromEntries(
+    batches.map((batch) => {
+      const lineageFacts = factsByBatch[batch.id];
+      return [
+        batch.id,
+        {
+          batch,
+          lineageFacts,
+          appliedWeightTons: lineageFacts.appliedWeightTons,
+        },
+      ];
+    }),
+  );
+}
+
 /**
- * Deep, set-based credit-batch accounting read. This is the only lineage walk:
- * callers ask for accounting records and never preload or thread assembly
- * facts back into another public query.
+ * Set-based batch identity + lineage rollups without sample chemistry or CO₂e
+ * preview assembly. Shallow list and guard callers use this projection so the
+ * deep module still owns the walk without paying for data they discard.
+ */
+export async function loadCreditBatchRollups(
+  ctx: OrgContext,
+  batchIds: string[],
+): Promise<CreditBatchRollupsByBatch> {
+  requireOrgScope(ctx);
+  const ids = uniqueSorted(batchIds);
+  if (ids.length === 0) return {};
+  return db.transaction((tx) =>
+    loadCreditBatchRollupsWithExecutor(ctx, ids, tx),
+  );
+}
+
+/**
+ * Deep, set-based credit-batch accounting read. This is the only full preview
+ * assembly: callers ask for complete accounting records and never preload or
+ * thread facts back into another public query.
  */
 export async function loadCreditBatchAccounting(
   ctx: OrgContext,
@@ -568,48 +654,18 @@ export async function loadCreditBatchAccounting(
   if (ids.length === 0) return {};
 
   return db.transaction(async (tx) => {
-    const batchRows = await tx
-      .select({
-        creditBatch: creditBatches,
-        facilityDurabilityOption: facilities.durabilityOption,
-      })
-      .from(creditBatches)
-      .leftJoin(
-        facilities,
-        and(
-          eq(creditBatches.facilityId, facilities.id),
-          eq(facilities.organizationId, ctx.organizationId),
-        ),
-      )
-      .where(
-        and(
-          inArray(creditBatches.id, ids),
-          eq(creditBatches.organizationId, ctx.organizationId),
-        ),
-      );
-
-    const batchById = new Map(
-      batchRows.map((row) => [
-        row.creditBatch.id,
-        {
-          ...row.creditBatch,
-          durabilityOption:
-            row.facilityDurabilityOption ?? DURABILITY_TIER_FALLBACK,
-        },
-      ]),
-    );
-    const batches = ids.flatMap((id) => {
-      const batch = batchById.get(id);
-      return batch ? [batch] : [];
-    });
-    const allowedIds = batches.map((batch) => batch.id);
-    if (allowedIds.length === 0) return {};
-
-    const factsByBatch = await loadLineageWithExecutor(
+    const rollupsByBatch = await loadCreditBatchRollupsWithExecutor(
       ctx,
-      allowedIds,
+      ids,
       tx,
     );
+    const rollups = ids.flatMap((id) => {
+      const rollup = rollupsByBatch[id];
+      return rollup ? [rollup] : [];
+    });
+    const allowedIds = rollups.map(({ batch }) => batch.id);
+    if (allowedIds.length === 0) return {};
+
     const sampleRows = await tx
       .select()
       .from(samples)
@@ -630,12 +686,12 @@ export async function loadCreditBatchAccounting(
     const providersByFacility = await loadFacilityCertifiers(
       ctx,
       tx,
-      batches.map((batch) => batch.facilityId),
+      rollups.map(({ batch }) => batch.facilityId),
     );
 
     return Object.fromEntries(
-      batches.map((batch) => {
-        const lineageFacts = factsByBatch[batch.id];
+      rollups.map((rollup) => {
+        const { batch, lineageFacts } = rollup;
         const batchSamples = samplesByBatch.get(batch.id) ?? [];
         const weightedChemistry = weightedBatchChemistry([
           {
@@ -659,10 +715,7 @@ export async function loadCreditBatchAccounting(
         return [
           batch.id,
           {
-            batch,
-            lineageFacts,
-            appliedWeightTons: lineageFacts.appliedWeightTons,
-            chemistry,
+            ...rollup,
             co2ePreview: buildCo2eStoredPreview(
               batch,
               provider,

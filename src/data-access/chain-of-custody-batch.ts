@@ -28,7 +28,7 @@ import {
   type ChainGeoNode,
   type ChainOfCustodyGeoData,
 } from "./chain-of-custody-geo";
-import { loadCreditBatchAccounting } from "./credit-batch-accounting";
+import { loadCreditBatchRollups } from "./credit-batch-accounting";
 import { requireOrgScope } from "./utils";
 
 export interface CreditBatchChainBatch {
@@ -87,7 +87,7 @@ async function resolveBatchScope(
     throw new SafeError("Credit batch not found");
   }
 
-  const accounting = (await loadCreditBatchAccounting(ctx, [creditBatchId]))[
+  const accounting = (await loadCreditBatchRollups(ctx, [creditBatchId]))[
     creditBatchId
   ];
   if (!accounting) {
