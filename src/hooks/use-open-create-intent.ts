@@ -2,7 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { isCreateIntentValue } from "@/lib/create-intent";
+import {
+  CREATE_INTENT_PARAM,
+  isCreateIntentValue,
+} from "@/lib/create-intent";
 
 export interface OpenCreateIntentOptions {
   initialOpen?: boolean;
@@ -43,7 +46,9 @@ export function useOpenCreateIntent(
   );
 
   useEffect(() => {
-    const shouldOpen = isCreateIntentValue(searchParams.get("create"));
+    const shouldOpen = isCreateIntentValue(
+      searchParams.get(CREATE_INTENT_PARAM),
+    );
 
     if (!shouldOpen) {
       handledRef.current = false;
@@ -63,7 +68,7 @@ export function useOpenCreateIntent(
     }
 
     const nextParams = new URLSearchParams(searchParams.toString());
-    nextParams.delete("create");
+    nextParams.delete(CREATE_INTENT_PARAM);
     if (contextParam) {
       nextParams.delete(contextParam);
     }

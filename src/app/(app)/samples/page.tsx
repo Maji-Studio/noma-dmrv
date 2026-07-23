@@ -6,7 +6,10 @@
 
 import { SampleList } from "@/components/samples";
 import { SAMPLE_CREATE_CREDIT_BATCH_PARAM } from "@/components/samples/sample-create-intent";
-import { isCreateIntentValue } from "@/lib/create-intent";
+import {
+  CREATE_INTENT_PARAM,
+  isCreateIntentValue,
+} from "@/lib/create-intent";
 
 export const metadata = {
   title: "Lab Samples | Maji dMRV",
@@ -26,7 +29,7 @@ export default async function SamplesPage({
 
   return (
     <SampleList
-      initialCreate={isCreateIntentValue(query.create)}
+      initialCreate={isCreateIntentValue(query[CREATE_INTENT_PARAM])}
       initialCreditBatchId={creditBatch}
     />
   );

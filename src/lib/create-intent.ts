@@ -1,3 +1,5 @@
+export const CREATE_INTENT_PARAM = "create";
+
 export function isCreateIntentValue(
   value: string | string[] | null | undefined,
 ): boolean {

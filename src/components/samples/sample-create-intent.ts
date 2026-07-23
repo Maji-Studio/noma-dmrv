@@ -1,3 +1,5 @@
+import { CREATE_INTENT_PARAM } from "@/lib/create-intent";
+
 export const SAMPLE_CREATE_CREDIT_BATCH_PARAM = "createCreditBatch";
 
 export function sampleCreateHref(
@@ -6,7 +8,7 @@ export function sampleCreateHref(
 ): string {
   const params = new URLSearchParams({
     facility: facilityId,
-    create: "true",
+    [CREATE_INTENT_PARAM]: "true",
     [SAMPLE_CREATE_CREDIT_BATCH_PARAM]: creditBatchId,
   });
   return `/samples?${params.toString()}`;

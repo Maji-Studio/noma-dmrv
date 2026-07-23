@@ -4,7 +4,10 @@
  * Protected by requireAuth guard in the (app) layout
  */
 import { CreditBatchList } from "@/components/credit-batches";
-import { isCreateIntentValue } from "@/lib/create-intent";
+import {
+  CREATE_INTENT_PARAM,
+  isCreateIntentValue,
+} from "@/lib/create-intent";
 import { getOrgContext } from "@/lib/auth/server";
 
 export default async function CreditBatchesPage({
@@ -21,7 +24,7 @@ export default async function CreditBatchesPage({
   return (
     <CreditBatchList
       canManage={canManage}
-      initialCreate={isCreateIntentValue(query.create)}
+      initialCreate={isCreateIntentValue(query[CREATE_INTENT_PARAM])}
     />
   );
 }
