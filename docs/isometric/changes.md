@@ -13,6 +13,18 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-07-23 (GHG Statement creation dialog)
+
+The period-first GHG Statement creation flow now uses the shared centered
+`Modal` instead of a right-side drawer. The three-step behavior, validation,
+membership preview, production confirmation, and Isometric payload are
+unchanged.
+
+Creation and list copy is shorter. The period summary now labels `Start` and
+`End` separately: operators still choose only the inclusive end accepted by
+Isometric, while the start remains read-only (`Set by Isometric` for the first
+statement, then derived from the prior statement end).
+
 ## 2026-07-21 (actionable transport-evidence readiness)
 
 Transport evidence now has one reusable operator workflow across feedstocks,

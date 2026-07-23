@@ -5,9 +5,8 @@
  * and the removals Isometric linked into it (as a cross-link accordion).
  *
  * It's a Modal, not a side-sheet: there's no form here — only read-only fields
- * plus the two guided actions (refresh status, submit/resubmit). Side-sheets in
- * this app are reserved for forms (the create flow, entity edit); a read-only
- * view belongs in a centred dialog.
+ * plus the two guided actions (refresh status, submit/resubmit). The create
+ * wizard is a separate centered Modal.
  *
  * Membership is read-only (ADR 0004): Isometric links removals to the statement
  * server-side by reporting-period date range, so there is no UI to assign or
