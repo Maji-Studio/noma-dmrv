@@ -1,24 +1,44 @@
-import { inArray, sql, type SQLWrapper } from "drizzle-orm";
-import { documents } from "@/db/schema";
+import { sql, type SQLWrapper } from "drizzle-orm";
 import { TRANSPORT_EVIDENCE_DOCUMENT_TYPES } from "@/lib/certification/transport-evidence";
+
+type TransportEvidenceEntityReference =
+  | "deliveryId"
+  | "feedstockId"
+  | "transportLegId"
+  | "transportLegEntityId";
+
+const QUALIFIED_ENTITY_ID: Record<TransportEvidenceEntityReference, string> = {
+  deliveryId: '"deliveries"."id"',
+  feedstockId: '"feedstocks"."id"',
+  transportLegId: '"transport_legs"."id"',
+  transportLegEntityId: '"transport_legs"."entity_id"',
+};
 
 /** Correlated, org-scoped count that does not multiply the parent query. */
 export function transportEvidenceDocumentCount(
   organizationId: string,
   entityType: "feedstock" | "delivery" | "transport_leg",
-  entityId: SQLWrapper,
+  entityReference: TransportEvidenceEntityReference,
 ) {
+  const outerEntityId = sql.raw(QUALIFIED_ENTITY_ID[entityReference]);
+  const docTypeList = sql.join(
+    TRANSPORT_EVIDENCE_DOCUMENT_TYPES.map((docType) => sql`${docType}`),
+    sql`, `,
+  );
+
+  // These identifiers are intentionally literal. Drizzle unqualifies
+  // interpolated column references inside a raw correlated subquery, which
+  // turns `documents.entity_id = outer_table.id` into an uncorrelated
+  // comparison (or even `entity_id = entity_id`). Keep the outer references
+  // limited to the validated map above.
   return sql<number>`(
     select count(*)::int
-    from ${documents}
-    where ${documents.organizationId} = ${organizationId}
-      and ${documents.entityType} = ${entityType}
-      and ${documents.entityId} = ${entityId}
-      and ${documents.uploadStatus} = 'uploaded'
-      and ${inArray(
-        documents.documentType,
-        [...TRANSPORT_EVIDENCE_DOCUMENT_TYPES],
-      )}
+    from documents
+    where documents.organization_id = ${organizationId}
+      and documents.entity_type = ${entityType}
+      and documents.entity_id = ${outerEntityId}
+      and documents.upload_status = 'uploaded'
+      and documents.document_type in (${docTypeList})
   )`;
 }
 

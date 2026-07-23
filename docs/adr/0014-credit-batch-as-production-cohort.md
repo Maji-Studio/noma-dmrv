@@ -15,6 +15,10 @@ submission unit) and ADR 0011 (credit-batch-anchored chain of custody).
 > below — run-membership, derived applications, the 12-month clock, produced-vs-applied
 > coverage — **stands unchanged**; 0016 adds only the feedstock constraint and a
 > `production_processes` entity that scopes the Method A/B sampling regime.
+>
+> **Amended 2026-07-23.** A credit batch may be declared before production
+> starts. Completed runs attach automatically when organization, facility,
+> feedstock, and production date match the declared cohort.
 
 ## Context
 
@@ -82,8 +86,9 @@ resolver (run → applications), which ADR 0011 anticipated.
   delivery-level cross-run blending fails loudly rather than mis-crediting silently.
 - The chain-of-custody batch roll-up and the certify context source lineages from member
   runs; their aggregation math (`buildMassAccounting`, `buildBatchSankey`) is unchanged.
-- The credit-batch form changes from application date-match to a production-run cohort
-  picker (unassigned runs only).
+- The credit-batch form declares the cohort boundary (facility, feedstock, and
+  production window). Existing matching runs are selected by default, and
+  future matching runs attach automatically when completed.
 - Out of scope: the `Removal → GhgEntry` rename (separate plan), the chain-of-custody page
   anchor (ADR 0011 stands — this changes only what "batch membership" resolves to).
 

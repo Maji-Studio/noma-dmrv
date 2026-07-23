@@ -193,7 +193,7 @@ function feedstockBaseQuery(ctx: OrgContext) {
       transportEvidenceDocumentCount: transportEvidenceDocumentCount(
         ctx.organizationId,
         "feedstock",
-        feedstocks.id,
+        "feedstockId",
       ),
     })
     .from(feedstocks)

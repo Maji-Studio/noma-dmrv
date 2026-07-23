@@ -9,12 +9,16 @@
  * that module under the 1000-line cap; both helpers are transaction-scoped so
  * the caller runs them atomically with the batch insert.
  */
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
 import { feedstocks } from "@/db/schema/feedstock";
-import { productionRuns, productionRunFeedstocks } from "@/db/schema/production";
+import {
+  productionRuns,
+  productionRunFeedstocks,
+  samples,
+} from "@/db/schema/production";
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
@@ -252,6 +256,11 @@ export async function assertDeclaredFeedstockType(
   productionRunIds: string[],
   declaredFeedstockTypeId: string,
 ): Promise<void> {
+  // A batch may be declared before production starts. Its facility, feedstock,
+  // and date window are enough to identify the cohort; completed matching runs
+  // attach as they are recorded.
+  if (productionRunIds.length === 0) return;
+
   const resolved = await resolveSingleFeedstockType(ctx, tx, productionRunIds);
   if (resolved !== declaredFeedstockTypeId) {
     throw new SafeError(
@@ -260,4 +269,187 @@ export async function assertDeclaredFeedstockType(
         `or change the batch's feedstock type.`,
     );
   }
+}
+
+/**
+ * Find every currently unassigned completed run inside a declared cohort.
+ * Feedstock identity is resolved from the run's actual feedstock links; empty
+ * and mixed-feedstock runs stay unassigned because they cannot belong to a
+ * single-feedstock credit batch.
+ */
+export async function findMatchingUnassignedProductionRunIds(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  params: {
+    facilityId: string;
+    feedstockTypeId: string;
+    startDate: string | Date;
+    endDate: string | Date;
+  },
+): Promise<string[]> {
+  const { startStr, endStr } = assertCreditBatchProductionWindow(
+    params.startDate,
+    params.endDate,
+  );
+  const rows = await tx
+    .selectDistinct({
+      productionRunId: productionRuns.id,
+      feedstockTypeId: feedstocks.feedstockTypeId,
+    })
+    .from(productionRuns)
+    .innerJoin(
+      productionRunFeedstocks,
+      and(
+        eq(productionRunFeedstocks.productionRunId, productionRuns.id),
+        eq(
+          productionRunFeedstocks.organizationId,
+          ctx.organizationId,
+        ),
+      ),
+    )
+    .innerJoin(
+      feedstocks,
+      and(
+        eq(feedstocks.id, productionRunFeedstocks.feedstockId),
+        eq(feedstocks.organizationId, ctx.organizationId),
+      ),
+    )
+    .leftJoin(
+      creditBatchProductionRuns,
+      and(
+        eq(
+          creditBatchProductionRuns.productionRunId,
+          productionRuns.id,
+        ),
+        eq(
+          creditBatchProductionRuns.organizationId,
+          ctx.organizationId,
+        ),
+      ),
+    )
+    .where(
+      and(
+        eq(productionRuns.organizationId, ctx.organizationId),
+        eq(productionRuns.facilityId, params.facilityId),
+        eq(productionRuns.status, COMPLETED_PRODUCTION_RUN_STATUS),
+        gte(productionRunDateExpr(), startStr),
+        lte(productionRunDateExpr(), endStr),
+        isNull(productionRuns.archivedAt),
+        isNull(creditBatchProductionRuns.creditBatchId),
+      ),
+    );
+
+  const typesByRun = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const types = typesByRun.get(row.productionRunId) ?? new Set<string>();
+    types.add(row.feedstockTypeId);
+    typesByRun.set(row.productionRunId, types);
+  }
+
+  return Array.from(typesByRun.entries())
+    .filter(
+      ([, typeIds]) =>
+        typeIds.size === 1 && typeIds.has(params.feedstockTypeId),
+    )
+    .map(([productionRunId]) => productionRunId)
+    .sort();
+}
+
+/**
+ * Attach one completed run to the credit batch identified by its facility,
+ * single feedstock type, and production date. Called inside the production-run
+ * write transaction after feedstock allocation is final, so membership and
+ * sample back-filling commit atomically with completion.
+ */
+export async function attachProductionRunToMatchingCreditBatch(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  productionRunId: string,
+): Promise<string | null> {
+  const [run] = await tx
+    .select({
+      id: productionRuns.id,
+      code: productionRuns.code,
+      facilityId: productionRuns.facilityId,
+      status: productionRuns.status,
+      date: productionRunDateExpr(),
+    })
+    .from(productionRuns)
+    .where(
+      and(
+        eq(productionRuns.id, productionRunId),
+        eq(productionRuns.organizationId, ctx.organizationId),
+      ),
+    )
+    .limit(1);
+
+  if (!run || run.status !== COMPLETED_PRODUCTION_RUN_STATUS) return null;
+
+  const [existingMembership] = await tx
+    .select({ creditBatchId: creditBatchProductionRuns.creditBatchId })
+    .from(creditBatchProductionRuns)
+    .where(
+      and(
+        eq(creditBatchProductionRuns.productionRunId, productionRunId),
+        eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
+      ),
+    )
+    .limit(1);
+  if (existingMembership) return existingMembership.creditBatchId;
+
+  const feedstockTypeId = await resolveSingleFeedstockType(
+    ctx,
+    tx,
+    [productionRunId],
+  );
+  const matchingBatches = await tx
+    .select({
+      id: creditBatches.id,
+      code: creditBatches.code,
+      removalId: creditBatches.removalId,
+    })
+    .from(creditBatches)
+    .where(
+      and(
+        eq(creditBatches.organizationId, ctx.organizationId),
+        eq(creditBatches.facilityId, run.facilityId),
+        eq(creditBatches.feedstockTypeId, feedstockTypeId),
+        lte(creditBatches.startDate, run.date),
+        gte(creditBatches.endDate, run.date),
+        isNull(creditBatches.archivedAt),
+      ),
+    )
+    .orderBy(creditBatches.id)
+    .for("update");
+
+  if (matchingBatches.length === 0) return null;
+  if (matchingBatches.length > 1) {
+    throw new SafeError(
+      `Production run ${run.code} matches multiple Credit batches (${matchingBatches.map((batch) => batch.code).join(", ")}). Adjust the overlapping production windows before completing the run.`,
+    );
+  }
+
+  const [batch] = matchingBatches;
+  if (batch.removalId) {
+    throw new SafeError(
+      `Production run ${run.code} matches Credit batch ${batch.code}, but that batch is already grouped into a Removal. Ungroup it before completing the run.`,
+    );
+  }
+
+  await tx.insert(creditBatchProductionRuns).values({
+    organizationId: ctx.organizationId,
+    creditBatchId: batch.id,
+    productionRunId,
+  });
+  await tx
+    .update(samples)
+    .set({ creditBatchId: batch.id, updatedAt: new Date() })
+    .where(
+      and(
+        eq(samples.productionRunId, productionRunId),
+        eq(samples.organizationId, ctx.organizationId),
+      ),
+    );
+
+  return batch.id;
 }

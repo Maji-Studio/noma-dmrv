@@ -160,6 +160,9 @@ export function useCreateCreditBatch() {
     mutationFn: (data: CreditBatchFormData) => createCreditBatchFn(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: creditBatchKeys.lists() });
+      queryClient.invalidateQueries({
+        queryKey: creditBatchKeys.productionRunOptionsPrefix(),
+      });
       invalidateCertificationReadiness(queryClient);
     },
   });

@@ -88,7 +88,7 @@ function CohortPickerSection({
   return (
     <div className="space-y-12 pt-16 border-t border-[var(--color-border-tertiary)]">
       <div className="flex items-center justify-between">
-        <SectionLabel hint="Select member production runs from the production window above.">
+        <SectionLabel hint="Completed runs matching this feedstock and production window are attached automatically.">
           {title}
         </SectionLabel>
         {hasDates && count > 0 && (
@@ -584,7 +584,7 @@ export function CreditBatchForm({
         onRetry={() => refetchProductionRunOptions()}
         isRetrying={productionRunOptionsFetching}
         notReadyMessage="Select a feedstock type and set the production window to load runs."
-        noMatchMessage="No runs of this feedstock type fall within the production window."
+        noMatchMessage="No completed runs match yet. You can create the batch now; matching runs will attach automatically."
         noMatchWithSelectionMessage="No additional runs of this feedstock type fall within the production window."
       >
         {typedRunOptions.map(renderProductionRunOption)}

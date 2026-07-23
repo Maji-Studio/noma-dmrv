@@ -44,6 +44,7 @@ import {
 import { hasCertifierCredentials } from "./certifier-credentials";
 import {
   assertDeclaredFeedstockType,
+  findMatchingUnassignedProductionRunIds,
   lockCreditBatchProductionRuns,
   validateProductionRunIds,
 } from "./credit-batch-membership";
@@ -405,6 +406,7 @@ export async function createCreditBatch(
 ): Promise<CreditBatchWithRelations> {
   requireOrgScope(ctx);
   const { productionRunIds, ...batchData } = data;
+  let resolvedProductionRunIds = productionRunIds ?? [];
   const sampling = data.sampling ?? "sampled";
   const hasIsometricCredentials =
     sampling === "unsampled"
@@ -420,7 +422,16 @@ export async function createCreditBatch(
     // facility, window, prior assignment), then GUARD that they all match the
     // declared feedstock type, then find-or-create the (facility, feedstock)
     // production process this batch is a <=1-month slice of.
-    const runIds = productionRunIds ?? [];
+    const runIds =
+      resolvedProductionRunIds.length > 0
+        ? resolvedProductionRunIds
+        : await findMatchingUnassignedProductionRunIds(ctx, tx, {
+            facilityId: batchData.facilityId,
+            feedstockTypeId: batchData.feedstockTypeId,
+            startDate: batchData.startDate,
+            endDate: batchData.endDate,
+          });
+    resolvedProductionRunIds = runIds;
     const lockedRuns = await lockCreditBatchProductionRuns(ctx, tx, runIds);
     const certifier = await resolveCreditBatchCertifier(ctx, tx, batchData.facilityId);
     const feedstockTypeId = batchData.feedstockTypeId;
@@ -517,7 +528,7 @@ export async function createCreditBatch(
     .from(feedstockTypes)
     .where(and(eq(feedstockTypes.id, creditBatch.feedstockTypeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
   const durabilityOption = facility?.durabilityOption ?? DURABILITY_TIER_FALLBACK;
-  const memberProductionRunIds = productionRunIds ?? [];
+  const memberProductionRunIds = resolvedProductionRunIds;
   const rollup =
     memberProductionRunIds.length > 0
       ? summarizeApplicationsForBatches(
@@ -687,9 +698,6 @@ export async function updateCreditBatch(
     updateData.certifier = await resolveCreditBatchCertifier(ctx, tx, targetFacilityId);
 
     if (productionRunIds !== undefined) {
-      if (productionRunIds.length === 0) {
-        throw new SafeError("A credit batch must include at least one production run.");
-      }
       await validateProductionRunIds(
         ctx,
         tx,
@@ -714,9 +722,6 @@ export async function updateCreditBatch(
         .from(creditBatchProductionRuns)
         .where(and(eq(creditBatchProductionRuns.creditBatchId, id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)));
       existingRunIdsForRevalidation = existingLinks.map((l) => l.productionRunId);
-      if (existingRunIdsForRevalidation.length === 0) {
-        throw new SafeError("A credit batch must include at least one production run.");
-      }
       await validateProductionRunIds(
         ctx,
         tx,
@@ -753,11 +758,6 @@ export async function updateCreditBatch(
             .from(creditBatchProductionRuns)
             .where(and(eq(creditBatchProductionRuns.creditBatchId, id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)))
         ).map((link) => link.productionRunId);
-      if (feedstockRunIds.length === 0) {
-        throw new SafeError(
-          "A credit batch must include at least one production run.",
-        );
-      }
     }
     if (feedstockRunIds !== undefined) {
       await assertDeclaredFeedstockType(ctx, tx, feedstockRunIds, effectiveFeedstockTypeId);
