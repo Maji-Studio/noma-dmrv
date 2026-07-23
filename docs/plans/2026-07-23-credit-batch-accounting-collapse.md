@@ -2,7 +2,7 @@
 
 Source: architecture review (2026-07-22), candidate 01, deferred as "out of scope" by
 `docs/plans/2026-07-22-architecture-remediation.md` (its Phases 1–3 landed as #506, #507,
-#510 — do NOT redo candidates 02/05 or the targeted 3a/3b/3c fixes; they are done).
+PR `#510` — do NOT redo candidates 02/05 or the targeted 3a/3b/3c fixes; they are done).
 This plan is the deferred remainder: collapse the credit-batch accounting read behind one
 deep module, plus a short revisit-check of the other deferred items.
 
