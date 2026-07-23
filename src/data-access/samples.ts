@@ -484,8 +484,8 @@ export async function getSampleStats(
 // or a direct server-action call could otherwise persist a 1000-year sample
 // missing its mandatory R₀/TGA fields (PR #336 second-pass review). Also
 // subsumes the batch-existence check for both write paths. This runs inside the
-// caller's transaction; facility mutation guards separately enforce safe tier
-// changes.
+// caller's transaction but is not synchronized with concurrent facility-tier
+// promotion; the residual race is tracked separately.
 async function requireBatchTierEvidence(
   ctx: OrgContext,
   tx: DbTransaction,
