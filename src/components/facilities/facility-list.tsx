@@ -475,18 +475,13 @@ export function FacilityList() {
         editLabel="Edit Facility"
         sections={sideSheetSections}
       >
-        {(createError || updateError) && (
-          <div className="mb-24">
-            <ServerError message={createError || updateError || ""} />
-          </div>
-        )}
-
         <FacilityForm
           key={sideSheetEntity?.id ?? "create"}
           facility={sideSheet?.entity as Facility | undefined}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
           isSubmitting={createFacility.isPending || updateFacility.isPending}
+          errorMessage={createError || updateError || undefined}
           submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Facility"}
         />
       </EntitySideSheet>

@@ -11,7 +11,6 @@ import {
   FormSection,
   FormSelect,
   PositionPicker,
-  ServerError,
   makeCertFieldStatus,
   resolveCertFieldStatus,
 } from "@/components/forms";
@@ -37,6 +36,7 @@ interface TransportLegFormProps {
   onSubmit: (data: TransportLegFormData) => Promise<void> | void;
   onCancel: () => void;
   isSubmitting?: boolean;
+  errorMessage?: string;
   /** Render without a nested form when an owning parent form surrounds this UI. */
   embedded?: boolean;
 }
@@ -111,6 +111,7 @@ export function TransportLegForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  errorMessage,
   embedded = false,
 }: TransportLegFormProps) {
   const isEditMode = !!leg;
@@ -161,10 +162,6 @@ export function TransportLegForm({
 
   return (
     <TransportLegFormContainer embedded={embedded} onSubmit={submit}>
-      {errors.root?.serverError?.message && (
-        <ServerError message={errors.root.serverError.message} />
-      )}
-
       <FormSection
         title="Route"
         divider={false}
@@ -361,6 +358,7 @@ export function TransportLegForm({
         sticky={false}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={errors.root?.serverError?.message ?? errorMessage}
         submitLabel={isEditMode ? "Save changes" : "Add transport leg"}
         submitType={embedded ? "button" : "submit"}
         onSubmitClick={embedded ? () => void submit() : undefined}

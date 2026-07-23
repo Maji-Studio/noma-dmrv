@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
-import { FormField, FormInput, FormTextarea, ServerError } from "@/components/forms";
+import { FormField, FormInput, FormTextarea } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { useToast } from "@/components/ui/toast";
 import { numericValue } from "@/lib/form-utils";
@@ -172,8 +172,6 @@ function StockTakeForm({
 
   return (
     <form onSubmit={onSubmit} className="flex flex-1 flex-col space-y-20">
-      {serverError && <ServerError message={serverError} />}
-
       <div className="flex items-center justify-between gap-8 border border-[var(--color-border-tertiary)] px-12 py-10">
         <span className="body-caption text-[var(--color-text-tertiary)]">
           Current derived stock
@@ -253,6 +251,7 @@ function StockTakeForm({
       <FormActions
         onCancel={onCancel}
         isSubmitting={recordStockTake.isPending}
+        errorMessage={serverError ?? undefined}
         submitLabel="Record stock-take"
       />
     </form>
@@ -308,8 +307,6 @@ function LossForm({
 
   return (
     <form onSubmit={onSubmit} className="flex flex-1 flex-col space-y-20">
-      {serverError && <ServerError message={serverError} />}
-
       <FormField
         id="loss-amount"
         label="Amount lost (kg)"
@@ -349,6 +346,7 @@ function LossForm({
       <FormActions
         onCancel={onCancel}
         isSubmitting={recordLoss.isPending}
+        errorMessage={serverError ?? undefined}
         submitLabel="Record loss"
       />
     </form>

@@ -183,7 +183,6 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
         {isAddingLocation && (
           <div className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
             <h3 className="title-heading-4 mb-24">Add New Location</h3>
-            {createError && <ServerError message={createError} />}
             <SupplierLocationForm
               onSubmit={handleCreateLocation}
               onCancel={() => {
@@ -191,6 +190,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
                 setCreateError(null);
               }}
               isSubmitting={createLocation.isPending}
+              errorMessage={createError ?? undefined}
               submitLabel="Add Location"
             />
           </div>
@@ -200,7 +200,6 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
         {editingLocation && (
           <div className="p-32 border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
             <h3 className="title-heading-4 mb-24">Edit Location</h3>
-            {updateError && <ServerError message={updateError} />}
             <SupplierLocationForm
               location={editingLocation}
               onSubmit={handleUpdateLocation}
@@ -209,6 +208,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
                 setUpdateError(null);
               }}
               isSubmitting={updateLocation.isPending}
+              errorMessage={updateError ?? undefined}
               submitLabel="Save Changes"
             />
           </div>

@@ -235,6 +235,8 @@ interface ProductionRunFormProps {
   onCancel?: () => void;
   /** Whether the form is currently submitting */
   isSubmitting?: boolean;
+  /** Submission-level error shown with the action footer */
+  errorMessage?: string;
   /** Custom label for the submit button */
   submitLabel?: string;
   /**
@@ -251,6 +253,7 @@ export function ProductionRunForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  errorMessage,
   submitLabel,
   children,
   deferredAttachments,
@@ -949,6 +952,7 @@ export function ProductionRunForm({
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

@@ -126,6 +126,7 @@ The visual contract (SectionLabel + `space-y-16` fields + `pt-16` hairline divid
 
 The only CTA row — left-aligned, primary action first, sticky by default, nothing renders after it.
 
+- Submission-level server/action/root errors go through `errorMessage`; `FormActions` renders the shared `ServerError` immediately above the buttons inside the same sticky footer. Do not render the same error in a parent sheet or earlier in the form.
 - Nested inline forms (child-entity editors, transport legs) pass `sticky={false}`.
 - When the actions render **inside an owning parent form**, pass `submitType="button"` + `onSubmitClick` — nesting `<form>` elements is invalid HTML.
 - `formId` is the escape hatch when extension content must render between the fields and the CTA: the CTA lives outside the `<form>` and points back at it by id.

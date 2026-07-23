@@ -149,6 +149,7 @@ interface FormulationFormProps {
   onSubmit: (data: FormulationFormData) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
+  errorMessage?: string;
   submitLabel?: string;
 }
 
@@ -157,6 +158,7 @@ export function FormulationForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  errorMessage,
   submitLabel,
 }: FormulationFormProps) {
   const isEditMode = !!formulation;
@@ -435,6 +437,7 @@ export function FormulationForm({
       <FormActions
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

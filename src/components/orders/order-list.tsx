@@ -408,13 +408,13 @@ export function OrderList() {
             : undefined
         }
       >
-        {formError && <div className="mb-24"><ServerError message={formError} /></div>}
         <OrderForm
           key={sideSheetEntity?.id ?? "create"}
           order={sideSheet?.entity as Order | undefined}
           onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
           onCancel={closeSideSheet}
           isSubmitting={createOrder.isPending || updateOrder.isPending}
+          errorMessage={formError ?? undefined}
           submitLabel={sideSheetMode === "create" ? "Create Order" : "Save Changes"}
         />
       </EntitySideSheet>

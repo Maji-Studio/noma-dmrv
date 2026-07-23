@@ -231,6 +231,8 @@ interface CreditBatchFormProps {
   onCancel?: () => void;
   /** Whether the form is currently submitting */
   isSubmitting?: boolean;
+  /** Submission-level error shown with the action footer */
+  errorMessage?: string;
   /** Custom label for the submit button */
   submitLabel?: string;
   /** Sticky CTA row (side sheet) — pass false when embedded in a page card. */
@@ -245,6 +247,7 @@ export function CreditBatchForm({
   onClearServerError,
   onCancel,
   isSubmitting = false,
+  errorMessage,
   submitLabel,
   stickyActions = true,
   canManage = false,
@@ -616,6 +619,7 @@ export function CreditBatchForm({
         sticky={stickyActions}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

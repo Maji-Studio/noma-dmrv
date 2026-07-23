@@ -8,7 +8,6 @@ import {
   FormActions,
   FormField,
   FormInput,
-  ServerError,
 } from "@/components/forms";
 import { Button } from "@/components/ui/button";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -171,9 +170,9 @@ export function OrganizationCertifierCredentials({
             />
           </FormField>
         </div>
-        <ServerError message={serverError} />
         <FormActions
           isSubmitting={setCredentials.isPending}
+          errorMessage={serverError}
           submitLabel={
             status?.configured ? "Replace credentials" : "Set credentials"
           }

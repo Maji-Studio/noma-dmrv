@@ -114,8 +114,6 @@ export function LoginForm() {
         />
       </FormField>
 
-      <ServerError message={serverError} />
-
       {showResendVerification && !resendSuccess && (
         <div className="p-16 bg-[var(--color-background-interaction-light)] border border-[var(--color-border-secondary)] rounded-none">
           <p className="body-small text-[var(--color-text-secondary)] mb-16">
@@ -151,6 +149,8 @@ export function LoginForm() {
           Forgot password?
         </Link>
       </div>
+
+      <ServerError message={serverError} />
 
       <Button
         type="submit"

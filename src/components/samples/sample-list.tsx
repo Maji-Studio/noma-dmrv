@@ -732,13 +732,13 @@ export function SampleList() {
           },
         ] : undefined}
       >
-        {formError && <div className="mb-24"><ServerError message={formError} /></div>}
         <SampleForm
           key={editingEntity?.id ?? "create"}
           sample={editingEntity ?? undefined}
           onSubmit={displaySideSheet?.mode === "edit" ? handleUpdate : handleCreate}
           onCancel={attemptCloseSideSheet}
           isSubmitting={isSubmitting}
+          errorMessage={formError ?? undefined}
           submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Sample"}
           deferredAttachments={deferredAttachments}
           onRetryDeferredAttachments={handleRetryDeferredAttachments}

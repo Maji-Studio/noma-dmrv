@@ -468,13 +468,13 @@ export function BiocharProductList() {
           },
         ] : undefined}
       >
-        {formError && <div className="mb-24"><ServerError message={formError} /></div>}
         <BiocharProductForm
           key={editingEntity?.id ?? "create"}
           product={editingEntity ?? undefined}
           onSubmit={displaySideSheet?.mode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}
+          errorMessage={formError ?? undefined}
           submitLabel={displaySideSheet?.mode === "edit" ? "Save Changes" : "Create Product"}
           focusTarget={
             displaySideSheet?.mode === "edit" ? activeFocusTarget : null

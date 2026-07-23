@@ -66,13 +66,13 @@ export function StorageLocationQuickAddDialog({
       isOpen={isOpen}
       onClose={onClose}
       title="Add New Storage Bin"
-      error={error}
       testId="storage-location-quick-add-dialog"
     >
       <StorageLocationForm
         onSubmit={handleSubmit}
         onCancel={onClose}
         isSubmitting={isSubmitting}
+        errorMessage={error ?? undefined}
         submitLabel="Create Bin"
         defaultType={defaultBinType}
         allowedTypes={allowedTypes}

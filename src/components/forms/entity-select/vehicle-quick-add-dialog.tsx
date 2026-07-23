@@ -52,13 +52,13 @@ export function VehicleQuickAddDialog({
       isOpen={isOpen}
       onClose={onClose}
       title="Add New Vehicle"
-      error={error}
       testId="vehicle-quick-add-dialog"
     >
       <VehicleForm
         onSubmit={handleSubmit}
         onCancel={onClose}
         isSubmitting={isSubmitting}
+        errorMessage={error ?? undefined}
         submitLabel="Create Vehicle"
       />
     </QuickAddDialogShell>

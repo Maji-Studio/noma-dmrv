@@ -545,11 +545,6 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
         editLabel="Edit Credit Batch"
         size="wide"
       >
-        {(createError || updateError) && (
-          <div className="mb-24">
-            <ServerError message={createError || updateError || ""} />
-          </div>
-        )}
         <CreditBatchForm
           key={sideSheetEntity?.id ?? "create"}
           creditBatch={sideSheetEntity ?? undefined}
@@ -566,6 +561,7 @@ export function CreditBatchList({ canManage = false }: { canManage?: boolean }) 
           isSubmitting={
             createCreditBatch.isPending || updateCreditBatch.isPending
           }
+          errorMessage={createError || updateError || undefined}
           canManage={canManage}
         />
       </EntitySideSheet>

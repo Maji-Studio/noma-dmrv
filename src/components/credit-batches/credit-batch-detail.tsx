@@ -201,11 +201,6 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
             <SlideOverPanel.Title>{creditBatch.code}</SlideOverPanel.Title>
           </SlideOverPanel.Header>
           <SlideOverPanel.Body noPaddingBottom fillHeight>
-            {updateError && (
-              <div className="mb-24">
-                <ServerError message={updateError} />
-              </div>
-            )}
             <CreditBatchForm
               key={creditBatch.id}
               creditBatch={creditBatch}
@@ -213,6 +208,7 @@ export function CreditBatchDetail({ creditBatchId }: CreditBatchDetailProps) {
               onClearServerError={() => setUpdateError(null)}
               onCancel={closeEdit}
               isSubmitting={updateCreditBatch.isPending}
+              errorMessage={updateError ?? undefined}
               submitLabel="Save changes"
             />
           </SlideOverPanel.Body>
