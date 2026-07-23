@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 Work the repo's **merge queue** to empty. The main thread is a **conductor**: it surveys, orders, and gates — per-PR legwork (diff comparison, comment fixes, reviews) goes to subagents and the `pr-review-panel` workflow, and only their compact returns enter the main window. Codex mechanics live in the **codex-implementation** and **codex-review** skills (`.claude/skills/codex-*/SKILL.md`) — point subagents there instead of restating commands.
 
-**Guardrails.** `pnpm` only. Never commit to `staging`/`main`. **Never auto-merge a `staging` → `main` promotion PR** — flag it in the report as its own explicit step for the user. Draft PRs are flagged, not processed, unless the user named them. Every review finding is verified against the actual code before acting — false positives (including bogus P0s) are common. Never trust exit 0 from a piped command. Codex and CodeRabbit are best-effort — degrade gracefully if absent.
+**Guardrails.** `pnpm` only. Never commit to `staging`/`main`. **Never auto-merge a `staging` → `main` promotion PR** — flag it in the report as its own explicit step for the user. If the user explicitly authorizes a promotion, preserve branch ancestry with a merge commit; never squash or rebase the promotion. Draft PRs are flagged, not processed, unless the user named them. Every review finding is verified against the actual code before acting — false positives (including bogus P0s) are common. Never trust exit 0 from a piped command. Codex and CodeRabbit are best-effort — degrade gracefully if absent.
 
 ## Phase 1 — Survey & queue
 
@@ -35,12 +35,22 @@ Run the full cycle for each queued PR in order. After every merge, `staging` has
 2. **Resolve comments** — one resolver subagent handles every unresolved thread and PR-level comment: verify against the code first; fix valid findings with the **minimal** change (one commit per addressed comment — mechanical fixes may go through the codex-implementation skill); decline false positives and gold-plating with a one-line written reason; reply to each thread and resolve it; push.
 3. **Panel** — run the `pr-review-panel` workflow (`.claude/workflows/pr-review-panel.js`) with `args: {pr, base, head}`. It runs a gpt-5.6-sol (codex) reviewer and a fresh Claude reviewer in parallel, then a single adversarial verifier that dedupes and confirms — only **confirmed** findings come back. Fix them (codex-implementation for mechanical work), commit, push. If the fixes were substantial, re-run the panel once; **max two rounds** — remaining low-severity nits after round two are judgment calls recorded in the report, not new rounds.
 4. **Gate** — `pnpm lint` + `pnpm typecheck` + focused tests green (read real output, not piped exit codes); `gh pr checks <n> --watch` until green; give CodeRabbit up to ~10 min to land if it reviews this PR, then triage its comments like step 2. Never merge on red.
-5. **Merge** — squash (matches `staging` history: one commit per PR); title `<type>: <imperative, lowercase>` under 70 chars:
+5. **Merge into `staging`** — squash ordinary feature, fix, refactor, chore, docs, and test PRs so `staging` keeps one commit per PR; title `<type>: <imperative, lowercase>` under 70 chars:
    ```bash
    gh pr merge <n> --squash --delete-branch
    ```
 
 Completion per PR: merged, or parked with a written blocker. A parked PR never silently blocks the queue — record the blocker and move on.
+
+### Promotion exception
+
+A `staging` → `main` promotion is not part of the ordinary queue and always requires explicit user authorization. Recheck its reviews and required CI, then use a merge commit so `main` retains `staging`'s commit ancestry:
+
+```bash
+gh pr merge <n> --merge
+```
+
+Never squash or rebase a promotion, and never delete the long-lived `staging` branch. If GitHub cannot create the merge commit cleanly, park the promotion and report the blocker instead of choosing another merge method.
 
 ## Phase 3 — Report
 
