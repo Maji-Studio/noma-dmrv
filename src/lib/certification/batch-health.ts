@@ -28,6 +28,7 @@ export type BatchHealthState =
 
 export type BatchHealthCheckKey =
   | "carbon" // carbon & durability lab inputs resolved
+  | "facilityEmissions" // facility emission-estimate inputs resolved
   | "production" // lineage resolves >= 1 production run
   | "transport" // transport legs present for the template's required categories
   | "entityReadiness"; // certifier-required entity fields on the batch's own lineage
@@ -40,6 +41,7 @@ export type BatchHealthFixTarget =
   | "productionRuns"
   | "biocharProducts"
   | "labSamples"
+  | "certificationEmissions"
   | "applications"
   | "sourceData";
 
@@ -111,6 +113,11 @@ export interface BatchHealthFacts {
    */
   carbonMissingInputs: string[];
   /**
+   * Facility-level emission-estimate blockers that apply to this batch's
+   * durability tier, such as a missing reference soil temperature.
+   */
+  facilityEmissionsBlockers: string[];
+  /**
    * Per-entity certifier-readiness gaps from THIS batch's own lineage (its
    * production runs, samples, and transport legs resolve 1:1 for an ungrouped
    * batch). A batch whose underlying entities are missing certifier-required
@@ -146,6 +153,7 @@ export interface BatchHealth {
 }
 
 const CARBON_LABEL = "Carbon & durability inputs complete";
+const FACILITY_EMISSIONS_LABEL = "Facility emission estimates complete";
 const PRODUCTION_LABEL = "Production data linked";
 const TRANSPORT_LABEL = "Transport legs present";
 const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
@@ -170,6 +178,22 @@ function carbonCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
     detail: `Missing: ${missingInputs.join(", ")}`,
     fixTarget: "labSamples",
   };
+}
+
+function facilityEmissionsChecks(
+  facts: BatchHealthFacts,
+): BatchHealthCheckBase[] {
+  const blockers = Array.from(
+    new Set(facts.facilityEmissionsBlockers.filter(Boolean)),
+  );
+  if (blockers.length === 0) return [];
+  return [{
+    key: "facilityEmissions",
+    label: FACILITY_EMISSIONS_LABEL,
+    status: "unmet",
+    detail: blockers.join(" · "),
+    fixTarget: "certificationEmissions",
+  }];
 }
 
 function productionCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
@@ -353,6 +377,7 @@ export function deriveBatchHealth(facts: BatchHealthFacts): BatchHealth {
   const checks = mergeUnmetChecksByDestination(
     [
       carbonCheck(facts),
+      ...facilityEmissionsChecks(facts),
       productionCheck(facts),
       transportCheck(facts),
       ...entityReadinessChecks(facts),

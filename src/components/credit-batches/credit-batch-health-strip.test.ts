@@ -97,6 +97,17 @@ describe("batchHealthFixLinkFor", () => {
     expect(link.href).toBe(`/samples?facility=${facilityId}`);
   });
 
+  it("routes facility emission blockers to certification emission estimates", () => {
+    const link = batchHealthFixLinkFor(
+      check("facilityEmissions", "certificationEmissions"),
+      facilityId,
+    );
+    expect(link.label).toBe("Open emission estimates");
+    expect(link.href).toBe(
+      `/certification/settings?tab=emissions&facility=${facilityId}`,
+    );
+  });
+
   it("routes an explicit applications fixTarget to the applications page", () => {
     // The noApplications production gap routes here: applications auto-match by
     // crediting period, so there is no manual "link" action to offer.

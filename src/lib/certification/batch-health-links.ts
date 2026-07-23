@@ -7,6 +7,7 @@ import {
   buildEntityDeepLink,
   ENTITY_FOCUS_TARGETS,
 } from "@/lib/entity-deep-link";
+import { certificationSettingsHref } from "./links";
 
 export interface BatchHealthFixLink {
   label: string;
@@ -39,6 +40,8 @@ export function fallbackBatchHealthFixTarget(
       // sample measurements — they live on the run's samples, NOT the batch
       // form, so the fix must land on Lab Samples.
       return "labSamples";
+    case "facilityEmissions":
+      return "certificationEmissions";
     case "production":
       return "productionRuns";
     case "transport":
@@ -87,6 +90,11 @@ export function batchHealthFixLinkFor(
           creditBatchId ? { creditBatch: creditBatchId } : undefined,
           false,
         )}`,
+      };
+    case "certificationEmissions":
+      return {
+        label: "Open emission estimates",
+        href: certificationSettingsHref(facilityId, "emissions"),
       };
     case "applications":
       // Applications auto-match by crediting period — there is no manual "link"

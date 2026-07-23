@@ -16,6 +16,9 @@ describe("toBatchHealthFacts", () => {
           durabilityGateBlockers: [
             "Credit batch CB-1 has 0 replicate(s) with complete H/C_org + O/C_org chemistry; ≥ 3 required per sampled batch (§8.3.1).",
           ],
+          facilityEmissionsGateBlockers: [
+            "Set the facility reference soil temperature.",
+          ],
         },
       ],
       hasSubmittableRuns: false,
@@ -40,13 +43,23 @@ describe("toBatchHealthFacts", () => {
 
     const health = deriveBatchHealth(toBatchHealthFacts(ctx, "batch-1"));
 
-    expect(health.issueCount).toBe(2);
+    expect(health.issueCount).toBe(3);
     expect(
       health.checks.find((check) => check.key === "carbon")?.detail,
     ).toContain("At least 3 usable 1000-year lab samples");
     expect(
       health.checks.find((check) => check.key === "carbon")?.detail,
     ).toContain("complete H/C_org + O/C_org chemistry");
+    expect(
+      health.checks.find((check) => check.key === "carbon")?.detail,
+    ).not.toContain("reference soil temperature");
+    expect(
+      health.checks.find((check) => check.key === "facilityEmissions"),
+    ).toMatchObject({
+      detail: "Set the facility reference soil temperature.",
+      fixTarget: "certificationEmissions",
+      status: "unmet",
+    });
     expect(
       health.checks.find((check) => check.key === "production")?.status,
     ).toBe("unmet");

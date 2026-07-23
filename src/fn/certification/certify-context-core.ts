@@ -126,10 +126,10 @@ export interface MemberCreditBatch {
   id: string;
   code: string;
   co2eStoredPreview?: CreditBatchCo2eStoredPreview;
-  /** Exact durability submission-gate blockers for this batch. */
+  /** Exact submission blockers, separated by their remediation workflow. */
   durabilityGateBlockers?: string[];
+  facilityEmissionsGateBlockers?: string[];
 }
-
 type DurabilityOption = "200_year" | "1000_year";
 
 // UI-facing removal context — the lean payload React Query caches.

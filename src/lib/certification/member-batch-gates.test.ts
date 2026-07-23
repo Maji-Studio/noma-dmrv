@@ -8,7 +8,10 @@ describe("attributeSoilTemperatureBlockers", () => {
     expect(
       attributeSoilTemperatureBlockers(
         [
-          { id: "batch-200", durabilityGateBlockers: ["Existing blocker"] },
+          {
+            id: "batch-200",
+            durabilityGateBlockers: ["Existing durability blocker"],
+          },
           { id: "batch-1000", durabilityGateBlockers: [] },
         ],
         [
@@ -20,9 +23,14 @@ describe("attributeSoilTemperatureBlockers", () => {
     ).toEqual([
       {
         id: "batch-200",
-        durabilityGateBlockers: ["Existing blocker", soilBlocker],
+        durabilityGateBlockers: ["Existing durability blocker"],
+        facilityEmissionsGateBlockers: [soilBlocker],
       },
-      { id: "batch-1000", durabilityGateBlockers: [] },
+      {
+        id: "batch-1000",
+        durabilityGateBlockers: [],
+        facilityEmissionsGateBlockers: [],
+      },
     ]);
   });
 });

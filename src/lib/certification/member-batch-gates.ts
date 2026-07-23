@@ -1,6 +1,6 @@
 interface MemberBatchGateFacts {
   id: string;
-  durabilityGateBlockers?: string[];
+  facilityEmissionsGateBlockers?: string[];
 }
 
 interface BatchDurabilityFacts {
@@ -23,8 +23,8 @@ export function attributeSoilTemperatureBlockers<
 
   return members.map((member) => ({
     ...member,
-    durabilityGateBlockers: [
-      ...(member.durabilityGateBlockers ?? []),
+    facilityEmissionsGateBlockers: [
+      ...(member.facilityEmissionsGateBlockers ?? []),
       ...(affectedBatchIds.has(member.id) ? soilTemperatureBlockers : []),
     ],
   }));

@@ -82,6 +82,9 @@ export function toBatchHealthFacts(
 ): BatchHealthFacts {
   return {
     carbonMissingInputs: carbonMissingInputs(ctx, batchId),
+    facilityEmissionsBlockers:
+      ctx.memberBatches.find((batch) => batch.id === batchId)
+        ?.facilityEmissionsGateBlockers ?? [],
     entityReadinessGaps: ctx.entityReadinessGaps ?? [],
     entityReadinessIssues: ctx.entityReadinessIssues ?? [],
     hasSubmittableRuns: ctx.hasSubmittableRuns,

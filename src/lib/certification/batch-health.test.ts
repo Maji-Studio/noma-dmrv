@@ -12,6 +12,7 @@ import { CERT_REQUIREMENT_META } from "./requirement-labels";
 // set up, and every required transport category present.
 const HEALTHY: BatchHealthFacts = {
   carbonMissingInputs: [],
+  facilityEmissionsBlockers: [],
   entityReadinessGaps: [],
   hasSubmittableRuns: true,
   facilitySetupComplete: true,
