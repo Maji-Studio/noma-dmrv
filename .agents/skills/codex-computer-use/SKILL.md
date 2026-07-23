@@ -39,6 +39,10 @@ or acting on real accounts/data).
    ```
 2. **Write a self-contained prompt** into `$PROMPT`: repo path, the exact flow to drive,
    constraints, the artifact dir for screenshots, and the report format (see below).
+   Explicitly tell the launched process: **You are the Codex computer-use worker launched by
+   this workflow. Operate the available browser/computer surface directly. Do not invoke the
+   repository's `codex-computer-use` skill, run `codex exec`, or launch any other Codex
+   process; those actions recursively re-enter this workflow.**
 3. **Run non-interactively:**
    ```bash
    "$CODEX" exec \
@@ -76,6 +80,11 @@ or acting on real accounts/data).
 ```text
 Repository: /Users/kenji/Dropbox/Maji/18 Dark Earth Carbon/noma-dmrv
 Artifact directory: <ARTIFACT_DIR> (save screenshots here; write your report to report.md here)
+
+You are the Codex computer-use worker launched by this workflow. Operate the available
+browser/computer surface directly. Do not invoke the repository's codex-computer-use skill,
+run codex exec, or launch any other Codex process; those actions recursively re-enter this
+workflow.
 
 The dev server should be running at http://localhost:3100 — if it is not, note that and stop.
 Sign in by reading ADMIN_EMAIL and ADMIN_PASSWORD from .env.local in the repo root. Never
