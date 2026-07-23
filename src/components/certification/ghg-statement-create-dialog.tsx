@@ -258,7 +258,7 @@ function DialogBody({
         )}
       </div>
 
-      <div className="flex flex-wrap justify-end gap-12 border-t border-[var(--color-border-tertiary)] pt-16">
+      <div className="sticky bottom-0 z-10 flex flex-wrap justify-end gap-12 border-t border-[var(--color-border-tertiary)] bg-[var(--color-background-white)] pt-16">
         {result ? (
           <Button variant="primary" onClick={onClose}>
             Done
@@ -361,8 +361,9 @@ function StepPeriod({
         </InfoHint>
       </h3>
       <p className="body-small text-[var(--color-text-secondary)]">
-        Choose the end. Isometric sets the first start; later periods begin the
-        day after the previous end.
+        A GHG statement bundles the removals you&apos;ve already submitted this
+        period so a verifier can review them. Pick the period end — we&apos;ll
+        show you exactly which removals fall inside.
       </p>
       <FormField
         id="reportingPeriodEndOn"

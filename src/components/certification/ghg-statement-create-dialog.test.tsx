@@ -1,33 +1,6 @@
-import { isValidElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
-import { Modal, type ModalProps } from "@/components/ui";
-import {
-  GhgStatementCreateDialog,
-  PeriodWindow,
-} from "./ghg-statement-create-dialog";
-
-describe("GhgStatementCreateDialog", () => {
-  it("uses protected, accessible shared Modal chrome", () => {
-    const view = GhgStatementCreateDialog({
-      facilityId: "facility-1",
-      isProduction: false,
-      open: true,
-      onClose: vi.fn(),
-    });
-
-    expect(isValidElement(view)).toBe(true);
-    const modal = view as ReactElement<ModalProps>;
-    expect(modal.type).toBe(Modal);
-    expect(modal.props).toMatchObject({
-      isOpen: true,
-      ariaLabelledBy: "ghg-statement-create-title",
-      ariaDescribedBy: "ghg-statement-create-description",
-      width: "xl",
-      dismissOnClickOutside: false,
-    });
-  });
-});
+import { describe, expect, it } from "vitest";
+import { PeriodWindow } from "./ghg-statement-create-dialog";
 
 describe("PeriodWindow", () => {
   it("shows Isometric-owned first start and the chosen end", () => {

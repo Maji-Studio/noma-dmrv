@@ -55,10 +55,10 @@ test.describe("Certification — GHG statement empty-period guard", () => {
         dialog.getByRole("heading", { name: "New GHG Statement", level: 2 }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
 
-      // Step 1 — concise guidance explains why only the end is entered.
+      // Step 1 — the approved plain-language explanation remains visible.
       await expect(
         dialog.getByText(
-          /Isometric sets the first start; later periods begin the day after the previous end/i,
+          /bundles the removals you've already submitted this period/i,
         ),
       ).toBeVisible();
 
