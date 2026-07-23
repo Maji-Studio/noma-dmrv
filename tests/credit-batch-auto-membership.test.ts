@@ -576,7 +576,7 @@ describe("credit batch automatic production-run membership", () => {
     expect(batch.productionRunIds.sort()).toEqual([first.id, second.id].sort());
   });
 
-  it("discovers matching completed runs when an update moves the cohort boundary", async () => {
+  it("discovers matching completed runs when a boundary-only update omits run IDs", async () => {
     const batch = await createCreditBatch(ctx, {
       code: `CB-CBAM-UPDATE-DISCOVERY-${tag}`,
       facilityId,
@@ -623,7 +623,6 @@ describe("credit batch automatic production-run membership", () => {
     const updated = await updateCreditBatch(ctx, batch.id, {
       startDate: new Date("2028-03-01T00:00:00.000Z"),
       endDate: new Date("2028-03-31T00:00:00.000Z"),
-      productionRunIds: [],
     });
 
     expect(updated.productionRunIds).toEqual([run.id]);

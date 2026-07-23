@@ -483,6 +483,13 @@ export async function updateCreditBatch(
 ): Promise<CreditBatchWithRelations> {
   requireOrgScope(ctx);
   const { productionRunIds, ...updateFields } = data;
+  const cohortDefinitionUpdated =
+    updateFields.facilityId !== undefined ||
+    updateFields.feedstockTypeId !== undefined ||
+    updateFields.startDate !== undefined ||
+    updateFields.endDate !== undefined;
+  const shouldRefreshMembership =
+    productionRunIds !== undefined || cohortDefinitionUpdated;
 
   const updateData: Record<string, unknown> = {
     updatedAt: new Date(),
@@ -528,7 +535,7 @@ export async function updateCreditBatch(
     // batch. Every writer follows run -> process scope -> batch ->
     // removal/certification order; production-run reopen also locks the run
     // before checking membership.
-    const currentMembership = productionRunIds !== undefined
+    const currentMembership = shouldRefreshMembership
       ? await tx
           .select({ productionRunId: creditBatchProductionRuns.productionRunId })
           .from(creditBatchProductionRuns)
@@ -537,7 +544,7 @@ export async function updateCreditBatch(
             eq(creditBatchProductionRuns.organizationId, ctx.organizationId),
           ))
       : [];
-    const [declarationSnapshot] = productionRunIds !== undefined
+    const [declarationSnapshot] = shouldRefreshMembership
       ? await tx
           .select({
             facilityId: creditBatches.facilityId,
@@ -552,7 +559,7 @@ export async function updateCreditBatch(
           ))
           .limit(1)
       : [undefined];
-    if (productionRunIds !== undefined && !declarationSnapshot) {
+    if (shouldRefreshMembership && !declarationSnapshot) {
       throw new SafeError("Credit batch not found");
     }
 
@@ -560,7 +567,10 @@ export async function updateCreditBatch(
     let lockedMembershipRuns = [] as Awaited<
       ReturnType<typeof lockCreditBatchDeclarationRuns>
     >["lockedRuns"];
-    if (productionRunIds !== undefined && declarationSnapshot) {
+    if (shouldRefreshMembership && declarationSnapshot) {
+      const currentProductionRunIds = currentMembership.map(
+        (link) => link.productionRunId,
+      );
       const declaration = await lockCreditBatchDeclarationRuns(ctx, tx, {
         facilityId:
           updateFields.facilityId ?? declarationSnapshot.facilityId,
@@ -570,10 +580,9 @@ export async function updateCreditBatch(
         startDate:
           updateFields.startDate ?? declarationSnapshot.startDate,
         endDate: updateFields.endDate ?? declarationSnapshot.endDate,
-        requestedProductionRunIds: productionRunIds,
-        currentProductionRunIds: currentMembership.map(
-          (link) => link.productionRunId,
-        ),
+        requestedProductionRunIds:
+          productionRunIds ?? currentProductionRunIds,
+        currentProductionRunIds,
       });
       resolvedProductionRunIds = declaration.runIds;
       lockedMembershipRuns = declaration.lockedRuns;
@@ -584,7 +593,7 @@ export async function updateCreditBatch(
       feedstockTypeId: updateFields.feedstockTypeId,
     });
 
-    if (productionRunIds !== undefined) {
+    if (shouldRefreshMembership) {
       if (
         !declarationSnapshot ||
         existingBatch.facilityId !== declarationSnapshot.facilityId ||
@@ -628,10 +637,6 @@ export async function updateCreditBatch(
     );
 
     const targetFacilityId = updateFields.facilityId ?? existingBatch.facilityId;
-    const facilityChanged =
-      updateFields.facilityId !== undefined &&
-      updateFields.facilityId !== existingBatch.facilityId;
-
     // Resolve the effective date window after update
     const effectiveStartDate = updateFields.startDate
       ? formatUtcDate(updateFields.startDate)
@@ -669,53 +674,12 @@ export async function updateCreditBatch(
       );
     }
 
-    let existingRunIdsForRevalidation: string[] | undefined;
-    if (
-      productionRunIds === undefined &&
-      (facilityChanged ||
-        updateFields.startDate !== undefined ||
-        updateFields.endDate !== undefined)
-    ) {
-      const existingLinks = await tx
-        .select({ productionRunId: creditBatchProductionRuns.productionRunId })
-        .from(creditBatchProductionRuns)
-        .where(and(eq(creditBatchProductionRuns.creditBatchId, id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)));
-      existingRunIdsForRevalidation = existingLinks.map((l) => l.productionRunId);
-      await validateProductionRunIds(
-        ctx,
-        tx,
-        existingRunIdsForRevalidation,
-        targetFacilityId,
-        effectiveStartDate,
-        effectiveEndDate,
-        id,
-      );
-    }
-
     // ADR 0016 (amended 2026-07-04): feedstock type is DECLARED, not derived.
     // Re-guard the membership against the effective declared type + refresh the
     // (facility, feedstock) production process whenever the runs, the facility,
     // or the declared type changes — any of the three can shift which process
     // this batch belongs to, or make the member runs mismatch the declaration.
-    let feedstockRunIds: string[] | undefined = resolvedProductionRunIds;
-    if (
-      feedstockRunIds === undefined &&
-      (facilityChanged || updateFields.feedstockTypeId !== undefined)
-    ) {
-      // Runs unchanged but the facility or declared type moved — guard the
-      // current members. Reuse the set already fetched for revalidation when the
-      // facility/window changed; otherwise (type-only edit) fetch them now.
-      feedstockRunIds =
-        existingRunIdsForRevalidation ??
-        (
-          await tx
-            .select({
-              productionRunId: creditBatchProductionRuns.productionRunId,
-            })
-            .from(creditBatchProductionRuns)
-            .where(and(eq(creditBatchProductionRuns.creditBatchId, id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)))
-        ).map((link) => link.productionRunId);
-    }
+    const feedstockRunIds = resolvedProductionRunIds;
     if (feedstockRunIds !== undefined) {
       await assertDeclaredFeedstockType(ctx, tx, feedstockRunIds, effectiveFeedstockTypeId);
       const process = await findOrCreateProductionProcess(
@@ -732,7 +696,7 @@ export async function updateCreditBatch(
       .set(updateData)
       .where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)));
 
-    if (productionRunIds !== undefined) {
+    if (shouldRefreshMembership) {
       await tx
         .delete(creditBatchProductionRuns)
         .where(and(eq(creditBatchProductionRuns.creditBatchId, id), eq(creditBatchProductionRuns.organizationId, ctx.organizationId)));
