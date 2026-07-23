@@ -54,9 +54,10 @@ into that workspace**.
    sidebar group exposes three concrete routes (Removals · GHG Statements ·
    Settings), with no in-page tabs. The root `/certification` route redirects
    to Removals for old bookmarks and broad entry points. Lists are
-   **DataTables** (the `production-runs` idiom); quick view is a
-   **read-only side-sheet** (`?removal=` / `?statement=`). The complex removal
-   path is the **New-Removal wizard**:
+   **DataTables** (the `production-runs` idiom); Removal quick view is a
+   **read-only side-sheet** (`?removal=`), while GHG Statement detail and
+   creation use centered dialogs (`?statement=`). The complex removal path is
+   the **New-Removal wizard**:
    select ready ungrouped credit batches, review registry requirements, then
    submit. Evidence upload and transport-document completion are handled on the
    relevant entity surfaces before a batch is selectable.

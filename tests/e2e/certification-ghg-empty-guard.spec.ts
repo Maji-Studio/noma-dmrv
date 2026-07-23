@@ -1,7 +1,7 @@
 /**
  * Certification — GHG-statement empty-period guard (#245, redesign §5.2).
  *
- * HERMETIC — no sandbox creds needed. The create drawer's period + contents
+ * HERMETIC — no sandbox creds needed. The create dialog's period + contents
  * steps make NO Isometric call: the preview reads the DB-only
  * `loadOpenRemovalsForFacility`, and the route is un-gated with a throwaway
  * `certifier_projects` row (operational routes are gated on a registry link —
@@ -10,7 +10,7 @@
  * The guard has three layers; this covers the client one end-to-end:
  *   - server `createGhgStatementDraft` refuses a 0-removal period,
  *   - server `submitGhgStatementToVerifier` refuses a 0-linked statement,
- *   - here: the drawer can't advance/create an empty period.
+ *   - here: the dialog can't advance/create an empty period.
  *
  * A far-past period end (2020) makes the in-window set provably empty
  * regardless of what the base chain seed contains — no removal completed before
@@ -50,37 +50,37 @@ test.describe("Certification — GHG statement empty-period guard", () => {
         .getByRole("button", { name: "New GHG Statement", exact: true })
         .click();
 
-      const drawer = page.getByRole("dialog");
+      const dialog = page.getByRole("dialog");
       await expect(
-        drawer.getByRole("heading", { name: "New GHG Statement", level: 2 }),
+        dialog.getByRole("heading", { name: "New GHG Statement", level: 2 }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
 
-      // Step 1 — the honest plain-language lead sentence (§5.1), not "pick a date".
+      // Step 1 — concise guidance explains why only the end is entered.
       await expect(
-        drawer.getByText(
-          /bundles the removals you've already submitted this period/i,
+        dialog.getByText(
+          /Isometric sets the first start; later periods begin the day after the previous end/i,
         ),
       ).toBeVisible();
 
       // Pick a period end that provably contains no removals.
-      await drawer.getByLabel("Reporting period end").fill(EMPTY_PERIOD_END);
+      await dialog.getByLabel("Reporting period end").fill(EMPTY_PERIOD_END);
 
       // Advance to the Contents step (the date is valid + non-overlapping).
-      await drawer.getByRole("button", { name: "Next", exact: true }).click();
+      await dialog.getByRole("button", { name: "Next", exact: true }).click();
 
       // The empty-period callout replaces the accordion, and the count reads 0.
       await expect(
-        drawer.getByText("Expected in this statement (0)"),
+        dialog.getByText("Expected in this statement (0)"),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       await expect(
-        drawer.getByText(
-          /This period has no submitted removals yet — a statement now would be empty/i,
+        dialog.getByText(
+          /No submitted Removals fall in this period/i,
         ),
       ).toBeVisible();
 
       // The gate: Next is disabled — no dead-end empty statement can be created.
       await expect(
-        drawer.getByRole("button", { name: "Next", exact: true }),
+        dialog.getByRole("button", { name: "Next", exact: true }),
       ).toBeDisabled();
     } finally {
       await mapping.cleanup();
