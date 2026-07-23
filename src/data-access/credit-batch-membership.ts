@@ -86,10 +86,12 @@ export async function lockCreditBatchDeclarationRuns(
     tx,
     params,
   );
-  let runIds =
-    params.requestedProductionRunIds.length > 0
-      ? params.requestedProductionRunIds
-      : matchingBeforeLock;
+  let runIds = [
+    ...new Set([
+      ...params.requestedProductionRunIds,
+      ...matchingBeforeLock,
+    ]),
+  ].sort();
   let lockedRuns = await lockCreditBatchProductionRuns(ctx, tx, runIds);
 
   await lockProductionProcessScope(tx, params);

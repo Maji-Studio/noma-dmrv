@@ -99,8 +99,8 @@ describe("credit batch automatic production-run membership", () => {
         facilityId,
         status: "complete",
         feedstockTypeId,
-        massDryKg: 500,
-        massWetKg: 625,
+        massDryKg: 2_000,
+        massWetKg: 2_500,
         moistureContentPercent: 20,
         storageLocationId,
       })
@@ -234,6 +234,57 @@ describe("credit batch automatic production-run membership", () => {
     creditBatchIds.push(batch.id);
 
     expect(batch.productionRunIds).toEqual([running.id]);
+  });
+
+  it("includes every existing match when create submits only a subset", async () => {
+    const first = await createProductionRun(ctx, {
+      code: `PR-CBAM-SUBSET-A-${tag}`,
+      facilityId,
+      reactorId,
+      status: "running",
+      startTime: new Date("2027-05-10T08:00:00.000Z"),
+      endTime: null,
+      feedstockWetMassKg: 100,
+      feedstockMoisturePercent: 20,
+      feedstockStorageLocationId: storageLocationId,
+    });
+    const second = await createProductionRun(ctx, {
+      code: `PR-CBAM-SUBSET-B-${tag}`,
+      facilityId,
+      reactorId,
+      status: "running",
+      startTime: new Date("2027-05-11T08:00:00.000Z"),
+      endTime: null,
+      feedstockWetMassKg: 100,
+      feedstockMoisturePercent: 20,
+      feedstockStorageLocationId: storageLocationId,
+    });
+    productionRunIds.push(first.id, second.id);
+    await updateProductionRun(ctx, first.id, {
+      status: "complete",
+      endTime: new Date("2027-05-10T12:00:00.000Z"),
+      biocharOutputKg: 30,
+      biocharMoisturePercent: 20,
+    });
+    await updateProductionRun(ctx, second.id, {
+      status: "complete",
+      endTime: new Date("2027-05-11T12:00:00.000Z"),
+      biocharOutputKg: 30,
+      biocharMoisturePercent: 20,
+    });
+
+    const batch = await createCreditBatch(ctx, {
+      code: `CB-CBAM-SUBSET-${tag}`,
+      facilityId,
+      feedstockTypeId,
+      startDate: new Date("2027-05-01T00:00:00.000Z"),
+      endDate: new Date("2027-05-31T00:00:00.000Z"),
+      productionRunIds: [first.id],
+      currency: "TZS",
+    });
+    creditBatchIds.push(batch.id);
+
+    expect(batch.productionRunIds.sort()).toEqual([first.id, second.id].sort());
   });
 
   it("updates a declared batch while it still has no production runs", async () => {
