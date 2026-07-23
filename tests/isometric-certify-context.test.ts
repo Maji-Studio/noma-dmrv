@@ -377,13 +377,13 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     );
   });
 
-  it("evaluates sampled-batch durability even when no applications are linked", async () => {
+  it("evaluates batch and facility gates even when no applications are linked", async () => {
     mockedGetCreditBatch.mockResolvedValue({
       id: CREDIT_BATCH_ID,
       code: "CB-1",
       facilityId: FACILITY_ID,
       productionRunIds: [],
-      durabilityOption: "1000_year",
+      durabilityOption: "200_year",
       sampling: "sampled",
     } as unknown as Awaited<ReturnType<typeof getCreditBatchById>>);
     mockedGetBatchesWithSamples.mockResolvedValue([
@@ -394,7 +394,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
         endDate: "2026-07-31",
         facilityTimezone: "UTC",
         sampling: "sampled",
-        durabilityOption: "1000_year",
+        durabilityOption: "200_year",
         samples: [],
         runs: [],
       },
@@ -409,7 +409,12 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(result.productionReadinessGap?.kind).toBe("noApplications");
     expect(result.durabilityGateBlockers).toEqual([
       "Credit batch CB-1 is marked sampled but has no samples (§8.3).",
+      "Set this facility's reference soil temperature (admin → Emission estimates) before submitting a 200-year removal.",
     ]);
+    expect(result.memberBatches[0]?.facilityEmissionsGateBlockers).toEqual([
+      "Set this facility's reference soil temperature (admin → Emission estimates) before submitting a 200-year removal.",
+    ]);
+    expect(result.submissionWarnings).toEqual([]);
     expect(mockedGetBatchesWithSamples).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: expect.any(String) }),
       [CREDIT_BATCH_ID],

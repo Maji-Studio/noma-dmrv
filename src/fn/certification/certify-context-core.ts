@@ -642,11 +642,46 @@ export async function buildRemovalContext(
     scope.memberBatches.map((b) => b.id),
     new Set(runIds),
   );
+  const {
+    batchesWithSamples,
+    blockers: durabilityBatchBlockers,
+    warnings: durabilityWarnings,
+  } = durabilityBatchData;
   const memberBatchesWithDurability = memberBatches.map((batch) => ({
     ...batch,
     durabilityGateBlockers:
       durabilityBatchData.blockersByBatchId[batch.id] ?? [],
   }));
+  // The facility reference gates every 200-year member even before applications
+  // exist; an empty site list deliberately suppresses site-comparison warnings.
+  const facilityReferenceSoilTemperature =
+    resolveFacilityReferenceSoilTemperature({
+      declaredSoilTemperatureC: facilityFacts.mapping?.defaultSoilTemperatureC,
+      source: facilityFacts.mapping?.defaultSoilTemperatureSource,
+    });
+  const soilTemperatureGate = buildSoilTemperatureGate({
+    facilityReference: facilityReferenceSoilTemperature,
+    batches: batchesWithSamples.map((batch) => ({
+      durabilityOption: batch.durabilityOption,
+      runIds: batch.runs.map((run) => run.id),
+    })),
+    siteTemperatures:
+      applicationIds.length === 0
+        ? []
+        : lineages.map((l) => ({
+            runId: l.productionRun?.id ?? null,
+            soilTemperatureC: l.application.soilTemperatureC,
+          })),
+  });
+  const durabilityGateBlockers = [
+    ...durabilityBatchBlockers,
+    ...soilTemperatureGate.blockers,
+  ];
+  const memberBatchesWithSubmissionGates = attributeSoilTemperatureBlockers(
+    memberBatchesWithDurability,
+    batchesWithSamples,
+    soilTemperatureGate.blockers,
+  );
 
   // Nothing to submit when the removal carries no applications. Facility
   // template setup does NOT gate the lineage walk; otherwise setup gaps collapse
@@ -663,27 +698,27 @@ export async function buildRemovalContext(
       facilityId: scope.facilityId,
       removalId: scope.removalId,
       ...facilityFacts,
-      memberBatches: memberBatchesWithDurability,
+      memberBatches: memberBatchesWithSubmissionGates,
       transportCoverage: EMPTY_COVERAGE,
       hasSubmittableRuns: false,
       productionReadinessGap,
       entityReadinessGaps: [],
-      durabilityGateBlockers: durabilityBatchData.blockers,
-      submissionWarnings: durabilityBatchData.warnings,
+      durabilityGateBlockers,
+      submissionWarnings: [
+        ...durabilityWarnings,
+        ...soilTemperatureGate.warnings,
+      ],
       runSummary: EMPTY_RUN_SUMMARY,
       latestSubmission,
       linkedGhgStatement,
       isProduction,
       lineages: [],
       runs: [],
-      batchesWithSamples: durabilityBatchData.batchesWithSamples,
+      batchesWithSamples,
       attributionByRunId: new Map<string, number>(),
       memberBatchClaims,
       transportLegs: { feedstock: [], biochar: [], sample: [] },
-      facilityReferenceSoilTemperature: resolveFacilityReferenceSoilTemperature({
-        declaredSoilTemperatureC: facilityFacts.mapping?.defaultSoilTemperatureC,
-        source: facilityFacts.mapping?.defaultSoilTemperatureSource,
-      }),
+      facilityReferenceSoilTemperature,
     };
   }
 
@@ -701,12 +736,6 @@ export async function buildRemovalContext(
   // is the same fail-closed list the submit pipeline blocks on; the §8.3.1
   // distribution warning is advisory, so it joins the non-blocking submission
   // warnings.
-  const {
-    batchesWithSamples,
-    blockers: durabilityBatchBlockers,
-    warnings: durabilityWarnings,
-  } = durabilityBatchData;
-
   const entityIds = collectTransportEntityIds(lineages, batchesWithSamples);
   const transportLegs = await loadTransportLegsByCategory(orgCtx, entityIds);
   const transportCoverage = buildCoverage(transportLegs, entityIds);
@@ -723,39 +752,6 @@ export async function buildRemovalContext(
   const { attributionByRunId, runSummary } = buildMassAccounting(
     lineages,
     runs,
-  );
-
-  // Facility reference soil temperature (Phase 2, ADR 0013): the authoritative
-  // value submitted as the `biochar_soil` measurement, 7 °C-floored. When there
-  // is a 200-year batch to submit, an unset reference is fail-closed — it joins
-  // the durability gate blockers so readiness predicts the submit-pipeline block.
-  const facilityReferenceSoilTemperature =
-    resolveFacilityReferenceSoilTemperature({
-      declaredSoilTemperatureC: facilityFacts.mapping?.defaultSoilTemperatureC,
-      source: facilityFacts.mapping?.defaultSoilTemperatureSource,
-    });
-
-  // Soil temperature credits only the 200-year durable fraction. The gate
-  // scopes blockers and advisories to those batches and their credited sites.
-  const soilTemperatureGate = buildSoilTemperatureGate({
-    facilityReference: facilityReferenceSoilTemperature,
-    batches: batchesWithSamples.map((batch) => ({
-      durabilityOption: batch.durabilityOption,
-      runIds: batch.runs.map((run) => run.id),
-    })),
-    siteTemperatures: lineages.map((l) => ({
-      runId: l.productionRun?.id ?? null,
-      soilTemperatureC: l.application.soilTemperatureC,
-    })),
-  });
-  const durabilityGateBlockers = [
-    ...durabilityBatchBlockers,
-    ...soilTemperatureGate.blockers,
-  ];
-  const memberBatchesWithSubmissionGates = attributeSoilTemperatureBlockers(
-    memberBatchesWithDurability,
-    batchesWithSamples,
-    soilTemperatureGate.blockers,
   );
 
   const submissionWarnings = [
