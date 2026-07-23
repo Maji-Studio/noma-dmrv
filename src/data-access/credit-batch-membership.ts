@@ -9,7 +9,16 @@
  * that module under the 1000-line cap; both helpers are transaction-scoped so
  * the caller runs them atomically with the batch insert.
  */
-import { and, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lte,
+  ne,
+  sql,
+} from "drizzle-orm";
 import type { DbTransaction } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import { creditBatches, creditBatchProductionRuns } from "@/db/schema/credits";
@@ -129,6 +138,47 @@ export interface LockedCreditBatchForUpdate {
   endDate: string;
   removalId: string | null;
   feedstockTypeId: string;
+}
+
+export async function assertNoOverlappingCreditBatchCohort(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  params: {
+    facilityId: string;
+    feedstockTypeId: string;
+    startDate: string | Date;
+    endDate: string | Date;
+    excludeCreditBatchId?: string;
+  },
+): Promise<void> {
+  const { startStr, endStr } = assertCreditBatchProductionWindow(
+    params.startDate,
+    params.endDate,
+  );
+  const [overlap] = await tx
+    .select({ code: creditBatches.code })
+    .from(creditBatches)
+    .where(
+      and(
+        eq(creditBatches.organizationId, ctx.organizationId),
+        eq(creditBatches.facilityId, params.facilityId),
+        eq(creditBatches.feedstockTypeId, params.feedstockTypeId),
+        lte(creditBatches.startDate, endStr),
+        gte(creditBatches.endDate, startStr),
+        isNull(creditBatches.archivedAt),
+        params.excludeCreditBatchId
+          ? ne(creditBatches.id, params.excludeCreditBatchId)
+          : undefined,
+      ),
+    )
+    .orderBy(creditBatches.id)
+    .limit(1);
+
+  if (overlap) {
+    throw new SafeError(
+      `This production cohort overlaps Credit batch ${overlap.code}. Use a non-overlapping window for the same facility and feedstock.`,
+    );
+  }
 }
 
 export async function lockCreditBatchForUpdate(
@@ -573,9 +623,9 @@ export async function attachProductionRunToMatchingCreditBatch(
 
   if (matchingBatches.length === 0) return null;
   if (matchingBatches.length > 1) {
-    throw new SafeError(
-      `Production run ${run.code} matches multiple Credit batches (${matchingBatches.map((batch) => batch.code).join(", ")}). Adjust the overlapping production windows before completing the run.`,
-    );
+    // Legacy cohorts may predate overlap validation. Keep routine production
+    // recording available and leave ambiguous membership for explicit repair.
+    return null;
   }
 
   const [batch] = matchingBatches;

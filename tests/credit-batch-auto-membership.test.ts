@@ -417,6 +417,46 @@ describe("credit batch automatic production-run membership", () => {
     ).resolves.toBeNull();
   });
 
+  it("rejects overlapping cohorts on create and update", async () => {
+    const first = await createCreditBatch(ctx, {
+      code: `CB-CBAM-OVERLAP-A-${tag}`,
+      facilityId,
+      feedstockTypeId,
+      startDate: new Date("2027-08-01T00:00:00.000Z"),
+      endDate: new Date("2027-08-10T00:00:00.000Z"),
+      productionRunIds: [],
+      currency: "TZS",
+    });
+    const second = await createCreditBatch(ctx, {
+      code: `CB-CBAM-OVERLAP-B-${tag}`,
+      facilityId,
+      feedstockTypeId,
+      startDate: new Date("2027-08-20T00:00:00.000Z"),
+      endDate: new Date("2027-08-31T00:00:00.000Z"),
+      productionRunIds: [],
+      currency: "TZS",
+    });
+    creditBatchIds.push(first.id, second.id);
+
+    await expect(
+      createCreditBatch(ctx, {
+        code: `CB-CBAM-OVERLAP-C-${tag}`,
+        facilityId,
+        feedstockTypeId,
+        startDate: new Date("2027-08-05T00:00:00.000Z"),
+        endDate: new Date("2027-08-15T00:00:00.000Z"),
+        productionRunIds: [],
+        currency: "TZS",
+      }),
+    ).rejects.toThrow(/overlaps Credit batch/);
+
+    await expect(
+      updateCreditBatch(ctx, second.id, {
+        startDate: new Date("2027-08-10T00:00:00.000Z"),
+      }),
+    ).rejects.toThrow(/overlaps Credit batch/);
+  });
+
   it("never loses membership when completion races batch declaration", async () => {
     const running = await createProductionRun(ctx, {
       code: `PR-CBAM-RACE-${tag}`,

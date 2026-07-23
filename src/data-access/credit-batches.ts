@@ -44,6 +44,7 @@ import {
 import { hasCertifierCredentials } from "./certifier-credentials";
 import {
   assertDeclaredFeedstockType,
+  assertNoOverlappingCreditBatchCohort,
   lockCreditBatchDeclarationRuns,
   lockCreditBatchForUpdate,
   lockCreditBatchProductionRuns,
@@ -434,6 +435,12 @@ export async function createCreditBatch(
         requestedProductionRunIds: resolvedProductionRunIds,
       },
     );
+    await assertNoOverlappingCreditBatchCohort(ctx, tx, {
+      facilityId: batchData.facilityId,
+      feedstockTypeId: batchData.feedstockTypeId,
+      startDate: batchData.startDate,
+      endDate: batchData.endDate,
+    });
     const certifier = await resolveCreditBatchCertifier(ctx, tx, batchData.facilityId);
     const feedstockTypeId = batchData.feedstockTypeId;
     const process = await findOrCreateProductionProcess(
@@ -685,6 +692,16 @@ export async function updateCreditBatch(
 
     assertCreditBatchProductionWindow(effectiveStartDate, effectiveEndDate);
 
+    const effectiveFeedstockTypeId =
+      updateFields.feedstockTypeId ?? existingBatch.feedstockTypeId;
+    await assertNoOverlappingCreditBatchCohort(ctx, tx, {
+      facilityId: targetFacilityId,
+      feedstockTypeId: effectiveFeedstockTypeId,
+      startDate: effectiveStartDate,
+      endDate: effectiveEndDate,
+      excludeCreditBatchId: id,
+    });
+
     updateData.certifier = await resolveCreditBatchCertifier(ctx, tx, targetFacilityId);
 
     if (productionRunIds !== undefined) {
@@ -728,8 +745,6 @@ export async function updateCreditBatch(
     // (facility, feedstock) production process whenever the runs, the facility,
     // or the declared type changes — any of the three can shift which process
     // this batch belongs to, or make the member runs mismatch the declaration.
-    const effectiveFeedstockTypeId =
-      updateFields.feedstockTypeId ?? existingBatch.feedstockTypeId;
     let feedstockRunIds: string[] | undefined = productionRunIds;
     if (
       feedstockRunIds === undefined &&
