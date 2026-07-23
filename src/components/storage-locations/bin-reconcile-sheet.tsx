@@ -341,11 +341,12 @@ function StockTakeForm({
         />
       </FormField>
 
+      {serverError && <ServerError message={serverError} />}
+
       <FormActions
         onCancel={onCancel}
         isSubmitting={recordStockTake.isPending}
         submitDisabled={deltaKg != null && deltaKg > 0}
-        errorMessage={serverError ?? undefined}
         submitLabel="Record stock-take"
       />
     </form>
