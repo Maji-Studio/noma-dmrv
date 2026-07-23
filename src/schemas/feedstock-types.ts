@@ -109,11 +109,10 @@ export const feedstockTypeFormSchema = z.object({
     .nullable()
     .or(z.literal("")),
   registryUrl: z
-    .string()
-    .max(500, "URL must be less than 500 characters")
+    .union([z.url("Enter a valid URL"), z.literal("")])
     .optional()
-    .nullable()
-    .or(z.literal("")),
+    .nullable(),
+  isometricFeedstockTypeId: z.string().trim().max(255).optional().nullable(),
 }).superRefine(validateCategoryUsage);
 
 // ============================================
@@ -123,16 +122,22 @@ export const feedstockTypeFormSchema = z.object({
 export const createFeedstockTypeSchema = feedstockTypeFormSchema;
 
 export const updateFeedstockTypeSchema = z.object({
-  feedstockTypeId: z.string().uuid("Invalid feedstock type ID"),
+  feedstockTypeId: z.uuid("Invalid feedstock type ID"),
   name: z.string().trim().min(1).max(255).optional(),
   category: z.enum(feedstockCategories).optional(),
   usage: z.enum(feedstockTypeUsages).optional(),
   description: z.string().max(1000).optional().nullable(),
-  registryUrl: z.string().max(500).optional().nullable(),
+  registryUrl: z.union([z.url(), z.literal("")]).optional().nullable(),
+  isometricFeedstockTypeId: z.string().trim().max(255).optional().nullable(),
 }).superRefine(validateCategoryUsage);
 
 export const deleteFeedstockTypeSchema = z.object({
-  feedstockTypeId: z.string().uuid("Invalid feedstock type ID"),
+  feedstockTypeId: z.uuid("Invalid feedstock type ID"),
+});
+
+export const importIsometricFeedstockTypeSchema = z.object({
+  isometricFeedstockTypeId: z.string().trim().min(1).max(255),
+  category: z.enum(pyrolysisFeedstockCategories),
 });
 
 // ============================================
@@ -143,3 +148,6 @@ export type FeedstockTypeFormData = z.infer<typeof feedstockTypeFormSchema>;
 export type CreateFeedstockTypeData = z.infer<typeof createFeedstockTypeSchema>;
 export type UpdateFeedstockTypeData = z.infer<typeof updateFeedstockTypeSchema>;
 export type DeleteFeedstockTypeData = z.infer<typeof deleteFeedstockTypeSchema>;
+export type ImportIsometricFeedstockTypeData = z.infer<
+  typeof importIsometricFeedstockTypeSchema
+>;

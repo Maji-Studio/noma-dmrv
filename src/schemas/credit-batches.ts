@@ -17,6 +17,9 @@ export const creditBatchStatuses = [
 ] as const;
 export type CreditBatchStatus = (typeof creditBatchStatuses)[number];
 
+export const creditBatchSamplingChoices = ["sampled", "unsampled"] as const;
+export type CreditBatchSampling = (typeof creditBatchSamplingChoices)[number];
+
 /**
  * Certifier provider options
  */
@@ -69,11 +72,11 @@ export const creditBatchFormSchema = z
       .uuid("Invalid feedstock type"),
     startDate: z.coerce.date({ message: "Start date is required" }),
     endDate: z.coerce.date({ message: "End date is required" }),
+    sampling: z.enum(creditBatchSamplingChoices).default("sampled"),
 
     // === Section 2: Production cohort (membership) ===
     productionRunIds: z
       .array(z.string().uuid())
-      .min(1, "Select at least one production run")
       .default([]),
 
     // === Section 3: Durability ===
@@ -194,7 +197,6 @@ export const updateCreditBatchSchema = z.object({
   endDate: z.coerce.date().optional(),
   productionRunIds: z
     .array(z.string().uuid())
-    .min(1, "Select at least one production run")
     .optional(),
   // durabilityOption is inherited from the facility (ADR 0021), not a batch field.
   hToCorgRatio: z.number().min(0).max(1).optional().nullable(),
@@ -208,6 +210,7 @@ export const updateCreditBatchSchema = z.object({
   value: z.number().min(0).optional().nullable(),
   currency: z.enum(currencyCodes).optional(),
   siteManagementNotes: z.string().max(2000).optional().nullable(),
+  sampling: z.never({ error: "Sampling cannot be changed after creation" }).optional(),
 });
 
 /**

@@ -56,14 +56,6 @@ vi.mock("@/fn/certification/sources", () => ({
   collectCandidateDocumentIdsForRemoval: vi.fn(async () => []),
   resolveSourceIdsForRemoval: vi.fn(async () => []),
 }));
-// D3 durability gates read each run's reactor sampling method. Default the
-// fixture reactor to Method A; the fixture run carries an eligible ≥3-replicate
-// sample set so the gates pass and the registry-boundary behaviour is reached.
-vi.mock("@/data-access/reactors", () => ({
-  getSamplingMethodsByReactorIds: vi.fn(
-    async () => new Map([["rct-irrelevant", "method_a"]]),
-  ),
-}));
 
 import { db } from "@/db";
 import {
@@ -435,9 +427,7 @@ function makeContext(
         creditBatchId: "cb-bd-1",
         creditBatchCode: "CB-BD-001",
         facilityTimezone: "UTC",
-        methodBUnlockedAt: null,
-        productionProcessId: null,
-        samplingMethod: "method_a",
+        sampling: "sampled",
         declaredHToCorgRatio: null,
         durabilityOption: "200_year" as const,
         runs: [{ id: PRODUCTION_RUN_ID, code: "PR-BD-1", biocharDryMassKg: biocharMassKg }],

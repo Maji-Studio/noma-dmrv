@@ -11,6 +11,19 @@ export class SafeError extends Error {
   }
 }
 
+export class ActionConflictError extends SafeError {
+  readonly conflict: { entity: string; id: string; code: string };
+
+  constructor(
+    message: string,
+    conflict: { entity: string; id: string; code: string },
+  ) {
+    super(message);
+    this.name = "ActionConflictError";
+    this.conflict = conflict;
+  }
+}
+
 /**
  * Convert an arbitrary server-side error into a client-safe action message.
  * Only intentional SafeError messages cross the server/client boundary.

@@ -129,17 +129,17 @@ function legEvidenceDocumentCount(
   entityType: TransportEntityType,
 ) {
   return entityType === "feedstock"
-    ? transportEvidenceDocumentCount(
-        organizationId,
-        "feedstock",
-        transportLegs.entityId,
-      )
-    : entityType === "sample"
       ? transportEvidenceDocumentCount(
           organizationId,
-          "transport_leg",
-          transportLegs.id,
+          "feedstock",
+          "transportLegEntityId",
         )
+      : entityType === "sample"
+        ? transportEvidenceDocumentCount(
+            organizationId,
+            "transport_leg",
+            "transportLegId",
+          )
       : biocharTransportEvidenceDocumentCount(
           organizationId,
           transportLegs.entityId,

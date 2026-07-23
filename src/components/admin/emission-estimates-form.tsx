@@ -104,11 +104,8 @@ export function EmissionEstimatesForm({
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
-      className="flex flex-col gap-32 max-w-[560px]"
+      className="content-measure-form flex flex-col gap-32"
     >
-      {errors.root?.serverError?.message && (
-        <ServerError message={errors.root.serverError.message} />
-      )}
       <input type="hidden" {...register("facilityId")} />
       {/* Genset energy yield is no longer user-configurable: issue #319 switched
           genset diesel to submit by volume (`fuel_usage_by_volume`), so the
@@ -148,6 +145,10 @@ export function EmissionEstimatesForm({
           />
         </FormField>
       </div>
+
+      {errors.root?.serverError?.message && (
+        <ServerError message={errors.root.serverError.message} />
+      )}
 
       <div>
         <Button

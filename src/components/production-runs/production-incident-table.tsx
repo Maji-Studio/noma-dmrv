@@ -200,7 +200,6 @@ export function ProductionIncidentTable({
               ? "Edit Production Incident"
               : "Add Production Incident"
           }
-          error={formError}
           width="lg"
           testId="production-incident-dialog"
         >
@@ -215,6 +214,7 @@ export function ProductionIncidentTable({
               onSubmit={handleSubmit}
               onCancel={closeDialog}
               isSubmitting={isSubmitting}
+              errorMessage={formError ?? undefined}
             />
           )}
         </QuickAddDialogShell>

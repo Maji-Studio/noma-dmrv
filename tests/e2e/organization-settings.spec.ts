@@ -1,9 +1,35 @@
+import * as crypto from "crypto";
+import { eq } from "drizzle-orm";
 import type { Locator, Page } from "@playwright/test";
-import { test, expect } from "./fixtures/auth-fixtures";
+import * as schema from "../../src/db/schema";
+import { test as authTest, expect } from "./fixtures/auth-fixtures";
+import { createDbConnection } from "./fixtures/db";
 import { enterDefaultOrganization } from "./fixtures/organization-helpers";
 
 const ORGANIZATION_NAME = "Dark Earth Carbon";
 const INVITEE_EMAIL = "org-e2e-invitee@example.com";
+
+const test = authTest.extend<{ secondOrganizationName: string }>({
+  secondOrganizationName: async ({}, provide) => {
+    const tag = crypto.randomUUID().slice(0, 8);
+    const organization = {
+      id: `e2e-switcher-org-${tag}`,
+      name: `E2E Switcher Organization ${tag}`,
+      slug: `e2e-switcher-organization-${tag}`,
+    };
+    const { db, pool } = createDbConnection();
+
+    try {
+      await db.insert(schema.organizations).values(organization);
+      await provide(organization.name);
+    } finally {
+      await db
+        .delete(schema.organizations)
+        .where(eq(schema.organizations.id, organization.id));
+      await pool.end();
+    }
+  },
+});
 
 function sectionWithHeading(page: Page, heading: string): Locator {
   return page.locator("section").filter({
@@ -127,8 +153,31 @@ test.describe("Organization foundation UI", () => {
     await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
   });
 
-  test("platform admin sees the active organization in the sidebar switcher", async ({
+  test("single-organization member sees the active organization as a sidebar link", async ({
+    orgAdminPage,
+  }) => {
+    const page = orgAdminPage;
+    await page.goto("/dashboard");
+
+    const sidebar = page.getByRole("complementary");
+    const orgLink = sidebar
+      .locator('a[href="/dashboard"]')
+      .filter({ hasText: ORGANIZATION_NAME });
+
+    await expect(orgLink).toBeVisible();
+    await expect(
+      orgLink.getByText(ORGANIZATION_NAME, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      sidebar
+        .locator('button[aria-haspopup="listbox"]')
+        .filter({ hasText: ORGANIZATION_NAME }),
+    ).toHaveCount(0);
+  });
+
+  test("platform admin sees the switcher when multiple organizations exist", async ({
     adminPage,
+    secondOrganizationName,
   }) => {
     const page = adminPage;
     await enterDefaultOrganization(page);
@@ -144,6 +193,11 @@ test.describe("Organization foundation UI", () => {
     // name node itself renders exactly once rather than the whole button text.
     await expect(
       orgSwitcher.getByText(ORGANIZATION_NAME, { exact: true }),
+    ).toBeVisible();
+
+    await orgSwitcher.click();
+    await expect(
+      page.getByRole("option", { name: secondOrganizationName, exact: true }),
     ).toBeVisible();
   });
 });

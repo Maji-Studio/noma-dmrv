@@ -22,7 +22,6 @@ import { IsometricFeedstockBrowser } from "./isometric-feedstock-browser";
 import type { IsometricFeedstockType } from "@/lib/isometric";
 import {
   feedstockTypeUsageOptionsFor,
-  isometricFeedstockRegistryRef,
   shouldClearCategoryForIsometricSelection,
   shouldSetUsageToPyrolysisForIsometricSelection,
   shouldShowIsometricFeedstockSection,
@@ -60,6 +59,7 @@ interface FeedstockTypeFormProps {
   onSubmit: (data: FeedstockTypeFormData) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
+  errorMessage?: string;
   submitLabel?: string;
   defaultUsage?: FeedstockTypeUsage;
   /** When true, the usage select is constrained to the parent workflow's usage. */
@@ -73,6 +73,7 @@ export function FeedstockTypeForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  errorMessage,
   submitLabel,
   defaultUsage,
   lockUsage = false,
@@ -129,6 +130,7 @@ export function FeedstockTypeForm({
       // No form field anymore (UI-only removal) — kept in form state so
       // edit-mode submits pass the persisted value through unchanged.
       registryUrl: feedstockType?.registryUrl ?? "",
+      isometricFeedstockTypeId: feedstockType?.isometricFeedstockTypeId ?? "",
     },
   });
 
@@ -167,9 +169,7 @@ export function FeedstockTypeForm({
       shouldTouch: true,
       shouldValidate: true,
     });
-    // Until a dedicated external-feedstock-id column lands, keep the selected
-    // Isometric id in the existing registry reference field.
-    setValue("registryUrl", isometricFeedstockRegistryRef(type.id), {
+    setValue("isometricFeedstockTypeId", type.id, {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
@@ -366,6 +366,7 @@ export function FeedstockTypeForm({
               <FormActions
                 onCancel={onCancel}
                 isSubmitting={isSubmitting}
+                errorMessage={errorMessage}
                 submitLabel={submitLabel}
                 defaultSubmitLabel={defaultSubmitLabel}
               />
@@ -413,6 +414,7 @@ export function FeedstockTypeForm({
                   <FormActions
                     onCancel={onCancel}
                     isSubmitting={isSubmitting}
+                    errorMessage={errorMessage}
                     submitLabel={submitLabel}
                     defaultSubmitLabel={defaultSubmitLabel}
                   />

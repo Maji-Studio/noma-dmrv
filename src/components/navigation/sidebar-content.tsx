@@ -32,7 +32,7 @@ import {
   StackIcon,
   FileTextIcon,
   TestTubeIcon,
-  FlowArrowIcon,
+  TagIcon,
   ListChecksIcon,
   LightningIcon,
   GearSixIcon,
@@ -115,6 +115,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/reactors", label: "Reactors", icon: FlaskIcon },
       { href: "/storage-locations", label: "Storage Locations", icon: PackageIcon },
+      { href: "/feedstock-types", label: "Feedstock Types", icon: TagIcon },
       { href: "/energy", label: "Energy", icon: LightningIcon },
     ],
   },
@@ -142,17 +143,11 @@ const navSections: NavSection[] = [
     // concrete artifact/setup routes. The root `/certification` route redirects
     // to Removals for old bookmarks and broad entry points.
     //
-    // Production Processes lives here, not under Verification: the whole surface
-    // is the Isometric Method A/B sampling regime (ADR 0017). It routes under the
-    // `certification` segment, so `CertificationRegistryGuard` gates direct URL
-    // access on a registry link like the other certification routes — a facility
-    // with no registry has no Method A/B to manage.
     title: CERTIFICATION_SECTION_TITLE,
     accent: SECTION_ACCENTS.certification,
     items: [
       { href: "/certification/removals", label: "Removals", icon: StackIcon },
       { href: "/certification/ghg-statements", label: "GHG Statements", icon: FileTextIcon },
-      { href: "/certification/production-processes", label: "Production Processes", icon: FlowArrowIcon },
       { href: "/certification/settings", label: "Settings", icon: GearSixIcon },
     ],
   },

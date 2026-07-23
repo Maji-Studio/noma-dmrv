@@ -22,8 +22,7 @@ function gateBatch(overrides: Partial<BatchGateFacts>): BatchGateFacts {
     creditBatchCode: "CB-1",
     startDate: "2026-06-01",
     endDate: "2026-06-30",
-    productionProcessId: "proc-1",
-    samplingMethod: "method_a",
+    sampling: "sampled",
     replicates,
     replicateProvenance:
       overrides.replicateProvenance ?? distributedProvenance(replicates.length),
@@ -38,7 +37,7 @@ const eligibleTriplet = [
 ];
 
 describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch grain)", () => {
-  it("passes a Method A batch with ≥3 eligible replicates distributed across runs/days", () => {
+  it("passes a sampled batch with ≥3 eligible replicates distributed across runs/days", () => {
     const r = evaluateDurabilitySubmissionGates([
       gateBatch({ replicates: eligibleTriplet }),
     ]);
@@ -47,76 +46,31 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
     expect(r.warnings).toEqual([]);
   });
 
-  it("blocks a Method A batch with no samples (gate b)", () => {
+  it("blocks a sampled batch with no samples (gate b)", () => {
     const r = evaluateDurabilitySubmissionGates([
-      gateBatch({ samplingMethod: "method_a", replicates: [] }),
+      gateBatch({ sampling: "sampled", replicates: [] }),
     ]);
     expect(r.ok).toBe(false);
-    expect(r.blockers.some((b) => /CB-1/.test(b) && /method a/i.test(b))).toBe(true);
+    expect(r.blockers.some((b) => /CB-1/.test(b) && /marked sampled/i.test(b))).toBe(true);
   });
 
-  it("allows unsampled Method B batches when the 1-in-10 cadence is met across the process set", () => {
-    // 1 sampled batch (≥3 eligible replicates) + 9 unsampled = ceil(10/10)=1 met.
-    const batches: BatchGateFacts[] = [
-      gateBatch({
-        creditBatchId: "b0",
-        creditBatchCode: "CB-B0",
-        samplingMethod: "method_b",
-        replicates: eligibleTriplet,
-      }),
-    ];
-    for (let i = 1; i < 10; i++) {
-      batches.push(
-        gateBatch({
-          creditBatchId: `b${i}`,
-          creditBatchCode: `CB-B${i}`,
-          samplingMethod: "method_b",
-          replicates: [],
-        }),
-      );
-    }
-    const r = evaluateDurabilitySubmissionGates(batches);
+  it("allows a batch stored as unsampled without local sample evidence", () => {
+    const r = evaluateDurabilitySubmissionGates([
+      gateBatch({ sampling: "unsampled", replicates: [] }),
+    ]);
     expect(r.ok).toBe(true);
     expect(r.blockers).toEqual([]);
   });
 
-  it("blocks an all-unsampled Method B process batch set (cadence shortfall, gate d)", () => {
+  it("does not reclassify an unsampled batch when incidental samples exist", () => {
     const r = evaluateDurabilitySubmissionGates([
-      gateBatch({ creditBatchId: "b1", creditBatchCode: "CB-B1", samplingMethod: "method_b", replicates: [] }),
-      gateBatch({ creditBatchId: "b2", creditBatchCode: "CB-B2", samplingMethod: "method_b", replicates: [] }),
+      gateBatch({
+        sampling: "unsampled",
+        replicates: [{ hToCOrgRatio: null, oToCOrgRatio: null }],
+      }),
     ]);
-    expect(r.ok).toBe(false);
-    expect(
-      r.blockers.some((b) => /method b/i.test(b) && /8\.3\.1\.2/.test(b)),
-    ).toBe(true);
-  });
-
-  it("enforces Method B cadence only across post-unlock Method B batches in a mixed process history", () => {
-    const historicalMethodA = gateBatch({
-      creditBatchId: "historical-a",
-      creditBatchCode: "CB-HISTORICAL-A",
-      samplingMethod: "method_a",
-      replicates: eligibleTriplet,
-    });
-    const postUnlockMethodB = gateBatch({
-      creditBatchId: "post-unlock-b",
-      creditBatchCode: "CB-POST-UNLOCK-B",
-      samplingMethod: "method_b",
-      replicates: [],
-    });
-
-    for (const batches of [
-      [historicalMethodA, postUnlockMethodB],
-      [postUnlockMethodB, historicalMethodA],
-    ]) {
-      const r = evaluateDurabilitySubmissionGates(batches);
-      expect(r.ok).toBe(false);
-      expect(
-        r.blockers.some(
-          (b) => /method b/i.test(b) && /sample 1 more/i.test(b),
-        ),
-      ).toBe(true);
-    }
+    expect(r.ok).toBe(true);
+    expect(r.blockers).toEqual([]);
   });
 
   it("blocks a sampled batch with fewer than 3 replicates (gate c)", () => {
@@ -213,7 +167,7 @@ describe("evaluateDurabilitySubmissionGates (D3 fail-closed blocks, credit-batch
   it("aggregates blockers across multiple batches", () => {
     const r = evaluateDurabilitySubmissionGates([
       gateBatch({ creditBatchId: "a", creditBatchCode: "CB-A", replicates: eligibleTriplet }),
-      gateBatch({ creditBatchId: "b", creditBatchCode: "CB-B", samplingMethod: "method_a", replicates: [] }),
+      gateBatch({ creditBatchId: "b", creditBatchCode: "CB-B", sampling: "sampled", replicates: [] }),
       gateBatch({ creditBatchId: "c", creditBatchCode: "CB-C", replicates: eligibleTriplet.slice(0, 1) }),
     ]);
     expect(r.ok).toBe(false);

@@ -16,7 +16,10 @@ import {
   computeBlueprint1000YearDurability,
   type Blueprint1000YearReplicate,
 } from "@/lib/calculations/biochar-removal";
-import { extract1000YearBlueprintReplicates } from "@/data-access/credit-batch-previews";
+import {
+  extract1000YearBlueprintReplicates,
+  independentPreviewMissingInputs,
+} from "@/data-access/credit-batch-accounting";
 import {
   build1000YearSequestrationSample,
   CARBON_CONTENTS_MEASUREMENT_PROPERTY,
@@ -134,5 +137,34 @@ describe("extract1000YearBlueprintReplicates", () => {
         { totalCarbonPercent: 84, sReflectanceFraction: null },
       ]),
     ).toEqual([{ totalCarbonPercent: 80, sReflectanceFraction: 0.91 }]);
+  });
+});
+
+describe("independentPreviewMissingInputs", () => {
+  it("reports sampled 1000-year chemistry even with no application calculation", () => {
+    expect(
+      independentPreviewMissingInputs(
+        { durabilityOption: "1000_year", sampling: "sampled" },
+        [
+          { totalCarbonPercent: 80, sReflectanceFraction: 0.91 },
+          { totalCarbonPercent: null, sReflectanceFraction: 0.92 },
+        ],
+      ),
+    ).toEqual([BLUEPRINT_1000_YEAR_REPLICATES_INPUT]);
+  });
+
+  it("preserves Method-B and 200-year behavior", () => {
+    expect(
+      independentPreviewMissingInputs(
+        { durabilityOption: "1000_year", sampling: "unsampled" },
+        [],
+      ),
+    ).toEqual([]);
+    expect(
+      independentPreviewMissingInputs(
+        { durabilityOption: "200_year", sampling: "sampled" },
+        [],
+      ),
+    ).toEqual([]);
   });
 });

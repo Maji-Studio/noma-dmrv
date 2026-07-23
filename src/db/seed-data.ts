@@ -17,8 +17,10 @@ import {
   buildApplicationBoundaryDocuments,
   buildProductionRunReadings,
   buildSoilTemperatureMeasurements,
+  buildTransportEvidenceDocuments,
 } from './seed-certification-evidence';
 import { seedProductionProcessesAndCreditBatches } from './seed-credit-batches';
+import { seedOperationalDetails } from './seed-operational-details';
 import {
   DEC_ORG_ID,
   DEC_ORG_NAME,
@@ -86,6 +88,12 @@ const ids = {
   supplierMeru: demoId(1301),
   supplierVictoria: demoId(1302),
 
+  // Supplier Locations
+  supplierLocationKiliMachame: demoId(1350),
+  supplierLocationKiliSawmill: demoId(1351),
+  supplierLocationMeruKilema: demoId(1352),
+  supplierLocationVictoriaTengeru: demoId(1353),
+
   // Customers
   customerCoffee: demoId(1400),
   customerTea: demoId(1401),
@@ -131,6 +139,21 @@ const ids = {
   productionRun1: demoId(1820),
   productionRun2: demoId(1821),
   productionRun3: demoId(1822),
+
+  // In-process Production Samples
+  productionSample1: demoId(1830),
+  productionSample2: demoId(1831),
+  productionSample3: demoId(1832),
+  productionSample4: demoId(1833),
+  productionSample5: demoId(1834),
+  productionSample6: demoId(1835),
+  productionSample7: demoId(1836),
+  productionSample8: demoId(1837),
+  productionSample9: demoId(1838),
+
+  // Production Incidents
+  incident1: demoId(1840),
+  incident2: demoId(1841),
 
   // Samples — ≥3 complete-chemistry replicates per sampled credit batch
   // (§8.3.1 durability gate): samples 1/3/4 pool on batch 1, samples 2/5/6
@@ -199,6 +222,14 @@ const ids = {
   transportLegSample4: demoId(2409),
   transportLegSample5: demoId(2410),
   transportLegSample6: demoId(2411),
+
+  // Storage/compliance history
+  binMovement1: demoId(2420),
+  binMovement2: demoId(2421),
+  binMovement3: demoId(2422),
+  stockpileEvent1: demoId(2430),
+  stockpileEvent2: demoId(2431),
+  powerEvidence1: demoId(2440),
 } as const;
 
 // Demo timestamps (realistic timeline)
@@ -412,7 +443,7 @@ async function seedDemoData() {
           contactPhone: '+255700200001',
           sourceRegion: 'Kilimanjaro',
           distanceToFacilityKm: 34,
-          distanceSource: 'map_estimate',
+          distanceSource: 'document',
         },
         {
           id: ids.supplierMeru,
@@ -427,7 +458,7 @@ async function seedDemoData() {
           contactPhone: '+255700200002',
           sourceRegion: 'Kilimanjaro',
           distanceToFacilityKm: 29,
-          distanceSource: 'map_estimate',
+          distanceSource: 'document',
         },
         {
           id: ids.supplierVictoria,
@@ -442,7 +473,7 @@ async function seedDemoData() {
           contactPhone: '+255700200003',
           sourceRegion: 'Arusha',
           distanceToFacilityKm: 92,
-          distanceSource: 'map_estimate',
+          distanceSource: 'document',
         },
       ]));
 
@@ -490,7 +521,7 @@ async function seedDemoData() {
           gpsLongitude: 37.425,
           address: 'Plot N-12, Kilema Village',
           distanceFromFacilityKm: 32,
-          distanceSource: 'map_estimate',
+          distanceSource: 'document',
           defaultSoilTemperatureC: 24.5,
           isDefault: true,
         },
@@ -505,7 +536,7 @@ async function seedDemoData() {
           gpsLongitude: 37.198,
           address: 'Plot S-8, Machame Weruweru',
           distanceFromFacilityKm: 39,
-          distanceSource: 'map_estimate',
+          distanceSource: 'document',
           defaultSoilTemperatureC: 25.2,
         },
         {
@@ -519,7 +550,7 @@ async function seedDemoData() {
           gpsLongitude: 38.312,
           address: 'Block E-1, Usambara Estate',
           distanceFromFacilityKm: 228,
-          distanceSource: 'map_estimate',
+          distanceSource: 'document',
           defaultSoilTemperatureC: 22.8,
           isDefault: true,
         },
@@ -1218,12 +1249,14 @@ async function seedDemoData() {
           destinationGpsLatitude: -3.3481,
           destinationGpsLongitude: 37.3404,
           distanceKm: 34,
-          distanceSource: 'map_estimate',
+          distanceSource: 'document',
           transportMethodType: 'road',
           vehicleType: 'heavy_truck',
           modelYear: 2022,
           loadMassKg: 4500,
           calculationMethodType: 'distance_based',
+          billOfLading: 'BOL-FD-26-001',
+          weighScaleTicketRef: 'WST-FD-26-001',
         },
         {
           id: ids.transportLegFeedstock2,
@@ -1237,12 +1270,14 @@ async function seedDemoData() {
           destinationGpsLatitude: -3.3481,
           destinationGpsLongitude: 37.3404,
           distanceKm: 29,
-          distanceSource: 'map_estimate',
+          distanceSource: 'document',
           transportMethodType: 'road',
           vehicleType: 'heavy_truck',
           modelYear: 2023,
           loadMassKg: 3200,
           calculationMethodType: 'distance_based',
+          billOfLading: 'BOL-FD-26-002',
+          weighScaleTicketRef: 'WST-FD-26-002',
         },
         {
           id: ids.transportLegFeedstock3,
@@ -1256,12 +1291,14 @@ async function seedDemoData() {
           destinationGpsLatitude: -3.3481,
           destinationGpsLongitude: 37.3404,
           distanceKm: 34,
-          distanceSource: 'map_estimate',
+          distanceSource: 'document',
           transportMethodType: 'road',
           vehicleType: 'heavy_truck',
           modelYear: 2022,
           loadMassKg: 5000,
           calculationMethodType: 'distance_based',
+          billOfLading: 'BOL-FD-26-003',
+          weighScaleTicketRef: 'WST-FD-26-003',
         },
         // --- Biochar (derived): Moshi facility -> delivery destination.
         // Distance = customer location's stored distance, load = delivered
@@ -1278,10 +1315,12 @@ async function seedDemoData() {
           destinationGpsLatitude: -3.245,
           destinationGpsLongitude: 37.425,
           distanceKm: 32,
-          distanceSource: 'map_estimate',
+          distanceSource: 'document',
           transportMethodType: 'road',
           loadMassKg: 2000,
           calculationMethodType: 'distance_based',
+          billOfLading: 'BOL-DL-26-001',
+          weighScaleTicketRef: 'WST-DL-26-001',
         },
         {
           id: ids.transportLegBiochar2,
@@ -1295,10 +1334,12 @@ async function seedDemoData() {
           destinationGpsLatitude: -4.789,
           destinationGpsLongitude: 38.312,
           distanceKm: 228,
-          distanceSource: 'map_estimate',
+          distanceSource: 'document',
           transportMethodType: 'road',
           loadMassKg: 1500,
           calculationMethodType: 'distance_based',
+          billOfLading: 'BOL-DL-26-002',
+          weighScaleTicketRef: 'WST-DL-26-002',
         },
         {
           id: ids.transportLegBiochar3,
@@ -1312,10 +1353,12 @@ async function seedDemoData() {
           destinationGpsLatitude: -3.289,
           destinationGpsLongitude: 37.198,
           distanceKm: 39,
-          distanceSource: 'map_estimate',
+          distanceSource: 'document',
           transportMethodType: 'road',
           loadMassKg: 1800,
           calculationMethodType: 'distance_based',
+          billOfLading: 'BOL-DL-26-003',
+          weighScaleTicketRef: 'WST-DL-26-003',
         },
         // --- Sample: Moshi facility -> analysis lab ---
         {
@@ -1323,78 +1366,108 @@ async function seedDemoData() {
           entityType: 'sample',
           entityId: ids.sample1,
           originName: 'Dark Earth Moshi Biochar Hub',
+          originGpsLatitude: -3.3481,
+          originGpsLongitude: 37.3404,
           destinationName: 'Kibo Analytical Labs, Arusha',
+          destinationGpsLatitude: -3.3869,
+          destinationGpsLongitude: 36.683,
           distanceKm: 82,
-          distanceSource: 'map_estimate',
+          distanceSource: 'document',
           transportMethodType: 'road',
           vehicleType: 'Courier van',
           loadMassKg: 5,
           calculationMethodType: 'distance_based',
+          billOfLading: 'COC-SAM-26-001',
         },
         {
           id: ids.transportLegSample2,
           entityType: 'sample',
           entityId: ids.sample2,
           originName: 'Dark Earth Moshi Biochar Hub',
+          originGpsLatitude: -3.3481,
+          originGpsLongitude: 37.3404,
           destinationName: 'Kibo Analytical Labs, Arusha',
+          destinationGpsLatitude: -3.3869,
+          destinationGpsLongitude: 36.683,
           distanceKm: 82,
-          distanceSource: 'map_estimate',
+          distanceSource: 'document',
           transportMethodType: 'road',
           vehicleType: 'Courier van',
           loadMassKg: 5,
           calculationMethodType: 'distance_based',
+          billOfLading: 'COC-SAM-26-002',
         },
         {
           id: ids.transportLegSample3,
           entityType: 'sample',
           entityId: ids.sample3,
           originName: 'Dark Earth Moshi Biochar Hub',
+          originGpsLatitude: -3.3481,
+          originGpsLongitude: 37.3404,
           destinationName: 'Kibo Analytical Labs, Arusha',
+          destinationGpsLatitude: -3.3869,
+          destinationGpsLongitude: 36.683,
           distanceKm: 82,
-          distanceSource: 'map_estimate',
+          distanceSource: 'document',
           transportMethodType: 'road',
           vehicleType: 'Courier van',
           loadMassKg: 5,
           calculationMethodType: 'distance_based',
+          billOfLading: 'COC-SAM-26-003',
         },
         {
           id: ids.transportLegSample4,
           entityType: 'sample',
           entityId: ids.sample4,
           originName: 'Dark Earth Moshi Biochar Hub',
+          originGpsLatitude: -3.3481,
+          originGpsLongitude: 37.3404,
           destinationName: 'Kibo Analytical Labs, Arusha',
+          destinationGpsLatitude: -3.3869,
+          destinationGpsLongitude: 36.683,
           distanceKm: 82,
-          distanceSource: 'map_estimate',
+          distanceSource: 'document',
           transportMethodType: 'road',
           vehicleType: 'Courier van',
           loadMassKg: 5,
           calculationMethodType: 'distance_based',
+          billOfLading: 'COC-SAM-26-004',
         },
         {
           id: ids.transportLegSample5,
           entityType: 'sample',
           entityId: ids.sample5,
           originName: 'Dark Earth Moshi Biochar Hub',
+          originGpsLatitude: -3.3481,
+          originGpsLongitude: 37.3404,
           destinationName: 'Kibo Analytical Labs, Arusha',
+          destinationGpsLatitude: -3.3869,
+          destinationGpsLongitude: 36.683,
           distanceKm: 82,
-          distanceSource: 'map_estimate',
+          distanceSource: 'document',
           transportMethodType: 'road',
           vehicleType: 'Courier van',
           loadMassKg: 5,
           calculationMethodType: 'distance_based',
+          billOfLading: 'COC-SAM-26-005',
         },
         {
           id: ids.transportLegSample6,
           entityType: 'sample',
           entityId: ids.sample6,
           originName: 'Dark Earth Moshi Biochar Hub',
+          originGpsLatitude: -3.3481,
+          originGpsLongitude: 37.3404,
           destinationName: 'Kibo Analytical Labs, Arusha',
+          destinationGpsLatitude: -3.3869,
+          destinationGpsLongitude: 36.683,
           distanceKm: 82,
-          distanceSource: 'map_estimate',
+          distanceSource: 'document',
           transportMethodType: 'road',
           vehicleType: 'Courier van',
           loadMassKg: 5,
           calculationMethodType: 'distance_based',
+          billOfLading: 'COC-SAM-26-006',
         },
       ]));
 
@@ -1631,6 +1704,156 @@ async function seedDemoData() {
         ], DEC_ORG_ID)
       );
 
+      console.log('Creating transport evidence documents...');
+      await tx.insert(schema.documents).values(
+        buildTransportEvidenceDocuments([
+          {
+            id: demoId(3200),
+            entityType: 'feedstock',
+            entityId: ids.feedstock1,
+            documentType: 'weighbridge_ticket',
+            fileName: 'FS-26-001-weighbridge-ticket.pdf',
+            capturedAt: demoTimestamps.firstDelivery,
+            description:
+              'Inbound weighbridge ticket recording the Machame-to-Moshi route and delivered mass.',
+            evidenceReference: 'WST-FD-26-001',
+            fileSizeBytes: 138_240,
+          },
+          {
+            id: demoId(3201),
+            entityType: 'feedstock',
+            entityId: ids.feedstock2,
+            documentType: 'weighbridge_ticket',
+            fileName: 'FS-26-002-weighbridge-ticket.pdf',
+            capturedAt: demoTimestamps.secondDelivery,
+            description:
+              'Inbound weighbridge ticket recording the Kilema-to-Moshi route and delivered mass.',
+            evidenceReference: 'WST-FD-26-002',
+            fileSizeBytes: 142_336,
+          },
+          {
+            id: demoId(3202),
+            entityType: 'feedstock',
+            entityId: ids.feedstock3,
+            documentType: 'bill_of_lading',
+            fileName: 'FS-26-003-bill-of-lading.pdf',
+            capturedAt: demoTimestamps.thirdDelivery,
+            description:
+              'Carrier bill of lading for the second hardwood-chip shipment from Machame.',
+            evidenceReference: 'BOL-FD-26-003',
+            fileSizeBytes: 151_552,
+          },
+          {
+            id: demoId(3203),
+            entityType: 'delivery',
+            entityId: ids.delivery1,
+            documentType: 'bill_of_lading',
+            fileName: 'DL-26-001-bill-of-lading.pdf',
+            capturedAt: demoTimestamps.delivery1Date,
+            description:
+              'Signed delivery route and custody record for the Kilema North Plot shipment.',
+            evidenceReference: 'BOL-DL-26-001',
+            fileSizeBytes: 166_912,
+          },
+          {
+            id: demoId(3204),
+            entityType: 'delivery',
+            entityId: ids.delivery2,
+            documentType: 'bill_of_lading',
+            fileName: 'DL-26-002-bill-of-lading.pdf',
+            capturedAt: demoTimestamps.delivery2Date,
+            description:
+              'Signed delivery route and custody record for the Lushoto Estate shipment.',
+            evidenceReference: 'BOL-DL-26-002',
+            fileSizeBytes: 174_080,
+          },
+          {
+            id: demoId(3205),
+            entityType: 'delivery',
+            entityId: ids.delivery3,
+            documentType: 'weighbridge_ticket',
+            fileName: 'DL-26-003-weighbridge-ticket.pdf',
+            capturedAt: demoTimestamps.delivery3Date,
+            description:
+              'Outbound weighbridge and destination route record for the Machame South Plot shipment.',
+            evidenceReference: 'WST-DL-26-003',
+            fileSizeBytes: 147_456,
+          },
+          {
+            id: demoId(3206),
+            entityType: 'transport_leg',
+            entityId: ids.transportLegSample1,
+            documentType: 'other_transport_evidence',
+            fileName: 'SAM-26-001-chain-of-custody.pdf',
+            capturedAt: new Date('2026-05-13T09:30:00.000Z'),
+            description:
+              'Courier chain-of-custody form from the Moshi facility to the analysis laboratory.',
+            evidenceReference: 'COC-SAM-26-001',
+            fileSizeBytes: 126_976,
+          },
+          {
+            id: demoId(3207),
+            entityType: 'transport_leg',
+            entityId: ids.transportLegSample2,
+            documentType: 'other_transport_evidence',
+            fileName: 'SAM-26-002-chain-of-custody.pdf',
+            capturedAt: new Date('2026-05-15T09:00:00.000Z'),
+            description:
+              'Courier chain-of-custody form from the Moshi facility to the analysis laboratory.',
+            evidenceReference: 'COC-SAM-26-002',
+            fileSizeBytes: 129_024,
+          },
+          {
+            id: demoId(3208),
+            entityType: 'transport_leg',
+            entityId: ids.transportLegSample3,
+            documentType: 'other_transport_evidence',
+            fileName: 'SAM-26-003-chain-of-custody.pdf',
+            capturedAt: new Date('2026-05-17T10:00:00.000Z'),
+            description:
+              'Courier chain-of-custody form from the Moshi facility to the analysis laboratory.',
+            evidenceReference: 'COC-SAM-26-003',
+            fileSizeBytes: 127_488,
+          },
+          {
+            id: demoId(3209),
+            entityType: 'transport_leg',
+            entityId: ids.transportLegSample4,
+            documentType: 'other_transport_evidence',
+            fileName: 'SAM-26-004-chain-of-custody.pdf',
+            capturedAt: new Date('2026-05-18T08:30:00.000Z'),
+            description:
+              'Courier chain-of-custody form from the Moshi facility to the analysis laboratory.',
+            evidenceReference: 'COC-SAM-26-004',
+            fileSizeBytes: 128_512,
+          },
+          {
+            id: demoId(3210),
+            entityType: 'transport_leg',
+            entityId: ids.transportLegSample5,
+            documentType: 'other_transport_evidence',
+            fileName: 'SAM-26-005-chain-of-custody.pdf',
+            capturedAt: new Date('2026-05-16T09:15:00.000Z'),
+            description:
+              'Courier chain-of-custody form from the Moshi facility to the analysis laboratory.',
+            evidenceReference: 'COC-SAM-26-005',
+            fileSizeBytes: 130_560,
+          },
+          {
+            id: demoId(3211),
+            entityType: 'transport_leg',
+            entityId: ids.transportLegSample6,
+            documentType: 'other_transport_evidence',
+            fileName: 'SAM-26-006-chain-of-custody.pdf',
+            capturedAt: new Date('2026-05-17T08:45:00.000Z'),
+            description:
+              'Courier chain-of-custody form from the Moshi facility to the analysis laboratory.',
+            evidenceReference: 'COC-SAM-26-006',
+            fileSizeBytes: 131_584,
+          },
+        ], DEC_ORG_ID),
+      );
+
       // Links the Moshi facility to the Isometric sandbox project +
       // Dark Earth Carbon Template, with the Phase 3.7 emission-estimate
       // config seeded from the Sifuri Halisi LCA. The Isometric facility
@@ -1649,6 +1872,8 @@ async function seedDemoData() {
         },
       ]));
 
+      await seedOperationalDetails(tx, DEC_ORG_ID, ids, demoTimestamps);
+
       // ============================================================
       // EXTRA STORAGE BINS (Moshi) — exercises the storage flow board at
       // realistic scale (20+ bins) with a spread of fill levels. Pure demo
@@ -1659,10 +1884,25 @@ async function seedDemoData() {
       console.log('Creating extra storage bins (scale demo)...');
 
       const extraBinBase = 9000;
-      const feedstockTypeRotation = [
-        ids.feedstockWoodchips,
-        ids.feedstockCoffeeHusk,
-        ids.feedstockCoconut,
+      const feedstockSupplyRotation = [
+        {
+          feedstockTypeId: ids.feedstockWoodchips,
+          supplierId: ids.supplierKili,
+          vehicleId: ids.vehicleTruck1,
+          sourceRegion: 'Kilimanjaro',
+        },
+        {
+          feedstockTypeId: ids.feedstockCoffeeHusk,
+          supplierId: ids.supplierMeru,
+          vehicleId: ids.vehicleTruck2,
+          sourceRegion: 'Kilimanjaro',
+        },
+        {
+          feedstockTypeId: ids.feedstockCoconut,
+          supplierId: ids.supplierVictoria,
+          vehicleId: ids.vehicleTruck2,
+          sourceRegion: 'Arusha',
+        },
       ];
 
       // [type, capacityBasisKg, fillFraction, name]
@@ -1709,7 +1949,8 @@ async function seedDemoData() {
               : 'bagged_palletized',
         feedstockTypeId:
           type === 'feedstock_bin'
-            ? feedstockTypeRotation[i % feedstockTypeRotation.length]
+            ? feedstockSupplyRotation[i % feedstockSupplyRotation.length]
+                .feedstockTypeId
             : null,
       }));
       await tx.insert(schema.storageLocations).values(extraBins);
@@ -1723,6 +1964,8 @@ async function seedDemoData() {
         if (massKg <= 0) return; // leave a few bins empty on purpose
         const binId = demoId(extraBinBase + i);
         if (type === 'feedstock_bin') {
+          const supply =
+            feedstockSupplyRotation[i % feedstockSupplyRotation.length];
           const moistureContentPercent = 15;
           const moistureFactor = 1 - moistureContentPercent / 100;
           extraFeedstocks.push({
@@ -1731,11 +1974,22 @@ async function seedDemoData() {
             code: `FI-26-${900 + i}`,
             facilityId: ids.facilityMoshi,
             status: 'complete',
-            feedstockTypeId: feedstockTypeRotation[i % feedstockTypeRotation.length],
+            deliveryDate: new Date(Date.UTC(2026, 4, 19, 7 + i, 0, 0)),
+            supplierId: supply.supplierId,
+            vehicleId: supply.vehicleId,
+            gpsLatitude: -3.3481,
+            gpsLongitude: 37.3404,
+            feedstockTypeId: supply.feedstockTypeId,
             massDryKg: massKg,
             massWetKg: Math.round(massKg / moistureFactor),
             moistureContentPercent,
+            feedstockSourceRegion: supply.sourceRegion,
             storageLocationId: binId,
+            counterfactualCategory: 'open_decay',
+            baselineScenario: 'mulched_or_open_decay',
+            baselineDescription:
+              'Scale-demo lot follows the same documented regional residue baseline as the curated supply chain.',
+            eligibilityStatus: 'eligible',
           });
         } else if (type === 'biochar_bin') {
           // All extra runs share one reactor, so their windows must not
@@ -1789,18 +2043,20 @@ async function seedDemoData() {
     console.log('  - 1 Facility (Dark Earth Moshi Biochar Hub)');
     console.log('  - 2 Reactors');
     console.log('  - 24 Storage Locations (6 curated + 18 scale-demo on Moshi)');
-    console.log('  - 3 Suppliers');
+    console.log('  - 3 Suppliers with 4 source locations');
     console.log('  - 3 Customers with 3 Locations');
     console.log('  - 2 Drivers, 2 Operators, 2 Vehicles');
     console.log('  - 9 Feedstock Types');
     console.log('  - 3 Feedstock Deliveries -> 3 Feedstocks');
-    console.log('  - 3 Production Runs -> 285 telemetry readings -> 6 Samples (3 per credit batch)');
-    console.log('  - 12 Transport Legs (3 feedstock, 3 biochar, 6 sample)');
+    console.log('  - 3 Production Runs -> 285 telemetry readings -> 9 in-process samples + 2 incidents');
+    console.log('  - 6 Lab Samples (3 per credit batch)');
+    console.log('  - 12 document-backed Transport Legs + 12 evidence files');
     console.log('  - 3 Formulations');
     console.log('  - 3 Biochar Products');
     console.log('  - 3 Orders -> 3 Deliveries');
     console.log('  - 3 Applications -> 30 soil temperature measurements + 3 boundary PDFs');
     console.log('  - 2 Credit Batches (1 with 3 linked applications)');
+    console.log('  - 3 Storage reconciliation entries + 3 compliance records');
     console.log('  - 1 Isometric certifier project (Moshi, sandbox)');
     console.log('');
   } catch (error) {

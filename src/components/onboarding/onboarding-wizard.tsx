@@ -16,7 +16,6 @@ import { useState } from "react";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { FacilityForm } from "@/components/facilities/facility-form";
 import { ReactorForm } from "@/components/reactors/reactor-form";
-import { ServerError } from "@/components/forms";
 import { Button, Modal, StepFlow, type StepFlowStep } from "@/components/ui";
 import { useCreateFacility } from "@/hooks/use-facilities";
 import { useCreateReactor } from "@/hooks/use-reactors";
@@ -151,11 +150,11 @@ export function OnboardingWizard({ wizard, status }: OnboardingWizardProps) {
             <p className="body-small text-[var(--color-text-secondary)]">
               Tell us about the site where you produce biochar.
             </p>
-            <ServerError message={facilityError} />
             <FacilityForm
               onSubmit={handleFacilitySubmit}
               onCancel={() => setCurrent(STEP.welcome)}
               isSubmitting={createFacility.isPending}
+              errorMessage={facilityError ?? undefined}
               submitLabel="Add facility"
             />
           </div>
@@ -176,11 +175,11 @@ export function OnboardingWizard({ wizard, status }: OnboardingWizardProps) {
               Register the reactor that converts feedstock into biochar at this
               facility.
             </p>
-            <ServerError message={reactorError} />
             <ReactorForm
               onSubmit={handleReactorSubmit}
               onCancel={() => setCurrent(STEP.facility)}
               isSubmitting={createReactor.isPending}
+              errorMessage={reactorError ?? undefined}
               submitLabel="Register reactor"
             />
           </div>

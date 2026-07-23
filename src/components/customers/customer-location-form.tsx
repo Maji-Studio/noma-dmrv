@@ -37,6 +37,8 @@ interface CustomerLocationFormProps {
   onCancel?: () => void;
   /** Whether the form is currently submitting */
   isSubmitting?: boolean;
+  /** Submission-level error shown with the action footer */
+  errorMessage?: string;
   /** Custom label for the submit button */
   submitLabel?: string;
 }
@@ -46,6 +48,7 @@ export function CustomerLocationForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  errorMessage,
   submitLabel,
 }: CustomerLocationFormProps) {
   const isEditMode = !!location;
@@ -285,6 +288,7 @@ export function CustomerLocationForm({
         sticky={false}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

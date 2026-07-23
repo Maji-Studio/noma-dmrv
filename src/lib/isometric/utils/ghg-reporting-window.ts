@@ -1,6 +1,6 @@
 /**
  * Pure GHG-statement reporting-window logic — the single source both the
- * create drawer's preview (client) and the empty-statement guard (server)
+ * create dialog's preview (client) and the empty-statement guard (server)
  * derive from, so operator and registry never disagree on which removals a
  * period contains.
  *

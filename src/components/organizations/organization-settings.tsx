@@ -152,7 +152,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
           <h2 className="title-heading-3">Invite a member</h2>
           <form
             onSubmit={handleSubmit(onInvite)}
-            className="flex flex-col gap-16 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20"
+            className="content-measure-form flex flex-col gap-16 border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20"
           >
             <div className="grid grid-cols-1 gap-16 md:grid-cols-[1fr_180px]">
               <FormField

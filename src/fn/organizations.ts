@@ -33,6 +33,7 @@ import {
   listAllOrganizations,
   listOrgInvitations,
   listOrgMembers,
+  persistLastActiveOrganization,
   removeMemberAsPlatformAdmin,
   updateMemberRoleAsPlatformAdmin,
   type OrganizationSummary,
@@ -239,15 +240,13 @@ export async function setActiveOrganizationAction(
         body: { organizationId },
         headers: await headers(),
       });
+      await persistLastActiveOrganization(session.user.id, organizationId);
       return { organizationId };
     }
 
-    const isPlatformAdmin =
-      (session.user as { role?: string }).role === "admin";
-    if (!isPlatformAdmin) {
-      throw new SafeError("You are not a member of this organization.");
-    }
+    await requirePlatformAdmin();
     await setActiveOrgForPlatformAdmin(sessionId, organizationId);
+    await persistLastActiveOrganization(session.user.id, organizationId);
     return { organizationId };
   }, "Failed to switch organization.");
 }
@@ -332,6 +331,7 @@ export async function acceptInvitationAction(
       body: { organizationId },
       headers: await headers(),
     });
+    await persistLastActiveOrganization(session.user.id, organizationId);
     return { organizationId };
   }, "Failed to accept invitation.");
 }

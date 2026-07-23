@@ -10,11 +10,14 @@
 "use client";
 
 import Link from "next/link";
+import { SealCheckIcon } from "@phosphor-icons/react";
+import { EmptyState } from "@/components/ui";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   useFacilityCertifierSummary,
   useIsometricFeedstockTypes,
 } from "@/hooks/use-certification";
+import { useFeedstockTypeList } from "@/hooks/use-feedstock-types";
 import type { IsometricFeedstockType } from "@/lib/isometric";
 
 const settingsHref = (facilityId: string) =>
@@ -33,6 +36,9 @@ export function IsometricFeedstockBrowser({
   const summary = useFacilityCertifierSummary(facilityId ?? "", !!facilityId);
   const isConnected = !!summary.data?.mapping;
   const catalogue = useIsometricFeedstockTypes(isConnected);
+  const localFeedstockTypes = useFeedstockTypeList(
+    Boolean(facilityId) && isConnected,
+  );
 
   if (!facilityId) {
     return (
@@ -64,6 +70,14 @@ export function IsometricFeedstockBrowser({
     );
   }
 
+  if (localFeedstockTypes.isLoading) {
+    return <Message>Checking existing feedstock types…</Message>;
+  }
+
+  if (localFeedstockTypes.error || !localFeedstockTypes.data) {
+    return <ErrorMessage>Unable to check existing feedstock types.</ErrorMessage>;
+  }
+
   if (catalogue.isLoading) {
     return <Message>Loading registry feedstock types…</Message>;
   }
@@ -79,9 +93,20 @@ export function IsometricFeedstockBrowser({
 
   if (catalogue.data.length === 0) {
     return (
-      <Message>No feedstock types found on the Isometric registry.</Message>
+      <EmptyState
+        padding="md"
+        icon={<SealCheckIcon size={40} />}
+        title="No registry feedstock types"
+        description="No feedstock types were returned by the Isometric catalogue."
+      />
     );
   }
+
+  const importedIds = new Set(
+    localFeedstockTypes.data.flatMap((type) =>
+      type.isometricFeedstockTypeId ? [type.isometricFeedstockTypeId] : [],
+    ),
+  );
 
   return (
     <div className="flex flex-col gap-12">
@@ -93,32 +118,46 @@ export function IsometricFeedstockBrowser({
         className="max-h-[320px] overflow-y-auto border border-[var(--color-border-secondary)] divide-y divide-[var(--color-border-tertiary)]"
         data-testid="isometric-feedstock-list"
       >
-        {catalogue.data.map((type) => (
-          <li key={type.id}>
-            <button
-              type="button"
-              onClick={() => onSelect?.(type)}
-              data-testid={`isometric-feedstock-option-${type.id}`}
-              className="flex w-full items-start justify-between gap-12 px-12 py-8 text-left transition-colors hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-border-primary)]"
-              aria-pressed={selectedId === type.id}
-            >
-              <span className="flex flex-col gap-2">
-                <span className="body-small text-[var(--color-text-primary)]">
-                  {type.name}
+        {catalogue.data.map((type) => {
+          const isImported = importedIds.has(type.id);
+          return (
+            <li key={type.id}>
+              <button
+                type="button"
+                onClick={() => onSelect?.(type)}
+                data-testid={`isometric-feedstock-option-${type.id}`}
+                disabled={isImported}
+                className="flex w-full items-start justify-between gap-12 px-12 py-8 text-left transition-colors hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-border-primary)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+                aria-pressed={selectedId === type.id}
+              >
+                <span className="flex flex-col gap-2">
+                  <span className="body-small text-[var(--color-text-primary)]">
+                    {type.name}
+                  </span>
+                  <span className="body-caption font-mono text-[var(--color-text-tertiary)]">
+                    {type.id}
+                    {type.supplier_reference_id
+                      ? ` · ref ${type.supplier_reference_id}`
+                      : ""}
+                  </span>
                 </span>
-                <span className="body-caption font-mono text-[var(--color-text-tertiary)]">
-                  {type.id}
-                  {type.supplier_reference_id
-                    ? ` · ref ${type.supplier_reference_id}`
-                    : ""}
+                <span
+                  className={`label-button shrink-0 ${
+                    isImported
+                      ? "text-[var(--color-text-tertiary)]"
+                      : "text-[var(--color-interaction)]"
+                  }`}
+                >
+                  {isImported
+                    ? "Imported"
+                    : selectedId === type.id
+                      ? "Selected"
+                      : "Use"}
                 </span>
-              </span>
-              <span className="label-button shrink-0 text-[var(--color-interaction)]">
-                {selectedId === type.id ? "Selected" : "Use"}
-              </span>
-            </button>
-          </li>
-        ))}
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

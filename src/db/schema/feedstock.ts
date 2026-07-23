@@ -83,13 +83,19 @@ export const feedstockTypes = pgTable(
     category: text('category').notNull(), // forestry | agricultural | industrial | municipal | invasive
     usage: feedstockTypeUsage('usage').notNull().default('pyrolysis'),
     description: text('description'),
-    registryUrl: text('registry_url'), // Link to Isometric registry page
+    registryUrl: text('registry_url'), // Optional external registry page URL
+    isometricFeedstockTypeId: text('isometric_feedstock_type_id'),
+    archivedAt: timestamp('archived_at'),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => [
     unique('feedstock_types_organization_id_code_unique').on(table.organizationId, table.code),
+    unique('feedstock_types_organization_id_isometric_id_unique').on(
+      table.organizationId,
+      table.isometricFeedstockTypeId
+    ),
     unique('feedstock_types_organization_id_name_usage_unique').on(
       table.organizationId,
       table.name,

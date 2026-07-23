@@ -149,24 +149,19 @@ a Turbopack/Vercel runtime bug.
 permission checks; pooling defaults are centralized in `src/db/index.ts`. See
 [database.md](./database.md) and [schema-overview.md](./schema-overview.md).
 
-## Sampling Method Enforcement (Isometric)
+## Computed Method-B Eligibility (Isometric)
 
-The sampling regime lives on `production_processes.sampling_method` (default
-`method_a`), keyed `(facility, feedstock)` and spanning reactors — **not** on
-`reactors`. A process is find-or-created per `(facility, feedstock)` when a
-credit batch is created. Why: ADR
+`production_processes` stores the process epoch and the all-or-none prerequisite
+record; it does not store a sampling regime or an unlock. Each credit batch
+stores its immutable `sampled`/`unsampled` choice. A process is find-or-created
+per `(facility, feedstock)` when a credit batch is created.
+
+For a newly created batch, unsampled processing is allowed only when the
+organization and facility are connected to Isometric, all three prerequisites
+are recorded, and the live eligible-sample count since the current process epoch
+meets the agreed baseline (minimum 30). See ADR
 [0016](./adr/0016-credit-batch-is-production-batch-production-process-scopes-sampling.md)
-and [0017](./adr/0017-method-b-unlock-registry-computes-noma-gates-and-previews.md).
-
-Method B requires both gates:
-
-1. ≥30 prior Method-A samples in the process before unlocking `method_b`.
-2. Credit batches in the process satisfy sampled-batch cadence ≥ 1 per 10.
-
-Enforcement is intentionally layered: UI gating → server validation in
-`fn/`/`data-access` (`unlockMethodBForProcess`) → a process-grain DB check
-constraint backstopping direct writes. The live `_unsampled` submission POST
-stays flag-gated.
+and [0022](./adr/0022-method-b-is-computed-eligibility-not-stored-unlock.md).
 
 ## Certify Integration (Isometric)
 

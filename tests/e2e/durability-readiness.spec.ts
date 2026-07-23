@@ -45,15 +45,31 @@ test.describe("200-year durability readiness", () => {
     await expect(signals).toContainText("distinct runs/days");
     await expect(signals).toContainText("Chemistry eligible");
 
+    await panel.getByText("View chemistry details", { exact: true }).click();
+
     // The raw replicates roll up into the batch.
+    const replicateTableBody = panel.locator("tbody");
     for (const code of batch.sampleCodes) {
-      await expect(panel.getByText(code)).toBeVisible();
+      await expect(
+        replicateTableBody.getByText(code, { exact: true }),
+      ).toBeVisible();
     }
 
     // The batch-level figure block the measurement-sample submission sends.
-    await expect(
-      panel.getByText("Submitted to registry (mean ± s.d.)"),
-    ).toBeVisible();
+    const submittedStats = panel
+      .getByText("Submitted to registry (mean ± s.d.)", { exact: true })
+      .locator("..");
+    await expect(submittedStats).toBeVisible();
+    for (const label of [
+      "H/C_org (molar)",
+      "Total carbon",
+      "Inorganic carbon",
+      "Product mass",
+    ]) {
+      await expect(
+        submittedStats.getByText(label, { exact: true }),
+      ).toBeVisible();
+    }
   });
 
   test("lab-sample form previews the selected credit batch's sampling progress", async ({

@@ -113,13 +113,15 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
 
     const card = page.locator("article").filter({ hasText: lineage.creditBatchCode });
     await expect(card).toBeVisible({ timeout: 10000 });
-    const weightValue = card.getByText("Weight", { exact: true }).locator(
-      "xpath=following-sibling::p[1]",
-    );
+    const appliedBiocharMetric = card
+      .getByText("Applied biochar", { exact: true })
+      .locator("xpath=..");
     // The applications form's "biocharAppliedTons" input is entered in kg
     // (applicationTonsToKg converts for display) but the schema field — and
     // this rollup — is in tonnes, so 5000 kg in reads back as "5.00 t".
-    await expect(weightValue).toHaveText("5.00 t", { timeout: 10000 });
+    await expect(
+      appliedBiocharMetric.getByText("5.00 t", { exact: true }),
+    ).toBeVisible({ timeout: 10000 });
 
     // Navigate to /applications via the sidebar (client-side nav — the
     // QueryClient created once in providers.tsx survives the route change).
@@ -146,9 +148,11 @@ test.describe("Credit batch view reflects application mutations (#396)", () => {
     await page.waitForLoadState("networkidle");
 
     const cardAfter = page.locator("article").filter({ hasText: lineage.creditBatchCode });
-    const weightValueAfter = cardAfter.getByText("Weight", { exact: true }).locator(
-      "xpath=following-sibling::p[1]",
-    );
-    await expect(weightValueAfter).toHaveText("3.00 t", { timeout: 10000 });
+    const appliedBiocharMetricAfter = cardAfter
+      .getByText("Applied biochar", { exact: true })
+      .locator("xpath=..");
+    await expect(
+      appliedBiocharMetricAfter.getByText("3.00 t", { exact: true }),
+    ).toBeVisible({ timeout: 10000 });
   });
 });

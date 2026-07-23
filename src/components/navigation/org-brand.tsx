@@ -1,10 +1,11 @@
 /**
  * OrgBrand — the sidebar brand header, doubling as the Organization switcher.
  *
- * One row, two behaviors: single-org members get the plain brand link to the
- * dashboard (no tenancy chrome at all), while multi-org members and Platform
- * Admins (who can enter any org) get the same row as a listbox trigger — the
- * org name is shown exactly once, and a caret is the only extra affordance.
+ * One row, two behaviors: users with at most one accessible organization get
+ * the plain brand link to the dashboard (no tenancy chrome at all), while users
+ * with multiple accessible organizations get the same row as a listbox trigger
+ * — the org name is shown exactly once, and a caret is the only extra
+ * affordance.
  * Switching resets facility selection and clears the query cache, because
  * every data view changes.
  */
@@ -20,6 +21,7 @@ import {
   useAllOrganizations,
   useEnterOrganization,
 } from "@/hooks/use-organizations";
+import { shouldShowOrganizationSwitcher } from "./org-brand-switching";
 
 type SwitchableOrg = { id: string; name: string };
 
@@ -36,6 +38,20 @@ function BrandMark({ initial }: { initial: string }) {
   );
 }
 
+function OrgBrandLoading() {
+  return (
+    <div
+      className="flex h-56 items-center gap-10 border-b border-[var(--color-white-10)] px-16 shrink-0"
+      role="status"
+      aria-label="Loading organization"
+      aria-busy="true"
+    >
+      <div className="size-28 shrink-0 animate-pulse bg-[var(--color-white-10)]" />
+      <div className="h-12 w-128 animate-pulse bg-[var(--color-white-10)]" />
+    </div>
+  );
+}
+
 export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
   const isAdmin = useIsAdmin();
   const enterOrganization = useEnterOrganization();
@@ -47,14 +63,18 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
   // Override-aware active-org lookup: the plugin's useActiveOrganization() is
   // members-only, so it never resolves for Platform Admins inside an org they
   // don't belong to.
-  const { data: activeOrg } = useActiveOrganizationProfile();
-  const { data: sessionData } = authClient.useSession();
+  const activeOrgQuery = useActiveOrganizationProfile();
+  const { data: activeOrg } = activeOrgQuery;
+  const sessionQuery = authClient.useSession();
+  const { data: sessionData } = sessionQuery;
   const activeOrganizationId =
     (sessionData?.session as { activeOrganizationId?: string | null } | undefined)
       ?.activeOrganizationId ?? null;
-  const { data: memberOrgs } = authClient.useListOrganizations();
+  const memberOrgsQuery = authClient.useListOrganizations();
+  const { data: memberOrgs } = memberOrgsQuery;
   // Platform Admins have no memberships, so their switch list is every org.
-  const { data: allOrgs } = useAllOrganizations(isAdmin);
+  const allOrgsQuery = useAllOrganizations(isAdmin);
+  const { data: allOrgs } = allOrgsQuery;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -77,13 +97,20 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
     ? (allOrgs ?? []).map((org) => ({ id: org.id, name: org.name }))
     : (memberOrgs ?? []).map((org) => ({ id: org.id, name: org.name }));
 
-  const canSwitch = isAdmin || switchable.length > 1;
+  const canSwitch = shouldShowOrganizationSwitcher(switchable);
 
   const activeOrgName =
     activeOrg?.name?.trim() ||
     switchable.find((org) => org.id === activeOrganizationId)?.name ||
     "noma dMRV";
   const orgInitial = activeOrgName.charAt(0).toUpperCase();
+
+  const organizationStatePending =
+    (sessionQuery.isPending && !sessionQuery.error) ||
+    (activeOrgQuery.isPending && !activeOrgQuery.error) ||
+    (isAdmin
+      ? allOrgsQuery.isPending && !allOrgsQuery.error
+      : memberOrgsQuery.isPending && !memberOrgsQuery.error);
 
   async function handleSelect(organizationId: string) {
     if (organizationId === activeOrganizationId) {
@@ -101,6 +128,12 @@ export function OrgBrand({ onNavigate }: { onNavigate?: () => void }) {
     } finally {
       setIsSwitching(false);
     }
+  }
+
+  // Do not briefly claim the fallback brand or a single-org link while the
+  // applicable organization list is still deciding the settled interaction.
+  if (organizationStatePending) {
+    return <OrgBrandLoading />;
   }
 
   // Single-org members: the brand header is just the brand — a link home.

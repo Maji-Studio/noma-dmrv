@@ -339,27 +339,15 @@ export function ReactorList() {
               { label: "Nominal Throughput (tph)", value: sideSheetEntity.nominalThroughputTph },
             ],
           },
-          {
-            title: "Relationships & Metadata",
-            fields: [
-              { label: "Code", value: sideSheetEntity.code },
-              { label: "Facility Name", value: sideSheetEntity.facilityName },
-              { label: "Facility Code", value: sideSheetEntity.facilityCode },
-            ],
-          },
         ] : undefined}
       >
-        {(createError || updateError) && (
-          <div className="mb-24">
-            <ServerError message={createError || updateError || ""} />
-          </div>
-        )}
         <ReactorForm
           key={sideSheetEntity?.id ?? "create"}
           reactor={sideSheetEntity as Reactor | undefined}
           onSubmit={sideSheetEntity && sideSheetMode === "edit" ? handleUpdate : handleCreate}
           onCancel={closeSideSheet}
           isSubmitting={createReactor.isPending || updateReactor.isPending}
+          errorMessage={createError || updateError || undefined}
           submitLabel={sideSheetEntity && sideSheetMode === "edit" ? "Save Changes" : "Create Reactor"}
         />
       </EntitySideSheet>

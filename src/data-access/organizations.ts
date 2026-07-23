@@ -406,3 +406,52 @@ export async function findMembershipRole(
     .limit(1);
   return membership?.role ?? null;
 }
+
+/**
+ * Persist an explicit organization choice after revalidating current access.
+ * This preference is not an authorization grant; session creation validates it
+ * again before restoring it.
+ */
+export async function persistLastActiveOrganization(
+  userId: string,
+  organizationId: string
+): Promise<void> {
+  if (!userId) {
+    throw new SafeError("You must be signed in.");
+  }
+
+  const [user] = await db
+    .select({ role: users.role })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (!user) {
+    throw new SafeError("You must be signed in.");
+  }
+
+  const [accessibleOrganization] =
+    user.role === "admin"
+      ? await db
+          .select({ id: organizations.id })
+          .from(organizations)
+          .where(eq(organizations.id, organizationId))
+          .limit(1)
+      : await db
+          .select({ id: members.organizationId })
+          .from(members)
+          .where(
+            and(
+              eq(members.userId, userId),
+              eq(members.organizationId, organizationId)
+            )
+          )
+          .limit(1);
+  if (!accessibleOrganization) {
+    throw new SafeError("You do not have access to this organization.");
+  }
+
+  await db
+    .update(users)
+    .set({ lastActiveOrganizationId: organizationId })
+    .where(eq(users.id, userId));
+}

@@ -39,6 +39,11 @@ import {
   isCertFieldValuePresent,
   resolveCertFieldStatus,
 } from "@/components/forms/cert-field-status";
+import {
+  createSpineMeta,
+  SpineSectionStatic,
+  type SpineMeta,
+} from "@/components/forms/form-spine";
 
 /* -------------------------------------------------------------------------------------------------
  * DetailSection - Flat section with mono label, mirrors FormSection so the
@@ -52,9 +57,27 @@ interface DetailSectionProps {
   /** Hairline divider above the section (default) — first section disables it. */
   divider?: boolean;
   className?: string;
+  /** Positional metadata for the passive read-only step rail. */
+  spine?: SpineMeta;
 }
 
-function DetailSection({ title, children, divider = true, className }: DetailSectionProps) {
+function DetailSection({
+  title,
+  children,
+  divider = true,
+  className,
+  spine,
+}: DetailSectionProps) {
+  const label = <SectionLabel>{title}</SectionLabel>;
+
+  if (spine) {
+    return (
+      <SpineSectionStatic meta={spine} label={label} className={className}>
+        {children}
+      </SpineSectionStatic>
+    );
+  }
+
   return (
     <div
       className={cn(
@@ -63,7 +86,7 @@ function DetailSection({ title, children, divider = true, className }: DetailSec
         className
       )}
     >
-      <SectionLabel>{title}</SectionLabel>
+      {label}
       {children}
     </div>
   );
@@ -147,6 +170,48 @@ export interface DetailPanelSection {
   content?: React.ReactNode;
 }
 
+interface DetailSpineProps {
+  sections: DetailPanelSection[];
+  /** Adds the shared numbered orientation rail used by FormSpine. */
+  numbered?: boolean;
+}
+
+/** Shared section renderer for read-only entity details. */
+function DetailSpine({ sections, numbered = false }: DetailSpineProps) {
+  return (
+    <div className={cn("flex flex-col", !numbered && "gap-20")}>
+      {sections.map((section, sectionIdx) => (
+        <DetailSection
+          key={section.title}
+          title={section.title}
+          divider={!numbered && sectionIdx > 0}
+          spine={
+            numbered
+              ? createSpineMeta(sectionIdx, sections.length)
+              : undefined
+          }
+        >
+          {chunkFields(section.fields).map((row, rowIdx) => (
+            <DetailRow key={rowIdx}>
+              {row.map((field, fieldIdx) => (
+                <DetailField
+                  key={`${rowIdx}-${fieldIdx}`}
+                  label={field.label}
+                  value={field.value}
+                  certifyRequired={field.certifyRequired}
+                  certifyStatus={field.certifyStatus}
+                />
+              ))}
+            </DetailRow>
+          ))}
+          {section.content}
+        </DetailSection>
+      ))}
+    </div>
+  );
+}
+DetailSpine.displayName = "DetailSpine";
+
 interface EntityDetailPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -176,30 +241,8 @@ function EntityDetailPanel({
           )}
         </SlideOverPanel.Header>
 
-        <SlideOverPanel.Body className="flex flex-col gap-20">
-          {sections.map((section, sectionIdx) => (
-            <DetailSection
-              key={section.title}
-              title={section.title}
-              divider={sectionIdx > 0}
-            >
-              {/* Render fields in rows of 2 */}
-              {chunkFields(section.fields).map((row, rowIdx) => (
-                <DetailRow key={rowIdx}>
-                  {row.map((field, fieldIdx) => (
-                    <DetailField
-                      key={`${rowIdx}-${fieldIdx}`}
-                      label={field.label}
-                      value={field.value}
-                      certifyRequired={field.certifyRequired}
-                      certifyStatus={field.certifyStatus}
-                    />
-                  ))}
-                </DetailRow>
-              ))}
-              {section.content}
-            </DetailSection>
-          ))}
+        <SlideOverPanel.Body>
+          <DetailSpine sections={sections} />
         </SlideOverPanel.Body>
 
         {onEdit && (
@@ -244,4 +287,4 @@ function chunkFields(fields: DetailPanelField[]): DetailPanelField[][] {
  * Export
  * -----------------------------------------------------------------------------------------------*/
 
-export { DetailSection, DetailRow, DetailField, EntityDetailPanel };
+export { DetailSection, DetailRow, DetailField, DetailSpine, EntityDetailPanel };

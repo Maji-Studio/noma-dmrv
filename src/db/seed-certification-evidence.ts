@@ -47,6 +47,21 @@ type BoundaryEvidenceSeedSpec = {
   fileSizeBytes: number;
 };
 
+type TransportEvidenceSeedSpec = {
+  id: string;
+  entityType: 'feedstock' | 'delivery' | 'transport_leg';
+  entityId: string;
+  documentType:
+    | 'bill_of_lading'
+    | 'weighbridge_ticket'
+    | 'other_transport_evidence';
+  fileName: string;
+  capturedAt: Date;
+  description: string;
+  evidenceReference: string;
+  fileSizeBytes: number;
+};
+
 export function buildProductionRunReadings(
   specs: ProductionReadingSeedSpec[],
   organizationId: string,
@@ -144,6 +159,33 @@ export function buildApplicationBoundaryDocuments(
       logbookEvidenceType: 'inventory',
       coordinateSystem: 'EPSG:4326',
       includesApplicatorSignature: true,
+    },
+  }));
+}
+
+export function buildTransportEvidenceDocuments(
+  specs: TransportEvidenceSeedSpec[],
+  organizationId: string,
+): (typeof schema.documents.$inferInsert)[] {
+  return specs.map((spec): typeof schema.documents.$inferInsert => ({
+    organizationId,
+    id: spec.id,
+    entityType: spec.entityType,
+    entityId: spec.entityId,
+    documentType: spec.documentType,
+    fileName: spec.fileName,
+    fileUrl: `${DEMO_EVIDENCE_BASE_URL}/${spec.fileName}`,
+    fileSizeBytes: spec.fileSizeBytes,
+    mimeType: 'application/pdf',
+    visibility: 'private',
+    uploadStatus: 'uploaded',
+    issuedAt: spec.capturedAt,
+    capturedAt: spec.capturedAt,
+    description: spec.description,
+    metadata: {
+      evidencePurpose: 'transport_distance',
+      evidenceReference: spec.evidenceReference,
+      distanceSource: 'document',
     },
   }));
 }

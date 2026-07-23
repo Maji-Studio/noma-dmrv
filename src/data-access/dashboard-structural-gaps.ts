@@ -135,7 +135,7 @@ function biocharDistanceEvidenceMissing(
           or ${transportEvidenceDocumentCount(
             organizationId,
             "delivery",
-            deliveries.id,
+            "deliveryId",
           )} = 0
         )
     )
@@ -330,7 +330,7 @@ export async function loadDashboardStructuralGapCounts(
           or ${transportEvidenceDocumentCount(
             orgId,
             "feedstock",
-            feedstocks.id,
+            "feedstockId",
           )} = 0
         `),
       )
@@ -380,7 +380,7 @@ export async function loadDashboardStructuralGapCounts(
           or ${transportEvidenceDocumentCount(
             orgId,
             "transport_leg",
-            transportLegs.id,
+            "transportLegId",
           )} = 0
         `),
       )
@@ -469,7 +469,7 @@ export async function loadDashboardStructuralGapCounts(
             or ${transportEvidenceDocumentCount(
               orgId,
               "delivery",
-              deliveries.id,
+              "deliveryId",
             )} = 0
           `,
         ),

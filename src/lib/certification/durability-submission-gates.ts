@@ -7,9 +7,9 @@
  *   (a) Eligibility — the batch's POOLED replicate MEAN must satisfy
  *       H/C_org < 0.5 AND O/C_org < 0.2 (module §3 Table 2, judged per D8).
  *       Indeterminate chemistry (a missing ratio) fails closed.
- *   (b) Sampling presence — every Method A batch must carry ≥ 1 sample (§8.3). A
- *       Method B batch MAY be unsampled (it submits via the unsampled blueprint),
- *       so it is not blocked here.
+ *   (b) Sampling presence — every batch created as sampled must carry ≥ 1
+ *       sample (§8.3). A batch created as unsampled submits through the
+ *       unsampled blueprint and is not judged on chemistry here.
  *   (c) Replicate sufficiency — any SAMPLED batch must pool ≥ 3 replicates
  *       (§8.3.1) across its member runs/days.
  *
@@ -26,7 +26,6 @@
  * chemistry datapoints (Phase E), not here.
  */
 
-import { METHOD_B_SAMPLING_CADENCE_BATCHES } from "@/config/certification";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
   MINIMUM_REPLICATES_PER_BATCH,
@@ -36,10 +35,7 @@ import {
   isUsableNumber,
   type ReplicateRatios,
 } from "@/lib/calculations/biochar-eligibility";
-import {
-  deriveSamplingRequirement,
-  type SamplingMethod,
-} from "./sampling-requirements";
+import type { CreditBatchSampling } from "@/schemas/credit-batches";
 
 /** Provenance of one pooled replicate, for the distribution (cluster) check. */
 export interface ReplicateProvenance {
@@ -57,14 +53,8 @@ export interface BatchGateFacts {
   /** ISO date-only production window; null skips window checks fail-softly. */
   startDate?: string | null;
   endDate?: string | null;
-  /**
-   * The (facility, feedstock) production process this batch belongs to — runs
-   * grouped by it for the Method B cadence check (d). Null falls back to the
-   * batch id (its own singleton group).
-   */
-  productionProcessId: string | null;
-  /** The batch's effective sampling method at its immutable start boundary. */
-  samplingMethod: SamplingMethod;
+  /** Immutable sampled/unsampled choice stored at batch creation. */
+  sampling: CreditBatchSampling;
   /** Per-replicate stability ratios, pooled across the batch's member runs/days. */
   replicates: ReplicateRatios[];
   /** Parallel to `replicates` — each replicate's run/day, for the cluster warning. */
@@ -198,15 +188,15 @@ export function evaluateDurabilitySubmissionGates(
       }
     }
 
-    // (b) Method A presence — every Method A batch must be sampled.
+    // An unsampled choice is the regime boundary: incidental sample rows do not
+    // reclassify the batch or route it through sampled chemistry gates.
+    if (batch.sampling === "unsampled") continue;
+
+    // (b) A batch explicitly created as sampled must carry sample evidence.
     if (sampleRowCount === 0) {
-      if (batch.samplingMethod === "method_a") {
-        blockers.push(
-          `Credit batch ${batch.creditBatchCode} (Method A) has no samples — every Method A batch must be sampled before submission (§8.3).`,
-        );
-      }
-      // Method B unsampled batch is valid (submits via the unsampled blueprint);
-      // its cadence is enforced across the process's batch set in (d) below.
+      blockers.push(
+        `Credit batch ${batch.creditBatchCode} is marked sampled but has no samples (§8.3).`,
+      );
       continue;
     }
 
@@ -258,40 +248,6 @@ export function evaluateDurabilitySubmissionGates(
     } else if (eligibility.eligible === null) {
       blockers.push(
         `Credit batch ${batch.creditBatchCode} eligibility is indeterminate — missing H/C_org or O/C_org chemistry; cannot confirm it meets module §3 Table 2.`,
-      );
-    }
-  }
-
-  // (d) Method B cadence — across a production process's batch set, ≥ ceil(N /
-  // cadence) batches must be sampled (§8.3.1.2). Method A's per-batch obligation
-  // is covered by (b); Method B's 1-in-10 cadence is a cross-batch property, so
-  // group by production process, then judge only that process's effective
-  // Method-B-era batches. A removal may contain pre-unlock Method A history and
-  // later Method B batches from the same process; the earlier batches must not
-  // satisfy or suppress the post-unlock cadence.
-  const batchesByProcess = new Map<string, BatchGateFacts[]>();
-  for (const batch of batches) {
-    const key = batch.productionProcessId ?? batch.creditBatchId;
-    const existing = batchesByProcess.get(key);
-    if (existing) existing.push(batch);
-    else batchesByProcess.set(key, [batch]);
-  }
-  for (const processBatches of batchesByProcess.values()) {
-    const methodBBatches = processBatches.filter(
-      (batch) => batch.samplingMethod === "method_b",
-    );
-    if (methodBBatches.length === 0) continue;
-    const requirement = deriveSamplingRequirement(
-      "method_b",
-      methodBBatches.map((batch) => ({
-        batchId: batch.creditBatchId,
-        batchCode: batch.creditBatchCode,
-        sampleCount: batch.replicates.length,
-      })),
-    );
-    if (requirement.cadenceShortfall > 0) {
-      blockers.push(
-        `Method B process batch set samples ${requirement.sampledBatches}/${requirement.requiredSampledBatches} required batch(es) (≥ 1 per ${METHOD_B_SAMPLING_CADENCE_BATCHES}); sample ${requirement.cadenceShortfall} more before submission (§8.3.1.2).`,
       );
     }
   }

@@ -4,7 +4,12 @@
  * Includes query keys, mutations, optimistic updates, and cache invalidation
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type {
   ProductionRunFilterData,
   CreateProductionRunData,
@@ -28,11 +33,14 @@ import {
   addProductionRunReadingFn,
 } from "@/fn/production-runs";
 import { creditBatchKeys } from "@/hooks/use-credit-batches";
+import { invalidateCertificationReadiness } from "@/hooks/use-certification";
 import { facilityKeys } from "@/hooks/use-facilities";
 import { reactorKeys } from "@/hooks/use-reactors";
 import { ProductionRunConflictError } from "@/lib/production-runs/overlap-conflict";
 
 import type { MutationCallbacks, OptimisticUpdateOptions } from "./types";
+
+const EXACT_ID_CHUNK_SIZE = 100;
 
 /**
  * Turn a failed production-run action into a thrown error, preserving the
@@ -83,18 +91,46 @@ export function useProductionRuns(
   filters?: Partial<ProductionRunFilterData>,
   options?: { enabled?: boolean },
 ) {
-  return useQuery({
-    queryKey: productionRunKeys.list(filters),
-    queryFn: async () => {
-      const result = await getProductionRunsFn(filters);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    staleTime: 30000, // 30 seconds
-    enabled: options?.enabled,
+  const exactIds = filters?.ids ?? [];
+  const requests = exactIds.length > 0
+    ? Array.from(
+        { length: Math.ceil(exactIds.length / EXACT_ID_CHUNK_SIZE) },
+        (_, index) => {
+          const ids = exactIds.slice(
+            index * EXACT_ID_CHUNK_SIZE,
+            (index + 1) * EXACT_ID_CHUNK_SIZE,
+          );
+          return { ...filters, ids, page: 1, pageSize: ids.length };
+        },
+      )
+    : [filters];
+  const results = useQueries({
+    queries: requests.map((request) => ({
+      queryKey: productionRunKeys.list(request),
+      queryFn: async () => {
+        const result = await getProductionRunsFn(request);
+        if (!result.success) throw new Error(result.error);
+        return result.data;
+      },
+      staleTime: 30000,
+      enabled: options?.enabled,
+    })),
   });
+
+  const items = results.flatMap((result) => result.data?.items ?? []);
+  return {
+    data: exactIds.length > 0
+      ? {
+          items,
+          total: items.length,
+          page: 1,
+          pageSize: Math.max(items.length, 1),
+          totalPages: items.length > 0 ? 1 : 0,
+        }
+      : results[0]?.data,
+    isLoading: results.some((result) => result.isLoading),
+    error: results.find((result) => result.error)?.error ?? null,
+  };
 }
 
 /**
@@ -238,6 +274,7 @@ export function useCreateProductionRun(
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
+      invalidateCertificationReadiness(queryClient);
 
       // Pre-populate the detail cache with the new run
       queryClient.setQueryData(productionRunKeys.detail(data.id), data);
@@ -345,12 +382,13 @@ export function useUpdateProductionRun(
       // Invalidate to ensure consistency
       queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
       queryClient.invalidateQueries({ queryKey: productionRunKeys.statsPrefix() });
-      // Completing a run makes it selectable by the credit-batch form — its
-      // cached run options must not keep serving the pre-completion empty
-      // result for another staleTime window (QA 2026-07-21 F5).
+      // Completing a run can now attach it to a matching credit batch in the
+      // same transaction. Refresh every batch surface: membership counts,
+      // detail lineage, previews/readiness, and form options all change.
       queryClient.invalidateQueries({
-        queryKey: creditBatchKeys.productionRunOptionsPrefix(),
+        queryKey: creditBatchKeys.all,
       });
+      invalidateCertificationReadiness(queryClient);
 
       await callbacks?.onSuccess?.(data, variables);
     },
@@ -463,6 +501,7 @@ export function useDeleteProductionRun(
       queryClient.invalidateQueries({
         queryKey: creditBatchKeys.productionRunOptionsPrefix(),
       });
+      invalidateCertificationReadiness(queryClient);
       // Invalidate facility data
       if (facilityId) {
         queryClient.invalidateQueries({
@@ -535,6 +574,7 @@ export function useAddProductionRunReading(
       queryClient.invalidateQueries({
         queryKey: productionRunKeys.readings(variables.productionRunId),
       });
+      invalidateCertificationReadiness(queryClient);
 
       await callbacks?.onSuccess?.(data, variables);
     },

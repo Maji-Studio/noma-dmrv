@@ -478,6 +478,7 @@ export function DeliveryList() {
 
       {/* Unified Side Sheet */}
       <EntitySideSheet
+        numberedSections
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         onCloseAttempt={confirmCreateClose}
@@ -546,42 +547,22 @@ export function DeliveryList() {
                       entityType="delivery"
                       entityId={sideSheetEntity.id}
                       readOnly
+                      embedded
                       distanceSource={sideSheetEntity.effectiveDistanceSource}
                     />
                   ),
-                },
-                {
-                  title: "Record Relationships & Metadata",
-                  fields: [
-                    { label: "Code", value: sideSheetEntity.code },
-                    { label: "Customer", value: sideSheetEntity.customerName },
-                    { label: "Facility", value: sideSheetEntity.facilityName },
-                    { label: "Biochar Product", value: sideSheetEntity.biocharProductCode },
-                    { label: "Driver", value: sideSheetEntity.driverName },
-                    { label: "Vehicle", value: sideSheetEntity.vehicleName },
-                    {
-                      label: "Certification",
-                      value: (
-                        <EntityCertifyReadinessBadge
-                          readiness={deriveEntityCertifyReadiness("delivery", sideSheetEntity)}
-                          readyLabel="Fields complete"
-                          readinessNoun="delivery fields"
-                        />
-                      ),
-                    },
-                  ],
                 },
               ]
             : undefined
         }
       >
-        {formError && <ServerError message={formError} />}
         <DeliveryForm
           key={sideSheetEntity?.id ?? "create"}
           delivery={sideSheetEntity as Delivery | undefined}
           onSubmit={sideSheetMode === "create" ? handleCreate : handleUpdate}
           onCancel={attemptCloseSideSheet}
           isSubmitting={createDelivery.isPending || updateDelivery.isPending || isFlushing}
+          errorMessage={formError ?? undefined}
           submitLabel={sideSheetMode === "create" ? "Create Delivery" : "Save Changes"}
           deferredAttachments={deferredAttachments}
           focusTarget={sideSheetMode === "edit" ? activeFocusTarget : null}

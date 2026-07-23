@@ -73,7 +73,7 @@ export function formatDurabilityStat(
  * Eligibility chip — the §3 Table 2 verdict (fails closed when indeterminate).
  * Labelled "chemistry eligible" rather than a bare "Eligible": this judges the
  * batch's pooled chemistry only, on a different clock and predicate from the
- * Method-B "baseline samples" counter on Production Processes — a bare
+ * Method-B "baseline samples" counter in the feedstock-type sampling detail — a bare
  * "Eligible" here reads as compliance progress there (QA 2026-07-21 F1).
  */
 function eligibilityChip(

@@ -58,7 +58,6 @@ export function SupplierLocationQuickAddDialog({
       isOpen={isOpen}
       onClose={handleClose}
       title="Add Location"
-      error={error}
       width="lg"
       testId="supplier-location-quick-add-dialog"
     >
@@ -66,6 +65,7 @@ export function SupplierLocationQuickAddDialog({
         onSubmit={handleSubmit}
         onCancel={handleClose}
         isSubmitting={createLocation.isPending}
+        errorMessage={error ?? undefined}
         submitLabel="Add Location"
       />
     </QuickAddDialogShell>

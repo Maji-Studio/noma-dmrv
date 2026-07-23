@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   feedstockTypeUsageOptionsFor,
-  ISOMETRIC_FEEDSTOCK_REF_PREFIX,
-  isometricFeedstockRegistryRef,
   shouldClearCategoryForIsometricSelection,
   shouldSetUsageToPyrolysisForIsometricSelection,
   shouldShowIsometricFeedstockSection,
@@ -44,25 +42,6 @@ describe("feedstockTypeUsageOptionsFor", () => {
     const options = feedstockTypeUsageOptionsFor(true, "blend");
     expect(options).toHaveLength(1);
     expect(options[0].value).toBe("blend");
-  });
-});
-
-describe("ISOMETRIC_FEEDSTOCK_REF_PREFIX and registry reference format", () => {
-  it("prefix is isometric:feedstock_type:", () => {
-    expect(ISOMETRIC_FEEDSTOCK_REF_PREFIX).toBe("isometric:feedstock_type:");
-  });
-
-  it("builds a registry ref by prepending the prefix to the Isometric ID", () => {
-    const ref = isometricFeedstockRegistryRef("ft-abc-123");
-    expect(ref).toBe("isometric:feedstock_type:ft-abc-123");
-  });
-
-  it("the ref starts with the prefix for any non-empty Isometric ID", () => {
-    expect(
-      isometricFeedstockRegistryRef("any-id").startsWith(
-        ISOMETRIC_FEEDSTOCK_REF_PREFIX,
-      ),
-    ).toBe(true);
   });
 });
 

@@ -42,6 +42,7 @@ interface FacilityFormProps {
   onSubmit: (data: FacilityFormData) => Promise<void> | void;
   onCancel?: () => void;
   isSubmitting?: boolean;
+  errorMessage?: string;
   submitLabel?: string;
 }
 
@@ -50,6 +51,7 @@ export function FacilityForm({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  errorMessage,
   submitLabel,
 }: FacilityFormProps) {
   const isEditMode = !!facility;
@@ -246,6 +248,7 @@ export function FacilityForm({
       <FormActions
         onCancel={onCancel}
         isSubmitting={isSubmitting}
+        errorMessage={errorMessage}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

@@ -2,7 +2,7 @@
  * Quick Add Dialog Shell
  * Generic dialog wrapper for inline entity creation. Composes the shared
  * `Modal` primitive (chrome, centering, focus, backdrop, ESC) and adds an
- * inset header + error banner that the embedded form sits below.
+ * inset header around the embedded form.
  */
 "use client";
 
@@ -13,7 +13,6 @@ interface QuickAddDialogShellProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
-  error?: string | null;
   /** Width token forwarded to Modal. Defaults to "md" (matches the previous max-w-lg ≈ 512px envelope). */
   width?: ModalWidth;
   /** Test ID for the dialog element */
@@ -25,7 +24,6 @@ export function QuickAddDialogShell({
   isOpen,
   onClose,
   title,
-  error,
   width = "md",
   testId,
   children,
@@ -51,13 +49,8 @@ export function QuickAddDialogShell({
           </h2>
         </div>
 
-        {/* Error banner + form content */}
+        {/* Form content */}
         <div className="p-24 flex flex-col gap-24">
-          {error && (
-            <div role="alert" className="px-12 py-8 bg-[var(--color-signal-red-light)] text-[var(--color-signal-red)] text-[var(--text-s)] rounded-none">
-              {error}
-            </div>
-          )}
           {children}
         </div>
       </div>

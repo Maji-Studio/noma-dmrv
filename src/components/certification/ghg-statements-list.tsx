@@ -3,8 +3,8 @@
  * /certification/ghg-statements). Replaces the card-grid GhgStatementsHub with
  * the app-native DataTable idiom (cf. removals-list / production-runs): one
  * dense, scannable list of every GHG Statement for the selected facility. A row
- * opens a read-only quick view in a side-sheet (`?statement=<id>`, nuqs); the
- * "New GHG Statement" button opens the period-first create drawer.
+ * opens a read-only centered Modal (`?statement=<id>`, nuqs); the
+ * "New GHG Statement" button opens the period-first create dialog.
  *
  * A GHG Statement is an independent, period-anchored artifact that rolls up
  * multiple Removals (ADR 0003); Isometric decides membership server-side by
@@ -13,7 +13,7 @@
  * The status column derives from the persisted `metadata.remoteStatus` overlay
  * (`deriveSubmissionStatus(..., "ghgStatement")`) — NOT a per-row live verifier
  * fetch (P2-a, N+1). The selected statement's heavier detail (remote status,
- * sync events) loads once in the side-sheet.
+ * sync events) loads once in the detail Modal.
  */
 "use client";
 
@@ -33,7 +33,7 @@ import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import { formatDate, formatDateRange } from "@/lib/format-utils";
-import { GhgStatementCreateDrawer } from "./ghg-statement-create-drawer";
+import { GhgStatementCreateDialog } from "./ghg-statement-create-dialog";
 import { GhgStatementDetailSheet } from "./ghg-statement-detail-sheet";
 
 export function GhgStatementsList() {
@@ -47,8 +47,7 @@ export function GhgStatementsList() {
         </span>
         <h1 className="title-heading-2">GHG Statements</h1>
         <p className="body-medium text-[var(--color-text-secondary)] max-w-[680px]">
-          A GHG Statement covers a reporting period and rolls up every Removal
-          Isometric links to it. Create one by picking the period end.
+          Reporting periods and the Removals Isometric links to each.
         </p>
       </header>
 
@@ -56,7 +55,7 @@ export function GhgStatementsList() {
         <EmptyState
           icon={<ClipboardTextIcon size={48} />}
           title="Select a facility"
-          description="Choose a facility from the sidebar to view its GHG statements."
+          description="Select a facility to view its GHG Statements."
         />
       ) : (
         <ListBody facilityId={facilityId} />
@@ -77,7 +76,7 @@ function statementPeriod(item: GhgStatementListItem): {
       }
     : {
         primary: `Ends ${formatDate(reportingPeriodEndOn)}`,
-        secondary: "Period start pending",
+        secondary: "Start set by Isometric",
       };
 }
 
@@ -212,13 +211,12 @@ function ListBody({ facilityId }: { facilityId: string }) {
           <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] px-20 py-12">
             {mappingFailed ? (
               <p className="body-small text-[var(--clr-red)]">
-                Couldn&apos;t verify the Isometric project link. Refresh the
-                page to retry.
+                Isometric project link unavailable. Refresh to retry.
               </p>
             ) : (
               <p className="body-small text-[var(--color-text-secondary)]">
-                Link this facility to an Isometric project (Settings → Registry
-                connection) before creating a GHG statement.
+                Link this facility to an Isometric project in Settings before
+                creating a statement.
               </p>
             )}
           </div>
@@ -232,19 +230,12 @@ function ListBody({ facilityId }: { facilityId: string }) {
           onRowClick={(row) => setStatementId(row.statement.id)}
           aria-label="GHG statements"
           emptyMessage={
-            <div className="flex flex-col items-center justify-center gap-12 py-48">
-              <ClipboardTextIcon
-                size={40}
-                className="text-[var(--color-text-tertiary)]"
-              />
-              <div className="text-center">
-                <h3 className="title-heading-3 mb-1">No GHG statements yet</h3>
-                <p className="body-small text-[var(--color-text-secondary)]">
-                  Create one to roll up submitted removals for a reporting
-                  period.
-                </p>
-              </div>
-            </div>
+            <EmptyState
+              icon={<ClipboardTextIcon size={40} />}
+              title="No GHG Statements yet"
+              description="Create one for submitted Removals in a reporting period."
+              padding="md"
+            />
           }
         />
       </section>
@@ -259,7 +250,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
       )}
 
       {isLinked === true && (
-        <GhgStatementCreateDrawer
+        <GhgStatementCreateDialog
           facilityId={facilityId}
           isProduction={isProduction}
           open={createOpen}

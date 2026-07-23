@@ -236,7 +236,7 @@ export async function createGhgStatementDraft(
     // statement's end. The own-end is excluded so an idempotent re-create
     // (same end, double-click / two tabs) still resolves to the existing row
     // via the submission-claim machinery below rather than being blocked.
-    // `overlappingEnd` is the same rule the create drawer applies client-side.
+    // `overlappingEnd` is the same rule the create dialog applies client-side.
     const existing = await listGhgStatementsForFacility(
       orgCtx,
       parsed.facilityId,

@@ -25,6 +25,9 @@ export const users = pgTable("users", {
   role: text("role").notNull().default("user"), // user | admin
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"), // For Better Auth compatibility
+  // Preference only, never authorization: session creation revalidates this
+  // against current memberships (or all organizations for Platform Admins).
+  lastActiveOrganizationId: text("last_active_organization_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at")
     .notNull()

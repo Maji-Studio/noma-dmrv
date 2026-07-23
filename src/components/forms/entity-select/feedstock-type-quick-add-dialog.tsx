@@ -49,13 +49,13 @@ export function FeedstockTypeQuickAddDialog({
       isOpen={isOpen}
       onClose={onClose}
       title="Add New Feedstock Type"
-      error={error}
       testId="feedstock-type-quick-add-dialog"
     >
       <FeedstockTypeForm
         onSubmit={handleSubmit}
         onCancel={onClose}
         isSubmitting={isSubmitting}
+        errorMessage={error ?? undefined}
         submitLabel="Create Feedstock Type"
         defaultUsage={defaultUsage}
         lockUsage={Boolean(defaultUsage)}

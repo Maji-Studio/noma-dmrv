@@ -18,10 +18,10 @@ import {
 } from "./helpers";
 import {
   allowedProductionRunStatusesFrom,
+  getProductionRunOutcomeViolations,
   PRODUCTION_RUN_STATUSES,
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
-import { dryOutputExceedsDryInput } from "@/lib/calculations/mass-dry";
 
 // ============================================
 // Time-window helpers (start/end date + time pairs)
@@ -155,55 +155,73 @@ export const productionRunFormSchema = z.object({
   .superRefine((data, ctx) => {
     const start = resolveInstant(data.startDate, data.startTime);
     const endPresent = hasEndTime(data.endTime);
+    const endDateVal = data.endDate ?? data.startDate;
+    const end = endPresent ? resolveInstant(endDateVal, data.endTime) : null;
+    const violations = getProductionRunOutcomeViolations({
+      status: data.status,
+      startTime: start,
+      endTime: end,
+      endTimePresent: endPresent,
+      cancellationReason: data.cancellationReason,
+      biocharOutputKg: data.biocharOutputKg,
+      biocharMoisturePercent: data.biocharMoisturePercent,
+      feedstockWetMassKg: data.feedstockWetMassKg,
+      feedstockMoisturePercent: data.feedstockMoisturePercent,
+      feedstock: {
+        basis: "form-inputs",
+        storageLocationId: data.feedstockStorageLocationId,
+      },
+    });
 
-    if (endPresent) {
-      const endDateVal = data.endDate ?? data.startDate;
-      const end = resolveInstant(endDateVal, data.endTime);
-      if (start && end && end.getTime() <= start.getTime()) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["endTime"],
-          message: "End must be after start — check the end date for overnight runs.",
-        });
+    for (const violation of violations) {
+      switch (violation.code) {
+        case "end-not-after-start":
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["endTime"],
+            message: "End must be after start — check the end date for overnight runs.",
+          });
+          break;
+        case "terminal-end-required":
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["endTime"],
+            message: `A ${violation.status} run needs an end date and time.`,
+          });
+          break;
+        case "complete-output-required":
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["biocharOutputKg"],
+            message: "A complete run needs positive biochar output.",
+          });
+          break;
+        case "feedstock-required":
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["feedstockWetMassKg"],
+            message: `A ${violation.status} run needs a source bin, moisture %, and wet mass to compute consumed feedstock.`,
+          });
+          break;
+        case "cancellation-reason-required":
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["cancellationReason"],
+            message: "Enter a cancellation reason.",
+          });
+          break;
+        case "dry-mass-balance-exceeded":
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["biocharOutputKg"],
+            message: DRY_MASS_BALANCE_MESSAGE,
+          });
+          break;
+        case "running-end-forbidden":
+          // Pre-existing adapter divergence: the mutation rejects this state,
+          // while the form schema has historically allowed it.
+          break;
       }
-    }
-
-    // A run cannot be marked Complete without an end time (a complete run has
-    // finished). Mirrors the server-side data-access guard.
-    if ((data.status === "complete" || data.status === "failed") && !endPresent) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["endTime"],
-        message: `A ${data.status} run needs an end date and time.`,
-      });
-    }
-    if (data.status === "complete" && !(data.biocharOutputKg && data.biocharOutputKg > 0)) {
-      ctx.addIssue({ code: "custom", path: ["biocharOutputKg"], message: "A complete run needs positive biochar output." });
-    }
-    if (
-      (data.status === "complete" || data.status === "failed") &&
-      !(
-        data.feedstockWetMassKg &&
-        data.feedstockWetMassKg > 0 &&
-        data.feedstockStorageLocationId &&
-        data.feedstockMoisturePercent != null
-      )
-    ) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["feedstockWetMassKg"],
-        message: `A ${data.status} run needs a source bin, moisture %, and wet mass to compute consumed feedstock.`,
-      });
-    }
-    if (data.status === "cancelled" && !data.cancellationReason?.trim()) {
-      ctx.addIssue({ code: "custom", path: ["cancellationReason"], message: "Enter a cancellation reason." });
-    }
-    if (dryOutputExceedsDryInput(data)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["biocharOutputKg"],
-        message: DRY_MASS_BALANCE_MESSAGE,
-      });
     }
   });
 
@@ -295,6 +313,9 @@ export const deleteProductionRunSchema = z.object({
  * Used for search, pagination, and filtering
  */
 export const productionRunFilterSchema = z.object({
+  // Exact-record deep link from certification readiness.
+  ids: z.array(z.uuid()).max(100).optional(),
+
   // Text search across code
   search: z
     .string()

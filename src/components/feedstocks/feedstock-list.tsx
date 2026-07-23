@@ -35,7 +35,10 @@ import {
   useUpdateFeedstock,
   useDeleteFeedstock,
 } from "@/hooks/use-feedstocks";
-import type { FeedstockFormData } from "@/schemas/feedstocks";
+import {
+  createFeedstockSchema,
+  type FeedstockFormData,
+} from "@/schemas/feedstocks";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import {
@@ -248,7 +251,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
     entityType: "feedstock",
     entityNoun: "Feedstock",
     executeCreate: async (data: FeedstockFormData) => {
-      const result = await createFeedstock.mutateAsync(data);
+      const result = await createFeedstock.mutateAsync(
+        createFeedstockSchema.parse(data),
+      );
       if (!result.feedstocks[0]) {
         throw new Error("Feedstock creation returned no feedstock");
       }
@@ -497,6 +502,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
 
       {/* Side Sheet */}
       <EntitySideSheet
+        numberedSections
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         onCloseAttempt={confirmCreateClose}
@@ -578,32 +584,10 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
                 entityType="feedstock"
                 entityId={sideSheetEntity.id}
                 readOnly
+                embedded
                 distanceSource={sideSheetEntity.transportDistanceSource}
               />
             ),
-          },
-          {
-            title: "Record Metadata",
-            fields: [
-              { label: "Code", value: sideSheetEntity.code },
-              { label: "Facility", value: sideSheetEntity.facilityName },
-              { label: "Supplier Code", value: sideSheetEntity.supplierCode },
-              { label: "Feedstock Category", value: sideSheetEntity.feedstockTypeCategory ? <span className="capitalize">{sideSheetEntity.feedstockTypeCategory}</span> : null },
-              { label: "Status", value: <span className="capitalize">{sideSheetEntity.status.replace("_", " ")}</span> },
-              {
-                label: "Certification",
-                value: (
-                  <EntityCertifyReadinessBadge
-                    readiness={deriveEntityCertifyReadiness(
-                      "feedstock",
-                      sideSheetEntity,
-                    )}
-                    readyLabel="Fields complete"
-                    readinessNoun="feedstock fields"
-                  />
-                ),
-              },
-            ],
           },
           {
             title: "Derived Transport",
