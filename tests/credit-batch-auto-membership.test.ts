@@ -12,6 +12,7 @@ import {
   productionRunFeedstocks,
   productionRuns,
   reactors,
+  samples,
   storageLocations,
 } from "@/db/schema";
 import {
@@ -43,10 +44,16 @@ describe("credit batch automatic production-run membership", () => {
   let storageLocationId = "";
   let feedstockId = "";
   let alternateFeedstockTypeId = "";
+  let alternateStorageLocationId = "";
   let alternateFeedstockId = "";
+  let otherFacilityId = "";
+  let otherReactorId = "";
+  let otherStorageLocationId = "";
+  let otherFeedstockId = "";
   const creditBatchIds: string[] = [];
   const removalIds: string[] = [];
   const productionRunIds: string[] = [];
+  const sampleIds: string[] = [];
 
   beforeAll(async () => {
     await ensureTestOrg();
@@ -126,6 +133,19 @@ describe("credit batch automatic production-run membership", () => {
       .returning({ id: feedstockTypes.id });
     alternateFeedstockTypeId = alternateFeedstockType.id;
 
+    const [alternateStorageLocation] = await db
+      .insert(storageLocations)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `BIN-CBAM-ALT-${tag}`,
+        name: `CB auto-membership alternate bin ${tag}`,
+        type: "feedstock_bin",
+        facilityId,
+        feedstockTypeId: alternateFeedstockTypeId,
+      })
+      .returning({ id: storageLocations.id });
+    alternateStorageLocationId = alternateStorageLocation.id;
+
     const [alternateFeedstock] = await db
       .insert(feedstocks)
       .values({
@@ -137,12 +157,67 @@ describe("credit batch automatic production-run membership", () => {
         massDryKg: 100,
         massWetKg: 125,
         moistureContentPercent: 20,
+        storageLocationId: alternateStorageLocationId,
       })
       .returning({ id: feedstocks.id });
     alternateFeedstockId = alternateFeedstock.id;
+
+    const [otherFacility] = await db
+      .insert(facilities)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FAC-CBAM-OTHER-${tag}`,
+        name: `CB auto-membership other facility ${tag}`,
+      })
+      .returning({ id: facilities.id });
+    otherFacilityId = otherFacility.id;
+
+    const [otherReactor] = await db
+      .insert(reactors)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `RE-CBAM-OTHER-${tag}`,
+        identifier: `CB auto-membership other reactor ${tag}`,
+        facilityId: otherFacilityId,
+        reactorType: "auger",
+      })
+      .returning({ id: reactors.id });
+    otherReactorId = otherReactor.id;
+
+    const [otherStorageLocation] = await db
+      .insert(storageLocations)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `BIN-CBAM-OTHER-${tag}`,
+        name: `CB auto-membership other facility bin ${tag}`,
+        type: "feedstock_bin",
+        facilityId: otherFacilityId,
+        feedstockTypeId,
+      })
+      .returning({ id: storageLocations.id });
+    otherStorageLocationId = otherStorageLocation.id;
+
+    const [otherFeedstock] = await db
+      .insert(feedstocks)
+      .values({
+        organizationId: TEST_ORG_ID,
+        code: `FS-CBAM-OTHER-${tag}`,
+        facilityId: otherFacilityId,
+        status: "complete",
+        feedstockTypeId,
+        massDryKg: 100,
+        massWetKg: 125,
+        moistureContentPercent: 20,
+        storageLocationId: otherStorageLocationId,
+      })
+      .returning({ id: feedstocks.id });
+    otherFeedstockId = otherFeedstock.id;
   });
 
   afterAll(async () => {
+    if (sampleIds.length > 0) {
+      await db.delete(samples).where(inArray(samples.id, sampleIds));
+    }
     if (productionRunIds.length > 0) {
       await db
         .delete(creditBatchProductionRuns)
@@ -171,10 +246,15 @@ describe("credit batch automatic production-run membership", () => {
         .delete(certifierRemovals)
         .where(inArray(certifierRemovals.id, removalIds));
     }
-    if (facilityId) {
+    if (facilityId && otherFacilityId) {
       await db
         .delete(productionProcesses)
-        .where(eq(productionProcesses.facilityId, facilityId));
+        .where(
+          inArray(productionProcesses.facilityId, [
+            facilityId,
+            otherFacilityId,
+          ]),
+        );
     }
     if (feedstockId) {
       await db.delete(feedstocks).where(eq(feedstocks.id, feedstockId));
@@ -184,16 +264,33 @@ describe("credit batch automatic production-run membership", () => {
         .delete(feedstocks)
         .where(eq(feedstocks.id, alternateFeedstockId));
     }
-    if (storageLocationId) {
+    if (otherFeedstockId) {
+      await db.delete(feedstocks).where(eq(feedstocks.id, otherFeedstockId));
+    }
+    if (
+      storageLocationId &&
+      alternateStorageLocationId &&
+      otherStorageLocationId
+    ) {
       await db
         .delete(storageLocations)
-        .where(eq(storageLocations.id, storageLocationId));
+        .where(
+          inArray(storageLocations.id, [
+            storageLocationId,
+            alternateStorageLocationId,
+            otherStorageLocationId,
+          ]),
+        );
     }
-    if (reactorId) {
-      await db.delete(reactors).where(eq(reactors.id, reactorId));
+    if (reactorId && otherReactorId) {
+      await db
+        .delete(reactors)
+        .where(inArray(reactors.id, [reactorId, otherReactorId]));
     }
-    if (facilityId) {
-      await db.delete(facilities).where(eq(facilities.id, facilityId));
+    if (facilityId && otherFacilityId) {
+      await db
+        .delete(facilities)
+        .where(inArray(facilities.id, [facilityId, otherFacilityId]));
     }
     if (feedstockTypeId) {
       await db
@@ -249,6 +346,130 @@ describe("credit batch automatic production-run membership", () => {
         eq(creditBatchProductionRuns.productionRunId, running.id),
       );
     expect(membership?.creditBatchId).toBe(batch.id);
+  });
+
+  it("rejects completed-run edits outside the attached cohort without changing links", async () => {
+    const batch = await createCreditBatch(ctx, {
+      code: `CB-CBAM-EDIT-GUARD-${tag}`,
+      facilityId,
+      feedstockTypeId,
+      startDate: new Date("2028-01-01T00:00:00.000Z"),
+      endDate: new Date("2028-01-31T00:00:00.000Z"),
+      productionRunIds: [],
+      currency: "TZS",
+    });
+    creditBatchIds.push(batch.id);
+
+    const run = await createProductionRun(ctx, {
+      code: `PR-CBAM-EDIT-GUARD-${tag}`,
+      facilityId,
+      reactorId,
+      status: "running",
+      startTime: new Date("2028-01-15T08:00:00.000Z"),
+      endTime: null,
+      feedstockWetMassKg: 100,
+      feedstockMoisturePercent: 20,
+      feedstockStorageLocationId: storageLocationId,
+    });
+    productionRunIds.push(run.id);
+
+    const [sample] = await db
+      .insert(samples)
+      .values({
+        organizationId: TEST_ORG_ID,
+        productionRunId: run.id,
+        sampleCode: `S-CBAM-EDIT-GUARD-${tag}`,
+        samplingTime: new Date("2028-01-15T10:00:00.000Z"),
+        totalCarbonPercent: 80,
+        organicCarbonPercent: 78,
+      })
+      .returning({ id: samples.id });
+    sampleIds.push(sample.id);
+
+    await updateProductionRun(ctx, run.id, {
+      status: "complete",
+      endTime: new Date("2028-01-15T12:00:00.000Z"),
+      biocharOutputKg: 30,
+      biocharMoisturePercent: 20,
+    });
+    await expect(
+      updateProductionRun(ctx, run.id, { feedingRateKgHr: 25 }),
+    ).resolves.toBeDefined();
+
+    const [unchangedRun] = await db
+      .select({
+        facilityId: productionRuns.facilityId,
+        reactorId: productionRuns.reactorId,
+        startTime: productionRuns.startTime,
+        endTime: productionRuns.endTime,
+        feedstockStorageLocationId:
+          productionRuns.feedstockStorageLocationId,
+      })
+      .from(productionRuns)
+      .where(eq(productionRuns.id, run.id));
+
+    const expectLinksAndCohortInputsUnchanged = async () => {
+      const [membership] = await db
+        .select({
+          creditBatchId: creditBatchProductionRuns.creditBatchId,
+        })
+        .from(creditBatchProductionRuns)
+        .where(eq(creditBatchProductionRuns.productionRunId, run.id));
+      const [linkedSample] = await db
+        .select({
+          creditBatchId: samples.creditBatchId,
+          productionRunId: samples.productionRunId,
+        })
+        .from(samples)
+        .where(eq(samples.id, sample.id));
+      const [persistedRun] = await db
+        .select({
+          facilityId: productionRuns.facilityId,
+          reactorId: productionRuns.reactorId,
+          startTime: productionRuns.startTime,
+          endTime: productionRuns.endTime,
+          feedstockStorageLocationId:
+            productionRuns.feedstockStorageLocationId,
+        })
+        .from(productionRuns)
+        .where(eq(productionRuns.id, run.id));
+      const feedstockLinks = await db
+        .select({ feedstockId: productionRunFeedstocks.feedstockId })
+        .from(productionRunFeedstocks)
+        .where(eq(productionRunFeedstocks.productionRunId, run.id));
+
+      expect(membership?.creditBatchId).toBe(batch.id);
+      expect(linkedSample).toEqual({
+        creditBatchId: batch.id,
+        productionRunId: run.id,
+      });
+      expect(persistedRun).toEqual(unchangedRun);
+      expect(feedstockLinks).toEqual([{ feedstockId }]);
+    };
+
+    await expect(
+      updateProductionRun(ctx, run.id, {
+        startTime: new Date("2028-02-15T08:00:00.000Z"),
+        endTime: new Date("2028-02-15T12:00:00.000Z"),
+      }),
+    ).rejects.toThrow(/cannot be edited outside its declared cohort/i);
+    await expectLinksAndCohortInputsUnchanged();
+
+    await expect(
+      updateProductionRun(ctx, run.id, {
+        feedstockStorageLocationId: alternateStorageLocationId,
+      }),
+    ).rejects.toThrow(/cannot be edited outside its declared cohort/i);
+    await expectLinksAndCohortInputsUnchanged();
+
+    await expect(
+      updateProductionRun(ctx, run.id, {
+        facilityId: otherFacilityId,
+        reactorId: otherReactorId,
+        feedstockStorageLocationId: otherStorageLocationId,
+      }),
+    ).rejects.toThrow(/cannot be edited outside its declared cohort/i);
+    await expectLinksAndCohortInputsUnchanged();
   });
 
   it("attaches existing matching completed runs when the batch is created", async () => {

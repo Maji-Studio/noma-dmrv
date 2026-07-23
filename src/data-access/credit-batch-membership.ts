@@ -578,8 +578,25 @@ export async function attachProductionRunToMatchingCreditBatch(
   if (!run || run.status !== COMPLETED_PRODUCTION_RUN_STATUS) return null;
 
   const [existingMembership] = await tx
-    .select({ creditBatchId: creditBatchProductionRuns.creditBatchId })
+    .select({
+      creditBatchId: creditBatchProductionRuns.creditBatchId,
+      creditBatchCode: creditBatches.code,
+      facilityId: creditBatches.facilityId,
+      feedstockTypeId: creditBatches.feedstockTypeId,
+      startDate: creditBatches.startDate,
+      endDate: creditBatches.endDate,
+    })
     .from(creditBatchProductionRuns)
+    .innerJoin(
+      creditBatches,
+      and(
+        eq(
+          creditBatches.id,
+          creditBatchProductionRuns.creditBatchId,
+        ),
+        eq(creditBatches.organizationId, ctx.organizationId),
+      ),
+    )
     .where(
       and(
         eq(creditBatchProductionRuns.productionRunId, productionRunId),
@@ -587,13 +604,26 @@ export async function attachProductionRunToMatchingCreditBatch(
       ),
     )
     .limit(1);
-  if (existingMembership) return existingMembership.creditBatchId;
 
   const feedstockTypeId = await resolveSingleRunFeedstockTypeOrNull(
     ctx,
     tx,
     productionRunId,
   );
+  if (
+    existingMembership &&
+    (
+      run.facilityId !== existingMembership.facilityId ||
+      run.date < existingMembership.startDate ||
+      run.date > existingMembership.endDate ||
+      feedstockTypeId !== existingMembership.feedstockTypeId
+    )
+  ) {
+    throw new SafeError(
+      `Production run ${run.code} cannot be edited outside its declared cohort while it belongs to Credit batch ${existingMembership.creditBatchCode}.`,
+    );
+  }
+  if (existingMembership) return existingMembership.creditBatchId;
   if (!feedstockTypeId) return null;
   // Batch declarations and run completions share this predicate lock. The
   // production-run transaction already holds the run row, so both paths order
