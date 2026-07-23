@@ -107,6 +107,12 @@ All from the `@/components/forms` barrel (`src/components/forms/index.ts`) — r
 
 Notes/description/address textareas inside a grid always span full width: wrap in `md:col-span-2` (2-col grids) or `md:col-span-3`.
 
+Free-form **Notes** fields are always the final editable field before
+`FormActions`. Put derived previews or selectable cohorts immediately after the
+inputs that control them, then place Notes after those previews. Documentation
+uploads remain the explicit ordering exception: the upload goes immediately
+before its trailing Notes field.
+
 Dynamic repeatable rows use RHF `useFieldArray` — reference: `src/components/formulations/formulation-form.tsx`.
 
 ### FormSection

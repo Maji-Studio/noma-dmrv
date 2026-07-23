@@ -43,9 +43,7 @@ describe("toBatchHealthFacts", () => {
     expect(health.issueCount).toBe(2);
     expect(
       health.checks.find((check) => check.key === "carbon")?.detail,
-    ).toContain(
-      "At least 3 usable 1000-year lab samples across distinct runs/days",
-    );
+    ).toContain("At least 3 usable 1000-year lab samples");
     expect(
       health.checks.find((check) => check.key === "carbon")?.detail,
     ).toContain("complete H/C_org + O/C_org chemistry");

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { isCreateIntentValue } from "@/lib/create-intent";
 
 export interface OpenCreateIntentOptions {
@@ -35,7 +35,6 @@ export function useOpenCreateIntent(
     typeof optionsOrLegacyCallback === "function"
       ? null
       : (optionsOrLegacyCallback.initialContext ?? null);
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const handledRef = useRef(false);
@@ -70,10 +69,15 @@ export function useOpenCreateIntent(
     }
     const nextQuery = nextParams.toString();
 
-    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, {
-      scroll: false,
-    });
-  }, [contextParam, legacyCallback, pathname, router, searchParams]);
+    // Keep this a same-document URL cleanup. A framework navigation asks the
+    // server page for fresh props, which can remount the client list with
+    // `initialOpen=false` and close the sheet that just opened.
+    window.history.replaceState(
+      window.history.state,
+      "",
+      nextQuery ? `${pathname}?${nextQuery}` : pathname,
+    );
+  }, [contextParam, legacyCallback, pathname, searchParams]);
 
   return {
     isOpen: intent !== null,

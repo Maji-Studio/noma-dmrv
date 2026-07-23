@@ -54,9 +54,9 @@ test.describe("Certification — New-Removal wizard", () => {
 
       await page.goto(`/credit-batches?facility=${facilityId}&create=true`);
       await expect(
-        page.getByRole("dialog").getByText("Create Credit Batch", {
-          exact: true,
-        }),
+        page
+          .getByRole("dialog")
+          .getByRole("heading", { name: "Create Credit Batch", exact: true }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       await expect(page).not.toHaveURL(/(?:\?|&)create=/);
 
@@ -65,7 +65,10 @@ test.describe("Certification — New-Removal wizard", () => {
       );
       const sampleDialog = page.getByRole("dialog");
       await expect(
-        sampleDialog.getByText("Create Sample", { exact: true }),
+        sampleDialog.getByRole("heading", {
+          name: "Create Sample",
+          exact: true,
+        }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       await expect(
         sampleDialog.getByText(batch.code, { exact: true }),

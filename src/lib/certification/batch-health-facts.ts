@@ -38,7 +38,7 @@ const CARBON_INPUT_LABELS: Record<string, string> = {
   hToCorgRatio: "H:Corg ratio",
   // 1000-year blueprint-parity preview gap: < 3 complete (total carbon +
   // s_fraction) replicates — see computeApplicationCo2eStoredBlueprint1000.
-  thousandYearReplicates: `At least ${MINIMUM_REPLICATES_PER_BATCH} usable 1000-year lab samples across distinct runs/days`,
+  thousandYearReplicates: `At least ${MINIMUM_REPLICATES_PER_BATCH} usable 1000-year lab samples`,
   // 1000-year (Eq.6) petrography/TGA gaps — issue #142.
   meanRandomReflectancePercent: "Mean random reflectance (R₀)",
   stdRandomReflectance: "Std dev of R₀",

@@ -3,8 +3,9 @@
  * Reusable credit batch form with React Hook Form integration
  *
  * Form sections:
- * 1. Batch definition — feedstock, startDate, endDate, notes
+ * 1. Batch definition — feedstock, startDate, endDate
  * 2. Production cohort — selected production runs in the production window
+ * 3. Additional information — notes always trail the operational fields
  * Facility durability and registry/accounting values are intentionally absent:
  * neither is a batch input.
  */
@@ -536,21 +537,6 @@ export function CreditBatchForm({
           </FormField>
         </div>
 
-        <FormField
-          id="siteManagementNotes"
-          label="Notes"
-          error={errors.siteManagementNotes?.message}
-        >
-          <FormTextarea
-            id="siteManagementNotes"
-            placeholder="Add optional notes about this credit batch…"
-            disabled={isSubmitting}
-            rows={3}
-            error={!!errors.siteManagementNotes}
-            {...register("siteManagementNotes")}
-          />
-        </FormField>
-
       </FormSection>
 
       {/* ── Production cohort ── */}
@@ -598,6 +584,24 @@ export function CreditBatchForm({
 
       {/* ── Cohort input ledger (live front-loaded production inputs) ── */}
       <CohortInputLedger runs={selectedRuns} />
+
+      {/* Free-form notes trail the operational inputs and their live preview. */}
+      <FormSection title="Additional information">
+        <FormField
+          id="siteManagementNotes"
+          label="Notes"
+          error={errors.siteManagementNotes?.message}
+        >
+          <FormTextarea
+            id="siteManagementNotes"
+            placeholder="Add optional notes about this credit batch…"
+            disabled={isSubmitting}
+            rows={3}
+            error={!!errors.siteManagementNotes}
+            {...register("siteManagementNotes")}
+          />
+        </FormField>
+      </FormSection>
 
       <FormActions
         sticky={stickyActions}
