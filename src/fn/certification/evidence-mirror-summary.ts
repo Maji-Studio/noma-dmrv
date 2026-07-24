@@ -2,8 +2,13 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { getSamplesByCreditBatchIds } from "@/data-access/credit-batch-samples";
 import { listDocumentUploadsForDocuments } from "@/data-access/certifier-document-uploads";
-import { listDocumentsForEntityIds } from "@/data-access/documents";
+import {
+  listDocumentsForEntityIds,
+  type DocumentRow,
+} from "@/data-access/documents";
 import { getTransportLegsForEntities } from "@/data-access/transport-legs";
+import { getStorageProvider } from "@/lib/storage";
+import { SOURCES_MAX_BYTES } from "@/schemas/certification-sources";
 import type { DocumentEntityType } from "@/schemas/documents";
 import { ISOMETRIC_PROVIDER } from "./shared";
 
@@ -16,6 +21,25 @@ interface EvidenceRemovalScope {
   removalId: string | null;
   memberBatches: { id: string }[];
   lineages: ChainOfCustodyData[];
+}
+
+type MirrorCandidateDocument = DocumentRow & {
+  storageKey: string;
+  fileSizeBytes: number;
+  mimeType: string;
+};
+
+function isMirrorCandidateDocument(
+  document: DocumentRow,
+): document is MirrorCandidateDocument {
+  return (
+    Boolean(document.storageKey) &&
+    document.uploadStatus === "uploaded" &&
+    document.fileSizeBytes !== null &&
+    document.fileSizeBytes > 0 &&
+    document.fileSizeBytes <= SOURCES_MAX_BYTES &&
+    Boolean(document.mimeType)
+  );
 }
 
 /** Count source candidates from the submission scope without rebuilding it. */
@@ -69,25 +93,40 @@ export async function loadEvidenceMirrorSummaryForScope(
       listDocumentsForEntityIds(orgCtx, entityType, Array.from(ids)),
     ),
   );
-  const documentIds = Array.from(
-    new Set(
-      documentGroups
-        .flat()
-        .filter(
-          (document) =>
-            document.storageKey !== null &&
-            document.uploadStatus === "uploaded",
-        )
-        .map((document) => document.id),
-    ),
+  const candidatesById = new Map(
+    documentGroups
+      .flat()
+      .filter(isMirrorCandidateDocument)
+      .map((document) => [document.id, document]),
   );
+  const documentIds = Array.from(candidatesById.keys());
   const mirrorRows = await listDocumentUploadsForDocuments(
     orgCtx,
     ISOMETRIC_PROVIDER,
     documentIds,
   );
+  const mirroredDocumentIds = new Set(
+    mirrorRows.map((row) => row.documentId),
+  );
+  const provider = getStorageProvider();
+  const availableDocumentIds = new Set(
+    (
+      await Promise.all(
+        Array.from(candidatesById.values(), async (document) => {
+          if (mirroredDocumentIds.has(document.id)) return document.id;
+          try {
+            const head = await provider.headObject(document.storageKey);
+            return head?.size === document.fileSizeBytes ? document.id : null;
+          } catch {
+            // Keep the advisory warning conservative during a provider outage.
+            return document.id;
+          }
+        }),
+      )
+    ).filter((id): id is string => id !== null),
+  );
   return {
-    total: documentIds.length,
-    mirrored: new Set(mirrorRows.map((row) => row.documentId)).size,
+    total: availableDocumentIds.size,
+    mirrored: mirroredDocumentIds.size,
   };
 }
