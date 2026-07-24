@@ -13,6 +13,35 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-07-24 (protocol re-pin 1.2 → 1.1 + durability tier resolution)
+
+Operator decisions closing the two open questions raised by the same-day
+version audit below:
+
+- **Protocol re-pin (closes `isometric/project-protocol-version`).** The
+  operator confirmed the Certify project's **v1.1** is authoritative and
+  `versions.json` was re-pinned from v1.2 to **v1.1 (patch 1.1.1)**. The module
+  set now follows protocol v1.1's references
+  ([registry](https://registry.isometric.com/protocol/biochar/1.1)): storage is
+  **Biochar Storage in Agricultural Soils v1.1** (`biochar-storage-soil-environments`
+  exists only from protocol v1.2), **Biomass Feedstock Accounting v1.2**
+  (not v1.3), and **GHG Accounting is unreferenced** by v1.1 (it enters with
+  v1.2). `checkProtocolVersionAtSubmit`
+  (`src/fn/certification/protocol-version-preflight.ts`) reads the pin from
+  `versions.json`, so the submit preflight now expects "1.1".
+  **Pending:** `requirements-shortlist.md` and `schema-mapping.md` still derive
+  from the v1.2 extraction; a v1.1 gap-check re-verification is queued. Until
+  it lands, treat v1.2-only requirements (Appendix II monitoring plan, loss
+  accounting, low-C/N N₂O mandates, energy-content emissions allocation, WBC
+  pollutant thresholds) as not applicable to the pinned version.
+- **Durability tier (closes `isometric/project-durability-tier`).** The
+  operator changed the Certify project's "Durability of biochar" setting from
+  200 years to **1000 years** in the Certify UI on 2026-07-24, matching the
+  active template and the noma pipeline's 1000-year sequestration blueprint
+  (`src/fn/certification/submit-removal.ts:submitRemoval` continues to validate
+  local template-to-facility-tier agreement; the API still exposes no project
+  durability field for an automated preflight).
+
 ## 2026-07-24 (GHG Statement registry reconciliation)
 
 The GHG Statements workspace now discovers and reconciles every paginated
