@@ -33,7 +33,7 @@ export const SANDBOX_PROJECT_ID = process.env.ISOMETRIC_DEMO_PROJECT_ID;
 // Mirrors the biochar protocol pin the link dialog writes; only `externalProjectId`
 // + `defaultRemovalTemplateId` are load-bearing for the loaders under test.
 const PROTOCOL_SLUG = "biochar";
-const PROTOCOL_VERSION = "1.2";
+const PROTOCOL_VERSION = "1.1";
 
 // Same base URLs + header auth as `src/lib/isometric/client.ts`, replicated so
 // the template fetch carries no `@/config/env` import surface into Playwright.
@@ -96,6 +96,29 @@ export async function seedCertifierMapping(
     await pool.end();
   }
   return { cleanup: () => deleteCertifierMapping(facilityId) };
+}
+
+/**
+ * Flip a seeded facility onto the 1000-year durability tier. The generic
+ * facility helpers deliberately seed 200-year (the simpler soil-temp flow),
+ * but the sandbox project's only fully-bound removal template carries the
+ * `biochar_sequestration_1000_year` component, and the submit tier guard
+ * requires facility tier ↔ template agreement (ADR 0021). No cleanup needed:
+ * the per-test facility row is torn down by the seed fixture itself.
+ */
+export async function setFacilityDurabilityTier(
+  facilityId: string,
+  tier: "200_year" | "1000_year",
+): Promise<void> {
+  const { db, pool } = createDbConnection();
+  try {
+    await db
+      .update(schema.facilities)
+      .set({ durabilityOption: tier })
+      .where(eq(schema.facilities.id, facilityId));
+  } finally {
+    await pool.end();
+  }
 }
 
 export async function deleteCertifierMapping(facilityId: string): Promise<void> {
@@ -244,8 +267,13 @@ export async function seedGroupedRemovalWithChain(
         facilityId: refs.facilityId,
         reactorId: refs.reactorId,
         status: "complete",
-        startTime: new Date(),
-        endTime: new Date(Date.now() + 4 * 60 * 60 * 1000),
+        // A closed run must lie in the PAST: the submit pipeline stamps the
+        // run window's latest end as the durability datapoints' measured_at,
+        // and the registry rejects a measured_at in the future (live 400,
+        // 2026-07-24). Sampling at "now" is then permitted post-production
+        // sampling (§8.3.1) rather than an impossible pre-window sample.
+        startTime: new Date(Date.now() - 6 * 60 * 60 * 1000),
+        endTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
         biocharOutputKg: BIOCHAR_OUTPUT_KG,
         biocharStorageLocationId: refs.biocharStorageLocationId,
         feedstockStorageLocationId: refs.feedstockStorageLocationId,
@@ -436,6 +464,18 @@ export async function teardownWizardRemovalForBatch(
       .update(schema.creditBatches)
       .set({ removalId: null })
       .where(eq(schema.creditBatches.id, creditBatchId));
+    // A LIVE submit also stamps the batch's front-loaded production-emissions
+    // claim (credit_batches.production_emissions_claimed_by_removal_id); the
+    // removal row cannot be deleted while any batch still claims through it.
+    await db
+      .update(schema.creditBatches)
+      .set({ productionEmissionsClaimedByRemovalId: null })
+      .where(
+        eq(
+          schema.creditBatches.productionEmissionsClaimedByRemovalId,
+          removalId,
+        ),
+      );
     await db
       .delete(schema.certificationSubmissions)
       .where(eq(schema.certificationSubmissions.localEntityId, removalId));
@@ -555,6 +595,13 @@ const SAMPLE_TOTAL_CARBON_PCT = 80;
 const SAMPLE_ORGANIC_CARBON_PCT = 78;
 const SAMPLE_H_TO_CORG_RATIO = 0.4;
 const SAMPLE_O_TO_CORG_RATIO = 0.1;
+// 1000-year lab evidence (certify-field-registry sample descriptors +
+// computeBlueprint1000YearDurability completeness): sReflectanceFraction and
+// randomReflectanceR0Percent must be entered, plus reactive OR residual carbon.
+const SAMPLE_S_REFLECTANCE_FRACTION = 0.9;
+const SAMPLE_RANDOM_REFLECTANCE_R0_PCT = 2.85;
+const SAMPLE_REACTIVE_CARBON_PCT = 32.6;
+const SAMPLE_RESIDUAL_CARBON_PCT = 67.4;
 const READY_SAMPLE_REPLICATE_COUNT = 3;
 const READY_REFERENCE_SOIL_TEMPERATURE_C = 25;
 const READY_REFERENCE_SOIL_TEMPERATURE_SOURCE =
@@ -562,6 +609,8 @@ const READY_REFERENCE_SOIL_TEMPERATURE_SOURCE =
 const TRANSPORT_LEG_DISTANCE_KM = 50;
 const TRANSPORT_LEG_LOAD_MASS_KG = 100;
 const TRANSPORT_LEG_EMISSION_FACTOR = 0.1;
+const READY_TRANSPORT_EVIDENCE_URL =
+  "https://example.invalid/e2e-transport-evidence.pdf";
 const READY_APPLICATION_EVIDENCE_URL = "https://example.com/e2e-geotagged-application.jpg";
 const READY_APPLICATION_EVIDENCE_ROLES = [
   "stockpile",
@@ -607,6 +656,8 @@ export async function seedUngroupedReadyBatchWithChain(
     feedstockTransportLeg: crypto.randomUUID(),
     biocharTransportLeg: crypto.randomUUID(),
     sampleTransportLeg: crypto.randomUUID(),
+    feedstockTransportDocument: crypto.randomUUID(),
+    biocharTransportDocument: crypto.randomUUID(),
   };
   const creditBatchCode = `E2E-RDY-${testRunId}`;
   const applicationCode = `E2E-APP-RDY-${testRunId}`;
@@ -700,8 +751,13 @@ export async function seedUngroupedReadyBatchWithChain(
         facilityId: refs.facilityId,
         reactorId: refs.reactorId,
         status: "complete",
-        startTime: new Date(),
-        endTime: new Date(Date.now() + 4 * 60 * 60 * 1000),
+        // A closed run must lie in the PAST: the submit pipeline stamps the
+        // run window's latest end as the durability datapoints' measured_at,
+        // and the registry rejects a measured_at in the future (live 400,
+        // 2026-07-24). Sampling at "now" is then permitted post-production
+        // sampling (§8.3.1) rather than an impossible pre-window sample.
+        startTime: new Date(Date.now() - 6 * 60 * 60 * 1000),
+        endTime: new Date(Date.now() - 2 * 60 * 60 * 1000),
         biocharOutputKg: READY_BIOCHAR_OUTPUT_KG,
         biocharMoisturePercent: READY_BIOCHAR_MOISTURE_PCT,
         biocharDryMassKg: READY_BIOCHAR_DRY_MASS_KG,
@@ -849,12 +905,44 @@ export async function seedUngroupedReadyBatchWithChain(
           organicCarbonPercent: SAMPLE_ORGANIC_CARBON_PCT,
           hToCOrgRatio: SAMPLE_H_TO_CORG_RATIO,
           oToCOrgRatio: SAMPLE_O_TO_CORG_RATIO,
+          sReflectanceFraction: SAMPLE_S_REFLECTANCE_FRACTION,
+          randomReflectanceR0Percent: SAMPLE_RANDOM_REFLECTANCE_R0_PCT,
+          reactiveCarbonPercent: SAMPLE_REACTIVE_CARBON_PCT,
+          residualCarbonPercent: SAMPLE_RESIDUAL_CARBON_PCT,
         })),
       );
       await tx.insert(schema.transportLegs).values([
-        leg(id.feedstockTransportLeg, "feedstock", refs.feedstockId),
-        leg(id.biocharTransportLeg, "biochar", id.biocharProduct),
+        {
+          ...leg(id.feedstockTransportLeg, "feedstock", refs.feedstockId),
+          distanceSource: "document" as const,
+        },
+        {
+          ...leg(id.biocharTransportLeg, "biochar", id.biocharProduct),
+          distanceSource: "document" as const,
+        },
         leg(id.sampleTransportLeg, "sample", id.samples[0]),
+      ]);
+      await tx.insert(schema.documents).values([
+        {
+          organizationId: DEC_ORG_ID,
+          id: id.feedstockTransportDocument,
+          entityType: "feedstock",
+          entityId: refs.feedstockId,
+          documentType: "weighbridge_ticket",
+          fileUrl: READY_TRANSPORT_EVIDENCE_URL,
+          fileName: `e2e-feedstock-transport-evidence-${testRunId}.pdf`,
+          uploadStatus: "uploaded",
+        },
+        {
+          organizationId: DEC_ORG_ID,
+          id: id.biocharTransportDocument,
+          entityType: "delivery",
+          entityId: id.delivery,
+          documentType: "bill_of_lading",
+          fileUrl: READY_TRANSPORT_EVIDENCE_URL,
+          fileName: `e2e-biochar-transport-evidence-${testRunId}.pdf`,
+          uploadStatus: "uploaded",
+        },
       ]);
     });
   } finally {
@@ -884,6 +972,14 @@ export async function seedUngroupedReadyBatchWithChain(
           await tx
             .delete(schema.productionProcesses)
             .where(eq(schema.productionProcesses.id, id.productionProcess));
+          await tx
+            .delete(schema.documents)
+            .where(
+              inArray(schema.documents.id, [
+                id.feedstockTransportDocument,
+                id.biocharTransportDocument,
+              ]),
+            );
           await tx
             .delete(schema.transportLegs)
             .where(

@@ -3,7 +3,9 @@ import {
   CO2_C_MOLAR_RATIO,
   F_DURABLE_1000_CAP,
   F_DURABLE_MAX,
+  PINNED_SOIL_STORAGE_MODULE_VERSION,
   SOIL_STORAGE_MODULE_VERSION,
+  SOIL_STORAGE_PREVIEW_REVERIFIED,
   SOIL_TEMPERATURE_FLOOR_C,
   computeApplicationCo2eStored,
   computeCo2eStoredTonnes,
@@ -23,14 +25,16 @@ const AP_101 = {
   inorganicCarbonPercent: 0.9,
 };
 
-describe("drift locks against the certified v1.2 module", () => {
+describe("legacy-preview drift locks pending v1.1 re-verification", () => {
   it("uses the isotope-weighted 44.01/12.01 ratio, NOT the textbook 44/12", () => {
     expect(CO2_C_MOLAR_RATIO).toBeCloseTo(3.66445, 5);
     expect(CO2_C_MOLAR_RATIO).not.toBe(44 / 12);
   });
 
-  it("is pinned to the storage module patch version recorded in versions.json", () => {
+  it("keeps the legacy source explicit and fails closed against the current pin", () => {
     expect(SOIL_STORAGE_MODULE_VERSION).toBe("1.2.0");
+    expect(PINNED_SOIL_STORAGE_MODULE_VERSION).toBe("1.1.0");
+    expect(SOIL_STORAGE_PREVIEW_REVERIFIED).toBe(false);
   });
 
   it("caps the 1000-year durable fraction at the SAME 0.95 ceiling as the 200-year path", () => {
