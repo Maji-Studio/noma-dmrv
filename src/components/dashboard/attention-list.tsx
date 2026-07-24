@@ -10,6 +10,8 @@ import { ArrowRightIcon, CheckCircleIcon } from "@phosphor-icons/react/dist/ssr"
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { DashboardAttentionItem } from "@/data-access/dashboard-overview";
 import type { DashboardStructuralGap } from "@/data-access/dashboard-structural-gaps";
+import { STATUS_STATE_COLOR_TOKENS } from "@/lib/status-state";
+import { deriveAttentionSummaryState } from "./dashboard-status-state";
 import { DashboardPanel } from "./dashboard-panel";
 import { StructuralGapList } from "./structural-gap-list";
 
@@ -33,16 +35,18 @@ export function AttentionList({
     0,
   );
   const displayedOpenCount = structuralGapTotal + attention.length;
+  const summaryState = deriveAttentionSummaryState({ total, flagsTotal });
 
   return (
     <DashboardPanel
       title="Needs attention"
       meta={
-        total > 0 ? (
-          <span className="label-micro text-[var(--st-wait)]">{total} open</span>
-        ) : (
-          <span className="label-micro text-[var(--st-ok)]">All clear</span>
-        )
+        <span
+          className="label-micro"
+          style={{ color: STATUS_STATE_COLOR_TOKENS[summaryState] }}
+        >
+          {total > 0 ? `${total} open` : "All clear"}
+        </span>
       }
     >
       <StructuralGapList gaps={structuralGaps} />

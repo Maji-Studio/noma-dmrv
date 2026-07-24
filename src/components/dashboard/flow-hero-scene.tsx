@@ -19,6 +19,8 @@ import type {
   DashboardStation,
   DashboardStationKey,
 } from "@/data-access/dashboard-overview";
+import { STATUS_STATE_COLOR_TOKENS } from "@/lib/status-state";
+import { deriveWorstDashboardState } from "./dashboard-status-state";
 import { SCENE_BG } from "./flow-hero-defs";
 import type { FlowHeroView } from "./flow-hero-types";
 import "./flow-hero.css";
@@ -502,14 +504,22 @@ export function FlowHeroScene({
           .map((station) => (
             <div
               key={`reason-${station.key}`}
-              className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap text-[12px] font-light text-[var(--st-wait)]"
+              className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap text-[12px] font-light"
               style={{
                 left: pctX(STATION_GEO[station.key].labelX),
                 top: pctY(REASON_Y),
               }}
               aria-hidden
             >
-              {station.reasons.map((reason) => reason.text).join(" · ")}
+              {station.reasons.map((reason, index) => (
+                <span
+                  key={reason.text}
+                  style={{ color: STATUS_STATE_COLOR_TOKENS[reason.state] }}
+                >
+                  {index > 0 ? " · " : ""}
+                  {reason.text}
+                </span>
+              ))}
             </div>
           ))}
 
@@ -541,16 +551,20 @@ export function FlowHeroScene({
           .map((station) => {
             const badge = STATION_GEO[station.key].badge!;
             const emphasized = view === "attention";
+            const stationState = deriveWorstDashboardState(
+              station.reasons.map((reason) => reason.state),
+            );
             return (
               <div
                 key={`badge-${station.key}`}
                 className={[
-                  "pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-full bg-[var(--st-wait)] font-[family-name:var(--font-mono)] font-medium leading-none text-white transition-all",
+                  "pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-full font-[family-name:var(--font-mono)] font-medium leading-none text-white transition-all",
                   emphasized ? "px-10 py-6 text-[13px]" : "px-8 py-4 text-[10.5px]",
                 ].join(" ")}
                 style={{
                   left: pctX(badge.x),
                   top: pctY(badge.y),
+                  background: STATUS_STATE_COLOR_TOKENS[stationState],
                   boxShadow: "2px 2px 0 var(--clr-dark-purple-10)",
                 }}
                 aria-hidden
@@ -563,8 +577,12 @@ export function FlowHeroScene({
       {/* Running-runs chip under the production badge (overview only). */}
       {interactive && view === "overview" && runningRuns > 0 && (
         <div
-          className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap rounded-full bg-[var(--st-run)] px-8 py-4 font-[family-name:var(--font-mono)] text-[9px] font-medium uppercase leading-none tracking-[0.08em] text-white"
-          style={{ left: pctX(632), top: pctY(238) }}
+          className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap rounded-full px-8 py-4 font-[family-name:var(--font-mono)] text-[9px] font-medium uppercase leading-none tracking-[0.08em] text-white"
+          style={{
+            left: pctX(632),
+            top: pctY(238),
+            background: STATUS_STATE_COLOR_TOKENS["in-progress"],
+          }}
           aria-hidden
         >
           {runningRuns} running
@@ -596,7 +614,7 @@ export function FlowHeroScene({
               <span
                 className="h-8 w-8 flex-none rounded-full"
                 style={{
-                  background: reason.tone === "run" ? "var(--st-run)" : "var(--st-wait)",
+                  background: STATUS_STATE_COLOR_TOKENS[reason.state],
                 }}
               />
               <span className="text-[12.5px] font-light">{reason.text}</span>

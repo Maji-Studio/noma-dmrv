@@ -13,6 +13,10 @@ import type {
   DashboardMassFlowSegment,
   DashboardStation,
 } from "@/data-access/dashboard-overview";
+import {
+  STATUS_STATE_COLOR_TOKENS,
+  type StatusStateClass,
+} from "@/lib/status-state";
 import { FlowHeroDefs } from "./flow-hero-defs";
 import { FlowHeroMobile } from "./flow-hero-mobile";
 import { FlowHeroScene } from "./flow-hero-scene";
@@ -29,9 +33,10 @@ interface FlowHeroProps {
   facilityId: string;
 }
 
-const LEGEND: { label: string; token: string }[] = [
-  { label: "Needs attention", token: "var(--st-wait)" },
-  { label: "Running", token: "var(--st-run)" },
+const LEGEND: { label: string; state: StatusStateClass }[] = [
+  { label: "Blocking issue", state: "error" },
+  { label: "Upcoming or pending", state: "warning" },
+  { label: "Running", state: "in-progress" },
 ];
 
 const PLACEHOLDER_STATIONS: DashboardStation[] = (
@@ -183,7 +188,7 @@ export function FlowHero({
           >
             <span
               className="h-8 w-8 rounded-full"
-              style={{ background: entry.token }}
+              style={{ background: STATUS_STATE_COLOR_TOKENS[entry.state] }}
               aria-hidden
             />
             {entry.label}

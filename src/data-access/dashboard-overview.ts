@@ -57,7 +57,7 @@ export type {
   DashboardStation,
   DashboardStationKey,
   DashboardStationReason,
-  DashboardStationTone,
+  DashboardStationState,
 } from "./dashboard-stations";
 
 export type DashboardRange = "week" | "month" | "all";

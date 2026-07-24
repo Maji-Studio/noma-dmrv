@@ -23,6 +23,7 @@ import {
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
+import type { StatusStateClass } from "@/lib/status-state";
 import { requireOrgScope } from "./utils";
 import {
   applicationEvidenceGapWhere,
@@ -49,11 +50,14 @@ export type DashboardStationKey =
   | "deliveries"
   | "applications";
 
-/** Status-ramp tone for a station reason row — never color-only in the UI. */
-export type DashboardStationTone = "wait" | "run";
+/** Canonical status state for a station reason row — never color-only in the UI. */
+export type DashboardStationState = Extract<
+  StatusStateClass,
+  "error" | "warning" | "in-progress"
+>;
 
 export interface DashboardStationReason {
-  tone: DashboardStationTone;
+  state: DashboardStationState;
   text: string;
 }
 
@@ -560,7 +564,7 @@ export async function getDashboardStations(
       attention: feedstockMissing,
       reasons:
         feedstockMissing > 0
-          ? [{ tone: "wait", text: `${plural(feedstockMissing, "record")} missing data` }]
+          ? [{ state: "error", text: `${plural(feedstockMissing, "record")} missing data` }]
           : [],
       href: facilityHref("/feedstocks", facilityId),
     },
@@ -572,10 +576,10 @@ export async function getDashboardStations(
       attention: runsMissingMass,
       reasons: [
         ...(runsMissingMass > 0
-          ? [{ tone: "wait" as const, text: `${plural(runsMissingMass, "run")} missing mass data` }]
+          ? [{ state: "error" as const, text: `${plural(runsMissingMass, "run")} missing mass data` }]
           : []),
         ...(runningRuns > 0
-          ? [{ tone: "run" as const, text: `${runningRuns} running now` }]
+          ? [{ state: "in-progress" as const, text: `${runningRuns} running now` }]
           : []),
       ],
       href: facilityHref("/production-runs", facilityId),
@@ -588,7 +592,7 @@ export async function getDashboardStations(
       attention: productsUnlinked,
       reasons:
         productsUnlinked > 0
-          ? [{ tone: "wait", text: `${plural(productsUnlinked, "product")} not linked to a run` }]
+          ? [{ state: "error", text: `${plural(productsUnlinked, "product")} not linked to a run` }]
           : [],
       href: facilityHref("/biochar-products", facilityId),
     },
@@ -600,7 +604,7 @@ export async function getDashboardStations(
       attention: deliveriesUpcoming,
       reasons:
         deliveriesUpcoming > 0
-          ? [{ tone: "wait", text: `${plural(deliveriesUpcoming, "upcoming delivery", "upcoming deliveries")}` }]
+          ? [{ state: "warning", text: `${plural(deliveriesUpcoming, "upcoming delivery", "upcoming deliveries")}` }]
           : [],
       href: facilityHref("/deliveries", facilityId),
     },
@@ -612,7 +616,7 @@ export async function getDashboardStations(
       attention: evidenceGaps,
       reasons:
         evidenceGaps > 0
-          ? [{ tone: "wait", text: `${plural(evidenceGaps, "evidence gap")}` }]
+          ? [{ state: "error", text: `${plural(evidenceGaps, "evidence gap")}` }]
           : [],
       href: facilityHref("/applications", facilityId),
     },
