@@ -79,6 +79,23 @@ export interface GhgStatementBreakdownInput {
   ghgStatementStatus: RemoteGhgStatus | null;
 }
 
+export function hasExactGhgEntryMembership(
+  localEntryIds: string[],
+  remoteEntryIds: string[],
+): boolean {
+  if (localEntryIds.length === 0 || remoteEntryIds.length === 0) return false;
+  const localIds = new Set(localEntryIds);
+  const remoteIds = new Set(remoteEntryIds);
+  if (
+    localIds.size !== localEntryIds.length ||
+    remoteIds.size !== remoteEntryIds.length ||
+    localIds.size !== remoteIds.size
+  ) {
+    return false;
+  }
+  return Array.from(localIds).every((id) => remoteIds.has(id));
+}
+
 // Combine independent per-entry standard deviations in quadrature (root sum of
 // squares) per Isometric's GHG-accounting uncertainty propagation: summing
 // linearly would overstate the spread by ignoring that random errors partly

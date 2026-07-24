@@ -1,16 +1,13 @@
 "use server";
 
 import { z } from "zod";
-import { and, eq, inArray } from "drizzle-orm";
 import { env } from "@/config/env";
-import { db } from "@/db";
-import { certifierRemovals } from "@/db/schema/certification";
+import { listCreditBatchCertificationLinks } from "@/data-access/credit-batch-certification-links";
 import { requireOrgFacility } from "@/data-access/utils";
 import {
   listRecentSyncEvents,
   type CertifierSyncEventRow,
 } from "@/data-access/certification";
-import { creditBatches } from "@/db/schema";
 import { getLatestSubmissionsForEntities } from "@/data-access/certification";
 import {
   listRemovalsForFacility,
@@ -230,27 +227,10 @@ export async function loadCreditBatchHealthSummaries(
       .parse(batchIds);
     if (ids.length === 0) return {};
 
-    const batchFacilityRows = await db
-      .select({
-        id: creditBatches.id,
-        facilityId: creditBatches.facilityId,
-        removalId: creditBatches.removalId,
-        ghgStatementId: certifierRemovals.ghgStatementId,
-      })
-      .from(creditBatches)
-      .leftJoin(
-        certifierRemovals,
-        and(
-          eq(creditBatches.removalId, certifierRemovals.id),
-          eq(certifierRemovals.organizationId, orgCtx.organizationId),
-        ),
-      )
-      .where(
-        and(
-          inArray(creditBatches.id, ids),
-          eq(creditBatches.organizationId, orgCtx.organizationId),
-        ),
-      );
+    const batchFacilityRows = await listCreditBatchCertificationLinks(
+      orgCtx,
+      ids,
+    );
     const facilityByBatchId = new Map(
       batchFacilityRows.map((row) => [row.id, row.facilityId]),
     );
