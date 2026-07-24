@@ -11,7 +11,10 @@ import type { Order } from "@/db/schema";
 import { useCreateOrder, useDeleteOrder, useOrders, useUpdateOrder } from "@/hooks/use-orders";
 import { useCustomers } from "@/hooks/use-customers";
 import { useDebounce } from "@/hooks/use-debounce";
-import { useListPagination } from "@/hooks/use-list-pagination";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
@@ -173,6 +176,12 @@ export function OrderList() {
   const orders = ordersData?.items ?? [];
   const totalOrders = ordersData?.total ?? 0;
   const totalPages = ordersData?.totalPages ?? 0;
+  useReconcileListPage({
+    currentPage,
+    totalPages,
+    isLoading,
+    setCurrentPage,
+  });
   const totalDeliveries = orders.reduce((sum, o) => sum + o.deliveryCount, 0);
   const totalQuantityKg = orders.reduce((sum, o) => sum + o.quantityKg, 0);
 

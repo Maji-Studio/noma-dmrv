@@ -41,7 +41,10 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useDebounce } from "@/hooks/use-debounce";
-import { useListPagination } from "@/hooks/use-list-pagination";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
 import {
   FacilityCertifierLinkLoader,
   FacilityCertifierSummary,
@@ -114,6 +117,12 @@ export function FacilityList() {
   const facilities = facilitiesData?.items ?? [];
   const totalFacilities = facilitiesData?.total ?? 0;
   const totalPages = facilitiesData?.totalPages ?? 0;
+  useReconcileListPage({
+    currentPage,
+    totalPages,
+    isLoading,
+    setCurrentPage,
+  });
   const totalReactors = facilities.reduce((sum, facility) => sum + facility.reactorCount, 0);
   const totalStorageBins = facilities.reduce(
     (sum, facility) => sum + facility.storageLocationCount,

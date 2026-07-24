@@ -19,7 +19,10 @@ import {
 import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useDebounce } from "@/hooks/use-debounce";
-import { useListPagination } from "@/hooks/use-list-pagination";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { useCreateTransportLeg } from "@/hooks/use-transport-legs";
@@ -261,6 +264,12 @@ export function SampleList({
 
   const samples = samplesData?.items ?? [];
   const totalPages = samplesData?.totalPages ?? 0;
+  useReconcileListPage({
+    currentPage,
+    totalPages,
+    isLoading,
+    setCurrentPage,
+  });
   useEffect(() => {
     if (!focusedSampleId) return;
     if (focusedSample.error || (focusedSample.isSuccess && !focusedSample.data)) {

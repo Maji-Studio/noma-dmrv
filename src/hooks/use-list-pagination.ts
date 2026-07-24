@@ -19,6 +19,15 @@ interface ListPageReconciliation {
   setCurrentPage: (page: number) => void;
 }
 
+export function getReconciledListPage({
+  currentPage,
+  totalPages,
+  isLoading,
+}: Omit<ListPageReconciliation, "setCurrentPage">): number {
+  if (isLoading) return currentPage;
+  return Math.min(currentPage, Math.max(1, totalPages));
+}
+
 /**
  * Reconciles client pagination with a server result whose last page moved
  * backward after a delete, archive, or filter change.
@@ -30,10 +39,13 @@ export function useReconcileListPage({
   setCurrentPage,
 }: ListPageReconciliation): void {
   useEffect(() => {
-    if (isLoading) return;
-    const lastAvailablePage = Math.max(1, totalPages);
-    if (currentPage > lastAvailablePage) {
-      setCurrentPage(lastAvailablePage);
+    const reconciledPage = getReconciledListPage({
+      currentPage,
+      totalPages,
+      isLoading,
+    });
+    if (currentPage !== reconciledPage) {
+      setCurrentPage(reconciledPage);
     }
   }, [currentPage, isLoading, setCurrentPage, totalPages]);
 }

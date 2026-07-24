@@ -37,7 +37,10 @@ import {
 } from "@/hooks/use-deliveries";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useDebounce } from "@/hooks/use-debounce";
-import { useListPagination } from "@/hooks/use-list-pagination";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
 import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { SelectFacilityEmptyState } from "@/components/navigation";
@@ -397,6 +400,12 @@ export function DeliveryList() {
 
   const deliveries = deliveriesData?.items ?? [];
   const totalPages = deliveriesData?.totalPages ?? 0;
+  useReconcileListPage({
+    currentPage,
+    totalPages,
+    isLoading,
+    setCurrentPage,
+  });
   const hasActiveFilters = !!searchQuery || !!creditBatchFilter;
   const clearFilters = () => {
     setSearchQuery("");

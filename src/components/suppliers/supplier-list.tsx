@@ -17,7 +17,10 @@ import {
   useUpdateSupplier,
 } from "@/hooks/use-suppliers";
 import { useDebounce } from "@/hooks/use-debounce";
-import { useListPagination } from "@/hooks/use-list-pagination";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -146,6 +149,12 @@ export function SupplierList() {
   // Computed stats
   const totalSuppliers = suppliersData?.total ?? 0;
   const totalPages = suppliersData?.totalPages ?? 0;
+  useReconcileListPage({
+    currentPage,
+    totalPages,
+    isLoading,
+    setCurrentPage,
+  });
   const hasActiveSearch = normalizedSearch.length > 0;
   // Handlers
   const handleCreate = async (

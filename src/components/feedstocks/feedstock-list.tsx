@@ -36,7 +36,10 @@ import {
   useDeleteFeedstock,
 } from "@/hooks/use-feedstocks";
 import { useDebounce } from "@/hooks/use-debounce";
-import { useListPagination } from "@/hooks/use-list-pagination";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
 import {
   createFeedstockSchema,
   type FeedstockFormData,
@@ -388,6 +391,12 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
 
   const feedstockItems = feedstocksData?.items ?? [];
   const totalPages = feedstocksData?.totalPages ?? 0;
+  useReconcileListPage({
+    currentPage,
+    totalPages,
+    isLoading,
+    setCurrentPage,
+  });
   const hasActiveSearch = normalizedSearch.length > 0;
   useEffect(() => {
     if (!focusedFeedstockId) return;

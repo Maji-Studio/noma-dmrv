@@ -7,7 +7,10 @@
 
 import { useState } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
-import { useListPagination } from "@/hooks/use-list-pagination";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
 import type { ColumnDef } from "@tanstack/react-table";
 import { LightningIcon, FlaskIcon, PlusIcon } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
@@ -203,6 +206,12 @@ export function ReactorList() {
   const reactors = reactorsData?.items ?? [];
   const totalReactors = reactorsData?.total ?? 0;
   const totalPages = reactorsData?.totalPages ?? 0;
+  useReconcileListPage({
+    currentPage,
+    totalPages,
+    isLoading,
+    setCurrentPage,
+  });
   const totalThroughputTph = reactors.reduce((sum, r) => sum + (r.nominalThroughputTph || 0), 0);
   const hasActiveSearch = searchInput.trim().length > 0;
 

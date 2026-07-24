@@ -21,7 +21,10 @@ import { useToast } from "@/components/ui/toast";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useDebounce } from "@/hooks/use-debounce";
-import { useListPagination } from "@/hooks/use-list-pagination";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { ApplicationForm } from "./application-form";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
@@ -389,6 +392,12 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const deliveryOptions = scopedDeliveries ?? deliveries;
   const totalApplications = applications?.total ?? 0;
   const totalPages = applications?.totalPages ?? 0;
+  useReconcileListPage({
+    currentPage,
+    totalPages,
+    isLoading,
+    setCurrentPage,
+  });
   const totalBiochar = items.reduce((sum, a) => sum + (a.biocharAppliedTons ?? 0), 0);
 
   const hasActiveFilters =
