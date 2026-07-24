@@ -78,7 +78,7 @@ describe("readinessErrorWithholdsResults", () => {
 
   it("directs operators to retry or clear an unevaluable active filter", () => {
     expect(readinessErrorMessage("ready")).toContain(
-      "clear the readiness filter",
+      "clear the data-status filter",
     );
   });
 });

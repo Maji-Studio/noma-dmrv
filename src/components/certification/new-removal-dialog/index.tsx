@@ -61,7 +61,8 @@ export function NewRemovalDialog({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      width="lg"
+      width="xl"
+      contentClassName="p-20"
       ariaLabelledBy="new-removal-title"
       // Multi-step wizard: a stray backdrop click must not discard a
       // half-built removal. Close button + ESC still dismiss.
@@ -158,14 +159,19 @@ function WizardBody({
   }
 
   return (
-    <div className="flex flex-col gap-24">
+    <div className="flex flex-col gap-16">
       <div className="flex items-center justify-between gap-12">
         <h2 id="new-removal-title" className="title-heading-2">
           New removal
         </h2>
       </div>
 
-      <StepFlow steps={STEPS} current={currentIndex} footer={null}>
+      <StepFlow
+        steps={STEPS}
+        current={currentIndex}
+        footer={null}
+        className="gap-16"
+      >
         {step === "select" && (
           <SelectBatchesStep
             batches={selectable.data?.batches ?? []}

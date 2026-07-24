@@ -3,6 +3,10 @@
 import { LeafIcon } from "@phosphor-icons/react/dist/ssr";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { FormField, FormInput, FormSection } from "@/components/forms";
+import {
+  SPINE_SECTION_TAG,
+  type SpineMeta,
+} from "@/components/forms/form-spine";
 
 interface NutrientFieldRegistration {
   registration: UseFormRegisterReturn;
@@ -18,6 +22,8 @@ interface SampleNutrientFieldsProps {
   magnesium: NutrientFieldRegistration;
   calcium: NutrientFieldRegistration;
   iron: NutrientFieldRegistration;
+  /** Injected by FormSpine — do not set manually. */
+  __spine?: SpineMeta;
 }
 
 export function SampleNutrientFields({
@@ -29,6 +35,7 @@ export function SampleNutrientFields({
   magnesium,
   calcium,
   iron,
+  __spine,
 }: SampleNutrientFieldsProps) {
   const fields = [
     { id: "phosphorusPercent", label: "Phosphorus (%)", placeholder: "e.g., 0.5", ...phosphorus },
@@ -43,6 +50,7 @@ export function SampleNutrientFields({
       title="Nutrient Claims"
       icon={<LeafIcon size={14} weight="bold" />}
       fields={fields.map((field) => field.id)}
+      __spine={__spine}
     >
       <label
         htmlFor="nutrientClaimEnabled"
@@ -80,3 +88,7 @@ export function SampleNutrientFields({
     </FormSection>
   );
 }
+
+(SampleNutrientFields as unknown as Record<string, boolean>)[
+  SPINE_SECTION_TAG
+] = true;

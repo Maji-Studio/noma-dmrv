@@ -103,7 +103,7 @@ function InfoHint({
         aria-label={label}
         className={cn(
           "inline-flex shrink-0 items-center justify-center align-middle",
-          "text-[var(--color-text-quaternary)] hover:text-[var(--color-text-secondary)]",
+          "text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]",
           "transition-colors cursor-help",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] focus-visible:ring-offset-1",
           className

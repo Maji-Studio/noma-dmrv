@@ -102,7 +102,7 @@ function Figure({
       <span
         className={`body-medium tabular-nums ${
           isEmpty
-            ? "text-[var(--color-text-quaternary)]"
+            ? "text-[var(--color-text-tertiary)]"
             : "text-[var(--color-text-primary)]"
         }`}
       >
@@ -144,7 +144,7 @@ export function CohortInputLedger({
 
   return (
     <section
-      className="border-t-2 border-[var(--clr-orange)] bg-[var(--color-background-sunken)]"
+      className="border-t-2 border-[var(--clr-orange)] bg-[var(--color-background-medium)]"
       aria-label="Production inputs this batch claims"
     >
       <div className="flex items-baseline justify-between gap-12 px-18 pt-16 pb-12">

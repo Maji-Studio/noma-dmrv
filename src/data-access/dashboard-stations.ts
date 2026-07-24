@@ -22,6 +22,7 @@ import {
   samples,
 } from "@/db/schema";
 import type { OrgContext } from "@/lib/auth/server";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { requireOrgScope } from "./utils";
 import {
   applicationEvidenceGapWhere,
@@ -485,7 +486,7 @@ async function loadActivity(
       code: row.code,
       title: "Credit batch created",
       dateIso: iso,
-      href: `/credit-batches/${row.id}`,
+      href: creditBatchDeepLinkHref(row.id, facilityId),
       ms: Date.parse(iso),
     });
   }

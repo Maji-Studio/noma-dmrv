@@ -145,7 +145,7 @@ function TelemetryError({ state }: { state: TelemetryState }) {
   const message = state?.latestStatus?.error_message;
   if (!message) return null;
   return (
-    <div className="flex items-start gap-8 border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-surface-secondary)] p-12">
+    <div className="flex items-start gap-8 border-l-2 border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] p-12">
       <WarningCircleIcon
         size={16}
         weight="bold"

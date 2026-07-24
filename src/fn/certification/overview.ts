@@ -4,12 +4,14 @@ import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
 import { env } from "@/config/env";
 import { db } from "@/db";
+import { certifierRemovals } from "@/db/schema/certification";
 import { requireOrgFacility } from "@/data-access/utils";
 import {
   listRecentSyncEvents,
   type CertifierSyncEventRow,
 } from "@/data-access/certification";
 import { creditBatches } from "@/db/schema";
+import { getLatestSubmissionsForEntities } from "@/data-access/certification";
 import {
   listRemovalsForFacility,
   listUngroupedCreditBatches,
@@ -24,8 +26,20 @@ import {
   type RemovalReadiness,
 } from "@/lib/certification/readiness";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
+import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import { SafeError } from "@/lib/errors";
-import type { LocalSubmissionStatus } from "@/lib/certification/status";
+import type {
+  DerivedStatus,
+  LocalSubmissionStatus,
+} from "@/lib/certification/status";
+import {
+  GHG_STATEMENT_ENTITY_TYPE,
+  GHG_STATEMENT_SUBMISSION_TYPE,
+  ISOMETRIC_PROVIDER,
+  REMOVAL_ENTITY_TYPE,
+  REMOVAL_SUBMISSION_TYPE,
+} from "@/lib/isometric/utils/constants";
+import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import {
@@ -34,7 +48,6 @@ import {
   loadFacilityCertifierFacts,
   resolveScopeForRemoval,
 } from "./certify-context-core";
-import { REMOVAL_ENTITY_TYPE } from "./shared";
 
 // Per-removal readiness rebuilds the submission context (DB-only — the facility
 // half is resolved once up front). Bound how many run at once so a facility with
@@ -48,14 +61,21 @@ const MAX_HEALTH_SUMMARIES = 50;
 const RECENT_SYNC_EVENTS_LIMIT = 10;
 
 /**
- * One credit batch's certification-readiness verdict for the overview cards —
- * the lightweight projection of `BatchHealth` (state + open-issue count) needed
- * to render a card's cert tag without shipping the full checklist.
+ * One credit batch's overview status: lightweight data readiness plus the
+ * downstream Removal and GHG Statement lifecycles needed by the card rail.
  */
 export interface CreditBatchHealthSummary {
   state: BatchHealthState;
   /** Count of unmet (blocking) checks; 0 when ready. */
   issueCount: number;
+  /** The Removal this batch belongs to, or null while it is still ungrouped. */
+  removalId: string | null;
+  /** The Removal's own registry-submission status. */
+  removalStatus: DerivedStatus | null;
+  /** The downstream GHG Statement, once the submitted Removal is rolled up. */
+  ghgStatementId: string | null;
+  /** The GHG Statement's verifier lifecycle, kept distinct from the Removal. */
+  ghgStatementStatus: DerivedStatus | null;
 }
 
 // One removal's place in the Removals hub: its identity, member batches, latest
@@ -214,8 +234,17 @@ export async function loadCreditBatchHealthSummaries(
       .select({
         id: creditBatches.id,
         facilityId: creditBatches.facilityId,
+        removalId: creditBatches.removalId,
+        ghgStatementId: certifierRemovals.ghgStatementId,
       })
       .from(creditBatches)
+      .leftJoin(
+        certifierRemovals,
+        and(
+          eq(creditBatches.removalId, certifierRemovals.id),
+          eq(certifierRemovals.organizationId, orgCtx.organizationId),
+        ),
+      )
       .where(
         and(
           inArray(creditBatches.id, ids),
@@ -232,10 +261,47 @@ export async function loadCreditBatchHealthSummaries(
       throw new SafeError("Batch does not belong to requested facility");
     }
 
-    const facilityFacts = await loadFacilityCertifierFacts(
-      orgCtx,
-      validFacilityId,
+    const batchRowById = new Map(
+      batchFacilityRows.map((row) => [row.id, row]),
     );
+    const removalIds = Array.from(
+      new Set(
+        batchFacilityRows.flatMap((row) =>
+          row.removalId ? [row.removalId] : [],
+        ),
+      ),
+    );
+    const ghgStatementIds = Array.from(
+      new Set(
+        batchFacilityRows.flatMap((row) =>
+          row.ghgStatementId ? [row.ghgStatementId] : [],
+        ),
+      ),
+    );
+    const [facilityFacts, removalSubmissions, ghgStatementSubmissions] =
+      await Promise.all([
+        loadFacilityCertifierFacts(orgCtx, validFacilityId),
+        getLatestSubmissionsForEntities(
+          orgCtx,
+          {
+            provider: ISOMETRIC_PROVIDER,
+            submissionType: REMOVAL_SUBMISSION_TYPE,
+            localEntityType: REMOVAL_ENTITY_TYPE,
+            localEntityIds: removalIds,
+          },
+          validFacilityId,
+        ),
+        getLatestSubmissionsForEntities(
+          orgCtx,
+          {
+            provider: ISOMETRIC_PROVIDER,
+            submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
+            localEntityType: GHG_STATEMENT_ENTITY_TYPE,
+            localEntityIds: ghgStatementIds,
+          },
+          validFacilityId,
+        ),
+      ]);
     const { contextsByBatch } = await buildCreditBatchContexts(
       orgCtx,
       ids,
@@ -248,9 +314,38 @@ export async function loadCreditBatchHealthSummaries(
         throw new SafeError("Batch does not belong to requested facility");
       }
       const health = deriveBatchHealth(toBatchHealthFacts(ctx, batchId));
+      const batchRow = batchRowById.get(batchId);
+      const removalId = batchRow?.removalId ?? null;
+      const ghgStatementId = batchRow?.ghgStatementId ?? null;
+      const removalSubmission = removalId
+        ? (removalSubmissions.get(removalId) ?? null)
+        : null;
+      const ghgStatementSubmission = ghgStatementId
+        ? (ghgStatementSubmissions.get(ghgStatementId) ?? null)
+        : null;
       summaries[batchId] = {
         state: health.state,
         issueCount: health.issueCount,
+        removalId,
+        removalStatus: removalId
+          ? deriveSubmissionStatus(
+              removalSubmission,
+              removalSubmission
+                ? isLockedInFlight(removalSubmission)
+                : false,
+              "removal",
+            )
+          : null,
+        ghgStatementId,
+        ghgStatementStatus: ghgStatementId
+          ? deriveSubmissionStatus(
+              ghgStatementSubmission,
+              ghgStatementSubmission
+                ? isLockedInFlight(ghgStatementSubmission)
+                : false,
+              "ghgStatement",
+            )
+          : null,
       };
     }
     return summaries;

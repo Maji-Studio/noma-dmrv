@@ -198,7 +198,7 @@ export function FacilityCertifierDialog({
         </FormField>
 
         {requiresShareAck && (
-          <div className="flex flex-col gap-12 border border-[var(--color-signal-amber)] bg-[var(--color-signal-amber-subtle)] p-16">
+          <div className="flex flex-col gap-12 border border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] p-16">
             <p className="body-small text-[var(--color-text-primary)]">
               This project is already linked to{" "}
               <strong className="body-small-bold">

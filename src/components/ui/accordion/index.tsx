@@ -95,9 +95,14 @@ function Header({ children, className }: AccordionHeaderProps) {
 interface AccordionTriggerProps {
   children: React.ReactNode;
   className?: string;
+  labelClassName?: string;
 }
 
-function Trigger({ children, className }: AccordionTriggerProps) {
+function Trigger({
+  children,
+  className,
+  labelClassName,
+}: AccordionTriggerProps) {
   return (
     <BaseAccordion.Trigger
       className={cn(
@@ -108,7 +113,12 @@ function Trigger({ children, className }: AccordionTriggerProps) {
         className
       )}
     >
-      <span className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
+      <span
+        className={cn(
+          "text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide",
+          labelClassName,
+        )}
+      >
         {children}
       </span>
       <CaretDownIcon

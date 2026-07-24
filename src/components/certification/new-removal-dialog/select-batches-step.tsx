@@ -24,6 +24,7 @@ import {
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
 import { InfoHint } from "@/components/ui/tooltip";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { certificationSettingsHref } from "@/lib/certification/links";
 import {
   facilityBlueprintLabel,
@@ -226,7 +227,7 @@ function IncompleteCard({
         })}
       </ul>
       <Link
-        href={`/credit-batches/${batch.id}?facility=${facilityId}`}
+        href={creditBatchDeepLinkHref(batch.id, facilityId)}
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex items-center gap-4 self-start body-caption text-[var(--color-text-tertiary)] underline-offset-2 hover:text-[var(--color-text-secondary)] hover:underline"

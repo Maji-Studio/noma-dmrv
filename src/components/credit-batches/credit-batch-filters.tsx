@@ -110,7 +110,7 @@ export function CreditBatchFilters({
 
         <label className="flex min-w-[180px] flex-1 flex-col gap-4 sm:flex-none">
           <span className="label-micro text-[var(--color-text-tertiary)]">
-            Readiness
+            Data status
           </span>
           <select
             value={readiness}
@@ -120,11 +120,11 @@ export function CreditBatchFilters({
               )
             }
             className={SELECT_CLASS}
-            aria-label="Filter by certification readiness"
+            aria-label="Filter by certification data status"
           >
             <option value="all">All batches</option>
             <option value="needs_attention">Needs attention</option>
-            <option value="ready">Ready to certify</option>
+            <option value="ready">Data complete</option>
           </select>
         </label>
 

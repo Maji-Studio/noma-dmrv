@@ -102,7 +102,7 @@ function ProcessFlowPreview({
       <div
         className={`flex-1 border px-12 py-10 flex flex-col justify-center transition-colors ${
           hasSource
-            ? "border-[var(--color-border-primary)] bg-[var(--color-bg-tertiary)]"
+            ? "border-[var(--color-border-primary)] bg-[var(--color-background-medium)]"
             : "border-dashed border-[var(--color-border-tertiary)] bg-transparent"
         }`}
       >
@@ -128,7 +128,7 @@ function ProcessFlowPreview({
             )}
           </>
         ) : (
-          <span className="body-small text-[var(--color-text-quaternary)] mt-2">
+          <span className="body-small text-[var(--color-text-tertiary)] mt-2">
             Select bin
           </span>
         )}
@@ -145,7 +145,7 @@ function ProcessFlowPreview({
       <div
         className={`flex-1 border px-12 py-10 flex flex-col items-center justify-center transition-colors ${
           hasReactor
-            ? "border-[var(--color-border-primary)] bg-[var(--color-bg-tertiary)]"
+            ? "border-[var(--color-border-primary)] bg-[var(--color-background-medium)]"
             : "border-dashed border-[var(--color-border-tertiary)] bg-transparent"
         }`}
       >
@@ -160,7 +160,7 @@ function ProcessFlowPreview({
             {reactorName}
           </span>
         ) : (
-          <span className="body-small text-[var(--color-text-quaternary)]">
+          <span className="body-small text-[var(--color-text-tertiary)]">
             Select reactor
           </span>
         )}
@@ -182,7 +182,7 @@ function ProcessFlowPreview({
       <div
         className={`flex-1 border px-12 py-10 flex flex-col justify-center transition-colors ${
           hasDestination
-            ? "border-[var(--color-border-primary)] bg-[var(--color-bg-tertiary)]"
+            ? "border-[var(--color-border-primary)] bg-[var(--color-background-medium)]"
             : "border-dashed border-[var(--color-border-tertiary)] bg-transparent"
         }`}
       >
@@ -208,7 +208,7 @@ function ProcessFlowPreview({
             )}
           </>
         ) : (
-          <span className="body-small text-[var(--color-text-quaternary)] mt-2">
+          <span className="body-small text-[var(--color-text-tertiary)] mt-2">
             Select bin
           </span>
         )}

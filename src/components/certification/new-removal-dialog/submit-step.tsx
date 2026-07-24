@@ -26,15 +26,13 @@ import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import {
   buildRemovalRequirementsChecklist,
   deriveRemovalReadiness,
-  type RemovalRequirementKey,
 } from "@/lib/certification/readiness";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
-import { certificationSettingsHref } from "@/lib/certification/links";
-import { formatTonnes } from "@/lib/format-utils";
 import { isometricRegistry } from "@/lib/isometric/links";
-import { CheckRow } from "../check-row";
 import { EnvBanner } from "../env-banner";
 import { SubmitConfirmDialog } from "../submit-confirm-dialog";
+import { SubmissionChecks } from "./submission-checks";
+import { SubmissionOverview } from "./submission-overview";
 
 const REJECTED_IN_ISOMETRIC_MSG =
   "This removal was rejected in Isometric. Resolve the registry record before retrying from noma.";
@@ -44,48 +42,6 @@ interface SubmitStepProps {
   ctx: RemovalCertifyContext;
   facilityId: string;
   onDone: () => void;
-}
-
-function totalCo2e(ctx: RemovalCertifyContext): number {
-  return ctx.memberBatches.reduce(
-    (sum, b) => sum + (b.co2eStoredPreview?.co2eStoredTonnes ?? 0),
-    0,
-  );
-}
-
-// Where each unmet facility-level requirement is fixed (design doc §6). All
-// in-app, so plain Next <Link> navigation, facility-scoped.
-function fixLinkFor(
-  key: RemovalRequirementKey,
-  facilityId: string,
-): { label: string; href: string } | null {
-  switch (key) {
-    case "mapping":
-    case "template":
-      return {
-        label: "Open settings",
-        href: certificationSettingsHref(facilityId),
-      };
-    case "credentials":
-      // Only a Platform Admin can manage organization credentials, so an
-      // operator-facing wizard must not link to an inaccessible admin route.
-      return null;
-    case "transportUniformity":
-      return {
-        label: "Review transport",
-        href: `/deliveries?facility=${facilityId}`,
-      };
-    case "durability":
-      // Sampling/eligibility blockers are fixed by adding replicate samples or
-      // correcting chemistry on the offending runs.
-      return {
-        label: "Review samples",
-        href: `/samples?facility=${facilityId}`,
-      };
-    case "entityReadiness":
-    case "evidence":
-      return null;
-  }
 }
 
 export function SubmitStep({
@@ -102,7 +58,6 @@ export function SubmitStep({
   const externalId = ctx.latestSubmission?.externalId ?? null;
   const rejectedWithExternal =
     ctx.latestSubmission?.status === "rejected" && externalId !== null;
-  const batchCount = ctx.memberBatches.length;
 
   const facts = toRemovalReadinessFacts(ctx);
   const checklist = buildRemovalRequirementsChecklist(facts);
@@ -202,36 +157,20 @@ export function SubmitStep({
   );
 
   return (
-    <div className="flex flex-col gap-16">
+    <div className="flex flex-col gap-12">
       <div className="flex flex-col gap-4">
         <h3 className="title-heading-3">Confirm &amp; submit</h3>
         <p className="body-small text-[var(--color-text-secondary)]">
-          {batchCount} {batchCount === 1 ? "batch" : "batches"} ·{" "}
-          {formatTonnes(totalCo2e(ctx), { digits: 1, unit: "t CO₂e" })}
+          Review exactly what will be sent to the registry.
         </p>
       </div>
 
-      <ul className="flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]">
-        {checklist.map((check, index) => (
-          <CheckRow
-            key={check.key}
-            status={check.status}
-            // The one plain-language requirement string every readiness surface
-            // renders (Phase 0/2) — never the affirmative "…complete" label,
-            // which reads as a contradiction next to an unmet warning icon. Raw
-            // protocol vocabulary stays tucked behind the ⓘ "Why?".
-            label={check.requirementLabel}
-            detail={check.detail}
-            whyDetail={check.whyDetail}
-            isFirst={index === 0}
-            fix={
-              check.status === "unmet"
-                ? fixLinkFor(check.key, facilityId)
-                : null
-            }
-          />
-        ))}
-      </ul>
+      <SubmissionOverview
+        memberBatches={ctx.memberBatches}
+        facilityId={facilityId}
+      />
+
+      <SubmissionChecks checks={checklist} facilityId={facilityId} />
 
       <EnvBanner isProduction={ctx.isProduction} variant="inline" />
 
