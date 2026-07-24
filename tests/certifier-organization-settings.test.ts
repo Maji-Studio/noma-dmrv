@@ -82,4 +82,21 @@ describe.sequential("certifier organization settings data access", () => {
       );
     expect(rows).toHaveLength(1);
   });
+
+  it("allows members to read the policy but rejects direct writes", async () => {
+    const memberContext: OrgContext = {
+      ...ORG_CONTEXT,
+      orgRole: "member",
+    };
+
+    await expect(
+      getRegistrySourceVisibility(memberContext, PROVIDER),
+    ).resolves.toBe("private");
+    await expect(
+      upsertRegistrySourceVisibility(memberContext, {
+        provider: PROVIDER,
+        sourceVisibility: "public",
+      }),
+    ).rejects.toThrow("You don't have permission");
+  });
 });
