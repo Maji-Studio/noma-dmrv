@@ -1,12 +1,12 @@
 /**
  * The removal's §8.6.2 reporting window (issue #320).
  *
- * Biochar protocol v1.3 §8.6.2: the Reporting Period "begins when the activity
- * associated with a batch of Removals begins, and ends upon application of
- * biochar from that batch at the storage site". The window's END therefore
- * anchors on the latest biochar application across the removal's lineages —
- * NOT the production-run end (which keeps feeding durability `measured_at`
- * and the sensor-telemetry window; those are production-time facts).
+ * Biochar Protocol §8.6.2 (local interpretation pin v1.2): the Reporting Period
+ * begins with the batch's activity and ends when its biochar is applied at the
+ * storage site. The window's END therefore anchors on the latest biochar
+ * application across the removal's lineages — NOT the production-run end
+ * (which keeps feeding durability `measured_at` and the sensor-telemetry
+ * window; those are production-time facts).
  *
  * This module owns deriving that end date and reading a locked window back
  * out of a submission snapshot for the resume path.

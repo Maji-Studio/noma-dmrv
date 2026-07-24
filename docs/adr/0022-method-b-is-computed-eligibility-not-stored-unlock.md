@@ -5,6 +5,13 @@ supersedes: partially ADR-0017 (Track 2 — the unlock ceremony)
 
 # Method B is computed eligibility, not a stored unlock
 
+> **Amended 2026-07-24 — version-citation correction.** The v1.3 label in the
+> historical opening below does not match noma's Biochar Protocol v1.2
+> interpretation pin. The Certify project was separately observed on v1.1 on
+> this date. The API observation and computed-eligibility decision stand, but
+> protocol-version applicability must be confirmed with Isometric before more
+> credit-bearing Method-B logic is enabled.
+
 Research against the live Isometric registry (Biochar Protocol v1.3 §8.3.1,
 §8.3.1.2) showed the Certify API has no sampling-method field: Method A/B
 surfaces only as per-batch blueprint routing (sampled → `_c_org`, unsampled →
