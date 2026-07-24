@@ -26,6 +26,8 @@ import {
 } from "@/schemas/applications";
 import { toLoggedActionError } from "./action-errors";
 
+const MAX_APPLICATION_LIST_SIZE = 100;
+
 function applicationActionError(
   error: unknown,
   fallbackMessage: string,
@@ -39,10 +41,10 @@ function applicationActionError(
 
 const getApplicationsOptionsSchema = z.object({
   page: z.number().int().min(1).optional(),
-  pageSize: z.number().int().min(1).max(100).optional(),
+  pageSize: z.number().int().min(1).max(MAX_APPLICATION_LIST_SIZE).optional(),
   facilityId: z.string().uuid().optional(),
   creditBatchId: z.string().uuid().optional(),
-  ids: z.array(z.uuid()).max(100).optional(),
+  ids: z.array(z.uuid()).max(MAX_APPLICATION_LIST_SIZE).optional(),
   search: z.string().max(255).optional(),
   status: z.enum(applicationStatuses).optional(),
   evidenceMethod: z.enum(applicationEvidenceMethods).optional(),
