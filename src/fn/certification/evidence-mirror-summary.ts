@@ -70,7 +70,12 @@ export async function loadEvidenceMirrorSummaryForScope(
     ),
   );
   const documentIds = Array.from(
-    new Set(documentGroups.flat().map((document) => document.id)),
+    new Set(
+      documentGroups
+        .flat()
+        .filter((document) => document.storageKey !== null)
+        .map((document) => document.id),
+    ),
   );
   const mirrorRows = await listDocumentUploadsForDocuments(
     orgCtx,

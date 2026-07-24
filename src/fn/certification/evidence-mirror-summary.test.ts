@@ -53,9 +53,11 @@ describe("loadEvidenceMirrorSummaryForScope", () => {
     );
     vi.mocked(listDocumentsForEntityIds).mockImplementation(
       async (_ctx, entityType) => {
-        if (entityType === "application") return [{ id: "document-1" }] as never;
+        if (entityType === "application") {
+          return [{ id: "document-1", storageKey: "managed/document-1" }] as never;
+        }
         if (entityType === "transport_leg") {
-          return [{ id: "document-2" }] as never;
+          return [{ id: "document-2", storageKey: "managed/document-2" }] as never;
         }
         return [];
       },
@@ -97,6 +99,33 @@ describe("loadEvidenceMirrorSummaryForScope", () => {
       orgCtx,
       "isometric",
       ["document-1", "document-2"],
+    );
+  });
+
+  it("excludes documents without managed storage from the mirror denominator", async () => {
+    vi.mocked(listDocumentsForEntityIds).mockImplementation(
+      async (_ctx, entityType) =>
+        entityType === "application"
+          ? ([
+              { id: "managed", storageKey: "managed/document.pdf" },
+              { id: "metadata-only", storageKey: null },
+            ] as never)
+          : [],
+    );
+    vi.mocked(listDocumentUploadsForDocuments).mockResolvedValue([]);
+
+    await expect(
+      loadEvidenceMirrorSummaryForScope(orgCtx, {
+        removalId: "removal-1",
+        memberBatches: [{ id: "batch-1" }],
+        lineages: [lineage],
+      }),
+    ).resolves.toEqual({ total: 1, mirrored: 0 });
+
+    expect(listDocumentUploadsForDocuments).toHaveBeenCalledWith(
+      orgCtx,
+      "isometric",
+      ["managed"],
     );
   });
 

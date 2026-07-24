@@ -13,6 +13,22 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-07-24 (promotion review hardening)
+
+- GHG Statement creation now fails before registry access when an Isometric
+  project is shared across noma facilities. Registry sync also fails with an
+  actionable error when one remote statement contains removals owned by
+  multiple facilities; the current local statement model remains
+  facility-scoped.
+- Statement carbon totals use registry figures only when local, fetched, and
+  remote GHG-entry ID sets match exactly. Unknown or stale remote membership
+  degrades to the local estimate instead of presenting a partial sum as
+  registry-derived.
+- Credit-batch lifecycle rendering branches on stable status kinds rather than
+  display labels, the overview's lifecycle query now lives in org-scoped
+  data-access, and evidence readiness counts only documents backed by managed
+  storage that can enter the mirror flow.
+
 ## 2026-07-24 (protocol re-pin 1.2 → 1.1 + durability tier resolution)
 
 Operator decisions closing the two open questions raised by the same-day

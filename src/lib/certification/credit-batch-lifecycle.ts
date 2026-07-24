@@ -46,57 +46,57 @@ function statementLifecycle(
   const status = summary.ghgStatementStatus;
   if (!status) return null;
 
-  switch (status.label) {
-    case "In progress":
+  switch (status.kind) {
+    case "in-progress":
       return {
         badgeStatus: "running",
         label: "Updating statement",
         currentStepIndex: 1,
         stepStates: buildStepStates(1),
       };
-    case "Draft":
+    case "draft":
       return {
         badgeStatus: "running",
         label: "Removal submitted",
         currentStepIndex: 1,
         stepStates: buildStepStates(1),
       };
-    case "In registry":
+    case "in-registry":
       return {
         badgeStatus: "running",
         label: "Removal submitted",
         currentStepIndex: 1,
         stepStates: buildStepStates(1),
       };
-    case "In verification":
+    case "in-verification":
       return {
         badgeStatus: "pending",
         label: "In verification",
         currentStepIndex: 1,
         stepStates: buildStepStates(1),
       };
-    case "Verified":
+    case "verified":
       return {
         badgeStatus: "verified",
         label: "Verified",
         currentStepIndex: 2,
         stepStates: buildStepStates(2, "success"),
       };
-    case "Issued":
+    case "issued":
       return {
         badgeStatus: "issued",
         label: "Credits issued",
         currentStepIndex: 3,
         stepStates: buildStepStates(3, "success"),
       };
-    case "Verification failed":
+    case "verification-failed":
       return {
         badgeStatus: "rejected",
         label: "Verification failed",
         currentStepIndex: 2,
         stepStates: buildStepStates(2, "failed"),
       };
-    case "Superseded":
+    case "superseded":
       return {
         badgeStatus: "superseded",
         label: "Statement superseded",
@@ -114,8 +114,8 @@ function removalLifecycle(
   const status = summary.removalStatus;
   if (!summary.removalId || !status) return null;
 
-  switch (status.label) {
-    case "Not submitted":
+  switch (status.kind) {
+    case "not-submitted":
       return summary.state === "ready"
         ? readyToSubmitLifecycle()
         : {
@@ -124,28 +124,28 @@ function removalLifecycle(
             currentStepIndex: 0,
             stepStates: buildStepStates(0),
           };
-    case "In progress":
+    case "in-progress":
       return {
         badgeStatus: "running",
         label: "Submitting removal",
         currentStepIndex: 0,
         stepStates: buildStepStates(0),
       };
-    case "Submitted":
+    case "submitted":
       return {
         badgeStatus: "running",
         label: "Removal submitted",
         currentStepIndex: 1,
         stepStates: buildStepStates(1),
       };
-    case "Rejected":
+    case "rejected":
       return {
         badgeStatus: "rejected",
         label: "Removal rejected",
         currentStepIndex: 0,
         stepStates: buildStepStates(0, "failed"),
       };
-    case "Superseded":
+    case "superseded":
       return {
         badgeStatus: "superseded",
         label: "Removal superseded",
