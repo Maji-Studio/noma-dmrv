@@ -106,6 +106,15 @@ export interface BuildDurabilityMeasurementSampleSubmissionsArgs {
 export function buildDurabilityMeasurementSampleSubmissions(
   args: BuildDurabilityMeasurementSampleSubmissionsArgs,
 ): DurabilityMeasurementSampleSubmission[] {
+  const thousandYearBatches = args.batches.filter(
+    (batch) => batch.durabilityOption === "1000_year",
+  );
+  if (thousandYearBatches.length > 1) {
+    throw new SafeError(
+      "A 1000-year Removal currently supports exactly one credit batch because the registry template requires a single product_mass datapoint. Split the credit batches into separate Removals until an aggregated removal-level product-mass mapping is verified.",
+    );
+  }
+
   const perBatch = buildPerBatchDurabilityData(
     args.batches,
     args.attributionByRunId,
