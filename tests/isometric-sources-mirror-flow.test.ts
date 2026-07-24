@@ -78,7 +78,6 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
     findSourceBySupplierRef: vi.fn(),
     requestSignedUploadUrl: vi.fn(),
     createSource: vi.fn(),
-    patchSource: vi.fn(),
   };
 });
 
