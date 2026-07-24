@@ -8,6 +8,9 @@ import {
 } from "@/db/schema/certification";
 import { SafeError } from "@/lib/errors";
 import { decideRemovalMembership } from "@/lib/isometric/utils/ghg-entry-membership";
+import {
+  chooseStoredRemotePeriodEnd,
+} from "@/lib/isometric/utils/ghg-statement-local-period";
 import type { Tx } from "./certification";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
@@ -17,6 +20,51 @@ export type CertifierGhgStatementRow =
   typeof certifierGhgStatements.$inferSelect;
 
 const ISOMETRIC = "isometric" as const;
+const REMOTE_PERIOD_INSERT_RETRY_LIMIT = 10;
+export const REMOTE_EXTERNAL_ID_METADATA_KEY = "remoteExternalId";
+export const REMOTE_PERIOD_MISSING_METADATA_KEY = "remotePeriodMissing";
+export const REMOTE_PERIOD_END_ON_METADATA_KEY = "remotePeriodEndOn";
+export const REMOTE_PERIOD_END_IS_SYNTHETIC_METADATA_KEY =
+  "remotePeriodEndIsSynthetic";
+
+export function hasMissingRemotePeriod(
+  statement: Pick<CertifierGhgStatementRow, "metadata">,
+): boolean {
+  return (
+    typeof statement.metadata === "object" &&
+    statement.metadata !== null &&
+    REMOTE_PERIOD_MISSING_METADATA_KEY in statement.metadata &&
+    (
+      statement.metadata as Record<string, unknown>
+    )[REMOTE_PERIOD_MISSING_METADATA_KEY] === true
+  );
+}
+
+export function getEffectiveReportingPeriodEndOn(
+  statement: Pick<
+    CertifierGhgStatementRow,
+    "metadata" | "reportingPeriodEndOn"
+  >,
+): string {
+  const remoteEndOn = metadataValue(
+    statement,
+    REMOTE_PERIOD_END_ON_METADATA_KEY,
+  );
+  return typeof remoteEndOn === "string"
+    ? remoteEndOn
+    : statement.reportingPeriodEndOn;
+}
+
+function metadataValue(
+  statement: Pick<CertifierGhgStatementRow, "metadata">,
+  key: string,
+): unknown {
+  return typeof statement.metadata === "object" &&
+    statement.metadata !== null &&
+    key in statement.metadata
+    ? (statement.metadata as Record<string, unknown>)[key]
+    : undefined;
+}
 
 export async function getCertifierGhgStatementById(
   ctx: OrgContext,
@@ -107,22 +155,194 @@ export async function getOrCreateGhgStatementDraft(
   return { statement: existing, created: false };
 }
 
+/**
+ * Creates a distinct local identity for a registry-discovered statement.
+ * Unlike operator creation, registry identity is the external statement ID,
+ * not its period: the registry permits duplicate and null periods.
+ */
+export async function createGhgStatementForRegistryDiscovery(
+  ctx: OrgContext,
+  input: {
+    facilityId: string;
+    externalId: string;
+    reportingPeriodEndOn: string | null;
+  },
+): Promise<CertifierGhgStatementRow> {
+  requireOrgScope(ctx);
+  const existing = await findRegistryDiscoveryStatement(
+    ctx,
+    input.facilityId,
+    input.externalId,
+  );
+  if (existing) return existing;
+
+  const occupiedEndOns = await listStoredPeriodEnds(ctx, input.facilityId);
+
+  for (
+    let attempt = 0;
+    attempt < REMOTE_PERIOD_INSERT_RETRY_LIMIT;
+    attempt += 1
+  ) {
+    const storedPeriod = chooseStoredRemotePeriodEnd(
+      input.reportingPeriodEndOn,
+      occupiedEndOns,
+    );
+    const [inserted] = await db
+      .insert(certifierGhgStatements)
+      .values({
+        organizationId: ctx.organizationId,
+        facilityId: input.facilityId,
+        reportingPeriodEndOn: storedPeriod.endOn,
+        metadata: {
+          [REMOTE_EXTERNAL_ID_METADATA_KEY]: input.externalId,
+          [REMOTE_PERIOD_END_ON_METADATA_KEY]: input.reportingPeriodEndOn,
+          [REMOTE_PERIOD_END_IS_SYNTHETIC_METADATA_KEY]:
+            storedPeriod.synthetic,
+          [REMOTE_PERIOD_MISSING_METADATA_KEY]:
+            input.reportingPeriodEndOn === null,
+        },
+      })
+      .onConflictDoNothing({
+        target: [
+          certifierGhgStatements.provider,
+          certifierGhgStatements.facilityId,
+          certifierGhgStatements.reportingPeriodEndOn,
+        ],
+      })
+      .returning();
+    if (inserted) return inserted;
+    const concurrentlyInserted = await findRegistryDiscoveryStatement(
+      ctx,
+      input.facilityId,
+      input.externalId,
+    );
+    if (concurrentlyInserted) return concurrentlyInserted;
+    occupiedEndOns.add(storedPeriod.endOn);
+  }
+
+  throw new SafeError(
+    "Registry statement could not be allocated a local record. Reload and retry.",
+  );
+}
+
+async function findRegistryDiscoveryStatement(
+  ctx: OrgContext,
+  facilityId: string,
+  externalId: string,
+): Promise<CertifierGhgStatementRow | null> {
+  requireOrgScope(ctx);
+  const rows = await db
+    .select()
+    .from(certifierGhgStatements)
+    .where(
+      and(
+        eq(certifierGhgStatements.provider, ISOMETRIC),
+        eq(certifierGhgStatements.facilityId, facilityId),
+        eq(
+          certifierGhgStatements.organizationId,
+          ctx.organizationId,
+        ),
+      ),
+    );
+  return (
+    rows.find(
+      (row) =>
+        metadataValue(row, REMOTE_EXTERNAL_ID_METADATA_KEY) === externalId,
+    ) ?? null
+  );
+}
+
 // Persists the server-derived reporting-period start after the statement is
 // created in Isometric (the create API derives it; we cannot set it).
 export async function updateGhgStatementReportingWindow(
   ctx: OrgContext,
   id: string,
-  args: { reportingPeriodStartOn: string | null },
+  args: {
+    reportingPeriodStartOn: string | null;
+    reportingPeriodEndOn?: string | null;
+    remotePeriodMissing?: boolean;
+  },
   tx?: Tx,
 ): Promise<void> {
   requireOrgScope(ctx);
-  await (tx ?? db)
+  const executor = tx ?? db;
+  const [statement] = await executor
+    .select()
+    .from(certifierGhgStatements)
+    .where(
+      and(
+        eq(certifierGhgStatements.id, id),
+        eq(certifierGhgStatements.organizationId, ctx.organizationId),
+      ),
+    )
+    .limit(1);
+  if (!statement) {
+    throw new SafeError("GHG statement could not be found.");
+  }
+
+  const metadataPatch: Record<string, unknown> = {};
+  let reportingPeriodEndOn = statement.reportingPeriodEndOn;
+  if (args.reportingPeriodEndOn !== undefined) {
+    const occupiedEndOns = await listStoredPeriodEnds(
+      ctx,
+      statement.facilityId,
+      executor,
+      statement.id,
+    );
+    const storedPeriod = chooseStoredRemotePeriodEnd(
+      args.reportingPeriodEndOn,
+      occupiedEndOns,
+    );
+    reportingPeriodEndOn = storedPeriod.endOn;
+    metadataPatch[REMOTE_PERIOD_END_ON_METADATA_KEY] =
+      args.reportingPeriodEndOn;
+    metadataPatch[REMOTE_PERIOD_END_IS_SYNTHETIC_METADATA_KEY] =
+      storedPeriod.synthetic;
+  }
+  if (args.remotePeriodMissing !== undefined) {
+    metadataPatch[REMOTE_PERIOD_MISSING_METADATA_KEY] =
+      args.remotePeriodMissing;
+  }
+
+  await executor
     .update(certifierGhgStatements)
     .set({
       reportingPeriodStartOn: args.reportingPeriodStartOn,
+      reportingPeriodEndOn,
+      metadata: sql`coalesce(${certifierGhgStatements.metadata}, '{}'::jsonb) || ${JSON.stringify(metadataPatch)}::jsonb`,
       updatedAt: sql`now()`,
     })
     .where(and(eq(certifierGhgStatements.id, id), eq(certifierGhgStatements.organizationId, ctx.organizationId)));
+}
+
+async function listStoredPeriodEnds(
+  ctx: OrgContext,
+  facilityId: string,
+  executor: Tx | typeof db = db,
+  excludeStatementId?: string,
+): Promise<Set<string>> {
+  requireOrgScope(ctx);
+  const rows = await executor
+    .select({
+      id: certifierGhgStatements.id,
+      endOn: certifierGhgStatements.reportingPeriodEndOn,
+    })
+    .from(certifierGhgStatements)
+    .where(
+      and(
+        eq(certifierGhgStatements.provider, ISOMETRIC),
+        eq(certifierGhgStatements.facilityId, facilityId),
+        eq(
+          certifierGhgStatements.organizationId,
+          ctx.organizationId,
+        ),
+      ),
+    );
+  return new Set(
+    rows.flatMap((row) =>
+      row.id === excludeStatementId ? [] : [row.endOn],
+    ),
+  );
 }
 
 export async function getRemovalsByGhgStatementId(

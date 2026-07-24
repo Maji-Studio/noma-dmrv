@@ -52,8 +52,12 @@ import {
   certifierSyncEvents,
 } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
-import { createGhgStatementDraft } from "@/fn/certification/ghg-statements";
+import {
+  createGhgStatementDraft,
+} from "@/fn/certification/ghg-statements";
+import { reconcileGhgStatementsFromRegistry } from "@/fn/certification/ghg-statement-sync";
 import * as authServer from "@/lib/auth/server";
+import { addDaysIso } from "@/lib/date-utils";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import {
   installFakeRegistry,
@@ -118,6 +122,8 @@ afterAll(async () => {
 interface Fixture {
   facilityId: string;
   externalProjectId: string;
+  removalId: string | null;
+  externalRemovalId: string | null;
 }
 
 async function createFixture(
@@ -136,6 +142,8 @@ async function createFixture(
     provider: "isometric",
     externalProjectId,
   });
+  let removalId: string | null = null;
+  let externalRemovalId: string | null = null;
   if (seedOpenRemoval) {
     // The empty-statement guard (#245) predicts period membership from the
     // facility's open removals — an already-submitted removal (latest ledger
@@ -145,13 +153,15 @@ async function createFixture(
       .insert(certifierRemovals)
       .values({ organizationId: TEST_ORG_ID, facilityId: facility.id, completedOn: IN_WINDOW_COMPLETED_ON })
       .returning({ id: certifierRemovals.id });
+    removalId = removal.id;
+    externalRemovalId = `rmv_ggs_bd_${runId}`;
     await db.insert(certificationSubmissions).values({
       organizationId: TEST_ORG_ID,
       provider: "isometric",
       submissionType: "removal",
       localEntityType: "removal",
       localEntityId: removal.id,
-      externalId: `rmv_ggs_bd_${runId}`,
+      externalId: externalRemovalId,
       version: 1,
       status: "submitted",
     });
@@ -168,7 +178,12 @@ async function createFixture(
   vi.mocked(authServer.requireOrgContext).mockResolvedValue(
     makeTestOrgContext(`test-user-ggs-${runId}`),
   );
-  return { facilityId: facility.id, externalProjectId };
+  return {
+    facilityId: facility.id,
+    externalProjectId,
+    removalId,
+    externalRemovalId,
+  };
 }
 
 async function latestLedgerRow(facilityId: string) {
@@ -335,5 +350,230 @@ describe("createGhgStatementDraft boundary — empty-statement guard (#245)", ()
     expect(registry.requestCount("POST", "/ghg_statements")).toBe(0);
     expect(registry.ghgStatements).toHaveLength(0);
     expect(await latestLedgerRow(fixture.facilityId)).toBeNull();
+  });
+});
+
+describe("registry-list GHG statement reconciliation", () => {
+  it("recovers a remote statement into zero local rows and links its removal", async () => {
+    const fixture = await createFixture();
+    const remote = registry.seedGhgStatement({
+      projectId: fixture.externalProjectId,
+      endOn: REPORTING_PERIOD_END,
+      ghgEntryIds: [fixture.externalRemovalId!],
+    });
+
+    const before = await db
+      .select()
+      .from(certifierGhgStatements)
+      .where(eq(certifierGhgStatements.facilityId, fixture.facilityId));
+    expect(before).toHaveLength(0);
+
+    const result = await reconcileGhgStatementsFromRegistry(
+      fixture.facilityId,
+    );
+    expect(result).toMatchObject({
+      success: true,
+      data: { reconciledCount: 1 },
+    });
+
+    const [statement] = await db
+      .select()
+      .from(certifierGhgStatements)
+      .where(eq(certifierGhgStatements.facilityId, fixture.facilityId));
+    expect(statement).toBeDefined();
+    const [submission] = await db
+      .select()
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.localEntityId, statement.id));
+    expect(submission).toMatchObject({
+      externalId: remote.id,
+      status: "submitted",
+    });
+    const [removal] = await db
+      .select()
+      .from(certifierRemovals)
+      .where(eq(certifierRemovals.id, fixture.removalId!));
+    expect(removal.ghgStatementId).toBe(statement.id);
+  });
+
+  it("does not steal a removal already owned by another local statement", async () => {
+    const fixture = await createFixture();
+    const [owner] = await db
+      .insert(certifierGhgStatements)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: fixture.facilityId,
+        reportingPeriodEndOn: "2025-12-31",
+      })
+      .returning();
+    await db
+      .update(certifierRemovals)
+      .set({ ghgStatementId: owner.id })
+      .where(eq(certifierRemovals.id, fixture.removalId!));
+    registry.seedGhgStatement({
+      projectId: fixture.externalProjectId,
+      endOn: REPORTING_PERIOD_END,
+      ghgEntryIds: [fixture.externalRemovalId!],
+    });
+
+    const result = await reconcileGhgStatementsFromRegistry(
+      fixture.facilityId,
+    );
+    expect(result.success).toBe(true);
+    const [removal] = await db
+      .select()
+      .from(certifierRemovals)
+      .where(eq(certifierRemovals.id, fixture.removalId!));
+    expect(removal.ghgStatementId).toBe(owner.id);
+  });
+
+  it("reconciles and adopts a null-period DRAFT without POSTing", async () => {
+    const fixture = await createFixture();
+    const remote = registry.seedGhgStatement({
+      projectId: fixture.externalProjectId,
+      endOn: null,
+      ghgEntryIds: [fixture.externalRemovalId!],
+    });
+
+    const synced = await reconcileGhgStatementsFromRegistry(
+      fixture.facilityId,
+    );
+    expect(synced.success).toBe(true);
+    const created = await createGhgStatementDraft({
+      facilityId: fixture.facilityId,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+    expect(created).toMatchObject({
+      success: true,
+      data: { externalId: remote.id },
+    });
+    expect(registry.requestCount("POST", "/ghg_statements")).toBe(0);
+  });
+
+  it("replaces a null-period surrogate when the registry assigns a real end and preserves metadata", async () => {
+    const fixture = await createFixture({ seedOpenRemoval: false });
+    const remote = registry.seedGhgStatement({
+      projectId: fixture.externalProjectId,
+      endOn: null,
+    });
+
+    await reconcileGhgStatementsFromRegistry(fixture.facilityId);
+    const [initial] = await db
+      .select()
+      .from(certifierGhgStatements)
+      .where(eq(certifierGhgStatements.facilityId, fixture.facilityId));
+    await db
+      .update(certifierGhgStatements)
+      .set({
+        metadata: {
+          ...(initial.metadata as Record<string, unknown>),
+          preservedKey: "preserved",
+        },
+      })
+      .where(eq(certifierGhgStatements.id, initial.id));
+
+    remote.reporting_period_start_at = "2026-01-01";
+    remote.reporting_period_end_at = REPORTING_PERIOD_END;
+    const result = await reconcileGhgStatementsFromRegistry(
+      fixture.facilityId,
+    );
+
+    expect(result.success).toBe(true);
+    const [updated] = await db
+      .select()
+      .from(certifierGhgStatements)
+      .where(eq(certifierGhgStatements.id, initial.id));
+    expect(updated.reportingPeriodEndOn).toBe(REPORTING_PERIOD_END);
+    expect(updated.metadata).toMatchObject({
+      preservedKey: "preserved",
+      remotePeriodMissing: false,
+      remotePeriodEndOn: REPORTING_PERIOD_END,
+      remotePeriodEndIsSynthetic: false,
+    });
+  });
+
+  it.each([
+    { label: "the same real end", endOn: REPORTING_PERIOD_END },
+    { label: "no period", endOn: null },
+  ])("keeps distinct local identities for remotes with $label", async ({ endOn }) => {
+    const fixture = await createFixture({ seedOpenRemoval: false });
+    const first = registry.seedGhgStatement({
+      projectId: fixture.externalProjectId,
+      endOn,
+    });
+    const second = registry.seedGhgStatement({
+      projectId: fixture.externalProjectId,
+      endOn,
+    });
+
+    const result = await reconcileGhgStatementsFromRegistry(
+      fixture.facilityId,
+    );
+
+    expect(result).toMatchObject({
+      success: true,
+      data: { reconciledCount: 2 },
+    });
+    const rows = await db
+      .select()
+      .from(certifierGhgStatements)
+      .where(eq(certifierGhgStatements.facilityId, fixture.facilityId));
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((row) => row.reportingPeriodEndOn)).size).toBe(2);
+    const submissions = await db
+      .select()
+      .from(certificationSubmissions)
+      .where(inArray(
+        certificationSubmissions.localEntityId,
+        rows.map((row) => row.id),
+      ));
+    expect(new Set(submissions.map((row) => row.externalId))).toEqual(
+      new Set([first.id, second.id]),
+    );
+  });
+
+  it("refuses a matching non-DRAFT and names its id and status", async () => {
+    const fixture = await createFixture();
+    const remote = registry.seedGhgStatement({
+      projectId: fixture.externalProjectId,
+      startOn: "2026-01-01",
+      endOn: REPORTING_PERIOD_END,
+      status: "VERIFIED",
+    });
+
+    const result = await createGhgStatementDraft({
+      facilityId: fixture.facilityId,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toContain(remote.id);
+    expect(result.error).toContain("VERIFIED");
+    expect(registry.requestCount("POST", "/ghg_statements")).toBe(0);
+  });
+
+  it("reconciles every page of the project statement list", async () => {
+    const fixture = await createFixture({ seedOpenRemoval: false });
+    const statementCount = 51;
+    for (let index = 0; index < statementCount; index += 1) {
+      registry.seedGhgStatement({
+        projectId: fixture.externalProjectId,
+        endOn: addDaysIso("2026-01-01", index),
+      });
+    }
+
+    const result = await reconcileGhgStatementsFromRegistry(
+      fixture.facilityId,
+    );
+    expect(result).toMatchObject({
+      success: true,
+      data: { reconciledCount: statementCount },
+    });
+    expect(registry.requestCount("GET", "/ghg_statements")).toBe(2);
+    const rows = await db
+      .select()
+      .from(certifierGhgStatements)
+      .where(eq(certifierGhgStatements.facilityId, fixture.facilityId));
+    expect(rows).toHaveLength(statementCount);
   });
 });

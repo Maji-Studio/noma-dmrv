@@ -256,6 +256,32 @@ describe("performRegistryCreate", () => {
     expect(ledger.appendSyncEvent).not.toHaveBeenCalled();
   });
 
+  it("records a refused lookup on the claimed ledger row", async () => {
+    const refusalMessage =
+      "Registry statement ggs_verified is VERIFIED and already covers this reporting period.";
+    const args = makeArgs({
+      resumed: true,
+      reconcile: vi.fn(
+        async (): Promise<ReconcileLookup> => ({
+          found: "refused",
+          message: refusalMessage,
+        }),
+      ),
+    });
+
+    await expect(performRegistryCreate(args)).rejects.toThrowError(
+      new SafeError(refusalMessage),
+    );
+
+    expect(ledger.markSubmissionRejected).toHaveBeenCalledExactlyOnceWith(
+      makeTestOrgContext(USER_ID),
+      ROW_ID,
+      { errorMessage: refusalMessage },
+    );
+    expect(args.create).not.toHaveBeenCalled();
+    expect(ledger.appendSyncEvent).not.toHaveBeenCalled();
+  });
+
   it("never unwinds a successful create because the audit insert failed (best-effort events)", async () => {
     vi.mocked(ledger.appendSyncEvent).mockRejectedValue(
       new Error("sync-event table unavailable"),

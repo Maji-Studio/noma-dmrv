@@ -572,6 +572,33 @@ export async function getSubmissionById(
   return row;
 }
 
+export async function getSubmissionByExternalId(
+  ctx: OrgContext,
+  args: {
+    provider: CertificationSubmissionRow["provider"];
+    submissionType: string;
+    externalId: string;
+  },
+): Promise<CertificationSubmissionRow | null> {
+  requireOrgScope(ctx);
+  const [row] = await db
+    .select()
+    .from(certificationSubmissions)
+    .where(
+      and(
+        eq(certificationSubmissions.provider, args.provider),
+        eq(certificationSubmissions.submissionType, args.submissionType),
+        eq(certificationSubmissions.externalId, args.externalId),
+        eq(
+          certificationSubmissions.organizationId,
+          ctx.organizationId,
+        ),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
 export async function markSubmissionSubmitted(
   ctx: OrgContext,
   id: string,
