@@ -66,8 +66,6 @@ import {
 } from "@/schemas/production-runs";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 
-const TOAST_GAP_PREVIEW_LIMIT = 3;
-
 function productionRunDetailHref(run: ProductionRunWithRelations) {
   const params = new URLSearchParams({
     facility: run.facilityId,
@@ -256,22 +254,6 @@ export function ProductionRunList() {
 
   const runs = runsData?.items ?? [];
   const totalPages = runsData?.totalPages ?? 0;
-  const showSavedToast = (
-    message: string,
-    run: ProductionRunWithRelations,
-  ) => {
-    const readiness = deriveEntityCertifyReadiness("productionRun", run);
-    if (readiness.state === "ready") {
-      toast.success(message);
-      return;
-    }
-    const gapLabels = readiness.gaps
-      .slice(0, TOAST_GAP_PREVIEW_LIMIT)
-      .map((gap) => gap.label)
-      .join(", ");
-    const suffix = readiness.gaps.length > TOAST_GAP_PREVIEW_LIMIT ? ", ..." : "";
-    toast.success(`${message}. Still needed to certify: ${gapLabels}${suffix}`);
-  };
 
   const createWithEvidence = useCreateWithEvidence({
     entityType: "production_run",
@@ -344,8 +326,8 @@ export function ProductionRunList() {
         clearAttachmentsOnFailure: uploadFailedCount === 0,
       };
     },
-    onSuccess: ({ result }) =>
-      showSavedToast("Production run created successfully", result),
+    onSuccess: () =>
+      toast.success("Production run created successfully"),
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
@@ -357,7 +339,7 @@ export function ProductionRunList() {
     if (createWithEvidence.guardUpdate()) return;
     try {
       const { startTime, endTime } = data;
-      const run = await updateRun.mutateAsync({
+      await updateRun.mutateAsync({
         // startDate/endDate are folded into startTime/endTime by the form and
         // are stripped by the update schema.
         ...data,
@@ -374,7 +356,7 @@ export function ProductionRunList() {
       });
       createWithEvidence.reset();
       setSideSheet(null);
-      showSavedToast("Production run updated successfully", run);
+      toast.success("Production run updated successfully");
     } catch (error) {
       if (getRunConflict(error)) throw error;
       setUpdateError(error instanceof Error ? error.message : "Failed to update production run");

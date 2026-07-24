@@ -57,6 +57,9 @@ test.describe("Production Run + Sample UI CRUD", () => {
 
     await page.locator('[role="dialog"]').locator('button:has-text("Create Production Run")').click();
     await waitForSideSheetClose(page);
+    await expect(page.getByRole("status")).toHaveText(
+      "Production run created successfully",
+    );
   }
 
   test("create production run via UI form", async ({
@@ -126,6 +129,9 @@ test.describe("Production Run + Sample UI CRUD", () => {
     await submitBtn.click();
 
     await waitForSideSheetClose(page);
+    await expect(page.getByRole("status")).toHaveText(
+      "Sample created successfully",
+    );
 
     // Verify sample appears in list
     await page.waitForLoadState("networkidle");

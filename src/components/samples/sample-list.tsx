@@ -58,8 +58,6 @@ import {
 } from "@/lib/sample-create-intent";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
-const READINESS_PREVIEW_LIMIT = 3;
-
 /** One template for the create-failure banner so its two call sites (post-flush
  * failure and inline retry recount) can never drift apart. Null when resolved. */
 function buildAttachmentFailureBanner(total: number): string | null {
@@ -293,19 +291,6 @@ export function SampleList({
   const activeFocusTarget = sideSheet
     ? null
     : parseEntityFocusTarget(deepLinkFocus);
-  const showSavedToast = (message: string, sample: SampleWithRelations) => {
-    const readiness = deriveEntityCertifyReadiness("sample", sample);
-    if (readiness.state === "ready") {
-      toast.success(message);
-      return;
-    }
-    const gapLabels = readiness.gaps
-      .slice(0, READINESS_PREVIEW_LIMIT)
-      .map((gap) => gap.label)
-      .join(", ");
-    const suffix = readiness.gaps.length > READINESS_PREVIEW_LIMIT ? ", ..." : "";
-    toast.success(`${message}. Still needed to certify: ${gapLabels}${suffix}`);
-  };
 
   const createWithEvidence = useCreateWithEvidence({
     entityType: "sample",
@@ -348,8 +333,8 @@ export function SampleList({
         failureMessage: buildAttachmentFailureBanner(failedCount) ?? undefined,
       };
     },
-    onSuccess: ({ result }) =>
-      showSavedToast("Sample created successfully", result),
+    onSuccess: () =>
+      toast.success("Sample created successfully"),
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
@@ -437,14 +422,14 @@ export function SampleList({
     setFormError(null);
     if (createWithEvidence.guardUpdate(deferredLegs.length > 0)) return;
     try {
-      const sample = await updateSample.mutateAsync({
+      await updateSample.mutateAsync({
         sampleId: sideSheet.entity.id,
         ...data,
       });
       createWithEvidence.reset();
       setDeferredLegs([]);
       setSideSheet(null);
-      showSavedToast("Sample updated successfully", sample);
+      toast.success("Sample updated successfully");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to update sample");
     }
