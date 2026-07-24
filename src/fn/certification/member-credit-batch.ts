@@ -14,6 +14,8 @@ export interface MemberCreditBatch {
   startDate: string;
   endDate: string;
   appliedWeightTons: number;
+  /** Dry applied mass used by the registry product-mass submission. */
+  appliedDryWeightTons: number;
   durabilityOption: DurabilityOption;
   sampling: CreditBatchSampling;
   productionRunCount: number;
@@ -40,6 +42,11 @@ export function toMemberCreditBatch(
     startDate: batch.startDate,
     endDate: batch.endDate,
     appliedWeightTons: accounting.appliedWeightTons,
+    appliedDryWeightTons: lineageFacts.applications.reduce(
+      (total, application) =>
+        total + (application.biocharAppliedDryTons ?? 0),
+      0,
+    ),
     durabilityOption: batch.durabilityOption,
     sampling: batch.sampling,
     productionRunCount: lineageFacts.productionRunIds.length,
@@ -59,6 +66,7 @@ export function toMemberCreditBatchView(
     startDate: batch.startDate,
     endDate: batch.endDate,
     appliedWeightTons: batch.appliedWeightTons,
+    appliedDryWeightTons: batch.appliedDryWeightTons,
     durabilityOption: batch.durabilityOption,
     sampling: batch.sampling,
     productionRunCount: batch.productionRunCount,

@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
@@ -218,6 +219,9 @@ export const certifierSensors = pgTable(
 // (ADR 0003 / Phase 4.5). Facility-scoped. The remote statement id, status
 // and payload live on the certification_submissions ledger row keyed
 // (provider, 'ghg_statement', 'ghgStatement', certifierGhgStatements.id).
+export const CERTIFIER_GHG_STATEMENT_REMOTE_EXTERNAL_ID_METADATA_KEY =
+  'remoteExternalId';
+
 export const certifierGhgStatements = pgTable(
   'certifier_ghg_statements',
   {
@@ -255,6 +259,17 @@ export const certifierGhgStatements = pgTable(
       table.facilityId,
       table.reportingPeriodEndOn
     ),
+    // Registry discovery is keyed by the remote statement id, not its period:
+    // Isometric permits duplicate and null periods. This expression index
+    // makes concurrent list/manual reconciles converge on one local identity.
+    uniqueIndex('certifier_ghg_statements_remote_external_id_unique')
+      .on(
+        table.provider,
+        sql`(${table.metadata}->>${sql.raw(`'${CERTIFIER_GHG_STATEMENT_REMOTE_EXTERNAL_ID_METADATA_KEY}'`)})`
+      )
+      .where(
+        sql`${table.metadata}->>${sql.raw(`'${CERTIFIER_GHG_STATEMENT_REMOTE_EXTERNAL_ID_METADATA_KEY}'`)} is not null`
+      ),
   ]
 );
 

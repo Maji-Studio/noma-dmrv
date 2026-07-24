@@ -15,6 +15,7 @@ const BATCH = {
   startDate: "2026-07-01",
   endDate: "2026-07-31",
   appliedWeightTons: 10,
+  appliedDryWeightTons: 8.5,
   durabilityOption: "1000_year",
   sampling: "sampled",
   productionRunCount: 2,
@@ -35,8 +36,11 @@ describe("SubmissionOverview", () => {
 
     expect(html).toContain("Submission overview");
     expect(html).toContain("1 credit batch");
-    expect(html).toContain("10.0 t");
+    expect(html).toContain("8.5 t");
     expect(html).toContain("3.0 t CO₂e");
+    expect(html).toContain("Stored CO₂e estimate in this submission");
+    expect(html).toContain("Submitted biochar (dry)");
+    expect(html).not.toContain("Net removal");
     expect(html).toContain("CB-26-001");
     expect(html).toContain("Jul 1 – Jul 31, 2026");
     expect(html).toContain("1000-Year (R₀ Reflectance)");
@@ -48,5 +52,33 @@ describe("SubmissionOverview", () => {
     );
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noopener noreferrer"');
+  });
+
+  it("does not present a partial stored estimate as a complete total", () => {
+    const html = renderToStaticMarkup(
+      <SubmissionOverview
+        memberBatches={[
+          BATCH,
+          {
+            ...BATCH,
+            id: "batch-2",
+            code: "CB-26-002",
+            co2eStoredPreview: {
+              provider: null,
+              co2eStoredTonnes: null,
+              moduleVersion: null,
+              applicationResults: [],
+              missingInputs: ["Stored CO₂e preview"],
+              warnings: [],
+            },
+          },
+        ]}
+        facilityId="facility-1"
+      />,
+    );
+
+    expect(html).toContain("Stored CO₂e estimate in this submission");
+    expect(html).toContain("—");
+    expect(html).not.toContain(">3.0<");
   });
 });

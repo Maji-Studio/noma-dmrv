@@ -20,7 +20,11 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { parseAsString, useQueryState } from "nuqs";
 import { useState } from "react";
-import { ClipboardTextIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  ArrowsClockwiseIcon,
+  ClipboardTextIcon,
+  PlusIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { Button, EmptyState } from "@/components/ui";
 import { DataTable } from "@/components/ui/data-table";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -28,7 +32,9 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import {
   useFacilityCertifierSummary,
   useGhgStatementsForFacility,
+  useSyncGhgStatementsFromRegistry,
 } from "@/hooks/use-certification";
+import { useToast } from "@/components/ui/toast";
 import type { GhgStatementListItem } from "@/fn/certification/ghg-statements";
 import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import { isLockedInFlight } from "@/lib/isometric/utils/lock";
@@ -68,7 +74,14 @@ function statementPeriod(item: GhgStatementListItem): {
   primary: string;
   secondary: string;
 } {
-  const { reportingPeriodStartOn, reportingPeriodEndOn } = item.statement;
+  const { reportingPeriodStartOn } = item.statement;
+  const reportingPeriodEndOn = item.effectiveReportingPeriodEndOn;
+  if (item.remotePeriodMissing) {
+    return {
+      primary: "No period set",
+      secondary: "Registry period is missing",
+    };
+  }
   return reportingPeriodStartOn
     ? {
         primary: formatDateRange(reportingPeriodStartOn, reportingPeriodEndOn),
@@ -168,6 +181,8 @@ function ListBody({ facilityId }: { facilityId: string }) {
   // hints, live Isometric API calls) that `useFacilityCertifierMapping` fetches.
   const summaryQuery = useFacilityCertifierSummary(facilityId);
   const query = useGhgStatementsForFacility(facilityId);
+  const syncMutation = useSyncGhgStatementsFromRegistry();
+  const toast = useToast();
   const [createOpen, setCreateOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statementId, setStatementId] = useQueryState(
@@ -183,6 +198,20 @@ function ListBody({ facilityId }: { facilityId: string }) {
     ? null
     : Boolean(summaryQuery.data?.mapping);
   const mappingFailed = summaryQuery.isError && !summaryQuery.isLoading;
+  const syncFromRegistry = async () => {
+    try {
+      const result = await syncMutation.mutateAsync(facilityId);
+      toast.success(
+        `Synced ${result.reconciledCount} registry statement${result.reconciledCount === 1 ? "" : "s"}.`,
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to sync GHG statements.",
+      );
+    }
+  };
 
   if (query.error) {
     return (
@@ -209,14 +238,25 @@ function ListBody({ facilityId }: { facilityId: string }) {
               ({statements.length})
             </span>
           </h2>
-          <Button
-            variant="primary"
-            onClick={() => setCreateOpen(true)}
-            disabled={isLinked !== true}
-          >
-            <PlusIcon size={20} weight="bold" />
-            New GHG Statement
-          </Button>
+          <div className="flex flex-wrap items-center justify-end gap-12">
+            <Button
+              variant="default"
+              onClick={syncFromRegistry}
+              busy={syncMutation.isPending}
+              disabled={isLinked !== true}
+            >
+              <ArrowsClockwiseIcon size={20} weight="bold" />
+              Sync from registry
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => setCreateOpen(true)}
+              disabled={isLinked !== true}
+            >
+              <PlusIcon size={20} weight="bold" />
+              New GHG Statement
+            </Button>
+          </div>
         </div>
 
         {(mappingFailed || isLinked === false) && (
@@ -256,7 +296,20 @@ function ListBody({ facilityId }: { facilityId: string }) {
               description={
                 searchQuery
                   ? "Try clearing your search."
-                  : "Create one for submitted Removals in a reporting period."
+                  : "Sync existing registry statements, or create one for submitted Removals in a reporting period."
+              }
+              action={
+                searchQuery ? undefined : (
+                  <Button
+                    variant="default"
+                    onClick={syncFromRegistry}
+                    busy={syncMutation.isPending}
+                    disabled={isLinked !== true}
+                  >
+                    <ArrowsClockwiseIcon size={20} weight="bold" />
+                    Sync from registry
+                  </Button>
+                )
               }
               padding="md"
             />

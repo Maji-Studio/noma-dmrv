@@ -90,7 +90,7 @@ describe("CreditBatchCard", () => {
     expect(collectText(loading)).toContain("Loading certification progress…");
   });
 
-  it("places remaining work beside the open lifecycle state", () => {
+  it("places readiness beside the open lifecycle state", () => {
     const summary: CreditBatchHealthSummary = {
       state: "incomplete",
       issueCount: 2,
@@ -103,7 +103,6 @@ describe("CreditBatchCard", () => {
     const rail = CreditBatchLifecycleRail({ summary });
     const text = collectText(rail);
 
-    expect(text).toContain("Open2 to complete");
-    expect(text).not.toContain("issues");
+    expect(text).toContain("Open2 issues open");
   });
 });

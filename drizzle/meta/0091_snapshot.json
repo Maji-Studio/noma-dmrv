@@ -1,5 +1,5 @@
 {
-  "id": "0ed19ada-16e9-4012-a07b-bcd0e7a99da8",
+  "id": "69b411e0-de29-4c9d-a821-ed0a36eedc71",
   "prevId": "2278ce4e-d9be-4378-b84a-a22df6624cd1",
   "version": "7",
   "dialect": "postgresql",
@@ -1628,6 +1628,28 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "certifier_ghg_statements_remote_external_id_unique": {
+          "name": "certifier_ghg_statements_remote_external_id_unique",
+          "columns": [
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "(\"metadata\"->>'remoteExternalId')",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"certifier_ghg_statements\".\"metadata\"->>'remoteExternalId' is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -1669,85 +1691,6 @@
             "provider",
             "facility_id",
             "reporting_period_end_on"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.certifier_organization_settings": {
-      "name": "certifier_organization_settings",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "provider": {
-          "name": "provider",
-          "type": "certifier_provider",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'isometric'"
-        },
-        "source_visibility": {
-          "name": "source_visibility",
-          "type": "registry_source_visibility",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'private'"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "certifier_organization_settings_organization_id_organizations_id_fk": {
-          "name": "certifier_organization_settings_organization_id_organizations_id_fk",
-          "tableFrom": "certifier_organization_settings",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "certifier_org_settings_organization_provider_unique": {
-          "name": "certifier_org_settings_organization_provider_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "organization_id",
-            "provider"
           ]
         }
       },
@@ -9079,14 +9022,6 @@
         "complete",
         "failed",
         "cancelled"
-      ]
-    },
-    "public.registry_source_visibility": {
-      "name": "registry_source_visibility",
-      "schema": "public",
-      "values": [
-        "private",
-        "public"
       ]
     },
     "public.soil_temperature_source": {

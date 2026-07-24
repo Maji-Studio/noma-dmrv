@@ -3,6 +3,12 @@
 Status: accepted (2026-06-19) — supersedes the stage-split portion of ADR 0001.
 Amended 2026-07-03 (issue #319) — see the amendment note at the end.
 
+> **Amended 2026-07-24 — version-citation correction.** The 2026-07-03
+> amendment's Energy Use Accounting v1.3 label does not match the local module
+> pin in `docs/isometric/versions.json`; the applicable interpretation target is
+> v1.2. The litres × lifecycle fuel-factor decision is unchanged. Reconfirm its
+> applicability when the Certify project protocol discrepancy is resolved.
+
 ## Context
 
 The operator-authored production removal template (`rvt_1KS4S43VPSBXA26X`) now carries

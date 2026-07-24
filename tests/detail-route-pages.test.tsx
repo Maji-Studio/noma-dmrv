@@ -4,12 +4,14 @@ const {
   NOT_FOUND_ERROR,
   mockRedirect,
   mockRequireOrgContext,
+  mockGetCreditBatchById,
   mockGetSupplierById,
   mockGetCustomerById,
 } = vi.hoisted(() => ({
   NOT_FOUND_ERROR: "NEXT_NOT_FOUND",
   mockRedirect: vi.fn(),
   mockRequireOrgContext: vi.fn(),
+  mockGetCreditBatchById: vi.fn(),
   mockGetSupplierById: vi.fn(),
   mockGetCustomerById: vi.fn(),
 }));
@@ -22,6 +24,9 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: mockRequireOrgContext,
+}));
+vi.mock("@/data-access/credit-batches", () => ({
+  getCreditBatchById: mockGetCreditBatchById,
 }));
 vi.mock("@/data-access/entities/suppliers", () => ({
   getSupplierById: mockGetSupplierById,
@@ -45,6 +50,10 @@ describe("detail route server preflights", () => {
       userId: "test-user",
       organizationId: "test-org",
     });
+    mockGetCreditBatchById.mockResolvedValue({
+      id: VALID_MISSING_ID,
+      facilityId: "facility-1",
+    });
   });
 
   it("redirects the retired credit-batch detail route into the list side sheet", async () => {
@@ -65,7 +74,7 @@ describe("detail route server preflights", () => {
     });
 
     expect(mockRedirect).toHaveBeenCalledWith(
-      `/credit-batches?batch=${VALID_MISSING_ID}`,
+      `/credit-batches?facility=facility-1&batch=${VALID_MISSING_ID}`,
     );
   });
 

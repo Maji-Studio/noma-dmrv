@@ -621,7 +621,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(result.unresolvedBlueprintKeys).toEqual(["key_unknown"]);
   });
 
-  it("accepts a recognized template-embedded sequestration blueprint omitted from the catalog", async () => {
+  it("accepts the explicitly-bound 1000-year sequestration component when its exact key is absent from the catalog", async () => {
     mockedGetMapping.mockResolvedValue(
       mapping({ defaultRemovalTemplateId: "rvt_resolved" }),
     );

@@ -16,6 +16,16 @@
     "authoritative_url": "https://registry.isometric.com/protocol/biochar/1.2",
     "authoritative_tag_url": "https://registry.isometric.com/protocol/biochar/1.2?tag=1.2.0"
   },
+  "certify_project_observation": {
+    "observed_at": "2026-07-24",
+    "project_id": "prj_1K9YJ33RKSBX9FFF",
+    "source": "Certify General page",
+    "baseline_protocol_version": "1.1",
+    "current_protocol_version": "1.1",
+    "current_standard_version": "1.7",
+    "api_protocol_version_available": false,
+    "discrepancy": "The Certify project runs Biochar Production and Storage v1.1, while this non-authoritative interpretation set remains pinned to v1.2. Do not repin or change credit logic until the operator confirms the intended project version with Isometric."
+  },
   "modules": [
     {
       "slug": "biochar-storage-soil-environments",
@@ -86,6 +96,7 @@
   ],
   "notes": [
     "Non-authoritative interpretation files in this folder must cite section references and authoritative URLs.",
-    "Bump versions only in this file first, then refresh shortlist + schema mapping."
+    "Bump versions only in this file first, then refresh shortlist + schema mapping.",
+    "Certify project protocol and Standard versions are UI-observed facts because GET /projects exposes no protocol fields and GET /ghg_statements/{id} returned protocol_version null on 2026-07-24."
   ]
 }
