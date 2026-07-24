@@ -548,7 +548,7 @@ export function EntitySelect({
                       index === clampedHighlightedIndex &&
                         "bg-[var(--color-background-medium)]",
                       option.id === value &&
-                        "bg-[var(--color-interaction-light)]"
+                        "bg-[var(--color-background-interaction-light)]"
                     )}
                   >
                     <span className="flex items-baseline justify-between gap-8">

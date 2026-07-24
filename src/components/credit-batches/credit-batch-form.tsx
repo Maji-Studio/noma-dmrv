@@ -129,20 +129,20 @@ function CohortPickerSection({
           </div>
         </div>
       ) : !hasDates ? (
-        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
+        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)]">
           <span className="body-small text-[var(--color-text-tertiary)]">
             {notReadyMessage}
           </span>
         </div>
       ) : totalCount === 0 && count === 0 ? (
-        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
+        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)]">
           <span className="body-small text-[var(--color-text-tertiary)]">
             {noMatchMessage}
           </span>
         </div>
       ) : totalCount === 0 ? (
         <div className="space-y-8">
-          <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
+          <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)]">
             <span className="body-small text-[var(--color-text-tertiary)]">
               {noMatchWithSelectionMessage ?? noMatchMessage}
             </span>
@@ -428,7 +428,7 @@ export function CreditBatchForm({
         key={run.id}
         className={`flex min-h-44 items-center gap-12 px-12 py-8 border ${
           assignedElsewhere
-            ? "bg-[var(--color-background-sunken)] border-[var(--color-border-tertiary)] text-[var(--color-text-quaternary)]"
+            ? "bg-[var(--color-background-medium)] border-[var(--color-border-tertiary)] text-[var(--color-text-tertiary)]"
             : "bg-[var(--color-background-white)] border-[var(--color-border-tertiary)] text-[var(--color-text-primary)]"
         }`}
       >
@@ -444,11 +444,11 @@ export function CreditBatchForm({
           {formatDate(run.date)}
         </span>
         {assignedElsewhere && run.assignedCreditBatchCode && (
-          <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-quaternary)] truncate">
+          <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-tertiary)] truncate">
             Assigned to {run.assignedCreditBatchCode}
           </span>
         )}
-        <span className="ml-auto text-[10px] uppercase tracking-wider text-[var(--color-text-quaternary)] shrink-0">
+        <span className="ml-auto text-[10px] uppercase tracking-wider text-[var(--color-text-tertiary)] shrink-0">
           Dry output{" "}
           {formatTons(
             run.biocharDryMassKg == null

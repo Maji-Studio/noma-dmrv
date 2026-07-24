@@ -75,7 +75,7 @@ export function MethodBPrerequisitesSetup({
   });
 
   return (
-    <div className="border border-[var(--color-border-tertiary)] bg-[var(--color-background-sunken)] p-12">
+    <div className="border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] p-12">
       <Button variant="noOutline" size="small" onClick={() => setOpen(!open)}>
         {open ? <CaretUpIcon size={16} /> : <CaretDownIcon size={16} />}
         {open ? "Hide Method-B setup" : "Set up Method B"}

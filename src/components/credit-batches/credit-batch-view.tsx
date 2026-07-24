@@ -56,7 +56,7 @@ function ProductionRunLink({
         </span>
         <ArrowRightIcon
           size={14}
-          className="text-[var(--color-text-quaternary)] group-hover:text-[var(--color-text-secondary)]"
+          className="text-[var(--color-text-tertiary)] group-hover:text-[var(--color-text-secondary)]"
           aria-hidden
         />
       </span>

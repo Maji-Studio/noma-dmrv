@@ -41,7 +41,7 @@ export function FacilityCard({
           </span>
           <span className="flex items-center gap-8">
             {isArchived && (
-              <span className="inline-flex items-center gap-6 border border-[var(--color-border-primary)] bg-[var(--color-background-secondary)] px-10 py-4 text-[11px] uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
+              <span className="inline-flex items-center gap-6 border border-[var(--color-border-primary)] bg-[var(--color-surface-light)] px-10 py-4 text-[11px] uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
                 <ArchiveIcon size={12} weight="bold" />
                 Archived
               </span>
