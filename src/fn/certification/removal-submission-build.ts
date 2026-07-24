@@ -59,6 +59,36 @@ export interface RemovalSubmissionBuild {
   memberCreditBatchIds: string[];
 }
 
+export function normalizeSequestrationTemplateForHash(
+  template: IsometricGhgEntryTemplate,
+) {
+  return template.groups
+    .flatMap((group) =>
+      group.components
+        .filter((component) =>
+          isSequestrationBlueprintFamily(component.blueprint_key),
+        )
+        .map((component) => ({
+          groupKey: group.key,
+          rtcId: component.id,
+          blueprintKey: component.blueprint_key,
+          inputs: component.inputs
+            .map((input) => ({
+              inputKey: input.input_key,
+              type: input.type,
+              quantityKind: input.quantity_kind,
+              datapointId: input.datapoint_id,
+            }))
+            .sort((a, b) => a.inputKey.localeCompare(b.inputKey)),
+        })),
+    )
+    .sort((a, b) =>
+      `${a.groupKey}::${a.rtcId}::${a.blueprintKey}`.localeCompare(
+        `${b.groupKey}::${b.rtcId}::${b.blueprintKey}`,
+      ),
+    );
+}
+
 export function assertEntityReadinessGapsResolved(
   entityReadinessGaps: string[] | undefined,
 ): void {
@@ -218,6 +248,9 @@ export async function buildRemovalSubmissionBuild(args: {
     removalId,
     mappingRevision: MAPPING_REVISION,
     templateId: defaultTemplate.id,
+    sequestrationTemplate: normalizeSequestrationTemplateForHash(
+      defaultTemplate,
+    ),
     sourceProductionRunIds: [...agg.sourceProductionRunIds].sort(),
     startedOn: agg.earliestStartTime.toISOString(),
     completedOn: latestApplicationTime.toISOString(),
