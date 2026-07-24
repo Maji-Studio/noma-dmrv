@@ -200,7 +200,6 @@ describe("ensureTransportEvidenceLedgerSourceFromContext", () => {
     expect(mirrorDocumentToSourceForUser).toHaveBeenCalledWith(makeTestOrgContext(USER), {
       removalId: REMOVAL,
       documentId: "doc-new",
-      isPublic: false,
     });
 
     expect(result).toMatchObject({

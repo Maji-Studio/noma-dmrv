@@ -140,7 +140,13 @@ describe("ensureDurabilityEvidenceLedgerSourceFromContext", () => {
 
     expect(result).toMatchObject({ status: "created", documentId: "doc-new" });
     expect(renderDurabilityLedgerPdf).toHaveBeenCalledOnce();
-    expect(mirrorDocumentToSourceForUser).toHaveBeenCalledOnce();
+    expect(mirrorDocumentToSourceForUser).toHaveBeenCalledWith(
+      makeTestOrgContext(USER),
+      {
+        removalId: REMOVAL,
+        documentId: "doc-new",
+      },
+    );
   });
 
   it("retires 200-year evidence instead of generating it for a 1000-year facility", async () => {

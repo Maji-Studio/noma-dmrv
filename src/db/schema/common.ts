@@ -107,6 +107,11 @@ export const documentVisibility = pgEnum('document_visibility', [
   'public',
 ]);
 
+export const registrySourceVisibility = pgEnum('registry_source_visibility', [
+  'private',
+  'public',
+]);
+
 export const documentUploadStatus = pgEnum('document_upload_status', [
   'pending',
   'uploaded',

@@ -5,7 +5,7 @@
  */
 
 import { SampleList } from "@/components/samples";
-import { SAMPLE_CREATE_CREDIT_BATCH_PARAM } from "@/components/samples/sample-create-intent";
+import { SAMPLE_CREATE_CREDIT_BATCH_PARAM } from "@/lib/sample-create-intent";
 import {
   CREATE_INTENT_PARAM,
   isCreateIntentValue,

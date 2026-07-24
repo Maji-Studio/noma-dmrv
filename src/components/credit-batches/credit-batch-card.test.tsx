@@ -1,4 +1,5 @@
 import { isValidElement, type ReactElement, type ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { CreditBatchHealthSummary } from "@/fn/certification";
@@ -104,5 +105,30 @@ describe("CreditBatchCard", () => {
     const text = collectText(rail);
 
     expect(text).toContain("Open2 issues open");
+  });
+
+  it("renders completed lifecycle steps in dark grey", () => {
+    const summary: CreditBatchHealthSummary = {
+      state: "ready",
+      issueCount: 0,
+      removalId: "removal-1",
+      removalStatus: {
+        value: "issued",
+        label: "Submitted",
+        isActionable: false,
+        isTerminal: true,
+      },
+      ghgStatementId: null,
+      ghgStatementStatus: null,
+    };
+
+    const rail = CreditBatchLifecycleRail({ summary });
+    const markup = renderToStaticMarkup(rail);
+
+    expect(markup).toContain(
+      "bg-[var(--color-background-dark-light)]",
+    );
+    expect(markup).not.toContain("bg-[var(--st-ok)]");
+    expect(markup).toContain("bg-[var(--st-run)]");
   });
 });

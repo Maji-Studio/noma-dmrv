@@ -16,27 +16,24 @@
  */
 "use client";
 
-import { useEffect, useState } from "react";
 import {
-  ArrowsClockwiseIcon,
   CheckCircleIcon,
   CloudIcon,
   FileIcon,
-  LockIcon,
-  GlobeIcon,
+  WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button, EmptyState } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import {
   useCandidateDocumentsForRemoval,
   useMirrorDocumentToSource,
-  useSetDocumentSourceVisibility,
   useUnlinkDocumentSource,
 } from "@/hooks/use-certification-sources";
 import { Section } from "./panel-layout";
 
 const ICON_SIZE = 14;
 const STATE_ICON_SIZE = 16;
+const PDF_MIME_TYPE = "application/pdf";
 
 interface SourcesPanelProps {
   // Null while the credit batch is not yet grouped into a removal — render
@@ -152,24 +149,12 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
   const { document, lineageEntity, mirror } = candidate;
   const isMirrored = !!mirror;
   const isMirrorable = !!document.storageKey;
-  const remoteIsPublic = mirror?.isPublic ?? false;
-  const [isPublic, setIsPublic] = useState(remoteIsPublic);
-  // Sync local toggle when the candidate query refetches with a different
-  // remote value — e.g., another operator flipped visibility from another
-  // tab and our window refocused. Without this, the toggle would show the
-  // stale local value while the server has the new one.
-  useEffect(() => {
-    setIsPublic(remoteIsPublic);
-  }, [remoteIsPublic]);
+  const isPdf = isPdfCandidate(document.mimeType, document.fileName);
   const mirrorMutation = useMirrorDocumentToSource();
   const unlinkMutation = useUnlinkDocumentSource(removalId);
-  const visibilityMutation = useSetDocumentSourceVisibility(removalId);
   const toast = useToast();
 
-  const pending =
-    mirrorMutation.isPending ||
-    unlinkMutation.isPending ||
-    visibilityMutation.isPending;
+  const pending = mirrorMutation.isPending || unlinkMutation.isPending;
 
   const description = [
     document.documentType.replace(/_/g, " "),
@@ -178,7 +163,7 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
 
   const handleMirror = () => {
     mirrorMutation.mutate(
-      { removalId, documentId: document.id, isPublic },
+      { removalId, documentId: document.id },
       {
         onSuccess: (result) => {
           if (result.recovered) {
@@ -212,29 +197,6 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
     );
   };
 
-  const handleVisibilityToggle = () => {
-    const next = !isPublic;
-    setIsPublic(next);
-    if (!isMirrored) return; // pre-mirror: just stage the choice
-    visibilityMutation.mutate(
-      { documentId: document.id, isPublic: next },
-      {
-        onSuccess: () =>
-          toast.success(
-            next
-              ? "Source set to public on the registry."
-              : "Source set to private.",
-          ),
-        onError: (err) => {
-          setIsPublic(!next); // revert UI on failure
-          toast.error(
-            err instanceof Error ? err.message : "Visibility change failed.",
-          );
-        },
-      },
-    );
-  };
-
   return (
     <div className="flex items-center justify-between gap-12 px-12 py-12">
       <div className="flex min-w-0 items-start gap-8">
@@ -244,9 +206,21 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
           className="mt-2 shrink-0 text-[var(--color-text-tertiary)]"
         />
         <div className="flex min-w-0 flex-col gap-2">
-          <span className="body-small truncate text-[var(--color-text-primary)]">
-            {document.fileName}
-          </span>
+          {isPdf ? (
+            <a
+              href={`/api/documents/${encodeURIComponent(document.id)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="body-small truncate text-[var(--color-text-primary)] underline underline-offset-2 hover:text-[var(--color-interaction)]"
+              title={`Preview ${document.fileName} in a new tab`}
+            >
+              {document.fileName}
+            </a>
+          ) : (
+            <span className="body-small truncate text-[var(--color-text-primary)]">
+              {document.fileName}
+            </span>
+          )}
           <span className="body-caption truncate text-[var(--color-text-tertiary)]">
             {description}
           </span>
@@ -259,36 +233,6 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
       </div>
 
       <div className="flex shrink-0 items-center gap-8">
-        <Button
-          variant="default"
-          size="small"
-          aria-pressed={isPublic}
-          aria-label={
-            isPublic
-              ? "Public on registry — click to set private"
-              : "Private — click to set public"
-          }
-          onClick={handleVisibilityToggle}
-          disabled={pending}
-          title={
-            isPublic
-              ? "Public on the registry after issuance"
-              : "Private — only visible to the verifier"
-          }
-        >
-          {isPublic ? (
-            <>
-              <GlobeIcon size={ICON_SIZE} weight="bold" />
-              <span className="body-caption">Public</span>
-            </>
-          ) : (
-            <>
-              <LockIcon size={ICON_SIZE} weight="bold" />
-              <span className="body-caption">Private</span>
-            </>
-          )}
-        </Button>
-
         {isMirrored ? (
           <>
             <span
@@ -302,8 +246,9 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
               size="small"
               onClick={handleUnlink}
               disabled={pending}
+              title="Remove the local Source mapping from future Removal submissions. The Isometric registry copy and audit history remain."
             >
-              Unlink
+              Unlink locally
             </Button>
           </>
         ) : isMirrorable ? (
@@ -312,28 +257,39 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
             size="small"
             onClick={handleMirror}
             disabled={pending}
+            busy={mirrorMutation.isPending}
           >
-            {mirrorMutation.isPending ? (
-              <ArrowsClockwiseIcon
-                size={ICON_SIZE}
-                className="animate-spin"
-              />
-            ) : (
+            {!mirrorMutation.isPending && (
               <CloudIcon size={ICON_SIZE} weight="bold" />
             )}
             Mirror
           </Button>
         ) : (
-          <Button
-            variant="default"
-            size="small"
-            disabled
-            title="Legacy URL-only document. Re-upload through noma before mirroring."
+          <span
+            className="flex max-w-[180px] items-center gap-6 body-caption text-[var(--color-text-tertiary)]"
+            role="status"
+            title="Legacy URL-only document: noma has no managed file bytes to copy to Isometric. Upload a new managed document to mirror it."
           >
-            Re-upload required
-          </Button>
+            <WarningCircleIcon
+              size={STATE_ICON_SIZE}
+              weight="bold"
+              className="shrink-0"
+            />
+            No managed file bytes
+          </span>
         )}
       </div>
     </div>
+  );
+}
+
+function isPdfCandidate(
+  mimeType: string | null | undefined,
+  fileName: string,
+): boolean {
+  const normalizedMime = mimeType?.split(";", 1)[0]?.trim().toLowerCase();
+  return (
+    normalizedMime === PDF_MIME_TYPE ||
+    fileName.trim().toLowerCase().endsWith(".pdf")
   );
 }

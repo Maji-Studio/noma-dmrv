@@ -9,15 +9,19 @@ import {
 const batches = [
   {
     id: "batch-hardwood",
+    code: "CB-HARDWOOD",
     startDate: "2026-05-01",
     endDate: "2026-05-31",
     feedstockTypeId: "hardwood",
+    feedstockTypeName: "Hardwood chips",
   },
   {
     id: "batch-straw",
+    code: "CB-STRAW",
     startDate: "2026-06-10",
     endDate: "2026-06-20",
     feedstockTypeId: "straw",
+    feedstockTypeName: "Wheat straw",
   },
 ] as CreditBatchWithRelations[];
 
@@ -27,6 +31,26 @@ const healthStates = {
 };
 
 describe("filterCreditBatches", () => {
+  it("searches batch codes and feedstock names case-insensitively", () => {
+    const byCode = filterCreditBatches(batches, healthStates, {
+      search: "hardwood",
+      startDate: "",
+      endDate: "",
+      feedstockTypeIds: [],
+      readiness: "all",
+    });
+    const byFeedstock = filterCreditBatches(batches, healthStates, {
+      search: "WHEAT",
+      startDate: "",
+      endDate: "",
+      feedstockTypeIds: [],
+      readiness: "all",
+    });
+
+    expect(byCode.map((batch) => batch.id)).toEqual(["batch-hardwood"]);
+    expect(byFeedstock.map((batch) => batch.id)).toEqual(["batch-straw"]);
+  });
+
   it("uses production-window overlap for date bounds", () => {
     const result = filterCreditBatches(batches, healthStates, {
       startDate: "2026-05-15",

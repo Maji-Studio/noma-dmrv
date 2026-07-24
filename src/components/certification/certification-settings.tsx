@@ -23,6 +23,7 @@
 import {
   FactoryIcon,
   GaugeIcon,
+  GlobeIcon,
   KeyIcon,
   PlugsIcon,
   PulseIcon,
@@ -38,6 +39,7 @@ import { CERTIFICATION_SETTINGS_EMISSION_ESTIMATES_ANCHOR } from "@/lib/certific
 import { CertificationHealthPanel } from "./certification-health-panel";
 import { EnvBanner } from "./env-banner";
 import { FacilityCertifierSection } from "./facility-certifier-section";
+import { RegistrySourceVisibilitySettings } from "./registry-source-visibility-settings";
 
 function SettingsSection({
   id,
@@ -140,6 +142,14 @@ export function CertificationSettings() {
               />
             </SettingsSection>
           )}
+
+          <SettingsSection
+            icon={GlobeIcon}
+            title="Registry Source visibility — organization-wide"
+            caption="One policy for every new Isometric Source mirrored by this organization, across all facilities."
+          >
+            <RegistrySourceVisibilitySettings />
+          </SettingsSection>
 
           {/* Registry connection — everyone reads; org Owners/Admins manage. */}
           <SettingsSection

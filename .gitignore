@@ -62,6 +62,8 @@ test-results
 
 # local agent/QA working files
 /.scratchpad/
+/.codex/scratch/
+/.pnpm-store/
 /output/
 # QA run artifacts: only markdown reports are tracked; screenshots, videos,
 # raw driver output, and scripts stay local (docs/organization.md)

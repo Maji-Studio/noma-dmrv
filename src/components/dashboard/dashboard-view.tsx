@@ -146,7 +146,6 @@ function DashboardBody({
             attention={data.attention}
             structuralGaps={data.structuralGaps}
             total={data.attentionTotal}
-            flagsTotal={data.attentionFlagsTotal}
           />
           <ActivityFeed activity={data.activity} />
           <CertificationBlock

@@ -10,12 +10,39 @@ vi.mock("@/hooks/use-certification-sources", () => ({
         {
           document: {
             id: "legacy-document-id",
-            fileName: "legacy-boundary-logbook.pdf",
+            fileName: "legacy-boundary-logbook.PDF",
             documentType: "boundary_logbook",
+            mimeType: null,
             storageKey: null,
           },
           lineageEntity: {
             entityLabel: "Application AP-26-001",
+          },
+          mirror: null,
+        },
+        {
+          document: {
+            id: "mime-pdf-document-id",
+            fileName: "laboratory-report",
+            documentType: "lab_report",
+            mimeType: "application/pdf; charset=binary",
+            storageKey: "samples/laboratory-report",
+          },
+          lineageEntity: {
+            entityLabel: "Lab sample CB-26-001",
+          },
+          mirror: null,
+        },
+        {
+          document: {
+            id: "csv-document-id",
+            fileName: "readings.csv",
+            documentType: "sensor_data",
+            mimeType: "text/csv",
+            storageKey: "runs/readings.csv",
+          },
+          lineageEntity: {
+            entityLabel: "Production run PR-26-001",
           },
           mirror: null,
         },
@@ -25,10 +52,6 @@ vi.mock("@/hooks/use-certification-sources", () => ({
     error: null,
   }),
   useMirrorDocumentToSource: () => ({
-    isPending: false,
-    mutate: vi.fn(),
-  }),
-  useSetDocumentSourceVisibility: () => ({
     isPending: false,
     mutate: vi.fn(),
   }),
@@ -43,21 +66,26 @@ vi.mock("@/components/ui/toast", () => ({
 vi.mock("@/components/ui", () => ({
   Button: ({
     children,
+    busy: _busy,
     ...props
-  }: ButtonHTMLAttributes<HTMLButtonElement> & { children?: ReactNode }) => (
-    <button type="button" {...props}>
-      {children}
-    </button>
-  ),
+  }: ButtonHTMLAttributes<HTMLButtonElement> & {
+    busy?: boolean;
+    children?: ReactNode;
+  }) => {
+    void _busy;
+    return (
+      <button type="button" {...props}>
+        {children}
+      </button>
+    );
+  },
   EmptyState: () => null,
 }));
 vi.mock("@phosphor-icons/react/dist/ssr", () => ({
-  ArrowsClockwiseIcon: () => null,
   CheckCircleIcon: () => null,
   CloudIcon: () => null,
   FileIcon: () => null,
-  LockIcon: () => null,
-  GlobeIcon: () => null,
+  WarningCircleIcon: () => null,
 }));
 vi.mock("./panel-layout", () => ({
   Section: ({ children }: { children?: ReactNode }) => (
@@ -67,14 +95,37 @@ vi.mock("./panel-layout", () => ({
 
 import { SourcesPanel } from "./sources-panel";
 
-describe("SourcesPanel legacy URL-only documents", () => {
-  it("shows an honest disabled affordance instead of an enabled Mirror action", () => {
+describe("SourcesPanel supporting document affordances", () => {
+  it("renders legacy URL-only documents as a non-interactive status", () => {
     const html = renderToStaticMarkup(
       <SourcesPanel removalId="removal-id" />,
     );
 
-    expect(html).toContain("Re-upload required");
-    expect(html).toContain("disabled");
-    expect(html).not.toContain(">Mirror</button>");
+    expect(html).toContain("No managed file bytes");
+    expect(html).toContain("noma has no managed file bytes to copy");
+    expect(html).not.toContain("Re-upload required");
+  });
+
+  it("previews PDFs through the authenticated document route only", () => {
+    const html = renderToStaticMarkup(
+      <SourcesPanel removalId="removal-id" />,
+    );
+
+    expect(html).toContain('href="/api/documents/legacy-document-id"');
+    expect(html).toContain('href="/api/documents/mime-pdf-document-id"');
+    expect(html).not.toContain('href="/api/documents/csv-document-id"');
+    expect(html.match(/target="_blank"/g)).toHaveLength(2);
+    expect(html.match(/rel="noopener noreferrer"/g)).toHaveLength(2);
+    expect(html).not.toContain("signed");
+  });
+
+  it("has no per-file registry visibility controls", () => {
+    const html = renderToStaticMarkup(
+      <SourcesPanel removalId="removal-id" />,
+    );
+
+    expect(html).not.toContain("Private");
+    expect(html).not.toContain("Public");
+    expect(html).not.toContain("aria-pressed");
   });
 });

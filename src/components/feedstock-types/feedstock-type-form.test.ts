@@ -3,6 +3,7 @@ import {
   feedstockTypeUsageOptionsFor,
   shouldClearCategoryForIsometricSelection,
   shouldSetUsageToPyrolysisForIsometricSelection,
+  shouldShowCertifiedFeedstockWarning,
   shouldShowIsometricFeedstockSection,
 } from "./feedstock-type-form-logic";
 
@@ -77,5 +78,31 @@ describe("handleSelectIsometricFeedstock — usage/category mutation conditions"
 
   it("does NOT clear category when current usage is already pyrolysis", () => {
     expect(shouldClearCategoryForIsometricSelection("pyrolysis")).toBe(false);
+  });
+});
+
+describe("shouldShowCertifiedFeedstockWarning", () => {
+  it("hides the warning for Blend in create mode", () => {
+    expect(
+      shouldShowCertifiedFeedstockWarning(false, "blend", false),
+    ).toBe(false);
+  });
+
+  it("shows the warning for Pyrolysis in create mode without an Isometric selection", () => {
+    expect(
+      shouldShowCertifiedFeedstockWarning(false, "pyrolysis", false),
+    ).toBe(true);
+  });
+
+  it("hides the warning after selecting an Isometric feedstock", () => {
+    expect(
+      shouldShowCertifiedFeedstockWarning(false, "pyrolysis", true),
+    ).toBe(false);
+  });
+
+  it("hides the warning in edit mode", () => {
+    expect(
+      shouldShowCertifiedFeedstockWarning(true, "pyrolysis", false),
+    ).toBe(false);
   });
 });

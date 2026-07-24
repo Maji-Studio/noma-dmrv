@@ -57,6 +57,9 @@ test.describe("Production Run + Sample UI CRUD", () => {
 
     await page.locator('[role="dialog"]').locator('button:has-text("Create Production Run")').click();
     await waitForSideSheetClose(page);
+    await expect(page.getByRole("status")).toHaveText(
+      "Production run created successfully",
+    );
   }
 
   test("create production run via UI form", async ({
@@ -126,6 +129,9 @@ test.describe("Production Run + Sample UI CRUD", () => {
     await submitBtn.click();
 
     await waitForSideSheetClose(page);
+    await expect(page.getByRole("status")).toHaveText(
+      "Sample created successfully",
+    );
 
     // Verify sample appears in list
     await page.waitForLoadState("networkidle");
@@ -245,7 +251,7 @@ test.describe("Production Run lifecycle (#254)", () => {
 
     await expect(
       page.locator('[role="dialog"] select[name="status"] option'),
-    ).toHaveText(["Draft", "Running", "Cancelled"]);
+    ).toHaveText(["Draft", "Running", "Complete", "Cancelled"]);
   });
 
   test("requires a cancellation reason and saves the cancelled audit record", async ({
@@ -271,7 +277,9 @@ test.describe("Production Run lifecycle (#254)", () => {
     await submitCreate(page);
     await waitForSideSheetClose(page);
 
-    await page.selectOption('select:not([name="status"])', "cancelled");
+    await page
+      .getByLabel("Filter production runs by status")
+      .selectOption("cancelled");
     const cancelledBadge = page
       .locator('tbody [data-status="cancelled"]')
       .first();
@@ -293,7 +301,9 @@ test.describe("Production Run lifecycle (#254)", () => {
     await submitCreate(page);
     await waitForSideSheetClose(page);
 
-    await page.selectOption('select:not([name="status"])', "running");
+    await page
+      .getByLabel("Filter production runs by status")
+      .selectOption("running");
     await expect(page.locator('tbody [data-status="running"]').first()).toBeVisible();
     await editFirstRow(page);
 
@@ -315,7 +325,9 @@ test.describe("Production Run lifecycle (#254)", () => {
     await saveEdit(page);
     await waitForSideSheetClose(page);
 
-    await page.selectOption('select:not([name="status"])', "failed");
+    await page
+      .getByLabel("Filter production runs by status")
+      .selectOption("failed");
     const failedBadge = page.locator('tbody [data-status="failed"]').first();
     await expect(failedBadge).toBeVisible();
     await expect(failedBadge).toHaveText("Failed");
