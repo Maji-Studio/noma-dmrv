@@ -133,6 +133,23 @@ describe("CarbonBreakdownCard", () => {
     expect(html).not.toContain("− −");
   });
 
+  it("renders signed draft figures in the registry-only ledger", () => {
+    const html = render(
+      breakdown({
+        reconciles: false,
+        registryVerification: {
+          ghgStatementId: "ghg_123",
+          ghgStatementStatus: "DRAFT",
+        },
+      }),
+    );
+
+    expect(html).toContain("+299 kg CO₂e");
+    expect(html).toContain("−15 kg CO₂e");
+    expect(html).toContain("−741 kg CO₂e");
+    expect(html).toContain("registry&#x27;s draft figures");
+  });
+
   it.each([
     ["net-negative", "Registry reports net emissions"],
     [
