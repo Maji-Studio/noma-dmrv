@@ -29,11 +29,16 @@ version audit below:
   v1.2). `checkProtocolVersionAtSubmit`
   (`src/fn/certification/protocol-version-preflight.ts`) reads the pin from
   `versions.json`, so the submit preflight now expects "1.1".
-  **Pending:** `requirements-shortlist.md` and `schema-mapping.md` still derive
-  from the v1.2 extraction; a v1.1 gap-check re-verification is queued. Until
-  it lands, treat v1.2-only requirements (Appendix II monitoring plan, loss
-  accounting, low-C/N N₂O mandates, energy-content emissions allocation, WBC
-  pollutant thresholds) as not applicable to the pinned version.
+  **Gap-check (same day):** the v1.1 re-verification ran — full report in
+  [`docs/archive/2026-07-24-isometric-gap-check-v1-1.md`](../archive/2026-07-24-isometric-gap-check-v1-1.md)
+  (348 atoms, 151 confirmed findings: 9 P0 / 78 P1 / 64 advisory; the P0s all
+  map to already-tracked open P0-checklist items). Its adversarial pass
+  corrected this entry's own first draft: **WBC contaminant thresholds bind
+  under agricultural-soils v1.1** — do not treat requirements as v1.2-only
+  without checking the report. `requirements-shortlist.md` and
+  `schema-mapping.md` still derive from the v1.2 extraction; their refresh plus
+  finding remediation is tracked under
+  `isometric/v1-1-shortlist-reverification` in `docs/open-questions.md`.
 - **Durability tier (closes `isometric/project-durability-tier`).** The
   operator changed the Certify project's "Durability of biochar" setting from
   200 years to **1000 years** in the Certify UI on 2026-07-24, matching the

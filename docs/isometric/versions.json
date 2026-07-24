@@ -88,6 +88,6 @@
     "Bump versions only in this file first, then refresh shortlist + schema mapping.",
     "Certify project protocol and Standard versions are UI-observed facts because GET /projects exposes no protocol fields and GET /ghg_statements/{id} returned protocol_version null on 2026-07-24.",
     "Re-pinned 1.2 -> 1.1 on 2026-07-24 (operator decision; registry authoritative). Module set follows protocol v1.1 references: storage module is biochar-storage-agricultural-soils v1.1 (soil-environments is a v1.2-only module), biomass-feedstock-accounting drops to v1.2, and ghg-accounting is removed because protocol v1.1 does not reference it (it enters with v1.2).",
-    "requirements-shortlist.md and schema-mapping.md were extracted against v1.2 and are pending re-verification against v1.1 — treat their v1.2-only rows (monitoring plan, loss accounting, N2O low-C/N mandates, energy-content emissions allocation, WBC pollutant thresholds) as not applicable to the pinned version until the gap-check lands."
+    "requirements-shortlist.md and schema-mapping.md were extracted against v1.2 and are pending refresh against v1.1. Do NOT assume a requirement is v1.2-only without checking the 2026-07-24 gap-check (docs/archive/2026-07-24-isometric-gap-check-v1-1.md): its adversarial pass confirmed, e.g., that WBC contaminant thresholds bind under agricultural-soils v1.1 despite first appearing prominent in v1.2 notes."
   ]
 }

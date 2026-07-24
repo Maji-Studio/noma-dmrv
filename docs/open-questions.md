@@ -400,9 +400,22 @@ companion inherits this file's schema, invariants, and resolution rules.
   replaces soil-environments v1.2, feedstock accounting v1.2 not v1.3,
   ghg-accounting unreferenced, no Appendix II monitoring plan / loss
   accounting / low-C/N N₂O mandates).
-- **Resolve via:** run the v1.1 gap-check (isometric MCP extraction per
-  [`docs/isometric/update-playbook.md`](./isometric/update-playbook.md) §2-5),
-  refresh both docs, and delete this entry.
+- **Gap-check ran 2026-07-24** — full report:
+  [`docs/archive/2026-07-24-isometric-gap-check-v1-1.md`](./archive/2026-07-24-isometric-gap-check-v1-1.md)
+  (151 confirmed findings; all 9 P0s map to already-tracked open P0-checklist
+  items). Headline drifts to fold into the refresh: `started_on` should derive
+  from earliest feedstock sourcing not production start (§8.6.2); the
+  electricity `ec1_grid_average…ec5_direct_connection` enum misreads EC1–EC5
+  as alternatives when they are conjunctive; the BFA market-leakage
+  interpretation mixes v1.3 significance tests into the pinned v1.2; WBC
+  contaminant thresholds DO bind under agricultural-soils v1.1;
+  `src/lib/isometric/utils/durability-aggregation.ts` header still cites the
+  superseded soil-environments v1.2. Caveat: the run's self-test missed 3 of 4
+  seeded known gaps in direct-emissions coverage — don't treat it as
+  exhaustive there.
+- **Resolve via:** refresh `requirements-shortlist.md` + `schema-mapping.md`
+  from the report, remediate or explicitly defer its FIX-class findings, then
+  delete this entry.
 - **Code anchor:** `src/fn/certification/protocol-version-preflight.ts:checkProtocolVersionAtSubmit`
   compares `certifier_projects.protocol_version` against the versions.json pin.
 
