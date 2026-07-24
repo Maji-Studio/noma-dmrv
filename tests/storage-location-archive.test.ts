@@ -1,10 +1,11 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   archiveStorageLocation,
   deleteStorageLocation,
   getStorageLocations,
   restoreStorageLocation,
+  updateStorageLocation,
 } from "@/data-access/storage-locations";
 import { recordStockTakeMovement } from "@/data-access/bin-movements";
 import {
@@ -26,6 +27,7 @@ import {
 } from "./helpers/test-org";
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
+const CONCURRENCY_BARRIER_TIMEOUT_MS = 5_000;
 
 beforeAll(() => ensureTestOrg());
 
@@ -223,6 +225,135 @@ describe("storage location archive", () => {
         }),
       ).rejects.toThrow(/not found or archived/);
     } finally {
+      await cleanupStorageArchiveFixture(fixture);
+    }
+  });
+
+  it("rejects direct edits after a bin is archived", async () => {
+    const fixture = await createStorageArchiveFixture();
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+
+    try {
+      await archiveStorageLocation(ctx, fixture.storageLocationId);
+      await expect(
+        updateStorageLocation(ctx, fixture.storageLocationId, {
+          name: "Archived bins must not be editable",
+        }),
+      ).rejects.toThrow(/restore this storage location before editing it/i);
+
+      const [unchanged] = await db
+        .select({ name: storageLocations.name })
+        .from(storageLocations)
+        .where(
+          and(
+            eq(storageLocations.id, fixture.storageLocationId),
+            eq(storageLocations.organizationId, TEST_ORG_ID),
+          ),
+        );
+      expect(unchanged.name).not.toBe(
+        "Archived bins must not be editable",
+      );
+    } finally {
+      await cleanupStorageArchiveFixture(fixture);
+    }
+  });
+
+  it("does not restore a bin while its facility is being archived", async () => {
+    const fixture = await createStorageArchiveFixture();
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    const facilityArchivedAt = new Date();
+    let releaseFacilityArchive = () => {};
+    let facilityArchiveTransaction: Promise<void> | undefined;
+
+    try {
+      await archiveStorageLocation(ctx, fixture.storageLocationId);
+
+      let signalFacilityArchiveReady = () => {};
+      const facilityArchiveReady = new Promise<void>((resolve) => {
+        signalFacilityArchiveReady = resolve;
+      });
+      const releaseFacilityArchivePromise = new Promise<void>((resolve) => {
+        releaseFacilityArchive = resolve;
+      });
+      let facilityArchiveBackendPid = 0;
+
+      facilityArchiveTransaction = db.transaction(async (tx) => {
+        await tx
+          .update(facilities)
+          .set({ archivedAt: facilityArchivedAt })
+          .where(
+            and(
+              eq(facilities.id, fixture.facilityId),
+              eq(facilities.organizationId, TEST_ORG_ID),
+            ),
+          );
+        const backend = await tx.execute<{ pid: number }>(
+          sql`select pg_backend_pid() as pid`,
+        );
+        facilityArchiveBackendPid = backend.rows[0]?.pid ?? 0;
+        signalFacilityArchiveReady();
+        await releaseFacilityArchivePromise;
+      });
+      await facilityArchiveReady;
+
+      const restoreOutcome = restoreStorageLocation(
+        ctx,
+        fixture.storageLocationId,
+      ).then(
+        (value) => ({ ok: true as const, value }),
+        (error: unknown) => ({ ok: false as const, error }),
+      );
+
+      await expect.poll(async () => {
+        const result = await db.execute<{ waiting: boolean }>(sql`
+          select exists (
+            select 1
+            from pg_stat_activity
+            where ${facilityArchiveBackendPid} = any(pg_blocking_pids(pid))
+          ) as waiting
+        `);
+        return result.rows[0]?.waiting ?? false;
+      }, { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS }).toBe(true);
+
+      releaseFacilityArchive();
+      await facilityArchiveTransaction;
+
+      const outcome = await restoreOutcome;
+      expect(outcome.ok).toBe(false);
+      if (outcome.ok) {
+        throw new Error("Expected storage-location restore to be rejected");
+      }
+      expect(outcome.error).toBeInstanceOf(SafeError);
+      expect((outcome.error as Error).message).toMatch(
+        /restore the facility before restoring this storage location/i,
+      );
+
+      const [state] = await db
+        .select({
+          binArchivedAt: storageLocations.archivedAt,
+          facilityArchivedAt: facilities.archivedAt,
+        })
+        .from(storageLocations)
+        .innerJoin(
+          facilities,
+          and(
+            eq(storageLocations.facilityId, facilities.id),
+            eq(facilities.organizationId, TEST_ORG_ID),
+          ),
+        )
+        .where(
+          and(
+            eq(storageLocations.id, fixture.storageLocationId),
+            eq(storageLocations.organizationId, TEST_ORG_ID),
+          ),
+        );
+      expect(state.binArchivedAt).toBeInstanceOf(Date);
+      expect(state.facilityArchivedAt?.getTime()).toBe(
+        facilityArchivedAt.getTime(),
+      );
+    } finally {
+      releaseFacilityArchive();
+      await facilityArchiveTransaction?.catch(() => undefined);
       await cleanupStorageArchiveFixture(fixture);
     }
   });

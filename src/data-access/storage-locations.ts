@@ -544,6 +544,11 @@ export async function updateStorageLocation(
   if (!existing) {
     throw new SafeError("Storage location not found");
   }
+  if (existing.archivedAt) {
+    throw new SafeError(
+      "Restore this storage location before editing it",
+    );
+  }
 
   // If code is being changed, check for duplicates
   if (data.code && data.code !== existing.code) {
@@ -664,9 +669,21 @@ export async function updateStorageLocation(
           formulationId: normalizedFormulationId,
           updatedAt: new Date(),
         })
-        .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)))
+        .where(
+          and(
+            eq(storageLocations.id, storageLocationId),
+            eq(storageLocations.organizationId, ctx.organizationId),
+            isNull(storageLocations.archivedAt),
+          ),
+        )
         .returning()
   );
+
+  if (!updated) {
+    throw new SafeError(
+      "Restore this storage location before editing it",
+    );
+  }
 
   return updated;
 }
@@ -770,7 +787,8 @@ export async function restoreStorageLocation(
           eq(storageLocations.id, storageLocationId),
           eq(storageLocations.organizationId, ctx.organizationId),
         ),
-      );
+      )
+      .for("update");
 
     if (!existing) {
       throw new SafeError("Storage location not found");
