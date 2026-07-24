@@ -57,6 +57,7 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { appendSyncEventBestEffort, ISOMETRIC_PROVIDER } from "./shared";
+import { withSourceSyncEventOnFailure } from "./source-sync-events";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Candidate-document discovery
@@ -279,7 +280,7 @@ async function collectLineageEntities(
   return Array.from(seen.values());
 }
 
-async function loadCandidateDocumentsForRemovalInternal(
+export async function loadCandidateDocumentsForRemovalForUser(
   orgCtx: OrgContext,
   removalId: string,
 ): Promise<CandidateDocumentsForRemoval> {
@@ -371,7 +372,7 @@ export async function loadCandidateDocumentsForRemoval(
 ): Promise<ActionResult<CandidateDocumentsForRemoval>> {
   return withAction(async (orgCtx) => {
     const parsed = loadCandidateDocumentsForRemovalSchema.parse(input);
-    return loadCandidateDocumentsForRemovalInternal(orgCtx, parsed.removalId);
+    return loadCandidateDocumentsForRemovalForUser(orgCtx, parsed.removalId);
   });
 }
 
@@ -388,7 +389,7 @@ async function assertDocumentIsCandidateForRemoval(
   removalId: string,
   documentId: string,
 ): Promise<CandidateDocumentsForRemoval> {
-  const candidates = await loadCandidateDocumentsForRemovalInternal(
+  const candidates = await loadCandidateDocumentsForRemovalForUser(
     orgCtx,
     removalId,
   );
@@ -419,31 +420,6 @@ export interface MirrorResult {
 // (auth expired, 5xx, network) leaves zero audit trail — ops cannot answer
 // "did we even try?" in production. Re-throws after recording so the action
 // still surfaces the error to the caller.
-async function withSyncEventOnFailure<T>(
-  orgCtx: OrgContext,
-  args: {
-    documentId: string;
-    operation: string;
-    requestPayload?: unknown;
-  },
-  fn: () => Promise<T>,
-): Promise<T> {
-  try {
-    return await fn();
-  } catch (err) {
-    await appendSyncEventBestEffort(orgCtx, {
-      provider: ISOMETRIC_PROVIDER,
-      entityType: "document",
-      entityId: args.documentId,
-      operation: args.operation,
-      status: "failed",
-      requestPayload: args.requestPayload,
-      errorMessage: err instanceof Error ? err.message : String(err),
-    });
-    throw err;
-  }
-}
-
 // Thin server-action wrapper: validates input and resolves the caller from the
 // session. The body lives in `mirrorDocumentToSourceForUser` so server-side
 // callers that already hold a orgCtx (the submit pipeline, the transport
@@ -567,10 +543,11 @@ export async function mirrorDocumentToSourceForUser(
       let resolvedIsPublic = isPublic;
 
       // Reconciliation: was a Source already created in a previous attempt?
-      const remoteExisting = await withSyncEventOnFailure(
+      const remoteExisting = await withSourceSyncEventOnFailure(
         orgCtx,
         {
           documentId,
+          removalId,
           operation: "source:lookup",
           requestPayload: { supplierRefId, phase: "lookup" },
         },
@@ -580,10 +557,11 @@ export async function mirrorDocumentToSourceForUser(
       if (remoteExisting) {
         sourceExternalId = remoteExisting.id;
         resolvedIsPublic = remoteExisting.is_public;
-        const result = await withSyncEventOnFailure(
+        const result = await withSourceSyncEventOnFailure(
           orgCtx,
           {
             documentId,
+            removalId,
             operation: "source:create:reconciled",
             requestPayload: { supplierRefId, externalId: remoteExisting.id },
           },
@@ -598,10 +576,11 @@ export async function mirrorDocumentToSourceForUser(
         }
         recoveredFlag = true;
       } else {
-        const created = await withSyncEventOnFailure(
+        const created = await withSourceSyncEventOnFailure(
           orgCtx,
           {
             documentId,
+            removalId,
             operation: "source:create",
             requestPayload: { supplierRefId },
           },
@@ -622,10 +601,11 @@ export async function mirrorDocumentToSourceForUser(
 
       // Upload bytes if a URL was returned ───────────────────────────────
       if (signedUploadUrl) {
-        await withSyncEventOnFailure(
+        await withSourceSyncEventOnFailure(
           orgCtx,
           {
             documentId,
+            removalId,
             operation: "source:upload",
             requestPayload: { supplierRefId, externalId: sourceExternalId },
           },
@@ -839,10 +819,11 @@ export async function setDocumentSourceVisibility(
       // PatchSourceRequest treats every field as required-with-sentinel;
       // `{ __typename: "Undefined" }` leaves unchanged fields alone.
       const undefinedField = { __typename: "Undefined" as const };
-      const updatedSource = await withSyncEventOnFailure(
+      const updatedSource = await withSourceSyncEventOnFailure(
         orgCtx,
         {
           documentId: parsed.documentId,
+          removalId: parsed.removalId,
           operation: "source:patch:visibility",
           requestPayload: {
             externalDocumentId: existing.externalDocumentId,
