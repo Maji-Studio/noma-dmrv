@@ -259,7 +259,7 @@ export const syncStatus = pgEnum('sync_status', [
 
 // Certifier submission lifecycle state.
 export const certificationSubmissionStatus = pgEnum(
-  'isometric_submission_status',
+  'certification_submission_status',
   [
     'draft',
     'submitted',
