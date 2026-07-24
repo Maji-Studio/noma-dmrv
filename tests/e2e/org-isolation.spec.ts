@@ -136,14 +136,19 @@ test("organization domain data is isolated across lists, record URLs, and picker
     orgB.page.getByText(seededData.supplier.name, { exact: true }),
   ).toHaveCount(0);
 
-  // The retired detail route redirects into the list's view sheet. A cross-org
-  // batch id must fail to resolve there: the deep link is cleared with a toast
-  // and nothing about the foreign batch (not even its code) is rendered.
-  await orgB.page.goto(`/credit-batches/${orgABatch.id}`);
-  await expect(orgB.page).toHaveURL(/\/credit-batches/);
+  // The retired detail route resolves the batch before redirecting into the
+  // list's view sheet. A cross-org batch id must return the canonical 404 and
+  // reveal nothing about the foreign batch (not even its code).
+  const creditBatchResponse = await orgB.page.goto(
+    `/credit-batches/${orgABatch.id}`,
+  );
+  expect(creditBatchResponse?.status()).toBe(404);
   await expect(
-    orgB.page.getByText("Linked credit batch could not be opened"),
-  ).toBeVisible({ timeout: 15000 });
+    orgB.page.getByRole("heading", {
+      name: "Credit batch not found",
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(orgB.page.getByText(orgABatch.code, { exact: true })).toHaveCount(0);
 
   const supplierResponse = await orgB.page.goto(
