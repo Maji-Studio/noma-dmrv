@@ -441,6 +441,10 @@ export function makeContext(
     },
     ...overrides,
     entityReadinessGaps: overrides.entityReadinessGaps ?? [],
+    supportingDocuments: overrides.supportingDocuments ?? {
+      total: 0,
+      mirrored: 0,
+    },
   };
 }
 

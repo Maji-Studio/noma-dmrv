@@ -149,20 +149,48 @@ function StatusCell({ summary }: { summary: RemovalPreflightSummary }) {
 }
 
 function ReadinessCell({ summary }: { summary: RemovalPreflightSummary }) {
-  const { state, reasons } = summary.readiness;
+  const { state, reasons, advisories } = summary.readiness;
   if (state === "ready") {
     return (
-      <span className="inline-flex items-center gap-6 body-caption text-[var(--color-signal-green)]">
-        <CheckCircleIcon size={16} weight="fill" aria-hidden />
-        Ready to submit
+      <span className="flex flex-col gap-4">
+        <span className="inline-flex items-center gap-6 body-caption text-[var(--color-signal-green)]">
+          <CheckCircleIcon size={16} weight="fill" aria-hidden />
+          Ready to submit
+        </span>
+        {advisories.map((advisory) => (
+          <span
+            key={advisory}
+            className="inline-flex items-start gap-6 body-caption text-[var(--color-signal-orange)]"
+          >
+            <WarningIcon
+              size={16}
+              weight="fill"
+              aria-hidden
+              className="mt-px shrink-0"
+            />
+            <span className="line-clamp-2">{advisory}</span>
+          </span>
+        ))}
       </span>
     );
   }
   if (state === "blocked") {
     return (
-      <span className="inline-flex items-start gap-6 body-caption text-[var(--color-signal-orange)]">
-        <WarningIcon size={16} weight="fill" aria-hidden className="mt-px shrink-0" />
-        <span className="line-clamp-2">{reasons.join(" · ")}</span>
+      <span className="flex flex-col gap-4">
+        {[...reasons, ...advisories].map((message) => (
+          <span
+            key={message}
+            className="inline-flex items-start gap-6 body-caption text-[var(--color-signal-orange)]"
+          >
+            <WarningIcon
+              size={16}
+              weight="fill"
+              aria-hidden
+              className="mt-px shrink-0"
+            />
+            <span className="line-clamp-2">{message}</span>
+          </span>
+        ))}
       </span>
     );
   }

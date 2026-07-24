@@ -62,6 +62,10 @@ export interface RemovalReadinessFacts {
   requiredTransport: TransportCoverageFact[];
   /** Compact labels from per-entity certifier-readiness checks. */
   entityReadinessGaps?: string[];
+  /** Documents discovered by the same lineage walk as the Sources panel. */
+  supportingDocumentCount?: number;
+  /** Supporting documents with an existing Isometric Source mirror. */
+  mirroredDocumentCount?: number;
   /**
    * Fail-closed durability sampling/eligibility blockers (decision D3) — the
    * exact list the submit pipeline hard-blocks on. Empty ⇒ sampling &
@@ -74,6 +78,8 @@ export interface RemovalReadiness {
   state: RemovalReadinessState;
   /** Human-readable blocker reasons; empty unless state === "blocked". */
   reasons: string[];
+  /** Non-blocking conditions operators should see before submission. */
+  advisories: string[];
 }
 
 const NOT_LINKED_REASON = "Facility not linked to an Isometric project";
@@ -85,6 +91,7 @@ const ENTITY_READINESS_LABEL = "Entity certifier fields complete";
 const ENTITY_READINESS_REASON_PREVIEW_LIMIT = 3;
 const ENTITY_READINESS_PREFLIGHT_DISPLAY_LIMIT = 5;
 const DURABILITY_LABEL = "Sampling & durability eligibility met";
+const EVIDENCE_LABEL = "Supporting documents mirrored";
 // Keep the blocker list readable: show the first few full blocker lines as
 // reasons, then a "+N more" rollup rather than flooding the verdict.
 const DURABILITY_BLOCKER_REASON_PREVIEW_LIMIT = 3;
@@ -154,6 +161,23 @@ function productionGapDetail(facts: RemovalReadinessFacts): string {
   );
 }
 
+function evidenceMirrorDetail(
+  facts: RemovalReadinessFacts,
+): string | null {
+  const total = facts.supportingDocumentCount ?? 0;
+  if (total === 0) return null;
+  const mirrored = Math.min(facts.mirroredDocumentCount ?? 0, total);
+  return `${mirrored} of ${total} supporting documents mirrored`;
+}
+
+function evidenceAdvisories(facts: RemovalReadinessFacts): string[] {
+  const detail = evidenceMirrorDetail(facts);
+  if (!detail) return [];
+  return (facts.mirroredDocumentCount ?? 0) < (facts.supportingDocumentCount ?? 0)
+    ? [detail]
+    : [];
+}
+
 /**
  * Folds removal status + submission preconditions into one verdict.
  * Precedence: live lock → terminal (submitted/superseded) → blocked → ready.
@@ -161,21 +185,26 @@ function productionGapDetail(facts: RemovalReadinessFacts): string {
 export function deriveRemovalReadiness(
   facts: RemovalReadinessFacts,
 ): RemovalReadiness {
-  if (facts.lockInFlight) return { state: "inProgress", reasons: [] };
+  const advisories = evidenceAdvisories(facts);
+  if (facts.lockInFlight) return { state: "inProgress", reasons: [], advisories };
 
   // Status drives the high end. `isTerminal` covers submitted/superseded — a
   // removal is "done" at submitted (no remote lifecycle exists; see status.ts).
   const status = deriveRemovalStatus({ local: facts.local, lockInFlight: false });
-  if (status.isTerminal) return { state: "submitted", reasons: [] };
+  if (status.isTerminal) return { state: "submitted", reasons: [], advisories };
 
   // Not submitted yet (null / draft / rejected) → evaluate preconditions.
   if (!facts.hasMapping) {
     // Without a project link every downstream fact is empty; one clear reason.
-    return { state: "blocked", reasons: [NOT_LINKED_REASON] };
+    return { state: "blocked", reasons: [NOT_LINKED_REASON], advisories };
   }
 
   if (!facts.hasOrgCredentials) {
-    return { state: "blocked", reasons: [NO_ORG_CREDENTIALS_REASON] };
+    return {
+      state: "blocked",
+      reasons: [NO_ORG_CREDENTIALS_REASON],
+      advisories,
+    };
   }
 
   const reasons: string[] = [];
@@ -212,8 +241,8 @@ export function deriveRemovalReadiness(
   reasons.push(...durabilityBlockerReasons(facts.durabilityGateBlockers ?? []));
 
   return reasons.length > 0
-    ? { state: "blocked", reasons }
-    : { state: "ready", reasons: [] };
+    ? { state: "blocked", reasons, advisories }
+    : { state: "ready", reasons: [], advisories };
 }
 
 // ---------------------------------------------------------------------------
@@ -223,7 +252,8 @@ export function deriveRemovalReadiness(
 export type PreflightCheckStatus =
   | "met" // precondition satisfied
   | "unmet" // precondition failed — see `detail`
-  | "skipped"; // not yet evaluable (an upstream check is unmet)
+  | "skipped" // not yet evaluable (an upstream check is unmet)
+  | "warning"; // advisory is incomplete, but does not block submission
 
 export interface PreflightCheck {
   key:
@@ -233,6 +263,7 @@ export interface PreflightCheck {
     | "transport"
     | "production"
     | "entityReadiness"
+    | "evidence"
     | "durability";
   /** Affirmative label — what's true when the check is met. */
   label: string;
@@ -266,6 +297,22 @@ function withPreflightMeta(check: PreflightCheckBase): PreflightCheck {
     ...check,
     requirementLabel: meta.requirementLabel,
     whyDetail: meta.whyDetail,
+  };
+}
+
+function evidencePreflightCheck(facts: RemovalReadinessFacts) {
+  const detail = evidenceMirrorDetail(facts);
+  if (!detail) return null;
+  const status: PreflightCheckStatus =
+    (facts.mirroredDocumentCount ?? 0) <
+    (facts.supportingDocumentCount ?? 0)
+      ? "warning"
+      : "met";
+  return {
+    key: "evidence" as const,
+    label: EVIDENCE_LABEL,
+    status,
+    detail,
   };
 }
 
@@ -334,7 +381,7 @@ export function buildRemovalPreflightChecklist(
         };
   })();
 
-  const checks: PreflightCheckBase[] = [
+  const checks: Array<PreflightCheckBase | null> = [
     {
       key: "mapping",
       label: "Facility linked to an Isometric project",
@@ -378,9 +425,12 @@ export function buildRemovalPreflightChecklist(
         : productionGapDetail(facts),
     },
     entityReadiness,
+    evidencePreflightCheck(facts),
     durabilityPreflightCheck(facts),
   ];
-  return checks.map(withPreflightMeta);
+  return checks
+    .filter((check): check is PreflightCheckBase => check !== null)
+    .map(withPreflightMeta);
 }
 
 // Sampling/eligibility pre-flight row (D3). Derived from the production runs, so
@@ -417,6 +467,7 @@ export type RemovalRequirementKey =
   | "template"
   | "transportUniformity"
   | "entityReadiness"
+  | "evidence"
   | "durability";
 
 export interface RemovalRequirementCheck {
@@ -541,7 +592,7 @@ export function buildRemovalRequirementsChecklist(
         };
   })();
 
-  const checks: RemovalRequirementCheckBase[] = [
+  const checks: Array<RemovalRequirementCheckBase | null> = [
     {
       key: "mapping",
       label: "Facility linked to an Isometric project",
@@ -577,9 +628,12 @@ export function buildRemovalRequirementsChecklist(
     },
     uniformity,
     entityReadiness,
+    evidencePreflightCheck(facts),
     durability,
   ];
-  return checks.map(withRequirementMeta);
+  return checks
+    .filter((check): check is RemovalRequirementCheckBase => check !== null)
+    .map(withRequirementMeta);
 }
 
 /**

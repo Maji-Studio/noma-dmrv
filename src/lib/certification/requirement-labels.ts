@@ -34,6 +34,7 @@ export type CertRequirementKey =
   | "mapping"
   | "credentials"
   | "template"
+  | "evidence"
   | "durability";
 
 export interface CertRequirementMeta {
@@ -98,6 +99,11 @@ export const CERT_REQUIREMENT_META: Record<
     requirementLabel: "Removal template resolved",
     whyDetail:
       "The facility's default removal template defines which inputs and transport categories the registry expects. It has to resolve cleanly — every referenced component present — before a removal can be assembled from it.",
+  },
+  evidence: {
+    requirementLabel: "Supporting documents mirrored",
+    whyDetail:
+      "Mirrored documents are attached to the removal's registry Datapoints as Sources, making the underlying lab reports, transport records, and application evidence available to reviewers. Mirroring is advisory and does not block submission.",
   },
   durability: {
     requirementLabel: "Sampling & durability eligibility",
