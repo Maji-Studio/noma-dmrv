@@ -1,10 +1,9 @@
 /**
  * CreditBatchList component
- * Card grid layout with operational filters and pagination. There is deliberately no
- * lifecycle-status column or filter: every batch sits at the DB default
- * ("pending") with no transition path, so a status surface only competed with
- * the real readiness signal (QA 2026-07-21 F3). Reintroduce one when a registry
- * lifecycle actually drives it.
+ * Card grid layout with operational filters, pagination, and a derived
+ * cross-artifact lifecycle. The dormant credit_batches.status column is not
+ * rendered; progress comes from data readiness, Removal submission, and the
+ * linked GHG Statement's verifier status.
  */
 "use client";
 
@@ -411,7 +410,7 @@ export function CreditBatchList({
         {hasPendingCo2e && !previewsLoading && (
           <span className="inline-flex items-center gap-6 body-caption text-[var(--st-wait)]">
             <WarningIcon size={14} weight="fill" aria-hidden />
-            Some batches have pending inputs
+            Some batches need CO₂e inputs
           </span>
         )}
       </div>

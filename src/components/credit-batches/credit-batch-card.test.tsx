@@ -1,6 +1,7 @@
 import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
+import type { CreditBatchHealthSummary } from "@/fn/certification";
 import {
   RowActionsMenu,
   StatusBadge,
@@ -20,6 +21,18 @@ function findRowActions(node: ReactNode): ReactElement<RowActionsMenuProps> | un
     return children.map(findRowActions).find(Boolean);
   }
   return findRowActions(children);
+}
+
+function collectText(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+  if (!isValidElement<ElementProps>(node)) return "";
+  const children = node.props.children;
+  if (Array.isArray(children)) {
+    return children.map(collectText).join("");
+  }
+  return collectText(children);
 }
 
 function findStatusBadges(node: ReactNode): ReactElement<ElementProps>[] {
@@ -69,7 +82,7 @@ describe("CreditBatchCard", () => {
     ]);
   });
 
-  it("omits a readiness badge after a failed summary load", () => {
+  it("uses quiet copy when certification progress is loading or unavailable", () => {
     const unavailable = CreditBatchCard({
       creditBatch,
       onView: vi.fn(),
@@ -84,9 +97,30 @@ describe("CreditBatchCard", () => {
       onDelete: vi.fn(),
     });
 
-    expect(findStatusBadges(unavailable)).toHaveLength(0);
-    expect(findStatusBadges(loading)[0]?.props.label).toBe(
-      "Checking readiness…",
+    expect(collectText(unavailable)).toContain(
+      "Certification progress unavailable",
     );
+    expect(collectText(loading)).toContain("Loading certification progress…");
+  });
+
+  it("reserves the header tag for actionable issues", () => {
+    const summary: CreditBatchHealthSummary = {
+      state: "incomplete",
+      issueCount: 2,
+      removalId: null,
+      removalStatus: null,
+      ghgStatementId: null,
+      ghgStatementStatus: null,
+    };
+
+    const card = CreditBatchCard({
+      creditBatch,
+      health: summary,
+      onView: vi.fn(),
+      onEdit: vi.fn(),
+      onDelete: vi.fn(),
+    });
+
+    expect(findStatusBadges(card)[0]?.props.label).toBe("2 issues");
   });
 });

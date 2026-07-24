@@ -116,7 +116,7 @@ export function CreditBatchOverview({
           label="CO₂e stored"
           value={
             co2eStored == null
-              ? "Pending inputs"
+              ? "Needs inputs"
               : formatTonnes(co2eStored, { unit: "t CO₂e" })
           }
         />
