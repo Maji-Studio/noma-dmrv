@@ -54,6 +54,63 @@ function StepMark({
   );
 }
 
+/**
+ * The card rail's dots, promoted to a labelled journey for the side sheet.
+ * The current step carries the derived lifecycle label (e.g. "In verification",
+ * "Verification failed") so the rail states the batch's exact position, not
+ * just which milestone it is nearest to.
+ */
+export function CreditBatchLifecycleSteps({
+  summary,
+}: {
+  summary: CreditBatchHealthSummary;
+}) {
+  const lifecycle = deriveCreditBatchLifecycle(summary);
+  const statusState = getStatusState(lifecycle.badgeStatus);
+
+  return (
+    <ol
+      className="flex flex-wrap items-center gap-y-8"
+      aria-label={`Certification progress: ${lifecycle.label}`}
+    >
+      {CREDIT_BATCH_LIFECYCLE_STEPS.map((step, index) => {
+        const state = lifecycle.stepStates[index];
+        const isCurrent = index === lifecycle.currentStepIndex;
+        const label = isCurrent ? lifecycle.label : step.label;
+
+        return (
+          <li
+            key={step.key}
+            className="flex items-center"
+            aria-current={isCurrent ? "step" : undefined}
+          >
+            {index > 0 && (
+              <span
+                className="mx-8 h-px w-12 shrink-0 bg-[var(--color-border-secondary)] sm:w-20"
+                aria-hidden
+              />
+            )}
+            <span className="flex items-center gap-6">
+              <StepMark state={state} statusState={statusState} />
+              <span
+                className={`body-caption whitespace-nowrap ${
+                  isCurrent
+                    ? `font-medium ${STATUS_TEXT_CLASSES[statusState]}`
+                    : state === "success"
+                      ? "text-[var(--color-text-secondary)]"
+                      : "text-[var(--color-text-tertiary)]"
+                }`}
+              >
+                {label}
+              </span>
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 export function CreditBatchLifecycleRail({
   summary,
 }: {

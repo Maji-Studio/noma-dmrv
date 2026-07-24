@@ -44,7 +44,7 @@ describe("SubmissionOverview", () => {
     expect(html).toContain("2 production runs");
     expect(html).toContain("3 applications");
     expect(html).toContain(
-      'href="/credit-batches/batch-1?facility=facility-1"',
+      'href="/credit-batches?facility=facility-1&amp;batch=batch-1"',
     );
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noopener noreferrer"');

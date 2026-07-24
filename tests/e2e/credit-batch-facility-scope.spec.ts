@@ -7,7 +7,7 @@ import { seedCreditBatch } from "./fixtures/seed-chain-data";
 import * as schema from "../../src/db/schema";
 
 test.describe("credit batch facility scope", () => {
-  test("detail URLs redirect to the batch facility when the query points elsewhere", async ({
+  test("deep links to a batch outside the selected facility are refused", async ({
     adminPage,
     seededData,
   }) => {
@@ -33,21 +33,25 @@ test.describe("credit batch facility scope", () => {
         .returning({ id: schema.facilities.id });
       otherFacilityId = otherFacility.id;
 
+      // The retired detail route redirects into the list's view sheet. With
+      // the query pointing at another facility, the deep link must be cleared
+      // with a toast instead of silently switching facilities or opening the
+      // batch across the facility boundary.
       await adminPage.goto(
         `/credit-batches/${batch.id}?facility=${otherFacilityId}`,
       );
 
-      await expect(adminPage).toHaveURL(
-        new RegExp(
-          `/credit-batches/${batch.id}\\?facility=${seededData.facility.id}`,
+      await expect(
+        adminPage.getByText(
+          "Linked credit batch is not in the selected facility",
         ),
+      ).toBeVisible({ timeout: 15000 });
+      await expect(adminPage).not.toHaveURL(
+        new RegExp(`batch=${batch.id}`),
       );
       await expect(
         adminPage.getByRole("heading", { name: batch.code }),
-      ).toBeVisible();
-      await expect(
-        adminPage.getByRole("button", { name: seededData.facility.name }),
-      ).toBeVisible();
+      ).toHaveCount(0);
     } finally {
       if (otherFacilityId) {
         await db

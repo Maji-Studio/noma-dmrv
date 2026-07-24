@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/ssr";
 import type { MemberCreditBatch } from "@/fn/certification/certify-context";
 import { formatDateRange, formatTonnes } from "@/lib/format-utils";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { formatDurabilityOption } from "@/schemas/credit-batches";
 
 interface SubmissionOverviewProps {
@@ -55,7 +56,7 @@ function BatchCard({
 }) {
   return (
     <Link
-      href={`/credit-batches/${batch.id}?facility=${facilityId}`}
+      href={creditBatchDeepLinkHref(batch.id, facilityId)}
       target="_blank"
       rel="noopener noreferrer"
       aria-label={`Open credit batch ${batch.code} in a new tab`}
