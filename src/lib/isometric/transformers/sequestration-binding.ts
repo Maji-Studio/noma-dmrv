@@ -121,6 +121,70 @@ export function getSequestrationInputBinding(
 }
 
 /**
+ * Validates the live removal-template shape before any registry mutation.
+ * A Removal has exactly one sequestration contribution; accepting zero would
+ * recreate the emissions-only bug, while accepting duplicates would bind the
+ * same evidence twice and overstate storage.
+ */
+export function assertSequestrationTemplateBindings(
+  template: GhgEntryTemplate,
+): void {
+  const components = template.groups.flatMap((group) =>
+    group.components.filter((component) =>
+      isSequestrationBlueprintFamily(component.blueprint_key),
+    ),
+  );
+  if (components.length !== 1) {
+    throw new SafeError(
+      `Removal template "${template.display_name}" must contain exactly one sequestration component; found ${components.length}.`,
+    );
+  }
+
+  const component = components[0];
+  assertSupportedSequestrationBlueprint(component.blueprint_key);
+  const blueprintBinding = (
+    SEQUESTRATION_COMPONENT_INPUT_BINDINGS as Readonly<
+      Record<string, SequestrationBlueprintBinding>
+    >
+  )[component.blueprint_key];
+
+  for (const input of component.inputs) {
+    if (!blueprintBinding.inputs[input.input_key]) {
+      throw missingInputBindingError(
+        component.blueprint_key,
+        input.input_key,
+      );
+    }
+  }
+
+  for (const [inputKey, binding] of Object.entries(blueprintBinding.inputs)) {
+    const declared = component.inputs.filter(
+      (input) => input.input_key === inputKey,
+    );
+    if (declared.length !== 1) {
+      throw new SafeError(
+        `Sequestration component ${component.id} must declare input "${inputKey}" exactly once; found ${declared.length}.`,
+      );
+    }
+    const input = declared[0];
+    if (input.type !== "monitored") {
+      throw new SafeError(
+        `Sequestration component ${component.id} input "${inputKey}" must be monitored; found "${input.type}".`,
+      );
+    }
+    const expectedQuantityKind =
+      binding.source === "measurement-property"
+        ? binding.measurementProperty.quantity_kind
+        : binding.quantityKind;
+    if (input.quantity_kind !== expectedQuantityKind) {
+      throw new SafeError(
+        `Sequestration component ${component.id} input "${inputKey}" requires quantity kind "${expectedQuantityKind}"; found "${input.quantity_kind}".`,
+      );
+    }
+  }
+}
+
+/**
  * Builds the direct-datapoint sources declared by the binding table. Values are
  * read from their matching measurement-sample evidence entries so the direct
  * datapoint magnitude and retained evidence cannot diverge. Supplier refs use

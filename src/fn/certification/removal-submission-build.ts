@@ -14,6 +14,7 @@ import {
   MAPPING_REVISION,
 } from "@/lib/isometric/transformers/datapoint";
 import { isSequestrationBlueprintFamily } from "@/lib/isometric/transformers/measurement-sample";
+import { assertSequestrationTemplateBindings } from "@/lib/isometric/transformers/sequestration-binding";
 import { weightedBatchChemistry } from "@/lib/isometric/utils/durability-aggregation";
 import type { Logger } from "@/lib/log";
 import {
@@ -129,6 +130,9 @@ export async function buildRemovalSubmissionBuild(args: {
   } = args;
 
   assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
+  if (hasDurabilityComponents) {
+    assertSequestrationTemplateBindings(defaultTemplate);
+  }
 
   const lineageWarnings: string[] = [];
   for (const lineage of ctx.lineages) {

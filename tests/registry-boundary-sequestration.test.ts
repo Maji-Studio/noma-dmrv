@@ -42,6 +42,7 @@ import { submitDurabilityMeasurementSamples } from "@/fn/certification/durabilit
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import { build1000YearSequestrationSample } from "@/lib/isometric/transformers/measurement-sample";
 import {
+  assertSequestrationTemplateBindings,
   bindSequestrationDatapointsToTemplate,
   buildDirectSequestrationDatapoints,
 } from "@/lib/isometric/transformers/sequestration-binding";
@@ -86,9 +87,24 @@ function template(): IsometricGhgEntryTemplate {
             blueprint_key: "biochar_sequestration_1000_year",
             display_name: "Biochar sequestration, 1000 year durability",
             inputs: [
-              { type: "monitored", input_key: "carbon_contents" },
-              { type: "monitored", input_key: "product_mass" },
-              { type: "monitored", input_key: "s_fraction" },
+              {
+                type: "monitored",
+                input_key: "carbon_contents",
+                quantity_kind: "mass_fraction_dry_basis",
+                datapoint_id: null,
+              },
+              {
+                type: "monitored",
+                input_key: "product_mass",
+                quantity_kind: "mass",
+                datapoint_id: null,
+              },
+              {
+                type: "monitored",
+                input_key: "s_fraction",
+                quantity_kind: "dimensionless",
+                datapoint_id: null,
+              },
             ],
           },
         ],
@@ -105,6 +121,33 @@ beforeEach(() => {
 });
 
 describe("1000-year sequestration registry boundary", () => {
+  it("rejects missing, duplicated, or drifted live template bindings", () => {
+    const valid = template();
+    expect(() => assertSequestrationTemplateBindings(valid)).not.toThrow();
+
+    const duplicate = structuredClone(valid);
+    duplicate.groups[0].components.push(
+      structuredClone(duplicate.groups[0].components[0]),
+    );
+    expect(() => assertSequestrationTemplateBindings(duplicate)).toThrow(
+      /exactly one sequestration component; found 2/,
+    );
+
+    const renamedInput = structuredClone(valid);
+    renamedInput.groups[0].components[0].inputs[0].input_key =
+      "renamed_carbon_contents";
+    expect(() => assertSequestrationTemplateBindings(renamedInput)).toThrow(
+      /has no explicit datapoint-source binding/,
+    );
+
+    const wrongQuantityKind = structuredClone(valid);
+    wrongQuantityKind.groups[0].components[0].inputs[2].quantity_kind =
+      "dimensionless_ratio";
+    expect(() =>
+      assertSequestrationTemplateBindings(wrongQuantityKind),
+    ).toThrow(/requires quantity kind "dimensionless"/);
+  });
+
   it("captures POSTed measurement value IDs and binds them into the GHG entry variants", async () => {
     const sampleBody = build1000YearSequestrationSample({
       projectId: PROJECT_ID,
