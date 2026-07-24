@@ -152,7 +152,7 @@ export function SubmissionOverview({
         <div className="grid overflow-hidden border border-[var(--color-border-primary)] sm:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
           <div className="flex flex-col justify-center gap-6 bg-[var(--color-background-dark-strong)] px-20 py-16">
             <span className="label-micro text-[var(--color-text-white-secondary)]">
-              Net removal in this submission
+              Stored CO₂e estimate in this submission
             </span>
             <div className="flex items-baseline gap-8 text-[var(--color-text-white-primary)]">
               <span className="title-heading-1 font-mono">

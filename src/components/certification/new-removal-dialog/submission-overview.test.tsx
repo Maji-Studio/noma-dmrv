@@ -38,7 +38,9 @@ describe("SubmissionOverview", () => {
     expect(html).toContain("1 credit batch");
     expect(html).toContain("8.5 t");
     expect(html).toContain("3.0 t CO₂e");
+    expect(html).toContain("Stored CO₂e estimate in this submission");
     expect(html).toContain("Submitted biochar (dry)");
+    expect(html).not.toContain("Net removal");
     expect(html).toContain("CB-26-001");
     expect(html).toContain("Jul 1 – Jul 31, 2026");
     expect(html).toContain("1000-Year (R₀ Reflectance)");
