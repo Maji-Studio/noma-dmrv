@@ -12,6 +12,7 @@
  *   });
  *
  * so `createDatapoint` / `createGhgEntry` / `createGhgStatement` /
+ * `createMeasurementSample` /
  * `findGhgEntryBySupplierRef` / `findDatapointBySupplierRef` /
  * `findDraftGhgStatementsByPeriod` run for REAL against a registry-shaped
  * counterparty — supplier-reference query semantics and pagination are
@@ -93,6 +94,7 @@ interface Page<T> {
 
 export class FakeIsometricRegistry {
   readonly datapoints: FakeRegistryRecord[] = [];
+  readonly measurementSamples: FakeRegistryRecord[] = [];
   readonly ghgEntries: FakeRegistryRecord[] = [];
   readonly ghgStatements: FakeGhgStatementRecord[] = [];
   readonly requests: LoggedRequest[] = [];
@@ -201,6 +203,9 @@ export class FakeIsometricRegistry {
     if (method === "POST" && path === "/datapoints") {
       return this.create(this.datapoints, "dpt", body, ApiError);
     }
+    if (method === "POST" && path === "/measurement_samples") {
+      return this.createMeasurementSample(body, ApiError);
+    }
     if (method === "POST" && path === "/ghg_entries") {
       return this.create(this.ghgEntries, "gge", body, ApiError);
     }
@@ -216,6 +221,12 @@ export class FakeIsometricRegistry {
     }
     if (method === "GET" && path === "/datapoints") {
       return paginateSlice(this.filterRecords(this.datapoints, query), query);
+    }
+    if (method === "GET" && path === "/measurement_samples") {
+      return paginateSlice(
+        this.filterRecords(this.measurementSamples, query),
+        query,
+      );
     }
     if (method === "GET" && path === "/ghg_entries") {
       return paginateSlice(this.filterRecords(this.ghgEntries, query), query);
@@ -278,6 +289,27 @@ export class FakeIsometricRegistry {
     const record: FakeRegistryRecord = { ...payload, id: this.nextId(prefix) };
     collection.push(record);
     return record;
+  }
+
+  private createMeasurementSample(
+    body: unknown,
+    ApiError: ApiErrorCtor,
+  ): FakeRegistryRecord {
+    const payload = (body ?? {}) as Record<string, unknown>;
+    const values = Array.isArray(payload.values) ? payload.values : [];
+    const response = {
+      ...payload,
+      values: values.map((value) => ({
+        ...(value as Record<string, unknown>),
+        datapoint_id: this.nextId("dtp"),
+      })),
+    };
+    return this.create(
+      this.measurementSamples,
+      "mts",
+      response,
+      ApiError,
+    );
   }
 
   private filterRecords(

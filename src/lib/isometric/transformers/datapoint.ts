@@ -5,6 +5,7 @@ import type {
   EmissionInputBucket,
 } from "../utils/aggregation";
 import { payloadHash } from "../utils/payload-hash";
+import { SEQUESTRATION_COMPONENT_INPUT_BINDINGS } from "./sequestration-binding";
 
 type DatapointType = components["schemas"]["DatapointType"];
 type QuantityKindType = components["schemas"]["QuantityKindType"];
@@ -319,13 +320,18 @@ export function lookupPeriodInputTuple(
   return PERIOD_INPUT_TUPLES[groupKey]?.[blueprintKey]?.[inputKey];
 }
 
-// Sha256 hex of the canonical-JSON serialisation of INPUT_MAPPING. Computed
-// once at module load and embedded in every submitRemoval-emitted
-// payloadSnapshot + sync event so an Isometric-side issue correlates to a
-// specific noma mapping revision (Plan §6 / B3). PROJECT-scope is omitted
-// from this hash by design — those values don't flow through this table
-// (ADR 0018: they live only in Isometric).
-export const MAPPING_REVISION: string = payloadHash(INPUT_MAPPING);
+// Sha256 hex of every mapping that controls a removal body: ordinary
+// aggregation→Datapoint inputs plus source-aware sequestration inputs.
+// Computed once at module load and embedded in every submitRemoval semantic
+// hash, payloadSnapshot, and sync event so a binding change supersedes the prior
+// removal version. PROJECT-scope is omitted by design (ADR 0018).
+export const MAPPING_REVISION_INPUT = {
+  inputMapping: INPUT_MAPPING,
+  sequestrationComponentInputBindings:
+    SEQUESTRATION_COMPONENT_INPUT_BINDINGS,
+};
+
+export const MAPPING_REVISION: string = payloadHash(MAPPING_REVISION_INPUT);
 
 export interface BuildCreateDatapointArgs {
   groupKey: string;

@@ -53,6 +53,7 @@ import {
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
 import { lookupInputMapping } from "@/lib/isometric/transformers/datapoint";
+import { hasExplicitSequestrationBinding } from "@/lib/isometric/transformers/sequestration-binding";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
 import {
   buildSoilTemperatureGate,
@@ -520,7 +521,9 @@ export async function loadFacilityCertifierFacts(
   for (const key of referencedKeys) {
     const found = blueprintByKey.get(key);
     if (found) blueprintsForTemplate.push(found);
-    else unresolvedBlueprintKeys.push(key);
+    else if (!hasExplicitSequestrationBinding(key)) {
+      unresolvedBlueprintKeys.push(key);
+    }
   }
 
   return {
