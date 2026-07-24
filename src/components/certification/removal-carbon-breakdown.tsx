@@ -84,6 +84,8 @@ const REMOVAL_LABELS: CarbonBreakdownLabels = {
     "A net estimate needs every member batch's stored-carbon inputs.",
   estimateFootnote:
     "The uncertainty discount and final net are set when Isometric verifies this removal.",
+  anomalyDescription:
+    "The normal removal ledger is hidden until the carbon data is corrected.",
 };
 
 export function RemovalCarbonBreakdown({

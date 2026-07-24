@@ -156,6 +156,8 @@ export async function loadGhgStatementBreakdown(
       memberBatchCount: batches.length,
       entries,
       creditAllocation,
+      ghgStatementId: externalId,
+      ghgStatementStatus: remote?.status ?? null,
     });
 
     return {

@@ -7,9 +7,10 @@
  *
  * rendered as a single deduction bar (how much of the gross sequestration
  * survives as net) over a signed ledger ending in the emphasised net. A
- * verified record shows the registry's figures (with the uncertainty haircut
- * made explicit and the buffer-pool split); a draft shows an honest local
- * estimate with the uncertainty step greyed out until verification.
+ * A registry record shows the registry's figures (with the uncertainty haircut
+ * made explicit and the buffer-pool split), but receives verified presentation
+ * only when its linked GHG statement is verified or issued. A local draft shows
+ * an estimate with the uncertainty step greyed out until verification.
  *
  * All numbers and the source/reconciliation flags come from the pure
  * `computeRemovalBreakdown` / `computeGhgStatementBreakdown`; this component
@@ -30,7 +31,10 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { Skeleton } from "@/components/ui/loading-skeleton";
 import { InfoHint } from "@/components/ui/tooltip";
-import type { RemovalCarbonBreakdown } from "@/lib/certification/removal-breakdown";
+import type {
+  RemovalBreakdownAnomaly,
+  RemovalCarbonBreakdown,
+} from "@/lib/certification/removal-breakdown";
 import { formatCo2e } from "@/lib/format-utils";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +47,8 @@ export interface CarbonBreakdownLabels {
   estimateIncomplete: string;
   /** Estimate footnote — who sets the uncertainty discount and final net. */
   estimateFootnote: string;
+  /** Anomaly-state explanation tailored to the card's removal/statement scope. */
+  anomalyDescription: string;
 }
 
 // Every figure shares one visual language across the bar and the ledger: a
@@ -60,6 +66,7 @@ const UNCERTAINTY_STYLE: CSSProperties = {
     "repeating-linear-gradient(135deg, var(--color-text-tertiary) 0, var(--color-text-tertiary) 1px, transparent 1px, transparent 5px)",
 };
 const MICRO_ICON_SIZE = 13;
+const ALERT_ICON_SIZE = 20;
 
 const TONE_CLASS: Record<Tone, string> = {
   stored: "bg-[var(--color-signal-green)]",
@@ -186,8 +193,15 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-function Eyebrow({ source }: { source: "registry" | "estimate" }) {
-  const verified = source === "registry";
+function Eyebrow({
+  source,
+  registryVerified,
+}: {
+  source: "registry" | "estimate";
+  registryVerified: boolean;
+}) {
+  const verified = source === "registry" && registryVerified;
+  const registryDraft = source === "registry" && !registryVerified;
   return (
     <div className="flex items-center justify-between gap-12">
       <span className="label-micro text-[var(--color-text-secondary)]">
@@ -197,38 +211,60 @@ function Eyebrow({ source }: { source: "registry" | "estimate" }) {
         className={cn(
           "inline-flex items-center gap-4 px-6 py-2 body-caption-fit font-medium uppercase tracking-wide",
           verified
-            ? "bg-[var(--st-ok-bg)] text-[var(--color-signal-green)]"
+            ? "bg-[var(--st-ok-bg)] text-[var(--st-ok)]"
             : "bg-[var(--color-background-medium)] text-[var(--color-text-secondary)]",
         )}
       >
         {verified ? (
           <SealCheckIcon size={MICRO_ICON_SIZE} weight="fill" aria-hidden />
+        ) : registryDraft ? (
+          <WarningIcon size={MICRO_ICON_SIZE} weight="fill" aria-hidden />
         ) : (
           <SlidersHorizontalIcon size={MICRO_ICON_SIZE} weight="bold" aria-hidden />
         )}
-        {verified ? "Registry-verified" : "Estimate"}
+        {verified
+          ? "Registry-verified"
+          : registryDraft
+            ? "Registry draft — unverified"
+            : "Estimate"}
       </span>
     </div>
   );
 }
 
+function formatSignedCo2e(kg: number | null): string {
+  return formatCo2e(kg, { signed: true });
+}
+
+function formatDeductionCo2e(kg: number | null): string {
+  return formatCo2e(kg == null ? null : -kg, { signed: true });
+}
+
 function Hero({
   netKg,
-  approximate,
+  source,
+  registryVerified,
 }: {
   netKg: number | null;
-  approximate: boolean;
+  source: "registry" | "estimate";
+  registryVerified: boolean;
 }) {
+  const isEstimate = source === "estimate";
+  const qualifier = isEstimate
+    ? "before verification"
+    : registryVerified
+      ? "verified"
+      : "registry draft · unverified";
   return (
     <div className="flex flex-col gap-2">
       <span className="title-heading-2 tabular-nums tracking-tight text-[var(--color-text-primary)]">
-        {approximate && netKg != null && (
+        {isEstimate && netKg != null && (
           <span className="text-[var(--color-text-tertiary)]">≈ </span>
         )}
-        {formatCo2e(netKg)}
+        {formatSignedCo2e(netKg)}
       </span>
       <span className="body-caption text-[var(--color-text-tertiary)]">
-        Net CO₂e removed{approximate ? " · before verification" : " · verified"}
+        Net CO₂e removed · {qualifier}
       </span>
     </div>
   );
@@ -244,6 +280,68 @@ const HINT_COUNTERFACTUAL =
   "Baseline emissions that would have occurred without the removal.";
 const HINT_UNCERTAINTY =
   "A statistical haircut Isometric applies to account for measurement uncertainty.";
+
+const ANOMALY_COPY: Record<RemovalBreakdownAnomaly, string> = {
+  "net-negative":
+    "Registry reports net emissions — sequestration inputs may be missing.",
+  "net-exceeds-before-discount":
+    "Registry net exceeds the amount before uncertainty discount.",
+  "sequestration-missing-or-zero":
+    "Sequestration inputs are missing or contribute no stored CO₂e.",
+};
+
+function getAnomalyCopy(
+  anomaly: RemovalBreakdownAnomaly,
+  source: "registry" | "estimate",
+): string {
+  if (anomaly === "net-negative" && source === "estimate") {
+    return "The carbon estimate reports net emissions.";
+  }
+  return ANOMALY_COPY[anomaly];
+}
+
+function AnomalyState({
+  data,
+  registryVerified,
+  description,
+}: {
+  data: RemovalCarbonBreakdown;
+  registryVerified: boolean;
+  description: string;
+}) {
+  return (
+    <Shell>
+      <Eyebrow source={data.source} registryVerified={registryVerified} />
+      <div
+        role="alert"
+        className="flex flex-col gap-12 border border-[var(--st-bad-border)] bg-[var(--st-bad-bg)] p-12 text-[var(--st-bad)]"
+      >
+        <div className="flex items-start gap-8">
+          <WarningIcon
+            size={ALERT_ICON_SIZE}
+            weight="fill"
+            aria-hidden
+            className="mt-2 shrink-0"
+          />
+          <div className="flex min-w-0 flex-col gap-4">
+            <p className="body-medium font-medium">Carbon accounting anomaly</p>
+            <p className="body-small">{description}</p>
+          </div>
+        </div>
+        {data.netRemovedKg != null && (
+          <p className="title-heading-3 tabular-nums tracking-tight">
+            {formatSignedCo2e(data.netRemovedKg)}
+          </p>
+        )}
+        <ul className="flex list-disc flex-col gap-4 pl-20 body-small">
+          {data.anomalies.map((anomaly) => (
+            <li key={anomaly}>{getAnomalyCopy(anomaly, data.source)}</li>
+          ))}
+        </ul>
+      </div>
+    </Shell>
+  );
+}
 
 function CarbonBreakdownBody({
   data,
@@ -270,12 +368,27 @@ function CarbonBreakdownBody({
   } = data;
 
   const isEstimate = source === "estimate";
+  const registryVerification = data.registryVerification;
+  const registryVerified =
+    registryVerification?.ghgStatementId != null &&
+    (registryVerification.ghgStatementStatus === "VERIFIED" ||
+      registryVerification.ghgStatementStatus === "CREDITS_ISSUED");
+
+  if (data.anomalies.length > 0) {
+    return (
+      <AnomalyState
+        data={data}
+        registryVerified={registryVerified}
+        description={labels.anomalyDescription}
+      />
+    );
+  }
 
   // Nothing computable yet — neither a complete local preview nor registry data.
   if (!data.hasAnyData) {
     return (
       <Shell>
-        <Eyebrow source={source} />
+        <Eyebrow source={source} registryVerified={registryVerified} />
         <p className="body-small text-[var(--color-text-tertiary)]">
           {labels.noData}
         </p>
@@ -289,7 +402,7 @@ function CarbonBreakdownBody({
   if (isEstimate && sequestrationKg == null) {
     return (
       <Shell>
-        <Eyebrow source={source} />
+        <Eyebrow source={source} registryVerified={registryVerified} />
         <p className="body-small text-[var(--color-text-secondary)]">
           {labels.estimateIncomplete}
         </p>
@@ -311,15 +424,19 @@ function CarbonBreakdownBody({
     ];
     return (
       <Shell>
-        <Eyebrow source={source} />
-        <Hero netKg={netRemovedKg} approximate={isEstimate} />
+        <Eyebrow source={source} registryVerified={registryVerified} />
+        <Hero
+          netKg={netRemovedKg}
+          source={source}
+          registryVerified={registryVerified}
+        />
         <DeductionBar segments={segments} totalKg={sequestrationKg} />
         <div className="flex flex-col gap-10">
           <LedgerRow
             tone="stored"
             label="Sequestrations"
             hint={HINT_SEQUESTRATION}
-            value={formatCo2e(sequestrationKg)}
+            value={formatSignedCo2e(sequestrationKg)}
           />
           <LedgerRow
             tone="activity"
@@ -327,7 +444,7 @@ function CarbonBreakdownBody({
             hint={HINT_ACTIVITIES}
             value={
               activitiesRecorded ? (
-                `− ${formatCo2e(activitiesKg)}`
+                formatDeductionCo2e(activitiesKg)
               ) : (
                 <span className="text-[var(--color-text-tertiary)]">
                   Not recorded
@@ -341,7 +458,7 @@ function CarbonBreakdownBody({
               tone="counterfactual"
               label="Counterfactual"
               hint={HINT_COUNTERFACTUAL}
-              value={`− ${formatCo2e(counterfactualKg)}`}
+              value={formatDeductionCo2e(counterfactualKg)}
             />
           )}
           <LedgerRow
@@ -354,7 +471,7 @@ function CarbonBreakdownBody({
                   At verification
                 </span>
               ) : (
-                `− ${formatCo2e(uncertaintyDiscountKg)}`
+                formatDeductionCo2e(uncertaintyDiscountKg)
               )
             }
             muted={isEstimate}
@@ -362,7 +479,7 @@ function CarbonBreakdownBody({
           <LedgerRow
             tone="net"
             label="Net CO₂e removed"
-            value={formatCo2e(netRemovedKg)}
+            value={formatSignedCo2e(netRemovedKg)}
             emphasised
           />
         </div>
@@ -372,12 +489,13 @@ function CarbonBreakdownBody({
           bufferPoolPercent={bufferPoolPercent}
           bufferCreditsKg={bufferCreditsKg}
           standardDeviationKg={standardDeviationKg}
+          registryVerified={registryVerified}
         />
       </Shell>
     );
   }
 
-  // Registry-only path: the verified figures exist but the local gross is
+  // Registry-only path: registry figures exist but the local gross is
   // missing or diverges. Anchor the bar on the registry's pre-uncertainty
   // figure so the math always adds up; surface local inputs only as context.
   const segments: Segment[] = [
@@ -386,25 +504,29 @@ function CarbonBreakdownBody({
   ];
   return (
     <Shell>
-      <Eyebrow source={source} />
-      <Hero netKg={netRemovedKg} approximate={false} />
+      <Eyebrow source={source} registryVerified={registryVerified} />
+      <Hero
+        netKg={netRemovedKg}
+        source={source}
+        registryVerified={registryVerified}
+      />
       <DeductionBar segments={segments} totalKg={netBeforeDiscountKg ?? 0} />
       <div className="flex flex-col gap-10">
         <LedgerRow
           tone="stored"
           label="Net before uncertainty"
-          value={formatCo2e(netBeforeDiscountKg)}
+          value={formatSignedCo2e(netBeforeDiscountKg)}
         />
         <LedgerRow
           tone="uncertainty"
           label="Uncertainty discount"
           hint={HINT_UNCERTAINTY}
-          value={`− ${formatCo2e(uncertaintyDiscountKg)}`}
+          value={formatDeductionCo2e(uncertaintyDiscountKg)}
         />
         <LedgerRow
           tone="net"
           label="Net CO₂e removed"
-          value={formatCo2e(netRemovedKg)}
+          value={formatSignedCo2e(netRemovedKg)}
           emphasised
         />
       </div>
@@ -417,9 +539,10 @@ function CarbonBreakdownBody({
             className="mt-2 shrink-0 text-[var(--color-signal-orange)]"
           />
           <span>
-            Your inputs (Sequestrations {formatCo2e(sequestrationKg)}, Activities{" "}
-            {formatCo2e(activitiesKg)}) differ from the registry&apos;s verified
-            figures — the registry net is authoritative.
+            Your inputs (Sequestrations {formatSignedCo2e(sequestrationKg)},
+            Activities {formatDeductionCo2e(activitiesKg)}) differ from the
+            registry&apos;s {registryVerified ? "verified" : "draft"} figures —
+            the registry net is authoritative.
           </span>
         </p>
       )}
@@ -429,6 +552,7 @@ function CarbonBreakdownBody({
         bufferPoolPercent={bufferPoolPercent}
         bufferCreditsKg={bufferCreditsKg}
         standardDeviationKg={standardDeviationKg}
+        registryVerified={registryVerified}
       />
     </Shell>
   );
@@ -454,12 +578,14 @@ function Footnotes({
   bufferPoolPercent,
   bufferCreditsKg,
   standardDeviationKg,
+  registryVerified,
 }: {
   isEstimate: boolean;
   estimateFootnote: string;
   bufferPoolPercent: number | null;
   bufferCreditsKg: number | null;
   standardDeviationKg: number | null;
+  registryVerified: boolean;
 }) {
   if (isEstimate) {
     return (
@@ -482,13 +608,24 @@ function Footnotes({
   if (parts.length === 0) return null;
   return (
     <p className="flex items-start gap-6 body-caption text-[var(--color-text-tertiary)]">
-      <SealCheckIcon
-        size={MICRO_ICON_SIZE}
-        weight="fill"
-        aria-hidden
-        className="mt-2 shrink-0 text-[var(--color-signal-green)]"
-      />
-      <span>{parts.join(" · ")}</span>
+      {registryVerified ? (
+        <SealCheckIcon
+          size={MICRO_ICON_SIZE}
+          weight="fill"
+          aria-hidden
+          className="mt-2 shrink-0 text-[var(--st-ok)]"
+        />
+      ) : (
+        <WarningIcon
+          size={MICRO_ICON_SIZE}
+          weight="fill"
+          aria-hidden
+          className="mt-2 shrink-0"
+        />
+      )}
+      <span>
+        {registryVerified ? parts.join(" · ") : `Registry draft · ${parts.join(" · ")}`}
+      </span>
     </p>
   );
 }

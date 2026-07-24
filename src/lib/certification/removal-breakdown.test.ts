@@ -30,12 +30,15 @@ const REGISTRY: RemovalBreakdownRegistryInput = {
   riskOfReversalPercent: 12,
   bufferCreditsKg: 34,
   supplierCreditsKg: 250,
+  ghgStatementId: "ghg_123",
+  ghgStatementStatus: "VERIFIED",
 };
 
 describe("computeRemovalBreakdown — estimate mode (no registry)", () => {
   it("sums member batches into kg and derives the local net", () => {
     const result = computeRemovalBreakdown(input());
     expect(result.source).toBe("estimate");
+    expect(result.anomalies).toEqual([]);
     expect(result.sequestrationKg).toBeCloseTo(1040, 6);
     expect(result.activitiesKg).toBeCloseTo(741, 6);
     expect(result.counterfactualKg).toBe(0);
@@ -94,6 +97,7 @@ describe("computeRemovalBreakdown — estimate mode (no registry)", () => {
       }),
     );
     expect(result.hasAnyData).toBe(false);
+    expect(result.anomalies).toEqual([]);
   });
 
   it("reports data when only counterfactual values are present", () => {
@@ -106,6 +110,19 @@ describe("computeRemovalBreakdown — estimate mode (no registry)", () => {
     );
     expect(result.counterfactualRecorded).toBe(true);
     expect(result.hasAnyData).toBe(true);
+    expect(result.anomalies).toEqual([]);
+  });
+
+  it("flags a computed negative local net without requiring registry data", () => {
+    const result = computeRemovalBreakdown(
+      input({
+        sequestrationTonnesByBatch: [0.1],
+        emissionsTonnesByBatch: [0.2],
+      }),
+    );
+
+    expect(result.netRemovedKg).toBeCloseTo(-100, 6);
+    expect(result.anomalies).toEqual(["net-negative"]);
   });
 });
 
@@ -126,6 +143,35 @@ describe("computeRemovalBreakdown — registry mode", () => {
     // local: 1040 − 741 = 299, registry netBeforeDiscount 299 → reconciles
     const result = computeRemovalBreakdown(input({ registry: REGISTRY }));
     expect(result.reconciles).toBe(true);
+  });
+
+  it("requires both a linked statement and a verified status", () => {
+    const verified = computeRemovalBreakdown(input({ registry: REGISTRY }));
+    const missingStatement = computeRemovalBreakdown(
+      input({
+        registry: {
+          ...REGISTRY,
+          ghgStatementId: null,
+        },
+      }),
+    );
+    const draftStatement = computeRemovalBreakdown(
+      input({
+        registry: {
+          ...REGISTRY,
+          ghgStatementStatus: "DRAFT",
+        },
+      }),
+    );
+
+    expect(verified.registryVerification).toEqual({
+      ghgStatementId: "ghg_123",
+      ghgStatementStatus: "VERIFIED",
+    });
+    expect(missingStatement.registryVerification?.ghgStatementId).toBeNull();
+    expect(draftStatement.registryVerification?.ghgStatementStatus).toBe(
+      "DRAFT",
+    );
   });
 
   it("flags divergence when local inputs drift from the registry", () => {
@@ -160,5 +206,38 @@ describe("computeRemovalBreakdown — registry mode", () => {
       }),
     );
     expect(result.uncertaintyDiscountKg).toBe(0);
+    expect(result.anomalies).toContain("net-exceeds-before-discount");
+  });
+
+  it("flags a registry net-negative result", () => {
+    const result = computeRemovalBreakdown(
+      input({ registry: { ...REGISTRY, netRemovedKg: -335.16 } }),
+    );
+
+    expect(result.anomalies).toContain("net-negative");
+  });
+
+  it("flags a zero sequestration contribution", () => {
+    const result = computeRemovalBreakdown(
+      input({
+        sequestrationTonnesByBatch: [0, 0],
+        registry: REGISTRY,
+      }),
+    );
+
+    expect(result.anomalies).toContain("sequestration-missing-or-zero");
+  });
+
+  it("keeps authoritative registry figures when the local preview is incomplete", () => {
+    const result = computeRemovalBreakdown(
+      input({
+        sequestrationTonnesByBatch: [null, null],
+        registry: REGISTRY,
+      }),
+    );
+
+    expect(result.anomalies).not.toContain("sequestration-missing-or-zero");
+    expect(result.netRemovedKg).toBe(284);
+    expect(result.reconciles).toBe(false);
   });
 });
