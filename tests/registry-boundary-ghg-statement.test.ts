@@ -427,12 +427,11 @@ describe("registry-list GHG statement reconciliation", () => {
     expect(removal.ghgStatementId).toBe(owner.id);
   });
 
-  it("reconciles and adopts a null-period DRAFT without POSTing", async () => {
+  it("reconciles a null-period DRAFT without adopting it for a dated create", async () => {
     const fixture = await createFixture();
     const remote = registry.seedGhgStatement({
       projectId: fixture.externalProjectId,
       endOn: null,
-      ghgEntryIds: [fixture.externalRemovalId!],
     });
 
     const synced = await reconcileGhgStatementsFromRegistry(
@@ -445,9 +444,43 @@ describe("registry-list GHG statement reconciliation", () => {
     });
     expect(created).toMatchObject({
       success: true,
-      data: { externalId: remote.id },
     });
-    expect(registry.requestCount("POST", "/ghg_statements")).toBe(0);
+    if (!created.success) return;
+    expect(created.data.externalId).not.toBe(remote.id);
+    expect(registry.requestCount("POST", "/ghg_statements")).toBe(1);
+  });
+
+  it("converges concurrent reconciliation on one local registry identity", async () => {
+    const fixture = await createFixture();
+    const remote = registry.seedGhgStatement({
+      projectId: fixture.externalProjectId,
+      endOn: null,
+      ghgEntryIds: [fixture.externalRemovalId!],
+    });
+
+    const results = await Promise.all([
+      reconcileGhgStatementsFromRegistry(fixture.facilityId),
+      reconcileGhgStatementsFromRegistry(fixture.facilityId),
+    ]);
+
+    expect(results.every((result) => result.success)).toBe(true);
+    const rows = await db
+      .select()
+      .from(certifierGhgStatements)
+      .where(eq(certifierGhgStatements.facilityId, fixture.facilityId));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].metadata).toMatchObject({
+      remoteExternalId: remote.id,
+    });
+    const submissions = await db
+      .select()
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.localEntityId, rows[0].id));
+    expect(submissions).toHaveLength(1);
+    expect(submissions[0]).toMatchObject({
+      externalId: remote.id,
+      status: "submitted",
+    });
   });
 
   it("replaces a null-period surrogate when the registry assigns a real end and preserves metadata", async () => {

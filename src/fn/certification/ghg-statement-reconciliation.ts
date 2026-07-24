@@ -35,6 +35,8 @@ import {
 } from "./shared";
 
 const facilityIdSchema = z.string().uuid();
+const CONCURRENT_RECONCILIATION_WARNING =
+  "This registry statement is already being reconciled by another request.";
 
 export interface RegistryGhgStatementView {
   id: string;
@@ -163,6 +165,14 @@ export async function reconcileRegistryGhgStatement(
       submission = await getLatestSubmission(orgCtx, key, args.facilityId);
     } else {
       submission = await getLatestSubmission(orgCtx, key, args.facilityId);
+      if (claimed.kind === "blocked" && claimed.reason === "in-flight") {
+        return {
+          ghgStatementId: statement.id,
+          externalId: args.remote.id,
+          linkedRemovalIds: [],
+          warnings: [CONCURRENT_RECONCILIATION_WARNING],
+        };
+      }
       if (
         claimed.kind === "blocked" ||
         claimed.externalId !== args.remote.id ||

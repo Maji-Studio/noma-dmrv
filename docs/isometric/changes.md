@@ -13,6 +13,19 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-07-24 (GHG Statement registry reconciliation)
+
+The GHG Statements workspace now discovers and reconciles every paginated
+registry statement for the linked project, including statements whose registry
+period is absent or duplicates another statement's end date. Local surrogate
+dates preserve the existing non-null period schema while metadata retains the
+authoritative registry period.
+
+Registry identity is the external statement ID, enforced by a partial unique
+database index so simultaneous page-load and manual syncs converge on one local
+statement. A period-less registry draft remains visible after sync but is not
+adopted for an arbitrary operator-selected reporting date.
+
 ## 2026-07-24 (Certify project version audit + Source preview closeout)
 
 ### Certify project protocol observation

@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { countRows } from "@/db/aggregate";
 import {
+  CERTIFIER_GHG_STATEMENT_REMOTE_EXTERNAL_ID_METADATA_KEY,
   certifierGhgStatements,
   certifierRemovals,
   certificationSubmissions,
@@ -21,7 +22,8 @@ export type CertifierGhgStatementRow =
 
 const ISOMETRIC = "isometric" as const;
 const REMOTE_PERIOD_INSERT_RETRY_LIMIT = 10;
-export const REMOTE_EXTERNAL_ID_METADATA_KEY = "remoteExternalId";
+export const REMOTE_EXTERNAL_ID_METADATA_KEY =
+  CERTIFIER_GHG_STATEMENT_REMOTE_EXTERNAL_ID_METADATA_KEY;
 export const REMOTE_PERIOD_MISSING_METADATA_KEY = "remotePeriodMissing";
 export const REMOTE_PERIOD_END_ON_METADATA_KEY = "remotePeriodEndOn";
 export const REMOTE_PERIOD_END_IS_SYNTHETIC_METADATA_KEY =
@@ -202,13 +204,10 @@ export async function createGhgStatementForRegistryDiscovery(
             input.reportingPeriodEndOn === null,
         },
       })
-      .onConflictDoNothing({
-        target: [
-          certifierGhgStatements.provider,
-          certifierGhgStatements.facilityId,
-          certifierGhgStatements.reportingPeriodEndOn,
-        ],
-      })
+      // The period constraint means another remote already occupies this
+      // local date; the external-id expression index means this remote won a
+      // concurrent insert. Handle either conflict, then identify which won.
+      .onConflictDoNothing()
       .returning();
     if (inserted) return inserted;
     const concurrentlyInserted = await findRegistryDiscoveryStatement(
