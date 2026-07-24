@@ -31,6 +31,7 @@ const ctx = makeTestOrgContext(TEST_USER_ID);
 
 interface Fixture {
   facilityId: string;
+  archivedFacilityId: string;
   supplierId: string;
   reactorId: string;
   primaryFeedstockTypeId: string;
@@ -39,6 +40,7 @@ interface Fixture {
   typedFeedstockBinId: string;
   biocharBinId: string;
   existingFeedstockId: string;
+  unlocatedFeedstockId: string;
   tag: string;
 }
 
@@ -49,13 +51,21 @@ beforeAll(() => ensureTestOrg());
 async function createFixture(): Promise<Fixture> {
   const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
   const fixture = await db.transaction(async (tx) => {
-    const [facility] = await tx
+    const [facility, archivedFacility] = await tx
       .insert(facilities)
-      .values({
-        organizationId: TEST_ORG_ID,
-        code: `FAC-SRA-${tag}`,
-        name: `Storage Reference Atomicity Facility ${tag}`,
-      })
+      .values([
+        {
+          organizationId: TEST_ORG_ID,
+          code: `FAC-SRA-${tag}`,
+          name: `Storage Reference Atomicity Facility ${tag}`,
+        },
+        {
+          organizationId: TEST_ORG_ID,
+          code: `FAC-SRA-ARCH-${tag}`,
+          name: `Archived Storage Reference Facility ${tag}`,
+          archivedAt: new Date(),
+        },
+      ])
       .returning({ id: facilities.id });
     const [supplier] = await tx
       .insert(suppliers)
@@ -121,23 +131,37 @@ async function createFixture(): Promise<Fixture> {
         },
       ])
       .returning({ id: storageLocations.id });
-    const [existingFeedstock] = await tx
+    const [existingFeedstock, unlocatedFeedstock] = await tx
       .insert(feedstocks)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        code: `FS-SRA-EXISTING-${tag}`,
-        status: "missing_data",
-        feedstockTypeId: primaryFeedstockType.id,
-        massDryKg: 0,
-        massWetKg: 0,
-        moistureContentPercent: 0,
-        storageLocationId: untypedFeedstockBin.id,
-      })
+      .values([
+        {
+          organizationId: TEST_ORG_ID,
+          facilityId: facility.id,
+          code: `FS-SRA-EXISTING-${tag}`,
+          status: "missing_data",
+          feedstockTypeId: primaryFeedstockType.id,
+          massDryKg: 0,
+          massWetKg: 0,
+          moistureContentPercent: 0,
+          storageLocationId: untypedFeedstockBin.id,
+        },
+        {
+          organizationId: TEST_ORG_ID,
+          facilityId: facility.id,
+          code: `FS-SRA-UNLOCATED-${tag}`,
+          status: "missing_data",
+          feedstockTypeId: primaryFeedstockType.id,
+          massDryKg: 0,
+          massWetKg: 0,
+          moistureContentPercent: 0,
+          storageLocationId: null,
+        },
+      ])
       .returning({ id: feedstocks.id });
 
     return {
       facilityId: facility.id,
+      archivedFacilityId: archivedFacility.id,
       supplierId: supplier.id,
       reactorId: reactor.id,
       primaryFeedstockTypeId: primaryFeedstockType.id,
@@ -146,6 +170,7 @@ async function createFixture(): Promise<Fixture> {
       typedFeedstockBinId: typedFeedstockBin.id,
       biocharBinId: biocharBin.id,
       existingFeedstockId: existingFeedstock.id,
+      unlocatedFeedstockId: unlocatedFeedstock.id,
       tag,
     };
   });
@@ -205,6 +230,9 @@ afterEach(async () => {
         ]),
       );
     await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+    await db
+      .delete(facilities)
+      .where(eq(facilities.id, fixture.archivedFacilityId));
   }
 });
 
@@ -403,6 +431,16 @@ describe(
       );
 
       expectArchivedReferenceRejected(outcome);
+    });
+
+    it("rejects an archived facility when moving an unlocated feedstock", async () => {
+      const fixture = await createFixture();
+
+      await expect(
+        updateFeedstock(ctx, fixture.unlocatedFeedstockId, {
+          facilityId: fixture.archivedFacilityId,
+        }),
+      ).rejects.toThrow(/not found|archived/i);
     });
 
     it("locks a supplied biochar bin for zero output", async () => {

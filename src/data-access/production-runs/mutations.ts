@@ -548,6 +548,10 @@ export async function updateProductionRun(
       productionRuns.code,
       CODE_CONFLICT_MESSAGES.productionRun,
       () => db.transaction(async (tx) => {
+    if (data.facilityId !== undefined) {
+      await lockActiveFacilityReference(ctx, tx, data.facilityId);
+    }
+
     await lockProductionRunUpdateStock(ctx, tx, existing, data);
 
     const [locked] = await tx

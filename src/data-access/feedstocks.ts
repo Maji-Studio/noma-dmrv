@@ -564,6 +564,10 @@ export async function updateFeedstock(
   }
 
   await db.transaction(async (tx) => {
+    if (feedstockData.facilityId !== undefined) {
+      await lockActiveFacilityReference(ctx, tx, feedstockData.facilityId);
+    }
+
     const [locked] = await tx
       .select()
       .from(feedstocks)
