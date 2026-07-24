@@ -56,7 +56,7 @@ const sampledBatch = (id: string, code: string) =>
   });
 
 describe("DURABILITY_MEASUREMENT_SAMPLES_LIVE", () => {
-  it("stays off until the two sandbox confirms land", () => {
+  it("stays off without the sandbox-only operator opt-in", () => {
     expect(DURABILITY_MEASUREMENT_SAMPLES_LIVE).toBe(false);
   });
 });

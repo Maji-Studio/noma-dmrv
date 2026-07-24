@@ -214,6 +214,28 @@ export function makeSequestrationTemplate(): IsometricGhgEntryTemplate {
   } as unknown as IsometricGhgEntryTemplate;
 }
 
+export function make1000YearSequestrationTemplate(): IsometricGhgEntryTemplate {
+  const base = makeSequestrationTemplate();
+  return {
+    ...base,
+    name: "1000-year durability template",
+    display_name: "1000-year durability template",
+    groups: base.groups.map((group) => ({
+      ...group,
+      components: group.components.map((component) => ({
+        ...component,
+        blueprint_key: "biochar_sequestration_1000_year",
+        display_name: "1000-year sequestration",
+        inputs: [
+          { type: "monitored", input_key: "carbon_contents" },
+          { type: "monitored", input_key: "product_mass" },
+          { type: "monitored", input_key: "s_fraction" },
+        ],
+      })),
+    })),
+  } as unknown as IsometricGhgEntryTemplate;
+}
+
 function makeBlueprints(): IsometricComponentBlueprint[] {
   return [
     {

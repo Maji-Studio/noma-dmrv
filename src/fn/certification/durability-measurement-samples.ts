@@ -6,18 +6,18 @@
  * credit batch it POSTs one `biochar_production_batch` measurement sample (H/C +
  * total/inorganic carbon + product mass, each value a per-batch mean ± std-dev),
  * plus one `biochar_soil` sample carrying the facility reference soil temperature.
- * Each measurement-sample value yields a datapoint the registry binds to the
- * matching `biochar_sequestration_200_year_c_org` list input.
+ * Measurement-sample response datapoints bind inputs declared with the
+ * `measurement-property` source. Values retained only as evidence (currently
+ * 1000-year `s_fraction`) are bound through direct orchestrator datapoints.
  *
  * ─── ⚠️ STAGED, NOT LIVE — gated on `DURABILITY_MEASUREMENT_SAMPLES_LIVE` ──────
- * The two sandbox-empirical confirms (datapoint↔component-input binding; the H/C
- * + carbon + mass unit scalings — see `transformers/measurement-sample.ts` and
- * `docs/open-questions.md` `isometric/durability-measurement-samples`) are not
- * resolved, so the live POST stays behind this flag. While it is `false`,
+ * Explicit binding is implemented for the verified 1000-year component. The
+ * 200-year H/C unit scaling and property/input table remain unverified (see
+ * `docs/open-questions.md`), so the registry POST stays behind this flag. While
+ * it is `false`,
  * `submitRemoval` hard-blocks any template that declares a sequestration
- * component, so this step never runs against the registry. Flip the flag (and
- * tune the one-constant unit/property guesses in the transformer) only after the
- * operator's `pnpm isometric:coverage-check -- --source=db` confirms both.
+ * component, so this step never runs against the registry. The operator enables
+ * the flag only for the sandbox after validating the active durability path.
  *
  * The POST choreography reuses `performRegistryCreate` (create → on failure
  * reconcile by supplier-ref lookup → audit event / ledger-reject), idempotent on
@@ -30,9 +30,13 @@ import type { Logger } from "@/lib/log";
 import { getIsometricClientForOrg } from "@/lib/isometric/client";
 import {
   buildMeasurementSampleReference,
+  captureMeasurementSampleDatapointIds,
   createMeasurementSample,
   findMeasurementSampleBySupplierRef,
+  mergeMeasurementSampleDatapointIds,
   type CreateMeasurementSampleRequest,
+  type IsometricMeasurementSample,
+  type MeasurementSampleDatapointCapture,
 } from "@/lib/isometric/measurement-samples";
 import {
   buildBiocharProductionBatchSample,
@@ -52,11 +56,10 @@ import { performRegistryCreate, supplierRefLookup } from "./registry-create";
 import { REMOVAL_ENTITY_TYPE } from "./shared";
 
 /**
- * Master gate for the live 200-year durability measurement-samples POST. Stays
- * `false` until the operator confirms the two sandbox-empirical questions (the
- * datapoint↔component-input binding and the H/C + carbon + mass unit scalings).
- * `submitRemoval` blocks any sequestration-template submission while it is off,
- * so no half-confirmed payload can reach a live credit.
+ * Sandbox-only gate for durability measurement-sample POSTs. The 1000-year
+ * explicit binding is implemented, while the 200-year table still awaits its
+ * H/C unit confirm. `submitRemoval` blocks every sequestration-template
+ * submission while this is off, so it can never create an emissions-only entry.
  */
 export const DURABILITY_MEASUREMENT_SAMPLES_LIVE =
   env.ISOMETRIC_ENVIRONMENT === "sandbox" &&
@@ -250,19 +253,29 @@ export interface SubmitDurabilityMeasurementSamplesArgs {
   log: Logger;
 }
 
+export interface SubmitDurabilityMeasurementSamplesResult {
+  submitted: number;
+  samples: MeasurementSampleDatapointCapture[];
+  datapointIdsByMeasurementProperty: Map<string, string[]>;
+}
+
 /**
  * POST each measurement-sample submission through the shared create-or-reconcile
  * choreography (idempotent on the versioned supplier ref). Sequential so the
  * audit-event ordering is deterministic and a batch never bursts the connection
- * pool. Returns the count actually submitted. Throws (via `performRegistryCreate`)
- * on an unrecoverable POST failure, which rejects the claimed ledger row.
+ * pool. Captures every returned value's required datapoint_id on both fresh
+ * creates and supplier-reference reconciliation. Throws (via
+ * `performRegistryCreate`) on an unrecoverable POST failure, which rejects the
+ * claimed ledger row.
  */
 export async function submitDurabilityMeasurementSamples(
   args: SubmitDurabilityMeasurementSamplesArgs,
-): Promise<{ submitted: number }> {
+): Promise<SubmitDurabilityMeasurementSamplesResult> {
   const client = await getIsometricClientForOrg(args.orgCtx.organizationId);
   let submitted = 0;
+  const samples: MeasurementSampleDatapointCapture[] = [];
   for (const submission of args.submissions) {
+    let resolvedSample: IsometricMeasurementSample | null = null;
     await performRegistryCreate({
       orgCtx: args.orgCtx,
       entityType: REMOVAL_ENTITY_TYPE,
@@ -272,17 +285,36 @@ export async function submitDurabilityMeasurementSamples(
       requestPayload: submission.body,
       supplierRefId: submission.supplierRefId,
       resumed: args.resumed,
-      create: () => createMeasurementSample(client, submission.body).then((m) => m.id),
-      reconcile: () =>
-        findMeasurementSampleBySupplierRef(client, submission.supplierRefId).then((m) =>
-          supplierRefLookup(
-            m ? { found: true, externalId: m.id } : { found: false },
-          ),
-        ),
+      create: async () => {
+        const sample = await createMeasurementSample(client, submission.body);
+        resolvedSample = sample;
+        return sample.id;
+      },
+      reconcile: async () => {
+        const sample = await findMeasurementSampleBySupplierRef(
+          client,
+          submission.supplierRefId,
+        );
+        resolvedSample = sample;
+        return supplierRefLookup(
+          sample ? { found: true, externalId: sample.id } : { found: false },
+        );
+      },
       failureMessagePrefix: `Measurement sample POST failed for ${submission.label}`,
       log: args.log,
     });
+    if (!resolvedSample) {
+      throw new SafeError(
+        `Measurement sample ${submission.supplierRefId} was created or reconciled without a response body; its sequestration datapoint IDs cannot be captured.`,
+      );
+    }
+    samples.push(captureMeasurementSampleDatapointIds(resolvedSample));
     submitted += 1;
   }
-  return { submitted };
+  return {
+    submitted,
+    samples,
+    datapointIdsByMeasurementProperty:
+      mergeMeasurementSampleDatapointIds(samples),
+  };
 }
