@@ -36,7 +36,6 @@ import {
 } from "./dashboard-attention";
 import {
   getDashboardStations,
-  type DashboardStationKey,
   type DashboardStationsData,
 } from "./dashboard-stations";
 import {
@@ -118,8 +117,9 @@ export interface DashboardAttentionItem {
   id: string;
   /** Entity code shown in the mono column, e.g. "PR-26-0042". */
   entityCode: string;
+  /** Canonical record date shown beside the entity code. */
+  date: string | Date | null;
   title: string;
-  severity: "flag" | "pending";
   href: string;
 }
 
@@ -136,21 +136,7 @@ export interface DashboardOverview extends DashboardStationsData {
   structuralGaps: DashboardStructuralGap[];
   /** Exact uncapped count of open items — the "N open" figure. */
   attentionTotal: number;
-  /** Exact uncapped count of blocking flags (a subset of `attentionTotal`). */
-  attentionFlagsTotal: number;
 }
-
-/**
- * Stations whose attention items surface as blocking "flags" (severity flag).
- * The remaining open items — upcoming deliveries and overdue credit batches —
- * are "pending", not flags, so they're excluded from the flag total.
- */
-const FLAG_STATION_KEYS: ReadonlySet<DashboardStationKey> = new Set([
-  "feedstock",
-  "production",
-  "products",
-  "applications",
-]);
 
 interface RangeBounds {
   /** Current-period start (ms); null = unbounded ("all"). */
@@ -507,11 +493,6 @@ export async function getDashboardOverview(
     stationsData.stations.reduce((acc, station) => acc + station.attention, 0) +
     attentionResult.overdueBatchesCount +
     structuralGapTotal;
-  // Exact (uncapped) flag count: the flag-station badges only. Upcoming
-  // deliveries and overdue batches are pending, not flags.
-  const attentionFlagsTotal = stationsData.stations
-    .filter((station) => FLAG_STATION_KEYS.has(station.key))
-    .reduce((acc, station) => acc + station.attention, structuralGapTotal);
 
   return {
     range,
@@ -521,7 +502,6 @@ export async function getDashboardOverview(
     attention: attentionResult.items,
     structuralGaps,
     attentionTotal,
-    attentionFlagsTotal,
     ...stationsData,
   };
 }
@@ -563,25 +543,42 @@ async function getAttentionItems(
     [overdueBatchesRow],
   ] = await Promise.all([
     db
-      .select({ id: productionRuns.id, code: productionRuns.code })
+      .select({
+        id: productionRuns.id,
+        code: productionRuns.code,
+        date: productionRunDateExpr(),
+      })
       .from(productionRuns)
       .where(runsMissingMassWhere(orgId, facilityId))
       .orderBy(desc(productionRuns.startTime))
       .limit(ATTENTION_PER_CHECK),
     db
-      .select({ id: biocharProducts.id, code: biocharProducts.code })
+      .select({
+        id: biocharProducts.id,
+        code: biocharProducts.code,
+        date: biocharProducts.productionDate,
+      })
       .from(biocharProducts)
       .where(productsUnlinkedWhere(orgId, facilityId))
       .orderBy(desc(biocharProducts.productionDate))
       .limit(ATTENTION_PER_CHECK),
     db
-      .select({ id: feedstocks.id, code: feedstocks.code })
+      .select({
+        id: feedstocks.id,
+        code: feedstocks.code,
+        deliveryDate: feedstocks.deliveryDate,
+        createdAt: feedstocks.createdAt,
+      })
       .from(feedstocks)
       .where(feedstocksMissingDataWhere(orgId, facilityId))
       .orderBy(desc(feedstocks.createdAt))
       .limit(ATTENTION_PER_CHECK),
     db
-      .select({ id: applications.id, code: applications.code })
+      .select({
+        id: applications.id,
+        code: applications.code,
+        date: applications.applicationDate,
+      })
       .from(applications)
       .innerJoin(
         deliveries,
@@ -594,7 +591,11 @@ async function getAttentionItems(
       .orderBy(desc(applications.applicationDate))
       .limit(ATTENTION_PER_CHECK),
     db
-      .select({ id: deliveries.id, code: deliveries.code })
+      .select({
+        id: deliveries.id,
+        code: deliveries.code,
+        date: deliveries.deliveryDate,
+      })
       .from(deliveries)
       // Redundant explicit org predicate beside the shared helper: the
       // check:org-scoping lexical guard can't see organizationId inside the
@@ -608,7 +609,11 @@ async function getAttentionItems(
       .orderBy(asc(deliveries.deliveryDate))
       .limit(ATTENTION_PER_CHECK),
     db
-      .select({ id: creditBatches.id, code: creditBatches.code })
+      .select({
+        id: creditBatches.id,
+        code: creditBatches.code,
+        date: creditBatches.endDate,
+      })
       .from(creditBatches)
       // Redundant org predicate for the lexical guard (see note above).
       .where(
@@ -636,29 +641,29 @@ async function getAttentionItems(
     ...runsMissingMass.map((row) => ({
       id: `run-mass-${row.id}`,
       entityCode: row.code,
+      date: row.date,
       title: "Complete run missing mass data",
-      severity: "flag" as const,
       href: productionRunHref(facilityId, row.id),
     })),
     ...unlinkedLots.map((row) => ({
       id: `lot-unlinked-${row.id}`,
       entityCode: row.code,
+      date: row.date,
       title: "Production run not linked",
-      severity: "flag" as const,
       href: `/biochar-products${facilityQuery}`,
     })),
     ...feedstocksMissingData.map((row) => ({
       id: `feedstock-missing-${row.id}`,
       entityCode: row.code,
+      date: row.deliveryDate ?? row.createdAt,
       title: "Feedstock record missing data",
-      severity: "flag" as const,
       href: `/feedstocks${facilityQuery}`,
     })),
     ...applicationsMissingEvidence.map((row) => ({
       id: `application-evidence-${row.id}`,
       entityCode: row.code,
+      date: row.date,
       title: "Application missing evidence",
-      severity: "flag" as const,
       href: `/applications${facilityQuery}`,
     })),
   ];
@@ -666,15 +671,15 @@ async function getAttentionItems(
     ...batchesAwaitingVerification.map((row) => ({
       id: `batch-pending-${row.id}`,
       entityCode: row.code,
+      date: row.date,
       title: "Period ended · awaiting verification",
-      severity: "pending" as const,
       href: creditBatchDeepLinkHref(row.id, facilityId),
     })),
     ...upcomingDeliveries.map((row) => ({
       id: `delivery-upcoming-${row.id}`,
       entityCode: row.code,
+      date: row.date,
       title: "Upcoming delivery",
-      severity: "pending" as const,
       href: `/deliveries${facilityQuery}`,
     })),
   ];

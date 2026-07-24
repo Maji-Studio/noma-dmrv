@@ -5,13 +5,15 @@
  */
 "use client";
 
-import Link from "next/link";
-import { ArrowRightIcon, CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import type { DashboardAttentionItem } from "@/data-access/dashboard-overview";
 import type { DashboardStructuralGap } from "@/data-access/dashboard-structural-gaps";
 import { STATUS_STATE_COLOR_TOKENS } from "@/lib/status-state";
 import { deriveAttentionSummaryState } from "./dashboard-status-state";
+import {
+  DashboardAttentionRow,
+  formatDashboardRecordMetadata,
+} from "./dashboard-attention-row";
 import { DashboardPanel } from "./dashboard-panel";
 import { StructuralGapList } from "./structural-gap-list";
 
@@ -20,15 +22,12 @@ interface AttentionListProps {
   structuralGaps: DashboardStructuralGap[];
   /** Exact uncapped count of open items; `attention` is a capped sample of it. */
   total: number;
-  /** Exact uncapped count of blocking flags (subset of `total`). */
-  flagsTotal: number;
 }
 
 export function AttentionList({
   attention,
   structuralGaps,
   total,
-  flagsTotal,
 }: AttentionListProps) {
   const structuralGapTotal = structuralGaps.reduce(
     (sum, gap) => sum + gap.count,
@@ -65,57 +64,21 @@ export function AttentionList({
       ) : (
         <ul className="flex flex-col px-20 py-4" data-testid="attention-list">
           {attention.map((item, index) => (
-            <li
+            <DashboardAttentionRow
               key={item.id}
-              className={
-                index > 0 ? "border-t border-[var(--color-border-tertiary)]" : undefined
-              }
-            >
-              <Link
-                href={item.href}
-                className="group grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-12 py-12"
-              >
-                <span className="flex min-w-0 flex-col gap-2">
-                  <span className="label-micro text-[var(--color-text-tertiary)]">
-                    {item.entityCode}
-                  </span>
-                  <span className="body-small text-[var(--color-text-primary)]">
-                    {item.title}
-                  </span>
-                </span>
-                {item.severity === "flag" ? (
-                  <StatusBadge status="pending" label="Flag" size="small" />
-                ) : (
-                  <StatusBadge status="pending" label="Upcoming" size="small" />
-                )}
-                <ArrowRightIcon
-                  size={14}
-                  weight="bold"
-                  className="text-[var(--color-text-tertiary)] transition-transform duration-150 group-hover:translate-x-[3px]"
-                  aria-hidden
-                />
-              </Link>
-            </li>
+              href={item.href}
+              metadata={formatDashboardRecordMetadata(item.entityCode, item.date)}
+              title={item.title}
+              divided={index > 0}
+            />
           ))}
         </ul>
       )}
-      {(flagsTotal > 0 || total > displayedOpenCount) && (
-        <div className="flex flex-wrap items-center justify-between gap-8 border-t border-[var(--color-border-tertiary)] px-20 py-10">
-          {flagsTotal > 0 ? (
-            <span
-              className="label-micro"
-              style={{ color: STATUS_STATE_COLOR_TOKENS.warning }}
-            >
-              {flagsTotal} {flagsTotal === 1 ? "flag" : "flags"} from blocking checks
-            </span>
-          ) : (
-            <span />
-          )}
-          {total > displayedOpenCount && (
-            <span className="label-micro text-[var(--color-text-tertiary)]">
-              Showing first {displayedOpenCount}
-            </span>
-          )}
+      {total > displayedOpenCount && (
+        <div className="border-t border-[var(--color-border-tertiary)] px-20 py-10">
+          <span className="label-micro text-[var(--color-text-tertiary)]">
+            Showing first {displayedOpenCount} of {total}
+          </span>
         </div>
       )}
     </DashboardPanel>
