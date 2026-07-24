@@ -62,6 +62,14 @@ export const saveMappingSchema = z.object({
 
 export type SaveMappingInput = z.infer<typeof saveMappingSchema>;
 
+export const registrySourceVisibilitySchema = z.object({
+  sourceVisibility: z.enum(["private", "public"]),
+});
+
+export type RegistrySourceVisibilityInput = z.infer<
+  typeof registrySourceVisibilitySchema
+>;
+
 // --- Per-facility emission-estimate config ---
 
 // ADR 0015 collapsed energy to a single combined measurement point, dropping

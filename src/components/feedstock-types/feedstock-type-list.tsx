@@ -8,6 +8,7 @@ import {
   LeafIcon,
   PlusIcon,
   SealCheckIcon,
+  XIcon,
 } from "@phosphor-icons/react";
 import type { FeedstockType } from "@/db/schema";
 import { ServerError } from "@/components/forms";
@@ -250,6 +251,10 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
   const pyrolysisCount = feedstockTypes.filter((type) => type.usage === "pyrolysis").length;
   const archivedCount = feedstockTypes.filter((type) => !!type.archivedAt).length;
   const hasActiveFilters = Boolean(searchQuery) || archiveFilter !== "all";
+  const clearFilters = () => {
+    setSearchQuery("");
+    setArchiveFilter("all");
+  };
 
   const openCreate = () => {
     if (!canManage) return;
@@ -451,6 +456,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
         enablePagination
         globalFilter={searchQuery}
         onGlobalFilterChange={setSearchQuery}
+        aria-label="Feedstock types"
         isLoading={feedstockTypesQuery.isLoading}
         hoverable
         emptyMessage={
@@ -475,20 +481,28 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
         }
       >
         <DataTable.Toolbar>
-          <DataTable.Search placeholder="Search feedstock types..." />
-          <div className="flex items-center gap-12">
-            <select
+          <DataTable.Search
+            placeholder="Search feedstock types..."
+            aria-label="Search feedstock types"
+          />
+          <DataTable.Controls>
+            <DataTable.FilterSelect
               aria-label="Filter feedstock types by archive state"
               value={archiveFilter}
               onChange={(event) => setArchiveFilter(event.target.value as ArchiveFilter)}
-              className="h-40 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
             >
               <option value="all">All states</option>
               <option value="active">Active</option>
               <option value="archived">Archived</option>
-            </select>
+            </DataTable.FilterSelect>
+            {hasActiveFilters && (
+              <Button variant="noOutline" size="small" onClick={clearFilters}>
+                <XIcon size={16} weight="bold" />
+                Clear
+              </Button>
+            )}
             <DataTable.ColumnVisibility />
-          </div>
+          </DataTable.Controls>
         </DataTable.Toolbar>
         <DataTable.Pagination />
       </DataTable>

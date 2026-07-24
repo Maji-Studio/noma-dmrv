@@ -6,10 +6,12 @@
 
 import { useState, useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { PackageIcon, MagnifyingGlassIcon, PlusIcon, XIcon, TruckIcon } from "@phosphor-icons/react";
+import { PackageIcon, PlusIcon, XIcon, TruckIcon } from "@phosphor-icons/react";
 import type { Order } from "@/db/schema";
 import { useCreateOrder, useDeleteOrder, useOrders, useUpdateOrder } from "@/hooks/use-orders";
 import { useCustomers } from "@/hooks/use-customers";
+import { useDebounce } from "@/hooks/use-debounce";
+import { useListPagination } from "@/hooks/use-list-pagination";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { DataTable } from "@/components/ui/data-table";
@@ -29,6 +31,7 @@ import {
   type OrderFulfillmentStatus,
 } from "@/lib/orders/fulfillment";
 import { formatDate } from "@/lib/format-utils";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
 // ============================================
 // Column Definitions
@@ -125,8 +128,9 @@ export function OrderList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderFulfillmentStatus | "">("");
   const [customerFilter, setCustomerFilter] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
+    useListPagination(facilityId);
+  const debouncedSearch = useDebounce(searchQuery, LIST_SEARCH_DEBOUNCE_MS);
 
   // Unified side sheet state
   const [sideSheet, setSideSheet] = useState<{
@@ -142,7 +146,7 @@ export function OrderList() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const filters: Partial<OrderFilterData> = useMemo(() => ({
-    search: searchQuery || undefined,
+    search: debouncedSearch || undefined,
     facilityId: facilityId || undefined,
     status: statusFilter || undefined,
     customerId: customerFilter || undefined,
@@ -150,7 +154,7 @@ export function OrderList() {
     pageSize,
     sortBy: "orderDate",
     sortOrder: "desc",
-  }), [searchQuery, facilityId, statusFilter, customerFilter, currentPage, pageSize]);
+  }), [debouncedSearch, facilityId, statusFilter, customerFilter, currentPage, pageSize]);
 
   const { data: ordersData, isLoading, error: fetchError } = useOrders(
     filters,
@@ -291,16 +295,19 @@ export function OrderList() {
       <DataTable
         columns={columns}
         data={orders}
-        enableSorting
+        enableSorting={false}
         enablePagination
         manualPagination
         pageCount={totalPages}
         pageSize={pageSize}
         pageIndex={currentPage - 1}
-        onPaginationChange={(p) => {
-          if (p.pageSize !== pageSize) { setPageSize(p.pageSize); setCurrentPage(1); }
-          else { setCurrentPage(p.pageIndex + 1); }
+        globalFilter={searchQuery}
+        onGlobalFilterChange={(value) => {
+          setSearchQuery(value);
+          setCurrentPage(1);
         }}
+        onPaginationChange={onPaginationChange}
+        aria-label="Orders"
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
@@ -315,35 +322,35 @@ export function OrderList() {
         }
       >
         <DataTable.Toolbar>
-          <div className="relative max-w-[320px] flex-1">
-            <MagnifyingGlassIcon size={18} className="absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none" />
-            <input type="text" placeholder="Search orders..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} className="w-full h-40 pl-36 pr-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]" aria-label="Search table" />
-          </div>
-          <div className="flex items-center gap-8">
-            <select
+          <DataTable.Search
+            placeholder="Search by order code..."
+            aria-label="Search orders by code"
+          />
+          <DataTable.Controls>
+            <DataTable.FilterSelect
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value as OrderFulfillmentStatus | ""); setCurrentPage(1); }}
-              className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer"
               aria-label="Filter by fulfillment status"
             >
               <option value="">All Statuses</option>
               {orderFulfillmentStatuses.map((s) => (
                 <option key={s} value={s}>{ORDER_FULFILLMENT_DISPLAY[s].label}</option>
               ))}
-            </select>
-            <select
+            </DataTable.FilterSelect>
+            <DataTable.FilterSelect
               value={customerFilter}
               onChange={(e) => { setCustomerFilter(e.target.value); setCurrentPage(1); }}
-              className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer max-w-[200px]"
+              className="sm:max-w-[200px]"
               aria-label="Filter by customer"
             >
               <option value="">All Customers</option>
               {customerOptions.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
-            </select>
+            </DataTable.FilterSelect>
             {hasActiveFilters && <Button variant="noOutline" size="small" onClick={clearFilters}><XIcon size={16} weight="bold" />Clear</Button>}
-          </div>
+            <DataTable.ColumnVisibility />
+          </DataTable.Controls>
         </DataTable.Toolbar>
         <DataTable.Pagination />
       </DataTable>

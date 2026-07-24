@@ -7,6 +7,11 @@ export {
   saveFacilityEmissionConfig,
   type FacilityCertifierSummary,
 } from "./facility-mapping";
+export {
+  loadRegistrySourceVisibility,
+  saveRegistrySourceVisibility,
+  type RegistrySourceVisibilitySettings,
+} from "./source-visibility";
 // Read-only browse of the registry feedstock-type catalogue (browse-only,
 // no local record) for the feedstock-type form's Isometric tab.
 export { loadIsometricFeedstockTypes } from "./feedstock-types";
@@ -76,7 +81,6 @@ export {
   loadCandidateDocumentsForRemoval,
   mirrorDocumentToSource,
   unlinkDocumentSource,
-  setDocumentSourceVisibility,
   type CandidateDocument,
   type CandidateDocumentsForRemoval,
   type CandidateLineageEntity,

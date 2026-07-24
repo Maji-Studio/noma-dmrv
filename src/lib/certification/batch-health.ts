@@ -211,6 +211,17 @@ function productionCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
 }
 
 function transportCheck(facts: BatchHealthFacts): BatchHealthCheckBase {
+  // Transport coverage is derived from application → delivery → product → run
+  // lineage. Until that lineage exists, an empty transport result is only a
+  // downstream symptom of the production gap and has no honest destination.
+  if (!facts.hasSubmittableRuns) {
+    return {
+      key: "transport",
+      label: TRANSPORT_LABEL,
+      status: "skipped",
+      detail: "Link production data before reviewing transport coverage",
+    };
+  }
   // Required categories come from the facility's default template; without a
   // resolved facility setup we cannot know them, so the check is not yet
   // evaluable. The wizard surfaces the facility-setup gap separately, so a

@@ -3,7 +3,7 @@
  * CRUD operations for storage locations with auth guards, pagination, and filtering
  */
 
-import { and, asc, desc, eq, ilike, isNull, or, sql, SQL, count } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, isNotNull, isNull, or, sql, SQL, count } from "drizzle-orm";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
@@ -14,6 +14,7 @@ import {
   productionRuns,
   biocharProducts,
   biocharStorageInventory,
+  binMovements,
   formulations,
   deliveries,
   type StorageLocation,
@@ -58,14 +59,20 @@ export async function getStorageLocations(
     search,
     facilityId,
     type,
+    archived = false,
     page = 1,
     pageSize = 20,
     sortBy = "code",
     sortOrder = "asc",
   } = filters ?? {};
 
-  // Build where conditions — archived bins (facility archive cascade) are hidden
-  const conditions: SQL[] = [eq(storageLocations.organizationId, ctx.organizationId), isNull(storageLocations.archivedAt)];
+  // Active bins by default; the archived view is explicit and restore-oriented.
+  const conditions: SQL[] = [
+    eq(storageLocations.organizationId, ctx.organizationId),
+    archived
+      ? isNotNull(storageLocations.archivedAt)
+      : isNull(storageLocations.archivedAt),
+  ];
 
   if (search) {
     const searchPattern = `%${search}%`;
@@ -537,12 +544,130 @@ export async function updateStorageLocation(
 }
 
 // ============================================
+// Archive Operations
+// ============================================
+
+/**
+ * Archive one storage location without disturbing its operational history.
+ */
+export async function archiveStorageLocation(
+  ctx: OrgContext,
+  storageLocationId: string,
+): Promise<StorageLocation> {
+  requireOrgScope(ctx);
+
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({
+        id: storageLocations.id,
+        archivedAt: storageLocations.archivedAt,
+      })
+      .from(storageLocations)
+      .where(
+        and(
+          eq(storageLocations.id, storageLocationId),
+          eq(storageLocations.organizationId, ctx.organizationId),
+        ),
+      );
+
+    if (!existing) {
+      throw new SafeError("Storage location not found");
+    }
+    if (existing.archivedAt) {
+      throw new SafeError("Storage location is already archived");
+    }
+
+    const archivedAt = new Date();
+    const [archived] = await tx
+      .update(storageLocations)
+      .set({ archivedAt, updatedAt: archivedAt })
+      .where(
+        and(
+          eq(storageLocations.id, storageLocationId),
+          eq(storageLocations.organizationId, ctx.organizationId),
+          isNull(storageLocations.archivedAt),
+        ),
+      )
+      .returning();
+
+    if (!archived) {
+      throw new SafeError("Storage location is already archived");
+    }
+
+    return archived;
+  });
+}
+
+/**
+ * Restore one archived storage location. Its facility must be active first.
+ */
+export async function restoreStorageLocation(
+  ctx: OrgContext,
+  storageLocationId: string,
+): Promise<StorageLocation> {
+  requireOrgScope(ctx);
+
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({
+        id: storageLocations.id,
+        archivedAt: storageLocations.archivedAt,
+        facilityArchivedAt: facilities.archivedAt,
+      })
+      .from(storageLocations)
+      .innerJoin(
+        facilities,
+        and(
+          eq(storageLocations.facilityId, facilities.id),
+          eq(facilities.organizationId, ctx.organizationId),
+        ),
+      )
+      .where(
+        and(
+          eq(storageLocations.id, storageLocationId),
+          eq(storageLocations.organizationId, ctx.organizationId),
+        ),
+      );
+
+    if (!existing) {
+      throw new SafeError("Storage location not found");
+    }
+    if (!existing.archivedAt) {
+      throw new SafeError("Storage location is not archived");
+    }
+    if (existing.facilityArchivedAt) {
+      throw new SafeError(
+        "Restore the facility before restoring this storage location",
+      );
+    }
+
+    const [restored] = await tx
+      .update(storageLocations)
+      .set({ archivedAt: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(storageLocations.id, storageLocationId),
+          eq(storageLocations.organizationId, ctx.organizationId),
+          isNotNull(storageLocations.archivedAt),
+        ),
+      )
+      .returning();
+
+    if (!restored) {
+      throw new SafeError("Storage location is not archived");
+    }
+
+    return restored;
+  });
+}
+
+// ============================================
 // Delete Operations
 // ============================================
 
 /**
  * Delete a storage location
- * Note: May fail if storage location has associated records (check in caller)
+ * Permanent deletion is reserved for bins with no operational history.
  */
 export async function deleteStorageLocation(
   ctx: OrgContext,
@@ -567,6 +692,7 @@ export async function deleteStorageLocation(
     [{ value: productCount }],
     [{ value: deliveryCount }],
     [{ value: inventoryCount }],
+    [{ value: movementCount }],
   ] = await Promise.all([
     db
       .select({ value: count() })
@@ -592,6 +718,10 @@ export async function deleteStorageLocation(
       .select({ value: count() })
       .from(biocharStorageInventory)
       .where(and(eq(biocharStorageInventory.storageLocationId, storageLocationId), eq(biocharStorageInventory.organizationId, ctx.organizationId))),
+    db
+      .select({ value: count() })
+      .from(binMovements)
+      .where(and(eq(binMovements.storageLocationId, storageLocationId), eq(binMovements.organizationId, ctx.organizationId))),
   ]);
 
   const blockers = [
@@ -601,6 +731,7 @@ export async function deleteStorageLocation(
     Number(productCount) > 0 ? "biochar products stored in it" : null,
     Number(deliveryCount) > 0 ? "deliveries drawing from it" : null,
     Number(inventoryCount) > 0 ? "storage inventory records" : null,
+    Number(movementCount) > 0 ? "reconciliation or movement history" : null,
   ].filter(Boolean);
 
   if (blockers.length > 0) {

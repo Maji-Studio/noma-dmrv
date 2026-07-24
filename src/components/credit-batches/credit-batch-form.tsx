@@ -27,7 +27,7 @@ import {
   WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, SectionLabel, FormActions } from "@/components/forms";
-import { Button } from "@/components/ui";
+import { Button, StatusBadge } from "@/components/ui";
 import {
   creditBatchFormSchema,
   type CreditBatchFormData,
@@ -38,6 +38,7 @@ import { useCreditBatchProductionRunOptions } from "@/hooks/use-credit-batches";
 import { CohortInputLedger } from "./cohort-input-ledger";
 import { CreditBatchSamplingControl } from "./credit-batch-sampling-control";
 import { MethodBPrerequisitesSetup } from "./method-b-prerequisites-setup";
+import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 
 const COHORT_LIST_HEIGHT_CLASS = "max-h-[320px]";
 
@@ -347,8 +348,9 @@ export function CreditBatchForm({
   const selectableProductionRunIds = typedRunOptions
     .filter(
       (run) =>
-        !run.assignedCreditBatchId ||
-        run.assignedCreditBatchId === creditBatch?.id,
+        run.status === COMPLETED_PRODUCTION_RUN_STATUS &&
+        (!run.assignedCreditBatchId ||
+          run.assignedCreditBatchId === creditBatch?.id),
     )
     .map((run) => run.id);
   const selectedProductionRunIdsKey = selectedProductionRunIds.join(",");
@@ -423,6 +425,7 @@ export function CreditBatchForm({
     const assignedElsewhere =
       !!run.assignedCreditBatchId &&
       run.assignedCreditBatchId !== creditBatch?.id;
+    const isPreview = run.status !== COMPLETED_PRODUCTION_RUN_STATUS;
     return (
       <label
         key={run.id}
@@ -435,7 +438,7 @@ export function CreditBatchForm({
         <input
           type="checkbox"
           value={run.id}
-          disabled={isSubmitting || assignedElsewhere || !isEditMode}
+          disabled={isSubmitting || assignedElsewhere || isPreview || !isEditMode}
           className="h-16 w-16 shrink-0"
           {...register("productionRunIds")}
         />
@@ -443,6 +446,7 @@ export function CreditBatchForm({
         <span className="text-[11px] text-[var(--color-text-tertiary)] shrink-0">
           {formatDate(run.date)}
         </span>
+        {isPreview && <StatusBadge status={run.status} size="small" />}
         {assignedElsewhere && run.assignedCreditBatchCode && (
           <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-tertiary)] truncate">
             Assigned to {run.assignedCreditBatchCode}
@@ -549,7 +553,7 @@ export function CreditBatchForm({
         onRetry={() => refetchProductionRunOptions()}
         isRetrying={productionRunOptionsFetching}
         notReadyMessage="Select a feedstock type and set the production window to load runs."
-        noMatchMessage="No completed runs match yet. You can create the batch now; matching runs will attach automatically."
+        noMatchMessage="No production runs match yet. You can create the batch now; matching completed runs will attach automatically."
         noMatchWithSelectionMessage="No additional runs of this feedstock type fall within the production window."
       >
         {typedRunOptions.map(renderProductionRunOption)}

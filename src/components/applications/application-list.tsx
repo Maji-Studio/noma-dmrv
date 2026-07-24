@@ -20,6 +20,8 @@ import { ServerError } from "@/components/forms";
 import { useToast } from "@/components/ui/toast";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useDebounce } from "@/hooks/use-debounce";
+import { useListPagination } from "@/hooks/use-list-pagination";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { ApplicationForm } from "./application-form";
 import { ApplicationEvidencePanel } from "./application-evidence-panel";
@@ -39,6 +41,7 @@ import {
   useDeleteApplication,
   applicationKeys,
 } from "@/hooks/use-applications";
+import { useCreditBatches } from "@/hooks/use-credit-batches";
 import type { ApplicationFormData } from "@/schemas/applications";
 import {
   applicationStatuses,
@@ -55,6 +58,7 @@ import {
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { formatDate } from "@/lib/format-utils";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
 // ============================================
 // Column Definitions
@@ -187,6 +191,11 @@ interface ApplicationListProps {
 
 export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const { facilityId: contextFacilityId, selectedFacility } = useFacilityContext();
+  const [creditBatchFilterParam, setCreditBatchFilter] = useQueryState(
+    "creditBatch",
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const creditBatchFilter = creditBatchFilterParam ?? "";
   const [affectedApplicationIdsParam, setAffectedApplicationIdsParam] =
     useQueryState(
       "ids",
@@ -229,19 +238,31 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Filter state (client-side facets over the loaded rows)
+  // Server-backed list controls
+  const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "">("");
   const [evidenceFilter, setEvidenceFilter] = useState<ApplicationEvidenceMethod | "">("");
+  const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
+    useListPagination(
+      `${contextFacilityId ?? ""}:${creditBatchFilter}:${affectedApplicationFilter.normalized ?? ""}`,
+    );
+  const debouncedSearch = useDebounce(searchQuery, LIST_SEARCH_DEBOUNCE_MS);
 
   // Data fetching
   const { data: applications, isLoading, error } = useApplications(
     contextFacilityId
       ? {
           facilityId: contextFacilityId,
+          creditBatchId: creditBatchFilter || undefined,
           ids:
             affectedApplicationIds.length > 0
               ? affectedApplicationIds
               : undefined,
+          search: debouncedSearch || undefined,
+          status: statusFilter || undefined,
+          evidenceMethod: evidenceFilter || undefined,
+          page: currentPage,
+          pageSize,
         }
       : undefined,
     { enabled: !!contextFacilityId },
@@ -249,6 +270,9 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
   const { data: scopedDeliveries } = useApplicationDeliveryOptions(
     contextFacilityId ?? undefined,
     { enabled: !!contextFacilityId },
+  );
+  const { data: creditBatches } = useCreditBatches(
+    contextFacilityId ?? undefined,
   );
   const createApplication = useCreateApplication();
   const updateApplication = useUpdateApplication();
@@ -363,23 +387,23 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
 
   const items = applications?.items ?? [];
   const deliveryOptions = scopedDeliveries ?? deliveries;
-  const totalApplications = items.length;
+  const totalApplications = applications?.total ?? 0;
+  const totalPages = applications?.totalPages ?? 0;
   const totalBiochar = items.reduce((sum, a) => sum + (a.biocharAppliedTons ?? 0), 0);
 
-  // Client-side facet filters (the list loads all rows for the facility)
-  const filteredItems = items.filter((a) =>
-    (!statusFilter || a.status === statusFilter) &&
-    // A null evidenceMethod renders as "visual" (the table/side-sheet fallback),
-    // so the facet must match that same default — otherwise filtering by Visual
-    // hides the very rows it visibly labels Visual.
-    (!evidenceFilter || (a.evidenceMethod ?? "visual") === evidenceFilter)
-  );
   const hasActiveFilters =
-    !!statusFilter || !!evidenceFilter || affectedApplicationIds.length > 0;
+    !!searchQuery ||
+    !!statusFilter ||
+    !!evidenceFilter ||
+    !!creditBatchFilter ||
+    affectedApplicationIds.length > 0;
   const clearFilters = () => {
+    setSearchQuery("");
     setStatusFilter("");
     setEvidenceFilter("");
+    setCreditBatchFilter(null);
     setAffectedApplicationIdsParam(null);
+    setCurrentPage(1);
   };
 
   if (!contextFacilityId) {
@@ -455,7 +479,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
           title="Biochar Applied"
           value={formatApplicationKgFromTons(totalBiochar)}
           icon={<LeafIcon size={24} weight="bold" />}
-          description="Total biochar applied"
+          description="Biochar applied on this page"
           isLoading={isLoading}
         />
       </div>
@@ -463,10 +487,20 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
       {/* Data Table */}
       <DataTable
         columns={columns}
-        data={filteredItems}
-        enableSorting
-        enableFiltering
+        data={items}
+        enableSorting={false}
         enablePagination
+        manualPagination
+        pageCount={totalPages}
+        pageSize={pageSize}
+        pageIndex={currentPage - 1}
+        globalFilter={searchQuery}
+        onGlobalFilterChange={(value) => {
+          setSearchQuery(value);
+          setCurrentPage(1);
+        }}
+        onPaginationChange={onPaginationChange}
+        aria-label="Applications"
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
@@ -475,12 +509,16 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             padding="md"
             icon={<MapPinIcon size={48} />}
             title={
-              hasActiveFilters
+              creditBatchFilter
+                ? "No applications in this credit batch"
+                : hasActiveFilters
                 ? "No applications match"
                 : "No applications yet"
             }
             description={
-              hasActiveFilters
+              creditBatchFilter
+                ? "No applications trace to this batch. Create one or review the batch period and linked production runs."
+                : hasActiveFilters
                 ? "Try adjusting or clearing the filters."
                 : "Create your first field application to get started"
             }
@@ -504,36 +542,66 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                 : "applications"}
             </span>
           )}
-          <DataTable.Search placeholder="Search applications..." />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as ApplicationStatus | "")}
-            className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer"
-            aria-label="Filter by status"
-          >
-            <option value="">All Statuses</option>
-            {applicationStatuses.map((s) => (
-              <option key={s} value={s}>{formatApplicationStatus(s)}</option>
-            ))}
-          </select>
-          <select
-            value={evidenceFilter}
-            onChange={(e) => setEvidenceFilter(e.target.value as ApplicationEvidenceMethod | "")}
-            className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer"
-            aria-label="Filter by evidence method"
-          >
-            <option value="">All Evidence</option>
-            {applicationEvidenceMethods.map((m) => (
-              <option key={m} value={m}>{formatApplicationEvidenceMethod(m)}</option>
-            ))}
-          </select>
-          {hasActiveFilters && (
-            <Button variant="noOutline" size="small" onClick={clearFilters}>
-              <XIcon size={16} weight="bold" />
-              Clear
-            </Button>
-          )}
-          <DataTable.ColumnVisibility />
+          <DataTable.Search
+            placeholder="Search applications..."
+            aria-label="Search applications"
+          />
+          <DataTable.Controls>
+            <DataTable.FilterSelect
+              value={creditBatchFilter}
+              onChange={(event) => {
+                setCreditBatchFilter(event.target.value || null);
+                setCurrentPage(1);
+              }}
+              aria-label="Filter by credit batch"
+            >
+              <option value="">All Credit Batches</option>
+              {creditBatches?.map((batch) => (
+                <option key={batch.id} value={batch.id}>
+                  {batch.code}
+                </option>
+              ))}
+            </DataTable.FilterSelect>
+            <DataTable.FilterSelect
+              value={statusFilter}
+              onChange={(event) => {
+                setStatusFilter(event.target.value as ApplicationStatus | "");
+                setCurrentPage(1);
+              }}
+              aria-label="Filter by status"
+            >
+              <option value="">All Statuses</option>
+              {applicationStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {formatApplicationStatus(status)}
+                </option>
+              ))}
+            </DataTable.FilterSelect>
+            <DataTable.FilterSelect
+              value={evidenceFilter}
+              onChange={(event) => {
+                setEvidenceFilter(
+                  event.target.value as ApplicationEvidenceMethod | "",
+                );
+                setCurrentPage(1);
+              }}
+              aria-label="Filter by evidence method"
+            >
+              <option value="">All Evidence</option>
+              {applicationEvidenceMethods.map((method) => (
+                <option key={method} value={method}>
+                  {formatApplicationEvidenceMethod(method)}
+                </option>
+              ))}
+            </DataTable.FilterSelect>
+            {hasActiveFilters && (
+              <Button variant="noOutline" size="small" onClick={clearFilters}>
+                <XIcon size={16} weight="bold" />
+                Clear
+              </Button>
+            )}
+            <DataTable.ColumnVisibility />
+          </DataTable.Controls>
         </DataTable.Toolbar>
         <DataTable.Pagination />
       </DataTable>

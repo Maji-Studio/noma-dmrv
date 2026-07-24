@@ -16,7 +16,6 @@ import {
   CheckCircleIcon,
   WarningIcon,
   ProhibitIcon,
-  MagnifyingGlassIcon,
 } from "@phosphor-icons/react";
 import {
   useCreateProductionRun,
@@ -26,7 +25,10 @@ import {
   useUpdateProductionRun,
   useProductionRunStats,
 } from "@/hooks/use-production-runs";
+import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useDebounce } from "@/hooks/use-debounce";
+import { useListPagination } from "@/hooks/use-list-pagination";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { useImportProductionRunReadings } from "@/hooks/use-production-run-reading-imports";
 import { SelectFacilityEmptyState } from "@/components/navigation";
@@ -46,12 +48,14 @@ import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate } from "@/lib/format-utils";
 import { formatLocalTime } from "@/lib/date-utils";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
 import { ProductionRunForm, type ProductionRunSubmitData } from "./production-run-form";
 import { ProductionIncidentTable } from "./production-incident-table";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
 import { ProductionSampleTable } from "./production-sample-table";
 import {
+  buildProductionRunFeedstockDetailField,
   buildProductionRunReadingsDetailField,
   productionRunStatusCertStatus,
 } from "./production-run-detail-fields";
@@ -182,6 +186,11 @@ export function ProductionRunList() {
     "ids",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
+  const [creditBatchFilterParam, setCreditBatchFilter] = useQueryState(
+    "creditBatch",
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const creditBatchFilter = creditBatchFilterParam ?? "";
   const affectedRunFilter = parseExactIdFilter(affectedRunIdsParam);
   const affectedRunIds = affectedRunFilter.ids;
   useEffect(() => {
@@ -201,8 +210,11 @@ export function ProductionRunList() {
   // Filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
+    useListPagination(
+      `${facilityId ?? ""}:${creditBatchFilter}:${affectedRunFilter.normalized ?? ""}`,
+    );
+  const debouncedSearch = useDebounce(searchQuery, LIST_SEARCH_DEBOUNCE_MS);
 
   // UI state
   const [sideSheet, setSideSheet] = useState<{
@@ -216,8 +228,9 @@ export function ProductionRunList() {
 
   const filters: Partial<ProductionRunFilterData> = {
     ids: affectedRunIds.length > 0 ? affectedRunIds : undefined,
-    search: searchQuery || undefined,
+    search: debouncedSearch || undefined,
     facilityId: facilityId || undefined,
+    creditBatchId: creditBatchFilter || undefined,
     status: (statusFilter as ProductionRunStatus) || undefined,
     page: currentPage,
     pageSize,
@@ -233,6 +246,7 @@ export function ProductionRunList() {
     facilityId || undefined,
     !!facilityId,
   );
+  const { data: creditBatches } = useCreditBatches(facilityId || undefined);
 
   const createRun = useCreateProductionRun();
   const updateRun = useUpdateProductionRun();
@@ -405,10 +419,15 @@ export function ProductionRunList() {
   const clearFilters = () => {
     setSearchQuery("");
     setStatusFilter("");
+    setCreditBatchFilter(null);
     setAffectedRunIdsParam(null);
     setCurrentPage(1);
   };
-  const hasActiveFilters = searchQuery || statusFilter || affectedRunIds.length > 0;
+  const hasActiveFilters =
+    searchQuery ||
+    statusFilter ||
+    creditBatchFilter ||
+    affectedRunIds.length > 0;
 
   const columns = createColumns(openEdit, handleDelete);
 
@@ -528,16 +547,19 @@ export function ProductionRunList() {
       <DataTable
         columns={columns}
         data={runs}
-        enableSorting
+        enableSorting={false}
         enablePagination
         manualPagination
         pageCount={totalPages}
         pageSize={pageSize}
         pageIndex={currentPage - 1}
-        onPaginationChange={(p) => {
-          if (p.pageSize !== pageSize) { setPageSize(p.pageSize); setCurrentPage(1); }
-          else { setCurrentPage(p.pageIndex + 1); }
+        globalFilter={searchQuery}
+        onGlobalFilterChange={(value) => {
+          setSearchQuery(value);
+          setCurrentPage(1);
         }}
+        onPaginationChange={onPaginationChange}
+        aria-label="Production runs"
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
@@ -545,7 +567,13 @@ export function ProductionRunList() {
           <EmptyState
             padding="md"
             icon={<FireIcon size={48} />}
-            title={hasActiveFilters ? "No production runs found" : "No production runs yet"}
+            title={
+              creditBatchFilter
+                ? "No production runs in this credit batch"
+                : hasActiveFilters
+                  ? "No production runs found"
+                  : "No production runs yet"
+            }
             description={hasActiveFilters ? "Try adjusting your search or filters." : "Create your first production run to start tracking pyrolysis batches."}
             action={
               !hasActiveFilters ? (
@@ -559,27 +587,37 @@ export function ProductionRunList() {
         }
       >
         <DataTable.Toolbar>
-          {affectedRunIds.length > 0 && (
-            <span className="inline-flex h-32 items-center border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-10 body-caption font-medium text-[var(--st-wait)]">
-              {affectedRunIds.length} affected production {affectedRunIds.length === 1 ? "run" : "runs"}
-            </span>
-          )}
-          <div className="relative max-w-[320px] flex-1">
-            <MagnifyingGlassIcon size={18} className="absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none" />
-            <input
-              type="text"
+          <div className="flex w-full flex-col gap-8 sm:flex-1 sm:flex-row sm:items-center">
+            {affectedRunIds.length > 0 && (
+              <span className="inline-flex h-32 shrink-0 items-center self-start border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-10 body-caption font-medium text-[var(--st-wait)] sm:self-auto">
+                {affectedRunIds.length} affected production {affectedRunIds.length === 1 ? "run" : "runs"}
+              </span>
+            )}
+            <DataTable.Search
               placeholder="Search production runs..."
-              value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-              className="w-full h-40 pl-36 pr-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-              aria-label="Search table"
+              aria-label="Search production runs"
             />
           </div>
-          <div className="flex items-center gap-8">
-            <select
+          <DataTable.Controls>
+            <DataTable.FilterSelect
+              value={creditBatchFilter}
+              onChange={(event) => {
+                setCreditBatchFilter(event.target.value || null);
+                setCurrentPage(1);
+              }}
+              aria-label="Filter production runs by credit batch"
+            >
+              <option value="">All Credit Batches</option>
+              {creditBatches?.map((batch) => (
+                <option key={batch.id} value={batch.id}>
+                  {batch.code}
+                </option>
+              ))}
+            </DataTable.FilterSelect>
+            <DataTable.FilterSelect
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-              className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer"
+              aria-label="Filter production runs by status"
             >
               <option value="">All Statuses</option>
               <option value="draft">Draft</option>
@@ -587,14 +625,15 @@ export function ProductionRunList() {
               <option value="complete">Complete</option>
               <option value="failed">Failed</option>
               <option value="cancelled">Cancelled</option>
-            </select>
+            </DataTable.FilterSelect>
             {hasActiveFilters && (
               <Button variant="noOutline" size="small" onClick={clearFilters}>
                 <XIcon size={16} weight="bold" />
                 Clear
               </Button>
             )}
-          </div>
+            <DataTable.ColumnVisibility />
+          </DataTable.Controls>
         </DataTable.Toolbar>
         <DataTable.Pagination />
       </DataTable>
@@ -647,6 +686,7 @@ export function ProductionRunList() {
           {
             title: "Feedstock & Processing",
             fields: [
+              buildProductionRunFeedstockDetailField(sideSheetEntity.feedstocks),
               { label: "Source Bin", value: sideSheetEntity.feedstockStorageLocationCode },
               { label: "Wet Mass (kg)", ...certificationDetailField("productionRun", "feedstockWetMassKg"), value: sideSheetEntity.feedstockWetMassKg != null ? `${sideSheetEntity.feedstockWetMassKg.toLocaleString()} kg` : null },
               { label: "Moisture Content (%)", ...certificationDetailField("productionRun", "feedstockMoisturePercent"), value: sideSheetEntity.feedstockMoisturePercent != null ? `${sideSheetEntity.feedstockMoisturePercent}%` : null },

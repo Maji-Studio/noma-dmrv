@@ -27,7 +27,6 @@ import {
 import { useToast } from "@/components/ui/toast";
 import {
   Button,
-  DEFAULT_PAGE_SIZE,
   EmptyState,
   ListPagination,
   PageHeader,
@@ -57,12 +56,14 @@ import {
   useDeleteCreditBatch,
 } from "@/hooks/use-credit-batches";
 import { formatDateRange } from "@/lib/format-utils";
+import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { CREDIT_BATCH_DEEP_LINK_PARAM } from "@/lib/credit-batch-links";
 import { useCreditBatchHealthSummaries } from "@/hooks/use-certification";
 import type { CreditBatchFormData } from "@/schemas/credit-batches";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
+import { useListPagination } from "@/hooks/use-list-pagination";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 
 // ============================================
@@ -93,13 +94,12 @@ export function CreditBatchList({
   initialCreate?: boolean;
 }) {
   // Filter & pagination state
+  const [searchQuery, setSearchQuery] = useState("");
   const [startDateFilter, setStartDateFilter] = useState("");
   const [endDateFilter, setEndDateFilter] = useState("");
   const [selectedFeedstockIds, setSelectedFeedstockIds] = useState<string[]>([]);
   const [readinessFilter, setReadinessFilter] =
     useState<CreditBatchReadinessFilter>("all");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   // Side sheet state — `?batch=` deep-links the view sheet (production-run
   // convention); local state handles sheets opened by clicks.
@@ -120,6 +120,8 @@ export function CreditBatchList({
   const createIntent = useOpenCreateIntent({ initialOpen: initialCreate });
 
   const { facilityId: contextFacilityId } = useFacilityContext();
+  const { currentPage, pageSize, setCurrentPage, setPageSize } =
+    useListPagination(contextFacilityId);
 
   // Data fetching — facility-scoped so batches never leak across facilities
   const { data: creditBatches, isLoading: batchesLoading, error } = useCreditBatches(
@@ -136,6 +138,7 @@ export function CreditBatchList({
   const allItems = creditBatches ?? EMPTY_CREDIT_BATCHES;
   const allBatchIds = allItems.map((batch) => batch.id);
   const facetFilteredItems = filterCreditBatches(allItems, {}, {
+    search: searchQuery,
     startDate: startDateFilter,
     endDate: endDateFilter,
     feedstockTypeIds: selectedFeedstockIds,
@@ -184,6 +187,7 @@ export function CreditBatchList({
       ]),
     ),
     {
+      search: "",
       startDate: "",
       endDate: "",
       feedstockTypeIds: [],
@@ -406,6 +410,15 @@ export function CreditBatchList({
   const memberRuns = (runOptionsQuery.data ?? []).filter((run) =>
     memberRunIds.has(run.id),
   );
+  const displayedRuns = (runOptionsQuery.data ?? []).filter((run) => {
+    if (memberRunIds.has(run.id)) return true;
+    return (
+      viewEntity != null &&
+      run.status !== COMPLETED_PRODUCTION_RUN_STATUS &&
+      run.feedstockTypeIds.length === 1 &&
+      run.feedstockTypeIds[0] === viewEntity.feedstockTypeId
+    );
+  });
 
   const handleModeChange = (mode: SideSheetMode) => {
     if (!displaySideSheet?.entity) return;
@@ -415,6 +428,7 @@ export function CreditBatchList({
   };
 
   const clearFilters = () => {
+    setSearchQuery("");
     setStartDateFilter("");
     setEndDateFilter("");
     setSelectedFeedstockIds([]);
@@ -423,7 +437,8 @@ export function CreditBatchList({
   };
 
   const hasActiveFilters = Boolean(
-    startDateFilter ||
+    searchQuery ||
+      startDateFilter ||
       endDateFilter ||
       selectedFeedstockIds.length > 0 ||
       readinessFilter !== "all",
@@ -528,12 +543,17 @@ export function CreditBatchList({
       </div>
 
       <CreditBatchFilters
+        search={searchQuery}
         startDate={startDateFilter}
         endDate={endDateFilter}
         readiness={readinessFilter}
         feedstocks={feedstockOptions}
         selectedFeedstockIds={selectedFeedstockIds}
         hasActiveFilters={hasActiveFilters}
+        onSearchChange={(value) => {
+          setSearchQuery(value);
+          setCurrentPage(1);
+        }}
         onStartDateChange={(value) => {
           setStartDateFilter(value);
           setCurrentPage(1);
@@ -636,10 +656,7 @@ export function CreditBatchList({
             pageCount={totalPages}
             pageSize={pageSize}
             onPageChange={setCurrentPage}
-            onPageSizeChange={(size) => {
-              setPageSize(size);
-              setCurrentPage(1);
-            }}
+            onPageSizeChange={setPageSize}
             className="border-t border-[var(--color-border-tertiary)] pt-16 md:px-0"
           />
         </>
@@ -669,7 +686,7 @@ export function CreditBatchList({
           sideSheetEntity
             ? creditBatchSheetSections({
                 creditBatch: sideSheetEntity,
-                productionRuns: memberRuns,
+                productionRuns: displayedRuns,
                 isLoadingRuns: runOptionsQuery.isLoading,
                 runsError: runOptionsQuery.error,
                 isRetryingRuns: runOptionsQuery.isFetching,

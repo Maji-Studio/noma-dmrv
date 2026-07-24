@@ -676,7 +676,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(result.productionReadinessGap).toMatchObject({
       kind: "noApplications",
       detail:
-        "No applications fall in this batch's crediting period — record an application in the period, or adjust the period.",
+        "No applications fall within this batch period.",
       fixTarget: "applications",
     });
     expect(mockedGetLegs).not.toHaveBeenCalled();

@@ -6,7 +6,12 @@
 
 import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { CubeIcon, PlusIcon, ScalesIcon } from "@phosphor-icons/react";
+import {
+  CubeIcon,
+  PlusIcon,
+  ScalesIcon,
+  XIcon,
+} from "@phosphor-icons/react";
 import { parseAsString, useQueryState } from "nuqs";
 import {
   useBiocharProduct,
@@ -15,6 +20,9 @@ import {
   useBiocharProducts,
   useUpdateBiocharProduct,
 } from "@/hooks/use-biochar-products";
+import { useCreditBatches } from "@/hooks/use-credit-batches";
+import { useDebounce } from "@/hooks/use-debounce";
+import { useListPagination } from "@/hooks/use-list-pagination";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -38,6 +46,7 @@ import type { BiocharProductWithRelations } from "@/data-access/biochar-products
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { formatDate } from "@/lib/format-utils";
 import { EntityDetailValue } from "@/components/ui/entity-detail-value";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
 // ============================================
 // Helpers
@@ -168,18 +177,39 @@ export function BiocharProductList() {
     ENTITY_DEEP_LINK_FOCUS_PARAM,
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
+  const [creditBatchFilterParam, setCreditBatchFilter] = useQueryState(
+    "creditBatch",
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const creditBatchFilter = creditBatchFilterParam ?? "";
   const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
+    useListPagination(`${contextFacilityId ?? ""}:${creditBatchFilter}`);
+  const debouncedSearch = useDebounce(
+    searchInput,
+    LIST_SEARCH_DEBOUNCE_MS,
+  );
 
   const { data: productsData, isLoading, error: fetchError } = useBiocharProducts(
-    contextFacilityId ? { facilityId: contextFacilityId } : undefined,
+    {
+      ...(debouncedSearch ? { search: debouncedSearch } : {}),
+      ...(contextFacilityId ? { facilityId: contextFacilityId } : {}),
+      ...(creditBatchFilter ? { creditBatchId: creditBatchFilter } : {}),
+      page: currentPage,
+      pageSize,
+    },
     { enabled: !!contextFacilityId },
   );
   const focusedProduct = useBiocharProduct(
     focusedProductId ?? "",
     !!focusedProductId,
+  );
+  const { data: creditBatches } = useCreditBatches(
+    contextFacilityId || undefined,
   );
   const createProduct = useCreateBiocharProduct();
   const updateProduct = useUpdateBiocharProduct();
@@ -218,8 +248,17 @@ export function BiocharProductList() {
   ]);
 
   // Computed stats
-  const totalProducts = products.length;
+  const totalProducts = productsData?.total ?? 0;
+  const totalPages = productsData?.totalPages ?? 0;
   const totalMassKg = products.reduce((sum, p) => sum + (p.massKg ?? 0), 0);
+  const hasActiveFilters =
+    searchInput.trim().length > 0 || Boolean(creditBatchFilter);
+
+  const clearFilters = () => {
+    setSearchInput("");
+    setCreditBatchFilter(null);
+    setCurrentPage(1);
+  };
 
   // Handlers
   const handleCreate = async (data: BiocharProductFormData) => {
@@ -351,10 +390,10 @@ export function BiocharProductList() {
           isLoading={isLoading}
         />
         <StatCard
-          title="Total Mass"
+          title="Mass on This Page"
           value={`${totalMassKg.toLocaleString()} kg`}
           icon={<ScalesIcon size={24} weight="bold" />}
-          description="Combined product mass"
+          description="Combined product mass on this page"
           isLoading={isLoading}
         />
       </div>
@@ -363,9 +402,19 @@ export function BiocharProductList() {
       <DataTable
         columns={columns}
         data={products}
-        enableSorting
-        enableFiltering
+        enableSorting={false}
         enablePagination
+        manualPagination
+        pageCount={totalPages}
+        pageSize={pageSize}
+        pageIndex={currentPage - 1}
+        globalFilter={searchInput}
+        onGlobalFilterChange={(value) => {
+          setSearchInput(value);
+          setCurrentPage(1);
+        }}
+        onPaginationChange={onPaginationChange}
+        aria-label="Biochar products"
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
@@ -373,20 +422,58 @@ export function BiocharProductList() {
           <EmptyState
             padding="md"
             icon={<CubeIcon size={48} />}
-            title="No biochar products yet"
-            description="Create your first biochar product to start tracking finished product batches."
+            title={
+              creditBatchFilter
+                ? "No biochar products in this credit batch"
+                : hasActiveFilters
+                  ? "No matching biochar products"
+                  : "No biochar products yet"
+            }
+            description={
+              hasActiveFilters
+                ? "Try adjusting or clearing the filters."
+                : "Create your first biochar product to start tracking finished product batches."
+            }
             action={
-              <Button variant="primary" onClick={openCreate}>
-                <PlusIcon size={20} weight="bold" />
-                Create Product
-              </Button>
+              !hasActiveFilters ? (
+                <Button variant="primary" onClick={openCreate}>
+                  <PlusIcon size={20} weight="bold" />
+                  Create Product
+                </Button>
+              ) : undefined
             }
           />
         }
       >
         <DataTable.Toolbar>
-          <DataTable.Search placeholder="Search products..." />
-          <DataTable.ColumnVisibility />
+          <DataTable.Search
+            placeholder="Search products..."
+            aria-label="Search biochar products"
+          />
+          <DataTable.Controls>
+            <DataTable.FilterSelect
+              value={creditBatchFilter}
+              onChange={(event) => {
+                setCreditBatchFilter(event.target.value || null);
+                setCurrentPage(1);
+              }}
+              aria-label="Filter biochar products by credit batch"
+            >
+              <option value="">All Credit Batches</option>
+              {creditBatches?.map((batch) => (
+                <option key={batch.id} value={batch.id}>
+                  {batch.code}
+                </option>
+              ))}
+            </DataTable.FilterSelect>
+            {hasActiveFilters && (
+              <Button variant="noOutline" size="small" onClick={clearFilters}>
+                <XIcon size={16} weight="bold" />
+                Clear
+              </Button>
+            )}
+            <DataTable.ColumnVisibility />
+          </DataTable.Controls>
         </DataTable.Toolbar>
         <DataTable.Pagination />
       </DataTable>

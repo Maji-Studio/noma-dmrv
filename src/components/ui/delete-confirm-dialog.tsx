@@ -8,6 +8,7 @@
 "use client";
 
 import { useId } from "react";
+import { ServerError } from "@/components/forms/server-error";
 import { Button, Modal } from "@/components/ui";
 
 interface DeleteConfirmDialogProps {
@@ -17,6 +18,7 @@ interface DeleteConfirmDialogProps {
   onConfirm: () => void;
   onCancel: () => void;
   isPending?: boolean;
+  errorMessage?: string;
 }
 
 export function DeleteConfirmDialog({
@@ -26,6 +28,7 @@ export function DeleteConfirmDialog({
   onConfirm,
   onCancel,
   isPending = false,
+  errorMessage,
 }: DeleteConfirmDialogProps) {
   const id = useId();
   const titleId = `${id}-delete-dialog-title`;
@@ -50,6 +53,7 @@ export function DeleteConfirmDialog({
             {message}
           </p>
         </div>
+        <ServerError message={errorMessage} />
         <div className="flex gap-16 justify-end">
           <Button
             size="large"

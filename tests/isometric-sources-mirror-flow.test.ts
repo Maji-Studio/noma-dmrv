@@ -41,6 +41,7 @@ vi.mock("@/data-access/credit-batch-samples", () => ({
 vi.mock("@/data-access/chain-of-custody");
 vi.mock("@/data-access/documents");
 vi.mock("@/data-access/certifier-document-uploads");
+vi.mock("@/data-access/certifier-organization-settings");
 vi.mock("@/db", () => {
   // Mirror flow opens `db.transaction(async (tx) => ...)` — the callback
   // body runs straight through with `tx` set to a stub. Real DB writes
@@ -117,6 +118,7 @@ import * as creditBatchSamplesDA from "@/data-access/credit-batch-samples";
 import * as chainDA from "@/data-access/chain-of-custody";
 import * as documentsDA from "@/data-access/documents";
 import * as uploadsDA from "@/data-access/certifier-document-uploads";
+import * as organizationSettingsDA from "@/data-access/certifier-organization-settings";
 import * as isometric from "@/lib/isometric";
 import { mirrorDocumentToSource } from "@/fn/certification/sources";
 import { buildSourceSupplierRef } from "@/lib/isometric/utils/source-ref";
@@ -179,6 +181,9 @@ beforeEach(() => {
     },
   );
   vi.mocked(uploadsDA.listDocumentUploadsForDocuments).mockResolvedValue([]);
+  vi.mocked(
+    organizationSettingsDA.getRegistrySourceVisibility,
+  ).mockResolvedValue("private");
   vi.mocked(documentsDA.getDocumentById).mockResolvedValue(
     DOCUMENT_FIXTURE as never,
   );
@@ -240,7 +245,6 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       const result = await mirrorDocumentToSource({
         removalId: REMOVAL_ID,
         documentId: DOCUMENT_ID,
-        isPublic: false,
       });
 
       expect(result.success).toBe(true);
@@ -294,7 +298,6 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       const result = await mirrorDocumentToSource({
         removalId: REMOVAL_ID,
         documentId: DOCUMENT_ID,
-        isPublic: false,
       });
 
       expect(result.success).toBe(true);
@@ -322,10 +325,9 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
   });
 
   it("reconciled metadata mirrors remote is_public (not caller's request)", async () => {
-    // The remote Source was created PUBLIC by a prior attempt. The caller
-    // is now mirroring with `isPublic: false`. The locally-persisted row
-    // must reflect the remote (Isometric is authoritative) — otherwise
-    // local cache silently disagrees with the registry.
+    // The remote Source was created PUBLIC by a prior attempt. The persisted
+    // organization policy is private now, but the locally-persisted row must
+    // reflect the existing remote Source (Isometric is authoritative).
     vi.mocked(isometric.findSourceBySupplierRef).mockResolvedValue({
       id: EXISTING_SOURCE_ID,
       is_public: true,
@@ -343,13 +345,73 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       const result = await mirrorDocumentToSource({
         removalId: REMOVAL_ID,
         documentId: DOCUMENT_ID,
-        isPublic: false,
       });
 
       expect(result.success).toBe(true);
       if (!result.success) throw new Error(result.error);
       // Result echoes the remote, not the request.
       expect(result.data.isPublic).toBe(true);
+      expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
+        makeTestOrgContext(USER_ID),
+        expect.objectContaining({
+          metadata: expect.objectContaining({ isPublic: true }),
+        }),
+        expect.anything(),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("derives fresh Source visibility from the persisted organization policy", async () => {
+    vi.mocked(
+      organizationSettingsDA.getRegistrySourceVisibility,
+    ).mockResolvedValue("public");
+    vi.mocked(isometric.findSourceBySupplierRef).mockResolvedValue(null);
+    vi.mocked(isometric.createSource).mockResolvedValue({
+      source: { id: "src_policy_public" },
+      signed_upload_url:
+        "https://noma-test.s3.amazonaws.com/policy-signed-upload",
+    } as never);
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("download-url")) {
+          return new Response("file-bytes", {
+            status: 200,
+            headers: { "Content-Type": DOCUMENT_FIXTURE.mimeType },
+          });
+        }
+        if (url.includes("policy-signed-upload") && init?.method === "PUT") {
+          return new Response(null, { status: 200 });
+        }
+        throw new Error(`Unexpected fetch URL: ${url}`);
+      });
+
+    try {
+      // Unknown keys are stripped by the action schema. Even a legacy caller
+      // attempting the removed per-document override cannot beat the policy.
+      const result = await mirrorDocumentToSource({
+        removalId: REMOVAL_ID,
+        documentId: DOCUMENT_ID,
+        isPublic: false,
+      });
+
+      expect(result).toMatchObject({
+        success: true,
+        data: { isPublic: true, recovered: false },
+      });
+      expect(
+        organizationSettingsDA.getRegistrySourceVisibility,
+      ).toHaveBeenCalledWith(
+        makeTestOrgContext(USER_ID),
+        "isometric",
+      );
+      expect(isometric.createSource).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ is_public: true }),
+      );
       expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
         makeTestOrgContext(USER_ID),
         expect.objectContaining({
@@ -371,7 +433,6 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
     const result = await mirrorDocumentToSource({
       removalId: REMOVAL_ID,
       documentId: DOCUMENT_ID,
-      isPublic: false,
     });
 
     expect(result.success).toBe(false);

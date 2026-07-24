@@ -16,6 +16,7 @@ import { sql } from 'drizzle-orm';
 import {
   certificationSubmissionStatus,
   certifierProvider,
+  registrySourceVisibility,
   syncStatus,
 } from './common';
 import { facilities, reactors } from './facilities';
@@ -37,6 +38,32 @@ export const certifierCredentials = pgTable(
   },
   (table) => [
     unique('certifier_credentials_organization_id_provider_unique').on(
+      table.organizationId,
+      table.provider
+    ),
+  ]
+);
+
+// Organization-wide provider policy for registry artifacts. This deliberately
+// sits above facility mappings: one organization policy governs every Source
+// created for the provider, regardless of which facility's Settings route the
+// operator entered through.
+export const certifierOrganizationSettings = pgTable(
+  'certifier_organization_settings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    provider: certifierProvider('provider').notNull().default('isometric'),
+    sourceVisibility: registrySourceVisibility('source_visibility')
+      .notNull()
+      .default('private'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    unique('certifier_org_settings_organization_provider_unique').on(
       table.organizationId,
       table.provider
     ),

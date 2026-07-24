@@ -10,6 +10,7 @@
 import Link from "next/link";
 import { ArrowRightIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { DetailPanelSection } from "@/components/ui/detail-panel";
 import type { CreditBatchHealthSummary } from "@/fn/certification";
 import type {
@@ -18,6 +19,7 @@ import type {
 } from "@/data-access/credit-batches";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
 import { CreditBatchLifecycleSteps } from "./credit-batch-lifecycle";
+import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 
 function durabilityLabel(value: CreditBatchWithRelations["durabilityOption"]) {
   return value === "200_year" ? "200 years" : "1,000 years";
@@ -44,6 +46,9 @@ function ProductionRunLink({
         </span>
       </span>
       <span className="flex shrink-0 items-center gap-10">
+        {run.status !== COMPLETED_PRODUCTION_RUN_STATUS && (
+          <StatusBadge status={run.status} size="small" />
+        )}
         <span className="text-right">
           <span className="block label-micro text-[var(--color-text-tertiary)]">
             Dry output
@@ -124,10 +129,17 @@ function CreditBatchRunsContent({
     );
   }
 
+  const previewCount = productionRuns.filter(
+    (run) => run.status !== COMPLETED_PRODUCTION_RUN_STATUS,
+  ).length;
+
   return (
     <div className="flex flex-col gap-8">
       <span className="body-caption text-[var(--color-text-tertiary)]">
-        {creditBatch.productionRunCount} linked
+        {creditBatch.productionRunCount} completed
+        {previewCount > 0
+          ? ` · ${previewCount} ${previewCount === 1 ? "preview" : "previews"}`
+          : ""}
       </span>
       {productionRuns.map((run) => (
         <ProductionRunLink

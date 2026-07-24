@@ -16,6 +16,8 @@ import {
   useSupplierLocationsBySupplier,
   useUpdateSupplier,
 } from "@/hooks/use-suppliers";
+import { useDebounce } from "@/hooks/use-debounce";
+import { useListPagination } from "@/hooks/use-list-pagination";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -31,6 +33,7 @@ import { resolveSupplierLocationText } from "@/lib/supplier-location-display";
 import { buildPartyLocationDetailFields } from "@/components/party-location-detail-fields";
 import { buildSupplierFallbackDistanceField } from "./supplier-detail-fields";
 import { SupplierLocationsReadState } from "./supplier-locations-read-state";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
 // ============================================
 // Column Definitions
@@ -114,8 +117,19 @@ export function SupplierList() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
+    useListPagination();
+  const debouncedSearch = useDebounce(
+    searchInput,
+    LIST_SEARCH_DEBOUNCE_MS,
+  );
 
-  const { data: suppliersData, isLoading, error: fetchError } = useSuppliers();
+  const { data: suppliersData, isLoading, error: fetchError } = useSuppliers({
+    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    page: currentPage,
+    pageSize,
+  });
   const sideSheetLocationsQuery = useSupplierLocationsBySupplier(
     sideSheet?.entity?.id ?? "",
     !!sideSheet?.entity,
@@ -129,7 +143,9 @@ export function SupplierList() {
   const suppliers = suppliersData?.items ?? [];
 
   // Computed stats
-  const totalSuppliers = suppliers.length;
+  const totalSuppliers = suppliersData?.total ?? 0;
+  const totalPages = suppliersData?.totalPages ?? 0;
+  const hasActiveSearch = searchInput.trim().length > 0;
   // Handlers
   const handleCreate = async (
     data: SupplierFormData,
@@ -241,9 +257,19 @@ export function SupplierList() {
       <DataTable
         columns={columns}
         data={suppliers}
-        enableSorting
-        enableFiltering
+        enableSorting={false}
         enablePagination
+        manualPagination
+        pageCount={totalPages}
+        pageSize={pageSize}
+        pageIndex={currentPage - 1}
+        globalFilter={searchInput}
+        onGlobalFilterChange={(value) => {
+          setSearchInput(value);
+          setCurrentPage(1);
+        }}
+        onPaginationChange={onPaginationChange}
+        aria-label="Suppliers"
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
@@ -251,20 +277,31 @@ export function SupplierList() {
           <EmptyState
             padding="md"
             icon={<UsersIcon size={48} />}
-            title="No suppliers yet"
-            description="Create your first supplier to get started tracking biomass feedstock providers."
+            title={hasActiveSearch ? "No matching suppliers" : "No suppliers yet"}
+            description={
+              hasActiveSearch
+                ? "Try clearing your search."
+                : "Create your first supplier to get started tracking biomass feedstock providers."
+            }
             action={
-              <Button variant="primary" onClick={openCreate}>
-                <PlusIcon size={20} weight="bold" />
-                Create Supplier
-              </Button>
+              !hasActiveSearch ? (
+                <Button variant="primary" onClick={openCreate}>
+                  <PlusIcon size={20} weight="bold" />
+                  Create Supplier
+                </Button>
+              ) : undefined
             }
           />
         }
       >
         <DataTable.Toolbar>
-          <DataTable.Search placeholder="Search suppliers..." />
-          <DataTable.ColumnVisibility />
+          <DataTable.Search
+            placeholder="Search suppliers..."
+            aria-label="Search suppliers"
+          />
+          <DataTable.Controls>
+            <DataTable.ColumnVisibility />
+          </DataTable.Controls>
         </DataTable.Toolbar>
         <DataTable.Pagination />
       </DataTable>

@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  ArchiveIcon,
   ArrowDownIcon,
+  ArrowCounterClockwiseIcon,
   ArrowsClockwiseIcon,
   ArrowUpIcon,
   CheckCircleIcon,
@@ -9,6 +11,7 @@ import {
   TrashIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
+import { RowActionsMenu } from "@/components/ui";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { formatDateTime, formatMass } from "@/lib/format-utils";
 import {
@@ -22,6 +25,8 @@ interface StorageLocationCardProps {
   storageLocation: StorageLocationWithFacility;
   onView: (storageLocation: StorageLocationWithFacility) => void;
   onEdit: (storageLocation: StorageLocationWithFacility) => void;
+  onArchive: (storageLocationId: string) => void;
+  onRestore: (storageLocationId: string) => void;
   onDelete: (storageLocationId: string) => void;
   onReconcile: (storageLocation: StorageLocationWithFacility) => void;
 }
@@ -41,6 +46,8 @@ export function StorageLocationCard({
   storageLocation,
   onView,
   onEdit,
+  onArchive,
+  onRestore,
   onDelete,
   onReconcile,
 }: StorageLocationCardProps) {
@@ -48,9 +55,11 @@ export function StorageLocationCard({
   const capacityPercent = binCapacityPercent(storageLocation);
   const needsReconciliation = binNeedsReconciliation(storageLocation);
   const isEmpty = currentMassKg === 0;
-  const hasCapacity = storageLocation.capacityKg != null && storageLocation.capacityKg > 0;
+  const hasCapacity =
+    storageLocation.capacityKg != null && storageLocation.capacityKg > 0;
   const { lastActivity } = storageLocation;
   const contents = contentsLabel(storageLocation);
+  const isArchived = storageLocation.archivedAt != null;
 
   return (
     <article
@@ -66,27 +75,35 @@ export function StorageLocationCard({
           <span className="inline-flex items-center bg-[var(--bin-soft)] px-8 py-4 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--bin-ink)]">
             {storageLocation.code}
           </span>
-          {lastActivity && (
-            <span
-              className={`inline-flex min-w-0 items-center gap-4 body-caption ${
-                lastActivity.type === "in"
-                  ? "text-[var(--color-signal-green)]"
-                  : "text-[var(--color-signal-orange)]"
-              }`}
-              title={`${lastActivity.label} · ${
-                lastActivity.type === "in" ? "+" : "−"
-              }${formatMass(lastActivity.massKg)}`}
-            >
-              {lastActivity.type === "in" ? (
-                <ArrowUpIcon className="shrink-0" size={12} weight="bold" />
-              ) : (
-                <ArrowDownIcon className="shrink-0" size={12} weight="bold" />
-              )}
-              <span className="truncate">
-                {formatDateTime(lastActivity.date)}
+          <span className="flex min-w-0 items-center gap-8">
+            {isArchived && (
+              <span className="inline-flex items-center gap-4 border border-[var(--color-border-primary)] bg-[var(--color-surface-light)] px-8 py-4 text-[11px] uppercase tracking-[0.1em] text-[var(--color-text-secondary)]">
+                <ArchiveIcon size={12} weight="bold" />
+                Archived
               </span>
-            </span>
-          )}
+            )}
+            {lastActivity && (
+              <span
+                className={`inline-flex min-w-0 items-center gap-4 body-caption ${
+                  lastActivity.type === "in"
+                    ? "text-[var(--color-signal-green)]"
+                    : "text-[var(--color-signal-orange)]"
+                }`}
+                title={`${lastActivity.label} · ${
+                  lastActivity.type === "in" ? "+" : "−"
+                }${formatMass(lastActivity.massKg)}`}
+              >
+                {lastActivity.type === "in" ? (
+                  <ArrowUpIcon className="shrink-0" size={12} weight="bold" />
+                ) : (
+                  <ArrowDownIcon className="shrink-0" size={12} weight="bold" />
+                )}
+                <span className="truncate">
+                  {formatDateTime(lastActivity.date)}
+                </span>
+              </span>
+            )}
+          </span>
         </div>
 
         {/* Name */}
@@ -186,31 +203,48 @@ export function StorageLocationCard({
         className="flex items-center justify-end gap-4 border-t border-[var(--color-border-tertiary)] px-12 py-8"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          type="button"
-          onClick={() => onReconcile(storageLocation)}
-          className="inline-flex h-32 w-32 items-center justify-center border border-[var(--color-border-tertiary)] text-[var(--color-text-tertiary)] transition-colors hover:border-[var(--bin-accent)] hover:text-[var(--bin-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-          aria-label={`Reconcile ${storageLocation.name}`}
-          title="Reconcile stock"
-        >
-          <ArrowsClockwiseIcon size={15} />
-        </button>
-        <button
-          type="button"
-          onClick={() => onEdit(storageLocation)}
-          className="inline-flex h-32 w-32 items-center justify-center border border-[var(--color-border-tertiary)] text-[var(--color-text-tertiary)] transition-colors hover:border-[var(--bin-accent)] hover:text-[var(--bin-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-          aria-label={`Edit ${storageLocation.name}`}
-        >
-          <PencilSimpleIcon size={15} />
-        </button>
-        <button
-          type="button"
-          onClick={() => onDelete(storageLocation.id)}
-          className="inline-flex h-32 w-32 items-center justify-center border border-[var(--color-border-tertiary)] text-[var(--color-text-tertiary)] transition-colors hover:border-[var(--color-signal-red)] hover:text-[var(--color-signal-red)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-          aria-label={`Delete ${storageLocation.name}`}
-        >
-          <TrashIcon size={15} />
-        </button>
+        {!isArchived && (
+          <button
+            type="button"
+            onClick={() => onReconcile(storageLocation)}
+            className="inline-flex h-32 w-32 items-center justify-center border border-[var(--color-border-tertiary)] text-[var(--color-text-tertiary)] transition-colors hover:border-[var(--bin-accent)] hover:text-[var(--bin-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+            aria-label={`Reconcile ${storageLocation.name}`}
+            title="Reconcile stock"
+          >
+            <ArrowsClockwiseIcon size={15} />
+          </button>
+        )}
+        <RowActionsMenu
+          label={`Actions for ${storageLocation.code}`}
+          actions={
+            isArchived
+              ? [
+                  {
+                    label: "Restore",
+                    icon: <ArrowCounterClockwiseIcon size={16} />,
+                    onSelect: () => onRestore(storageLocation.id),
+                  },
+                ]
+              : [
+                  {
+                    label: "Edit",
+                    icon: <PencilSimpleIcon size={16} />,
+                    onSelect: () => onEdit(storageLocation),
+                  },
+                  {
+                    label: "Archive",
+                    icon: <ArchiveIcon size={16} />,
+                    onSelect: () => onArchive(storageLocation.id),
+                  },
+                  {
+                    label: "Delete permanently",
+                    icon: <TrashIcon size={16} />,
+                    destructive: true,
+                    onSelect: () => onDelete(storageLocation.id),
+                  },
+                ]
+          }
+        />
       </div>
     </article>
   );

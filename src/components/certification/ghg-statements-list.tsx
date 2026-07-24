@@ -132,21 +132,32 @@ const columns: ColumnDef<GhgStatementListItem>[] = [
   {
     id: "period",
     header: "Reporting period",
+    accessorFn: (item) => statementPeriod(item).primary,
     cell: ({ row }) => <PeriodCell item={row.original} />,
   },
   {
     id: "linkedRemovals",
     header: "Linked removals",
+    accessorFn: (item) => String(item.linkedRemovalCount),
     cell: ({ row }) => <LinkedRemovalsCell item={row.original} />,
   },
   {
     id: "registry",
     header: "Registry record",
+    accessorFn: (item) => item.latestSubmission?.externalId ?? "",
     cell: ({ row }) => <RegistryRecordCell item={row.original} />,
   },
   {
     id: "status",
     header: "Status",
+    accessorFn: (item) => {
+      const submission = item.latestSubmission;
+      return deriveSubmissionStatus(
+        submission,
+        submission ? isLockedInFlight(submission) : false,
+        "ghgStatement",
+      ).label;
+    },
     cell: ({ row }) => <StatusCell item={row.original} />,
   },
 ];
@@ -158,6 +169,7 @@ function ListBody({ facilityId }: { facilityId: string }) {
   const summaryQuery = useFacilityCertifierSummary(facilityId);
   const query = useGhgStatementsForFacility(facilityId);
   const [createOpen, setCreateOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [statementId, setStatementId] = useQueryState(
     "statement",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
@@ -225,6 +237,10 @@ function ListBody({ facilityId }: { facilityId: string }) {
         <DataTable
           columns={columns}
           data={statements}
+          enableFiltering
+          enablePagination
+          globalFilter={searchQuery}
+          onGlobalFilterChange={setSearchQuery}
           isLoading={query.isLoading}
           hoverable
           onRowClick={(row) => setStatementId(row.statement.id)}
@@ -232,12 +248,31 @@ function ListBody({ facilityId }: { facilityId: string }) {
           emptyMessage={
             <EmptyState
               icon={<ClipboardTextIcon size={40} />}
-              title="No GHG Statements yet"
-              description="Create one for submitted Removals in a reporting period."
+              title={
+                searchQuery
+                  ? "No matching GHG Statements"
+                  : "No GHG Statements yet"
+              }
+              description={
+                searchQuery
+                  ? "Try clearing your search."
+                  : "Create one for submitted Removals in a reporting period."
+              }
               padding="md"
             />
           }
-        />
+        >
+          <DataTable.Toolbar>
+            <DataTable.Search
+              placeholder="Search GHG Statements..."
+              aria-label="Search GHG Statements"
+            />
+            <DataTable.Controls>
+              <DataTable.ColumnVisibility />
+            </DataTable.Controls>
+          </DataTable.Toolbar>
+          <DataTable.Pagination />
+        </DataTable>
       </section>
 
       {selected && (

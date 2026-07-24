@@ -18,11 +18,11 @@ import {
 } from "@/db/schema";
 import type { BiocharProductFilterData } from "@/schemas/biochar-products";
 import { parseLocalDateString } from "@/lib/date-utils";
+import { inCreditBatchProductionRuns } from "./credit-batch-lineage-filter";
 
 // ============================================
 // Types
 // ============================================
-
 export interface BiocharProductWithRelations extends BiocharProduct {
   facility: {
     id: string;
@@ -53,11 +53,9 @@ export interface PaginatedBiocharProducts {
   pageSize: number;
   totalPages: number;
 }
-
 // ============================================
 // Helpers
 // ============================================
-
 /**
  * The biochar product's production date IS the linked production run's date —
  * when the biochar was produced, not when the product (its blend) was mixed.
@@ -68,7 +66,6 @@ export interface PaginatedBiocharProducts {
 function runDateToProductionDate(runDate: string | Date): Date {
   return runDate instanceof Date ? runDate : parseLocalDateString(runDate);
 }
-
 // ============================================
 // Auth Guards
 // ============================================
@@ -114,6 +111,7 @@ export async function getBiocharProducts(
     search,
     status,
     facilityId,
+    creditBatchId,
     formulationId,
     page = 1,
     pageSize = 20,
@@ -141,6 +139,10 @@ export async function getBiocharProducts(
 
   if (facilityId) {
     conditions.push(eq(biocharProducts.facilityId, facilityId));
+  }
+
+  if (creditBatchId) {
+    conditions.push(inCreditBatchProductionRuns(ctx, creditBatchId, biocharProducts.linkedProductionRunId));
   }
 
   if (formulationId) {

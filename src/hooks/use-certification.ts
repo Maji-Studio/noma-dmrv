@@ -29,6 +29,7 @@ import {
   loadIsometricFeedstockTypes,
   loadIsometricProjectTemplates,
   loadOpenRemovalsForFacility,
+  loadRegistrySourceVisibility,
   loadRemovalBreakdown,
   loadRemovalCertifyContext,
   loadRemovalsForFacility,
@@ -36,6 +37,7 @@ import {
   refreshGhgStatementStatus,
   saveFacilityCertifierMapping,
   saveFacilityEmissionConfig,
+  saveRegistrySourceVisibility,
   submitGhgStatementToVerifier,
   submitRemovalAction,
   type CreditBatchHealthSummary,
@@ -44,6 +46,7 @@ import type {
   CreateGhgStatementInput,
   CreateRemovalWithBatchesInput,
   FacilityEmissionConfigFormData,
+  RegistrySourceVisibilityInput,
   SaveMappingInput,
   SubmitGhgStatementDialogInput,
   SubmitRemovalInput,
@@ -119,6 +122,8 @@ export const certificationKeys = {
   overview: (facilityId: string) =>
     [...certificationKeys.all, "overview", facilityId] as const,
   health: () => [...certificationKeys.all, "health"] as const,
+  registrySourceVisibility: () =>
+    [...certificationKeys.all, "registry-source-visibility"] as const,
 };
 
 /** Refresh cached readiness and, when relevant, derived CO₂e previews. */
@@ -186,6 +191,34 @@ export function useCertificationHealth() {
       return result.data;
     },
     staleTime: PROJECT_TEMPLATES_STALE_MS,
+  });
+}
+
+export function useRegistrySourceVisibility() {
+  return useQuery({
+    queryKey: certificationKeys.registrySourceVisibility(),
+    queryFn: async () => {
+      const result = await loadRegistrySourceVisibility();
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+export function useSaveRegistrySourceVisibility() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: RegistrySourceVisibilityInput) => {
+      const result = await saveRegistrySourceVisibility(input);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: certificationKeys.registrySourceVisibility(),
+      });
+    },
   });
 }
 
@@ -353,11 +386,10 @@ export function useBatchDurabilitySummary(
   });
 }
 
-// Per-batch certification-readiness verdicts for the Credit Batches overview
-// cards and readiness filter, keyed by batch id. The list passes the complete
-// facility-scoped set; bounded chunks keep each action request within its cap.
-// Reuses the same `deriveBatchHealth` classifier as `useBatchHealth`, so a
-// card's cert tag and the detail page's submission gate can never disagree.
+// Per-batch certification summaries for the Credit Batches cards and data
+// filter, keyed by batch id. Each summary combines the canonical BatchHealth
+// verdict with its Removal and linked GHG Statement status. The list passes the
+// complete facility-scoped set; bounded chunks keep each request within its cap.
 // Mutations to a batch / its lineage invalidate `certificationKeys.all`, which
 // covers this key.
 export function useCreditBatchHealthSummaries(

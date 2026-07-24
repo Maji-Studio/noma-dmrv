@@ -7,7 +7,14 @@
 
 import { useEffect, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { TruckIcon, CalendarIcon, PackageIcon, DropIcon, PlusIcon } from "@phosphor-icons/react";
+import {
+  TruckIcon,
+  CalendarIcon,
+  PackageIcon,
+  DropIcon,
+  PlusIcon,
+  XIcon,
+} from "@phosphor-icons/react";
 import type { Delivery } from "@/db/schema";
 import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState, PageHeader, RowActionsMenu } from "@/components/ui";
@@ -29,6 +36,9 @@ import {
   useDeliveryWithRelations,
 } from "@/hooks/use-deliveries";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useDebounce } from "@/hooks/use-debounce";
+import { useListPagination } from "@/hooks/use-list-pagination";
+import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import type {
@@ -50,6 +60,7 @@ import {
   ENTITY_DEEP_LINK_MODE_PARAM,
   parseEntityFocusTarget,
 } from "@/lib/entity-deep-link";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
 // ============================================
 // Helper Functions
@@ -170,6 +181,11 @@ function createColumns(
 // ============================================
 
 export function DeliveryList() {
+  const [creditBatchFilterParam, setCreditBatchFilter] = useQueryState(
+    "creditBatch",
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const creditBatchFilter = creditBatchFilterParam ?? "";
   const [focusedDeliveryId, setFocusedDeliveryId] = useQueryState(
     "delivery",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
@@ -197,15 +213,35 @@ export function DeliveryList() {
 
   // Global facility context
   const { facilityId: contextFacilityId } = useFacilityContext();
+  const [searchQuery, setSearchQuery] = useState("");
+  const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
+    useListPagination(`${contextFacilityId ?? ""}:${creditBatchFilter}`);
+  const debouncedSearch = useDebounce(searchQuery, LIST_SEARCH_DEBOUNCE_MS);
 
   // Data fetching — scope to selected facility (only query when facility is selected)
   const { data: deliveriesData, isLoading, error: fetchError } = useDeliveries(
-    contextFacilityId ? { facilityId: contextFacilityId } : undefined,
+    contextFacilityId
+      ? {
+          facilityId: contextFacilityId,
+          creditBatchId: creditBatchFilter || undefined,
+          search: debouncedSearch || undefined,
+          page: currentPage,
+          pageSize,
+        }
+      : undefined,
     { enabled: !!contextFacilityId },
   );
   const { data: statsData, isLoading: statsLoading } = useDeliveryStats(
-    contextFacilityId ? { facilityId: contextFacilityId } : undefined,
+    contextFacilityId
+      ? {
+          facilityId: contextFacilityId,
+          creditBatchId: creditBatchFilter || undefined,
+        }
+      : undefined,
     { enabled: !!contextFacilityId },
+  );
+  const { data: creditBatches } = useCreditBatches(
+    contextFacilityId ?? undefined,
   );
   const focusedDelivery = useDeliveryWithRelations(
     focusedDeliveryId ?? "",
@@ -360,6 +396,13 @@ export function DeliveryList() {
   const columns = createColumns(openEdit, handleDelete);
 
   const deliveries = deliveriesData?.items ?? [];
+  const totalPages = deliveriesData?.totalPages ?? 0;
+  const hasActiveFilters = !!searchQuery || !!creditBatchFilter;
+  const clearFilters = () => {
+    setSearchQuery("");
+    setCreditBatchFilter(null);
+    setCurrentPage(1);
+  };
 
   if (!contextFacilityId) {
     return (
@@ -448,9 +491,19 @@ export function DeliveryList() {
       <DataTable
         columns={columns}
         data={deliveries}
-        enableSorting
-        enableFiltering
+        enableSorting={false}
         enablePagination
+        manualPagination
+        pageCount={totalPages}
+        pageSize={pageSize}
+        pageIndex={currentPage - 1}
+        globalFilter={searchQuery}
+        onGlobalFilterChange={(value) => {
+          setSearchQuery(value);
+          setCurrentPage(1);
+        }}
+        onPaginationChange={onPaginationChange}
+        aria-label="Deliveries"
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
@@ -458,20 +511,52 @@ export function DeliveryList() {
           <EmptyState
             padding="md"
             icon={<TruckIcon size={48} />}
-            title="No deliveries yet"
-            description="Create your first delivery to get started"
+            title={hasActiveFilters ? "No deliveries match" : "No deliveries yet"}
+            description={
+              hasActiveFilters
+                ? "Try adjusting or clearing the search and filters."
+                : "Create your first delivery to get started"
+            }
             action={
-              <Button variant="primary" onClick={openCreate}>
-                <PlusIcon size={18} weight="bold" />
-                New Delivery
-              </Button>
+              hasActiveFilters ? undefined : (
+                <Button variant="primary" onClick={openCreate}>
+                  <PlusIcon size={18} weight="bold" />
+                  New Delivery
+                </Button>
+              )
             }
           />
         }
       >
         <DataTable.Toolbar>
-          <DataTable.Search placeholder="Search deliveries..." />
-          <DataTable.ColumnVisibility />
+          <DataTable.Search
+            placeholder="Search by delivery code..."
+            aria-label="Search deliveries by code"
+          />
+          <DataTable.Controls>
+            <DataTable.FilterSelect
+              value={creditBatchFilter}
+              onChange={(event) => {
+                setCreditBatchFilter(event.target.value || null);
+                setCurrentPage(1);
+              }}
+              aria-label="Filter by credit batch"
+            >
+              <option value="">All Credit Batches</option>
+              {creditBatches?.map((batch) => (
+                <option key={batch.id} value={batch.id}>
+                  {batch.code}
+                </option>
+              ))}
+            </DataTable.FilterSelect>
+            {hasActiveFilters && (
+              <Button variant="noOutline" size="small" onClick={clearFilters}>
+                <XIcon size={16} weight="bold" />
+                Clear
+              </Button>
+            )}
+            <DataTable.ColumnVisibility />
+          </DataTable.Controls>
         </DataTable.Toolbar>
         <DataTable.Pagination />
       </DataTable>

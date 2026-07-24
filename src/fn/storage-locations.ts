@@ -13,6 +13,7 @@ import {
 } from "@/data-access/code-generator";
 import { requireOrgFacility } from "@/data-access/utils";
 import {
+  archiveStorageLocation,
   createStorageLocation,
   deleteStorageLocation,
   getStorageLocations as getStorageLocationsData,
@@ -20,19 +21,23 @@ import {
   getStorageLocationWithFacility as getStorageLocationWithFacilityData,
   getStorageLocationsByFacility as getStorageLocationsByFacilityData,
   isStorageLocationCodeAvailable as isStorageLocationCodeAvailableData,
+  restoreStorageLocation,
   updateStorageLocation,
   type PaginatedStorageLocations,
   type StorageLocationWithFacility,
 } from "@/data-access/storage-locations";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
+  archiveStorageLocationSchema,
   createStorageLocationSchema,
   deleteStorageLocationSchema,
+  restoreStorageLocationSchema,
   updateStorageLocationSchema,
   storageLocationFilterSchema,
 } from "@/schemas/storage-locations";
 import type { ActionResult } from "@/types/actions";
 import { toLoggedActionError } from "./action-errors";
+import { withAction } from "./with-action";
 
 function storageLocationActionError(
   error: unknown,
@@ -299,6 +304,40 @@ export async function updateStorageLocationFn(
       ),
     };
   }
+}
+
+// ============================================
+// Archive Operations
+// ============================================
+
+/**
+ * Archive a storage location while retaining all operational history.
+ */
+export async function archiveStorageLocationFn(
+  data: z.infer<typeof archiveStorageLocationSchema>,
+): Promise<ActionResult<StorageLocation>> {
+  return withAction(
+    async (ctx) => {
+      const validated = archiveStorageLocationSchema.parse(data);
+      return archiveStorageLocation(ctx, validated.storageLocationId);
+    },
+    { fallbackMessage: "Failed to archive storage location" },
+  );
+}
+
+/**
+ * Restore an individually archived storage location.
+ */
+export async function restoreStorageLocationFn(
+  data: z.infer<typeof restoreStorageLocationSchema>,
+): Promise<ActionResult<StorageLocation>> {
+  return withAction(
+    async (ctx) => {
+      const validated = restoreStorageLocationSchema.parse(data);
+      return restoreStorageLocation(ctx, validated.storageLocationId);
+    },
+    { fallbackMessage: "Failed to restore storage location" },
+  );
 }
 
 // ============================================

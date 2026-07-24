@@ -13,6 +13,8 @@ import {
   useFormulations,
   useUpdateFormulation,
 } from "@/hooks/use-formulations";
+import { useDebounce } from "@/hooks/use-debounce";
+import { useListPagination } from "@/hooks/use-list-pagination";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -24,6 +26,7 @@ import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { FormulationForm } from "./formulation-form";
 import type { FormulationFormData } from "@/schemas/formulations";
 import type { FormulationWithIngredients } from "@/data-access/formulations";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
 // ============================================
 // Helpers
@@ -130,14 +133,28 @@ export function FormulationList() {
   const [deletingFormulationId, setDeletingFormulationId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
+    useListPagination();
+  const debouncedSearch = useDebounce(
+    searchInput,
+    LIST_SEARCH_DEBOUNCE_MS,
+  );
 
-  const { data: formulationsData, isLoading, error: fetchError } = useFormulations();
+  const { data: formulationsData, isLoading, error: fetchError } = useFormulations({
+    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    page: currentPage,
+    pageSize,
+  });
   const createFormulation = useCreateFormulation();
   const updateFormulation = useUpdateFormulation();
   const deleteFormulation = useDeleteFormulation();
   const toast = useToast();
 
   const formulations = formulationsData?.items ?? [];
+  const totalFormulations = formulationsData?.total ?? 0;
+  const totalPages = formulationsData?.totalPages ?? 0;
+  const hasActiveSearch = searchInput.trim().length > 0;
 
   // Handlers
   const handleCreate = async (data: FormulationFormData) => {
@@ -275,7 +292,7 @@ export function FormulationList() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-24">
         <StatCard
           title="Total Formulations"
-          value={formulations.length}
+          value={totalFormulations}
           icon={<ListChecksIcon size={24} weight="bold" />}
           description="Biochar product recipes"
           isLoading={isLoading}
@@ -286,9 +303,19 @@ export function FormulationList() {
       <DataTable
         columns={columns}
         data={formulations}
-        enableSorting
-        enableFiltering
+        enableSorting={false}
         enablePagination
+        manualPagination
+        pageCount={totalPages}
+        pageSize={pageSize}
+        pageIndex={currentPage - 1}
+        globalFilter={searchInput}
+        onGlobalFilterChange={(value) => {
+          setSearchInput(value);
+          setCurrentPage(1);
+        }}
+        onPaginationChange={onPaginationChange}
+        aria-label="Formulations"
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
@@ -296,20 +323,31 @@ export function FormulationList() {
           <EmptyState
             padding="md"
             icon={<ListChecksIcon size={48} />}
-            title="No formulations yet"
-            description="Create your first formulation to define biochar product recipes."
+            title={hasActiveSearch ? "No matching formulations" : "No formulations yet"}
+            description={
+              hasActiveSearch
+                ? "Try clearing your search."
+                : "Create your first formulation to define biochar product recipes."
+            }
             action={
-              <Button variant="primary" onClick={openCreate}>
-                <PlusIcon size={20} weight="bold" />
-                Create Formulation
-              </Button>
+              !hasActiveSearch ? (
+                <Button variant="primary" onClick={openCreate}>
+                  <PlusIcon size={20} weight="bold" />
+                  Create Formulation
+                </Button>
+              ) : undefined
             }
           />
         }
       >
         <DataTable.Toolbar>
-          <DataTable.Search placeholder="Search formulations..." />
-          <DataTable.ColumnVisibility />
+          <DataTable.Search
+            placeholder="Search formulations..."
+            aria-label="Search formulations"
+          />
+          <DataTable.Controls>
+            <DataTable.ColumnVisibility />
+          </DataTable.Controls>
         </DataTable.Toolbar>
         <DataTable.Pagination />
       </DataTable>
