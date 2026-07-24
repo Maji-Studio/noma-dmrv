@@ -585,13 +585,13 @@ export function FeedstockForm({
 
             {/* Allocation summary */}
             {fields.length > 1 && (
-              <div className="flex items-center gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
+              <div className="flex items-center gap-12 border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] px-16 py-12">
                 <span className="body-small text-[var(--color-text-tertiary)]">Total Allocated</span>
                 <span className="body-medium font-medium text-[var(--color-text-primary)]">
                   {allocatedTotalWetKg.toFixed(2)} kg
                 </span>
                 {typeof watchWetMass === "number" && (
-                  <span className="body-small text-[var(--color-text-quaternary)]">
+                  <span className="body-small text-[var(--color-text-tertiary)]">
                     of {watchWetMass.toFixed(2)} kg delivered
                   </span>
                 )}

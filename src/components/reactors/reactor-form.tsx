@@ -14,7 +14,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormActions } from "@/components/forms";
+import { FormField, FormInput, FormActions, FormSection } from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import {
   reactorFormSchema,
@@ -112,11 +112,7 @@ export function ReactorForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* Required Fields Section */}
-      <div className="space-y-20">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Required Information
-        </h3>
-
+      <FormSection title="Required Information" divider={false}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="identifier"
@@ -135,14 +131,10 @@ export function ReactorForm({
           </FormField>
         </div>
 
-      </div>
+      </FormSection>
 
       {/* Reactor Configuration Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Reactor Configuration
-        </h3>
-
+      <FormSection title="Reactor Configuration">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="reactorType"
@@ -179,7 +171,7 @@ export function ReactorForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
 
       <FormActions
         onCancel={onCancel}

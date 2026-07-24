@@ -465,7 +465,9 @@ export type RemovalRequirementKey =
   | "mapping"
   | "credentials"
   | "template"
+  | "transport"
   | "transportUniformity"
+  | "production"
   | "entityReadiness"
   | "evidence"
   | "durability";
@@ -512,12 +514,10 @@ function withRequirementMeta(
  * The New-Removal wizard's requirements step shows only the checks that are NOT
  * a single batch's concern (design doc §3): facility setup (project mapping +
  * default template) and the cross-batch transport uniformity that can only be
- * judged once batches are pooled into a removal, plus entity certifier-readiness
- * gaps that submit readiness already blocks on. Batch-level checks — production
- * lineage and transport-leg PRESENCE — are the batch health check's job, so they
- * are deliberately excluded here even when unmet (the wizard only let ready
- * batches in, so they are already satisfied). Pure projection of the same facts
- * the full pre-flight uses, so the two never disagree on the shared rows.
+ * judged once batches are pooled into a removal, plus any production or entity
+ * readiness blockers that can appear when an existing removal is resumed.
+ * Transport-leg presence remains a batch-health concern. Pure projection of the
+ * same facts the full pre-flight uses, so the two never disagree on shared rows.
  */
 export function buildRemovalRequirementsChecklist(
   facts: RemovalReadinessFacts,
@@ -554,6 +554,31 @@ export function buildRemovalRequirementsChecklist(
         };
   })();
 
+  const transport = ((): RemovalRequirementCheckBase => {
+    if (!linked || !templateClean) {
+      return {
+        key: "transport",
+        label: TRANSPORT_COVERAGE_LABEL,
+        status: "skipped",
+      };
+    }
+    const missing = facts.requiredTransport
+      .filter((category) => category.count === 0)
+      .map((category) => category.category);
+    return missing.length === 0
+      ? {
+          key: "transport",
+          label: TRANSPORT_COVERAGE_LABEL,
+          status: "met",
+        }
+      : {
+          key: "transport",
+          label: TRANSPORT_COVERAGE_LABEL,
+          status: "unmet",
+          detail: `Missing ${describeCategories(missing)} transport legs`,
+        };
+  })();
+
   const entityReadiness = ((): RemovalRequirementCheckBase => {
     const gaps = facts.entityReadinessGaps ?? [];
     return gaps.length === 0
@@ -571,6 +596,15 @@ export function buildRemovalRequirementsChecklist(
             .join(" · "),
         };
   })();
+
+  const production: RemovalRequirementCheckBase = {
+    key: "production",
+    label: "Production lineage complete",
+    status: facts.hasSubmittableRuns ? "met" : "unmet",
+    detail: facts.hasSubmittableRuns
+      ? undefined
+      : productionGapDetail(facts),
+  };
 
   const durability = ((): RemovalRequirementCheckBase => {
     // Sampling/eligibility is a run-level concern batch health does not cover,
@@ -626,7 +660,9 @@ export function buildRemovalRequirementsChecklist(
           ? undefined
           : (templateBlockerReason(facts) ?? undefined),
     },
+    transport,
     uniformity,
+    production,
     entityReadiness,
     evidencePreflightCheck(facts),
     durability,

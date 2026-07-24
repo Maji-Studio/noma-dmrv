@@ -23,6 +23,7 @@ import {
   productionRuns,
 } from "@/db/schema";
 import { computeClampedDryMass } from "@/lib/calculations/mass-dry";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { tonnesToKg } from "@/lib/calculations/unit-conversions";
 import { getCo2eStoredPreviews } from "./credit-batches";
 import {
@@ -667,7 +668,7 @@ async function getAttentionItems(
       entityCode: row.code,
       title: "Period ended · awaiting verification",
       severity: "pending" as const,
-      href: `/credit-batches/${row.id}`,
+      href: creditBatchDeepLinkHref(row.id, facilityId),
     })),
     ...upcomingDeliveries.map((row) => ({
       id: `delivery-upcoming-${row.id}`,

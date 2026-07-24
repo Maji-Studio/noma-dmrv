@@ -539,7 +539,9 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
       "mapping",
       "credentials",
       "template",
+      "transport",
       "transportUniformity",
+      "production",
       "entityReadiness",
       "durability",
     ]);
@@ -591,6 +593,7 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
       }),
     );
     expect(reqFor(checks, "transportUniformity").status).toBe("met");
+    expect(reqFor(checks, "transport").status).toBe("unmet");
   });
 
   it("flags entity-readiness gaps so submit is never disabled without a visible reason", () => {
@@ -602,6 +605,22 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
     const entityReadiness = reqFor(checks, "entityReadiness");
     expect(entityReadiness.status).toBe("unmet");
     expect(entityReadiness.detail).toContain("Electricity reading");
+  });
+
+  it("flags missing production lineage when an existing removal is resumed", () => {
+    const checks = buildRemovalRequirementsChecklist(
+      ready({
+        hasSubmittableRuns: false,
+        productionReadinessGap: {
+          kind: "noApplications",
+          detail: "No applications fall in this batch's crediting period.",
+          fixTarget: "applications",
+        },
+      }),
+    );
+    const production = reqFor(checks, "production");
+    expect(production.status).toBe("unmet");
+    expect(production.detail).toContain("No applications");
   });
 });
 

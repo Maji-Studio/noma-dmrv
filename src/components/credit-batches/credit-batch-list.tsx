@@ -1,15 +1,18 @@
 /**
  * CreditBatchList component
- * Card grid layout with operational filters and pagination. There is deliberately no
- * lifecycle-status column or filter: every batch sits at the DB default
- * ("pending") with no transition path, so a status surface only competed with
- * the real readiness signal (QA 2026-07-21 F3). Reintroduce one when a registry
- * lifecycle actually drives it.
+ * Card grid layout with operational filters, pagination, and a derived
+ * cross-artifact lifecycle. The dormant credit_batches.status column is not
+ * rendered; progress comes from data readiness, Removal submission, and the
+ * linked GHG Statement's verifier status.
+ *
+ * Clicking a card opens the unified side sheet in view mode (deep-linkable via
+ * `?batch=<id>`, mirroring the production-run list) — there is no separate
+ * detail page; `/credit-batches/[id]` redirects here.
  */
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { parseAsString, useQueryState } from "nuqs";
 import {
   CertificateIcon,
   LeafIcon,
@@ -32,6 +35,9 @@ import {
 import { ServerError } from "@/components/forms";
 import { CreditBatchForm } from "./credit-batch-form";
 import { CreditBatchCard } from "./credit-batch-card";
+import { CreditBatchHealthStrip } from "./credit-batch-health-strip";
+import { CreditBatchDurabilityPanel } from "./credit-batch-durability-panel";
+import { creditBatchSheetSections } from "./credit-batch-view";
 import {
   CreditBatchFilters,
   type CreditBatchReadinessFilter,
@@ -43,11 +49,15 @@ import {
 } from "./credit-batch-filtering";
 import {
   useCreditBatches,
+  useCreditBatch,
   useCreditBatchCo2eStoredPreviews,
+  useCreditBatchProductionRunOptions,
   useCreateCreditBatch,
   useUpdateCreditBatch,
   useDeleteCreditBatch,
 } from "@/hooks/use-credit-batches";
+import { formatDateRange } from "@/lib/format-utils";
+import { CREDIT_BATCH_DEEP_LINK_PARAM } from "@/lib/credit-batch-links";
 import { useCreditBatchHealthSummaries } from "@/hooks/use-certification";
 import type { CreditBatchFormData } from "@/schemas/credit-batches";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
@@ -91,7 +101,13 @@ export function CreditBatchList({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
-  // Side sheet state
+  // Side sheet state — `?batch=` deep-links the view sheet (production-run
+  // convention); local state handles sheets opened by clicks.
+  const [focusedBatchId, setFocusedBatchId] = useQueryState(
+    CREDIT_BATCH_DEEP_LINK_PARAM,
+    parseAsString.withOptions({ shallow: true, history: "replace" }),
+  );
+  const handledInvalidBatchIdRef = useRef<string | null>(null);
   const [sideSheet, setSideSheet] = useState<{
     entity: CreditBatchWithRelations | null;
     mode: SideSheetMode;
@@ -103,13 +119,13 @@ export function CreditBatchList({
   const [updateError, setUpdateError] = useState<string | null>(null);
   const createIntent = useOpenCreateIntent({ initialOpen: initialCreate });
 
-  const router = useRouter();
   const { facilityId: contextFacilityId } = useFacilityContext();
 
   // Data fetching — facility-scoped so batches never leak across facilities
   const { data: creditBatches, isLoading: batchesLoading, error } = useCreditBatches(
     contextFacilityId ?? undefined
   );
+  const focusedBatch = useCreditBatch(focusedBatchId ?? "");
   const createCreditBatch = useCreateCreditBatch();
   const updateCreditBatch = useUpdateCreditBatch();
   const deleteCreditBatch = useDeleteCreditBatch();
@@ -139,6 +155,13 @@ export function CreditBatchList({
   const healthBatchIds = readinessFilter === "all"
     ? visibleFacetIds
     : facetFilteredItems.map((batch) => batch.id);
+  // The sheet's lifecycle rail needs the focused batch's summary even when it
+  // is not on the visible page (deep link straight into the sheet).
+  const sheetBatchId = sideSheet?.entity?.id ?? focusedBatchId;
+  const summaryBatchIds =
+    sheetBatchId && !healthBatchIds.includes(sheetBatchId)
+      ? [...healthBatchIds, sheetBatchId]
+      : healthBatchIds;
   const {
     data: batchHealthSummaries = {},
     isLoading: healthLoading,
@@ -148,7 +171,7 @@ export function CreditBatchList({
   } =
     useCreditBatchHealthSummaries(
       contextFacilityId ?? undefined,
-      healthBatchIds,
+      summaryBatchIds,
     );
   const listLoading =
     batchesLoading || (readinessFilter !== "all" && healthLoading);
@@ -275,6 +298,10 @@ export function CreditBatchList({
     try {
       const result = await deleteCreditBatch.mutateAsync(deletingBatchId);
       if (result.success) {
+        if (focusedBatchId === deletingBatchId) {
+          void setFocusedBatchId(null);
+          setSideSheet(null);
+        }
         toast.success("Credit batch deleted successfully");
       } else {
         toast.error(result.error || "Failed to delete credit batch");
@@ -287,14 +314,16 @@ export function CreditBatchList({
 
   const openCreate = () => {
     createIntent.clear();
+    void setFocusedBatchId(null);
     setCreateError(null);
     setUpdateError(null);
     setSideSheet({ entity: null, mode: "create" });
   };
-  // Opening a batch goes to its detail page (health check + edit), the redesign
-  // replacement for the read-only view side-sheet.
   const openView = (batch: CreditBatchWithRelations) => {
-    router.push(`/credit-batches/${batch.id}?facility=${batch.facilityId}`);
+    setCreateError(null);
+    setUpdateError(null);
+    void setFocusedBatchId(batch.id);
+    setSideSheet({ entity: batch, mode: "view" });
   };
   const openEdit = (batch: CreditBatchWithRelations) => {
     setCreateError(null);
@@ -303,9 +332,86 @@ export function CreditBatchList({
   };
   const closeSideSheet = () => {
     createIntent.clear();
+    void setFocusedBatchId(null);
     setSideSheet(null);
     setCreateError(null);
     setUpdateError(null);
+  };
+
+  // Clear a deep-linked `?batch=` that cannot be opened (wrong facility,
+  // deleted, or cross-org) — same guard as the production-run list.
+  useEffect(() => {
+    if (!focusedBatchId) {
+      handledInvalidBatchIdRef.current = null;
+      return;
+    }
+    if (
+      focusedBatch.isLoading ||
+      focusedBatch.isFetching ||
+      focusedBatch.isPending
+    ) {
+      return;
+    }
+    if (handledInvalidBatchIdRef.current === focusedBatchId) return;
+
+    if (
+      focusedBatch.data &&
+      contextFacilityId &&
+      focusedBatch.data.facilityId !== contextFacilityId
+    ) {
+      handledInvalidBatchIdRef.current = focusedBatchId;
+      toast.error("Linked credit batch is not in the selected facility");
+      void setFocusedBatchId(null);
+      return;
+    }
+
+    if (
+      focusedBatch.isError ||
+      (focusedBatch.isSuccess && !focusedBatch.data)
+    ) {
+      handledInvalidBatchIdRef.current = focusedBatchId;
+      toast.error("Linked credit batch could not be opened");
+      void setFocusedBatchId(null);
+    }
+  }, [
+    contextFacilityId,
+    focusedBatch.data,
+    focusedBatch.isError,
+    focusedBatch.isFetching,
+    focusedBatch.isLoading,
+    focusedBatch.isPending,
+    focusedBatch.isSuccess,
+    focusedBatchId,
+    setFocusedBatchId,
+    toast,
+  ]);
+
+  const deepLinkedSideSheet =
+    focusedBatchId &&
+    focusedBatch.data &&
+    (!contextFacilityId || focusedBatch.data.facilityId === contextFacilityId)
+      ? ({ entity: focusedBatch.data, mode: "view" } as const)
+      : null;
+  const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
+
+  // Member production runs for the view sheet's "Production runs" section.
+  const viewEntity = displaySideSheet?.entity ?? null;
+  const runOptionsQuery = useCreditBatchProductionRunOptions({
+    facilityId: viewEntity?.facilityId,
+    startDate: viewEntity?.startDate,
+    endDate: viewEntity?.endDate,
+    includeCreditBatchId: viewEntity?.id,
+  });
+  const memberRunIds = new Set(viewEntity?.productionRunIds ?? []);
+  const memberRuns = (runOptionsQuery.data ?? []).filter((run) =>
+    memberRunIds.has(run.id),
+  );
+
+  const handleModeChange = (mode: SideSheetMode) => {
+    if (!displaySideSheet?.entity) return;
+    setCreateError(null);
+    setUpdateError(null);
+    setSideSheet({ entity: displaySideSheet.entity, mode });
   };
 
   const clearFilters = () => {
@@ -352,12 +458,17 @@ export function CreditBatchList({
   );
 
   // Derived values for the side sheet
-  const sideSheetOpen = !!sideSheet || createIntent.isOpen;
-  const sideSheetMode = sideSheet?.mode ?? "create";
-  const sideSheetEntity = sideSheet?.entity ?? null;
+  const sideSheetOpen = !!displaySideSheet || createIntent.isOpen;
+  const sideSheetMode = displaySideSheet?.mode ?? "create";
+  const sideSheetEntity = displaySideSheet?.entity ?? null;
 
   const sideSheetTitle =
     sideSheetMode === "create" ? "Create Credit Batch" : sideSheetEntity?.code ?? "";
+
+  const sideSheetSubtitle =
+    sideSheetMode === "create" || !sideSheetEntity
+      ? undefined
+      : formatDateRange(sideSheetEntity.startDate, sideSheetEntity.endDate);
 
   return (
     <div className="container-max page-shell">
@@ -411,7 +522,7 @@ export function CreditBatchList({
         {hasPendingCo2e && !previewsLoading && (
           <span className="inline-flex items-center gap-6 body-caption text-[var(--st-wait)]">
             <WarningIcon size={14} weight="fill" aria-hidden />
-            Some batches have pending inputs
+            Some batches need CO₂e inputs
           </span>
         )}
       </div>
@@ -549,19 +660,43 @@ export function CreditBatchList({
         open={sideSheetOpen}
         onOpenChange={(open) => !open && closeSideSheet()}
         mode={sideSheetMode}
-        onModeChange={(mode) => {
-          if (mode === "view" && sideSheetEntity) {
-            setSideSheet(null);
-            openView(sideSheetEntity);
-            return;
-          }
-          setSideSheet((previous) =>
-            previous ? { ...previous, mode } : null,
-          );
-        }}
+        onModeChange={handleModeChange}
         title={sideSheetTitle}
+        subtitle={sideSheetSubtitle}
         editLabel="Edit Credit Batch"
         size="wide"
+        sections={
+          sideSheetEntity
+            ? creditBatchSheetSections({
+                creditBatch: sideSheetEntity,
+                productionRuns: memberRuns,
+                isLoadingRuns: runOptionsQuery.isLoading,
+                runsError: runOptionsQuery.error,
+                isRetryingRuns: runOptionsQuery.isFetching,
+                onRetryRuns: () => void runOptionsQuery.refetch(),
+                healthSummary: healthError
+                  ? undefined
+                  : batchHealthSummaries[sideSheetEntity.id],
+                isHealthLoading: healthLoading && !healthError,
+              })
+            : undefined
+        }
+        viewModeChildren={
+          sideSheetEntity ? (
+            <>
+              <CreditBatchHealthStrip
+                creditBatchId={sideSheetEntity.id}
+                facilityId={sideSheetEntity.facilityId}
+                productionRuns={memberRuns}
+                feedstockName={sideSheetEntity.feedstockTypeName}
+              />
+              <CreditBatchDurabilityPanel
+                creditBatchId={sideSheetEntity.id}
+                facilityId={sideSheetEntity.facilityId}
+              />
+            </>
+          ) : undefined
+        }
       >
         <CreditBatchForm
           key={sideSheetEntity?.id ?? "create"}

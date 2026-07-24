@@ -639,6 +639,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
       CREDIT_BATCH_ID,
     );
 
+    expect(result.defaultTemplate?.id).toBe("rvt_resolved");
     expect(result.blueprintsForTemplate.map((bp) => bp.key)).toEqual([
       "key_known",
     ]);

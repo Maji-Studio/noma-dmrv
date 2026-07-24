@@ -14,6 +14,7 @@ import {
   listRemovalsForFacility,
   listUngroupedCreditBatches,
   type CertifierRemovalRow,
+  type UngroupedCreditBatchRow,
 } from "@/data-access/certifier-removals";
 import {
   projectChainOfCustodyFromBatchFacts,
@@ -24,8 +25,6 @@ import {
   loadCreditBatchRollups,
   type CreditBatchAccounting,
   type CreditBatchAccountingByBatch,
-  type CreditBatchCo2eStoredPreview,
-  type CreditBatchRollup,
 } from "@/data-access/credit-batch-accounting";
 import { getCreditBatchRemovalId } from "@/data-access/credit-batches";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
@@ -73,10 +72,7 @@ import {
 import { buildCertifyEntityReadiness } from "./certify-entity-readiness";
 import { loadDurabilityBatchData } from "./durability-readiness";
 import { buildSubmissionWarnings } from "./submission-warnings";
-import {
-  loadEvidenceMirrorSummaryForUser,
-  type EvidenceMirrorSummary,
-} from "./evidence-mirror-summary";
+import { loadEvidenceMirrorSummaryForScope, type EvidenceMirrorSummary } from "./evidence-mirror-summary";
 import {
   loadLinkedGhgStatementStatus,
   type LinkedGhgStatementStatus,
@@ -85,19 +81,19 @@ import {
   buildSelectableBatchesData,
   type SelectableBatchesData,
 } from "./selectable-batches";
+import {
+  toMemberCreditBatch,
+  toMemberCreditBatchView,
+  type MemberCreditBatch,
+} from "./member-credit-batch";
 
 export type { LinkedGhgStatementStatus } from "./linked-ghg-statement-status";
 export type { SelectableBatch, SelectableBatchesData } from "./selectable-batches";
+export type { MemberCreditBatch } from "./member-credit-batch";
 
 // Bound facility fan-out so per-removal DB/registry query chains cannot burst
 // the connection pool. Mirrors `READINESS_CONCURRENCY` in overview.ts.
 const FANOUT_CONCURRENCY = 8;
-
-function includesCo2ePreview(
-  accounting: CreditBatchRollup,
-): accounting is CreditBatchAccounting {
-  return "co2ePreview" in accounting;
-}
 
 export interface TransportCoverageBucket {
   count: number;
@@ -127,14 +123,6 @@ const TRANSPORT_SOURCE_TO_CATEGORY: Record<string, TransportCategory> = {
   sampleTransportMassDistanceTonneKm: "sample",
 };
 
-export interface MemberCreditBatch {
-  id: string;
-  code: string;
-  co2eStoredPreview?: CreditBatchCo2eStoredPreview;
-  /** Exact submission blockers, separated by their remediation workflow. */
-  durabilityGateBlockers?: string[];
-  facilityEmissionsGateBlockers?: string[];
-}
 type DurabilityOption = "200_year" | "1000_year";
 
 // UI-facing removal context — the lean payload React Query caches.
@@ -177,7 +165,7 @@ export interface RemovalCertifyContext {
   // durabilityGateBlockers / entityReadinessGaps, these do NOT gate submission;
   // they tell the operator a recorded value will not be submitted.
   submissionWarnings: string[];
-  supportingDocuments: EvidenceMirrorSummary; // same counts as Sources panel
+  supportingDocuments: EvidenceMirrorSummary;
   // Focused run aggregation (run count, total biochar output, applied dry kg)
   // surfaced on the lean UI context so the Review step can show what's being
   // submitted without shipping the heavy `runs` array.
@@ -311,17 +299,14 @@ interface RemovalScope {
   facilityId: string;
   removalId: string | null;
   removal: CertifierRemovalRow | null;
-  memberBatches: {
-    id: string;
-    code: string;
+  memberBatches: (MemberCreditBatch & {
     productionRunIds: string[];
     applicationIds: string[];
     durabilityOption: DurabilityOption;
     // §8.6.2 production-bucket claim state (issue #349, ADR 0020): the removal
     // that already claimed this batch's production emissions, or null.
     productionEmissionsClaimedByRemovalId: string | null;
-    co2eStoredPreview?: CreditBatchCo2eStoredPreview;
-  }[];
+  })[];
   lineages: ChainOfCustodyData[];
 }
 
@@ -365,14 +350,12 @@ function resolveSingleBatchScope(
     removal: null,
     memberBatches: [
       {
-        id: batch.id,
-        code: batch.code,
+        ...toMemberCreditBatch(accounting),
         productionRunIds: lineageFacts.productionRunIds,
         applicationIds: lineageFacts.applicationIds,
         durabilityOption: batch.durabilityOption,
         productionEmissionsClaimedByRemovalId:
           batch.productionEmissionsClaimedByRemovalId,
-        co2eStoredPreview: accounting.co2ePreview,
       },
     ],
     lineages: lineageFacts.applications.map((application) =>
@@ -405,17 +388,12 @@ export async function resolveScopeForRemoval(
       }
       const { lineageFacts, batch: accountingBatch } = accounting;
       return {
-        id: accountingBatch.id,
-        code: accountingBatch.code,
+        ...toMemberCreditBatch(accounting),
         productionRunIds: lineageFacts.productionRunIds,
         applicationIds: lineageFacts.applicationIds,
         durabilityOption: accountingBatch.durabilityOption,
         productionEmissionsClaimedByRemovalId:
           accountingBatch.productionEmissionsClaimedByRemovalId,
-        co2eStoredPreview:
-          !options?.skipPreview && includesCo2ePreview(accounting)
-            ? accounting.co2ePreview
-            : undefined,
       };
     });
   const lineages = Object.values(accountingByBatch).flatMap((accounting) => {
@@ -526,6 +504,8 @@ export async function loadFacilityCertifierFacts(
   for (const key of referencedKeys) {
     const found = blueprintByKey.get(key);
     if (found) blueprintsForTemplate.push(found);
+    // Explicit bindings are the fail-closed source of truth for template
+    // components intentionally absent from the global blueprint catalogue.
     else if (!hasExplicitSequestrationBinding(key)) {
       unresolvedBlueprintKeys.push(key);
     }
@@ -594,11 +574,8 @@ export async function buildRemovalContext(
   facilityFacts: FacilityCertifierFacts,
 ): Promise<RemovalSubmissionContext> {
   const isProduction = env.ISOMETRIC_ENVIRONMENT === "production";
-  const memberBatches: MemberCreditBatch[] = scope.memberBatches.map((b) => ({
-    id: b.id,
-    code: b.code,
-    co2eStoredPreview: b.co2eStoredPreview,
-  }));
+  const memberBatches: MemberCreditBatch[] =
+    scope.memberBatches.map(toMemberCreditBatchView);
   // §8.6.2 claim state per member batch (issue #349) — kept off
   // `MemberCreditBatch` (UI-facing) and carried only on the submission context.
   // Lineage arrays sorted here so the post-claim fresh re-assert compares
@@ -623,7 +600,7 @@ export async function buildRemovalContext(
           })
         : Promise.resolve(null),
       loadLinkedGhgStatementStatus(orgCtx, scope.removal),
-      loadEvidenceMirrorSummaryForUser(orgCtx, scope.removalId),
+      loadEvidenceMirrorSummaryForScope(orgCtx, scope),
     ]);
 
   // Walk every member batch's production-run applications into one deduped run union.
@@ -842,8 +819,7 @@ function projectUiContext(
   };
 }
 
-// UI context keyed by removal id — the guided Review flow's source of truth
-// (Assemble / Review / Pre-flight read it; the pre-flight runs the shared
+// Guided Review UI context keyed by removal id; its pre-flight runs the shared
 // `deriveRemovalReadiness` classifier against it). Mirrors
 // `loadCertifyContextForCreditBatch` but resolves the scope from the removal.
 export async function loadRemovalCertifyContext(
@@ -927,13 +903,13 @@ export async function buildCreditBatchContexts(
 
 export interface RemovalHubEntry {
   removal: CertifierRemovalRow;
-  memberBatches: MemberCreditBatch[];
+  memberBatches: Pick<MemberCreditBatch, "id" | "code">[];
   latestSubmission: CertificationSubmissionRow | null;
 }
 
 export interface RemovalsHubData {
   removals: RemovalHubEntry[];
-  ungroupedBatches: MemberCreditBatch[];
+  ungroupedBatches: UngroupedCreditBatchRow[];
   // Whether submits from the hub write to the production Isometric registry —
   // drives the confirmation gate on the hub's Submit button.
   isProduction: boolean;

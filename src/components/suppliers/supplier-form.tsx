@@ -20,6 +20,7 @@ import {
   FormActions,
   FormField,
   FormInput,
+  FormSection,
   FormTextarea,
   PositionPicker,
 } from "@/components/forms";
@@ -163,11 +164,7 @@ export function SupplierForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* Required Fields Section */}
-      <div className="space-y-20">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Required Information
-        </h3>
-
+      <FormSection title="Required Information" divider={false}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="name"
@@ -185,30 +182,22 @@ export function SupplierForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
 
       {/* Locations Section */}
       {managesLiveLocations && supplierId ? (
-        <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-          <LocationsSection supplierId={supplierId} />
-        </div>
+        <LocationsSection supplierId={supplierId} />
       ) : (
-        <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-          <CreateModeLocationsSection
-            locations={pendingLocations}
-            onAdd={handleAddPendingLocation}
-            onRemove={handleRemovePendingLocation}
-            error={locationError}
-          />
-        </div>
+        <CreateModeLocationsSection
+          locations={pendingLocations}
+          onAdd={handleAddPendingLocation}
+          onRemove={handleRemovePendingLocation}
+          error={locationError}
+        />
       )}
 
       {/* Contact Information Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Contact Information
-        </h3>
-
+      <FormSection title="Contact Information">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="contactName"
@@ -258,14 +247,10 @@ export function SupplierForm({
             />
           </FormField>
         </div>
-      </div>
+      </FormSection>
 
       {/* Sourcing Information Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Sourcing Information
-        </h3>
-
+      <FormSection title="Sourcing Information">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="location"
@@ -311,7 +296,7 @@ export function SupplierForm({
             </FormField>
           </div>
         </div>
-      </div>
+      </FormSection>
 
       <FormActions
         onCancel={onCancel}
@@ -342,11 +327,13 @@ function CreateModeLocationsSection({
   const [showForm, setShowForm] = useState(false);
 
   return (
-    <>
-      <div className="flex items-center justify-between">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+    <FormSection
+      title={
+        <>
           Locations <span className="text-[var(--color-signal-red)]">*</span>
-        </h3>
+        </>
+      }
+      actions={
         <Button
           variant="noOutline"
           size="small"
@@ -356,8 +343,8 @@ function CreateModeLocationsSection({
           <PlusIcon size={14} weight="bold" />
           Add Location
         </Button>
-      </div>
-
+      }
+    >
       {error && (
         <p className="text-[var(--text-s)] text-[var(--color-signal-red)]" role="alert">
           {error}
@@ -418,7 +405,7 @@ function CreateModeLocationsSection({
           onCancel={() => setShowForm(false)}
         />
       )}
-    </>
+    </FormSection>
   );
 }
 
@@ -515,7 +502,7 @@ function InlineLocationForm({
       )}
 
       <div className="flex flex-col gap-6">
-        <label htmlFor="pending-loc-name" className="label-medium">
+        <label htmlFor="pending-loc-name" className="body-small font-medium text-[var(--color-text-secondary)]">
           Name
         </label>
         <input
@@ -530,7 +517,7 @@ function InlineLocationForm({
       </div>
 
       <div className="flex flex-col gap-6">
-        <label htmlFor="pending-loc-country" className="label-medium">
+        <label htmlFor="pending-loc-country" className="body-small font-medium text-[var(--color-text-secondary)]">
           Country <span className="text-[var(--color-signal-red)]">*</span>
         </label>
         <input
@@ -545,7 +532,7 @@ function InlineLocationForm({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-16">
         <div className="flex flex-col gap-6">
-          <label htmlFor="pending-loc-state" className="label-medium">
+          <label htmlFor="pending-loc-state" className="body-small font-medium text-[var(--color-text-secondary)]">
             State / Region
           </label>
           <input
@@ -558,7 +545,7 @@ function InlineLocationForm({
           />
         </div>
         <div className="flex flex-col gap-6">
-          <label htmlFor="pending-loc-city" className="label-medium">
+          <label htmlFor="pending-loc-city" className="body-small font-medium text-[var(--color-text-secondary)]">
             City
           </label>
           <input
@@ -573,7 +560,7 @@ function InlineLocationForm({
       </div>
 
       <div className="flex flex-col gap-6">
-        <label htmlFor="pending-loc-address" className="label-medium">
+        <label htmlFor="pending-loc-address" className="body-small font-medium text-[var(--color-text-secondary)]">
           Address / Description
         </label>
         <input
@@ -666,11 +653,9 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
   };
 
   return (
-    <>
-      <div className="flex items-center justify-between">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Locations
-        </h3>
+    <FormSection
+      title="Locations"
+      actions={
         <Button
           variant="noOutline"
           size="small"
@@ -680,8 +665,8 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
           <PlusIcon size={14} weight="bold" />
           Add Location
         </Button>
-      </div>
-
+      }
+    >
       {isLoading ? (
         <p className="body-small text-[var(--color-text-tertiary)]">Loading locations...</p>
       ) : isError ? (
@@ -744,6 +729,6 @@ function LocationsSection({ supplierId }: { supplierId: string }) {
         onCancel={() => setDeletingLocationId(null)}
         isPending={deleteLocation.isPending}
       />
-    </>
+    </FormSection>
   );
 }
