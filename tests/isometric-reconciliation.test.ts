@@ -9,20 +9,25 @@ import {
   findDatapointBySupplierRef,
   findGhgEntryBySupplierRef,
 } from "@/lib/isometric/submissions";
-import { findDraftGhgStatementsByPeriod } from "@/lib/isometric/ghg-statements";
+import { listGhgStatementsForProject } from "@/lib/isometric/ghg-statements";
 
 vi.mock("@/lib/isometric/submissions", () => ({
   findDatapointBySupplierRef: vi.fn(),
   findGhgEntryBySupplierRef: vi.fn(),
 }));
 
-vi.mock("@/lib/isometric/ghg-statements", () => ({
-  findDraftGhgStatementsByPeriod: vi.fn(),
-}));
+vi.mock("@/lib/isometric/ghg-statements", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/isometric/ghg-statements")>();
+  return {
+    ...actual,
+    listGhgStatementsForProject: vi.fn(),
+  };
+});
 
 const mockedFindDatapoint = vi.mocked(findDatapointBySupplierRef);
 const mockedFindRemoval = vi.mocked(findGhgEntryBySupplierRef);
-const mockedFindGhg = vi.mocked(findDraftGhgStatementsByPeriod);
+const mockedListGhg = vi.mocked(listGhgStatementsForProject);
 const client = {} as IsometricClient;
 
 describe("Isometric reconciliation helpers", () => {
@@ -49,7 +54,7 @@ describe("Isometric reconciliation helpers", () => {
   });
 
   it("surfaces multiple draft GHG statement matches", async () => {
-    mockedFindGhg.mockResolvedValue([
+    mockedListGhg.mockResolvedValue([
       ghgStatement("ggs_1"),
       ghgStatement("ggs_2"),
     ]);
@@ -58,9 +63,45 @@ describe("Isometric reconciliation helpers", () => {
       reconcileGhgStatement(client, { projectId: "prj_1", endOn: "2026-05-05" }),
     ).resolves.toEqual({ found: "multiple", ids: ["ggs_1", "ggs_2"] });
   });
+
+  it("refuses a matching non-DRAFT instead of treating the period as empty", async () => {
+    mockedListGhg.mockResolvedValue([
+      ghgStatement("ggs_verified", { status: "VERIFIED" }),
+    ]);
+
+    await expect(
+      reconcileGhgStatement(client, {
+        projectId: "prj_1",
+        endOn: "2026-05-05",
+      }),
+    ).resolves.toEqual({
+      found: "refused",
+      externalId: "ggs_verified",
+      status: "VERIFIED",
+    });
+  });
+
+  it("does not adopt a DRAFT whose registry period is missing", async () => {
+    mockedListGhg.mockResolvedValue([
+      ghgStatement("ggs_null", {
+        reporting_period_start_at: null,
+        reporting_period_end_at: null,
+      }),
+    ]);
+
+    await expect(
+      reconcileGhgStatement(client, {
+        projectId: "prj_1",
+        endOn: "2026-05-05",
+      }),
+    ).resolves.toEqual({ found: false });
+  });
 });
 
-function ghgStatement(id: string): GhgStatement {
+function ghgStatement(
+  id: string,
+  overrides: Partial<GhgStatement> = {},
+): GhgStatement {
   return {
     id,
     project_id: "prj_1",
@@ -75,5 +116,6 @@ function ghgStatement(id: string): GhgStatement {
     submitted_at: null,
     credits_issued_at: null,
     pending_total_co2e_removed_kg: null,
+    ...overrides,
   };
 }

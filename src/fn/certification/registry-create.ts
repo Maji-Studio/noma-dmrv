@@ -4,6 +4,7 @@ import { SafeError } from "@/lib/errors";
 import { logger, type Logger } from "@/lib/log";
 import {
   describeIsometricApiError,
+  ghgStatementCreateRefusalMessage,
   IsometricApiError,
   sanitizeIsometricErrorBody,
   type GhgStatementReconciliation,
@@ -25,17 +26,19 @@ import { appendSyncEventBestEffort, ISOMETRIC_PROVIDER } from "./shared";
 // journaled-step recovery) stay on their own shapes by decision — see
 // docs/plans/2026-06-10-certification-reliability-track.md, Phase 2.
 
-// Three-way reconcile outcome. "multiple" covers lookups that are not
+// Registry lookup outcome. "multiple" covers lookups that are not
 // guaranteed unique server-side (a GHG Statement period can hold several
-// drafts); supplier-reference lookups never produce it.
+// drafts); "refused" lets a domain-specific lookup reject the claimed row
+// without attempting a POST. Supplier-reference lookups produce neither.
 export type ReconcileLookup =
   | { found: "single"; externalId: string }
   | { found: "none" }
-  | { found: "multiple" };
+  | { found: "multiple" }
+  | { found: "refused"; message: string };
 
 // Adapts the supplier-ref reconciliation shape (`found: boolean` — a supplier
 // reference is unique in the registry, so "multiple" is unreachable) to the
-// module's three-way lookup.
+// module's registry lookup.
 export function supplierRefLookup(
   result: { found: true; externalId: string } | { found: false },
 ): ReconcileLookup {
@@ -44,10 +47,9 @@ export function supplierRefLookup(
     : { found: "none" };
 }
 
-// Adapts the GHG Statement reconciliation shape to the module's three-way
-// lookup. Unlike the supplier-ref shape this genuinely uses all three arms —
-// a period can hold multiple drafts ("multiple") — and drops the carried
-// `status`/`ids` the create choreography does not need.
+// Adapts the GHG Statement reconciliation shape to the module's registry
+// lookup. A period can hold multiple drafts ("multiple"), while a matching
+// non-DRAFT is a refusal whose message must be recorded on the claimed row.
 export function ghgStatementLookup(
   result: GhgStatementReconciliation,
 ): ReconcileLookup {
@@ -56,6 +58,15 @@ export function ghgStatementLookup(
   }
   if (result.found === "multiple") {
     return { found: "multiple" };
+  }
+  if (result.found === "refused") {
+    return {
+      found: "refused",
+      message: ghgStatementCreateRefusalMessage({
+        id: result.externalId,
+        status: result.status,
+      }),
+    };
   }
   return { found: "none" };
 }
@@ -177,13 +188,20 @@ export async function performRegistryCreate(
 }
 
 // Runs the lookup and translates it: "single" claims the orphan (recording
-// the `:reconciled` audit event), "multiple" rejects the row and throws the
-// caller's ambiguity wording, "none" returns null so the caller proceeds.
+// the `:reconciled` audit event), "multiple" and "refused" reject the row,
+// and "none" returns null so the caller proceeds.
 async function reconcileToResult(
   args: PerformRegistryCreateArgs,
 ): Promise<RegistryCreateResult | null> {
   const lookup = await args.reconcile();
   if (lookup.found === "none") return null;
+
+  if (lookup.found === "refused") {
+    await markSubmissionRejected(args.orgCtx, args.submissionRowId, {
+      errorMessage: lookup.message,
+    });
+    throw new SafeError(lookup.message);
+  }
 
   if (lookup.found === "multiple") {
     const message = args.ambiguousMessage ?? AMBIGUOUS_FALLBACK_MESSAGE;

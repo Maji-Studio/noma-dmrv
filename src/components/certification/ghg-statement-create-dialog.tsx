@@ -28,9 +28,14 @@ import {
   type UseFormRegister,
   type UseFormRegisterReturn,
 } from "react-hook-form";
-import { CheckCircleIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  CheckCircleIcon,
+  ClipboardTextIcon,
+  WarningIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, ServerError } from "@/components/forms";
-import { Button, Modal } from "@/components/ui";
+import { Button, EmptyState, Modal } from "@/components/ui";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { InfoHint } from "@/components/ui/tooltip";
 import { StepFlow, type StepFlowStep } from "@/components/ui/step-flow";
 import { useToast } from "@/components/ui/toast";
@@ -38,13 +43,15 @@ import {
   useCreateGhgStatement,
   useGhgStatementsForFacility,
   useOpenRemovalsForFacility,
+  useRegistryGhgStatementsForFacility,
 } from "@/hooks/use-certification";
+import type { RegistryGhgStatementView } from "@/fn/certification";
 import {
   derivePeriodStart,
   overlappingEnd,
   partitionByWindow,
 } from "@/lib/isometric/utils/ghg-reporting-window";
-import { formatDate } from "@/lib/format-utils";
+import { formatDate, formatDateRange } from "@/lib/format-utils";
 import {
   createGhgStatementSchema,
   type CreateGhgStatementInput,
@@ -112,6 +119,8 @@ function DialogBody({
   const toast = useToast();
   const mutation = useCreateGhgStatement();
   const statementsQuery = useGhgStatementsForFacility(facilityId);
+  const registryStatementsQuery =
+    useRegistryGhgStatementsForFacility(facilityId);
 
   const {
     register,
@@ -130,9 +139,9 @@ function DialogBody({
   });
 
   const endOn = watch("reportingPeriodEndOn");
-  const existingEnds = (statementsQuery.data ?? []).map(
-    (item) => item.statement.reportingPeriodEndOn,
-  );
+  const existingEnds = (statementsQuery.data ?? [])
+    .filter((item) => !item.remotePeriodMissing)
+    .map((item) => item.effectiveReportingPeriodEndOn);
   const derivedStart = endOn ? derivePeriodStart(endOn, existingEnds) : null;
   // The preview query only runs once the operator reaches the Preview step.
   const openQuery = useOpenRemovalsForFacility(facilityId, stepIndex >= 1);
@@ -230,6 +239,7 @@ function DialogBody({
                 error={errors.reportingPeriodEndOn?.message}
                 endOn={endOn}
                 derivedStart={derivedStart}
+                registryStatementsQuery={registryStatementsQuery}
               />
             )}
             {stepIndex === 1 && (
@@ -345,11 +355,15 @@ function StepPeriod({
   error,
   endOn,
   derivedStart,
+  registryStatementsQuery,
 }: {
   register: UseFormRegister<CreateGhgStatementInput>;
   error?: string;
   endOn: string;
   derivedStart: string | null;
+  registryStatementsQuery: ReturnType<
+    typeof useRegistryGhgStatementsForFacility
+  >;
 }) {
   return (
     <div className="flex flex-col gap-12">
@@ -386,8 +400,107 @@ function StepPeriod({
           <PeriodWindow derivedStart={derivedStart} endOn={endOn} />
         </div>
       )}
+      <RegistryStatementsPanel query={registryStatementsQuery} />
     </div>
   );
+}
+
+function RegistryStatementsPanel({
+  query,
+}: {
+  query: ReturnType<typeof useRegistryGhgStatementsForFacility>;
+}) {
+  if (query.isLoading) {
+    return (
+      <div
+        aria-busy="true"
+        className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-16"
+      >
+        <p className="body-small text-[var(--color-text-tertiary)]">
+          Loading registry statements…
+        </p>
+      </div>
+    );
+  }
+  if (query.error || !query.data) {
+    return <ServerError message="Unable to load registry statements." />;
+  }
+  if (query.data.length === 0) {
+    return (
+      <EmptyState
+        icon={<ClipboardTextIcon size={32} />}
+        title="No registry statements"
+        description="This project has no GHG statements in the registry."
+        padding="sm"
+      />
+    );
+  }
+  return (
+    <section className="flex flex-col gap-8">
+      <div className="flex flex-col gap-2">
+        <h4 className="title-heading-4">Already in the registry</h4>
+        <p className="body-caption text-[var(--color-text-tertiary)]">
+          Review these before choosing a new reporting period.
+        </p>
+      </div>
+      <div className="flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)]">
+        {query.data.map((statement) => (
+          <RegistryStatementRow key={statement.id} statement={statement} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RegistryStatementRow({
+  statement,
+}: {
+  statement: RegistryGhgStatementView;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-12 border-b border-[var(--color-border-tertiary)] px-16 py-12 last:border-b-0">
+      <div className="flex min-w-0 flex-col gap-2">
+        <span className="body-small font-mono text-[var(--color-text-primary)] truncate">
+          {statement.id}
+        </span>
+        <span className="body-caption text-[var(--color-text-secondary)]">
+          {registryStatementPeriod(statement)}
+        </span>
+      </div>
+      <div className="flex items-center gap-12">
+        <span className="body-caption text-[var(--color-text-tertiary)]">
+          {statement.removalCount} removal
+          {statement.removalCount === 1 ? "" : "s"}
+        </span>
+        <StatusBadge status={registryStatusBadgeValue(statement.status)} />
+      </div>
+    </div>
+  );
+}
+
+function registryStatementPeriod(statement: RegistryGhgStatementView): string {
+  if (statement.startOn && statement.endOn) {
+    return formatDateRange(statement.startOn, statement.endOn);
+  }
+  if (statement.endOn) return `Ends ${formatDate(statement.endOn)}`;
+  return "No period set";
+}
+
+function registryStatusBadgeValue(
+  status: RegistryGhgStatementView["status"],
+): "draft" | "pending" | "verified" | "issued" | "rejected" {
+  switch (status) {
+    case "DRAFT":
+      return "draft";
+    case "AWAITING_VERIFICATION":
+      return "pending";
+    case "VERIFIED":
+      return "verified";
+    case "CREDITS_ISSUED":
+      return "issued";
+    case "FAILED_VERIFICATION":
+      return "rejected";
+  }
 }
 
 function StepPreview({

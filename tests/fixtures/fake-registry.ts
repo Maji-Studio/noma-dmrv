@@ -39,6 +39,7 @@ import type {
   IsometricRequestOptions,
   PaginateOptions,
 } from "@/lib/isometric/client";
+import type { GhgStatementStatus } from "@/lib/isometric/ghg-statements";
 
 type ClientModule = typeof import("@/lib/isometric/client");
 type ApiErrorCtor = ClientModule["IsometricApiError"];
@@ -68,9 +69,9 @@ export interface FakeGhgStatementRecord {
   removal_ids: string[];
   credit_allocation: null;
   ghg_statement_report_url: string | null;
-  status: "DRAFT";
+  status: GhgStatementStatus;
   reporting_period_start_at: string | null;
-  reporting_period_end_at: string;
+  reporting_period_end_at: string | null;
   submitted_at: string | null;
   credits_issued_at: string | null;
   pending_total_co2e_removed_kg: number | null;
@@ -133,18 +134,21 @@ export class FakeIsometricRegistry {
   /** Injects a draft statement directly (e.g. the second draft of an ambiguous period). */
   seedGhgStatement(args: {
     projectId: string;
-    endOn: string;
+    endOn: string | null;
+    startOn?: string | null;
+    status?: GhgStatementStatus;
+    ghgEntryIds?: string[];
   }): FakeGhgStatementRecord {
     const statement: FakeGhgStatementRecord = {
       id: this.nextId("ggs"),
       project_id: args.projectId,
       verifier: null,
-      ghg_entry_ids: [],
+      ghg_entry_ids: args.ghgEntryIds ?? [],
       removal_ids: [],
       credit_allocation: null,
       ghg_statement_report_url: null,
-      status: "DRAFT",
-      reporting_period_start_at: null,
+      status: args.status ?? "DRAFT",
+      reporting_period_start_at: args.startOn ?? null,
       reporting_period_end_at: args.endOn,
       submitted_at: null,
       credits_issued_at: null,

@@ -34,6 +34,7 @@ import {
   loadRemovalsForFacility,
   loadSelectableBatchesForFacility,
   refreshGhgStatementStatus,
+  reconcileGhgStatementsFromRegistry,
   saveFacilityCertifierMapping,
   saveFacilityEmissionConfig,
   submitGhgStatementToVerifier,
@@ -116,6 +117,8 @@ export const certificationKeys = {
     ] as const,
   openRemovalsForFacility: (facilityId: string) =>
     [...certificationKeys.all, "open-removals", facilityId] as const,
+  registryGhgStatementsForFacility: (facilityId: string) =>
+    [...certificationKeys.all, "registry-ghg-statements", facilityId] as const,
   overview: (facilityId: string) =>
     [...certificationKeys.all, "overview", facilityId] as const,
   health: () => [...certificationKeys.all, "health"] as const,
@@ -523,6 +526,36 @@ export function useGhgStatementsForFacility(
     },
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+export function useRegistryGhgStatementsForFacility(
+  facilityId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: certificationKeys.registryGhgStatementsForFacility(facilityId),
+    queryFn: async () => {
+      const result = await reconcileGhgStatementsFromRegistry(facilityId);
+      if (!result.success) throw new Error(result.error);
+      return result.data.statements;
+    },
+    enabled: enabled && !!facilityId,
+    staleTime: DEFAULT_STALE_MS,
+  });
+}
+
+export function useSyncGhgStatementsFromRegistry() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (facilityId: string) => {
+      const result = await reconcileGhgStatementsFromRegistry(facilityId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
   });
 }
 
