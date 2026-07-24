@@ -401,6 +401,7 @@ function makeContext(
     // buildRemovalContext would precompute; submitRemoval blocks on this field).
     durabilityGateBlockers: [],
     submissionWarnings: [],
+    supportingDocuments: { total: 0, mirrored: 0 },
     productionReadinessGap: null,
     runSummary: {
       runCount: 1,

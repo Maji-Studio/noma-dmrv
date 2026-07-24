@@ -6,6 +6,10 @@ import { env } from "@/config/env";
 import { db } from "@/db";
 import { certifierRemovals } from "@/db/schema/certification";
 import { requireOrgFacility } from "@/data-access/utils";
+import {
+  listRecentSyncEvents,
+  type CertifierSyncEventRow,
+} from "@/data-access/certification";
 import { creditBatches } from "@/db/schema";
 import { getLatestSubmissionsForEntities } from "@/data-access/certification";
 import {
@@ -54,6 +58,7 @@ const READINESS_CONCURRENCY = 8;
 // the Credit Batches list pages at most 36 cards, so 50 leaves headroom while
 // capping the cost of a single fan-out.
 const MAX_HEALTH_SUMMARIES = 50;
+const RECENT_SYNC_EVENTS_LIMIT = 10;
 
 /**
  * One credit batch's overview status: lightweight data readiness plus the
@@ -89,6 +94,8 @@ export interface RemovalPreflightSummary {
   // Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant diesel the
   // active template cannot carry. Shown alongside readiness; never gates submit.
   submissionWarnings: string[];
+  /** Removal-scoped submit/upload attempts, newest first. */
+  recentSyncEvents: CertifierSyncEventRow[];
 }
 
 export interface CertificationOverviewData {
@@ -141,7 +148,14 @@ export async function loadCertificationOverview(
             const scope = await resolveScopeForRemoval(orgCtx, removal.id, {
               skipPreview: true,
             });
-            const ctx = await buildRemovalContext(orgCtx, scope, facilityFacts);
+            const [ctx, recentSyncEvents] = await Promise.all([
+              buildRemovalContext(orgCtx, scope, facilityFacts),
+              listRecentSyncEvents(orgCtx, {
+                entityType: REMOVAL_ENTITY_TYPE,
+                entityId: removal.id,
+                limit: RECENT_SYNC_EVENTS_LIMIT,
+              }),
+            ]);
             const facts = toRemovalReadinessFacts(ctx);
             const readiness = deriveRemovalReadiness(facts);
 
@@ -156,6 +170,7 @@ export async function loadCertificationOverview(
               lockInFlight: facts.lockInFlight,
               readiness,
               submissionWarnings: ctx.submissionWarnings,
+              recentSyncEvents,
             };
           }),
       );

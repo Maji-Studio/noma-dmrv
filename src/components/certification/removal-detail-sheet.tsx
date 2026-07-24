@@ -24,6 +24,7 @@ import { EnvBanner } from "./env-banner";
 import { RegistryRecordLink } from "./registry-record-link";
 import { RemovalCarbonBreakdown } from "./removal-carbon-breakdown";
 import { SourcesPanel } from "./sources-panel";
+import { SyncEventLog } from "./sync-event-log";
 
 interface RemovalDetailSheetProps {
   summary: RemovalPreflightSummary;
@@ -45,52 +46,97 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function ReadinessBlock({ summary }: { summary: RemovalPreflightSummary }) {
-  const { state, reasons } = summary.readiness;
+  const { state, reasons, advisories } = summary.readiness;
   if (state === "ready") {
     return (
-      <div className="flex items-center gap-8 border-l-2 border-[var(--color-signal-green)] pl-12 py-4">
-        <CheckCircleIcon
-          size={16}
-          weight="fill"
-          aria-hidden
-          className="shrink-0 text-[var(--color-signal-green)]"
-        />
-        <span className="body-small text-[var(--color-text-primary)]">
-          Ready to submit — all preconditions met.
-        </span>
+      <div className="flex flex-col gap-8">
+        <div className="flex items-center gap-8 border-l-2 border-[var(--color-signal-green)] pl-12 py-4">
+          <CheckCircleIcon
+            size={16}
+            weight="fill"
+            aria-hidden
+            className="shrink-0 text-[var(--color-signal-green)]"
+          />
+          <span className="body-small text-[var(--color-text-primary)]">
+            Ready to submit —{" "}
+            {advisories.length > 0
+              ? "blocking preconditions met."
+              : "all preconditions met."}
+          </span>
+        </div>
+        <AdvisoryRows advisories={advisories} />
       </div>
     );
   }
   if (state === "blocked") {
     return (
-      <div className="flex flex-col gap-6 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
-        <span className="body-small font-medium text-[var(--color-text-primary)]">
-          Blocked — resolve before submitting:
-        </span>
-        <ul className="flex flex-col gap-4">
-          {reasons.map((reason) => (
-            <li key={reason} className="flex items-start gap-6">
-              <WarningIcon
-                size={14}
-                weight="fill"
-                aria-hidden
-                className="mt-2 shrink-0 text-[var(--color-signal-orange)]"
-              />
-              <span className="body-caption text-[var(--color-text-secondary)]">
-                {reason}
-              </span>
-            </li>
-          ))}
-        </ul>
+      <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-6 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
+          <span className="body-small font-medium text-[var(--color-text-primary)]">
+            Blocked — resolve before submitting:
+          </span>
+          <ul className="flex flex-col gap-4">
+            {reasons.map((reason) => (
+              <li key={reason} className="flex items-start gap-6">
+                <WarningIcon
+                  size={14}
+                  weight="fill"
+                  aria-hidden
+                  className="mt-2 shrink-0 text-[var(--color-signal-orange)]"
+                />
+                <span className="body-caption text-[var(--color-text-secondary)]">
+                  {reason}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <AdvisoryRows advisories={advisories} />
       </div>
     );
   }
   return (
-    <p className="body-small text-[var(--color-text-secondary)]">
-      {state === "inProgress"
-        ? "A submission is in progress."
-        : "This removal has been submitted to the registry."}
-    </p>
+    <div className="flex flex-col gap-8">
+      <p className="body-small text-[var(--color-text-secondary)]">
+        {state === "inProgress"
+          ? "A submission is in progress."
+          : "This removal has been submitted to the registry."}
+      </p>
+      <AdvisoryRows advisories={advisories} showSubmissionNote={false} />
+    </div>
+  );
+}
+
+function AdvisoryRows({
+  advisories,
+  showSubmissionNote = true,
+}: {
+  advisories: string[];
+  showSubmissionNote?: boolean;
+}) {
+  if (advisories.length === 0) return null;
+  return (
+    <ul className="flex flex-col gap-4 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
+      {advisories.map((advisory) => (
+        <li key={advisory} className="flex items-start gap-6">
+          <WarningIcon
+            size={14}
+            weight="fill"
+            aria-hidden
+            className="mt-2 shrink-0 text-[var(--color-signal-orange)]"
+          />
+          {showSubmissionNote ? (
+            <span className="body-caption text-[var(--color-text-secondary)]">
+              Advisory — {advisory}. Submission remains available.
+            </span>
+          ) : (
+            <span className="body-caption text-[var(--color-text-secondary)]">
+              Advisory — {advisory}.
+            </span>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -227,6 +273,12 @@ export function RemovalDetailSheet({
             2026-06-04 certify redesign.)
           */}
           <SourcesPanel removalId={summary.removalId} />
+
+          <SyncEventLog
+            events={summary.recentSyncEvents}
+            compact
+            label={`View removal sync history (${summary.recentSyncEvents.length})`}
+          />
         </SlideOverPanel.Body>
 
         <SlideOverPanel.Footer className="justify-stretch">

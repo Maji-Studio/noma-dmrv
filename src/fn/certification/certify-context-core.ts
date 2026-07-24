@@ -52,13 +52,13 @@ import {
   type IsometricGhgEntryTemplate,
 } from "@/lib/isometric";
 import { lookupInputMapping } from "@/lib/isometric/transformers/datapoint";
+import { hasExplicitSequestrationBinding } from "@/lib/isometric/transformers/sequestration-binding";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
 import {
   buildSoilTemperatureGate,
   resolveFacilityReferenceSoilTemperature,
   type FacilityReferenceSoilTemperature,
 } from "@/lib/isometric/utils/durability-aggregation";
-import { isSequestrationBlueprintKey } from "@/lib/isometric/transformers/measurement-sample";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import {
@@ -72,6 +72,7 @@ import {
 import { buildCertifyEntityReadiness } from "./certify-entity-readiness";
 import { loadDurabilityBatchData } from "./durability-readiness";
 import { buildSubmissionWarnings } from "./submission-warnings";
+import { loadEvidenceMirrorSummaryForScope, type EvidenceMirrorSummary } from "./evidence-mirror-summary";
 import {
   loadLinkedGhgStatementStatus,
   type LinkedGhgStatementStatus,
@@ -164,6 +165,7 @@ export interface RemovalCertifyContext {
   // durabilityGateBlockers / entityReadinessGaps, these do NOT gate submission;
   // they tell the operator a recorded value will not be submitted.
   submissionWarnings: string[];
+  supportingDocuments: EvidenceMirrorSummary;
   // Focused run aggregation (run count, total biochar output, applied dry kg)
   // surfaced on the lean UI context so the Review step can show what's being
   // submitted without shipping the heavy `runs` array.
@@ -502,8 +504,9 @@ export async function loadFacilityCertifierFacts(
   for (const key of referencedKeys) {
     const found = blueprintByKey.get(key);
     if (found) blueprintsForTemplate.push(found);
-    // Template-bound measurement samples make recognized retired catalogue entries optional.
-    else if (!isSequestrationBlueprintKey(key)) {
+    // Explicit bindings are the fail-closed source of truth for template
+    // components intentionally absent from the global blueprint catalogue.
+    else if (!hasExplicitSequestrationBinding(key)) {
       unresolvedBlueprintKeys.push(key);
     }
   }
@@ -564,11 +567,7 @@ function productionReadinessGapFromLineages(
   return defaultProductionReadinessGap();
 }
 
-// Composes one removal's full submission context from its resolved scope and
-// the facility-scoped certifier facts (loaded once per facility, passed in).
-// The facility half spreads straight onto the context; this only adds the
-// removal-level half — submission status, member-batch lineage, the deduped
-// production-run union, transport coverage, and mass accounting.
+// Composes one removal's scope, submission, lineage, transport, and mass facts.
 export async function buildRemovalContext(
   orgCtx: OrgContext,
   scope: RemovalScope,
@@ -589,20 +588,20 @@ export async function buildRemovalContext(
     applicationIds: [...b.applicationIds].sort(),
   }));
 
-  // The removal's own submission + its linked GHG Statement status resolve from
-  // the scope alone, so load them up-front: every short-circuit path then
-  // carries the real values rather than a placeholder.
-  const [latestSubmission, linkedGhgStatement] = await Promise.all([
-    scope.removalId
-      ? getLatestSubmission(orgCtx, {
-          provider: ISOMETRIC_PROVIDER,
-          submissionType: REMOVAL_SUBMISSION_TYPE,
-          localEntityType: REMOVAL_ENTITY_TYPE,
-          localEntityId: scope.removalId,
-        })
-      : Promise.resolve(null),
-    loadLinkedGhgStatementStatus(orgCtx, scope.removal),
-  ]);
+  // Load removal-owned facts up-front so every short-circuit carries them.
+  const [latestSubmission, linkedGhgStatement, supportingDocuments] =
+    await Promise.all([
+      scope.removalId
+        ? getLatestSubmission(orgCtx, {
+            provider: ISOMETRIC_PROVIDER,
+            submissionType: REMOVAL_SUBMISSION_TYPE,
+            localEntityType: REMOVAL_ENTITY_TYPE,
+            localEntityId: scope.removalId,
+          })
+        : Promise.resolve(null),
+      loadLinkedGhgStatementStatus(orgCtx, scope.removal),
+      loadEvidenceMirrorSummaryForScope(orgCtx, scope),
+    ]);
 
   // Walk every member batch's production-run applications into one deduped run union.
   const applicationIds = Array.from(
@@ -690,6 +689,7 @@ export async function buildRemovalContext(
         ...durabilityWarnings,
         ...soilTemperatureGate.warnings,
       ],
+      supportingDocuments,
       runSummary: EMPTY_RUN_SUMMARY,
       latestSubmission,
       linkedGhgStatement,
@@ -758,6 +758,7 @@ export async function buildRemovalContext(
     entityReadinessIssues: entityReadiness.issues,
     durabilityGateBlockers,
     submissionWarnings,
+    supportingDocuments,
     runSummary,
     latestSubmission,
     linkedGhgStatement,
@@ -810,6 +811,7 @@ function projectUiContext(
     entityReadinessIssues: ctx.entityReadinessIssues ?? [],
     durabilityGateBlockers: ctx.durabilityGateBlockers,
     submissionWarnings: ctx.submissionWarnings,
+    supportingDocuments: ctx.supportingDocuments,
     runSummary: ctx.runSummary,
     latestSubmission: ctx.latestSubmission,
     linkedGhgStatement: ctx.linkedGhgStatement,
@@ -817,8 +819,7 @@ function projectUiContext(
   };
 }
 
-// UI context keyed by removal id — the guided Review flow's source of truth
-// (Assemble / Review / Pre-flight read it; the pre-flight runs the shared
+// Guided Review UI context keyed by removal id; its pre-flight runs the shared
 // `deriveRemovalReadiness` classifier against it). Mirrors
 // `loadCertifyContextForCreditBatch` but resolves the scope from the removal.
 export async function loadRemovalCertifyContext(

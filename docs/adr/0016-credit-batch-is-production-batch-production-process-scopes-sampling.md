@@ -36,6 +36,13 @@ Status: accepted (2026-06-19); amended 2026-07-02 (issue #309); amended 2026-07-
 > H/C_org datapoints — the "production batch" ADR 0013 submits per *is* the credit batch
 > defined here). Archived implementation shape:
 > `docs/archive/2026-06-19-credit-batch-lab-sampling-compliance.md`.
+>
+> **Amendment (2026-07-24 — version-citation correction):** the v1.3 label in
+> the Context is not the applicable local interpretation pin. Read the cited
+> Biochar Protocol rules against the v1.2 interpretation set. The Certify
+> project was separately observed on v1.1 on this date; that project
+> discrepancy requires operator resolution and does not change this ADR's
+> production-batch/process grain.
 
 ## Context
 
