@@ -25,8 +25,6 @@ export type GhgStatementStatus =
   components["schemas"]["GhgStatementStatus"];
 
 const GHG_STATEMENT_LIST_PAGE_SIZE = 50;
-const ADJACENT_PERIOD_TOLERANCE_DAYS = 1;
-const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export interface GhgStatementPeriod {
   startOn: string | null;
@@ -140,13 +138,5 @@ function periodMatchesRequestedEnd(
   ) {
     return true;
   }
-  return (
-    Math.abs(calendarDayNumber(period.endOn) - calendarDayNumber(requestedEndOn)) <=
-    ADJACENT_PERIOD_TOLERANCE_DAYS
-  );
-}
-
-function calendarDayNumber(value: string): number {
-  const [year, month, day] = value.split("-").map(Number);
-  return Date.UTC(year, month - 1, day) / MILLISECONDS_PER_DAY;
+  return false;
 }

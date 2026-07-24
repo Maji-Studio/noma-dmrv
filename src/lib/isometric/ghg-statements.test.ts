@@ -88,13 +88,14 @@ describe("GHG statement create matching", () => {
     });
   });
 
-  it("adopts a DRAFT whose end is one calendar day away", () => {
+  it("treats an end one calendar day away as an unrelated period", () => {
     const remote = statement("ggs_adjacent", "prj_target", {
+      reporting_period_start_at: "2026-01-01",
       reporting_period_end_at: "2026-03-30",
     });
 
     expect(matchGhgStatementForCreate(remote, "2026-03-31").behavior).toBe(
-      "adopt",
+      "unrelated",
     );
   });
 
