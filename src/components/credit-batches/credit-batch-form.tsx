@@ -4,7 +4,7 @@
  *
  * Form sections:
  * 1. Batch definition — feedstock, startDate, endDate
- * 2. Production cohort — selected production runs in the production window
+ * 2. Production cohort — automatic production runs in the production window
  * 3. Additional information — notes always trail the operational fields
  * Facility durability and registry/accounting values are intentionally absent:
  * neither is a batch input.
@@ -12,178 +12,33 @@
 "use client";
 
 import { formatUtcDate, toDateInputValue } from "@/lib/date-utils";
-import { formatDate } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useFacilityCertifierSummary } from "@/hooks/use-certification";
 import { useFeedstockTypeList } from "@/hooks/use-feedstock-types";
 import { useMethodBEligibility } from "@/hooks/use-production-processes";
-import { kgToTonnes } from "@/lib/calculations/unit-conversions";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  ArrowsClockwiseIcon,
-  WarningCircleIcon,
-} from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, SectionLabel, FormActions } from "@/components/forms";
-import { Button, StatusBadge } from "@/components/ui";
+  FormActions,
+  FormEntitySelect,
+  FormField,
+  FormInput,
+  FormSection,
+  FormTextarea,
+} from "@/components/forms";
 import {
   creditBatchFormSchema,
   type CreditBatchFormData,
 } from "@/schemas/credit-batches";
 import type { CreditBatch } from "@/db/schema/credits";
-import type { CreditBatchProductionRunOption } from "@/data-access/credit-batches";
 import { useCreditBatchProductionRunOptions } from "@/hooks/use-credit-batches";
 import { CohortInputLedger } from "./cohort-input-ledger";
 import { CreditBatchSamplingControl } from "./credit-batch-sampling-control";
 import { MethodBPrerequisitesSetup } from "./method-b-prerequisites-setup";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
-
-const COHORT_LIST_HEIGHT_CLASS = "max-h-[320px]";
-
-// ============================================
-// Format helpers
-// ============================================
-
-function formatTons(value: number | null): string {
-  if (value == null) return "—";
-  return `${value.toFixed(2)} t`;
-}
-
-// ============================================
-// Cohort picker accordion section
-// ============================================
-
-function CohortPickerSection({
-  title,
-  count,
-  totalCount,
-  hasDates,
-  isError,
-  onRetry,
-  isRetrying,
-  notReadyMessage,
-  noMatchMessage,
-  noMatchWithSelectionMessage,
-  children,
-}: {
-  title: string;
-  count: number;
-  totalCount: number;
-  /** Whether the cohort's prerequisites (feedstock + window) are all set. */
-  hasDates: boolean;
-  /** True when the underlying production-run-options query has failed. */
-  isError?: boolean;
-  /** Refetch handler surfaced by the fetch-error retry affordance. */
-  onRetry?: () => void;
-  /** Disables the retry button while a refetch is already in flight. */
-  isRetrying?: boolean;
-  notReadyMessage: string;
-  noMatchMessage: string;
-  noMatchWithSelectionMessage?: string;
-  children: React.ReactNode;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const panelId = `cohort-picker-${title.toLowerCase().replace(/\s+/g, "-")}-panel`;
-
-  return (
-    <div className="space-y-12 pt-16 border-t border-[var(--color-border-tertiary)]">
-      <div className="flex items-center justify-between">
-        <SectionLabel hint="Completed runs matching this feedstock and production window are attached automatically.">
-          {title}
-        </SectionLabel>
-        {hasDates && count > 0 && (
-          <span className="inline-flex items-center px-8 py-2 body-caption font-medium bg-[var(--clr-purple-10)] text-[var(--clr-purple)]">
-            {count} selected
-          </span>
-        )}
-      </div>
-
-      {hasDates && isError ? (
-        <div
-          role="alert"
-          className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-signal-red)] bg-[var(--clr-red-10)]"
-        >
-          <WarningCircleIcon
-            size={16}
-            weight="fill"
-            aria-hidden
-            className="mt-1 shrink-0 text-[var(--color-signal-red)]"
-          />
-          <div className="flex flex-1 items-center justify-between gap-12">
-            <span className="body-small text-[var(--color-signal-red)]">
-              Couldn&apos;t load production runs for this window. Try again.
-            </span>
-            {onRetry && (
-              <Button
-                type="button"
-                variant="noOutline"
-                size="small"
-                onClick={onRetry}
-                disabled={isRetrying}
-              >
-                <ArrowsClockwiseIcon size={14} />
-                {isRetrying ? "Retrying…" : "Retry"}
-              </Button>
-            )}
-          </div>
-        </div>
-      ) : !hasDates ? (
-        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)]">
-          <span className="body-small text-[var(--color-text-tertiary)]">
-            {notReadyMessage}
-          </span>
-        </div>
-      ) : totalCount === 0 && count === 0 ? (
-        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)]">
-          <span className="body-small text-[var(--color-text-tertiary)]">
-            {noMatchMessage}
-          </span>
-        </div>
-      ) : totalCount === 0 ? (
-        <div className="space-y-8">
-          <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)]">
-            <span className="body-small text-[var(--color-text-tertiary)]">
-              {noMatchWithSelectionMessage ?? noMatchMessage}
-            </span>
-          </div>
-          <div
-            className={`grid grid-cols-1 gap-8 ${COHORT_LIST_HEIGHT_CLASS} overflow-y-auto`}
-          >
-            {children}
-          </div>
-        </div>
-      ) : (
-        <div className="border border-[var(--color-border-tertiary)]">
-          <button
-            type="button"
-            onClick={() => setIsOpen(!isOpen)}
-            aria-expanded={isOpen}
-            aria-controls={panelId}
-            className="w-full flex items-center justify-between px-16 py-10 bg-[var(--color-background-medium)] hover:bg-[var(--color-surface-light)] transition-colors"
-          >
-            <span className="body-small font-medium text-[var(--color-text-secondary)]">
-              {totalCount} {title.toLowerCase()} in production window
-            </span>
-            <span className="body-caption text-[var(--color-text-tertiary)]">
-              {isOpen ? "Collapse" : "Expand"}
-            </span>
-          </button>
-          {isOpen && (
-            <div
-              id={panelId}
-              role="region"
-              className={`grid grid-cols-1 gap-8 p-8 ${COHORT_LIST_HEIGHT_CLASS} overflow-y-auto`}
-            >
-              {children}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+import { CreditBatchProductionRunsPreview } from "./credit-batch-production-runs-preview";
 
 function parseWatchedDate(value: unknown): Date | null {
   if (value == null || value === "") {
@@ -316,6 +171,7 @@ export function CreditBatchForm({
   const {
     data: productionRunOptions = [],
     isSuccess: productionRunOptionsLoaded,
+    isLoading: productionRunOptionsLoading,
     isError: productionRunOptionsErrored,
     isFetching: productionRunOptionsFetching,
     refetch: refetchProductionRunOptions,
@@ -421,49 +277,6 @@ export function CreditBatchForm({
     onSubmit({ ...data, sampling } as CreditBatchFormData);
   });
 
-  const renderProductionRunOption = (run: CreditBatchProductionRunOption) => {
-    const assignedElsewhere =
-      !!run.assignedCreditBatchId &&
-      run.assignedCreditBatchId !== creditBatch?.id;
-    const isPreview = run.status !== COMPLETED_PRODUCTION_RUN_STATUS;
-    return (
-      <label
-        key={run.id}
-        className={`flex min-h-44 items-center gap-12 px-12 py-8 border ${
-          assignedElsewhere
-            ? "bg-[var(--color-background-medium)] border-[var(--color-border-tertiary)] text-[var(--color-text-tertiary)]"
-            : "bg-[var(--color-background-white)] border-[var(--color-border-tertiary)] text-[var(--color-text-primary)]"
-        }`}
-      >
-        <input
-          type="checkbox"
-          value={run.id}
-          disabled={isSubmitting || assignedElsewhere || isPreview || !isEditMode}
-          className="h-16 w-16 shrink-0"
-          {...register("productionRunIds")}
-        />
-        <span className="body-small font-medium shrink-0">{run.code}</span>
-        <span className="text-[11px] text-[var(--color-text-tertiary)] shrink-0">
-          {formatDate(run.date)}
-        </span>
-        {isPreview && <StatusBadge status={run.status} size="small" />}
-        {assignedElsewhere && run.assignedCreditBatchCode && (
-          <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-tertiary)] truncate">
-            Assigned to {run.assignedCreditBatchCode}
-          </span>
-        )}
-        <span className="ml-auto text-[10px] uppercase tracking-wider text-[var(--color-text-tertiary)] shrink-0">
-          Dry output{" "}
-          {formatTons(
-            run.biocharDryMassKg == null
-              ? null
-              : kgToTonnes(run.biocharDryMassKg),
-          )}
-        </span>
-      </label>
-    );
-  };
-
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* ── Batch definition ── */}
@@ -544,41 +357,16 @@ export function CreditBatchForm({
       </FormSection>
 
       {/* ── Production cohort ── */}
-      <CohortPickerSection
-        title="Production runs"
-        count={selectedProductionRunIds.length}
-        totalCount={typedRunOptions.length}
-        hasDates={isCohortReady}
+      <CreditBatchProductionRunsPreview
+        matchingRuns={typedRunOptions}
+        retainedRuns={retainedProductionRunOptions}
+        currentCreditBatchId={creditBatch?.id}
+        isReady={isCohortReady}
+        isLoading={productionRunOptionsLoading}
         isError={productionRunOptionsErrored}
         onRetry={() => refetchProductionRunOptions()}
         isRetrying={productionRunOptionsFetching}
-        notReadyMessage="Select a feedstock type and set the production window to load runs."
-        noMatchMessage="No production runs match yet. You can create the batch now; matching completed runs will attach automatically."
-        noMatchWithSelectionMessage="No additional runs of this feedstock type fall within the production window."
-      >
-        {typedRunOptions.map(renderProductionRunOption)}
-        {retainedProductionRunOptions.map(({ id, run }) =>
-          run ? (
-            renderProductionRunOption(run)
-          ) : (
-            <label
-              key={id}
-              className="flex min-h-44 items-center gap-12 px-12 py-8 border bg-[var(--color-background-white)] border-[var(--color-border-tertiary)] text-[var(--color-text-primary)]"
-            >
-              <input
-                type="checkbox"
-                value={id}
-                disabled={isSubmitting || !isEditMode}
-                className="h-16 w-16 shrink-0"
-                {...register("productionRunIds")}
-              />
-              <span className="body-small font-mono break-all">
-                {id}
-              </span>
-            </label>
-          ),
-        )}
-      </CohortPickerSection>
+      />
 
       {errors.productionRunIds?.message && (
         <p className="body-caption text-[var(--color-signal-red)]">
