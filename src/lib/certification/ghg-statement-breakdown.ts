@@ -33,6 +33,7 @@ import {
   type RemovalBreakdownRegistryInput,
   type RemovalCarbonBreakdown,
 } from "./removal-breakdown";
+import type { RemoteGhgStatus } from "./status";
 
 /** Per member GHG entry, read back from the registry (kg CO₂e). */
 export interface GhgStatementEntryFigures {
@@ -71,6 +72,10 @@ export interface GhgStatementBreakdownInput {
   entries: GhgStatementEntryFigures[];
   /** Statement-level buffer/supplier split, or null until the registry sets it. */
   creditAllocation: GhgStatementCreditAllocation | null;
+  /** Registry statement id, null before the local statement has a remote id. */
+  ghgStatementId: string | null;
+  /** Live registry status when readable; unknown/missing stays unverified. */
+  ghgStatementStatus: RemoteGhgStatus | null;
 }
 
 // Combine independent per-entry standard deviations in quadrature (root sum of
@@ -106,6 +111,8 @@ function deriveBufferPercent(
 function aggregateRegistry(
   entries: GhgStatementEntryFigures[],
   allocation: GhgStatementCreditAllocation | null,
+  ghgStatementId: string | null,
+  ghgStatementStatus: RemoteGhgStatus | null,
 ): RemovalBreakdownRegistryInput {
   return {
     netRemovedKg: entries.reduce((sum, e) => sum + e.netRemovedKg, 0),
@@ -117,6 +124,8 @@ function aggregateRegistry(
     riskOfReversalPercent: deriveBufferPercent(allocation),
     bufferCreditsKg: allocation?.bufferCreditsKg ?? null,
     supplierCreditsKg: allocation?.supplierCreditsKg ?? null,
+    ghgStatementId,
+    ghgStatementStatus,
   };
 }
 
@@ -127,7 +136,12 @@ export function computeGhgStatementBreakdown(
   // flattened member batches (identical shape to a single removal's estimate).
   const registry =
     input.entries.length > 0
-      ? aggregateRegistry(input.entries, input.creditAllocation)
+      ? aggregateRegistry(
+          input.entries,
+          input.creditAllocation,
+          input.ghgStatementId,
+          input.ghgStatementStatus,
+        )
       : null;
 
   return computeRemovalBreakdown({

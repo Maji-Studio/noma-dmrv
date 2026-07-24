@@ -21,6 +21,8 @@ function input(
     memberBatchCount: 2,
     entries: [],
     creditAllocation: null,
+    ghgStatementId: null,
+    ghgStatementStatus: null,
     ...overrides,
   };
 }
@@ -57,6 +59,7 @@ describe("computeGhgStatementBreakdown — estimate mode (no entries)", () => {
       }),
     );
     expect(result.hasAnyData).toBe(false);
+    expect(result.anomalies).toEqual([]);
   });
 });
 

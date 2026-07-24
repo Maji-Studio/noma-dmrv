@@ -14,14 +14,15 @@
  *    pre-uncertainty figure, the standard deviation behind the uncertainty
  *    discount and the buffer-pool split, read back from the GHG entry.
  *
- * The registry never returns uncertainty discounting until a removal is
- * verified, and only the registry knows it — so a draft removal shows an
- * honest local *estimate* (no uncertainty bar), and a submitted removal shows
- * the registry's verified net with the uncertainty haircut made explicit.
+ * Registry figures can exist while their GHG statement is still a draft. The
+ * statement link and status therefore travel with the figures so the UI can
+ * distinguish a registry draft from genuinely verified accounting.
  *
  * All public figures are kg CO₂e (the registry's unit); the display layer
  * down-converts to tonnes. Pure and IO-free so the math is unit-testable.
  */
+
+import type { RemoteGhgStatus } from "./status";
 
 const TONNE_KG = 1000;
 
@@ -34,6 +35,18 @@ const RECONCILE_ABS_TOLERANCE_KG = 1;
 const RECONCILE_REL_TOLERANCE = 0.01;
 
 export type RemovalBreakdownSource = "registry" | "estimate";
+
+export type RemovalBreakdownAnomaly =
+  | "net-negative"
+  | "net-exceeds-before-discount"
+  | "sequestration-missing-or-zero";
+
+export interface RemovalBreakdownRegistryVerification {
+  /** Registry GHG statement linked from the GHG entry; null means draft. */
+  ghgStatementId: string | null;
+  /** Live statement status when readable; unknown/missing stays null. */
+  ghgStatementStatus: RemoteGhgStatus | null;
+}
 
 /** Registry-side figures read back from a submitted GHG entry (kg CO₂e). */
 export interface RemovalBreakdownRegistryInput {
@@ -49,6 +62,10 @@ export interface RemovalBreakdownRegistryInput {
   bufferCreditsKg: number | null;
   /** `credit_allocation.supplier_allocation_kg`. */
   supplierCreditsKg: number | null;
+  /** `ghg_statement_id` from the GHG entry; null means the entry is a draft. */
+  ghgStatementId: string | null;
+  /** Status of the linked GHG statement, when the registry read succeeds. */
+  ghgStatementStatus: RemoteGhgStatus | null;
 }
 
 export interface RemovalBreakdownInput {
@@ -94,6 +111,10 @@ export interface RemovalCarbonBreakdown {
   memberBatchCount: number;
   /** False when there is nothing meaningful to show (no preview, no registry). */
   hasAnyData: boolean;
+  /** Trust failures that suppress the normal positive-removal ledger. */
+  anomalies: RemovalBreakdownAnomaly[];
+  /** Registry statement identity/status used to gate verified presentation. */
+  registryVerification: RemovalBreakdownRegistryVerification | null;
 }
 
 interface NullableSum {
@@ -119,6 +140,39 @@ function sumNullable(values: (number | null)[]): NullableSum {
 
 function toKg(tonnes: number): number {
   return tonnes * TONNE_KG;
+}
+
+function collectRegistryAnomalies(
+  sequestrationKg: number | null,
+  netRemovedKg: number,
+  netBeforeDiscountKg: number,
+): RemovalBreakdownAnomaly[] {
+  const anomalies: RemovalBreakdownAnomaly[] = [];
+  if (netRemovedKg < 0) {
+    anomalies.push("net-negative");
+  }
+  if (netRemovedKg > netBeforeDiscountKg) {
+    anomalies.push("net-exceeds-before-discount");
+  }
+  if (sequestrationKg == null || sequestrationKg <= 0) {
+    anomalies.push("sequestration-missing-or-zero");
+  }
+  return anomalies;
+}
+
+function collectEstimateAnomalies(
+  netRemovedKg: number | null,
+): RemovalBreakdownAnomaly[] {
+  return netRemovedKg != null && netRemovedKg < 0 ? ["net-negative"] : [];
+}
+
+function buildRegistryVerification(
+  registry: RemovalBreakdownRegistryInput,
+): RemovalBreakdownRegistryVerification {
+  return {
+    ghgStatementId: registry.ghgStatementId,
+    ghgStatementStatus: registry.ghgStatementStatus,
+  };
 }
 
 export function computeRemovalBreakdown(
@@ -154,6 +208,11 @@ export function computeRemovalBreakdown(
           RECONCILE_ABS_TOLERANCE_KG,
           Math.abs(registry.netBeforeDiscountKg) * RECONCILE_REL_TOLERANCE,
         );
+    const anomalies = collectRegistryAnomalies(
+      sequestrationKg,
+      registry.netRemovedKg,
+      registry.netBeforeDiscountKg,
+    );
 
     return {
       source: "registry",
@@ -175,8 +234,12 @@ export function computeRemovalBreakdown(
       missingInputs: input.missingInputs,
       memberBatchCount: input.memberBatchCount,
       hasAnyData: true,
+      anomalies,
+      registryVerification: buildRegistryVerification(registry),
     };
   }
+
+  const anomalies = collectEstimateAnomalies(localNetBeforeDiscountKg);
 
   return {
     source: "estimate",
@@ -201,5 +264,7 @@ export function computeRemovalBreakdown(
       sequestration.anyPresent ||
       emissions.anyPresent ||
       counterfactual.anyPresent,
+    anomalies,
+    registryVerification: null,
   };
 }
