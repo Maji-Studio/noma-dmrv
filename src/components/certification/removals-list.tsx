@@ -177,9 +177,9 @@ function ReadinessCell({ summary }: { summary: RemovalPreflightSummary }) {
   if (state === "blocked") {
     return (
       <span className="flex flex-col gap-4">
-        {[...reasons, ...advisories].map((message) => (
+        {reasons.map((reason) => (
           <span
-            key={message}
+            key={reason}
             className="inline-flex items-start gap-6 body-caption text-[var(--color-signal-orange)]"
           >
             <WarningIcon
@@ -188,7 +188,23 @@ function ReadinessCell({ summary }: { summary: RemovalPreflightSummary }) {
               aria-hidden
               className="mt-px shrink-0"
             />
-            <span className="line-clamp-2">{message}</span>
+            <span className="line-clamp-2">{reason}</span>
+          </span>
+        ))}
+        {advisories.map((advisory) => (
+          <span
+            key={advisory}
+            className="inline-flex items-start gap-6 body-caption"
+          >
+            <WarningIcon
+              size={16}
+              weight="fill"
+              aria-hidden
+              className="mt-px shrink-0 text-[var(--color-signal-orange)]"
+            />
+            <span className="line-clamp-2 text-[var(--color-text-secondary)]">
+              Advisory — {advisory}
+            </span>
           </span>
         ))}
       </span>

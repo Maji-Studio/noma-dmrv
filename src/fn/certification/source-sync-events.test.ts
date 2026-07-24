@@ -11,7 +11,7 @@ import { withSourceSyncEventOnFailure } from "./source-sync-events";
 
 describe("withSourceSyncEventOnFailure", () => {
   it("records a source failure for both the document and its removal", async () => {
-    const error = new Error("upload failed");
+    const error = new Error("upload failed for operator@example.com");
 
     await expect(
       withSourceSyncEventOnFailure(
@@ -40,6 +40,7 @@ describe("withSourceSyncEventOnFailure", () => {
         entityType: "document",
         entityId: "document-id",
         status: "failed",
+        errorMessage: "upload failed for [REDACTED]",
       }),
     );
     expect(appendSyncEventBestEffort).toHaveBeenCalledWith(
@@ -48,6 +49,7 @@ describe("withSourceSyncEventOnFailure", () => {
         entityType: "removal",
         entityId: "removal-id",
         status: "failed",
+        errorMessage: "upload failed for [REDACTED]",
         requestPayload: {
           externalId: "source-id",
           documentId: "document-id",

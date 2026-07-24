@@ -1,4 +1,5 @@
 import type { OrgContext } from "@/lib/auth/server";
+import { sanitizeErrorMessage } from "@/lib/log";
 import {
   appendSyncEventBestEffort,
   ISOMETRIC_PROVIDER,
@@ -24,8 +25,7 @@ export async function withSourceSyncEventOnFailure<T>(
   try {
     return await fn();
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : String(error);
+    const errorMessage = sanitizeErrorMessage(error);
     const common = {
       provider: ISOMETRIC_PROVIDER,
       operation: args.operation,

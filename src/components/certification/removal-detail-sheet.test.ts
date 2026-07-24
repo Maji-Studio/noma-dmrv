@@ -13,4 +13,19 @@ describe("RemovalDetailSheet sync history contract", () => {
       /<SyncEventLog\s+events=\{summary\.recentSyncEvents\}\s+compact/,
     );
   });
+
+  it("shows submitted-state advisories without the submission availability note", () => {
+    const source = readFileSync(
+      new URL("./removal-detail-sheet.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toContain(
+      "<AdvisoryRows advisories={advisories} showSubmissionNote={false} />",
+    );
+    expect(source).toContain("showSubmissionNote = true");
+    expect(source).toContain(
+      "Advisory — {advisory}. Submission remains available.",
+    );
+  });
 });

@@ -107,8 +107,9 @@ export async function renderSyntheticSeedPdf(
 export async function storeSyntheticSeedDocuments(
   provider: StorageProvider,
   rows: SeedDocumentInsert[],
+  uploadedKeys?: string[],
 ): Promise<SeedDocumentInsert[]> {
-  return Promise.all(
+  const results = await Promise.allSettled(
     rows.map(async (row) => {
       const pdf = await renderSyntheticSeedPdf(seedDocumentCode(row));
       const storageKey = buildStorageKey({
@@ -118,6 +119,7 @@ export async function storeSyntheticSeedDocuments(
         fileName: row.fileName,
       });
       await provider.putObject(storageKey, pdf, PDF_MIME_TYPE);
+      uploadedKeys?.push(storageKey);
       return {
         ...row,
         storageProvider: provider.name,
@@ -128,7 +130,13 @@ export async function storeSyntheticSeedDocuments(
         mimeType: PDF_MIME_TYPE,
         checksumSha256: createHash("sha256").update(pdf).digest("hex"),
         uploadStatus: "uploaded",
-      };
+      } satisfies SeedDocumentInsert;
     }),
   );
+  const rejected = results.find((result) => result.status === "rejected");
+  if (rejected) throw rejected.reason;
+  return results.map((result) => {
+    if (result.status === "rejected") throw result.reason;
+    return result.value;
+  });
 }

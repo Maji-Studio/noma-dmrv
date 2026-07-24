@@ -100,15 +100,24 @@ function ReadinessBlock({ summary }: { summary: RemovalPreflightSummary }) {
     );
   }
   return (
-    <p className="body-small text-[var(--color-text-secondary)]">
-      {state === "inProgress"
-        ? "A submission is in progress."
-        : "This removal has been submitted to the registry."}
-    </p>
+    <div className="flex flex-col gap-8">
+      <p className="body-small text-[var(--color-text-secondary)]">
+        {state === "inProgress"
+          ? "A submission is in progress."
+          : "This removal has been submitted to the registry."}
+      </p>
+      <AdvisoryRows advisories={advisories} showSubmissionNote={false} />
+    </div>
   );
 }
 
-function AdvisoryRows({ advisories }: { advisories: string[] }) {
+function AdvisoryRows({
+  advisories,
+  showSubmissionNote = true,
+}: {
+  advisories: string[];
+  showSubmissionNote?: boolean;
+}) {
   if (advisories.length === 0) return null;
   return (
     <ul className="flex flex-col gap-4 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
@@ -120,9 +129,15 @@ function AdvisoryRows({ advisories }: { advisories: string[] }) {
             aria-hidden
             className="mt-2 shrink-0 text-[var(--color-signal-orange)]"
           />
-          <span className="body-caption text-[var(--color-text-secondary)]">
-            Advisory — {advisory}. Submission remains available.
-          </span>
+          {showSubmissionNote ? (
+            <span className="body-caption text-[var(--color-text-secondary)]">
+              Advisory — {advisory}. Submission remains available.
+            </span>
+          ) : (
+            <span className="body-caption text-[var(--color-text-secondary)]">
+              Advisory — {advisory}.
+            </span>
+          )}
         </li>
       ))}
     </ul>

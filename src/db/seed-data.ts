@@ -305,6 +305,7 @@ async function seedDemoData() {
 
     const { getStorageProvider } = await import('../lib/storage');
     const storageProvider = getStorageProvider();
+    const uploadedSeedDocumentKeys: string[] = [];
 
     await db.transaction(async (tx) => {
       // ============================================================
@@ -1711,6 +1712,7 @@ async function seedDemoData() {
               fileSizeBytes: 176_640,
             },
           ], DEC_ORG_ID),
+          uploadedSeedDocumentKeys,
         ),
       );
 
@@ -1864,6 +1866,7 @@ async function seedDemoData() {
             fileSizeBytes: 131_584,
           },
           ], DEC_ORG_ID),
+          uploadedSeedDocumentKeys,
         ),
       );
 
@@ -2047,6 +2050,15 @@ async function seedDemoData() {
       if (extraProducts.length > 0) {
         await tx.insert(schema.biocharProducts).values(extraProducts);
       }
+    }).catch(async (error: unknown) => {
+      for (const storageKey of uploadedSeedDocumentKeys) {
+        try {
+          await storageProvider.deleteObject(storageKey);
+        } catch {
+          console.warn(`Failed to delete seed document object ${storageKey}`);
+        }
+      }
+      throw error;
     });
 
     console.log('');
