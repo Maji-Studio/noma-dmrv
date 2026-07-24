@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   captureMeasurementSampleDatapointIds,
   mergeMeasurementSampleDatapointIds,
+  type CreateMeasurementSampleRequest,
   type IsometricMeasurementSample,
 } from "./measurement-samples";
 
@@ -19,9 +20,36 @@ function measurementSample(
   };
 }
 
+function requestForSample(
+  sample: IsometricMeasurementSample,
+  values: IsometricMeasurementSample["values"] = sample.values,
+): CreateMeasurementSampleRequest {
+  return {
+    feedstock_batch_id: null,
+    measured_at: sample.measured_at,
+    measurement_location_id: null,
+    measurement_type: "biochar_production_batch",
+    production_batch_id: null,
+    project_id: "prj_1",
+    storage_location_id: null,
+    supplier_reference_id: sample.supplier_reference_id,
+    values: values.map(({ measurement_property, value }) => ({
+      measurement_property,
+      value,
+    })),
+  };
+}
+
+function capture(sample: IsometricMeasurementSample) {
+  return captureMeasurementSampleDatapointIds(
+    sample,
+    requestForSample(sample),
+  );
+}
+
 describe("captureMeasurementSampleDatapointIds", () => {
   it("groups response datapoint IDs by measurement property and preserves replicate order", () => {
-    const capture = captureMeasurementSampleDatapointIds(
+    const result = capture(
       measurementSample("mts_1", [
         {
           datapoint_id: "dtp_c1",
@@ -67,18 +95,18 @@ describe("captureMeasurementSampleDatapointIds", () => {
       ]),
     );
 
-    expect(capture.measurementSampleId).toBe("mts_1");
+    expect(result.measurementSampleId).toBe("mts_1");
     expect(
-      capture.datapointIdsByMeasurementProperty.get(
+      result.datapointIdsByMeasurementProperty.get(
         "mass_fraction_dry_basis|total_carbon",
       ),
     ).toEqual(["dtp_c1", "dtp_c2"]);
     expect(
-      capture.datapointIdsByMeasurementProperty.get(
+      result.datapointIdsByMeasurementProperty.get(
         "dimensionless_ratio|inertinite_fraction",
       ),
     ).toEqual(["dtp_s1"]);
-    expect(capture.datapointIdsByMeasurementProperty.get("mass")).toEqual([
+    expect(result.datapointIdsByMeasurementProperty.get("mass")).toEqual([
       "dtp_mass",
     ]);
   });
@@ -92,15 +120,100 @@ describe("captureMeasurementSampleDatapointIds", () => {
       } as unknown as IsometricMeasurementSample["values"][number],
     ]);
 
-    expect(() => captureMeasurementSampleDatapointIds(sample)).toThrow(
+    expect(() => capture(sample)).toThrow(
       /without the required datapoint_id.*cannot bind sequestration inputs/,
     );
+  });
+
+  it("fails closed when the registry response omits a requested value", () => {
+    const response = measurementSample("mts_partial", [
+      {
+        datapoint_id: "dtp_c1",
+        measurement_property: {
+          quantity_kind: "mass_fraction_dry_basis",
+          qualifier: "total_carbon",
+        },
+        value: {
+          magnitude: 0.8,
+          standard_deviation: null,
+          unit: "dimensionless",
+        },
+      },
+    ]);
+    const expectedValues = [
+      ...response.values,
+      {
+        ...response.values[0],
+        datapoint_id: "not-sent-by-registry",
+        value: { ...response.values[0].value, magnitude: 0.82 },
+      },
+    ];
+
+    expect(() =>
+      captureMeasurementSampleDatapointIds(
+        response,
+        requestForSample(response, expectedValues),
+      ),
+    ).toThrow(/returned 1 value.*expected 2/);
+  });
+
+  it("fails closed on an unexpected response property", () => {
+    const response = measurementSample("mts_extra", [
+      {
+        datapoint_id: "dtp_mass",
+        measurement_property: { quantity_kind: "mass", qualifier: null },
+        value: { magnitude: 1000, standard_deviation: null, unit: "kg" },
+      },
+      {
+        datapoint_id: "dtp_extra",
+        measurement_property: {
+          quantity_kind: "mass_fraction_dry_basis",
+          qualifier: "total_carbon",
+        },
+        value: {
+          magnitude: 0.8,
+          standard_deviation: null,
+          unit: "dimensionless",
+        },
+      },
+    ]);
+
+    expect(() =>
+      captureMeasurementSampleDatapointIds(
+        response,
+        requestForSample(response, response.values.slice(0, 1)),
+      ),
+    ).toThrow(/unexpected measurement property/);
+  });
+
+  it("fails closed on duplicate response datapoint IDs", () => {
+    const response = measurementSample("mts_duplicate", [
+      {
+        datapoint_id: "dtp_duplicate",
+        measurement_property: { quantity_kind: "mass", qualifier: null },
+        value: { magnitude: 1000, standard_deviation: null, unit: "kg" },
+      },
+      {
+        datapoint_id: "dtp_duplicate",
+        measurement_property: {
+          quantity_kind: "mass_fraction_dry_basis",
+          qualifier: "total_carbon",
+        },
+        value: {
+          magnitude: 0.8,
+          standard_deviation: null,
+          unit: "dimensionless",
+        },
+      },
+    ]);
+
+    expect(() => capture(response)).toThrow(/duplicate datapoint_id/);
   });
 });
 
 describe("mergeMeasurementSampleDatapointIds", () => {
   it("retains per-sample ordering while combining the same property", () => {
-    const first = captureMeasurementSampleDatapointIds(
+    const first = capture(
       measurementSample("mts_1", [
         {
           datapoint_id: "dtp_c1",
@@ -116,7 +229,7 @@ describe("mergeMeasurementSampleDatapointIds", () => {
         },
       ]),
     );
-    const second = captureMeasurementSampleDatapointIds(
+    const second = capture(
       measurementSample("mts_2", [
         {
           datapoint_id: "dtp_c2",

@@ -317,7 +317,9 @@ export async function submitDurabilityMeasurementSamples(
         `Measurement sample ${submission.supplierRefId} was created or reconciled without a response body; its sequestration datapoint IDs cannot be captured.`,
       );
     }
-    samples.push(captureMeasurementSampleDatapointIds(resolvedSample));
+    samples.push(
+      captureMeasurementSampleDatapointIds(resolvedSample, submission.body),
+    );
     submitted += 1;
   }
   return {

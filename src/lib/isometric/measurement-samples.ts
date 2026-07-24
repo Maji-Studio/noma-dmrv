@@ -39,8 +39,20 @@ export interface MeasurementSampleDatapointCapture {
  */
 export function captureMeasurementSampleDatapointIds(
   sample: IsometricMeasurementSample,
+  request: CreateMeasurementSampleRequest,
 ): MeasurementSampleDatapointCapture {
   const datapointIdsByMeasurementProperty = new Map<string, string[]>();
+  const expectedCountByMeasurementProperty = new Map<string, number>();
+  const returnedCountByMeasurementProperty = new Map<string, number>();
+  const returnedDatapointIds = new Set<string>();
+
+  for (const value of request.values) {
+    const propertyKey = encodeMeasurementProperty(value.measurement_property);
+    expectedCountByMeasurementProperty.set(
+      propertyKey,
+      (expectedCountByMeasurementProperty.get(propertyKey) ?? 0) + 1,
+    );
+  }
 
   for (const value of sample.values) {
     if (
@@ -51,10 +63,36 @@ export function captureMeasurementSampleDatapointIds(
         `Measurement sample ${sample.id} returned a value without the required datapoint_id; the GHG entry cannot bind sequestration inputs.`,
       );
     }
+    if (returnedDatapointIds.has(value.datapoint_id)) {
+      throw new SafeError(
+        `Measurement sample ${sample.id} returned duplicate datapoint_id "${value.datapoint_id}"; the GHG entry cannot bind sequestration inputs safely.`,
+      );
+    }
+    returnedDatapointIds.add(value.datapoint_id);
+
     const propertyKey = encodeMeasurementProperty(value.measurement_property);
+    if (!expectedCountByMeasurementProperty.has(propertyKey)) {
+      throw new SafeError(
+        `Measurement sample ${sample.id} returned unexpected measurement property "${propertyKey}".`,
+      );
+    }
+    returnedCountByMeasurementProperty.set(
+      propertyKey,
+      (returnedCountByMeasurementProperty.get(propertyKey) ?? 0) + 1,
+    );
     const existing = datapointIdsByMeasurementProperty.get(propertyKey) ?? [];
     existing.push(value.datapoint_id);
     datapointIdsByMeasurementProperty.set(propertyKey, existing);
+  }
+
+  for (const [propertyKey, expectedCount] of expectedCountByMeasurementProperty) {
+    const returnedCount =
+      returnedCountByMeasurementProperty.get(propertyKey) ?? 0;
+    if (returnedCount !== expectedCount) {
+      throw new SafeError(
+        `Measurement sample ${sample.id} returned ${returnedCount} value(s) for measurement property "${propertyKey}"; expected ${expectedCount}.`,
+      );
+    }
   }
 
   return {
