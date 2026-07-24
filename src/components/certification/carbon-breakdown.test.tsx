@@ -15,6 +15,8 @@ const LABELS: CarbonBreakdownLabels = {
   noData: "No data.",
   estimateIncomplete: "Estimate incomplete.",
   estimateFootnote: "Verification sets the final net.",
+  anomalyDescription:
+    "The normal removal ledger is hidden until the carbon data is corrected.",
 };
 
 function breakdown(
@@ -168,7 +170,22 @@ describe("CarbonBreakdownCard", () => {
     expect(html).toContain('role="alert"');
     expect(html).toContain("--st-bad");
     expect(html).toContain(copy);
+    expect(html).toContain(LABELS.anomalyDescription);
     expect(html).not.toContain("Uncertainty discount");
+  });
+
+  it("renders the caller-specific statement anomaly description", () => {
+    const statementDescription =
+      "The normal statement roll-up is hidden until the carbon data is corrected.";
+    const html = renderToStaticMarkup(
+      <CarbonBreakdownCard
+        data={breakdown({ anomalies: ["net-negative"] })}
+        labels={{ ...LABELS, anomalyDescription: statementDescription }}
+      />,
+    );
+
+    expect(html).toContain(statementDescription);
+    expect(html).not.toContain(LABELS.anomalyDescription);
   });
 
   it.each([

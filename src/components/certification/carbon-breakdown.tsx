@@ -47,6 +47,8 @@ export interface CarbonBreakdownLabels {
   estimateIncomplete: string;
   /** Estimate footnote — who sets the uncertainty discount and final net. */
   estimateFootnote: string;
+  /** Anomaly-state explanation tailored to the card's removal/statement scope. */
+  anomalyDescription: string;
 }
 
 // Every figure shares one visual language across the bar and the ledger: a
@@ -301,9 +303,11 @@ function getAnomalyCopy(
 function AnomalyState({
   data,
   registryVerified,
+  description,
 }: {
   data: RemovalCarbonBreakdown;
   registryVerified: boolean;
+  description: string;
 }) {
   return (
     <Shell>
@@ -321,10 +325,7 @@ function AnomalyState({
           />
           <div className="flex min-w-0 flex-col gap-4">
             <p className="body-medium font-medium">Carbon accounting anomaly</p>
-            <p className="body-small">
-              The normal removal ledger is hidden until the carbon data is
-              corrected.
-            </p>
+            <p className="body-small">{description}</p>
           </div>
         </div>
         {data.netRemovedKg != null && (
@@ -375,7 +376,11 @@ function CarbonBreakdownBody({
 
   if (data.anomalies.length > 0) {
     return (
-      <AnomalyState data={data} registryVerified={registryVerified} />
+      <AnomalyState
+        data={data}
+        registryVerified={registryVerified}
+        description={labels.anomalyDescription}
+      />
     );
   }
 
