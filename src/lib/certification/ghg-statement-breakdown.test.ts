@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   computeGhgStatementBreakdown,
+  hasExactGhgEntryMembership,
   type GhgStatementBreakdownInput,
   type GhgStatementEntryFigures,
 } from "./ghg-statement-breakdown";
@@ -37,6 +38,36 @@ const ENTRIES: GhgStatementEntryFigures[] = [
 
 // Buffer 34 kg of 284 kg issuable → 12.0% effective reversal rate.
 const ALLOCATION = { bufferCreditsKg: 34, supplierCreditsKg: 250 };
+
+describe("hasExactGhgEntryMembership", () => {
+  it("accepts the same membership regardless of registry order", () => {
+    expect(
+      hasExactGhgEntryMembership(
+        ["rmv_local_1", "rmv_local_2"],
+        ["rmv_local_2", "rmv_local_1"],
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects an unknown remote statement member", () => {
+    expect(
+      hasExactGhgEntryMembership(
+        ["rmv_local_1"],
+        ["rmv_local_1", "rmv_unknown"],
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects missing and duplicate memberships", () => {
+    expect(hasExactGhgEntryMembership([], [])).toBe(false);
+    expect(
+      hasExactGhgEntryMembership(
+        ["rmv_local_1", "rmv_local_1"],
+        ["rmv_local_1"],
+      ),
+    ).toBe(false);
+  });
+});
 
 describe("computeGhgStatementBreakdown — estimate mode (no entries)", () => {
   it("sums the flattened member batches into the local net", () => {

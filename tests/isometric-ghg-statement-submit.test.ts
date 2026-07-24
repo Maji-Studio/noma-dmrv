@@ -379,6 +379,9 @@ beforeEach(() => {
   // The non-overlap guard reads the facility's existing statements before
   // get-or-create; no siblings here, so nothing to overlap.
   vi.mocked(ghgDA.listGhgStatementsForFacility).mockResolvedValue([]);
+  vi.mocked(ghgDA.listFacilityIdsForExternalProject).mockResolvedValue([
+    FACILITY_ID,
+  ]);
 
   // The empty-statement guard (#245) predicts period membership from the
   // facility's open removals. Default to one completed in-window so creates
@@ -414,6 +417,26 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("createGhgStatementDraft — happy path", () => {
+  it("fails before registry access when the project is shared across facilities", async () => {
+    vi.mocked(ghgDA.listFacilityIdsForExternalProject).mockResolvedValue([
+      FACILITY_ID,
+      "44444444-4444-4444-8444-444444444444",
+    ]);
+
+    const result = await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: expect.stringMatching(/shared across multiple noma facilities/i),
+    });
+    expect(isometric.listGhgStatementsForProject).not.toHaveBeenCalled();
+    expect(isometric.createGhgStatement).not.toHaveBeenCalled();
+    expect(storedLedger).toHaveLength(0);
+  });
+
   it("inserts a v=1 draft, POSTs /ghg_statements, reconciles ghg_entry_ids, and marks the ledger submitted", async () => {
     const remote = makeRemoteStatement();
     vi.mocked(isometric.createGhgStatement).mockResolvedValue(remote);

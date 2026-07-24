@@ -40,6 +40,27 @@ import {
 const facilityIdSchema = z.string().uuid();
 const CONCURRENT_RECONCILIATION_WARNING =
   "This registry statement is already being reconciled by another request.";
+export const SHARED_PROJECT_GHG_CREATE_MESSAGE =
+  "GHG statements cannot be created while this Isometric project is shared across multiple noma facilities. Link each facility to a dedicated Isometric project first.";
+
+export function assertDedicatedGhgStatementProject(
+  projectFacilityIds: string[],
+): void {
+  if (new Set(projectFacilityIds).size > 1) {
+    throw new SafeError(SHARED_PROJECT_GHG_CREATE_MESSAGE);
+  }
+}
+
+function assertSingleFacilityRegistryStatement(
+  remoteId: string,
+  facilityIds: string[],
+): void {
+  if (new Set(facilityIds).size > 1) {
+    throw new SafeError(
+      `Registry statement ${remoteId} contains removals from multiple noma facilities. Split it into one statement per facility in Isometric, then sync again.`,
+    );
+  }
+}
 
 export interface RegistryGhgStatementView {
   id: string;
@@ -91,6 +112,11 @@ export async function reconcileGhgStatementsForFacility(
   const ownedRemotes: GhgStatement[] = [];
   for (const remote of remotes) {
     if (operatorCreateInFlight) continue;
+    const facilityIds = await listFacilityIdsForExternalRemovals(
+      orgCtx,
+      remote.ghg_entry_ids,
+    );
+    assertSingleFacilityRegistryStatement(remote.id, facilityIds);
     const existingSubmission = await getSubmissionByExternalId(orgCtx, {
       provider: ISOMETRIC_PROVIDER,
       submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
@@ -103,10 +129,6 @@ export async function reconcileGhgStatementsForFacility(
       );
       if (owner?.facilityId !== facilityId) continue;
     } else {
-      const facilityIds = await listFacilityIdsForExternalRemovals(
-        orgCtx,
-        remote.ghg_entry_ids,
-      );
       const assignedByMembership =
         facilityIds.length === 1 && facilityIds[0] === facilityId;
       const assignedByUniqueProject =

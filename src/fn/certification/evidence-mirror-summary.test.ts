@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
 
+const storageMocks = vi.hoisted(() => ({
+  headObject: vi.fn(),
+}));
+
 vi.mock("@/data-access/credit-batch-samples", () => ({
   getSamplesByCreditBatchIds: vi.fn(),
 }));
@@ -12,6 +16,9 @@ vi.mock("@/data-access/documents", () => ({
 }));
 vi.mock("@/data-access/transport-legs", () => ({
   getTransportLegsForEntities: vi.fn(),
+}));
+vi.mock("@/lib/storage", () => ({
+  getStorageProvider: () => ({ headObject: storageMocks.headObject }),
 }));
 
 import { getSamplesByCreditBatchIds } from "@/data-access/credit-batch-samples";
@@ -40,6 +47,11 @@ const lineage = {
 describe("loadEvidenceMirrorSummaryForScope", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    storageMocks.headObject.mockResolvedValue({
+      size: 1_024,
+      contentType: "application/pdf",
+      etag: "etag",
+    });
     vi.mocked(getSamplesByCreditBatchIds).mockResolvedValue([
       { id: "sample-1" },
     ] as never);
@@ -53,9 +65,27 @@ describe("loadEvidenceMirrorSummaryForScope", () => {
     );
     vi.mocked(listDocumentsForEntityIds).mockImplementation(
       async (_ctx, entityType) => {
-        if (entityType === "application") return [{ id: "document-1" }] as never;
+        if (entityType === "application") {
+          return [
+            {
+              id: "document-1",
+              storageKey: "managed/document-1",
+              uploadStatus: "uploaded",
+              fileSizeBytes: 1_024,
+              mimeType: "application/pdf",
+            },
+          ] as never;
+        }
         if (entityType === "transport_leg") {
-          return [{ id: "document-2" }] as never;
+          return [
+            {
+              id: "document-2",
+              storageKey: "managed/document-2",
+              uploadStatus: "uploaded",
+              fileSizeBytes: 1_024,
+              mimeType: "application/pdf",
+            },
+          ] as never;
         }
         return [];
       },
@@ -98,6 +128,82 @@ describe("loadEvidenceMirrorSummaryForScope", () => {
       "isometric",
       ["document-1", "document-2"],
     );
+  });
+
+  it("counts only completed managed uploads in the mirror denominator", async () => {
+    vi.mocked(listDocumentsForEntityIds).mockImplementation(
+      async (_ctx, entityType) =>
+        entityType === "application"
+          ? ([
+              {
+                id: "managed",
+                storageKey: "managed/document.pdf",
+                uploadStatus: "uploaded",
+                fileSizeBytes: 1_024,
+                mimeType: "application/pdf",
+              },
+              {
+                id: "metadata-only",
+                storageKey: null,
+                uploadStatus: "uploaded",
+              },
+              {
+                id: "pending",
+                storageKey: "managed/pending.pdf",
+                uploadStatus: "pending",
+              },
+              {
+                id: "failed",
+                storageKey: "managed/failed.pdf",
+                uploadStatus: "failed",
+              },
+            ] as never)
+          : [],
+    );
+    vi.mocked(listDocumentUploadsForDocuments).mockResolvedValue([]);
+
+    await expect(
+      loadEvidenceMirrorSummaryForScope(orgCtx, {
+        removalId: "removal-1",
+        memberBatches: [{ id: "batch-1" }],
+        lineages: [lineage],
+      }),
+    ).resolves.toEqual({ total: 1, mirrored: 0 });
+
+    expect(listDocumentUploadsForDocuments).toHaveBeenCalledWith(
+      orgCtx,
+      "isometric",
+      ["managed"],
+    );
+  });
+
+  it("excludes uploaded rows whose storage object is missing", async () => {
+    storageMocks.headObject.mockResolvedValueOnce(null);
+    vi.mocked(listDocumentsForEntityIds).mockImplementation(
+      async (_ctx, entityType) =>
+        entityType === "application"
+          ? ([
+              {
+                id: "missing-object",
+                storageKey: "managed/missing.pdf",
+                uploadStatus: "uploaded",
+                fileSizeBytes: 1_024,
+                mimeType: "application/pdf",
+              },
+            ] as never)
+          : [],
+    );
+    vi.mocked(listDocumentUploadsForDocuments).mockResolvedValue([]);
+
+    await expect(
+      loadEvidenceMirrorSummaryForScope(orgCtx, {
+        removalId: "removal-1",
+        memberBatches: [{ id: "batch-1" }],
+        lineages: [lineage],
+      }),
+    ).resolves.toEqual({ total: 0, mirrored: 0 });
+
+    expect(storageMocks.headObject).toHaveBeenCalledWith("managed/missing.pdf");
   });
 
   it("returns an empty summary for an unpersisted removal scope", async () => {

@@ -39,6 +39,7 @@ describe("deriveCreditBatchLifecycle", () => {
         summary({
           removalId: "removal-1",
           removalStatus: {
+            kind: "not-submitted",
             value: "draft",
             label: "Not submitted",
             isActionable: true,
@@ -57,6 +58,7 @@ describe("deriveCreditBatchLifecycle", () => {
       summary({
         removalId: "removal-1",
         removalStatus: {
+          kind: "submitted",
           value: "issued",
           label: "Submitted",
           isActionable: false,
@@ -80,6 +82,7 @@ describe("deriveCreditBatchLifecycle", () => {
       summary({
         removalId: "removal-1",
         removalStatus: {
+          kind: "submitted",
           value: "issued",
           label: "Submitted",
           isActionable: false,
@@ -87,6 +90,7 @@ describe("deriveCreditBatchLifecycle", () => {
         },
         ghgStatementId: "statement-1",
         ghgStatementStatus: {
+          kind: "in-verification",
           value: "pending",
           label: "In verification",
           isActionable: false,
@@ -105,6 +109,7 @@ describe("deriveCreditBatchLifecycle", () => {
         removalId: "removal-1",
         ghgStatementId: "statement-1",
         ghgStatementStatus: {
+          kind: "issued",
           value: "issued",
           label: "Issued",
           isActionable: false,
@@ -120,5 +125,24 @@ describe("deriveCreditBatchLifecycle", () => {
       "success",
       "success",
     ]);
+  });
+
+  it("derives lifecycle from the stable kind rather than display copy", () => {
+    const lifecycle = deriveCreditBatchLifecycle(
+      summary({
+        removalId: "removal-1",
+        ghgStatementId: "statement-1",
+        ghgStatementStatus: {
+          kind: "verified",
+          value: "verified",
+          label: "Verifier approved",
+          isActionable: false,
+          isTerminal: true,
+        },
+      }),
+    );
+
+    expect(lifecycle.label).toBe("Verified");
+    expect(lifecycle.currentStepIndex).toBe(2);
   });
 });

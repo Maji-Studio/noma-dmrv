@@ -604,6 +604,32 @@ describe("registry-list GHG statement reconciliation", () => {
     });
   });
 
+  it("fails loudly when one shared-project statement spans facilities", async () => {
+    const owner = await createFixture();
+    const neighbour = await createFixture();
+    await db
+      .update(certifierProjects)
+      .set({ externalProjectId: owner.externalProjectId })
+      .where(eq(certifierProjects.facilityId, neighbour.facilityId));
+    registry.seedGhgStatement({
+      projectId: owner.externalProjectId,
+      endOn: REPORTING_PERIOD_END,
+      ghgEntryIds: [
+        owner.externalRemovalId!,
+        neighbour.externalRemovalId!,
+      ],
+    });
+
+    const result = await reconcileGhgStatementsFromRegistry(owner.facilityId);
+
+    expect(result).toMatchObject({
+      success: false,
+      error: expect.stringMatching(/multiple noma facilities/i),
+    });
+    expect(await latestLedgerRow(owner.facilityId)).toBeNull();
+    expect(await latestLedgerRow(neighbour.facilityId)).toBeNull();
+  });
+
   it("does not discover a duplicate while an operator create is in flight", async () => {
     const fixture = await createFixture();
     const [local] = await db

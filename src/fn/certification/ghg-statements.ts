@@ -26,6 +26,7 @@ import {
   getOrCreateGhgStatementDraft,
   getRemovalsByGhgStatementId,
   hasMissingRemotePeriod,
+  listFacilityIdsForExternalProject,
   listGhgStatementsForFacility,
   listOpenRemovalsForFacility,
   reconcileRemovalMembership,
@@ -76,10 +77,7 @@ import {
   type GhgSubmitMode,
 } from "@/lib/isometric/utils/ghg-statement-state";
 import { isLockedInFlight as computeIsLockedInFlight } from "@/lib/isometric/utils/lock";
-import {
-  SUBMISSION_METADATA_KEYS,
-  getMetadataValue,
-} from "@/lib/isometric/utils/submission-metadata";
+import { SUBMISSION_METADATA_KEYS, getMetadataValue } from "@/lib/isometric/utils/submission-metadata";
 import {
   createGhgStatementSchema,
   submitGhgStatementDialogSchema,
@@ -91,6 +89,7 @@ import { withAction } from "../with-action";
 import { ghgStatementLookup, performRegistryCreate } from "./registry-create";
 import { applyGhgRemoteState } from "./ghg-statement-remote-state";
 import {
+  assertDedicatedGhgStatementProject,
   reconcileGhgStatementsForFacility,
   reconcileRegistryGhgStatement,
 } from "./ghg-statement-reconciliation";
@@ -227,6 +226,9 @@ export async function createGhgStatementDraft(
         "Link this facility to an Isometric project before creating a GHG statement.",
       );
     }
+    assertDedicatedGhgStatementProject(
+      await listFacilityIdsForExternalProject(orgCtx, project.externalProjectId),
+    );
 
     const remoteStatements = await listGhgStatementsForProject(
       client,
