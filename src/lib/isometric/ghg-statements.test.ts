@@ -60,7 +60,7 @@ describe("GHG statement registry discovery", () => {
 });
 
 describe("GHG statement create matching", () => {
-  it("adopts a DRAFT with no registry period", () => {
+  it("does not adopt a DRAFT with no registry period for an arbitrary date", () => {
     const remote = statement("ggs_null", "prj_target", {
       reporting_period_start_at: null,
       reporting_period_end_at: null,
@@ -71,7 +71,7 @@ describe("GHG statement create matching", () => {
       endOn: null,
     });
     expect(matchGhgStatementForCreate(remote, "2026-03-31").behavior).toBe(
-      "adopt",
+      "unrelated",
     );
   });
 

@@ -131,7 +131,7 @@ function periodMatchesRequestedEnd(
   requestedEndOn: string,
 ): boolean {
   const period = getGhgStatementPeriod(statement);
-  if (period.endOn === null) return true;
+  if (period.endOn === null) return false;
   if (period.endOn === requestedEndOn) return true;
   if (
     period.startOn !== null &&
