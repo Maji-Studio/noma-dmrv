@@ -75,12 +75,17 @@ test.describe("Storage-bin archive", () => {
       binCard.getByRole("heading", { name: bin.name }),
     ).toBeVisible();
 
-    await binCard
-      .getByRole("button", { name: `Actions for ${bin.code}` })
-      .click();
-    await page
-      .getByRole("menuitem", { name: "Delete permanently" })
-      .click();
+    // A list refetch can replace the card between opening its overflow menu
+    // and selecting an item. Retry the complete interaction so Playwright
+    // reacquires both elements from the current render.
+    await expect(async () => {
+      await binCard
+        .getByRole("button", { name: `Actions for ${bin.code}` })
+        .click({ timeout: 5_000 });
+      await page
+        .getByRole("menuitem", { name: "Delete permanently" })
+        .click({ timeout: 5_000 });
+    }).toPass({ timeout: 30_000 });
 
     const deleteDialog = page.getByRole("dialog", {
       name: "Delete Storage Bin",
