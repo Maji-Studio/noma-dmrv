@@ -113,6 +113,7 @@ describe("CreditBatchCard", () => {
       issueCount: 0,
       removalId: "removal-1",
       removalStatus: {
+        kind: "submitted",
         value: "issued",
         label: "Submitted",
         isActionable: false,
