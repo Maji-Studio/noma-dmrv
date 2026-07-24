@@ -153,13 +153,17 @@ test.describe("Organization foundation UI", () => {
     await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/);
   });
 
-  test("single-organization member sees the active organization as a sidebar link", async ({
+  test("single-organization sidebar renders the active organization as a dashboard link", async ({
     orgAdminPage,
   }) => {
     const page = orgAdminPage;
     await page.goto("/dashboard");
 
-    const sidebar = page.getByRole("complementary");
+    // A fresh organization admin auto-opens the onboarding modal, which
+    // correctly removes the background app shell from the accessibility tree.
+    // Scope structurally so this assertion tests the sidebar DOM contract
+    // without racing that unrelated modal.
+    const sidebar = page.locator("aside");
     const orgLink = sidebar
       .locator('a[href="/dashboard"]')
       .filter({ hasText: ORGANIZATION_NAME });
