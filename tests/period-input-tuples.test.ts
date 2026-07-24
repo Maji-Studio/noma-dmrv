@@ -22,8 +22,10 @@ import {
   lookupInputMapping,
   lookupPeriodInputTuple,
   MAPPING_REVISION,
+  MAPPING_REVISION_INPUT,
 } from "@/lib/isometric/transformers/datapoint";
 import type { AggregatedProductionData } from "@/lib/isometric/utils/aggregation";
+import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 
 type ComponentBlueprintInput = components["schemas"]["ComponentBlueprintInput"];
 type RemovalTemplateComponentInput =
@@ -257,7 +259,9 @@ describe("buildCreateDatapointRequest scope-conflict SafeError", () => {
 });
 
 describe("MAPPING_REVISION", () => {
-  it("is a deterministic 64-char sha256 hex string", () => {
+  it("hashes both ordinary inputs and explicit sequestration bindings", () => {
     expect(MAPPING_REVISION).toMatch(/^[0-9a-f]{64}$/);
+    expect(MAPPING_REVISION).toBe(payloadHash(MAPPING_REVISION_INPUT));
+    expect(MAPPING_REVISION).not.toBe(payloadHash(INPUT_MAPPING));
   });
 });

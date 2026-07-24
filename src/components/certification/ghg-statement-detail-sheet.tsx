@@ -50,7 +50,9 @@ interface GhgStatementDetailSheetProps {
 }
 
 function statementPeriod(item: GhgStatementListItem): string {
-  const { reportingPeriodStartOn, reportingPeriodEndOn } = item.statement;
+  if (item.remotePeriodMissing) return "No period set";
+  const { reportingPeriodStartOn } = item.statement;
+  const reportingPeriodEndOn = item.effectiveReportingPeriodEndOn;
   return reportingPeriodStartOn
     ? formatDateRange(reportingPeriodStartOn, reportingPeriodEndOn)
     : `Ends ${formatDate(reportingPeriodEndOn)}`;
