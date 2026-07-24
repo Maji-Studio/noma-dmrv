@@ -24,6 +24,7 @@ import {
   binMovements,
   deliveries,
   orders,
+  storageLocations,
 } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
 import type { OrgContext } from "@/lib/auth/server";
@@ -66,6 +67,21 @@ export async function lockBinStock(
   await tx.execute(
     sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
   );
+  const [bin] = await tx
+    .select({ archivedAt: storageLocations.archivedAt })
+    .from(storageLocations)
+    .where(
+      and(
+        eq(storageLocations.id, storageLocationId),
+        eq(storageLocations.organizationId, ctx.organizationId),
+      ),
+    );
+  // Some stock flows deliberately use a product ID as a fallback advisory-lock
+  // key when no physical bin exists. Missing rows are validated by the caller's
+  // entity boundary; an actual archived bin must never accept a stock write.
+  if (bin?.archivedAt) {
+    throw new SafeError("Storage location not found or archived");
+  }
 }
 
 /**
@@ -100,6 +116,11 @@ export function overdrawError(
 /** True when `requestedKg` exceeds `availableKg` beyond the FP slack. */
 export function isOverdraw(requestedKg: number, availableKg: number): boolean {
   return requestedKg - availableKg > STOCK_OVERDRAW_EPSILON_KG;
+}
+
+/** True when a derived balance is materially above or below zero. */
+export function hasNonZeroStock(availableKg: number): boolean {
+  return Math.abs(availableKg) > STOCK_OVERDRAW_EPSILON_KG;
 }
 
 /**

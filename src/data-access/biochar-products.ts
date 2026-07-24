@@ -542,7 +542,7 @@ export async function createBiocharProduct(
         formulationId: storageLocations.formulationId,
       })
       .from(storageLocations)
-      .where(and(eq(storageLocations.id, destinationBinId), eq(storageLocations.organizationId, ctx.organizationId)))
+      .where(and(eq(storageLocations.id, destinationBinId), eq(storageLocations.organizationId, ctx.organizationId), isNull(storageLocations.archivedAt)))
       .for("update");
 
     if (!storage) {
@@ -875,7 +875,7 @@ export async function updateBiocharProduct(
           formulationId: storageLocations.formulationId,
         })
         .from(storageLocations)
-        .where(and(eq(storageLocations.id, transactionStorageId), eq(storageLocations.organizationId, ctx.organizationId)))
+        .where(and(eq(storageLocations.id, transactionStorageId), eq(storageLocations.organizationId, ctx.organizationId), isNull(storageLocations.archivedAt)))
         .for("update");
 
       if (!storage) {

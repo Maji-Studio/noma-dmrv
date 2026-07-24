@@ -6,6 +6,7 @@ import {
   getStorageLocations,
   restoreStorageLocation,
 } from "@/data-access/storage-locations";
+import { recordStockTakeMovement } from "@/data-access/bin-movements";
 import {
   archiveFacility,
   restoreFacility,
@@ -28,7 +29,15 @@ const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
 
 beforeAll(() => ensureTestOrg());
 
-async function createStorageArchiveFixture() {
+async function createStorageArchiveFixture({
+  type = "feedstock_bin",
+  lane = "feedstock",
+  endingBalanceKg = 0,
+}: {
+  type?: "feedstock_bin" | "biochar_bin" | "product_bin";
+  lane?: "feedstock" | "biochar" | "product";
+  endingBalanceKg?: number;
+} = {}) {
   const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
   return db.transaction(async (tx) => {
     const [facility] = await tx
@@ -55,7 +64,7 @@ async function createStorageArchiveFixture() {
         organizationId: TEST_ORG_ID,
         code: `BIN-SLA-${tag}`,
         name: `Storage Archive Bin ${tag}`,
-        type: "feedstock_bin",
+        type,
         facilityId: facility.id,
         feedstockTypeId: feedstockType.id,
       })
@@ -66,7 +75,7 @@ async function createStorageArchiveFixture() {
         {
           organizationId: TEST_ORG_ID,
           storageLocationId: storageLocation.id,
-          lane: "feedstock" as const,
+          lane,
           movementType: "adjustment" as const,
           massDeltaKg: 25,
           reason: "Regression fixture intake",
@@ -74,9 +83,9 @@ async function createStorageArchiveFixture() {
         {
           organizationId: TEST_ORG_ID,
           storageLocationId: storageLocation.id,
-          lane: "feedstock" as const,
+          lane,
           movementType: "adjustment" as const,
-          massDeltaKg: -25,
+          massDeltaKg: endingBalanceKg - 25,
           reason: "Regression fixture drawdown",
         },
       ])
@@ -171,6 +180,48 @@ describe("storage location archive", () => {
         fixture.storageLocationId,
       );
       expect(restored.archivedAt).toBeNull();
+    } finally {
+      await cleanupStorageArchiveFixture(fixture);
+    }
+  });
+
+  it.each([
+    { type: "feedstock_bin" as const, lane: "feedstock" as const },
+    { type: "biochar_bin" as const, lane: "biochar" as const },
+    { type: "product_bin" as const, lane: "product" as const },
+  ])("blocks archiving a $lane bin with non-zero stock", async ({ type, lane }) => {
+    const fixture = await createStorageArchiveFixture({
+      type,
+      lane,
+      endingBalanceKg: 10,
+    });
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+
+    try {
+      await expect(
+        archiveStorageLocation(ctx, fixture.storageLocationId),
+      ).rejects.toThrow(/10 kg on hand/);
+    } finally {
+      await cleanupStorageArchiveFixture(fixture);
+    }
+  });
+
+  it("rejects reconciliation writes after a bin is archived", async () => {
+    const fixture = await createStorageArchiveFixture();
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+
+    try {
+      await archiveStorageLocation(ctx, fixture.storageLocationId);
+      await expect(
+        recordStockTakeMovement(ctx, {
+          storageLocationId: fixture.storageLocationId,
+          lane: "feedstock",
+          countedMassKg: 0,
+          countedWetMassKg: 0,
+          moistureRatioUsed: 0,
+          reason: "Archived-bin regression check",
+        }),
+      ).rejects.toThrow(/not found or archived/);
     } finally {
       await cleanupStorageArchiveFixture(fixture);
     }
