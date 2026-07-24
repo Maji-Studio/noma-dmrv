@@ -2,12 +2,9 @@ import { isValidElement, type ReactElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import type { CreditBatchHealthSummary } from "@/fn/certification";
-import {
-  RowActionsMenu,
-  StatusBadge,
-  type RowActionsMenuProps,
-} from "@/components/ui";
+import { RowActionsMenu, type RowActionsMenuProps } from "@/components/ui";
 import { CreditBatchCard } from "./credit-batch-card";
+import { CreditBatchLifecycleRail } from "./credit-batch-lifecycle";
 
 type ElementProps = Record<string, unknown> & { children?: ReactNode };
 
@@ -33,16 +30,6 @@ function collectText(node: ReactNode): string {
     return children.map(collectText).join("");
   }
   return collectText(children);
-}
-
-function findStatusBadges(node: ReactNode): ReactElement<ElementProps>[] {
-  if (!isValidElement<ElementProps>(node)) return [];
-  const matches = node.type === StatusBadge ? [node] : [];
-  const children = node.props.children;
-  if (Array.isArray(children)) {
-    return [...matches, ...children.flatMap(findStatusBadges)];
-  }
-  return [...matches, ...findStatusBadges(children)];
 }
 
 const creditBatch = {
@@ -103,7 +90,7 @@ describe("CreditBatchCard", () => {
     expect(collectText(loading)).toContain("Loading certification progress…");
   });
 
-  it("reserves the header tag for actionable issues", () => {
+  it("places remaining work beside the open lifecycle state", () => {
     const summary: CreditBatchHealthSummary = {
       state: "incomplete",
       issueCount: 2,
@@ -113,14 +100,10 @@ describe("CreditBatchCard", () => {
       ghgStatementStatus: null,
     };
 
-    const card = CreditBatchCard({
-      creditBatch,
-      health: summary,
-      onView: vi.fn(),
-      onEdit: vi.fn(),
-      onDelete: vi.fn(),
-    });
+    const rail = CreditBatchLifecycleRail({ summary });
+    const text = collectText(rail);
 
-    expect(findStatusBadges(card)[0]?.props.label).toBe("2 issues");
+    expect(text).toContain("Open2 to complete");
+    expect(text).not.toContain("issues");
   });
 });

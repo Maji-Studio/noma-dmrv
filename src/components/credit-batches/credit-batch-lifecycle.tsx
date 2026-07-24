@@ -64,11 +64,18 @@ export function CreditBatchLifecycleRail({
 
   return (
     <div className="flex items-center justify-between gap-16">
-      <span
-        className={`body-small font-medium ${STATUS_TEXT_CLASSES[statusState]}`}
-      >
-        {lifecycle.label}
-      </span>
+      <div className="flex items-baseline gap-8">
+        <span
+          className={`body-small font-medium ${STATUS_TEXT_CLASSES[statusState]}`}
+        >
+          {lifecycle.label}
+        </span>
+        {lifecycle.label === "Open" && summary.issueCount > 0 && (
+          <span className="body-caption text-[var(--color-text-tertiary)]">
+            {summary.issueCount} to complete
+          </span>
+        )}
+      </div>
       <ol
         className="flex shrink-0 items-center"
         aria-label={`Certification progress: ${lifecycle.label}`}

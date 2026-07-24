@@ -5,9 +5,8 @@ import {
   CertificateIcon,
   PencilSimpleIcon,
   TrashIcon,
-  WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { RowActionsMenu, StatusBadge } from "@/components/ui";
+import { RowActionsMenu } from "@/components/ui";
 import type { CreditBatchHealthSummary } from "@/fn/certification";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
 import { CreditBatchLifecycleRail } from "./credit-batch-lifecycle";
@@ -45,33 +44,22 @@ export function CreditBatchCard({
             <CertificateIcon size={12} weight="bold" />
             {creditBatch.code}
           </span>
-          <div className="flex items-center gap-8">
-            {health && health.issueCount > 0 && (
-              <StatusBadge
-                status="pending"
-                label={`${health.issueCount} ${
-                  health.issueCount === 1 ? "issue" : "issues"
-                }`}
-                icon={<WarningIcon size={14} weight="fill" />}
-              />
-            )}
-            <RowActionsMenu
-              label={`Actions for credit batch ${creditBatch.code}`}
-              actions={[
-                {
-                  label: "Edit",
-                  icon: <PencilSimpleIcon size={16} />,
-                  onSelect: () => onEdit(creditBatch),
-                },
-                {
-                  label: "Delete",
-                  destructive: true,
-                  icon: <TrashIcon size={16} />,
-                  onSelect: () => onDelete(creditBatch.id),
-                },
-              ]}
-            />
-          </div>
+          <RowActionsMenu
+            label={`Actions for credit batch ${creditBatch.code}`}
+            actions={[
+              {
+                label: "Edit",
+                icon: <PencilSimpleIcon size={16} />,
+                onSelect: () => onEdit(creditBatch),
+              },
+              {
+                label: "Delete",
+                destructive: true,
+                icon: <TrashIcon size={16} />,
+                onSelect: () => onDelete(creditBatch.id),
+              },
+            ]}
+          />
         </div>
 
         {/* Feedstock is the production cohort's identity; facility is already

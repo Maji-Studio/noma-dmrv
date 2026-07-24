@@ -17,11 +17,11 @@ function summary(
 }
 
 describe("deriveCreditBatchLifecycle", () => {
-  it("keeps pre-submission batches in the open milestone", () => {
+  it("distinguishes incomplete from submission-ready pre-submission batches", () => {
     expect(deriveCreditBatchLifecycle(summary())).toMatchObject({
-      badgeStatus: "draft",
-      label: "Open",
-      stepStates: ["active", "inactive", "inactive", "inactive"],
+      badgeStatus: "ready",
+      label: "Ready to submit",
+      stepStates: ["success", "inactive", "inactive", "inactive"],
     });
     expect(
       deriveCreditBatchLifecycle(
@@ -33,7 +33,7 @@ describe("deriveCreditBatchLifecycle", () => {
     });
   });
 
-  it("keeps a grouped but unsubmitted batch open", () => {
+  it("shows a ready batch as ready when its removal is not submitted", () => {
     expect(
       deriveCreditBatchLifecycle(
         summary({
@@ -47,8 +47,8 @@ describe("deriveCreditBatchLifecycle", () => {
         }),
       ),
     ).toMatchObject({
-      badgeStatus: "draft",
-      label: "Open",
+      badgeStatus: "ready",
+      label: "Ready to submit",
     });
   });
 

@@ -30,6 +30,15 @@ function buildStepStates(
   );
 }
 
+function readyToSubmitLifecycle(): CreditBatchLifecycle {
+  return {
+    badgeStatus: "ready",
+    label: "Ready to submit",
+    currentStepIndex: 0,
+    stepStates: buildStepStates(0, "success"),
+  };
+}
+
 function statementLifecycle(
   summary: CreditBatchHealthSummary,
 ): CreditBatchLifecycle | null {
@@ -106,12 +115,14 @@ function removalLifecycle(
 
   switch (status.label) {
     case "Not submitted":
-      return {
-        badgeStatus: "draft",
-        label: "Open",
-        currentStepIndex: 0,
-        stepStates: buildStepStates(0),
-      };
+      return summary.state === "ready"
+        ? readyToSubmitLifecycle()
+        : {
+            badgeStatus: "draft",
+            label: "Open",
+            currentStepIndex: 0,
+            stepStates: buildStepStates(0),
+          };
     case "In progress":
       return {
         badgeStatus: "running",
@@ -154,8 +165,12 @@ export function deriveCreditBatchLifecycle(
   const removal = removalLifecycle(summary);
   if (removal) return removal;
 
+  if (summary.state === "ready") {
+    return readyToSubmitLifecycle();
+  }
+
   return {
-    badgeStatus: summary.state === "ready" ? "draft" : "pending",
+    badgeStatus: "pending",
     label: "Open",
     currentStepIndex: 0,
     stepStates: buildStepStates(0),
