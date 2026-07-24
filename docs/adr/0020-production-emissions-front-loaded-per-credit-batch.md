@@ -4,6 +4,13 @@ Status: accepted (2026-07-03) · Issue #349 · Partially supersedes
 [ADR 0003](./0003-removal-as-submission-unit.md) (narrows its
 "applied-biochar scoping" clause)
 
+> **Amended 2026-07-24 — version-citation correction.** The v1.3 labels in the
+> historical Context below do not match noma's Biochar Protocol v1.2
+> interpretation pin. The Certify project was separately observed on v1.1 on
+> this date. The §8.6.2 allocation decision remains in force, but its
+> applicability to the configured project version must be confirmed when the
+> operator resolves the project discrepancy with Isometric.
+
 ## Context
 
 ADR 0003 scoped **every** run-derived quantity in a Removal submission by the

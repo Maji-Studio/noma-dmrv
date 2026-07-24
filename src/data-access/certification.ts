@@ -294,7 +294,18 @@ export async function upsertCertifierProject(
           set: {
             externalProjectId: values.externalProjectId,
             protocolSlug: values.protocolSlug,
-            protocolVersion: values.protocolVersion,
+            // The supported settings form does not expose protocol version.
+            // Preserve an audited value only while saving the same project.
+            // A rebind clears the old project's value until the new project is
+            // audited; explicit null also remains available to clear it.
+            protocolVersion:
+              input.protocolVersion === undefined
+                ? sql<string | null>`case
+                    when ${certifierProjects.externalProjectId} = ${values.externalProjectId}
+                    then ${certifierProjects.protocolVersion}
+                    else null
+                  end`
+                : values.protocolVersion,
             defaultRemovalTemplateId: values.defaultRemovalTemplateId,
             externalFacilityId: values.externalFacilityId,
             metadata: values.metadata,

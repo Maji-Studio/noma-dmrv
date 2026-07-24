@@ -386,6 +386,35 @@ Registry-specific deferred decisions live in
 [Isometric Certify open questions](./open-questions-isometric.md). That
 companion inherits this file's schema, invariants, and resolution rules.
 
+### Certify project protocol differs from noma's interpretation pin (`isometric/project-protocol-version`, opened 2026-07-24)
+
+- **Observed:** project `prj_1K9YJ33RKSBX9FFF` shows baseline/current Biochar
+  Production and Storage v1.1 and Isometric Standard v1.7 in Certify, while
+  [`docs/isometric/versions.json`](./isometric/versions.json) targets protocol
+  v1.2. Historical ADR 0017 text also cites v1.3; its 2026-07-24 amendment
+  prevents that label from being treated as the configured project version.
+  The API cannot resolve the discrepancy because it exposes no usable project
+  protocol field.
+- **Operator decision:** confirm with Isometric whether the sandbox project
+  should be bumped. Then align the Certify project,
+  `certifier_projects.protocol_version`, interpretation docs, and amended ADR
+  applicability notes through
+  [`docs/isometric/update-playbook.md`](./isometric/update-playbook.md).
+- **Code anchor:** `src/fn/certification/protocol-version-preflight.ts:checkProtocolVersionAtSubmit`
+  warns and records drift at submit time without blocking.
+
+### Certify project durability is 200 years but the active path submits 1000 years (`isometric/project-durability-tier`, opened 2026-07-24)
+
+- **Observed:** the Certify project's "Durability of biochar" setting is
+  **200 YEARS**, while the active template and noma pipeline use the 1000-year
+  sequestration blueprint.
+- **Operator decision:** either set the project to 1000 years in the Certify UI
+  or re-author the active template and local facility tier for the 200-year
+  path. Code cannot reconcile a contradictory project-level registry setting.
+- **Code anchor:** `src/fn/certification/submit-removal.ts:submitRemoval`
+  validates local template-to-facility-tier agreement, but the Certify API does
+  not expose the project durability setting for an automated preflight.
+
 ## Audit follow-ups (opened 2026-05-25)
 
 Deferrals from the whole-codebase tech-debt audit (CRITICAL + HIGH landed

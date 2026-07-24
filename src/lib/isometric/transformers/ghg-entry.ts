@@ -24,10 +24,11 @@ export interface BuildCreateGhgEntryArgs {
   // inputs carry one ID; measurement-sample-backed sequestration LIST inputs
   // carry every returned replicate ID.
   datapointIdsByRtcInput: DatapointIdsByRtcInput;
-  // The removal's reporting window (biochar protocol v1.3 §8.6.2): starts with
-  // production, ends when the biochar is applied at the storage site — NOT the
-  // production window. The orchestrator derives `completedOn` from the latest
-  // application date across the removal's lineages (issue #320).
+  // The removal's reporting window (Biochar Protocol §8.6.2; local
+  // interpretation pin v1.2): starts with production, ends when the biochar is
+  // applied at the storage site — NOT the production window. The orchestrator
+  // derives `completedOn` from the latest application date across the removal's
+  // lineages (issue #320).
   reportingWindow: { startedOn: Date; completedOn: Date };
   projectId: string;
   supplierRefId: string;

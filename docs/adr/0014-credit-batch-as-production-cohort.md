@@ -19,6 +19,15 @@ submission unit) and ADR 0011 (credit-batch-anchored chain of custody).
 > **Amended 2026-07-23.** A credit batch may be declared before production
 > starts. Completed runs attach automatically when organization, facility,
 > feedstock, and production date match the declared cohort.
+>
+> **Amended 2026-07-24 — version-citation correction.** The v1.3 labels in the
+> historical Context below are not the applicable local pins. Read the cited
+> stockpiling rule against Biochar Storage in Soil Environments v1.2 and the
+> cited production-batch rules against Biochar Protocol v1.2. The Certify
+> project itself was observed on Biochar Protocol v1.1 on this date, so the
+> operator must resolve that project-vs-interpretation discrepancy before
+> treating either interpretation version as the project's configured version.
+> The cohort-grain decision is unchanged.
 
 ## Context
 
