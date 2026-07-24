@@ -3,7 +3,8 @@ import {
   findGhgEntryBySupplierRef,
 } from "../submissions";
 import {
-  findDraftGhgStatementsByPeriod,
+  listGhgStatementsForProject,
+  matchGhgStatementForCreate,
   type GhgStatementStatus,
 } from "../ghg-statements";
 import type { IsometricClient } from "../client";
@@ -15,7 +16,8 @@ export type SupplierRefReconciliation =
 export type GhgStatementReconciliation =
   | { found: false }
   | { found: "single"; externalId: string; status: GhgStatementStatus }
-  | { found: "multiple"; ids: string[] };
+  | { found: "multiple"; ids: string[] }
+  | { found: "refused"; externalId: string; status: GhgStatementStatus };
 
 export async function reconcileRemoval(client: IsometricClient, args: {
   supplierRefId: string;
@@ -37,18 +39,33 @@ export async function reconcileGhgStatement(client: IsometricClient, args: {
   projectId: string;
   endOn: string;
 }): Promise<GhgStatementReconciliation> {
-  const matches = await findDraftGhgStatementsByPeriod(
-    client,
-    args.projectId,
-    args.endOn,
-  );
-  if (matches.length === 0) return { found: false };
-  if (matches.length === 1) {
+  const matches = (
+    await listGhgStatementsForProject(
+      client,
+      args.projectId,
+    )
+  )
+    .map((statement) => matchGhgStatementForCreate(statement, args.endOn))
+    .filter((match) => match.behavior !== "unrelated");
+  const blocking = matches.find((match) => match.behavior === "refuse");
+  if (blocking) {
     return {
-      found: "single",
-      externalId: matches[0].id,
-      status: matches[0].status,
+      found: "refused",
+      externalId: blocking.statement.id,
+      status: blocking.statement.status,
     };
   }
-  return { found: "multiple", ids: matches.map((statement) => statement.id) };
+  const adoptable = matches.filter((match) => match.behavior === "adopt");
+  if (adoptable.length === 0) return { found: false };
+  if (adoptable.length === 1) {
+    return {
+      found: "single",
+      externalId: adoptable[0].statement.id,
+      status: adoptable[0].statement.status,
+    };
+  }
+  return {
+    found: "multiple",
+    ids: adoptable.map((match) => match.statement.id),
+  };
 }
