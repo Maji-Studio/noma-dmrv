@@ -73,7 +73,11 @@ export async function loadEvidenceMirrorSummaryForScope(
     new Set(
       documentGroups
         .flat()
-        .filter((document) => document.storageKey !== null)
+        .filter(
+          (document) =>
+            document.storageKey !== null &&
+            document.uploadStatus === "uploaded",
+        )
         .map((document) => document.id),
     ),
   );

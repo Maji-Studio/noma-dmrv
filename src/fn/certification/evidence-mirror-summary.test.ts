@@ -54,10 +54,22 @@ describe("loadEvidenceMirrorSummaryForScope", () => {
     vi.mocked(listDocumentsForEntityIds).mockImplementation(
       async (_ctx, entityType) => {
         if (entityType === "application") {
-          return [{ id: "document-1", storageKey: "managed/document-1" }] as never;
+          return [
+            {
+              id: "document-1",
+              storageKey: "managed/document-1",
+              uploadStatus: "uploaded",
+            },
+          ] as never;
         }
         if (entityType === "transport_leg") {
-          return [{ id: "document-2", storageKey: "managed/document-2" }] as never;
+          return [
+            {
+              id: "document-2",
+              storageKey: "managed/document-2",
+              uploadStatus: "uploaded",
+            },
+          ] as never;
         }
         return [];
       },
@@ -102,13 +114,31 @@ describe("loadEvidenceMirrorSummaryForScope", () => {
     );
   });
 
-  it("excludes documents without managed storage from the mirror denominator", async () => {
+  it("counts only completed managed uploads in the mirror denominator", async () => {
     vi.mocked(listDocumentsForEntityIds).mockImplementation(
       async (_ctx, entityType) =>
         entityType === "application"
           ? ([
-              { id: "managed", storageKey: "managed/document.pdf" },
-              { id: "metadata-only", storageKey: null },
+              {
+                id: "managed",
+                storageKey: "managed/document.pdf",
+                uploadStatus: "uploaded",
+              },
+              {
+                id: "metadata-only",
+                storageKey: null,
+                uploadStatus: "uploaded",
+              },
+              {
+                id: "pending",
+                storageKey: "managed/pending.pdf",
+                uploadStatus: "pending",
+              },
+              {
+                id: "failed",
+                storageKey: "managed/failed.pdf",
+                uploadStatus: "failed",
+              },
             ] as never)
           : [],
     );

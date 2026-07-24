@@ -26,8 +26,8 @@ implementation and sandbox-verification notes from 2026-06-19 are archived in
   registry-derived.
 - Credit-batch lifecycle rendering branches on stable status kinds rather than
   display labels, the overview's lifecycle query now lives in org-scoped
-  data-access, and evidence readiness counts only documents backed by managed
-  storage that can enter the mirror flow.
+  data-access, and evidence readiness counts only completed managed-storage
+  uploads that can enter the mirror flow.
 
 ## 2026-07-24 (protocol re-pin 1.2 → 1.1 + durability tier resolution)
 
