@@ -85,6 +85,8 @@ describe("computeRemovalBreakdown — hasAnyData", () => {
           riskOfReversalPercent: 4,
           bufferCreditsKg: 40,
           supplierCreditsKg: 860,
+          ghgStatementId: null,
+          ghgStatementStatus: null,
         },
       }),
     );
