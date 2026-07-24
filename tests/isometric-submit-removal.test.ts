@@ -37,7 +37,6 @@ import {
   makeRun,
   make1000YearSequestrationTemplate,
   makeSequestrationTemplate,
-  makeTemplate,
   setDurabilityMeasurementSamplesLive,
   storedRows,
 } from "./fixtures/submit-removal-orchestrator";
@@ -356,12 +355,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
   // component, so one submit exercises the GHG-entry window AND the durability
   // measurement-samples path side by side.
   function makeCombinedTemplate(): IsometricGhgEntryTemplate {
-    const base = makeTemplate();
-    const seq = make1000YearSequestrationTemplate();
-    return {
-      ...base,
-      groups: [...base.groups, ...seq.groups],
-    } as IsometricGhgEntryTemplate;
+    return make1000YearSequestrationTemplate();
   }
 
   it("uses MAX(applicationDate) across lineages for completed_on while durability measured_at keeps the production end", async () => {
@@ -468,7 +462,7 @@ describe("submitRemoval — reporting window anchored to application date (issue
     );
     expect(sFractionInput).toEqual({
       __typename: "CreateComponentListInput",
-      datapoint_ids: ["dp_2", "dp_3", "dp_4"],
+      datapoint_ids: ["dp_1", "dp_2", "dp_3"],
       input_key: "s_fraction",
     });
   });

@@ -130,9 +130,7 @@ export async function buildRemovalSubmissionBuild(args: {
   } = args;
 
   assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
-  if (hasDurabilityComponents) {
-    assertSequestrationTemplateBindings(defaultTemplate);
-  }
+  assertSequestrationTemplateBindings(defaultTemplate);
 
   const lineageWarnings: string[] = [];
   for (const lineage of ctx.lineages) {

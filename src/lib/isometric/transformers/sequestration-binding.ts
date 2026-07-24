@@ -25,6 +25,8 @@ export type DatapointIdsByMeasurementProperty = Map<string, string[]>;
 
 const S_FRACTION_MIN = 0;
 const S_FRACTION_MAX = 1;
+const LEGACY_SEQUESTRATION_BLUEPRINT_KEY =
+  "carbon_rich_substance_sequestration";
 
 interface MeasurementPropertyInputBinding {
   dataShape: InputDataShape;
@@ -129,16 +131,24 @@ export function getSequestrationInputBinding(
 export function assertSequestrationTemplateBindings(
   template: GhgEntryTemplate,
 ): void {
-  const components = template.groups.flatMap((group) =>
-    group.components.filter((component) =>
-      isSequestrationBlueprintFamily(component.blueprint_key),
-    ),
+  const templateComponents = template.groups.flatMap(
+    (group) => group.components,
   );
-  if (components.length !== 1) {
+  const components = templateComponents.filter((component) =>
+      isSequestrationBlueprintFamily(component.blueprint_key),
+  );
+  const legacyComponents = templateComponents.filter(
+    (component) =>
+      component.blueprint_key === LEGACY_SEQUESTRATION_BLUEPRINT_KEY,
+  );
+  const storageComponentCount =
+    components.length + legacyComponents.length;
+  if (storageComponentCount !== 1) {
     throw new SafeError(
-      `Removal template "${template.display_name}" must contain exactly one sequestration component; found ${components.length}.`,
+      `Removal template "${template.display_name}" must contain exactly one supported sequestration component; found ${storageComponentCount}.`,
     );
   }
+  if (legacyComponents.length === 1) return;
 
   const component = components[0];
   assertSupportedSequestrationBlueprint(component.blueprint_key);

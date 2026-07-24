@@ -130,7 +130,14 @@ describe("1000-year sequestration registry boundary", () => {
       structuredClone(duplicate.groups[0].components[0]),
     );
     expect(() => assertSequestrationTemplateBindings(duplicate)).toThrow(
-      /exactly one sequestration component; found 2/,
+      /exactly one supported sequestration component; found 2/,
+    );
+
+    const emissionsOnly = structuredClone(valid);
+    emissionsOnly.groups[0].components[0].blueprint_key =
+      "pyrolyzer_direct";
+    expect(() => assertSequestrationTemplateBindings(emissionsOnly)).toThrow(
+      /exactly one supported sequestration component; found 0/,
     );
 
     const renamedInput = structuredClone(valid);
