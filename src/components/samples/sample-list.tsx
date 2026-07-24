@@ -4,7 +4,7 @@
  */
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FlaskIcon, LeafIcon, PlusIcon, XIcon, FireIcon, CertificateIcon } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, useQueryState } from "nuqs";
@@ -227,7 +227,7 @@ export function SampleList({
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const filters: Partial<SampleFilterData> = useMemo(() => ({
+  const filters: Partial<SampleFilterData> = {
     search: debouncedSearch || undefined,
     creditBatchId: creditBatchFilter || undefined,
     facilityId: contextFacilityId || undefined,
@@ -235,7 +235,7 @@ export function SampleList({
     pageSize,
     sortBy: "samplingTime",
     sortOrder: "desc",
-  }), [debouncedSearch, creditBatchFilter, contextFacilityId, currentPage, pageSize]);
+  };
 
   const { data: samplesData, isLoading, error: fetchError } = useSamples(filters, {
     enabled: !!contextFacilityId,
