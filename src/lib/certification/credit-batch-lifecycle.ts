@@ -34,7 +34,7 @@ function buildStepStates(
 function readyToSubmitLifecycle(): CreditBatchLifecycle {
   return {
     badgeStatus: "ready",
-    label: "Ready to submit",
+    label: "Batch data ready",
     currentStepIndex: 0,
     stepStates: buildStepStates(0, "success"),
   };

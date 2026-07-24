@@ -17,10 +17,9 @@ import {
   listFacilityIdsForExternalProject,
   listFacilityIdsForExternalRemovals,
   reconcileRemovalMembership,
-  updateGhgStatementReportingWindow,
 } from "@/data-access/certifier-ghg-statements";
+import { reconcileDiscoveredGhgStatementState } from "@/data-access/certifier-ghg-remote-state";
 import { requireOrgFacility } from "@/data-access/utils";
-import { db } from "@/db";
 import { SafeError } from "@/lib/errors";
 import {
   getGhgStatementPeriod,
@@ -30,14 +29,13 @@ import {
   type GhgStatement,
   type GhgStatementStatus,
 } from "@/lib/isometric";
-import { applyGhgRemoteState } from "./ghg-statement-remote-state";
 import {
   GHG_STATEMENT_ENTITY_TYPE,
   GHG_STATEMENT_SUBMISSION_TYPE,
   ISOMETRIC_PROVIDER,
 } from "./shared";
 
-const facilityIdSchema = z.string().uuid();
+const facilityIdSchema = z.uuid();
 const CONCURRENT_RECONCILIATION_WARNING =
   "This registry statement is already being reconciled by another request.";
 export const SHARED_PROJECT_GHG_CREATE_MESSAGE =
@@ -281,31 +279,17 @@ export async function reconcileRegistryGhgStatement(
     );
   }
 
-  return db.transaction(async (tx) => {
-    const membership = await reconcileRemovalMembership(
-      orgCtx,
-      statement.id,
-      args.remote.ghg_entry_ids,
-      tx,
-    );
-    await updateGhgStatementReportingWindow(
-      orgCtx,
-      statement.id,
-      {
-        reportingPeriodStartOn: period.startOn,
-        reportingPeriodEndOn: period.endOn,
-        remotePeriodMissing: period.endOn === null,
-      },
-      tx,
-    );
-    await applyGhgRemoteState(orgCtx, submission, args.remote, {}, tx);
-    return {
-      ghgStatementId: statement.id,
-      externalId: args.remote.id,
-      linkedRemovalIds: membership.linkedRemovalIds,
-      warnings: membership.warnings,
-    };
+  const membership = await reconcileDiscoveredGhgStatementState(orgCtx, {
+    statementId: statement.id,
+    submission,
+    remote: args.remote,
   });
+  return {
+    ghgStatementId: statement.id,
+    externalId: args.remote.id,
+    linkedRemovalIds: membership.linkedRemovalIds,
+    warnings: membership.warnings,
+  };
 }
 
 function toRegistryGhgStatementView(

@@ -131,7 +131,7 @@ export function CreditBatchLifecycleRail({
         {lifecycle.label === "Open" && (
           <span className="body-caption text-[var(--color-text-tertiary)]">
             {summary.issueCount === 0
-              ? "Ready to certify"
+              ? "Batch data ready"
               : `${summary.issueCount} ${
                   summary.issueCount === 1 ? "issue" : "issues"
                 } open`}

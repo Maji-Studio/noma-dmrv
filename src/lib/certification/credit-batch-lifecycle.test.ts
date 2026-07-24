@@ -20,7 +20,7 @@ describe("deriveCreditBatchLifecycle", () => {
   it("distinguishes incomplete from submission-ready pre-submission batches", () => {
     expect(deriveCreditBatchLifecycle(summary())).toMatchObject({
       badgeStatus: "ready",
-      label: "Ready to submit",
+      label: "Batch data ready",
       stepStates: ["success", "inactive", "inactive", "inactive"],
     });
     expect(
@@ -49,7 +49,7 @@ describe("deriveCreditBatchLifecycle", () => {
       ),
     ).toMatchObject({
       badgeStatus: "ready",
-      label: "Ready to submit",
+      label: "Batch data ready",
     });
   });
 

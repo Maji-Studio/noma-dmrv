@@ -87,7 +87,7 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { ghgStatementLookup, performRegistryCreate } from "./registry-create";
-import { applyGhgRemoteState } from "./ghg-statement-remote-state";
+import { applyGhgRemoteState } from "@/data-access/certifier-ghg-remote-state";
 import {
   assertDedicatedGhgStatementProject,
   reconcileGhgStatementsForFacility,

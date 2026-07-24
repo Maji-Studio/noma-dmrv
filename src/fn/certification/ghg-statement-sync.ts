@@ -8,7 +8,7 @@ import {
   type ReconcileRegistryGhgStatementsResult,
 } from "./ghg-statement-reconciliation";
 
-const facilityIdSchema = z.string().uuid();
+const facilityIdSchema = z.uuid();
 
 export async function reconcileGhgStatementsFromRegistry(
   facilityId: string,

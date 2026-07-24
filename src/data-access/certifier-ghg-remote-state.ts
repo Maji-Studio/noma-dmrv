@@ -1,28 +1,35 @@
+import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
+import {
+  getGhgStatementPeriod,
+  type GhgStatement,
+} from "@/lib/isometric";
+import { SUBMISSION_METADATA_KEYS } from "@/lib/isometric/utils/submission-metadata";
 import {
   clearTerminalStatusForResubmit,
   setSubmissionTerminalStatus,
   updateSubmissionMetadata,
   type CertificationSubmissionRow,
   type Tx,
-} from "@/data-access/certification";
+} from "./certification";
 import {
-  getGhgStatementPeriod,
-  type GhgStatement,
-} from "@/lib/isometric";
-import { SUBMISSION_METADATA_KEYS } from "@/lib/isometric/utils/submission-metadata";
+  reconcileRemovalMembership,
+  updateGhgStatementReportingWindow,
+} from "./certifier-ghg-statements";
+import { requireOrgScope } from "./utils";
 
 export async function applyGhgRemoteState(
-  orgCtx: OrgContext,
+  ctx: OrgContext,
   submission: CertificationSubmissionRow,
   remote: GhgStatement,
   extraMetadata: Record<string, unknown> = {},
   tx?: Tx,
 ): Promise<void> {
+  requireOrgScope(ctx);
   const metadataPatch = { ...remoteMetadata(remote), ...extraMetadata };
   if (remote.status === "VERIFIED" || remote.status === "CREDITS_ISSUED") {
     await setSubmissionTerminalStatus(
-      orgCtx,
+      ctx,
       submission.id,
       { status: "accepted", metadataPatch },
       tx,
@@ -31,7 +38,7 @@ export async function applyGhgRemoteState(
   }
   if (remote.status === "FAILED_VERIFICATION") {
     await setSubmissionTerminalStatus(
-      orgCtx,
+      ctx,
       submission.id,
       { status: "rejected", metadataPatch },
       tx,
@@ -44,14 +51,46 @@ export async function applyGhgRemoteState(
     submission.status === "superseded"
   ) {
     await clearTerminalStatusForResubmit(
-      orgCtx,
+      ctx,
       submission.id,
       { metadataPatch },
       tx,
     );
     return;
   }
-  await updateSubmissionMetadata(orgCtx, submission.id, metadataPatch, tx);
+  await updateSubmissionMetadata(ctx, submission.id, metadataPatch, tx);
+}
+
+export async function reconcileDiscoveredGhgStatementState(
+  ctx: OrgContext,
+  args: {
+    statementId: string;
+    submission: CertificationSubmissionRow;
+    remote: GhgStatement;
+  },
+): Promise<{ linkedRemovalIds: string[]; warnings: string[] }> {
+  requireOrgScope(ctx);
+  const period = getGhgStatementPeriod(args.remote);
+  return db.transaction(async (tx) => {
+    const membership = await reconcileRemovalMembership(
+      ctx,
+      args.statementId,
+      args.remote.ghg_entry_ids,
+      tx,
+    );
+    await updateGhgStatementReportingWindow(
+      ctx,
+      args.statementId,
+      {
+        reportingPeriodStartOn: period.startOn,
+        reportingPeriodEndOn: period.endOn,
+        remotePeriodMissing: period.endOn === null,
+      },
+      tx,
+    );
+    await applyGhgRemoteState(ctx, args.submission, args.remote, {}, tx);
+    return membership;
+  });
 }
 
 function remoteMetadata(remote: GhgStatement): Record<string, unknown> {

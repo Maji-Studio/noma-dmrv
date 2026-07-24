@@ -251,7 +251,7 @@ export function CreditBatchHealthStrip({
         {health && (
           <span className="shrink-0 body-caption font-medium text-[var(--color-text-secondary)]">
             {health.state === "ready"
-              ? "Ready to certify"
+              ? "Batch data ready"
               : `${health.issueCount} ${
                   health.issueCount === 1 ? "issue" : "issues"
                 } open`}

@@ -154,7 +154,7 @@ function collectRegistryAnomalies(
   if (netRemovedKg > netBeforeDiscountKg) {
     anomalies.push("net-exceeds-before-discount");
   }
-  if (sequestrationKg != null && sequestrationKg <= 0) {
+  if (sequestrationKg == null || sequestrationKg <= 0) {
     anomalies.push("sequestration-missing-or-zero");
   }
   return anomalies;
