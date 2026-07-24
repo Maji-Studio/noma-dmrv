@@ -5,6 +5,12 @@ import {
   lookupInputMapping,
 } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
+import {
+  bindSequestrationDatapointsToTemplate,
+  buildDirectSequestrationDatapoints,
+  getSequestrationInputBinding,
+} from "@/lib/isometric/transformers/sequestration-binding";
+import { build1000YearSequestrationSample } from "@/lib/isometric/transformers/measurement-sample";
 import type { AggregatedProductionData } from "@/lib/isometric/utils/aggregation";
 
 type ComponentBlueprint = components["schemas"]["ComponentBlueprint"];
@@ -63,6 +69,161 @@ const baseReportingWindow = {
   startedOn: new Date("2026-01-01T00:00:00Z"),
   completedOn: new Date("2026-01-31T23:59:59Z"),
 };
+
+describe("1000-year sequestration input sources", () => {
+  it("builds one direct dimensionless datapoint per s_fraction replicate", () => {
+    const sample = build1000YearSequestrationSample({
+      projectId: PROJECT_ID,
+      supplierRefId: "nm-mts-sample-v2",
+      measuredAt: "2026-01-31T23:59:59.000Z",
+      productMassKg: 1_000,
+      replicates: [
+        { carbonContentFraction: 0.8, sFraction: 0.91 },
+        { carbonContentFraction: 0.82, sFraction: 0.92 },
+        { carbonContentFraction: 0.84, sFraction: 0.93 },
+      ],
+    });
+    expect(sample).not.toBeNull();
+    if (!sample) return;
+
+    const direct = buildDirectSequestrationDatapoints({
+      template: template([
+        {
+          id: "rtc_SEQ",
+          blueprint_key: "biochar_sequestration_1000_year",
+          inputs: [
+            { input_key: "carbon_contents" },
+            { input_key: "product_mass" },
+            { input_key: "s_fraction" },
+          ],
+        },
+      ]),
+      measurementSampleSubmissions: [
+        {
+          operationKey: "pb:cb-1",
+          supplierRefId: "nm-mts-sample-v2",
+          body: sample,
+        },
+      ],
+      projectId: PROJECT_ID,
+      removalId: "rem-test",
+      version: 2,
+      sourceIds: ["src-evidence"],
+    });
+
+    expect(getSequestrationInputBinding(
+      "biochar_sequestration_1000_year",
+      "s_fraction",
+    )).toMatchObject({
+      source: "direct-datapoint",
+      quantityKind: "dimensionless",
+      unit: "dimensionless",
+    });
+    expect(direct).toHaveLength(3);
+    expect(direct.map((entry) => entry.body.quantity)).toEqual([
+      { magnitude: 0.91, unit: "dimensionless" },
+      { magnitude: 0.92, unit: "dimensionless" },
+      { magnitude: 0.93, unit: "dimensionless" },
+    ]);
+    expect(direct.every((entry) => entry.inputKey === "s_fraction")).toBe(true);
+    expect(direct.every((entry) => entry.body.source_ids[0] === "src-evidence")).toBe(
+      true,
+    );
+    expect(
+      new Set(direct.map((entry) => entry.body.supplier_reference_id)).size,
+    ).toBe(3);
+    expect(
+      direct.every((entry) => entry.body.supplier_reference_id.endsWith("-v2")),
+    ).toBe(true);
+    expect(
+      buildDirectSequestrationDatapoints({
+        template: template([
+          {
+            id: "rtc_SEQ",
+            blueprint_key: "biochar_sequestration_1000_year",
+            inputs: [{ input_key: "s_fraction" }],
+          },
+        ]),
+        measurementSampleSubmissions: [
+          {
+            operationKey: "pb:cb-1",
+            supplierRefId: "nm-mts-sample-v2",
+            body: sample,
+          },
+        ],
+        projectId: PROJECT_ID,
+        removalId: "rem-test",
+        version: 2,
+        sourceIds: ["src-evidence"],
+      }).map((entry) => entry.body.supplier_reference_id),
+    ).toEqual(direct.map((entry) => entry.body.supplier_reference_id));
+  });
+
+  it("binds s_fraction only from direct datapoints, not measurement-sample IDs", () => {
+    const bound = bindSequestrationDatapointsToTemplate({
+      template: template([
+        {
+          id: "rtc_SEQ",
+          blueprint_key: "biochar_sequestration_1000_year",
+          inputs: [
+            { input_key: "carbon_contents" },
+            { input_key: "product_mass" },
+            { input_key: "s_fraction" },
+          ],
+        },
+      ]),
+      datapointIdsByMeasurementProperty: new Map([
+        [
+          "mass_fraction_dry_basis|total_carbon",
+          ["dtp-carbon-1", "dtp-carbon-2", "dtp-carbon-3"],
+        ],
+        ["mass", ["dtp-product-mass"]],
+        [
+          "dimensionless_ratio|inertinite_fraction",
+          ["dtp-measurement-s-1", "dtp-measurement-s-2"],
+        ],
+      ]),
+      datapointIdsByRtcInput: new Map([
+        [
+          "rtc_SEQ::s_fraction",
+          ["dtp-direct-s-1", "dtp-direct-s-2", "dtp-direct-s-3"],
+        ],
+      ]),
+    });
+
+    expect(bound.get("rtc_SEQ::carbon_contents")).toEqual([
+      "dtp-carbon-1",
+      "dtp-carbon-2",
+      "dtp-carbon-3",
+    ]);
+    expect(bound.get("rtc_SEQ::product_mass")).toEqual(["dtp-product-mass"]);
+    expect(bound.get("rtc_SEQ::s_fraction")).toEqual([
+      "dtp-direct-s-1",
+      "dtp-direct-s-2",
+      "dtp-direct-s-3",
+    ]);
+  });
+
+  it("fails loudly when the orchestrator has not resolved direct s_fraction IDs", () => {
+    expect(() =>
+      bindSequestrationDatapointsToTemplate({
+        template: template([
+          {
+            id: "rtc_SEQ",
+            blueprint_key: "biochar_sequestration_1000_year",
+            inputs: [{ input_key: "s_fraction" }],
+          },
+        ]),
+        datapointIdsByMeasurementProperty: new Map([
+          [
+            "dimensionless_ratio|inertinite_fraction",
+            ["dtp-measurement-s-1"],
+          ],
+        ]),
+      }),
+    ).toThrowError(/orchestrator did not post a direct datapoint.*s_fraction/i);
+  });
+});
 
 function blueprintInput(
   overrides: Partial<ComponentBlueprintInput>,
@@ -472,7 +633,7 @@ describe("buildCreateGhgEntryRequest", () => {
       { id: "rtc_A", blueprint_key: "mass_blueprint", inputs: [{ input_key: "mass" }] },
     ]);
     const blueprints = new Map([["mass_blueprint", blueprintMass]]);
-    const datapointIds = new Map([["rtc_A::mass", "dtp_1"]]);
+    const datapointIds = new Map([["rtc_A::mass", ["dtp_1"]]]);
 
     const result = buildCreateGhgEntryRequest({
       template: tmpl,
@@ -511,7 +672,7 @@ describe("buildCreateGhgEntryRequest", () => {
       },
     ]);
     const blueprints = new Map([["list_blueprint", blueprintListInput]]);
-    const datapointIds = new Map([["rtc_L::feedstock_mass", "dtp_99"]]);
+    const datapointIds = new Map([["rtc_L::feedstock_mass", ["dtp_99"]]]);
 
     const result = buildCreateGhgEntryRequest({
       template: tmpl,
@@ -531,20 +692,26 @@ describe("buildCreateGhgEntryRequest", () => {
     }
   });
 
-  it("skips biochar_sequestration_200_year_* components (fed by the measurement-samples step)", () => {
-    // The sequestration component carries no resolved datapoint and no catalog
-    // blueprint here — both would throw if it weren't skipped. The normal
-    // component must still be emitted.
+  it("binds 1000-year sequestration LIST + SCALAR inputs without a catalog blueprint", () => {
     const tmpl = template([
       {
         id: "rtc_SEQ",
-        blueprint_key: "biochar_sequestration_200_year_c_org",
-        inputs: [{ input_key: "h_c_molar_ratios" }],
+        blueprint_key: "biochar_sequestration_1000_year",
+        inputs: [
+          { input_key: "carbon_contents" },
+          { input_key: "product_mass" },
+          { input_key: "s_fraction" },
+        ],
       },
       { id: "rtc_A", blueprint_key: "mass_blueprint", inputs: [{ input_key: "mass" }] },
     ]);
     const blueprints = new Map([["mass_blueprint", blueprintMass]]);
-    const datapointIds = new Map([["rtc_A::mass", "dtp_1"]]);
+    const datapointIds = new Map([
+      ["rtc_SEQ::carbon_contents", ["dtp_c1", "dtp_c2", "dtp_c3"]],
+      ["rtc_SEQ::product_mass", ["dtp_mass"]],
+      ["rtc_SEQ::s_fraction", ["dtp_s1", "dtp_s2", "dtp_s3"]],
+      ["rtc_A::mass", ["dtp_1"]],
+    ]);
 
     const result = buildCreateGhgEntryRequest({
       template: tmpl,
@@ -556,8 +723,73 @@ describe("buildCreateGhgEntryRequest", () => {
     });
 
     const components = result.ghg_entry_template_components ?? [];
-    expect(components).toHaveLength(1);
-    expect(components[0]!.ghg_entry_template_component_id).toBe("rtc_A");
+    expect(components).toHaveLength(2);
+    expect(components[0]).toEqual({
+      ghg_entry_template_component_id: "rtc_SEQ",
+      inputs: [
+        {
+          __typename: "CreateComponentListInput",
+          datapoint_ids: ["dtp_c1", "dtp_c2", "dtp_c3"],
+          input_key: "carbon_contents",
+        },
+        {
+          __typename: "CreateComponentScalarInput",
+          datapoint_id: "dtp_mass",
+          input_key: "product_mass",
+        },
+        {
+          __typename: "CreateComponentListInput",
+          datapoint_ids: ["dtp_s1", "dtp_s2", "dtp_s3"],
+          input_key: "s_fraction",
+        },
+      ],
+    });
+  });
+
+  it("fails actionably for an unknown sequestration blueprint instead of skipping it", () => {
+    const tmpl = template([
+      {
+        id: "rtc_UNKNOWN",
+        blueprint_key: "biochar_sequestration_500_year",
+        inputs: [{ input_key: "carbon_contents" }],
+      },
+    ]);
+
+    expect(() =>
+      buildCreateGhgEntryRequest({
+        template: tmpl,
+        blueprintsByKey: new Map(),
+        datapointIdsByRtcInput: new Map(),
+        reportingWindow: baseReportingWindow,
+        projectId: PROJECT_ID,
+        supplierRefId: SUPPLIER_REF,
+      }),
+    ).toThrowError(
+      /Sequestration blueprint "biochar_sequestration_500_year" has no explicit GHG-entry datapoint binding[\s\S]*Re-author/,
+    );
+  });
+
+  it("fails closed when a sequestration SCALAR resolves more than one datapoint", () => {
+    const tmpl = template([
+      {
+        id: "rtc_SEQ",
+        blueprint_key: "biochar_sequestration_1000_year",
+        inputs: [{ input_key: "product_mass" }],
+      },
+    ]);
+
+    expect(() =>
+      buildCreateGhgEntryRequest({
+        template: tmpl,
+        blueprintsByKey: new Map(),
+        datapointIdsByRtcInput: new Map([
+          ["rtc_SEQ::product_mass", ["dtp_mass_1", "dtp_mass_2"]],
+        ]),
+        reportingWindow: baseReportingWindow,
+        projectId: PROJECT_ID,
+        supplierRefId: SUPPLIER_REF,
+      }),
+    ).toThrowError(/input "product_mass" is SCALAR but 2 datapoints/);
   });
 
   it("throws when a component references a blueprint missing from the catalog (drift detection)", () => {
@@ -613,7 +845,7 @@ describe("buildCreateGhgEntryRequest", () => {
         projectId: PROJECT_ID,
         supplierRefId: SUPPLIER_REF,
       }),
-    ).toThrowError(/did not resolve a datapoint for component rtc_A/);
+    ).toThrowError(/did not resolve any datapoints for component rtc_A/);
   });
 
   it("formats started_on / completed_on as ISO date (YYYY-MM-DD), stripping time", () => {
@@ -623,7 +855,7 @@ describe("buildCreateGhgEntryRequest", () => {
     const result = buildCreateGhgEntryRequest({
       template: tmpl,
       blueprintsByKey: new Map([["mass_blueprint", blueprintMass]]),
-      datapointIdsByRtcInput: new Map([["rtc_A::mass", "dtp_1"]]),
+      datapointIdsByRtcInput: new Map([["rtc_A::mass", ["dtp_1"]]]),
       reportingWindow: {
         startedOn: new Date("2026-03-15T08:30:45Z"),
         completedOn: new Date("2026-04-02T17:00:00Z"),

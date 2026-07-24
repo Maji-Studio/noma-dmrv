@@ -13,11 +13,8 @@
  * The measurement properties, blueprint keys, and units below were confirmed by
  * the live coverage-check (plan §4, sandbox template rvt_1KS4S43VPSBXA26X).
  *
- * ─── ⚠️ SANDBOX-GATED — keep the live submit path behind these confirms ──────
- *   (1) The datapoint↔component-input BINDING (auto-link vs explicit
- *       `datapoint_id` reference) — not modelled here; resolved when wiring the
- *       live submit path against the sandbox.
- *   (2) The H/C ×100 UNIT TRANSFORM — the blueprint declares `h_c_molar_ratios`
+ * ─── ⚠️ SANDBOX-GATED — keep the 200-year path behind this confirm ───────────
+ *   The H/C ×100 UNIT TRANSFORM — the blueprint declares `h_c_molar_ratios`
  *       in `%`, but our samples store a dimensionless ratio (~0.5).
  *       `toHcMolarRatioPercent` applies ×100 as the most likely transform; this
  *       is UNCONFIRMED. See `docs/open-questions.md`.
@@ -374,10 +371,9 @@ export function buildBiocharUnsampledBatchSample(args: {
 // pre-reduced mean/−SE/cap (collapsing to one aggregate → n=1 → massive
 // over-penalty). The registry owns the reduction (mirrors ADR 0013).
 //
-// ⚠️ The exact datapoint↔list-input binding and unit declarations are the
-// remaining sandbox confirms (mirrors the 200-year gated confirms). Inert until
-// `DURABILITY_MEASUREMENT_SAMPLES_LIVE` flips, so a wrong guess can never reach a
-// live credit. See `docs/open-questions.md`.
+// The explicit datapoint↔input binding is implemented in
+// `sequestration-binding.ts` from the verified Certify response/component
+// contract. The sandbox-only feature flag remains the operator kill-switch.
 
 /** Total carbon content, dry basis — the 1000-year `carbon_contents` list input. */
 export const CARBON_CONTENTS_MEASUREMENT_PROPERTY: IsometricMeasurementProperty =
@@ -423,13 +419,14 @@ export interface Build1000YearSequestrationSampleArgs {
 
 /**
  * Build the `biochar_production_batch` measurement sample carrying the 1000-year
- * blueprint inputs: the per-replicate `carbon_contents` LIST + `s_fraction` LIST
- * (one value each per replicate) and the single `product_mass` SCALAR. Each list
- * value yields a datapoint the registry binds to the matching
- * `biochar_sequestration_1000_year` list input; the registry computes the
- * conservative −binomial-SE durable fraction from the FULL list, so this submits
- * the raw per-replicate values with no local reduction. Returns null when the
- * batch pooled no replicate. Pure — no I/O. ⚠️ Sandbox-gated (see header).
+ * inputs as evidence: the per-replicate `carbon_contents` + `s_fraction` values
+ * and the single `product_mass`. Carbon and mass response datapoints bind their
+ * GHG inputs. The sample's `dimensionless_ratio` s_fraction values remain
+ * data-quality evidence while the orchestrator posts matching `dimensionless`
+ * datapoints for that LIST input. The registry computes the conservative
+ * −binomial-SE durable fraction from the FULL list, so this submits the raw
+ * per-replicate values with no local reduction. Returns null when the batch
+ * pooled no replicate. Pure — no I/O. ⚠️ Sandbox-gated (see header).
  */
 export function build1000YearSequestrationSample(
   args: Build1000YearSequestrationSampleArgs,

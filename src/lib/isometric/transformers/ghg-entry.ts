@@ -1,6 +1,11 @@
 import { SafeError } from "@/lib/errors";
 import type { components } from "../generated/certify";
-import { isSequestrationBlueprintKey } from "./measurement-sample";
+import { isSequestrationBlueprintFamily } from "./measurement-sample";
+import {
+  getSequestrationInputBinding,
+  hasExplicitSequestrationBinding,
+  type DatapointIdsByRtcInput,
+} from "./sequestration-binding";
 
 type CreateGhgEntryRequest = components["schemas"]["CreateGhgEntryRequest"];
 type GhgEntryTemplate = components["schemas"]["GhgEntryTemplate"];
@@ -15,9 +20,10 @@ type CreateComponentListInput =
 export interface BuildCreateGhgEntryArgs {
   template: GhgEntryTemplate;
   blueprintsByKey: Map<string, ComponentBlueprint>;
-  // Resolved scalar datapoint IDs keyed by `${rtcId}::${inputKey}` — orchestrator
-  // populates one entry per monitored input plus pre-bound fixed inputs.
-  datapointIdsByRtcInput: Map<string, string>;
+  // Resolved datapoint IDs keyed by `${rtcId}::${inputKey}`. Ordinary scalar
+  // inputs carry one ID; measurement-sample-backed sequestration LIST inputs
+  // carry every returned replicate ID.
+  datapointIdsByRtcInput: DatapointIdsByRtcInput;
   // The removal's reporting window (biochar protocol v1.3 §8.6.2): starts with
   // production, ends when the biochar is applied at the storage site — NOT the
   // production window. The orchestrator derives `completedOn` from the latest
@@ -43,15 +49,23 @@ export function buildCreateGhgEntryRequest(
 
   for (const group of template.groups) {
     for (const component of group.components) {
-      // The `biochar_sequestration_200_year_*` components are fed by the
-      // measurement-samples step (Phase 3), not the datapoint loop, so they carry
-      // no resolved datapoint here — skip them in the removal body. The registry
-      // binds their inputs to the measurement-sample datapoints (binding mode is
-      // sandbox-gated; see docs/open-questions.md). resolveTemplateInputs skips
-      // them to match.
-      if (isSequestrationBlueprintKey(component.blueprint_key)) continue;
-      const blueprint = blueprintsByKey.get(component.blueprint_key);
-      if (!blueprint) {
+      const isSequestration = isSequestrationBlueprintFamily(
+        component.blueprint_key,
+      );
+      if (
+        isSequestration &&
+        !hasExplicitSequestrationBinding(component.blueprint_key)
+      ) {
+        throw new SafeError(
+          `Sequestration blueprint "${component.blueprint_key}" has no explicit GHG-entry datapoint binding. ` +
+            "Re-author the template to a supported sequestration blueprint or add and verify its input mapping before submitting.",
+        );
+      }
+
+      const blueprint = isSequestration
+        ? null
+        : blueprintsByKey.get(component.blueprint_key);
+      if (!isSequestration && !blueprint) {
         throw new SafeError(
           `Component blueprint "${component.blueprint_key}" missing from catalog — drift detected.`,
         );
@@ -60,38 +74,57 @@ export function buildCreateGhgEntryRequest(
       const inputs: (CreateComponentScalarInput | CreateComponentListInput)[] =
         [];
       for (const rtcInput of component.inputs) {
-        const blueprintInput = blueprint.inputs.find(
-          (i) => i.input_key === rtcInput.input_key,
+        const sequestrationBinding = isSequestration
+          ? getSequestrationInputBinding(
+              component.blueprint_key,
+              rtcInput.input_key,
+            )
+          : null;
+        const blueprintInput = blueprint?.inputs.find(
+          (input) => input.input_key === rtcInput.input_key,
         );
-        if (!blueprintInput) {
+        if (isSequestration && !sequestrationBinding) {
+          throw new SafeError(
+            `Sequestration blueprint "${component.blueprint_key}" input "${rtcInput.input_key}" has no explicit GHG-entry binding. ` +
+              "Update the verified sequestration binding table before submitting.",
+          );
+        }
+        if (!isSequestration && !blueprintInput) {
           throw new SafeError(
             `Blueprint "${component.blueprint_key}" missing input "${rtcInput.input_key}".`,
           );
         }
-        const datapointId = datapointIdsByRtcInput.get(
+        const datapointIds = datapointIdsByRtcInput.get(
           `${component.id}::${rtcInput.input_key}`,
         );
-        if (!datapointId) {
+        if (!datapointIds || datapointIds.length === 0) {
           throw new SafeError(
-            `Orchestrator did not resolve a datapoint for component ${component.id} input "${rtcInput.input_key}".`,
+            `Orchestrator did not resolve any datapoints for component ${component.id} input "${rtcInput.input_key}".`,
           );
         }
 
-        if (blueprintInput.data_shape === "LIST") {
+        const dataShape =
+          sequestrationBinding?.dataShape ?? blueprintInput?.data_shape;
+        if (dataShape === "LIST") {
           inputs.push({
             __typename: "CreateComponentListInput",
-            datapoint_ids: [datapointId],
+            datapoint_ids: datapointIds,
             input_key: rtcInput.input_key,
           });
-        } else if (blueprintInput.data_shape === "SCALAR") {
+        } else if (dataShape === "SCALAR") {
+          if (datapointIds.length !== 1) {
+            throw new SafeError(
+              `Component ${component.id} input "${rtcInput.input_key}" is SCALAR but ${datapointIds.length} datapoints were resolved.`,
+            );
+          }
           inputs.push({
             __typename: "CreateComponentScalarInput",
-            datapoint_id: datapointId,
+            datapoint_id: datapointIds[0],
             input_key: rtcInput.input_key,
           });
         } else {
           throw new SafeError(
-            `Blueprint "${component.blueprint_key}" input "${rtcInput.input_key}" has unsupported data_shape "${blueprintInput.data_shape}".`,
+            `Blueprint "${component.blueprint_key}" input "${rtcInput.input_key}" has unsupported data_shape "${String(dataShape)}".`,
           );
         }
       }

@@ -35,8 +35,8 @@ import {
   makeContext,
   makeLineage,
   makeRun,
+  make1000YearSequestrationTemplate,
   makeSequestrationTemplate,
-  makeTemplate,
   setDurabilityMeasurementSamplesLive,
   storedRows,
 } from "./fixtures/submit-removal-orchestrator";
@@ -48,6 +48,7 @@ import * as durabilitySamples from "@/fn/certification/durability-measurement-sa
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import * as isometric from "@/lib/isometric";
+import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -129,6 +130,10 @@ describe("submitRemoval — happy path", () => {
       removalId: REMOVAL_ID,
       externalId: "rmv_1",
       version: 1,
+    });
+    expect(storedRows[0].payloadSnapshot).toMatchObject({
+      __mappingRevision: MAPPING_REVISION,
+      semantic: { mappingRevision: MAPPING_REVISION },
     });
 
     // One datapoint POST (the only monitored input) + one removal POST.
@@ -350,22 +355,38 @@ describe("submitRemoval — reporting window anchored to application date (issue
   // component, so one submit exercises the GHG-entry window AND the durability
   // measurement-samples path side by side.
   function makeCombinedTemplate(): IsometricGhgEntryTemplate {
-    const base = makeTemplate();
-    const seq = makeSequestrationTemplate();
-    return {
-      ...base,
-      groups: [...base.groups, ...seq.groups],
-    } as IsometricGhgEntryTemplate;
+    return make1000YearSequestrationTemplate();
   }
 
   it("uses MAX(applicationDate) across lineages for completed_on while durability measured_at keeps the production end", async () => {
     setDurabilityMeasurementSamplesLive(true);
     vi.mocked(
       durabilitySamples.submitDurabilityMeasurementSamples,
-    ).mockResolvedValue({ submitted: 2 } as never);
+    ).mockResolvedValue({
+      submitted: 1,
+      samples: [],
+      datapointIdsByMeasurementProperty: new Map([
+        [
+          "mass_fraction_dry_basis|total_carbon",
+          ["dtp-carbon-1", "dtp-carbon-2", "dtp-carbon-3"],
+        ],
+        ["mass", ["dtp-product-mass"]],
+      ]),
+    } as never);
+    const baseContext = makeContext();
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
-      ...makeContext(),
+      ...baseContext,
       defaultTemplate: makeCombinedTemplate(),
+      durabilityGateBlockers: [],
+      batchesWithSamples: baseContext.batchesWithSamples.map((batch) => ({
+        ...batch,
+        durabilityOption: "1000_year" as const,
+        samples: batch.samples.map((sample, index) => ({
+          ...sample,
+          totalCarbonPercent: 80 + index,
+          sReflectanceFraction: 0.9 + index / 100,
+        })),
+      })),
       lineages: [
         makeLineage({
           applicationId: "app-early",
@@ -408,7 +429,42 @@ describe("submitRemoval — reporting window anchored to application date (issue
     expect(submitArgs.submissions.length).toBeGreaterThan(0);
     for (const submission of submitArgs.submissions) {
       expect(submission.body.measured_at).toBe("2026-01-31T23:59:59.000Z");
+      expect(
+        submission.body.values.filter(
+          (value) =>
+            value.measurement_property.qualifier === "inertinite_fraction",
+        ).map((value) => value.value.magnitude),
+      ).toEqual([0.9, 0.91, 0.92]);
     }
+
+    const datapointBodies = vi.mocked(isometric.createDatapoint).mock.calls.map(
+      (call) => call[1],
+    );
+    const sFractionDatapoints = datapointBodies.filter(
+      (body) => body.display_name === "s_fraction",
+    );
+    expect(sFractionDatapoints.map((body) => body.quantity)).toEqual([
+      { magnitude: 0.9, unit: "dimensionless" },
+      { magnitude: 0.91, unit: "dimensionless" },
+      { magnitude: 0.92, unit: "dimensionless" },
+    ]);
+    expect(
+      new Set(sFractionDatapoints.map((body) => body.supplier_reference_id)).size,
+    ).toBe(3);
+
+    const sequestrationComponent =
+      removalBody.ghg_entry_template_components?.find(
+        (component) =>
+          component.ghg_entry_template_component_id === "rtc-seq",
+      );
+    const sFractionInput = sequestrationComponent?.inputs.find(
+      (input) => input.input_key === "s_fraction",
+    );
+    expect(sFractionInput).toEqual({
+      __typename: "CreateComponentListInput",
+      datapoint_ids: ["dp_1", "dp_2", "dp_3"],
+      input_key: "s_fraction",
+    });
   });
 
   it("allows an application dated the same UTC day as a mid-day production start (date-granular guard)", async () => {
@@ -521,6 +577,31 @@ describe("submitRemoval — durability measurement-samples gate (Phase 3, staged
     ).rejects.toThrow(/staged but not yet live/i);
     // Gated before any aggregation/claim — nothing posted, no ledger row.
     expect(createDatapointFake).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
+  });
+
+  it("blocks the 1000-year component rather than silently omitting it when the flag is off", async () => {
+    const ctx = makeContext();
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+      ...ctx,
+      defaultTemplate: make1000YearSequestrationTemplate(),
+      batchesWithSamples: ctx.batchesWithSamples.map((batch) => ({
+        ...batch,
+        durabilityOption: "1000_year" as const,
+      })),
+    });
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow(/required sequestration datapoint IDs cannot be bound/i);
+
+    expect(
+      durabilitySamples.submitDurabilityMeasurementSamples,
+    ).not.toHaveBeenCalled();
+    expect(isometric.createGhgEntry).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
   });
 });
