@@ -33,7 +33,7 @@ export function CreditBatchSamplingControl({
   if (isEditMode) {
     return (
       <div
-        className="flex flex-col gap-4 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)] px-16 py-12"
+        className="flex flex-col gap-4 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12"
         data-testid="sampling-read-only"
       >
         <span className="body-small font-medium text-[var(--color-text-primary)]">

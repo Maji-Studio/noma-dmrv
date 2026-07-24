@@ -68,7 +68,7 @@ function TransferFlowPreview({
       <div
         className={`flex-1 border px-12 py-10 flex flex-col justify-center transition-colors ${
           hasSource
-            ? "border-[var(--color-border-primary)] bg-[var(--color-bg-tertiary)]"
+            ? "border-[var(--color-border-primary)] bg-[var(--color-background-medium)]"
             : "border-dashed border-[var(--color-border-tertiary)] bg-transparent"
         }`}
       >
@@ -90,7 +90,7 @@ function TransferFlowPreview({
             )}
           </>
         ) : (
-          <span className="body-small text-[var(--color-text-quaternary)] mt-2">
+          <span className="body-small text-[var(--color-text-tertiary)] mt-2">
             Select a run
           </span>
         )}
@@ -106,7 +106,7 @@ function TransferFlowPreview({
             {sourceMassKg.toLocaleString()} kg
           </span>
         ) : (
-          <span className="body-caption text-[var(--color-text-quaternary)] mt-2">
+          <span className="body-caption text-[var(--color-text-tertiary)] mt-2">
             — kg
           </span>
         )}
@@ -116,7 +116,7 @@ function TransferFlowPreview({
       <div
         className={`flex-1 border px-12 py-10 flex flex-col justify-center transition-colors ${
           hasDestination
-            ? "border-[var(--color-border-primary)] bg-[var(--color-bg-tertiary)]"
+            ? "border-[var(--color-border-primary)] bg-[var(--color-background-medium)]"
             : "border-dashed border-[var(--color-border-tertiary)] bg-transparent"
         }`}
       >
@@ -135,7 +135,7 @@ function TransferFlowPreview({
             )}
           </>
         ) : (
-          <span className="body-small text-[var(--color-text-quaternary)] mt-2">
+          <span className="body-small text-[var(--color-text-tertiary)] mt-2">
             Select a bin
           </span>
         )}
@@ -495,14 +495,14 @@ export function BiocharProductForm({
         {/* Dry mass is surfaced inline under Wet Mass (DryMassInput). When water
             is added, show what it changes — effective wet mass and final moisture. */}
         {hasWaterAdded && effectiveWetMassKg !== null && (
-          <div className="flex flex-wrap items-center gap-x-8 gap-y-4 border border-[var(--color-border-tertiary)] bg-[var(--color-bg-tertiary)] px-16 py-12">
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-4 border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] px-16 py-12">
             <span className="body-small text-[var(--color-text-tertiary)]">Effective wet mass</span>
             <span className="body-medium font-medium text-[var(--color-text-primary)]">
               {effectiveWetMassKg.toFixed(2)} kg
             </span>
             {finalMoisturePercent !== null && (
               <>
-                <span className="text-[var(--color-text-quaternary)]">&middot;</span>
+                <span className="text-[var(--color-text-tertiary)]">&middot;</span>
                 <span className="body-small text-[var(--color-text-tertiary)]">Final moisture</span>
                 <span className="body-small font-medium text-[var(--color-text-primary)]">
                   {finalMoisturePercent.toFixed(2)}%

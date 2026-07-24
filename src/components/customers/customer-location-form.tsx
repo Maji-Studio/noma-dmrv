@@ -12,6 +12,7 @@ import {
   FormActions,
   FormField,
   FormInput,
+  FormSection,
   FormTextarea,
   PositionPicker,
   makeCertFieldStatus,
@@ -104,11 +105,7 @@ export function CustomerLocationForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* Location Details Section */}
-      <div className="space-y-20">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Location Details
-        </h3>
-
+      <FormSection title="Location Details" divider={false}>
         <FormField
           id="name"
           label="Location Name"
@@ -187,14 +184,10 @@ export function CustomerLocationForm({
             {...register("address")}
           />
         </FormField>
-      </div>
+      </FormSection>
 
       {/* GPS Coordinates Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          GPS Coordinates
-        </h3>
-
+      <FormSection title="GPS Coordinates">
         <PositionPicker
           idPrefix="gps"
           label="Application site position"
@@ -210,14 +203,10 @@ export function CustomerLocationForm({
           longitudeError={errors.gpsLongitude?.message}
           disabled={isSubmitting}
         />
-      </div>
+      </FormSection>
 
       {/* Soil Defaults Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Soil Defaults
-        </h3>
-
+      <FormSection title="Soil Defaults">
         <FormField
           id="defaultSoilTemperatureC"
           label="Default soil temperature (°C)"
@@ -234,14 +223,10 @@ export function CustomerLocationForm({
             {...register("defaultSoilTemperatureC")}
           />
         </FormField>
-      </div>
+      </FormSection>
 
       {/* Logistics Section */}
-      <div className="space-y-20 pt-20 border-t border-[var(--color-border-tertiary)]">
-        <h3 className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-          Logistics
-        </h3>
-
+      <FormSection title="Logistics">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <DistanceCalcField
             id="distanceFromFacilityKm"
@@ -282,7 +267,7 @@ export function CustomerLocationForm({
             Set as default destination
           </span>
         </label>
-      </div>
+      </FormSection>
 
       <FormActions
         sticky={false}

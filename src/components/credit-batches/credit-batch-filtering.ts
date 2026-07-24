@@ -20,8 +20,8 @@ export function readinessErrorMessage(
   readiness: CreditBatchReadinessFilter,
 ): string {
   return readiness === "all"
-    ? "Certification readiness unavailable. Batches are still shown without readiness badges."
-    : "Certification readiness unavailable. Retry or clear the readiness filter to view batches.";
+    ? "Certification progress unavailable. Batches are still shown without lifecycle status."
+    : "Certification data status unavailable. Retry or clear the data-status filter to view batches.";
 }
 
 /**

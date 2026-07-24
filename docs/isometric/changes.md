@@ -125,6 +125,18 @@ Isometric production-batch ID mapping or production-batch create/reconcile step.
 Adding an unverified ID would reduce traceability rather than improve it; the
 versioned supplier reference continues to anchor each measurement sample.
 
+## 2026-07-23 (legacy sequestration blueprint compatibility)
+
+Facility readiness accepts the explicitly bound 1000-year sequestration
+blueprint when it remains embedded in an existing Isometric Removal Template
+after Isometric retires it from the global component-blueprint catalogue. The
+template is still the active contract for that component, and noma supplies its
+inputs through the verified explicit binding table.
+
+Unknown missing blueprint keys continue to fail closed. This compatibility path
+does not alias a retired blueprint to a replacement with a different input
+contract, and it does not modify the remote Isometric template.
+
 ## 2026-07-23 (GHG Statement creation dialog)
 
 The period-first GHG Statement creation flow now uses the shared centered
