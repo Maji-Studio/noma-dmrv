@@ -1879,7 +1879,7 @@ async function seedDemoData() {
         {
           facilityId: ids.facilityMoshi,
           externalProjectId: 'prj_1K9YJ33RKSBX9FFF',
-          protocolVersion: '1.2',
+          protocolVersion: '1.1',
           defaultRemovalTemplateId: 'rvt_1KS4S43VPSBXA26X',
           gensetEnergyYieldKwhPerLitre: 3.375,
           defaultSoilTemperatureC: 24.2,

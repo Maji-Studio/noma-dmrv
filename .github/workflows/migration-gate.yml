@@ -51,6 +51,8 @@ jobs:
       # All values are runner-local and disposable; this job never loads
       # repository or environment secrets.
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/noma_dmrv_migration_gate
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
+      BETTER_AUTH_SECRET: migration-gate-placeholder-secret-unused
       ADMIN_EMAIL: migration-gate-admin@ci.local
       # Quoted: unquoted, YAML parses an all-digit scalar as the integer 0, and
       # the key must reach the process as 64 hex characters.

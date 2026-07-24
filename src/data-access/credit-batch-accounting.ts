@@ -25,6 +25,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import {
   BLUEPRINT_1000_YEAR_REPLICATES_INPUT,
   SOIL_STORAGE_MODULE_VERSION,
+  SOIL_STORAGE_PREVIEW_REVERIFIED,
   computeApplicationCo2eStored,
   computeApplicationCo2eStoredBlueprint1000,
   type Blueprint1000YearReplicate,
@@ -35,6 +36,7 @@ import {
   weightedBatchChemistry,
   type WeightedBatchChemistry,
 } from "@/lib/isometric/utils/durability-aggregation";
+import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "@/lib/certification/preview-gaps";
 import {
   DURABILITY_TIER_FALLBACK,
   type DurabilityOption,
@@ -445,6 +447,17 @@ function buildCo2eStoredPreview(
       missingInputs: [
         provider ? "isometricCertifier" : "facilityCertifierProject",
       ],
+      warnings: [],
+    };
+  }
+
+  if (!SOIL_STORAGE_PREVIEW_REVERIFIED) {
+    return {
+      provider,
+      co2eStoredTonnes: null,
+      moduleVersion: null,
+      applicationResults: [],
+      missingInputs: [STORED_CO2E_PREVIEW_REVERIFICATION_GAP],
       warnings: [],
     };
   }

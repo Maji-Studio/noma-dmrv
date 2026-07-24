@@ -68,7 +68,7 @@ describe("checkProtocolVersionAtSubmit", () => {
       checkProtocolVersionAtSubmit({
         orgCtx: ORG_CTX,
         removalId: REMOVAL_ID,
-        mapping: makeMapping("1.1"),
+        mapping: makeMapping("1.2"),
         log,
       }),
     ).resolves.toBe("mismatch");
@@ -76,7 +76,7 @@ describe("checkProtocolVersionAtSubmit", () => {
     expect(log.warn).toHaveBeenCalledWith(
       expect.objectContaining({
         outcome: "mismatch",
-        configuredProtocolVersion: "1.1",
+        configuredProtocolVersion: "1.2",
         pinnedProtocolVersion: PINNED_BIOCHAR_PROTOCOL_VERSION,
       }),
       expect.stringMatching(/differs/),

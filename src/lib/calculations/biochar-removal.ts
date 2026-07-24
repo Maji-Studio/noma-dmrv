@@ -8,7 +8,7 @@
  * the credit-batch total, and the value we submit to Certify must all flow
  * through these same pure functions. A protocol version bump happens HERE first.
  *
- * ─── AUTHORITATIVE SOURCE (pinned, see docs/isometric/versions.json) ──────────
+ * ─── LEGACY PREVIEW SOURCE (pending v1.1 re-verification) ───────────────────
  *   Module: "Biochar Storage in Soil Environments" v1.2 (CERTIFIED, tag 1.2.0)
  *   https://registry.isometric.com/module/biochar-storage-soil-environments/1.2?tag=1.2.0
  *
@@ -27,12 +27,27 @@
  * against the authoritative URL above before relying on this output.
  */
 
+import versions from "../../../docs/isometric/versions.json";
 import { MINIMUM_REPLICATES_PER_BATCH } from "./biochar-eligibility";
 
 // ── Pinned protocol constants ────────────────────────────────────────────────
 
 /** Storage module patch version these constants are derived from. Bump here first. */
 export const SOIL_STORAGE_MODULE_VERSION = "1.2.0";
+
+/** Storage-module patch selected by the repository's current interpretation pin. */
+export const PINNED_SOIL_STORAGE_MODULE_VERSION =
+  versions.modules.find(
+    (module) => module.slug === versions.scope.storage_pathway,
+  )?.patch_version ?? null;
+
+/**
+ * Fail-closed drift lock for consumers of the local stored-CO₂e preview.
+ * False means the legacy constants above have not yet been re-verified against
+ * the current module pin and must not be presented as a current preview.
+ */
+export const SOIL_STORAGE_PREVIEW_REVERIFIED =
+  PINNED_SOIL_STORAGE_MODULE_VERSION === SOIL_STORAGE_MODULE_VERSION;
 
 /**
  * CO₂ ↔ elemental-carbon mass ratio (Eq.1). The protocol specifies the
