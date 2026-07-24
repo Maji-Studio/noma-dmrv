@@ -127,6 +127,9 @@ The visual contract (SectionLabel + `space-y-16` fields + `pt-16` hairline divid
 - **`space-y-20`** — all side-sheet forms (top-level `<form>`), sectioned or not. `FormSection` owns intra-section rhythm; nothing else sets section spacing.
 - **`space-y-24`** — full-page and auth forms only.
 - Field grids inside sections: `grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20`.
+- Direct `FormField` children of any grid share label, control, and message rows
+  through the global subgrid rule. Wrapped labels therefore keep neighboring
+  controls aligned; do not add per-field label heights or spacer elements.
 
 ### FormActions
 

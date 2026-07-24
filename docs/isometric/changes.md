@@ -13,6 +13,18 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-07-23 (legacy sequestration blueprint compatibility)
+
+Facility readiness now accepts a recognized sequestration blueprint that remains
+embedded in an existing Isometric Removal Template after Isometric retires it
+from the global component-blueprint catalogue. The template is still the active
+contract for that component, and noma supplies its inputs through measurement
+samples rather than the generic catalogue-driven datapoint builder.
+
+Unknown missing blueprint keys continue to fail closed. This compatibility path
+does not alias a retired blueprint to a replacement with a different input
+contract, and it does not modify the remote Isometric template.
+
 ## 2026-07-23 (GHG Statement creation dialog)
 
 The period-first GHG Statement creation flow now uses the shared centered

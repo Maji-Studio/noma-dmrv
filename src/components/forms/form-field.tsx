@@ -110,13 +110,13 @@ export function FormField({
       : undefined;
 
   return (
-    <div>
+    <div className="form-field">
       {/* Keep the info icon a sibling of the label, not a child — a button
           inside a <label> would forward its clicks to the field control.
           Top-align so a wrapped multi-line label keeps the CERT tag / ⓘ icon
           beside its first line instead of floating them in the vertical
           middle of the wrapped text. */}
-      <div className="flex items-start gap-6 mb-6">
+      <div className="form-field-label-row flex items-start gap-6 mb-6">
         <label
           htmlFor={id}
           className="body-small font-medium text-[var(--color-text-secondary)]"

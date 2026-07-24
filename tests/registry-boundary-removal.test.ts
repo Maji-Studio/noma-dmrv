@@ -378,7 +378,17 @@ function makeContext(
     missingDefaultTemplateId: null,
     blueprintsForTemplate: makeBlueprints(),
     unresolvedBlueprintKeys: [],
-    memberBatches: [{ id: fixture.creditBatchId, code: "CB-BD-001" }],
+    memberBatches: [{
+      id: fixture.creditBatchId,
+      code: "CB-BD-001",
+      startDate: "2026-07-01",
+      endDate: "2026-07-31",
+      appliedWeightTons: 1,
+      durabilityOption: "1000_year",
+      sampling: "sampled",
+      productionRunCount: 1,
+      applicationCount: 1,
+    }],
     transportCoverage: {
       feedstock: emptyCoverage,
       biochar: emptyCoverage,

@@ -621,6 +621,31 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(result.unresolvedBlueprintKeys).toEqual(["key_unknown"]);
   });
 
+  it("accepts a recognized template-embedded sequestration blueprint omitted from the catalog", async () => {
+    mockedGetMapping.mockResolvedValue(
+      mapping({ defaultRemovalTemplateId: "rvt_resolved" }),
+    );
+    mockedListProjects.mockResolvedValue([project(EXTERNAL_PROJECT_ID)]);
+    mockedListTemplates.mockResolvedValue([
+      template("rvt_resolved", [
+        "key_known",
+        "biochar_sequestration_1000_year",
+      ]),
+    ]);
+    mockedListBlueprints.mockResolvedValue([blueprint("key_known")]);
+
+    const result = await loadCertifyContextForCreditBatchForUser(
+      makeTestOrgContext(USER_ID),
+      CREDIT_BATCH_ID,
+    );
+
+    expect(result.defaultTemplate?.id).toBe("rvt_resolved");
+    expect(result.blueprintsForTemplate.map((bp) => bp.key)).toEqual([
+      "key_known",
+    ]);
+    expect(result.unresolvedBlueprintKeys).toEqual([]);
+  });
+
   it("returns the fully-resolved shape when project, template, and blueprints all resolve", async () => {
     mockedGetMapping.mockResolvedValue(
       mapping({ defaultRemovalTemplateId: "rvt_resolved" }),

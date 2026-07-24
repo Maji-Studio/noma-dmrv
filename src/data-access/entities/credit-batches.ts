@@ -4,10 +4,11 @@
 
 import { ilike, or, eq, and, isNull, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { creditBatches, facilities } from "@/db/schema";
+import { creditBatches } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "../utils";
+import { toCreditBatchEntityOption } from "./credit-batch-option";
 
 export async function getCreditBatchesEntity(ctx: OrgContext, params: {
   search?: string;
@@ -42,25 +43,12 @@ export async function getCreditBatchesEntity(ctx: OrgContext, params: {
       status: creditBatches.status,
       startDate: creditBatches.startDate,
       endDate: creditBatches.endDate,
-      facilityName: facilities.name,
     })
     .from(creditBatches)
-    .leftJoin(
-      facilities,
-      and(
-        eq(creditBatches.facilityId, facilities.id),
-        eq(facilities.organizationId, ctx.organizationId),
-      ),
-    )
     .where(and(eq(creditBatches.organizationId, ctx.organizationId), whereClause))
     .limit(limit);
 
-  return results.map((r) => ({
-    id: r.id,
-    code: r.code,
-    name: r.code,
-    subtitle: [r.facilityName, r.status].filter(Boolean).join(" · "),
-  }));
+  return results.map(toCreditBatchEntityOption);
 }
 
 export async function getCreditBatchEntityById(ctx: OrgContext, id: string): Promise<EntityOption | null> {
@@ -70,25 +58,14 @@ export async function getCreditBatchEntityById(ctx: OrgContext, id: string): Pro
       id: creditBatches.id,
       code: creditBatches.code,
       status: creditBatches.status,
-      facilityName: facilities.name,
+      startDate: creditBatches.startDate,
+      endDate: creditBatches.endDate,
     })
     .from(creditBatches)
-    .leftJoin(
-      facilities,
-      and(
-        eq(creditBatches.facilityId, facilities.id),
-        eq(facilities.organizationId, ctx.organizationId),
-      ),
-    )
     .where(and(eq(creditBatches.id, id), eq(creditBatches.organizationId, ctx.organizationId)))
     .limit(1);
 
   if (!result) return null;
 
-  return {
-    id: result.id,
-    code: result.code,
-    name: result.code,
-    subtitle: [result.facilityName, result.status].filter(Boolean).join(" · "),
-  };
+  return toCreditBatchEntityOption(result);
 }
