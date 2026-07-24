@@ -54,11 +54,25 @@ vi.mock("./facility-certifier-section", () => ({
   FacilityCertifierSection: () => <div>Connection</div>,
 }));
 
+vi.mock("./registry-source-visibility-settings", () => ({
+  RegistrySourceVisibilitySettings: () => <div>Source visibility policy</div>,
+}));
+
 describe("CertificationSettings", () => {
   it("exposes a stable anchor for the emission-estimates section", () => {
     const html = renderToStaticMarkup(<CertificationSettings />);
 
     expect(html).toContain('<section id="emission-estimates"');
     expect(html).toContain("Emission estimates form");
+  });
+
+  it("makes the registry Source policy organization-wide on the facility settings surface", () => {
+    const html = renderToStaticMarkup(<CertificationSettings />);
+
+    expect(html).toContain(
+      "Registry Source visibility — organization-wide",
+    );
+    expect(html).toContain("across all facilities");
+    expect(html).toContain("Source visibility policy");
   });
 });

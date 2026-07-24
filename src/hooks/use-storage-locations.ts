@@ -22,6 +22,8 @@ import {
   getStorageLocationsByFacilityFn,
   checkStorageLocationCodeFn,
   createStorageLocationFn,
+  archiveStorageLocationFn,
+  restoreStorageLocationFn,
   updateStorageLocationFn,
   deleteStorageLocationFn,
 } from "@/fn/storage-locations";
@@ -357,8 +359,80 @@ export function useUpdateStorageLocation(
 }
 
 /**
- * Hook to delete a storage location
- * Supports optimistic updates for immediate UI feedback
+ * Hook to archive a storage location while preserving its history.
+ */
+export function useArchiveStorageLocation(
+  callbacks?: MutationCallbacks<StorageLocation, string>,
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (storageLocationId: string) => {
+      const result = await archiveStorageLocationFn({ storageLocationId });
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
+    onSuccess: async (data, storageLocationId) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: storageLocationKeys.all,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: facilityKeys.storageLocations(data.facilityId),
+        }),
+      ]);
+      await callbacks?.onSuccess?.(data, storageLocationId);
+    },
+    onError: async (error, storageLocationId) => {
+      await callbacks?.onError?.(error, storageLocationId);
+    },
+    onSettled: async (data, error, storageLocationId) => {
+      await callbacks?.onSettled?.(data, error, storageLocationId);
+    },
+  });
+}
+
+/**
+ * Hook to restore an individually archived storage location.
+ */
+export function useRestoreStorageLocation(
+  callbacks?: MutationCallbacks<StorageLocation, string>,
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (storageLocationId: string) => {
+      const result = await restoreStorageLocationFn({ storageLocationId });
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return result.data;
+    },
+    onSuccess: async (data, storageLocationId) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: storageLocationKeys.all,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: facilityKeys.storageLocations(data.facilityId),
+        }),
+      ]);
+      await callbacks?.onSuccess?.(data, storageLocationId);
+    },
+    onError: async (error, storageLocationId) => {
+      await callbacks?.onError?.(error, storageLocationId);
+    },
+    onSettled: async (data, error, storageLocationId) => {
+      await callbacks?.onSettled?.(data, error, storageLocationId);
+    },
+  });
+}
+
+/**
+ * Hook to delete a storage location.
+ * Supports optimistic updates for immediate UI feedback.
  */
 export function useDeleteStorageLocation(
   callbacks?: MutationCallbacks<void, string>,

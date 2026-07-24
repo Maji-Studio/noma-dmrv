@@ -176,7 +176,17 @@ test.describe("Dashboard (Flow Hero)", () => {
       await expect(
         structuralGaps.getByText("Transport distance lacks document evidence"),
       ).toBeVisible();
-      await expect(structuralGaps.getByText("1 gap")).toHaveCount(3);
+      await expect(
+        structuralGaps.getByText("Supplier form · Location · 1 affected"),
+      ).toBeVisible();
+      await expect(
+        structuralGaps.getByText("Feedstock form · Transport route · 1 affected"),
+      ).toBeVisible();
+      await expect(
+        structuralGaps.getByText(
+          "Feedstock form · Transport evidence · 1 affected",
+        ),
+      ).toBeVisible();
       await expect(page.getByText("3 open", { exact: true }).first()).toBeVisible();
       await expect(page.getByText("All clear")).toHaveCount(0);
 

@@ -52,6 +52,22 @@ to store protocol version 1.1: `src/db/seed-data.ts` deliberately skips the
 whole seed when its facility already exists, so this change does not backfill
 an existing mapping.
 
+## Registry Source visibility contract
+
+Certification Settings exposes one organization-wide Isometric Source
+visibility policy to organization Owners/Admins and Platform Admins. It defaults
+to private and applies to every new Source created through the centralized
+mirror flow, including generated Removal evidence-ledger PDFs. Per-document
+visibility controls and the remote visibility PATCH action were removed, so
+callers cannot override the persisted policy.
+
+Policy changes are forward-only: noma does not bulk-rewrite existing Isometric
+Sources, and reconciliation continues to preserve the registry-of-record
+visibility for Sources that already exist.
+
+Dated implementation and verification notes are archived in
+[`docs/archive/isometric-changes-archive-2026-07-24-registry-source-visibility.md`](../archive/isometric-changes-archive-2026-07-24-registry-source-visibility.md).
+
 ## 2026-07-24 (GHG Statement registry reconciliation)
 
 The GHG Statements workspace now discovers and reconciles every paginated

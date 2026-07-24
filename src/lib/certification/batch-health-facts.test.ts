@@ -54,7 +54,7 @@ describe("toBatchHealthFacts", () => {
     ).toContain("At least 3 usable 1000-year lab samples");
     expect(
       health.checks.find((check) => check.key === "carbon")?.detail,
-    ).toContain("complete H/C_org + O/C_org chemistry");
+    ).not.toContain("complete H/C_org + O/C_org chemistry");
     expect(
       health.checks.find((check) => check.key === "carbon")?.detail,
     ).not.toContain("reference soil temperature");

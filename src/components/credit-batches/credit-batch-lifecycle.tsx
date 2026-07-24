@@ -11,7 +11,8 @@ import {
 
 const STEP_DOT_CLASSES: Record<CreditBatchLifecycleStepState, string> = {
   active: "border-[var(--st-run)] bg-[var(--st-run)]",
-  success: "border-[var(--st-ok)] bg-[var(--st-ok)]",
+  success:
+    "border-[var(--color-background-dark-light)] bg-[var(--color-background-dark-light)]",
   inactive:
     "border-[var(--st-off-border)] bg-[var(--color-background-white)]",
   failed:

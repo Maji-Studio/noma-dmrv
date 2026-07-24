@@ -8,7 +8,6 @@ export type CreateSourceResponse =
 export type Source = components["schemas"]["Source"];
 export type SignedUploadUrlRequest =
   components["schemas"]["SignedUploadUrlRequest"];
-export type PatchSourceRequest = components["schemas"]["PatchSourceRequest"];
 
 const SUPPLIER_REF_LOOKUP_PAGE_SIZE = 1;
 
@@ -64,14 +63,6 @@ export async function findSourceBySupplierRef(
     return node;
   }
   return null;
-}
-
-export function patchSource(
-  client: IsometricClient,
-  sourceId: string,
-  body: PatchSourceRequest,
-): Promise<Source> {
-  return client.patch<Source>(`/sources/${sourceId}`, body);
 }
 
 // DELETE /sources/{id} intentionally not exported in Phase 3.5.

@@ -8,6 +8,7 @@ import {
   LeafIcon,
   PlusIcon,
   SealCheckIcon,
+  XIcon,
 } from "@phosphor-icons/react";
 import type { FeedstockType } from "@/db/schema";
 import { ServerError } from "@/components/forms";
@@ -39,7 +40,6 @@ import {
 import type { FeedstockTypeFormData } from "@/schemas/feedstock-types";
 import { FeedstockTypeForm } from "./feedstock-type-form";
 import { FeedstockTypeSampling } from "./feedstock-type-sampling";
-import { IsometricFeedstockImportDialog } from "./isometric-feedstock-import-dialog";
 
 type ArchiveFilter = "all" | "active" | "archived";
 
@@ -227,7 +227,6 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
   const [deletingType, setDeletingType] = useState<FeedstockType | null>(null);
   const [deleteConflict, setDeleteConflict] = useState<FeedstockType | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [importOpen, setImportOpen] = useState(false);
 
   const { facilityId } = useFacilityContext();
   const certifierSummary = useFacilityCertifierSummary(
@@ -252,6 +251,10 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
   const pyrolysisCount = feedstockTypes.filter((type) => type.usage === "pyrolysis").length;
   const archivedCount = feedstockTypes.filter((type) => !!type.archivedAt).length;
   const hasActiveFilters = Boolean(searchQuery) || archiveFilter !== "all";
+  const clearFilters = () => {
+    setSearchQuery("");
+    setArchiveFilter("all");
+  };
 
   const openCreate = () => {
     if (!canManage) return;
@@ -403,12 +406,6 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
         actions={
           canManage ? (
             <div className="flex flex-wrap gap-12">
-              {hasRegistryConnection && (
-                <Button variant="default" onClick={() => setImportOpen(true)}>
-                  <SealCheckIcon size={18} weight="bold" />
-                  Import from Isometric
-                </Button>
-              )}
               <Button variant="primary" onClick={openCreate}>
                 <PlusIcon size={18} weight="bold" />
                 New Feedstock Type
@@ -459,6 +456,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
         enablePagination
         globalFilter={searchQuery}
         onGlobalFilterChange={setSearchQuery}
+        aria-label="Feedstock types"
         isLoading={feedstockTypesQuery.isLoading}
         hoverable
         emptyMessage={
@@ -483,20 +481,28 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
         }
       >
         <DataTable.Toolbar>
-          <DataTable.Search placeholder="Search feedstock types..." />
-          <div className="flex items-center gap-12">
-            <select
+          <DataTable.Search
+            placeholder="Search feedstock types..."
+            aria-label="Search feedstock types"
+          />
+          <DataTable.Controls>
+            <DataTable.FilterSelect
               aria-label="Filter feedstock types by archive state"
               value={archiveFilter}
               onChange={(event) => setArchiveFilter(event.target.value as ArchiveFilter)}
-              className="h-40 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
             >
               <option value="all">All states</option>
               <option value="active">Active</option>
               <option value="archived">Archived</option>
-            </select>
+            </DataTable.FilterSelect>
+            {hasActiveFilters && (
+              <Button variant="noOutline" size="small" onClick={clearFilters}>
+                <XIcon size={16} weight="bold" />
+                Clear
+              </Button>
+            )}
             <DataTable.ColumnVisibility />
-          </div>
+          </DataTable.Controls>
         </DataTable.Toolbar>
         <DataTable.Pagination />
       </DataTable>
@@ -535,8 +541,6 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
           submitLabel={sideSheet?.mode === "edit" ? "Save Changes" : "Create Feedstock Type"}
         />
       </EntitySideSheet>
-
-      <IsometricFeedstockImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
     </div>
   );
 }

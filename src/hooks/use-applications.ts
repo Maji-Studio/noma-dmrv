@@ -15,6 +15,7 @@ import {
 import { creditBatchKeys } from "@/hooks/use-credit-batches";
 import { invalidateCertificationReadiness } from "@/hooks/use-certification";
 import type { ApplicationFormData, UpdateApplicationData } from "@/schemas/applications";
+import type { ApplicationListOptions } from "@/data-access/applications";
 
 const EXACT_ID_CHUNK_SIZE = 100;
 
@@ -24,7 +25,7 @@ const EXACT_ID_CHUNK_SIZE = 100;
 export const applicationKeys = {
   all: ["applications"] as const,
   lists: () => [...applicationKeys.all, "list"] as const,
-  list: (filters?: Record<string, unknown>) =>
+  list: (filters?: ApplicationListOptions) =>
     [...applicationKeys.lists(), filters] as const,
   deliveryOptions: (facilityId?: string) =>
     [...applicationKeys.all, "deliveryOptions", facilityId] as const,
@@ -36,7 +37,7 @@ export const applicationKeys = {
  * Query hook for fetching applications with pagination
  */
 export function useApplications(
-  options?: { page?: number; pageSize?: number; facilityId?: string; ids?: string[] },
+  options?: ApplicationListOptions,
   queryOptions?: { enabled?: boolean },
 ) {
   const exactIds = options?.ids ?? [];

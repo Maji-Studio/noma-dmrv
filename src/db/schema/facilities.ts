@@ -87,7 +87,7 @@ export const reactors = pgTable(
     // sampled/unsampled choice within a facility/feedstock process (ADR 0022).
     nominalThroughputTph: real('nominal_throughput_tph'),
     specifications: jsonb('specifications'), // { description, manufacturer, ... }
-    // Stamped by the facility archive cascade; NULL = active
+    // Stamped by individual or facility-cascade archive; NULL = active
     archivedAt: timestamp('archived_at'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),

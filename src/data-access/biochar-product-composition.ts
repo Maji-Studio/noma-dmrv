@@ -8,7 +8,7 @@
  * to keep that file under the 1000-line cap.
  */
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import type { OrgContext } from "@/lib/auth/server";
 import {
@@ -178,6 +178,7 @@ export async function validateCompositionIngredientBins(
     .where(and(
       inArray(storageLocations.id, storageLocationIds),
       eq(storageLocations.organizationId, ctx.organizationId),
+      isNull(storageLocations.archivedAt),
     ));
 
   if (bins.length !== storageLocationIds.length) {

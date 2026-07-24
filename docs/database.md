@@ -47,12 +47,12 @@ Schema defaults and create/update defaults must stay aligned, especially for JSO
 - `pnpm dev:manual` starts Next.js alone; `pnpm docker:up` / `docker:down` / `docker:clean` manage the container; `pnpm db:seed` loads canonical seed data.
 - Connection via `DATABASE_URL`. The app pool (`src/db/index.ts`) also reads `DB_POOL_MAX`, `DB_POOL_IDLE_TIMEOUT_MS`, `DB_POOL_CONNECTION_TIMEOUT_MS`. CLI scripts build short-lived pools through `src/lib/cli/*` and do not share the app pool.
 
-## Soft Delete — Facility Archive
+## Soft Delete — Facility and Storage-Bin Archive
 
 Facilities are never hard-deleted. `archiveFacility` (`src/data-access/facilities.ts`) stamps `archived_at` on the facility **and all 11 operational facility-scoped tables in one transaction**; `restoreFacility` clears the stamps. `NULL` = active.
 
 - **The cascade is org-scoped as well as facility-scoped** — every `UPDATE` filters `eq(table.organizationId, ctx.organizationId)` alongside `facilityId`. A new stamped table must carry both predicates.
-- **The facility cascade is the only writer of `archived_at`.** A child row is archived iff its facility is. Archive stamps only rows where `archived_at IS NULL`; restore clears **indiscriminately, with no `isNull` guard** — deliberate, and `src/data-access/facilities.ts` carries an in-code tripwire comment saying this must change if a per-entity archive writer is ever added.
+- **Storage bins may also be archived individually.** This is the safe retirement path for a bin whose operational history prevents hard deletion. Facility archive stamps only rows where `archived_at IS NULL`; facility restore clears only child stamps equal to that facility's archive timestamp, so an individually archived bin stays archived.
 - **Every list / picker / options / stats query filters `isNull(table.archivedAt)`.** Detail-by-id reads do **not** — existing references to archived rows must still hydrate. Seed a new read query's conditions array with the `isNull` filter.
 - **Grandchildren have no own column** (samples, readings, applications, transport legs, …) — they hide transitively through their archived parent (applications filter via `deliveries.archived_at` in joins).
 - **Certifier mirror tables are unstamped for `archived_at`** (`certifier_projects`, `certifier_ghg_statements`, `certifier_removals`) — they mirror registry state and hide transitively. They are **not** unscoped: each carries `organizationId NOT NULL` plus the composite FK to `facilities`, and still requires the org filter. Archiving a facility with registry submissions is allowed with a warning (`getFacilityArchiveImpact.hasRegistrySubmissions`), never blocked.
@@ -91,7 +91,7 @@ A `staging` → `main` PR labelled `first-production-deployment` adds a second j
 
 ## Certification Tables
 
-`src/db/schema/certification.ts` is provider-neutral; Isometric-specific code lives under `src/lib/isometric/`. Tables: `certifier_credentials` (registry credentials — handle as secrets, data-access in `src/data-access/certifier-credentials.ts`), `certifier_projects`, `certifier_sensors`, `certifier_ghg_statements`, `certifier_removals`, `certification_submissions`, `certifier_document_uploads`, `certifier_sync_events`. Purpose per table: [`schema-overview.md`](./schema-overview.md); submission-unit rationale: [ADR 0003](./adr/0003-removal-as-submission-unit.md), [ADR 0008](./adr/0008-submission-ledger-internal-seam.md).
+`src/db/schema/certification.ts` is provider-neutral; Isometric-specific code lives under `src/lib/isometric/`. Tables: `certifier_credentials` (registry credentials — handle as secrets, data-access in `src/data-access/certifier-credentials.ts`), `certifier_organization_settings` (organization/provider policy, including Source visibility), `certifier_projects`, `certifier_sensors`, `certifier_ghg_statements`, `certifier_removals`, `certification_submissions`, `certifier_document_uploads`, `certifier_sync_events`. Purpose per table: [`schema-overview.md`](./schema-overview.md); submission-unit rationale: [ADR 0003](./adr/0003-removal-as-submission-unit.md), [ADR 0008](./adr/0008-submission-ledger-internal-seam.md).
 
 `certification_submissions` is the **freeze point** for certification source data. A blocking ledger status (`draft`, `submitted`, `accepted`) on a Removal, telemetry upload, or GHG Statement prevents in-place mutation of upstream production runs, lab samples, deliveries, biochar products, and feedstocks reached through current credit-batch lineage. The guard lives in data-access (`certification-lineage-guards.ts`) so stale UI membership cannot bypass it.
 

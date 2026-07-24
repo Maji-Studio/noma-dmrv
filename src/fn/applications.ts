@@ -15,13 +15,18 @@ import {
   deleteApplication as deleteApplicationData,
   applicationCodeExists,
   type ApplicationListItem,
+  type ApplicationListOptions,
 } from "@/data-access/applications";
 import {
+  applicationEvidenceMethods,
+  applicationStatuses,
   createApplicationSchema,
   updateApplicationSchema,
   deleteApplicationSchema,
 } from "@/schemas/applications";
 import { toLoggedActionError } from "./action-errors";
+
+const MAX_APPLICATION_LIST_SIZE = 100;
 
 function applicationActionError(
   error: unknown,
@@ -36,16 +41,20 @@ function applicationActionError(
 
 const getApplicationsOptionsSchema = z.object({
   page: z.number().int().min(1).optional(),
-  pageSize: z.number().int().min(1).max(100).optional(),
+  pageSize: z.number().int().min(1).max(MAX_APPLICATION_LIST_SIZE).optional(),
   facilityId: z.string().uuid().optional(),
-  ids: z.array(z.uuid()).max(100).optional(),
+  creditBatchId: z.string().uuid().optional(),
+  ids: z.array(z.uuid()).max(MAX_APPLICATION_LIST_SIZE).optional(),
+  search: z.string().max(255).optional(),
+  status: z.enum(applicationStatuses).optional(),
+  evidenceMethod: z.enum(applicationEvidenceMethods).optional(),
 }).optional();
 
 /**
  * Get applications with pagination
  */
 export async function getApplicationsFn(
-  options?: { page?: number; pageSize?: number; facilityId?: string; ids?: string[] }
+  options?: ApplicationListOptions,
 ): Promise<ActionResult<{ items: ApplicationListItem[]; total: number; page: number; pageSize: number; totalPages: number }>> {
   try {
     const ctx = await requireOrgContext();

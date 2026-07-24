@@ -137,16 +137,11 @@ export async function selectFirstCreditBatchProductionRun(
 ) {
   const dialog = page.locator('[role="dialog"]');
   // The credit-batch form declares one feedstock type (usage="pyrolysis") and
-  // scopes the run cohort to it (#356): the production-window toggle below only
-  // renders once a type is picked AND runs of that type fall in the window.
-  // Select the seeded type by id so the cohort matches the run this test built.
+  // scopes the automatic run cohort to it (#356). Select the seeded type by id,
+  // then wait for the matching read-only preview before submitting.
   await selectEntity(page, "Feedstock Type", feedstockType.id, feedstockType.name);
-  await dialog
-    .getByRole("button", { name: /production runs in production window/i })
-    .click();
-  const firstRunCheckbox = dialog
-    .locator('input[name="productionRunIds"]')
+  const firstRunPreview = dialog
+    .getByTestId("credit-batch-production-run-preview")
     .first();
-  await firstRunCheckbox.waitFor({ state: "visible", timeout: 10000 });
-  await firstRunCheckbox.check();
+  await firstRunPreview.waitFor({ state: "visible", timeout: 10000 });
 }

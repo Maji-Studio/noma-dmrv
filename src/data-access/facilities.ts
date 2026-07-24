@@ -30,6 +30,12 @@ import { hasBlockingFacilitySubmission } from "./certification";
 import type { FacilityFilterData } from "@/schemas/facilities";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 
+// Individual entity archives originate from JavaScript Date values and are
+// stored at whole-millisecond precision. Facility cascades use a database
+// timestamp between milliseconds so equality remains an unambiguous provenance
+// marker even when both operations happen during the same millisecond.
+const FACILITY_ARCHIVE_OFFSET_MICROSECONDS = 500;
+
 // ============================================
 // Types
 // ============================================
@@ -696,7 +702,8 @@ export async function archiveFacility(
     const [existing] = await tx
       .select({ id: facilities.id, archivedAt: facilities.archivedAt })
       .from(facilities)
-      .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
+      .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)))
+      .for("update");
 
     if (!existing) {
       throw new SafeError("Facility not found");
@@ -705,13 +712,33 @@ export async function archiveFacility(
       throw new SafeError("Facility is already archived");
     }
 
-    const archivedAt = new Date();
+    const archiveStampResult = await tx.execute<{ archive_stamp: string }>(sql`
+      select (
+        date_trunc('milliseconds', clock_timestamp()::timestamp)
+        + ${FACILITY_ARCHIVE_OFFSET_MICROSECONDS} * interval '1 microsecond'
+      )::text as archive_stamp
+    `);
+    const facilityArchiveStamp = archiveStampResult.rows[0]?.archive_stamp;
+    if (!facilityArchiveStamp) {
+      throw new Error("Failed to generate facility archive stamp");
+    }
+    const archivedAt = sql<Date>`${facilityArchiveStamp}::timestamp`;
 
     const [archived] = await tx
       .update(facilities)
       .set({ archivedAt, updatedAt: archivedAt })
-      .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)))
+      .where(
+        and(
+          eq(facilities.id, facilityId),
+          eq(facilities.organizationId, ctx.organizationId),
+          isNull(facilities.archivedAt),
+        ),
+      )
       .returning();
+
+    if (!archived) {
+      throw new SafeError("Facility is already archived");
+    }
 
     // Cascade: only rows not already archived get this stamp, so a future
     // per-entity archive cannot be clobbered (restore clears indiscriminately
@@ -743,9 +770,14 @@ export async function restoreFacility(
 
   return db.transaction(async (tx) => {
     const [existing] = await tx
-      .select({ id: facilities.id, archivedAt: facilities.archivedAt })
+      .select({
+        id: facilities.id,
+        archivedAt: facilities.archivedAt,
+        archiveStamp: sql<string | null>`${facilities.archivedAt}::text`,
+      })
       .from(facilities)
-      .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)));
+      .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)))
+      .for("update");
 
     if (!existing) {
       throw new SafeError("Facility not found");
@@ -754,30 +786,43 @@ export async function restoreFacility(
       throw new SafeError("Facility is not archived");
     }
 
+    const facilityArchiveStamp = existing.archiveStamp;
+    if (!facilityArchiveStamp) {
+      throw new Error("Archived facility is missing its archive stamp");
+    }
+    const cascadeArchiveStamp =
+      sql<Date>`${facilityArchiveStamp}::timestamp`;
     const archivedAt = null;
 
     const [restored] = await tx
       .update(facilities)
       .set({ archivedAt, updatedAt: new Date() })
-      .where(and(eq(facilities.id, facilityId), eq(facilities.organizationId, ctx.organizationId)))
+      .where(
+        and(
+          eq(facilities.id, facilityId),
+          eq(facilities.organizationId, ctx.organizationId),
+          isNotNull(facilities.archivedAt),
+        ),
+      )
       .returning();
 
-    // The facility cascade is the only writer of archived_at, so restore clears
-    // it on all children indiscriminately. If per-entity archive writers are
-    // ever added, guard these updates with .where(isNull(<table>.archivedAt))
-    // captured at archive time, or restore will un-archive individually
-    // archived rows.
-    await tx.update(reactors).set({ archivedAt }).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId)));
-    await tx.update(storageLocations).set({ archivedAt }).where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId)));
-    await tx.update(feedstockDeliveries).set({ archivedAt }).where(and(eq(feedstockDeliveries.facilityId, facilityId), eq(feedstockDeliveries.organizationId, ctx.organizationId)));
-    await tx.update(feedstocks).set({ archivedAt }).where(and(eq(feedstocks.facilityId, facilityId), eq(feedstocks.organizationId, ctx.organizationId)));
-    await tx.update(productionRuns).set({ archivedAt }).where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId)));
-    await tx.update(biocharProducts).set({ archivedAt }).where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId)));
-    await tx.update(orders).set({ archivedAt }).where(and(eq(orders.facilityId, facilityId), eq(orders.organizationId, ctx.organizationId)));
-    await tx.update(deliveries).set({ archivedAt }).where(and(eq(deliveries.facilityId, facilityId), eq(deliveries.organizationId, ctx.organizationId)));
-    await tx.update(creditBatches).set({ archivedAt }).where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId)));
-    await tx.update(stockpileEvents).set({ archivedAt }).where(and(eq(stockpileEvents.facilityId, facilityId), eq(stockpileEvents.organizationId, ctx.organizationId)));
-    await tx.update(powerProcurementEvidence).set({ archivedAt }).where(and(eq(powerProcurementEvidence.facilityId, facilityId), eq(powerProcurementEvidence.organizationId, ctx.organizationId)));
+    if (!restored) {
+      throw new SafeError("Facility is not archived");
+    }
+
+    // Restore only children stamped by this facility archive. Rows archived
+    // individually keep their earlier stamp and remain archived.
+    await tx.update(reactors).set({ archivedAt }).where(and(eq(reactors.facilityId, facilityId), eq(reactors.organizationId, ctx.organizationId), eq(reactors.archivedAt, cascadeArchiveStamp)));
+    await tx.update(storageLocations).set({ archivedAt }).where(and(eq(storageLocations.facilityId, facilityId), eq(storageLocations.organizationId, ctx.organizationId), eq(storageLocations.archivedAt, cascadeArchiveStamp)));
+    await tx.update(feedstockDeliveries).set({ archivedAt }).where(and(eq(feedstockDeliveries.facilityId, facilityId), eq(feedstockDeliveries.organizationId, ctx.organizationId), eq(feedstockDeliveries.archivedAt, cascadeArchiveStamp)));
+    await tx.update(feedstocks).set({ archivedAt }).where(and(eq(feedstocks.facilityId, facilityId), eq(feedstocks.organizationId, ctx.organizationId), eq(feedstocks.archivedAt, cascadeArchiveStamp)));
+    await tx.update(productionRuns).set({ archivedAt }).where(and(eq(productionRuns.facilityId, facilityId), eq(productionRuns.organizationId, ctx.organizationId), eq(productionRuns.archivedAt, cascadeArchiveStamp)));
+    await tx.update(biocharProducts).set({ archivedAt }).where(and(eq(biocharProducts.facilityId, facilityId), eq(biocharProducts.organizationId, ctx.organizationId), eq(biocharProducts.archivedAt, cascadeArchiveStamp)));
+    await tx.update(orders).set({ archivedAt }).where(and(eq(orders.facilityId, facilityId), eq(orders.organizationId, ctx.organizationId), eq(orders.archivedAt, cascadeArchiveStamp)));
+    await tx.update(deliveries).set({ archivedAt }).where(and(eq(deliveries.facilityId, facilityId), eq(deliveries.organizationId, ctx.organizationId), eq(deliveries.archivedAt, cascadeArchiveStamp)));
+    await tx.update(creditBatches).set({ archivedAt }).where(and(eq(creditBatches.facilityId, facilityId), eq(creditBatches.organizationId, ctx.organizationId), eq(creditBatches.archivedAt, cascadeArchiveStamp)));
+    await tx.update(stockpileEvents).set({ archivedAt }).where(and(eq(stockpileEvents.facilityId, facilityId), eq(stockpileEvents.organizationId, ctx.organizationId), eq(stockpileEvents.archivedAt, cascadeArchiveStamp)));
+    await tx.update(powerProcurementEvidence).set({ archivedAt }).where(and(eq(powerProcurementEvidence.facilityId, facilityId), eq(powerProcurementEvidence.organizationId, ctx.organizationId), eq(powerProcurementEvidence.archivedAt, cascadeArchiveStamp)));
 
     return restored;
   });

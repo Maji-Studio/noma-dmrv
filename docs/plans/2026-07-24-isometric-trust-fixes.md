@@ -1,6 +1,17 @@
 # Isometric integration trust fixes — phased plan (2026-07-24)
 
-Status: planned, not started. Source: E2E retry report (codex, 2026-07-24) +
+Status: EXECUTED 2026-07-24 — all five phases implemented and PR'd:
+Phase 1 → PR #526 (staging) · Phase 2 → PR #528 (stacked on #526; retarget
+after merge) · Phase 3 → PR #529 · Phase 4 → PR #530 · Phase 5 → PR #531.
+Live-verified: fresh removal rmv_1KY9NRHK7SBX9HV5 nets +1242.68 kg on the
+registry (sequestration component bound). Preview issue = Isometric
+previewer defect (reported via MCP). Remaining operator decisions live in
+docs/open-questions.md (protocol v1.1-vs-v1.2 pin; Certify project
+durability set to 200y vs 1000y template). Final full E2E retry (plan
+§5.3) still pending — needs an interactive session for codex-computer-use
+auth. Original plan follows unchanged.
+
+Source: E2E retry report (codex, 2026-07-24) +
 full code/DB/live-API investigation the same day. This file is the handoff —
 a fresh session can execute from here without re-investigating.
 

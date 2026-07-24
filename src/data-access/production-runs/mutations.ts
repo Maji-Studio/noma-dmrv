@@ -127,7 +127,13 @@ async function validateBiocharStorageLocation(
   const [loc] = await tx
     .select({ id: storageLocations.id, facilityId: storageLocations.facilityId, type: storageLocations.type })
     .from(storageLocations)
-    .where(and(eq(storageLocations.id, locationId), eq(storageLocations.organizationId, ctx.organizationId)));
+    .where(
+      and(
+        eq(storageLocations.id, locationId),
+        eq(storageLocations.organizationId, ctx.organizationId),
+        isNull(storageLocations.archivedAt),
+      ),
+    );
 
   if (!loc) throw new SafeError(`${label} storage location not found`);
   if (loc.facilityId !== facilityId) throw new SafeError(`${label} bin does not belong to the selected facility`);
@@ -153,7 +159,13 @@ async function validateProductionFeedstockSource(
     })
     .from(storageLocations)
     .leftJoin(feedstockTypes, and(eq(storageLocations.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
-    .where(and(eq(storageLocations.id, locationId), eq(storageLocations.organizationId, ctx.organizationId)));
+    .where(
+      and(
+        eq(storageLocations.id, locationId),
+        eq(storageLocations.organizationId, ctx.organizationId),
+        isNull(storageLocations.archivedAt),
+      ),
+    );
 
   if (!loc) throw new SafeError("Feedstock storage location not found");
   if (loc.facilityId !== facilityId) throw new SafeError("Feedstock bin does not belong to the selected facility");

@@ -2,14 +2,14 @@
  * StorageLocationList — a material-flow board. Bins are grouped into three
  * lanes ordered the way material moves through the facility
  * (Feedstock → Biochar → Product) and each bin is a silo tile whose gauge
- * shows what's still in it. Replaces the old paginated card grid so 20+ bins
- * stay legible at a glance. The page is already facility-scoped, so the
+ * shows what's still in it. The page is already facility-scoped, so the
  * facility is not repeated per bin.
  */
 "use client";
 
 import { useMemo, useState } from "react";
 import {
+  ArchiveIcon,
   ArrowsClockwiseIcon,
   CubeIcon,
   LeafIcon,
@@ -21,12 +21,19 @@ import {
 } from "@phosphor-icons/react";
 import type { StorageLocation } from "@/db/schema";
 import {
+  useArchiveStorageLocation,
   useCreateStorageLocation,
   useDeleteStorageLocation,
+  useRestoreStorageLocation,
   useStorageLocations,
   useUpdateStorageLocation,
 } from "@/hooks/use-storage-locations";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useDebounce } from "@/hooks/use-debounce";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { formatDate, formatMass } from "@/lib/format-utils";
 import { ServerError } from "@/components/forms";
@@ -36,13 +43,13 @@ import {
 } from "@/components/ui/entity-side-sheet";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { StatCard } from "@/components/ui/stat-card";
-import { Button, EmptyState, PageHeader } from "@/components/ui";
+import { Button, EmptyState, ListPagination, PageHeader } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import { StorageLocationForm } from "./storage-location-form";
 import { StorageLocationCard } from "./storage-location-card";
 import { BinReconcileSheet } from "./bin-reconcile-sheet";
 import { BinMovementHistory } from "./bin-movement-history";
-import { STORAGE_LANE_ORDER, binCurrentMassKg } from "./bin-display";
+import { STORAGE_LANE_ORDER } from "./bin-display";
 import {
   formatStorageLocationType,
   type StorageLocationFormData,
@@ -50,10 +57,7 @@ import {
   type StorageLocationType,
 } from "@/schemas/storage-locations";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
-
-// Bins per facility are few enough to load in one pass; the flow board groups
-// them client-side rather than paging across the lanes.
-const BIN_FETCH_LIMIT = 100;
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
 const LANE_META: Record<
   StorageLocationType,
@@ -196,6 +200,13 @@ export function StorageLocationList() {
   const { facilityId } = useFacilityContext();
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
+  const { currentPage, pageSize, setCurrentPage, setPageSize } =
+    useListPagination(facilityId);
+  const debouncedSearch = useDebounce(
+    searchQuery,
+    LIST_SEARCH_DEBOUNCE_MS,
+  );
 
   const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
   const [reconcilingBin, setReconcilingBin] =
@@ -206,14 +217,15 @@ export function StorageLocationList() {
 
   const filters: Partial<StorageLocationFilterData> = useMemo(
     () => ({
-      search: searchQuery || undefined,
+      search: debouncedSearch || undefined,
       facilityId: facilityId || undefined,
-      page: 1,
-      pageSize: BIN_FETCH_LIMIT,
+      archived: showArchived,
+      page: currentPage,
+      pageSize,
       sortBy: "code",
       sortOrder: "asc",
     }),
-    [searchQuery, facilityId]
+    [debouncedSearch, facilityId, showArchived, currentPage, pageSize]
   );
 
   const { data: storageLocationsData, isLoading, error: fetchError } = useStorageLocations(filters, {
@@ -222,24 +234,35 @@ export function StorageLocationList() {
 
   const createStorageLocation = useCreateStorageLocation();
   const updateStorageLocation = useUpdateStorageLocation();
+  const archiveStorageLocation = useArchiveStorageLocation();
+  const restoreStorageLocation = useRestoreStorageLocation();
   const deleteStorageLocation = useDeleteStorageLocation();
   const toast = useToast();
 
   const storageLocations = storageLocationsData?.items ?? [];
   const totalStorageLocations = storageLocationsData?.total ?? 0;
-  const isTruncated = totalStorageLocations > storageLocations.length;
+  const totalPages = storageLocationsData?.totalPages ?? 0;
+  const laneSummary = storageLocationsData?.laneSummary;
+  useReconcileListPage({
+    currentPage,
+    totalPages,
+    isLoading,
+    setCurrentPage,
+  });
 
-  // Group into lanes in production-flow order, and tally on-hand mass per lane.
+  // Group the current page into lanes in production-flow order. Facility-wide
+  // counts and on-hand mass come from the server summary below.
   // (React Compiler memoizes these derivations — no manual useMemo.)
   const lanes = STORAGE_LANE_ORDER.map((type) => {
     const bins = storageLocations.filter((bin) => bin.type === type);
-    const onHandKg = bins.reduce((sum, bin) => sum + binCurrentMassKg(bin), 0);
-    return { type, bins, onHandKg };
+    return { type, bins };
   });
 
-  const onHandByType = Object.fromEntries(
-    lanes.map((lane) => [lane.type, lane.onHandKg])
-  ) as Record<StorageLocationType, number>;
+  const onHandByType: Record<StorageLocationType, number> = {
+    feedstock_bin: laneSummary?.feedstock_bin.onHandKg ?? 0,
+    biochar_bin: laneSummary?.biochar_bin.onHandKg ?? 0,
+    product_bin: laneSummary?.product_bin.onHandKg ?? 0,
+  };
 
   const handleCreate = async (data: StorageLocationFormData) => {
     setFormError(null);
@@ -268,6 +291,36 @@ export function StorageLocationList() {
   };
 
   const handleDelete = (id: string) => setDeletingStorageLocationId(id);
+
+  const handleArchive = async (storageLocationId: string) => {
+    setDeleteError(null);
+    try {
+      await archiveStorageLocation.mutateAsync(storageLocationId);
+      toast.success(
+        "Storage bin archived — restore it any time from the archived view",
+      );
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error
+          ? error.message
+          : "Failed to archive storage location",
+      );
+    }
+  };
+
+  const handleRestore = async (storageLocationId: string) => {
+    setDeleteError(null);
+    try {
+      await restoreStorageLocation.mutateAsync(storageLocationId);
+      toast.success("Storage bin restored");
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error
+          ? error.message
+          : "Failed to restore storage location",
+      );
+    }
+  };
 
   const handleDeleteConfirm = async () => {
     if (!deletingStorageLocationId) return;
@@ -314,7 +367,16 @@ export function StorageLocationList() {
     setSideSheet({ mode: mode === "edit" ? "edit" : "view", entity: sideSheet.entity });
   };
 
-  const clearFilters = () => setSearchQuery("");
+  const clearFilters = () => {
+    setSearchQuery("");
+    setCurrentPage(1);
+  };
+
+  const toggleShowArchived = () => {
+    setShowArchived((current) => !current);
+    setCurrentPage(1);
+    setSideSheet(null);
+  };
 
   const hasActiveFilters = Boolean(searchQuery);
   const editingEntity = sideSheet?.mode === "edit" ? sideSheet.entity : null;
@@ -360,42 +422,24 @@ export function StorageLocationList() {
           title="Feedstock On Hand"
           value={formatMass(onHandByType.feedstock_bin ?? 0)}
           icon={<LeafIcon size={24} weight="bold" color="var(--acc-prod)" />}
-          description={
-            isTruncated
-              ? "Loaded dry mass across feedstock bins"
-              : "Dry mass across feedstock bins"
-          }
+          description="Dry mass across facility bins"
           isLoading={isLoading}
         />
         <StatCard
           title="Biochar On Hand"
           value={formatMass(onHandByType.biochar_bin ?? 0)}
           icon={<CubeIcon size={24} weight="bold" color="var(--acc-infra)" />}
-          description={
-            isTruncated
-              ? "Loaded unallocated biochar in store"
-              : "Unallocated biochar in store"
-          }
+          description="Unallocated biochar across facility bins"
           isLoading={isLoading}
         />
         <StatCard
           title="Product On Hand"
           value={formatMass(onHandByType.product_bin ?? 0)}
           icon={<PackageIcon size={24} weight="bold" color="var(--acc-dist)" />}
-          description={
-            isTruncated
-              ? "Loaded packed product ready to ship"
-              : "Packed product ready to ship"
-          }
+          description="Packed product across facility bins"
           isLoading={isLoading}
         />
       </div>
-      {isTruncated && (
-        <p className="body-caption text-[var(--color-text-tertiary)]">
-          Inventory totals and lane totals reflect the first {storageLocations.length} loaded bins.
-        </p>
-      )}
-
       <section className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20">
         <div className="flex flex-col gap-12 md:flex-row md:items-center md:justify-between">
           <div className="relative md:max-w-[360px] md:flex-1">
@@ -407,7 +451,10 @@ export function StorageLocationList() {
               type="text"
               placeholder="Search storage by code or name..."
               value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
+              onChange={(event) => {
+                setSearchQuery(event.target.value);
+                setCurrentPage(1);
+              }}
               className="h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] pl-36 pr-12 body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
               aria-label="Search storage"
             />
@@ -417,8 +464,16 @@ export function StorageLocationList() {
             <span className="body-small text-[var(--color-text-secondary)]">
               {totalStorageLocations}{" "}
               {totalStorageLocations === 1 ? "bin" : "bins"}
-              {isTruncated ? ` · showing first ${storageLocations.length}` : ""}
             </span>
+            <Button
+              variant={showArchived ? "primary" : "default"}
+              size="small"
+              onClick={toggleShowArchived}
+              aria-pressed={showArchived}
+            >
+              <ArchiveIcon size={16} weight="bold" />
+              Archived
+            </Button>
             {hasActiveFilters && (
               <Button variant="noOutline" size="small" onClick={clearFilters}>
                 <XIcon size={16} weight="bold" />
@@ -433,14 +488,24 @@ export function StorageLocationList() {
         <EmptyState
           padding="lg"
           icon={<WarehouseIcon size={48} />}
-          title={hasActiveFilters ? "No storage bins found" : "No storage bins yet"}
+          title={
+            hasActiveFilters
+              ? showArchived
+                ? "No archived storage bins match"
+                : "No storage bins found"
+              : showArchived
+                ? "No archived storage bins"
+                : "No storage bins yet"
+          }
           description={
             hasActiveFilters
               ? "Try adjusting your search."
-              : "Create your first storage bin to track feedstock, biochar, and finished product inventory."
+              : showArchived
+                ? "Storage bins you archive will appear here and can be restored."
+                : "Create your first storage bin to track feedstock, biochar, and finished product inventory."
           }
           action={
-            !hasActiveFilters ? (
+            !hasActiveFilters && !showArchived ? (
               <Button variant="primary" onClick={openCreate}>
                 <PlusIcon size={20} weight="bold" />
                 Create Storage Bin
@@ -449,11 +514,16 @@ export function StorageLocationList() {
           }
         />
       ) : (
-        <div className="flex flex-col gap-32 lg:flex-row lg:items-start lg:gap-24">
-          {lanes.map((lane) => {
-            const meta = LANE_META[lane.type];
-            return (
-              <div key={lane.type} className="flex flex-1 flex-col gap-16">
+        <>
+          <div className="flex flex-col gap-32 lg:flex-row lg:items-start lg:gap-24">
+            {lanes.map((lane) => {
+              const meta = LANE_META[lane.type];
+              const facilityBinCount =
+                laneSummary?.[lane.type].binCount ?? lane.bins.length;
+              const facilityOnHandKg =
+                laneSummary?.[lane.type].onHandKg ?? 0;
+              return (
+                <div key={lane.type} className="flex flex-1 flex-col gap-16">
                 {/* Lane header */}
                 <div
                   className="flex items-center justify-between gap-12 border-b-2 pb-10"
@@ -466,19 +536,18 @@ export function StorageLocationList() {
                     {meta.icon}
                     <span className="title-chapter-title">{meta.label}</span>
                     <span className="body-caption text-[var(--color-text-tertiary)]">
-                      {lane.bins.length}{" "}
-                      {lane.bins.length === 1 ? "bin" : "bins"}
+                      {lane.bins.length} on this page · {facilityBinCount} total
                     </span>
                   </div>
                   <span className="shrink-0 body-caption text-[var(--color-text-tertiary)]">
-                    {formatMass(lane.onHandKg)} {isTruncated ? "loaded" : ""} on hand
+                    {formatMass(facilityOnHandKg)} on hand
                   </span>
                 </div>
 
                 {/* Bins */}
                 {lane.bins.length === 0 ? (
                   <div className="flex items-center justify-center border border-dashed border-[var(--color-border-tertiary)] px-16 py-32 text-center body-caption text-[var(--color-text-tertiary)]">
-                    No {meta.label.toLowerCase()} bins
+                    No {meta.label.toLowerCase()} bins on this page
                   </div>
                 ) : (
                   <div className="grid gap-16 grid-cols-[repeat(auto-fill,minmax(240px,1fr))] lg:grid-cols-1">
@@ -488,30 +557,44 @@ export function StorageLocationList() {
                         storageLocation={bin}
                         onView={openView}
                         onEdit={openEdit}
+                        onArchive={handleArchive}
+                        onRestore={handleRestore}
                         onDelete={handleDelete}
                         onReconcile={openReconcile}
                       />
                     ))}
                   </div>
                 )}
-              </div>
-            );
-          })}
-        </div>
+                </div>
+              );
+            })}
+          </div>
+          <ListPagination
+            page={currentPage}
+            pageCount={totalPages}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+            className="border-t border-[var(--color-border-tertiary)] pt-16 md:px-0"
+          />
+        </>
       )}
 
-      {deleteError && <ServerError message={deleteError} />}
+      {deleteError && !deletingStorageLocationId && (
+        <ServerError message={deleteError} />
+      )}
 
       <DeleteConfirmDialog
         isOpen={!!deletingStorageLocationId}
         title="Delete Storage Bin"
-        message="Are you sure you want to delete this storage bin? This action cannot be undone."
+        message="Permanently delete this unused storage bin? Bins with stock or operational history must be archived instead."
         onConfirm={handleDeleteConfirm}
         onCancel={() => {
           setDeletingStorageLocationId(null);
           setDeleteError(null);
         }}
         isPending={deleteStorageLocation.isPending}
+        errorMessage={deleteError ?? undefined}
       />
 
       <EntitySideSheet
@@ -526,6 +609,7 @@ export function StorageLocationList() {
           sideSheet?.mode === "create" ? undefined : sideSheet?.entity?.name
         }
         editLabel="Edit Storage Bin"
+        canEdit={sideSheet?.entity?.archivedAt == null}
         sections={
           sideSheet?.mode === "view" && sideSheet.entity
             ? [

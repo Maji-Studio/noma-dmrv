@@ -407,7 +407,13 @@ export async function createFeedstock(
       facilityId: storageLocations.facilityId,
     })
     .from(storageLocations)
-    .where(and(inArray(storageLocations.id, binIds), eq(storageLocations.organizationId, ctx.organizationId)));
+    .where(
+      and(
+        inArray(storageLocations.id, binIds),
+        eq(storageLocations.organizationId, ctx.organizationId),
+        isNull(storageLocations.archivedAt),
+      ),
+    );
 
   const binMap = new Map(bins.map((b) => [b.id, b]));
   for (const allocation of data.allocations) {
@@ -566,7 +572,13 @@ export async function updateFeedstock(
           facilityId: storageLocations.facilityId,
         })
         .from(storageLocations)
-        .where(and(eq(storageLocations.id, binId), eq(storageLocations.organizationId, ctx.organizationId)));
+        .where(
+          and(
+            eq(storageLocations.id, binId),
+            eq(storageLocations.organizationId, ctx.organizationId),
+            isNull(storageLocations.archivedAt),
+          ),
+        );
 
       if (!bin) {
         throw new SafeError(`Storage bin not found: ${binId}`);

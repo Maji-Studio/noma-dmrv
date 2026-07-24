@@ -672,7 +672,7 @@ export async function buildRemovalContext(
       kind: "noApplications",
       detail: scope.removalId
         ? "No applications linked to this removal"
-        : "No applications fall in this batch's crediting period — record an application in the period, or adjust the period.",
+        : "No applications fall within this batch period.",
       fixTarget: "applications",
     };
     return {

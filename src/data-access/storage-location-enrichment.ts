@@ -83,6 +83,10 @@ export interface PaginatedStorageLocations {
   page: number;
   pageSize: number;
   totalPages: number;
+  laneSummary: Record<
+    StorageLocation["type"],
+    { binCount: number; onHandKg: number }
+  >;
 }
 
 export type BaseStorageLocationRow = {
