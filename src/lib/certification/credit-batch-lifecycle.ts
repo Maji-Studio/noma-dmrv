@@ -25,9 +25,10 @@ function buildStepStates(
   currentStepIndex: number,
   currentState: "active" | "success" | "failed" = "active",
 ): CreditBatchLifecycleStepState[] {
-  return CREDIT_BATCH_LIFECYCLE_STEPS.map((_, index) =>
-    index === currentStepIndex ? currentState : "inactive",
-  );
+  return CREDIT_BATCH_LIFECYCLE_STEPS.map((_, index) => {
+    if (index < currentStepIndex) return "success";
+    return index === currentStepIndex ? currentState : "inactive";
+  });
 }
 
 function readyToSubmitLifecycle(): CreditBatchLifecycle {

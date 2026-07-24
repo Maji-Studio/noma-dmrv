@@ -539,6 +539,7 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
       "mapping",
       "credentials",
       "template",
+      "transport",
       "transportUniformity",
       "production",
       "entityReadiness",
@@ -592,6 +593,7 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
       }),
     );
     expect(reqFor(checks, "transportUniformity").status).toBe("met");
+    expect(reqFor(checks, "transport").status).toBe("unmet");
   });
 
   it("flags entity-readiness gaps so submit is never disabled without a visible reason", () => {

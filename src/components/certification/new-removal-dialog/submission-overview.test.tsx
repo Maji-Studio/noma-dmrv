@@ -53,4 +53,32 @@ describe("SubmissionOverview", () => {
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noopener noreferrer"');
   });
+
+  it("does not present a partial stored estimate as a complete total", () => {
+    const html = renderToStaticMarkup(
+      <SubmissionOverview
+        memberBatches={[
+          BATCH,
+          {
+            ...BATCH,
+            id: "batch-2",
+            code: "CB-26-002",
+            co2eStoredPreview: {
+              provider: null,
+              co2eStoredTonnes: null,
+              moduleVersion: null,
+              applicationResults: [],
+              missingInputs: ["Stored CO₂e preview"],
+              warnings: [],
+            },
+          },
+        ]}
+        facilityId="facility-1"
+      />,
+    );
+
+    expect(html).toContain("Stored CO₂e estimate in this submission");
+    expect(html).toContain("—");
+    expect(html).not.toContain(">3.0<");
+  });
 });

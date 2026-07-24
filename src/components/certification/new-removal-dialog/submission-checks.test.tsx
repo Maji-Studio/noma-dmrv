@@ -13,6 +13,7 @@ const CHECKS = [
   ["mapping", "Facility linked to a registry project"],
   ["credentials", "Organization registry credentials"],
   ["template", "Removal template resolved"],
+  ["transport", "Transport legs recorded"],
   ["transportUniformity", "Transport legs aggregate cleanly"],
   ["production", "Production lineage complete"],
   ["entityReadiness", "Certifier fields on linked records"],
@@ -31,7 +32,7 @@ describe("SubmissionChecks", () => {
     );
 
     expect(html).toContain("Submission checks");
-    expect(html).toContain("7 of 7 checks passed");
+    expect(html).toContain("8 of 8 checks passed");
     expect(html).toMatch(/<button[^>]*>[\s\S]*Submission checks[\s\S]*<\/button>/);
     expect(html).not.toContain("Removal template resolved");
   });
@@ -50,7 +51,7 @@ describe("SubmissionChecks", () => {
       <SubmissionChecks checks={blockedChecks} facilityId="facility-1" />,
     );
 
-    expect(html).toContain("6 of 7 checks passed · 1 need attention");
+    expect(html).toContain("7 of 8 checks passed · 1 need attention");
     expect(html).toContain("Removal template resolved");
     expect(html).toContain("No default removal template is selected.");
     expect(html).toContain(
@@ -72,10 +73,29 @@ describe("SubmissionChecks", () => {
       <SubmissionChecks checks={blockedChecks} facilityId="facility-1" />,
     );
 
-    expect(html).toContain("6 of 7 checks passed · 1 need attention");
+    expect(html).toContain("7 of 8 checks passed · 1 need attention");
     expect(html).toContain("Production lineage complete");
     expect(html).toContain(
       "No applications fall in this batch&#x27;s crediting period.",
     );
+  });
+
+  it("opens automatically and surfaces evidence advisories", () => {
+    const checksWithWarning: RemovalRequirementCheck[] = [
+      ...CHECKS,
+      {
+        key: "evidence",
+        label: "Supporting documents mirrored",
+        requirementLabel: "Supporting documents mirrored",
+        status: "warning",
+        detail: "0 of 2 supporting documents mirrored",
+      },
+    ];
+    const html = renderToStaticMarkup(
+      <SubmissionChecks checks={checksWithWarning} facilityId="facility-1" />,
+    );
+
+    expect(html).toContain("8 of 9 checks passed · 1 need attention");
+    expect(html).toContain("0 of 2 supporting documents mirrored");
   });
 });

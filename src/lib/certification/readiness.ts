@@ -465,6 +465,7 @@ export type RemovalRequirementKey =
   | "mapping"
   | "credentials"
   | "template"
+  | "transport"
   | "transportUniformity"
   | "production"
   | "entityReadiness"
@@ -553,6 +554,31 @@ export function buildRemovalRequirementsChecklist(
         };
   })();
 
+  const transport = ((): RemovalRequirementCheckBase => {
+    if (!linked || !templateClean) {
+      return {
+        key: "transport",
+        label: TRANSPORT_COVERAGE_LABEL,
+        status: "skipped",
+      };
+    }
+    const missing = facts.requiredTransport
+      .filter((category) => category.count === 0)
+      .map((category) => category.category);
+    return missing.length === 0
+      ? {
+          key: "transport",
+          label: TRANSPORT_COVERAGE_LABEL,
+          status: "met",
+        }
+      : {
+          key: "transport",
+          label: TRANSPORT_COVERAGE_LABEL,
+          status: "unmet",
+          detail: `Missing ${describeCategories(missing)} transport legs`,
+        };
+  })();
+
   const entityReadiness = ((): RemovalRequirementCheckBase => {
     const gaps = facts.entityReadinessGaps ?? [];
     return gaps.length === 0
@@ -634,6 +660,7 @@ export function buildRemovalRequirementsChecklist(
           ? undefined
           : (templateBlockerReason(facts) ?? undefined),
     },
+    transport,
     uniformity,
     production,
     entityReadiness,

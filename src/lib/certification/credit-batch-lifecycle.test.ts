@@ -67,6 +67,12 @@ describe("deriveCreditBatchLifecycle", () => {
 
     expect(lifecycle.label).toBe("Removal submitted");
     expect(lifecycle.currentStepIndex).toBe(1);
+    expect(lifecycle.stepStates).toEqual([
+      "success",
+      "active",
+      "inactive",
+      "inactive",
+    ]);
   });
 
   it("uses the downstream statement as the highest lifecycle signal", () => {
@@ -109,9 +115,9 @@ describe("deriveCreditBatchLifecycle", () => {
 
     expect(lifecycle.label).toBe("Credits issued");
     expect(lifecycle.stepStates).toEqual([
-      "inactive",
-      "inactive",
-      "inactive",
+      "success",
+      "success",
+      "success",
       "success",
     ]);
   });

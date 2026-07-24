@@ -128,10 +128,15 @@ export function SubmissionOverview({
     memberBatches,
     (batch) => batch.appliedDryWeightTons,
   );
-  const co2eStoredTonnes = total(
-    memberBatches,
-    (batch) => batch.co2eStoredPreview?.co2eStoredTonnes ?? 0,
+  const hasCompleteCo2ePreview = memberBatches.every(
+    (batch) => typeof batch.co2eStoredPreview?.co2eStoredTonnes === "number",
   );
+  const co2eStoredTonnes = hasCompleteCo2ePreview
+    ? total(
+        memberBatches,
+        (batch) => batch.co2eStoredPreview?.co2eStoredTonnes ?? 0,
+      )
+    : null;
   const productionRunCount = total(
     memberBatches,
     (batch) => batch.productionRunCount,
@@ -156,7 +161,9 @@ export function SubmissionOverview({
             </span>
             <div className="flex items-baseline gap-8 text-[var(--color-text-white-primary)]">
               <span className="title-heading-1 font-mono">
-                {co2eStoredTonnes.toFixed(1)}
+                {co2eStoredTonnes === null
+                  ? "—"
+                  : co2eStoredTonnes.toFixed(1)}
               </span>
               <span className="body-medium font-medium">t CO₂e</span>
             </div>

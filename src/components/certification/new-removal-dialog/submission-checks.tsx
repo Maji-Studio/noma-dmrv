@@ -34,6 +34,7 @@ function fixLinkFor(
     case "evidence":
       return null;
     case "transportUniformity":
+    case "transport":
       return {
         label: "Review transport",
         href: `/deliveries?facility=${facilityId}`,
@@ -57,7 +58,7 @@ function CheckIcon({ status }: Pick<RemovalRequirementCheck, "status">) {
       />
     );
   }
-  if (status === "unmet") {
+  if (status === "unmet" || status === "warning") {
     return (
       <WarningIcon
         size={14}
@@ -123,15 +124,19 @@ export function SubmissionChecks({
 }: SubmissionChecksProps) {
   const passedCount = checks.filter((check) => check.status === "met").length;
   const unmetCount = checks.filter((check) => check.status === "unmet").length;
+  const warningCount = checks.filter(
+    (check) => check.status === "warning",
+  ).length;
+  const attentionCount = unmetCount + warningCount;
   const summary =
-    unmetCount === 0
+    attentionCount === 0
       ? `${passedCount} of ${checks.length} checks passed`
-      : `${passedCount} of ${checks.length} checks passed · ${unmetCount} need attention`;
+      : `${passedCount} of ${checks.length} checks passed · ${attentionCount} need attention`;
 
   return (
     <Accordion.Root
       className="gap-0"
-      defaultValue={unmetCount > 0 ? ["submission-checks"] : []}
+      defaultValue={attentionCount > 0 ? ["submission-checks"] : []}
     >
       <Accordion.Item
         value="submission-checks"

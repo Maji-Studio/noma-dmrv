@@ -239,12 +239,23 @@ export function CreditBatchHealthStrip({
       className="flex flex-col gap-16 border-t border-[var(--color-border-tertiary)] pt-16"
       data-testid="batch-health-strip"
     >
-      <div className="flex max-w-[680px] flex-col gap-4">
-        <SectionLabel>Certification requirements</SectionLabel>
-        {hasOpenIssues && (
-          <p className="body-small text-[var(--color-text-secondary)]">
-            Complete these before adding this batch to a Removal.
-          </p>
+      <div className="flex items-start justify-between gap-16">
+        <div className="flex max-w-[680px] flex-col gap-4">
+          <SectionLabel>Certification requirements</SectionLabel>
+          {hasOpenIssues && (
+            <p className="body-small text-[var(--color-text-secondary)]">
+              Complete these before adding this batch to a Removal.
+            </p>
+          )}
+        </div>
+        {health && (
+          <span className="shrink-0 body-caption font-medium text-[var(--color-text-secondary)]">
+            {health.state === "ready"
+              ? "Ready to certify"
+              : `${health.issueCount} ${
+                  health.issueCount === 1 ? "issue" : "issues"
+                } open`}
+          </span>
         )}
       </div>
 
