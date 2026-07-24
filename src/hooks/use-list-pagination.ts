@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { PaginationState } from "@tanstack/react-table";
 import { DEFAULT_LIST_PAGE_SIZE } from "@/config/list-controls";
 
@@ -10,6 +10,32 @@ interface ListPaginationState {
   scopeKey: string;
   page: number;
   pageSize: number;
+}
+
+interface ListPageReconciliation {
+  currentPage: number;
+  totalPages: number;
+  isLoading: boolean;
+  setCurrentPage: (page: number) => void;
+}
+
+/**
+ * Reconciles client pagination with a server result whose last page moved
+ * backward after a delete, archive, or filter change.
+ */
+export function useReconcileListPage({
+  currentPage,
+  totalPages,
+  isLoading,
+  setCurrentPage,
+}: ListPageReconciliation): void {
+  useEffect(() => {
+    if (isLoading) return;
+    const lastAvailablePage = Math.max(1, totalPages);
+    if (currentPage > lastAvailablePage) {
+      setCurrentPage(lastAvailablePage);
+    }
+  }, [currentPage, isLoading, setCurrentPage, totalPages]);
 }
 
 /**

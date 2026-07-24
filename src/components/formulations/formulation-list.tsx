@@ -14,7 +14,10 @@ import {
   useUpdateFormulation,
 } from "@/hooks/use-formulations";
 import { useDebounce } from "@/hooks/use-debounce";
-import { useListPagination } from "@/hooks/use-list-pagination";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -155,6 +158,12 @@ export function FormulationList() {
   const totalFormulations = formulationsData?.total ?? 0;
   const totalPages = formulationsData?.totalPages ?? 0;
   const hasActiveSearch = searchInput.trim().length > 0;
+  useReconcileListPage({
+    currentPage,
+    totalPages,
+    isLoading,
+    setCurrentPage,
+  });
 
   // Handlers
   const handleCreate = async (data: FormulationFormData) => {
