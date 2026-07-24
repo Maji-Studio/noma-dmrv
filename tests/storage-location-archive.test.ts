@@ -28,6 +28,7 @@ import {
 
 const TEST_USER_ID = "test-user-00000000-0000-0000-0000-000000000001";
 const CONCURRENCY_BARRIER_TIMEOUT_MS = 5_000;
+const CONCURRENCY_TEST_TIMEOUT_MS = 10_000;
 
 beforeAll(() => ensureTestOrg());
 
@@ -358,6 +359,109 @@ describe("storage location archive", () => {
     }
   });
 
+  it("serializes concurrent facility archives without stranding children", async () => {
+    const fixture = await createStorageArchiveFixture();
+    const ctx = makeTestOrgContext(TEST_USER_ID);
+    let releaseFacilityLock = () => {};
+    let facilityLockTransaction: Promise<void> | undefined;
+
+    try {
+      let signalFacilityLockReady = () => {};
+      const facilityLockReady = new Promise<void>((resolve) => {
+        signalFacilityLockReady = resolve;
+      });
+      const releaseFacilityLockPromise = new Promise<void>((resolve) => {
+        releaseFacilityLock = resolve;
+      });
+      let facilityLockBackendPid = 0;
+
+      facilityLockTransaction = db.transaction(async (tx) => {
+        await tx
+          .select({ id: facilities.id })
+          .from(facilities)
+          .where(
+            and(
+              eq(facilities.id, fixture.facilityId),
+              eq(facilities.organizationId, TEST_ORG_ID),
+            ),
+          )
+          .for("update");
+        const backend = await tx.execute<{ pid: number }>(
+          sql`select pg_backend_pid() as pid`,
+        );
+        facilityLockBackendPid = backend.rows[0]?.pid ?? 0;
+        signalFacilityLockReady();
+        await releaseFacilityLockPromise;
+      });
+      await facilityLockReady;
+
+      const archiveOutcomes = [
+        archiveFacility(ctx, fixture.facilityId),
+        archiveFacility(ctx, fixture.facilityId),
+      ].map((archive) =>
+        archive.then(
+          (value) => ({ ok: true as const, value }),
+          (error: unknown) => ({ ok: false as const, error }),
+        ),
+      );
+
+      await expect.poll(async () => {
+        const result = await db.execute<{ waiting_count: number }>(sql`
+          with recursive blocked(pid) as (
+            select pid
+            from pg_stat_activity
+            where ${facilityLockBackendPid} = any(pg_blocking_pids(pid))
+            union
+            select activity.pid
+            from pg_stat_activity activity
+            inner join blocked blocker
+              on blocker.pid = any(pg_blocking_pids(activity.pid))
+          )
+          select count(*)::int as waiting_count from blocked
+        `);
+        return result.rows[0]?.waiting_count ?? 0;
+      }, { timeout: CONCURRENCY_BARRIER_TIMEOUT_MS }).toBe(2);
+
+      releaseFacilityLock();
+      await facilityLockTransaction;
+
+      const outcomes = await Promise.all(archiveOutcomes);
+      expect(outcomes.filter((outcome) => outcome.ok)).toHaveLength(1);
+      const rejected = outcomes.find((outcome) => !outcome.ok);
+      expect(rejected?.error).toBeInstanceOf(SafeError);
+      expect((rejected?.error as Error).message).toMatch(
+        /facility is already archived/i,
+      );
+
+      await restoreFacility(ctx, fixture.facilityId);
+      const [restored] = await db
+        .select({
+          binArchivedAt: storageLocations.archivedAt,
+          facilityArchivedAt: facilities.archivedAt,
+        })
+        .from(storageLocations)
+        .innerJoin(
+          facilities,
+          and(
+            eq(storageLocations.facilityId, facilities.id),
+            eq(facilities.organizationId, TEST_ORG_ID),
+          ),
+        )
+        .where(
+          and(
+            eq(storageLocations.id, fixture.storageLocationId),
+            eq(storageLocations.organizationId, TEST_ORG_ID),
+          ),
+        );
+      expect(restored.facilityArchivedAt).toBeNull();
+      expect(restored.binArchivedAt).toBeNull();
+    } finally {
+      releaseFacilityLock();
+      await facilityLockTransaction?.catch(() => undefined);
+      await cleanupStorageArchiveFixture(fixture);
+    }
+  }, CONCURRENCY_TEST_TIMEOUT_MS);
+
   it("keeps an individually archived bin archived across facility archive and restore", async () => {
     const fixture = await createStorageArchiveFixture();
     const ctx = makeTestOrgContext(TEST_USER_ID);
@@ -368,6 +472,39 @@ describe("storage location archive", () => {
         fixture.storageLocationId,
       );
       await archiveFacility(ctx, fixture.facilityId);
+
+      const [archivePrecision] = await db
+        .select({
+          binOffsetMicroseconds: sql<number>`
+            mod(
+              extract(microseconds from ${storageLocations.archivedAt})::int,
+              1000
+            )
+          `,
+          facilityOffsetMicroseconds: sql<number>`
+            mod(
+              extract(microseconds from ${facilities.archivedAt})::int,
+              1000
+            )
+          `,
+        })
+        .from(storageLocations)
+        .innerJoin(
+          facilities,
+          and(
+            eq(storageLocations.facilityId, facilities.id),
+            eq(facilities.organizationId, TEST_ORG_ID),
+          ),
+        )
+        .where(
+          and(
+            eq(storageLocations.id, fixture.storageLocationId),
+            eq(storageLocations.organizationId, TEST_ORG_ID),
+          ),
+        );
+      expect(archivePrecision.binOffsetMicroseconds).toBe(0);
+      expect(archivePrecision.facilityOffsetMicroseconds).toBe(500);
+
       await restoreFacility(ctx, fixture.facilityId);
 
       const [bin] = await db
