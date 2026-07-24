@@ -386,34 +386,38 @@ Registry-specific deferred decisions live in
 [Isometric Certify open questions](./open-questions-isometric.md). That
 companion inherits this file's schema, invariants, and resolution rules.
 
-### Certify project protocol differs from noma's interpretation pin (`isometric/project-protocol-version`, opened 2026-07-24)
+### Interpretation docs still derive from protocol v1.2 after the v1.1 re-pin (`isometric/v1-1-shortlist-reverification`, opened 2026-07-24, `needs-registry-check`)
 
-- **Observed:** project `prj_1K9YJ33RKSBX9FFF` shows baseline/current Biochar
-  Production and Storage v1.1 and Isometric Standard v1.7 in Certify, while
-  [`docs/isometric/versions.json`](./isometric/versions.json) targets protocol
-  v1.2. Historical ADR 0017 text also cites v1.3; its 2026-07-24 amendment
-  prevents that label from being treated as the configured project version.
-  The API cannot resolve the discrepancy because it exposes no usable project
-  protocol field.
-- **Operator decision:** confirm with Isometric whether the sandbox project
-  should be bumped. Then align the Certify project,
-  `certifier_projects.protocol_version`, interpretation docs, and amended ADR
-  applicability notes through
-  [`docs/isometric/update-playbook.md`](./isometric/update-playbook.md).
+- **Observed:** the operator resolved `isometric/project-protocol-version` on
+  2026-07-24 by re-pinning
+  [`docs/isometric/versions.json`](./isometric/versions.json) to the Certify
+  project's authoritative **v1.1** (and separately resolved
+  `isometric/project-durability-tier` by setting the project to 1000 years in
+  the Certify UI) — resolutions recorded in
+  [`docs/isometric/changes.md`](./isometric/changes.md). But
+  `requirements-shortlist.md` and `schema-mapping.md` were extracted against
+  v1.2, whose module set and requirements differ (agricultural-soils v1.1
+  replaces soil-environments v1.2, feedstock accounting v1.2 not v1.3,
+  ghg-accounting unreferenced, no Appendix II monitoring plan / loss
+  accounting / low-C/N N₂O mandates).
+- **Gap-check ran 2026-07-24** — full report:
+  [`docs/archive/2026-07-24-isometric-gap-check-v1-1.md`](./archive/2026-07-24-isometric-gap-check-v1-1.md)
+  (151 confirmed findings; all 9 P0s map to already-tracked open P0-checklist
+  items). Headline drifts to fold into the refresh: `started_on` should derive
+  from earliest feedstock sourcing not production start (§8.6.2); the
+  electricity `ec1_grid_average…ec5_direct_connection` enum misreads EC1–EC5
+  as alternatives when they are conjunctive; the BFA market-leakage
+  interpretation mixes v1.3 significance tests into the pinned v1.2; WBC
+  contaminant thresholds DO bind under agricultural-soils v1.1;
+  `src/lib/isometric/utils/durability-aggregation.ts` header still cites the
+  superseded soil-environments v1.2. Caveat: the run's self-test missed 3 of 4
+  seeded known gaps in direct-emissions coverage — don't treat it as
+  exhaustive there.
+- **Resolve via:** refresh `requirements-shortlist.md` + `schema-mapping.md`
+  from the report, remediate or explicitly defer its FIX-class findings, then
+  delete this entry.
 - **Code anchor:** `src/fn/certification/protocol-version-preflight.ts:checkProtocolVersionAtSubmit`
-  warns and records drift at submit time without blocking.
-
-### Certify project durability is 200 years but the active path submits 1000 years (`isometric/project-durability-tier`, opened 2026-07-24)
-
-- **Observed:** the Certify project's "Durability of biochar" setting is
-  **200 YEARS**, while the active template and noma pipeline use the 1000-year
-  sequestration blueprint.
-- **Operator decision:** either set the project to 1000 years in the Certify UI
-  or re-author the active template and local facility tier for the 200-year
-  path. Code cannot reconcile a contradictory project-level registry setting.
-- **Code anchor:** `src/fn/certification/submit-removal.ts:submitRemoval`
-  validates local template-to-facility-tier agreement, but the Certify API does
-  not expose the project durability setting for an automated preflight.
+  compares `certifier_projects.protocol_version` against the versions.json pin.
 
 ## Audit follow-ups (opened 2026-05-25)
 

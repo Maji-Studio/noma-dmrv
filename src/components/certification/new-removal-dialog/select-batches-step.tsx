@@ -140,8 +140,12 @@ function ReadyCard({
       <div className="grid grid-cols-3 gap-8">
         <Metric label="Weight" value={formatTonnes(batch.appliedWeightTons)} />
         <Metric
-          label="CO₂e stored"
-          value={formatTonnes(batch.co2eStoredTonnes)}
+          label="CO₂e preview"
+          value={
+            batch.co2eStoredTonnes == null
+              ? "Unavailable"
+              : formatTonnes(batch.co2eStoredTonnes)
+          }
         />
         <Metric
           label="Durability"
