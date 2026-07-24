@@ -73,10 +73,7 @@ import {
 import { buildCertifyEntityReadiness } from "./certify-entity-readiness";
 import { loadDurabilityBatchData } from "./durability-readiness";
 import { buildSubmissionWarnings } from "./submission-warnings";
-import {
-  loadEvidenceMirrorSummaryForUser,
-  type EvidenceMirrorSummary,
-} from "./evidence-mirror-summary";
+import { loadEvidenceMirrorSummaryForScope, type EvidenceMirrorSummary } from "./evidence-mirror-summary";
 import {
   loadLinkedGhgStatementStatus,
   type LinkedGhgStatementStatus,
@@ -177,7 +174,7 @@ export interface RemovalCertifyContext {
   // durabilityGateBlockers / entityReadinessGaps, these do NOT gate submission;
   // they tell the operator a recorded value will not be submitted.
   submissionWarnings: string[];
-  supportingDocuments: EvidenceMirrorSummary; // same counts as Sources panel
+  supportingDocuments: EvidenceMirrorSummary;
   // Focused run aggregation (run count, total biochar output, applied dry kg)
   // surfaced on the lean UI context so the Review step can show what's being
   // submitted without shipping the heavy `runs` array.
@@ -623,7 +620,7 @@ export async function buildRemovalContext(
           })
         : Promise.resolve(null),
       loadLinkedGhgStatementStatus(orgCtx, scope.removal),
-      loadEvidenceMirrorSummaryForUser(orgCtx, scope.removalId),
+      loadEvidenceMirrorSummaryForScope(orgCtx, scope),
     ]);
 
   // Walk every member batch's production-run applications into one deduped run union.
@@ -842,8 +839,7 @@ function projectUiContext(
   };
 }
 
-// UI context keyed by removal id — the guided Review flow's source of truth
-// (Assemble / Review / Pre-flight read it; the pre-flight runs the shared
+// Guided Review UI context keyed by removal id; its pre-flight runs the shared
 // `deriveRemovalReadiness` classifier against it). Mirrors
 // `loadCertifyContextForCreditBatch` but resolves the scope from the removal.
 export async function loadRemovalCertifyContext(
