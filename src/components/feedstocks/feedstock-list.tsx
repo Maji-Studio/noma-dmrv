@@ -239,8 +239,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const [searchInput, setSearchInput] = useState("");
   const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
     useListPagination(contextFacilityId);
+  const normalizedSearch = searchInput.trim();
   const debouncedSearch = useDebounce(
-    searchInput,
+    normalizedSearch,
     LIST_SEARCH_DEBOUNCE_MS,
   );
 
@@ -387,7 +388,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
 
   const feedstockItems = feedstocksData?.items ?? [];
   const totalPages = feedstocksData?.totalPages ?? 0;
-  const hasActiveSearch = searchInput.trim().length > 0;
+  const hasActiveSearch = normalizedSearch.length > 0;
   useEffect(() => {
     if (!focusedFeedstockId) return;
     if (focusedFeedstock.error || (focusedFeedstock.isSuccess && !focusedFeedstock.data)) {

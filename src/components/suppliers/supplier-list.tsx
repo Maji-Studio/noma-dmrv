@@ -120,8 +120,9 @@ export function SupplierList() {
   const [searchInput, setSearchInput] = useState("");
   const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
     useListPagination();
+  const normalizedSearch = searchInput.trim();
   const debouncedSearch = useDebounce(
-    searchInput,
+    normalizedSearch,
     LIST_SEARCH_DEBOUNCE_MS,
   );
 
@@ -145,7 +146,7 @@ export function SupplierList() {
   // Computed stats
   const totalSuppliers = suppliersData?.total ?? 0;
   const totalPages = suppliersData?.totalPages ?? 0;
-  const hasActiveSearch = searchInput.trim().length > 0;
+  const hasActiveSearch = normalizedSearch.length > 0;
   // Handlers
   const handleCreate = async (
     data: SupplierFormData,
