@@ -64,6 +64,7 @@ const UNCERTAINTY_STYLE: CSSProperties = {
     "repeating-linear-gradient(135deg, var(--color-text-tertiary) 0, var(--color-text-tertiary) 1px, transparent 1px, transparent 5px)",
 };
 const MICRO_ICON_SIZE = 13;
+const ALERT_ICON_SIZE = 20;
 
 const TONE_CLASS: Record<Tone, string> = {
   stored: "bg-[var(--color-signal-green)]",
@@ -313,7 +314,7 @@ function AnomalyState({
       >
         <div className="flex items-start gap-8">
           <WarningIcon
-            size={20}
+            size={ALERT_ICON_SIZE}
             weight="fill"
             aria-hidden
             className="mt-2 shrink-0"
