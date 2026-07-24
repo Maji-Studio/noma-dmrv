@@ -1,0 +1,1 @@
+ALTER TYPE "public"."isometric_submission_status" RENAME TO "certification_submission_status";
