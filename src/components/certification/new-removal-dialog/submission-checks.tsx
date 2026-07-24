@@ -29,7 +29,9 @@ function fixLinkFor(
         href: certificationSettingsHref(facilityId),
       };
     case "credentials":
+    case "production":
     case "entityReadiness":
+    case "evidence":
       return null;
     case "transportUniformity":
       return {

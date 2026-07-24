@@ -14,6 +14,7 @@ const CHECKS = [
   ["credentials", "Organization registry credentials"],
   ["template", "Removal template resolved"],
   ["transportUniformity", "Transport legs aggregate cleanly"],
+  ["production", "Production lineage complete"],
   ["entityReadiness", "Certifier fields on linked records"],
   ["durability", "Sampling & durability eligibility"],
 ].map(([key, requirementLabel]) => ({
@@ -30,7 +31,7 @@ describe("SubmissionChecks", () => {
     );
 
     expect(html).toContain("Submission checks");
-    expect(html).toContain("6 of 6 checks passed");
+    expect(html).toContain("7 of 7 checks passed");
     expect(html).toMatch(/<button[^>]*>[\s\S]*Submission checks[\s\S]*<\/button>/);
     expect(html).not.toContain("Removal template resolved");
   });
@@ -49,11 +50,32 @@ describe("SubmissionChecks", () => {
       <SubmissionChecks checks={blockedChecks} facilityId="facility-1" />,
     );
 
-    expect(html).toContain("5 of 6 checks passed · 1 need attention");
+    expect(html).toContain("6 of 7 checks passed · 1 need attention");
     expect(html).toContain("Removal template resolved");
     expect(html).toContain("No default removal template is selected.");
     expect(html).toContain(
       'href="/certification/settings?tab=connection&amp;facility=facility-1"',
+    );
+  });
+
+  it("opens automatically when resumed production lineage is blocked", () => {
+    const blockedChecks = CHECKS.map((check) =>
+      check.key === "production"
+        ? {
+            ...check,
+            status: "unmet" as const,
+            detail: "No applications fall in this batch's crediting period.",
+          }
+        : check,
+    );
+    const html = renderToStaticMarkup(
+      <SubmissionChecks checks={blockedChecks} facilityId="facility-1" />,
+    );
+
+    expect(html).toContain("6 of 7 checks passed · 1 need attention");
+    expect(html).toContain("Production lineage complete");
+    expect(html).toContain(
+      "No applications fall in this batch&#x27;s crediting period.",
     );
   });
 });
