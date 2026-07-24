@@ -35,6 +35,7 @@ import {
 import { getProductionRunById } from "./queries";
 import type { ProductionRunWithRelations } from "./types";
 import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
+import { lockActiveFacilityReference } from "../facility-reference-guards";
 import { lockBinStocks } from "../lock-bin-stocks";
 import {
   assertProductionRunCreateFeedstockDrawWithinStock,
@@ -267,6 +268,13 @@ export async function createProductionRun(
   let run: typeof productionRuns.$inferSelect;
   try {
     run = await db.transaction(async (tx) => {
+    await lockActiveFacilityReference(ctx, tx, data.facilityId);
+
+    await lockBinStocks(ctx, tx, [
+      data.feedstockStorageLocationId,
+      data.biocharStorageLocationId,
+    ]);
+
     // Reject an overlapping window before writing (serialized per-reactor).
     if (statusOccupiesReactor(status)) {
       await assertNoReactorRunOverlap(ctx, tx, {
@@ -275,11 +283,6 @@ export async function createProductionRun(
         endTime: data.endTime,
       });
     }
-
-    await lockBinStocks(ctx, tx, [
-      computedDryMass ? data.feedstockStorageLocationId : null,
-      data.biocharOutputKg ? data.biocharStorageLocationId : null,
-    ]);
 
     // Validate long-tail storage references before writing the run.
     if (data.feedstockStorageLocationId) {
