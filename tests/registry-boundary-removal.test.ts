@@ -384,6 +384,7 @@ function makeContext(
       startDate: "2026-07-01",
       endDate: "2026-07-31",
       appliedWeightTons: 1,
+      appliedDryWeightTons: 1,
       durabilityOption: "1000_year",
       sampling: "sampled",
       productionRunCount: 1,

@@ -15,6 +15,7 @@ const BATCH = {
   startDate: "2026-07-01",
   endDate: "2026-07-31",
   appliedWeightTons: 10,
+  appliedDryWeightTons: 8.5,
   durabilityOption: "1000_year",
   sampling: "sampled",
   productionRunCount: 2,
@@ -35,8 +36,9 @@ describe("SubmissionOverview", () => {
 
     expect(html).toContain("Submission overview");
     expect(html).toContain("1 credit batch");
-    expect(html).toContain("10.0 t");
+    expect(html).toContain("8.5 t");
     expect(html).toContain("3.0 t CO₂e");
+    expect(html).toContain("Submitted biochar (dry)");
     expect(html).toContain("CB-26-001");
     expect(html).toContain("Jul 1 – Jul 31, 2026");
     expect(html).toContain("1000-Year (R₀ Reflectance)");

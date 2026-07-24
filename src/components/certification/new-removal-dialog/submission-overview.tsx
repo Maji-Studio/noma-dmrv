@@ -95,8 +95,8 @@ function BatchCard({
 
       <div className="grid grid-cols-2 gap-x-16 gap-y-12 border-t border-[var(--color-border-tertiary)] bg-[var(--color-background-light)] px-16 py-12 sm:grid-cols-[0.8fr_1.5fr_0.75fr_1fr_1fr]">
         <BatchFact
-          label="Applied biochar"
-          value={formatTonnes(batch.appliedWeightTons, { digits: 1 })}
+          label="Submitted biochar (dry)"
+          value={formatTonnes(batch.appliedDryWeightTons, { digits: 1 })}
         />
         <BatchFact
           label="Durability"
@@ -124,9 +124,9 @@ export function SubmissionOverview({
   facilityId,
 }: SubmissionOverviewProps) {
   const batchCount = memberBatches.length;
-  const appliedWeightTons = total(
+  const appliedDryWeightTons = total(
     memberBatches,
-    (batch) => batch.appliedWeightTons,
+    (batch) => batch.appliedDryWeightTons,
   );
   const co2eStoredTonnes = total(
     memberBatches,
@@ -172,8 +172,8 @@ export function SubmissionOverview({
             />
             <div className="col-span-2 border-t border-[var(--color-border-tertiary)]">
               <ManifestFact
-                label="Applied biochar"
-                value={formatTonnes(appliedWeightTons, { digits: 1 })}
+                label="Submitted biochar (dry)"
+                value={formatTonnes(appliedDryWeightTons, { digits: 1 })}
               />
             </div>
           </div>
