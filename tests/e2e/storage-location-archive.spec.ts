@@ -62,7 +62,13 @@ test.describe("Storage-bin archive", () => {
     const page = adminPage;
     await page.goto(`/storage-locations?facility=${facility.id}`);
     await expect(page.getByRole("heading", { name: "Storage" })).toBeVisible();
+    const filteredListResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname === "/storage-locations",
+    );
     await page.getByLabel("Search storage").fill(bin.name);
+    await filteredListResponse;
 
     const binCard = page.locator("article").filter({ hasText: bin.name });
     await expect(
