@@ -484,10 +484,11 @@ describe("registry-list GHG statement reconciliation", () => {
   });
 
   it("replaces a null-period surrogate when the registry assigns a real end and preserves metadata", async () => {
-    const fixture = await createFixture({ seedOpenRemoval: false });
+    const fixture = await createFixture();
     const remote = registry.seedGhgStatement({
       projectId: fixture.externalProjectId,
       endOn: null,
+      ghgEntryIds: [fixture.externalRemovalId!],
     });
 
     await reconcileGhgStatementsFromRegistry(fixture.facilityId);
@@ -545,7 +546,10 @@ describe("registry-list GHG statement reconciliation", () => {
 
     expect(result).toMatchObject({
       success: true,
-      data: { reconciledCount: 2 },
+      data: {
+        reconciledCount: 2,
+        warningCount: 0,
+      },
     });
     const rows = await db
       .select()
@@ -562,6 +566,157 @@ describe("registry-list GHG statement reconciliation", () => {
       ));
     expect(new Set(submissions.map((row) => row.externalId))).toEqual(
       new Set([first.id, second.id]),
+    );
+  });
+
+  it("assigns a shared-project statement only to the facility owning its removal", async () => {
+    const owner = await createFixture();
+    const neighbour = await createFixture();
+    await db
+      .update(certifierProjects)
+      .set({ externalProjectId: owner.externalProjectId })
+      .where(eq(certifierProjects.facilityId, neighbour.facilityId));
+    const remote = registry.seedGhgStatement({
+      projectId: owner.externalProjectId,
+      endOn: REPORTING_PERIOD_END,
+      ghgEntryIds: [owner.externalRemovalId!],
+    });
+
+    const neighbourResult = await reconcileGhgStatementsFromRegistry(
+      neighbour.facilityId,
+    );
+    expect(neighbourResult).toMatchObject({
+      success: true,
+      data: { reconciledCount: 0, warningCount: 1 },
+    });
+    expect(await latestLedgerRow(neighbour.facilityId)).toBeNull();
+
+    const ownerResult = await reconcileGhgStatementsFromRegistry(
+      owner.facilityId,
+    );
+    expect(ownerResult).toMatchObject({
+      success: true,
+      data: { reconciledCount: 1 },
+    });
+    expect(await latestLedgerRow(owner.facilityId)).toMatchObject({
+      externalId: remote.id,
+      status: "submitted",
+    });
+  });
+
+  it("does not discover a duplicate while an operator create is in flight", async () => {
+    const fixture = await createFixture();
+    const [local] = await db
+      .insert(certifierGhgStatements)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: fixture.facilityId,
+        reportingPeriodEndOn: REPORTING_PERIOD_END,
+      })
+      .returning();
+    await db.insert(certificationSubmissions).values({
+      organizationId: TEST_ORG_ID,
+      provider: "isometric",
+      submissionType: "ghg_statement",
+      localEntityType: "ghgStatement",
+      localEntityId: local.id,
+      version: 1,
+      status: "draft",
+      lockedAt: new Date(),
+    });
+    registry.seedGhgStatement({
+      projectId: fixture.externalProjectId,
+      endOn: REPORTING_PERIOD_END,
+      ghgEntryIds: [fixture.externalRemovalId!],
+    });
+
+    const result = await reconcileGhgStatementsFromRegistry(
+      fixture.facilityId,
+    );
+    expect(result).toMatchObject({
+      success: true,
+      data: { reconciledCount: 0, warningCount: 1 },
+    });
+    const rows = await db
+      .select()
+      .from(certifierGhgStatements)
+      .where(eq(certifierGhgStatements.facilityId, fixture.facilityId));
+    expect(rows).toEqual([expect.objectContaining({ id: local.id })]);
+
+    const [draft] = await db
+      .select()
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.localEntityId, local.id));
+    await staleifyLock(draft.id);
+    const resumed = await reconcileGhgStatementsFromRegistry(
+      fixture.facilityId,
+    );
+    expect(resumed).toMatchObject({
+      success: true,
+      data: { reconciledCount: 1 },
+    });
+    expect(await latestLedgerRow(fixture.facilityId)).toMatchObject({
+      status: "submitted",
+    });
+  });
+
+  it("unlinks a removal when registry membership shrinks to empty", async () => {
+    const fixture = await createFixture();
+    const remote = registry.seedGhgStatement({
+      projectId: fixture.externalProjectId,
+      endOn: REPORTING_PERIOD_END,
+      ghgEntryIds: [fixture.externalRemovalId!],
+    });
+    await reconcileGhgStatementsFromRegistry(fixture.facilityId);
+
+    remote.ghg_entry_ids = [];
+    const result = await reconcileGhgStatementsFromRegistry(
+      fixture.facilityId,
+    );
+    expect(result).toMatchObject({
+      success: true,
+      data: { reconciledCount: 1 },
+    });
+    const [removal] = await db
+      .select()
+      .from(certifierRemovals)
+      .where(eq(certifierRemovals.id, fixture.removalId!));
+    expect(removal.ghgStatementId).toBeNull();
+  });
+
+  it("moves a removal between statements in one registry sweep", async () => {
+    const fixture = await createFixture();
+    const destination = registry.seedGhgStatement({
+      projectId: fixture.externalProjectId,
+      endOn: "2026-06-30",
+      ghgEntryIds: [],
+    });
+    const source = registry.seedGhgStatement({
+      projectId: fixture.externalProjectId,
+      endOn: REPORTING_PERIOD_END,
+      ghgEntryIds: [fixture.externalRemovalId!],
+    });
+    await reconcileGhgStatementsFromRegistry(fixture.facilityId);
+
+    destination.ghg_entry_ids = [fixture.externalRemovalId!];
+    source.ghg_entry_ids = [];
+    const result = await reconcileGhgStatementsFromRegistry(
+      fixture.facilityId,
+    );
+    expect(result).toMatchObject({
+      success: true,
+      data: { reconciledCount: 2 },
+    });
+    const [destinationSubmission] = await db
+      .select()
+      .from(certificationSubmissions)
+      .where(eq(certificationSubmissions.externalId, destination.id));
+    const [removal] = await db
+      .select()
+      .from(certifierRemovals)
+      .where(eq(certifierRemovals.id, fixture.removalId!));
+    expect(removal.ghgStatementId).toBe(
+      destinationSubmission.localEntityId,
     );
   });
 
@@ -600,7 +755,10 @@ describe("registry-list GHG statement reconciliation", () => {
     );
     expect(result).toMatchObject({
       success: true,
-      data: { reconciledCount: statementCount },
+      data: {
+        reconciledCount: statementCount,
+        warningCount: 0,
+      },
     });
     expect(registry.requestCount("GET", "/ghg_statements")).toBe(2);
     const rows = await db

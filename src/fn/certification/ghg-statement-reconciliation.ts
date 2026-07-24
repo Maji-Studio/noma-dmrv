@@ -13,6 +13,9 @@ import {
 import {
   createGhgStatementForRegistryDiscovery,
   getCertifierGhgStatementById,
+  hasInFlightGhgStatementForFacility,
+  listFacilityIdsForExternalProject,
+  listFacilityIdsForExternalRemovals,
   reconcileRemovalMembership,
   updateGhgStatementReportingWindow,
 } from "@/data-access/certifier-ghg-statements";
@@ -76,20 +79,86 @@ export async function reconcileGhgStatementsForFacility(
     client,
     project.externalProjectId,
   );
+  const projectFacilityIds = await listFacilityIdsForExternalProject(
+    orgCtx,
+    project.externalProjectId,
+  );
 
-  let warningCount = 0;
+  const operatorCreateInFlight =
+    await hasInFlightGhgStatementForFacility(orgCtx, facilityId);
+  let warningCount = operatorCreateInFlight ? 1 : 0;
+  let reconciledCount = 0;
+  const ownedRemotes: GhgStatement[] = [];
   for (const remote of remotes) {
+    if (operatorCreateInFlight) continue;
+    const existingSubmission = await getSubmissionByExternalId(orgCtx, {
+      provider: ISOMETRIC_PROVIDER,
+      submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
+      externalId: remote.id,
+    });
+    if (existingSubmission) {
+      const owner = await getCertifierGhgStatementById(
+        orgCtx,
+        existingSubmission.localEntityId,
+      );
+      if (owner?.facilityId !== facilityId) continue;
+    } else {
+      const facilityIds = await listFacilityIdsForExternalRemovals(
+        orgCtx,
+        remote.ghg_entry_ids,
+      );
+      const assignedByMembership =
+        facilityIds.length === 1 && facilityIds[0] === facilityId;
+      const assignedByUniqueProject =
+        facilityIds.length === 0 &&
+        projectFacilityIds.length === 1 &&
+        projectFacilityIds[0] === facilityId;
+      if (!assignedByMembership && !assignedByUniqueProject) {
+        warningCount += 1;
+        continue;
+      }
+    }
+    ownedRemotes.push(remote);
+  }
+
+  // Registry membership is authoritative. Clear removals omitted from their
+  // current statement across the whole remote snapshot before linking any
+  // additions, so a move A → B converges in one sweep regardless of list
+  // order (B can claim only after A has released it).
+  for (const remote of ownedRemotes) {
+    const existingSubmission = await getSubmissionByExternalId(orgCtx, {
+      provider: ISOMETRIC_PROVIDER,
+      submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
+      externalId: remote.id,
+    });
+    if (!existingSubmission) continue;
+    const owner = await getCertifierGhgStatementById(
+      orgCtx,
+      existingSubmission.localEntityId,
+    );
+    if (owner?.facilityId !== facilityId) continue;
+    await reconcileRemovalMembership(
+      orgCtx,
+      owner.id,
+      remote.ghg_entry_ids,
+      undefined,
+      "unlink-only",
+    );
+  }
+
+  for (const remote of ownedRemotes) {
     const result = await reconcileRegistryGhgStatement(orgCtx, {
       facilityId,
       externalProjectId: project.externalProjectId,
       remote,
     });
+    reconciledCount += 1;
     warningCount += result.warnings.length;
   }
 
   return {
     statements: remotes.map(toRegistryGhgStatementView),
-    reconciledCount: remotes.length,
+    reconciledCount,
     warningCount,
   };
 }

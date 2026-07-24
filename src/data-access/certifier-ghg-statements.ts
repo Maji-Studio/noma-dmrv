@@ -1,13 +1,25 @@
-import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
 import { db } from "@/db";
 import { countRows } from "@/db/aggregate";
 import {
   CERTIFIER_GHG_STATEMENT_REMOTE_EXTERNAL_ID_METADATA_KEY,
   certifierGhgStatements,
+  certifierProjects,
   certifierRemovals,
   certificationSubmissions,
 } from "@/db/schema/certification";
 import { SafeError } from "@/lib/errors";
+import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { decideRemovalMembership } from "@/lib/isometric/utils/ghg-entry-membership";
 import {
   chooseStoredRemotePeriodEnd,
@@ -91,6 +103,89 @@ export async function listGhgStatementsForFacility(
     .from(certifierGhgStatements)
     .where(and(eq(certifierGhgStatements.facilityId, facilityId), eq(certifierGhgStatements.organizationId, ctx.organizationId)))
     .orderBy(desc(certifierGhgStatements.createdAt));
+}
+
+export async function listFacilityIdsForExternalRemovals(
+  ctx: OrgContext,
+  externalRemovalIds: string[],
+): Promise<string[]> {
+  requireOrgScope(ctx);
+  if (externalRemovalIds.length === 0) return [];
+  const rows = await db
+    .select({ facilityId: certifierRemovals.facilityId })
+    .from(certificationSubmissions)
+    .innerJoin(
+      certifierRemovals,
+      and(
+        eq(certificationSubmissions.localEntityId, certifierRemovals.id),
+        eq(certifierRemovals.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(
+      and(
+        eq(certificationSubmissions.provider, ISOMETRIC),
+        eq(certificationSubmissions.submissionType, "removal"),
+        eq(certificationSubmissions.localEntityType, "removal"),
+        inArray(certificationSubmissions.externalId, externalRemovalIds),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+      ),
+    );
+  return [...new Set(rows.map((row) => row.facilityId))];
+}
+
+export async function listFacilityIdsForExternalProject(
+  ctx: OrgContext,
+  externalProjectId: string,
+): Promise<string[]> {
+  requireOrgScope(ctx);
+  const rows = await db
+    .select({ facilityId: certifierProjects.facilityId })
+    .from(certifierProjects)
+    .where(
+      and(
+        eq(certifierProjects.provider, ISOMETRIC),
+        eq(certifierProjects.externalProjectId, externalProjectId),
+        eq(certifierProjects.organizationId, ctx.organizationId),
+      ),
+    );
+  return rows.map((row) => row.facilityId);
+}
+
+export async function hasInFlightGhgStatementForFacility(
+  ctx: OrgContext,
+  facilityId: string,
+): Promise<boolean> {
+  requireOrgScope(ctx);
+  const [row] = await db
+    .select({ id: certificationSubmissions.id })
+    .from(certificationSubmissions)
+    .innerJoin(
+      certifierGhgStatements,
+      and(
+        eq(
+          certificationSubmissions.localEntityId,
+          certifierGhgStatements.id,
+        ),
+        eq(certifierGhgStatements.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(
+      and(
+        eq(certificationSubmissions.provider, ISOMETRIC),
+        eq(certificationSubmissions.submissionType, "ghg_statement"),
+        eq(certificationSubmissions.localEntityType, "ghgStatement"),
+        eq(certificationSubmissions.status, "draft"),
+        isNotNull(certificationSubmissions.lockedAt),
+        gt(
+          certificationSubmissions.lockedAt,
+          new Date(Date.now() - LOCK_TTL_MS),
+        ),
+        eq(certifierGhgStatements.facilityId, facilityId),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
 }
 
 export interface GetOrCreateGhgStatementResult {
@@ -178,6 +273,12 @@ export async function createGhgStatementForRegistryDiscovery(
   );
   if (existing) return existing;
 
+  // A stale operator create may have POSTed successfully before persisting
+  // the returned registry id. Once its lock expires, adopt that unbound
+  // same-period identity rather than allocating a synthetic duplicate.
+  const adoptable = await findAdoptableOperatorStatement(ctx, input);
+  if (adoptable) return adoptable;
+
   const occupiedEndOns = await listStoredPeriodEnds(ctx, input.facilityId);
 
   for (
@@ -222,6 +323,62 @@ export async function createGhgStatementForRegistryDiscovery(
   throw new SafeError(
     "Registry statement could not be allocated a local record. Reload and retry.",
   );
+}
+
+async function findAdoptableOperatorStatement(
+  ctx: OrgContext,
+  input: {
+    facilityId: string;
+    externalId: string;
+    reportingPeriodEndOn: string | null;
+  },
+): Promise<CertifierGhgStatementRow | null> {
+  if (input.reportingPeriodEndOn === null) return null;
+  const [candidate] = await db
+    .select()
+    .from(certifierGhgStatements)
+    .where(
+      and(
+        eq(certifierGhgStatements.provider, ISOMETRIC),
+        eq(certifierGhgStatements.facilityId, input.facilityId),
+        eq(
+          certifierGhgStatements.reportingPeriodEndOn,
+          input.reportingPeriodEndOn,
+        ),
+        eq(certifierGhgStatements.organizationId, ctx.organizationId),
+      ),
+    )
+    .limit(1);
+  if (
+    !candidate ||
+    metadataValue(candidate, REMOTE_EXTERNAL_ID_METADATA_KEY) !== undefined
+  ) {
+    return null;
+  }
+  const [latest] = await db
+    .select({
+      externalId: certificationSubmissions.externalId,
+      status: certificationSubmissions.status,
+      lockedAt: certificationSubmissions.lockedAt,
+    })
+    .from(certificationSubmissions)
+    .where(
+      and(
+        eq(certificationSubmissions.provider, ISOMETRIC),
+        eq(certificationSubmissions.submissionType, "ghg_statement"),
+        eq(certificationSubmissions.localEntityType, "ghgStatement"),
+        eq(certificationSubmissions.localEntityId, candidate.id),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+      ),
+    )
+    .orderBy(desc(certificationSubmissions.version))
+    .limit(1);
+  if (!latest) return candidate;
+  const activeLock =
+    latest.status === "draft" &&
+    latest.lockedAt !== null &&
+    Date.now() - latest.lockedAt.getTime() < LOCK_TTL_MS;
+  return latest.externalId === null && !activeLock ? candidate : null;
 }
 
 async function findRegistryDiscoveryStatement(
@@ -462,12 +619,9 @@ export async function reconcileRemovalMembership(
   ghgStatementId: string,
   externalRemovalIds: string[],
   tx?: Tx,
+  mode: "full" | "unlink-only" = "full",
 ): Promise<ReconcileResult> {
   requireOrgScope(ctx);
-  if (externalRemovalIds.length === 0) {
-    return { linkedRemovalIds: [], warnings: [] };
-  }
-
   const run = async (tx: Tx): Promise<ReconcileResult> => {
     // 0. Resolve the target statement's facility so every subsequent step
     //    refuses to stamp a removal that lives in a different facility.
@@ -510,34 +664,41 @@ export async function reconcileRemovalMembership(
       }
     }
 
-    // 2. Lock the candidate removal rows and read their current membership +
-    //    facility, so the link decision and the write are atomic (no steal,
-    //    no race) and we can drop any removal whose facility doesn't match
-    //    the target statement.
+    // 2. Lock both candidates and removals currently owned by this statement.
+    //    The latter lets registry membership shrink authoritatively, including
+    //    to an empty set, without touching another statement's members.
     const candidateIds = [...new Set(externalToLocal.values())];
     const currentMembership = new Map<string, string | null>();
-    if (candidateIds.length > 0) {
-      const current = await tx
-        .select({
-          id: certifierRemovals.id,
-          facilityId: certifierRemovals.facilityId,
-          ghgStatementId: certifierRemovals.ghgStatementId,
-        })
-        .from(certifierRemovals)
-        .where(and(inArray(certifierRemovals.id, candidateIds), eq(certifierRemovals.organizationId, ctx.organizationId)))
-        .for("update");
-      for (const r of current) {
-        if (r.facilityId !== targetFacilityId) {
-          // Drop the mapping so decideRemovalMembership never sees an
-          // out-of-facility candidate. The corresponding external id falls
-          // through to the "no local record" warning path.
-          for (const [extId, localId] of externalToLocal) {
-            if (localId === r.id) externalToLocal.delete(extId);
-          }
-          continue;
+    const current = await tx
+      .select({
+        id: certifierRemovals.id,
+        facilityId: certifierRemovals.facilityId,
+        ghgStatementId: certifierRemovals.ghgStatementId,
+      })
+      .from(certifierRemovals)
+      .where(
+        and(
+          or(
+            candidateIds.length > 0
+              ? inArray(certifierRemovals.id, candidateIds)
+              : undefined,
+            eq(certifierRemovals.ghgStatementId, ghgStatementId),
+          ),
+          eq(certifierRemovals.organizationId, ctx.organizationId),
+        ),
+      )
+      .for("update");
+    for (const r of current) {
+      if (r.facilityId !== targetFacilityId) {
+        // Drop the mapping so decideRemovalMembership never sees an
+        // out-of-facility candidate. The corresponding external id falls
+        // through to the "no local record" warning path.
+        for (const [extId, localId] of externalToLocal) {
+          if (localId === r.id) externalToLocal.delete(extId);
         }
-        currentMembership.set(r.id, r.ghgStatementId);
+        continue;
       }
+      currentMembership.set(r.id, r.ghgStatementId);
     }
 
     // 3. Pure decision — what to link, what to warn about. No steal.
@@ -552,7 +713,7 @@ export async function reconcileRemovalMembership(
     //    is redundant under the FOR UPDATE lock but kept as belt-and-braces.
     //    The facilityId predicate mirrors step 0 so the write itself cannot
     //    cross facility boundaries even if the in-memory filter slipped.
-    if (decision.toLink.length > 0) {
+    if (mode === "full" && decision.toLink.length > 0) {
       await tx
         .update(certifierRemovals)
         .set({ ghgStatementId, updatedAt: sql`now()` })
@@ -561,6 +722,27 @@ export async function reconcileRemovalMembership(
             inArray(certifierRemovals.id, decision.toLink),
             eq(certifierRemovals.facilityId, targetFacilityId),
             isNull(certifierRemovals.ghgStatementId),
+            eq(certifierRemovals.organizationId, ctx.organizationId),
+          ),
+        );
+    }
+
+    const linkedSet = new Set(decision.linkedRemovalIds);
+    const toUnlink = current
+      .filter(
+        (removal) =>
+          removal.ghgStatementId === ghgStatementId &&
+          !linkedSet.has(removal.id),
+      )
+      .map((removal) => removal.id);
+    if (toUnlink.length > 0) {
+      await tx
+        .update(certifierRemovals)
+        .set({ ghgStatementId: null, updatedAt: sql`now()` })
+        .where(
+          and(
+            inArray(certifierRemovals.id, toUnlink),
+            eq(certifierRemovals.ghgStatementId, ghgStatementId),
             eq(certifierRemovals.organizationId, ctx.organizationId),
           ),
         );
