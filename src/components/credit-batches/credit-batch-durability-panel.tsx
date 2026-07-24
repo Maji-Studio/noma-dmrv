@@ -24,7 +24,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { EmptyState } from "@/components/ui/empty-state";
 import { buttonVariants } from "@/components/ui/button";
-import { InfoHint } from "@/components/ui/tooltip";
+import { SectionLabel } from "@/components/forms";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
 import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 import type {
@@ -36,31 +36,29 @@ import {
   DurabilityReadinessSignals,
   formatDurabilityStat,
 } from "@/components/certification/durability-readiness";
-import { sampleCreateHref } from "@/components/samples/sample-create-intent";
+import { sampleCreateHref } from "@/lib/sample-create-intent";
 
 function Section({ children }: { children: React.ReactNode }) {
   return (
     <section
       data-testid="credit-batch-durability-panel"
-      className="flex flex-col gap-16 bg-[var(--panel-bg)] [border:var(--panel-border)] p-24"
+      className="flex flex-col gap-16 border-t border-[var(--color-border-tertiary)] pt-16"
     >
-      <div className="flex flex-col gap-4">
-        <h2 className="title-heading-3 flex items-center gap-6 text-[var(--color-text-primary)]">
-          Lab samples
-          <InfoHint>
+      <SectionLabel
+        hint={
+          <>
             Samples from this batch&apos;s production runs are pooled into one
             batch-level figure (mean ± standard deviation) — that is what the
-            registry receives for the 200-year durability claim. Protocol rules
-            (module §8.3.1, §3 Table 2): at least 3 independent samples across
-            distinct runs/days, eligible when the pooled mean H/C_org &lt;{" "}
-            {DURABILITY_ELIGIBILITY_CEILINGS.hToC} and O/C_org &lt;{" "}
+            registry receives for the 200-year durability claim. Protocol
+            rules (module §8.3.1, §3 Table 2): at least 3 independent samples
+            across distinct runs/days, eligible when the pooled mean H/C_org
+            &lt; {DURABILITY_ELIGIBILITY_CEILINGS.hToC} and O/C_org &lt;{" "}
             {DURABILITY_ELIGIBILITY_CEILINGS.oToC}.
-          </InfoHint>
-        </h2>
-        <p className="body-small text-[var(--color-text-secondary)]">
-          Sample coverage and chemistry eligibility for this batch.
-        </p>
-      </div>
+          </>
+        }
+      >
+        Lab samples
+      </SectionLabel>
       {children}
     </section>
   );

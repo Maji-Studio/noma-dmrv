@@ -16,23 +16,25 @@ import Link from "next/link";
 import {
   ArrowRightIcon,
   ArrowSquareOutIcon,
-  CheckCircleIcon,
   ShieldCheckIcon,
-  WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { SectionLabel } from "@/components/forms";
 import { InfoHint, Tooltip } from "@/components/ui/tooltip";
 import { useBatchHealth } from "@/hooks/use-certification";
 import type { BatchHealth, BatchHealthCheck } from "@/lib/certification/batch-health";
 import type { CreditBatchProductionRunOption } from "@/data-access/credit-batches";
 import { formatDate, formatTonnes } from "@/lib/format-utils";
-import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
+import {
+  batchHealthFixLinkFor,
+  compactBatchHealthDetail,
+} from "@/lib/certification/batch-health-links";
 import { cn } from "@/lib/utils";
 
 /** Stagger between open-row entrance reveals (ms). */
 const ROW_STAGGER_MS = 60;
 const AFFECTED_RECORD_PREVIEW_LIMIT = 4;
+const OPEN_CHECK_DETAIL_MAX_CHARS = 120;
 
 function AffectedRecordChips({
   check,
@@ -126,43 +128,38 @@ function OpenCheckRow({
 
   return (
     <li
-      className="animate-gate-row flex flex-col gap-12 border-l-2 border-[var(--st-wait)] bg-[var(--st-wait-bg)] px-16 py-12 sm:flex-row sm:items-center sm:justify-between sm:gap-16"
+      className="animate-gate-row flex flex-col gap-12 border-l-2 border-[var(--color-border-secondary)] bg-[var(--sea)] px-16 py-12"
       style={{ animationDelay: `${index * ROW_STAGGER_MS}ms` }}
     >
-      <div className="flex items-start gap-10">
-        <WarningIcon
-          size={16}
-          weight="fill"
-          className="mt-1 shrink-0 text-[var(--st-wait)]"
-        />
-        <div className="flex min-w-0 flex-col gap-2">
-          {/* The one plain-language requirement string — identical to the
-              removal wizard's gap row (Phase 0). Neutral, so it reads correctly
-              next to this warning icon without saying "…complete". The raw
-              protocol reasoning is tucked behind the ⓘ "Why?" (Phase 1). */}
-          <span className="inline-flex items-center gap-6 body-medium font-medium text-[var(--color-text-primary)]">
-            {check.requirementLabel}
-            {check.whyDetail && (
-              <InfoHint label="Why is this required?">{check.whyDetail}</InfoHint>
+      <div className="flex min-w-0 flex-col gap-2">
+        {/* The one plain-language requirement string — identical to the
+            removal wizard's gap row (Phase 0). The protocol reasoning is
+            tucked behind the "Why?" hint (Phase 1). */}
+        <span className="inline-flex items-center gap-6 body-medium font-medium text-[var(--color-text-primary)]">
+          {check.requirementLabel}
+          {check.whyDetail && (
+            <InfoHint label="Why is this required?">{check.whyDetail}</InfoHint>
+          )}
+        </span>
+        {check.detail && (
+          <span className="body-caption text-[var(--color-text-secondary)]">
+            {compactBatchHealthDetail(
+              check.detail.replace(/^Missing:\s*/i, ""),
+              OPEN_CHECK_DETAIL_MAX_CHARS,
             )}
           </span>
-          {check.detail && (
-            <span className="body-caption text-[var(--color-text-secondary)]">
-              {check.detail}
-            </span>
-          )}
-          <AffectedRecordChips
-            check={check}
-            productionRuns={productionRuns}
-            feedstockName={feedstockName}
-          />
-        </div>
+        )}
+        <AffectedRecordChips
+          check={check}
+          productionRuns={productionRuns}
+          feedstockName={feedstockName}
+        />
       </div>
       <Link
         href={fix.href}
         className={cn(
           buttonVariants({ variant: "default", size: "small" }),
-          "shrink-0 self-start sm:self-center"
+          "shrink-0 self-start",
         )}
       >
         {fix.label}
@@ -173,26 +170,6 @@ function OpenCheckRow({
         )}
       </Link>
     </li>
-  );
-}
-
-/** Right-aligned header status: a single state badge. */
-function GateStatus({ health }: { health: BatchHealth }) {
-  if (health.state === "ready") {
-    return (
-      <StatusBadge
-        status="ready"
-        label="Ready to certify"
-        icon={<CheckCircleIcon size={14} weight="fill" />}
-      />
-    );
-  }
-  return (
-    <StatusBadge
-      status="pending"
-      label={`${health.issueCount} ${health.issueCount === 1 ? "issue" : "issues"} open`}
-      icon={<WarningIcon size={14} weight="fill" />}
-    />
   );
 }
 
@@ -219,11 +196,8 @@ function GateBody({
           weight="fill"
           className="shrink-0 text-[var(--st-ok)]"
         />
-        <p className="body-small text-[var(--color-text-secondary)]">
-          <span className="font-medium text-[var(--color-text-primary)]">
-            All checks passed.
-          </span>{" "}
-          This batch has everything it needs to be submitted for certification.
+        <p className="body-small font-medium text-[var(--color-text-primary)]">
+          All checks passed.
         </p>
       </div>
     );
@@ -262,21 +236,16 @@ export function CreditBatchHealthStrip({
 
   return (
     <section
-      className="flex flex-col gap-20 bg-[var(--panel-bg)] [border:var(--panel-border)] p-24"
+      className="flex flex-col gap-16 border-t border-[var(--color-border-tertiary)] pt-16"
       data-testid="batch-health-strip"
     >
-      <div className="flex flex-col gap-12 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex max-w-[680px] flex-col gap-4">
-          <h2 className="title-heading-3 text-[var(--color-text-primary)]">
-            Certification readiness
-          </h2>
+      <div className="flex max-w-[680px] flex-col gap-4">
+        <SectionLabel>Certification requirements</SectionLabel>
+        {hasOpenIssues && (
           <p className="body-small text-[var(--color-text-secondary)]">
-            {hasOpenIssues
-              ? "Fix the items below before this batch can be submitted for certification."
-              : "Everything this batch needs before it can be submitted for certification."}
+            Complete these before adding this batch to a Removal.
           </p>
-        </div>
-        {health && <GateStatus health={health} />}
+        )}
       </div>
 
       {isLoading ? (
