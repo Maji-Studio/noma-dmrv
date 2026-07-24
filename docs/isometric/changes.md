@@ -31,7 +31,7 @@ version audit below:
   `versions.json`, so the submit preflight now expects "1.1".
   **Gap-check (same day):** the v1.1 re-verification ran — full report in
   [`docs/archive/2026-07-24-isometric-gap-check-v1-1.md`](../archive/2026-07-24-isometric-gap-check-v1-1.md)
-  (348 atoms, 151 confirmed findings: 9 P0 / 78 P1 / 64 advisory; the P0s all
+  (328 atoms, 151 confirmed findings: 9 P0 / 78 P1 / 64 advisory; the P0s all
   map to already-tracked open P0-checklist items). Its adversarial pass
   corrected this entry's own first draft: **WBC contaminant thresholds bind
   under agricultural-soils v1.1** — do not treat requirements as v1.2-only
@@ -46,6 +46,11 @@ version audit below:
   (`src/fn/certification/submit-removal.ts:submitRemoval` continues to validate
   local template-to-facility-tier agreement; the API still exposes no project
   durability field for an automated preflight).
+
+Existing demo databases require a reset/reseed (or an operator mapping update)
+to store protocol version 1.1: `src/db/seed-data.ts` deliberately skips the
+whole seed when its facility already exists, so this change does not backfill
+an existing mapping.
 
 ## 2026-07-24 (GHG Statement registry reconciliation)
 

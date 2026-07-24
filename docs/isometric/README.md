@@ -4,7 +4,7 @@
 
 ## Scope
 
-- **In scope:** `biochar` pathway + `biochar-storage-soil-environments` storage module
+- **In scope:** `biochar` pathway + `biochar-storage-agricultural-soils` storage module
 - **Out of scope:** built-environment storage, low-oxygen storage, non-biochar pathways
 - **Version authority:** `versions.json` is the single version pin file
 
