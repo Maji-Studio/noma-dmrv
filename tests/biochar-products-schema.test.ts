@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { biocharProductFormSchema } from "@/schemas/biochar-products";
+import {
+  biocharProductFilterSchema,
+  biocharProductFormSchema,
+} from "@/schemas/biochar-products";
 
 // productionDate is intentionally absent: a biochar product's production date is
 // the linked run's date (when the biochar was produced), derived server-side in
@@ -64,5 +67,14 @@ describe("biocharProductFormSchema", () => {
     if (result.success) {
       expect(result.data).not.toHaveProperty("productionDate");
     }
+  });
+});
+
+describe("biocharProductFilterSchema", () => {
+  it("accepts a credit-batch deep-link filter", () => {
+    const creditBatchId = "55555555-5555-4555-8555-555555555555";
+    const result = biocharProductFilterSchema.parse({ creditBatchId });
+
+    expect(result.creditBatchId).toBe(creditBatchId);
   });
 });

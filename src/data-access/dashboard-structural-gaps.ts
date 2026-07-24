@@ -66,6 +66,7 @@ export type DashboardStructuralGapKey =
 export interface DashboardStructuralGap {
   key: DashboardStructuralGapKey;
   label: string;
+  metadata: string;
   count: number;
   href: string;
 }
@@ -213,6 +214,24 @@ function parentEditorHref(
   });
 }
 
+function transportTargetForm(target: TransportGapTarget | null): string {
+  const formNames: Record<TransportGapTarget["entityType"], string> = {
+    feedstock: "Feedstock form",
+    biochar: "Biochar product form",
+    sample: "Sample form",
+    delivery: "Delivery form",
+  };
+  return formNames[target?.entityType ?? "feedstock"];
+}
+
+function structuralGapMetadata(
+  form: string,
+  section: string,
+  count: number,
+): string {
+  return `${form} · ${section} · ${count} affected`;
+}
+
 export function buildDashboardStructuralGaps(
   counts: DashboardStructuralGapCounts,
   facilityId: string,
@@ -226,18 +245,33 @@ export function buildDashboardStructuralGaps(
     {
       key: "facilityGps" as const,
       label: "Facility GPS missing",
+      metadata: structuralGapMetadata(
+        "Facility form",
+        "Location",
+        counts.missingFacilityGps,
+      ),
       count: counts.missingFacilityGps,
       href: `/facilities${facilityQuery}`,
     },
     {
       key: "feedstockGps" as const,
       label: "Feedstock GPS missing",
+      metadata: structuralGapMetadata(
+        "Supplier form",
+        "Location",
+        counts.missingFeedstockGps,
+      ),
       count: counts.missingFeedstockGps,
       href: supplierHref,
     },
     {
       key: "transportEndpointGps" as const,
       label: "Transport endpoint GPS missing",
+      metadata: structuralGapMetadata(
+        transportTargetForm(counts.transportEndpointGpsTarget),
+        "Transport route",
+        counts.transportEndpointGpsGaps,
+      ),
       count: counts.transportEndpointGpsGaps,
       href: parentEditorHref(
         facilityId,
@@ -248,6 +282,11 @@ export function buildDashboardStructuralGaps(
     {
       key: "transportDistanceEvidence" as const,
       label: "Transport distance lacks document evidence",
+      metadata: structuralGapMetadata(
+        transportTargetForm(counts.transportDistanceEvidenceTarget),
+        "Transport evidence",
+        counts.transportDistanceEvidenceGaps,
+      ),
       count: counts.transportDistanceEvidenceGaps,
       href: parentEditorHref(
         facilityId,

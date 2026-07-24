@@ -50,19 +50,29 @@ const CARBON_INPUT_LABELS: Record<string, string> = {
   stdNonReactiveCarbonPercent: "Std dev of non-reactive carbon",
 };
 
+const COMPLETE_CHEMISTRY_REPLICATE_DETAIL =
+  "replicate(s) with complete H/C_org + O/C_org chemistry";
+
 function carbonMissingInputs(
   ctx: RemovalCertifyContext,
   batchId: string,
 ): string[] {
   const member = ctx.memberBatches.find((b) => b.id === batchId);
   const raw = member?.co2eStoredPreview?.missingInputs ?? [];
+  const hasReplicateShortfall = raw.includes("thousandYearReplicates");
   return Array.from(
     new Set(
       [
         ...raw
           .filter((key) => !NON_CARBON_MISSING_INPUTS.has(key))
           .map((key) => CARBON_INPUT_LABELS[key] ?? key),
-        ...(member?.durabilityGateBlockers ?? []),
+        ...(member?.durabilityGateBlockers ?? []).filter(
+          (blocker) =>
+            !(
+              hasReplicateShortfall &&
+              blocker.includes(COMPLETE_CHEMISTRY_REPLICATE_DETAIL)
+            ),
+        ),
       ],
     ),
   );

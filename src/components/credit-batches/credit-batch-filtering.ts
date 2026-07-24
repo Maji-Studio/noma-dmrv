@@ -3,6 +3,7 @@ import type { BatchHealthState } from "@/lib/certification/batch-health";
 import type { CreditBatchReadinessFilter } from "./credit-batch-filters";
 
 export interface CreditBatchFilterValues {
+  search?: string;
   startDate: string;
   endDate: string;
   feedstockTypeIds: string[];
@@ -35,8 +36,13 @@ export function filterCreditBatches(
   filters: CreditBatchFilterValues,
 ): CreditBatchWithRelations[] {
   const selectedFeedstocks = new Set(filters.feedstockTypeIds);
+  const search = filters.search?.trim().toLocaleLowerCase() ?? "";
 
   return batches.filter((batch) => {
+    const matchesSearch =
+      !search ||
+      batch.code.toLocaleLowerCase().includes(search) ||
+      batch.feedstockTypeName?.toLocaleLowerCase().includes(search);
     const overlapsDateRange =
       (!filters.startDate || batch.endDate >= filters.startDate) &&
       (!filters.endDate || batch.startDate <= filters.endDate);
@@ -49,6 +55,11 @@ export function filterCreditBatches(
       (filters.readiness === "ready" && healthState === "ready") ||
       (filters.readiness === "needs_attention" && healthState === "incomplete");
 
-    return overlapsDateRange && matchesFeedstock && matchesReadiness;
+    return (
+      matchesSearch &&
+      overlapsDateRange &&
+      matchesFeedstock &&
+      matchesReadiness
+    );
   });
 }

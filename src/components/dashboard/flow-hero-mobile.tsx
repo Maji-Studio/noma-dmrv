@@ -12,6 +12,8 @@ import type {
   DashboardStation,
   DashboardStationKey,
 } from "@/data-access/dashboard-overview";
+import { STATUS_STATE_COLOR_TOKENS } from "@/lib/status-state";
+import { deriveWorstDashboardState } from "./dashboard-status-state";
 import { formatTonnes } from "./flow-hero-scene";
 
 /** Compact glyph per station, referencing the shared defs. */
@@ -90,6 +92,12 @@ export function FlowHeroMobile({ stations, massFlow }: FlowHeroMobileProps) {
       {stations.map((station, index) => {
         const glyph = STATION_GLYPH[station.key];
         const segment = index < massFlow.length ? massFlow[index] : undefined;
+        const stationState = deriveWorstDashboardState(
+          station.reasons.map((reason) => reason.state),
+        );
+        const runningReason = station.reasons.find(
+          (reason) => reason.state === "in-progress",
+        );
         return (
           <div key={station.key} className="flex flex-col">
             <Link
@@ -117,21 +125,22 @@ export function FlowHeroMobile({ stations, massFlow }: FlowHeroMobileProps) {
                 <span className="text-[13.5px] font-bold">{station.name}</span>
                 <span className="font-[family-name:var(--font-mono)] text-[9px] uppercase tracking-[0.08em] text-[var(--clr-dark-purple-50)]">
                   {station.totalLabel}
-                  {station.reasons.some((reason) => reason.tone === "run")
-                    ? ` · ${station.reasons.find((reason) => reason.tone === "run")?.text}`
-                    : ""}
+                  {runningReason ? ` · ${runningReason.text}` : ""}
                 </span>
               </span>
               {station.attention > 0 && (
                 <span
-                  className="rounded-full bg-[var(--st-wait)] px-8 py-4 font-[family-name:var(--font-mono)] text-[10px] leading-none text-white"
+                  className="rounded-full px-8 py-4 font-[family-name:var(--font-mono)] text-[10px] leading-none text-white"
+                  style={{
+                    background: STATUS_STATE_COLOR_TOKENS[stationState],
+                  }}
                   aria-label={
                     // Screen readers otherwise hear a bare number; spell out
                     // the count and the reasons behind it.
                     [
-                      `${station.attention} needing attention`,
+                      `${station.attention} requiring action`,
                       ...station.reasons
-                        .filter((reason) => reason.tone === "wait")
+                        .filter((reason) => reason.state !== "in-progress")
                         .map((reason) => reason.text),
                     ].join(": ")
                   }

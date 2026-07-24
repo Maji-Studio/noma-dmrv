@@ -2,10 +2,12 @@
 
 import { CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
+import {
+  DEFAULT_LIST_PAGE_SIZE,
+  LIST_PAGE_SIZE_OPTIONS,
+} from "@/config/list-controls";
 import { cn } from "@/lib/utils";
 
-const DEFAULT_ROWS_PER_PAGE_OPTIONS = [10, 20, 30, 50];
-const DEFAULT_PAGE_SIZE = DEFAULT_ROWS_PER_PAGE_OPTIONS[0];
 const PAGINATION_NAV_BUTTON_CLASS = "h-44 w-44 sm:h-32 sm:w-32";
 
 interface ListPaginationProps {
@@ -14,7 +16,7 @@ interface ListPaginationProps {
   pageSize: number;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
-  rowsPerPageOptions?: number[];
+  rowsPerPageOptions?: readonly number[];
   showRowsPerPage?: boolean;
   leadingContent?: React.ReactNode;
   className?: string;
@@ -30,7 +32,7 @@ function ListPagination({
   pageSize,
   onPageChange,
   onPageSizeChange,
-  rowsPerPageOptions = DEFAULT_ROWS_PER_PAGE_OPTIONS,
+  rowsPerPageOptions = LIST_PAGE_SIZE_OPTIONS,
   showRowsPerPage = true,
   leadingContent,
   className,
@@ -124,5 +126,5 @@ function ListPagination({
   );
 }
 
-export { DEFAULT_PAGE_SIZE, ListPagination };
+export { DEFAULT_LIST_PAGE_SIZE as DEFAULT_PAGE_SIZE, ListPagination };
 export type { ListPaginationProps };

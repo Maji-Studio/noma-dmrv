@@ -1,4 +1,17 @@
-import { desc, eq, count, sum, ne, and, inArray, isNull, SQL, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNull,
+  ne,
+  or,
+  SQL,
+  sql,
+  sum,
+} from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db, type DbTransaction } from "@/db";
 import { numericAggregate } from "@/db/aggregate";
@@ -22,6 +35,7 @@ import { tonnesToKg, kgToTonnes, KG_PER_TONNE } from "@/lib/calculations/unit-co
 import { checkDeliveryCapacity } from "@/lib/calculations/delivery-inventory";
 import type {
   ApplicationEvidenceMethod,
+  ApplicationStatus,
   CreateApplicationData,
   UpdateApplicationData,
 } from "@/schemas/applications";
@@ -29,6 +43,7 @@ import type { DeliveryStatus } from "@/schemas/deliveries";
 
 import { requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
+import { inCreditBatchLineage } from "./credit-batch-lineage-filter";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
 import { applicationEvidenceGapCountSql } from "./application-evidence-sql";
 import { retireDocumentsForEntities } from "./documents";
@@ -269,9 +284,20 @@ export interface ApplicationListItem extends Application {
   durabilityOption: "200_year" | "1000_year";
 }
 
+export interface ApplicationListOptions {
+  page?: number;
+  pageSize?: number;
+  facilityId?: string;
+  creditBatchId?: string;
+  ids?: string[];
+  search?: string;
+  status?: ApplicationStatus;
+  evidenceMethod?: ApplicationEvidenceMethod;
+}
+
 export async function getApplications(
   ctx: OrgContext,
-  options?: { page?: number; pageSize?: number; facilityId?: string; ids?: string[] }
+  options?: ApplicationListOptions,
 ): Promise<{ items: ApplicationListItem[]; total: number; page: number; pageSize: number; totalPages: number }> {
   requireOrgScope(ctx);
 
@@ -287,8 +313,45 @@ export async function getApplications(
   if (options?.facilityId) {
     conditions.push(eq(deliveries.facilityId, options.facilityId));
   }
+  if (options?.creditBatchId) {
+    conditions.push(
+      inCreditBatchLineage(
+        ctx,
+        options.creditBatchId,
+        sql`coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+      ),
+    );
+  }
   if (options?.ids?.length) {
     conditions.push(inArray(applications.id, options.ids));
+  }
+  if (options?.search?.trim()) {
+    const searchPattern = `%${options.search.trim()}%`;
+    conditions.push(
+      or(
+        ilike(applications.code, searchPattern),
+        ilike(deliveries.code, searchPattern),
+        ilike(applications.fieldIdentifier, searchPattern),
+        ilike(applications.cropType, searchPattern),
+        ilike(customers.name, searchPattern),
+        ilike(customerLocations.name, searchPattern),
+      )!,
+    );
+  }
+  if (options?.status) {
+    conditions.push(eq(applications.status, options.status));
+  }
+  if (options?.evidenceMethod) {
+    // Legacy rows with no stored method render as Visual throughout the UI,
+    // so the server facet must preserve that same fallback.
+    conditions.push(
+      options.evidenceMethod === "visual"
+        ? or(
+            eq(applications.evidenceMethod, options.evidenceMethod),
+            isNull(applications.evidenceMethod),
+          )!
+        : eq(applications.evidenceMethod, options.evidenceMethod),
+    );
   }
 
   const whereClause = and(...conditions);
@@ -297,6 +360,18 @@ export async function getApplications(
     .select({ totalCount: count() })
     .from(applications)
     .innerJoin(deliveries, and(eq(applications.deliveryId, deliveries.id), eq(deliveries.organizationId, ctx.organizationId)))
+    .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
+    .leftJoin(customers, and(eq(orders.customerId, customers.id), eq(customers.organizationId, ctx.organizationId)))
+    .leftJoin(
+      customerLocations,
+      and(
+        eq(
+          customerLocations.id,
+          sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+        ),
+        eq(customerLocations.organizationId, ctx.organizationId),
+      ),
+    )
     .where(whereClause);
 
   const total = Number(totalCount);
@@ -337,9 +412,12 @@ export async function getApplications(
     .leftJoin(customers, and(eq(orders.customerId, customers.id), eq(customers.organizationId, ctx.organizationId)))
     .leftJoin(
       customerLocations,
-      eq(
-        customerLocations.id,
-        sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+      and(
+        eq(
+          customerLocations.id,
+          sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
+        ),
+        eq(customerLocations.organizationId, ctx.organizationId),
       ),
     )
     .where(whereClause)

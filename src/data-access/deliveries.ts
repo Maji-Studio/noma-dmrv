@@ -6,7 +6,6 @@
 import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, sql, SQL, count } from "drizzle-orm";
 import type { OrgContext } from "@/lib/auth/server";
 import { db } from "@/db";
-import { sumNumeric } from "@/db/aggregate";
 import {
   deliveries,
   orders,
@@ -79,14 +78,6 @@ export interface DeliveryDetail extends Delivery {
   } | null;
 }
 
-export interface DeliveryStats {
-  totalDeliveries: number;
-  totalDeliveredWetMassKg: number;
-  totalMassDryKg: number;
-  upcomingCount: number;
-  deliveredCount: number;
-}
-
 // Auth guards
 import { assertSameOrg, requireOrgScope } from "./utils";
 import { SafeError } from "@/lib/errors";
@@ -105,12 +96,13 @@ import {
   lockBiocharTransportRouteTopology,
   syncBiocharProductTransportLegs,
 } from "./transport-legs";
+import { inCreditBatchLineage } from "./credit-batch-lineage-filter";
 
 // ============================================
 // Read Operations
 // ============================================
 
-type DeliveryColumnAvailability = {
+export type DeliveryColumnAvailability = {
   distanceKmOverride: boolean;
   distanceSource: boolean;
   distanceNote: boolean;
@@ -120,7 +112,7 @@ type DeliveryColumnAvailability = {
 
 let deliveryColumnAvailabilityPromise: Promise<DeliveryColumnAvailability> | null = null;
 
-async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAvailability> {
+export async function getDeliveryColumnAvailability(): Promise<DeliveryColumnAvailability> {
   if (!deliveryColumnAvailabilityPromise) {
     deliveryColumnAvailabilityPromise = db
       .execute<{ column_name: string }>(sql`
@@ -193,7 +185,7 @@ function getDeliveryBaseSelection(columns: DeliveryColumnAvailability) {
 }
 
 /** Archived-row filter, skipped while the column has not been migrated yet. */
-function activeDeliveriesCondition(columns: DeliveryColumnAvailability): SQL[] {
+export function activeDeliveriesCondition(columns: DeliveryColumnAvailability): SQL[] {
   return columns.archivedAt ? [isNull(deliveries.archivedAt)] : [];
 }
 
@@ -211,6 +203,7 @@ export async function getDeliveries(
     search,
     orderId,
     facilityId,
+    creditBatchId,
     status,
     fromDate,
     toDate,
@@ -237,6 +230,16 @@ export async function getDeliveries(
 
   if (facilityId) {
     conditions.push(eq(deliveries.facilityId, facilityId));
+  }
+
+  if (creditBatchId) {
+    conditions.push(
+      inCreditBatchLineage(
+        ctx,
+        creditBatchId,
+        sql`coalesce(${deliveries.biocharProductId}, ${orders.biocharProductId})`,
+      ),
+    );
   }
 
   if (status) {
@@ -271,6 +274,7 @@ export async function getDeliveries(
   const [{ totalCount }] = await db
     .select({ totalCount: count() })
     .from(deliveries)
+    .leftJoin(orders, and(eq(deliveries.orderId, orders.id), eq(orders.organizationId, ctx.organizationId)))
     .where(whereClause);
 
   const total = Number(totalCount);
@@ -466,73 +470,6 @@ export async function getDeliveryWithRelations(
           identifier: deliveryRow.vehicleIdentifier ?? "",
         }
       : null,
-  };
-}
-
-/**
- * Get delivery statistics
- */
-export async function getDeliveryStats(
-  ctx: OrgContext,
-  filters?: { facilityId?: string; fromDate?: Date; toDate?: Date }
-): Promise<DeliveryStats> {
-  requireOrgScope(ctx);
-  const deliveryColumns = await getDeliveryColumnAvailability();
-
-  const conditions: SQL[] = [eq(deliveries.organizationId, ctx.organizationId), ...activeDeliveriesCondition(deliveryColumns)];
-
-  if (filters?.facilityId) {
-    conditions.push(eq(deliveries.facilityId, filters.facilityId));
-  }
-
-  if (filters?.fromDate) {
-    conditions.push(gte(deliveries.deliveryDate, filters.fromDate));
-  }
-
-  if (filters?.toDate) {
-    conditions.push(lte(deliveries.deliveryDate, filters.toDate));
-  }
-
-  const whereClause = and(...conditions);
-
-  // Get aggregate stats
-  // org-scope-ok: whereClause includes the active organization predicate.
-  const [stats] = await db
-    .select({
-      totalDeliveries: count(),
-      totalDeliveredWetMassKg: sumNumeric(
-        deliveries.deliveredWetMassKg,
-        sql`${deliveries.status} = 'delivered'`,
-      ),
-      totalMassDryKg: sumNumeric(
-        deliveries.massDryKg,
-        sql`${deliveries.status} = 'delivered'`,
-      ),
-    })
-    .from(deliveries)
-    .where(whereClause);
-
-  // Get counts by status
-  // org-scope-ok: whereClause includes the active organization predicate.
-  const statusCounts = await db
-    .select({
-      status: deliveries.status,
-      count: count(),
-    })
-    .from(deliveries)
-    .where(whereClause)
-    .groupBy(deliveries.status);
-
-  const statusCountMap = new Map(
-    statusCounts.map((s) => [s.status, Number(s.count)])
-  );
-
-  return {
-    totalDeliveries: Number(stats.totalDeliveries),
-    totalDeliveredWetMassKg: stats.totalDeliveredWetMassKg || 0,
-    totalMassDryKg: stats.totalMassDryKg || 0,
-    upcomingCount: statusCountMap.get("upcoming") ?? 0,
-    deliveredCount: statusCountMap.get("delivered") ?? 0,
   };
 }
 

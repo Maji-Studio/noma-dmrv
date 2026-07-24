@@ -76,6 +76,7 @@ Rankings below are **higher = better**. Cost reflects what I actually pay (gpt-5
 - User-facing (UI, copy, API design) needs **taste ≥ 7**. Utilize frontend-design skill
 - Reviews of plans/implementations → **fable-5 or gpt-5.6-sol**, optionally opus-4.8 as an extra independent perspective.
 - **Never use Haiku.** Subagents/Workflow agents run on **sonnet or opus — never inherit Fable**. Batch items to keep agent counts low.
+- Don't use Fable for workflows, except its been asked. Use instead opus-4.8 or gpt-5.6-sol.
 
 **Mechanics** — the Codex model (**gpt-5.6-sol high**; the flat-rate slot formerly called "gpt-5.5") is only reachable through the Codex CLI (`codex exec` / `codex review`; `~/.codex/config.toml` sets the default model + effort; binary at `~/Library/pnpm/bin/codex`, needs codex-cli ≥ 0.144 for gpt-5.6-sol; fallback `/Applications/ChatGPT.app/Contents/Resources/codex`). Use the **codex-implementation**, **codex-review**, **codex-computer-use** skills; for uncovered work (investigation, data analysis) run `codex exec -s read-only` directly with a self-contained prompt. Claude models run via the Agent/Workflow `model` parameter.
 

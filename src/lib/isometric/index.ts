@@ -72,13 +72,11 @@ export {
   createSource,
   requestSignedUploadUrl,
   findSourceBySupplierRef,
-  patchSource,
   type CreateDocumentSourceRequest,
   type CreateSourceResponse,
   type Source,
   type SignedUploadUrlRequest,
   type SignedUploadUrlResult,
-  type PatchSourceRequest,
 } from "./sources";
 export {
   reconcileRemoval,

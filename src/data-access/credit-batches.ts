@@ -59,8 +59,18 @@ import {
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { assertUnsampledBatchEligibility } from "@/lib/certification/credit-batch-sampling";
+import {
+  COMPLETED_PRODUCTION_RUN_STATUS,
+  type ProductionRunStatus,
+} from "@/lib/production-runs/lifecycle";
 import { retireDocumentsForEntities } from "./documents";
 import { assertRemovalAllowsCreditBatchMutation } from "./credit-batch-certification-lock";
+
+const CREDIT_BATCH_PREVIEW_PRODUCTION_RUN_STATUSES = [
+  "draft",
+  "running",
+  COMPLETED_PRODUCTION_RUN_STATUS,
+] as const;
 
 export { getApplicationsForRuns } from "./credit-batch-production-runs";
 export type { ApplicationForRun } from "./credit-batch-production-runs";
@@ -114,7 +124,7 @@ export interface CreditBatchProductionRunOption {
   id: string;
   code: string;
   date: string;
-  status: string;
+  status: ProductionRunStatus;
   biocharDryMassKg: number | null;
   /**
    * Run-local production-emission inputs, surfaced so the credit-batch form can
@@ -852,7 +862,9 @@ export async function getCreditBatchProductionRunOptions(
   const conditions = [
     eq(productionRuns.organizationId, ctx.organizationId),
     eq(productionRuns.facilityId, params.facilityId),
-    eq(productionRuns.status, "complete"),
+    inArray(productionRuns.status, [
+      ...CREDIT_BATCH_PREVIEW_PRODUCTION_RUN_STATUSES,
+    ]),
     isNull(productionRuns.archivedAt),
   ];
 

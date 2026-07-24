@@ -236,7 +236,8 @@ export const createProductionRunSchema = productionRunFormSchema.refine(
   (data) => allowedProductionRunStatusesFrom("draft").includes(data.status),
   {
     path: ["status"],
-    message: "A new production run can only start as Draft, Running, or Cancelled.",
+    message:
+      "A new production run can only start as Draft, Running, Complete, or Cancelled.",
   },
 );
 
@@ -324,6 +325,9 @@ export const productionRunFilterSchema = z.object({
 
   // Filter by facility
   facilityId: z.string().uuid().optional(),
+
+  // Filter by credit-batch membership
+  creditBatchId: z.string().uuid().optional(),
 
   // Filter by reactor
   reactorId: z.string().uuid().optional(),

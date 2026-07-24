@@ -39,6 +39,7 @@ import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "../utils";
 import { SafeError } from "@/lib/errors";
 import { productionRunDateExpr } from "./date-expr";
+import { inCreditBatchProductionRuns } from "../credit-batch-lineage-filter";
 import type { ProductionRunFilterData } from "@/schemas/production-runs";
 import type {
   ProductionRunFeedstockWithDetails,
@@ -67,6 +68,7 @@ export async function getProductionRuns(
     ids,
     search,
     facilityId,
+    creditBatchId,
     reactorId,
     status,
     startDate,
@@ -94,6 +96,12 @@ export async function getProductionRuns(
 
   if (facilityId) {
     conditions.push(eq(productionRuns.facilityId, facilityId));
+  }
+
+  if (creditBatchId) {
+    conditions.push(
+      inCreditBatchProductionRuns(ctx, creditBatchId, productionRuns.id),
+    );
   }
 
   if (reactorId) {
