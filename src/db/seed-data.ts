@@ -21,6 +21,7 @@ import {
 } from './seed-certification-evidence';
 import { seedProductionProcessesAndCreditBatches } from './seed-credit-batches';
 import { seedOperationalDetails } from './seed-operational-details';
+import { storeSyntheticSeedDocuments } from './seed-document-storage';
 import {
   DEC_ORG_ID,
   DEC_ORG_NAME,
@@ -29,6 +30,9 @@ import {
 } from './org-defaults';
 
 config({ path: '.env.local' });
+// Dev-only CLI: the lazily imported storage layer validates the full env
+// schema, which requires NODE_ENV — plain `pnpm db:seed` shells don't set it.
+(process.env as Record<string, string | undefined>).NODE_ENV ??= 'development';
 
 // Helper to generate deterministic UUIDs for demo data
 const demoId = (n: number) => `de000000-0000-4000-a000-${n.toString().padStart(12, '0')}`;
@@ -298,6 +302,10 @@ async function seedDemoData() {
       console.log(`Demo data already present (facility ${demoCodes.facilityMoshi}). Skipping.`);
       return;
     }
+
+    const { getStorageProvider } = await import('../lib/storage');
+    const storageProvider = getStorageProvider();
+    const uploadedSeedDocumentKeys: string[] = [];
 
     await db.transaction(async (tx) => {
       // ============================================================
@@ -1670,43 +1678,49 @@ async function seedDemoData() {
 
       console.log('Creating application boundary evidence documents...');
       await tx.insert(schema.documents).values(
-        buildApplicationBoundaryDocuments([
-          {
-            id: ids.applicationBoundaryDocument1,
-            applicationId: ids.application1,
-            applicationCode: 'AP-26-001',
-            capturedAt: demoTimestamps.application1Date,
-            fieldIdentifier: 'KILEMA-N-12',
-            boundaryReference: 'TZ-KLM-KILEMA-N12-2026',
-            fileName: 'AP-26-001-boundary-logbook.pdf',
-            fileSizeBytes: 184_320,
-          },
-          {
-            id: ids.applicationBoundaryDocument2,
-            applicationId: ids.application2,
-            applicationCode: 'AP-26-002',
-            capturedAt: demoTimestamps.application2Date,
-            fieldIdentifier: 'USAMBARA-E-1',
-            boundaryReference: 'TZ-TGA-LUSHOTO-E1-2026',
-            fileName: 'AP-26-002-boundary-logbook.pdf',
-            fileSizeBytes: 171_008,
-          },
-          {
-            id: ids.applicationBoundaryDocument3,
-            applicationId: ids.application3,
-            applicationCode: 'AP-26-003',
-            capturedAt: demoTimestamps.application3Date,
-            fieldIdentifier: 'MACHAME-S-8',
-            boundaryReference: 'TZ-KLM-MACHAME-S8-2026',
-            fileName: 'AP-26-003-boundary-logbook.pdf',
-            fileSizeBytes: 176_640,
-          },
-        ], DEC_ORG_ID)
+        await storeSyntheticSeedDocuments(
+          storageProvider,
+          buildApplicationBoundaryDocuments([
+            {
+              id: ids.applicationBoundaryDocument1,
+              applicationId: ids.application1,
+              applicationCode: 'AP-26-001',
+              capturedAt: demoTimestamps.application1Date,
+              fieldIdentifier: 'KILEMA-N-12',
+              boundaryReference: 'TZ-KLM-KILEMA-N12-2026',
+              fileName: 'AP-26-001-boundary-logbook.pdf',
+              fileSizeBytes: 184_320,
+            },
+            {
+              id: ids.applicationBoundaryDocument2,
+              applicationId: ids.application2,
+              applicationCode: 'AP-26-002',
+              capturedAt: demoTimestamps.application2Date,
+              fieldIdentifier: 'USAMBARA-E-1',
+              boundaryReference: 'TZ-TGA-LUSHOTO-E1-2026',
+              fileName: 'AP-26-002-boundary-logbook.pdf',
+              fileSizeBytes: 171_008,
+            },
+            {
+              id: ids.applicationBoundaryDocument3,
+              applicationId: ids.application3,
+              applicationCode: 'AP-26-003',
+              capturedAt: demoTimestamps.application3Date,
+              fieldIdentifier: 'MACHAME-S-8',
+              boundaryReference: 'TZ-KLM-MACHAME-S8-2026',
+              fileName: 'AP-26-003-boundary-logbook.pdf',
+              fileSizeBytes: 176_640,
+            },
+          ], DEC_ORG_ID),
+          uploadedSeedDocumentKeys,
+        ),
       );
 
       console.log('Creating transport evidence documents...');
       await tx.insert(schema.documents).values(
-        buildTransportEvidenceDocuments([
+        await storeSyntheticSeedDocuments(
+          storageProvider,
+          buildTransportEvidenceDocuments([
           {
             id: demoId(3200),
             entityType: 'feedstock',
@@ -1851,7 +1865,9 @@ async function seedDemoData() {
             evidenceReference: 'COC-SAM-26-006',
             fileSizeBytes: 131_584,
           },
-        ], DEC_ORG_ID),
+          ], DEC_ORG_ID),
+          uploadedSeedDocumentKeys,
+        ),
       );
 
       // Links the Moshi facility to the Isometric sandbox project +
@@ -2034,6 +2050,15 @@ async function seedDemoData() {
       if (extraProducts.length > 0) {
         await tx.insert(schema.biocharProducts).values(extraProducts);
       }
+    }).catch(async (error: unknown) => {
+      for (const storageKey of uploadedSeedDocumentKeys) {
+        try {
+          await storageProvider.deleteObject(storageKey);
+        } catch {
+          console.warn(`Failed to delete seed document object ${storageKey}`);
+        }
+      }
+      throw error;
     });
 
     console.log('');

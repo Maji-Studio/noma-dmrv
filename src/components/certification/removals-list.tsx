@@ -149,20 +149,64 @@ function StatusCell({ summary }: { summary: RemovalPreflightSummary }) {
 }
 
 function ReadinessCell({ summary }: { summary: RemovalPreflightSummary }) {
-  const { state, reasons } = summary.readiness;
+  const { state, reasons, advisories } = summary.readiness;
   if (state === "ready") {
     return (
-      <span className="inline-flex items-center gap-6 body-caption text-[var(--color-signal-green)]">
-        <CheckCircleIcon size={16} weight="fill" aria-hidden />
-        Ready to submit
+      <span className="flex flex-col gap-4">
+        <span className="inline-flex items-center gap-6 body-caption text-[var(--color-signal-green)]">
+          <CheckCircleIcon size={16} weight="fill" aria-hidden />
+          Ready to submit
+        </span>
+        {advisories.map((advisory) => (
+          <span
+            key={advisory}
+            className="inline-flex items-start gap-6 body-caption text-[var(--color-signal-orange)]"
+          >
+            <WarningIcon
+              size={16}
+              weight="fill"
+              aria-hidden
+              className="mt-px shrink-0"
+            />
+            <span className="line-clamp-2">{advisory}</span>
+          </span>
+        ))}
       </span>
     );
   }
   if (state === "blocked") {
     return (
-      <span className="inline-flex items-start gap-6 body-caption text-[var(--color-signal-orange)]">
-        <WarningIcon size={16} weight="fill" aria-hidden className="mt-px shrink-0" />
-        <span className="line-clamp-2">{reasons.join(" · ")}</span>
+      <span className="flex flex-col gap-4">
+        {reasons.map((reason) => (
+          <span
+            key={reason}
+            className="inline-flex items-start gap-6 body-caption text-[var(--color-signal-orange)]"
+          >
+            <WarningIcon
+              size={16}
+              weight="fill"
+              aria-hidden
+              className="mt-px shrink-0"
+            />
+            <span className="line-clamp-2">{reason}</span>
+          </span>
+        ))}
+        {advisories.map((advisory) => (
+          <span
+            key={advisory}
+            className="inline-flex items-start gap-6 body-caption"
+          >
+            <WarningIcon
+              size={16}
+              weight="fill"
+              aria-hidden
+              className="mt-px shrink-0 text-[var(--color-signal-orange)]"
+            />
+            <span className="line-clamp-2 text-[var(--color-text-secondary)]">
+              Advisory — {advisory}
+            </span>
+          </span>
+        ))}
       </span>
     );
   }

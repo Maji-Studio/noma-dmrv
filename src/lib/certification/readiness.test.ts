@@ -119,6 +119,7 @@ describe("deriveRemovalReadiness — blocked: linkage & template", () => {
     expect(r).toEqual({
       state: "blocked",
       reasons: ["Organization Isometric credentials are not configured"],
+      advisories: [],
     });
   });
 
@@ -275,6 +276,98 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
     expect(r.reasons).toContain("Missing feedstock transport legs");
     expect(r.reasons).toContain(
       "No production data linked yet — nothing to submit",
+    );
+  });
+});
+
+describe("evidence mirroring advisory", () => {
+  it("shows 0 of M as a warning without blocking readiness", () => {
+    const facts = ready({
+      supportingDocumentCount: 4,
+      mirroredDocumentCount: 0,
+    });
+
+    const readiness = deriveRemovalReadiness(facts);
+    expect(readiness.state).toBe("ready");
+    expect(readiness.reasons).toEqual([]);
+    expect(readiness.advisories).toEqual([
+      "0 of 4 supporting documents mirrored",
+    ]);
+    expect(checkFor(buildRemovalPreflightChecklist(facts), "evidence")).toMatchObject({
+      status: "warning",
+      detail: "0 of 4 supporting documents mirrored",
+    });
+  });
+
+  it("shows a partially mirrored N of M count as an advisory", () => {
+    const facts = ready({
+      supportingDocumentCount: 9,
+      mirroredDocumentCount: 3,
+    });
+
+    expect(deriveRemovalReadiness(facts)).toMatchObject({
+      state: "ready",
+      advisories: ["3 of 9 supporting documents mirrored"],
+    });
+    const wizardEvidence = buildRemovalRequirementsChecklist(facts).find(
+      (check) => check.key === "evidence",
+    );
+    expect(wizardEvidence).toMatchObject({
+      status: "warning",
+      detail: "3 of 9 supporting documents mirrored",
+    });
+  });
+
+  it("marks N of M met when every supporting document is mirrored", () => {
+    const facts = ready({
+      supportingDocumentCount: 3,
+      mirroredDocumentCount: 3,
+    });
+
+    expect(deriveRemovalReadiness(facts).advisories).toEqual([]);
+    expect(checkFor(buildRemovalPreflightChecklist(facts), "evidence")).toMatchObject({
+      status: "met",
+      detail: "3 of 3 supporting documents mirrored",
+    });
+  });
+
+  it("omits the evidence row and advisory when M is zero", () => {
+    const facts = ready({
+      supportingDocumentCount: 0,
+      mirroredDocumentCount: 0,
+    });
+
+    expect(deriveRemovalReadiness(facts)).toMatchObject({
+      state: "ready",
+      advisories: [],
+    });
+    expect(
+      buildRemovalPreflightChecklist(facts).some(
+        (check) => check.key === "evidence",
+      ),
+    ).toBe(false);
+    expect(
+      buildRemovalRequirementsChecklist(facts).some(
+        (check) => check.key === "evidence",
+      ),
+    ).toBe(false);
+  });
+
+  it("never adds the evidence advisory to blocking reasons", () => {
+    const readiness = deriveRemovalReadiness(
+      ready({
+        supportingDocumentCount: 2,
+        mirroredDocumentCount: 0,
+        hasSubmittableRuns: false,
+      }),
+    );
+
+    expect(readiness.state).toBe("blocked");
+    expect(readiness.reasons).not.toContain(
+      "0 of 2 supporting documents mirrored",
+    );
+    expect(readiness.advisories).toContain(
+      "0 of 2 supporting documents mirrored",
     );
   });
 });

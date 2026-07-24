@@ -74,6 +74,10 @@ import { buildCertifyEntityReadiness } from "./certify-entity-readiness";
 import { loadDurabilityBatchData } from "./durability-readiness";
 import { buildSubmissionWarnings } from "./submission-warnings";
 import {
+  loadEvidenceMirrorSummaryForUser,
+  type EvidenceMirrorSummary,
+} from "./evidence-mirror-summary";
+import {
   loadLinkedGhgStatementStatus,
   type LinkedGhgStatementStatus,
 } from "./linked-ghg-statement-status";
@@ -173,6 +177,7 @@ export interface RemovalCertifyContext {
   // durabilityGateBlockers / entityReadinessGaps, these do NOT gate submission;
   // they tell the operator a recorded value will not be submitted.
   submissionWarnings: string[];
+  supportingDocuments: EvidenceMirrorSummary; // same counts as Sources panel
   // Focused run aggregation (run count, total biochar output, applied dry kg)
   // surfaced on the lean UI context so the Review step can show what's being
   // submitted without shipping the heavy `runs` array.
@@ -582,11 +587,7 @@ function productionReadinessGapFromLineages(
   return defaultProductionReadinessGap();
 }
 
-// Composes one removal's full submission context from its resolved scope and
-// the facility-scoped certifier facts (loaded once per facility, passed in).
-// The facility half spreads straight onto the context; this only adds the
-// removal-level half — submission status, member-batch lineage, the deduped
-// production-run union, transport coverage, and mass accounting.
+// Composes one removal's scope, submission, lineage, transport, and mass facts.
 export async function buildRemovalContext(
   orgCtx: OrgContext,
   scope: RemovalScope,
@@ -610,20 +611,20 @@ export async function buildRemovalContext(
     applicationIds: [...b.applicationIds].sort(),
   }));
 
-  // The removal's own submission + its linked GHG Statement status resolve from
-  // the scope alone, so load them up-front: every short-circuit path then
-  // carries the real values rather than a placeholder.
-  const [latestSubmission, linkedGhgStatement] = await Promise.all([
-    scope.removalId
-      ? getLatestSubmission(orgCtx, {
-          provider: ISOMETRIC_PROVIDER,
-          submissionType: REMOVAL_SUBMISSION_TYPE,
-          localEntityType: REMOVAL_ENTITY_TYPE,
-          localEntityId: scope.removalId,
-        })
-      : Promise.resolve(null),
-    loadLinkedGhgStatementStatus(orgCtx, scope.removal),
-  ]);
+  // Load removal-owned facts up-front so every short-circuit carries them.
+  const [latestSubmission, linkedGhgStatement, supportingDocuments] =
+    await Promise.all([
+      scope.removalId
+        ? getLatestSubmission(orgCtx, {
+            provider: ISOMETRIC_PROVIDER,
+            submissionType: REMOVAL_SUBMISSION_TYPE,
+            localEntityType: REMOVAL_ENTITY_TYPE,
+            localEntityId: scope.removalId,
+          })
+        : Promise.resolve(null),
+      loadLinkedGhgStatementStatus(orgCtx, scope.removal),
+      loadEvidenceMirrorSummaryForUser(orgCtx, scope.removalId),
+    ]);
 
   // Walk every member batch's production-run applications into one deduped run union.
   const applicationIds = Array.from(
@@ -711,6 +712,7 @@ export async function buildRemovalContext(
         ...durabilityWarnings,
         ...soilTemperatureGate.warnings,
       ],
+      supportingDocuments,
       runSummary: EMPTY_RUN_SUMMARY,
       latestSubmission,
       linkedGhgStatement,
@@ -779,6 +781,7 @@ export async function buildRemovalContext(
     entityReadinessIssues: entityReadiness.issues,
     durabilityGateBlockers,
     submissionWarnings,
+    supportingDocuments,
     runSummary,
     latestSubmission,
     linkedGhgStatement,
@@ -831,6 +834,7 @@ function projectUiContext(
     entityReadinessIssues: ctx.entityReadinessIssues ?? [],
     durabilityGateBlockers: ctx.durabilityGateBlockers,
     submissionWarnings: ctx.submissionWarnings,
+    supportingDocuments: ctx.supportingDocuments,
     runSummary: ctx.runSummary,
     latestSubmission: ctx.latestSubmission,
     linkedGhgStatement: ctx.linkedGhgStatement,

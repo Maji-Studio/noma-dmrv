@@ -83,6 +83,7 @@ function fixLinkFor(
         href: `/samples?facility=${facilityId}`,
       };
     case "entityReadiness":
+    case "evidence":
       return null;
   }
 }
