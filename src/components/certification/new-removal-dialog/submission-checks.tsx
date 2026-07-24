@@ -84,12 +84,12 @@ function CompactCheckRow({
   const fix =
     check.status === "unmet" ? fixLinkFor(check.key, facilityId) : null;
   return (
-    <li className="flex items-start gap-8 border-t border-[var(--color-border-tertiary)] px-12 py-6 first:border-t-0">
+    <li className="flex items-start gap-8 border-t border-[var(--color-border-tertiary)] px-12 py-4 first:border-t-0">
       <span className="mt-2">
         <CheckIcon status={check.status} />
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <span className="inline-flex items-center gap-5 body-caption font-medium text-[var(--color-text-secondary)]">
+        <span className="inline-flex items-center gap-4 body-caption font-medium text-[var(--color-text-secondary)]">
           {check.requirementLabel}
           {check.whyDetail && (
             <InfoHint label="Why is this required?">
@@ -137,7 +137,7 @@ export function SubmissionChecks({
       >
         <Accordion.Header>
           <Accordion.Trigger
-            className="bg-[var(--color-background-white)] px-12 py-9 hover:bg-[var(--color-surface-light)]"
+            className="bg-[var(--color-background-white)] px-12 py-8 hover:bg-[var(--color-surface-light)]"
             labelClassName="body-caption normal-case tracking-normal"
           >
             Submission checks · {summary}

@@ -18,7 +18,7 @@ function total(
 
 function ManifestFact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex min-w-0 flex-col justify-center gap-4 px-16 py-14">
+    <div className="flex min-w-0 flex-col justify-center gap-4 px-16 py-6">
       <span className="label-micro text-[var(--color-text-tertiary)]">
         {label}
       </span>
@@ -61,7 +61,7 @@ function BatchCard({
       aria-label={`Open credit batch ${batch.code} in a new tab`}
       className="group flex flex-col border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] transition-colors hover:border-[var(--color-interaction)] hover:bg-[var(--color-background-light)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
     >
-      <div className="flex flex-wrap items-start justify-between gap-16 px-16 py-14">
+      <div className="flex flex-wrap items-start justify-between gap-16 px-16 py-8">
         <div className="flex min-w-0 flex-col gap-4">
           <span className="label-micro text-[var(--color-text-tertiary)]">
             Credit batch
