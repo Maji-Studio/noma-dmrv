@@ -81,7 +81,7 @@ describe("Isometric reconciliation helpers", () => {
     });
   });
 
-  it("adopts a DRAFT whose registry period is missing", async () => {
+  it("does not adopt a DRAFT whose registry period is missing", async () => {
     mockedListGhg.mockResolvedValue([
       ghgStatement("ggs_null", {
         reporting_period_start_at: null,
@@ -94,11 +94,7 @@ describe("Isometric reconciliation helpers", () => {
         projectId: "prj_1",
         endOn: "2026-05-05",
       }),
-    ).resolves.toEqual({
-      found: "single",
-      externalId: "ggs_null",
-      status: "DRAFT",
-    });
+    ).resolves.toEqual({ found: false });
   });
 });
 
