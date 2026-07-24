@@ -1,6 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { upsertCertifierProject } from "@/data-access/certification";
+import {
+  getCertifierProjectByFacility,
+  upsertCertifierProject,
+} from "@/data-access/certification";
 import { db } from "@/db";
 import { certifierProjects } from "@/db/schema/certification";
 import { facilities } from "@/db/schema/facilities";
@@ -52,10 +55,29 @@ describe("upsertCertifierProject protocol version", () => {
     const updated = await upsertCertifierProject(ctx, {
       facilityId,
       provider: "isometric",
-      externalProjectId: "prj_protocol_rebound",
+      externalProjectId: "prj_protocol_initial",
     });
 
     expect(updated.protocolVersion).toBe("1.2");
+  });
+
+  it("clears the previous project's version when the mapping is rebound", async () => {
+    const facilityId = await createFacility();
+    const ctx = makeTestOrgContext(USER_ID);
+
+    await upsertCertifierProject(ctx, {
+      facilityId,
+      provider: "isometric",
+      externalProjectId: "prj_protocol_old",
+      protocolVersion: "1.2",
+    });
+    const updated = await upsertCertifierProject(ctx, {
+      facilityId,
+      provider: "isometric",
+      externalProjectId: "prj_protocol_new",
+    });
+
+    expect(updated.protocolVersion).toBeNull();
   });
 
   it("clears the audited version only when explicitly requested", async () => {
@@ -76,5 +98,32 @@ describe("upsertCertifierProject protocol version", () => {
     });
 
     expect(updated.protocolVersion).toBeNull();
+  });
+
+  it("preserves a concurrent first writer's version for the same project", async () => {
+    const facilityId = await createFacility();
+    const ctx = makeTestOrgContext(USER_ID);
+    const externalProjectId = "prj_protocol_concurrent";
+
+    await Promise.all([
+      upsertCertifierProject(ctx, {
+        facilityId,
+        provider: "isometric",
+        externalProjectId,
+        protocolVersion: "1.2",
+      }),
+      upsertCertifierProject(ctx, {
+        facilityId,
+        provider: "isometric",
+        externalProjectId,
+      }),
+    ]);
+
+    const mapping = await getCertifierProjectByFacility(
+      ctx,
+      facilityId,
+      "isometric",
+    );
+    expect(mapping?.protocolVersion).toBe("1.2");
   });
 });
