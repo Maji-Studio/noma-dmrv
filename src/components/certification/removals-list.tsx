@@ -242,7 +242,7 @@ const columns: ColumnDef<RemovalPreflightSummary>[] = [
     id: "readiness",
     header: "Readiness",
     accessorFn: (summary) =>
-      `${summary.readiness.state} ${summary.readiness.reasons.join(" ")}`,
+      `${summary.readiness.state} ${summary.readiness.reasons.join(" ")} ${summary.readiness.advisories.join(" ")}`,
     cell: ({ row }) => <ReadinessCell summary={row.original} />,
   },
 ];
