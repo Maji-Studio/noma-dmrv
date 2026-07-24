@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
 import type { DashboardStructuralGap } from "@/data-access/dashboard-structural-gaps";
+import { STATUS_STATE_COLOR_TOKENS } from "@/lib/status-state";
 
 export function StructuralGapList({
   gaps,
@@ -29,7 +30,10 @@ export function StructuralGapList({
             <span className="body-small text-[var(--color-text-primary)]">
               {gap.label}
             </span>
-            <span className="label-micro text-[var(--st-bad)]">
+            <span
+              className="label-micro"
+              style={{ color: STATUS_STATE_COLOR_TOKENS.warning }}
+            >
               {gap.count} {gap.count === 1 ? "gap" : "gaps"}
             </span>
             <ArrowRightIcon

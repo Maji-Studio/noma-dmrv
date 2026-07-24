@@ -18,21 +18,11 @@ describe("deriveWorstDashboardState", () => {
 });
 
 describe("deriveAttentionSummaryState", () => {
-  it("uses error for blocking flags", () => {
-    expect(deriveAttentionSummaryState({ total: 4, flagsTotal: 1 })).toBe(
-      "error",
-    );
-  });
-
-  it("uses warning when only pending items remain", () => {
-    expect(deriveAttentionSummaryState({ total: 4, flagsTotal: 0 })).toBe(
-      "warning",
-    );
+  it("uses warning when attention items are open", () => {
+    expect(deriveAttentionSummaryState(4)).toBe("warning");
   });
 
   it("uses success when no items are open", () => {
-    expect(deriveAttentionSummaryState({ total: 0, flagsTotal: 0 })).toBe(
-      "success",
-    );
+    expect(deriveAttentionSummaryState(0)).toBe("success");
   });
 });

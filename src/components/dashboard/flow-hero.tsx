@@ -34,8 +34,8 @@ interface FlowHeroProps {
 }
 
 const LEGEND: { label: string; state: StatusStateClass }[] = [
-  { label: "Blocking issue", state: "error" },
-  { label: "Upcoming or pending", state: "warning" },
+  { label: "Error", state: "error" },
+  { label: "Needs attention", state: "warning" },
   { label: "Running", state: "in-progress" },
 ];
 

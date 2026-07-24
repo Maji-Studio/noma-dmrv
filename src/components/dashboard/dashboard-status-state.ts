@@ -26,18 +26,10 @@ export function deriveWorstDashboardState(
 }
 
 /**
- * The Needs attention summary is red when any blocking flag is present,
- * orange when only pending work remains, and green when nothing is open.
+ * The Needs attention summary is orange whenever operator follow-through is
+ * needed and green when nothing is open. Blocking checks describe urgency,
+ * not a failed or rejected state.
  */
-export function deriveAttentionSummaryState({
-  total,
-  flagsTotal,
-}: {
-  total: number;
-  flagsTotal: number;
-}): StatusStateClass {
-  return deriveWorstDashboardState([
-    ...(total > 0 ? (["warning"] as const) : []),
-    ...(flagsTotal > 0 ? (["error"] as const) : []),
-  ]);
+export function deriveAttentionSummaryState(total: number): StatusStateClass {
+  return total > 0 ? "warning" : "success";
 }

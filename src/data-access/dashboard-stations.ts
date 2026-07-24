@@ -564,7 +564,7 @@ export async function getDashboardStations(
       attention: feedstockMissing,
       reasons:
         feedstockMissing > 0
-          ? [{ state: "error", text: `${plural(feedstockMissing, "record")} missing data` }]
+          ? [{ state: "warning", text: `${plural(feedstockMissing, "record")} missing data` }]
           : [],
       href: facilityHref("/feedstocks", facilityId),
     },
@@ -576,7 +576,7 @@ export async function getDashboardStations(
       attention: runsMissingMass,
       reasons: [
         ...(runsMissingMass > 0
-          ? [{ state: "error" as const, text: `${plural(runsMissingMass, "run")} missing mass data` }]
+          ? [{ state: "warning" as const, text: `${plural(runsMissingMass, "run")} missing mass data` }]
           : []),
         ...(runningRuns > 0
           ? [{ state: "in-progress" as const, text: `${runningRuns} running now` }]
@@ -592,7 +592,7 @@ export async function getDashboardStations(
       attention: productsUnlinked,
       reasons:
         productsUnlinked > 0
-          ? [{ state: "error", text: `${plural(productsUnlinked, "product")} not linked to a run` }]
+          ? [{ state: "warning", text: `${plural(productsUnlinked, "product")} not linked to a run` }]
           : [],
       href: facilityHref("/biochar-products", facilityId),
     },
@@ -616,7 +616,7 @@ export async function getDashboardStations(
       attention: evidenceGaps,
       reasons:
         evidenceGaps > 0
-          ? [{ state: "error", text: `${plural(evidenceGaps, "evidence gap")}` }]
+          ? [{ state: "warning", text: `${plural(evidenceGaps, "evidence gap")}` }]
           : [],
       href: facilityHref("/applications", facilityId),
     },

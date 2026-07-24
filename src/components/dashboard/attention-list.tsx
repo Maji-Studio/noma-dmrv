@@ -35,7 +35,7 @@ export function AttentionList({
     0,
   );
   const displayedOpenCount = structuralGapTotal + attention.length;
-  const summaryState = deriveAttentionSummaryState({ total, flagsTotal });
+  const summaryState = deriveAttentionSummaryState(total);
 
   return (
     <DashboardPanel
@@ -84,7 +84,7 @@ export function AttentionList({
                   </span>
                 </span>
                 {item.severity === "flag" ? (
-                  <StatusBadge status="rejected" label="Flag" size="small" />
+                  <StatusBadge status="pending" label="Flag" size="small" />
                 ) : (
                   <StatusBadge status="pending" label="Upcoming" size="small" />
                 )}
@@ -102,7 +102,10 @@ export function AttentionList({
       {(flagsTotal > 0 || total > displayedOpenCount) && (
         <div className="flex flex-wrap items-center justify-between gap-8 border-t border-[var(--color-border-tertiary)] px-20 py-10">
           {flagsTotal > 0 ? (
-            <span className="label-micro text-[var(--st-bad)]">
+            <span
+              className="label-micro"
+              style={{ color: STATUS_STATE_COLOR_TOKENS.warning }}
+            >
               {flagsTotal} {flagsTotal === 1 ? "flag" : "flags"} from blocking checks
             </span>
           ) : (
