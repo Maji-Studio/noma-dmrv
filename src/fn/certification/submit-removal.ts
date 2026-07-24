@@ -65,6 +65,7 @@ import {
   assertEntityReadinessGapsResolved,
   buildRemovalSubmissionBuild,
 } from "./removal-submission-build";
+import { checkProtocolVersionAtSubmit } from "./protocol-version-preflight";
 import { performRegistryCreate, supplierRefLookup } from "./registry-create";
 import { resolveSourceIdsForRemoval } from "./sources";
 import {
@@ -131,6 +132,12 @@ export async function submitRemoval(
       "Configure organization Isometric credentials before submitting.",
     );
   }
+  await checkProtocolVersionAtSubmit({
+    orgCtx,
+    removalId,
+    mapping: ctx.mapping,
+    log,
+  });
   // Fail before the submit-phase client, evidence-ledger generation/mirroring,
   // local ledger claims, or registry writes. Context loading may already make
   // read-only registry calls to resolve the configured project and template.

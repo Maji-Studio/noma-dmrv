@@ -64,10 +64,12 @@ Method B until all three close.
   a production-process history rule, not just the removal member-batch subset;
   the live gate must load the full process batch window or accept an explicit
   process-level cadence fact.
-- **Version dependency → #278.** ADR 0017 cites biochar protocol 1.3
-  while the local pin remains 1.2; resolve before encoding more credit-bearing
-  Method-B logic. Also entangled with #291 (template-driven remodel) —
-  coordinate so the submission layer isn't double-built.
+- **Version dependency → #278.** The Certify project was observed on biochar
+  protocol 1.1 on 2026-07-24, the local interpretation pin remains 1.2, and
+  ADR 0017's historical text cites 1.3 (now qualified by a dated amendment).
+  Resolve the project version with Isometric before encoding more
+  credit-bearing Method-B logic. Also entangled with #291 (template-driven
+  remodel) — coordinate so the submission layer isn't double-built.
 
 ### Method-B compute — tracked cleanups on the process-grain surface (`certification/method-b-compute-cleanups`, opened 2026-06-20)
 

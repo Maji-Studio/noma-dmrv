@@ -13,6 +13,47 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-07-24 (Certify project version audit + Source preview closeout)
+
+### Certify project protocol observation
+
+The Certify General page for project `prj_1K9YJ33RKSBX9FFF` showed baseline and
+current **Biochar Production and Storage v1.1** and **Isometric Standard v1.7**.
+The API does not expose a usable project protocol version: `GET /projects` has
+no protocol fields, and `GET /ghg_statements/{id}` returned
+`protocol_version: null`. `versions.json` therefore keeps the non-authoritative
+interpretation target at v1.2 and now records the UI-observed v1.1/v1.7 project
+state as a discrepancy, not a repin.
+
+`submitRemoval` now compares `certifier_projects.protocol_version` with the
+v1.2 interpretation pin. A match is silent. A mismatch or missing value emits
+an IDs-only structured warning and appends a non-blocking
+`removal:protocol-version-check` sync event so the stored column participates
+in every submit-time audit. Submission continues.
+
+Historical v1.3 labels in the 2026-07-03 fuel-accounting and reporting-window
+entries below do not describe this project's configured protocol/module set.
+The applicable local interpretation pins are Biochar Protocol v1.2 and Energy
+Use Accounting v1.2; the project itself is observed on Biochar Protocol v1.1.
+The implementation decisions remain in force, but their version applicability
+must be confirmed when the operator resolves the project-version discrepancy.
+
+### Source preview verdict
+
+The Source mirror is byte-faithful: the registry copy of the generated ledger
+matched noma's recorded SHA-256 and is a valid, correctly rendered PDF in
+Quartz and Chrome. Certify's previewer rendered `@react-pdf/renderer` output
+blank with subset TTF fonts and solid black with base-14 fonts, while a
+browser-print PDF previewed normally. This isolates the failure to Isometric's
+previewer; no PDF-generation change is warranted. The defect was reported to
+Isometric through MCP feedback on 2026-07-24.
+
+One-click diagnostic Sources for a future retest:
+
+- `src_1KY9MZ6Y9SBXBGKW` — blank preview.
+- `src_1KY9T9WVHSBXSHQP` — solid-black preview.
+- `src_1KX9B828ESBX3N89` — browser-print PDF renders correctly.
+
 ## 2026-07-24 (`s_fraction` direct-datapoint correction)
 
 A real sandbox submission established that the live
