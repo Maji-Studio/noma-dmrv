@@ -1,0 +1,80 @@
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
+import { upsertCertifierProject } from "@/data-access/certification";
+import { db } from "@/db";
+import { certifierProjects } from "@/db/schema/certification";
+import { facilities } from "@/db/schema/facilities";
+import {
+  ensureTestOrg,
+  makeTestOrgContext,
+  TEST_ORG_ID,
+} from "./helpers/test-org";
+
+const USER_ID = "test-user-certifier-project-mapping";
+const facilityIds: string[] = [];
+
+beforeAll(() => ensureTestOrg());
+
+afterAll(async () => {
+  for (const facilityId of facilityIds) {
+    await db
+      .delete(certifierProjects)
+      .where(eq(certifierProjects.facilityId, facilityId));
+    await db.delete(facilities).where(eq(facilities.id, facilityId));
+  }
+});
+
+async function createFacility(): Promise<string> {
+  const tag = crypto.randomUUID().slice(0, 8);
+  const [facility] = await db
+    .insert(facilities)
+    .values({
+      organizationId: TEST_ORG_ID,
+      code: `FAC-CPM-${tag}`,
+      name: `Certifier Project Mapping ${tag}`,
+    })
+    .returning({ id: facilities.id });
+  facilityIds.push(facility.id);
+  return facility.id;
+}
+
+describe("upsertCertifierProject protocol version", () => {
+  it("preserves the audited version when a mapping save omits it", async () => {
+    const facilityId = await createFacility();
+    const ctx = makeTestOrgContext(USER_ID);
+
+    await upsertCertifierProject(ctx, {
+      facilityId,
+      provider: "isometric",
+      externalProjectId: "prj_protocol_initial",
+      protocolVersion: "1.2",
+    });
+    const updated = await upsertCertifierProject(ctx, {
+      facilityId,
+      provider: "isometric",
+      externalProjectId: "prj_protocol_rebound",
+    });
+
+    expect(updated.protocolVersion).toBe("1.2");
+  });
+
+  it("clears the audited version only when explicitly requested", async () => {
+    const facilityId = await createFacility();
+    const ctx = makeTestOrgContext(USER_ID);
+
+    await upsertCertifierProject(ctx, {
+      facilityId,
+      provider: "isometric",
+      externalProjectId: "prj_protocol_clear",
+      protocolVersion: "1.2",
+    });
+    const updated = await upsertCertifierProject(ctx, {
+      facilityId,
+      provider: "isometric",
+      externalProjectId: "prj_protocol_clear",
+      protocolVersion: null,
+    });
+
+    expect(updated.protocolVersion).toBeNull();
+  });
+});

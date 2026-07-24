@@ -294,7 +294,13 @@ export async function upsertCertifierProject(
           set: {
             externalProjectId: values.externalProjectId,
             protocolSlug: values.protocolSlug,
-            protocolVersion: values.protocolVersion,
+            // The supported settings form does not expose protocol version.
+            // Preserve an audited value when that caller omits the field;
+            // explicit null remains available to deliberately clear it.
+            protocolVersion:
+              input.protocolVersion === undefined
+                ? (existing?.protocolVersion ?? null)
+                : values.protocolVersion,
             defaultRemovalTemplateId: values.defaultRemovalTemplateId,
             externalFacilityId: values.externalFacilityId,
             metadata: values.metadata,
