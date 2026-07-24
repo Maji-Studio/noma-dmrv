@@ -30,6 +30,7 @@
 
 import {
   computeRemovalBreakdown,
+  type RemovalBreakdownAnomaly,
   type RemovalBreakdownRegistryInput,
   type RemovalCarbonBreakdown,
 } from "./removal-breakdown";
@@ -129,6 +130,21 @@ function aggregateRegistry(
   };
 }
 
+function collectEntryAnomalies(
+  entries: GhgStatementEntryFigures[],
+): RemovalBreakdownAnomaly[] {
+  const anomalies = new Set<RemovalBreakdownAnomaly>();
+  for (const entry of entries) {
+    if (entry.netRemovedKg < 0) {
+      anomalies.add("net-negative");
+    }
+    if (entry.netRemovedKg > entry.netBeforeDiscountKg) {
+      anomalies.add("net-exceeds-before-discount");
+    }
+  }
+  return Array.from(anomalies);
+}
+
 export function computeGhgStatementBreakdown(
   input: GhgStatementBreakdownInput,
 ): RemovalCarbonBreakdown {
@@ -144,7 +160,7 @@ export function computeGhgStatementBreakdown(
         )
       : null;
 
-  return computeRemovalBreakdown({
+  const breakdown = computeRemovalBreakdown({
     sequestrationTonnesByBatch: input.sequestrationTonnesByBatch,
     emissionsTonnesByBatch: input.emissionsTonnesByBatch,
     counterfactualTonnesByBatch: input.counterfactualTonnesByBatch,
@@ -152,4 +168,12 @@ export function computeGhgStatementBreakdown(
     memberBatchCount: input.memberBatchCount,
     registry,
   });
+
+  if (input.entries.length === 0) return breakdown;
+  return {
+    ...breakdown,
+    anomalies: Array.from(
+      new Set([...breakdown.anomalies, ...collectEntryAnomalies(input.entries)]),
+    ),
+  };
 }

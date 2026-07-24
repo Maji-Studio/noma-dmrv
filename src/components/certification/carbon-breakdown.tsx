@@ -47,6 +47,8 @@ export interface CarbonBreakdownLabels {
   estimateIncomplete: string;
   /** Estimate footnote — who sets the uncertainty discount and final net. */
   estimateFootnote: string;
+  /** Anomaly-state explanation tailored to the card's removal/statement scope. */
+  anomalyDescription: string;
 }
 
 // Every figure shares one visual language across the bar and the ledger: a
@@ -64,6 +66,7 @@ const UNCERTAINTY_STYLE: CSSProperties = {
     "repeating-linear-gradient(135deg, var(--color-text-tertiary) 0, var(--color-text-tertiary) 1px, transparent 1px, transparent 5px)",
 };
 const MICRO_ICON_SIZE = 13;
+const ALERT_ICON_SIZE = 20;
 
 const TONE_CLASS: Record<Tone, string> = {
   stored: "bg-[var(--color-signal-green)]",
@@ -300,9 +303,11 @@ function getAnomalyCopy(
 function AnomalyState({
   data,
   registryVerified,
+  description,
 }: {
   data: RemovalCarbonBreakdown;
   registryVerified: boolean;
+  description: string;
 }) {
   return (
     <Shell>
@@ -313,17 +318,14 @@ function AnomalyState({
       >
         <div className="flex items-start gap-8">
           <WarningIcon
-            size={20}
+            size={ALERT_ICON_SIZE}
             weight="fill"
             aria-hidden
             className="mt-2 shrink-0"
           />
           <div className="flex min-w-0 flex-col gap-4">
             <p className="body-medium font-medium">Carbon accounting anomaly</p>
-            <p className="body-small">
-              The normal removal ledger is hidden until the carbon data is
-              corrected.
-            </p>
+            <p className="body-small">{description}</p>
           </div>
         </div>
         {data.netRemovedKg != null && (
@@ -374,7 +376,11 @@ function CarbonBreakdownBody({
 
   if (data.anomalies.length > 0) {
     return (
-      <AnomalyState data={data} registryVerified={registryVerified} />
+      <AnomalyState
+        data={data}
+        registryVerified={registryVerified}
+        description={labels.anomalyDescription}
+      />
     );
   }
 
