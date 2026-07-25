@@ -5,7 +5,14 @@
  * Avoids UTC conversion bugs from toISOString().split("T")[0].
  */
 
-import { formatInTimeZone } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+
+/**
+ * Fallback IANA zone when a facility's timezone cannot be resolved. Mirrors the
+ * `facilities.timezone` column default (`src/db/schema/facilities.ts`) so a
+ * missing facility row and a facility that never set a zone behave identically.
+ */
+export const DEFAULT_FACILITY_TIMEZONE = "UTC";
 
 // ============================================
 // Facility Timezone Display Helpers
@@ -44,6 +51,22 @@ export function formatTimezoneLabel(timezone: string): string {
   return `${readable} (${offset})`;
 }
 
+/**
+ * Resolve a facility's IANA zone from a facility list. Returns
+ * {@link DEFAULT_FACILITY_TIMEZONE} when the facility is unknown — e.g. an edit
+ * form opened for a run whose facility is not in the current context list.
+ */
+export function resolveFacilityTimezone(
+  facilities: readonly { id: string; timezone: string }[],
+  facilityId: string | null | undefined
+): string {
+  if (!facilityId) return DEFAULT_FACILITY_TIMEZONE;
+  return (
+    facilities.find((facility) => facility.id === facilityId)?.timezone ??
+    DEFAULT_FACILITY_TIMEZONE
+  );
+}
+
 /** Format a Date as "YYYY-MM-DD" in local timezone. */
 export function formatLocalDate(date: Date): string {
   const y = date.getFullYear();
@@ -77,9 +100,31 @@ export function formatLocalTime(date: Date): string {
   return `${h}:${mi}`;
 }
 
-/** Combine a date string "YYYY-MM-DD" and time string "HH:MM" into a Date. */
-export function combineDateAndTime(dateStr: string, timeStr: string): Date {
-  return new Date(`${dateStr}T${timeStr}`);
+/**
+ * Combine a date string "YYYY-MM-DD" and a time string "HH:MM" entered against
+ * `timeZone` into the UTC instant they denote.
+ *
+ * `timeZone` is **required** — pass the IANA zone of the facility the value
+ * belongs to (`facilities.timezone`). `new Date("YYYY-MM-DDTHH:MM")` is the
+ * zoneless date-time form, which the spec parses in the *browser's* zone: an
+ * operator on CEST (UTC+2) entering 08:00 for a UTC+3 plant stored 06:00Z
+ * instead of 05:00Z, and the telemetry importer — which clips CSV rows to the
+ * stored run window — then discarded the readings that fell outside the shifted
+ * hour with no error. A defaulted zone is exactly what made that invisible, so
+ * callers must name the zone (use {@link DEFAULT_FACILITY_TIMEZONE} explicitly
+ * when there is genuinely nothing better).
+ *
+ * Note the deliberate asymmetry with {@link toDateInputValue} below, which pins
+ * *date-only* values to UTC (#46): those persist at UTC midnight and carry no
+ * clock, so UTC is their canonical calendar. A date+time pair describes a wall
+ * clock at a physical plant, so it resolves in the plant's zone instead.
+ */
+export function combineDateAndTime(
+  dateStr: string,
+  timeStr: string,
+  timeZone: string
+): Date {
+  return fromZonedTime(`${dateStr}T${timeStr}`, timeZone);
 }
 
 /**

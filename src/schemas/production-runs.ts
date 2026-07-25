@@ -22,6 +22,11 @@ import {
   PRODUCTION_RUN_STATUSES,
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
+import {
+  combineDateAndTime,
+  DEFAULT_FACILITY_TIMEZONE,
+  formatLocalDate,
+} from "@/lib/date-utils";
 
 // ============================================
 // Time-window helpers (start/end date + time pairs)
@@ -40,22 +45,32 @@ const DRY_MASS_BALANCE_MESSAGE =
  * on server re-validation the time is already a combined `Date`. Returns null
  * when either part is missing/malformed (the field-level validators surface the
  * specific error).
+ *
+ * `timeZone` must be the facility's IANA zone, matching what the form submits
+ * via `combineDateAndTime`. Resolving here in the browser's zone while the
+ * submitted instant is built in the facility's zone lets the two disagree
+ * across a DST boundary that only one of the zones observes (a run that is
+ * valid when saved can be rejected by the client, or vice versa).
  */
-function resolveInstant(dateVal: unknown, timeVal: unknown): Date | null {
+function resolveInstant(
+  dateVal: unknown,
+  timeVal: unknown,
+  timeZone: string
+): Date | null {
   if (timeVal instanceof Date) return timeVal;
   if (typeof timeVal !== "string" || !TIME_ONLY_RE.test(timeVal)) return null;
 
-  let base: Date | null = null;
+  // `requiredDateOnly`/`optionalDateOnly` parse "YYYY-MM-DD" at local midnight,
+  // so reading the calendar day back off the Date is the exact inverse.
+  let dateStr: string | null = null;
   if (dateVal instanceof Date) {
-    base = dateVal;
+    dateStr = formatLocalDate(dateVal);
   } else if (typeof dateVal === "string" && DATE_ONLY_RE.test(dateVal)) {
-    const [y, m, d] = dateVal.split("-").map(Number);
-    base = new Date(y, m - 1, d);
+    dateStr = dateVal;
   }
-  if (!base) return null;
+  if (!dateStr) return null;
 
-  const [hh, mm] = timeVal.split(":").map(Number);
-  return new Date(base.getFullYear(), base.getMonth(), base.getDate(), hh, mm);
+  return combineDateAndTime(dateStr, timeVal, timeZone);
 }
 
 /** Whether an end-time value is actually present (Date or non-empty "HH:MM"). */
@@ -78,10 +93,10 @@ export type { ProductionRunStatus };
 // ============================================
 
 /**
- * Schema for production run form (client-side validation)
- * Used in ProductionRunForm component for creating/editing runs
+ * Field shape for the production run form. Timing cross-field checks live in
+ * {@link makeProductionRunFormSchema}, which binds them to a facility timezone.
  */
-export const productionRunFormSchema = z.object({
+const productionRunFormObject = z.object({
   // Required fields
   facilityId: z.string().min(1, "Please select a facility").uuid("Please select a valid facility"),
   reactorId: z.string().min(1, "Please select a reactor").uuid("Please select a valid reactor"),
@@ -151,12 +166,28 @@ export const productionRunFormSchema = z.object({
   biocharMoisturePercent: optionalPercent,
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-})
-  .superRefine((data, ctx) => {
-    const start = resolveInstant(data.startDate, data.startTime);
+});
+
+/**
+ * Schema for the production run form (client-side validation), bound to the
+ * IANA timezone of the run's facility.
+ *
+ * The zone is a parameter rather than a schema field because it is not user
+ * input — it is a property of the facility, and putting it on the wire would
+ * let a client override how its own times are interpreted. Callers that hold a
+ * facility (the form) pass its zone; the exported {@link productionRunFormSchema}
+ * binds {@link DEFAULT_FACILITY_TIMEZONE} for the server-action path, where the
+ * start/end values have already been combined into `Date` instants by the
+ * client and the zone is therefore never consulted.
+ */
+export function makeProductionRunFormSchema(timeZone: string) {
+  return productionRunFormObject.superRefine((data, ctx) => {
+    const start = resolveInstant(data.startDate, data.startTime, timeZone);
     const endPresent = hasEndTime(data.endTime);
     const endDateVal = data.endDate ?? data.startDate;
-    const end = endPresent ? resolveInstant(endDateVal, data.endTime) : null;
+    const end = endPresent
+      ? resolveInstant(endDateVal, data.endTime, timeZone)
+      : null;
     const violations = getProductionRunOutcomeViolations({
       status: data.status,
       startTime: start,
@@ -224,6 +255,15 @@ export const productionRunFormSchema = z.object({
       }
     }
   });
+}
+
+/**
+ * Server-action / default-bound instance of the form schema. See
+ * {@link makeProductionRunFormSchema} for why the zone defaults here.
+ */
+export const productionRunFormSchema = makeProductionRunFormSchema(
+  DEFAULT_FACILITY_TIMEZONE,
+);
 
 // ============================================
 // Server Action Schemas
