@@ -45,7 +45,6 @@ import {
   createGhgStatement,
   describeIsometricApiError,
   ghgStatementCreateRefusalMessage,
-  getGhgStatementPeriod,
   getIsometricClientForOrg,
   getGhgStatement,
   IsometricApiError,
