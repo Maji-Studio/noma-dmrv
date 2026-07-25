@@ -723,7 +723,7 @@ export function SampleList({
             fields: [
               { label: "Inherited Durability", value: formatDurabilityOption(displaySideSheet.entity.durabilityOption) },
               { label: "H:C org Ratio", ...certificationDetailField("sample", "hToCOrgRatio"), value: displaySideSheet.entity.hToCOrgRatio?.toFixed(4) ?? null },
-              { label: "O:C org Ratio", value: displaySideSheet.entity.oToCOrgRatio?.toFixed(4) ?? null },
+              { label: "O:C org Ratio", ...certificationDetailField("sample", "oToCOrgRatio"), value: displaySideSheet.entity.oToCOrgRatio?.toFixed(4) ?? null },
             ],
           },
           ...(displaySideSheet.entity.durabilityOption === "1000_year" ? [
