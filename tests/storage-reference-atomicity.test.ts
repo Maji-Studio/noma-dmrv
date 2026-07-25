@@ -2,11 +2,15 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { lockBinStock } from "@/data-access/bin-stock-guards";
+import { archiveFacility } from "@/data-access/facilities";
 import {
   createFeedstock,
   updateFeedstock,
 } from "@/data-access/feedstocks";
-import { createProductionRun } from "@/data-access/production-runs";
+import {
+  createProductionRun,
+  updateProductionRun,
+} from "@/data-access/production-runs";
 import {
   facilities,
   feedstocks,
@@ -31,9 +35,11 @@ const ctx = makeTestOrgContext(TEST_USER_ID);
 
 interface Fixture {
   facilityId: string;
+  targetFacilityId: string;
   archivedFacilityId: string;
   supplierId: string;
   reactorId: string;
+  targetReactorId: string;
   primaryFeedstockTypeId: string;
   secondaryFeedstockTypeId: string;
   untypedFeedstockBinId: string;
@@ -41,6 +47,7 @@ interface Fixture {
   biocharBinId: string;
   existingFeedstockId: string;
   unlocatedFeedstockId: string;
+  existingProductionRunId: string;
   tag: string;
 }
 
@@ -51,13 +58,18 @@ beforeAll(() => ensureTestOrg());
 async function createFixture(): Promise<Fixture> {
   const tag = crypto.randomUUID().slice(0, 8).toUpperCase();
   const fixture = await db.transaction(async (tx) => {
-    const [facility, archivedFacility] = await tx
+    const [facility, targetFacility, archivedFacility] = await tx
       .insert(facilities)
       .values([
         {
           organizationId: TEST_ORG_ID,
           code: `FAC-SRA-${tag}`,
           name: `Storage Reference Atomicity Facility ${tag}`,
+        },
+        {
+          organizationId: TEST_ORG_ID,
+          code: `FAC-SRA-TARGET-${tag}`,
+          name: `Storage Reference Atomicity Target ${tag}`,
         },
         {
           organizationId: TEST_ORG_ID,
@@ -75,15 +87,24 @@ async function createFixture(): Promise<Fixture> {
         name: `Storage Reference Atomicity Supplier ${tag}`,
       })
       .returning({ id: suppliers.id });
-    const [reactor] = await tx
+    const [reactor, targetReactor] = await tx
       .insert(reactors)
-      .values({
-        organizationId: TEST_ORG_ID,
-        facilityId: facility.id,
-        code: `R-SRA-${tag}`,
-        identifier: `Storage Reference Atomicity Reactor ${tag}`,
-        reactorType: "auger",
-      })
+      .values([
+        {
+          organizationId: TEST_ORG_ID,
+          facilityId: facility.id,
+          code: `R-SRA-${tag}`,
+          identifier: `Storage Reference Atomicity Reactor ${tag}`,
+          reactorType: "auger" as const,
+        },
+        {
+          organizationId: TEST_ORG_ID,
+          facilityId: targetFacility.id,
+          code: `R-SRA-TARGET-${tag}`,
+          identifier: `Storage Reference Atomicity Target Reactor ${tag}`,
+          reactorType: "auger" as const,
+        },
+      ])
       .returning({ id: reactors.id });
     const [primaryFeedstockType, secondaryFeedstockType] = await tx
       .insert(feedstockTypes)
@@ -158,12 +179,26 @@ async function createFixture(): Promise<Fixture> {
         },
       ])
       .returning({ id: feedstocks.id });
+    const [existingProductionRun] = await tx
+      .insert(productionRuns)
+      .values({
+        organizationId: TEST_ORG_ID,
+        facilityId: facility.id,
+        code: `PR-SRA-EXISTING-${tag}`,
+        status: "draft",
+        startTime: new Date("2026-07-24T06:00:00Z"),
+        endTime: null,
+        reactorId: reactor.id,
+      })
+      .returning({ id: productionRuns.id });
 
     return {
       facilityId: facility.id,
+      targetFacilityId: targetFacility.id,
       archivedFacilityId: archivedFacility.id,
       supplierId: supplier.id,
       reactorId: reactor.id,
+      targetReactorId: targetReactor.id,
       primaryFeedstockTypeId: primaryFeedstockType.id,
       secondaryFeedstockTypeId: secondaryFeedstockType.id,
       untypedFeedstockBinId: untypedFeedstockBin.id,
@@ -171,6 +206,7 @@ async function createFixture(): Promise<Fixture> {
       biocharBinId: biocharBin.id,
       existingFeedstockId: existingFeedstock.id,
       unlocatedFeedstockId: unlocatedFeedstock.id,
+      existingProductionRunId: existingProductionRun.id,
       tag,
     };
   });
@@ -184,11 +220,21 @@ afterEach(async () => {
     const testFeedstocks = await db
       .select({ id: feedstocks.id })
       .from(feedstocks)
-      .where(eq(feedstocks.facilityId, fixture.facilityId));
+      .where(
+        inArray(feedstocks.facilityId, [
+          fixture.facilityId,
+          fixture.targetFacilityId,
+        ]),
+      );
     const testRuns = await db
       .select({ id: productionRuns.id })
       .from(productionRuns)
-      .where(eq(productionRuns.facilityId, fixture.facilityId));
+      .where(
+        inArray(productionRuns.facilityId, [
+          fixture.facilityId,
+          fixture.targetFacilityId,
+        ]),
+      );
 
     if (testRuns.length > 0) {
       await db
@@ -219,7 +265,9 @@ afterEach(async () => {
     await db
       .delete(storageLocations)
       .where(eq(storageLocations.facilityId, fixture.facilityId));
-    await db.delete(reactors).where(eq(reactors.id, fixture.reactorId));
+    await db
+      .delete(reactors)
+      .where(inArray(reactors.id, [fixture.reactorId, fixture.targetReactorId]));
     await db.delete(suppliers).where(eq(suppliers.id, fixture.supplierId));
     await db
       .delete(feedstockTypes)
@@ -230,6 +278,9 @@ afterEach(async () => {
         ]),
       );
     await db.delete(facilities).where(eq(facilities.id, fixture.facilityId));
+    await db
+      .delete(facilities)
+      .where(eq(facilities.id, fixture.targetFacilityId));
     await db
       .delete(facilities)
       .where(eq(facilities.id, fixture.archivedFacilityId));
@@ -337,6 +388,14 @@ async function archiveFacilityBeforeReferenceWrite<T>(
       .update(storageLocations)
       .set({ archivedAt })
       .where(eq(storageLocations.facilityId, fixture.facilityId));
+    await tx
+      .update(feedstocks)
+      .set({ archivedAt })
+      .where(eq(feedstocks.facilityId, fixture.facilityId));
+    await tx
+      .update(productionRuns)
+      .set({ archivedAt })
+      .where(eq(productionRuns.facilityId, fixture.facilityId));
     const backend = await tx.execute<{ pid: number }>(
       sql`select pg_backend_pid() as pid`,
     );
@@ -531,6 +590,90 @@ describe(
       );
 
       expectArchivedReferenceRejected(outcome);
+    });
+
+    it("rejects a feedstock move after its source facility archive wins", async () => {
+      const fixture = await createFixture();
+
+      const outcome = await archiveFacilityBeforeReferenceWrite(
+        fixture,
+        () =>
+          updateFeedstock(ctx, fixture.unlocatedFeedstockId, {
+            facilityId: fixture.targetFacilityId,
+          }),
+      );
+
+      expectArchivedReferenceRejected(outcome);
+      const [stored] = await db
+        .select({
+          facilityId: feedstocks.facilityId,
+          archivedAt: feedstocks.archivedAt,
+        })
+        .from(feedstocks)
+        .where(eq(feedstocks.id, fixture.unlocatedFeedstockId));
+      expect(stored).toMatchObject({ facilityId: fixture.facilityId });
+      expect(stored.archivedAt).not.toBeNull();
+    });
+
+    it("rejects a production run move after its source facility archive wins", async () => {
+      const fixture = await createFixture();
+
+      const outcome = await archiveFacilityBeforeReferenceWrite(
+        fixture,
+        () =>
+          updateProductionRun(ctx, fixture.existingProductionRunId, {
+            facilityId: fixture.targetFacilityId,
+            reactorId: fixture.targetReactorId,
+          }),
+      );
+
+      expectArchivedReferenceRejected(outcome);
+      const [stored] = await db
+        .select({
+          facilityId: productionRuns.facilityId,
+          archivedAt: productionRuns.archivedAt,
+        })
+        .from(productionRuns)
+        .where(eq(productionRuns.id, fixture.existingProductionRunId));
+      expect(stored).toMatchObject({ facilityId: fixture.facilityId });
+      expect(stored.archivedAt).not.toBeNull();
+    });
+
+    it("keeps moved rows active when their move wins before source archive", async () => {
+      const fixture = await createFixture();
+
+      await updateFeedstock(ctx, fixture.unlocatedFeedstockId, {
+        facilityId: fixture.targetFacilityId,
+      });
+      await updateProductionRun(ctx, fixture.existingProductionRunId, {
+        facilityId: fixture.targetFacilityId,
+        reactorId: fixture.targetReactorId,
+      });
+      await archiveFacility(ctx, fixture.facilityId);
+
+      const [storedFeedstock] = await db
+        .select({
+          facilityId: feedstocks.facilityId,
+          archivedAt: feedstocks.archivedAt,
+        })
+        .from(feedstocks)
+        .where(eq(feedstocks.id, fixture.unlocatedFeedstockId));
+      const [storedRun] = await db
+        .select({
+          facilityId: productionRuns.facilityId,
+          archivedAt: productionRuns.archivedAt,
+        })
+        .from(productionRuns)
+        .where(eq(productionRuns.id, fixture.existingProductionRunId));
+
+      expect(storedFeedstock).toMatchObject({
+        facilityId: fixture.targetFacilityId,
+        archivedAt: null,
+      });
+      expect(storedRun).toMatchObject({
+        facilityId: fixture.targetFacilityId,
+        archivedAt: null,
+      });
     });
   },
 );

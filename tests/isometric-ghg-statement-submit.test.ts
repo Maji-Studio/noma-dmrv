@@ -104,6 +104,7 @@ import * as isometric from "@/lib/isometric";
 import { __resetRateLimitForTests } from "@/lib/rate-limit/in-memory";
 import {
   createGhgStatementDraft,
+  refreshGhgStatementStatus,
   submitGhgStatementToVerifier,
 } from "@/fn/certification/ghg-statements";
 
@@ -526,6 +527,57 @@ describe("createGhgStatementDraft — happy path", () => {
     expect(ghgDA.updateGhgStatementReportingWindow).not.toHaveBeenCalled();
     // No new ledger row — the existing v=1 row was returned.
     expect(storedLedger).toHaveLength(1);
+  });
+});
+
+describe("refreshGhgStatementStatus", () => {
+  it("reconciles membership, reporting window, and remote state atomically", async () => {
+    const submission = newLedgerRow({
+      provider: "isometric",
+      submissionType: "ghg_statement",
+      localEntityType: "ghgStatement",
+      localEntityId: STATEMENT_ID,
+      payloadSnapshot: {},
+      payloadHash: "refresh-test",
+      version: 1,
+    });
+    submission.externalId = EXTERNAL_STATEMENT_ID;
+    submission.status = "submitted";
+    storedLedger.push(submission);
+    const remote = makeRemoteStatement();
+
+    vi.mocked(ledger.getSubmissionById).mockResolvedValue(submission);
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remote);
+
+    const result = await refreshGhgStatementStatus(submission.id);
+
+    expect(result).toMatchObject({ success: true, data: remote });
+    const transaction = expect.objectContaining({ __fakeTx: true });
+    expect(ghgDA.reconcileRemovalMembership).toHaveBeenCalledWith(
+      makeTestOrgContext("user-test-1"),
+      STATEMENT_ID,
+      [EXTERNAL_REMOVAL_ID],
+      transaction,
+    );
+    expect(ghgDA.updateGhgStatementReportingWindow).toHaveBeenCalledWith(
+      makeTestOrgContext("user-test-1"),
+      STATEMENT_ID,
+      {
+        reportingPeriodStartOn: "2026-01-01",
+        reportingPeriodEndOn: REPORTING_PERIOD_END,
+        remotePeriodMissing: false,
+      },
+      transaction,
+    );
+    expect(ledger.updateSubmissionMetadata).toHaveBeenCalledWith(
+      makeTestOrgContext("user-test-1"),
+      submission.id,
+      expect.objectContaining({
+        remoteStatus: "DRAFT",
+        removalIds: [EXTERNAL_REMOVAL_ID],
+      }),
+      transaction,
+    );
   });
 });
 
