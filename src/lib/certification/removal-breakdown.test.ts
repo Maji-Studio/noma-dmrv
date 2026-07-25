@@ -228,15 +228,15 @@ describe("computeRemovalBreakdown — registry mode", () => {
     expect(result.anomalies).toContain("sequestration-missing-or-zero");
   });
 
-  it("fails closed when the local sequestration contribution is absent", () => {
+  it("keeps authoritative registry figures when one local preview is incomplete", () => {
     const result = computeRemovalBreakdown(
       input({
-        sequestrationTonnesByBatch: [null, null],
+        sequestrationTonnesByBatch: [0.64, null],
         registry: REGISTRY,
       }),
     );
 
-    expect(result.anomalies).toContain("sequestration-missing-or-zero");
+    expect(result.anomalies).not.toContain("sequestration-missing-or-zero");
     expect(result.netRemovedKg).toBe(284);
     expect(result.reconciles).toBe(false);
   });
