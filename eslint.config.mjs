@@ -27,6 +27,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // eslint-config-next only ignores the ROOT .next. A build run from a git
+    // worktree under .claude/worktrees/ leaves its own .next inside the repo,
+    // which ESLint then walks — turning `pnpm lint` red with hundreds of
+    // errors that belong to generated code in a checkout nobody is editing.
+    "**/.next/**",
+    ".claude/worktrees/**",
     // Untracked QA run tooling (only markdown reports are committed —
     // docs/organization.md); driver scripts are throwaway, not lintable code.
     "docs/qa/artifacts/**",
