@@ -30,7 +30,6 @@ import {
   listGhgStatementsForFacility,
   listOpenRemovalsForFacility,
   reconcileRemovalMembership,
-  updateGhgStatementReportingWindow,
   type CertifierGhgStatementRow,
 } from "@/data-access/certifier-ghg-statements";
 import {
@@ -40,14 +39,12 @@ import {
 } from "@/data-access/certifier-removals";
 import { getFacilityById } from "@/data-access/facilities";
 import { requireOrgFacility } from "@/data-access/utils";
-import { db } from "@/db";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import {
   createGhgStatement,
   describeIsometricApiError,
   ghgStatementCreateRefusalMessage,
-  getGhgStatementPeriod,
   getIsometricClientForOrg,
   getGhgStatement,
   IsometricApiError,
@@ -87,7 +84,10 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { ghgStatementLookup, performRegistryCreate } from "./registry-create";
-import { applyGhgRemoteState } from "./ghg-statement-remote-state";
+import {
+  applyGhgRemoteState,
+  reconcileGhgStatementRemoteState,
+} from "@/data-access/certifier-ghg-remote-state";
 import {
   assertDedicatedGhgStatementProject,
   reconcileGhgStatementsForFacility,
@@ -509,39 +509,25 @@ async function finalizeGhgStatement(args: {
     };
   }
 
-  // Membership, reporting window and ledger state move together.
-  const remotePeriod = getGhgStatementPeriod(remote);
-  return db.transaction(async (tx) => {
-    const reconciled = await reconcileRemovalMembership(
-      orgCtx,
-      statement.id,
-      remote.ghg_entry_ids,
-      tx,
-    );
-    await updateGhgStatementReportingWindow(
-      orgCtx,
-      statement.id,
-      {
-        reportingPeriodStartOn: remotePeriod.startOn,
-        reportingPeriodEndOn: remotePeriod.endOn,
-        remotePeriodMissing: remotePeriod.endOn === null,
-      },
-      tx,
-    );
-    await applyGhgRemoteState(orgCtx, row, remote, {}, tx);
-    return {
-      ghgStatementId: statement.id,
-      externalId,
-      linkedRemovalIds: reconciled.linkedRemovalIds,
-      // Reconcile warns about ids the registry *returned* but we couldn't
-      // match; the honesty delta is the inverse — removals we predicted
-      // in-window that the registry silently placed in a different period.
-      warnings: [
-        ...reconciled.warnings,
-        ...expectedButExcludedWarnings(expected, reconciled.linkedRemovalIds),
-      ],
-    };
+  // Membership, reporting window and ledger state move together behind the
+  // organization-scoped data-access boundary.
+  const reconciled = await reconcileGhgStatementRemoteState(orgCtx, {
+    statementId: statement.id,
+    submission: row,
+    remote,
   });
+  return {
+    ghgStatementId: statement.id,
+    externalId,
+    linkedRemovalIds: reconciled.linkedRemovalIds,
+    // Reconcile warns about ids the registry *returned* but we couldn't
+    // match; the honesty delta is the inverse — removals we predicted
+    // in-window that the registry silently placed in a different period.
+    warnings: [
+      ...reconciled.warnings,
+      ...expectedButExcludedWarnings(expected, reconciled.linkedRemovalIds),
+    ],
+  };
 }
 
 // =====================================================================

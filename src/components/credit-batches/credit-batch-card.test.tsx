@@ -132,4 +132,20 @@ describe("CreditBatchCard", () => {
     expect(markup).not.toContain("bg-[var(--st-ok)]");
     expect(markup).toContain("bg-[var(--st-run)]");
   });
+
+  it("labels batch-local readiness without claiming certification readiness", () => {
+    const summary: CreditBatchHealthSummary = {
+      state: "ready",
+      issueCount: 0,
+      removalId: null,
+      removalStatus: null,
+      ghgStatementId: null,
+      ghgStatementStatus: null,
+    };
+
+    const text = collectText(CreditBatchLifecycleRail({ summary }));
+
+    expect(text).toContain("Batch data ready");
+    expect(text).not.toContain("Ready to certify");
+  });
 });
