@@ -282,8 +282,8 @@ export function FacilityIsometricConnector({
             <strong className="body-small-bold">
               {linkedElsewhere.join(", ")}
             </strong>
-            . Submissions from both facilities will target the same Isometric
-            project.
+            . Submissions from this and the listed facilities will target the
+            same Isometric project.
           </p>
           <label className="flex items-start gap-12 body-small text-[var(--color-text-primary)] cursor-pointer">
             <input

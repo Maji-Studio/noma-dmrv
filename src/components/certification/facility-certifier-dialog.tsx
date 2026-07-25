@@ -204,8 +204,9 @@ export function FacilityCertifierDialog({
               <strong className="body-small-bold">
                 {linkedHintForSelected?.join(", ")}
               </strong>
-              . Submissions from both facilities will target the same Isometric
-              project. The Isometric facility ID below stays unique per facility.
+              . Submissions from this and the listed facilities will target the
+              same Isometric project. The Isometric facility ID below stays
+              unique per facility.
             </p>
             <label className="flex items-start gap-12 body-small text-[var(--color-text-primary)] cursor-pointer">
               <input

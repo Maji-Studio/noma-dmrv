@@ -410,7 +410,14 @@ export function FacilityList() {
         </div>
       </section>
 
-      {facilities.length === 0 ? (
+      {isLoading ? (
+        <div
+          className="bg-[var(--panel-bg)] [border:var(--panel-border)] p-32 body-small text-[var(--color-text-tertiary)]"
+          aria-busy="true"
+        >
+          Loading facilities…
+        </div>
+      ) : facilities.length === 0 ? (
         <EmptyState
           padding="lg"
           icon={<FactoryIcon size={48} />}

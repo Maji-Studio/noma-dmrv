@@ -484,7 +484,14 @@ export function StorageLocationList() {
         </div>
       </section>
 
-      {storageLocations.length === 0 ? (
+      {isLoading ? (
+        <div
+          className="bg-[var(--panel-bg)] [border:var(--panel-border)] p-32 body-small text-[var(--color-text-tertiary)]"
+          aria-busy="true"
+        >
+          Loading storage bins…
+        </div>
+      ) : storageLocations.length === 0 ? (
         <EmptyState
           padding="lg"
           icon={<WarehouseIcon size={48} />}
