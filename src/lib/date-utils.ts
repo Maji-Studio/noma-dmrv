@@ -5,7 +5,8 @@
  * Avoids UTC conversion bugs from toISOString().split("T")[0].
  */
 
-import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { formatInTimeZone } from "date-fns-tz";
+import { SafeError } from "@/lib/errors";
 
 /**
  * Fallback IANA zone when a facility's timezone cannot be resolved. Mirrors the
@@ -13,6 +14,63 @@ import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
  * missing facility row and a facility that never set a zone behave identically.
  */
 export const DEFAULT_FACILITY_TIMEZONE = "UTC";
+
+/** Shapes {@link combineDateAndTime} accepts for its two halves. */
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_ONLY_PATTERN = /^\d{2}:\d{2}$/;
+
+/**
+ * How far either side of a wall clock to sample the zone's UTC offset when
+ * looking for a DST transition. One day brackets every real transition — no
+ * zone changes offset twice within 24 h — while staying far enough from the
+ * boundary that both the pre- and post-transition offsets are observed.
+ */
+const OFFSET_PROBE_MS = 24 * 60 * 60 * 1000;
+
+/** `Intl` is the only zone reader here that ignores the process's own zone. */
+const wallClockFormatters = new Map<string, Intl.DateTimeFormat>();
+
+function wallClockFormatter(timeZone: string): Intl.DateTimeFormat {
+  const cached = wallClockFormatters.get(timeZone);
+  if (cached) return cached;
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  wallClockFormatters.set(timeZone, formatter);
+  return formatter;
+}
+
+/**
+ * Read `instant` back as the "YYYY-MM-DDTHH:MM" wall clock it shows in
+ * `timeZone`.
+ *
+ * Deliberately not `formatInTimeZone`: date-fns-tz renders by building a Date
+ * whose *local* components are the target zone's wall clock, so when the
+ * process's own zone skips that wall clock the Date rolls forward and the
+ * reader lies. A Dar es Salaam 02:30 read on a machine set to
+ * `America/New_York` came back as 03:30 on that zone's spring-forward day —
+ * exactly the ambiguity this module has to detect.
+ */
+function wallClockIn(instant: Date, timeZone: string): string {
+  const parts = wallClockFormatter(timeZone).formatToParts(instant);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((candidate) => candidate.type === type)?.value ?? "";
+  return (
+    `${part("year").padStart(4, "0")}-${part("month")}-${part("day")}` +
+    `T${part("hour")}:${part("minute")}`
+  );
+}
+
+/** Signed local-minus-UTC offset of `timeZone` at `instantMs`, in milliseconds. */
+function zoneOffsetMs(instantMs: number, timeZone: string): number {
+  return Date.parse(`${wallClockIn(new Date(instantMs), timeZone)}:00.000Z`) - instantMs;
+}
 
 // ============================================
 // Facility Timezone Display Helpers
@@ -101,6 +159,30 @@ export function formatLocalTime(date: Date): string {
 }
 
 /**
+ * A wall clock that never happens: `timeStr` on `dateStr` falls inside the hour
+ * `timeZone` skips when its clocks move forward. Thrown by
+ * {@link combineDateAndTime} so the caller can surface it on the offending
+ * field instead of silently storing the wrong instant. Extends
+ * {@link SafeError} because the message is written for the operator.
+ */
+export class NonexistentLocalTimeError extends SafeError {
+  readonly dateStr: string;
+  readonly timeStr: string;
+  readonly timeZone: string;
+
+  constructor(dateStr: string, timeStr: string, timeZone: string) {
+    super(
+      `${timeStr} does not exist on ${dateStr} in ${timeZone.replace(/_/g, " ")}` +
+        ` — clocks move forward that day. Enter a time outside the skipped hour.`
+    );
+    this.name = "NonexistentLocalTimeError";
+    this.dateStr = dateStr;
+    this.timeStr = timeStr;
+    this.timeZone = timeZone;
+  }
+}
+
+/**
  * Combine a date string "YYYY-MM-DD" and a time string "HH:MM" entered against
  * `timeZone` into the UTC instant they denote.
  *
@@ -114,17 +196,66 @@ export function formatLocalTime(date: Date): string {
  * callers must name the zone (use {@link DEFAULT_FACILITY_TIMEZONE} explicitly
  * when there is genuinely nothing better).
  *
+ * ## DST policy — a wall clock is not always exactly one instant
+ *
+ * `fromZonedTime` is not used here because it answers both edge cases wrongly
+ * and inconsistently: it maps the nonexistent `2026-03-08 02:30` in
+ * `America/New_York` to `06:30Z`, which reads back as `01:30`, and it resolves
+ * ambiguous times to the *earlier* offset in `America/New_York` but the *later*
+ * one in `Europe/Zurich`. Both offsets bracketing the wall clock are sampled
+ * instead, and only those that read the entered wall clock back are kept:
+ *
+ * - **Gap** (clocks jump forward; the wall clock never occurs) — no candidate
+ *   survives, so this **throws {@link NonexistentLocalTimeError}**. Shifting it
+ *   silently is the same class of invisible corruption as the wrong-zone bug
+ *   above: the run window feeds the telemetry CSV clip and, via the end time,
+ *   the registry `measured_at` datapoint.
+ * - **Fold** (clocks jump back; the wall clock occurs twice) — both candidates
+ *   survive and the **earlier** one wins, i.e. the pre-transition offset that is
+ *   still on summer time. Rejecting is not an option: `01:30` is a wall clock a
+ *   plant genuinely runs through twice a year, and refusing it would block real
+ *   data entry for an hour every autumn. Earlier is chosen because it is the
+ *   first moment the clock reads that value, so a run logged forward in time
+ *   lands on the occurrence the operator was looking at; it also matches the
+ *   `Temporal` `disambiguation: "compatible"` default and `java.time`, and it
+ *   keeps a start and an end inside the same fold in entry order.
+ *
  * Note the deliberate asymmetry with {@link toDateInputValue} below, which pins
  * *date-only* values to UTC (#46): those persist at UTC midnight and carry no
  * clock, so UTC is their canonical calendar. A date+time pair describes a wall
  * clock at a physical plant, so it resolves in the plant's zone instead.
+ *
+ * @throws {NonexistentLocalTimeError} when the wall clock falls in a DST gap.
  */
 export function combineDateAndTime(
   dateStr: string,
   timeStr: string,
   timeZone: string
 ): Date {
-  return fromZonedTime(`${dateStr}T${timeStr}`, timeZone);
+  const wallClock = `${dateStr}T${timeStr}`;
+  if (!DATE_ONLY_PATTERN.test(dateStr) || !TIME_ONLY_PATTERN.test(timeStr)) {
+    // Malformed halves stay an Invalid Date, as before — the caller's
+    // field-level validators own that message.
+    return new Date(NaN);
+  }
+  const asIfUtc = Date.parse(`${wallClock}:00.000Z`);
+  if (Number.isNaN(asIfUtc)) return new Date(NaN);
+
+  // Offsets are signed local-minus-UTC, so instant = wall − offset.
+  const offsetBefore = zoneOffsetMs(asIfUtc - OFFSET_PROBE_MS, timeZone);
+  const offsetAfter = zoneOffsetMs(asIfUtc + OFFSET_PROBE_MS, timeZone);
+  const candidates =
+    offsetBefore === offsetAfter
+      ? [asIfUtc - offsetBefore]
+      : [asIfUtc - offsetBefore, asIfUtc - offsetAfter];
+
+  const valid = candidates.filter(
+    (ms) => wallClockIn(new Date(ms), timeZone) === wallClock
+  );
+  if (valid.length === 0) {
+    throw new NonexistentLocalTimeError(dateStr, timeStr, timeZone);
+  }
+  return new Date(Math.min(...valid));
 }
 
 /**

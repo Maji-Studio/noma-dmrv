@@ -26,6 +26,7 @@ import {
   combineDateAndTime,
   DEFAULT_FACILITY_TIMEZONE,
   formatLocalDate,
+  NonexistentLocalTimeError,
 } from "@/lib/date-utils";
 
 // ============================================
@@ -39,26 +40,45 @@ const DRY_MASS_BALANCE_MESSAGE =
   "Dry biochar output cannot exceed dry feedstock input";
 
 /**
+ * Outcome of {@link resolveInstant}. `instant` is null both when the pair is
+ * incomplete/malformed and when the wall clock does not exist; only the latter
+ * sets `nonexistentMessage`, so the caller can tell "nothing to check yet" from
+ * "the operator entered a time that never happens".
+ */
+type ResolvedInstant = {
+  instant: Date | null;
+  nonexistentMessage: string | null;
+};
+
+const UNRESOLVED_INSTANT: ResolvedInstant = { instant: null, nonexistentMessage: null };
+
+/**
  * Resolve a calendar-date value + a time value into a single instant, robust to
  * either shape the schema produces: on the client the date field has been
  * transformed to a `Date` (local midnight) and the time is an "HH:MM" string;
- * on server re-validation the time is already a combined `Date`. Returns null
- * when either part is missing/malformed (the field-level validators surface the
- * specific error).
+ * on server re-validation the time is already a combined `Date`. Returns a null
+ * instant when either part is missing/malformed (the field-level validators
+ * surface the specific error).
  *
  * `timeZone` must be the facility's IANA zone, matching what the form submits
  * via `combineDateAndTime`. Resolving here in the browser's zone while the
  * submitted instant is built in the facility's zone lets the two disagree
  * across a DST boundary that only one of the zones observes (a run that is
- * valid when saved can be rejected by the client, or vice versa).
+ * valid when saved can be rejected by the client, or vice versa). Sharing the
+ * combiner also means the two share its DST gap/fold policy, so validation
+ * rejects exactly the wall clocks the submit path would refuse to build.
  */
 function resolveInstant(
   dateVal: unknown,
   timeVal: unknown,
   timeZone: string
-): Date | null {
-  if (timeVal instanceof Date) return timeVal;
-  if (typeof timeVal !== "string" || !TIME_ONLY_RE.test(timeVal)) return null;
+): ResolvedInstant {
+  if (timeVal instanceof Date) {
+    return { instant: timeVal, nonexistentMessage: null };
+  }
+  if (typeof timeVal !== "string" || !TIME_ONLY_RE.test(timeVal)) {
+    return UNRESOLVED_INSTANT;
+  }
 
   // `requiredDateOnly`/`optionalDateOnly` parse "YYYY-MM-DD" at local midnight,
   // so reading the calendar day back off the Date is the exact inverse.
@@ -68,9 +88,19 @@ function resolveInstant(
   } else if (typeof dateVal === "string" && DATE_ONLY_RE.test(dateVal)) {
     dateStr = dateVal;
   }
-  if (!dateStr) return null;
+  if (!dateStr) return UNRESOLVED_INSTANT;
 
-  return combineDateAndTime(dateStr, timeVal, timeZone);
+  try {
+    return {
+      instant: combineDateAndTime(dateStr, timeVal, timeZone),
+      nonexistentMessage: null,
+    };
+  } catch (error) {
+    if (error instanceof NonexistentLocalTimeError) {
+      return { instant: null, nonexistentMessage: error.message };
+    }
+    throw error;
+  }
 }
 
 /** Whether an end-time value is actually present (Date or non-empty "HH:MM"). */
@@ -187,11 +217,32 @@ export function makeProductionRunFormSchema(timeZone: string) {
     const endDateVal = data.endDate ?? data.startDate;
     const end = endPresent
       ? resolveInstant(endDateVal, data.endTime, timeZone)
-      : null;
+      : UNRESOLVED_INSTANT;
+
+    // A wall clock inside the facility's spring-forward gap never happened, so
+    // it is reported on its own field and then treated as unresolved. The
+    // downstream window checks all guard on a non-null instant, so they stay
+    // silent rather than piling a second, misleading message onto the same
+    // field ("End must be after start" for a time that has no instant at all).
+    if (start.nonexistentMessage) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["startTime"],
+        message: start.nonexistentMessage,
+      });
+    }
+    if (end.nonexistentMessage) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["endTime"],
+        message: end.nonexistentMessage,
+      });
+    }
+
     const violations = getProductionRunOutcomeViolations({
       status: data.status,
-      startTime: start,
-      endTime: end,
+      startTime: start.instant,
+      endTime: end.instant,
       endTimePresent: endPresent,
       cancellationReason: data.cancellationReason,
       biocharOutputKg: data.biocharOutputKg,

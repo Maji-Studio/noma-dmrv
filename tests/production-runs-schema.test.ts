@@ -103,6 +103,97 @@ describe("makeProductionRunFormSchema timezone binding", () => {
   });
 });
 
+// A wall clock inside the facility's spring-forward gap never happened, so the
+// schema must refuse it by name instead of letting the submit path silently
+// store the hour next door — that window clips the telemetry CSV and, via the
+// end time, sets the registry `measured_at` datapoint.
+describe("makeProductionRunFormSchema DST gap and fold", () => {
+  const NEW_YORK = "America/New_York"; // forward 2026-03-08, back 2026-11-01
+  const completeRun = {
+    ...validProductionRunInput,
+    status: "complete" as const,
+    biocharOutputKg: 10,
+    biocharMoisturePercent: 5,
+  };
+  const messagesFor = (
+    result: ReturnType<ReturnType<typeof makeProductionRunFormSchema>["safeParse"]>,
+    field: string,
+  ) =>
+    result.success
+      ? []
+      : result.error.issues
+          .filter((issue) => issue.path.join(".") === field)
+          .map((issue) => issue.message);
+
+  it("rejects a start inside the spring-forward gap, naming the gap", () => {
+    process.env.TZ = "UTC";
+    const result = makeProductionRunFormSchema(NEW_YORK).safeParse({
+      ...completeRun,
+      startDate: "2026-03-08",
+      startTime: "02:30",
+      endDate: "2026-03-08",
+      endTime: "04:00",
+    });
+
+    expect(result.success).toBe(false);
+    expect(messagesFor(result, "startTime")).toEqual([
+      "02:30 does not exist on 2026-03-08 in America/New York — clocks move" +
+        " forward that day. Enter a time outside the skipped hour.",
+    ]);
+    // Exactly one message, on the field the operator typed into: an unresolved
+    // start must not also fire "End must be after start" or the terminal-run
+    // "needs an end date and time" check.
+    expect(messagesFor(result, "endTime")).toEqual([]);
+  });
+
+  it("rejects an end inside the spring-forward gap, on the end field", () => {
+    process.env.TZ = "Africa/Dar_es_Salaam";
+    const result = makeProductionRunFormSchema(NEW_YORK).safeParse({
+      ...completeRun,
+      startDate: "2026-03-08",
+      startTime: "01:30",
+      endDate: "2026-03-08",
+      endTime: "02:30",
+    });
+
+    expect(result.success).toBe(false);
+    expect(messagesFor(result, "endTime")).toEqual([
+      "02:30 does not exist on 2026-03-08 in America/New York — clocks move" +
+        " forward that day. Enter a time outside the skipped hour.",
+    ]);
+    expect(messagesFor(result, "startTime")).toEqual([]);
+  });
+
+  // The fold is the opposite call: 01:30 happens twice on 2026-11-01, and both
+  // occurrences are legitimate operating time, so the run is accepted and the
+  // earlier instant is used (see `combineDateAndTime`).
+  it("accepts an ambiguous fall-back wall clock", () => {
+    process.env.TZ = "Europe/Zurich";
+    const result = makeProductionRunFormSchema(NEW_YORK).safeParse({
+      ...completeRun,
+      startDate: "2026-11-01",
+      startTime: "01:30",
+      endDate: "2026-11-01",
+      endTime: "03:00",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("leaves a run at a facility without DST unaffected", () => {
+    process.env.TZ = "America/New_York";
+    const result = makeProductionRunFormSchema("Africa/Dar_es_Salaam").safeParse({
+      ...completeRun,
+      startDate: "2026-03-08",
+      startTime: "02:30",
+      endDate: "2026-03-08",
+      endTime: "04:00",
+    });
+
+    expect(result.success).toBe(true);
+  });
+});
+
 describe("productionRunFilterSchema", () => {
   it("accepts a credit-batch deep-link filter", () => {
     const creditBatchId = "55555555-5555-4555-8555-555555555555";

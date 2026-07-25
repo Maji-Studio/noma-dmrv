@@ -6,13 +6,10 @@
 "use client";
 
 import { nullableNumericValue, integerValue } from "@/lib/form-utils";
-import {
-  combineDateAndTime,
-  formatLocalDate,
-  resolveFacilityTimezone,
-} from "@/lib/date-utils";
+import { formatLocalDate, resolveFacilityTimezone } from "@/lib/date-utils";
 import {
   buildProductionRunResolver,
+  buildProductionRunWindow,
   productionRunTimezoneHelperText,
   productionRunTimingDefaults,
   type ProductionRunResolver,
@@ -438,16 +435,24 @@ export function ProductionRunForm({
       to: data.status,
       existingEndTime: productionRun?.endTime,
     });
+    const runWindow = buildProductionRunWindow({
+      startDateStr,
+      startTimeStr: data.startTime as string,
+      endDateStr,
+      endTimeStr: data.endTime as string | undefined,
+      includeEndTime,
+      clearEndTime,
+      timeZone: formTimezone,
+    });
+    if (!runWindow.ok) {
+      setError(runWindow.field, { type: "validate", message: runWindow.message });
+      return;
+    }
     const combined: ProductionRunSubmitData = {
       ...data,
       expectedUpdatedAt: productionRun?.updatedAt,
-      startTime: combineDateAndTime(startDateStr, data.startTime as string, formTimezone),
-      endTime:
-        clearEndTime
-          ? null
-          : data.endTime && includeEndTime
-          ? combineDateAndTime(endDateStr, data.endTime as string, formTimezone)
-          : undefined,
+      startTime: runWindow.startTime,
+      endTime: runWindow.endTime,
     };
 
     // Clear any prior overlap state before re-submitting.

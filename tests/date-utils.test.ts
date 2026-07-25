@@ -5,6 +5,7 @@ import {
   formatFacilityDate,
   formatFacilityTime,
   formatLocalDate,
+  NonexistentLocalTimeError,
   parseLocalDateString,
   resolveFacilityTimezone,
   toDateInputValue,
@@ -100,6 +101,92 @@ describe("combineDateAndTime", () => {
       expect(formatFacilityDate(instant, timezone)).toBe("2026-07-17");
       expect(formatFacilityTime(instant, timezone, "HH:mm")).toBe("08:00");
     }
+  });
+});
+
+// A wall clock is not always exactly one instant. `fromZonedTime` answered both
+// DST edges wrongly: the nonexistent New York 2026-03-08 02:30 became 06:30Z,
+// which reads back as 01:30 — silently storing an hour the operator never
+// entered, into the window that clips the telemetry CSV and sets the registry
+// `measured_at` — and ambiguous times resolved to the earlier offset in New
+// York but the later one in Zurich. All assertions here are on absolute
+// instants and must hold whatever the machine's zone is.
+describe("combineDateAndTime across DST transitions", () => {
+  const MACHINE_ZONES = ["Europe/Zurich", "America/New_York", "UTC"];
+  const NEW_YORK = "America/New_York"; // forward 2026-03-08, back 2026-11-01
+  const ZURICH = "Europe/Zurich"; // forward 2026-03-29, back 2026-10-25
+
+  it("rejects a wall clock inside the spring-forward gap", () => {
+    for (const machineZone of MACHINE_ZONES) {
+      process.env.TZ = machineZone;
+      expect(() => combineDateAndTime("2026-03-08", "02:30", NEW_YORK)).toThrow(
+        NonexistentLocalTimeError,
+      );
+      expect(() => combineDateAndTime("2026-03-29", "02:30", ZURICH)).toThrow(
+        NonexistentLocalTimeError,
+      );
+    }
+  });
+
+  it("names the time, date and zone in the rejection", () => {
+    process.env.TZ = "UTC";
+    expect(() => combineDateAndTime("2026-03-08", "02:30", NEW_YORK)).toThrow(
+      "02:30 does not exist on 2026-03-08 in America/New York — clocks move" +
+        " forward that day. Enter a time outside the skipped hour.",
+    );
+  });
+
+  it("still accepts the wall clocks on either side of the gap", () => {
+    process.env.TZ = "Europe/Zurich";
+    // 01:30 EST (UTC-5) and 03:30 EDT (UTC-4) both exist on the same day.
+    expect(
+      combineDateAndTime("2026-03-08", "01:30", NEW_YORK).toISOString(),
+    ).toBe("2026-03-08T06:30:00.000Z");
+    expect(
+      combineDateAndTime("2026-03-08", "03:30", NEW_YORK).toISOString(),
+    ).toBe("2026-03-08T07:30:00.000Z");
+  });
+
+  // Documented policy: an ambiguous wall clock resolves to the EARLIER of its
+  // two instants — the pre-transition, still-summer-time offset. Rejecting is
+  // not an option; 01:30 is a wall clock a plant really runs through.
+  it("resolves a fall-back wall clock to the earlier of its two instants", () => {
+    for (const machineZone of MACHINE_ZONES) {
+      process.env.TZ = machineZone;
+      // 01:30 EDT (UTC-4) = 05:30Z, not 01:30 EST (UTC-5) = 06:30Z.
+      expect(
+        combineDateAndTime("2026-11-01", "01:30", NEW_YORK).toISOString(),
+      ).toBe("2026-11-01T05:30:00.000Z");
+      // 02:30 CEST (UTC+2) = 00:30Z, not 02:30 CET (UTC+1) = 01:30Z. Zurich is
+      // the case `fromZonedTime` resolved the other way round from New York.
+      expect(
+        combineDateAndTime("2026-10-25", "02:30", ZURICH).toISOString(),
+      ).toBe("2026-10-25T00:30:00.000Z");
+    }
+  });
+
+  it("round-trips an accepted fold time back to the entered wall clock", () => {
+    process.env.TZ = "UTC";
+    const instant = combineDateAndTime("2026-11-01", "01:30", NEW_YORK);
+    expect(formatFacilityDate(instant, NEW_YORK)).toBe("2026-11-01");
+    expect(formatFacilityTime(instant, NEW_YORK, "HH:mm")).toBe("01:30");
+  });
+
+  it("leaves a zone without DST untouched", () => {
+    process.env.TZ = "America/New_York";
+    // The control case: no transition, so there is nothing to disambiguate.
+    expect(
+      combineDateAndTime("2026-07-17", "08:00", "Africa/Dar_es_Salaam").toISOString(),
+    ).toBe("2026-07-17T05:00:00.000Z");
+    expect(
+      combineDateAndTime("2026-03-08", "02:30", "Africa/Dar_es_Salaam").toISOString(),
+    ).toBe("2026-03-07T23:30:00.000Z");
+  });
+
+  it("returns an Invalid Date for a malformed pair rather than throwing", () => {
+    process.env.TZ = "UTC";
+    expect(combineDateAndTime("", "", NEW_YORK).getTime()).toBeNaN();
+    expect(combineDateAndTime("2026-13-45", "08:00", NEW_YORK).getTime()).toBeNaN();
   });
 });
 

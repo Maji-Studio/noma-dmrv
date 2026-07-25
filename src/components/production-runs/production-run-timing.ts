@@ -12,9 +12,11 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
+  combineDateAndTime,
   formatFacilityDate,
   formatFacilityTime,
   formatTimezoneLabel,
+  NonexistentLocalTimeError,
   resolveFacilityTimezone,
 } from "@/lib/date-utils";
 import { makeProductionRunFormSchema } from "@/schemas/production-runs";
@@ -45,6 +47,64 @@ export function productionRunTimingDefaults(
     endDate: end ? formatFacilityDate(end, timeZone) : "",
     endTime: end ? formatFacilityTime(end, timeZone, TIME_INPUT_FORMAT) : "",
   };
+}
+
+/**
+ * The instants a submit writes, or the field a DST gap makes unwritable.
+ *
+ * `endTime` keeps the three-way meaning the mutation relies on: a `Date` to
+ * write, `null` to clear a reopened run's end, `undefined` to leave the stored
+ * end untouched.
+ */
+export type ProductionRunWindow =
+  | { ok: true; startTime: Date; endTime: Date | null | undefined }
+  | { ok: false; field: "startTime" | "endTime"; message: string };
+
+/**
+ * Build a run's start/end instants from the form's date + time pairs in
+ * `timeZone`.
+ *
+ * The gap rejection is returned rather than thrown so the form can pin it to
+ * the offending field. In practice the schema's `superRefine` — which shares
+ * `combineDateAndTime` and therefore its DST policy — has already blocked
+ * submit, so this is the second line of the same defence.
+ */
+export function buildProductionRunWindow(input: {
+  startDateStr: string;
+  startTimeStr: string;
+  endDateStr: string;
+  endTimeStr: string | undefined;
+  includeEndTime: boolean;
+  clearEndTime: boolean;
+  timeZone: string;
+}): ProductionRunWindow {
+  let startTime: Date;
+  try {
+    startTime = combineDateAndTime(input.startDateStr, input.startTimeStr, input.timeZone);
+  } catch (error) {
+    if (error instanceof NonexistentLocalTimeError) {
+      return { ok: false, field: "startTime", message: error.message };
+    }
+    throw error;
+  }
+
+  if (input.clearEndTime) return { ok: true, startTime, endTime: null };
+  if (!input.endTimeStr || !input.includeEndTime) {
+    return { ok: true, startTime, endTime: undefined };
+  }
+
+  try {
+    return {
+      ok: true,
+      startTime,
+      endTime: combineDateAndTime(input.endDateStr, input.endTimeStr, input.timeZone),
+    };
+  } catch (error) {
+    if (error instanceof NonexistentLocalTimeError) {
+      return { ok: false, field: "endTime", message: error.message };
+    }
+    throw error;
+  }
 }
 
 /**
