@@ -264,6 +264,9 @@ export const deliveryFilterSchema = z.object({
   // Filter by facility
   facilityId: z.string().uuid().optional(),
 
+  // Filter through production-run membership in a credit batch
+  creditBatchId: z.string().uuid().optional(),
+
   // Filter by status
   status: z.enum(deliveryStatuses).optional(),
 

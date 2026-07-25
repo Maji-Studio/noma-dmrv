@@ -12,6 +12,7 @@
  *   });
  *
  * so `createDatapoint` / `createGhgEntry` / `createGhgStatement` /
+ * `createMeasurementSample` /
  * `findGhgEntryBySupplierRef` / `findDatapointBySupplierRef` /
  * `findDraftGhgStatementsByPeriod` run for REAL against a registry-shaped
  * counterparty — supplier-reference query semantics and pagination are
@@ -38,6 +39,7 @@ import type {
   IsometricRequestOptions,
   PaginateOptions,
 } from "@/lib/isometric/client";
+import type { GhgStatementStatus } from "@/lib/isometric/ghg-statements";
 
 type ClientModule = typeof import("@/lib/isometric/client");
 type ApiErrorCtor = ClientModule["IsometricApiError"];
@@ -67,9 +69,9 @@ export interface FakeGhgStatementRecord {
   removal_ids: string[];
   credit_allocation: null;
   ghg_statement_report_url: string | null;
-  status: "DRAFT";
+  status: GhgStatementStatus;
   reporting_period_start_at: string | null;
-  reporting_period_end_at: string;
+  reporting_period_end_at: string | null;
   submitted_at: string | null;
   credits_issued_at: string | null;
   pending_total_co2e_removed_kg: number | null;
@@ -93,6 +95,7 @@ interface Page<T> {
 
 export class FakeIsometricRegistry {
   readonly datapoints: FakeRegistryRecord[] = [];
+  readonly measurementSamples: FakeRegistryRecord[] = [];
   readonly ghgEntries: FakeRegistryRecord[] = [];
   readonly ghgStatements: FakeGhgStatementRecord[] = [];
   readonly requests: LoggedRequest[] = [];
@@ -131,18 +134,21 @@ export class FakeIsometricRegistry {
   /** Injects a draft statement directly (e.g. the second draft of an ambiguous period). */
   seedGhgStatement(args: {
     projectId: string;
-    endOn: string;
+    endOn: string | null;
+    startOn?: string | null;
+    status?: GhgStatementStatus;
+    ghgEntryIds?: string[];
   }): FakeGhgStatementRecord {
     const statement: FakeGhgStatementRecord = {
       id: this.nextId("ggs"),
       project_id: args.projectId,
       verifier: null,
-      ghg_entry_ids: [],
+      ghg_entry_ids: args.ghgEntryIds ?? [],
       removal_ids: [],
       credit_allocation: null,
       ghg_statement_report_url: null,
-      status: "DRAFT",
-      reporting_period_start_at: null,
+      status: args.status ?? "DRAFT",
+      reporting_period_start_at: args.startOn ?? null,
       reporting_period_end_at: args.endOn,
       submitted_at: null,
       credits_issued_at: null,
@@ -201,6 +207,9 @@ export class FakeIsometricRegistry {
     if (method === "POST" && path === "/datapoints") {
       return this.create(this.datapoints, "dpt", body, ApiError);
     }
+    if (method === "POST" && path === "/measurement_samples") {
+      return this.createMeasurementSample(body, ApiError);
+    }
     if (method === "POST" && path === "/ghg_entries") {
       return this.create(this.ghgEntries, "gge", body, ApiError);
     }
@@ -216,6 +225,12 @@ export class FakeIsometricRegistry {
     }
     if (method === "GET" && path === "/datapoints") {
       return paginateSlice(this.filterRecords(this.datapoints, query), query);
+    }
+    if (method === "GET" && path === "/measurement_samples") {
+      return paginateSlice(
+        this.filterRecords(this.measurementSamples, query),
+        query,
+      );
     }
     if (method === "GET" && path === "/ghg_entries") {
       return paginateSlice(this.filterRecords(this.ghgEntries, query), query);
@@ -278,6 +293,27 @@ export class FakeIsometricRegistry {
     const record: FakeRegistryRecord = { ...payload, id: this.nextId(prefix) };
     collection.push(record);
     return record;
+  }
+
+  private createMeasurementSample(
+    body: unknown,
+    ApiError: ApiErrorCtor,
+  ): FakeRegistryRecord {
+    const payload = (body ?? {}) as Record<string, unknown>;
+    const values = Array.isArray(payload.values) ? payload.values : [];
+    const response = {
+      ...payload,
+      values: values.map((value) => ({
+        ...(value as Record<string, unknown>),
+        datapoint_id: this.nextId("dtp"),
+      })),
+    };
+    return this.create(
+      this.measurementSamples,
+      "mts",
+      response,
+      ApiError,
+    );
   }
 
   private filterRecords(

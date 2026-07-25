@@ -30,6 +30,10 @@ import {
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import {
+  bindSequestrationDatapointsToTemplate,
+  buildDirectSequestrationDatapoints,
+} from "@/lib/isometric/transformers/sequestration-binding";
+import {
   expectedSequestrationBlueprintKeys,
   isSequestrationBlueprintFamily,
   isSequestrationBlueprintKey,
@@ -61,6 +65,7 @@ import {
   assertEntityReadinessGapsResolved,
   buildRemovalSubmissionBuild,
 } from "./removal-submission-build";
+import { checkProtocolVersionAtSubmit } from "./protocol-version-preflight";
 import { performRegistryCreate, supplierRefLookup } from "./registry-create";
 import { resolveSourceIdsForRemoval } from "./sources";
 import {
@@ -127,6 +132,12 @@ export async function submitRemoval(
       "Configure organization Isometric credentials before submitting.",
     );
   }
+  await checkProtocolVersionAtSubmit({
+    orgCtx,
+    removalId,
+    mapping: ctx.mapping,
+    log,
+  });
   // Fail before the submit-phase client, evidence-ledger generation/mirroring,
   // local ledger claims, or registry writes. Context loading may already make
   // read-only registry calls to resolve the configured project and template.
@@ -195,23 +206,20 @@ export async function submitRemoval(
     }
   }
 
-  // Phase 3 gate: a template carrying a `biochar_sequestration_200_year_*`
-  // component routes its durability inputs through the measurement-samples step,
-  // whose live POST is staged behind two sandbox-empirical confirms (binding +
-  // unit scalings). Block such a submission while the flag is off rather than
-  // POST an under-specified removal (the sequestration components are skipped in
-  // resolveTemplateInputs / the removal body), so the new template can't be
-  // submitted until the confirms land. See docs/open-questions.md
-  // `isometric/durability-measurement-samples`.
+  // Durability evidence comes through measurement samples; each binding then
+  // declares whether its GHG input consumes a sample-response datapoint or an
+  // orchestrator-posted direct datapoint. Block while the sandbox-only flag is
+  // off: without the evidence step the required sources cannot be bound, and
+  // emitting an emissions-only GHG entry is forbidden.
   const hasDurabilityComponents = defaultTemplate.groups.some((group) =>
     group.components.some((c) => isSequestrationBlueprintKey(c.blueprint_key)),
   );
   if (hasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
     throw new SafeError(
-      "Durability submission is staged but not yet live — pending the sandbox " +
-        "confirms (datapoint↔input binding, measurement unit scalings, and — for " +
-        "1000-year — the s_fraction derivation). Enable " +
-        "DURABILITY_MEASUREMENT_SAMPLES_LIVE after confirming them.",
+      "Durability submission is staged but not yet live — measurement-sample " +
+        "POSTs are disabled, so the required sequestration datapoint IDs cannot " +
+        "be bound. Enable DURABILITY_MEASUREMENT_SAMPLES_LIVE only for the " +
+        "sandbox after operator validation.",
     );
   }
 
@@ -322,6 +330,7 @@ export async function submitRemoval(
       monitored,
       datapointBodyByKey,
       durabilityMeasurementSampleArgs,
+      sourceIds,
     },
     hashOf: (inputs) => payloadHash(inputs.semanticPayload),
     mirrorDocumentIds: candidateDocumentIds,
@@ -356,6 +365,7 @@ export async function submitRemoval(
         monitored: finalBuild.monitored,
         datapointBodyByKey: finalBuild.datapointBodyByKey,
         durabilityMeasurementSampleArgs: finalBuild.durabilityMeasurementSampleArgs,
+        sourceIds: finalBuild.sourceIds,
       };
     },
     buildSnapshot: ({ inputs, nextVersion }) => {
@@ -397,6 +407,17 @@ export async function submitRemoval(
             }),
           }
         : undefined;
+      const directSequestrationDatapoints = durabilityMeasurementSamples
+        ? buildDirectSequestrationDatapoints({
+            template: defaultTemplate,
+            measurementSampleSubmissions:
+              durabilityMeasurementSamples.submissions,
+            projectId: externalProjectId,
+            removalId,
+            version: nextVersion,
+            sourceIds: inputs.sourceIds,
+          })
+        : [];
 
       return {
         payloadSnapshot: {
@@ -410,7 +431,10 @@ export async function submitRemoval(
           memberCreditBatchIds,
           transport: {
             removalSupplierRef,
-            datapointBodies: finalDatapointBodies,
+            datapointBodies: [
+              ...finalDatapointBodies,
+              ...directSequestrationDatapoints,
+            ],
           },
           ...(durabilityMeasurementSamples
             ? { durabilityMeasurementSamples }
@@ -637,11 +661,11 @@ async function runRemovalSubmission({
     ? readRemovalReportingWindow(row)
     : reportingWindow;
 
-  const datapointIdsByRtcInput = new Map<string, string>();
+  let datapointIdsByRtcInput = new Map<string, string[]>();
   for (const f of fixed) {
     datapointIdsByRtcInput.set(
       `${f.removalTemplateComponentId}::${f.inputKey}`,
-      f.preboundDatapointId,
+      [f.preboundDatapointId],
     );
   }
 
@@ -661,23 +685,41 @@ async function runRemovalSubmission({
       failureMessagePrefix: `Datapoint POST failed for "${dp.inputKey}"`,
       log,
     });
-    datapointIdsByRtcInput.set(`${dp.rtcId}::${dp.inputKey}`, externalId);
+    const rtcInputKey = `${dp.rtcId}::${dp.inputKey}`;
+    datapointIdsByRtcInput.set(rtcInputKey, [
+      ...(datapointIdsByRtcInput.get(rtcInputKey) ?? []),
+      externalId,
+    ]);
   }
 
   // Phase 3: POST the durability measurement samples (per-batch chemistry +
-  // facility soil reference) after the datapoint loop, before the removal body —
-  // each value yields a datapoint the registry binds to the sequestration
-  // component. The flag is already on whenever submissions are present (the
-  // submitRemoval gate blocks otherwise); the explicit guard is defence-in-depth
-  // so a future caller can't accidentally fire the staged path.
-  if (durabilityMeasurementSubmissions && DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
-    const { submitted } = await submitDurabilityMeasurementSamples({
+  // facility soil reference) after the datapoint loop, before the removal body.
+  // Measurement-property inputs bind response datapoints; direct-datapoint
+  // inputs (currently 1000-year s_fraction) were already posted through the
+  // same idempotent loop above and remain duplicated in the sample as
+  // data-quality evidence. The flag is already on whenever submissions are
+  // present; the explicit guard is defence-in-depth for future callers.
+  if (durabilityMeasurementSubmissions && !DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
+    throw new SafeError(
+      "Durability measurement-sample submission is disabled. The GHG entry cannot be created without explicit sequestration datapoint bindings.",
+    );
+  }
+  if (durabilityMeasurementSubmissions) {
+    const {
+      submitted,
+      datapointIdsByMeasurementProperty,
+    } = await submitDurabilityMeasurementSamples({
       orgCtx,
       removalId,
       submissionRowId: row.id,
       resumed,
       submissions: durabilityMeasurementSubmissions,
       log,
+    });
+    datapointIdsByRtcInput = bindSequestrationDatapointsToTemplate({
+      template,
+      datapointIdsByMeasurementProperty,
+      datapointIdsByRtcInput,
     });
     log.info({ submitted }, "durability measurement samples submitted");
   }

@@ -235,5 +235,7 @@ export async function withAutoCode<T>(
   }
 
   // Should never reach here, but TypeScript needs it
-  throw new Error(`Failed to generate unique code after ${MAX_RETRIES} attempts`);
+  throw new SafeError(
+    `Failed to generate unique code after ${MAX_RETRIES} attempts`,
+  );
 }

@@ -7,6 +7,7 @@
 import { useState, useCallback } from "react";
 import { Modal } from "@/components/ui";
 import { Button } from "@/components/ui/button";
+import { ServerError } from "@/components/forms/server-error";
 import type { QuickAddDialogProps, EntityOption, EntityType } from "./types";
 
 // Human-readable entity type labels
@@ -107,14 +108,10 @@ export function QuickAddDialog({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-24 p-24">
-          {error && (
-            <div className="px-12 py-8 bg-[var(--color-signal-red-light)] text-[var(--color-signal-red)] text-[var(--text-s)] rounded-none">
-              {error}
-            </div>
-          )}
+          <ServerError message={error ?? undefined} />
 
-          <div className="flex flex-col gap-16">
-            <label htmlFor="quick-add-code" className="label-medium">
+          <div className="flex flex-col gap-6">
+            <label htmlFor="quick-add-code" className="body-small font-medium text-[var(--color-text-secondary)]">
               Code
             </label>
             <input
@@ -130,8 +127,8 @@ export function QuickAddDialog({
             />
           </div>
 
-          <div className="flex flex-col gap-16">
-            <label htmlFor="quick-add-name" className="label-medium">
+          <div className="flex flex-col gap-6">
+            <label htmlFor="quick-add-name" className="body-small font-medium text-[var(--color-text-secondary)]">
               Name <span className="text-[var(--color-signal-red)]">*</span>
             </label>
             <input
@@ -149,7 +146,7 @@ export function QuickAddDialog({
           {/* Actions */}
           <div className="flex gap-16 justify-start pt-16">
             <Button type="submit" variant="primary" busy={isSubmitting}>
-              {isSubmitting ? "Creating..." : `Create ${entityLabel}`}
+              Create {entityLabel}
             </Button>
             <Button
               variant="default"

@@ -35,6 +35,11 @@ import {
   useUpdateFeedstock,
   useDeleteFeedstock,
 } from "@/hooks/use-feedstocks";
+import { useDebounce } from "@/hooks/use-debounce";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
 import {
   createFeedstockSchema,
   type FeedstockFormData,
@@ -49,6 +54,7 @@ import {
 import { resolveCertFieldStatus } from "@/components/forms/cert-field-status";
 import { DEFAULT_TRIP_TYPE, TRIP_TYPE_LABELS } from "@/schemas/trip-type";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
 // ============================================
 // Column Definitions
@@ -233,10 +239,23 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
+    useListPagination(contextFacilityId);
+  const normalizedSearch = searchInput.trim();
+  const debouncedSearch = useDebounce(
+    normalizedSearch,
+    LIST_SEARCH_DEBOUNCE_MS,
+  );
 
   // Data
   const { data: feedstocksData, isLoading, error: fetchError } = useFeedstocks(
-    contextFacilityId ? { facilityId: contextFacilityId } : undefined,
+    {
+      ...(debouncedSearch ? { search: debouncedSearch } : {}),
+      ...(contextFacilityId ? { facilityId: contextFacilityId } : {}),
+      page: currentPage,
+      pageSize,
+    },
     { enabled: !!contextFacilityId },
   );
   const focusedFeedstock = useFeedstock(
@@ -371,6 +390,14 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const columns = createColumns(openEdit, handleDelete);
 
   const feedstockItems = feedstocksData?.items ?? [];
+  const totalPages = feedstocksData?.totalPages ?? 0;
+  useReconcileListPage({
+    currentPage,
+    totalPages,
+    isLoading,
+    setCurrentPage,
+  });
+  const hasActiveSearch = normalizedSearch.length > 0;
   useEffect(() => {
     if (!focusedFeedstockId) return;
     if (focusedFeedstock.error || (focusedFeedstock.isSuccess && !focusedFeedstock.data)) {
@@ -459,9 +486,19 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       <DataTable
         columns={columns}
         data={feedstockItems}
-        enableSorting
-        enableFiltering
+        enableSorting={false}
         enablePagination
+        manualPagination
+        pageCount={totalPages}
+        pageSize={pageSize}
+        pageIndex={currentPage - 1}
+        globalFilter={searchInput}
+        onGlobalFilterChange={(value) => {
+          setSearchInput(value);
+          setCurrentPage(1);
+        }}
+        onPaginationChange={onPaginationChange}
+        aria-label="Feedstocks"
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
@@ -469,20 +506,31 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           <EmptyState
             padding="md"
             icon={<PackageIcon size={48} />}
-            title="No feedstocks yet"
-            description="Create your first feedstock to get started"
+            title={hasActiveSearch ? "No matching feedstocks" : "No feedstocks yet"}
+            description={
+              hasActiveSearch
+                ? "Try clearing your search."
+                : "Create your first feedstock to get started"
+            }
             action={
-              <Button variant="primary" onClick={openCreate}>
-                <PlusIcon size={18} weight="bold" />
-                New Feedstock
-              </Button>
+              !hasActiveSearch ? (
+                <Button variant="primary" onClick={openCreate}>
+                  <PlusIcon size={18} weight="bold" />
+                  New Feedstock
+                </Button>
+              ) : undefined
             }
           />
         }
       >
         <DataTable.Toolbar>
-          <DataTable.Search placeholder="Search feedstocks..." />
-          <DataTable.ColumnVisibility />
+          <DataTable.Search
+            placeholder="Search feedstocks..."
+            aria-label="Search feedstocks"
+          />
+          <DataTable.Controls>
+            <DataTable.ColumnVisibility />
+          </DataTable.Controls>
         </DataTable.Toolbar>
         <DataTable.Pagination />
       </DataTable>

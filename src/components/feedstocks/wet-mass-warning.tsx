@@ -29,9 +29,9 @@ export function WetMassWarning({
   const overagePercent = deliveredKg > 0 ? ((overageKg / deliveredKg) * 100).toFixed(1) : null;
 
   return (
-    <div className="border border-[var(--color-signal-amber)] bg-[var(--color-signal-amber)]/5 p-16 space-y-12">
+    <div className="border border-[var(--color-signal-orange)] bg-[var(--color-signal-orange-light)] p-16 space-y-12">
       <div className="flex items-start gap-12">
-        <WarningIcon size={20} weight="fill" className="text-[var(--color-signal-amber)] mt-1 shrink-0" />
+        <WarningIcon size={20} weight="fill" className="text-[var(--color-signal-orange)] mt-1 shrink-0" />
         <div className="space-y-4">
           <p className="body-medium font-medium text-[var(--color-text-primary)]">
             Allocated wet mass exceeds total delivery

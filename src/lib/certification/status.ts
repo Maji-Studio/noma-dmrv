@@ -61,7 +61,22 @@ export const BLOCKING_SUBMISSION_STATUSES: readonly LocalSubmissionStatus[] = [
 /** Remote Isometric GHG-statement status (verifier lifecycle). */
 export type RemoteGhgStatus = components["schemas"]["GhgStatementStatus"];
 
+export type DerivedStatusKind =
+  | "in-progress"
+  | "not-submitted"
+  | "submitted"
+  | "draft"
+  | "in-registry"
+  | "in-verification"
+  | "verified"
+  | "issued"
+  | "rejected"
+  | "verification-failed"
+  | "superseded";
+
 export interface DerivedStatus {
+  /** Stable lifecycle discriminant; presentation code must not branch on label. */
+  kind: DerivedStatusKind;
   /** Color value handed to `<StatusBadge status={value} />`. */
   value: StatusValue;
   /** Human-readable label. */
@@ -73,6 +88,7 @@ export interface DerivedStatus {
 }
 
 const IN_PROGRESS: DerivedStatus = {
+  kind: "in-progress",
   value: "running",
   label: "In progress",
   isActionable: false,
@@ -97,6 +113,7 @@ export function deriveRemovalStatus({
   if (lockInFlight) return IN_PROGRESS;
   if (local === null) {
     return {
+      kind: "not-submitted",
       value: "draft",
       label: "Not submitted",
       isActionable: true,
@@ -107,6 +124,7 @@ export function deriveRemovalStatus({
     case "draft":
       // Stale-locked or rejected-cleared draft: actionable, treat as not sent.
       return {
+        kind: "not-submitted",
         value: "draft",
         label: "Not submitted",
         isActionable: true,
@@ -117,6 +135,7 @@ export function deriveRemovalStatus({
     // defensively to the same done state rather than throwing.
     case "accepted":
       return {
+        kind: "submitted",
         value: "issued",
         label: "Submitted",
         isActionable: false,
@@ -124,6 +143,7 @@ export function deriveRemovalStatus({
       };
     case "rejected":
       return {
+        kind: "rejected",
         value: "rejected",
         label: "Rejected",
         isActionable: true,
@@ -131,6 +151,7 @@ export function deriveRemovalStatus({
       };
     case "superseded":
       return {
+        kind: "superseded",
         value: "superseded",
         label: "Superseded",
         isActionable: false,
@@ -161,6 +182,7 @@ export function deriveStatementStatus({
   if (lockInFlight) return IN_PROGRESS;
   if (local === null) {
     return {
+      kind: "draft",
       value: "draft",
       label: "Draft",
       isActionable: true,
@@ -172,6 +194,7 @@ export function deriveStatementStatus({
   switch (remoteStatus) {
     case "AWAITING_VERIFICATION":
       return {
+        kind: "in-verification",
         value: "pending",
         label: "In verification",
         isActionable: false,
@@ -179,6 +202,7 @@ export function deriveStatementStatus({
       };
     case "VERIFIED":
       return {
+        kind: "verified",
         value: "verified",
         label: "Verified",
         isActionable: false,
@@ -186,6 +210,7 @@ export function deriveStatementStatus({
       };
     case "CREDITS_ISSUED":
       return {
+        kind: "issued",
         value: "issued",
         label: "Issued",
         isActionable: false,
@@ -193,6 +218,7 @@ export function deriveStatementStatus({
       };
     case "FAILED_VERIFICATION":
       return {
+        kind: "verification-failed",
         value: "rejected",
         label: "Verification failed",
         isActionable: true,
@@ -206,6 +232,7 @@ export function deriveStatementStatus({
   switch (local) {
     case "draft":
       return {
+        kind: "draft",
         value: "draft",
         label: "Draft",
         isActionable: true,
@@ -215,6 +242,7 @@ export function deriveStatementStatus({
       // Created in the registry, not yet sent to the verifier (remote DRAFT).
       // The next operator action is "Submit to verifier".
       return {
+        kind: "in-registry",
         value: "running",
         label: "In registry",
         isActionable: false,
@@ -222,6 +250,7 @@ export function deriveStatementStatus({
       };
     case "accepted":
       return {
+        kind: "verified",
         value: "verified",
         label: "Verified",
         isActionable: false,
@@ -229,6 +258,7 @@ export function deriveStatementStatus({
       };
     case "rejected":
       return {
+        kind: "verification-failed",
         value: "rejected",
         label: "Verification failed",
         isActionable: true,
@@ -236,6 +266,7 @@ export function deriveStatementStatus({
       };
     case "superseded":
       return {
+        kind: "superseded",
         value: "superseded",
         label: "Superseded",
         isActionable: false,

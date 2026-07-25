@@ -269,7 +269,7 @@ describe("deriveBatchHealth", () => {
     expect(carbon.requirementLabel).not.toMatch(/complete/i);
   });
 
-  it("counts every unmet check toward issueCount", () => {
+  it("does not surface transport until production lineage can be evaluated", () => {
     const result = deriveBatchHealth(
       facts({
         carbonMissingInputs: ["sample carbon content"],
@@ -277,8 +277,12 @@ describe("deriveBatchHealth", () => {
         requiredTransport: [{ category: "feedstock", present: false }],
       }),
     );
-    expect(result.issueCount).toBe(3);
+    expect(result.issueCount).toBe(2);
     expect(result.state).toBe("incomplete");
+    expect(checkFor(result, "transport")).toMatchObject({
+      status: "skipped",
+      detail: "Link production data before reviewing transport coverage",
+    });
   });
 
   it("keeps no-lineage and insufficient-sample gaps independent", () => {

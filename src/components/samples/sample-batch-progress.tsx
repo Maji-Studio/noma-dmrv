@@ -15,6 +15,7 @@ import Link from "next/link";
 import { ArrowSquareOutIcon, FlaskIcon } from "@phosphor-icons/react/dist/ssr";
 import { useBatchDurabilitySummary } from "@/hooks/use-certification";
 import type { DurabilityBatchSummary } from "@/lib/certification/durability-batch-summary";
+import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { DurabilityReadinessSignals } from "@/components/certification/durability-readiness";
 
 interface SampleBatchProgressProps {
@@ -103,7 +104,7 @@ export function SampleBatchProgress({
           Characterises credit batch {summary.creditBatchCode}
         </span>
         <Link
-          href={`/credit-batches/${summary.creditBatchId}`}
+          href={creditBatchDeepLinkHref(summary.creditBatchId)}
           className="inline-flex items-center gap-4 body-caption font-medium text-[var(--color-interaction)] underline-offset-2 hover:underline"
         >
           View batch

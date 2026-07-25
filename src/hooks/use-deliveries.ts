@@ -45,7 +45,12 @@ export const deliveryKeys = {
     [...deliveryKeys.details(), id, "relations"] as const,
   select: (orderId?: string) =>
     [...deliveryKeys.all, "select", orderId] as const,
-  stats: (filters?: { facilityId?: string; fromDate?: Date; toDate?: Date }) =>
+  stats: (filters?: {
+    facilityId?: string;
+    creditBatchId?: string;
+    fromDate?: Date;
+    toDate?: Date;
+  }) =>
     [...deliveryKeys.all, "stats", filters] as const,
   // Prefix that matches every stats variant regardless of filters — use for
   // invalidation so a filtered stats query (e.g. {facilityId}) is refetched.
@@ -119,7 +124,12 @@ export function useDeliveryWithRelations(deliveryId: string, enabled = true) {
  * Hook to fetch delivery statistics
  */
 export function useDeliveryStats(
-  filters?: { facilityId?: string; fromDate?: Date; toDate?: Date },
+  filters?: {
+    facilityId?: string;
+    creditBatchId?: string;
+    fromDate?: Date;
+    toDate?: Date;
+  },
   options?: { enabled?: boolean },
 ) {
   return useQuery({

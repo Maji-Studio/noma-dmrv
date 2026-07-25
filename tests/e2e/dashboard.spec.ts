@@ -176,7 +176,17 @@ test.describe("Dashboard (Flow Hero)", () => {
       await expect(
         structuralGaps.getByText("Transport distance lacks document evidence"),
       ).toBeVisible();
-      await expect(structuralGaps.getByText("1 gap")).toHaveCount(3);
+      await expect(
+        structuralGaps.getByText("Supplier form · Location · 1 affected"),
+      ).toBeVisible();
+      await expect(
+        structuralGaps.getByText("Feedstock form · Transport route · 1 affected"),
+      ).toBeVisible();
+      await expect(
+        structuralGaps.getByText(
+          "Feedstock form · Transport evidence · 1 affected",
+        ),
+      ).toBeVisible();
       await expect(page.getByText("3 open", { exact: true }).first()).toBeVisible();
       await expect(page.getByText("All clear")).toHaveCount(0);
 
@@ -265,8 +275,8 @@ test.describe("Dashboard (Flow Hero)", () => {
   });
 });
 
-test.describe("Credit batch detail (Phase 5)", () => {
-  test("compact overview, readiness panels, and edit sheet", async ({
+test.describe("Credit batch view sheet (Phase 5)", () => {
+  test("retired detail route opens the view sheet with sections and edit mode", async ({
     adminPage,
     seededData,
   }) => {
@@ -278,31 +288,34 @@ test.describe("Credit batch detail (Phase 5)", () => {
     const page = adminPage;
     await page.goto(`/credit-batches/${batch.id}`);
 
-    // Detail header: code and period, without repeating the facility name.
-    await expect(page.getByRole("heading", { name: batch.code })).toBeVisible();
+    // The old detail URL redirects into the list's deep-linked view sheet.
+    await expect(page).toHaveURL(new RegExp(`[?&]batch=${batch.id}`));
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByRole("heading", { name: batch.code })).toBeVisible();
+
+    // Certification journey and cohort fields lead the view.
     await expect(
-      page.locator(".container-max").getByText(seededData.facility.name),
-    ).toHaveCount(0);
+      sheet.getByText("Certification progress", { exact: true }),
+    ).toBeVisible();
+    await expect(sheet.getByText("Feedstock Type", { exact: true })).toBeVisible();
+    await expect(sheet.getByText("CO₂e stored", { exact: true })).toBeVisible();
+    await expect(sheet.getByText("Durability", { exact: true })).toBeVisible();
+    await expect(
+      sheet.getByText("Production runs", { exact: true }),
+    ).toBeVisible();
 
-    // Compact overview keeps operational cohort fields at the top.
-    const details = page.locator("#batch-details");
-    await expect(details.getByText("Feedstock", { exact: true })).toBeVisible();
-    await expect(details.getByText("CO₂e stored", { exact: true })).toBeVisible();
-    await expect(details.getByText("Durability", { exact: true })).toBeVisible();
-    await expect(details.getByText("Production runs", { exact: true })).toBeVisible();
-
-    // Readiness and lab samples are the two primary panels below the overview.
-    await expect(page.getByTestId("batch-health-strip")).toBeVisible();
-    await expect(page.getByText("Certification readiness")).toBeVisible();
-    await expect(page.getByText("Lab samples", { exact: true })).toBeVisible();
+    // Readiness and lab samples render below the sections.
+    await expect(sheet.getByTestId("batch-health-strip")).toBeVisible();
+    await expect(sheet.getByText("Certification requirements")).toBeVisible();
+    await expect(sheet.getByText("Lab samples", { exact: true })).toBeVisible();
 
     // Registry/accounting fields are deliberately absent; the form mounts only
-    // after the one page-level edit action is used.
-    await expect(page.getByText("Registry & accounting")).toHaveCount(0);
+    // after the footer edit action is used.
+    await expect(sheet.getByText("Registry & accounting")).toHaveCount(0);
     await expect(page.locator("#startDate")).toHaveCount(0);
 
-    // Header edit opens the side-sheet form; cancel closes it again
-    await page.getByRole("button", { name: "Edit batch" }).click();
+    // Footer edit swaps the sheet to the form; cancel closes the sheet.
+    await sheet.getByRole("button", { name: "Edit Credit Batch" }).click();
     await expect(page.locator("#startDate")).toBeVisible();
     await page.getByRole("button", { name: "Cancel" }).click();
     await expect(page.locator("#startDate")).toHaveCount(0);

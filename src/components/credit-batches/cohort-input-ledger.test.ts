@@ -9,7 +9,7 @@ function makeRun(
     id: "run-1",
     code: "PR-26-001",
     date: "2026-05-13",
-    status: "completed",
+    status: "complete",
     biocharDryMassKg: null,
     feedstockMassDryKg: null,
     dieselOperationLiters: null,

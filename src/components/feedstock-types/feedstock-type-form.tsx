@@ -24,6 +24,7 @@ import {
   feedstockTypeUsageOptionsFor,
   shouldClearCategoryForIsometricSelection,
   shouldSetUsageToPyrolysisForIsometricSelection,
+  shouldShowCertifiedFeedstockWarning,
   shouldShowIsometricFeedstockSection,
 } from "./feedstock-type-form-logic";
 
@@ -145,6 +146,12 @@ export function FeedstockTypeForm({
   const selectedIsometricNameChanged =
     !!selectedIsometricFeedstock &&
     selectedName.trim() !== selectedIsometricFeedstock.name.trim();
+  const showCertifiedFeedstockWarning =
+    shouldShowCertifiedFeedstockWarning(
+      isEditMode,
+      selectedUsage,
+      !!selectedIsometricFeedstock,
+    );
 
   const handleSelectIsometricFeedstock = (type: IsometricFeedstockType) => {
     setSelectedIsometricFeedstock(type);
@@ -257,19 +264,6 @@ export function FeedstockTypeForm({
       </div>
       )}
 
-      {showSourceSelector && activeSection === "general" && !selectedIsometricFeedstock && (
-        <div className="flex gap-10 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-12 py-10">
-          <WarningCircleIcon
-            aria-hidden
-            className="mt-1 size-18 shrink-0 text-[var(--st-wait)]"
-            weight="bold"
-          />
-          <p className="body-small text-[var(--color-text-primary)]">
-            {CERTIFIED_FEEDSTOCK_WARNING}
-          </p>
-        </div>
-      )}
-
       <form
         onSubmit={handleSubmit((data) => onSubmit(data))}
         className="space-y-20"
@@ -292,33 +286,47 @@ export function FeedstockTypeForm({
               {selectedIsometricSummary}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-                <FormField
-                  id="usage"
-                  label="Usage"
-                  error={errors.usage?.message}
-                  required
-                >
-                  <FormSelect
+                <div className="space-y-10">
+                  <FormField
                     id="usage"
-                    placeholder="Select usage..."
-                    disabled={isSubmitting}
-                    error={!!errors.usage}
-                    options={usageOptions}
-                    {...register("usage", {
-                      onChange: () =>
-                        setValue(
-                          "category",
-                          "" as FeedstockTypeFormData["category"]
-                        ),
-                    })}
-                  />
+                    label="Usage"
+                    error={errors.usage?.message}
+                    required
+                  >
+                    <FormSelect
+                      id="usage"
+                      placeholder="Select usage..."
+                      disabled={isSubmitting}
+                      error={!!errors.usage}
+                      options={usageOptions}
+                      {...register("usage", {
+                        onChange: () =>
+                          setValue(
+                            "category",
+                            "" as FeedstockTypeFormData["category"]
+                          ),
+                      })}
+                    />
+                  </FormField>
+                  {showCertifiedFeedstockWarning && (
+                    <div className="flex gap-10 border border-[var(--st-wait-border)] bg-[var(--st-wait-bg)] px-12 py-10">
+                      <WarningCircleIcon
+                        aria-hidden
+                        className="mt-1 size-18 shrink-0 text-[var(--st-wait)]"
+                        weight="bold"
+                      />
+                      <p className="body-small text-[var(--color-text-primary)]">
+                        {CERTIFIED_FEEDSTOCK_WARNING}
+                      </p>
+                    </div>
+                  )}
                   {lockUsage && (
                     <p className="body-caption text-[var(--color-text-tertiary)] mt-6">
                       Fixed by the parent workflow so this type cannot be
                       created with the wrong usage.
                     </p>
                   )}
-                </FormField>
+                </div>
 
                 <FormField id="name" label="Name" error={errors.name?.message} required>
                   <FormInput

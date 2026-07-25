@@ -1,11 +1,14 @@
 "use server";
 
 import { z } from "zod";
-import { and, eq, inArray } from "drizzle-orm";
 import { env } from "@/config/env";
-import { db } from "@/db";
+import { listCreditBatchCertificationLinks } from "@/data-access/credit-batch-certification-links";
 import { requireOrgFacility } from "@/data-access/utils";
-import { creditBatches } from "@/db/schema";
+import {
+  listRecentSyncEvents,
+  type CertifierSyncEventRow,
+} from "@/data-access/certification";
+import { getLatestSubmissionsForEntities } from "@/data-access/certification";
 import {
   listRemovalsForFacility,
   listUngroupedCreditBatches,
@@ -20,8 +23,20 @@ import {
   type RemovalReadiness,
 } from "@/lib/certification/readiness";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
+import { deriveSubmissionStatus } from "@/lib/certification/from-submission";
 import { SafeError } from "@/lib/errors";
-import type { LocalSubmissionStatus } from "@/lib/certification/status";
+import type {
+  DerivedStatus,
+  LocalSubmissionStatus,
+} from "@/lib/certification/status";
+import {
+  GHG_STATEMENT_ENTITY_TYPE,
+  GHG_STATEMENT_SUBMISSION_TYPE,
+  ISOMETRIC_PROVIDER,
+  REMOVAL_ENTITY_TYPE,
+  REMOVAL_SUBMISSION_TYPE,
+} from "@/lib/isometric/utils/constants";
+import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import {
@@ -40,16 +55,24 @@ const READINESS_CONCURRENCY = 8;
 // the Credit Batches list pages at most 36 cards, so 50 leaves headroom while
 // capping the cost of a single fan-out.
 const MAX_HEALTH_SUMMARIES = 50;
+const RECENT_SYNC_EVENTS_LIMIT = 10;
 
 /**
- * One credit batch's certification-readiness verdict for the overview cards —
- * the lightweight projection of `BatchHealth` (state + open-issue count) needed
- * to render a card's cert tag without shipping the full checklist.
+ * One credit batch's overview status: lightweight data readiness plus the
+ * downstream Removal and GHG Statement lifecycles needed by the card rail.
  */
 export interface CreditBatchHealthSummary {
   state: BatchHealthState;
   /** Count of unmet (blocking) checks; 0 when ready. */
   issueCount: number;
+  /** The Removal this batch belongs to, or null while it is still ungrouped. */
+  removalId: string | null;
+  /** The Removal's own registry-submission status. */
+  removalStatus: DerivedStatus | null;
+  /** The downstream GHG Statement, once the submitted Removal is rolled up. */
+  ghgStatementId: string | null;
+  /** The GHG Statement's verifier lifecycle, kept distinct from the Removal. */
+  ghgStatementStatus: DerivedStatus | null;
 }
 
 // One removal's place in the Removals hub: its identity, member batches, latest
@@ -68,6 +91,8 @@ export interface RemovalPreflightSummary {
   // Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant diesel the
   // active template cannot carry. Shown alongside readiness; never gates submit.
   submissionWarnings: string[];
+  /** Removal-scoped submit/upload attempts, newest first. */
+  recentSyncEvents: CertifierSyncEventRow[];
 }
 
 export interface CertificationOverviewData {
@@ -120,7 +145,14 @@ export async function loadCertificationOverview(
             const scope = await resolveScopeForRemoval(orgCtx, removal.id, {
               skipPreview: true,
             });
-            const ctx = await buildRemovalContext(orgCtx, scope, facilityFacts);
+            const [ctx, recentSyncEvents] = await Promise.all([
+              buildRemovalContext(orgCtx, scope, facilityFacts),
+              listRecentSyncEvents(orgCtx, {
+                entityType: REMOVAL_ENTITY_TYPE,
+                entityId: removal.id,
+                limit: RECENT_SYNC_EVENTS_LIMIT,
+              }),
+            ]);
             const facts = toRemovalReadinessFacts(ctx);
             const readiness = deriveRemovalReadiness(facts);
 
@@ -135,6 +167,7 @@ export async function loadCertificationOverview(
               lockInFlight: facts.lockInFlight,
               readiness,
               submissionWarnings: ctx.submissionWarnings,
+              recentSyncEvents,
             };
           }),
       );
@@ -194,18 +227,10 @@ export async function loadCreditBatchHealthSummaries(
       .parse(batchIds);
     if (ids.length === 0) return {};
 
-    const batchFacilityRows = await db
-      .select({
-        id: creditBatches.id,
-        facilityId: creditBatches.facilityId,
-      })
-      .from(creditBatches)
-      .where(
-        and(
-          inArray(creditBatches.id, ids),
-          eq(creditBatches.organizationId, orgCtx.organizationId),
-        ),
-      );
+    const batchFacilityRows = await listCreditBatchCertificationLinks(
+      orgCtx,
+      ids,
+    );
     const facilityByBatchId = new Map(
       batchFacilityRows.map((row) => [row.id, row.facilityId]),
     );
@@ -216,10 +241,47 @@ export async function loadCreditBatchHealthSummaries(
       throw new SafeError("Batch does not belong to requested facility");
     }
 
-    const facilityFacts = await loadFacilityCertifierFacts(
-      orgCtx,
-      validFacilityId,
+    const batchRowById = new Map(
+      batchFacilityRows.map((row) => [row.id, row]),
     );
+    const removalIds = Array.from(
+      new Set(
+        batchFacilityRows.flatMap((row) =>
+          row.removalId ? [row.removalId] : [],
+        ),
+      ),
+    );
+    const ghgStatementIds = Array.from(
+      new Set(
+        batchFacilityRows.flatMap((row) =>
+          row.ghgStatementId ? [row.ghgStatementId] : [],
+        ),
+      ),
+    );
+    const [facilityFacts, removalSubmissions, ghgStatementSubmissions] =
+      await Promise.all([
+        loadFacilityCertifierFacts(orgCtx, validFacilityId),
+        getLatestSubmissionsForEntities(
+          orgCtx,
+          {
+            provider: ISOMETRIC_PROVIDER,
+            submissionType: REMOVAL_SUBMISSION_TYPE,
+            localEntityType: REMOVAL_ENTITY_TYPE,
+            localEntityIds: removalIds,
+          },
+          validFacilityId,
+        ),
+        getLatestSubmissionsForEntities(
+          orgCtx,
+          {
+            provider: ISOMETRIC_PROVIDER,
+            submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
+            localEntityType: GHG_STATEMENT_ENTITY_TYPE,
+            localEntityIds: ghgStatementIds,
+          },
+          validFacilityId,
+        ),
+      ]);
     const { contextsByBatch } = await buildCreditBatchContexts(
       orgCtx,
       ids,
@@ -232,9 +294,38 @@ export async function loadCreditBatchHealthSummaries(
         throw new SafeError("Batch does not belong to requested facility");
       }
       const health = deriveBatchHealth(toBatchHealthFacts(ctx, batchId));
+      const batchRow = batchRowById.get(batchId);
+      const removalId = batchRow?.removalId ?? null;
+      const ghgStatementId = batchRow?.ghgStatementId ?? null;
+      const removalSubmission = removalId
+        ? (removalSubmissions.get(removalId) ?? null)
+        : null;
+      const ghgStatementSubmission = ghgStatementId
+        ? (ghgStatementSubmissions.get(ghgStatementId) ?? null)
+        : null;
       summaries[batchId] = {
         state: health.state,
         issueCount: health.issueCount,
+        removalId,
+        removalStatus: removalId
+          ? deriveSubmissionStatus(
+              removalSubmission,
+              removalSubmission
+                ? isLockedInFlight(removalSubmission)
+                : false,
+              "removal",
+            )
+          : null,
+        ghgStatementId,
+        ghgStatementStatus: ghgStatementId
+          ? deriveSubmissionStatus(
+              ghgStatementSubmission,
+              ghgStatementSubmission
+                ? isLockedInFlight(ghgStatementSubmission)
+                : false,
+              "ghgStatement",
+            )
+          : null,
       };
     }
     return summaries;

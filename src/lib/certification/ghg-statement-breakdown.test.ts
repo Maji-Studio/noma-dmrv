@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   computeGhgStatementBreakdown,
+  hasExactGhgEntryMembership,
   type GhgStatementBreakdownInput,
   type GhgStatementEntryFigures,
 } from "./ghg-statement-breakdown";
@@ -21,6 +22,8 @@ function input(
     memberBatchCount: 2,
     entries: [],
     creditAllocation: null,
+    ghgStatementId: null,
+    ghgStatementStatus: null,
     ...overrides,
   };
 }
@@ -35,6 +38,36 @@ const ENTRIES: GhgStatementEntryFigures[] = [
 
 // Buffer 34 kg of 284 kg issuable → 12.0% effective reversal rate.
 const ALLOCATION = { bufferCreditsKg: 34, supplierCreditsKg: 250 };
+
+describe("hasExactGhgEntryMembership", () => {
+  it("accepts the same membership regardless of registry order", () => {
+    expect(
+      hasExactGhgEntryMembership(
+        ["rmv_local_1", "rmv_local_2"],
+        ["rmv_local_2", "rmv_local_1"],
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects an unknown remote statement member", () => {
+    expect(
+      hasExactGhgEntryMembership(
+        ["rmv_local_1"],
+        ["rmv_local_1", "rmv_unknown"],
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects missing and duplicate memberships", () => {
+    expect(hasExactGhgEntryMembership([], [])).toBe(false);
+    expect(
+      hasExactGhgEntryMembership(
+        ["rmv_local_1", "rmv_local_1"],
+        ["rmv_local_1"],
+      ),
+    ).toBe(false);
+  });
+});
 
 describe("computeGhgStatementBreakdown — estimate mode (no entries)", () => {
   it("sums the flattened member batches into the local net", () => {
@@ -57,6 +90,7 @@ describe("computeGhgStatementBreakdown — estimate mode (no entries)", () => {
       }),
     );
     expect(result.hasAnyData).toBe(false);
+    expect(result.anomalies).toEqual([]);
   });
 });
 
@@ -144,5 +178,52 @@ describe("computeGhgStatementBreakdown — registry mode", () => {
     expect(result.sequestrationKg).toBeNull();
     expect(result.netRemovedKg).toBeCloseTo(284, 6);
     expect(result.hasAnyData).toBe(true);
+  });
+
+  it("preserves a negative member anomaly when another entry offsets it", () => {
+    const result = computeGhgStatementBreakdown(
+      input({
+        entries: [
+          {
+            netRemovedKg: -10,
+            netBeforeDiscountKg: -5,
+            standardDeviationKg: 1,
+          },
+          {
+            netRemovedKg: 294,
+            netBeforeDiscountKg: 304,
+            standardDeviationKg: 4,
+          },
+        ],
+        creditAllocation: ALLOCATION,
+      }),
+    );
+
+    expect(result.netRemovedKg).toBe(284);
+    expect(result.anomalies).toContain("net-negative");
+  });
+
+  it("preserves a member discount anomaly when another entry offsets it", () => {
+    const result = computeGhgStatementBreakdown(
+      input({
+        entries: [
+          {
+            netRemovedKg: 160,
+            netBeforeDiscountKg: 150,
+            standardDeviationKg: 1,
+          },
+          {
+            netRemovedKg: 124,
+            netBeforeDiscountKg: 149,
+            standardDeviationKg: 4,
+          },
+        ],
+        creditAllocation: ALLOCATION,
+      }),
+    );
+
+    expect(result.netRemovedKg).toBe(284);
+    expect(result.netBeforeDiscountKg).toBe(299);
+    expect(result.anomalies).toContain("net-exceeds-before-discount");
   });
 });

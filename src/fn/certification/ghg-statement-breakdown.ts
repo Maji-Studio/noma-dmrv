@@ -11,6 +11,7 @@ import { getCreditBatchesByRemovalId } from "@/data-access/certifier-removals";
 import { getCo2eStoredPreviews } from "@/data-access/credit-batches";
 import {
   computeGhgStatementBreakdown,
+  hasExactGhgEntryMembership,
   type GhgStatementEntryFigures,
 } from "@/lib/certification/ghg-statement-breakdown";
 import type { RemovalCarbonBreakdown } from "@/lib/certification/removal-breakdown";
@@ -111,14 +112,26 @@ export async function loadGhgStatementBreakdown(
     const entryExternalIds = removalIds
       .map((id) => removalSubmissions.get(id)?.externalId)
       .filter((value): value is string => Boolean(value));
-    const fetchedEntries = await Promise.all(
-      entryExternalIds.map((id) => getGhgEntry(client, id).catch(() => null)),
-    );
+    const externalId = statementSubmission?.externalId ?? null;
+    const [fetchedEntries, remote] = await Promise.all([
+      Promise.all(
+        entryExternalIds.map((id) => getGhgEntry(client, id).catch(() => null)),
+      ),
+      externalId
+        ? getGhgStatement(client, externalId).catch(() => null)
+        : Promise.resolve(null),
+    ]);
     const presentEntries = fetchedEntries.filter(
       (entry): entry is NonNullable<typeof entry> => entry !== null,
     );
     const allEntriesPresent =
-      removalIds.length > 0 && presentEntries.length === removalIds.length;
+      entryExternalIds.length === removalIds.length &&
+      remote !== null &&
+      hasExactGhgEntryMembership(entryExternalIds, remote.ghg_entry_ids) &&
+      hasExactGhgEntryMembership(
+        presentEntries.map((entry) => entry.id),
+        remote.ghg_entry_ids,
+      );
     const entries: GhgStatementEntryFigures[] = allEntriesPresent
       ? presentEntries.map((entry) => ({
           netRemovedKg: entry.co2e_net_removed_kg,
@@ -130,10 +143,6 @@ export async function loadGhgStatementBreakdown(
     // The buffer/supplier split lives only on the statement (it's null until
     // every entry's risk-of-reversal is set), so read it from the remote
     // statement rather than summing per-entry allocations.
-    const externalId = statementSubmission?.externalId ?? null;
-    const remote = externalId
-      ? await getGhgStatement(client, externalId).catch(() => null)
-      : null;
     const creditAllocation = remote?.credit_allocation
       ? {
           bufferCreditsKg: remote.credit_allocation.buffer_pool_contribution_kg,
@@ -156,6 +165,8 @@ export async function loadGhgStatementBreakdown(
       memberBatchCount: batches.length,
       entries,
       creditAllocation,
+      ghgStatementId: externalId,
+      ghgStatementStatus: remote?.status ?? null,
     });
 
     return {

@@ -35,6 +35,7 @@ import {
 import { getProductionRunById } from "./queries";
 import type { ProductionRunWithRelations } from "./types";
 import { assertCanMutateCertifiedLineage } from "../certification-lineage-guards";
+import { lockActiveFacilityReference } from "../facility-reference-guards";
 import { lockBinStocks } from "../lock-bin-stocks";
 import {
   assertProductionRunCreateFeedstockDrawWithinStock,
@@ -127,7 +128,13 @@ async function validateBiocharStorageLocation(
   const [loc] = await tx
     .select({ id: storageLocations.id, facilityId: storageLocations.facilityId, type: storageLocations.type })
     .from(storageLocations)
-    .where(and(eq(storageLocations.id, locationId), eq(storageLocations.organizationId, ctx.organizationId)));
+    .where(
+      and(
+        eq(storageLocations.id, locationId),
+        eq(storageLocations.organizationId, ctx.organizationId),
+        isNull(storageLocations.archivedAt),
+      ),
+    );
 
   if (!loc) throw new SafeError(`${label} storage location not found`);
   if (loc.facilityId !== facilityId) throw new SafeError(`${label} bin does not belong to the selected facility`);
@@ -153,7 +160,13 @@ async function validateProductionFeedstockSource(
     })
     .from(storageLocations)
     .leftJoin(feedstockTypes, and(eq(storageLocations.feedstockTypeId, feedstockTypes.id), eq(feedstockTypes.organizationId, ctx.organizationId)))
-    .where(and(eq(storageLocations.id, locationId), eq(storageLocations.organizationId, ctx.organizationId)));
+    .where(
+      and(
+        eq(storageLocations.id, locationId),
+        eq(storageLocations.organizationId, ctx.organizationId),
+        isNull(storageLocations.archivedAt),
+      ),
+    );
 
   if (!loc) throw new SafeError("Feedstock storage location not found");
   if (loc.facilityId !== facilityId) throw new SafeError("Feedstock bin does not belong to the selected facility");
@@ -255,6 +268,13 @@ export async function createProductionRun(
   let run: typeof productionRuns.$inferSelect;
   try {
     run = await db.transaction(async (tx) => {
+    await lockActiveFacilityReference(ctx, tx, data.facilityId);
+
+    await lockBinStocks(ctx, tx, [
+      data.feedstockStorageLocationId,
+      data.biocharStorageLocationId,
+    ]);
+
     // Reject an overlapping window before writing (serialized per-reactor).
     if (statusOccupiesReactor(status)) {
       await assertNoReactorRunOverlap(ctx, tx, {
@@ -263,11 +283,6 @@ export async function createProductionRun(
         endTime: data.endTime,
       });
     }
-
-    await lockBinStocks(ctx, tx, [
-      computedDryMass ? data.feedstockStorageLocationId : null,
-      data.biocharOutputKg ? data.biocharStorageLocationId : null,
-    ]);
 
     // Validate long-tail storage references before writing the run.
     if (data.feedstockStorageLocationId) {
@@ -533,6 +548,10 @@ export async function updateProductionRun(
       productionRuns.code,
       CODE_CONFLICT_MESSAGES.productionRun,
       () => db.transaction(async (tx) => {
+    if (data.facilityId !== undefined) {
+      await lockActiveFacilityReference(ctx, tx, data.facilityId);
+    }
+
     await lockProductionRunUpdateStock(ctx, tx, existing, data);
 
     const [locked] = await tx
@@ -541,6 +560,7 @@ export async function updateProductionRun(
       .where(and(
         eq(productionRuns.id, productionRunId),
         eq(productionRuns.organizationId, ctx.organizationId),
+        isNull(productionRuns.archivedAt),
       ))
       .for("update");
 

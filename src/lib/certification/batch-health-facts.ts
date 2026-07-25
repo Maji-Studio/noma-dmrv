@@ -16,6 +16,7 @@
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import type { BatchHealthFacts } from "./batch-health";
+import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "./preview-gaps";
 
 // Preview `missingInputs` keys owned by OTHER health checks (or by the
 // removal-level requirements step), excluded here so each concern reports once:
@@ -25,6 +26,9 @@ const NON_CARBON_MISSING_INPUTS = new Set([
   "applicationIds",
   "facilityCertifierProject",
   "isometricCertifier",
+  // The registry remains authoritative and submission-capable while the local
+  // preview is withheld; this provenance gap must not become a submit blocker.
+  STORED_CO2E_PREVIEW_REVERIFICATION_GAP,
 ]);
 
 // Human labels for the genuine carbon/durability gaps the CO2e-stored preview
@@ -46,19 +50,29 @@ const CARBON_INPUT_LABELS: Record<string, string> = {
   stdNonReactiveCarbonPercent: "Std dev of non-reactive carbon",
 };
 
+const COMPLETE_CHEMISTRY_REPLICATE_DETAIL =
+  "replicate(s) with complete H/C_org + O/C_org chemistry";
+
 function carbonMissingInputs(
   ctx: RemovalCertifyContext,
   batchId: string,
 ): string[] {
   const member = ctx.memberBatches.find((b) => b.id === batchId);
   const raw = member?.co2eStoredPreview?.missingInputs ?? [];
+  const hasReplicateShortfall = raw.includes("thousandYearReplicates");
   return Array.from(
     new Set(
       [
         ...raw
           .filter((key) => !NON_CARBON_MISSING_INPUTS.has(key))
           .map((key) => CARBON_INPUT_LABELS[key] ?? key),
-        ...(member?.durabilityGateBlockers ?? []),
+        ...(member?.durabilityGateBlockers ?? []).filter(
+          (blocker) =>
+            !(
+              hasReplicateShortfall &&
+              blocker.includes(COMPLETE_CHEMISTRY_REPLICATE_DETAIL)
+            ),
+        ),
       ],
     ),
   );

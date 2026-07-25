@@ -6,7 +6,7 @@
  */
 
 import { and, asc, count, desc, eq, gte, ilike, inArray, isNull, lte, or, sql, SQL } from "drizzle-orm";
-import { db } from "@/db";
+import { db, type DbTransaction } from "@/db";
 import { countRows, sumNumeric } from "@/db/aggregate";
 import {
   feedstocks,
@@ -33,6 +33,7 @@ import {
 import { SafeError } from "@/lib/errors";
 import { retireDocumentsForEntities } from "./documents";
 import { assertCanMutateCertifiedLineage } from "./certification-lineage-guards";
+import { lockActiveFacilityReference } from "./facility-reference-guards";
 import { lockBinStocks } from "./lock-bin-stocks";
 import { transportEvidenceDocumentCount } from "./transport-evidence-projections";
 
@@ -42,6 +43,55 @@ const ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE =
 
 function isFeedstockIntakeBinType(type: string): boolean {
   return FEEDSTOCK_INTAKE_BIN_TYPES.some((binType) => binType === type);
+}
+
+async function validateFeedstockStorageLocations(
+  ctx: OrgContext,
+  tx: DbTransaction,
+  storageLocationIds: readonly string[],
+  facilityId: string,
+  feedstockTypeId: string,
+): Promise<void> {
+  if (storageLocationIds.length === 0) return;
+
+  const bins = await tx
+    .select({
+      id: storageLocations.id,
+      type: storageLocations.type,
+      feedstockTypeId: storageLocations.feedstockTypeId,
+      facilityId: storageLocations.facilityId,
+    })
+    .from(storageLocations)
+    .where(
+      and(
+        inArray(storageLocations.id, storageLocationIds),
+        eq(storageLocations.organizationId, ctx.organizationId),
+        isNull(storageLocations.archivedAt),
+      ),
+    );
+
+  const binMap = new Map(bins.map((bin) => [bin.id, bin]));
+  for (const storageLocationId of storageLocationIds) {
+    const bin = binMap.get(storageLocationId);
+    if (!bin) {
+      throw new SafeError(`Storage bin not found: ${storageLocationId}`);
+    }
+    if (bin.facilityId !== facilityId) {
+      throw new SafeError(
+        `Storage bin ${bin.id} does not belong to the selected facility`,
+      );
+    }
+    if (!isFeedstockIntakeBinType(bin.type)) {
+      throw new SafeError(
+        `Feedstock materials must be allocated to a feedstock bin, not a ${bin.type.replace("_", " ")}.`,
+      );
+    }
+    if (bin.feedstockTypeId && bin.feedstockTypeId !== feedstockTypeId) {
+      throw new SafeError(
+        "Storage bin already holds a different feedstock type. Each bin can only hold one type.",
+      );
+    }
+  }
 }
 
 // ============================================
@@ -397,48 +447,19 @@ export async function createFeedstock(
     throw new SafeError("Feedstock type not found");
   }
 
-  // Batch-validate bin type compatibility for all allocations
   const binIds = data.allocations.map((a) => a.storageLocationId);
-  const bins = await db
-    .select({
-      id: storageLocations.id,
-      type: storageLocations.type,
-      feedstockTypeId: storageLocations.feedstockTypeId,
-      facilityId: storageLocations.facilityId,
-    })
-    .from(storageLocations)
-    .where(and(inArray(storageLocations.id, binIds), eq(storageLocations.organizationId, ctx.organizationId)));
-
-  const binMap = new Map(bins.map((b) => [b.id, b]));
-  for (const allocation of data.allocations) {
-    const bin = binMap.get(allocation.storageLocationId);
-    if (!bin) {
-      throw new SafeError(`Storage bin not found: ${allocation.storageLocationId}`);
-    }
-    if (bin.facilityId !== data.facilityId) {
-      throw new SafeError(`Storage bin ${bin.id} does not belong to the selected facility`);
-    }
-      if (!isFeedstockIntakeBinType(bin.type)) {
-        throw new SafeError(
-          `Feedstock materials must be allocated to a feedstock bin, not a ${bin.type.replace("_", " ")}.`
-        );
-      }
-    if (bin.feedstockTypeId && bin.feedstockTypeId !== data.feedstockTypeId) {
-      throw new SafeError(
-        `Storage bin already holds a different feedstock type. Each bin can only hold one type.`
-      );
-    }
-  }
-
   const codes = await codesFn(data.allocations.length);
-  const stockBinIds = data.allocations
-    .filter((allocation) =>
-      deriveMassDryKg(allocation.allocatedWetMassKg, data.moisturePercent) > 0
-    )
-    .map((allocation) => allocation.storageLocationId);
 
   const createdFeedstocks = await db.transaction(async (tx) => {
-    await lockBinStocks(ctx, tx, stockBinIds);
+    await lockActiveFacilityReference(ctx, tx, data.facilityId);
+    await lockBinStocks(ctx, tx, binIds);
+    await validateFeedstockStorageLocations(
+      ctx,
+      tx,
+      binIds,
+      data.facilityId,
+      data.feedstockTypeId,
+    );
     const results: string[] = [];
 
     for (let i = 0; i < data.allocations.length; i++) {
@@ -542,59 +563,18 @@ export async function updateFeedstock(
     throw new SafeError("Feedstock not found");
   }
 
-  // Validate storage bin compatibility if changing storage location or feedstock type
-  if (feedstockData.storageLocationId || feedstockData.feedstockTypeId) {
-    const binId = feedstockData.storageLocationId ?? existing.storageLocationId;
-    const typeId = feedstockData.feedstockTypeId ?? existing.feedstockTypeId;
-    const facId = feedstockData.facilityId ?? existing.facilityId;
-
-    // Confirm the feedstock type exists before validating compatible bins.
-    const [ft] = await db
-      .select({ id: feedstockTypes.id })
-      .from(feedstockTypes)
-      .where(and(eq(feedstockTypes.id, typeId), eq(feedstockTypes.organizationId, ctx.organizationId)));
-
-    if (!ft) {
-      throw new SafeError("Feedstock type not found");
-    }
-
-    if (binId) {
-      const [bin] = await db
-        .select({
-          type: storageLocations.type,
-          feedstockTypeId: storageLocations.feedstockTypeId,
-          facilityId: storageLocations.facilityId,
-        })
-        .from(storageLocations)
-        .where(and(eq(storageLocations.id, binId), eq(storageLocations.organizationId, ctx.organizationId)));
-
-      if (!bin) {
-        throw new SafeError(`Storage bin not found: ${binId}`);
-      }
-      if (bin.facilityId !== facId) {
-        throw new SafeError(`Storage bin ${binId} does not belong to the selected facility`);
-      }
-
-      if (!isFeedstockIntakeBinType(bin.type)) {
-        throw new SafeError(
-          "Feedstock materials must be allocated to a feedstock bin."
-        );
-      }
-      if (bin.feedstockTypeId && bin.feedstockTypeId !== typeId) {
-        throw new SafeError(
-          "Storage bin already holds a different feedstock type. Each bin can only hold one type."
-        );
-      }
-    }
-  }
-
   await db.transaction(async (tx) => {
+    if (feedstockData.facilityId !== undefined) {
+      await lockActiveFacilityReference(ctx, tx, feedstockData.facilityId);
+    }
+
     const [locked] = await tx
       .select()
       .from(feedstocks)
       .where(and(
         eq(feedstocks.id, feedstockId),
         eq(feedstocks.organizationId, ctx.organizationId),
+        isNull(feedstocks.archivedAt),
       ))
       .for("update");
 
@@ -622,17 +602,34 @@ export async function updateFeedstock(
       feedstockData.storageLocationId !== undefined
         ? feedstockData.storageLocationId
         : locked.storageLocationId;
+    const effectiveFeedstockTypeId =
+      feedstockData.feedstockTypeId ?? locked.feedstockTypeId;
+    const effectiveFacilityId =
+      feedstockData.facilityId ?? locked.facilityId;
+    const storageReferenceNeedsValidation =
+      feedstockData.storageLocationId !== undefined ||
+      feedstockData.feedstockTypeId !== undefined ||
+      feedstockData.facilityId !== undefined;
     const stockDerivationChanged =
       status !== locked.status ||
       (feedstockData.massDryKg !== undefined && feedstockData.massDryKg !== locked.massDryKg) ||
       (feedstockData.storageLocationId !== undefined &&
         feedstockData.storageLocationId !== locked.storageLocationId);
 
-    if (stockDerivationChanged) {
+    if (stockDerivationChanged || storageReferenceNeedsValidation) {
       await lockBinStocks(ctx, tx, [
         locked.storageLocationId,
         effectiveStorageLocationId,
       ]);
+    }
+    if (storageReferenceNeedsValidation && effectiveStorageLocationId) {
+      await validateFeedstockStorageLocations(
+        ctx,
+        tx,
+        [effectiveStorageLocationId],
+        effectiveFacilityId,
+        effectiveFeedstockTypeId,
+      );
     }
 
     await tx

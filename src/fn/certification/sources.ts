@@ -13,10 +13,10 @@ import {
   insertOrGetDocumentUpload,
   isExternalSourceReferencedInSnapshots,
   listDocumentUploadsForDocuments,
-  updateDocumentUploadMetadata,
   type CertifierDocumentUploadRow,
   type DocumentUploadMetadata,
 } from "@/data-access/certifier-document-uploads";
+import { getRegistrySourceVisibility } from "@/data-access/certifier-organization-settings";
 import {
   getCertifierRemovalById,
   getCreditBatchesByRemovalId,
@@ -37,7 +37,6 @@ import {
   createSource,
   findSourceBySupplierRef,
   getIsometricClientForOrg,
-  patchSource,
   requestSignedUploadUrl,
 } from "@/lib/isometric";
 import { getStorageProvider } from "@/lib/storage";
@@ -50,13 +49,13 @@ import {
   loadCandidateDocumentsForRemovalSchema,
   mirrorDocumentToSourceSchema,
   type MirrorDocumentToSourceInput,
-  setDocumentSourceVisibilitySchema,
   SOURCES_MAX_BYTES,
   unlinkDocumentSourceSchema,
 } from "@/schemas/certification-sources";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { appendSyncEventBestEffort, ISOMETRIC_PROVIDER } from "./shared";
+import { withSourceSyncEventOnFailure } from "./source-sync-events";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Candidate-document discovery
@@ -279,7 +278,7 @@ async function collectLineageEntities(
   return Array.from(seen.values());
 }
 
-async function loadCandidateDocumentsForRemovalInternal(
+export async function loadCandidateDocumentsForRemovalForUser(
   orgCtx: OrgContext,
   removalId: string,
 ): Promise<CandidateDocumentsForRemoval> {
@@ -371,11 +370,11 @@ export async function loadCandidateDocumentsForRemoval(
 ): Promise<ActionResult<CandidateDocumentsForRemoval>> {
   return withAction(async (orgCtx) => {
     const parsed = loadCandidateDocumentsForRemovalSchema.parse(input);
-    return loadCandidateDocumentsForRemovalInternal(orgCtx, parsed.removalId);
+    return loadCandidateDocumentsForRemovalForUser(orgCtx, parsed.removalId);
   });
 }
 
-// Source mutations (mirror, unlink, set-visibility) are anchored to a specific
+// Source mutations (mirror and unlink) are anchored to a specific
 // removal so the server can verify the document actually belongs to that
 // removal's lineage. Without this check, any authenticated caller who knows a
 // documentId UUID could mutate a Source mirrored under another removal — the
@@ -388,7 +387,7 @@ async function assertDocumentIsCandidateForRemoval(
   removalId: string,
   documentId: string,
 ): Promise<CandidateDocumentsForRemoval> {
-  const candidates = await loadCandidateDocumentsForRemovalInternal(
+  const candidates = await loadCandidateDocumentsForRemovalForUser(
     orgCtx,
     removalId,
   );
@@ -419,31 +418,6 @@ export interface MirrorResult {
 // (auth expired, 5xx, network) leaves zero audit trail — ops cannot answer
 // "did we even try?" in production. Re-throws after recording so the action
 // still surfaces the error to the caller.
-async function withSyncEventOnFailure<T>(
-  orgCtx: OrgContext,
-  args: {
-    documentId: string;
-    operation: string;
-    requestPayload?: unknown;
-  },
-  fn: () => Promise<T>,
-): Promise<T> {
-  try {
-    return await fn();
-  } catch (err) {
-    await appendSyncEventBestEffort(orgCtx, {
-      provider: ISOMETRIC_PROVIDER,
-      entityType: "document",
-      entityId: args.documentId,
-      operation: args.operation,
-      status: "failed",
-      requestPayload: args.requestPayload,
-      errorMessage: err instanceof Error ? err.message : String(err),
-    });
-    throw err;
-  }
-}
-
 // Thin server-action wrapper: validates input and resolves the caller from the
 // session. The body lives in `mirrorDocumentToSourceForUser` so server-side
 // callers that already hold a orgCtx (the submit pipeline, the transport
@@ -461,7 +435,7 @@ export async function mirrorDocumentToSourceForUser(
   parsed: MirrorDocumentToSourceInput,
 ): Promise<MirrorResult> {
     requireOrgRole(orgCtx, "admin");
-    const { removalId, documentId, isPublic } = parsed;
+    const { removalId, documentId } = parsed;
 
     // Ownership + lineage scoping ───────────────────────────────────────
     // `assertDocumentIsCandidateForRemoval` walks the same lineage the panel
@@ -534,6 +508,11 @@ export async function mirrorDocumentToSourceForUser(
     const fileSizeBytes: number = document.fileSizeBytes;
     const mimeType: string = document.mimeType;
     const supplierRefId = buildSourceSupplierRef(documentId);
+    const sourceVisibility = await getRegistrySourceVisibility(
+      orgCtx,
+      ISOMETRIC_PROVIDER,
+    );
+    const policyIsPublic = sourceVisibility === "public";
     // Serialize concurrent mirrors of the same document with a transaction-
     // scoped advisory lock. Two operators clicking "Mirror" simultaneously
     // would otherwise both POST /sources and one Source becomes an orphan
@@ -562,15 +541,17 @@ export async function mirrorDocumentToSourceForUser(
       let sourceExternalId: string;
       let signedUploadUrl: string | null = null;
       let recoveredFlag = false;
-      // Fresh creates use the requested visibility; reconciliation trusts the
-      // remote Source because Isometric is the registry of record.
-      let resolvedIsPublic = isPublic;
+      // Fresh creates use the persisted organization policy. Reconciliation
+      // trusts the existing remote Source because Isometric remains the
+      // registry of record for Sources created before a policy change.
+      let resolvedIsPublic = policyIsPublic;
 
       // Reconciliation: was a Source already created in a previous attempt?
-      const remoteExisting = await withSyncEventOnFailure(
+      const remoteExisting = await withSourceSyncEventOnFailure(
         orgCtx,
         {
           documentId,
+          removalId,
           operation: "source:lookup",
           requestPayload: { supplierRefId, phase: "lookup" },
         },
@@ -580,10 +561,11 @@ export async function mirrorDocumentToSourceForUser(
       if (remoteExisting) {
         sourceExternalId = remoteExisting.id;
         resolvedIsPublic = remoteExisting.is_public;
-        const result = await withSyncEventOnFailure(
+        const result = await withSourceSyncEventOnFailure(
           orgCtx,
           {
             documentId,
+            removalId,
             operation: "source:create:reconciled",
             requestPayload: { supplierRefId, externalId: remoteExisting.id },
           },
@@ -598,10 +580,11 @@ export async function mirrorDocumentToSourceForUser(
         }
         recoveredFlag = true;
       } else {
-        const created = await withSyncEventOnFailure(
+        const created = await withSourceSyncEventOnFailure(
           orgCtx,
           {
             documentId,
+            removalId,
             operation: "source:create",
             requestPayload: { supplierRefId },
           },
@@ -612,7 +595,7 @@ export async function mirrorDocumentToSourceForUser(
                 externalProjectId: mapping.externalProjectId,
                 document,
                 supplierRefId,
-                isPublic,
+                isPublic: policyIsPublic,
               }),
             ),
         );
@@ -622,10 +605,11 @@ export async function mirrorDocumentToSourceForUser(
 
       // Upload bytes if a URL was returned ───────────────────────────────
       if (signedUploadUrl) {
-        await withSyncEventOnFailure(
+        await withSourceSyncEventOnFailure(
           orgCtx,
           {
             documentId,
+            removalId,
             operation: "source:upload",
             requestPayload: { supplierRefId, externalId: sourceExternalId },
           },
@@ -708,7 +692,7 @@ export async function mirrorDocumentToSourceForUser(
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// Unlink (local-only) + visibility toggle
+// Unlink (local-only)
 // ───────────────────────────────────────────────────────────────────────────
 
 export async function unlinkDocumentSource(
@@ -792,105 +776,6 @@ export async function unlinkDocumentSource(
         },
       });
       return { unlinked: true };
-    });
-  });
-}
-
-export async function setDocumentSourceVisibility(
-  input: unknown,
-): Promise<ActionResult<{ isPublic: boolean }>> {
-  return withAction(async (orgCtx) => {
-    requireOrgRole(orgCtx, "admin");
-    const parsed = setDocumentSourceVisibilitySchema.parse(input);
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
-
-    // Anchor the mutation to the removal so the document must belong to
-    // that removal's lineage before any cross-system call is made.
-    await assertDocumentIsCandidateForRemoval(
-      orgCtx,
-      parsed.removalId,
-      parsed.documentId,
-    );
-
-    // Open a transaction and take the per-document mirror lock so this PATCH
-    // serializes against concurrent mirror / unlink on the same document.
-    // Without the lock, an unlink racing between the remote PATCH and the
-    // local UPDATE would leave the remote visibility flipped but the local
-    // row deleted — confusing on the next mirror reconciliation. The lock
-    // is held across the Isometric PATCH, matching the tradeoff
-    // mirrorDocumentToSource accepts (single-tenant v1).
-    return db.transaction(async (tx) => {
-      await acquireMirrorLock(tx, parsed.documentId);
-
-      const existing = await getDocumentUploadByDocument(
-        orgCtx,
-        ISOMETRIC_PROVIDER,
-        parsed.documentId,
-        tx,
-      );
-      if (!existing) {
-        throw new SafeError(
-          "Document is not mirrored yet; mirror it before changing visibility.",
-        );
-      }
-
-      // PATCH remote first — Isometric is the source of truth for is_public
-      // on the registry; local metadata is just a cache. The generated
-      // PatchSourceRequest treats every field as required-with-sentinel;
-      // `{ __typename: "Undefined" }` leaves unchanged fields alone.
-      const undefinedField = { __typename: "Undefined" as const };
-      const updatedSource = await withSyncEventOnFailure(
-        orgCtx,
-        {
-          documentId: parsed.documentId,
-          operation: "source:patch:visibility",
-          requestPayload: {
-            externalDocumentId: existing.externalDocumentId,
-            is_public: parsed.isPublic,
-          },
-        },
-        () =>
-          patchSource(client, existing.externalDocumentId, {
-            description: undefinedField,
-            display_name: undefinedField,
-            is_public: parsed.isPublic,
-            published_at: undefinedField,
-            supplier_reference_id: undefinedField,
-          }),
-      );
-
-      // Use the registry's response (not the requested value) as
-      // authoritative for the local cache — closes the race where two
-      // concurrent toggles diverge remote vs local.
-      const remoteIsPublic = updatedSource.is_public;
-
-      const existingMeta = (existing.metadata as DocumentUploadMetadata) ?? {
-        mirroredBy: orgCtx.userId,
-        supplierRefId: buildSourceSupplierRef(parsed.documentId),
-        contentLength: 0,
-        contentType: "",
-        isPublic: false,
-      };
-      const nextMeta: DocumentUploadMetadata = {
-        ...existingMeta,
-        isPublic: remoteIsPublic,
-      };
-      await updateDocumentUploadMetadata(orgCtx, existing.id, nextMeta, tx);
-
-      await appendSyncEventBestEffort(orgCtx, {
-        provider: ISOMETRIC_PROVIDER,
-        entityType: "document",
-        entityId: parsed.documentId,
-        operation: "source:patch:visibility",
-        status: "succeeded",
-        requestPayload: { is_public: parsed.isPublic },
-        responsePayload: {
-          externalDocumentId: existing.externalDocumentId,
-          remote_is_public: remoteIsPublic,
-        },
-      });
-
-      return { isPublic: remoteIsPublic };
     });
   });
 }
@@ -995,6 +880,5 @@ export async function resolveSourceIdsForRemoval(
 export type {
   MirrorDocumentToSourceInput,
   UnlinkDocumentSourceInput,
-  SetDocumentSourceVisibilityInput,
   LoadCandidateDocumentsForRemovalInput,
 } from "@/schemas/certification-sources";

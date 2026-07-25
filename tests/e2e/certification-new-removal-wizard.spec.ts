@@ -26,7 +26,7 @@ import {
   seedGroupedRemovalWithChain,
   seedUngroupedIncompleteBatch,
 } from "./fixtures/certification-helpers";
-import { SAMPLE_CREATE_CREDIT_BATCH_PARAM } from "@/components/samples/sample-create-intent";
+import { SAMPLE_CREATE_CREDIT_BATCH_PARAM } from "@/lib/sample-create-intent";
 
 // DB-only link target; never reaches Isometric, so any string is fine.
 const FAKE_PROJECT_ID = "e2e-new-removal-fake-project";
@@ -434,7 +434,9 @@ test.describe("Certification — New-Removal wizard (Phase 2 readiness workspace
         dialog.getByRole("link", { name: "Open full checklist on batch page" }),
       ).toHaveAttribute(
         "href",
-        new RegExp(`/credit-batches/${batch.creditBatchId}\\?facility=${facilityId}`),
+        new RegExp(
+          `/credit-batches\\?facility=${facilityId}&batch=${batch.creditBatchId}`,
+        ),
       );
     } finally {
       try {

@@ -16,7 +16,11 @@ import {
   type ConservativeSoilTemperature,
 } from "@/lib/isometric/utils/durability-aggregation";
 import { SafeError } from "@/lib/errors";
-import { getGhgEntry, getIsometricClientForOrg } from "@/lib/isometric";
+import {
+  getGhgEntry,
+  getGhgStatement,
+  getIsometricClientForOrg,
+} from "@/lib/isometric";
 import {
   ISOMETRIC_PROVIDER,
   REMOVAL_ENTITY_TYPE,
@@ -87,6 +91,12 @@ export async function loadRemovalBreakdown(
     const ghgEntry = externalId
       ? await getGhgEntry(client, externalId).catch(() => null)
       : null;
+    const ghgStatement =
+      ghgEntry?.ghg_statement_id != null
+        ? await getGhgStatement(client, ghgEntry.ghg_statement_id).catch(
+            () => null,
+          )
+        : null;
 
     // Conservative soil-temperature estimate across the removal's application
     // sites (each preview's per-site value is already 7 °C-floored). Only build
@@ -131,6 +141,8 @@ export async function loadRemovalBreakdown(
               ghgEntry.credit_allocation?.buffer_pool_contribution_kg ?? null,
             supplierCreditsKg:
               ghgEntry.credit_allocation?.supplier_allocation_kg ?? null,
+            ghgStatementId: ghgEntry.ghg_statement_id,
+            ghgStatementStatus: ghgStatement?.status ?? null,
           }
         : null,
     });

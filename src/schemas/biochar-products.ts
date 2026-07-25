@@ -176,6 +176,9 @@ export const biocharProductFilterSchema = z.object({
   // Filter by facility
   facilityId: z.string().uuid().optional(),
 
+  // Filter by the credit batch containing the linked production run
+  creditBatchId: z.string().uuid().optional(),
+
   // Filter by formulation
   formulationId: z.string().uuid().optional(),
 

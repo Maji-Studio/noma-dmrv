@@ -10,8 +10,6 @@
 
 import {
   CheckCircleIcon,
-  CircleIcon,
-  WarningIcon,
   XCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import {
@@ -22,7 +20,6 @@ import {
   type DurabilityBatchSummary,
   type DurabilitySummaryEligibility,
 } from "@/lib/certification/durability-batch-summary";
-import { formatDayString } from "@/lib/format-utils";
 import type { ValueWithStdDev } from "@/lib/isometric/utils/durability-aggregation";
 
 type Tone = "ok" | "wait" | "bad" | "off";
@@ -40,16 +37,18 @@ function ReadinessChip({
   children,
 }: {
   tone: Tone;
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <span
       className={`inline-flex items-center gap-6 border px-8 py-4 body-caption font-medium ${TONE_CLASSES[tone]}`}
     >
-      <span className="shrink-0" aria-hidden>
-        {icon}
-      </span>
+      {icon && (
+        <span className="shrink-0" aria-hidden>
+          {icon}
+        </span>
+      )}
       {children}
     </span>
   );
@@ -98,12 +97,12 @@ function eligibilityChip(
   return hasUsableReplicates
     ? {
         tone: "wait",
-        icon: <WarningIcon size={14} weight="fill" />,
+        icon: undefined,
         label: "Chemistry indeterminate",
       }
     : {
         tone: "off",
-        icon: <CircleIcon size={14} />,
+        icon: undefined,
         label: "Awaiting chemistry",
       };
 }
@@ -123,65 +122,57 @@ export function DurabilityReadinessSignals({
     summary.eligibility,
     usableReplicateCount > 0,
   );
-  // Server-computed against the facility-local day and the process unlock state
-  // (see `buildDurabilityBatchSummaries`) — never recompute the exclusion from
-  // the viewer's browser clock, which drifts a day across timezones.
-  const future = summary.future;
+  const signals: Array<{
+    key: string;
+    tone: Tone;
+    icon?: React.ReactNode;
+    content: React.ReactNode;
+  }> = [
+    {
+      key: "chemistry",
+      tone: eligibility.tone,
+      icon: eligibility.icon,
+      content: eligibility.label,
+    },
+    {
+      key: "replicates",
+      tone: meetsMinimum ? "ok" as const : "wait" as const,
+      icon: meetsMinimum ? (
+        <CheckCircleIcon size={14} weight="fill" />
+      ) : undefined,
+      content: `${usableReplicateCount} of ${minimumReplicates} usable samples`,
+    },
+    ...(meetsMinimum
+      ? [{
+          key: "distribution",
+          tone: summary.distributionWarning ? "wait" as const : "ok" as const,
+          icon: summary.distributionWarning ? undefined : (
+            <CheckCircleIcon size={14} weight="fill" />
+          ),
+          content: summary.distributionWarning
+            ? "Clustered on one run/day"
+            : `${summary.distinctRunDayCount} distinct runs/days`,
+        }]
+      : []),
+  ].sort(
+    (left, right) =>
+      Number(right.tone === "ok") - Number(left.tone === "ok"),
+  );
 
   return (
     <div
       data-testid="durability-readiness-signals"
       className="flex flex-wrap items-center gap-8"
     >
-      <ReadinessChip
-        tone={meetsMinimum ? "ok" : "wait"}
-        icon={
-          meetsMinimum ? (
-            <CheckCircleIcon size={14} weight="fill" />
-          ) : (
-            <WarningIcon size={14} weight="fill" />
-          )
-        }
-      >
-        {usableReplicateCount} of {minimumReplicates} usable samples
-      </ReadinessChip>
-
-      {meetsMinimum && (
+      {signals.map((signal) => (
         <ReadinessChip
-          tone={summary.distributionWarning ? "wait" : "ok"}
-          icon={
-            summary.distributionWarning ? (
-              <WarningIcon size={14} weight="fill" />
-            ) : (
-              <CheckCircleIcon size={14} weight="fill" />
-            )
-          }
+          key={signal.key}
+          tone={signal.tone}
+          icon={signal.icon}
         >
-          {summary.distributionWarning
-            ? "Clustered on one run/day"
-            : `${summary.distinctRunDayCount} distinct runs/days`}
+          {signal.content}
         </ReadinessChip>
-      )}
-
-      <ReadinessChip tone={eligibility.tone} icon={eligibility.icon}>
-        {eligibility.label}
-      </ReadinessChip>
-
-      {/* Future-dated samples count for batch chemistry but not (yet) toward
-          the process's Method-B baseline — say so here, where the operator
-          would otherwise read "chemistry eligible" as baseline progress. Once
-          Method B is unlocked the baseline window is closed, so drop the
-          "counts toward the baseline" claim and state the neutral fact. */}
-      {future.count > 0 && (
-        <ReadinessChip
-          tone="wait"
-          icon={<WarningIcon size={14} weight="fill" />}
-        >
-          {future.countsTowardBaseline
-            ? `${future.count} future-dated — counts toward the Method-B baseline from ${formatDayString(future.earliestDay)}`
-            : `${future.count} future-dated — not part of the Method-B baseline`}
-        </ReadinessChip>
-      )}
+      ))}
     </div>
   );
 }

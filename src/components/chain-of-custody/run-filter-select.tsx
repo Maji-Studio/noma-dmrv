@@ -137,7 +137,7 @@ export function RunFilterSelect({
             className={cn(
               "cursor-pointer px-12 py-8 text-[var(--text-s)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-background-medium)]",
               "focus-visible:outline-none focus-visible:bg-[var(--color-background-medium)]",
-              value == null && "bg-[var(--color-interaction-light)]"
+              value == null && "bg-[var(--color-background-interaction-light)]"
             )}
           >
             All production runs
@@ -154,7 +154,7 @@ export function RunFilterSelect({
               className={cn(
                 "cursor-pointer px-12 py-8 transition-colors hover:bg-[var(--color-background-medium)]",
                 "focus-visible:outline-none focus-visible:bg-[var(--color-background-medium)]",
-                run.id === value && "bg-[var(--color-interaction-light)]"
+                run.id === value && "bg-[var(--color-background-interaction-light)]"
               )}
             >
               <span className="block text-[var(--text-s)] text-[var(--color-text-primary)]">

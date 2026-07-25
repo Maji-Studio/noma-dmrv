@@ -18,7 +18,6 @@ import type {
 import type {
   PaginatedProductionRuns,
   ProductionRunWithRelations,
-  ProductionRunReadingRecord,
 } from "@/data-access/production-runs";
 import {
   getProductionRunsFn,
@@ -30,7 +29,6 @@ import {
   createProductionRunFn,
   updateProductionRunFn,
   deleteProductionRunFn,
-  addProductionRunReadingFn,
 } from "@/fn/production-runs";
 import { creditBatchKeys } from "@/hooks/use-credit-batches";
 import { invalidateCertificationReadiness } from "@/hooks/use-certification";
@@ -540,46 +538,6 @@ export function useDeleteProductionRun(
       queryClient.invalidateQueries({ queryKey: productionRunKeys.lists() });
 
       await callbacks?.onSettled?.(data, error, productionRunId);
-    },
-  });
-}
-
-/**
- * Hook to add a reading to a production run
- */
-export function useAddProductionRunReading(
-  callbacks?: MutationCallbacks<
-    ProductionRunReadingRecord,
-    { productionRunId: string; timestamp: Date; temperatureC?: number | null; pressureBar?: number | null; gasFlowRate?: number | null }
-  >
-) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (data: {
-      productionRunId: string;
-      timestamp: Date;
-      temperatureC?: number | null;
-      pressureBar?: number | null;
-      gasFlowRate?: number | null;
-    }) => {
-      const result = await addProductionRunReadingFn(data);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-      return result.data;
-    },
-    onSuccess: async (data, variables) => {
-      // Invalidate readings cache
-      queryClient.invalidateQueries({
-        queryKey: productionRunKeys.readings(variables.productionRunId),
-      });
-      invalidateCertificationReadiness(queryClient);
-
-      await callbacks?.onSuccess?.(data, variables);
-    },
-    onError: async (error, variables) => {
-      await callbacks?.onError?.(error, variables);
     },
   });
 }

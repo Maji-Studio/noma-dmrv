@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { productionRunFormSchema } from "@/schemas/production-runs";
+import {
+  productionRunFilterSchema,
+  productionRunFormSchema,
+} from "@/schemas/production-runs";
 
 const validProductionRunInput = {
   facilityId: "11111111-1111-4111-8111-111111111111",
@@ -41,5 +44,14 @@ describe("productionRunFormSchema mass balance", () => {
     });
 
     expect(result.success).toBe(true);
+  });
+});
+
+describe("productionRunFilterSchema", () => {
+  it("accepts a credit-batch deep-link filter", () => {
+    const creditBatchId = "55555555-5555-4555-8555-555555555555";
+    const result = productionRunFilterSchema.parse({ creditBatchId });
+
+    expect(result.creditBatchId).toBe(creditBatchId);
   });
 });

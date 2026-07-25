@@ -1,11 +1,30 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildProductionRunFeedstockDetailField,
   buildProductionRunReadingsDetailField,
   productionRunStatusCertStatus,
   productionRunTelemetryCertification,
 } from "./production-run-detail-fields";
 
 describe("production run detail certification fields", () => {
+  it("shows the linked feedstock batches with their feedstock types", () => {
+    expect(
+      buildProductionRunFeedstockDetailField([
+        {
+          feedstockCode: "FS-26-901",
+          feedstockTypeName: "Wood chips",
+        },
+        {
+          feedstockCode: "FS-26-902",
+          feedstockTypeName: "Wood chips",
+        },
+      ]),
+    ).toEqual({
+      label: "Feedstock",
+      value: "Wood chips (FS-26-901), Wood chips (FS-26-902)",
+    });
+  });
+
   it("requires the saved run status to be complete", () => {
     expect(productionRunStatusCertStatus("complete")).toBe("satisfied");
     expect(productionRunStatusCertStatus("running")).toBe("missing");

@@ -98,19 +98,19 @@ function DryMassCard({
   return (
     <div className="col-span-full mt-8">
       {!hasMoisture ? (
-        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
+        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)]">
           <span className="body-small text-[var(--color-text-tertiary)] leading-relaxed">
             No moisture content on delivery — enter dry mass manually or update the delivery record.
           </span>
         </div>
       ) : !hasApplied ? (
-        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-sunken)]">
+        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)]">
           <span className="body-small text-[var(--color-text-tertiary)] leading-relaxed">
             Enter wet mass applied to calculate dry mass.
           </span>
         </div>
       ) : (
-        <div className="bg-[var(--color-background-sunken)] border border-[var(--color-border-tertiary)]">
+        <div className="bg-[var(--color-background-medium)] border border-[var(--color-border-tertiary)]">
           {/* Header */}
           <div className="px-16 py-8 border-b border-[var(--color-border-tertiary)]">
             <span className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
@@ -123,37 +123,37 @@ function DryMassCard({
             <div className="flex items-center gap-8">
               {/* Wet mass */}
               <div className="flex flex-col items-center gap-2 min-w-0">
-                <span className="font-mono text-[var(--text-base)] font-[var(--font-weight-bold)] text-[var(--color-text-primary)]">
+                <span className="font-mono text-[var(--text-s)] font-[var(--font-weight-bold)] text-[var(--color-text-primary)]">
                   {formatKg(appliedKg)}
                 </span>
-                <span className="body-caption text-[var(--color-text-quaternary)]">
+                <span className="body-caption text-[var(--color-text-tertiary)]">
                   wet mass
                 </span>
               </div>
 
               {/* Minus sign */}
-              <span className="font-mono text-[var(--text-base)] text-[var(--color-text-tertiary)] shrink-0 pb-16">
+              <span className="font-mono text-[var(--text-s)] text-[var(--color-text-tertiary)] shrink-0 pb-16">
                 &minus;
               </span>
 
               {/* Moisture removed */}
               <div className="flex flex-col items-center gap-2 min-w-0">
-                <span className="font-mono text-[var(--text-base)] text-[var(--color-text-tertiary)]">
+                <span className="font-mono text-[var(--text-s)] text-[var(--color-text-tertiary)]">
                   {formatKg(moistureKg)}
                 </span>
-                <span className="body-caption text-[var(--color-text-quaternary)]">
+                <span className="body-caption text-[var(--color-text-tertiary)]">
                   moisture ({moisturePercent?.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
                 </span>
               </div>
 
               {/* Equals sign */}
-              <span className="font-mono text-[var(--text-base)] text-[var(--color-text-tertiary)] shrink-0 pb-16">
+              <span className="font-mono text-[var(--text-s)] text-[var(--color-text-tertiary)] shrink-0 pb-16">
                 =
               </span>
 
               {/* Dry mass result */}
               <div className="flex flex-col items-center gap-2 min-w-0 px-12 py-4 bg-[var(--clr-purple-10)] border-l-2 border-[var(--clr-purple)]">
-                <span className="font-mono text-[var(--text-lg)] font-bold text-[var(--color-text-primary)]" aria-live="polite" aria-atomic="true">
+                <span className="font-mono text-[var(--text-l)] font-bold text-[var(--color-text-primary)]" aria-live="polite" aria-atomic="true">
                   {formatKg(dryKg)}
                 </span>
                 <span className="body-caption font-medium text-[var(--clr-purple)]">
@@ -165,7 +165,7 @@ function DryMassCard({
 
           {/* Source note */}
           <div className="px-16 py-6 border-t border-[var(--color-border-tertiary)]">
-            <span className="body-caption text-[var(--color-text-quaternary)]">
+            <span className="body-caption text-[var(--color-text-tertiary)]">
               Moisture % from delivery record
             </span>
           </div>

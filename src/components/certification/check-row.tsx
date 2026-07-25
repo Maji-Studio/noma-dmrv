@@ -13,18 +13,20 @@ import Link from "next/link";
 import { CheckCircleIcon, CircleIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { InfoHint } from "@/components/ui/tooltip";
 
-export type CheckStatus = "met" | "unmet" | "skipped";
+export type CheckStatus = "met" | "unmet" | "skipped" | "warning";
 
 const STATUS_ICON: Record<CheckStatus, ElementType> = {
   met: CheckCircleIcon,
   unmet: WarningIcon,
   skipped: CircleIcon,
+  warning: WarningIcon,
 };
 
 const STATUS_COLOR: Record<CheckStatus, string> = {
   met: "var(--color-signal-green)",
   unmet: "var(--color-signal-orange)",
   skipped: "var(--color-text-tertiary)",
+  warning: "var(--color-signal-orange)",
 };
 
 interface FixLink {
