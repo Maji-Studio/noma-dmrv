@@ -104,14 +104,19 @@ export function factsFromMockedLineages(
       },
     };
   });
+  const normalizedApplications = Array.from(
+    new Map(
+      applications.map((application) => [application.id, application]),
+    ).values(),
+  );
 
   return {
     batchId,
     productionRunIds,
     runs: Array.from(new Map(runs.map((run) => [run.id, run])).values()),
-    applications,
-    applicationIds: applications.map((application) => application.id),
-    appliedWeightTons: applications.reduce(
+    applications: normalizedApplications,
+    applicationIds: normalizedApplications.map((application) => application.id),
+    appliedWeightTons: normalizedApplications.reduce(
       (total, application) => total + application.biocharAppliedTons,
       0,
     ),
