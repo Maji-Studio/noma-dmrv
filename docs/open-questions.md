@@ -386,6 +386,39 @@ Registry-specific deferred decisions live in
 [Isometric Certify open questions](./open-questions-isometric.md). That
 companion inherits this file's schema, invariants, and resolution rules.
 
+### Interpretation docs still derive from protocol v1.2 after the v1.1 re-pin (`isometric/v1-1-shortlist-reverification`, opened 2026-07-24, `needs-registry-check`)
+
+- **Observed:** the operator resolved `isometric/project-protocol-version` on
+  2026-07-24 by re-pinning
+  [`docs/isometric/versions.json`](./isometric/versions.json) to the Certify
+  project's authoritative **v1.1** (and separately resolved
+  `isometric/project-durability-tier` by setting the project to 1000 years in
+  the Certify UI) — resolutions recorded in
+  [`docs/isometric/changes.md`](./isometric/changes.md). But
+  `requirements-shortlist.md` and `schema-mapping.md` were extracted against
+  v1.2, whose module set and requirements differ (agricultural-soils v1.1
+  replaces soil-environments v1.2, feedstock accounting v1.2 not v1.3,
+  ghg-accounting unreferenced, no Appendix II monitoring plan / loss
+  accounting / low-C/N N₂O mandates).
+- **Gap-check ran 2026-07-24** — full report:
+  [`docs/archive/2026-07-24-isometric-gap-check-v1-1.md`](./archive/2026-07-24-isometric-gap-check-v1-1.md)
+  (151 confirmed findings; all 9 P0s map to already-tracked open P0-checklist
+  items). Headline drifts to fold into the refresh: `started_on` should derive
+  from earliest feedstock sourcing not production start (§8.6.2); the
+  electricity `ec1_grid_average…ec5_direct_connection` enum misreads EC1–EC5
+  as alternatives when they are conjunctive; the BFA market-leakage
+  interpretation mixes v1.3 significance tests into the pinned v1.2; WBC
+  contaminant thresholds DO bind under agricultural-soils v1.1;
+  `src/lib/isometric/utils/durability-aggregation.ts` header still cites the
+  superseded soil-environments v1.2. Caveat: the run's self-test missed 3 of 4
+  seeded known gaps in direct-emissions coverage — don't treat it as
+  exhaustive there.
+- **Resolve via:** refresh `requirements-shortlist.md` + `schema-mapping.md`
+  from the report, remediate or explicitly defer its FIX-class findings, then
+  delete this entry.
+- **Code anchor:** `src/fn/certification/protocol-version-preflight.ts:checkProtocolVersionAtSubmit`
+  compares `certifier_projects.protocol_version` against the versions.json pin.
+
 ## Audit follow-ups (opened 2026-05-25)
 
 Deferrals from the whole-codebase tech-debt audit (CRITICAL + HIGH landed

@@ -20,6 +20,7 @@ import {
 } from "@/data-access/credit-batch-membership";
 import {
   createCreditBatch,
+  getCreditBatchProductionRunOptions,
   updateCreditBatch,
 } from "@/data-access/credit-batches";
 import {
@@ -349,6 +350,38 @@ describe("credit batch automatic production-run membership", () => {
     });
     productionRunIds.push(running.id);
 
+    const draft = await createProductionRun(ctx, {
+      code: `PR-CBAM-DRAFT-${tag}`,
+      facilityId,
+      reactorId: cohortGuardReactorId,
+      status: "draft",
+      startTime: new Date("2027-02-16T08:00:00.000Z"),
+      endTime: new Date("2027-02-16T12:00:00.000Z"),
+      feedstockWetMassKg: 100,
+      feedstockMoisturePercent: 20,
+      feedstockStorageLocationId: storageLocationId,
+    });
+    productionRunIds.push(draft.id);
+
+    const previewRuns = await getCreditBatchProductionRunOptions(ctx, {
+      facilityId,
+      startDate: new Date("2027-02-01T00:00:00.000Z"),
+      endDate: new Date("2027-02-28T00:00:00.000Z"),
+      includeCreditBatchId: batch.id,
+    });
+    expect(
+      previewRuns
+        .filter((run) => run.id === running.id || run.id === draft.id)
+        .map((run) => run.status)
+        .sort(),
+    ).toEqual(["draft", "running"]);
+
+    await updateProductionRun(ctx, draft.id, {
+      status: "complete",
+      biocharOutputKg: 30,
+      biocharMoisturePercent: 20,
+    });
+
     await updateProductionRun(ctx, running.id, {
       status: "complete",
       endTime: new Date("2027-02-15T12:00:00.000Z"),
@@ -365,6 +398,14 @@ describe("credit batch automatic production-run membership", () => {
         eq(creditBatchProductionRuns.productionRunId, running.id),
       );
     expect(membership?.creditBatchId).toBe(batch.id);
+
+    const [directCompletionMembership] = await db
+      .select({
+        creditBatchId: creditBatchProductionRuns.creditBatchId,
+      })
+      .from(creditBatchProductionRuns)
+      .where(eq(creditBatchProductionRuns.productionRunId, draft.id));
+    expect(directCompletionMembership?.creditBatchId).toBe(batch.id);
   });
 
   it("rejects completed-run edits outside the attached cohort without changing links", async () => {

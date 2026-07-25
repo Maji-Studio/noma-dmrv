@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   NOT_FOUND_ERROR,
+  mockRedirect,
   mockRequireOrgContext,
   mockGetCreditBatchById,
   mockGetSupplierById,
   mockGetCustomerById,
 } = vi.hoisted(() => ({
   NOT_FOUND_ERROR: "NEXT_NOT_FOUND",
+  mockRedirect: vi.fn(),
   mockRequireOrgContext: vi.fn(),
   mockGetCreditBatchById: vi.fn(),
   mockGetSupplierById: vi.fn(),
@@ -18,16 +20,13 @@ vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error(NOT_FOUND_ERROR);
   },
-  redirect: vi.fn(),
+  redirect: mockRedirect,
 }));
 vi.mock("@/lib/auth/server", () => ({
   requireOrgContext: mockRequireOrgContext,
 }));
 vi.mock("@/data-access/credit-batches", () => ({
   getCreditBatchById: mockGetCreditBatchById,
-}));
-vi.mock("@/components/credit-batches", () => ({
-  CreditBatchDetail: () => null,
 }));
 vi.mock("@/data-access/entities/suppliers", () => ({
   getSupplierById: mockGetSupplierById,
@@ -38,7 +37,7 @@ vi.mock("@/data-access/entities/customers", () => ({
 }));
 vi.mock("@/components/customers", () => ({ CustomerDetail: () => null }));
 
-import CreditBatchDetailPage from "@/app/(app)/credit-batches/[id]/page";
+import CreditBatchRedirectPage from "@/app/(app)/credit-batches/[id]/page";
 import SupplierDetailPage from "@/app/(app)/suppliers/[supplierId]/page";
 import CustomerDetailPage from "@/app/(app)/customers/[customerId]/page";
 
@@ -51,18 +50,32 @@ describe("detail route server preflights", () => {
       userId: "test-user",
       organizationId: "test-org",
     });
+    mockGetCreditBatchById.mockResolvedValue({
+      id: VALID_MISSING_ID,
+      facilityId: "facility-1",
+    });
   });
 
-  it("returns not found for a malformed credit-batch ID before querying", async () => {
-    await expect(
-      CreditBatchDetailPage({
-        params: Promise.resolve({ id: "__missing__" }),
-        searchParams: Promise.resolve({}),
-      }),
-    ).rejects.toThrow(NOT_FOUND_ERROR);
+  it("redirects the retired credit-batch detail route into the list side sheet", async () => {
+    await CreditBatchRedirectPage({
+      params: Promise.resolve({ id: VALID_MISSING_ID }),
+      searchParams: Promise.resolve({ facility: "facility-1" }),
+    });
 
-    expect(mockRequireOrgContext).not.toHaveBeenCalled();
-    expect(mockGetCreditBatchById).not.toHaveBeenCalled();
+    expect(mockRedirect).toHaveBeenCalledWith(
+      `/credit-batches?facility=facility-1&batch=${VALID_MISSING_ID}`,
+    );
+  });
+
+  it("drops a stale batch param when redirecting the credit-batch detail route", async () => {
+    await CreditBatchRedirectPage({
+      params: Promise.resolve({ id: VALID_MISSING_ID }),
+      searchParams: Promise.resolve({ batch: "stale-id" }),
+    });
+
+    expect(mockRedirect).toHaveBeenCalledWith(
+      `/credit-batches?facility=facility-1&batch=${VALID_MISSING_ID}`,
+    );
   });
 
   it("returns not found for a malformed supplier ID before querying", async () => {
@@ -85,23 +98,6 @@ describe("detail route server preflights", () => {
 
     expect(mockRequireOrgContext).not.toHaveBeenCalled();
     expect(mockGetCustomerById).not.toHaveBeenCalled();
-  });
-
-  it("returns not found for an absent credit-batch UUID", async () => {
-    mockGetCreditBatchById.mockResolvedValue(null);
-
-    await expect(
-      CreditBatchDetailPage({
-        params: Promise.resolve({ id: VALID_MISSING_ID }),
-        searchParams: Promise.resolve({}),
-      }),
-    ).rejects.toThrow(NOT_FOUND_ERROR);
-
-    expect(mockGetCreditBatchById).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: "test-org" }),
-      VALID_MISSING_ID,
-      { skipPreview: true },
-    );
   });
 
   it("returns not found for an absent supplier UUID", async () => {

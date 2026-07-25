@@ -7,6 +7,11 @@ export {
   saveFacilityEmissionConfig,
   type FacilityCertifierSummary,
 } from "./facility-mapping";
+export {
+  loadRegistrySourceVisibility,
+  saveRegistrySourceVisibility,
+  type RegistrySourceVisibilitySettings,
+} from "./source-visibility";
 // Read-only browse of the registry feedstock-type catalogue (browse-only,
 // no local record) for the feedstock-type form's Isometric tab.
 export { loadIsometricFeedstockTypes } from "./feedstock-types";
@@ -69,6 +74,11 @@ export {
   refreshGhgStatementStatus,
   submitGhgStatementToVerifier,
 } from "./ghg-statements";
+export {
+  type ReconcileRegistryGhgStatementsResult,
+  type RegistryGhgStatementView,
+} from "./ghg-statement-reconciliation";
+export { reconcileGhgStatementsFromRegistry } from "./ghg-statement-sync";
 // Phase 3.5 — mirror noma documents to Isometric Sources + attach
 // source_ids to Datapoint payloads. Server-side proxy, no client blob
 // handling.
@@ -76,7 +86,6 @@ export {
   loadCandidateDocumentsForRemoval,
   mirrorDocumentToSource,
   unlinkDocumentSource,
-  setDocumentSourceVisibility,
   type CandidateDocument,
   type CandidateDocumentsForRemoval,
   type CandidateLineageEntity,

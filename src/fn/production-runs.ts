@@ -22,7 +22,6 @@ import {
   getProductionRunStats as getProductionRunStatsData,
   getFacilityEnergyTotals as getFacilityEnergyTotalsData,
   getProductionRunReadings as getProductionRunReadingsData,
-  addProductionRunReading as addProductionRunReadingData,
   updateProductionRun,
   isProductionRunCodeAvailable as isProductionRunCodeAvailableData,
   ProductionRunOverlapError,
@@ -41,7 +40,6 @@ import {
   deleteProductionRunSchema,
   updateProductionRunSchema,
   productionRunFilterSchema,
-  productionRunReadingSchema,
 } from "@/schemas/production-runs";
 import type { ActionResult } from "@/types/actions";
 
@@ -326,44 +324,6 @@ export async function createProductionRunFn(
         error,
         "Failed to create production run",
         "production-run:create",
-      ),
-    };
-  }
-}
-
-/**
- * Add a reading to a production run
- */
-export async function addProductionRunReadingFn(
-  data: z.infer<typeof productionRunReadingSchema>
-): Promise<ActionResult<ProductionRunReadingRecord>> {
-  try {
-    const ctx = await requireOrgContext();
-
-    const validated = productionRunReadingSchema.parse(data);
-
-    const reading = await addProductionRunReadingData(ctx, {
-      productionRunId: validated.productionRunId,
-      timestamp: validated.timestamp instanceof Date ? validated.timestamp : new Date(validated.timestamp),
-      temperatureC: validated.temperatureC ?? null,
-      pressureBar: validated.pressureBar ?? null,
-      gasFlowRate: validated.gasFlowRate ?? null,
-    });
-
-    return { success: true, data: reading };
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return {
-        success: false,
-        error: `Validation error: ${error.issues.map((e) => e.message).join(", ")}`,
-      };
-    }
-    return {
-      success: false,
-      error: productionRunActionError(
-        error,
-        "Failed to add reading",
-        "production-run:add-reading",
       ),
     };
   }

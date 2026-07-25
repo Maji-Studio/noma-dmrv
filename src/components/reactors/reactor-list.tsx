@@ -7,6 +7,10 @@
 
 import { useState } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
 import type { ColumnDef } from "@tanstack/react-table";
 import { LightningIcon, FlaskIcon, PlusIcon } from "@phosphor-icons/react";
 import { DataTable } from "@/components/ui/data-table";
@@ -32,6 +36,7 @@ import {
 } from "@/schemas/reactors";
 import type { ReactorWithRelations } from "@/data-access/reactors";
 import type { Reactor } from "@/db/schema";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
 // ============================================
 // Column Definitions
@@ -113,14 +118,19 @@ export function ReactorList() {
 
   // Server-side search: debounce the search input before querying
   const [searchInput, setSearchInput] = useState("");
-  const debouncedSearch = useDebounce(searchInput, 250);
+  const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
+    useListPagination(contextFacilityId);
+  const debouncedSearch = useDebounce(
+    searchInput,
+    LIST_SEARCH_DEBOUNCE_MS,
+  );
   const filters = {
     ...(debouncedSearch ? { search: debouncedSearch } : {}),
     ...(contextFacilityId ? { facilityId: contextFacilityId } : {}),
-    pageSize: 100,
+    page: currentPage,
+    pageSize,
   };
 
-  // Data fetching — pass search filter so the server does the filtering
   const { data: reactorsData, isLoading, error: fetchError } = useReactors(
     filters,
     { enabled: !!contextFacilityId },
@@ -195,7 +205,15 @@ export function ReactorList() {
 
   const reactors = reactorsData?.items ?? [];
   const totalReactors = reactorsData?.total ?? 0;
+  const totalPages = reactorsData?.totalPages ?? 0;
+  useReconcileListPage({
+    currentPage,
+    totalPages,
+    isLoading,
+    setCurrentPage,
+  });
   const totalThroughputTph = reactors.reduce((sum, r) => sum + (r.nominalThroughputTph || 0), 0);
+  const hasActiveSearch = searchInput.trim().length > 0;
 
   if (!contextFacilityId) {
     return (
@@ -253,7 +271,7 @@ export function ReactorList() {
           isLoading={isLoading}
         />
         <StatCard
-          title="Total Throughput"
+          title="Throughput on This Page"
           value={`${totalThroughputTph.toLocaleString()} tph`}
           icon={<FlaskIcon size={24} weight="bold" />}
           description="Combined nominal throughput on this page"
@@ -266,24 +284,33 @@ export function ReactorList() {
         columns={columns}
         data={reactors}
         onRowClick={openView}
-        enableSorting
+        enableSorting={false}
         enablePagination
+        manualPagination
+        pageCount={totalPages}
+        pageSize={pageSize}
+        pageIndex={currentPage - 1}
         globalFilter={searchInput}
-        onGlobalFilterChange={setSearchInput}
+        onGlobalFilterChange={(value) => {
+          setSearchInput(value);
+          setCurrentPage(1);
+        }}
+        onPaginationChange={onPaginationChange}
+        aria-label="Reactors"
         isLoading={isLoading}
         hoverable
         emptyMessage={
           <EmptyState
             padding="md"
             icon={<LightningIcon size={48} />}
-            title={contextFacilityId ? "No reactors yet" : "Select a facility"}
+            title={hasActiveSearch ? "No matching reactors" : "No reactors yet"}
             description={
-              contextFacilityId
-                ? "Create your first reactor to get started"
-                : "Choose a facility from the sidebar to view reactors"
+              hasActiveSearch
+                ? "Try clearing your search."
+                : "Create your first reactor to get started"
             }
             action={
-              contextFacilityId ? (
+              !hasActiveSearch ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={18} weight="bold" />
                   New Reactor
@@ -294,8 +321,13 @@ export function ReactorList() {
         }
       >
         <DataTable.Toolbar>
-          <DataTable.Search placeholder="Search reactors..." />
-          <DataTable.ColumnVisibility />
+          <DataTable.Search
+            placeholder="Search reactors..."
+            aria-label="Search reactors"
+          />
+          <DataTable.Controls>
+            <DataTable.ColumnVisibility />
+          </DataTable.Controls>
         </DataTable.Toolbar>
         <DataTable.Pagination />
       </DataTable>

@@ -17,6 +17,11 @@ import {
   useCustomers,
   useUpdateCustomer,
 } from "@/hooks/use-customers";
+import { useDebounce } from "@/hooks/use-debounce";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
 import { DataTable } from "@/components/ui/data-table";
 import { ServerError } from "@/components/forms";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
@@ -29,6 +34,7 @@ import { CustomerForm, type PendingLocation } from "./customer-form";
 import type { CustomerFormData } from "@/schemas/customers";
 import type { CustomerWithRelations } from "@/data-access/customers";
 import { buildPartyLocationDetailFields } from "@/components/party-location-detail-fields";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
 // ============================================
 // Column Definitions
@@ -107,8 +113,19 @@ export function CustomerList() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
+    useListPagination();
+  const debouncedSearch = useDebounce(
+    searchInput,
+    LIST_SEARCH_DEBOUNCE_MS,
+  );
 
-  const { data: customersData, isLoading, error: fetchError } = useCustomers();
+  const { data: customersData, isLoading, error: fetchError } = useCustomers({
+    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    page: currentPage,
+    pageSize,
+  });
   const { data: sideSheetLocations = [] } = useCustomerLocations(
     sideSheet?.entity?.id ?? "",
     !!sideSheet?.entity,
@@ -122,8 +139,16 @@ export function CustomerList() {
   const customers = customersData?.items ?? [];
 
   // Computed stats
-  const totalCustomers = customers.length;
+  const totalCustomers = customersData?.total ?? 0;
+  const totalPages = customersData?.totalPages ?? 0;
+  useReconcileListPage({
+    currentPage,
+    totalPages,
+    isLoading,
+    setCurrentPage,
+  });
   const totalLocations = customers.reduce((sum, c) => sum + c.locationCount, 0);
+  const hasActiveSearch = searchInput.trim().length > 0;
 
   // Side sheet helpers
   const openCreate = () => {
@@ -244,10 +269,10 @@ export function CustomerList() {
           isLoading={isLoading}
         />
         <StatCard
-          title="Total Locations"
+          title="Locations on This Page"
           value={totalLocations}
           icon={<MapTrifoldIcon size={24} weight="bold" />}
-          description="Application field locations"
+          description="Application field locations on this page"
           isLoading={isLoading}
         />
       </div>
@@ -256,9 +281,19 @@ export function CustomerList() {
       <DataTable
         columns={columns}
         data={customers}
-        enableSorting
-        enableFiltering
+        enableSorting={false}
         enablePagination
+        manualPagination
+        pageCount={totalPages}
+        pageSize={pageSize}
+        pageIndex={currentPage - 1}
+        globalFilter={searchInput}
+        onGlobalFilterChange={(value) => {
+          setSearchInput(value);
+          setCurrentPage(1);
+        }}
+        onPaginationChange={onPaginationChange}
+        aria-label="Customers"
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
@@ -266,20 +301,31 @@ export function CustomerList() {
           <EmptyState
             padding="md"
             icon={<UsersIcon size={48} />}
-            title="No customers yet"
-            description="Create your first customer to get started."
+            title={hasActiveSearch ? "No matching customers" : "No customers yet"}
+            description={
+              hasActiveSearch
+                ? "Try clearing your search."
+                : "Create your first customer to get started."
+            }
             action={
-              <Button variant="primary" onClick={openCreate}>
-                <PlusIcon size={20} weight="bold" />
-                Create Customer
-              </Button>
+              !hasActiveSearch ? (
+                <Button variant="primary" onClick={openCreate}>
+                  <PlusIcon size={20} weight="bold" />
+                  Create Customer
+                </Button>
+              ) : undefined
             }
           />
         }
       >
         <DataTable.Toolbar>
-          <DataTable.Search placeholder="Search customers..." />
-          <DataTable.ColumnVisibility />
+          <DataTable.Search
+            placeholder="Search customers..."
+            aria-label="Search customers"
+          />
+          <DataTable.Controls>
+            <DataTable.ColumnVisibility />
+          </DataTable.Controls>
         </DataTable.Toolbar>
         <DataTable.Pagination />
       </DataTable>

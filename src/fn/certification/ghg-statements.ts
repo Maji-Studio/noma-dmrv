@@ -4,17 +4,15 @@ import { requireOrgRole, type OrgContext } from "@/lib/auth/server";
 import {
   appendSyncEvent,
   attachReportDocument,
-  clearTerminalStatusForResubmit,
   getCertifierProjectByFacility,
   getLatestSubmissionsForEntities,
   getSubmissionById,
+  getSubmissionByExternalId,
   listRecentSyncEvents,
   markSubmissionSubmitted,
-  setSubmissionTerminalStatus,
   updateSubmissionMetadata,
   type CertificationSubmissionRow,
   type CertifierSyncEventRow,
-  type Tx,
 } from "@/data-access/certification";
 import {
   claimSubmissionDraft,
@@ -24,12 +22,13 @@ import {
 import {
   countRemovalsByGhgStatementIds,
   getCertifierGhgStatementById,
+  getEffectiveReportingPeriodEndOn,
   getOrCreateGhgStatementDraft,
   getRemovalsByGhgStatementId,
+  hasMissingRemotePeriod,
+  listFacilityIdsForExternalProject,
   listGhgStatementsForFacility,
   listOpenRemovalsForFacility,
-  reconcileRemovalMembership,
-  updateGhgStatementReportingWindow,
   type CertifierGhgStatementRow,
 } from "@/data-access/certifier-ghg-statements";
 import {
@@ -39,16 +38,17 @@ import {
 } from "@/data-access/certifier-removals";
 import { getFacilityById } from "@/data-access/facilities";
 import { requireOrgFacility } from "@/data-access/utils";
-import { db } from "@/db";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import {
   createGhgStatement,
   describeIsometricApiError,
-  findDraftGhgStatementsByPeriod,
+  ghgStatementCreateRefusalMessage,
   getIsometricClientForOrg,
   getGhgStatement,
   IsometricApiError,
+  listGhgStatementsForProject,
+  matchGhgStatementForCreate,
   payloadHash,
   reconcileGhgStatement,
   resubmitGhgStatement,
@@ -73,10 +73,7 @@ import {
   type GhgSubmitMode,
 } from "@/lib/isometric/utils/ghg-statement-state";
 import { isLockedInFlight as computeIsLockedInFlight } from "@/lib/isometric/utils/lock";
-import {
-  SUBMISSION_METADATA_KEYS,
-  getMetadataValue,
-} from "@/lib/isometric/utils/submission-metadata";
+import { SUBMISSION_METADATA_KEYS, getMetadataValue } from "@/lib/isometric/utils/submission-metadata";
 import {
   createGhgStatementSchema,
   submitGhgStatementDialogSchema,
@@ -86,6 +83,15 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { ghgStatementLookup, performRegistryCreate } from "./registry-create";
+import {
+  applyGhgRemoteState,
+  reconcileGhgStatementRemoteState,
+} from "@/data-access/certifier-ghg-remote-state";
+import {
+  assertDedicatedGhgStatementProject,
+  reconcileGhgStatementsForFacility,
+  reconcileRegistryGhgStatement,
+} from "./ghg-statement-reconciliation";
 import {
   assertProductionConfirmed,
   GHG_STATEMENT_ENTITY_TYPE,
@@ -144,6 +150,8 @@ export interface GhgStatementListItem {
   statement: CertifierGhgStatementRow;
   latestSubmission: CertificationSubmissionRow | null;
   linkedRemovalCount: number;
+  effectiveReportingPeriodEndOn: string;
+  remotePeriodMissing: boolean;
 }
 
 // A submitted removal not yet absorbed by any GHG statement — the stepper
@@ -217,6 +225,51 @@ export async function createGhgStatementDraft(
         "Link this facility to an Isometric project before creating a GHG statement.",
       );
     }
+    assertDedicatedGhgStatementProject(
+      await listFacilityIdsForExternalProject(orgCtx, project.externalProjectId),
+    );
+
+    const remoteStatements = await listGhgStatementsForProject(
+      client,
+      project.externalProjectId,
+    );
+    const remoteMatches = remoteStatements
+      .map((remote) =>
+        matchGhgStatementForCreate(remote, parsed.reportingPeriodEndOn),
+      )
+      .filter((match) => match.behavior !== "unrelated");
+    const blocking = remoteMatches.find(
+      (match) => match.behavior === "refuse",
+    );
+    const adoptable = remoteMatches.filter(
+      (match) => match.behavior === "adopt",
+    );
+    const singleMatch =
+      blocking?.statement ??
+      (adoptable.length === 1 ? adoptable[0].statement : null);
+    if (singleMatch) {
+      const existingRemoteSubmission = await getSubmissionByExternalId(
+        orgCtx,
+        {
+          provider: ISOMETRIC_PROVIDER,
+          submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
+          externalId: singleMatch.id,
+        },
+      );
+      if (existingRemoteSubmission) {
+        if (blocking) {
+          throw new SafeError(
+            ghgStatementCreateRefusalMessage(blocking.statement),
+          );
+        }
+        return reconcileRegistryGhgStatement(orgCtx, {
+          facilityId: parsed.facilityId,
+          externalProjectId: project.externalProjectId,
+          remote: singleMatch,
+        });
+      }
+    }
+    const knownRemoteMatch = remoteMatches.length > 0;
 
     // expectedDefaultRemovalTemplateId is intentionally undefined: a GHG
     // Statement has no template, so we only need the externalProjectId arm of
@@ -241,7 +294,9 @@ export async function createGhgStatementDraft(
       orgCtx,
       parsed.facilityId,
     );
-    const existingEnds = existing.map((s) => s.reportingPeriodEndOn);
+    const existingEnds = existing
+      .filter((statement) => !hasMissingRemotePeriod(statement))
+      .map(getEffectiveReportingPeriodEndOn);
     const overlap = overlappingEnd(parsed.reportingPeriodEndOn, existingEnds);
     if (overlap) {
       throw new SafeError(
@@ -266,22 +321,7 @@ export async function createGhgStatementDraft(
       parsed.reportingPeriodEndOn,
     );
     const expected: ExpectedRemoval[] = [];
-    let knownRemoteDraft = false;
     if (!periodAlreadyExists) {
-      // Reconcile an exact out-of-band draft before considering a POST. Do
-      // this even when local removals still appear open: Isometric may already
-      // have linked some or all of them, and POSTing would create a duplicate
-      // period before the normal recovery lookup gets a chance to run.
-      const remoteDrafts = await findDraftGhgStatementsByPeriod(
-        client,
-        project.externalProjectId,
-        parsed.reportingPeriodEndOn,
-      );
-      if (remoteDrafts.length > 1) {
-        throw new SafeError(MULTIPLE_DRAFTS_MESSAGE);
-      }
-      knownRemoteDraft = remoteDrafts.length === 1;
-
       const derivedStart = derivePeriodStart(
         parsed.reportingPeriodEndOn,
         existingEnds,
@@ -301,7 +341,7 @@ export async function createGhgStatementDraft(
           expected.push({ localId: removal.id, externalId });
         }
       }
-      if (expected.length === 0 && !knownRemoteDraft) {
+      if (expected.length === 0 && !knownRemoteMatch) {
         throw new SafeError(
           "This reporting period has no submitted removals yet — a statement now would be empty. Submit a removal first, or pick a period end that includes one.",
         );
@@ -371,7 +411,7 @@ export async function createGhgStatementDraft(
           orgCtx,
           statement,
           row: claimed.row,
-          resumed: claimed.resumed || knownRemoteDraft,
+          resumed: claimed.resumed || knownRemoteMatch,
           externalProjectId: project.externalProjectId,
           endOn: parsed.reportingPeriodEndOn,
           submissionAttemptId,
@@ -468,34 +508,25 @@ async function finalizeGhgStatement(args: {
     };
   }
 
-  // Membership, reporting window and ledger state move together.
-  return db.transaction(async (tx) => {
-    const reconciled = await reconcileRemovalMembership(
-      orgCtx,
-      statement.id,
-      remote.ghg_entry_ids,
-      tx,
-    );
-    await updateGhgStatementReportingWindow(
-      orgCtx,
-      statement.id,
-      { reportingPeriodStartOn: remote.reporting_period_start_at ?? null },
-      tx,
-    );
-    await applyGhgRemoteState(orgCtx, row, remote, {}, tx);
-    return {
-      ghgStatementId: statement.id,
-      externalId,
-      linkedRemovalIds: reconciled.linkedRemovalIds,
-      // Reconcile warns about ids the registry *returned* but we couldn't
-      // match; the honesty delta is the inverse — removals we predicted
-      // in-window that the registry silently placed in a different period.
-      warnings: [
-        ...reconciled.warnings,
-        ...expectedButExcludedWarnings(expected, reconciled.linkedRemovalIds),
-      ],
-    };
+  // Membership, reporting window and ledger state move together behind the
+  // organization-scoped data-access boundary.
+  const reconciled = await reconcileGhgStatementRemoteState(orgCtx, {
+    statementId: statement.id,
+    submission: row,
+    remote,
   });
+  return {
+    ghgStatementId: statement.id,
+    externalId,
+    linkedRemovalIds: reconciled.linkedRemovalIds,
+    // Reconcile warns about ids the registry *returned* but we couldn't
+    // match; the honesty delta is the inverse — removals we predicted
+    // in-window that the registry silently placed in a different period.
+    warnings: [
+      ...reconciled.warnings,
+      ...expectedButExcludedWarnings(expected, reconciled.linkedRemovalIds),
+    ],
+  };
 }
 
 // =====================================================================
@@ -759,12 +790,11 @@ export async function refreshGhgStatementStatus(
       );
     }
     const remote = await getGhgStatement(client, submission.externalId);
-    await applyGhgRemoteState(orgCtx, submission, remote);
-    await reconcileRemovalMembership(
-      orgCtx,
-      submission.localEntityId,
-      remote.ghg_entry_ids,
-    );
+    await reconcileGhgStatementRemoteState(orgCtx, {
+      statementId: submission.localEntityId,
+      submission,
+      remote,
+    });
     return remote;
   });
 }
@@ -841,6 +871,18 @@ export async function loadGhgStatementsForFacility(
 ): Promise<ActionResult<GhgStatementListItem[]>> {
   return withAction(async (orgCtx) => {
     await requireOrgFacility(orgCtx, facilityId);
+    try {
+      await reconcileGhgStatementsForFacility(orgCtx, facilityId);
+    } catch (error) {
+      logger.warn(
+        {
+          op: "ghg-statement:list-reconcile",
+          facilityId,
+          errorName: error instanceof Error ? error.name : typeof error,
+        },
+        "registry statement refresh failed; serving stale local list",
+      );
+    }
     const statements = await listGhgStatementsForFacility(orgCtx, facilityId);
     if (statements.length === 0) return [];
 
@@ -862,6 +904,9 @@ export async function loadGhgStatementsForFacility(
       statement,
       latestSubmission: submissions.get(statement.id) ?? null,
       linkedRemovalCount: removalCounts.get(statement.id) ?? 0,
+      effectiveReportingPeriodEndOn:
+        getEffectiveReportingPeriodEndOn(statement),
+      remotePeriodMissing: hasMissingRemotePeriod(statement),
     }));
   });
 }
@@ -885,67 +930,6 @@ export async function loadOpenRemovalsForFacility(
       creditBatches: creditBatchesByRemoval.get(removal.id) ?? [],
     }));
   });
-}
-
-// =====================================================================
-// Remote-state helpers
-// =====================================================================
-
-async function applyGhgRemoteState(
-  orgCtx: OrgContext,
-  submission: CertificationSubmissionRow,
-  remote: GhgStatement,
-  extraMetadata: Record<string, unknown> = {},
-  tx?: Tx,
-): Promise<void> {
-  const metadataPatch = { ...remoteMetadata(remote), ...extraMetadata };
-  if (remote.status === "VERIFIED" || remote.status === "CREDITS_ISSUED") {
-    await setSubmissionTerminalStatus(
-      orgCtx,
-      submission.id,
-      { status: "accepted", metadataPatch },
-      tx,
-    );
-    return;
-  }
-  if (remote.status === "FAILED_VERIFICATION") {
-    await setSubmissionTerminalStatus(
-      orgCtx,
-      submission.id,
-      { status: "rejected", metadataPatch },
-      tx,
-    );
-    return;
-  }
-  if (
-    submission.status === "rejected" ||
-    submission.status === "accepted" ||
-    submission.status === "superseded"
-  ) {
-    await clearTerminalStatusForResubmit(
-      orgCtx,
-      submission.id,
-      { metadataPatch },
-      tx,
-    );
-    return;
-  }
-  await updateSubmissionMetadata(orgCtx, submission.id, metadataPatch, tx);
-}
-
-function remoteMetadata(remote: GhgStatement): Record<string, unknown> {
-  return {
-    [SUBMISSION_METADATA_KEYS.remoteStatus]: remote.status,
-    [SUBMISSION_METADATA_KEYS.pendingTotalCo2eRemovedKg]:
-      remote.pending_total_co2e_removed_kg,
-    reportUrl: remote.ghg_statement_report_url,
-    reportingPeriodStartAt: remote.reporting_period_start_at,
-    reportingPeriodEndAt: remote.reporting_period_end_at,
-    submittedToVerifierAt: remote.submitted_at,
-    creditsIssuedAt: remote.credits_issued_at,
-    verifier: remote.verifier,
-    [SUBMISSION_METADATA_KEYS.removalIds]: remote.ghg_entry_ids,
-  };
 }
 
 function chooseGhgSubmitModeFromKnownState(

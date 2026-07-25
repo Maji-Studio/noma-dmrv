@@ -1,12 +1,11 @@
 import { isValidElement, type ReactElement, type ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { CreditBatchWithRelations } from "@/data-access/credit-batches";
-import {
-  RowActionsMenu,
-  StatusBadge,
-  type RowActionsMenuProps,
-} from "@/components/ui";
+import type { CreditBatchHealthSummary } from "@/fn/certification";
+import { RowActionsMenu, type RowActionsMenuProps } from "@/components/ui";
 import { CreditBatchCard } from "./credit-batch-card";
+import { CreditBatchLifecycleRail } from "./credit-batch-lifecycle";
 
 type ElementProps = Record<string, unknown> & { children?: ReactNode };
 
@@ -22,14 +21,16 @@ function findRowActions(node: ReactNode): ReactElement<RowActionsMenuProps> | un
   return findRowActions(children);
 }
 
-function findStatusBadges(node: ReactNode): ReactElement<ElementProps>[] {
-  if (!isValidElement<ElementProps>(node)) return [];
-  const matches = node.type === StatusBadge ? [node] : [];
+function collectText(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+  if (!isValidElement<ElementProps>(node)) return "";
   const children = node.props.children;
   if (Array.isArray(children)) {
-    return [...matches, ...children.flatMap(findStatusBadges)];
+    return children.map(collectText).join("");
   }
-  return [...matches, ...findStatusBadges(children)];
+  return collectText(children);
 }
 
 const creditBatch = {
@@ -69,7 +70,7 @@ describe("CreditBatchCard", () => {
     ]);
   });
 
-  it("omits a readiness badge after a failed summary load", () => {
+  it("uses quiet copy when certification progress is loading or unavailable", () => {
     const unavailable = CreditBatchCard({
       creditBatch,
       onView: vi.fn(),
@@ -84,9 +85,67 @@ describe("CreditBatchCard", () => {
       onDelete: vi.fn(),
     });
 
-    expect(findStatusBadges(unavailable)).toHaveLength(0);
-    expect(findStatusBadges(loading)[0]?.props.label).toBe(
-      "Checking readiness…",
+    expect(collectText(unavailable)).toContain(
+      "Certification progress unavailable",
     );
+    expect(collectText(loading)).toContain("Loading certification progress…");
+  });
+
+  it("places readiness beside the open lifecycle state", () => {
+    const summary: CreditBatchHealthSummary = {
+      state: "incomplete",
+      issueCount: 2,
+      removalId: null,
+      removalStatus: null,
+      ghgStatementId: null,
+      ghgStatementStatus: null,
+    };
+
+    const rail = CreditBatchLifecycleRail({ summary });
+    const text = collectText(rail);
+
+    expect(text).toContain("Open2 issues open");
+  });
+
+  it("renders completed lifecycle steps in dark grey", () => {
+    const summary: CreditBatchHealthSummary = {
+      state: "ready",
+      issueCount: 0,
+      removalId: "removal-1",
+      removalStatus: {
+        kind: "submitted",
+        value: "issued",
+        label: "Submitted",
+        isActionable: false,
+        isTerminal: true,
+      },
+      ghgStatementId: null,
+      ghgStatementStatus: null,
+    };
+
+    const rail = CreditBatchLifecycleRail({ summary });
+    const markup = renderToStaticMarkup(rail);
+
+    expect(markup).toContain(
+      "bg-[var(--color-background-dark-light)]",
+    );
+    expect(markup).not.toContain("bg-[var(--st-ok)]");
+    expect(markup).toContain("bg-[var(--st-run)]");
+  });
+
+  it("labels batch-local readiness without claiming certification readiness", () => {
+    const summary: CreditBatchHealthSummary = {
+      state: "ready",
+      issueCount: 0,
+      removalId: null,
+      removalStatus: null,
+      ghgStatementId: null,
+      ghgStatementStatus: null,
+    };
+
+    const text = collectText(CreditBatchLifecycleRail({ summary }));
+
+    expect(text).toContain("Batch data ready");
+    expect(text).not.toContain("Ready to certify");
   });
 });

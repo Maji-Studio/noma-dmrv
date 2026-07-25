@@ -7,6 +7,7 @@ import {
   buildEntityDeepLink,
   ENTITY_FOCUS_TARGETS,
 } from "@/lib/entity-deep-link";
+import { sampleCreateHref } from "@/lib/sample-create-intent";
 import { certificationEmissionEstimatesHref } from "./links";
 
 export interface BatchHealthFixLink {
@@ -83,13 +84,9 @@ export function batchHealthFixLinkFor(
           affectedCount > 0
             ? `Fix ${affectedCount} ${affectedCount === 1 ? "sample" : "samples"}`
             : "Add lab sample data",
-        // The Samples page owns a batch-scoped filter, not an exact-id filter.
-        // Keep this destination honest and recoverable by using that supported
-        // contract; production-run actions remain exact-record links.
-        href: `/samples?${query(
-          creditBatchId ? { creditBatch: creditBatchId } : undefined,
-          false,
-        )}`,
+        href: creditBatchId
+          ? sampleCreateHref(facilityId, creditBatchId)
+          : `/samples?${query(undefined, false)}`,
       };
     case "certificationEmissions":
       return {
@@ -104,7 +101,9 @@ export function batchHealthFixLinkFor(
           affectedCount > 0
             ? `Fix ${affectedCount} ${affectedCount === 1 ? "application" : "applications"}`
             : "Review applications",
-        href: `/applications?${query()}`,
+        href: `/applications?${query(
+          creditBatchId ? { creditBatch: creditBatchId } : undefined,
+        )}`,
       };
     case "productionRuns":
       return {
@@ -112,12 +111,17 @@ export function batchHealthFixLinkFor(
           affectedCount > 0
             ? `Fix ${affectedCount} production ${affectedCount === 1 ? "run" : "runs"}`
             : "Link production data",
-        href: `/production-runs?${query()}`,
+        href: `/production-runs?${query(
+          creditBatchId ? { creditBatch: creditBatchId } : undefined,
+        )}`,
       };
     case "biocharProducts":
       return {
         label: "Link production run",
-        href: `/biochar-products?facility=${facilityId}`,
+        href: `/biochar-products?${query(
+          creditBatchId ? { creditBatch: creditBatchId } : undefined,
+          false,
+        )}`,
       };
     case "feedstocks": {
       const feedstockId = affectedIds[0];
@@ -138,12 +142,18 @@ export function batchHealthFixLinkFor(
     case "deliveryDistances":
       return {
         label: "Review deliveries",
-        href: `/deliveries?${query(undefined, false)}`,
+        href: `/deliveries?${query(
+          creditBatchId ? { creditBatch: creditBatchId } : undefined,
+          false,
+        )}`,
       };
     case "sourceData":
       return {
         label: "Review source data",
-        href: `/production-runs?${query(undefined, false)}`,
+        href: `/production-runs?${query(
+          creditBatchId ? { creditBatch: creditBatchId } : undefined,
+          false,
+        )}`,
       };
   }
 }

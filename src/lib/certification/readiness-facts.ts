@@ -32,6 +32,8 @@ export function toRemovalReadinessFacts(
     productionReadinessGap: ctx.productionReadinessGap ?? null,
     entityReadinessGaps: ctx.entityReadinessGaps ?? [],
     durabilityGateBlockers: ctx.durabilityGateBlockers ?? [],
+    supportingDocumentCount: ctx.supportingDocuments.total,
+    mirroredDocumentCount: ctx.supportingDocuments.mirrored,
     requiredTransport: ctx.requiredTransportCategories.map((category) => {
       const bucket = ctx.transportCoverage[category];
       return {

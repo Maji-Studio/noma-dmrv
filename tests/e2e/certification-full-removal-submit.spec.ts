@@ -31,6 +31,7 @@ import {
   fetchSubmittableSandboxRemovalTemplateId,
   seedCertifierMapping,
   seedUngroupedReadyBatchWithChain,
+  setFacilityDurabilityTier,
   teardownWizardRemovalForBatch,
 } from "./fixtures/certification-helpers";
 
@@ -82,6 +83,11 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
       // A live submit reads these; harmless for the committed (no-submit) path.
       emissionConfig: DEFAULT_FACILITY_EMISSION_CONFIG,
     });
+
+    // The sandbox project's only fully-bound template is the 1000-year one;
+    // the seeded facility defaults to 200-year, which the submit tier guard
+    // rejects (ADR 0021). Align the facility with the template it will submit.
+    await setFacilityDurabilityTier(facilityId, "1000_year");
 
     let batch: SeededReadyBatch | undefined;
     try {

@@ -31,3 +31,15 @@ export function shouldClearCategoryForIsometricSelection(
 ): boolean {
   return currentUsage !== "pyrolysis";
 }
+
+export function shouldShowCertifiedFeedstockWarning(
+  isEditMode: boolean,
+  usage: FeedstockTypeUsage | undefined,
+  hasSelectedIsometricFeedstock: boolean,
+): boolean {
+  return (
+    !isEditMode &&
+    usage === "pyrolysis" &&
+    !hasSelectedIsometricFeedstock
+  );
+}

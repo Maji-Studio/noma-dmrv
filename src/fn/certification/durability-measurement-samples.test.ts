@@ -55,8 +55,21 @@ const sampledBatch = (id: string, code: string) =>
     ],
   });
 
+const thousandYearBatch = (id: string, code: string) =>
+  batch({
+    creditBatchId: id,
+    creditBatchCode: code,
+    durabilityOption: "1000_year",
+    runs: [{ id: `run-${id}`, code: `R-${id}`, biocharDryMassKg: 1000 }],
+    samples: [
+      sample({ totalCarbonPercent: 80, sReflectanceFraction: 0.91 }),
+      sample({ totalCarbonPercent: 82, sReflectanceFraction: 0.92 }),
+      sample({ totalCarbonPercent: 84, sReflectanceFraction: 0.93 }),
+    ],
+  });
+
 describe("DURABILITY_MEASUREMENT_SAMPLES_LIVE", () => {
-  it("stays off until the two sandbox confirms land", () => {
+  it("stays off without the sandbox-only operator opt-in", () => {
     expect(DURABILITY_MEASUREMENT_SAMPLES_LIVE).toBe(false);
   });
 });
@@ -125,22 +138,10 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
   });
 
   it("emits the full per-replicate 1000-year payload without a soil sample", () => {
-    const thousandYearBatch = batch({
-      creditBatchId: "t",
-      creditBatchCode: "CB-T",
-      durabilityOption: "1000_year",
-      runs: [{ id: "run-t", code: "R-T", biocharDryMassKg: 1000 }],
-      samples: [
-        sample({ totalCarbonPercent: 80, sReflectanceFraction: 0.91 }),
-        sample({ totalCarbonPercent: 82, sReflectanceFraction: 0.92 }),
-        sample({ totalCarbonPercent: 84, sReflectanceFraction: 0.93 }),
-      ],
-    });
-
     const submissions = buildDurabilityMeasurementSampleSubmissions({
       ...common,
       facilityReferenceSoilTemperature: null,
-      batches: [thousandYearBatch],
+      batches: [thousandYearBatch("t", "CB-T")],
     });
 
     expect(submissions).toHaveLength(1);
@@ -163,6 +164,19 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
       { qualifier: "inertinite_fraction", magnitude: 0.93, unit: "dimensionless" },
       { qualifier: null, magnitude: 1000, unit: "kg" },
     ]);
+  });
+
+  it("rejects multi-batch 1000-year removals before building registry requests", () => {
+    expect(() =>
+      buildDurabilityMeasurementSampleSubmissions({
+        ...common,
+        facilityReferenceSoilTemperature: null,
+        batches: [
+          thousandYearBatch("t1", "CB-T1"),
+          thousandYearBatch("t2", "CB-T2"),
+        ],
+      }),
+    ).toThrow(/supports exactly one credit batch.*single product_mass/);
   });
 
   it("normalizes to an identical hash payload regardless of sample row order", () => {

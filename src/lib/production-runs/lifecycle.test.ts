@@ -32,6 +32,7 @@ function makeOutcomeInput(
 describe("production-run lifecycle", () => {
   it.each([
     ["draft", "running"],
+    ["draft", "complete"],
     ["draft", "cancelled"],
     ["running", "complete"],
     ["running", "failed"],
@@ -43,7 +44,6 @@ describe("production-run lifecycle", () => {
   });
 
   it.each([
-    ["draft", "complete"],
     ["draft", "failed"],
     ["complete", "cancelled"],
     ["failed", "complete"],

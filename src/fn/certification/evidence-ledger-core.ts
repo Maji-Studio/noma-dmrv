@@ -306,7 +306,6 @@ export async function ensureLedgerSource(
         const mirror = await mirrorDocumentToSourceForUser(orgCtx, {
           removalId: spec.removalId,
           documentId: doc.id,
-          isPublic: false,
         });
 
         // Supersede: retire every prior ledger now that the current one is mirrored.

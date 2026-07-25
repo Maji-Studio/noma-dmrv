@@ -10,12 +10,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   loadCandidateDocumentsForRemoval,
   mirrorDocumentToSource,
-  setDocumentSourceVisibility,
   unlinkDocumentSource,
 } from "@/fn/certification";
 import type {
   MirrorDocumentToSourceInput,
-  SetDocumentSourceVisibilityInput,
   UnlinkDocumentSourceInput,
 } from "@/schemas/certification-sources";
 import { certificationKeys } from "./use-certification";
@@ -78,24 +76,6 @@ export function useUnlinkDocumentSource(removalId: string) {
         queryKey: certificationSourcesKeys.candidatesForRemoval(removalId),
       });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
-    },
-  });
-}
-
-export function useSetDocumentSourceVisibility(removalId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (
-      input: Omit<SetDocumentSourceVisibilityInput, "removalId">,
-    ) => {
-      const result = await setDocumentSourceVisibility({ ...input, removalId });
-      if (!result.success) throw new Error(result.error);
-      return result.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: certificationSourcesKeys.candidatesForRemoval(removalId),
-      });
     },
   });
 }

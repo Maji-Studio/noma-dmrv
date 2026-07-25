@@ -1,6 +1,9 @@
 "use client";
 
-import { XIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  MagnifyingGlassIcon,
+  XIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { Button } from "@/components/ui/button";
 
 export type CreditBatchReadinessFilter = "all" | "needs_attention" | "ready";
@@ -11,12 +14,14 @@ export interface CreditBatchFeedstockFilterOption {
 }
 
 interface CreditBatchFiltersProps {
+  search: string;
   startDate: string;
   endDate: string;
   readiness: CreditBatchReadinessFilter;
   feedstocks: CreditBatchFeedstockFilterOption[];
   selectedFeedstockIds: string[];
   hasActiveFilters: boolean;
+  onSearchChange: (value: string) => void;
   onStartDateChange: (value: string) => void;
   onEndDateChange: (value: string) => void;
   onReadinessChange: (value: CreditBatchReadinessFilter) => void;
@@ -31,12 +36,14 @@ const DATE_CLASS =
   "h-40 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-10 body-small focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]";
 
 export function CreditBatchFilters({
+  search,
   startDate,
   endDate,
   readiness,
   feedstocks,
   selectedFeedstockIds,
   hasActiveFilters,
+  onSearchChange,
   onStartDateChange,
   onEndDateChange,
   onReadinessChange,
@@ -55,6 +62,22 @@ export function CreditBatchFilters({
   return (
     <section className="flex flex-col gap-12 bg-[var(--panel-bg)] [border:var(--panel-border)] p-16">
       <div className="flex flex-wrap items-end gap-12">
+        <div className="relative min-w-[240px] flex-1 sm:max-w-[320px]">
+          <MagnifyingGlassIcon
+            size={18}
+            aria-hidden
+            className="pointer-events-none absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)]"
+          />
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="Search by batch code or feedstock..."
+            aria-label="Search credit batches"
+            className="h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] pl-36 pr-12 body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
+          />
+        </div>
+
         <label className="flex min-w-[150px] flex-1 flex-col gap-4 sm:flex-none">
           <span className="label-micro text-[var(--color-text-tertiary)]">
             From
@@ -110,7 +133,7 @@ export function CreditBatchFilters({
 
         <label className="flex min-w-[180px] flex-1 flex-col gap-4 sm:flex-none">
           <span className="label-micro text-[var(--color-text-tertiary)]">
-            Readiness
+            Data status
           </span>
           <select
             value={readiness}
@@ -120,11 +143,11 @@ export function CreditBatchFilters({
               )
             }
             className={SELECT_CLASS}
-            aria-label="Filter by certification readiness"
+            aria-label="Filter by certification data status"
           >
             <option value="all">All batches</option>
             <option value="needs_attention">Needs attention</option>
-            <option value="ready">Ready to certify</option>
+            <option value="ready">Data complete</option>
           </select>
         </label>
 

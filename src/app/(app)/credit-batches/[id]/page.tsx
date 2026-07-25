@@ -1,46 +1,22 @@
-/**
- * Credit Batch Detail Page
- * Batch health check + detail/edit form for a single credit batch.
- * Protected by requireAuth guard in the (app) layout.
- */
-import { CreditBatchDetail } from "@/components/credit-batches";
-import { requireOrgContext } from "@/lib/auth/server";
-import { getCreditBatchById } from "@/data-access/credit-batches";
 import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
+import { getCreditBatchById } from "@/data-access/credit-batches";
+import { requireOrgContext } from "@/lib/auth/server";
+import { CREDIT_BATCH_DEEP_LINK_PARAM } from "@/lib/credit-batch-links";
 
-interface CreditBatchDetailPageProps {
+/**
+ * The credit-batch detail page was retired in favour of the list's view side
+ * sheet — old links land there via `?batch=<id>` (production-run pattern).
+ */
+interface CreditBatchRedirectPageProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-function firstQueryValue(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
-}
-
-function canonicalBatchUrl(
-  id: string,
-  searchParams: Record<string, string | string[] | undefined>,
-  facilityId: string
-): string {
-  const params = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(searchParams)) {
-    if (Array.isArray(value)) {
-      for (const entry of value) params.append(key, entry);
-    } else if (value !== undefined) {
-      params.set(key, value);
-    }
-  }
-
-  params.set("facility", facilityId);
-  return `/credit-batches/${encodeURIComponent(id)}?${params.toString()}`;
-}
-
-export default async function CreditBatchDetailPage({
+export default async function CreditBatchRedirectPage({
   params,
   searchParams,
-}: CreditBatchDetailPageProps) {
+}: CreditBatchRedirectPageProps) {
   const { id } = await params;
   const sp = await searchParams;
 
@@ -49,16 +25,24 @@ export default async function CreditBatchDetailPage({
   }
 
   const ctx = await requireOrgContext();
-
   const batch = await getCreditBatchById(ctx, id, { skipPreview: true });
-
   if (!batch) {
     notFound();
   }
 
-  if (firstQueryValue(sp.facility) !== batch.facilityId) {
-    redirect(canonicalBatchUrl(id, sp, batch.facilityId));
+  const nextParams = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(sp)) {
+    if (key === CREDIT_BATCH_DEEP_LINK_PARAM || key === "facility") continue;
+    if (Array.isArray(value)) {
+      for (const entry of value) nextParams.append(key, entry);
+    } else if (value !== undefined) {
+      nextParams.set(key, value);
+    }
   }
 
-  return <CreditBatchDetail creditBatchId={id} />;
+  nextParams.set("facility", batch.facilityId);
+  nextParams.set(CREDIT_BATCH_DEEP_LINK_PARAM, id);
+
+  redirect(`/credit-batches?${nextParams.toString()}`);
 }

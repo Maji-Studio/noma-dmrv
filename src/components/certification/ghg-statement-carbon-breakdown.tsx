@@ -29,6 +29,8 @@ const STATEMENT_LABELS: CarbonBreakdownLabels = {
     "A net estimate needs every member removal's stored-carbon inputs.",
   estimateFootnote:
     "The uncertainty discount and final net are set when Isometric verifies this statement.",
+  anomalyDescription:
+    "The normal statement roll-up is hidden until the carbon data is corrected.",
 };
 
 export function GhgStatementCarbonBreakdown({

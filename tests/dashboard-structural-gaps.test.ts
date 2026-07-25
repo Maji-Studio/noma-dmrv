@@ -591,26 +591,30 @@ describe("dashboard structural certification gaps", () => {
     });
     expect(
       buildDashboardStructuralGaps(counts, fixture.gapFacilityId).map(
-        ({ key, count, href }) => ({ key, count, href }),
+        ({ key, metadata, count, href }) => ({ key, metadata, count, href }),
       ),
     ).toEqual([
       {
         key: "facilityGps",
+        metadata: "Facility form · Location · 1 affected",
         count: 1,
         href: `/facilities?facility=${fixture.gapFacilityId}`,
       },
       {
         key: "feedstockGps",
+        metadata: "Supplier form · Location · 1 affected",
         count: 1,
         href: `/suppliers/${fixture.missingGpsSupplierId}?facility=${fixture.gapFacilityId}`,
       },
       {
         key: "transportEndpointGps",
+        metadata: "Biochar product form · Transport route · 2 affected",
         count: 2,
         href: `/biochar-products?facility=${fixture.gapFacilityId}&biocharProduct=${fixture.activeBiocharProductId}&mode=edit&focus=transport-route`,
       },
       {
         key: "transportDistanceEvidence",
+        metadata: "Feedstock form · Transport evidence · 4 affected",
         count: 4,
         href: `/feedstocks?facility=${fixture.gapFacilityId}&feedstock=${fixture.activeFeedstockId}&mode=edit&focus=transport-evidence`,
       },
@@ -698,7 +702,45 @@ describe("dashboard structural certification gaps", () => {
       `/samples?facility=${facilityId}&sample=${fixture?.validBatchSampleId ?? "sample-id"}&mode=edit&focus=transport-route`,
       `/feedstocks?facility=${facilityId}&feedstock=${fixture?.activeFeedstockId ?? "feedstock-id"}&mode=edit&focus=transport-evidence`,
     ]);
+    expect(gaps.map(({ metadata }) => metadata)).toEqual([
+      "Sample form · Transport route · 1 affected",
+      "Feedstock form · Transport evidence · 1 affected",
+    ]);
   });
+
+  it.each([
+    ["feedstock", "Feedstock form"],
+    ["biochar", "Biochar product form"],
+    ["sample", "Sample form"],
+    ["delivery", "Delivery form"],
+  ] as const)(
+    "names the %s destination form for transport gaps",
+    (entityType, formName) => {
+      const gaps = buildDashboardStructuralGaps(
+        {
+          missingFacilityGps: 0,
+          missingFeedstockGps: 0,
+          transportEndpointGpsGaps: 2,
+          transportDistanceEvidenceGaps: 3,
+          missingFeedstockGpsSupplierId: null,
+          transportEndpointGpsTarget: {
+            entityType,
+            entityId: `${entityType}-route`,
+          },
+          transportDistanceEvidenceTarget: {
+            entityType,
+            entityId: `${entityType}-evidence`,
+          },
+        },
+        "00000000-0000-4000-8000-000000000001",
+      );
+
+      expect(gaps.map(({ metadata }) => metadata)).toEqual([
+        `${formName} · Transport route · 2 affected`,
+        `${formName} · Transport evidence · 3 affected`,
+      ]);
+    },
+  );
 
   it("returns no structural blockers for a complete empty facility", async (ctx) => {
     if (!dbReachable || !fixture) {

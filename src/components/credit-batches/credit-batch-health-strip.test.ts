@@ -92,9 +92,15 @@ describe("batchHealthFixLinkFor", () => {
   });
 
   it("routes a carbon check with no explicit fixTarget to Lab Samples", () => {
-    const link = batchHealthFixLinkFor(check("carbon"), facilityId);
+    const link = batchHealthFixLinkFor(
+      check("carbon"),
+      facilityId,
+      "batch-001",
+    );
     expect(link.label).toBe("Add lab sample data");
-    expect(link.href).toBe(`/samples?facility=${facilityId}`);
+    expect(link.href).toBe(
+      `/samples?facility=${facilityId}&create=true&createCreditBatch=batch-001`,
+    );
   });
 
   it("routes facility emission blockers to certification emission estimates", () => {
@@ -114,9 +120,12 @@ describe("batchHealthFixLinkFor", () => {
     const link = batchHealthFixLinkFor(
       check("production", "applications"),
       facilityId,
+      "batch-001",
     );
     expect(link.label).toBe("Review applications");
-    expect(link.href).toBe(`/applications?facility=${facilityId}`);
+    expect(link.href).toBe(
+      `/applications?facility=${facilityId}&creditBatch=batch-001`,
+    );
   });
 
   it("uses 'Edit details' label for an explicit batchDetails fixTarget", () => {
@@ -140,31 +149,46 @@ describe("batchHealthFixLinkFor", () => {
         { id: "run-2", code: "PR-2", missing: ["Meter evidence"] },
       ]),
       facilityId,
+      "batch-001",
     );
 
     expect(link.label).toBe("Fix 2 production runs");
     expect(link.href).toBe(
-      `/production-runs?facility=${facilityId}&ids=run-1%2Crun-2`,
+      `/production-runs?facility=${facilityId}&creditBatch=batch-001&ids=run-1%2Crun-2`,
     );
   });
 
   it("routes a transport check to deliveries with the facility", () => {
-    const link = batchHealthFixLinkFor(check("transport"), facilityId);
-    expect(link.href).toBe(`/deliveries?facility=${facilityId}`);
+    const link = batchHealthFixLinkFor(
+      check("transport"),
+      facilityId,
+      "batch-001",
+    );
+    expect(link.href).toBe(
+      `/deliveries?facility=${facilityId}&creditBatch=batch-001`,
+    );
   });
 
-  it("routes entityReadiness to sourceData (production-runs) with the facility", () => {
-    const link = batchHealthFixLinkFor(check("entityReadiness"), facilityId);
+  it("routes entityReadiness to sourceData within the credit batch", () => {
+    const link = batchHealthFixLinkFor(
+      check("entityReadiness"),
+      facilityId,
+      "batch-001",
+    );
     expect(link.href).toContain("/production-runs");
     expect(link.href).toContain(facilityId);
+    expect(link.href).toContain("creditBatch=batch-001");
   });
 
-  it("routes an explicit biocharProducts fixTarget to biochar-products", () => {
+  it("routes an explicit biocharProducts fixTarget within the credit batch", () => {
     const link = batchHealthFixLinkFor(
       check("production", "biocharProducts"),
       facilityId,
+      "batch-001",
     );
-    expect(link.href).toBe(`/biochar-products?facility=${facilityId}`);
+    expect(link.href).toBe(
+      `/biochar-products?facility=${facilityId}&creditBatch=batch-001`,
+    );
     expect(link.label).toBe("Link production run");
   });
 
@@ -172,8 +196,11 @@ describe("batchHealthFixLinkFor", () => {
     const link = batchHealthFixLinkFor(
       check("transport", "deliveries"),
       facilityId,
+      "batch-001",
     );
-    expect(link.href).toBe(`/deliveries?facility=${facilityId}`);
+    expect(link.href).toBe(
+      `/deliveries?facility=${facilityId}&creditBatch=batch-001`,
+    );
   });
 
   it("deep-links feedstock transport evidence to the affected feedstock", () => {

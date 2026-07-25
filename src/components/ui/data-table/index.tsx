@@ -16,12 +16,22 @@ import {
   type Table as TanStackTable,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { CaretUpIcon, CaretDownIcon, MagnifyingGlassIcon, CheckIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  CaretUpIcon,
+  CaretDownIcon,
+  MagnifyingGlassIcon,
+  CheckIcon,
+  XIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Button } from "@/components/ui/button";
 import { TableRowSkeleton } from "@/components/ui/loading-skeleton";
 import { ListPagination } from "@/components/ui/list-pagination";
+import {
+  DEFAULT_LIST_PAGE_SIZE,
+  LIST_PAGE_SIZE_OPTIONS,
+} from "@/config/list-controls";
 
 /* ------------------------------------------------------------------ */
 /*  Data Table Context                                                  */
@@ -103,8 +113,8 @@ const MAX_LOADING_ROWS = 5;
  */
 function columnLabel(column: { id: string; columnDef: { header?: unknown } }): string {
   const header = column.columnDef.header;
-  if (typeof header === "string") return header;
   if (column.id === "select" || column.id === "actions") return "";
+  if (typeof header === "string") return header;
   return column.id
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/[_-]+/g, " ")
@@ -215,8 +225,8 @@ function DataTableRoot<TData, TValue>({
   onGlobalFilterChange,
   // Pagination
   enablePagination = false,
-  pageSize: externalPageSize = 10,
-  pageIndex: externalPageIndex = 0,
+  pageSize: externalPageSize,
+  pageIndex: externalPageIndex,
   onPaginationChange,
   manualPagination = false,
   pageCount: externalPageCount,
@@ -256,17 +266,9 @@ function DataTableRoot<TData, TValue>({
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
   const [pagination, setPagination] = React.useState<PaginationState>({
-    pageIndex: externalPageIndex,
-    pageSize: externalPageSize,
+    pageIndex: externalPageIndex ?? 0,
+    pageSize: externalPageSize ?? DEFAULT_LIST_PAGE_SIZE,
   });
-
-  // Sync pagination state when external props change
-  React.useEffect(() => {
-    setPagination((prev) => {
-      if (prev.pageIndex === externalPageIndex && prev.pageSize === externalPageSize) return prev;
-      return { pageIndex: externalPageIndex, pageSize: externalPageSize };
-    });
-  }, [externalPageIndex, externalPageSize]);
 
   // Controlled state handlers
   const handleSortingChange = React.useCallback(
@@ -288,24 +290,39 @@ function DataTableRoot<TData, TValue>({
 
   const handleColumnVisibilityChange = React.useCallback(
     (updater: VisibilityState | ((old: VisibilityState) => VisibilityState)) => {
-      const newVisibility = typeof updater === "function" ? updater(columnVisibility) : updater;
+      const currentVisibility = externalColumnVisibility ?? columnVisibility;
+      const newVisibility = typeof updater === "function" ? updater(currentVisibility) : updater;
       setColumnVisibility(newVisibility);
       onColumnVisibilityChange?.(newVisibility);
     },
-    [columnVisibility, onColumnVisibilityChange]
+    [columnVisibility, externalColumnVisibility, onColumnVisibilityChange]
   );
 
   const handleRowSelectionChange = React.useCallback(
     (updater: RowSelectionState | ((old: RowSelectionState) => RowSelectionState)) => {
-      const newSelection = typeof updater === "function" ? updater(rowSelection) : updater;
+      const currentSelection = externalRowSelection ?? rowSelection;
+      const newSelection = typeof updater === "function" ? updater(currentSelection) : updater;
       setRowSelection(newSelection);
       onRowSelectionChange?.(newSelection);
     },
-    [rowSelection, onRowSelectionChange]
+    [rowSelection, externalRowSelection, onRowSelectionChange]
   );
 
   const handlePaginationChange = React.useCallback(
     (updaterOrValue: PaginationState | ((old: PaginationState) => PaginationState)) => {
+      if (externalPageIndex !== undefined || externalPageSize !== undefined) {
+        const currentPagination = {
+          pageIndex: externalPageIndex ?? pagination.pageIndex,
+          pageSize: externalPageSize ?? pagination.pageSize,
+        };
+        const newPagination = typeof updaterOrValue === "function"
+          ? updaterOrValue(currentPagination)
+          : updaterOrValue;
+        setPagination(newPagination);
+        onPaginationChange?.(newPagination);
+        return;
+      }
+
       setPagination((oldPagination) => {
         const newPagination = typeof updaterOrValue === "function"
           ? updaterOrValue(oldPagination)
@@ -314,14 +331,18 @@ function DataTableRoot<TData, TValue>({
         return newPagination;
       });
     },
-    [onPaginationChange]
+    [externalPageIndex, externalPageSize, onPaginationChange, pagination]
   );
 
   // Use external values if provided
   const effectiveGlobalFilter = externalGlobalFilter ?? globalFilter;
   const effectiveColumnVisibility = externalColumnVisibility ?? columnVisibility;
   const effectiveRowSelection = externalRowSelection ?? rowSelection;
-  const loadingRows = Math.min(pagination.pageSize, MAX_LOADING_ROWS);
+  const effectivePagination = {
+    pageIndex: externalPageIndex ?? pagination.pageIndex,
+    pageSize: externalPageSize ?? pagination.pageSize,
+  };
+  const loadingRows = Math.min(effectivePagination.pageSize, MAX_LOADING_ROWS);
 
   const table = useReactTable({
     data,
@@ -332,7 +353,7 @@ function DataTableRoot<TData, TValue>({
       columnFilters,
       columnVisibility: effectiveColumnVisibility,
       rowSelection: effectiveRowSelection,
-      pagination,
+      pagination: effectivePagination,
     },
     onSortingChange: handleSortingChange,
     onGlobalFilterChange: handleGlobalFilterChange,
@@ -627,26 +648,97 @@ function DataTableToolbar({ children, className }: DataTableToolbarProps) {
 interface DataTableSearchProps {
   placeholder?: string;
   className?: string;
+  "aria-label"?: string;
 }
 
-function DataTableSearch({ placeholder = "Search...", className }: DataTableSearchProps) {
+function DataTableSearch({
+  placeholder = "Search...",
+  className,
+  "aria-label": ariaLabel = "Search table",
+}: DataTableSearchProps) {
   const { table } = useDataTable();
   const value = (table.getState().globalFilter as string) ?? "";
+
+  function setSearch(nextValue: string) {
+    table.setGlobalFilter(nextValue);
+    table.setPageIndex(0);
+  }
 
   return (
     <div className={cn("relative w-full sm:max-w-[320px] sm:flex-1", className)}>
       <MagnifyingGlassIcon
         size={18}
+        aria-hidden
         className="absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none"
       />
       <input
         value={value}
-        onChange={(e) => table.setGlobalFilter(e.target.value)}
+        onChange={(event) => setSearch(event.target.value)}
         placeholder={placeholder}
-        className="w-full h-40 pl-36 pr-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-        aria-label="Search table"
+        className={cn(
+          "w-full h-40 pl-36 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]",
+          value ? "pr-40" : "pr-12",
+        )}
+        aria-label={ariaLabel}
       />
+      {value && (
+        <Button
+          variant="noOutline"
+          size="icon"
+          onClick={() => setSearch("")}
+          aria-label="Clear search"
+          className="absolute right-4 top-1/2 -translate-y-1/2"
+        >
+          <XIcon size={16} weight="bold" aria-hidden />
+        </Button>
+      )}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  DataTable Controls                                                  */
+/* ------------------------------------------------------------------ */
+
+interface DataTableControlsProps {
+  children?: React.ReactNode;
+  className?: string;
+}
+
+function DataTableControls({ children, className }: DataTableControlsProps) {
+  return (
+    <div
+      className={cn(
+        "flex w-full flex-col gap-8 [&>button]:h-40 [&>button]:w-full sm:w-auto sm:flex-row sm:items-center sm:flex-wrap sm:[&>button]:w-auto",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  DataTable Filter Select                                             */
+/* ------------------------------------------------------------------ */
+
+type DataTableFilterSelectProps = React.SelectHTMLAttributes<HTMLSelectElement>;
+
+function DataTableFilterSelect({
+  children,
+  className,
+  ...props
+}: DataTableFilterSelectProps) {
+  return (
+    <select
+      className={cn(
+        "h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small text-[var(--color-text-primary)] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </select>
   );
 }
 
@@ -662,6 +754,12 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
   const { table } = useDataTable();
   const [isOpen, setIsOpen] = React.useState(false);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const menuId = React.useId();
+  const hideableColumns = table
+    .getAllLeafColumns()
+    .filter((column) => column.getCanHide() && columnLabel(column));
+  const hasVisibilityChanges = hideableColumns.some((column) => !column.getIsVisible());
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -673,42 +771,71 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Escape" || !isOpen) return;
+    event.preventDefault();
+    setIsOpen(false);
+    triggerRef.current?.focus();
+  }
+
   return (
-    <div className={cn("relative", className)} ref={dropdownRef}>
+    <div
+      className={cn("relative w-full sm:w-auto", className)}
+      ref={dropdownRef}
+      onKeyDown={handleKeyDown}
+    >
       <Button
+        ref={triggerRef}
         variant="default"
-        onClick={() => setIsOpen(!isOpen)}
-        className="bg-[var(--color-background-white)]"
+        onClick={() => setIsOpen((open) => !open)}
+        className="w-full bg-[var(--color-background-white)] sm:w-auto"
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
+        aria-controls={menuId}
       >
         Columns
       </Button>
       {isOpen && (
-        <div className="absolute right-0 top-[calc(100%+4px)] z-10 min-w-[160px] border border-[var(--color-border-primary)] bg-[var(--color-background-white)]">
-          {table.getAllLeafColumns().map((column) => {
-            if (!column.getCanHide()) return null;
-            return (
-              <label
-                key={column.id}
-                className="flex items-center gap-8 px-12 py-8 body-small text-[var(--color-text-primary)] hover:bg-[var(--color-background-medium)] cursor-pointer"
+        <div
+          id={menuId}
+          role="dialog"
+          aria-label="Column visibility"
+          className="absolute right-0 top-[calc(100%+4px)] z-10 min-w-[160px] border border-[var(--color-border-primary)] bg-[var(--color-background-white)]"
+        >
+          {hideableColumns.map((column) => (
+            <label
+              key={column.id}
+              className="flex items-center gap-8 px-12 py-8 body-small text-[var(--color-text-primary)] hover:bg-[var(--color-background-medium)] cursor-pointer"
+            >
+              <span
+                className={cn(
+                  "flex items-center justify-center h-16 w-16 border border-[var(--color-border-primary)]",
+                  column.getIsVisible() && "bg-[var(--color-interaction)] border-[var(--color-interaction)]"
+                )}
               >
-                <span
-                  className={cn(
-                    "flex items-center justify-center h-16 w-16 border border-[var(--color-border-primary)]",
-                    column.getIsVisible() && "bg-[var(--color-interaction)] border-[var(--color-interaction)]"
-                  )}
-                >
-                  {column.getIsVisible() && <CheckIcon size={12} weight="bold" className="text-white" />}
-                </span>
-                <input
-                  type="checkbox"
-                  checked={column.getIsVisible()}
-                  onChange={column.getToggleVisibilityHandler()}
-                  className="sr-only"
-                />
-                <span className="capitalize">{column.id}</span>
-              </label>
-            );
-          })}
+                {column.getIsVisible() && <CheckIcon size={12} weight="bold" className="text-white" />}
+              </span>
+              <input
+                type="checkbox"
+                checked={column.getIsVisible()}
+                onChange={column.getToggleVisibilityHandler()}
+                className="sr-only"
+              />
+              <span>{columnLabel(column)}</span>
+            </label>
+          ))}
+          {hasVisibilityChanges && (
+            <div className="border-t border-[var(--color-border-tertiary)] p-4">
+              <Button
+                variant="noOutline"
+                size="small"
+                width="full"
+                onClick={() => table.resetColumnVisibility()}
+              >
+                Reset columns
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -721,14 +848,14 @@ function DataTableColumnVisibility({ className }: DataTableColumnVisibilityProps
 
 interface DataTablePaginationProps {
   showRowsPerPage?: boolean;
-  rowsPerPageOptions?: number[];
+  rowsPerPageOptions?: readonly number[];
   showSelectedCount?: boolean;
   className?: string;
 }
 
 function DataTablePagination({
   showRowsPerPage = true,
-  rowsPerPageOptions = [10, 20, 30, 50],
+  rowsPerPageOptions = LIST_PAGE_SIZE_OPTIONS,
   showSelectedCount = false,
   className,
 }: DataTablePaginationProps) {
@@ -844,11 +971,18 @@ function createSelectionColumn<TData>(): ColumnDef<TData> {
 
 export const DataTable = Object.assign(DataTableRoot, {
   Toolbar: DataTableToolbar,
+  Controls: DataTableControls,
   Search: DataTableSearch,
+  FilterSelect: DataTableFilterSelect,
   ColumnVisibility: DataTableColumnVisibility,
   Pagination: DataTablePagination,
   Checkbox: DataTableCheckbox,
 });
 
 export { createSelectionColumn, useDataTable };
-export type { DataTableCheckboxProps };
+export type {
+  DataTableCheckboxProps,
+  DataTableControlsProps,
+  DataTableFilterSelectProps,
+  DataTableSearchProps,
+};

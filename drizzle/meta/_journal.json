@@ -638,6 +638,20 @@
       "when": 1784786209094,
       "tag": "0090_curly_bloodstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1784897396829,
+      "tag": "0091_gigantic_randall",
+      "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1784903207833,
+      "tag": "0092_chubby_proemial_gods",
+      "breakpoints": true
     }
   ]
 }

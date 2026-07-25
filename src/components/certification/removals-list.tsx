@@ -149,20 +149,64 @@ function StatusCell({ summary }: { summary: RemovalPreflightSummary }) {
 }
 
 function ReadinessCell({ summary }: { summary: RemovalPreflightSummary }) {
-  const { state, reasons } = summary.readiness;
+  const { state, reasons, advisories } = summary.readiness;
   if (state === "ready") {
     return (
-      <span className="inline-flex items-center gap-6 body-caption text-[var(--color-signal-green)]">
-        <CheckCircleIcon size={16} weight="fill" aria-hidden />
-        Ready to submit
+      <span className="flex flex-col gap-4">
+        <span className="inline-flex items-center gap-6 body-caption text-[var(--color-signal-green)]">
+          <CheckCircleIcon size={16} weight="fill" aria-hidden />
+          Ready to submit
+        </span>
+        {advisories.map((advisory) => (
+          <span
+            key={advisory}
+            className="inline-flex items-start gap-6 body-caption text-[var(--color-signal-orange)]"
+          >
+            <WarningIcon
+              size={16}
+              weight="fill"
+              aria-hidden
+              className="mt-px shrink-0"
+            />
+            <span className="line-clamp-2">{advisory}</span>
+          </span>
+        ))}
       </span>
     );
   }
   if (state === "blocked") {
     return (
-      <span className="inline-flex items-start gap-6 body-caption text-[var(--color-signal-orange)]">
-        <WarningIcon size={16} weight="fill" aria-hidden className="mt-px shrink-0" />
-        <span className="line-clamp-2">{reasons.join(" · ")}</span>
+      <span className="flex flex-col gap-4">
+        {reasons.map((reason) => (
+          <span
+            key={reason}
+            className="inline-flex items-start gap-6 body-caption text-[var(--color-signal-orange)]"
+          >
+            <WarningIcon
+              size={16}
+              weight="fill"
+              aria-hidden
+              className="mt-px shrink-0"
+            />
+            <span className="line-clamp-2">{reason}</span>
+          </span>
+        ))}
+        {advisories.map((advisory) => (
+          <span
+            key={advisory}
+            className="inline-flex items-start gap-6 body-caption"
+          >
+            <WarningIcon
+              size={16}
+              weight="fill"
+              aria-hidden
+              className="mt-px shrink-0 text-[var(--color-signal-orange)]"
+            />
+            <span className="line-clamp-2 text-[var(--color-text-secondary)]">
+              Advisory — {advisory}
+            </span>
+          </span>
+        ))}
       </span>
     );
   }
@@ -174,21 +218,31 @@ const columns: ColumnDef<RemovalPreflightSummary>[] = [
   {
     id: "removal",
     header: "Removal",
+    accessorFn: (summary) =>
+      `${summary.removalId} ${reportingWindow(summary)}`,
     cell: ({ row }) => <RemovalCell summary={row.original} />,
   },
   {
     id: "batches",
     header: "Credit batches",
+    accessorFn: (summary) => summary.memberBatchCodes.join(" "),
     cell: ({ row }) => <MemberBatchesCell summary={row.original} />,
   },
   {
     id: "status",
     header: "Status",
+    accessorFn: (summary) =>
+      deriveRemovalStatus({
+        local: summary.local,
+        lockInFlight: summary.lockInFlight,
+      }).label,
     cell: ({ row }) => <StatusCell summary={row.original} />,
   },
   {
     id: "readiness",
     header: "Readiness",
+    accessorFn: (summary) =>
+      `${summary.readiness.state} ${summary.readiness.reasons.join(" ")} ${summary.readiness.advisories.join(" ")}`,
     cell: ({ row }) => <ReadinessCell summary={row.original} />,
   },
 ];
@@ -201,6 +255,7 @@ function ListBody({
   onNewRemoval: () => void;
 }) {
   const overview = useCertificationOverview(facilityId);
+  const [searchQuery, setSearchQuery] = useState("");
   const [removalId, setRemovalId] = useQueryState(
     "removal",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
@@ -234,26 +289,46 @@ function ListBody({
         <DataTable
           columns={columns}
           data={rows}
+          enableFiltering
+          enablePagination
+          globalFilter={searchQuery}
+          onGlobalFilterChange={setSearchQuery}
           isLoading={overview.isLoading}
           hoverable
           onRowClick={(row) => setRemovalId(row.removalId)}
           aria-label="Removals"
           emptyMessage={
-            <div className="flex flex-col items-center justify-center gap-12 py-48">
-              <SealCheckIcon size={40} className="text-[var(--color-text-tertiary)]" />
-              <div className="text-center">
-                <h3 className="title-heading-3 mb-1">No removals yet</h3>
-                <p className="body-small text-[var(--color-text-secondary)]">
-                  Start one with “New removal” to group complete credit batches.
-                </p>
-              </div>
-              <Button variant="default" onClick={onNewRemoval}>
-                <PlusIcon size={16} weight="bold" />
-                New removal
-              </Button>
-            </div>
+            <EmptyState
+              padding="md"
+              icon={<SealCheckIcon size={40} />}
+              title={searchQuery ? "No matching removals" : "No removals yet"}
+              description={
+                searchQuery
+                  ? "Try clearing your search."
+                  : "Start one with “New removal” to group complete credit batches."
+              }
+              action={
+                searchQuery ? undefined : (
+                  <Button variant="default" onClick={onNewRemoval}>
+                    <PlusIcon size={16} weight="bold" />
+                    New removal
+                  </Button>
+                )
+              }
+            />
           }
-        />
+        >
+          <DataTable.Toolbar>
+            <DataTable.Search
+              placeholder="Search removals..."
+              aria-label="Search removals"
+            />
+            <DataTable.Controls>
+              <DataTable.ColumnVisibility />
+            </DataTable.Controls>
+          </DataTable.Toolbar>
+          <DataTable.Pagination />
+        </DataTable>
       </section>
 
       {selected && data && (

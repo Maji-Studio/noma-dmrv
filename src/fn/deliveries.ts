@@ -18,13 +18,15 @@ import {
   getDeliveryById as getDeliveryByIdData,
   getDeliveryWithRelations as getDeliveryWithRelationsData,
   getDeliveriesForSelect as getDeliveriesForSelectData,
-  getDeliveryStats as getDeliveryStatsData,
   isDeliveryCodeAvailable as isDeliveryCodeAvailableData,
   updateDelivery,
   type PaginatedDeliveries,
   type DeliveryDetail,
-  type DeliveryStats,
 } from "@/data-access/deliveries";
+import {
+  getDeliveryStats as getDeliveryStatsData,
+  type DeliveryStats,
+} from "@/data-access/delivery-stats";
 import { requireOrgFacility } from "@/data-access/utils";
 import { requireOrgContext } from "@/lib/auth/server";
 import {
@@ -47,6 +49,13 @@ function deliveryActionError(
     context: { op },
   });
 }
+
+const deliveryStatsFilterSchema = z.object({
+  facilityId: z.string().uuid().optional(),
+  creditBatchId: z.string().uuid().optional(),
+  fromDate: z.coerce.date().optional(),
+  toDate: z.coerce.date().optional(),
+}).optional();
 
 // ============================================
 // List/Query Operations
@@ -138,15 +147,21 @@ export async function getDeliveryWithRelationsFn(
  * Get delivery statistics
  */
 export async function getDeliveryStatsFn(
-  filters?: { facilityId?: string; fromDate?: Date; toDate?: Date }
+  filters?: {
+    facilityId?: string;
+    creditBatchId?: string;
+    fromDate?: Date;
+    toDate?: Date;
+  }
 ): Promise<ActionResult<DeliveryStats>> {
   try {
     const ctx = await requireOrgContext();
 
-    if (filters?.facilityId) {
-      await requireOrgFacility(ctx, filters.facilityId);
+    const validatedFilters = deliveryStatsFilterSchema.parse(filters);
+    if (validatedFilters?.facilityId) {
+      await requireOrgFacility(ctx, validatedFilters.facilityId);
     }
-    const stats = await getDeliveryStatsData(ctx, filters);
+    const stats = await getDeliveryStatsData(ctx, validatedFilters);
     return { success: true, data: stats };
   } catch (error) {
     return {

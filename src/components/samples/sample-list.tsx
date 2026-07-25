@@ -4,9 +4,9 @@
  */
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { FlaskIcon, LeafIcon, MagnifyingGlassIcon, PlusIcon, XIcon, FireIcon, CertificateIcon } from "@phosphor-icons/react/dist/ssr";
+import { FlaskIcon, LeafIcon, PlusIcon, XIcon, FireIcon, CertificateIcon } from "@phosphor-icons/react/dist/ssr";
 import { parseAsString, useQueryState } from "nuqs";
 import {
   useCreateSample,
@@ -18,6 +18,11 @@ import {
 } from "@/hooks/use-samples";
 import { useCreditBatches } from "@/hooks/use-credit-batches";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useDebounce } from "@/hooks/use-debounce";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useCreateWithEvidence } from "@/hooks/use-create-with-evidence";
 import { useCreateTransportLeg } from "@/hooks/use-transport-legs";
@@ -53,9 +58,8 @@ import {
   leaveSampleCreateIntent,
   resolveSampleCreateCreditBatchId,
   SAMPLE_CREATE_CREDIT_BATCH_PARAM,
-} from "./sample-create-intent";
-
-const READINESS_PREVIEW_LIMIT = 3;
+} from "@/lib/sample-create-intent";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
 /** One template for the create-failure banner so its two call sites (post-flush
  * failure and inline retry recount) can never drift apart. Null when resolved. */
@@ -217,23 +221,24 @@ export function SampleList({
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
   const creditBatchFilter = creditBatchFilterParam ?? "";
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const { currentPage, pageSize, setCurrentPage, onPaginationChange } =
+    useListPagination(`${contextFacilityId ?? ""}:${creditBatchFilter}`);
+  const debouncedSearch = useDebounce(searchQuery, LIST_SEARCH_DEBOUNCE_MS);
 
   const [sideSheet, setSideSheet] = useState<SideSheetState | null>(null);
   const [deletingSampleId, setDeletingSampleId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const filters: Partial<SampleFilterData> = useMemo(() => ({
-    search: searchQuery || undefined,
+  const filters: Partial<SampleFilterData> = {
+    search: debouncedSearch || undefined,
     creditBatchId: creditBatchFilter || undefined,
     facilityId: contextFacilityId || undefined,
     page: currentPage,
     pageSize,
     sortBy: "samplingTime",
     sortOrder: "desc",
-  }), [searchQuery, creditBatchFilter, contextFacilityId, currentPage, pageSize]);
+  };
 
   const { data: samplesData, isLoading, error: fetchError } = useSamples(filters, {
     enabled: !!contextFacilityId,
@@ -259,6 +264,12 @@ export function SampleList({
 
   const samples = samplesData?.items ?? [];
   const totalPages = samplesData?.totalPages ?? 0;
+  useReconcileListPage({
+    currentPage,
+    totalPages,
+    isLoading,
+    setCurrentPage,
+  });
   useEffect(() => {
     if (!focusedSampleId) return;
     if (focusedSample.error || (focusedSample.isSuccess && !focusedSample.data)) {
@@ -289,19 +300,6 @@ export function SampleList({
   const activeFocusTarget = sideSheet
     ? null
     : parseEntityFocusTarget(deepLinkFocus);
-  const showSavedToast = (message: string, sample: SampleWithRelations) => {
-    const readiness = deriveEntityCertifyReadiness("sample", sample);
-    if (readiness.state === "ready") {
-      toast.success(message);
-      return;
-    }
-    const gapLabels = readiness.gaps
-      .slice(0, READINESS_PREVIEW_LIMIT)
-      .map((gap) => gap.label)
-      .join(", ");
-    const suffix = readiness.gaps.length > READINESS_PREVIEW_LIMIT ? ", ..." : "";
-    toast.success(`${message}. Still needed to certify: ${gapLabels}${suffix}`);
-  };
 
   const createWithEvidence = useCreateWithEvidence({
     entityType: "sample",
@@ -344,8 +342,8 @@ export function SampleList({
         failureMessage: buildAttachmentFailureBanner(failedCount) ?? undefined,
       };
     },
-    onSuccess: ({ result }) =>
-      showSavedToast("Sample created successfully", result),
+    onSuccess: () =>
+      toast.success("Sample created successfully"),
   });
   const { deferredAttachments, isFlushing } = createWithEvidence;
 
@@ -433,14 +431,14 @@ export function SampleList({
     setFormError(null);
     if (createWithEvidence.guardUpdate(deferredLegs.length > 0)) return;
     try {
-      const sample = await updateSample.mutateAsync({
+      await updateSample.mutateAsync({
         sampleId: sideSheet.entity.id,
         ...data,
       });
       createWithEvidence.reset();
       setDeferredLegs([]);
       setSideSheet(null);
-      showSavedToast("Sample updated successfully", sample);
+      toast.success("Sample updated successfully");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Failed to update sample");
     }
@@ -588,16 +586,19 @@ export function SampleList({
       <DataTable
         columns={columns}
         data={samples}
-        enableSorting
+        enableSorting={false}
         enablePagination
         manualPagination
         pageCount={totalPages}
         pageSize={pageSize}
         pageIndex={currentPage - 1}
-        onPaginationChange={(p) => {
-          if (p.pageSize !== pageSize) { setPageSize(p.pageSize); setCurrentPage(1); }
-          else { setCurrentPage(p.pageIndex + 1); }
+        globalFilter={searchQuery}
+        onGlobalFilterChange={(value) => {
+          setSearchQuery(value);
+          setCurrentPage(1);
         }}
+        onPaginationChange={onPaginationChange}
+        aria-label="Samples"
         isLoading={isLoading}
         hoverable
         onRowClick={(row) => openView(row)}
@@ -623,22 +624,14 @@ export function SampleList({
         }
       >
         <DataTable.Toolbar>
-          <div className="relative max-w-[320px] flex-1">
-            <MagnifyingGlassIcon size={18} className="absolute left-12 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search samples..."
-              value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-              className="w-full h-40 pl-36 pr-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
-              aria-label="Search table"
-            />
-          </div>
-          <div className="flex items-center gap-8">
-            <select
+          <DataTable.Search
+            placeholder="Search by sample code..."
+            aria-label="Search samples by code"
+          />
+          <DataTable.Controls>
+            <DataTable.FilterSelect
               value={creditBatchFilter}
               onChange={(e) => { setCreditBatchFilter(e.target.value || null); setCurrentPage(1); }}
-              className="h-40 px-12 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] body-small cursor-pointer"
               aria-label="Filter by credit batch"
             >
               <option value="">All Credit Batches</option>
@@ -647,14 +640,15 @@ export function SampleList({
                   {batch.code}
                 </option>
               ))}
-            </select>
+            </DataTable.FilterSelect>
             {hasActiveFilters && (
               <Button variant="noOutline" size="small" onClick={clearFilters}>
                 <XIcon size={16} weight="bold" />
                 Clear
               </Button>
             )}
-          </div>
+            <DataTable.ColumnVisibility />
+          </DataTable.Controls>
         </DataTable.Toolbar>
         <DataTable.Pagination />
       </DataTable>

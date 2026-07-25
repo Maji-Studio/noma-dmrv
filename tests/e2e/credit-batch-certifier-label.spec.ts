@@ -19,7 +19,7 @@ test.describe("credit-batch card scanability", () => {
     const card = page.locator("article").filter({ hasText: batch.code });
     await expect(card).toHaveCount(1);
     await expect(card.getByText(seededData.feedstockType.name)).toBeVisible();
-    await expect(card.getByText(/Ready to certify|issues? open/)).toBeVisible();
+    await expect(card.getByText(/Batch data ready|issues? open/)).toBeVisible();
     await expect(card.getByText(seededData.facility.name)).toHaveCount(0);
     await expect(card.getByText("Isometric", { exact: true })).toHaveCount(0);
   });

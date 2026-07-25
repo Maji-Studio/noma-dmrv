@@ -161,6 +161,12 @@ export const deleteStorageLocationSchema = z.object({
   storageLocationId: z.string().uuid("Invalid storage location ID"),
 });
 
+/**
+ * Schemas for reversible storage-location lifecycle actions.
+ */
+export const archiveStorageLocationSchema = deleteStorageLocationSchema;
+export const restoreStorageLocationSchema = deleteStorageLocationSchema;
+
 // ============================================
 // Filter/Query Schemas
 // ============================================
@@ -181,6 +187,9 @@ export const storageLocationFilterSchema = z.object({
 
   // Filter by storage type
   type: z.enum(storageLocationTypes).optional(),
+
+  // false (default) = active bins only; true = archived bins only
+  archived: z.boolean().default(false),
 
   // Pagination
   page: z.number().int().min(1).default(1),
@@ -206,6 +215,12 @@ export type UpdateStorageLocationData = z.infer<
 >;
 export type DeleteStorageLocationData = z.infer<
   typeof deleteStorageLocationSchema
+>;
+export type ArchiveStorageLocationData = z.infer<
+  typeof archiveStorageLocationSchema
+>;
+export type RestoreStorageLocationData = z.infer<
+  typeof restoreStorageLocationSchema
 >;
 export type StorageLocationFilterData = z.infer<
   typeof storageLocationFilterSchema

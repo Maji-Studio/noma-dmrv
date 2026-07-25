@@ -64,10 +64,12 @@ Method B until all three close.
   a production-process history rule, not just the removal member-batch subset;
   the live gate must load the full process batch window or accept an explicit
   process-level cadence fact.
-- **Version dependency → #278.** ADR 0017 cites biochar protocol 1.3
-  while the local pin remains 1.2; resolve before encoding more credit-bearing
-  Method-B logic. Also entangled with #291 (template-driven remodel) —
-  coordinate so the submission layer isn't double-built.
+- **Version dependency → #278.** The Certify project was observed on biochar
+  protocol 1.1 on 2026-07-24, the local interpretation pin remains 1.2, and
+  ADR 0017's historical text cites 1.3 (now qualified by a dated amendment).
+  Resolve the project version with Isometric before encoding more
+  credit-bearing Method-B logic. Also entangled with #291 (template-driven
+  remodel) — coordinate so the submission layer isn't double-built.
 
 ### Method-B compute — tracked cleanups on the process-grain surface (`certification/method-b-compute-cleanups`, opened 2026-06-20)
 
@@ -96,31 +98,34 @@ when the flag is retired.
 Phases 1–5 and the 1000-year extension are **built and committed** (ADR 0021;
 issues #358 and #348); the phased plan and its decision record live in
 [`docs/plans/2026-06-19-tier1-durability-live-wiring.md`](./plans/2026-06-19-tier1-durability-live-wiring.md).
-Two sandbox-empirical confirms and one cutover checklist are all that remain.
+One 200-year unit confirm and the legacy-template cutover checklist remain.
 
-**Two sandbox-empirical confirms gate the LIVE submit — both
+**Resolved — datapoint↔component-input binding is explicit.** There is no
+measurement-property auto-link. `POST /measurement_samples` returns the required
+`values[].datapoint_id`; the submit pipeline captures those IDs and
+`transformers/sequestration-binding.ts` maps the 1000-year properties to the
+template component's `carbon_contents` / `product_mass` / `s_fraction` inputs.
+`buildCreateGhgEntryRequest` emits the corresponding LIST / SCALAR input
+variants. Unknown sequestration blueprints and missing IDs fail the submission
+instead of being skipped. The explicit table also permits the live
+`biochar_sequestration_1000_year` template key even though that exact key is
+absent from the blueprint catalog.
+
+**One sandbox-empirical confirm still gates the 200-year live submit —
 needs-registry-check.** The bodies, HTTP wrappers
 (`src/lib/isometric/measurement-samples.ts`), and per-batch aggregation are done
-and unit-tested; what remains needs the operator's
+and unit-tested; the remaining 200-year question needs the operator's
 `pnpm isometric:coverage-check -- --source=db` against the sandbox (interactive
 1Password — an agent can't run it).
 
-1. **Datapoint↔component-input binding — needs-registry-check.** How a
-   `biochar_sequestration_200_year_*` blueprint input references the
-   measurement-sample datapoints: auto-link by measurement type/property vs. an
-   explicit `datapoint_id` reference. Not modelled yet. *Hypothesis (local docs,
-   non-authoritative):* `user-guides/certify/datapoint-sharing` describes an
-   explicit sharing act, which leans toward an explicit reference. Confirm the
-   exact field against the live sandbox or the `post-datapoint`/component schema.
-2. **H/C unit transform — needs-registry-check.** The blueprint declares
-   `h_c_molar_ratios` in `%` while samples store a dimensionless molar ratio
-   (~0.5); `toHcMolarRatioPercent`
-   (`src/lib/isometric/transformers/measurement-sample.ts`) applies ×100 as the
-   most likely transform. *Hypothesis (local docs, non-authoritative):* the
-   Certify measurement-samples reference lists H:C as `DIMENSIONLESS_RATIO` /
-   `HYDROGEN_TO_ORGANIC_CARBON_RATIO`, which would make the ×100 **wrong**. This
-   is a hypothesis, not evidence — verify the live template's blueprint *input*
-   unit declaration before flipping.
+- **H/C unit transform — needs-registry-check.** The 200-year blueprint declares
+  `h_c_molar_ratios` in `%` while samples store a dimensionless molar ratio
+  (~0.5); `toHcMolarRatioPercent`
+  (`src/lib/isometric/transformers/measurement-sample.ts`) applies ×100 as the
+  most likely transform. The Certify measurement-samples reference lists H:C as
+  `DIMENSIONLESS_RATIO` / `HYDROGEN_TO_ORGANIC_CARBON_RATIO`, which may make the
+  ×100 wrong. Verify the live template's blueprint input unit before adding the
+  200-year explicit binding.
 
 **Cutover checklist (verified still load-bearing).** At the live flip, and not
 before: delete the stale `carbon_rich_substance_sequestration` `INPUT_MAPPING`
@@ -131,9 +136,8 @@ retarget the 5 tests that reference it (`isometric-submit-removal`,
 `registry-boundary-removal`, `period-input-tuples`, `isometric-transformers`,
 `isometric-sources`). It is load-bearing on the still-live old-template carbon
 path, so deleting it early breaks working tests for zero gain. Then wire the live
-path in `submit-removal.ts` via `selectSequestrationBlueprintKey`, close this
-entry, and record the outcome in
-[`docs/isometric/changes.md`](./isometric/changes.md).
+200-year property/input table after its unit confirm. The 1000-year path is
+already explicitly bound and does not use the legacy mapping.
 
 ### Ambiguous-lookup rejection records no failed sync event (`isometric/ambiguous-lookup-audit-silence`, opened 2026-06-10)
 

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "certifier_ghg_statements_remote_external_id_unique" ON "certifier_ghg_statements" USING btree ("provider",("metadata"->>'remoteExternalId')) WHERE "certifier_ghg_statements"."metadata"->>'remoteExternalId' is not null;

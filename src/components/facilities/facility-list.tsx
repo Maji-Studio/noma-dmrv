@@ -32,7 +32,6 @@ import {
 import { StatCard } from "@/components/ui/stat-card";
 import {
   Button,
-  DEFAULT_PAGE_SIZE,
   EmptyState,
   ListPagination,
   PageHeader,
@@ -41,6 +40,11 @@ import { useToast } from "@/components/ui/toast";
 import { useOpenCreateIntent } from "@/hooks/use-open-create-intent";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useFacilityContext } from "@/hooks/use-facility-context";
+import { useDebounce } from "@/hooks/use-debounce";
+import {
+  useListPagination,
+  useReconcileListPage,
+} from "@/hooks/use-list-pagination";
 import {
   FacilityCertifierLinkLoader,
   FacilityCertifierSummary,
@@ -52,13 +56,18 @@ import type { FacilityFormData, FacilityFilterData } from "@/schemas/facilities"
 import type { FacilityWithRelations } from "@/data-access/facilities";
 import { formatTimezoneLabel } from "@/lib/date-utils";
 import { formatDurabilityOption } from "@/schemas/credit-batches";
+import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
 export function FacilityList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [countryFilter, setCountryFilter] = useState<string>("");
   const [showArchived, setShowArchived] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const { currentPage, pageSize, setCurrentPage, setPageSize } =
+    useListPagination(showArchived ? "archived" : "active");
+  const debouncedSearch = useDebounce(
+    searchQuery,
+    LIST_SEARCH_DEBOUNCE_MS,
+  );
 
   const [sideSheet, setSideSheet] = useState<{
     entity: FacilityWithRelations | null;
@@ -83,7 +92,7 @@ export function FacilityList() {
 
   const filters: Partial<FacilityFilterData> = useMemo(
     () => ({
-      search: searchQuery || undefined,
+      search: debouncedSearch || undefined,
       country: countryFilter || undefined,
       archived: showArchived,
       page: currentPage,
@@ -91,7 +100,7 @@ export function FacilityList() {
       sortBy: "name",
       sortOrder: "asc",
     }),
-    [searchQuery, countryFilter, showArchived, currentPage, pageSize]
+    [debouncedSearch, countryFilter, showArchived, currentPage, pageSize]
   );
 
   const { data: facilitiesData, isLoading, error: fetchError } = useFacilities(filters);
@@ -108,6 +117,12 @@ export function FacilityList() {
   const facilities = facilitiesData?.items ?? [];
   const totalFacilities = facilitiesData?.total ?? 0;
   const totalPages = facilitiesData?.totalPages ?? 0;
+  useReconcileListPage({
+    currentPage,
+    totalPages,
+    isLoading,
+    setCurrentPage,
+  });
   const totalReactors = facilities.reduce((sum, facility) => sum + facility.reactorCount, 0);
   const totalStorageBins = facilities.reduce(
     (sum, facility) => sum + facility.storageLocationCount,
@@ -357,6 +372,7 @@ export function FacilityList() {
             </div>
 
             <select
+              aria-label="Filter facilities by country"
               value={countryFilter}
               onChange={(event) => {
                 setCountryFilter(event.target.value);
@@ -399,17 +415,19 @@ export function FacilityList() {
           padding="lg"
           icon={<FactoryIcon size={48} />}
           title={
-            showArchived
-              ? "No archived facilities"
-              : hasActiveFilters
-                ? "No facilities found"
+            hasActiveFilters
+              ? showArchived
+                ? "No archived facilities match"
+                : "No facilities found"
+              : showArchived
+                ? "No archived facilities"
                 : "No facilities yet"
           }
           description={
-            showArchived
-              ? "Facilities you archive will appear here and can be restored."
-              : hasActiveFilters
-                ? "Try adjusting your search or filters."
+            hasActiveFilters
+              ? "Try adjusting your search or filters."
+              : showArchived
+                ? "Facilities you archive will appear here and can be restored."
                 : "Create your first facility to start organising reactors and storage bins."
           }
           action={
@@ -441,10 +459,7 @@ export function FacilityList() {
             pageCount={totalPages}
             pageSize={pageSize}
             onPageChange={setCurrentPage}
-            onPageSizeChange={(size) => {
-              setPageSize(size);
-              setCurrentPage(1);
-            }}
+            onPageSizeChange={setPageSize}
             className="border-t border-[var(--color-border-tertiary)] pt-16 md:px-0"
           />
         </>

@@ -32,6 +32,21 @@ stands, now gated on computed eligibility instead of a stored unlock.
 > the production process actually began operating, not database-row creation time. Back-entering a
 > historical process is valid, but samples dated before its operational start never count toward the
 > ≥30-sample Method-A baseline or its Method-B eligible pool.
+>
+> **Amendment (2026-07-24 — version-citation correction):** the v1.3 label and
+> URL in the historical Context/freshness note below do not match noma's
+> Biochar Protocol v1.2 interpretation pin. The Certify project was separately
+> observed on v1.1 on this date. The Method-B rules and architectural decision
+> remain as recorded, but their applicability to the configured project must
+> be confirmed with Isometric before more credit-bearing logic is enabled.
+>
+> **Amendment (2026-07-24, later — re-pin to v1.1):** the operator confirmed
+> the Certify project's v1.1 is authoritative and the interpretation pin moved
+> to v1.1 (`docs/isometric/changes.md`). This ADR's Method-B rules were
+> verified against pages labelled v1.3 and must be re-verified against
+> protocol v1.1 in the pending gap-check
+> (`isometric/v1-1-shortlist-reverification` in `docs/open-questions.md`)
+> before more credit-bearing logic is enabled.
 
 ## Context
 

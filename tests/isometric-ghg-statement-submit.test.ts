@@ -70,8 +70,8 @@ vi.mock("@/lib/auth/server", () => ({
     isPlatformAdmin: false,
   }),
 }));
-// `finalizeGhgStatement` uses `db.transaction(cb)` — fake it by invoking
-// the callback with a sentinel tx that our mocked data-access ignores.
+// The remote-state data-access helper uses `db.transaction(cb)` — fake it by
+// invoking the callback with a sentinel tx that our mocked data-access ignores.
 vi.mock("@/db", () => ({
   db: {
     transaction: vi.fn(async (cb: (tx: unknown) => unknown) =>
@@ -88,6 +88,7 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
     getGhgStatement: vi.fn(),
     submitGhgStatement: vi.fn(),
     resubmitGhgStatement: vi.fn(),
+    listGhgStatementsForProject: vi.fn(),
     reconcileGhgStatement: vi.fn(),
     findDraftGhgStatementsByPeriod: vi.fn(),
   };
@@ -103,6 +104,7 @@ import * as isometric from "@/lib/isometric";
 import { __resetRateLimitForTests } from "@/lib/rate-limit/in-memory";
 import {
   createGhgStatementDraft,
+  refreshGhgStatementStatus,
   submitGhgStatementToVerifier,
 } from "@/fn/certification/ghg-statements";
 
@@ -265,6 +267,7 @@ beforeEach(() => {
   vi.mocked(ledger.getCertifierProjectByFacility).mockResolvedValue(
     makeMapping(),
   );
+  vi.mocked(ledger.getSubmissionByExternalId).mockResolvedValue(null);
 
   // Statement upsert: returns the seed row; orchestrator treats it as
   // already-present.
@@ -272,6 +275,9 @@ beforeEach(() => {
     statement: storedStatements[0],
     created: storedStatements.length === 1,
   }));
+  vi.mocked(
+    ghgDA.createGhgStatementForRegistryDiscovery,
+  ).mockImplementation(async () => storedStatements[0]);
   vi.mocked(ghgDA.getCertifierGhgStatementById).mockImplementation(async () =>
     storedStatements[0] ?? null,
   );
@@ -311,7 +317,19 @@ beforeEach(() => {
       }
     },
   );
-  vi.mocked(ledger.markSubmissionRejected).mockResolvedValue(undefined as never);
+  vi.mocked(ledger.markSubmissionRejected).mockImplementation(
+    async (_userId, id, args) => {
+      const row = storedLedger.find((candidate) => candidate.id === id);
+      if (row) {
+        row.status = "rejected";
+        row.lockedAt = null;
+        row.metadata = {
+          ...(row.metadata ?? {}),
+          lastError: args.errorMessage,
+        } as Record<string, unknown>;
+      }
+    },
+  );
   vi.mocked(ledger.updateSubmissionMetadata).mockImplementation(
     async (_userId, id, patch) => {
       const row = storedLedger.find((r) => r.id === id);
@@ -362,6 +380,9 @@ beforeEach(() => {
   // The non-overlap guard reads the facility's existing statements before
   // get-or-create; no siblings here, so nothing to overlap.
   vi.mocked(ghgDA.listGhgStatementsForFacility).mockResolvedValue([]);
+  vi.mocked(ghgDA.listFacilityIdsForExternalProject).mockResolvedValue([
+    FACILITY_ID,
+  ]);
 
   // The empty-statement guard (#245) predicts period membership from the
   // facility's open removals. Default to one completed in-window so creates
@@ -389,6 +410,7 @@ beforeEach(() => {
   // Default Isometric HTTP — the per-test overrides extend these.
   vi.mocked(isometric.reconcileGhgStatement).mockResolvedValue({ found: false });
   vi.mocked(isometric.findDraftGhgStatementsByPeriod).mockResolvedValue([]);
+  vi.mocked(isometric.listGhgStatementsForProject).mockResolvedValue([]);
 });
 
 // ---------------------------------------------------------------------------
@@ -396,6 +418,26 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("createGhgStatementDraft — happy path", () => {
+  it("fails before registry access when the project is shared across facilities", async () => {
+    vi.mocked(ghgDA.listFacilityIdsForExternalProject).mockResolvedValue([
+      FACILITY_ID,
+      "44444444-4444-4444-8444-444444444444",
+    ]);
+
+    const result = await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: expect.stringMatching(/shared across multiple noma facilities/i),
+    });
+    expect(isometric.listGhgStatementsForProject).not.toHaveBeenCalled();
+    expect(isometric.createGhgStatement).not.toHaveBeenCalled();
+    expect(storedLedger).toHaveLength(0);
+  });
+
   it("inserts a v=1 draft, POSTs /ghg_statements, reconciles ghg_entry_ids, and marks the ledger submitted", async () => {
     const remote = makeRemoteStatement();
     vi.mocked(isometric.createGhgStatement).mockResolvedValue(remote);
@@ -445,7 +487,11 @@ describe("createGhgStatementDraft — happy path", () => {
     expect(ghgDA.updateGhgStatementReportingWindow).toHaveBeenCalledWith(
       makeTestOrgContext("user-test-1"),
       STATEMENT_ID,
-      { reportingPeriodStartOn: "2026-01-01" },
+      {
+        reportingPeriodStartOn: "2026-01-01",
+        reportingPeriodEndOn: REPORTING_PERIOD_END,
+        remotePeriodMissing: false,
+      },
       expect.any(Object),
     );
   });
@@ -484,12 +530,61 @@ describe("createGhgStatementDraft — happy path", () => {
   });
 });
 
+describe("refreshGhgStatementStatus", () => {
+  it("reconciles membership, reporting window, and remote state atomically", async () => {
+    const submission = newLedgerRow({
+      provider: "isometric",
+      submissionType: "ghg_statement",
+      localEntityType: "ghgStatement",
+      localEntityId: STATEMENT_ID,
+      payloadSnapshot: {},
+      payloadHash: "refresh-test",
+      version: 1,
+    });
+    submission.externalId = EXTERNAL_STATEMENT_ID;
+    submission.status = "submitted";
+    storedLedger.push(submission);
+    const remote = makeRemoteStatement();
+
+    vi.mocked(ledger.getSubmissionById).mockResolvedValue(submission);
+    vi.mocked(isometric.getGhgStatement).mockResolvedValue(remote);
+
+    const result = await refreshGhgStatementStatus(submission.id);
+
+    expect(result).toMatchObject({ success: true, data: remote });
+    const transaction = expect.objectContaining({ __fakeTx: true });
+    expect(ghgDA.reconcileRemovalMembership).toHaveBeenCalledWith(
+      makeTestOrgContext("user-test-1"),
+      STATEMENT_ID,
+      [EXTERNAL_REMOVAL_ID],
+      transaction,
+    );
+    expect(ghgDA.updateGhgStatementReportingWindow).toHaveBeenCalledWith(
+      makeTestOrgContext("user-test-1"),
+      STATEMENT_ID,
+      {
+        reportingPeriodStartOn: "2026-01-01",
+        reportingPeriodEndOn: REPORTING_PERIOD_END,
+        remotePeriodMissing: false,
+      },
+      transaction,
+    );
+    expect(ledger.updateSubmissionMetadata).toHaveBeenCalledWith(
+      makeTestOrgContext("user-test-1"),
+      submission.id,
+      expect.objectContaining({
+        remoteStatus: "DRAFT",
+        removalIds: [EXTERNAL_REMOVAL_ID],
+      }),
+      transaction,
+    );
+  });
+});
+
 describe("createGhgStatementDraft — empty-statement guard (#245)", () => {
   it("adopts one exact remote draft before POSTing even when a removal is still open locally", async () => {
     const remote = makeRemoteStatement();
-    vi.mocked(isometric.findDraftGhgStatementsByPeriod).mockResolvedValue([
-      remote,
-    ]);
+    vi.mocked(isometric.listGhgStatementsForProject).mockResolvedValue([remote]);
     vi.mocked(isometric.reconcileGhgStatement).mockResolvedValue({
       found: "single",
       externalId: EXTERNAL_STATEMENT_ID,
@@ -507,6 +602,70 @@ describe("createGhgStatementDraft — empty-statement guard (#245)", () => {
       data: { externalId: EXTERNAL_STATEMENT_ID },
     });
     expect(isometric.createGhgStatement).not.toHaveBeenCalled();
+    expect(isometric.reconcileGhgStatement).toHaveBeenCalledOnce();
+    expect(storedLedger[0]).toMatchObject({
+      status: "submitted",
+      externalId: EXTERNAL_STATEMENT_ID,
+    });
+  });
+
+  it("rejects the claimed ledger row when matching remote drafts are ambiguous", async () => {
+    const first = makeRemoteStatement({ id: "ggs_test_1" });
+    const second = makeRemoteStatement({ id: "ggs_test_2" });
+    vi.mocked(isometric.listGhgStatementsForProject).mockResolvedValue([
+      first,
+      second,
+    ]);
+    vi.mocked(isometric.reconcileGhgStatement).mockResolvedValue({
+      found: "multiple",
+      ids: [first.id, second.id],
+    });
+
+    const result = await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error:
+        "Multiple draft GHG statements exist for this project and period in Isometric.",
+    });
+    expect(isometric.createGhgStatement).not.toHaveBeenCalled();
+    expect(storedLedger[0]).toMatchObject({
+      status: "rejected",
+      externalId: null,
+      metadata: {
+        lastError:
+          "Multiple draft GHG statements exist for this project and period in Isometric.",
+      },
+    });
+  });
+
+  it("rejects the claimed ledger row when a matching remote is not a DRAFT", async () => {
+    const remote = makeRemoteStatement({ status: "VERIFIED" });
+    vi.mocked(isometric.listGhgStatementsForProject).mockResolvedValue([
+      remote,
+    ]);
+    vi.mocked(isometric.reconcileGhgStatement).mockResolvedValue({
+      found: "refused",
+      externalId: remote.id,
+      status: remote.status,
+    });
+
+    const result = await createGhgStatementDraft({
+      facilityId: FACILITY_ID,
+      reportingPeriodEndOn: REPORTING_PERIOD_END,
+    });
+
+    const refusalMessage = `Registry statement ${remote.id} is VERIFIED and already covers this reporting period. Sync from the registry and open that statement instead of creating a duplicate.`;
+    expect(result).toEqual({ success: false, error: refusalMessage });
+    expect(isometric.createGhgStatement).not.toHaveBeenCalled();
+    expect(storedLedger[0]).toMatchObject({
+      status: "rejected",
+      externalId: null,
+      metadata: { lastError: refusalMessage },
+    });
   });
 
   it("fail-closes before any local row or remote POST when no removals are open", async () => {

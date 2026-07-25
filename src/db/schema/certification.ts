@@ -10,12 +10,14 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import {
   certificationSubmissionStatus,
   certifierProvider,
+  registrySourceVisibility,
   syncStatus,
 } from './common';
 import { facilities, reactors } from './facilities';
@@ -37,6 +39,32 @@ export const certifierCredentials = pgTable(
   },
   (table) => [
     unique('certifier_credentials_organization_id_provider_unique').on(
+      table.organizationId,
+      table.provider
+    ),
+  ]
+);
+
+// Organization-wide provider policy for registry artifacts. This deliberately
+// sits above facility mappings: one organization policy governs every Source
+// created for the provider, regardless of which facility's Settings route the
+// operator entered through.
+export const certifierOrganizationSettings = pgTable(
+  'certifier_organization_settings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organizations.id),
+    provider: certifierProvider('provider').notNull().default('isometric'),
+    sourceVisibility: registrySourceVisibility('source_visibility')
+      .notNull()
+      .default('private'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => [
+    unique('certifier_org_settings_organization_provider_unique').on(
       table.organizationId,
       table.provider
     ),
@@ -191,6 +219,9 @@ export const certifierSensors = pgTable(
 // (ADR 0003 / Phase 4.5). Facility-scoped. The remote statement id, status
 // and payload live on the certification_submissions ledger row keyed
 // (provider, 'ghg_statement', 'ghgStatement', certifierGhgStatements.id).
+export const CERTIFIER_GHG_STATEMENT_REMOTE_EXTERNAL_ID_METADATA_KEY =
+  'remoteExternalId';
+
 export const certifierGhgStatements = pgTable(
   'certifier_ghg_statements',
   {
@@ -228,6 +259,17 @@ export const certifierGhgStatements = pgTable(
       table.facilityId,
       table.reportingPeriodEndOn
     ),
+    // Registry discovery is keyed by the remote statement id, not its period:
+    // Isometric permits duplicate and null periods. This expression index
+    // makes concurrent list/manual reconciles converge on one local identity.
+    uniqueIndex('certifier_ghg_statements_remote_external_id_unique')
+      .on(
+        table.provider,
+        sql`(${table.metadata}->>${sql.raw(`'${CERTIFIER_GHG_STATEMENT_REMOTE_EXTERNAL_ID_METADATA_KEY}'`)})`
+      )
+      .where(
+        sql`${table.metadata}->>${sql.raw(`'${CERTIFIER_GHG_STATEMENT_REMOTE_EXTERNAL_ID_METADATA_KEY}'`)} is not null`
+      ),
   ]
 );
 

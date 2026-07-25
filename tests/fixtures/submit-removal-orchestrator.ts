@@ -214,6 +214,43 @@ export function makeSequestrationTemplate(): IsometricGhgEntryTemplate {
   } as unknown as IsometricGhgEntryTemplate;
 }
 
+export function make1000YearSequestrationTemplate(): IsometricGhgEntryTemplate {
+  const base = makeSequestrationTemplate();
+  return {
+    ...base,
+    name: "1000-year durability template",
+    display_name: "1000-year durability template",
+    groups: base.groups.map((group) => ({
+      ...group,
+      components: group.components.map((component) => ({
+        ...component,
+        blueprint_key: "biochar_sequestration_1000_year",
+        display_name: "1000-year sequestration",
+        inputs: [
+          {
+            type: "monitored",
+            input_key: "carbon_contents",
+            quantity_kind: "mass_fraction_dry_basis",
+            datapoint_id: null,
+          },
+          {
+            type: "monitored",
+            input_key: "product_mass",
+            quantity_kind: "mass",
+            datapoint_id: null,
+          },
+          {
+            type: "monitored",
+            input_key: "s_fraction",
+            quantity_kind: "dimensionless",
+            datapoint_id: null,
+          },
+        ],
+      })),
+    })),
+  } as unknown as IsometricGhgEntryTemplate;
+}
+
 function makeBlueprints(): IsometricComponentBlueprint[] {
   return [
     {
@@ -377,7 +414,18 @@ export function makeContext(
     missingDefaultTemplateId: null,
     blueprintsForTemplate: makeBlueprints(),
     unresolvedBlueprintKeys: [],
-    memberBatches: [{ id: CREDIT_BATCH_ID, code: "CB-TEST-001" }],
+    memberBatches: [{
+      id: CREDIT_BATCH_ID,
+      code: "CB-TEST-001",
+      startDate: "2026-07-01",
+      endDate: "2026-07-31",
+      appliedWeightTons: 1,
+      appliedDryWeightTons: 1,
+      durabilityOption: "1000_year",
+      sampling: "sampled",
+      productionRunCount: 1,
+      applicationCount: 1,
+    }],
     transportCoverage: {
       feedstock: {
         count: 0,
@@ -441,6 +489,10 @@ export function makeContext(
     },
     ...overrides,
     entityReadinessGaps: overrides.entityReadinessGaps ?? [],
+    supportingDocuments: overrides.supportingDocuments ?? {
+      total: 0,
+      mirrored: 0,
+    },
   };
 }
 

@@ -70,7 +70,7 @@ export function FeedstockTypeSampling({
 
   return (
     <div
-      className="flex flex-col gap-16 border border-[var(--color-border-tertiary)] bg-[var(--color-background-sunken)] p-16"
+      className="flex flex-col gap-16 border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] p-16"
       data-testid="feedstock-type-sampling"
     >
       <div className="grid grid-cols-1 gap-16 sm:grid-cols-2">

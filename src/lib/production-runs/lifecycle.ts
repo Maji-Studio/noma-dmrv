@@ -63,7 +63,7 @@ export type ProductionRunOutcomeViolation =
   | { code: "dry-mass-balance-exceeded" };
 
 const ALLOWED_TRANSITIONS: Record<ProductionRunStatus, readonly ProductionRunStatus[]> = {
-  draft: ["draft", "running", "cancelled"],
+  draft: ["draft", "running", "complete", "cancelled"],
   running: ["running", "complete", "failed", "cancelled"],
   complete: ["complete", "running"],
   failed: ["failed", "running"],

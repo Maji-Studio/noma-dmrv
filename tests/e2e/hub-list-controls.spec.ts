@@ -100,6 +100,11 @@ test.describe("Hub list controls", () => {
     await adminPage.keyboard.press("Escape");
 
     await firstCard.click();
-    await expect(adminPage).toHaveURL(new RegExp(`/credit-batches/${batches[0].id}`));
+    await expect(adminPage).toHaveURL(new RegExp(`[?&]batch=${batches[0].id}`));
+    await expect(
+      adminPage
+        .getByRole("dialog")
+        .getByRole("heading", { name: batches[0].code }),
+    ).toBeVisible();
   });
 });

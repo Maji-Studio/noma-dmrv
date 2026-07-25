@@ -1,25 +1,22 @@
 /**
  * RemovalDetailSheet — the read-only quick view for a Removal, opened from the
  * Removals table via `?removal=<id>`. Shows status, reporting window, member
- * batches, submission identity, and the readiness verdict. Actions adapt to the
- * removal (ADR 0003 decision 6): a ready 1:1 removal submits in one click
- * (production-gated); anything more complex routes to the guided Review flow.
+ * batches, submission identity, and the readiness verdict. Every actionable
+ * removal routes through the guided confirmation flow so the operator can
+ * inspect the exact batches and readiness checks before submitting.
  *
  * Built on SlideOverPanel rather than EntitySideSheet because the quick view
- * is read-only with bespoke actions (Submit / Review & submit), not the
+ * is read-only with a bespoke Review & submit action, not the
  * view↔edit form lifecycle EntitySideSheet models.
  */
 "use client";
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useState } from "react";
 import { CheckCircleIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, buttonVariants } from "@/components/ui";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { useToast } from "@/components/ui/toast";
-import { useSubmitRemoval } from "@/hooks/use-certification";
 import type { RemovalPreflightSummary } from "@/fn/certification";
 import { deriveRemovalStatus } from "@/lib/certification/status";
 import { formatDateRange } from "@/lib/format-utils";
@@ -27,7 +24,7 @@ import { EnvBanner } from "./env-banner";
 import { RegistryRecordLink } from "./registry-record-link";
 import { RemovalCarbonBreakdown } from "./removal-carbon-breakdown";
 import { SourcesPanel } from "./sources-panel";
-import { SubmitConfirmDialog } from "./submit-confirm-dialog";
+import { SyncEventLog } from "./sync-event-log";
 
 interface RemovalDetailSheetProps {
   summary: RemovalPreflightSummary;
@@ -49,52 +46,118 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function ReadinessBlock({ summary }: { summary: RemovalPreflightSummary }) {
-  const { state, reasons } = summary.readiness;
+  const { state, reasons, advisories } = summary.readiness;
   if (state === "ready") {
     return (
-      <div className="flex items-center gap-8 border-l-2 border-[var(--color-signal-green)] pl-12 py-4">
-        <CheckCircleIcon
-          size={16}
-          weight="fill"
-          aria-hidden
-          className="shrink-0 text-[var(--color-signal-green)]"
-        />
-        <span className="body-small text-[var(--color-text-primary)]">
-          Ready to submit — all preconditions met.
-        </span>
+      <div className="flex flex-col gap-8">
+        <div className="flex items-center gap-8 border-l-2 border-[var(--color-signal-green)] pl-12 py-4">
+          <CheckCircleIcon
+            size={16}
+            weight="fill"
+            aria-hidden
+            className="shrink-0 text-[var(--color-signal-green)]"
+          />
+          <span className="body-small text-[var(--color-text-primary)]">
+            Ready to submit —{" "}
+            {advisories.length > 0
+              ? "blocking preconditions met."
+              : "all preconditions met."}
+          </span>
+        </div>
+        <AdvisoryRows advisories={advisories} />
       </div>
     );
   }
   if (state === "blocked") {
     return (
-      <div className="flex flex-col gap-6 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
-        <span className="body-small font-medium text-[var(--color-text-primary)]">
-          Blocked — resolve before submitting:
-        </span>
-        <ul className="flex flex-col gap-4">
-          {reasons.map((reason) => (
-            <li key={reason} className="flex items-start gap-6">
-              <WarningIcon
-                size={14}
-                weight="fill"
-                aria-hidden
-                className="mt-2 shrink-0 text-[var(--color-signal-orange)]"
-              />
-              <span className="body-caption text-[var(--color-text-secondary)]">
-                {reason}
-              </span>
-            </li>
-          ))}
-        </ul>
+      <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-6 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
+          <span className="body-small font-medium text-[var(--color-text-primary)]">
+            Blocked — resolve before submitting:
+          </span>
+          <ul className="flex flex-col gap-4">
+            {reasons.map((reason) => (
+              <li key={reason} className="flex items-start gap-6">
+                <WarningIcon
+                  size={14}
+                  weight="fill"
+                  aria-hidden
+                  className="mt-2 shrink-0 text-[var(--color-signal-orange)]"
+                />
+                <span className="body-caption text-[var(--color-text-secondary)]">
+                  {reason}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <AdvisoryRows advisories={advisories} />
       </div>
     );
   }
   return (
-    <p className="body-small text-[var(--color-text-secondary)]">
-      {state === "inProgress"
-        ? "A submission is in progress."
-        : "This removal has been submitted to the registry."}
-    </p>
+    <div className="flex flex-col gap-8">
+      <p className="body-small text-[var(--color-text-secondary)]">
+        {state === "inProgress"
+          ? "A submission is in progress."
+          : "This removal has been submitted to the registry."}
+      </p>
+      <AdvisoryRows advisories={advisories} showSubmissionNote={false} />
+    </div>
+  );
+}
+
+function AdvisoryRows({
+  advisories,
+  showSubmissionNote = true,
+}: {
+  advisories: string[];
+  showSubmissionNote?: boolean;
+}) {
+  if (advisories.length === 0) return null;
+  return (
+    <ul className="flex flex-col gap-4 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
+      {advisories.map((advisory) => (
+        <li key={advisory} className="flex items-start gap-6">
+          <WarningIcon
+            size={14}
+            weight="fill"
+            aria-hidden
+            className="mt-2 shrink-0 text-[var(--color-signal-orange)]"
+          />
+          {showSubmissionNote ? (
+            <span className="body-caption text-[var(--color-text-secondary)]">
+              Advisory — {advisory}. Submission remains available.
+            </span>
+          ) : (
+            <span className="body-caption text-[var(--color-text-secondary)]">
+              Advisory — {advisory}.
+            </span>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function RemovalReviewAction({
+  isActionable,
+  reviewHref,
+}: {
+  isActionable: boolean;
+  reviewHref: string;
+}) {
+  if (!isActionable) return null;
+  return (
+    <Link
+      href={reviewHref}
+      className={buttonVariants({
+        variant: "primary",
+        className: "flex-1",
+      })}
+    >
+      Review &amp; submit
+    </Link>
   );
 }
 
@@ -105,10 +168,6 @@ export function RemovalDetailSheet({
   open,
   onClose,
 }: RemovalDetailSheetProps) {
-  const submitMutation = useSubmitRemoval();
-  const toast = useToast();
-  const [confirmOpen, setConfirmOpen] = useState(false);
-
   const derived = deriveRemovalStatus({
     local: summary.local,
     lockInFlight: summary.lockInFlight,
@@ -120,7 +179,6 @@ export function RemovalDetailSheet({
   // action, so the sheet stays read-only (the server would refuse a resubmit
   // anyway; this just stops offering a dead-end control).
   const isActionable = state === "ready" || state === "blocked";
-  const isOneClick = state === "ready" && summary.memberBatchCodes.length === 1;
 
   // "Review & submit" resumes the New-Removal wizard directly on this removal.
   // The legacy `/removals/[id]/review` route only redirects here (dropping any
@@ -133,30 +191,6 @@ export function RemovalDetailSheet({
     summary.startedOn && summary.completedOn
       ? formatDateRange(summary.startedOn, summary.completedOn)
       : "Set on submit";
-
-  const fireSubmit = (confirmProduction = false) => {
-    submitMutation.mutate(
-      { removalId: summary.removalId, confirmProduction },
-      {
-        onSuccess: (result) =>
-          toast.success(`Submitted Removal ${result.externalId}.`),
-        onError: (err) =>
-          toast.error(
-            `Submission failed: ${
-              err instanceof Error ? err.message : String(err)
-            }`,
-          ),
-      },
-    );
-  };
-
-  const handleSubmit = () => {
-    if (isProduction) {
-      setConfirmOpen(true);
-      return;
-    }
-    fireSubmit();
-  };
 
   return (
     <SlideOverPanel.Root open={open} onOpenChange={(o) => !o && onClose()}>
@@ -239,30 +273,19 @@ export function RemovalDetailSheet({
             2026-06-04 certify redesign.)
           */}
           <SourcesPanel removalId={summary.removalId} />
+
+          <SyncEventLog
+            events={summary.recentSyncEvents}
+            compact
+            label={`View removal sync history (${summary.recentSyncEvents.length})`}
+          />
         </SlideOverPanel.Body>
 
         <SlideOverPanel.Footer className="justify-stretch">
-          {isActionable &&
-            (isOneClick ? (
-              <Button
-                variant="primary"
-                className="flex-1"
-                onClick={handleSubmit}
-                busy={submitMutation.isPending}
-              >
-                {summary.externalId ? "Resubmit" : "Submit"}
-              </Button>
-            ) : (
-              <Link
-                href={reviewHref}
-                className={buttonVariants({
-                  variant: "primary",
-                  className: "flex-1",
-                })}
-              >
-                Review &amp; submit
-              </Link>
-            ))}
+          <RemovalReviewAction
+            isActionable={isActionable}
+            reviewHref={reviewHref}
+          />
           <SlideOverPanel.Close>
             <Button
               variant={isActionable ? "default" : "primary"}
@@ -273,18 +296,6 @@ export function RemovalDetailSheet({
           </SlideOverPanel.Close>
         </SlideOverPanel.Footer>
       </SlideOverPanel.Content>
-
-      <SubmitConfirmDialog
-        isOpen={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        onConfirm={() => {
-          setConfirmOpen(false);
-          fireSubmit(true);
-        }}
-        isPending={submitMutation.isPending}
-        artifact="removal"
-        isProduction={isProduction}
-      />
     </SlideOverPanel.Root>
   );
 }
