@@ -46,9 +46,20 @@ import * as removalsDA from "@/data-access/certifier-removals";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as durabilitySamples from "@/fn/certification/durability-measurement-samples";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
+import * as protocolPreflight from "@/fn/certification/protocol-version-preflight";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import * as isometric from "@/lib/isometric";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
+
+vi.mock("@/fn/certification/protocol-version-preflight", async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import("@/fn/certification/protocol-version-preflight")
+  >();
+  return {
+    ...actual,
+    checkProtocolVersionAtSubmit: vi.fn(),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -118,6 +129,22 @@ describe("submitRemoval — happy path", () => {
     );
 
     const result = await submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID });
+
+    expect(protocolPreflight.checkProtocolVersionAtSubmit).toHaveBeenCalledTimes(1);
+    const protocolCheckOrder = vi.mocked(
+      protocolPreflight.checkProtocolVersionAtSubmit,
+    ).mock.invocationCallOrder[0];
+    expect(protocolCheckOrder).toBeLessThan(
+      vi.mocked(isometric.getIsometricClientForOrg).mock.invocationCallOrder[0],
+    );
+    expect(protocolCheckOrder).toBeLessThan(
+      vi.mocked(
+        evidenceLedgers.ensureEvidenceLedgersFromContext,
+      ).mock.invocationCallOrder[0],
+    );
+    expect(protocolCheckOrder).toBeLessThan(
+      createDatapointFake.mock.invocationCallOrder[0],
+    );
 
     // Ledger transitioned draft → submitted; externalId matches the fake.
     expect(storedRows).toHaveLength(1);
@@ -520,6 +547,41 @@ describe("submitRemoval — reporting window anchored to application date (issue
     // POST or ledger claim.
     expect(createDatapointFake).not.toHaveBeenCalled();
     expect(createGhgEntryFake).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
+  });
+
+  it("rejects future production data before evidence, registry, or ledger mutations", async () => {
+    const futureRun = {
+      ...makeRun(ORIGINAL_BIOCHAR_MASS_KG),
+      startTime: new Date("2099-01-01T08:00:00.000Z"),
+      endTime: new Date("2099-01-01T16:00:00.000Z"),
+    };
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+      ...makeContext(),
+      runs: [futureRun],
+      lineages: [
+        makeLineage({
+          applicationDate: new Date("2099-01-02T00:00:00.000Z"),
+        }),
+      ],
+    });
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow(/production run end.*is in the future/i);
+
+    expect(
+      evidenceLedgers.ensureEvidenceLedgersFromContext,
+    ).not.toHaveBeenCalled();
+    expect(
+      protocolPreflight.checkProtocolVersionAtSubmit,
+    ).not.toHaveBeenCalled();
+    expect(isometric.getIsometricClientForOrg).not.toHaveBeenCalled();
+    expect(isometric.createDatapoint).not.toHaveBeenCalled();
+    expect(isometric.createGhgEntry).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
   });
 
