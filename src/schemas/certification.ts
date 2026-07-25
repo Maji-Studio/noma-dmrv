@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isSettledPeriodEnd } from "@/lib/isometric/utils/ghg-reporting-window";
 import {
   defaultSoilTemperatureSchema,
   emptyToNull,
@@ -181,9 +182,14 @@ export function buildSubmitGhgStatementDialogSchema(args: {
 // reconciles the linked removals afterward.
 export const createGhgStatementSchema = z.object({
   facilityId: z.string().uuid(),
+  // `isSettledPeriodEnd` rejects the intermediate values an `<input type="date">`
+  // emits while the year is being typed ("0202-01-31"), which are real calendar
+  // dates the round-trip check happily accepts. Without it a half-typed year can
+  // reach the create action.
   reportingPeriodEndOn: z
     .string()
-    .refine(isValidCalendarDate, "Pick a valid period end date"),
+    .refine(isValidCalendarDate, "Pick a valid period end date")
+    .refine(isSettledPeriodEnd, "Enter the full four-digit year"),
   confirmProduction: z.boolean().optional(),
 });
 
