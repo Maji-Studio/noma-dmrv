@@ -422,7 +422,7 @@ export function BiocharProductForm({
             <DryMassInput
               id="massKg"
               type="number"
-              step="0.01"
+              step="any"
               min="0"
               placeholder="e.g., 500"
               disabled={isSubmitting}
@@ -443,7 +443,7 @@ export function BiocharProductForm({
             <FormInput
               id="moistureContentPercent"
               type="number"
-              step="0.1"
+              step="any"
               min="0"
               max="100"
               placeholder="e.g., 2"
@@ -465,7 +465,7 @@ export function BiocharProductForm({
             <FormInput
               id="waterAddedKg"
               type="number"
-              step="0.01"
+              step="any"
               min="0"
               placeholder="e.g., 50"
               disabled={isSubmitting}
@@ -482,12 +482,12 @@ export function BiocharProductForm({
             <FormInput
               id="densityKgM3"
               type="number"
-              step="0.01"
+              step="any"
               min="0"
               placeholder="e.g., 350"
               disabled={isSubmitting}
               error={!!errors.densityKgM3}
-              {...register("densityKgM3", { setValueAs: nullableNumericValue })}
+              {...register("densityKgM3")}
             />
           </FormField>
         </div>

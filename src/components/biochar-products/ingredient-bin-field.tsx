@@ -92,7 +92,7 @@ export function IngredientBinField({
               <FormInput
                 id={row.massKgFieldName}
                 type="number"
-                step="0.01"
+                step="any"
                 min="0"
                 placeholder="e.g., 120"
                 disabled={isSubmitting}

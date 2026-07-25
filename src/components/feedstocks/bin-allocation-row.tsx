@@ -74,7 +74,7 @@ export function BinAllocationRow({
           <FormInput
             id={`allocations.${index}.allocatedWetMassKg`}
             type="number"
-            step="0.01"
+            step="any"
             min="0"
             placeholder="e.g., 975"
             disabled={disabled}

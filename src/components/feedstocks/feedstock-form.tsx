@@ -408,7 +408,7 @@ export function FeedstockForm({
                     <FormInput
                       id="transportDistanceKm"
                       type="number"
-                      step="0.1"
+                      step="any"
                       min="0"
                       placeholder="e.g., 85"
                       disabled={isSubmitting}
@@ -504,7 +504,7 @@ export function FeedstockForm({
               <DryMassInput
                 id="totalWetMassKg"
                 type="number"
-                step="0.01"
+                step="any"
                 min="0"
                 placeholder="e.g., 1500"
                 disabled={isSubmitting}
@@ -525,7 +525,7 @@ export function FeedstockForm({
               <FormInput
                 id="moisturePercent"
                 type="number"
-                step="0.1"
+                step="any"
                 min="0"
                 max="100"
                 placeholder="e.g., 35"

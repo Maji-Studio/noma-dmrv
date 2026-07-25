@@ -75,7 +75,7 @@ export function SampleNutrientFields({
               <FormInput
                 id={field.id}
                 type="number"
-                step="0.01"
+                step="any"
                 placeholder={field.placeholder}
                 disabled={isSubmitting}
                 error={!!field.error}

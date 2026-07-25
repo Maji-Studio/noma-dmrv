@@ -305,7 +305,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             <DryMassInput
               id="deliveredWetMassKg"
               type="number"
-              step="0.01"
+              step="any"
               placeholder="e.g., 1000"
               disabled={isSubmitting}
               error={!!errors.deliveredWetMassKg}
@@ -327,7 +327,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             <FormInput
               id="moistureContentPercent"
               type="number"
-              step="0.1"
+              step="any"
               min="0"
               max="100"
               placeholder="e.g., 20"
