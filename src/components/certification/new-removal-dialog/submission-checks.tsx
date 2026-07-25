@@ -33,6 +33,13 @@ function fixLinkFor(
     case "entityReadiness":
     case "evidence":
       return null;
+    // A future date is almost always a mistyped run end; the detail names the
+    // application when it isn't.
+    case "measurementDates":
+      return {
+        label: "Review production runs",
+        href: `/production-runs?facility=${facilityId}`,
+      };
     case "transportUniformity":
     case "transport":
       return {

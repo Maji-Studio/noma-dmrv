@@ -373,7 +373,7 @@ describe("evidence mirroring advisory", () => {
 });
 
 describe("buildRemovalPreflightChecklist", () => {
-  it("returns the seven checks in a stable order", () => {
+  it("returns the checks in a stable order", () => {
     const checks = buildRemovalPreflightChecklist(ready());
     expect(checks.map((c) => c.key)).toEqual([
       "mapping",
@@ -381,6 +381,7 @@ describe("buildRemovalPreflightChecklist", () => {
       "template",
       "transport",
       "production",
+      "measurementDates",
       "entityReadiness",
       "durability",
     ]);
@@ -542,6 +543,7 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
       "transport",
       "transportUniformity",
       "production",
+      "measurementDates",
       "entityReadiness",
       "durability",
     ]);
@@ -621,6 +623,86 @@ describe("buildRemovalRequirementsChecklist — wizard facility-level subset", (
     const production = reqFor(checks, "production");
     expect(production.status).toBe("unmet");
     expect(production.detail).toContain("No applications");
+  });
+});
+
+describe("future-dated measurement dates", () => {
+  const FUTURE_RUN =
+    "Production run PR-0007 ends 2099-01-31, in the future — wait until " +
+    "production is complete or correct the run end time.";
+  const FUTURE_APPLICATION =
+    "Application APP-0003 is dated 2099-02-14, in the future — wait until the " +
+    "application has occurred or correct the application date.";
+
+  it("blocks submission instead of failing only at submit time", () => {
+    const readiness = deriveRemovalReadiness(
+      ready({ futureDatedMeasurements: [FUTURE_RUN] }),
+    );
+
+    expect(readiness.state).toBe("blocked");
+    expect(readiness.reasons).toContain(FUTURE_RUN);
+  });
+
+  it("rolls up beyond the preview limit rather than flooding the verdict", () => {
+    const measurements = [
+      FUTURE_RUN,
+      FUTURE_APPLICATION,
+      "Application APP-0004 is dated 2099-02-15, in the future.",
+      "Application APP-0005 is dated 2099-02-16, in the future.",
+    ];
+
+    const readiness = deriveRemovalReadiness(
+      ready({ futureDatedMeasurements: measurements }),
+    );
+
+    expect(readiness.state).toBe("blocked");
+    expect(readiness.reasons).toContain("+1 more future-dated measurement(s)");
+  });
+
+  it("renders red in the requirements checklist naming the offending record", () => {
+    const check = buildRemovalRequirementsChecklist(
+      ready({ futureDatedMeasurements: [FUTURE_RUN, FUTURE_APPLICATION] }),
+    ).find((c) => c.key === "measurementDates");
+
+    expect(check).toMatchObject({ status: "unmet" });
+    expect(check?.detail).toContain("PR-0007");
+    expect(check?.detail).toContain("APP-0003");
+  });
+
+  it("renders red in the pre-flight checklist too", () => {
+    const checks = buildRemovalPreflightChecklist(
+      ready({ futureDatedMeasurements: [FUTURE_APPLICATION] }),
+    );
+    expect(checkFor(checks, "measurementDates")).toMatchObject({
+      status: "unmet",
+    });
+  });
+
+  it("is met — and never a blocker — once every date has happened", () => {
+    const facts = ready();
+    expect(deriveRemovalReadiness(facts).state).toBe("ready");
+    expect(
+      buildRemovalRequirementsChecklist(facts).find(
+        (c) => c.key === "measurementDates",
+      )?.status,
+    ).toBe("met");
+  });
+
+  it("skips rather than reads met when there is nothing to submit", () => {
+    const check = buildRemovalRequirementsChecklist(
+      ready({ hasSubmittableRuns: false }),
+    ).find((c) => c.key === "measurementDates");
+    expect(check?.status).toBe("skipped");
+  });
+
+  it("still flags a future date when production lineage is incomplete", () => {
+    const check = buildRemovalRequirementsChecklist(
+      ready({
+        hasSubmittableRuns: false,
+        futureDatedMeasurements: [FUTURE_APPLICATION],
+      }),
+    ).find((c) => c.key === "measurementDates");
+    expect(check?.status).toBe("unmet");
   });
 });
 

@@ -453,6 +453,7 @@ export function makeContext(
     hasSubmittableRuns: true,
     productionReadinessGap: null,
     durabilityGateBlockers: durabilityBlockersFor(batchesWithSamples),
+    futureDatedMeasurements: [],
     submissionWarnings: [],
     runSummary: {
       runCount: 1,
