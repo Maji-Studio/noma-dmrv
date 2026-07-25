@@ -261,10 +261,17 @@ export const certifierGhgStatements = pgTable(
     ),
     // Registry discovery is keyed by the remote statement id, not its period:
     // Isometric permits duplicate and null periods. This expression index
-    // makes concurrent list/manual reconciles converge on one local identity.
+    // makes concurrent list/manual reconciles converge on one local identity —
+    // per (organization, facility), NOT globally (ADR 0023). One Isometric
+    // project may be shared by several noma facilities (see
+    // `certifier_projects_facility_provider_unique` above), so a registry
+    // statement can legitimately need one local mirror row per facility; a
+    // global key also made a registry id collide across tenants.
     uniqueIndex('certifier_ghg_statements_remote_external_id_unique')
       .on(
         table.provider,
+        table.organizationId,
+        table.facilityId,
         sql`(${table.metadata}->>${sql.raw(`'${CERTIFIER_GHG_STATEMENT_REMOTE_EXTERNAL_ID_METADATA_KEY}'`)})`
       )
       .where(
@@ -325,6 +332,13 @@ export const certifierRemovals = pgTable(
   ]
 );
 
+// The ledger `submission_type` a GHG Statement is filed under. Duplicated as a
+// literal here — the schema layer is the bottom of the import graph and must
+// not pull in `@/lib/isometric/utils/constants` (which client bundles import) —
+// and asserted equal to `GHG_STATEMENT_SUBMISSION_TYPE` in
+// tests/ghg-statement-facility-identity.test.ts.
+export const GHG_STATEMENT_LEDGER_SUBMISSION_TYPE = 'ghg_statement';
+
 // Generic, provider-agnostic submission history with immutable payload snapshots.
 export const certificationSubmissions = pgTable(
   'certification_submissions',
@@ -358,11 +372,33 @@ export const certificationSubmissions = pgTable(
       table.localEntityId,
       table.version
     ),
-    unique('cert_submissions_external_unique').on(
-      table.provider,
-      table.submissionType,
-      table.externalId
-    ),
+    // Remote-id uniqueness, split by submission type (ADR 0023).
+    //
+    // Every type except `ghg_statement` keeps the original global rule: one
+    // local entity per remote artifact id. A Removal belongs to exactly one
+    // facility, so nothing legitimate collides here.
+    //
+    // A GHG Statement is different. One Isometric project may be shared by
+    // several noma facilities, and statement identity is now scoped per
+    // (organization, facility) — so the SAME registry statement legitimately
+    // gets one local mirror row (and one ledger row) per facility. The
+    // narrower index below keeps the invariant that still matters: a single
+    // local statement never carries the same remote id on two ledger rows.
+    uniqueIndex('cert_submissions_external_unique')
+      .on(table.provider, table.submissionType, table.externalId)
+      .where(
+        sql`${table.submissionType} <> ${sql.raw(`'${GHG_STATEMENT_LEDGER_SUBMISSION_TYPE}'`)}`
+      ),
+    uniqueIndex('cert_submissions_ghg_statement_external_unique')
+      .on(
+        table.provider,
+        table.organizationId,
+        table.localEntityId,
+        table.externalId
+      )
+      .where(
+        sql`${table.submissionType} = ${sql.raw(`'${GHG_STATEMENT_LEDGER_SUBMISSION_TYPE}'`)}`
+      ),
   ]
 );
 

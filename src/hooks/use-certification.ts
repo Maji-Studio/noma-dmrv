@@ -29,6 +29,7 @@ import {
   loadIsometricFeedstockTypes,
   loadIsometricProjectTemplates,
   loadOpenRemovalsForFacility,
+  loadRegistryGhgStatements,
   loadRegistrySourceVisibility,
   loadRemovalBreakdown,
   loadRemovalCertifyContext,
@@ -561,6 +562,11 @@ export function useGhgStatementsForFacility(
   });
 }
 
+// Read-only view of the project's registry statements. This is a *query*, so
+// it must not write: it previously called the reconcile action, which meant
+// merely opening the create dialog performed an unannounced sync (advancing
+// `updated_at` and discarding both of the reconcile's counters). Reconciling
+// is an explicit operator action — `useSyncGhgStatementsFromRegistry`.
 export function useRegistryGhgStatementsForFacility(
   facilityId: string,
   enabled = true,
@@ -568,9 +574,9 @@ export function useRegistryGhgStatementsForFacility(
   return useQuery({
     queryKey: certificationKeys.registryGhgStatementsForFacility(facilityId),
     queryFn: async () => {
-      const result = await reconcileGhgStatementsFromRegistry(facilityId);
+      const result = await loadRegistryGhgStatements(facilityId);
       if (!result.success) throw new Error(result.error);
-      return result.data.statements;
+      return result.data;
     },
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,

@@ -31,6 +31,7 @@ import {
 import {
   CheckCircleIcon,
   ClipboardTextIcon,
+  InfoIcon,
   WarningIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, ServerError } from "@/components/forms";
@@ -46,6 +47,7 @@ import {
   useRegistryGhgStatementsForFacility,
 } from "@/hooks/use-certification";
 import type { RegistryGhgStatementView } from "@/fn/certification";
+import type { GhgStatementCreateOutcome } from "@/fn/certification/ghg-statements";
 import {
   derivePeriodStart,
   overlappingEnd,
@@ -183,14 +185,17 @@ function DialogBody({
     }
     try {
       const result = await mutation.mutateAsync(data);
-      if (result.warnings.length > 0) {
+      const linked = `${result.linkedRemovalIds.length} linked removal${result.linkedRemovalIds.length === 1 ? "" : "s"}`;
+      if (result.outcome === "existing") {
+        // ADR 0004: the create is idempotent per period, so this is a normal
+        // success — but nothing was created and saying so would be a lie.
+        toast.info(`Statement already existed for this period — ${linked}.`);
+      } else if (result.warnings.length > 0) {
         toast.warning(
           `Created with ${result.warnings.length} warning${result.warnings.length === 1 ? "" : "s"}.`,
         );
       } else {
-        toast.success(
-          `Created with ${result.linkedRemovalIds.length} linked removal${result.linkedRemovalIds.length === 1 ? "" : "s"}.`,
-        );
+        toast.success(`Created with ${linked}.`);
       }
     } catch (err) {
       setError("root.serverError", {
@@ -213,7 +218,9 @@ function DialogBody({
           className="body-small text-[var(--color-text-secondary)]"
         >
           {result
-            ? "Created in Isometric."
+            ? result.outcome === "existing"
+              ? "Already in Isometric."
+              : "Created in Isometric."
             : "Choose a period, preview removals, then create."}
         </p>
       </header>
@@ -221,6 +228,7 @@ function DialogBody({
       <div className="flex flex-col gap-24">
         {result ? (
           <ResultPanel
+            outcome={result.outcome}
             externalId={result.externalId}
             linkedCount={result.linkedRemovalIds.length}
             warnings={result.warnings}
@@ -648,25 +656,45 @@ function StepConfirm({
 }
 
 function ResultPanel({
+  outcome,
   externalId,
   linkedCount,
   warnings,
 }: {
+  outcome: GhgStatementCreateOutcome;
   externalId: string;
   linkedCount: number;
   warnings: string[];
 }) {
+  // "existing" is the ADR 0004 idempotent path: a statement for this period was
+  // already created in Isometric and this attempt resolved to it. Say that,
+  // rather than claiming a creation that did not happen.
+  const alreadyExisted = outcome === "existing";
+  const OutcomeIcon = alreadyExisted ? InfoIcon : CheckCircleIcon;
   return (
     <div className="flex flex-col gap-16">
-      <div className="flex items-start gap-8 border-l-2 border-[var(--color-signal-green)] pl-12 py-4">
-        <CheckCircleIcon
+      <div
+        className={`flex items-start gap-8 border-l-2 pl-12 py-4 ${
+          alreadyExisted
+            ? "border-[var(--clr-dark-purple)]"
+            : "border-[var(--color-signal-green)]"
+        }`}
+      >
+        <OutcomeIcon
           size={18}
           weight="fill"
           aria-hidden
-          className="mt-px shrink-0 text-[var(--color-signal-green)]"
+          className={`mt-px shrink-0 ${
+            alreadyExisted
+              ? "text-[var(--clr-dark-purple)]"
+              : "text-[var(--color-signal-green)]"
+          }`}
         />
         <p className="body-small text-[var(--color-text-primary)]">
-          <span className="font-mono">{externalId}</span> created with{" "}
+          <span className="font-mono">{externalId}</span>{" "}
+          {alreadyExisted
+            ? "already exists for this period, with"
+            : "created with"}{" "}
           <strong className="body-small-bold">{linkedCount}</strong>{" "}
           removal{linkedCount === 1 ? "" : "s"}.
         </p>

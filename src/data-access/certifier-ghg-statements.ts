@@ -11,6 +11,7 @@ import {
 } from "drizzle-orm";
 import { db } from "@/db";
 import { countRows } from "@/db/aggregate";
+import { isPgUniqueViolation } from "@/db/errors";
 import {
   CERTIFIER_GHG_STATEMENT_REMOTE_EXTERNAL_ID_METADATA_KEY,
   certifierGhgStatements,
@@ -24,7 +25,7 @@ import { decideRemovalMembership } from "@/lib/isometric/utils/ghg-entry-members
 import {
   chooseStoredRemotePeriodEnd,
 } from "@/lib/isometric/utils/ghg-statement-local-period";
-import type { Tx } from "./certification";
+import type { CertificationSubmissionRow, Tx } from "./certification";
 import type { OrgContext } from "@/lib/auth/server";
 import { assertSameOrg, requireOrgScope } from "./utils";
 import type { CertifierRemovalRow } from "./certifier-removals";
@@ -34,6 +35,10 @@ export type CertifierGhgStatementRow =
 
 const ISOMETRIC = "isometric" as const;
 const REMOTE_PERIOD_INSERT_RETRY_LIMIT = 10;
+// Per-(organization, facility) registry-identity index (ADR 0023). Matched by
+// name so a 23505 on it is never confused with the period constraint.
+const REMOTE_EXTERNAL_ID_UNIQUE_CONSTRAINT =
+  "certifier_ghg_statements_remote_external_id_unique";
 export const REMOTE_EXTERNAL_ID_METADATA_KEY =
   CERTIFIER_GHG_STATEMENT_REMOTE_EXTERNAL_ID_METADATA_KEY;
 export const REMOTE_PERIOD_MISSING_METADATA_KEY = "remotePeriodMissing";
@@ -149,6 +154,47 @@ export async function listFacilityIdsForExternalProject(
       ),
     );
   return rows.map((row) => row.facilityId);
+}
+
+// The ledger row a *specific* facility holds for a registry statement id.
+//
+// Statement identity is scoped per (organization, facility) since ADR 0023, so
+// the generic `getSubmissionByExternalId` is ambiguous for GHG statements: two
+// facilities sharing one Isometric project each keep their own local row and
+// their own ledger row for the same `remote.id`. Every GHG reconcile path must
+// ask "does THIS facility already hold this remote statement?" rather than
+// "does anyone?".
+export async function getGhgStatementSubmissionForFacility(
+  ctx: OrgContext,
+  args: { facilityId: string; externalId: string },
+): Promise<CertificationSubmissionRow | null> {
+  requireOrgScope(ctx);
+  const [row] = await db
+    .select({ submission: certificationSubmissions })
+    .from(certificationSubmissions)
+    .innerJoin(
+      certifierGhgStatements,
+      and(
+        eq(
+          certificationSubmissions.localEntityId,
+          certifierGhgStatements.id,
+        ),
+        eq(certifierGhgStatements.organizationId, ctx.organizationId),
+      ),
+    )
+    .where(
+      and(
+        eq(certificationSubmissions.provider, ISOMETRIC),
+        eq(certificationSubmissions.submissionType, "ghg_statement"),
+        eq(certificationSubmissions.localEntityType, "ghgStatement"),
+        eq(certificationSubmissions.externalId, args.externalId),
+        eq(certifierGhgStatements.facilityId, args.facilityId),
+        eq(certificationSubmissions.organizationId, ctx.organizationId),
+      ),
+    )
+    .orderBy(desc(certificationSubmissions.version))
+    .limit(1);
+  return row?.submission ?? null;
 }
 
 export async function hasInFlightGhgStatementForFacility(
@@ -290,26 +336,43 @@ export async function createGhgStatementForRegistryDiscovery(
       input.reportingPeriodEndOn,
       occupiedEndOns,
     );
-    const [inserted] = await db
-      .insert(certifierGhgStatements)
-      .values({
-        organizationId: ctx.organizationId,
-        facilityId: input.facilityId,
-        reportingPeriodEndOn: storedPeriod.endOn,
-        metadata: {
-          [REMOTE_EXTERNAL_ID_METADATA_KEY]: input.externalId,
-          [REMOTE_PERIOD_END_ON_METADATA_KEY]: input.reportingPeriodEndOn,
-          [REMOTE_PERIOD_END_IS_SYNTHETIC_METADATA_KEY]:
-            storedPeriod.synthetic,
-          [REMOTE_PERIOD_MISSING_METADATA_KEY]:
-            input.reportingPeriodEndOn === null,
-        },
-      })
-      // The period constraint means another remote already occupies this
-      // local date; the external-id expression index means this remote won a
-      // concurrent insert. Handle either conflict, then identify which won.
-      .onConflictDoNothing()
-      .returning();
+    // Two unique keys can reject this insert and they mean opposite things,
+    // but Postgres allows only ONE inference target per ON CONFLICT. So the
+    // *period* key (the retryable one — another remote already occupies this
+    // local date, pick another) is the explicit target, and the per-facility
+    // *external-id* key (a concurrent reconcile of this same remote won the
+    // race) is caught by name and resolved by re-reading. Nothing is swallowed
+    // untargeted: any other violation propagates.
+    let inserted: CertifierGhgStatementRow | undefined;
+    try {
+      [inserted] = await db
+        .insert(certifierGhgStatements)
+        .values({
+          organizationId: ctx.organizationId,
+          facilityId: input.facilityId,
+          reportingPeriodEndOn: storedPeriod.endOn,
+          metadata: {
+            [REMOTE_EXTERNAL_ID_METADATA_KEY]: input.externalId,
+            [REMOTE_PERIOD_END_ON_METADATA_KEY]: input.reportingPeriodEndOn,
+            [REMOTE_PERIOD_END_IS_SYNTHETIC_METADATA_KEY]:
+              storedPeriod.synthetic,
+            [REMOTE_PERIOD_MISSING_METADATA_KEY]:
+              input.reportingPeriodEndOn === null,
+          },
+        })
+        .onConflictDoNothing({
+          target: [
+            certifierGhgStatements.provider,
+            certifierGhgStatements.facilityId,
+            certifierGhgStatements.reportingPeriodEndOn,
+          ],
+        })
+        .returning();
+    } catch (err) {
+      if (!isPgUniqueViolation(err, REMOTE_EXTERNAL_ID_UNIQUE_CONSTRAINT)) {
+        throw err;
+      }
+    }
     if (inserted) return inserted;
     const concurrentlyInserted = await findRegistryDiscoveryStatement(
       ctx,
