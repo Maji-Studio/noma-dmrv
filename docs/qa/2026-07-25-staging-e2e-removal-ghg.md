@@ -382,3 +382,59 @@ deleting the junk draft statements/entries from the sandbox before the next pass
   `example.com` address so it could not be mistaken for a real report.
 - Staging artefacts (`FAC-26-005`, `CB-26-005`, `SAM-26-041…044`) are left in place,
   ready to resume once F-1 is fixed.
+
+---
+
+## Addendum — corrections from remediation (2026-07-25)
+
+Findings from this report were verified against the code before being fixed.
+Three claims did **not** survive that check and are corrected here so a later
+pass does not re-report them.
+
+### F-4b "Sync from registry gives no feedback at all" — incorrect
+
+A toast reporting `reconciledCount` already existed on this branch
+(`components/certification/ghg-statements-list`), added in `3a32f1d7` (#536)
+*before* this QA pass. The real defect was narrower and is now fixed: the
+reconcile computed a `warningCount` that was **never rendered**, and a remote
+statement already owned by another facility was `continue`d in
+`fn/certification/ghg-statement-reconciliation` without being counted in
+*either* counter — so the toast read "Synced 0 registry statements" while 12
+statements sat in the project. Skips and warnings are now surfaced.
+
+### F-4b "Create GHG Statement silently no-ops" — wrong mechanism
+
+The dialog does not close silently. `Modal` sets `dismissOnClickOutside={false}`
+and only the explicit **Done** button closes it. For an already-existing period
+the action returned a *success* payload with `linkedRemovalIds: []`, so the UI
+fired `toast.success("Created with 0 linked removals.")` — a **false claim of
+creation** plus a wrong count, which is worse than silence. Per ADR 0004 the
+idempotency itself is correct and was kept; the result now carries an
+`outcome: "created" | "existing"` discriminator and reports real membership.
+
+### F-8 "preprocess fuel may belong to a different SSR" — does not hold
+
+The `Diesel · genset + startup` label showing 170 L was a **label** error, not a
+value error. `lib/isometric/utils/aggregation` and
+`lib/certification/certify-field-registry` both route preprocessing fuel into
+the genset component deliberately, and `docs/isometric/changes.md` records that
+the Dark Earth template's two pyrolysis `fuel_usage_by_volume` components share
+one fixed emission factor — the split is presentation-only and total emissions
+are unchanged. All three litre fields belong to the same pyrolysis SSR, so
+summing them is correct. Only the label changed.
+
+### F-8 storage-bin wording — co-location claim incorrect
+
+`0 kg remaining` and the `0% of 50.0 t` capacity meter are on **different
+surfaces** (the entity-picker dropdown vs the storage-bin card), not side by
+side. The wording defect was real and is fixed (`kg stored`); real headroom was
+deliberately not computed, since `capacityKg` is not selected by the picker
+queries and uncapped bins are nullable.
+
+### F-2 file path — incorrect
+
+The report cites `durability-batch-summary.ts` under `src/lib/durability/`.
+That directory does not exist; the file is `src/lib/certification/`. Also worth
+pinning: the production-run columns are `timestamp` **without** time zone, and
+that is correct — Drizzle round-trips them as UTC. The bug was client-side
+construction only. Nobody should "fix" this by altering the column type.

@@ -465,3 +465,52 @@ handling, and the reused project's continuous Statement coverage through
 complete Removal; then use a project/period whose next Statement window is
 non-future and contains that submitted Removal before treating its Noma and
 Isometric figures as verified.
+
+---
+
+## Addendum — corrections from remediation (2026-07-25)
+
+Two P2 findings from this report were disproven when checked against the code.
+
+### "P2 — Application evidence type does not persist on creation" — incorrect
+
+Disproven at runtime. Querying `documents.metadata->>'logbookEvidenceType'` for
+the three applications created by this run returned `affidavit` for all three —
+exactly what was selected. The create path is correct end to end
+(`application-evidence-panel` → `use-deferred-attachments` → `use-file-upload`
+→ `fn/documents`).
+
+The real defect was **display-only**: `application-evidence-panel` held the
+radio in a `useState` hardcoded to `"weighbridge"` that drove *both* create and
+edit mode, so reopening any application always showed Weighbridge regardless of
+what was stored — and in edit mode the radio was effectively write-only, since
+its change handler only re-tagged *deferred* attachments, which no longer exist
+once the application has an id. The panel contradicted itself, because the file
+row beside it already printed the true saved label. Fixed by deriving the value
+from the saved boundary documents and relabelling the edit-mode control as
+"type for the next upload".
+
+### "P2 — Credit-batch preview disagrees with saved membership" — not a defect
+
+Closed as a false positive; see
+[`docs/open-questions.md`](../open-questions.md) →
+*Credit-batch preview is deliberately a superset of saved membership*. The two
+paths agree on window bounds, date expression, feedstock-type rule and
+org/facility scoping. The preview intentionally shows a superset (`draft` and
+`running` runs, plus runs already assigned elsewhere), and the observed
+direction — preview empty, saved batch populated — is
+`attachProductionRunToMatchingCreditBatch` firing when a run is re-completed
+after the preview was rendered. This run's own lifecycle (Running → Complete →
+Running with the end cleared → Complete again) is exactly that sequence. The
+preview panel already states that matching completed runs attach automatically.
+Notably this is **not** a symptom of the timezone bug below: both sides use the
+same `productionRunDateExpr`, so a shift moves them identically.
+
+### "P1 — Browser timezone truncates valid UTC telemetry" — confirmed, and understated
+
+Correct, and worse than described: the same bug had **three** code sites, not
+one. Besides the `combineDateAndTime` write path, the form's read-back rebuilt
+its defaults in the browser zone (so editing a run re-shifted it), and
+`schemas/production-runs` carried a second independent zoneless combiner used by
+form validation. All three were fixed together; remaining siblings are recorded
+in [`docs/open-questions.md`](../open-questions.md).

@@ -839,3 +839,62 @@ bound); these are the decisions it deliberately did not make.
 - **Resolve via:** pick one convention (group count with expanded field list,
   or field count everywhere) and apply it to the card tag, health strip, and
   Removal wizard copy (S).
+
+### Zoneless date/time construction outside the production-run form (`dates/zoneless-instants`)
+
+- F-2 anchored the production-run start/end combiner to the facility timezone,
+  but the same bug class survives elsewhere. `fn/production-incidents` and
+  `fn/production-samples` parse a zoneless `"YYYY-MM-DDTHH:mm"` string with
+  `new Date(...)` on the **server**, so the stored instant depends on the server
+  process timezone; `data-access/production-runs/overlap` formats conflict
+  messages in that same zone; and `productionRunDateExpr` casts `start_time` to
+  a **UTC** calendar day rather than the facility day, so a near-midnight run
+  can land in the wrong cohort date. Display counterparts in
+  `components/production-runs/production-run-list`,
+  `production-incident-form`, `production-sample-form` and
+  `components/samples/sample-form` render in the browser zone.
+- **Resolve via:** decide one project-wide rule — instants are constructed and
+  rendered in the facility zone, date-only values stay pinned to UTC (issue #46)
+  — then apply it to the remaining sites and add a lint or test guard so a
+  zoneless `new Date(string)` cannot reappear (M).
+
+### Sampling-day chips are not post-window-normalized (`certification/sampling-day-normalization`)
+
+- F-6 filtered the credit-batch day chips to usable replicates, but
+  `certification/durability-batch-summary` exposes `replicates[].samplingDay`
+  raw, while the gate's `distinctRunDayCount` passes days through
+  `normalizePostWindowSamplingDay` (which nulls days after the batch end date).
+  A stored-material sample dated after the production window can therefore still
+  show a chip that the submission gate does not credit.
+- **Resolve via:** normalize `samplingDay` at the summary boundary so every
+  surface reads the same day set, or expose the normalized day alongside the raw
+  one and have the chips use it (S).
+
+### Credit-batch preview is deliberately a superset of saved membership (`credit-batches/preview-vs-membership`)
+
+- **Recorded decision, not a defect** — re-reported by QA on 2026-07-25 and
+  closed. `data-access/credit-batches` (preview) and
+  `data-access/credit-batch-membership` (saved) agree on window bounds, date
+  expression, feedstock-type rule and org/facility scoping. The preview
+  deliberately shows a superset: it includes `draft`/`running` runs and runs
+  already assigned elsewhere, whereas membership takes only unassigned
+  `complete` runs. A preview that looks empty while the saved batch has members
+  is `attachProductionRunToMatchingCreditBatch` firing when a run is
+  re-completed after the preview was rendered — which the preview panel already
+  announces ("matching completed runs will attach automatically").
+- **Resolve via:** nothing to fix in the queries. If it keeps being re-reported,
+  surface the auto-attach explicitly after save, or refetch the options query on
+  form focus so the preview cannot be staler than the batch (S).
+
+### Operator-initiated GHG statements are still refused on a shared project (`certification/shared-project-statement-create`)
+
+- ADR 0023 scoped registry statement identity per organization + facility, so a
+  re-pointed project no longer locks the new facility out on **sync**. But
+  `assertDedicatedGhgStatementProject` still refuses operator-initiated creates
+  while a project is shared across facilities, so the unlocked path is the
+  sequential one (A imports → project re-points → B imports its own row).
+  Whether two facilities on one live project should be able to create statements
+  concurrently is unanswered — the guard was deliberately kept.
+- **Resolve via:** confirm with Isometric whether one project may carry
+  concurrent per-site statements for the same period; if yes, replace the guard
+  with per-facility period scoping, if no, keep it and say so in the copy (M).
