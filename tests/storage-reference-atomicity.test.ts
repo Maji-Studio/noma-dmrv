@@ -2,6 +2,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { lockBinStock } from "@/data-access/bin-stock-guards";
+import { archiveFacility } from "@/data-access/facilities";
 import {
   createFeedstock,
   updateFeedstock,
@@ -603,6 +604,15 @@ describe(
       );
 
       expectArchivedReferenceRejected(outcome);
+      const [stored] = await db
+        .select({
+          facilityId: feedstocks.facilityId,
+          archivedAt: feedstocks.archivedAt,
+        })
+        .from(feedstocks)
+        .where(eq(feedstocks.id, fixture.unlocatedFeedstockId));
+      expect(stored).toMatchObject({ facilityId: fixture.facilityId });
+      expect(stored.archivedAt).not.toBeNull();
     });
 
     it("rejects a production run move after its source facility archive wins", async () => {
@@ -618,6 +628,52 @@ describe(
       );
 
       expectArchivedReferenceRejected(outcome);
+      const [stored] = await db
+        .select({
+          facilityId: productionRuns.facilityId,
+          archivedAt: productionRuns.archivedAt,
+        })
+        .from(productionRuns)
+        .where(eq(productionRuns.id, fixture.existingProductionRunId));
+      expect(stored).toMatchObject({ facilityId: fixture.facilityId });
+      expect(stored.archivedAt).not.toBeNull();
+    });
+
+    it("keeps moved rows active when their move wins before source archive", async () => {
+      const fixture = await createFixture();
+
+      await updateFeedstock(ctx, fixture.unlocatedFeedstockId, {
+        facilityId: fixture.targetFacilityId,
+      });
+      await updateProductionRun(ctx, fixture.existingProductionRunId, {
+        facilityId: fixture.targetFacilityId,
+        reactorId: fixture.targetReactorId,
+      });
+      await archiveFacility(ctx, fixture.facilityId);
+
+      const [storedFeedstock] = await db
+        .select({
+          facilityId: feedstocks.facilityId,
+          archivedAt: feedstocks.archivedAt,
+        })
+        .from(feedstocks)
+        .where(eq(feedstocks.id, fixture.unlocatedFeedstockId));
+      const [storedRun] = await db
+        .select({
+          facilityId: productionRuns.facilityId,
+          archivedAt: productionRuns.archivedAt,
+        })
+        .from(productionRuns)
+        .where(eq(productionRuns.id, fixture.existingProductionRunId));
+
+      expect(storedFeedstock).toMatchObject({
+        facilityId: fixture.targetFacilityId,
+        archivedAt: null,
+      });
+      expect(storedRun).toMatchObject({
+        facilityId: fixture.targetFacilityId,
+        archivedAt: null,
+      });
     });
   },
 );
