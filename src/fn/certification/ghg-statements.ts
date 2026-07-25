@@ -29,7 +29,6 @@ import {
   listFacilityIdsForExternalProject,
   listGhgStatementsForFacility,
   listOpenRemovalsForFacility,
-  reconcileRemovalMembership,
   type CertifierGhgStatementRow,
 } from "@/data-access/certifier-ghg-statements";
 import {
@@ -791,12 +790,11 @@ export async function refreshGhgStatementStatus(
       );
     }
     const remote = await getGhgStatement(client, submission.externalId);
-    await applyGhgRemoteState(orgCtx, submission, remote);
-    await reconcileRemovalMembership(
-      orgCtx,
-      submission.localEntityId,
-      remote.ghg_entry_ids,
-    );
+    await reconcileGhgStatementRemoteState(orgCtx, {
+      statementId: submission.localEntityId,
+      submission,
+      remote,
+    });
     return remote;
   });
 }
