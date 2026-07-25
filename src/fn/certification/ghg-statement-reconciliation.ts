@@ -18,7 +18,7 @@ import {
   listFacilityIdsForExternalRemovals,
   reconcileRemovalMembership,
 } from "@/data-access/certifier-ghg-statements";
-import { reconcileDiscoveredGhgStatementState } from "@/data-access/certifier-ghg-remote-state";
+import { reconcileGhgStatementRemoteState } from "@/data-access/certifier-ghg-remote-state";
 import { requireOrgFacility } from "@/data-access/utils";
 import { SafeError } from "@/lib/errors";
 import {
@@ -279,7 +279,7 @@ export async function reconcileRegistryGhgStatement(
     );
   }
 
-  const membership = await reconcileDiscoveredGhgStatementState(orgCtx, {
+  const membership = await reconcileGhgStatementRemoteState(orgCtx, {
     statementId: statement.id,
     submission,
     remote: args.remote,

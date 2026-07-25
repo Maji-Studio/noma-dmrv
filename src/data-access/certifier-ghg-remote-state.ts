@@ -61,7 +61,7 @@ export async function applyGhgRemoteState(
   await updateSubmissionMetadata(ctx, submission.id, metadataPatch, tx);
 }
 
-export async function reconcileDiscoveredGhgStatementState(
+export async function reconcileGhgStatementRemoteState(
   ctx: OrgContext,
   args: {
     statementId: string;
