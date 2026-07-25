@@ -1,6 +1,8 @@
 import type { StatusValue } from "@/components/ui/status-badge";
 import type { CreditBatchHealthSummary } from "@/fn/certification";
 
+export const CREDIT_BATCH_READY_LABEL = "Batch data ready";
+
 export const CREDIT_BATCH_LIFECYCLE_STEPS = [
   { key: "open", label: "Open" },
   { key: "removal-submitted", label: "Removal submitted" },
@@ -34,7 +36,7 @@ function buildStepStates(
 function readyToSubmitLifecycle(): CreditBatchLifecycle {
   return {
     badgeStatus: "ready",
-    label: "Batch data ready",
+    label: CREDIT_BATCH_READY_LABEL,
     currentStepIndex: 0,
     stepStates: buildStepStates(0, "success"),
   };

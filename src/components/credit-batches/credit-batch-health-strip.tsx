@@ -29,6 +29,7 @@ import {
   batchHealthFixLinkFor,
   compactBatchHealthDetail,
 } from "@/lib/certification/batch-health-links";
+import { CREDIT_BATCH_READY_LABEL } from "@/lib/certification/credit-batch-lifecycle";
 import { cn } from "@/lib/utils";
 
 /** Stagger between open-row entrance reveals (ms). */
@@ -251,7 +252,7 @@ export function CreditBatchHealthStrip({
         {health && (
           <span className="shrink-0 body-caption font-medium text-[var(--color-text-secondary)]">
             {health.state === "ready"
-              ? "Batch data ready"
+              ? CREDIT_BATCH_READY_LABEL
               : `${health.issueCount} ${
                   health.issueCount === 1 ? "issue" : "issues"
                 } open`}

@@ -4,6 +4,7 @@ import {
   type StatusStateClass,
 } from "@/lib/status-state";
 import {
+  CREDIT_BATCH_READY_LABEL,
   CREDIT_BATCH_LIFECYCLE_STEPS,
   deriveCreditBatchLifecycle,
   type CreditBatchLifecycleStepState,
@@ -131,7 +132,7 @@ export function CreditBatchLifecycleRail({
         {lifecycle.label === "Open" && (
           <span className="body-caption text-[var(--color-text-tertiary)]">
             {summary.issueCount === 0
-              ? "Batch data ready"
+              ? CREDIT_BATCH_READY_LABEL
               : `${summary.issueCount} ${
                   summary.issueCount === 1 ? "issue" : "issues"
                 } open`}
