@@ -576,4 +576,4 @@ Open question closed: `isometric/phase-3.5`.
 ---
 
 Older entries (2026-02-09 → 2026-05-24) are archived in
-[`docs/archive/isometric-changes-archive-2026-02-to-05-24.md`](../archive/isometric-changes-archive-2026-02-to-05-24.md).
+[`docs/archive/isometric-changes-archive-2026-02-to-05-24.md`](isometric-changes-archive-2026-02-to-05-24.md).

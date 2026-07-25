@@ -6,7 +6,7 @@ Historical implementation and verification notes moved from `docs/isometric/chan
 ## 2026-06-20 (ADR 0017 Track 2 — Method-B unlock backend + operator UI)
 
 Track 2 activates the Method-B unlock end-to-end (ADR 0017; implementation record
-[`docs/archive/2026-06-20-method-b-unlock.md`](../archive/2026-06-20-method-b-unlock.md)).
+[`docs/archive/2026-06-20-method-b-unlock.md`](2026-06-20-method-b-unlock.md)).
 The registry stays the authority for the credited compute (ADR 0013 / D1) —
 everything here **gates, routes, and previews**; it never submits a credited
 number. The live `_unsampled` POST stays gated behind
@@ -46,7 +46,7 @@ number. The live `_unsampled` POST stays gated behind
 ## 2026-06-20 (ADR 0017 Track 1 — re-grain Method-B sampling/eligibility to the production process)
 
 Track 1 of the Method-B unlock (ADR 0017; implementation record
-[`docs/archive/2026-06-20-method-b-unlock.md`](../archive/2026-06-20-method-b-unlock.md)).
+[`docs/archive/2026-06-20-method-b-unlock.md`](2026-06-20-method-b-unlock.md)).
 **Method-A-safe** — changes the
 sampling/eligibility *grain*, not behaviour. Moves the Method-A/B baseline counter
 off the reactor onto the **production process** (`(facility, feedstock)` campaign),
