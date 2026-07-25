@@ -54,7 +54,7 @@ function CheckIcon({ status }: Pick<RemovalRequirementCheck, "status">) {
         size={14}
         weight="fill"
         aria-hidden
-        className="shrink-0 text-[var(--color-signal-green)]"
+        className="shrink-0 text-[var(--st-ok)]"
       />
     );
   }

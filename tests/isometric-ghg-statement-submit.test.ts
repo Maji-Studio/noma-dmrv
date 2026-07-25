@@ -70,8 +70,8 @@ vi.mock("@/lib/auth/server", () => ({
     isPlatformAdmin: false,
   }),
 }));
-// `finalizeGhgStatement` uses `db.transaction(cb)` — fake it by invoking
-// the callback with a sentinel tx that our mocked data-access ignores.
+// The remote-state data-access helper uses `db.transaction(cb)` — fake it by
+// invoking the callback with a sentinel tx that our mocked data-access ignores.
 vi.mock("@/db", () => ({
   db: {
     transaction: vi.fn(async (cb: (tx: unknown) => unknown) =>

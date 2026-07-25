@@ -1,0 +1,232 @@
+/* ===== TYPOGRAPHY CLASSES ===== */
+
+/* Headings */
+h1,
+.title-heading-1 {
+  font-family: var(--font-standard);
+  font-size: var(--text-h1);
+  font-weight: var(--text-h1--font-weight);
+  line-height: var(--text-h1--line-height);
+  letter-spacing: var(--text-h1--letter-spacing);
+  margin: 0;
+}
+
+.title-heading-1-thin {
+  font-family: var(--font-standard);
+  font-size: var(--text-h1);
+  font-weight: var(--font-weight-thin);
+  line-height: var(--text-h1--line-height);
+  letter-spacing: var(--text-h1--letter-spacing);
+  margin: 0;
+}
+
+h2,
+.title-heading-2 {
+  font-family: var(--font-standard);
+  font-size: var(--text-h2);
+  font-weight: var(--text-h2--font-weight);
+  line-height: var(--text-h2--line-height);
+  letter-spacing: var(--text-h2--letter-spacing);
+  margin: 0;
+}
+
+.title-heading-2-thin {
+  font-family: var(--font-standard);
+  font-size: var(--text-h2);
+  font-weight: var(--font-weight-thin);
+  line-height: var(--text-h2--line-height);
+  letter-spacing: var(--text-h2--letter-spacing);
+  margin: 0;
+}
+
+h3,
+.title-heading-3 {
+  font-family: var(--font-standard);
+  font-size: var(--text-h3);
+  font-weight: var(--text-h3--font-weight);
+  line-height: var(--text-h3--line-height);
+  letter-spacing: var(--text-h3--letter-spacing);
+  margin: 0;
+}
+
+.title-heading-3-thin {
+  font-family: var(--font-standard);
+  font-size: var(--text-h3);
+  font-weight: var(--font-weight-thin);
+  line-height: var(--text-h3--line-height);
+  letter-spacing: var(--text-h3--letter-spacing);
+  margin: 0;
+}
+
+h4,
+.title-heading-4 {
+  font-family: var(--font-standard);
+  font-size: var(--text-h4);
+  font-weight: var(--text-h4--font-weight);
+  line-height: var(--text-h4--line-height);
+  letter-spacing: var(--text-h4--letter-spacing);
+  margin: 0;
+}
+
+.title-chapter-title {
+  font-family: var(--font-mono);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--text-xs);
+  line-height: 120%;
+  letter-spacing: 0.125%;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+/* Body Text */
+.body-lead {
+  font-family: var(--font-standard);
+  font-size: var(--text-body-lead);
+  font-weight: var(--text-body-lead--font-weight);
+  line-height: var(--text-body-lead--line-height);
+  letter-spacing: var(--text-body-lead--letter-spacing);
+  margin: 0;
+}
+
+.body-lead-bold {
+  font-family: var(--font-standard);
+  font-size: var(--text-body-lead);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--text-body-lead--line-height);
+  letter-spacing: var(--text-body-lead--letter-spacing);
+  margin: 0;
+}
+
+.body-large {
+  font-family: var(--font-standard);
+  font-size: var(--text-body-large);
+  font-weight: var(--text-body-large--font-weight);
+  line-height: var(--text-body-large--line-height);
+  letter-spacing: var(--text-body-large--letter-spacing);
+  margin: 0;
+}
+
+.body-large-bold {
+  font-family: var(--font-standard);
+  font-size: var(--text-body-large);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--text-body-large--line-height);
+  letter-spacing: var(--text-body-large--letter-spacing);
+  margin: 0;
+}
+
+p,
+.body-medium {
+  font-family: var(--font-standard);
+  font-size: var(--text-body-medium);
+  font-weight: var(--text-body-medium--font-weight);
+  line-height: var(--text-body-medium--line-height);
+  letter-spacing: var(--text-body-medium--letter-spacing);
+  margin: 0;
+}
+
+.body-bold {
+  font-family: var(--font-standard);
+  font-size: var(--text-body-medium);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--text-body-medium--line-height);
+  letter-spacing: var(--text-body-medium--letter-spacing);
+  margin: 0;
+}
+
+.body-small {
+  font-family: var(--font-standard);
+  font-size: var(--text-body-small);
+  font-weight: var(--text-body-small--font-weight);
+  line-height: var(--text-body-small--line-height);
+  letter-spacing: var(--text-body-small--letter-spacing);
+  margin: 0;
+}
+
+.body-small-bold {
+  font-family: var(--font-standard);
+  font-size: var(--text-body-small);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--text-body-small--line-height);
+  letter-spacing: var(--text-body-small--letter-spacing);
+  margin: 0;
+}
+
+.body-caption {
+  font-family: var(--font-standard);
+  font-size: var(--text-body-caption);
+  font-weight: var(--text-body-caption--font-weight);
+  line-height: var(--text-body-caption--line-height);
+  letter-spacing: var(--text-body-caption--letter-spacing);
+  margin: 0;
+}
+
+.body-caption-fit {
+  font-family: var(--font-standard);
+  font-size: var(--text-body-caption);
+  font-weight: var(--text-body-caption--font-weight);
+  line-height: 100%;
+  letter-spacing: var(--text-body-caption--letter-spacing);
+  margin: 0;
+}
+
+.body-caption-bold {
+  font-family: var(--font-standard);
+  font-size: var(--text-body-caption);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--text-body-caption--line-height);
+  letter-spacing: var(--text-body-caption--letter-spacing);
+  margin: 0;
+}
+
+.body-caption-fit-bold {
+  font-family: var(--font-standard);
+  font-size: var(--text-body-caption);
+  font-weight: var(--font-weight-bold);
+  line-height: 100%;
+  letter-spacing: var(--text-body-caption--letter-spacing);
+  margin: 0;
+}
+
+.body-quote {
+  font-family: var(--font-standard);
+  font-weight: var(--font-weight-thin);
+  font-size: var(--text-xl);
+  line-height: 150%;
+  letter-spacing: 0%;
+  font-style: italic;
+  margin: 0;
+}
+
+/* Labels */
+.label-button {
+  font-family: var(--font-mono);
+  font-size: var(--text-label-button);
+  font-weight: var(--text-label-button--font-weight);
+  line-height: var(--text-label-button--line-height);
+  letter-spacing: var(--text-label-button--letter-spacing);
+  text-transform: uppercase;
+  margin: 0;
+}
+
+/* Mono micro-label — table headers, KPI titles, panel heads. The 12px
+   sibling of .title-chapter-title (every label is GT Flexa Mono Medium,
+   uppercase, letter-spaced, per the Maji DS). */
+.label-micro {
+  font-family: var(--font-mono);
+  font-size: var(--text-xxs);
+  font-weight: var(--font-weight-medium);
+  line-height: 120%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.label-input {
+  font-family: var(--font-standard);
+  font-size: var(--text-label-input);
+  font-weight: var(--text-label-input--font-weight);
+  line-height: var(--text-label-input--line-height);
+  letter-spacing: var(--text-label-input--letter-spacing);
+  margin: 0;
+}

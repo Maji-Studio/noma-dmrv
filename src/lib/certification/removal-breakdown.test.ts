@@ -228,7 +228,7 @@ describe("computeRemovalBreakdown — registry mode", () => {
     expect(result.anomalies).toContain("sequestration-missing-or-zero");
   });
 
-  it("keeps authoritative registry figures when the local preview is incomplete", () => {
+  it("keeps authoritative registry figures when local previews are absent", () => {
     const result = computeRemovalBreakdown(
       input({
         sequestrationTonnesByBatch: [null, null],

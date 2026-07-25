@@ -26,6 +26,7 @@ import { InfoHint } from "@/components/ui/tooltip";
 import { batchHealthFixLinkFor } from "@/lib/certification/batch-health-links";
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { certificationSettingsHref } from "@/lib/certification/links";
+import { CREDIT_BATCH_READY_LABEL } from "@/lib/certification/credit-batch-lifecycle";
 import {
   facilityBlueprintLabel,
   type FacilitySetupGap,
@@ -154,7 +155,7 @@ function ReadyCard({
       </div>
       <span className="inline-flex items-center gap-6 body-caption font-medium text-[var(--color-signal-green)]">
         <CheckCircleIcon size={14} weight="fill" aria-hidden />
-        Batch data ready
+        {CREDIT_BATCH_READY_LABEL}
       </span>
     </label>
   );

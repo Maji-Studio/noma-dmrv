@@ -140,7 +140,7 @@ test.describe("application certification readiness", () => {
         `/credit-batches/${batch.creditBatchId}?facility=${facilityId}`,
       );
       await expect(
-        page.getByTestId("batch-health-strip").getByText("Ready to certify"),
+        page.getByTestId("batch-health-strip").getByText("Batch data ready"),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
 
       // Delete the evidence in the editor; the already-mounted list row must
