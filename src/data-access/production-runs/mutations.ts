@@ -560,6 +560,7 @@ export async function updateProductionRun(
       .where(and(
         eq(productionRuns.id, productionRunId),
         eq(productionRuns.organizationId, ctx.organizationId),
+        isNull(productionRuns.archivedAt),
       ))
       .for("update");
 
