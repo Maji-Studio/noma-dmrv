@@ -28,6 +28,14 @@ function mockFetch(body: unknown) {
   return fetchMock as unknown as ReturnType<typeof vi.fn>;
 }
 
+function mockFetchRejection(error: unknown) {
+  const fetchMock = vi.fn(async () => {
+    throw error;
+  }) as unknown as typeof fetch;
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock as unknown as ReturnType<typeof vi.fn>;
+}
+
 function calledUrl(fetchMock: ReturnType<typeof vi.fn>): string {
   return String(fetchMock.mock.calls[0]?.[0]);
 }
@@ -89,5 +97,29 @@ describe("orsProvider URL contract (api.heigit.org)", () => {
       ORS_SNAP_RADIUS_METERS,
       ORS_SNAP_RADIUS_METERS,
     ]);
+  });
+});
+
+/**
+ * The fetch rejection path used to collapse every failure into "could not
+ * reach", which reads to the operator as if their own connectivity were at
+ * fault — an upstream that is merely slow needs a different message.
+ */
+describe("orsProvider transport failures", () => {
+  const origin = { lat: -3.35, lng: 37.33 };
+  const destination = { lat: -3.25, lng: 37.45 };
+
+  it("reports a request timeout distinctly (AbortSignal.timeout)", async () => {
+    mockFetchRejection(new DOMException("The operation was aborted.", "TimeoutError"));
+    await expect(orsProvider.routeDistanceKm(origin, destination)).rejects.toThrow(
+      "The routing service did not respond in time. Try again, or enter the distance manually."
+    );
+  });
+
+  it("reports a genuine network failure as unreachable", async () => {
+    mockFetchRejection(new TypeError("fetch failed"));
+    await expect(orsProvider.routeDistanceKm(origin, destination)).rejects.toThrow(
+      "Could not reach the routing service. Try again."
+    );
   });
 });
