@@ -59,20 +59,19 @@ copy both `.env.test` and `.env.local` in first.
   so locally it lives in `.env.local` where `pnpm dev:manual` sees it; CI sets it as a
   workflow env. See [security.md](./security.md).
 - `GEO_PROVIDER=stub` is an **app-server** var too (read via `src/config/env.ts` by
-  `src/lib/geo/index.ts`, which otherwise falls back to the real OpenRouteService
-  provider). It is in `.env.test`, but **`.env.test` only reaches the server when
-  Playwright spawns the `webServer` itself** — `reuseExistingServer` adopts a
-  hand-started `pnpm dev`, which reads `.env.local`, where `GEO_PROVIDER` is absent (no
-  such field in the 1Password item). Start a manual server for these specs as:
+  `src/lib/geo/index.ts`). It is in `.env.test`, but **`.env.test` only reaches
+  the server when Playwright spawns the `webServer` itself**.
+  `reuseExistingServer` adopts a hand-started `pnpm dev`, which reads
+  `.env.local`; set `GEO_PROVIDER=stub` there for fixture-based geo assertions,
+  or start the manual server as:
 
   ```bash
   DISABLE_RATE_LIMIT=true GEO_PROVIDER=stub pnpm dev
   ```
 
-  Without it the app serves **live** geo data and the fixture-exact assertions in
-  `position-picker.spec.ts` fail with real-world coordinates (`-7.29067` for a stubbed
-  `-6.163`) — which reads like a rounding bug and is not one. CI is unaffected;
-  `.github/workflows/e2e.yml` sets it as a workflow env. See
+  Without the stub, geo uses OpenRouteService when configured or is disabled
+  when no ORS key exists, so the fixture-exact assertions in
+  `position-picker.spec.ts` fail. CI sets the provider in the workflow. See
   [adr/0009-provider-agnostic-server-proxied-geo.md](./adr/0009-provider-agnostic-server-proxied-geo.md).
 
 ## Fixtures and conventions

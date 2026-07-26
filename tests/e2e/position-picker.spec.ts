@@ -11,8 +11,7 @@
  * process), not a Playwright-side one — same class as DISABLE_RATE_LIMIT. It
  * only reaches the server via .env.test when Playwright spawns the webServer
  * itself. With a hand-started dev server (reuseExistingServer picks it up),
- * export it explicitly or the app falls back to the real ORS provider and the
- * two fixture-exact assertions below fail with real-world coordinates:
+ * export it explicitly or the fixture-exact assertions below fail:
  *   DISABLE_RATE_LIMIT=true GEO_PROVIDER=stub pnpm dev
  *
  * The supplier create sheet drives the picker through its per-location editor
