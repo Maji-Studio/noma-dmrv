@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDayString } from "./format-utils";
+import { formatDayString, formatMass } from "./format-utils";
 
 describe("formatDayString", () => {
   it("formats a YYYY-MM-DD day without reparsing into an instant", () => {
@@ -13,5 +13,13 @@ describe("formatDayString", () => {
     expect(formatDayString("")).toBe("—");
     expect(formatDayString("2026-08-01T12:00:00Z")).toBe("—");
     expect(formatDayString("2026-13-01")).toBe("—");
+  });
+});
+
+describe("formatMass", () => {
+  it("returns the fallback for null, undefined, and NaN", () => {
+    expect(formatMass(null)).toBe("—");
+    expect(formatMass(undefined)).toBe("—");
+    expect(formatMass(Number.NaN)).toBe("—");
   });
 });

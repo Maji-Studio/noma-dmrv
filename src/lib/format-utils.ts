@@ -104,11 +104,11 @@ export function formatDateRange(start: DateValue, end: DateValue): string {
  * So reach for `formatMass` for a lone mass, where the tonne switch keeps big
  * numbers readable and sub-kg precision is noise. Reach for `formatMassKg` when
  * a set of related figures must stay comparable, or when the fractional part
- * carries meaning. `formatMass` also returns `"—"` only for null/undefined;
- * `formatMassKg` additionally catches `NaN`.
+ * carries meaning. Both formatters return `"—"` for null, undefined, and
+ * `NaN`.
  */
 export function formatMass(kg: number | null | undefined): string {
-  if (kg == null) return FALLBACK_DISPLAY;
+  if (kg == null || Number.isNaN(kg)) return FALLBACK_DISPLAY;
   if (kg >= KG_PER_TONNE) return `${(kg / KG_PER_TONNE).toFixed(1)} t`;
   return `${Math.round(kg).toLocaleString()} kg`;
 }
