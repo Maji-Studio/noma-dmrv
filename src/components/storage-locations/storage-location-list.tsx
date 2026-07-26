@@ -126,9 +126,7 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
         : []),
       {
         label: "Estimated wet mass",
-        value: storageLocation.feedstockInventory.estimatedWetMassKg
-          ? formatMassKg(storageLocation.feedstockInventory.estimatedWetMassKg)
-          : null,
+        value: formatMassKg(storageLocation.feedstockInventory.estimatedWetMassKg),
       },
       {
         label: "Estimated moisture",
