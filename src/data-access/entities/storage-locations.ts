@@ -44,8 +44,8 @@ function formatStorageLocationSubtitle(
   switch (type) {
     case "feedstock_bin": {
       const typeLabel = formatStorageLocationType(type);
-      const remainingKg = Math.max(0, totalStoredKg - totalConsumedKg);
-      if (!feedstockTypeName && remainingKg === 0) {
+      const onHandKg = Math.max(0, totalStoredKg - totalConsumedKg);
+      if (!feedstockTypeName && onHandKg === 0) {
         return `${typeLabel} · Empty · Feedstock type locks on first intake`;
       }
 
@@ -57,7 +57,7 @@ function formatStorageLocationSubtitle(
             : feedstockTypeName
         );
       }
-      parts.push(`${Math.round(remainingKg).toLocaleString()} kg remaining`);
+      parts.push(`${Math.round(onHandKg).toLocaleString()} kg stored`);
       if (pendingStoredKg > 0) {
         parts.push(`${Math.round(pendingStoredKg).toLocaleString()} kg pending completion`);
       }

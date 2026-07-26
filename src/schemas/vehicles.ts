@@ -27,6 +27,19 @@ export const VEHICLE_TYPE_OPTIONS: ReadonlyArray<{ value: VehicleType; label: st
   { value: "trailer", label: "Trailer" },
 ];
 
+/**
+ * Display label for a stored `vehicles.vehicle_type` value. The column is free
+ * text seeded from the lowercase {@link vehicleTypes} slugs, so read surfaces
+ * must never render it raw. Unknown/legacy values fall back to sentence case.
+ */
+export function formatVehicleType(value: string): string {
+  const known = VEHICLE_TYPE_OPTIONS.find((option) => option.value === value);
+  if (known) return known.label;
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
 export const fuelTypes = [
   "Diesel",
   "Gasoline",

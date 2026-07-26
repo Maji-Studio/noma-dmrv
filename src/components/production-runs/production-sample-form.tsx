@@ -134,7 +134,7 @@ export function ProductionSampleForm({
             <FormInput
               id="weightGrams"
               type="number"
-              step="0.01"
+              step="any"
               placeholder="e.g. 250"
               disabled={isSubmitting}
               error={!!errors.weightGrams}
@@ -152,7 +152,7 @@ export function ProductionSampleForm({
             <FormInput
               id="volumeMl"
               type="number"
-              step="0.01"
+              step="any"
               placeholder="e.g. 500"
               disabled={isSubmitting}
               error={!!errors.volumeMl}
@@ -170,7 +170,7 @@ export function ProductionSampleForm({
             <FormInput
               id="temperatureC"
               type="number"
-              step="0.1"
+              step="any"
               placeholder="e.g. 550"
               disabled={isSubmitting}
               error={!!errors.temperatureC}
@@ -194,7 +194,7 @@ export function ProductionSampleForm({
             <FormInput
               id="moistureContentPercent"
               type="number"
-              step="0.01"
+              step="any"
               placeholder="e.g. 5.2"
               disabled={isSubmitting}
               error={!!errors.moistureContentPercent}
@@ -212,7 +212,7 @@ export function ProductionSampleForm({
             <FormInput
               id="fixedCarbonPercent"
               type="number"
-              step="0.01"
+              step="any"
               placeholder="e.g. 75.0"
               disabled={isSubmitting}
               error={!!errors.fixedCarbonPercent}
@@ -230,7 +230,7 @@ export function ProductionSampleForm({
             <FormInput
               id="volatileMatterPercent"
               type="number"
-              step="0.01"
+              step="any"
               placeholder="e.g. 15.0"
               disabled={isSubmitting}
               error={!!errors.volatileMatterPercent}
@@ -248,7 +248,7 @@ export function ProductionSampleForm({
             <FormInput
               id="ashContentPercent"
               type="number"
-              step="0.01"
+              step="any"
               placeholder="e.g. 4.8"
               disabled={isSubmitting}
               error={!!errors.ashContentPercent}

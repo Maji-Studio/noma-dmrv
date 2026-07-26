@@ -1,9 +1,37 @@
 import { describe, expect, it } from "vitest";
 import type { ProductionRunWithSamples } from "@/lib/isometric/utils/aggregation";
+import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import type { TransportLeg } from "@/db/schema";
 import { buildEntityReadinessResult } from "./certify-readiness-gaps";
 
 const TRANSPORT_LEG_ID = "00000000-0000-4000-a000-000000000001";
+
+/** A lab sample whose chemistry is complete for the 200-year tier. */
+function labSample(
+  id: string,
+  sampleCode: string,
+  overrides: Record<string, number | null> = {},
+) {
+  return {
+    id,
+    sampleCode,
+    organicCarbonPercent: 78,
+    hToCOrgRatio: 0.32,
+    oToCOrgRatio: 0.14,
+    ...overrides,
+  };
+}
+
+function batchWithSamples(
+  samples: ReturnType<typeof labSample>[],
+): CreditBatchWithSamples {
+  return {
+    id: "00000000-0000-4000-a000-0000000000b1",
+    code: "CB-001",
+    durabilityOption: "200_year",
+    samples,
+  } as unknown as CreditBatchWithSamples;
+}
 
 function productionRun(
   id: string,
@@ -83,6 +111,43 @@ describe("buildEntityReadinessResult", () => {
     expect(result.issues[0]).toMatchObject({
       key: "feedstock-transport-evidence",
       fixTarget: "feedstocks",
+    });
+  });
+
+  // O:Corg is an UNCONDITIONAL sample descriptor, deliberately symmetric with
+  // H:Corg (Soil Module §3.3 Table 2 checks pooled H/C_org AND O/C_org for every
+  // tier). Readiness walks every sample of every member batch, so one extra
+  // sample without oxygen blocks the batch even when three usable replicates
+  // already satisfy the §8.3.1 minimum. That is the intended fail-closed
+  // behaviour on a registry path, not an accident — this test pins it.
+  it("blocks a batch that already has three usable replicates when an extra sample is missing O:Corg", () => {
+    const result = buildEntityReadinessResult(
+      [],
+      [
+        batchWithSamples([
+          labSample("sample-1", "S-001"),
+          labSample("sample-2", "S-002"),
+          labSample("sample-3", "S-003"),
+          labSample("sample-4", "S-004", { oToCOrgRatio: null }),
+          labSample("sample-5", "S-005", { oToCOrgRatio: null }),
+        ]),
+      ],
+      { feedstock: [], biochar: [], sample: [] },
+      [],
+    );
+
+    expect(result.gaps).toEqual([
+      "Sample S-004: O:Corg ratio",
+      "Sample S-005: O:Corg ratio",
+    ]);
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0]).toMatchObject({
+      key: "lab-samples",
+      fixTarget: "labSamples",
+      affectedRecords: [
+        { id: "sample-4", code: "S-004", missing: ["O:Corg ratio"] },
+        { id: "sample-5", code: "S-005", missing: ["O:Corg ratio"] },
+      ],
     });
   });
 

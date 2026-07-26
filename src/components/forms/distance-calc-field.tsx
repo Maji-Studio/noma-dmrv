@@ -98,6 +98,10 @@ export function DistanceCalcField({
   }
 
   const handleManualChange = (raw: string) => {
+    // A failed CALC keeps isError until reset(), so the red message would sit
+    // next to a hand-typed value the operator just fixed. Clear the mutation
+    // itself, not only its rendering.
+    if (route.isError) route.reset();
     setDraft(raw);
     const parsed = parseDistanceDraft(raw);
     if (parsed === undefined) return; // unparseable in-flight text — wait

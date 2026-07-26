@@ -7,7 +7,6 @@ import {
   getCertifierProjectByFacility,
   getLatestSubmissionsForEntities,
   getSubmissionById,
-  getSubmissionByExternalId,
   listRecentSyncEvents,
   markSubmissionSubmitted,
   updateSubmissionMetadata,
@@ -23,6 +22,7 @@ import {
   countRemovalsByGhgStatementIds,
   getCertifierGhgStatementById,
   getEffectiveReportingPeriodEndOn,
+  getGhgStatementSubmissionForFacility,
   getOrCreateGhgStatementDraft,
   getRemovalsByGhgStatementId,
   hasMissingRemotePeriod,
@@ -68,12 +68,13 @@ import {
   overlappingEnd,
 } from "@/lib/isometric/utils/ghg-reporting-window";
 import {
-  chooseGhgSubmitMode,
+  buildGhgSubmitRequestPayload,
+  chooseGhgSubmitModeFromKnownState,
+  ghgSubmitAppearsApplied,
   ghgSubmitFingerprintChanged,
-  type GhgSubmitMode,
 } from "@/lib/isometric/utils/ghg-statement-state";
 import { isLockedInFlight as computeIsLockedInFlight } from "@/lib/isometric/utils/lock";
-import { SUBMISSION_METADATA_KEYS, getMetadataValue } from "@/lib/isometric/utils/submission-metadata";
+import { SUBMISSION_METADATA_KEYS } from "@/lib/isometric/utils/submission-metadata";
 import {
   createGhgStatementSchema,
   submitGhgStatementDialogSchema,
@@ -106,7 +107,14 @@ import {
 // Result + state shapes
 // =====================================================================
 
+// Whether this call actually minted the registry statement, or resolved to one
+// that already existed for the period. ADR 0004 makes the create *idempotent*
+// per (provider, facility, period) on purpose, so "existing" is a normal,
+// successful outcome — but the UI must not report it as a creation.
+export type GhgStatementCreateOutcome = "created" | "existing";
+
 export interface CreateGhgStatementResult {
+  outcome: GhgStatementCreateOutcome;
   ghgStatementId: string;
   externalId: string;
   // Local removal ids Isometric linked into the statement, reconciled from
@@ -248,25 +256,25 @@ export async function createGhgStatementDraft(
       blocking?.statement ??
       (adoptable.length === 1 ? adoptable[0].statement : null);
     if (singleMatch) {
-      const existingRemoteSubmission = await getSubmissionByExternalId(
-        orgCtx,
-        {
-          provider: ISOMETRIC_PROVIDER,
-          submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
+      const existingRemoteSubmission =
+        await getGhgStatementSubmissionForFacility(orgCtx, {
+          facilityId: parsed.facilityId,
           externalId: singleMatch.id,
-        },
-      );
+        });
       if (existingRemoteSubmission) {
         if (blocking) {
           throw new SafeError(
             ghgStatementCreateRefusalMessage(blocking.statement),
           );
         }
-        return reconcileRegistryGhgStatement(orgCtx, {
+        // Nothing is minted here — the registry statement already exists and
+        // is already on the ledger; this only re-reconciles it.
+        const reconciled = await reconcileRegistryGhgStatement(orgCtx, {
           facilityId: parsed.facilityId,
           externalProjectId: project.externalProjectId,
           remote: singleMatch,
         });
+        return { outcome: "existing" as const, ...reconciled };
       }
     }
     const knownRemoteMatch = remoteMatches.length > 0;
@@ -398,13 +406,20 @@ export async function createGhgStatementDraft(
     switch (claimed.kind) {
       case "blocked":
         throw new SafeError(GHG_CLAIM_BLOCKED_MESSAGES[claimed.reason]);
-      case "existing":
+      case "existing": {
+        // ADR 0004 idempotency: the statement for this period was already
+        // created in the registry, so this attempt mints nothing. Report it
+        // as such — and read the real membership rather than claiming zero
+        // linked removals, which the ledger row simply doesn't carry.
+        const linked = await getRemovalsByGhgStatementId(orgCtx, statement.id);
         return {
+          outcome: "existing" as const,
           ghgStatementId: statement.id,
           externalId: claimed.externalId,
-          linkedRemovalIds: [],
+          linkedRemovalIds: linked.map((removal) => removal.id),
           warnings: [],
         };
+      }
       case "claimed":
         return createGhgStatementRemote({
           client,
@@ -449,7 +464,7 @@ async function createGhgStatementRemote(args: {
   } = args;
 
   const requestPayload = { end_on: endOn, project_id: externalProjectId };
-  const { externalId } = await performRegistryCreate({
+  const { externalId, source } = await performRegistryCreate({
     orgCtx,
     entityType: GHG_STATEMENT_ENTITY_TYPE,
     entityId: statement.id,
@@ -471,7 +486,15 @@ async function createGhgStatementRemote(args: {
     }),
   });
 
-  return finalizeGhgStatement({ client, orgCtx, statement, row, externalId, expected });
+  return finalizeGhgStatement({
+    client,
+    orgCtx,
+    statement,
+    row,
+    externalId,
+    expected,
+    outcome: source === "create" ? "created" : "existing",
+  });
 }
 
 // Shared tail for fresh and reconciled creates. Persist the external id before
@@ -484,8 +507,10 @@ async function finalizeGhgStatement(args: {
   row: CertificationSubmissionRow;
   externalId: string;
   expected: ExpectedRemoval[];
+  outcome: GhgStatementCreateOutcome;
 }): Promise<CreateGhgStatementResult> {
-  const { client, orgCtx, statement, row, externalId, expected } = args;
+  const { client, orgCtx, statement, row, externalId, expected, outcome } =
+    args;
 
   await markSubmissionSubmitted(orgCtx, row.id, {
     externalId,
@@ -501,6 +526,7 @@ async function finalizeGhgStatement(args: {
       [SUBMISSION_METADATA_KEYS.remoteStatus]: "DRAFT",
     });
     return {
+      outcome,
       ghgStatementId: statement.id,
       externalId,
       linkedRemovalIds: [],
@@ -516,6 +542,7 @@ async function finalizeGhgStatement(args: {
     remote,
   });
   return {
+    outcome,
     ghgStatementId: statement.id,
     externalId,
     linkedRemovalIds: reconciled.linkedRemovalIds,
@@ -601,7 +628,7 @@ export async function submitGhgStatementToVerifier(
 
     const submitMode = chooseGhgSubmitModeFromKnownState(
       remoteBefore,
-      submission,
+      submission.metadata,
     );
     if (submitMode === "blocked-awaiting") {
       throw new SafeError(
@@ -625,7 +652,7 @@ export async function submitGhgStatementToVerifier(
     // Same payload shape for every audit event in this action — three call
     // sites (reconciled-success, failure, success) all log the same request.
     const summaryProvided = Boolean(parsed.summaryOfChanges?.trim());
-    const submitRequestPayload = buildSubmitRequestPayload(
+    const submitRequestPayload = buildGhgSubmitRequestPayload(
       submitMode,
       parsed.reportUrl,
       summaryProvided,
@@ -930,55 +957,4 @@ export async function loadOpenRemovalsForFacility(
       creditBatches: creditBatchesByRemoval.get(removal.id) ?? [],
     }));
   });
-}
-
-function chooseGhgSubmitModeFromKnownState(
-  remote: GhgStatement | null,
-  submission: CertificationSubmissionRow,
-): GhgSubmitMode {
-  if (remote) return chooseGhgSubmitMode(remote);
-
-  const status = getMetadataValue(
-    submission.metadata,
-    SUBMISSION_METADATA_KEYS.remoteStatus,
-  );
-  const pendingTotal = getMetadataValue(
-    submission.metadata,
-    SUBMISSION_METADATA_KEYS.pendingTotalCo2eRemovedKg,
-  );
-  if (status === "DRAFT") return "submit";
-  if (status === "AWAITING_VERIFICATION") return "blocked-awaiting";
-  if (
-    status === "FAILED_VERIFICATION" ||
-    (typeof pendingTotal === "number" && pendingTotal > 0)
-  ) {
-    return "resubmit";
-  }
-  if (typeof status === "string") return "blocked-verified";
-
-  throw new SafeError("Unable to determine the GHG statement submit state.");
-}
-
-function ghgSubmitAppearsApplied(
-  remote: GhgStatement,
-  reportUrl: string,
-): boolean {
-  return (
-    remote.ghg_statement_report_url === reportUrl &&
-    (remote.status === "AWAITING_VERIFICATION" || remote.status === "VERIFIED")
-  );
-}
-
-function buildSubmitRequestPayload(
-  mode: "submit" | "resubmit",
-  reportUrl: string,
-  summaryProvided: boolean,
-): Record<string, string | boolean> {
-  if (mode === "resubmit") {
-    return {
-      ghg_statement_report_url: reportUrl,
-      summary_of_changes_provided: summaryProvided,
-    };
-  }
-  return { ghg_statement_report_url: reportUrl };
 }

@@ -260,7 +260,7 @@ export function SampleForm({
         <FormInput
           id="hToCOrgRatio"
           type="number"
-          step="0.0001"
+          step="any"
           placeholder="Auto-calculated"
           disabled
           readOnly
@@ -274,11 +274,13 @@ export function SampleForm({
         label="O:C org Ratio"
         error={errors.oToCOrgRatio?.message}
         helperText="Enter to override, or leave blank to derive from O% and C_org%"
+        certifyRequired={isSampleCertifyField("oToCOrgRatio")}
+        certifyStatus={certStatus("oToCOrgRatio")}
       >
         <FormInput
           id="oToCOrgRatio"
           type="number"
-          step="0.0001"
+          step="any"
           placeholder={
             calculatedOToCRatio !== null
               ? calculatedOToCRatio.toFixed(4)
@@ -439,7 +441,7 @@ export function SampleForm({
                   <FormInput
                     id="weightGrams"
                     type="number"
-                    step="0.01"
+                    step="any"
                     placeholder="e.g., 50"
                     disabled={isSubmitting}
                     error={!!errors.weightGrams}
@@ -457,7 +459,7 @@ export function SampleForm({
                   <FormInput
                     id="volumeMl"
                     type="number"
-                    step="0.1"
+                    step="any"
                     placeholder="e.g., 100"
                     disabled={isSubmitting}
                     error={!!errors.volumeMl}
@@ -485,7 +487,7 @@ export function SampleForm({
                   <FormInput
                     id="totalCarbonPercent"
                     type="number"
-                    step="0.01"
+                    step="any"
                     placeholder="e.g., 75.5"
                     disabled={isSubmitting}
                     error={!!errors.totalCarbonPercent}
@@ -507,7 +509,7 @@ export function SampleForm({
                   <FormInput
                     id="organicCarbonPercent"
                     type="number"
-                    step="0.01"
+                    step="any"
                     placeholder="e.g., 72.0"
                     disabled={isSubmitting}
                     error={!!errors.organicCarbonPercent}
@@ -526,7 +528,7 @@ export function SampleForm({
                 <FormInput
                   id="inorganicCarbonPercent"
                   type="number"
-                  step="0.01"
+                  step="any"
                   placeholder="e.g., 3.5"
                   disabled={isSubmitting}
                   error={!!errors.inorganicCarbonPercent}
@@ -552,7 +554,7 @@ export function SampleForm({
                 <FormInput
                   id="totalHydrogenPercent"
                   type="number"
-                  step="0.01"
+                  step="any"
                   placeholder="e.g., 2.5"
                   disabled={isSubmitting}
                   error={!!errors.totalHydrogenPercent}
@@ -570,7 +572,7 @@ export function SampleForm({
                 <FormInput
                   id="totalNitrogenPercent"
                   type="number"
-                  step="0.01"
+                  step="any"
                   placeholder="e.g., 0.8"
                   disabled={isSubmitting}
                   error={!!errors.totalNitrogenPercent}
@@ -588,7 +590,7 @@ export function SampleForm({
                 <FormInput
                   id="totalOxygenPercent"
                   type="number"
-                  step="0.01"
+                  step="any"
                   placeholder="e.g., 12.0"
                   disabled={isSubmitting}
                   error={!!errors.totalOxygenPercent}
@@ -606,7 +608,7 @@ export function SampleForm({
                 <FormInput
                   id="totalSulfurPercent"
                   type="number"
-                  step="0.01"
+                  step="any"
                   placeholder="e.g., 0.1"
                   disabled={isSubmitting}
                   error={!!errors.totalSulfurPercent}
@@ -633,7 +635,7 @@ export function SampleForm({
                   <FormInput
                     id="ashContentPercent"
                     type="number"
-                    step="0.01"
+                    step="any"
                     placeholder="e.g., 8.5"
                     disabled={isSubmitting}
                     error={!!errors.ashContentPercent}
@@ -651,7 +653,7 @@ export function SampleForm({
                   <FormInput
                     id="moistureContentPercent"
                     type="number"
-                    step="0.01"
+                    step="any"
                     placeholder="e.g., 5.0"
                     disabled={isSubmitting}
                     error={!!errors.moistureContentPercent}
@@ -678,7 +680,7 @@ export function SampleForm({
                 <FormInput
                   id="bulkDensityKgPerM3"
                   type="number"
-                  step="0.1"
+                  step="any"
                   placeholder="e.g., 350"
                   disabled={isSubmitting}
                   error={!!errors.bulkDensityKgPerM3}
@@ -696,7 +698,7 @@ export function SampleForm({
                 <FormInput
                   id="ph"
                   type="number"
-                  step="0.1"
+                  step="any"
                   min="0"
                   max="14"
                   placeholder="e.g., 9.5"
@@ -716,7 +718,7 @@ export function SampleForm({
                 <FormInput
                   id="saltContentGPerKg"
                   type="number"
-                  step="0.1"
+                  step="any"
                   placeholder="e.g., 5.0"
                   disabled={isSubmitting}
                   error={!!errors.saltContentGPerKg}
@@ -743,20 +745,24 @@ export function SampleForm({
               </p>
 
               {/* Under 1000-year, durability is measured by R₀ + TGA (below), so
-                  the H:Corg/O:Corg ratios move behind an optional disclosure —
-                  they're kept only for the universal eligibility gate
-                  (H/C_org < 0.5, O/C_org < 0.2), not the durability estimate.
-                  Under 200-year they stay in view (H:Corg drives durability). */}
+                  the H:Corg/O:Corg ratios move behind a collapsed disclosure —
+                  they don't feed that estimate. They are NOT optional: both are
+                  required by the universal eligibility gate (H/C_org < 0.5,
+                  O/C_org < 0.2) and a sample missing either never counts as a
+                  usable replicate. Under 200-year they stay in view (H:Corg
+                  drives durability). */}
               {is1000Year ? (
                 <details className="border border-[var(--color-border-tertiary)] bg-[var(--color-surface-light)]">
                   <summary className="cursor-pointer px-12 py-8 body-small font-medium text-[var(--color-text-primary)] marker:text-[var(--color-text-tertiary)]">
-                    Eligibility ratios (H:Corg, O:Corg) — optional
+                    Eligibility ratios (H:Corg, O:Corg) — required
                   </summary>
                   <div className="flex flex-col gap-16 border-t border-[var(--color-border-tertiary)] p-12">
                     <p className="body-caption text-[var(--color-text-tertiary)]">
-                      Not used for the 1000-year durability estimate. Kept for the
-                      universal eligibility check (H/C_org &lt; 0.5, O/C_org &lt;
-                      0.2). H:Corg auto-calculates from H% and C_org%; O:Corg
+                      Not used for the 1000-year durability estimate, but still
+                      required by the universal eligibility check (H/C_org &lt;
+                      0.5, O/C_org &lt; 0.2) — a sample missing either ratio
+                      doesn&apos;t count toward the batch&apos;s replicate
+                      minimum. H:Corg auto-calculates from H% and C_org%; O:Corg
                       derives from O% and C_org% unless you enter it.
                     </p>
                     {stabilityRatioFields}
@@ -791,7 +797,7 @@ export function SampleForm({
                     <FormInput
                       id="randomReflectanceR0Percent"
                       type="number"
-                      step="0.01"
+                      step="any"
                       placeholder="e.g., 2.5"
                       disabled={isSubmitting}
                       error={!!errors.randomReflectanceR0Percent}
@@ -820,7 +826,7 @@ export function SampleForm({
                           type="number"
                           min="0"
                           max="100"
-                          step="0.01"
+                          step="any"
                           placeholder="e.g., 92"
                           disabled={isSubmitting}
                           error={!!errors.sReflectanceFraction}
@@ -888,7 +894,7 @@ export function SampleForm({
                     <FormInput
                       id="reactiveCarbonPercent"
                       type="number"
-                      step="0.01"
+                      step="any"
                       placeholder="e.g., 15.0"
                       disabled={isSubmitting}
                       error={!!errors.reactiveCarbonPercent}
@@ -908,7 +914,7 @@ export function SampleForm({
                     <FormInput
                       id="residualCarbonPercent"
                       type="number"
-                      step="0.01"
+                      step="any"
                       placeholder="e.g., 85.0"
                       disabled={isSubmitting}
                       error={!!errors.residualCarbonPercent}

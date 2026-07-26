@@ -298,7 +298,7 @@ export function OrderForm({
             <FormInput
               id="quantityKg"
               type="number"
-              step="0.01"
+              step="any"
               placeholder="e.g., 1000"
               disabled={isSubmitting}
               error={!!errors.quantityKg}
@@ -316,7 +316,7 @@ export function OrderForm({
             <FormInput
               id="value"
               type="number"
-              step="0.01"
+              step="any"
               placeholder="e.g., 50000"
               disabled={isSubmitting}
               error={!!errors.value}

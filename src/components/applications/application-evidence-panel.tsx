@@ -53,6 +53,13 @@ const LOGBOOK_EVIDENCE_TYPE_OPTIONS =
     label: APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPE_LABELS[type],
   }));
 
+/**
+ * Fallback classification for the next upload when the application has no
+ * classified boundary evidence yet and the operator has not picked one.
+ */
+const DEFAULT_LOGBOOK_EVIDENCE_TYPE: ApplicationBoundaryLogbookEvidenceType =
+  "weighbridge";
+
 type EvidenceMode = "visual" | "boundary";
 
 // Mode-specific guidance shown inline (intro) and on the ⓘ tooltip (detail).
@@ -106,6 +113,39 @@ function documentLogbookEvidenceType(
 ): ApplicationBoundaryLogbookEvidenceType | null {
   const value = metadataRecord(doc.metadata).logbookEvidenceType;
   return isApplicationBoundaryLogbookEvidenceType(value) ? value : null;
+}
+
+/** Sort key for "most recently saved"; an unusable timestamp sorts oldest. */
+function documentCreatedAtMs(doc: DocumentRow): number {
+  const ms = new Date(doc.createdAt).getTime();
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
+/**
+ * The classification recorded on this application's MOST RECENTLY saved
+ * boundary evidence. Seeds the upload-type radio so reopening a record does not
+ * report the hardcoded default for evidence that was saved as something else.
+ *
+ * Most-recent, not first: document row order is not a contract, so on an
+ * application with mixed saved types the seed would otherwise be whichever row
+ * the query happened to return first — and could visibly flip once a new upload
+ * landed. The operator's own pick still overrides this for the session.
+ */
+export function savedLogbookEvidenceType(
+  docs: DocumentRow[],
+): ApplicationBoundaryLogbookEvidenceType | null {
+  let latestType: ApplicationBoundaryLogbookEvidenceType | null = null;
+  let latestMs = -Infinity;
+  for (const doc of docs) {
+    const type = documentLogbookEvidenceType(doc);
+    if (!type) continue;
+    const createdAtMs = documentCreatedAtMs(doc);
+    if (createdAtMs > latestMs) {
+      latestType = type;
+      latestMs = createdAtMs;
+    }
+  }
+  return latestType;
 }
 
 function isBoundaryEvidenceDocument(doc: DocumentRow): boolean {
@@ -266,8 +306,13 @@ export function ApplicationEvidencePanel({
   const [classifyingDocumentId, setClassifyingDocumentId] = useState<
     string | null
   >(null);
-  const [logbookEvidenceType, setLogbookEvidenceType] =
-    useState<ApplicationBoundaryLogbookEvidenceType>("weighbridge");
+  // The radio classifies the NEXT upload — it is not a record-level field, and
+  // files already attached are re-classified from their own row select below.
+  // `null` means "not picked in this session", so the displayed value derives
+  // from the saved boundary evidence instead of a hardcoded default (reopening
+  // an affidavit-backed application used to always show Weighbridge).
+  const [pickedLogbookEvidenceType, setPickedLogbookEvidenceType] =
+    useState<ApplicationBoundaryLogbookEvidenceType | null>(null);
   const { data: docs, isLoading, error } = useDocumentsForEntity(
     ENTITY_TYPE,
     applicationId,
@@ -288,11 +333,15 @@ export function ApplicationEvidencePanel({
   );
   const boundaryDocs = uploadedDocs.filter(isBoundaryEvidenceDocument);
   const visibleDocs = mode === "visual" ? visualDocs : boundaryDocs;
+  const logbookEvidenceType =
+    pickedLogbookEvidenceType ??
+    savedLogbookEvidenceType(boundaryDocs) ??
+    DEFAULT_LOGBOOK_EVIDENCE_TYPE;
 
   const handleLogbookEvidenceTypeChange = (
     type: ApplicationBoundaryLogbookEvidenceType,
   ) => {
-    setLogbookEvidenceType(type);
+    setPickedLogbookEvidenceType(type);
     // Held boundary entries captured the classification at add-time; re-tag
     // them so a late radio change does not upload the file misclassified.
     for (const attachment of deferredAttachments?.attachments ?? []) {
@@ -597,7 +646,19 @@ export function ApplicationEvidencePanel({
       ) : (
         <div className="flex flex-col gap-12">
           {!readOnly && <div className="flex flex-col gap-6">
-            <div className="flex flex-wrap gap-8">
+            <div className="flex items-center gap-8">
+              <h4 className="body-small-bold">Type for the next upload</h4>
+              <InfoHint side="top" label="How the logbook type is applied">
+                This classifies the next logbook file you attach. Files already
+                attached keep the type shown on their own row — change those from
+                the select beside the file.
+              </InfoHint>
+            </div>
+            <div
+              className="flex flex-wrap gap-8"
+              role="radiogroup"
+              aria-label="Logbook evidence type for the next upload"
+            >
               {APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES.map((type) => (
                 <label
                   key={type}

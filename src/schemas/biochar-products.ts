@@ -10,6 +10,7 @@ import {
   optionalPositiveNumber,
   requiredMassKgSchema,
   requiredNumber,
+  storedPercentSchema,
 } from "./helpers";
 
 // ============================================
@@ -23,8 +24,7 @@ const requiredNonNegativeNumber = (message: string) =>
   requiredMassKgSchema(message);
 
 const requiredPercent = requiredNumber().pipe(
-  z
-    .number()
+  storedPercentSchema()
     .min(MOISTURE_MIN, "Must be 0-100")
     .max(MOISTURE_MAX, "Must be 0-100")
 );
@@ -142,7 +142,10 @@ export const updateBiocharProductSchema = z.object({
   linkedProductionRunId: z.string().uuid("Invalid production run").optional(),
   storageLocationId: z.string().uuid("Invalid storage location").optional(),
   massKg: massKgSchema().optional(),
-  moistureContentPercent: z.number().min(MOISTURE_MIN).max(MOISTURE_MAX).optional(),
+  moistureContentPercent: storedPercentSchema()
+    .min(MOISTURE_MIN)
+    .max(MOISTURE_MAX)
+    .optional(),
   densityKgM3: z.number().min(0).optional().nullable(),
   waterAddedKg: massKgSchema().optional(),
   ingredientBins: z.array(ingredientBinUpdateSchema).optional(),

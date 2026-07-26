@@ -305,12 +305,14 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
   const handleCreate = createWithEvidence.handleCreate;
 
   const handleUpdate = async (data: FeedstockFormData) => {
-    if (!sideSheet?.entity) return;
+    const editing =
+      displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
+    if (!editing) return;
     setUpdateError(null);
     if (createWithEvidence.guardUpdate()) return;
     try {
       await updateFeedstock.mutateAsync({
-        feedstockId: sideSheet.entity.id,
+        feedstockId: editing.id,
         facilityId: data.facilityId,
         deliveryDate: data.deliveryDate,
         supplierId: data.supplierId,
@@ -331,6 +333,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       });
       createWithEvidence.reset();
       setSideSheet(null);
+      setFocusedFeedstockId(null);
+      setDeepLinkMode(null);
+      setDeepLinkFocus(null);
       toast.success("Feedstock updated successfully");
     } catch (error) {
       setUpdateError(error instanceof Error ? error.message : "Failed to update feedstock");

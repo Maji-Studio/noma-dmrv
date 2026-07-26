@@ -22,6 +22,7 @@ import {
   facilities,
   feedstocks,
   documents,
+  storageLocations,
   supplierLocations,
   suppliers,
   transportLegs,
@@ -93,6 +94,7 @@ test.describe("Dashboard (Flow Hero)", () => {
     const facilityId = crypto.randomUUID();
     const supplierId = crypto.randomUUID();
     const supplierLocationId = crypto.randomUUID();
+    const storageLocationId = crypto.randomUUID();
     const feedstockId = crypto.randomUUID();
     const transportLegId = crypto.randomUUID();
     const evidenceDocumentId = crypto.randomUUID();
@@ -123,17 +125,28 @@ test.describe("Dashboard (Flow Hero)", () => {
           gpsLatitude: -6.8,
           isDefault: true,
         });
+        await tx.insert(storageLocations).values({
+          id: storageLocationId,
+          organizationId: DEC_ORG_ID,
+          code: `E2E-DASH-SL-${tag}`,
+          name: `E2E Dashboard Feedstock Bin ${tag}`,
+          type: "feedstock_bin",
+          facilityId,
+          feedstockTypeId: seededData.feedstockType.id,
+        });
         await tx.insert(feedstocks).values({
           id: feedstockId,
           organizationId: DEC_ORG_ID,
           code: `E2E-DASH-FS-${tag}`,
           facilityId,
           status: "complete",
+          deliveryDate: new Date("2026-07-25T12:00:00.000Z"),
           supplierId,
           feedstockTypeId: seededData.feedstockType.id,
           massWetKg: 100,
           massDryKg: 90,
           moistureContentPercent: 10,
+          storageLocationId,
         });
         await tx.insert(transportLegs).values({
           id: transportLegId,
@@ -148,6 +161,7 @@ test.describe("Dashboard (Flow Hero)", () => {
           distanceSource: "manual",
           transportMethodType: "road",
           loadMassKg: 100,
+          isDerived: true,
         });
       });
 
@@ -229,6 +243,29 @@ test.describe("Dashboard (Flow Hero)", () => {
           "Transport evidence requires saved Document provenance plus at least one uploaded bill of lading, weigh-scale ticket, or other transport evidence file. One accepted file is enough. Uploading does not change the saved provenance.",
         ),
       ).toBeVisible();
+      await expect(
+        feedstockSheet.getByRole("spinbutton", { name: "Distance (km)" }),
+      ).toHaveValue("25");
+      await expect(feedstockSheet.getByText(/Draft: Document/)).toBeVisible();
+
+      await feedstockSheet
+        .getByRole("button", { name: "Save Changes" })
+        .click();
+      await expect(feedstockSheet).toHaveCount(0);
+      await expect(page).not.toHaveURL(/(?:\?|&)feedstock=/);
+      const [savedTransportLeg] = await db
+        .select({
+          distanceKm: transportLegs.distanceKm,
+          distanceSource: transportLegs.distanceSource,
+          isDerived: transportLegs.isDerived,
+        })
+        .from(transportLegs)
+        .where(eq(transportLegs.id, transportLegId));
+      expect(savedTransportLeg).toEqual({
+        distanceKm: 25,
+        distanceSource: "document",
+        isDerived: true,
+      });
 
       await page.goto(`/dashboard?facility=${facilityId}`);
 
@@ -242,7 +279,6 @@ test.describe("Dashboard (Flow Hero)", () => {
           .set({
             originGpsLatitude: -6.8,
             originGpsLongitude: 39.28,
-            distanceSource: "document",
           })
           .where(eq(transportLegs.id, transportLegId));
         await tx.insert(documents).values({
@@ -269,6 +305,9 @@ test.describe("Dashboard (Flow Hero)", () => {
         .delete(supplierLocations)
         .where(eq(supplierLocations.id, supplierLocationId));
       await db.delete(suppliers).where(eq(suppliers.id, supplierId));
+      await db
+        .delete(storageLocations)
+        .where(eq(storageLocations.id, storageLocationId));
       await db.delete(facilities).where(eq(facilities.id, facilityId));
       await pool.end();
     }

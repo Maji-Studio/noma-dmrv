@@ -130,7 +130,7 @@ export function VehicleForm({
             <FormInput
               id="fuelConsumptionLPer100Km"
               type="number"
-              step="0.1"
+              step="any"
               min="0.1"
               max="1000"
               placeholder="e.g., 30"

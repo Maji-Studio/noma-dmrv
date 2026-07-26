@@ -23,6 +23,7 @@ import {
   type DurabilityMeasurementSampleClaimArgs,
 } from "./durability-measurement-sample-snapshot";
 import {
+  assertRemovalDatesNotFuture,
   assertReportingWindowNotInverted,
   resolveLatestApplicationTime,
 } from "./removal-reporting-window";
@@ -189,6 +190,10 @@ export async function buildRemovalSubmissionBuild(args: {
     runStartTimeByRunId: new Map(
       ctx.runs.map((run) => [run.id, run.startTime]),
     ),
+  });
+  assertRemovalDatesNotFuture({
+    productionEndTime: agg.latestEndTime,
+    latestApplicationTime,
   });
 
   if (ctx.submissionWarnings.length > 0) {

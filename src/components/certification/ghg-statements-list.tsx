@@ -201,9 +201,23 @@ function ListBody({ facilityId }: { facilityId: string }) {
   const syncFromRegistry = async () => {
     try {
       const result = await syncMutation.mutateAsync(facilityId);
-      toast.success(
-        `Synced ${result.reconciledCount} registry statement${result.reconciledCount === 1 ? "" : "s"}.`,
-      );
+      // Report skips and warnings, not just successes: without them
+      // "Synced 0 registry statements." reads identically whether the project
+      // is empty or every statement was deliberately passed over.
+      const parts = [
+        `Synced ${result.reconciledCount} registry statement${result.reconciledCount === 1 ? "" : "s"}`,
+      ];
+      if (result.skippedCount > 0) {
+        parts.push(`${result.skippedCount} skipped`);
+      }
+      if (result.warningCount > 0) {
+        parts.push(
+          `${result.warningCount} warning${result.warningCount === 1 ? "" : "s"}`,
+        );
+      }
+      const message = `${parts.join(" · ")}.`;
+      if (parts.length > 1) toast.warning(message);
+      else toast.success(message);
     } catch (error) {
       toast.error(
         error instanceof Error

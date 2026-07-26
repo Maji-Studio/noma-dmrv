@@ -29,6 +29,7 @@ import {
   loadIsometricFeedstockTypes,
   loadIsometricProjectTemplates,
   loadOpenRemovalsForFacility,
+  loadRegistryGhgStatements,
   loadRegistrySourceVisibility,
   loadRemovalBreakdown,
   loadRemovalCertifyContext,
@@ -62,6 +63,20 @@ const DEFAULT_STALE_MS = 30_000;
 const PROJECT_TEMPLATES_STALE_MS = 60_000;
 const LOCKED_REFETCH_INTERVAL_MS = 60_000;
 const BATCH_HEALTH_SUMMARY_CHUNK_SIZE = 50;
+
+type RemovalCertifyPollingData = {
+  latestSubmission?: { lockedAt?: Date | string | null } | null;
+  futureDatedMeasurements?: readonly string[];
+};
+
+export function getRemovalCertifyRefetchInterval(
+  data: RemovalCertifyPollingData | undefined,
+): number | false {
+  return data?.latestSubmission?.lockedAt ||
+    (data?.futureDatedMeasurements?.length ?? 0) > 0
+    ? LOCKED_REFETCH_INTERVAL_MS
+    : false;
+}
 
 export const certificationKeys = {
   all: ["certification"] as const,
@@ -438,8 +453,9 @@ export function useCreditBatchHealthSummaries(
 }
 
 // Removal-keyed Certify context for the guided Review flow. Like the
-// credit-batch variant it refetches while a submission is locked in flight so
-// the pre-flight reflects progress without a manual refresh.
+// credit-batch variant it refetches while a submission is locked in flight.
+// It also polls while a clock-derived future-date blocker exists so an open
+// dialog becomes ready when that timestamp passes, without broad idle polling.
 export function useRemovalCertifyContext(removalId: string, enabled = true) {
   return useQuery({
     queryKey: certificationKeys.certifyContextForRemoval(removalId),
@@ -451,9 +467,7 @@ export function useRemovalCertifyContext(removalId: string, enabled = true) {
     enabled: enabled && !!removalId,
     staleTime: DEFAULT_STALE_MS,
     refetchInterval: (query) =>
-      query.state.data?.latestSubmission?.lockedAt
-        ? LOCKED_REFETCH_INTERVAL_MS
-        : false,
+      getRemovalCertifyRefetchInterval(query.state.data),
   });
 }
 
@@ -561,6 +575,11 @@ export function useGhgStatementsForFacility(
   });
 }
 
+// Read-only view of the project's registry statements. This is a *query*, so
+// it must not write: it previously called the reconcile action, which meant
+// merely opening the create dialog performed an unannounced sync (advancing
+// `updated_at` and discarding both of the reconcile's counters). Reconciling
+// is an explicit operator action — `useSyncGhgStatementsFromRegistry`.
 export function useRegistryGhgStatementsForFacility(
   facilityId: string,
   enabled = true,
@@ -568,9 +587,9 @@ export function useRegistryGhgStatementsForFacility(
   return useQuery({
     queryKey: certificationKeys.registryGhgStatementsForFacility(facilityId),
     queryFn: async () => {
-      const result = await reconcileGhgStatementsFromRegistry(facilityId);
+      const result = await loadRegistryGhgStatements(facilityId);
       if (!result.success) throw new Error(result.error);
-      return result.data.statements;
+      return result.data;
     },
     enabled: enabled && !!facilityId,
     staleTime: DEFAULT_STALE_MS,

@@ -132,19 +132,12 @@ export async function submitRemoval(
       "Configure organization Isometric credentials before submitting.",
     );
   }
-  await checkProtocolVersionAtSubmit({
-    orgCtx,
-    removalId,
-    mapping: ctx.mapping,
-    log,
-  });
   // Fail before the submit-phase client, evidence-ledger generation/mirroring,
   // local ledger claims, or registry writes. Context loading may already make
   // read-only registry calls to resolve the configured project and template.
   // The build layer repeats this assertion as a defensive seam for callers that
   // prepare a submission outside this orchestrator.
   assertEntityReadinessGapsResolved(ctx.entityReadinessGaps);
-  const client = await getIsometricClientForOrg(orgCtx.organizationId);
   if (ctx.missingDefaultTemplateId) {
     throw new SafeError(
       "The facility's default removal template was not found in Certify. Refresh the link in facility settings.",
@@ -274,6 +267,18 @@ export async function submitRemoval(
     hasDurabilityComponents,
     sourceIds: [],
   });
+
+  // The advisory protocol check appends a local sync event on mismatch/missing.
+  // Keep it after the complete side-effect-free build so invalid source data
+  // leaves no audit mutation, but before client construction and every registry
+  // or submission-ledger mutation.
+  await checkProtocolVersionAtSubmit({
+    orgCtx,
+    removalId,
+    mapping: ctx.mapping,
+    log,
+  });
+  const client = await getIsometricClientForOrg(orgCtx.organizationId);
 
   // Regenerate every Source-mirrored evidence ledger (transport mass·distance +
   // 200-year durability) from the live context and mirror them BEFORE candidate

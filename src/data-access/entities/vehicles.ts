@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { vehicles } from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
+import { formatVehicleType } from "@/schemas/vehicles";
 import { requireOrgScope } from "../utils";
 
 export async function getVehicles(ctx: OrgContext, params: {
@@ -41,7 +42,7 @@ export async function getVehicles(ctx: OrgContext, params: {
     id: r.id,
     code: r.code,
     name: r.name,
-    subtitle: r.vehicleType,
+    subtitle: formatVehicleType(r.vehicleType),
   }));
 }
 
@@ -64,6 +65,6 @@ export async function getVehicleById(ctx: OrgContext, id: string): Promise<Entit
     id: result.id,
     code: result.code,
     name: result.name,
-    subtitle: result.vehicleType,
+    subtitle: formatVehicleType(result.vehicleType),
   };
 }

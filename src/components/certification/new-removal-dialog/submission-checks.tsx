@@ -6,10 +6,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { Accordion } from "@/components/ui/accordion";
 import { InfoHint } from "@/components/ui/tooltip";
-import {
-  type RemovalRequirementCheck,
-  type RemovalRequirementKey,
-} from "@/lib/certification/readiness";
+import type { RemovalRequirementCheck } from "@/lib/certification/readiness";
 import { certificationSettingsHref } from "@/lib/certification/links";
 
 interface SubmissionChecksProps {
@@ -18,10 +15,10 @@ interface SubmissionChecksProps {
 }
 
 function fixLinkFor(
-  key: RemovalRequirementKey,
+  check: Pick<RemovalRequirementCheck, "key" | "fixTarget">,
   facilityId: string,
 ): { label: string; href: string } | null {
-  switch (key) {
+  switch (check.key) {
     case "mapping":
     case "template":
       return {
@@ -32,6 +29,20 @@ function fixLinkFor(
     case "production":
     case "entityReadiness":
     case "evidence":
+      return null;
+    case "measurementDates":
+      if (check.fixTarget === "productionRuns") {
+        return {
+          label: "Review production runs",
+          href: `/production-runs?facility=${facilityId}`,
+        };
+      }
+      if (check.fixTarget === "applications") {
+        return {
+          label: "Review applications",
+          href: `/applications?facility=${facilityId}`,
+        };
+      }
       return null;
     case "transportUniformity":
     case "transport":
@@ -85,7 +96,7 @@ function CompactCheckRow({
   facilityId: string;
 }) {
   const fix =
-    check.status === "unmet" ? fixLinkFor(check.key, facilityId) : null;
+    check.status === "unmet" ? fixLinkFor(check, facilityId) : null;
   return (
     <li className="flex items-start gap-8 border-t border-[var(--color-border-tertiary)] px-12 py-4 first:border-t-0">
       <span className="mt-2">

@@ -9,10 +9,12 @@
 
 import { z } from "zod";
 import {
+  massKgSchema,
+  optionalCanonicalizableMassKgInputSchema,
   optionalPercent,
+  requiredCanonicalizableMassKgSchema,
   requiredMassKgSchema,
   requiredPositiveMassKgSchema,
-  optionalMassKgInputSchema,
   toNumberOrNull,
 } from "./helpers";
 import { type StorageLocationType } from "./storage-locations";
@@ -79,7 +81,7 @@ const reasonSchema = z
 export const stockTakeFormSchema = z
   .object({
     lane: z.enum(binMovementLanes),
-    counted: requiredMassKgSchema("Counted stock is required"),
+    counted: requiredCanonicalizableMassKgSchema("Counted stock is required"),
     moisturePercent: optionalPercent,
     reason: reasonSchema,
   })
@@ -90,6 +92,17 @@ export const stockTakeFormSchema = z
         path: ["moisturePercent"],
         message: "Moisture content is required",
       });
+    }
+
+    if (data.lane !== "feedstock") {
+      const persistedMass = massKgSchema().safeParse(data.counted);
+      if (!persistedMass.success) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["counted"],
+          message: persistedMass.error.issues[0]?.message ?? "Invalid mass",
+        });
+      }
     }
   });
 export type StockTakeFormData = z.infer<typeof stockTakeFormSchema>;
@@ -118,7 +131,7 @@ export const recordStockTakeSchema = z
     // from the wet snapshot for feedstock stock-takes.
     countedMassKg: requiredMassKgSchema("Counted stock is required"),
     // Feedstock-only provenance for the authoritative dry conversion.
-    countedWetMassKg: optionalMassKgInputSchema(),
+    countedWetMassKg: optionalCanonicalizableMassKgInputSchema(),
     moistureRatioUsed: z.preprocess(
       toNumberOrNull,
       z.number().min(0).max(1).nullable().optional()

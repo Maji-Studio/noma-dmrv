@@ -29,7 +29,7 @@ export interface CohortInputTotals {
   dryOutputKg: number | null;
   /** Σ feedstock dry mass (kg). */
   feedstockDryKg: number | null;
-  /** Σ startup + genset diesel (litres). */
+  /** Σ startup + genset + preprocessing fuel (litres) — all one pyrolysis SSR. */
   dieselLiters: number | null;
   /** Σ grid electricity (kWh). */
   electricityKwh: number | null;
@@ -168,7 +168,7 @@ export function CohortInputLedger({
           unit="t"
         />
         <Figure
-          label="Diesel · genset + startup"
+          label="Diesel · startup + genset + preprocess"
           value={formatQuantity(totals.dieselLiters)}
           unit="L"
         />

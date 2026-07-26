@@ -57,6 +57,34 @@ describe("biocharProductFormSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("rejects precision that exact numeric storage would round", () => {
+    const result = biocharProductFormSchema.safeParse({
+      ...validBiocharProductInput,
+      massKg: 1041.6667,
+      moistureContentPercent: 1.1234567,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: ["massKg"] }),
+          expect.objectContaining({ path: ["moistureContentPercent"] }),
+        ]),
+      );
+    }
+  });
+
+  it("accepts values at the persisted mass and percent scales", () => {
+    expect(
+      biocharProductFormSchema.safeParse({
+        ...validBiocharProductInput,
+        massKg: 1041.667,
+        moistureContentPercent: 1.123456,
+      }).success,
+    ).toBe(true);
+  });
+
   it("ignores a productionDate field — it is derived from the run, not the form", () => {
     const result = biocharProductFormSchema.safeParse({
       ...validBiocharProductInput,

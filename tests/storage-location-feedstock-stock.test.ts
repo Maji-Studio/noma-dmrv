@@ -128,7 +128,7 @@ describe("storage-location feedstock stock", () => {
         fixture.storageLocationId,
       );
 
-      expect(option?.subtitle).toContain("80 kg remaining");
+      expect(option?.subtitle).toContain("80 kg stored");
       expect(option?.subtitle).toContain("120 kg pending completion");
     } finally {
       await cleanupFixture(fixture);

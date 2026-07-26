@@ -28,6 +28,7 @@ export type CertRequirementKey =
   | "carbon"
   | "facilityEmissions"
   | "production"
+  | "measurementDates"
   | "transport"
   | "transportUniformity"
   | "entityReadiness"
@@ -69,6 +70,11 @@ export const CERT_REQUIREMENT_META: Record<
     requirementLabel: "Linked production data",
     whyDetail:
       "This batch's applications must trace back to at least one production run so the removal can attribute the pyrolysed biochar mass and its production emissions. With no linked run there is nothing to submit.",
+  },
+  measurementDates: {
+    requirementLabel: "Measurement dates not in the future",
+    whyDetail:
+      "Durability is measured at the end of the production run, and the reporting period ends when the biochar is applied. Both dates have to have already happened — a removal cannot report a measurement that has not been taken yet, so a run ending or an application dated in the future is rejected. Correct the date, or wait until the run or application has actually occurred.",
   },
   transport: {
     requirementLabel: "Transport legs recorded",

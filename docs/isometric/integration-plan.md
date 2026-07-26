@@ -91,7 +91,10 @@ registry data:
    purge or remap. Note `cert_submissions_external_unique` is **not**
    scoped by `localEntityType`, so a stale `creditBatch` row sharing an
    `externalId` with a new removal would raise a unique-constraint
-   violation.
+   violation. Since migration `0093` it is a *partial* index that excludes
+   `submission_type = 'ghg_statement'` (those use
+   `cert_submissions_ghg_statement_external_unique`, scoped to the local
+   statement — ADR 0023); every other type keeps the global rule.
 2. **Destructive migration `0021`** — `DROP TABLE certifier_ghg_periods
    CASCADE`, no down-migration. `migrate.yml` auto-applies on push to
    `main`/`staging`. Confirm a DB backup exists and the table is empty

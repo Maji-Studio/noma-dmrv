@@ -220,6 +220,18 @@ export const CERTIFY_FIELD_REGISTRY: Record<
       mappings: [mapping("weightedHToCorgRatio")],
     },
     {
+      // Unconditional, like H:Corg: the Soil Module §3.3 Table 2 eligibility
+      // check is universal (pooled mean H/C_org < 0.5 AND O/C_org < 0.2), not
+      // tier-specific. Without this descriptor a sample missing oxygen badged
+      // "chemistry complete" while the usable-replicate gate
+      // (biochar-eligibility.ts, durability-submission-gates.ts) refused to
+      // count it toward the §8.3.1 ≥3 minimum (QA 2026-07-25 F-6).
+      key: "oToCOrgRatio",
+      label: "O:Corg ratio",
+      kind: "entered",
+      mappings: [mapping("weightedOToCorgRatio")],
+    },
+    {
       key: "tgaNonReactiveCarbonData",
       label: "TGA non-reactive carbon data",
       kind: "entered",

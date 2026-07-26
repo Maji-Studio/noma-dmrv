@@ -401,6 +401,7 @@ function makeContext(
     // Eligible run, ≥3 in-spec replicates → no D3 blockers (mirrors what
     // buildRemovalContext would precompute; submitRemoval blocks on this field).
     durabilityGateBlockers: [],
+    futureDatedMeasurements: [],
     submissionWarnings: [],
     supportingDocuments: { total: 0, mirrored: 0 },
     productionReadinessGap: null,

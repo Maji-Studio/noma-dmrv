@@ -49,7 +49,6 @@ import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readine
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate } from "@/lib/format-utils";
-import { formatLocalTime } from "@/lib/date-utils";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
@@ -60,6 +59,7 @@ import { ProductionSampleTable } from "./production-sample-table";
 import {
   buildProductionRunFeedstockDetailField,
   buildProductionRunReadingsDetailField,
+  buildProductionRunWindowDetailFields,
   productionRunStatusCertStatus,
 } from "./production-run-detail-fields";
 import {
@@ -178,7 +178,7 @@ function createColumns(
 
 export function ProductionRunList() {
   // Global facility context
-  const { facilityId } = useFacilityContext();
+  const { facilityId, facilities } = useFacilityContext();
   const [focusedRunId, setFocusedRunId] = useQueryState(
     "run",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
@@ -667,10 +667,7 @@ export function ProductionRunList() {
               ...(sideSheetEntity.status === "cancelled"
                 ? [{ label: "Cancellation reason", value: sideSheetEntity.cancellationReason }]
                 : []),
-              { label: "Start Date", value: formatDate(sideSheetEntity.startTime) },
-              { label: "Start Time", value: formatLocalTime(sideSheetEntity.startTime) },
-              { label: "End Date", value: sideSheetEntity.endTime ? formatDate(sideSheetEntity.endTime) : null },
-              { label: "End Time", value: sideSheetEntity.endTime ? formatLocalTime(sideSheetEntity.endTime) : null },
+              ...buildProductionRunWindowDetailFields(sideSheetEntity, facilities),
               { label: "Operator", value: sideSheetEntity.operatorName },
             ],
           },

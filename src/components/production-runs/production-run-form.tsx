@@ -6,14 +6,21 @@
 "use client";
 
 import { nullableNumericValue, integerValue } from "@/lib/form-utils";
-import { formatLocalDate, formatLocalTime, combineDateAndTime } from "@/lib/date-utils";
+import { formatLocalDate, resolveFacilityTimezone } from "@/lib/date-utils";
+import {
+  buildProductionRunResolver,
+  buildProductionRunWindow,
+  productionRunTimezoneHelperText,
+  productionRunTimingDefaults,
+  type ProductionRunResolver,
+} from "./production-run-timing";
+import { useProductionRunTimingZoneSync } from "./use-production-run-timing-zone-sync";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useForm, useWatch, Controller } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
 import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, FileCsvIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, DryMassInput, FormActions, FormSection, FormSpine, SectionLabel, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
@@ -29,7 +36,6 @@ import {
 import { useEntityById } from "@/hooks/use-entities";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import {
-  productionRunFormSchema,
   formatProductionRunStatus,
   type ProductionRunFormData,
   type ProductionRunStatus,
@@ -42,6 +48,10 @@ import {
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { StorageLocationType } from "@/schemas/storage-locations";
+import {
+  MASS_KG_INPUT_STEP,
+  STORED_PERCENT_INPUT_STEP,
+} from "@/schemas/helpers";
 
 // ============================================
 // Constants for select options
@@ -247,7 +257,6 @@ interface ProductionRunFormProps {
   children?: React.ReactNode;
   deferredAttachments?: UseDeferredAttachmentsResult;
 }
-
 export function ProductionRunForm({
   productionRun,
   onSubmit,
@@ -264,23 +273,19 @@ export function ProductionRunForm({
   const statusOptions = allowedProductionRunStatusesFrom(transitionFrom).map(
     (status) => ({ value: status, label: formatProductionRunStatus(status) }),
   );
-  const { facilityId: contextFacilityId } = useFacilityContext();
+  const { facilityId: contextFacilityId, facilities } = useFacilityContext();
 
+  // Start/end are read back in the FACILITY's zone, never the browser's — see
+  // ./production-run-timing.ts for the QA F-2 data loss this prevents.
   const defaultValues = {
     facilityId: productionRun?.facilityId || contextFacilityId || "",
     reactorId: productionRun?.reactorId ?? "",
     status: (productionRun?.status as ProductionRunStatus) ?? "draft",
     cancellationReason: productionRun?.cancellationReason ?? "",
-    // Start and end are explicit date + time pairs (issue #259). The end pair is
-    // blank for an unfinished run; an overnight run gets an end date one day on.
-    startDate: productionRun?.startTime
-      ? formatLocalDate(new Date(productionRun.startTime))
-      : formatLocalDate(new Date()),
-    startTime: productionRun?.startTime
-      ? formatLocalTime(new Date(productionRun.startTime))
-      : formatLocalTime(new Date()),
-    endDate: productionRun?.endTime ? formatLocalDate(new Date(productionRun.endTime)) : "",
-    endTime: productionRun?.endTime ? formatLocalTime(new Date(productionRun.endTime)) : "",
+    ...productionRunTimingDefaults(
+      productionRun,
+      resolveFacilityTimezone(facilities, productionRun?.facilityId ?? contextFacilityId),
+    ),
     operatorId: productionRun?.operatorId ?? "",
     feedstockStorageLocationId: productionRun?.feedstockStorageLocationId ?? "",
     feedstockWetMassKg: productionRun?.feedstockWetMassKg ?? undefined,
@@ -301,11 +306,19 @@ export function ProductionRunForm({
     handleSubmit,
     control,
     setValue,
+    resetField,
     setError,
     clearErrors,
     formState: { errors, dirtyFields },
   } = useForm({
-    resolver: zodResolver(productionRunFormSchema),
+    // The timing cross-field checks must resolve start/end in the same zone the
+    // submit path writes them in, so the schema is rebuilt per validation from
+    // the facility currently chosen in the form (the facility select can differ
+    // from the context facility). RHF refreshes `resolver` on every render.
+    resolver: ((values, context, options) =>
+      buildProductionRunResolver(
+        resolveFacilityTimezone(facilities, values.facilityId),
+      )(values, context, options)) as ProductionRunResolver,
     // onTouched so the spine markers can turn red on blur, not just on submit.
     mode: "onTouched",
     defaultValues,
@@ -332,6 +345,11 @@ export function ProductionRunForm({
   // Watch facility to filter reactors and storage locations
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedStatus = useWatch({ control, name: "status" });
+
+  // The zone the entered start/end are interpreted in — the facility picked in
+  // the form, which can differ from the context facility.
+  const formTimezone = resolveFacilityTimezone(facilities, watchedFacilityId);
+  const timezoneHelperText = productionRunTimezoneHelperText(facilities, watchedFacilityId);
 
   // Watch fields for flow preview
   const watchedReactorId = useWatch({ control, name: "reactorId" });
@@ -389,6 +407,12 @@ export function ProductionRunForm({
     }
     prevFacilityRef.current = watchedFacilityId;
   }, [watchedFacilityId, setValue, productionRun]);
+  useProductionRunTimingZoneSync({
+    timeZone: formTimezone,
+    productionRun,
+    dirtyFields,
+    resetField,
+  });
 
   const defaultSubmitLabel = isEditMode ? "Update Production Run" : "Create Production Run";
 
@@ -416,16 +440,24 @@ export function ProductionRunForm({
       to: data.status,
       existingEndTime: productionRun?.endTime,
     });
+    const runWindow = buildProductionRunWindow({
+      startDateStr,
+      startTimeStr: data.startTime as string,
+      endDateStr,
+      endTimeStr: data.endTime as string | undefined,
+      includeEndTime,
+      clearEndTime,
+      timeZone: formTimezone,
+    });
+    if (!runWindow.ok) {
+      setError(runWindow.field, { type: "validate", message: runWindow.message });
+      return;
+    }
     const combined: ProductionRunSubmitData = {
       ...data,
       expectedUpdatedAt: productionRun?.updatedAt,
-      startTime: combineDateAndTime(startDateStr, data.startTime as string),
-      endTime:
-        clearEndTime
-          ? null
-          : data.endTime && includeEndTime
-          ? combineDateAndTime(endDateStr, data.endTime as string)
-          : undefined,
+      startTime: runWindow.startTime,
+      endTime: runWindow.endTime,
     };
 
     // Clear any prior overlap state before re-submitting.
@@ -515,7 +547,13 @@ export function ProductionRunForm({
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField id="startDate" label="Start Date" error={errors.startDate?.message} required>
+          <FormField
+            id="startDate"
+            label="Start Date"
+            error={errors.startDate?.message}
+            helperText={timezoneHelperText}
+            required
+          >
             <FormInput id="startDate" type="date" disabled={isSubmitting} error={!!errors.startDate} {...register("startDate")} />
           </FormField>
 
@@ -640,7 +678,7 @@ export function ProductionRunForm({
             <DryMassInput
               id="feedstockWetMassKg"
               type="number"
-              step="0.1"
+              step={MASS_KG_INPUT_STEP}
               placeholder="e.g. 500"
               disabled={isSubmitting}
               error={!!errors.feedstockWetMassKg}
@@ -662,7 +700,7 @@ export function ProductionRunForm({
             <FormInput
               id="feedstockMoisturePercent"
               type="number"
-              step="0.1"
+              step={STORED_PERCENT_INPUT_STEP}
               placeholder="e.g. 15"
               disabled={isSubmitting}
               error={!!errors.feedstockMoisturePercent}
@@ -678,7 +716,7 @@ export function ProductionRunForm({
             <FormInput
               id="feedingRateKgHr"
               type="number"
-              step="0.1"
+              step="any"
               placeholder="e.g. 420"
               disabled={isSubmitting}
               error={!!errors.feedingRateKgHr}
@@ -751,7 +789,7 @@ export function ProductionRunForm({
             <DryMassInput
               id="biocharOutputKg"
               type="number"
-              step="0.1"
+              step={MASS_KG_INPUT_STEP}
               placeholder="e.g. 150"
               disabled={isSubmitting}
               error={!!errors.biocharOutputKg}
@@ -772,7 +810,7 @@ export function ProductionRunForm({
             <FormInput
               id="biocharMoisturePercent"
               type="number"
-              step="0.1"
+              step={STORED_PERCENT_INPUT_STEP}
               placeholder="e.g. 1.5"
               disabled={isSubmitting}
               error={!!errors.biocharMoisturePercent}
@@ -807,7 +845,7 @@ export function ProductionRunForm({
             <FormInput
               id="dieselOperationLiters"
               type="number"
-              step="0.1"
+              step="any"
               placeholder="e.g. 50"
               disabled={isSubmitting}
               error={!!errors.dieselOperationLiters}
@@ -828,7 +866,7 @@ export function ProductionRunForm({
             <FormInput
               id="dieselGensetLiters"
               type="number"
-              step="0.1"
+              step="any"
               placeholder="e.g. 25"
               disabled={isSubmitting}
               error={!!errors.dieselGensetLiters}
@@ -849,7 +887,7 @@ export function ProductionRunForm({
             <FormInput
               id="preprocessingFuelLiters"
               type="number"
-              step="0.1"
+              step="any"
               placeholder="e.g. 10"
               disabled={isSubmitting}
               error={!!errors.preprocessingFuelLiters}
@@ -870,7 +908,7 @@ export function ProductionRunForm({
             <FormInput
               id="electricityKwh"
               type="number"
-              step="0.1"
+              step="any"
               placeholder="e.g. 100"
               disabled={isSubmitting}
               error={!!errors.electricityKwh}

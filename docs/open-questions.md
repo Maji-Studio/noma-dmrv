@@ -839,3 +839,70 @@ bound); these are the decisions it deliberately did not make.
 - **Resolve via:** pick one convention (group count with expanded field list,
   or field count everywhere) and apply it to the card tag, health strip, and
   Removal wizard copy (S).
+
+### Zoneless date/time construction outside the production-run form (`dates/zoneless-instants`)
+
+- F-2 anchored the production-run start/end combiner to the facility timezone,
+  but the same bug class survives elsewhere. `fn/production-incidents` and
+  `fn/production-samples` parse a zoneless `"YYYY-MM-DDTHH:mm"` string with
+  `new Date(...)` on the **server**, so the stored instant depends on the server
+  process timezone; `data-access/production-runs/overlap` formats conflict
+  messages in that same zone; and `productionRunDateExpr` casts `start_time` to
+  a **UTC** calendar day rather than the facility day, so a near-midnight run
+  can land in the wrong cohort date. Display counterparts in
+  `production-incident-form`, `production-sample-form` and
+  `components/samples/sample-form` render in the browser zone (the
+  production-run side sheet was moved to the facility zone on 2026-07-25).
+- **Resolve via:** decide one project-wide rule — instants are constructed and
+  rendered in the facility zone, date-only values stay pinned to UTC (issue #46)
+  — then apply it to the remaining sites and add a lint or test guard so a
+  zoneless `new Date(string)` cannot reappear (M).
+
+### Sampling-day chips are not post-window-normalized (`certification/sampling-day-normalization`)
+
+- F-6 filtered the credit-batch day chips to usable replicates, but
+  `certification/durability-batch-summary` exposes `replicates[].samplingDay`
+  raw, while the gate's `distinctRunDayCount` passes days through
+  `normalizePostWindowSamplingDay` (which nulls days after the batch end date).
+  A stored-material sample dated after the production window can therefore still
+  show a chip that the submission gate does not credit.
+- **Resolve via:** normalize `samplingDay` at the summary boundary so every
+  surface reads the same day set, or expose the normalized day alongside the raw
+  one and have the chips use it (S).
+
+### Operator-initiated GHG statements are still refused on a shared project (`certification/shared-project-statement-create`)
+
+- ADR 0023 scoped registry statement identity per organization + facility, so a
+  re-pointed project no longer locks the new facility out on **sync**. But
+  `assertDedicatedGhgStatementProject` still refuses operator-initiated creates
+  while a project is shared across facilities, so the unlocked path is the
+  sequential one (A imports → project re-points → B imports its own row).
+  Whether two facilities on one live project should be able to create statements
+  concurrently is unanswered — the guard was deliberately kept.
+- **Resolve via:** confirm with Isometric whether one project may carry
+  concurrent per-site statements for the same period; if yes, replace the guard
+  with per-facility period scoping, if no, keep it and say so in the copy (M).
+
+### `formatInTimeZone` is not process-zone independent (`dates/format-in-time-zone-gap`)
+
+- `formatFacilityTime` and `formatFacilityDate` (`src/lib/date-utils.ts`) render
+  through date-fns-tz's `formatInTimeZone`, which builds a `Date` whose **local**
+  components equal the target zone's wall clock. When the machine's own zone
+  skips that wall clock, the `Date` rolls forward and the reader lies —
+  empirically `formatInTimeZone(2026-03-07T23:30Z, "Africa/Dar_es_Salaam")`
+  returns `03:30` instead of `02:30` under `TZ=America/New_York`.
+- It only bites when the viewer's (or server's) zone skips the same wall clock on
+  the same date, so it is rare — but the affected readers are load-bearing: the
+  production-run edit read-back
+  (`src/components/production-runs/production-run-timing:productionRunTimingDefaults`),
+  and the facility-local sampling day in `src/fn/samples`,
+  `src/fn/certification/durability-readiness`,
+  `src/lib/certification/durability-batch-summary` and
+  `src/lib/certification/evidence-ledger/durability-build-model`, which feeds
+  registry-facing durability gates.
+- `combineDateAndTime` in the same module already avoids this by reading the zone
+  with `Intl.DateTimeFormat.formatToParts` (`wallClockIn`) instead — the likely
+  fix shape.
+- **Resolve via:** re-implement `formatFacilityTime` / `formatFacilityDate` on
+  `wallClockIn`-style `formatToParts` output, then pin it with a regression test
+  run under a process zone that skips the rendered wall clock (S).

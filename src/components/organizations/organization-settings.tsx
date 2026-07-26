@@ -54,7 +54,8 @@ type InviteForm = z.infer<typeof inviteMemberSchema>;
 export function OrganizationSettings({ canManage }: { canManage: boolean }) {
   const toast = useToast();
   const { data: members, isLoading: membersLoading } = useOrgMembers();
-  const { data: invitations } = useOrgInvitations(canManage);
+  const { data: invitations, isLoading: invitationsLoading } =
+    useOrgInvitations(canManage);
 
   const inviteMember = useInviteMember();
   const changeRole = useChangeMemberRole();
@@ -283,7 +284,11 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
       {canManage && (
         <section className="flex flex-col gap-16">
           <h2 className="title-heading-3">Pending invitations</h2>
-          {!invitations || invitations.length === 0 ? (
+          {invitationsLoading ? (
+            <div aria-busy="true">
+              <Skeleton className="h-64 w-full" />
+            </div>
+          ) : !invitations || invitations.length === 0 ? (
             <EmptyState
               icon={<EnvelopeSimpleIcon size={40} />}
               title="No pending invitations"
