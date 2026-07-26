@@ -136,7 +136,7 @@ function createColumns(
     },
     {
       accessorKey: "hToCOrgRatio",
-      header: "H:C ratio",
+      header: "H:C org ratio",
       cell: ({ row }) => row.original.hToCOrgRatio?.toFixed(3) ?? "\u2014",
     },
     {

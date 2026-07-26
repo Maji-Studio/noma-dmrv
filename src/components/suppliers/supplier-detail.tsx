@@ -130,7 +130,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-32 mt-32 pt-32 border-t border-[var(--color-border-secondary)]">
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-              Contact Email
+              Contact email
             </dt>
             <dd className="body-medium mt-16">{supplier.contactEmail || "—"}</dd>
           </div>
@@ -150,7 +150,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
           </div>
           <div>
             <dt className="flex items-center gap-6 text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-              Distance to Facility
+              Distance to facility
               <CertificationFieldTag />
             </dt>
             <dd className="body-medium mt-16">
