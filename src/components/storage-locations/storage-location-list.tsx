@@ -180,7 +180,8 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
       value: String(storageLocation.productInventory.batchCount),
     },
     {
-      label: "Successfully applied",
+      // Dry basis, unlike the as-is masses above it — the label has to say so.
+      label: "Applied, dry",
       value:
         storageLocation.productInventory.appliedApplicationCount > 0
           ? formatMassKg(storageLocation.productInventory.appliedDryMassKg)
