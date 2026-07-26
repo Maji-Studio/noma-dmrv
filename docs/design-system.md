@@ -64,21 +64,18 @@ sidebar). Don't invent the missing tokens.
 **Status ramp** — `--st-ok` / `--st-run` / `--st-wait` / `--st-off` /
 `--st-bad` is the canonical palette for status badges, dots, and state text.
 Each has a solid (icon, text, rule, bar fill), a `-bg` 10% tint fill and a
-`-border` 40% tint. `/styleguide` renders all five × three (2026-07-26).
+`-border` 40% tint fill. `/styleguide` renders all five × three.
 
-`--color-signal-green` / `--color-signal-green-light` are **RETIRED** (2026-07-26)
-— both definitions are gone from `globals.css` and no call sites remain. They
-resolve to nothing; if you meet one in an old branch, translate it:
+`--color-signal-green` / `--color-signal-green-light` are **retired** and
+resolve to nothing. Translate them as follows:
 
 | retired | use |
 | --- | --- |
-| `--color-signal-green` | `--st-ok` — was a straight alias, so the swap is 1:1 |
-| `--color-signal-green-light` | `--st-ok-bg` — a 10% tint, where the old token was 15% |
+| `--color-signal-green` | `--st-ok` |
+| `--color-signal-green-light` | `--st-ok-bg` |
 
-`--color-signal-orange` / `-strong` / `-light` are **not** deprecated and still
-have ~40 live call sites. Don't convert them to `--st-wait` component by
-component — that trades one inconsistency for a worse one. It is one app-wide
-edit or nothing.
+`--color-signal-orange` / `-strong` / `-light` remain supported. Don't convert
+them to `--st-wait` component by component; any migration must be app-wide.
 
 **Hairlines & the panel recipe.** Structure is drawn with borders, never drop
 shadows — elevation is border + paper. Three steps: `--hair` (structural /
@@ -158,11 +155,11 @@ rename a domain term.
 
 Page titles (`PageHeader`), `StatCard` titles, button text, dialog titles and
 side-sheet titles are **outside** this rule and keep their existing casing. One
-exception (2026-07-26): where a dialog title or button **names an entity the
-operator just saw on a select**, the noun follows the select's label rather than
-the chrome's casing — "Feedstock type" on the select, "New feedstock type" as
-the quick-add title, "Create feedstock type" on its submit button. One action,
-one name, through the whole flow. Those nouns live in `ENTITY_TYPE_LABELS`
+exception: where a dialog title or button **names an entity the operator just
+saw on a select**, the noun follows the select's label rather than the chrome's
+casing — "Feedstock type" on the select, "New feedstock type" as the quick-add
+title, "Create feedstock type" on its submit button. One action, one name,
+through the whole flow. Those nouns live in `ENTITY_TYPE_LABELS`
 (`components/forms/entity-select/entity-labels.ts`) — the single source shared by
 the select and the quick-add dialog — stored lowercase because they are always
 read mid-sentence. Follow the glossary: a bin is a **storage bin**, never a
