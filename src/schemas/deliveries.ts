@@ -15,7 +15,7 @@ import { optionalTripType } from "./trip-type";
 import {
   emptyToNull,
   optionalMassKgSchema,
-  optionalStoredPercent,
+  optionalStoredPercentValue,
 } from "./helpers";
 
 // ============================================
@@ -83,7 +83,7 @@ const deliveryFormBaseSchema = z.object({
   status: z.enum(deliveryStatuses).default("upcoming"),
   deliveredWetMassKg: optionalWetMassKg,
   massDryKg: optionalDryMassKg,
-  moistureContentPercent: optionalStoredPercent,
+  moistureContentPercent: optionalStoredPercentValue,
   // Per-delivery road-distance override (km) + reason for the distribution leg.
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
@@ -161,7 +161,7 @@ export const createDeliverySchema = z.object({
   status: z.enum(deliveryStatuses).default("upcoming"),
   deliveredWetMassKg: optionalWetMassKg,
   massDryKg: optionalDryMassKg,
-  moistureContentPercent: optionalStoredPercent,
+  moistureContentPercent: optionalStoredPercentValue,
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
@@ -211,7 +211,7 @@ export const updateDeliverySchema = z.object({
   status: z.enum(deliveryStatuses).optional(),
   deliveredWetMassKg: optionalWetMassKg,
   massDryKg: optionalDryMassKg,
-  moistureContentPercent: optionalStoredPercent,
+  moistureContentPercent: optionalStoredPercentValue,
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,

@@ -9,8 +9,10 @@
 
 import { z } from "zod";
 import {
+  massKgSchema,
   optionalCanonicalizableMassKgInputSchema,
   optionalPercent,
+  requiredCanonicalizableMassKgSchema,
   requiredMassKgSchema,
   requiredPositiveMassKgSchema,
   toNumberOrNull,
@@ -79,7 +81,7 @@ const reasonSchema = z
 export const stockTakeFormSchema = z
   .object({
     lane: z.enum(binMovementLanes),
-    counted: requiredMassKgSchema("Counted stock is required"),
+    counted: requiredCanonicalizableMassKgSchema("Counted stock is required"),
     moisturePercent: optionalPercent,
     reason: reasonSchema,
   })
@@ -90,6 +92,17 @@ export const stockTakeFormSchema = z
         path: ["moisturePercent"],
         message: "Moisture content is required",
       });
+    }
+
+    if (data.lane !== "feedstock") {
+      const persistedMass = massKgSchema().safeParse(data.counted);
+      if (!persistedMass.success) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["counted"],
+          message: persistedMass.error.issues[0]?.message ?? "Invalid mass",
+        });
+      }
     }
   });
 export type StockTakeFormData = z.infer<typeof stockTakeFormSchema>;

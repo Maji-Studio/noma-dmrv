@@ -191,6 +191,17 @@ export const optionalStoredPercent = optionalPercent.pipe(
   storedPercentSchema().nullable().optional(),
 );
 
+/**
+ * Bounded stored percent for callers that already coerce form input before
+ * schema validation (for example React Hook Form's `setValueAs`).
+ */
+export const optionalStoredPercentValue = storedPercentSchema()
+  .finite()
+  .min(0)
+  .max(100)
+  .optional()
+  .nullable();
+
 // ============================================
 // Mass Input Caps
 // ============================================
@@ -231,6 +242,16 @@ export function positiveMassKgSchema(message = "Must be greater than 0") {
 
 export function requiredMassKgSchema(message = "Must be 0 or greater") {
   return requiredNumber().pipe(massKgSchema(message));
+}
+
+/**
+ * Accepts a higher-precision mass that an authoritative boundary canonicalizes
+ * to the persisted scale before writing.
+ */
+export function requiredCanonicalizableMassKgSchema(
+  message = "Must be 0 or greater",
+) {
+  return requiredNumber().pipe(massKgRangeSchema(message));
 }
 
 export function requiredPositiveMassKgSchema(
