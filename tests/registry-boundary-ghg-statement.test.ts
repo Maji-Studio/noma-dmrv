@@ -254,7 +254,10 @@ describe("createGhgStatementDraft boundary — orphan reconciliation (test 3)", 
     });
     expect(second).toMatchObject({
       success: true,
-      data: { externalId: orphanId },
+      data: {
+        outcome: "existing",
+        externalId: orphanId,
+      },
     });
 
     // Reconciled, never re-POSTed: still exactly one statement server-side.

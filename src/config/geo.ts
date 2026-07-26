@@ -26,7 +26,13 @@ export const ORS_ROUTING_PROFILE = "driving-car";
 /** Max geocode autocomplete results returned to the client. */
 export const GEOCODE_MAX_RESULTS = 5;
 
-/** Outbound request timeout for ORS calls (ms). */
+/**
+ * Outbound request timeout for ORS calls (ms). Deliberately short: this budget
+ * is shared by the per-keystroke geocode autocomplete and the CALC button, so a
+ * long wait would stall typing as well as clicks. A slow upstream therefore
+ * aborts before its own error status arrives — the adapter reports that as a
+ * distinct "did not respond in time" message rather than a network failure.
+ */
 export const ORS_REQUEST_TIMEOUT_MS = 10_000;
 
 /**

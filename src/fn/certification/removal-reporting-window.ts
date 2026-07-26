@@ -47,6 +47,38 @@ export function resolveLatestApplicationTime(
   return latest;
 }
 
+/**
+ * Reject dates that Isometric cannot accept before the submission pipeline
+ * mirrors evidence Sources or creates Datapoints. Production end is the
+ * durability `measured_at`; latest application is the GHG entry's
+ * `completed_on`. Equality is valid because neither date is in the future.
+ */
+export function assertRemovalDatesNotFuture(args: {
+  productionEndTime: Date;
+  latestApplicationTime: Date;
+  now?: Date;
+}): void {
+  const {
+    productionEndTime,
+    latestApplicationTime,
+    now = new Date(),
+  } = args;
+
+  if (productionEndTime.getTime() > now.getTime()) {
+    throw new SafeError(
+      `Production run end ${productionEndTime.toISOString()} is in the future. ` +
+        "Wait until production is complete or correct the run end time before submitting.",
+    );
+  }
+
+  if (latestApplicationTime.getTime() > now.getTime()) {
+    throw new SafeError(
+      `Latest application date ${latestApplicationTime.toISOString()} is in the future. ` +
+        "Wait until the application has occurred or correct the application date before submitting.",
+    );
+  }
+}
+
 // Guards the window inversion BEFORE any registry POST — the local stamp's
 // `startedOn <= completedOn` DB check runs inside a best-effort write the
 // submit path swallows, so a back-dated application must fail loudly instead

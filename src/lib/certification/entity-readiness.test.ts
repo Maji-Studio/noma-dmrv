@@ -153,6 +153,7 @@ describe("deriveEntityCertifyReadiness", () => {
       durabilityOption: "200_year",
       organicCarbonPercent: 80,
       hToCOrgRatio: 0.4,
+      oToCOrgRatio: 0.15,
       randomReflectanceR0Percent: null,
       reactiveCarbonPercent: null,
       residualCarbonPercent: null,
@@ -161,11 +162,41 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness).toEqual({ state: "ready", gaps: [] });
   });
 
+  // Both eligibility ratios are universal (§3.3 Table 2), so a sample carrying
+  // only H:Corg must not badge complete — it never counts toward the §8.3.1
+  // usable-replicate minimum (QA 2026-07-25 F-6).
+  it.each(["200_year", "1000_year"])(
+    "reports the O:Corg gap for a %s sample missing the oxygen ratio",
+    (durabilityOption) => {
+      const readiness = deriveEntityCertifyReadiness("sample", {
+        durabilityOption,
+        organicCarbonPercent: 80,
+        hToCOrgRatio: 0.4,
+        oToCOrgRatio: null,
+        randomReflectanceR0Percent: 1.2,
+        sReflectanceFraction: 0.85,
+        reactiveCarbonPercent: null,
+        residualCarbonPercent: 85,
+      });
+
+      expect(readiness.state).toBe("incomplete");
+      expect(readiness.gaps).toMatchObject([
+        {
+          kind: "field",
+          key: "oToCOrgRatio",
+          label: "O:Corg ratio",
+          fields: ["oToCOrgRatio"],
+        },
+      ]);
+    },
+  );
+
   it("requires 1000-year durability fields when the condition applies", () => {
     const readiness = deriveEntityCertifyReadiness("sample", {
       durabilityOption: "1000_year",
       organicCarbonPercent: 80,
       hToCOrgRatio: 0.4,
+      oToCOrgRatio: 0.15,
       randomReflectanceR0Percent: null,
       reactiveCarbonPercent: null,
       residualCarbonPercent: null,
@@ -184,6 +215,7 @@ describe("deriveEntityCertifyReadiness", () => {
       durabilityOption: "1000_year",
       organicCarbonPercent: 80,
       hToCOrgRatio: 0.4,
+      oToCOrgRatio: 0.15,
       randomReflectanceR0Percent: 1.2,
       sReflectanceFraction: 0.85,
       reactiveCarbonPercent: null,

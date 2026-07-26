@@ -908,6 +908,10 @@ describe("requiredTransportCategories", () => {
             sampleCode: "S-1",
             organicCarbonPercent: 70,
             hToCOrgRatio: 0.4,
+            // Both eligibility ratios are unconditional sample descriptors, so
+            // supply O:Corg too — otherwise this 1000-year test also trips the
+            // universal chemistry gap and stops testing what it names.
+            oToCOrgRatio: 0.1,
             randomReflectanceR0Percent: null,
             reactiveCarbonPercent: null,
             residualCarbonPercent: null,

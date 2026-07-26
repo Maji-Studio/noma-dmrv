@@ -52,7 +52,7 @@ describe("computeCohortInputTotals", () => {
     expect(totals.electricityKwh).toBe(395);
   });
 
-  it("combines startup and genset diesel into one total", () => {
+  it("combines startup, genset, and preprocessing fuel into one diesel total", () => {
     const totals = computeCohortInputTotals([
       makeRun({
         dieselOperationLiters: 20,

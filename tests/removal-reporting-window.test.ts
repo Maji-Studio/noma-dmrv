@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  assertRemovalDatesNotFuture,
   assertReportingWindowNotInverted,
   resolveLatestApplicationTime,
 } from "@/fn/certification/removal-reporting-window";
@@ -109,6 +110,44 @@ describe("resolveLatestApplicationTime", () => {
   it("fails closed on an empty lineage list", () => {
     expect(() => resolveLatestApplicationTime([])).toThrow(
       /no applications in the lineage/,
+    );
+  });
+});
+
+describe("assertRemovalDatesNotFuture", () => {
+  const now = new Date("2026-07-25T12:00:00.000Z");
+
+  it("allows production and application dates exactly at the current instant", () => {
+    expect(() =>
+      assertRemovalDatesNotFuture({
+        productionEndTime: now,
+        latestApplicationTime: now,
+        now,
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejects a future production end with an actionable error", () => {
+    expect(() =>
+      assertRemovalDatesNotFuture({
+        productionEndTime: new Date("2026-07-25T12:00:00.001Z"),
+        latestApplicationTime: now,
+        now,
+      }),
+    ).toThrow(
+      /production run end 2026-07-25T12:00:00.001Z is in the future.*correct the run end time/i,
+    );
+  });
+
+  it("rejects a future latest application with an actionable error", () => {
+    expect(() =>
+      assertRemovalDatesNotFuture({
+        productionEndTime: now,
+        latestApplicationTime: new Date("2026-07-26T00:00:00.000Z"),
+        now,
+      }),
+    ).toThrow(
+      /latest application date 2026-07-26T00:00:00.000Z is in the future.*correct the application date/i,
     );
   });
 });

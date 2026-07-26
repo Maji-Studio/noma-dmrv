@@ -16,6 +16,7 @@ const CHECKS = [
   ["transport", "Transport legs recorded"],
   ["transportUniformity", "Transport legs aggregate cleanly"],
   ["production", "Production lineage complete"],
+  ["measurementDates", "Measurement dates not in the future"],
   ["entityReadiness", "Certifier fields on linked records"],
   ["durability", "Sampling & durability eligibility"],
 ].map(([key, requirementLabel]) => ({
@@ -32,7 +33,7 @@ describe("SubmissionChecks", () => {
     );
 
     expect(html).toContain("Submission checks");
-    expect(html).toContain("8 of 8 checks passed");
+    expect(html).toContain("9 of 9 checks passed");
     expect(html).toMatch(/<button[^>]*>[\s\S]*Submission checks[\s\S]*<\/button>/);
     expect(html).not.toContain("Removal template resolved");
   });
@@ -51,7 +52,7 @@ describe("SubmissionChecks", () => {
       <SubmissionChecks checks={blockedChecks} facilityId="facility-1" />,
     );
 
-    expect(html).toContain("7 of 8 checks passed · 1 need attention");
+    expect(html).toContain("8 of 9 checks passed · 1 need attention");
     expect(html).toContain("Removal template resolved");
     expect(html).toContain("No default removal template is selected.");
     expect(html).toContain(
@@ -73,11 +74,50 @@ describe("SubmissionChecks", () => {
       <SubmissionChecks checks={blockedChecks} facilityId="facility-1" />,
     );
 
-    expect(html).toContain("7 of 8 checks passed · 1 need attention");
+    expect(html).toContain("8 of 9 checks passed · 1 need attention");
     expect(html).toContain("Production lineage complete");
     expect(html).toContain(
       "No applications fall in this batch&#x27;s crediting period.",
     );
+  });
+
+  it("routes future-date blockers only to their typed record target", () => {
+    const futureRunChecks = CHECKS.map((check) =>
+      check.key === "measurementDates"
+        ? {
+            ...check,
+            status: "unmet" as const,
+            fixTarget: "productionRuns" as const,
+          }
+        : check,
+    );
+    const futureApplicationChecks = CHECKS.map((check) =>
+      check.key === "measurementDates"
+        ? {
+            ...check,
+            status: "unmet" as const,
+            fixTarget: "applications" as const,
+          }
+        : check,
+    );
+
+    const runHtml = renderToStaticMarkup(
+      <SubmissionChecks checks={futureRunChecks} facilityId="facility-1" />,
+    );
+    const applicationHtml = renderToStaticMarkup(
+      <SubmissionChecks
+        checks={futureApplicationChecks}
+        facilityId="facility-1"
+      />,
+    );
+
+    expect(runHtml).toContain(
+      'href="/production-runs?facility=facility-1"',
+    );
+    expect(applicationHtml).toContain(
+      'href="/applications?facility=facility-1"',
+    );
+    expect(applicationHtml).not.toContain('href="/production-runs');
   });
 
   it("opens automatically and surfaces evidence advisories", () => {
@@ -95,7 +135,7 @@ describe("SubmissionChecks", () => {
       <SubmissionChecks checks={checksWithWarning} facilityId="facility-1" />,
     );
 
-    expect(html).toContain("8 of 9 checks passed · 1 need attention");
+    expect(html).toContain("9 of 10 checks passed · 1 need attention");
     expect(html).toContain("0 of 2 supporting documents mirrored");
   });
 });

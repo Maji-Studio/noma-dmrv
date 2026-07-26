@@ -392,6 +392,10 @@ beforeEach(() => {
     makeOpenRemoval(),
   ]);
 
+  // The idempotent `return-existing` arm reports the statement's REAL
+  // membership rather than claiming zero linked removals (ADR 0023 follow-up).
+  vi.mocked(ghgDA.getRemovalsByGhgStatementId).mockResolvedValue([]);
+
   // GHG-statement DA ops touched after the remote create.
   vi.mocked(ghgDA.reconcileRemovalMembership).mockResolvedValue({
     linkedRemovalIds: [REMOVAL_ID],
@@ -450,6 +454,7 @@ describe("createGhgStatementDraft — happy path", () => {
 
     if (!result.success) throw new Error(`Action failed: ${result.error}`);
     expect(result.data).toMatchObject({
+      outcome: "created",
       ghgStatementId: STATEMENT_ID,
       externalId: EXTERNAL_STATEMENT_ID,
       linkedRemovalIds: [REMOVAL_ID],
@@ -519,6 +524,8 @@ describe("createGhgStatementDraft — happy path", () => {
     expect(second.success).toBe(true);
     if (!second.success) return;
     expect(second.data.externalId).toBe(EXTERNAL_STATEMENT_ID);
+    // Reported honestly as an already-existing statement, not a creation.
+    expect(second.data.outcome).toBe("existing");
     expect(isometric.createGhgStatement).not.toHaveBeenCalled();
     // Idempotent return-existing must not trigger any remote read or local
     // membership/window reconciliation — only the externalId is replayed.
@@ -599,7 +606,10 @@ describe("createGhgStatementDraft — empty-statement guard (#245)", () => {
 
     expect(result).toMatchObject({
       success: true,
-      data: { externalId: EXTERNAL_STATEMENT_ID },
+      data: {
+        outcome: "existing",
+        externalId: EXTERNAL_STATEMENT_ID,
+      },
     });
     expect(isometric.createGhgStatement).not.toHaveBeenCalled();
     expect(isometric.reconcileGhgStatement).toHaveBeenCalledOnce();

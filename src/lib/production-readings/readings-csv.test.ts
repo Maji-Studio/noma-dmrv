@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseReadingsCsv, parseUtcTimestamp } from "./readings-csv";
+import { combineDateAndTime } from "@/lib/date-utils";
 
 const DAY_START = new Date("2026-04-02T00:00:00.000Z");
 const TWO_DAYS_END = new Date("2026-04-04T00:00:00.000Z");
@@ -83,6 +84,43 @@ describe("parseReadingsCsv", () => {
     expect(result.readings.map((r) => r.timestamp)).toEqual([
       new Date("2026-04-02T06:00:00.000Z"),
     ]);
+  });
+
+  // QA F-2 regression. The clip below is correct and unchanged — the data loss
+  // came from the run window itself being built in the BROWSER's zone. A CEST
+  // operator entering 08:00–16:00 for a UTC+3 plant produced a 06:00Z–14:00Z
+  // window, so the first hour of telemetry landed outside it and was counted
+  // into `droppedRows` and discarded with no error. Building the window with
+  // the facility's zone must keep those readings in window from any machine.
+  it("keeps facility-local readings inside a facility-local run window", () => {
+    const originalTz = process.env.TZ;
+    process.env.TZ = "Europe/Berlin"; // CEST (UTC+2) — the QA operator's browser
+    try {
+      const facilityTimezone = "Africa/Dar_es_Salaam"; // UTC+3
+      const runWindowStart = combineDateAndTime("2026-07-17", "08:00", facilityTimezone);
+      const runWindowEnd = combineDateAndTime("2026-07-17", "16:00", facilityTimezone);
+      expect(runWindowStart.toISOString()).toBe("2026-07-17T05:00:00.000Z");
+
+      const csv = [
+        "timestamp_utc,temperature_c,pressure_bar",
+        "2026-07-17T05:00:00Z,500,0.02", // facility-local 08:00 — first reading
+        "2026-07-17T05:30:00Z,510,0.03", // facility-local 08:30
+        "2026-07-17T12:59:00Z,520,0.04", // facility-local 15:59 — last reading
+        "2026-07-17T13:00:00Z,530,0.05", // facility-local 16:00 — window is end-exclusive
+      ].join("\n");
+
+      const result = parseReadingsCsv({ csvText: csv, runWindowStart, runWindowEnd });
+
+      expect(result.inWindowRows).toBe(3);
+      expect(result.droppedRows).toBe(1);
+      expect(result.readings.map((r) => r.timestamp.toISOString())).toEqual([
+        "2026-07-17T05:00:00.000Z",
+        "2026-07-17T05:30:00.000Z",
+        "2026-07-17T12:59:00.000Z",
+      ]);
+    } finally {
+      process.env.TZ = originalTz;
+    }
   });
 
   it("sorts out-of-order rows and treats --- as a null sensor value", () => {

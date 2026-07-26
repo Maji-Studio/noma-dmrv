@@ -71,6 +71,7 @@ import {
 } from "./shared";
 import { buildCertifyEntityReadiness } from "./certify-entity-readiness";
 import { loadDurabilityBatchData } from "./durability-readiness";
+import { collectFutureDatedMeasurements } from "./future-dated-measurements";
 import { buildSubmissionWarnings } from "./submission-warnings";
 import { loadEvidenceMirrorSummaryForScope, type EvidenceMirrorSummary } from "./evidence-mirror-summary";
 import {
@@ -160,6 +161,12 @@ export interface RemovalCertifyContext {
   // Fail-closed durability sampling/eligibility blockers (D3) — the EXACT list
   // the submit pipeline blocks on, so readiness predicts the gate. [] ⇒ ready.
   durabilityGateBlockers: string[];
+  // Production-run end times / biochar application dates that still lie in the
+  // future, phrased as blocker sentences. The SAME verdict the submit-time
+  // guard `assertRemovalDatesNotFuture` reaches, computed here against the
+  // server clock so the readiness classifier can stay pure and clock-free.
+  // [] ⇒ every measurement date has already happened.
+  futureDatedMeasurements: string[];
   // Non-blocking submission advisories — e.g. recorded startup/plant diesel the
   // active template has no component to carry (ADR 0015). Unlike
   // durabilityGateBlockers / entityReadinessGaps, these do NOT gate submission;
@@ -685,6 +692,8 @@ export async function buildRemovalContext(
       productionReadinessGap,
       entityReadinessGaps: [],
       durabilityGateBlockers,
+      // No applications and no runs resolved ⇒ no date to be in the future.
+      futureDatedMeasurements: [],
       submissionWarnings: [
         ...durabilityWarnings,
         ...soilTemperatureGate.warnings,
@@ -757,6 +766,7 @@ export async function buildRemovalContext(
     entityReadinessGaps: entityReadiness.gaps,
     entityReadinessIssues: entityReadiness.issues,
     durabilityGateBlockers,
+    futureDatedMeasurements: collectFutureDatedMeasurements({ runs, lineages }),
     submissionWarnings,
     supportingDocuments,
     runSummary,
@@ -810,6 +820,7 @@ function projectUiContext(
     entityReadinessGaps: ctx.entityReadinessGaps,
     entityReadinessIssues: ctx.entityReadinessIssues ?? [],
     durabilityGateBlockers: ctx.durabilityGateBlockers,
+    futureDatedMeasurements: ctx.futureDatedMeasurements,
     submissionWarnings: ctx.submissionWarnings,
     supportingDocuments: ctx.supportingDocuments,
     runSummary: ctx.runSummary,
