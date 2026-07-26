@@ -33,7 +33,7 @@ import {
   orderFulfillmentStatuses,
   type OrderFulfillmentStatus,
 } from "@/lib/orders/fulfillment";
-import { formatDate } from "@/lib/format-utils";
+import { formatDate, formatMassKg } from "@/lib/format-utils";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
 // ============================================
@@ -395,7 +395,7 @@ export function OrderList() {
                   fields: [
                     { label: "Biochar product", value: sideSheetEntity.biocharProductCode },
                     { label: "Packaging", value: <span className="capitalize">{sideSheetEntity.packaging}</span> },
-                    { label: "Quantity (kg)", value: `${sideSheetEntity.quantityKg.toLocaleString()} kg` },
+                    { label: "Quantity (kg)", value: formatMassKg(sideSheetEntity.quantityKg) },
                     { label: "Value", value: sideSheetEntity.value },
                     { label: "Currency", value: sideSheetEntity.currency },
                   ],
