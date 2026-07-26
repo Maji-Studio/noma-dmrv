@@ -14,6 +14,7 @@ import {
   productionRunTimingDefaults,
   type ProductionRunResolver,
 } from "./production-run-timing";
+import { useProductionRunTimingZoneSync } from "./use-production-run-timing-zone-sync";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
@@ -256,7 +257,6 @@ interface ProductionRunFormProps {
   children?: React.ReactNode;
   deferredAttachments?: UseDeferredAttachmentsResult;
 }
-
 export function ProductionRunForm({
   productionRun,
   onSubmit,
@@ -284,10 +284,7 @@ export function ProductionRunForm({
     cancellationReason: productionRun?.cancellationReason ?? "",
     ...productionRunTimingDefaults(
       productionRun,
-      resolveFacilityTimezone(
-        facilities,
-        productionRun?.facilityId ?? contextFacilityId,
-      ),
+      resolveFacilityTimezone(facilities, productionRun?.facilityId ?? contextFacilityId),
     ),
     operatorId: productionRun?.operatorId ?? "",
     feedstockStorageLocationId: productionRun?.feedstockStorageLocationId ?? "",
@@ -309,6 +306,7 @@ export function ProductionRunForm({
     handleSubmit,
     control,
     setValue,
+    resetField,
     setError,
     clearErrors,
     formState: { errors, dirtyFields },
@@ -347,14 +345,12 @@ export function ProductionRunForm({
   // Watch facility to filter reactors and storage locations
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedStatus = useWatch({ control, name: "status" });
+  const watchedStartDate = useWatch({ control, name: "startDate" });
 
   // The zone the entered start/end are interpreted in — the facility picked in
   // the form, which can differ from the context facility.
   const formTimezone = resolveFacilityTimezone(facilities, watchedFacilityId);
-  const timezoneHelperText = productionRunTimezoneHelperText(
-    facilities,
-    watchedFacilityId,
-  );
+  const timezoneHelperText = productionRunTimezoneHelperText(facilities, watchedFacilityId, watchedStartDate);
 
   // Watch fields for flow preview
   const watchedReactorId = useWatch({ control, name: "reactorId" });
@@ -412,6 +408,12 @@ export function ProductionRunForm({
     }
     prevFacilityRef.current = watchedFacilityId;
   }, [watchedFacilityId, setValue, productionRun]);
+  useProductionRunTimingZoneSync({
+    timeZone: formTimezone,
+    productionRun,
+    dirtyFields,
+    resetField,
+  });
 
   const defaultSubmitLabel = isEditMode ? "Update Production Run" : "Create Production Run";
 

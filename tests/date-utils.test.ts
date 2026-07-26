@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  AmbiguousLocalTimeError,
   combineDateAndTime,
   DEFAULT_FACILITY_TIMEZONE,
   formatFacilityDate,
@@ -147,29 +148,24 @@ describe("combineDateAndTime across DST transitions", () => {
     ).toBe("2026-03-08T07:30:00.000Z");
   });
 
-  // Documented policy: an ambiguous wall clock resolves to the EARLIER of its
-  // two instants — the pre-transition, still-summer-time offset. Rejecting is
-  // not an option; 01:30 is a wall clock a plant really runs through.
-  it("resolves a fall-back wall clock to the earlier of its two instants", () => {
+  it("rejects a wall clock inside the fall-back fold", () => {
     for (const machineZone of MACHINE_ZONES) {
       process.env.TZ = machineZone;
-      // 01:30 EDT (UTC-4) = 05:30Z, not 01:30 EST (UTC-5) = 06:30Z.
       expect(
-        combineDateAndTime("2026-11-01", "01:30", NEW_YORK).toISOString(),
-      ).toBe("2026-11-01T05:30:00.000Z");
-      // 02:30 CEST (UTC+2) = 00:30Z, not 02:30 CET (UTC+1) = 01:30Z. Zurich is
-      // the case `fromZonedTime` resolved the other way round from New York.
+        () => combineDateAndTime("2026-11-01", "01:30", NEW_YORK),
+      ).toThrow(AmbiguousLocalTimeError);
       expect(
-        combineDateAndTime("2026-10-25", "02:30", ZURICH).toISOString(),
-      ).toBe("2026-10-25T00:30:00.000Z");
+        () => combineDateAndTime("2026-10-25", "02:30", ZURICH),
+      ).toThrow(AmbiguousLocalTimeError);
     }
   });
 
-  it("round-trips an accepted fold time back to the entered wall clock", () => {
+  it("names the repeated time, date and zone in the fold rejection", () => {
     process.env.TZ = "UTC";
-    const instant = combineDateAndTime("2026-11-01", "01:30", NEW_YORK);
-    expect(formatFacilityDate(instant, NEW_YORK)).toBe("2026-11-01");
-    expect(formatFacilityTime(instant, NEW_YORK, "HH:mm")).toBe("01:30");
+    expect(() => combineDateAndTime("2026-11-01", "01:30", NEW_YORK)).toThrow(
+      "01:30 occurs twice on 2026-11-01 in America/New York — clocks move" +
+        " back that day. Enter a time outside the repeated hour.",
+    );
   });
 
   it("leaves a zone without DST untouched", () => {

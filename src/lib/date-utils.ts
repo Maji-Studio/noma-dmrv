@@ -67,6 +67,17 @@ function wallClockIn(instant: Date, timeZone: string): string {
   );
 }
 
+/**
+ * Format an instant as the exact value shown by a facility-local
+ * `datetime-local` input.
+ *
+ * Unlike `formatInTimeZone`, this stays independent of the process timezone
+ * even when the target wall clock falls inside the process timezone's DST gap.
+ */
+export function formatFacilityWallClock(instant: Date, timeZone: string): string {
+  return wallClockIn(instant, timeZone);
+}
+
 /** Signed local-minus-UTC offset of `timeZone` at `instantMs`, in milliseconds. */
 function zoneOffsetMs(instantMs: number, timeZone: string): number {
   return Date.parse(`${wallClockIn(new Date(instantMs), timeZone)}:00.000Z`) - instantMs;
@@ -90,22 +101,30 @@ export function formatFacilityDate(utcDate: Date, timezone: string): string {
   return formatInTimeZone(utcDate, timezone, "yyyy-MM-dd");
 }
 
-/** Get the UTC offset label for an IANA timezone, e.g. "UTC+3" or "UTC-5". */
-export function getUtcOffsetLabel(timezone: string): string {
-  const now = new Date();
+/**
+ * Get the UTC offset label for an IANA timezone at `referenceInstant`, e.g.
+ * "UTC+3" or "UTC-5". The instant matters for zones that observe DST.
+ */
+export function getUtcOffsetLabel(
+  timezone: string,
+  referenceInstant: Date = new Date(),
+): string {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
     timeZoneName: "shortOffset",
-  }).formatToParts(now);
+  }).formatToParts(referenceInstant);
   const offsetPart = parts.find((p) => p.type === "timeZoneName");
   // Returns e.g. "GMT+3" — normalise to "UTC+3"
   return offsetPart?.value.replace("GMT", "UTC") ?? "UTC";
 }
 
-/** Format an IANA timezone for dropdown display, e.g. "Africa/Nairobi (UTC+3)". */
-export function formatTimezoneLabel(timezone: string): string {
+/** Format an IANA timezone for display, e.g. "Africa/Nairobi (UTC+3)". */
+export function formatTimezoneLabel(
+  timezone: string,
+  referenceInstant: Date = new Date(),
+): string {
   const readable = timezone.replace(/_/g, " ");
-  const offset = getUtcOffsetLabel(timezone);
+  const offset = getUtcOffsetLabel(timezone, referenceInstant);
   return `${readable} (${offset})`;
 }
 
@@ -183,6 +202,28 @@ export class NonexistentLocalTimeError extends SafeError {
 }
 
 /**
+ * A wall clock that happens twice because the zone's clocks move backward.
+ * The input does not identify which of the two instants the operator means, so
+ * callers must reject it instead of silently choosing an offset.
+ */
+export class AmbiguousLocalTimeError extends SafeError {
+  readonly dateStr: string;
+  readonly timeStr: string;
+  readonly timeZone: string;
+
+  constructor(dateStr: string, timeStr: string, timeZone: string) {
+    super(
+      `${timeStr} occurs twice on ${dateStr} in ${timeZone.replace(/_/g, " ")}` +
+        ` — clocks move back that day. Enter a time outside the repeated hour.`
+    );
+    this.name = "AmbiguousLocalTimeError";
+    this.dateStr = dateStr;
+    this.timeStr = timeStr;
+    this.timeZone = timeZone;
+  }
+}
+
+/**
  * Combine a date string "YYYY-MM-DD" and a time string "HH:MM" entered against
  * `timeZone` into the UTC instant they denote.
  *
@@ -211,14 +252,9 @@ export class NonexistentLocalTimeError extends SafeError {
  *   above: the run window feeds the telemetry CSV clip and, via the end time,
  *   the registry `measured_at` datapoint.
  * - **Fold** (clocks jump back; the wall clock occurs twice) — both candidates
- *   survive and the **earlier** one wins, i.e. the pre-transition offset that is
- *   still on summer time. Rejecting is not an option: `01:30` is a wall clock a
- *   plant genuinely runs through twice a year, and refusing it would block real
- *   data entry for an hour every autumn. Earlier is chosen because it is the
- *   first moment the clock reads that value, so a run logged forward in time
- *   lands on the occurrence the operator was looking at; it also matches the
- *   `Temporal` `disambiguation: "compatible"` default and `java.time`, and it
- *   keeps a start and an end inside the same fold in entry order.
+ *   survive, so this **throws {@link AmbiguousLocalTimeError}**. Without an
+ *   explicit offset the form cannot know which occurrence the operator means;
+ *   silently choosing one can shift a run window by an hour.
  *
  * Note the deliberate asymmetry with {@link toDateInputValue} below, which pins
  * *date-only* values to UTC (#46): those persist at UTC midnight and carry no
@@ -226,6 +262,7 @@ export class NonexistentLocalTimeError extends SafeError {
  * clock at a physical plant, so it resolves in the plant's zone instead.
  *
  * @throws {NonexistentLocalTimeError} when the wall clock falls in a DST gap.
+ * @throws {AmbiguousLocalTimeError} when the wall clock falls in a DST fold.
  */
 export function combineDateAndTime(
   dateStr: string,
@@ -255,7 +292,10 @@ export function combineDateAndTime(
   if (valid.length === 0) {
     throw new NonexistentLocalTimeError(dateStr, timeStr, timeZone);
   }
-  return new Date(Math.min(...valid));
+  if (new Set(valid).size > 1) {
+    throw new AmbiguousLocalTimeError(dateStr, timeStr, timeZone);
+  }
+  return new Date(valid[0]);
 }
 
 /**

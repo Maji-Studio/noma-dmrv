@@ -12,9 +12,9 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
+  AmbiguousLocalTimeError,
   combineDateAndTime,
-  formatFacilityDate,
-  formatFacilityTime,
+  formatFacilityWallClock,
   formatTimezoneLabel,
   NonexistentLocalTimeError,
   resolveFacilityTimezone,
@@ -41,16 +41,44 @@ export function productionRunTimingDefaults(
 ) {
   const start = run?.startTime ? new Date(run.startTime) : new Date();
   const end = run?.endTime ? new Date(run.endTime) : null;
+  const [startDate, startTime] = formatFacilityWallClock(start, timeZone).split("T");
+  const [endDate = "", endTime = ""] = end
+    ? formatFacilityWallClock(end, timeZone).split("T")
+    : [];
   return {
-    startDate: formatFacilityDate(start, timeZone),
-    startTime: formatFacilityTime(start, timeZone, TIME_INPUT_FORMAT),
-    endDate: end ? formatFacilityDate(end, timeZone) : "",
-    endTime: end ? formatFacilityTime(end, timeZone, TIME_INPUT_FORMAT) : "",
+    startDate,
+    startTime,
+    endDate,
+    endTime,
   };
 }
 
+export type ProductionRunTimingField =
+  | "startDate"
+  | "startTime"
+  | "endDate"
+  | "endTime";
+
 /**
- * The instants a submit writes, or the field a DST gap makes unwritable.
+ * Re-seed facility-local defaults only when the resolved zone actually changed
+ * and the operator has not edited any timing field.
+ */
+export function shouldResetProductionRunTimingDefaults(
+  previousTimeZone: string,
+  nextTimeZone: string,
+  dirtyFields: Partial<Record<ProductionRunTimingField, boolean>>,
+): boolean {
+  return (
+    previousTimeZone !== nextTimeZone &&
+    !dirtyFields.startDate &&
+    !dirtyFields.startTime &&
+    !dirtyFields.endDate &&
+    !dirtyFields.endTime
+  );
+}
+
+/**
+ * The instants a submit writes, or the field a DST gap/fold makes unwritable.
  *
  * `endTime` keeps the three-way meaning the mutation relies on: a `Date` to
  * write, `null` to clear a reopened run's end, `undefined` to leave the stored
@@ -64,10 +92,10 @@ export type ProductionRunWindow =
  * Build a run's start/end instants from the form's date + time pairs in
  * `timeZone`.
  *
- * The gap rejection is returned rather than thrown so the form can pin it to
- * the offending field. In practice the schema's `superRefine` — which shares
- * `combineDateAndTime` and therefore its DST policy — has already blocked
- * submit, so this is the second line of the same defence.
+ * A DST rejection is returned rather than thrown so the form can pin it to the
+ * offending field. In practice the schema's `superRefine` — which shares the
+ * same combiner — has already blocked submit, so this is the second line of the
+ * same defence.
  */
 export function buildProductionRunWindow(input: {
   startDateStr: string;
@@ -82,7 +110,10 @@ export function buildProductionRunWindow(input: {
   try {
     startTime = combineDateAndTime(input.startDateStr, input.startTimeStr, input.timeZone);
   } catch (error) {
-    if (error instanceof NonexistentLocalTimeError) {
+    if (
+      error instanceof NonexistentLocalTimeError ||
+      error instanceof AmbiguousLocalTimeError
+    ) {
       return { ok: false, field: "startTime", message: error.message };
     }
     throw error;
@@ -100,7 +131,10 @@ export function buildProductionRunWindow(input: {
       endTime: combineDateAndTime(input.endDateStr, input.endTimeStr, input.timeZone),
     };
   } catch (error) {
-    if (error instanceof NonexistentLocalTimeError) {
+    if (
+      error instanceof NonexistentLocalTimeError ||
+      error instanceof AmbiguousLocalTimeError
+    ) {
       return { ok: false, field: "endTime", message: error.message };
     }
     throw error;
@@ -118,10 +152,20 @@ export function buildProductionRunWindow(input: {
 export function productionRunTimezoneHelperText(
   facilities: readonly { id: string; timezone: string }[],
   facilityId: string | null | undefined,
+  reference: Date | string = new Date(),
 ): string {
   const resolved = facilityId
     ? facilities.some((facility) => facility.id === facilityId)
     : false;
-  const label = formatTimezoneLabel(resolveFacilityTimezone(facilities, facilityId));
+  const referenceInstant =
+    typeof reference === "string" && /^\d{4}-\d{2}-\d{2}$/.test(reference)
+      ? new Date(`${reference}T12:00:00.000Z`)
+      : reference instanceof Date
+        ? reference
+        : new Date(reference);
+  const label = formatTimezoneLabel(
+    resolveFacilityTimezone(facilities, facilityId),
+    Number.isNaN(referenceInstant.getTime()) ? new Date() : referenceInstant,
+  );
   return resolved ? `Facility time — ${label}` : `Facility time unknown — using ${label}`;
 }

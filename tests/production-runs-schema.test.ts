@@ -184,10 +184,7 @@ describe("makeProductionRunFormSchema DST gap and fold", () => {
     expect(messagesFor(result, "startTime")).toEqual([]);
   });
 
-  // The fold is the opposite call: 01:30 happens twice on 2026-11-01, and both
-  // occurrences are legitimate operating time, so the run is accepted and the
-  // earlier instant is used (see `combineDateAndTime`).
-  it("accepts an ambiguous fall-back wall clock", () => {
+  it("rejects an ambiguous fall-back wall clock on its own field", () => {
     process.env.TZ = "Europe/Zurich";
     const result = makeProductionRunFormSchema(NEW_YORK).safeParse({
       ...completeRun,
@@ -197,7 +194,12 @@ describe("makeProductionRunFormSchema DST gap and fold", () => {
       endTime: "03:00",
     });
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
+    expect(messagesFor(result, "startTime")).toEqual([
+      "01:30 occurs twice on 2026-11-01 in America/New York — clocks move" +
+        " back that day. Enter a time outside the repeated hour.",
+    ]);
+    expect(messagesFor(result, "endTime")).toEqual([]);
   });
 
   it("leaves a run at a facility without DST unaffected", () => {

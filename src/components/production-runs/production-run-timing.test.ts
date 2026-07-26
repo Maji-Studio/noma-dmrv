@@ -3,6 +3,7 @@ import {
   buildProductionRunWindow,
   productionRunTimezoneHelperText,
   productionRunTimingDefaults,
+  shouldResetProductionRunTimingDefaults,
 } from "./production-run-timing";
 
 const originalTz = process.env.TZ;
@@ -13,6 +14,7 @@ afterEach(() => {
 
 const FACILITIES = [
   { id: "facility-a", timezone: "Africa/Dar_es_Salaam" }, // UTC+3
+  { id: "facility-b", timezone: "America/New_York" },
 ];
 
 // QA F-2 read-back half. Fixing only the write side and reading the stored
@@ -49,6 +51,58 @@ describe("productionRunTimingDefaults", () => {
     expect(defaults.endDate).toBe("");
     expect(defaults.endTime).toBe("");
   });
+
+  it("does not roll a facility default through the process timezone's DST gap", () => {
+    process.env.TZ = "Europe/Zurich";
+
+    const defaults = productionRunTimingDefaults(
+      {
+        // 02:30 in Dar es Salaam, which is a nonexistent wall clock in Zurich
+        // on this date. The process timezone must not roll it to 03:30.
+        startTime: new Date("2026-03-28T23:30:00.000Z"),
+        endTime: new Date("2026-03-29T00:30:00.000Z"),
+      },
+      "Africa/Dar_es_Salaam",
+    );
+
+    expect(defaults).toEqual({
+      startDate: "2026-03-29",
+      startTime: "02:30",
+      endDate: "2026-03-29",
+      endTime: "03:30",
+    });
+  });
+});
+
+describe("shouldResetProductionRunTimingDefaults", () => {
+  it("resets untouched defaults when async facility resolution changes the zone", () => {
+    expect(
+      shouldResetProductionRunTimingDefaults("UTC", "Africa/Dar_es_Salaam", {}),
+    ).toBe(true);
+  });
+
+  it.each(["startDate", "startTime", "endDate", "endTime"] as const)(
+    "preserves operator edits when %s is dirty",
+    (field) => {
+      expect(
+        shouldResetProductionRunTimingDefaults(
+          "UTC",
+          "Africa/Dar_es_Salaam",
+          { [field]: true },
+        ),
+      ).toBe(false);
+    },
+  );
+
+  it("does not reset when a facility change keeps the same zone", () => {
+    expect(
+      shouldResetProductionRunTimingDefaults(
+        "Africa/Dar_es_Salaam",
+        "Africa/Dar_es_Salaam",
+        {},
+      ),
+    ).toBe(false);
+  });
 });
 
 // The submit path shares `combineDateAndTime` with the schema, so it inherits
@@ -59,7 +113,7 @@ describe("buildProductionRunWindow", () => {
   const NEW_YORK = "America/New_York";
   const base = {
     startDateStr: "2026-11-01",
-    startTimeStr: "01:30",
+    startTimeStr: "00:30",
     endDateStr: "2026-11-01",
     endTimeStr: "03:00",
     includeEndTime: true,
@@ -67,14 +121,35 @@ describe("buildProductionRunWindow", () => {
     timeZone: NEW_YORK,
   };
 
-  it("resolves an ambiguous fall-back window to its earlier instants", () => {
+  it("reports an ambiguous fall-back start on the start field", () => {
     process.env.TZ = "Europe/Zurich";
-    const result = buildProductionRunWindow(base);
+    const result = buildProductionRunWindow({
+      ...base,
+      startTimeStr: "01:30",
+    });
 
     expect(result).toEqual({
-      ok: true,
-      startTime: new Date("2026-11-01T05:30:00.000Z"),
-      endTime: new Date("2026-11-01T08:00:00.000Z"),
+      ok: false,
+      field: "startTime",
+      message: expect.stringContaining(
+        "01:30 occurs twice on 2026-11-01 in America/New York",
+      ),
+    });
+  });
+
+  it("reports an ambiguous fall-back end on the end field", () => {
+    const result = buildProductionRunWindow({
+      ...base,
+      startTimeStr: "00:30",
+      endTimeStr: "01:30",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      field: "endTime",
+      message: expect.stringContaining(
+        "01:30 occurs twice on 2026-11-01 in America/New York",
+      ),
     });
   });
 
@@ -138,5 +213,22 @@ describe("productionRunTimezoneHelperText", () => {
     expect(productionRunTimezoneHelperText(FACILITIES, "facility-z")).toBe(
       "Facility time unknown — using UTC (UTC+0)",
     );
+  });
+
+  it("uses the entered run date for winter and summer DST offsets", () => {
+    expect(
+      productionRunTimezoneHelperText(
+        FACILITIES,
+        "facility-b",
+        "2026-01-15",
+      ),
+    ).toBe("Facility time — America/New York (UTC-5)");
+    expect(
+      productionRunTimezoneHelperText(
+        FACILITIES,
+        "facility-b",
+        "2026-07-15",
+      ),
+    ).toBe("Facility time — America/New York (UTC-4)");
   });
 });

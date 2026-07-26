@@ -23,6 +23,7 @@ import {
   type ProductionRunStatus,
 } from "@/lib/production-runs/lifecycle";
 import {
+  AmbiguousLocalTimeError,
   combineDateAndTime,
   DEFAULT_FACILITY_TIMEZONE,
   formatLocalDate,
@@ -42,15 +43,18 @@ const DRY_MASS_BALANCE_MESSAGE =
 /**
  * Outcome of {@link resolveInstant}. `instant` is null both when the pair is
  * incomplete/malformed and when the wall clock does not exist; only the latter
- * sets `nonexistentMessage`, so the caller can tell "nothing to check yet" from
- * "the operator entered a time that never happens".
+ * sets `wallClockErrorMessage`, so the caller can tell "nothing to check yet"
+ * from "the operator entered a time that is not a unique instant".
  */
 type ResolvedInstant = {
   instant: Date | null;
-  nonexistentMessage: string | null;
+  wallClockErrorMessage: string | null;
 };
 
-const UNRESOLVED_INSTANT: ResolvedInstant = { instant: null, nonexistentMessage: null };
+const UNRESOLVED_INSTANT: ResolvedInstant = {
+  instant: null,
+  wallClockErrorMessage: null,
+};
 
 /**
  * Resolve a calendar-date value + a time value into a single instant, robust to
@@ -74,7 +78,7 @@ function resolveInstant(
   timeZone: string
 ): ResolvedInstant {
   if (timeVal instanceof Date) {
-    return { instant: timeVal, nonexistentMessage: null };
+    return { instant: timeVal, wallClockErrorMessage: null };
   }
   if (typeof timeVal !== "string" || !TIME_ONLY_RE.test(timeVal)) {
     return UNRESOLVED_INSTANT;
@@ -93,11 +97,14 @@ function resolveInstant(
   try {
     return {
       instant: combineDateAndTime(dateStr, timeVal, timeZone),
-      nonexistentMessage: null,
+      wallClockErrorMessage: null,
     };
   } catch (error) {
-    if (error instanceof NonexistentLocalTimeError) {
-      return { instant: null, nonexistentMessage: error.message };
+    if (
+      error instanceof NonexistentLocalTimeError ||
+      error instanceof AmbiguousLocalTimeError
+    ) {
+      return { instant: null, wallClockErrorMessage: error.message };
     }
     throw error;
   }
@@ -227,23 +234,23 @@ export function makeProductionRunFormSchema(timeZone: string) {
       ? resolveInstant(endDateVal, data.endTime, timeZone)
       : UNRESOLVED_INSTANT;
 
-    // A wall clock inside the facility's spring-forward gap never happened, so
-    // it is reported on its own field and then treated as unresolved. The
+    // A wall clock inside a DST gap or fold is not a unique instant, so it is
+    // reported on its own field and then treated as unresolved. The
     // downstream window checks all guard on a non-null instant, so they stay
     // silent rather than piling a second, misleading message onto the same
     // field ("End must be after start" for a time that has no instant at all).
-    if (start.nonexistentMessage) {
+    if (start.wallClockErrorMessage) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["startTime"],
-        message: start.nonexistentMessage,
+        message: start.wallClockErrorMessage,
       });
     }
-    if (end.nonexistentMessage) {
+    if (end.wallClockErrorMessage) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["endTime"],
-        message: end.nonexistentMessage,
+        message: end.wallClockErrorMessage,
       });
     }
 
