@@ -15,7 +15,7 @@ import { optionalTripType } from "./trip-type";
 import {
   emptyToNull,
   optionalMassKgSchema,
-  storedPercentSchema,
+  optionalStoredPercent,
 } from "./helpers";
 
 // ============================================
@@ -47,10 +47,6 @@ export function resolveDeliveryDistanceSource(
 // ============================================
 
 const optionalNumber = z.number().finite().optional().nullable();
-const optionalStoredPercent = storedPercentSchema()
-  .finite()
-  .optional()
-  .nullable();
 const optionalWetMassKg = optionalMassKgSchema("Wet mass must be >= 0");
 const optionalDryMassKg = optionalMassKgSchema("Dry mass must be >= 0");
 const optionalNote = z.string().max(500, "Note must be less than 500 characters").optional().nullable().or(z.literal(""));
