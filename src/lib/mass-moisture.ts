@@ -47,6 +47,22 @@ export const MOISTURE_FIELD_LABEL = "Moisture (%)";
  * the moisture field's hint everywhere, so an operator never has to guess which
  * convention this app uses.
  */
+/**
+ * Qualify a mass/moisture label with what the mass IS ("Biochar" + "Wet mass
+ * (kg)" -> "Biochar wet mass (kg)").
+ *
+ * Exported because read surfaces need the identical string the form produced —
+ * a detail row and its form field are one label. While this lived privately in
+ * the form component, read surfaces hand-typed the qualified label and drifted.
+ */
+export function qualifyMassLabel(
+  base: string,
+  materialLabel: string | undefined
+): string {
+  if (!materialLabel) return base;
+  return `${materialLabel} ${base.charAt(0).toLowerCase()}${base.slice(1)}`;
+}
+
 export const MOISTURE_BASIS_HINT =
   "Share of the as-received wet mass that is water (wet basis).";
 

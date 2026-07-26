@@ -49,7 +49,12 @@ import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readine
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
-import { formatMoisturePercent } from "@/lib/mass-moisture";
+import {
+  formatMoisturePercent,
+  MOISTURE_FIELD_LABEL,
+  qualifyMassLabel,
+  WET_MASS_FIELD_LABEL,
+} from "@/lib/mass-moisture";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
@@ -689,8 +694,8 @@ export function ProductionRunList() {
             fields: [
               buildProductionRunFeedstockDetailField(sideSheetEntity.feedstocks),
               { label: "Source bin", value: sideSheetEntity.feedstockStorageLocationCode },
-              { label: "Feedstock wet mass (kg)", ...certificationDetailField("productionRun", "feedstockWetMassKg"), value: formatMassKg(sideSheetEntity.feedstockWetMassKg) },
-              { label: "Feedstock moisture (%)", ...certificationDetailField("productionRun", "feedstockMoisturePercent"), value: formatMoisturePercent(sideSheetEntity.feedstockMoisturePercent) },
+              { label: qualifyMassLabel(WET_MASS_FIELD_LABEL, "Feedstock"), ...certificationDetailField("productionRun", "feedstockWetMassKg"), value: formatMassKg(sideSheetEntity.feedstockWetMassKg) },
+              { label: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Feedstock"), ...certificationDetailField("productionRun", "feedstockMoisturePercent"), value: formatMoisturePercent(sideSheetEntity.feedstockMoisturePercent) },
               { label: "Feed rate (kg/hr)", value: sideSheetEntity.feedingRateKgHr != null ? `${sideSheetEntity.feedingRateKgHr} kg/hr` : null },
               { label: "Residence time (min)", value: sideSheetEntity.residenceTimeMinutes != null ? `${sideSheetEntity.residenceTimeMinutes} min` : null },
             ],
@@ -706,8 +711,8 @@ export function ProductionRunList() {
             title: "Output",
             fields: [
               { label: "Biochar storage", value: sideSheetEntity.biocharStorageLocationCode },
-              { label: "Biochar wet mass (kg)", ...certificationDetailField("productionRun", "biocharOutputKg"), value: formatMassKg(sideSheetEntity.biocharOutputKg) },
-              { label: "Biochar moisture (%)", ...certificationDetailField("productionRun", "biocharMoisturePercent"), value: formatMoisturePercent(sideSheetEntity.biocharMoisturePercent) },
+              { label: qualifyMassLabel(WET_MASS_FIELD_LABEL, "Biochar"), ...certificationDetailField("productionRun", "biocharOutputKg"), value: formatMassKg(sideSheetEntity.biocharOutputKg) },
+              { label: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Biochar"), ...certificationDetailField("productionRun", "biocharMoisturePercent"), value: formatMoisturePercent(sideSheetEntity.biocharMoisturePercent) },
             ],
             content: (
               <MoistureSplit

@@ -94,7 +94,7 @@ export async function getStorageLocationsFn(
 }
 
 /**
- * Get a single storage location by ID
+ * Get a single storage bin by ID
  */
 export async function getStorageLocationByIdFn(
   storageLocationId: string
@@ -120,7 +120,7 @@ export async function getStorageLocationByIdFn(
 }
 
 /**
- * Get a storage location with its facility info
+ * Get a storage bin with its facility info
  */
 export async function getStorageLocationWithFacilityFn(
   storageLocationId: string
@@ -146,7 +146,7 @@ export async function getStorageLocationWithFacilityFn(
 }
 
 /**
- * Get storage locations by facility ID
+ * Get storage bins by facility ID
  */
 export async function getStorageLocationsByFacilityFn(
   facilityId: string
@@ -173,7 +173,7 @@ export async function getStorageLocationsByFacilityFn(
 }
 
 /**
- * Check if a storage location code is available
+ * Check if a storage bin code is available
  */
 export async function checkStorageLocationCodeFn(
   code: string,
@@ -205,7 +205,7 @@ export async function checkStorageLocationCodeFn(
 // ============================================
 
 /**
- * Create a new storage location
+ * Create a new storage bin
  */
 export async function createStorageLocationFn(
   data: z.infer<typeof createStorageLocationSchema>
@@ -260,7 +260,7 @@ export async function createStorageLocationFn(
 // ============================================
 
 /**
- * Update an existing storage location
+ * Update an existing storage bin
  */
 export async function updateStorageLocationFn(
   data: z.infer<typeof updateStorageLocationSchema>
@@ -311,7 +311,7 @@ export async function updateStorageLocationFn(
 // ============================================
 
 /**
- * Archive a storage location while retaining all operational history.
+ * Archive a storage bin while retaining all operational history.
  */
 export async function archiveStorageLocationFn(
   data: z.infer<typeof archiveStorageLocationSchema>,
@@ -326,7 +326,7 @@ export async function archiveStorageLocationFn(
 }
 
 /**
- * Restore an individually archived storage location.
+ * Restore an individually archived storage bin.
  */
 export async function restoreStorageLocationFn(
   data: z.infer<typeof restoreStorageLocationSchema>,
@@ -345,7 +345,7 @@ export async function restoreStorageLocationFn(
 // ============================================
 
 /**
- * Delete a storage location
+ * Delete a storage bin
  */
 export async function deleteStorageLocationFn(
   data: z.infer<typeof deleteStorageLocationSchema>

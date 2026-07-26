@@ -169,7 +169,7 @@ async function getStorageLocationLaneSummary(
 // ============================================
 
 /**
- * Get all storage locations with pagination and filtering
+ * Get all storage bins with pagination and filtering
  * Supports search, facility filter, type filter, sorting, and pagination
  */
 export async function getStorageLocations(
@@ -240,7 +240,7 @@ export async function getStorageLocations(
   const totalPages = Math.ceil(total / pageSize);
   const offset = (page - 1) * pageSize;
 
-  // Get storage locations with facility info
+  // Get storage bins with facility info
   const storageLocationList = await db
     .select({
       id: storageLocations.id,
@@ -307,8 +307,8 @@ export async function getStorageLocations(
 }
 
 /**
- * Get a single storage location by ID
- * Returns storage location data without relations
+ * Get a single storage bin by ID
+ * Returns storage bin data without relations
  */
 export async function getStorageLocationById(
   ctx: OrgContext,
@@ -329,7 +329,7 @@ export async function getStorageLocationById(
 }
 
 /**
- * Get a single storage location by ID with facility info
+ * Get a single storage bin by ID with facility info
  */
 export async function getStorageLocationWithFacility(
   ctx: OrgContext,
@@ -393,7 +393,7 @@ export async function getStorageLocationWithFacility(
 }
 
 /**
- * Get storage locations by facility ID
+ * Get storage bins by facility ID
  */
 export async function getStorageLocationsByFacility(
   ctx: OrgContext,
@@ -423,7 +423,7 @@ export async function getStorageLocationsByFacility(
 // ============================================
 
 /**
- * Create a new storage location
+ * Create a new storage bin
  */
 export async function createStorageLocation(
   ctx: OrgContext,
@@ -515,7 +515,7 @@ export async function createStorageLocation(
 // ============================================
 
 /**
- * Update an existing storage location
+ * Update an existing storage bin
  */
 export async function updateStorageLocation(
   ctx: OrgContext,
@@ -535,7 +535,7 @@ export async function updateStorageLocation(
 ): Promise<StorageLocation> {
   requireOrgScope(ctx);
 
-  // Verify storage location exists
+  // Verify storage bin exists
   const [existing] = await db
     .select()
     .from(storageLocations)
@@ -693,7 +693,7 @@ export async function updateStorageLocation(
 // ============================================
 
 /**
- * Archive one storage location without disturbing its operational history.
+ * Archive one storage bin without disturbing its operational history.
  */
 export async function archiveStorageLocation(
   ctx: OrgContext,
@@ -759,7 +759,7 @@ export async function archiveStorageLocation(
 }
 
 /**
- * Restore one archived storage location. Its facility must be active first.
+ * Restore one archived storage bin. Its facility must be active first.
  */
 export async function restoreStorageLocation(
   ctx: OrgContext,
@@ -827,7 +827,7 @@ export async function restoreStorageLocation(
 // ============================================
 
 /**
- * Delete a storage location
+ * Delete a storage bin
  * Permanent deletion is reserved for bins with no operational history.
  */
 export async function deleteStorageLocation(
@@ -836,7 +836,7 @@ export async function deleteStorageLocation(
 ): Promise<void> {
   requireOrgScope(ctx);
 
-  // Verify storage location exists
+  // Verify storage bin exists
   const [existing] = await db
     .select({ id: storageLocations.id })
     .from(storageLocations)
@@ -911,7 +911,7 @@ export async function deleteStorageLocation(
 // ============================================
 
 /**
- * Check if a storage location code is available
+ * Check if a storage bin code is available
  */
 export async function isStorageLocationCodeAvailable(
   ctx: OrgContext,

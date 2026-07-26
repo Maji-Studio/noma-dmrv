@@ -438,7 +438,7 @@ export async function updateProductionRun(
     }
   }
 
-  // Compute effective facility once — used for reactor + storage location validation
+  // Compute effective facility once — used for reactor + storage bin validation
   const targetFacilityId = data.facilityId ?? existing.facilityId;
 
   // Verify reactor belongs to the facility when reactor or facility changes

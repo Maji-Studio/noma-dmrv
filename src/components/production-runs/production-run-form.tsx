@@ -732,7 +732,7 @@ export function ProductionRunForm({
 
         <FormField
           id="biocharStorageLocationId"
-          label="Biochar storage"
+          label="Biochar storage bin"
           error={errors.biocharStorageLocationId?.message}
         >
           <Controller
@@ -743,7 +743,6 @@ export function ProductionRunForm({
                 entityType="storageLocation"
                 value={field.value || undefined}
                 onChange={field.onChange}
-                placeholder="Select storage..."
                 disabled={isSubmitting || !watchedFacilityId}
                 error={!!errors.biocharStorageLocationId}
                 filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "biochar_bin" } : undefined}

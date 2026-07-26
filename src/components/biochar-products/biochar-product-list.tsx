@@ -48,7 +48,12 @@ import { fromCompositionJsonb } from "@/lib/biochar-composition";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
-import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
+import {
+  formatMoisturePercent,
+  MOISTURE_FIELD_LABEL,
+  qualifyMassLabel,
+  WET_MASS_FIELD_LABEL,
+} from "@/lib/mass-moisture";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { EntityDetailValue } from "@/components/ui/entity-detail-value";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
@@ -513,8 +518,8 @@ export function BiocharProductList() {
             title: "Source",
             fields: [
               { label: "Production run", value: displaySideSheet.entity.linkedProductionRun?.code },
-              { label: "Wet mass (kg)", value: formatMassKg(displaySideSheet.entity.massKg) },
-              { label: MOISTURE_FIELD_LABEL, value: formatMoisturePercent(displaySideSheet.entity.moistureContentPercent) },
+              { label: qualifyMassLabel(WET_MASS_FIELD_LABEL, "Biochar"), value: formatMassKg(displaySideSheet.entity.massKg) },
+              { label: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Biochar"), value: formatMoisturePercent(displaySideSheet.entity.moistureContentPercent) },
               { label: "Water added (kg)", value: formatMassKg(displaySideSheet.entity.waterAddedKg) },
               { label: "Density (kg/m³)", value: displaySideSheet.entity.densityKgM3 != null ? `${displaySideSheet.entity.densityKgM3} kg/m³` : null },
             ],

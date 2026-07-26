@@ -20,9 +20,10 @@
  * - `variant="compact"` — bar plus a single line. Nested panels, cards.
  * - `variant="inline"` — text only, no bar. Table cells and option labels.
  *
- * Missing moisture renders as an explicit unresolved state rather than nothing:
- * a fully hatched bar and "Moisture not recorded". Dry mass drives certification
- * readiness, so its absence has to be visible, not silent.
+ * A missing input renders as an explicit unresolved state rather than nothing:
+ * a fully hatched bar naming whichever of wet mass or moisture is absent. Dry
+ * mass drives certification readiness, so its absence has to be visible, not
+ * silent — and has to point at the field that actually needs filling.
  */
 "use client";
 
@@ -60,6 +61,18 @@ interface MoistureSplitProps {
   /** Hide the unresolved state entirely — for surfaces where a blank is fine. */
   hideWhenIncomplete?: boolean;
   className?: string;
+}
+
+/**
+ * Which input the split is waiting on. `splitWetMass` returns null when either
+ * is missing or out of range, and the two gaps send the operator to different
+ * fields, so the unresolved state has to say which. Both missing reads as wet
+ * mass — that is the one entered first.
+ */
+function missingSplitInput(wetMassKg: number | null | undefined): string {
+  const wetOk =
+    wetMassKg != null && Number.isFinite(wetMassKg) && wetMassKg >= 0;
+  return wetOk ? "Moisture" : "Wet mass";
 }
 
 function segmentWidths(split: MassSplit): { dry: number; water: number } {
@@ -120,10 +133,16 @@ export function MoistureSplit({
   if (!split) {
     if (hideWhenIncomplete) return null;
 
+    // The split needs BOTH inputs, so name the one actually missing — telling an
+    // operator "moisture not recorded" when moisture is fine and wet mass is not
+    // sends them to the wrong field, and the unresolved state exists precisely to
+    // make a certification gap visible.
+    const missing = missingSplitInput(wetMassKg);
+
     if (variant === "inline") {
       return (
         <span className={`body-caption text-[var(--color-text-tertiary)] ${className}`}>
-          Moisture not recorded
+          {missing} not recorded
         </span>
       );
     }
@@ -132,7 +151,7 @@ export function MoistureSplit({
       <div className={`flex flex-col gap-6 ${className}`}>
         <UnresolvedBar height={variant === "compact" ? "h-8" : "h-12"} />
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          Moisture not recorded — {dryLabel.toLowerCase()} cannot be derived.
+          {missing} not recorded — {dryLabel.toLowerCase()} cannot be derived.
         </p>
       </div>
     );

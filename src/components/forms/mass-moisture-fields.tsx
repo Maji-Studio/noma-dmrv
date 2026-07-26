@@ -33,6 +33,7 @@ import {
 import {
   MOISTURE_BASIS_HINT,
   MOISTURE_FIELD_LABEL,
+  qualifyMassLabel,
   MOISTURE_RANGE_HELPER,
   parseWatchedNumber,
   WET_MASS_FIELD_LABEL,
@@ -65,11 +66,6 @@ interface MassMoistureInputProps {
   step?: number | string;
 }
 
-function qualifyLabel(base: string, materialLabel: string | undefined): string {
-  if (!materialLabel) return base;
-  return `${materialLabel} ${base.charAt(0).toLowerCase()}${base.slice(1)}`;
-}
-
 /**
  * Moisture percentage input. Carries the wet-basis explainer on every instance —
  * "moisture content" is ambiguous between wet and dry basis in the biochar
@@ -93,7 +89,7 @@ export function MoistureField({
   return (
     <FormField
       id={id}
-      label={label ?? qualifyLabel(MOISTURE_FIELD_LABEL, materialLabel)}
+      label={label ?? qualifyMassLabel(MOISTURE_FIELD_LABEL, materialLabel)}
       error={error}
       helperText={helperText}
       hint={hint}
@@ -135,7 +131,7 @@ export function WetMassField({
   return (
     <FormField
       id={id}
-      label={label ?? qualifyLabel(WET_MASS_FIELD_LABEL, materialLabel)}
+      label={label ?? qualifyMassLabel(WET_MASS_FIELD_LABEL, materialLabel)}
       error={error}
       helperText={helperText}
       hint={hint}
