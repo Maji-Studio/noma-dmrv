@@ -8,7 +8,7 @@ import { FormField, FormInput, FormTextarea, MoistureField } from "@/components/
 import { FormActions } from "@/components/forms/form-actions";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { useToast } from "@/components/ui/toast";
-import { formatMass } from "@/lib/format-utils";
+import { formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { canonicalizeFeedstockStockTake } from "@/lib/calculations/bin-stock-take";
 import {
@@ -82,6 +82,11 @@ function ModeToggle({
   );
 }
 
+/**
+ * Fixed kg throughout this sheet: the book figure, the counted mass and the
+ * delta are the same arithmetic the movement history then prints in kg, so the
+ * operator never confirms "1.2 t" and reads back "+1,200 kg".
+ */
 function previewNumber(value: unknown): number | null {
   const parsed = toNumberOrNull(value);
   return typeof parsed === "number" && Number.isFinite(parsed) ? parsed : null;
@@ -108,7 +113,7 @@ function CurrentStockContext({
           Current derived stock
         </dt>
         <dd className="body-small font-medium text-[var(--color-text-primary)]">
-          {formatMass(binCurrentMassKg(storageLocation))}
+          {formatMassKg(binCurrentMassKg(storageLocation))}
           {isFeedstock ? " dry" : ""}
         </dd>
       </div>
@@ -227,7 +232,6 @@ function StockTakeForm({
         label={countedLabel}
         error={errors.counted?.message}
         required
-        helperText={isFeedstock ? "The physically weighed mass" : undefined}
       >
         <FormInput
           id="counted"
@@ -258,7 +262,7 @@ function StockTakeForm({
           <MoistureSplit
             wetMassKg={countedNum}
             moisturePercent={measuredMoisturePercent}
-            note="Bin stock is held in dry kg, so the counted wet mass is converted before it is compared with the book figure."
+            note="Counted wet mass is converted to dry before comparison."
           />
         </div>
       )}
@@ -278,7 +282,7 @@ function StockTakeForm({
             }`}
           >
             {deltaKg > 0 ? "+" : deltaKg < 0 ? "−" : ""}
-            {formatMass(Math.abs(deltaKg))}
+            {formatMassKg(Math.abs(deltaKg))}
           </span>
         </div>
       )}

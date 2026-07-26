@@ -48,6 +48,12 @@ const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: t
 // Transfer Flow Visual
 // ============================================
 
+/**
+ * The −/+ pair is one readout, so both halves come from the status ramp rather
+ * than mixing a ramp token with an area accent: `--st-wait` for the planned
+ * draw from the source bin (upcoming, not an error — `--st-bad` would read as
+ * a failure) and `--st-ok` for the resulting stock in the destination bin.
+ */
 function TransferFlowPreview({
   sourceBinCode,
   availableKg,
@@ -89,7 +95,7 @@ function TransferFlowPreview({
               {availableKg.toLocaleString()} kg available
             </span>
             {hasMass && (
-              <span className="body-caption font-medium text-[var(--clr-orange)] mt-1">
+              <span className="body-caption font-medium text-[var(--st-wait)] mt-1">
                 &minus;{sourceMassKg.toLocaleString()} kg
               </span>
             )}
@@ -134,7 +140,7 @@ function TransferFlowPreview({
               {destinationBinLabel}
             </span>
             {destinationMassKg !== null && destinationMassKg > 0 && (
-              <span className="body-caption font-medium text-green-600 mt-1">
+              <span className="body-caption font-medium text-[var(--st-ok)] mt-1">
                 +{destinationMassKg.toLocaleString()} kg
               </span>
             )}
@@ -350,12 +356,12 @@ export function BiocharProductForm({
         </ActionableFocusTarget>
       )}
       <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
-      {/* Transfer Preview — a derived recap of the transfer, not a data-entry
+      {/* Transfer preview — a derived recap of the transfer, not a data-entry
           step, so it sits above the numbered spine and only when it has data. */}
       {(linkedRunPreview || selectedStorageLocation || massKgNum != null) && (
         <div className="space-y-12">
           <SectionLabel icon={<FlowArrowIcon size={14} weight="bold" />}>
-            Transfer Preview
+            Transfer preview
           </SectionLabel>
           <TransferFlowPreview
             sourceBinCode={linkedRunPreview?.biocharStorageLocationCode ?? null}
@@ -382,9 +388,8 @@ export function BiocharProductForm({
       >
         <FormField
           id="linkedProductionRunId"
-          label="Production Run"
+          label="Production run"
           error={errors.linkedProductionRunId?.message}
-          helperText="Which production run produced this biochar?"
           required
         >
           <Controller
@@ -467,7 +472,7 @@ export function BiocharProductForm({
 
           <FormField
             id="densityKgM3"
-            label="Density (kg/m3)"
+            label="Density (kg/m³)"
             error={errors.densityKgM3?.message}
           >
             <FormInput
@@ -487,7 +492,7 @@ export function BiocharProductForm({
 
       {/* Destination + Product Details */}
       <FormSection
-        title="Destination & Product"
+        title="Destination & product"
         icon={<PackageIcon size={14} weight="bold" />}
         fields={["formulationId", "storageLocationId"]}
       >
@@ -521,7 +526,7 @@ export function BiocharProductForm({
 
         <FormField
           id="storageLocationId"
-          label="Product Bin"
+          label="Product bin"
           error={errors.storageLocationId?.message}
           helperText={
             selectedFormulationId
@@ -547,7 +552,6 @@ export function BiocharProductForm({
                   formulationId: selectedFormulationId || PURE_PRODUCT_BIN_FILTER,
                 }}
                 allowCreate
-                createLabel="Add New Bin"
                 onCreateNew={() => storageLocationDialog.open()}
               />
             )}

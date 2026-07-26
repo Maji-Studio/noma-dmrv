@@ -31,6 +31,7 @@ import { ApplicationEvidencePanel } from "./application-evidence-panel";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import {
   formatApplicationKgFromTons,
+  formatFieldSizeHa,
   type ApplicationDeliveryOption,
 } from "./mass-utils";
 import type { ApplicationListItem } from "@/data-access/applications";
@@ -88,7 +89,7 @@ function createColumns(
     },
     {
       id: "customer",
-      header: "Customer / Location",
+      header: "Customer / location",
       accessorFn: (row) => `${row.customerName ?? ""} ${row.locationName ?? ""}`.trim(),
       cell: ({ row }) => {
         const { customerName, locationName } = row.original;
@@ -104,7 +105,7 @@ function createColumns(
     },
     {
       accessorKey: "biocharAppliedTons",
-      header: "Biochar Applied (kg)",
+      header: "Biochar applied, wet (kg)",
       cell: ({ row }) => (
         <span className="font-mono">
           {formatApplicationKgFromTons(row.original.biocharAppliedTons)}
@@ -113,7 +114,7 @@ function createColumns(
     },
     {
       accessorKey: "biocharAppliedDryTons",
-      header: "Dry Biochar (kg)",
+      header: "Biochar applied, dry (kg)",
       cell: ({ row }) => (
         <span className="font-mono">
           {formatApplicationKgFromTons(row.original.biocharAppliedDryTons)}
@@ -122,11 +123,9 @@ function createColumns(
     },
     {
       accessorKey: "fieldSizeHa",
-      header: "Field Size",
+      header: "Field size",
       cell: ({ row }) => (
-        <span className="font-mono">
-          {row.original.fieldSizeHa?.toFixed(2) ?? "—"} ha
-        </span>
+        <span className="font-mono">{formatFieldSizeHa(row.original.fieldSizeHa)}</span>
       ),
     },
     {
@@ -535,7 +534,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               !hasActiveFilters ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={18} weight="bold" />
-                  New Application
+                  Create your first field application
                 </Button>
               ) : undefined
             }
@@ -645,19 +644,19 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         size="wide"
         sections={sideSheetEntity ? [
           {
-            title: "Application Details",
+            title: "Application details",
             fields: [
-              { label: "Application Date", value: formatDate(sideSheetEntity.applicationDate) },
+              { label: "Application date", value: formatDate(sideSheetEntity.applicationDate) },
               { label: "Delivery", value: sideSheetEntity.deliveryCode || sideSheetDelivery?.code || null },
               {
-                label: "Biochar Applied, Wet (kg)",
+                label: "Biochar applied, wet (kg)",
                 ...certificationDetailField("application", "biocharAppliedTons"),
                 value: sideSheetEntity.biocharAppliedTons != null
                   ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedTons)
                   : null,
               },
               {
-                label: "Biochar Applied Dry (kg)",
+                label: "Biochar applied, dry (kg)",
                 ...certificationDetailField("application", "biocharAppliedDryTons"),
                 value: sideSheetEntity.biocharAppliedDryTons != null
                   ? formatApplicationKgFromTons(sideSheetEntity.biocharAppliedDryTons)
@@ -666,13 +665,13 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             ],
           },
           {
-            title: "Field Details",
+            title: "Field details",
             fields: [
-              { label: "Field Size (Ha)", value: sideSheetEntity.fieldSizeHa },
-              { label: "Field Identifier", value: sideSheetEntity.fieldIdentifier },
-              { label: "Crop Type", value: sideSheetEntity.cropType },
+              { label: "Field size", value: formatFieldSizeHa(sideSheetEntity.fieldSizeHa) },
+              { label: "Field identifier", value: sideSheetEntity.fieldIdentifier },
+              { label: "Crop type", value: sideSheetEntity.cropType },
               {
-                label: "Application Method",
+                label: "Application method",
                 value: sideSheetEntity.applicationMethodType
                   ? formatApplicationMethod(sideSheetEntity.applicationMethodType as ApplicationMethod)
                   : null,
@@ -682,16 +681,16 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             ],
           },
           {
-            title: "Evidence Method",
+            title: "Evidence",
             fields: [
               {
-                label: "Evidence Method",
+                label: "Evidence method",
                 value: formatApplicationEvidenceMethod(
                   (sideSheetEntity.evidenceMethod ?? "visual") as ApplicationEvidenceMethod,
                 ),
               },
               ...((sideSheetEntity.evidenceMethod ?? "visual") === "boundary"
-                ? [{ label: "GIS Boundary Reference", value: sideSheetEntity.gisBoundaryReference }]
+                ? [{ label: "GIS boundary reference", value: sideSheetEntity.gisBoundaryReference }]
                 : []),
             ],
             content: (
@@ -703,16 +702,16 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
             ),
           },
           ...((sideSheetEntity.durabilityOption ?? durabilityOption) === "1000_year" ? [] : [{
-            title: "Soil Temperature",
+            title: "Soil temperature",
             fields: [
               {
-                label: "Temperature Source",
+                label: "Temperature source",
                 value: sideSheetEntity.soilTemperatureSource
                   ? formatSoilTemperatureSource(sideSheetEntity.soilTemperatureSource as SoilTemperatureSource)
                   : null,
               },
               {
-                label: "Soil Temperature (°C)",
+                label: "Soil temperature (°C)",
                 ...certificationDetailField("application", "soilTemperatureC"),
                 value: sideSheetEntity.soilTemperatureC != null
                   ? `${sideSheetEntity.soilTemperatureC} °C`

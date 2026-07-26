@@ -105,10 +105,10 @@ export function CustomerLocationForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* Location Details Section */}
-      <FormSection title="Location Details" divider={false}>
+      <FormSection title="Location details" divider={false}>
         <FormField
           id="name"
-          label="Location Name"
+          label="Location name"
           error={errors.name?.message}
           required
         >
@@ -141,7 +141,7 @@ export function CustomerLocationForm({
 
           <FormField
             id="stateRegion"
-            label="State / Region"
+            label="State / region"
             error={errors.stateRegion?.message}
           >
             <FormInput
@@ -172,7 +172,7 @@ export function CustomerLocationForm({
 
         <FormField
           id="address"
-          label="Address / Description"
+          label="Address / description"
           error={errors.address?.message}
           required
         >
@@ -187,7 +187,7 @@ export function CustomerLocationForm({
       </FormSection>
 
       {/* GPS Coordinates Section */}
-      <FormSection title="GPS Coordinates">
+      <FormSection title="GPS coordinates">
         <PositionPicker
           idPrefix="gps"
           label="Application site position"
@@ -206,7 +206,7 @@ export function CustomerLocationForm({
       </FormSection>
 
       {/* Soil Defaults Section */}
-      <FormSection title="Soil Defaults">
+      <FormSection title="Soil defaults">
         <FormField
           id="defaultSoilTemperatureC"
           label="Default soil temperature (°C)"

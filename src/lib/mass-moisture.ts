@@ -48,13 +48,14 @@ export const MOISTURE_FIELD_LABEL = "Moisture (%)";
  * convention this app uses.
  */
 export const MOISTURE_BASIS_HINT =
-  "Share of the as-received wet mass that is water (wet basis). 20% moisture on 1,000 kg wet means 200 kg water and 800 kg dry.";
+  "Share of the as-received wet mass that is water (wet basis).";
 
-/** Short always-visible cue under a moisture input. */
+/**
+ * The always-visible cue under a moisture input. Carries the basis as well as
+ * the range: `MOISTURE_BASIS_HINT` sits behind an ⓘ, so this is the only place
+ * the wet basis is on screen without an interaction.
+ */
 export const MOISTURE_RANGE_HELPER = "0–100% of wet mass";
-
-/** Why dry mass matters, for the derived readout's footnote. */
-export const DRY_MASS_DERIVED_NOTE = "Derived from wet mass and moisture. Carbon accounting uses dry mass.";
 
 export interface MassSplit {
   /** As-received mass. */

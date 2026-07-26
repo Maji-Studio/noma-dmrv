@@ -91,12 +91,25 @@ export function formatDateRange(start: DateValue, end: DateValue): string {
 }
 
 /**
- * Format a mass value in kg, auto-converting to tonnes when >= 1000.
- * Returns "—" for null/undefined.
+ * The default mass formatter: kg below a tonne, tonnes at or above it.
+ *
+ * `formatMass` and `formatMassKg` differ in **two** ways, not one — swapping
+ * one for the other changes the number as well as the unit:
+ *
+ * | | unit | precision below 1 t |
+ * | --- | --- | --- |
+ * | `formatMass` | switches to `t` at 1,000 kg (1 decimal) | **whole kg** — `4.5` → `"5 kg"` |
+ * | `formatMassKg` | always `kg` | **1 decimal** — `4.5` → `"4.5 kg"` |
+ *
+ * So reach for `formatMass` for a lone mass, where the tonne switch keeps big
+ * numbers readable and sub-kg precision is noise. Reach for `formatMassKg` when
+ * a set of related figures must stay comparable, or when the fractional part
+ * carries meaning. `formatMass` also returns `"—"` only for null/undefined;
+ * `formatMassKg` additionally catches `NaN`.
  */
 export function formatMass(kg: number | null | undefined): string {
   if (kg == null) return FALLBACK_DISPLAY;
-  if (kg >= 1000) return `${(kg / 1000).toFixed(1)} t`;
+  if (kg >= KG_PER_TONNE) return `${(kg / KG_PER_TONNE).toFixed(1)} t`;
   return `${Math.round(kg).toLocaleString()} kg`;
 }
 
@@ -106,6 +119,8 @@ export function formatMass(kg: number | null | undefined): string {
  * figures (a wet/dry split, a stock-take delta) and mixing "1.1 t" against
  * "900 kg" in the same readout would make them incomparable. Everywhere a lone
  * mass is shown, prefer `formatMass`.
+ *
+ * Note the precision difference as well as the unit one — see `formatMass`.
  */
 export function formatMassKg(kg: number | null | undefined): string {
   if (kg == null || Number.isNaN(kg)) return FALLBACK_DISPLAY;

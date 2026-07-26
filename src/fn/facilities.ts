@@ -201,7 +201,7 @@ export async function getFacilityStorageLocationsFn(
       success: false,
       error: facilityActionError(
         error,
-        "Failed to load facility storage locations",
+        "Failed to load facility storage bins",
         "facility:storage-locations",
       ),
     };

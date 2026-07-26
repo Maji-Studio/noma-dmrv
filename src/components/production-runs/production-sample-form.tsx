@@ -80,8 +80,8 @@ export function ProductionSampleForm({
 
   return (
     <form className="space-y-20" onSubmit={onFormSubmit}>
-      {/* Sample Info */}
-      <FormSection title="Sample Info" divider={false}>
+      {/* Sample info */}
+      <FormSection title="Sample info" divider={false}>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
@@ -101,7 +101,7 @@ export function ProductionSampleForm({
 
           <FormField
             id="sampledById"
-            label="Sampled By"
+            label="Sampled by"
             error={errors.sampledById?.message}
           >
             <Controller
@@ -122,8 +122,8 @@ export function ProductionSampleForm({
         </div>
       </FormSection>
 
-      {/* Physical Measurements */}
-      <FormSection title="Physical Measurements">
+      {/* Physical measurements */}
+      <FormSection title="Physical measurements">
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-16">
           <FormField
@@ -182,8 +182,8 @@ export function ProductionSampleForm({
         </div>
       </FormSection>
 
-      {/* Proximate Analysis */}
-      <FormSection title="Proximate Analysis">
+      {/* Proximate analysis */}
+      <FormSection title="Proximate analysis">
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <MoistureField
@@ -199,7 +199,7 @@ export function ProductionSampleForm({
 
           <FormField
             id="fixedCarbonPercent"
-            label="Fixed Carbon (%)"
+            label="Fixed carbon (%)"
             error={errors.fixedCarbonPercent?.message}
           >
             <FormInput
@@ -217,7 +217,7 @@ export function ProductionSampleForm({
 
           <FormField
             id="volatileMatterPercent"
-            label="Volatile Matter (%)"
+            label="Volatile matter (%)"
             error={errors.volatileMatterPercent?.message}
           >
             <FormInput
@@ -235,7 +235,7 @@ export function ProductionSampleForm({
 
           <FormField
             id="ashContentPercent"
-            label="Ash Content (%)"
+            label="Ash content (%)"
             error={errors.ashContentPercent?.message}
           >
             <FormInput

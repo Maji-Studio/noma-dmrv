@@ -48,7 +48,7 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
-import { formatDate, formatMass, formatMassKg } from "@/lib/format-utils";
+import { formatDate, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
@@ -131,21 +131,21 @@ function createColumns(
       accessorKey: "totalFeedstockMassKg",
       header: "Feedstock wet mass",
       cell: ({ row }) => (
-        <span className="font-mono">{formatMass(row.original.totalFeedstockMassKg)}</span>
+        <span className="font-mono">{formatMassKg(row.original.totalFeedstockMassKg)}</span>
       ),
     },
     {
       accessorKey: "biocharOutputKg",
       header: "Biochar wet mass",
       cell: ({ row }) => (
-        <span className="font-mono">{formatMass(row.original.biocharOutputKg)}</span>
+        <span className="font-mono">{formatMassKg(row.original.biocharOutputKg)}</span>
       ),
     },
     {
       accessorKey: "biocharDryMassKg",
       header: "Biochar dry mass",
       cell: ({ row }) => (
-        <span className="font-mono">{formatMass(row.original.biocharDryMassKg)}</span>
+        <span className="font-mono">{formatMassKg(row.original.biocharDryMassKg)}</span>
       ),
     },
     {
@@ -583,7 +583,7 @@ export function ProductionRunList() {
               !hasActiveFilters ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={20} weight="bold" />
-                  Create Production Run
+                  Create your first production run
                 </Button>
               ) : undefined
             }
@@ -666,7 +666,7 @@ export function ProductionRunList() {
         size="wide"
         sections={sideSheetEntity ? [
           {
-            title: "Run Setup",
+            title: "Run setup",
             fields: [
               { label: "Reactor", value: sideSheetEntity.reactorIdentifier },
               {
@@ -685,14 +685,14 @@ export function ProductionRunList() {
             ],
           },
           {
-            title: "Feedstock & Processing",
+            title: "Feedstock & processing",
             fields: [
               buildProductionRunFeedstockDetailField(sideSheetEntity.feedstocks),
-              { label: "Source Bin", value: sideSheetEntity.feedstockStorageLocationCode },
+              { label: "Source bin", value: sideSheetEntity.feedstockStorageLocationCode },
               { label: "Feedstock wet mass (kg)", ...certificationDetailField("productionRun", "feedstockWetMassKg"), value: formatMassKg(sideSheetEntity.feedstockWetMassKg) },
               { label: "Feedstock moisture (%)", ...certificationDetailField("productionRun", "feedstockMoisturePercent"), value: formatMoisturePercent(sideSheetEntity.feedstockMoisturePercent) },
-              { label: "Feed Rate (kg/hr)", value: sideSheetEntity.feedingRateKgHr != null ? `${sideSheetEntity.feedingRateKgHr} kg/hr` : null },
-              { label: "Residence Time (min)", value: sideSheetEntity.residenceTimeMinutes != null ? `${sideSheetEntity.residenceTimeMinutes} min` : null },
+              { label: "Feed rate (kg/hr)", value: sideSheetEntity.feedingRateKgHr != null ? `${sideSheetEntity.feedingRateKgHr} kg/hr` : null },
+              { label: "Residence time (min)", value: sideSheetEntity.residenceTimeMinutes != null ? `${sideSheetEntity.residenceTimeMinutes} min` : null },
             ],
             content: (
               <MoistureSplit
@@ -705,7 +705,7 @@ export function ProductionRunList() {
           {
             title: "Output",
             fields: [
-              { label: "Biochar Storage", value: sideSheetEntity.biocharStorageLocationCode },
+              { label: "Biochar storage", value: sideSheetEntity.biocharStorageLocationCode },
               { label: "Biochar wet mass (kg)", ...certificationDetailField("productionRun", "biocharOutputKg"), value: formatMassKg(sideSheetEntity.biocharOutputKg) },
               { label: "Biochar moisture (%)", ...certificationDetailField("productionRun", "biocharMoisturePercent"), value: formatMoisturePercent(sideSheetEntity.biocharMoisturePercent) },
             ],
@@ -720,14 +720,14 @@ export function ProductionRunList() {
           {
             title: "Energy",
             fields: [
-              { label: "Startup / Plant Diesel (L)", ...certificationDetailField("productionRun", "dieselOperationLiters"), value: sideSheetEntity.dieselOperationLiters != null ? `${sideSheetEntity.dieselOperationLiters} L` : null },
-              { label: "Genset Diesel (L)", ...certificationDetailField("productionRun", "dieselGensetLiters"), value: sideSheetEntity.dieselGensetLiters != null ? `${sideSheetEntity.dieselGensetLiters} L` : null },
-              { label: "Preprocess Fuel (L)", ...certificationDetailField("productionRun", "preprocessingFuelLiters"), value: sideSheetEntity.preprocessingFuelLiters != null ? `${sideSheetEntity.preprocessingFuelLiters} L` : null },
+              { label: "Startup / plant diesel (L)", ...certificationDetailField("productionRun", "dieselOperationLiters"), value: sideSheetEntity.dieselOperationLiters != null ? `${sideSheetEntity.dieselOperationLiters} L` : null },
+              { label: "Genset diesel (L)", ...certificationDetailField("productionRun", "dieselGensetLiters"), value: sideSheetEntity.dieselGensetLiters != null ? `${sideSheetEntity.dieselGensetLiters} L` : null },
+              { label: "Preprocess fuel (L)", ...certificationDetailField("productionRun", "preprocessingFuelLiters"), value: sideSheetEntity.preprocessingFuelLiters != null ? `${sideSheetEntity.preprocessingFuelLiters} L` : null },
               { label: "Electricity (kWh)", ...certificationDetailField("productionRun", "electricityKwh"), value: sideSheetEntity.electricityKwh != null ? `${sideSheetEntity.electricityKwh} kWh` : null },
             ],
           },
           {
-            title: "Readings CSV Import",
+            title: "Readings CSV import",
             fields: [
               buildProductionRunReadingsDetailField(
                 sideSheetEntity.status,
@@ -742,7 +742,7 @@ export function ProductionRunList() {
             ),
           },
           {
-            title: "Samples & Incidents",
+            title: "Samples & incidents",
             fields: [],
             content: (
               <div className="space-y-20">

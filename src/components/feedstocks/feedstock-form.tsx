@@ -312,7 +312,7 @@ export function FeedstockForm({
         <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
         {/* Delivery Information */}
         <FormSection
-          title="Delivery Information"
+          title="Delivery information"
           icon={<CalendarIcon size={14} weight="bold" />}
           fields={["facilityId", "deliveryDate", "supplierId"]}
         >
@@ -333,7 +333,7 @@ export function FeedstockForm({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormField
               id="deliveryDate"
-              label="Delivery Date"
+              label="Delivery date"
               error={errors.deliveryDate?.message}
               required
             >
@@ -365,9 +365,9 @@ export function FeedstockForm({
 
         {/* Transport Details */}
         <FormSection
-          title="Transport Details"
+          title="Transport details"
           icon={<MapPinIcon size={14} weight="bold" />}
-          hint="We record the one-way distance plus the delivery wet mass as one road transport leg. Return trips double the distance at emissions time; Isometric applies the emission factor."
+          hint="One-way distance plus the delivery wet mass, recorded as one road transport leg."
           fields={["vehicleId", "transportDistanceKm", "transportTripType"]}
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
@@ -399,7 +399,7 @@ export function FeedstockForm({
                 certifyStatus={transportDistanceCertStatus}
                 helperText={
                   storedDistanceKm != null
-                    ? "One-way supplier › facility distance, autofilled from the supplier; return trips are doubled at emissions time. Override if the route differs."
+                    ? "Supplier › facility distance, autofilled from the supplier. Override if the route differs."
                     : "Set a one-way distance on the supplier (or its default location) to autofill this."
                 }
               >
@@ -478,7 +478,7 @@ export function FeedstockForm({
             <FormEntitySelect
               control={formControl}
               name="feedstockTypeId"
-              label="Feedstock Type"
+              label="Feedstock type"
               entityType="feedstockType"
               placeholder="Select feedstock type..."
               disabled={isSubmitting}
@@ -520,7 +520,7 @@ export function FeedstockForm({
         {/* Bin Allocations — only shown after feedstock type is selected */}
         {watchedFeedstockTypeId ? (
           <FormSection
-            title="Bin Allocations"
+            title="Bin allocations"
             icon={<StackIcon size={14} weight="bold" />}
             actions={
               !isEditMode && (

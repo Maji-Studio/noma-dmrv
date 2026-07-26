@@ -65,7 +65,7 @@ const entityConfig: Record<
   "storage-location": {
     icon: WarehouseIcon,
     path: "/storage-locations",
-    label: "Storage Location",
+    label: "Storage bin",
   },
   supplier: { icon: UsersIcon, path: "/suppliers", label: "Supplier" },
   customer: { icon: UsersIcon, path: "/customers", label: "Customer" },
@@ -73,14 +73,14 @@ const entityConfig: Record<
   "production-run": {
     icon: FactoryIcon,
     path: "/production-runs",
-    label: "Production Run",
+    label: "Production run",
   },
   sample: { icon: FlaskIcon, path: "/samples", label: "Sample" },
   formulation: { icon: FlaskIcon, path: "/formulations", label: "Formulation" },
   "biochar-product": {
     icon: PackageIcon,
     path: "/biochar-products",
-    label: "Biochar Product",
+    label: "Biochar product",
   },
   order: { icon: ShoppingCartIcon, path: "/orders", label: "Order" },
   delivery: { icon: TruckIcon, path: "/deliveries", label: "Delivery" },
@@ -88,7 +88,7 @@ const entityConfig: Record<
   "credit-batch": {
     icon: CertificateIcon,
     path: "/credit-batches",
-    label: "Credit Batch",
+    label: "Credit batch",
   },
 };
 
@@ -150,7 +150,7 @@ interface ViewRelatedGroupProps {
 
 export function ViewRelatedGroup({
   children,
-  label = "View Related",
+  label = "View related",
   className,
 }: ViewRelatedGroupProps) {
   return (

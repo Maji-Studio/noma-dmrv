@@ -11,15 +11,15 @@
  *
  * Spine steps (Evidence & Transport sit OUTSIDE the `<form>` element — they
  * nest their own forms — but FormSpine numbers them on the same rail):
- * 1. Sample Info - credit batch, samplingTime, lab details
- * 2. Carbon Analysis - totalCarbonPercent, organicCarbonPercent, inorganicCarbonPercent
- * 3. Elemental - H, N, O, S percentages
- * 4. Proximate - ash, moisture
- * 5. Physical - bulkDensity, pH, saltContent
- * 6. Stability - H:C ratio, O:C ratio (durability tier shown, from the batch)
+ * 1. Sample information - credit batch, samplingTime, lab details
+ * 2. Carbon analysis - totalCarbonPercent, organicCarbonPercent, inorganicCarbonPercent
+ * 3. Elemental analysis - H, N, O, S percentages
+ * 4. Proximate analysis - ash, moisture
+ * 5. Physical properties - bulkDensity, pH, saltContent
+ * 6. Stability ratios - H:C ratio, O:C ratio (durability tier shown, from the batch)
  * (+2 conditional, 1000-year batches) R₀ reflectance · TGA non-reactive carbon
- * 7. Nutrient Claims (conditional) - P, K, Mg, Ca, Fe
- * 8. Evidence & Documents
+ * 7. Nutrient claims (conditional) - P, K, Mg, Ca, Fe
+ * 8. Evidence & documents
  * 9. Transport (lab shipment legs)
  */
 "use client";
@@ -251,7 +251,7 @@ export function SampleForm({
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
       <FormField
         id="hToCOrgRatio"
-        label="H:C org Ratio"
+        label="H:C org ratio"
         error={errors.hToCOrgRatio?.message}
         helperText="Auto-calculated from H% and C_org%"
         certifyRequired={isSampleCertifyField("hToCOrgRatio")}
@@ -271,7 +271,7 @@ export function SampleForm({
 
       <FormField
         id="oToCOrgRatio"
-        label="O:C org Ratio"
+        label="O:C org ratio"
         error={errors.oToCOrgRatio?.message}
         helperText="Enter to override, or leave blank to derive from O% and C_org%"
         certifyRequired={isSampleCertifyField("oToCOrgRatio")}
@@ -334,13 +334,13 @@ export function SampleForm({
       <form id={formId} onSubmit={handleFormSubmit}>
         {/* ── Sample Information ── */}
         <FormSection
-          title="Sample Information"
+          title="Sample information"
           icon={<FlaskIcon size={14} weight="bold" />}
           fields={["creditBatchId", "samplingTime", "analysisDate", "labName", "labAccreditation", "weightGrams", "volumeMl"]}
         >
               <FormField
                 id="creditBatchId"
-                label="Credit Batch"
+                label="Credit batch"
                 error={errors.creditBatchId?.message}
                 required
               >
@@ -368,7 +368,7 @@ export function SampleForm({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="samplingTime"
-                  label="Sampling Time"
+                  label="Sampling time"
                   error={errors.samplingTime?.message}
                   required
                 >
@@ -385,7 +385,7 @@ export function SampleForm({
 
                 <FormField
                   id="analysisDate"
-                  label="Analysis Date"
+                  label="Analysis date"
                   error={errors.analysisDate?.message}
                 >
                   <FormInput
@@ -403,7 +403,7 @@ export function SampleForm({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="labName"
-                  label="Lab Name"
+                  label="Lab name"
                   error={errors.labName?.message}
                 >
                   <FormInput
@@ -418,7 +418,7 @@ export function SampleForm({
 
                 <FormField
                   id="labAccreditation"
-                  label="Lab Accreditation"
+                  label="Lab accreditation"
                   error={errors.labAccreditation?.message}
                 >
                   <FormInput
@@ -435,7 +435,7 @@ export function SampleForm({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="weightGrams"
-                  label="Sample Weight (g)"
+                  label="Sample weight (g)"
                   error={errors.weightGrams?.message}
                 >
                   <FormInput
@@ -453,7 +453,7 @@ export function SampleForm({
 
                 <FormField
                   id="volumeMl"
-                  label="Sample Volume (mL)"
+                  label="Sample volume (mL)"
                   error={errors.volumeMl?.message}
                 >
                   <FormInput
@@ -473,14 +473,14 @@ export function SampleForm({
 
         {/* ── Carbon Analysis ── */}
         <FormSection
-          title="Carbon Analysis"
+          title="Carbon analysis"
           icon={<FireIcon size={14} weight="bold" />}
           fields={["totalCarbonPercent", "organicCarbonPercent", "inorganicCarbonPercent"]}
         >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="totalCarbonPercent"
-                  label="Total Carbon (%)"
+                  label="Total carbon (%)"
                   error={errors.totalCarbonPercent?.message}
                   required
                 >
@@ -499,7 +499,7 @@ export function SampleForm({
 
                 <FormField
                   id="organicCarbonPercent"
-                  label="Organic Carbon (%)"
+                  label="Organic carbon (%)"
                   error={errors.organicCarbonPercent?.message}
                   helperText="Basis for the H:Corg / O:Corg eligibility ratios and durable-carbon accounting (both tiers)."
                   required
@@ -522,7 +522,7 @@ export function SampleForm({
 
               <FormField
                 id="inorganicCarbonPercent"
-                label="Inorganic Carbon (%)"
+                label="Inorganic carbon (%)"
                 error={errors.inorganicCarbonPercent?.message}
               >
                 <FormInput
@@ -541,7 +541,7 @@ export function SampleForm({
 
         {/* ── Elemental Analysis ── */}
         <FormSection
-          title="Elemental Analysis"
+          title="Elemental analysis"
           icon={<AtomIcon size={14} weight="bold" />}
           fields={["totalHydrogenPercent", "totalNitrogenPercent", "totalOxygenPercent", "totalSulfurPercent"]}
         >
@@ -622,14 +622,14 @@ export function SampleForm({
 
         {/* ── Proximate Analysis ── */}
         <FormSection
-          title="Proximate Analysis"
+          title="Proximate analysis"
           icon={<ScalesIcon size={14} weight="bold" />}
           fields={["ashContentPercent", "moistureContentPercent"]}
         >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                 <FormField
                   id="ashContentPercent"
-                  label="Ash Content (%)"
+                  label="Ash content (%)"
                   error={errors.ashContentPercent?.message}
                 >
                   <FormInput
@@ -660,14 +660,14 @@ export function SampleForm({
 
         {/* ── Physical Properties ── */}
         <FormSection
-          title="Physical Properties"
+          title="Physical properties"
           icon={<CubeIcon size={14} weight="bold" />}
           fields={["bulkDensityKgPerM3", "ph", "saltContentGPerKg"]}
         >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
               <FormField
                 id="bulkDensityKgPerM3"
-                label="Bulk Density (kg/m³)"
+                label="Bulk density (kg/m³)"
                 error={errors.bulkDensityKgPerM3?.message}
               >
                 <FormInput
@@ -705,7 +705,7 @@ export function SampleForm({
 
               <FormField
                 id="saltContentGPerKg"
-                label="Salt Content (g/kg)"
+                label="Salt content (g/kg)"
                 error={errors.saltContentGPerKg?.message}
               >
                 <FormInput
@@ -725,7 +725,7 @@ export function SampleForm({
 
         {/* ── Stability Ratios ── */}
         <FormSection
-          title="Stability Ratios"
+          title="Stability ratios"
           icon={<CalculatorIcon size={14} weight="bold" />}
           fields={["hToCOrgRatio", "oToCOrgRatio"]}
         >
@@ -755,8 +755,7 @@ export function SampleForm({
                       required by the universal eligibility check (H/C_org &lt;
                       0.5, O/C_org &lt; 0.2) — a sample missing either ratio
                       doesn&apos;t count toward the batch&apos;s replicate
-                      minimum. H:Corg auto-calculates from H% and C_org%; O:Corg
-                      derives from O% and C_org% unless you enter it.
+                      minimum.
                     </p>
                     {stabilityRatioFields}
                   </div>
@@ -775,14 +774,14 @@ export function SampleForm({
         {watchedDurabilityOption === "1000_year" && (
           <>
             <FormSection
-              title="1000-Year Durability · R₀ Reflectance"
+              title="1000-year durability · R₀ reflectance"
               icon={<EyeIcon size={14} weight="bold" />}
               fields={["randomReflectanceR0Percent", "sReflectanceFraction", "r0MeasurementCount", "r0AnalysisDate"]}
             >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                   <FormField
                     id="randomReflectanceR0Percent"
-                    label="Mean Random Reflectance R₀ (%)"
+                    label="Mean random reflectance R₀ (%)"
                     error={errors.randomReflectanceR0Percent?.message}
                     certifyRequired={isSampleCertifyField("randomReflectanceR0Percent")}
                     certifyStatus={certStatus("randomReflectanceR0Percent")}
@@ -802,7 +801,7 @@ export function SampleForm({
 
                   <FormField
                     id="sReflectanceFraction"
-                    label="R₀ Readings at or above 2% (%)"
+                    label="R₀ readings at or above 2% (%)"
                     helperText="Share of ISO 7404-5 reflectance readings meeting the 1000-year threshold."
                     error={errors.sReflectanceFraction?.message}
                     certifyRequired={isSampleCertifyField("sReflectanceFraction")}
@@ -836,7 +835,7 @@ export function SampleForm({
 
                   <FormField
                     id="r0MeasurementCount"
-                    label="Measurement Count"
+                    label="Measurement count"
                     error={errors.r0MeasurementCount?.message}
                   >
                     <FormInput
@@ -856,7 +855,7 @@ export function SampleForm({
 
                 <FormField
                   id="r0AnalysisDate"
-                  label="R₀ Analysis Date"
+                  label="R₀ analysis date"
                   error={errors.r0AnalysisDate?.message}
                 >
                   <FormInput
@@ -872,14 +871,14 @@ export function SampleForm({
             </FormSection>
 
             <FormSection
-              title="TGA Non-Reactive Carbon"
+              title="TGA non-reactive carbon"
               icon={<ThermometerIcon size={14} weight="bold" />}
               fields={["reactiveCarbonPercent", "residualCarbonPercent", "tgaAnalysisDate"]}
             >
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-20">
                   <FormField
                     id="reactiveCarbonPercent"
-                    label="Reactive Carbon (%)"
+                    label="Reactive carbon (%)"
                     error={errors.reactiveCarbonPercent?.message}
                     certifyRequired={isSampleCertifyField("reactiveCarbonPercent")}
                     certifyStatus={certStatus("reactiveCarbonPercent")}
@@ -899,7 +898,7 @@ export function SampleForm({
 
                   <FormField
                     id="residualCarbonPercent"
-                    label="Residual (Non-Reactive) Carbon (%)"
+                    label="Residual (non-reactive) carbon (%)"
                     error={errors.residualCarbonPercent?.message}
                     certifyRequired={isSampleCertifyField("residualCarbonPercent")}
                     certifyStatus={certStatus("residualCarbonPercent")}
@@ -920,7 +919,7 @@ export function SampleForm({
 
                 <FormField
                   id="tgaAnalysisDate"
-                  label="TGA Analysis Date"
+                  label="TGA analysis date"
                   error={errors.tgaAnalysisDate?.message}
                 >
                   <FormInput

@@ -223,11 +223,14 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     return onSubmit(normalized as DeliveryFormData);
   });
 
+  // All three branches describe the same quantity — the one-way facility ›
+  // destination distance the field's own label names — so none of them
+  // re-qualifies it. Round-trip doubling is the Trip type field's job.
   const distanceHelperText = !watchOrderId
-    ? "Select an order to load the destination's stored one-way distance."
+    ? "Select an order to load the destination's stored distance."
     : storedDistanceKm == null
-      ? "No stored distance for this destination — add it on the customer location. A one-off manual one-way distance is still possible. Return trips are doubled at emissions time."
-      : "One-way facility › destination distance, prefilled from the customer location; return trips are doubled at emissions time. Edit only when routing differs.";
+      ? "No stored distance for this destination — add it on the customer location, or enter a one-off distance here."
+      : "Facility › destination distance. Edit only when routing differs.";
 
   return (
     // The wrapper div absorbs the side-sheet Body's direct-child flex-col
@@ -237,12 +240,12 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       {/* Delivery Information Section */}
       <FormSection
-        title="Delivery Information"
+        title="Delivery information"
         icon={<CalendarIcon size={14} weight="bold" />}
         fields={["deliveryDate", "status", "orderId"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="deliveryDate" label="Delivery Date" error={errors.deliveryDate?.message} required>
+          <FormField id="deliveryDate" label="Delivery date" error={errors.deliveryDate?.message} required>
             <FormInput
               id="deliveryDate"
               type="date"

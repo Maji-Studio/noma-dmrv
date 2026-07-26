@@ -76,7 +76,7 @@ function createColumns(
     },
     {
       accessorKey: "deliveryDate",
-      header: "Delivery Date",
+      header: "Delivery date",
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <CalendarIcon size={16} className="text-[var(--color-text-tertiary)]" />
@@ -100,7 +100,7 @@ function createColumns(
     },
     {
       accessorKey: "feedstockTypeName",
-      header: "Feedstock Type",
+      header: "Feedstock type",
       cell: ({ row }) => (
         <div className="flex flex-col">
           <span>{row.original.feedstockTypeName || "\u2014"}</span>
@@ -112,23 +112,25 @@ function createColumns(
         </div>
       ),
     },
+    // Wet and dry sit side by side, so both stay in fixed kg — auto-tonne
+    // rounds a 1,500 / 1,470 pair to "1.5 t" twice and hides the water.
     {
       accessorKey: "massWetKg",
       header: "Wet mass",
       cell: ({ row }) => (
-        <span className="font-mono">{formatMass(row.original.massWetKg)}</span>
+        <span className="font-mono">{formatMassKg(row.original.massWetKg)}</span>
       ),
     },
     {
       accessorKey: "massDryKg",
       header: "Dry mass",
       cell: ({ row }) => (
-        <span className="font-mono">{formatMass(row.original.massDryKg)}</span>
+        <span className="font-mono">{formatMassKg(row.original.massDryKg)}</span>
       ),
     },
     {
       accessorKey: "storageLocationName",
-      header: "Storage Bin",
+      header: "Storage bin",
       cell: ({ row }) => (
         <span>{row.original.storageLocationCode ?? row.original.storageLocationName ?? "\u2014"}</span>
       ),
@@ -465,7 +467,9 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
       : sideSheetEntity
         ? [
             sideSheetEntity.feedstockTypeName,
-            formatMass(sideSheetEntity.massDryKg),
+            // Fixed kg: the sheet body and the table columns below are all kg,
+            // and auto-tonne would print a rounded "1.5 t" over a "1,530 kg" row.
+            formatMassKg(sideSheetEntity.massDryKg),
             sideSheetEntity.storageLocationCode,
           ].filter(Boolean).join(" · ") || "Feedstock"
         : undefined;
@@ -512,16 +516,12 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             padding="md"
             icon={<PackageIcon size={48} />}
             title={hasActiveSearch ? "No matching feedstocks" : "No feedstocks yet"}
-            description={
-              hasActiveSearch
-                ? "Try clearing your search."
-                : "Create your first feedstock to get started"
-            }
+            description={hasActiveSearch ? "Try clearing your search." : undefined}
             action={
               !hasActiveSearch ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={18} weight="bold" />
-                  New Feedstock
+                  Create your first feedstock
                 </Button>
               ) : undefined
             }
@@ -570,14 +570,14 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
         editLabel="Edit Feedstock"
         sections={sideSheetEntity ? [
           {
-            title: "Delivery Information",
+            title: "Delivery information",
             fields: [
-              { label: "Delivery Date", value: formatDate(sideSheetEntity.deliveryDate) },
+              { label: "Delivery date", value: formatDate(sideSheetEntity.deliveryDate) },
               { label: "Supplier", value: sideSheetEntity.supplierName },
             ],
           },
           {
-            title: "Transport Details",
+            title: "Transport details",
             fields: [
               { label: "Vehicle", value: sideSheetEntity.vehiclePlateNumber },
               {
@@ -606,7 +606,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
           {
             title: "Material",
             fields: [
-              { label: "Feedstock Type", value: sideSheetEntity.feedstockTypeName },
+              { label: "Feedstock type", value: sideSheetEntity.feedstockTypeName },
               {
                 label: "Total wet mass (kg)",
                 ...certificationDetailField("feedstock", "massWetKg"),
@@ -627,11 +627,11 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             ),
           },
           {
-            title: "Bin Allocations",
+            title: "Bin allocations",
             fields: [
-              { label: "Storage Bin", value: sideSheetEntity.storageLocationCode ?? sideSheetEntity.storageLocationName },
+              { label: "Storage bin", value: sideSheetEntity.storageLocationCode ?? sideSheetEntity.storageLocationName },
               { label: "Allocated wet mass (kg)", value: formatMassKg(sideSheetEntity.massWetKg) },
-              { label: "Override Justification", value: sideSheetEntity.overrideJustification },
+              { label: "Override justification", value: sideSheetEntity.overrideJustification },
             ],
           },
           {
@@ -639,7 +639,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             fields: [{ label: "Notes", value: sideSheetEntity.notes }],
           },
           {
-            title: "Transport Evidence",
+            title: "Transport evidence",
             fields: [],
             content: (
               <TransportEvidencePanel
@@ -652,7 +652,7 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             ),
           },
           {
-            title: "Derived Transport",
+            title: "Derived transport",
             fields: [],
             content: <TransportLegsSummary entityType="feedstock" entityId={sideSheetEntity.id} />,
           },

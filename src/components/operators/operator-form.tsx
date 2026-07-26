@@ -75,7 +75,7 @@ export function OperatorForm({
 
         <FormField
           id="contactPhone"
-          label="Contact Phone"
+          label="Contact phone"
           error={errors.contactPhone?.message}
         >
           <FormInput

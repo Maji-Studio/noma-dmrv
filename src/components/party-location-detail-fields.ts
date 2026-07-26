@@ -31,11 +31,11 @@ export function buildPartyLocationDetailFields(
   return rows.flatMap((location, index) => {
     const prefix = locations.length > 1 ? `Location ${index + 1} · ` : "";
     const fields: DetailPanelField[] = [
-      { label: `${prefix}Location Name`, value: location?.name ?? null },
+      { label: `${prefix}Location name`, value: location?.name ?? null },
       { label: `${prefix}Country`, value: location?.country ?? null },
-      { label: `${prefix}State / Region`, value: location?.stateRegion ?? null },
+      { label: `${prefix}State / region`, value: location?.stateRegion ?? null },
       { label: `${prefix}City`, value: location?.city ?? null },
-      { label: `${prefix}Address / Description`, value: location?.address ?? null },
+      { label: `${prefix}Address / description`, value: location?.address ?? null },
       { label: `${prefix}${options.positionLabel} latitude`, value: location?.gpsLatitude ?? null },
       { label: `${prefix}${options.positionLabel} longitude`, value: location?.gpsLongitude ?? null },
     ];

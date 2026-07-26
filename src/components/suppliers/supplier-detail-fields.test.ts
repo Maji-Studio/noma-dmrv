@@ -8,7 +8,7 @@ describe("buildSupplierFallbackDistanceField", () => {
       legacySupplierDistanceKm: 18.5,
       locationsLoaded: true,
     })).toMatchObject({
-      label: "Distance to Facility",
+      label: "Distance to facility",
       value: "18.5 km",
       certifyRequired: true,
       certifyStatus: "satisfied",

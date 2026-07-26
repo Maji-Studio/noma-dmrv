@@ -90,7 +90,7 @@ export function VehicleForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
         <FormField
           id="vehicleType"
-          label="Vehicle Type"
+          label="Vehicle type"
           error={errors.vehicleType?.message}
           required
         >
@@ -106,7 +106,7 @@ export function VehicleForm({
 
         <FormField
           id="fuelType"
-          label="Fuel Type"
+          label="Fuel type"
           error={errors.fuelType?.message}
         >
           <FormSelect
@@ -124,7 +124,7 @@ export function VehicleForm({
         {!isElectric && (
           <FormField
             id="fuelConsumptionLPer100Km"
-            label="Fuel Consumption (L/100 km)"
+            label="Fuel consumption (L/100 km)"
             error={errors.fuelConsumptionLPer100Km?.message}
           >
             <FormInput
@@ -143,7 +143,7 @@ export function VehicleForm({
 
         <FormField
           id="modelYear"
-          label="Model Year"
+          label="Model year"
           error={errors.modelYear?.message}
         >
           <FormInput

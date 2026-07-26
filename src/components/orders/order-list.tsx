@@ -325,8 +325,8 @@ export function OrderList() {
             padding="md"
             icon={<PackageIcon size={48} />}
             title={hasActiveFilters ? "No orders found" : "No orders yet"}
-            description={hasActiveFilters ? "Try adjusting your search or filters." : "Create your first order to get started."}
-            action={!hasActiveFilters ? <Button variant="primary" onClick={openCreate}><PlusIcon size={20} weight="bold" />Create Order</Button> : undefined}
+            description={hasActiveFilters ? "Try adjusting your search or filters." : undefined}
+            action={!hasActiveFilters ? <Button variant="primary" onClick={openCreate}><PlusIcon size={20} weight="bold" />Create your first order</Button> : undefined}
           />
         }
       >
@@ -378,22 +378,22 @@ export function OrderList() {
           sideSheetEntity
             ? [
                 {
-                  title: "Order Information",
+                  title: "Order information",
                   fields: [
-                    { label: "Order Date", value: formatDate(sideSheetEntity.orderDate) },
+                    { label: "Order date", value: formatDate(sideSheetEntity.orderDate) },
                   ],
                 },
                 {
-                  title: "Customer Details",
+                  title: "Customer details",
                   fields: [
                     { label: "Customer", value: sideSheetEntity.customerName },
                     { label: "Customer location", value: sideSheetEntity.customerLocationName },
                   ],
                 },
                 {
-                  title: "Product Details",
+                  title: "Product details",
                   fields: [
-                    { label: "Biochar Product", value: sideSheetEntity.biocharProductCode },
+                    { label: "Biochar product", value: sideSheetEntity.biocharProductCode },
                     { label: "Packaging", value: <span className="capitalize">{sideSheetEntity.packaging}</span> },
                     { label: "Quantity (kg)", value: `${sideSheetEntity.quantityKg.toLocaleString()} kg` },
                     { label: "Value", value: sideSheetEntity.value },

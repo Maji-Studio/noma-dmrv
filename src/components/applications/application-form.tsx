@@ -3,9 +3,10 @@
  * Reusable application form with React Hook Form integration
  *
  * Form sections:
- * 1. Application Details — applicationDate, delivery, biocharAppliedTons + auto-calculated dry mass card
- * 2. Field Details — fieldSizeHa, fieldIdentifier, cropType, GPS coordinates
- * 3. Soil Temperature — soilTemperatureSource (enum toggle), soilTemperatureC
+ * 1. Application details — applicationDate, delivery, biocharAppliedTons + auto-calculated dry mass card
+ * 2. Field details — fieldSizeHa, fieldIdentifier, cropType, GPS coordinates
+ * 3. Evidence — evidenceMethod, gisBoundaryReference, evidence panel
+ * 4. Soil temperature — soilTemperatureSource (enum toggle), soilTemperatureC
  */
 "use client";
 
@@ -21,7 +22,6 @@ import type { z } from "zod";
 import { PackageIcon, MapPinIcon, CameraIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormSelect, FormSection, FormSpine, PositionPicker, FormActions, makeCertFieldStatus } from "@/components/forms";
 import { MoistureSplit } from "@/components/ui/moisture-split";
-import { DRY_MASS_DERIVED_NOTE } from "@/lib/mass-moisture";
 import {
   applicationFormSchema,
   applicationEvidenceMethods,
@@ -83,7 +83,12 @@ const evidenceMethodDescriptions: Record<ApplicationEvidenceMethod, string> = {
  * The applied wet mass split into dry matter and water. Unlike the other
  * mass/moisture surfaces the operator does not type the moisture here — it
  * comes from the chosen delivery — so the panel's job is to explain where the
- * dry figure came from, and to say plainly when the delivery cannot supply one.
+ * dry figure came from.
+ *
+ * Without a delivery moisture there is no split to draw, and the unresolved
+ * state is already carried by the "Biochar applied, dry (kg)" input this form
+ * swaps in — the control the operator has to act on. The panel stays silent
+ * rather than restating that input's own helper text beside it.
  */
 function AppliedMassSplit({
   appliedKg,
@@ -92,19 +97,13 @@ function AppliedMassSplit({
   appliedKg: number | null | undefined;
   moisturePercent: number | null | undefined;
 }) {
-  const hasMoisture = moisturePercent != null;
-  const hasApplied = appliedKg != null && appliedKg > 0;
+  if (moisturePercent == null) return null;
 
-  if (!hasMoisture && !hasApplied) return null;
+  const hasApplied = appliedKg != null && appliedKg > 0;
 
   return (
     <div className="col-span-full border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12">
-      {!hasMoisture ? (
-        <p className="body-small text-[var(--color-text-tertiary)]">
-          The selected delivery has no moisture reading, so dry mass cannot be derived. Enter it
-          manually above, or add moisture to the delivery record.
-        </p>
-      ) : !hasApplied ? (
+      {!hasApplied ? (
         <p className="body-small text-[var(--color-text-tertiary)]">
           Enter the wet mass applied to see the dry mass this delivery&rsquo;s moisture implies.
         </p>
@@ -112,7 +111,7 @@ function AppliedMassSplit({
         <MoistureSplit
           wetMassKg={appliedKg}
           moisturePercent={moisturePercent}
-          note={`Moisture from the delivery record. ${DRY_MASS_DERIVED_NOTE}`}
+          note="Moisture from the delivery record."
         />
       )}
     </div>
@@ -358,12 +357,12 @@ export function ApplicationForm({
       <FormSpine control={control}>
       {/* === Section 1: Application Details === */}
       <FormSection
-        title="Application Details"
+        title="Application details"
         icon={<PackageIcon size={14} weight="bold" />}
         fields={["applicationDate", "deliveryId", "biocharAppliedTons", "biocharAppliedDryTons"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="applicationDate" label="Application Date" error={errors.applicationDate?.message} required>
+          <FormField id="applicationDate" label="Application date" error={errors.applicationDate?.message} required>
             <FormInput
               id="applicationDate"
               type="date"
@@ -458,12 +457,12 @@ export function ApplicationForm({
 
       {/* === Section 2: Field Details === */}
       <FormSection
-        title="Field Details"
+        title="Field details"
         icon={<MapPinIcon size={14} weight="bold" />}
         fields={["fieldSizeHa", "fieldIdentifier", "cropType", "applicationMethodType", "gpsLatitude", "gpsLongitude"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="fieldSizeHa" label="Field Size (Ha)" error={errors.fieldSizeHa?.message}>
+          <FormField id="fieldSizeHa" label="Field size (ha)" error={errors.fieldSizeHa?.message}>
             <FormInput
               id="fieldSizeHa"
               type="number"
@@ -479,7 +478,7 @@ export function ApplicationForm({
 
           <FormField
             id="fieldIdentifier"
-            label="Field Identifier"
+            label="Field identifier"
             error={errors.fieldIdentifier?.message}
             helperText="Field name or parcel ID"
           >
@@ -495,7 +494,7 @@ export function ApplicationForm({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="cropType" label="Crop Type" error={errors.cropType?.message}>
+          <FormField id="cropType" label="Crop type" error={errors.cropType?.message}>
             <FormInput
               id="cropType"
               type="text"
@@ -508,7 +507,7 @@ export function ApplicationForm({
 
           <FormField
             id="applicationMethodType"
-            label="Application Method"
+            label="Application method"
             error={errors.applicationMethodType?.message}
           >
             <FormSelect
@@ -540,8 +539,10 @@ export function ApplicationForm({
       </FormSection>
 
       {/* === Section 3: Evidence === */}
+      {/* Named "Evidence", not "Evidence method": the section carries the
+          declared method AND what proves it (GIS reference, uploaded files). */}
       <FormSection
-        title="Evidence Method"
+        title="Evidence"
         icon={<CameraIcon size={14} weight="bold" />}
         hint="Isometric requires one of two evidence paths per application: geotagged stage photos, or a GIS boundary map with logbook quantities (Biochar Storage in Soil module §8.5)."
         fields={["evidenceMethod", "gisBoundaryReference"]}
@@ -584,7 +585,7 @@ export function ApplicationForm({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <FormField
               id="gisBoundaryReference"
-              label="GIS Boundary Reference"
+              label="GIS boundary reference"
               error={errors.gisBoundaryReference?.message}
               helperText="Link to GIS layer data"
             >
@@ -613,7 +614,7 @@ export function ApplicationForm({
           Woolf 2021 200-year durable fraction (ADR 0021). */}
       {!hideSoilTemperature && (
       <FormSection
-        title="Soil Temperature"
+        title="Soil temperature"
         icon={<ThermometerIcon size={14} weight="bold" />}
         hint="Used in the Isometric 200-year durability calculation."
         fields={["soilTemperatureSource", "soilTemperatureC"]}
@@ -621,7 +622,7 @@ export function ApplicationForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="soilTemperatureSource"
-            label="Temperature Source"
+            label="Temperature source"
             error={errors.soilTemperatureSource?.message}
           >
             <FormSelect
@@ -636,7 +637,7 @@ export function ApplicationForm({
 
           <FormField
             id="soilTemperatureC"
-            label="Soil Temperature (°C)"
+            label="Soil temperature (°C)"
             error={errors.soilTemperatureC?.message}
             helperText="Annual average for this application site"
             certifyRequired={isApplicationCertifyField("soilTemperatureC")}

@@ -50,7 +50,7 @@ export function FeedstockEvidenceSection({
 }: FeedstockEvidenceSectionProps) {
   return (
     <FormSection
-      title="Transport Evidence"
+      title="Transport evidence"
       icon={<PaperclipIcon size={14} weight="bold" />}
       __spine={__spine}
     >

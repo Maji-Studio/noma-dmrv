@@ -153,7 +153,7 @@ function ReadinessCell({ summary }: { summary: RemovalPreflightSummary }) {
   if (state === "ready") {
     return (
       <span className="flex flex-col gap-4">
-        <span className="inline-flex items-center gap-6 body-caption text-[var(--color-signal-green)]">
+        <span className="inline-flex items-center gap-6 body-caption text-[var(--st-ok)]">
           <CheckCircleIcon size={16} weight="fill" aria-hidden />
           Ready to submit
         </span>

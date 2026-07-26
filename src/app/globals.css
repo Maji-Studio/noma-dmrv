@@ -169,9 +169,6 @@
   --color-signal-orange: #f59723ff;
   --color-signal-orange-strong: #f59723ff;
   --color-signal-orange-light: #f5972326;
-  /* DEPRECATED: use --st-ok (signal-green now aliases the status ramp) */
-  --color-signal-green: var(--st-ok);
-  --color-signal-green-light: rgba(23, 116, 74, 0.15);
 
   /* ===== STATUS COLORS ===== */
   --color-status-success: var(--st-ok);

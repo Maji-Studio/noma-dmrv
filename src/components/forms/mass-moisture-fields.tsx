@@ -52,7 +52,7 @@ interface MassMoistureInputProps {
   required?: boolean;
   disabled?: boolean;
   placeholder?: string;
-  /** Extra always-visible cue appended after the canonical one. */
+  /** Overrides the short always-visible cue rendered under the input. */
   helperText?: string;
   hint?: ReactNode;
   certifyRequired?: boolean;

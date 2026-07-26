@@ -239,11 +239,11 @@ export function FormulationForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* Required Fields Section */}
-      <FormSection title="Required Information" divider={false}>
+      <FormSection title="Required information" divider={false}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="name"
-            label="Formulation Name"
+            label="Formulation name"
             error={errors.name?.message}
             required
           >
@@ -261,7 +261,7 @@ export function FormulationForm({
 
       {/* Blend Composition — biochar and ingredients partition one whole */}
       <FormSection
-        title="Blend Composition"
+        title="Blend composition"
         hint="Shares are percentages of the solid blend. Water is tracked on the product, so the total may stay under 100%."
         actions={
           <Button
@@ -350,7 +350,7 @@ export function FormulationForm({
                 <FormEntitySelect
                   control={formControl}
                   name={`ingredients.${index}.feedstockTypeId`}
-                  label="Blend Material"
+                  label="Blend material"
                   entityType="feedstockType"
                   placeholder="Select a blend material..."
                   disabled={isSubmitting}
@@ -414,7 +414,7 @@ export function FormulationForm({
       </FormSection>
 
       {/* Description Section */}
-      <FormSection title="Additional Information">
+      <FormSection title="Additional information">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <div className="md:col-span-2">
             <FormField

@@ -1,3 +1,11 @@
+/**
+ * StorageLocationCard — one bin tile in the storage board.
+ *
+ * Every mass here is fixed kg (`formatMassKg`), matching the detail sheet the
+ * card opens: a card reading "1.5 t" above a sheet reading "1,470 kg" for the
+ * same bin is the incoherence this rule prevents. Facility-wide roll-ups (the
+ * KPI strip, the lane headers) keep auto-tonne `formatMass`.
+ */
 "use client";
 
 import {
@@ -13,7 +21,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { RowActionsMenu } from "@/components/ui";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
-import { formatDateTime, formatMass } from "@/lib/format-utils";
+import { formatDateTime, formatMassKg } from "@/lib/format-utils";
 import {
   binAccentStyle,
   binCapacityPercent,
@@ -86,12 +94,12 @@ export function StorageLocationCard({
               <span
                 className={`inline-flex min-w-0 items-center gap-4 body-caption ${
                   lastActivity.type === "in"
-                    ? "text-[var(--color-signal-green)]"
+                    ? "text-[var(--st-ok)]"
                     : "text-[var(--color-signal-orange)]"
                 }`}
                 title={`${lastActivity.label} · ${
                   lastActivity.type === "in" ? "+" : "−"
-                }${formatMass(lastActivity.massKg)}`}
+                }${formatMassKg(lastActivity.massKg)}`}
               >
                 {lastActivity.type === "in" ? (
                   <ArrowUpIcon className="shrink-0" size={12} weight="bold" />
@@ -122,13 +130,13 @@ export function StorageLocationCard({
                   : "text-[var(--color-text-primary)]"
             }`}
           >
-            {isEmpty ? "Empty" : formatMass(currentMassKg)}
+            {isEmpty ? "Empty" : formatMassKg(currentMassKg)}
           </span>
           {/* Capacity context only when a capacity is set — uncapped stores
               (e.g. biochar piles) just show their mass. */}
           {hasCapacity && (
             <span className="shrink-0 body-caption text-[var(--color-text-tertiary)]">
-              {capacityPercent}% of {formatMass(storageLocation.capacityKg)}
+              {capacityPercent}% of {formatMassKg(storageLocation.capacityKg)}
             </span>
           )}
         </div>
@@ -178,17 +186,17 @@ export function StorageLocationCard({
           storageLocation.feedstockInventory.pendingDryMassKg > 0 && (
             <p className="flex items-center gap-4 body-caption text-[var(--clr-orange)]">
               <WarningIcon size={12} weight="fill" />
-              {formatMass(storageLocation.feedstockInventory.pendingDryMassKg)}{" "}
+              {formatMassKg(storageLocation.feedstockInventory.pendingDryMassKg)}{" "}
               pending completion
             </p>
           )}
 
         {storageLocation.type === "product_bin" &&
           storageLocation.productInventory.appliedApplicationCount > 0 && (
-            <p className="flex items-center gap-4 body-caption text-[var(--color-signal-green)]">
+            <p className="flex items-center gap-4 body-caption text-[var(--st-ok)]">
               <CheckCircleIcon size={12} weight="fill" />
               Applied{" "}
-              {formatMass(storageLocation.productInventory.appliedDryMassKg)}
+              {formatMassKg(storageLocation.productInventory.appliedDryMassKg)}
               <span className="mx-2">·</span>
               {storageLocation.productInventory.appliedApplicationCount}{" "}
               {storageLocation.productInventory.appliedApplicationCount === 1

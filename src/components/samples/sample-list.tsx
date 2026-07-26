@@ -111,12 +111,12 @@ function createColumns(
     },
     {
       accessorKey: "samplingTime",
-      header: "Sampling Time",
+      header: "Sampling time",
       cell: ({ row }) => formatDateTime(row.original.samplingTime),
     },
     {
       id: "creditBatch",
-      header: "Credit Batch",
+      header: "Credit batch",
       accessorFn: (row) => row.creditBatchCode ?? "",
       cell: ({ row }) => (
         <span className="text-[var(--clr-dark-purple)]">
@@ -136,7 +136,7 @@ function createColumns(
     },
     {
       accessorKey: "hToCOrgRatio",
-      header: "H:C Ratio",
+      header: "H:C ratio",
       cell: ({ row }) => row.original.hToCOrgRatio?.toFixed(3) ?? "\u2014",
     },
     {
@@ -613,7 +613,7 @@ export function SampleList({
               !hasActiveFilters ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={20} weight="bold" />
-                  Create Sample
+                  Create your first lab sample
                 </Button>
               ) : undefined
             }
@@ -672,27 +672,27 @@ export function SampleList({
         editLabel="Edit Sample"
         sections={displaySideSheet?.mode === "view" && displaySideSheet.entity ? [
           {
-            title: "Sample Information",
+            title: "Sample information",
             fields: [
-              { label: "Credit Batch", value: displaySideSheet.entity.creditBatchCode },
-              { label: "Sampling Time", value: formatDateTime(displaySideSheet.entity.samplingTime) },
-              { label: "Analysis Date", value: formatDate(displaySideSheet.entity.analysisDate) },
-              { label: "Lab Name", value: displaySideSheet.entity.labName },
-              { label: "Lab Accreditation", value: displaySideSheet.entity.labAccreditation },
-              { label: "Sample Weight (g)", value: displaySideSheet.entity.weightGrams },
-              { label: "Sample Volume (mL)", value: displaySideSheet.entity.volumeMl },
+              { label: "Credit batch", value: displaySideSheet.entity.creditBatchCode },
+              { label: "Sampling time", value: formatDateTime(displaySideSheet.entity.samplingTime) },
+              { label: "Analysis date", value: formatDate(displaySideSheet.entity.analysisDate) },
+              { label: "Lab name", value: displaySideSheet.entity.labName },
+              { label: "Lab accreditation", value: displaySideSheet.entity.labAccreditation },
+              { label: "Sample weight (g)", value: displaySideSheet.entity.weightGrams },
+              { label: "Sample volume (mL)", value: displaySideSheet.entity.volumeMl },
             ],
           },
           {
-            title: "Carbon Analysis",
+            title: "Carbon analysis",
             fields: [
-              { label: "Total Carbon (%)", value: formatPercent(displaySideSheet.entity.totalCarbonPercent) },
-              { label: "Organic Carbon (%)", ...certificationDetailField("sample", "organicCarbonPercent"), value: formatPercent(displaySideSheet.entity.organicCarbonPercent) },
-              { label: "Inorganic Carbon (%)", value: formatPercent(displaySideSheet.entity.inorganicCarbonPercent) },
+              { label: "Total carbon (%)", value: formatPercent(displaySideSheet.entity.totalCarbonPercent) },
+              { label: "Organic carbon (%)", ...certificationDetailField("sample", "organicCarbonPercent"), value: formatPercent(displaySideSheet.entity.organicCarbonPercent) },
+              { label: "Inorganic carbon (%)", value: formatPercent(displaySideSheet.entity.inorganicCarbonPercent) },
             ],
           },
           {
-            title: "Elemental Analysis",
+            title: "Elemental analysis",
             fields: [
               { label: "Hydrogen (%)", value: formatPercent(displaySideSheet.entity.totalHydrogenPercent) },
               { label: "Nitrogen (%)", value: formatPercent(displaySideSheet.entity.totalNitrogenPercent) },
@@ -701,49 +701,49 @@ export function SampleList({
             ],
           },
           {
-            title: "Proximate Analysis",
+            title: "Proximate analysis",
             fields: [
-              { label: "Ash Content (%)", value: formatPercent(displaySideSheet.entity.ashContentPercent) },
+              { label: "Ash content (%)", value: formatPercent(displaySideSheet.entity.ashContentPercent) },
               { label: MOISTURE_FIELD_LABEL, value: formatMoisturePercent(displaySideSheet.entity.moistureContentPercent) },
             ],
           },
           {
-            title: "Physical Properties",
+            title: "Physical properties",
             fields: [
-              { label: "Bulk Density (kg/m³)", value: displaySideSheet.entity.bulkDensityKgPerM3 },
+              { label: "Bulk density (kg/m³)", value: displaySideSheet.entity.bulkDensityKgPerM3 },
               { label: "pH", value: displaySideSheet.entity.ph != null ? String(displaySideSheet.entity.ph) : null },
-              { label: "Salt Content (g/kg)", value: displaySideSheet.entity.saltContentGPerKg },
+              { label: "Salt content (g/kg)", value: displaySideSheet.entity.saltContentGPerKg },
             ],
           },
           {
-            title: "Stability Ratios",
+            title: "Stability ratios",
             fields: [
-              { label: "Inherited Durability", value: formatDurabilityOption(displaySideSheet.entity.durabilityOption) },
-              { label: "H:C org Ratio", ...certificationDetailField("sample", "hToCOrgRatio"), value: displaySideSheet.entity.hToCOrgRatio?.toFixed(4) ?? null },
-              { label: "O:C org Ratio", ...certificationDetailField("sample", "oToCOrgRatio"), value: displaySideSheet.entity.oToCOrgRatio?.toFixed(4) ?? null },
+              { label: "Inherited durability", value: formatDurabilityOption(displaySideSheet.entity.durabilityOption) },
+              { label: "H:C org ratio", ...certificationDetailField("sample", "hToCOrgRatio"), value: displaySideSheet.entity.hToCOrgRatio?.toFixed(4) ?? null },
+              { label: "O:C org ratio", ...certificationDetailField("sample", "oToCOrgRatio"), value: displaySideSheet.entity.oToCOrgRatio?.toFixed(4) ?? null },
             ],
           },
           ...(displaySideSheet.entity.durabilityOption === "1000_year" ? [
             {
-              title: "1000-Year Durability · R₀ Reflectance",
+              title: "1000-year durability · R₀ reflectance",
               fields: [
-                { label: "Mean Random Reflectance R₀ (%)", ...certificationDetailField("sample", "randomReflectanceR0Percent"), value: formatPercent(displaySideSheet.entity.randomReflectanceR0Percent) },
-                { label: "R₀ Readings at or above 2% (%)", ...certificationDetailField("sample", "sReflectanceFraction"), value: displaySideSheet.entity.sReflectanceFraction == null ? null : formatPercent(displaySideSheet.entity.sReflectanceFraction * 100) },
-                { label: "Measurement Count", value: displaySideSheet.entity.r0MeasurementCount },
-                { label: "R₀ Analysis Date", value: formatDate(displaySideSheet.entity.r0AnalysisDate) },
+                { label: "Mean random reflectance R₀ (%)", ...certificationDetailField("sample", "randomReflectanceR0Percent"), value: formatPercent(displaySideSheet.entity.randomReflectanceR0Percent) },
+                { label: "R₀ readings at or above 2% (%)", ...certificationDetailField("sample", "sReflectanceFraction"), value: displaySideSheet.entity.sReflectanceFraction == null ? null : formatPercent(displaySideSheet.entity.sReflectanceFraction * 100) },
+                { label: "Measurement count", value: displaySideSheet.entity.r0MeasurementCount },
+                { label: "R₀ analysis date", value: formatDate(displaySideSheet.entity.r0AnalysisDate) },
               ],
             },
             {
-              title: "TGA Non-Reactive Carbon",
+              title: "TGA non-reactive carbon",
               fields: [
-                { label: "Reactive Carbon (%)", ...certificationDetailField("sample", "reactiveCarbonPercent"), value: formatPercent(displaySideSheet.entity.reactiveCarbonPercent) },
-                { label: "Residual (Non-Reactive) Carbon (%)", ...certificationDetailField("sample", "residualCarbonPercent"), value: formatPercent(displaySideSheet.entity.residualCarbonPercent) },
-                { label: "TGA Analysis Date", value: formatDate(displaySideSheet.entity.tgaAnalysisDate) },
+                { label: "Reactive carbon (%)", ...certificationDetailField("sample", "reactiveCarbonPercent"), value: formatPercent(displaySideSheet.entity.reactiveCarbonPercent) },
+                { label: "Residual (non-reactive) carbon (%)", ...certificationDetailField("sample", "residualCarbonPercent"), value: formatPercent(displaySideSheet.entity.residualCarbonPercent) },
+                { label: "TGA analysis date", value: formatDate(displaySideSheet.entity.tgaAnalysisDate) },
               ],
             },
           ] : []),
           {
-            title: "Nutrient Claims",
+            title: "Nutrient claims",
             fields: [
               { label: "Enable nutrient claims", value: displaySideSheet.entity.nutrientClaimEnabled ? "Yes" : "No" },
               ...(displaySideSheet.entity.nutrientClaimEnabled ? [
@@ -756,7 +756,7 @@ export function SampleList({
             ],
           },
           {
-            title: "Evidence & Documents",
+            title: "Evidence & documents",
             fields: [],
             content: <SampleDocumentsPanel sampleId={displaySideSheet.entity.id} readOnly />,
           },

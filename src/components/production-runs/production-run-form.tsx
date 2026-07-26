@@ -360,7 +360,7 @@ export function ProductionRunForm({
   const { data: selectedSourceBin } = useEntityById("storageLocation", watchedSourceBinId || undefined);
   const { data: selectedDestBin } = useEntityById("storageLocation", watchedDestBinId || undefined);
 
-  // Inline "Add New Bin" quick-add for the Biochar Storage select.
+  // Inline quick-add for the Biochar Storage select.
   const biocharBinDialog = useQuickAddDialog();
 
   // Watch wet mass + moisture for dry mass preview
@@ -480,9 +480,9 @@ export function ProductionRunForm({
     <div className="space-y-20">
       <form id={formId} onSubmit={handleFormSubmit}>
       <FormSpine control={control}>
-      {/* ── Run Setup ── */}
+      {/* ── Run setup ── */}
       <FormSection
-        title="Run Setup"
+        title="Run setup"
         icon={<FactoryIcon size={14} weight="bold" />}
         fields={["reactorId", "status", "cancellationReason", "startDate", "startTime", "endDate", "endTime", "operatorId"]}
       >
@@ -546,7 +546,7 @@ export function ProductionRunForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="startDate"
-            label="Start Date"
+            label="Start date"
             error={errors.startDate?.message}
             helperText={timezoneHelperText}
             required
@@ -554,7 +554,7 @@ export function ProductionRunForm({
             <FormInput id="startDate" type="date" disabled={isSubmitting} error={!!errors.startDate} {...register("startDate")} />
           </FormField>
 
-          <FormField id="startTime" label="Start Time" error={errors.startTime?.message} required>
+          <FormField id="startTime" label="Start time" error={errors.startTime?.message} required>
             <FormInput
               id="startTime"
               type="time"
@@ -580,7 +580,7 @@ export function ProductionRunForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="endDate"
-            label="End Date"
+            label="End date"
             error={errors.endDate?.message}
             helperText="Leave the end blank until the run finishes. For an overnight run, set the next day."
           >
@@ -593,7 +593,7 @@ export function ProductionRunForm({
             />
           </FormField>
 
-          <FormField id="endTime" label="End Time" error={errors.endTime?.message}>
+          <FormField id="endTime" label="End time" error={errors.endTime?.message}>
             <FormInput
               id="endTime"
               type="time"
@@ -624,9 +624,9 @@ export function ProductionRunForm({
         </div>
       </FormSection>
 
-      {/* ── Feedstock & Processing ── */}
+      {/* ── Feedstock & processing ── */}
       <FormSection
-        title="Feedstock & Processing"
+        title="Feedstock & processing"
         icon={<PlantIcon size={14} weight="bold" />}
         fields={[
           "feedstockStorageLocationId",
@@ -644,7 +644,7 @@ export function ProductionRunForm({
         )}
         <FormField
           id="feedstockStorageLocationId"
-          label="Source Bin"
+          label="Source bin"
           error={errors.feedstockStorageLocationId?.message}
         >
           <Controller
@@ -689,7 +689,7 @@ export function ProductionRunForm({
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField id="feedingRateKgHr" label="Feed Rate (kg/hr)" error={errors.feedingRateKgHr?.message}>
+          <FormField id="feedingRateKgHr" label="Feed rate (kg/hr)" error={errors.feedingRateKgHr?.message}>
             <FormInput
               id="feedingRateKgHr"
               type="number"
@@ -703,7 +703,7 @@ export function ProductionRunForm({
             />
           </FormField>
 
-          <FormField id="residenceTimeMinutes" label="Residence Time (min)" error={errors.residenceTimeMinutes?.message}>
+          <FormField id="residenceTimeMinutes" label="Residence time (min)" error={errors.residenceTimeMinutes?.message}>
             <FormInput
               id="residenceTimeMinutes"
               type="number"
@@ -732,7 +732,7 @@ export function ProductionRunForm({
 
         <FormField
           id="biocharStorageLocationId"
-          label="Biochar Storage"
+          label="Biochar storage"
           error={errors.biocharStorageLocationId?.message}
         >
           <Controller
@@ -748,7 +748,6 @@ export function ProductionRunForm({
                 error={!!errors.biocharStorageLocationId}
                 filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "biochar_bin" } : undefined}
                 allowCreate={!!watchedFacilityId}
-                createLabel="Add New Bin"
                 onCreateNew={() => biocharBinDialog.open()}
               />
             )}
@@ -794,8 +793,8 @@ export function ProductionRunForm({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="dieselOperationLiters"
-            label="Startup / Plant Diesel (L)"
-            hint="Diesel for reactor startup and running on-site plant equipment during this run — not the generator. Shown as “Startup / Plant Diesel” on the Energy page."
+            label="Startup / plant diesel (L)"
+            hint="Diesel for reactor startup and on-site plant equipment during this run — not the generator."
             error={errors.dieselOperationLiters?.message}
             certifyRequired={isProductionRunCertifyField("dieselOperationLiters")}
             certifyStatus={certStatus("dieselOperationLiters")}
@@ -815,7 +814,7 @@ export function ProductionRunForm({
 
           <FormField
             id="dieselGensetLiters"
-            label="Genset Diesel (L)"
+            label="Genset diesel (L)"
             hint="Diesel burned by the generator that supplied this run's electricity."
             error={errors.dieselGensetLiters?.message}
             certifyRequired={isProductionRunCertifyField("dieselGensetLiters")}
@@ -836,7 +835,7 @@ export function ProductionRunForm({
 
           <FormField
             id="preprocessingFuelLiters"
-            label="Preprocess Fuel (L)"
+            label="Preprocess fuel (L)"
             hint="Fuel used to dry, chip, or otherwise prepare the feedstock before pyrolysis."
             error={errors.preprocessingFuelLiters?.message}
             certifyRequired={isProductionRunCertifyField("preprocessingFuelLiters")}
@@ -879,13 +878,13 @@ export function ProductionRunForm({
 
       </FormSection>
 
-      {/* ── Readings CSV Import ── */}
-      <FormSection title="Readings CSV Import" icon={<FileCsvIcon size={14} weight="bold" />}>
+      {/* ── Readings CSV import ── */}
+      <FormSection title="Readings CSV import" icon={<FileCsvIcon size={14} weight="bold" />}>
 
         <FormField
           id="readingsCsv"
           label="Readings CSV"
-          helperText="Upload a readings CSV (timestamp_utc, temperature_c, pressure_bar, plus optional dryer/reactor frequency). A file may span multiple UTC days; rows inside the run's time window populate the readings table below."
+          helperText="Columns: timestamp_utc, temperature_c, pressure_bar (dryer/reactor frequency optional). Rows inside the run's window fill the table below."
           certifyRequired={readingsCertification.certifyRequired}
           certifyStatus={readingsCertification.certifyStatus}
         >

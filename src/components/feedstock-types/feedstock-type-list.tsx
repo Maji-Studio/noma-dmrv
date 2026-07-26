@@ -473,7 +473,7 @@ export function FeedstockTypeList({ canManage }: FeedstockTypeListProps) {
               canManage && !hasActiveFilters ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={18} weight="bold" />
-                  New Feedstock Type
+                  Create the first catalogue entry
                 </Button>
               ) : undefined
             }

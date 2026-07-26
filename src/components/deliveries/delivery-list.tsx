@@ -54,7 +54,7 @@ import type {
 } from "@/data-access/deliveries";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatDate, formatDistanceKm, formatMass, formatMassKg } from "@/lib/format-utils";
+import { formatDate, formatDistanceKm, formatMassKg } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
   MOISTURE_FIELD_LABEL,
@@ -129,18 +129,24 @@ function createColumns(
         </span>
       ),
     },
+    // Every mass on this surface — these two columns, the KPI strip, the detail
+    // sheet's wet-mass row and its MoistureSplit — goes through `formatMassKg`:
+    // fixed kg, one decimal. Wet and dry sit next to each other and must stay
+    // subtractable, and dry mass is derived (wet × (1 − moisture/100)), so it
+    // routinely lands on a half kilo. `formatMass` would round that away in the
+    // table while the split bar below still showed it.
     {
       accessorKey: "deliveredWetMassKg",
       header: "Wet mass",
       cell: ({ row }) => (
-        <span className="font-mono text-right">{formatMass(row.original.deliveredWetMassKg)}</span>
+        <span className="font-mono text-right">{formatMassKg(row.original.deliveredWetMassKg)}</span>
       ),
     },
     {
       accessorKey: "massDryKg",
       header: "Dry mass",
       cell: ({ row }) => (
-        <span className="font-mono text-right">{formatMass(row.original.massDryKg)}</span>
+        <span className="font-mono text-right">{formatMassKg(row.original.massDryKg)}</span>
       ),
     },
     {
@@ -485,14 +491,14 @@ export function DeliveryList() {
         />
         <StatCard
           title="Wet Mass Delivered"
-          value={`${(statsData?.totalDeliveredWetMassKg ?? 0).toLocaleString()} kg`}
+          value={formatMassKg(statsData?.totalDeliveredWetMassKg ?? 0)}
           icon={<PackageIcon size={24} weight="bold" />}
           description="Total wet mass"
           isLoading={statsLoading}
         />
         <StatCard
           title="Dry Mass"
-          value={`${(statsData?.totalMassDryKg ?? 0).toLocaleString()} kg`}
+          value={formatMassKg(statsData?.totalMassDryKg ?? 0)}
           icon={<DropIcon size={24} weight="bold" />}
           description="Total dry mass"
           isLoading={statsLoading}
@@ -540,7 +546,7 @@ export function DeliveryList() {
               hasActiveFilters ? undefined : (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={18} weight="bold" />
-                  New Delivery
+                  Create your first delivery
                 </Button>
               )
             }
@@ -599,9 +605,9 @@ export function DeliveryList() {
           sideSheetEntity
             ? [
                 {
-                  title: "Delivery Information",
+                  title: "Delivery information",
                   fields: [
-                    { label: "Delivery Date", value: formatDate(sideSheetEntity.deliveryDate) },
+                    { label: "Delivery date", value: formatDate(sideSheetEntity.deliveryDate) },
                     { label: "Status", value: <StatusBadge status={sideSheetEntity.status} /> },
                     { label: "Order", value: sideSheetEntity.orderCode },
                   ],
@@ -643,7 +649,7 @@ export function DeliveryList() {
                   ],
                 },
                 {
-                  title: "Transport Evidence",
+                  title: "Transport evidence",
                   fields: [],
                   content: (
                     <TransportEvidencePanel

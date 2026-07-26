@@ -63,10 +63,25 @@ sidebar). Don't invent the missing tokens.
 
 **Status ramp** — `--st-ok` / `--st-run` / `--st-wait` / `--st-off` /
 `--st-bad` is the canonical palette for status badges, dots, and state text.
+Each has a solid (icon, text, rule, bar fill), a `-bg` 10% tint fill and a
+`-border` 40% tint. `/styleguide` renders all five × three (2026-07-26).
 
-`--color-signal-green` / `--color-signal-green-light` are **DEPRECATED** in
-favour of `--st-ok` and an `--st-ok` tint, but still have ~22 live call sites
-in `src/components`. Don't propagate them by copying a neighbouring component.
+`--color-signal-green` / `--color-signal-green-light` are **DEPRECATED**:
+
+| deprecated | use |
+| --- | --- |
+| `--color-signal-green` | `--st-ok` — a straight alias, so the swap is 1:1 |
+| `--color-signal-green-light` | `--st-ok-bg` — a 10% tint, where the old token was 15% |
+
+As of 2026-07-26 one live call site remains
+(`storage-locations/storage-location-card.tsx`); delete both definitions from
+`globals.css` once it is converted. Don't propagate them by copying a
+neighbouring component.
+
+`--color-signal-orange` / `-strong` / `-light` are **not** deprecated and still
+have ~40 live call sites. Don't convert them to `--st-wait` component by
+component — that trades one inconsistency for a worse one. It is one app-wide
+edit or nothing.
 
 **Hairlines & the panel recipe.** Structure is drawn with borders, never drop
 shadows — elevation is border + paper. Three steps: `--hair` (structural /
@@ -119,6 +134,56 @@ Class definitions live in `src/app/globals.css`. Size → class ladder:
 
 Use the design-system classes, never inline `text-4xl`. In-page section
 headings on rollup/detail pages are `title-heading-3`, sentence case.
+
+### Label casing
+
+**Sentence case** — capitalise the first word only — for field labels, table
+column headers, `FormSection` / `DetailSection` titles, and `DetailPanelField`
+labels.
+
+| ❌ | ✅ |
+| --- | --- |
+| `Contact Phone` | `Contact phone` |
+| `Ash Content (%)` | `Ash content (%)` |
+| `Field Size (Ha)` | `Field size (ha)` |
+| `Startup / Plant Diesel (L)` | `Startup / plant diesel (L)` |
+| `1000-Year Durability · R₀ Reflectance` | `1000-year durability · R₀ reflectance` |
+
+Four things keep their capitals: proper nouns and product/registry names
+(Isometric, Certify), acronyms (GPS, CSV, UTC, GHG, TGA), unit and element
+symbols (`mL`, `ha`, `kg/m³`, `H:C`, `R₀`), and any term whose canonical form in
+[CONTEXT.md](../CONTEXT.md) is capitalised — check the glossary before you
+rename a domain term.
+
+Page titles (`PageHeader`), `StatCard` titles, button text, dialog titles and
+side-sheet titles are **outside** this rule and keep their existing casing. One
+exception (2026-07-26): where a dialog title or button **names an entity the
+operator just saw on a select**, the noun follows the select's label rather than
+the chrome's casing — "Feedstock type" on the select, "New feedstock type" as
+the quick-add title, "Create feedstock type" on its submit button. One action,
+one name, through the whole flow. Those nouns live in `ENTITY_TYPE_LABELS`
+(`components/forms/entity-select/entity-labels.ts`) — the single source shared by
+the select and the quick-add dialog — stored lowercase because they are always
+read mid-sentence. Follow the glossary: a bin is a **storage bin**, never a
+"storage location", on every operator-facing surface.
+
+**A label and its mirror must match.** An edit form's `FormField` label, the
+same field's `DetailPanelField` in the read sheet, and its `DataTable` column
+header are one label — rename all three together or none. Table cells may carry
+the unit that a terse column header drops ("Wet mass" / `1,000 kg`); a form
+label carries it instead, because an empty input has nowhere else to put it.
+
+**Renaming a label is a test change.** Playwright specs in `tests/e2e/` locate
+elements by these exact strings, and the matchers split two ways:
+
+| case-**insensitive** substring (a pure case flip survives) | case-**sensitive** (a pure case flip breaks) |
+| --- | --- |
+| `getByText/getByRole/getByLabel(name)` with the default `exact: false` · `filter({ hasText: "…" })` · CSS `:has-text("…")` · `/…/i` regex | the same locators with `{ exact: true }` · a regex without `/i` · `toHaveText` / `toContainText` |
+
+Changing a label's *words* (not just its case) breaks **both** columns. Before
+committing a rename, `grep -rF "<old string>" tests/e2e/` and fix the hits —
+and check that the new string does not now collide with a second control on the
+same screen, which turns a passing locator into a strict-mode violation.
 
 ---
 
@@ -217,7 +282,15 @@ restore for free.
 
 - **`EmptyState`** — the shared dashed empty/zero-data card. Every empty and
   filtered-empty state uses it; **never a bare `<p>`**. Icon sizing is
-  caller-owned.
+  caller-owned. Two copy rules, both load-bearing:
+  - **The zero-state CTA is `Create your first <entity>`, never a copy of the
+    `PageHeader` button.** Both buttons render at once on an empty list, and two
+    controls with the same accessible name break `getByRole("button", { name })`
+    in Playwright — the header keeps `New <entity>`, the card invites.
+  - **`description` is for the filtered-empty branch**, where it says how to get
+    back ("Try clearing your search."). On the zero state, pass a line that says
+    what the entity *is* or omit it — "Create your first X to get started" only
+    repeats the button.
 - **`SelectFacilityEmptyState`** (`src/components/navigation`) — the *no
   facility chosen* state. Do not branch `EmptyState` copy on `facilityId`;
   this component exists so every first-run screen speaks with one voice.

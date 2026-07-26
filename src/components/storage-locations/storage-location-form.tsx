@@ -101,7 +101,7 @@ export function StorageLocationForm({
 
   const defaultSubmitLabel = isEditMode
     ? "Update Storage Bin"
-    : "Create Storage Bin";
+    : "Create storage bin";
 
   const handleFormSubmit = handleSubmit((data) => {
     const normalized = { ...data } as StorageLocationFormData;
@@ -119,7 +119,7 @@ export function StorageLocationForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
         <FormField
           id="type"
-          label="Storage Type"
+          label="Storage type"
           error={errors.type?.message}
           helperText={typeDescription}
           required
@@ -134,7 +134,7 @@ export function StorageLocationForm({
           />
         </FormField>
 
-        <FormField id="name" label="Bin Name" error={errors.name?.message} required>
+        <FormField id="name" label="Bin name" error={errors.name?.message} required>
           <FormInput
             id="name"
             type="text"
@@ -165,7 +165,7 @@ export function StorageLocationForm({
 
         <FormField
           id="storageMethod"
-          label="Storage Method"
+          label="Storage method"
           error={errors.storageMethod?.message}
         >
           <FormInput
@@ -184,7 +184,7 @@ export function StorageLocationForm({
           <FormEntitySelect
             control={control}
             name="feedstockTypeId"
-            label="Feedstock Type"
+            label="Feedstock type"
             entityType="feedstockType"
             placeholder="Select feedstock type..."
             disabled={isSubmitting || lockFeedstockType}

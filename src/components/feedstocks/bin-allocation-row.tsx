@@ -50,7 +50,7 @@ export function BinAllocationRow({
         <FormEntitySelect
           control={control}
           name={`allocations.${index}.storageLocationId`}
-          label="Storage Bin"
+          label="Storage bin"
           entityType="storageLocation"
           placeholder="Select bin..."
           disabled={disabled}
@@ -62,13 +62,12 @@ export function BinAllocationRow({
             ...(feedstockTypeId ? { feedstockTypeId } : {}),
           }}
           dependsOn={[feedstockTypeId, facilityId]}
-          createLabel="Add New Bin"
           onCreateNew={onCreateNew}
         />
 
         <FormField
           id={`allocations.${index}.allocatedWetMassKg`}
-          label="Allocated Wet Mass (kg)"
+          label="Allocated wet mass (kg)"
           error={massError?.message}
           required
         >

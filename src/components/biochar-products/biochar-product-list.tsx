@@ -47,7 +47,7 @@ import {
 import { fromCompositionJsonb } from "@/lib/biochar-composition";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
-import { formatDate, formatMass, formatMassKg } from "@/lib/format-utils";
+import { formatDate, formatMassKg } from "@/lib/format-utils";
 import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { EntityDetailValue } from "@/components/ui/entity-detail-value";
@@ -85,7 +85,7 @@ function createColumns(
     },
     {
       accessorKey: "productionDate",
-      header: "Production Date",
+      header: "Production date",
       cell: ({ row }) => formatDate(row.original.productionDate),
     },
     {
@@ -104,7 +104,7 @@ function createColumns(
       accessorKey: "massKg",
       header: "Wet mass",
       cell: ({ row }) => (
-        <span className="font-mono">{formatMass(row.original.massKg)}</span>
+        <span className="font-mono">{formatMassKg(row.original.massKg)}</span>
       ),
     },
     {
@@ -122,7 +122,7 @@ function createColumns(
       header: "Dry mass",
       cell: ({ row }) => (
         <span className="font-mono">
-          {formatMass(deriveBiocharProductDryMass(row.original))}
+          {formatMassKg(deriveBiocharProductDryMass(row.original))}
         </span>
       ),
     },
@@ -445,7 +445,7 @@ export function BiocharProductList() {
               !hasActiveFilters ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={20} weight="bold" />
-                  Create Product
+                  Create your first product
                 </Button>
               ) : undefined
             }
@@ -512,7 +512,7 @@ export function BiocharProductList() {
           {
             title: "Source",
             fields: [
-              { label: "Production Run", value: displaySideSheet.entity.linkedProductionRun?.code },
+              { label: "Production run", value: displaySideSheet.entity.linkedProductionRun?.code },
               { label: "Wet mass (kg)", value: formatMassKg(displaySideSheet.entity.massKg) },
               { label: MOISTURE_FIELD_LABEL, value: formatMoisturePercent(displaySideSheet.entity.moistureContentPercent) },
               { label: "Water added (kg)", value: formatMassKg(displaySideSheet.entity.waterAddedKg) },
@@ -527,22 +527,22 @@ export function BiocharProductList() {
             ),
           },
           {
-            title: "Destination & Product",
+            title: "Destination & product",
             fields: [
               { label: "Formulation", value: displaySideSheet.entity.formulation?.name ?? PURE_BIOCHAR_LABEL },
               ...fromCompositionJsonb(displaySideSheet.entity.composition).flatMap((ingredient, index) => {
                 const prefix = `Ingredient ${index + 1}`;
                 return [
                   {
-                    label: `${prefix} · Blend Material`,
+                    label: `${prefix} · Blend material`,
                     value: ingredient.feedstockTypeName,
                   },
                   {
-                    label: `${prefix} · Mass`,
-                    value: ingredient.massKg != null ? formatMass(ingredient.massKg) : null,
+                    label: `${prefix} · Mass (kg)`,
+                    value: ingredient.massKg != null ? formatMassKg(ingredient.massKg) : null,
                   },
                   {
-                    label: `${prefix} · Source Bin`,
+                    label: `${prefix} · Source bin`,
                     value: (
                       <EntityDetailValue
                         entityType="storageLocation"
@@ -552,11 +552,11 @@ export function BiocharProductList() {
                   },
                 ];
               }),
-              { label: "Product Bin", value: displaySideSheet.entity.storageLocation?.name },
+              { label: "Product bin", value: displaySideSheet.entity.storageLocation?.name },
             ],
           },
           {
-            title: "Derived Transport",
+            title: "Derived transport",
             fields: [],
             content: (
               <TransportLegsSummary

@@ -65,7 +65,7 @@ export function StorageLocationQuickAddDialog({
     <QuickAddDialogShell
       isOpen={isOpen}
       onClose={onClose}
-      title="Add New Storage Bin"
+      title="New storage bin"
       testId="storage-location-quick-add-dialog"
     >
       <StorageLocationForm
@@ -73,7 +73,7 @@ export function StorageLocationQuickAddDialog({
         onCancel={onClose}
         isSubmitting={isSubmitting}
         errorMessage={error ?? undefined}
-        submitLabel="Create Bin"
+        submitLabel="Create storage bin"
         defaultType={defaultBinType}
         allowedTypes={allowedTypes}
         defaultFeedstockTypeId={defaultFeedstockTypeId}

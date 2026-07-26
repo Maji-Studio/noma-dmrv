@@ -259,18 +259,18 @@ export function FacilityList() {
   const sideSheetSections = sideSheetEntity
     ? [
         {
-          title: "Facility Information",
+          title: "Facility information",
           fields: [
-            { label: "Facility Name", value: sideSheetEntity.name },
+            { label: "Facility name", value: sideSheetEntity.name },
             { label: "Country", value: sideSheetEntity.country },
             { label: "Timezone", value: formatTimezoneLabel(sideSheetEntity.timezone) },
             { label: "Location", value: sideSheetEntity.location },
             { label: "Address", value: sideSheetEntity.address },
             { label: "Facility position latitude", value: sideSheetEntity.gpsLatitude },
             { label: "Facility position longitude", value: sideSheetEntity.gpsLongitude },
-            { label: "Contact Email", value: sideSheetEntity.contactEmail },
-            { label: "Contact Phone", value: sideSheetEntity.contactPhone },
-            { label: "Durability Tier", value: formatDurabilityOption(sideSheetEntity.durabilityOption) },
+            { label: "Contact email", value: sideSheetEntity.contactEmail },
+            { label: "Contact phone", value: sideSheetEntity.contactPhone },
+            { label: "Durability tier", value: formatDurabilityOption(sideSheetEntity.durabilityOption) },
           ],
         },
         {
@@ -278,38 +278,38 @@ export function FacilityList() {
           fields: [
             { label: "Reactors", value: `${sideSheetEntity.reactorCount} reactors` },
             {
-              label: "Feedstock Bins",
+              label: "Feedstock bins",
               value: `${sideSheetEntity.storageSummary.feedstockBinCount} bins`,
             },
             {
-              label: "Biochar Bins",
+              label: "Biochar bins",
               value: `${sideSheetEntity.storageSummary.biocharBinCount} bins`,
             },
             {
-              label: "Product Bins",
+              label: "Product bins",
               value: `${sideSheetEntity.storageSummary.productBinCount} bins`,
             },
           ],
         },
         {
-          title: "Inventory Snapshot",
+          title: "Inventory snapshot",
           fields: [
             {
-              label: "Feedstock On Hand",
+              label: "Feedstock on hand",
               value: formatMass(sideSheetEntity.inventorySummary.feedstockDryKg),
             },
             {
-              label: "Biochar On Hand",
+              label: "Biochar on hand",
               value: formatMass(sideSheetEntity.inventorySummary.biocharKg),
             },
             {
-              label: "Product Mass",
+              label: "Product mass",
               value: formatMass(sideSheetEntity.inventorySummary.productKg),
             },
           ],
         },
         {
-          title: "Registry Connection",
+          title: "Registry connection",
           fields: [],
           content: <FacilityCertifierSummary facilityId={sideSheetEntity.id} />,
         },
@@ -448,7 +448,7 @@ export function FacilityList() {
             !hasActiveFilters && !showArchived ? (
               <Button variant="primary" onClick={openCreate}>
                 <PlusIcon size={20} weight="bold" />
-                Create Facility
+                Create your first facility
               </Button>
             ) : undefined
           }

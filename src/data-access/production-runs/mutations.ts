@@ -168,7 +168,7 @@ async function validateProductionFeedstockSource(
       ),
     );
 
-  if (!loc) throw new SafeError("Feedstock storage location not found");
+  if (!loc) throw new SafeError("Feedstock storage bin not found");
   if (loc.facilityId !== facilityId) throw new SafeError("Feedstock bin does not belong to the selected facility");
   if (loc.type !== "feedstock_bin") throw new SafeError("Selected storage location is not a feedstock bin");
   if (!loc.feedstockTypeId || !loc.feedstockTypeUsage) {

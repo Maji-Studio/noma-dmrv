@@ -80,7 +80,7 @@ export async function lockBinStock(
   // key when no physical bin exists. Missing rows are validated by the caller's
   // entity boundary; an actual archived bin must never accept a stock write.
   if (bin?.archivedAt) {
-    throw new SafeError("Storage location not found or archived");
+    throw new SafeError("Storage bin not found or archived");
   }
 }
 
