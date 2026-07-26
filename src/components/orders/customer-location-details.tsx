@@ -10,6 +10,7 @@
  */
 
 import dynamic from "next/dynamic";
+import { formatDistanceKm } from "@/lib/format-utils";
 import {
   DISTANCE_SOURCE_LABELS,
   type DistanceSourceValue,
@@ -62,10 +63,6 @@ interface CustomerLocationDetailsProps {
   location: CustomerLocationDetailsLocation;
   /** The order's facility — distance/map origin. Undefined while loading. */
   facility: CustomerLocationDetailsFacility | undefined;
-}
-
-function formatDistanceKm(km: number): string {
-  return `${Number.isInteger(km) ? km : km.toFixed(1)} km`;
 }
 
 export function CustomerLocationDetails({

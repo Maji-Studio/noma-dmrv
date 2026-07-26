@@ -36,6 +36,7 @@ import {
 } from "@/hooks/use-list-pagination";
 import { SelectFacilityEmptyState } from "@/components/navigation";
 import { formatDate, formatMass } from "@/lib/format-utils";
+import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { ServerError } from "@/components/forms";
 import {
   EntitySideSheet,
@@ -92,11 +93,6 @@ type SideSheetState =
   | { mode: "view"; entity: StorageLocationWithFacility }
   | { mode: "edit"; entity: StorageLocationWithFacility };
 
-function formatPercent(value: number | null) {
-  if (value == null) return "—";
-  return `${value.toFixed(1)}%`;
-}
-
 function formatDateOrFallback(value: Date | null) {
   if (!value) return "No completed applications";
   return formatDate(value);
@@ -129,7 +125,7 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
       },
       {
         label: "Estimated Moisture",
-        value: formatPercent(storageLocation.feedstockInventory.estimatedMoisturePercent),
+        value: formatMoisturePercent(storageLocation.feedstockInventory.estimatedMoisturePercent),
       },
       {
         label: "Feedstock Types",

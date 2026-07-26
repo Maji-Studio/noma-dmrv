@@ -22,7 +22,9 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatDate, formatDistanceKm, formatMass } from "@/lib/format-utils";
+import { formatDate, formatDistanceKm, formatMass, formatMassKg } from "@/lib/format-utils";
+import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
+import { MoistureSplit } from "@/components/ui/moisture-split";
 import { FeedstockForm } from "./feedstock-form";
 import {
   TransportEvidencePanel,
@@ -112,14 +114,14 @@ function createColumns(
     },
     {
       accessorKey: "massWetKg",
-      header: "Wet Mass",
+      header: "Wet mass",
       cell: ({ row }) => (
         <span className="font-mono">{formatMass(row.original.massWetKg)}</span>
       ),
     },
     {
       accessorKey: "massDryKg",
-      header: "Dry Mass",
+      header: "Dry mass",
       cell: ({ row }) => (
         <span className="font-mono">{formatMass(row.original.massDryKg)}</span>
       ),
@@ -136,9 +138,7 @@ function createColumns(
       header: "Moisture",
       cell: ({ row }) => (
         <span className="font-mono">
-          {row.original.moistureContentPercent !== null
-            ? `${row.original.moistureContentPercent}%`
-            : "—"}
+          {formatMoisturePercent(row.original.moistureContentPercent)}
         </span>
       ),
     },
@@ -608,20 +608,29 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
             fields: [
               { label: "Feedstock Type", value: sideSheetEntity.feedstockTypeName },
               {
-                label: "Total Wet Mass (kg)",
+                label: "Total wet mass (kg)",
                 ...certificationDetailField("feedstock", "massWetKg"),
                 certifyStatus: resolveCertFieldStatus(true, sideSheetEntity.massWetKg !== null),
-                value: sideSheetEntity.massWetKg !== null ? formatMass(sideSheetEntity.massWetKg) : null,
+                value: formatMassKg(sideSheetEntity.massWetKg),
               },
-              { label: "Moisture Content (%)", value: sideSheetEntity.moistureContentPercent !== null ? `${sideSheetEntity.moistureContentPercent}%` : null },
-              { label: "Dry Mass (derived)", value: formatMass(sideSheetEntity.massDryKg) },
+              {
+                label: MOISTURE_FIELD_LABEL,
+                value: formatMoisturePercent(sideSheetEntity.moistureContentPercent),
+              },
             ],
+            content: (
+              <MoistureSplit
+                wetMassKg={sideSheetEntity.massWetKg}
+                moisturePercent={sideSheetEntity.moistureContentPercent}
+                materialLabel="Feedstock"
+              />
+            ),
           },
           {
             title: "Bin Allocations",
             fields: [
               { label: "Storage Bin", value: sideSheetEntity.storageLocationCode ?? sideSheetEntity.storageLocationName },
-              { label: "Allocated Wet Mass (kg)", value: sideSheetEntity.massWetKg !== null ? formatMass(sideSheetEntity.massWetKg) : null },
+              { label: "Allocated wet mass (kg)", value: formatMassKg(sideSheetEntity.massWetKg) },
               { label: "Override Justification", value: sideSheetEntity.overrideJustification },
             ],
           },

@@ -14,15 +14,11 @@ import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, ScalesIcon, MapPinIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, FormSection, FormSpine, DryMassInput, makeCertFieldStatus } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus } from "@/components/forms";
 import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
 import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
-import {
-  MASS_KG_INPUT_STEP,
-  STORED_PERCENT_INPUT_STEP,
-} from "@/schemas/helpers";
 import { DEFAULT_TRIP_TYPE, TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
 import type { Delivery } from "@/db/schema";
 import { useOrdersForSelect } from "@/hooks/use-orders";
@@ -292,60 +288,36 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
       {/* Mass & Moisture Section */}
       <FormSection
-        title="Mass & Moisture"
+        title="Mass and moisture"
         icon={<ScalesIcon size={14} weight="bold" />}
         fields={["deliveredWetMassKg", "moistureContentPercent", "massDryKg"]}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="deliveredWetMassKg"
-            label="Wet Mass (kg)"
-            error={errors.deliveredWetMassKg?.message}
-            hint="As-received weight of the delivery."
-            required
-            certifyRequired={isDeliveryCertifyField("deliveredWetMassKg")}
-            certifyStatus={certStatus("deliveredWetMassKg")}
-          >
-            <DryMassInput
-              id="deliveredWetMassKg"
-              type="number"
-              step={MASS_KG_INPUT_STEP}
-              placeholder="e.g., 1000"
-              disabled={isSubmitting}
-              error={!!errors.deliveredWetMassKg}
-              wetMassKg={watchWetMass}
-              moisturePercent={watchMoisture}
-              {...register("deliveredWetMassKg", {
-                setValueAs: numericValue,
-              })}
-            />
-          </FormField>
+        <MassMoistureFields
+          wetMassKg={watchWetMass}
+          moisturePercent={watchMoisture}
+          wet={{
+            id: "deliveredWetMassKg",
+            error: errors.deliveredWetMassKg?.message,
+            hint: "As-received weight of the delivery, water included.",
+            required: true,
+            disabled: isSubmitting,
+            placeholder: "e.g. 1000",
+            certifyRequired: isDeliveryCertifyField("deliveredWetMassKg"),
+            certifyStatus: certStatus("deliveredWetMassKg"),
+            registration: register("deliveredWetMassKg", { setValueAs: numericValue }),
+          }}
+          moisture={{
+            id: "moistureContentPercent",
+            error: errors.moistureContentPercent?.message,
+            required: true,
+            disabled: isSubmitting,
+            placeholder: "e.g. 20",
+            registration: register("moistureContentPercent", { setValueAs: numericValue }),
+          }}
+        />
 
-          <FormField
-            id="moistureContentPercent"
-            label="Moisture (%)"
-            error={errors.moistureContentPercent?.message}
-            helperText="0–100%"
-            required
-          >
-            <FormInput
-              id="moistureContentPercent"
-              type="number"
-              step={STORED_PERCENT_INPUT_STEP}
-              min="0"
-              max="100"
-              placeholder="e.g., 20"
-              disabled={isSubmitting}
-              error={!!errors.moistureContentPercent}
-              {...register("moistureContentPercent", {
-                setValueAs: numericValue,
-              })}
-            />
-          </FormField>
-        </div>
-
-        {/* Dry mass is surfaced inline under the wet-mass field (DryMassInput)
-            and synced into massDryKg below for submission. */}
+        {/* The split above is display-only; massDryKg is recomputed server-side
+            and synced through the hidden field below for submission. */}
         {errors.massDryKg?.message && (
           <p className="body-small text-[var(--color-status-error)]">{errors.massDryKg.message}</p>
         )}

@@ -54,7 +54,13 @@ import type {
 } from "@/data-access/deliveries";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatDate, formatDistanceKm } from "@/lib/format-utils";
+import { formatDate, formatDistanceKm, formatMass, formatMassKg } from "@/lib/format-utils";
+import {
+  formatMoisturePercent,
+  MOISTURE_FIELD_LABEL,
+  WET_MASS_FIELD_LABEL,
+} from "@/lib/mass-moisture";
+import { MoistureSplit } from "@/components/ui/moisture-split";
 import { DEFAULT_TRIP_TYPE, TRIP_TYPE_LABELS } from "@/schemas/trip-type";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import { parseAsString, useQueryState } from "nuqs";
@@ -68,11 +74,6 @@ import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 // ============================================
 // Helper Functions
 // ============================================
-
-function formatMass(value: number | null): string {
-  if (value === null || value === undefined) return "—";
-  return `${value.toLocaleString()} kg`;
-}
 
 function deliveryDetailToRelations(
   delivery: DeliveryDetail,
@@ -130,16 +131,25 @@ function createColumns(
     },
     {
       accessorKey: "deliveredWetMassKg",
-      header: "Wet Mass",
+      header: "Wet mass",
       cell: ({ row }) => (
         <span className="font-mono text-right">{formatMass(row.original.deliveredWetMassKg)}</span>
       ),
     },
     {
       accessorKey: "massDryKg",
-      header: "Dry Mass",
+      header: "Dry mass",
       cell: ({ row }) => (
         <span className="font-mono text-right">{formatMass(row.original.massDryKg)}</span>
+      ),
+    },
+    {
+      accessorKey: "moistureContentPercent",
+      header: "Moisture",
+      cell: ({ row }) => (
+        <span className="font-mono text-right">
+          {formatMoisturePercent(row.original.moistureContentPercent)}
+        </span>
       ),
     },
     {
@@ -597,25 +607,24 @@ export function DeliveryList() {
                   ],
                 },
                 {
-                  title: "Mass & Moisture",
+                  title: "Mass and moisture",
                   fields: [
                     {
-                      label: "Wet Mass (kg)",
+                      label: WET_MASS_FIELD_LABEL,
                       ...certificationDetailField("delivery", "deliveredWetMassKg"),
-                      value:
-                        sideSheetEntity.deliveredWetMassKg != null
-                          ? `${sideSheetEntity.deliveredWetMassKg.toLocaleString()} kg`
-                          : null,
+                      value: formatMassKg(sideSheetEntity.deliveredWetMassKg),
                     },
-                    { label: "Moisture (%)", value: sideSheetEntity.moistureContentPercent != null ? `${sideSheetEntity.moistureContentPercent}%` : null },
                     {
-                      label: "Dry Mass (derived)",
-                      value:
-                        sideSheetEntity.massDryKg != null
-                          ? `${sideSheetEntity.massDryKg.toLocaleString()} kg`
-                          : null,
+                      label: MOISTURE_FIELD_LABEL,
+                      value: formatMoisturePercent(sideSheetEntity.moistureContentPercent),
                     },
                   ],
+                  content: (
+                    <MoistureSplit
+                      wetMassKg={sideSheetEntity.deliveredWetMassKg}
+                      moisturePercent={sideSheetEntity.moistureContentPercent}
+                    />
+                  ),
                 },
                 {
                   title: "Transport",

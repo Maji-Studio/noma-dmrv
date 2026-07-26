@@ -11,10 +11,14 @@ import { Skeleton } from "@/components/ui/loading-skeleton";
 import { useBinMovements } from "@/hooks/use-bin-movements";
 import type { BinMovementWithActor } from "@/data-access/bin-movements";
 import { formatDateTime, formatMass } from "@/lib/format-utils";
+import { formatMoisturePercent } from "@/lib/mass-moisture";
 import {
   BIN_MOVEMENT_LANE_LABELS,
   type BinMovementLane,
 } from "@/schemas/bin-movements";
+
+/** Stored moisture is a 0–1 ratio; display is a 0–100 percentage. */
+const PERCENT_SCALE = 100;
 
 interface BinMovementHistoryProps {
   storageLocationId: string;
@@ -24,11 +28,6 @@ function signedMass(deltaKg: number): string {
   if (deltaKg === 0) return formatMass(0);
   const sign = deltaKg > 0 ? "+" : "−";
   return `${sign}${formatMass(Math.abs(deltaKg))}`;
-}
-
-function formatRecordedMoisture(ratio: number): string {
-  const percent = ratio * 100;
-  return `${percent.toFixed(1).replace(/\.0$/, "")}%`;
 }
 
 function MovementRow({ movement }: { movement: BinMovementWithActor }) {
@@ -85,8 +84,8 @@ function MovementRow({ movement }: { movement: BinMovementWithActor }) {
               <>
                 {" "}
                 at{" "}
-                {formatRecordedMoisture(
-                  Number(movement.moistureRatioUsed),
+                {formatMoisturePercent(
+                  Number(movement.moistureRatioUsed) * PERCENT_SCALE,
                 )}{" "}
                 moisture
               </>

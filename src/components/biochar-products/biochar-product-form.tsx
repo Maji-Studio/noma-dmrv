@@ -12,7 +12,9 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FactoryIcon, PackageIcon, FlowArrowIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, DryMassInput } from "@/components/forms";
+import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, MassMoistureFields } from "@/components/forms";
+import { formatMassKg } from "@/lib/format-utils";
+import { formatMoisturePercent } from "@/lib/mass-moisture";
 import {
   StorageLocationQuickAddDialog,
   useQuickAddDialog,
@@ -25,7 +27,6 @@ import {
 } from "@/schemas/biochar-products";
 import {
   MASS_KG_INPUT_STEP,
-  STORED_PERCENT_INPUT_STEP,
 } from "@/schemas/helpers";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
@@ -411,59 +412,45 @@ export function BiocharProductForm({
           />
         </FormField>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField
-            id="massKg"
-            label="Wet Mass (kg)"
-            error={errors.massKg?.message}
-            required
-            helperText={
-              linkedRunPreview?.biocharOutputKg !== null && linkedRunPreview?.biocharOutputKg !== undefined
+        <MassMoistureFields
+          materialLabel="Biochar"
+          wetMassKg={watchedMassKg}
+          moisturePercent={watchedMoisture}
+          splitNote={
+            hasWaterAdded && effectiveWetMassKg !== null
+              ? `Before added water. With ${formatMassKg(waterAddedKgNum)} added: ${formatMassKg(effectiveWetMassKg)} wet at ${formatMoisturePercent(finalMoisturePercent)} moisture.`
+              : undefined
+          }
+          wet={{
+            id: "massKg",
+            error: errors.massKg?.message,
+            required: true,
+            disabled: isSubmitting,
+            placeholder: "e.g. 500",
+            helperText:
+              linkedRunPreview?.biocharOutputKg != null
                 ? `${linkedRunPreview.biocharOutputKg.toLocaleString()} kg from run`
-                : undefined
-            }
-          >
-            <DryMassInput
-              id="massKg"
-              type="number"
-              step={MASS_KG_INPUT_STEP}
-              min="0"
-              placeholder="e.g., 500"
-              disabled={isSubmitting}
-              error={!!errors.massKg}
-              wetMassKg={watchedMassKg}
-              moisturePercent={watchedMoisture}
-              {...register("massKg", { setValueAs: nullableNumericValue })}
-            />
-          </FormField>
-
-          <FormField
-            id="moistureContentPercent"
-            label="Moisture Content (%)"
-            error={errors.moistureContentPercent?.message}
-            helperText="Typically 1-2% for biochar"
-            required
-          >
-            <FormInput
-              id="moistureContentPercent"
-              type="number"
-              step={STORED_PERCENT_INPUT_STEP}
-              min="0"
-              max="100"
-              placeholder="e.g., 2"
-              disabled={isSubmitting}
-              error={!!errors.moistureContentPercent}
-              {...register("moistureContentPercent", { setValueAs: nullableNumericValue })}
-            />
-          </FormField>
-        </div>
+                : undefined,
+            registration: register("massKg", { setValueAs: nullableNumericValue }),
+          }}
+          moisture={{
+            id: "moistureContentPercent",
+            error: errors.moistureContentPercent?.message,
+            required: true,
+            disabled: isSubmitting,
+            placeholder: "e.g. 2",
+            helperText: "Typically 1–2% for biochar",
+            registration: register("moistureContentPercent", { setValueAs: nullableNumericValue }),
+          }}
+        />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="waterAddedKg"
-            label="Water Added (kg)"
+            label="Water added (kg)"
             error={errors.waterAddedKg?.message}
             helperText="Water added to reach target moisture"
+            hint="Added water raises wet mass and final moisture but creates no dry matter, so the dry mass above is unchanged by it."
             required
           >
             <FormInput
@@ -496,25 +483,6 @@ export function BiocharProductForm({
           </FormField>
         </div>
 
-        {/* Dry mass is surfaced inline under Wet Mass (DryMassInput). When water
-            is added, show what it changes — effective wet mass and final moisture. */}
-        {hasWaterAdded && effectiveWetMassKg !== null && (
-          <div className="flex flex-wrap items-center gap-x-8 gap-y-4 border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] px-16 py-12">
-            <span className="body-small text-[var(--color-text-tertiary)]">Effective wet mass</span>
-            <span className="body-medium font-medium text-[var(--color-text-primary)]">
-              {effectiveWetMassKg.toFixed(2)} kg
-            </span>
-            {finalMoisturePercent !== null && (
-              <>
-                <span className="text-[var(--color-text-tertiary)]">&middot;</span>
-                <span className="body-small text-[var(--color-text-tertiary)]">Final moisture</span>
-                <span className="body-small font-medium text-[var(--color-text-primary)]">
-                  {finalMoisturePercent.toFixed(2)}%
-                </span>
-              </>
-            )}
-          </div>
-        )}
       </FormSection>
 
       {/* Destination + Product Details */}

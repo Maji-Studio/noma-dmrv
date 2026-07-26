@@ -8,7 +8,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { formatLocalDateTime } from "@/lib/date-utils";
-import { FormField, FormInput, FormFileUpload, FormActions, FormSection } from "@/components/forms";
+import { FormField, FormInput, FormFileUpload, FormActions, FormSection, MoistureField } from "@/components/forms";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { FormTextarea } from "@/components/forms/form-textarea";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
@@ -186,23 +186,16 @@ export function ProductionSampleForm({
       <FormSection title="Proximate Analysis">
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField
+          <MoistureField
             id="moistureContentPercent"
-            label="Moisture Content (%)"
             error={errors.moistureContentPercent?.message}
-          >
-            <FormInput
-              id="moistureContentPercent"
-              type="number"
-              step="any"
-              placeholder="e.g. 5.2"
-              disabled={isSubmitting}
-              error={!!errors.moistureContentPercent}
-              {...register("moistureContentPercent", {
-                setValueAs: nullableNumericValue,
-              })}
-            />
-          </FormField>
+            disabled={isSubmitting}
+            placeholder="e.g. 5.2"
+            step="any"
+            registration={register("moistureContentPercent", {
+              setValueAs: nullableNumericValue,
+            })}
+          />
 
           <FormField
             id="fixedCarbonPercent"

@@ -47,18 +47,15 @@ import {
 import { fromCompositionJsonb } from "@/lib/biochar-composition";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
-import { formatDate } from "@/lib/format-utils";
+import { formatDate, formatMass, formatMassKg } from "@/lib/format-utils";
+import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
+import { MoistureSplit } from "@/components/ui/moisture-split";
 import { EntityDetailValue } from "@/components/ui/entity-detail-value";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
 // ============================================
 // Helpers
 // ============================================
-
-function formatMass(massKg: number | null): string {
-  if (massKg === null || massKg === undefined) return "\u2014";
-  return `${massKg.toLocaleString()} kg`;
-}
 
 function deriveBiocharProductDryMass(product: BiocharProductWithRelations): number | null {
   const { massKg, moistureContentPercent, waterAddedKg } = product;
@@ -105,28 +102,29 @@ function createColumns(
     },
     {
       accessorKey: "massKg",
-      header: "Wet Mass",
+      header: "Wet mass",
       cell: ({ row }) => (
-        <span className="text-[var(--color-text-secondary)]">
-          {formatMass(row.original.massKg)}
-        </span>
+        <span className="font-mono">{formatMass(row.original.massKg)}</span>
       ),
     },
     {
       id: "moistureContentPercent",
-      header: "Moisture %",
+      header: "Moisture",
       accessorFn: (row) => row.moistureContentPercent,
-      cell: ({ row }) => {
-        const mc = row.original.moistureContentPercent;
-        return mc !== null && mc !== undefined ? `${mc}%` : "\u2014";
-      },
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {formatMoisturePercent(row.original.moistureContentPercent)}
+        </span>
+      ),
     },
     {
       id: "dryMass",
-      header: "Dry Mass",
-      cell: ({ row }) => {
-        return formatMass(deriveBiocharProductDryMass(row.original));
-      },
+      header: "Dry mass",
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {formatMass(deriveBiocharProductDryMass(row.original))}
+        </span>
+      ),
     },
     {
       id: "storageLocation",
@@ -515,12 +513,18 @@ export function BiocharProductList() {
             title: "Source",
             fields: [
               { label: "Production Run", value: displaySideSheet.entity.linkedProductionRun?.code },
-              { label: "Wet Mass (kg)", value: formatMass(displaySideSheet.entity.massKg) },
-              { label: "Dry Mass (derived)", value: formatMass(deriveBiocharProductDryMass(displaySideSheet.entity)) },
-              { label: "Moisture Content (%)", value: displaySideSheet.entity.moistureContentPercent != null ? `${displaySideSheet.entity.moistureContentPercent}%` : null },
-              { label: "Water Added (kg)", value: displaySideSheet.entity.waterAddedKg != null ? formatMass(displaySideSheet.entity.waterAddedKg) : null },
-              { label: "Density (kg/m3)", value: displaySideSheet.entity.densityKgM3 != null ? `${displaySideSheet.entity.densityKgM3} kg/m³` : null },
+              { label: "Wet mass (kg)", value: formatMassKg(displaySideSheet.entity.massKg) },
+              { label: MOISTURE_FIELD_LABEL, value: formatMoisturePercent(displaySideSheet.entity.moistureContentPercent) },
+              { label: "Water added (kg)", value: formatMassKg(displaySideSheet.entity.waterAddedKg) },
+              { label: "Density (kg/m³)", value: displaySideSheet.entity.densityKgM3 != null ? `${displaySideSheet.entity.densityKgM3} kg/m³` : null },
             ],
+            content: (
+              <MoistureSplit
+                wetMassKg={displaySideSheet.entity.massKg}
+                moisturePercent={displaySideSheet.entity.moistureContentPercent}
+                materialLabel="Biochar"
+              />
+            ),
           },
           {
             title: "Destination & Product",

@@ -20,6 +20,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { PackageIcon, MapPinIcon, CameraIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormSelect, FormSection, FormSpine, PositionPicker, FormActions, makeCertFieldStatus } from "@/components/forms";
+import { MoistureSplit } from "@/components/ui/moisture-split";
+import { DRY_MASS_DERIVED_NOTE } from "@/lib/mass-moisture";
 import {
   applicationFormSchema,
   applicationEvidenceMethods,
@@ -77,99 +79,41 @@ const evidenceMethodDescriptions: Record<ApplicationEvidenceMethod, string> = {
 // Dry Mass Calculation Card
 // ============================================
 
-function DryMassCard({
+/**
+ * The applied wet mass split into dry matter and water. Unlike the other
+ * mass/moisture surfaces the operator does not type the moisture here — it
+ * comes from the chosen delivery — so the panel's job is to explain where the
+ * dry figure came from, and to say plainly when the delivery cannot supply one.
+ */
+function AppliedMassSplit({
   appliedKg,
   moisturePercent,
 }: {
   appliedKg: number | null | undefined;
   moisturePercent: number | null | undefined;
 }) {
-  const dryKg = calculateDryMass(appliedKg, moisturePercent);
   const hasMoisture = moisturePercent != null;
   const hasApplied = appliedKg != null && appliedKg > 0;
-  const moistureFraction = moisturePercent != null ? moisturePercent / 100 : null;
-  const moistureKg =
-    appliedKg != null && moistureFraction != null
-      ? appliedKg * moistureFraction
-      : null;
 
   if (!hasMoisture && !hasApplied) return null;
 
   return (
-    <div className="col-span-full mt-8">
+    <div className="col-span-full border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12">
       {!hasMoisture ? (
-        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)]">
-          <span className="body-small text-[var(--color-text-tertiary)] leading-relaxed">
-            No moisture content on delivery — enter dry mass manually or update the delivery record.
-          </span>
-        </div>
+        <p className="body-small text-[var(--color-text-tertiary)]">
+          The selected delivery has no moisture reading, so dry mass cannot be derived. Enter it
+          manually above, or add moisture to the delivery record.
+        </p>
       ) : !hasApplied ? (
-        <div className="flex items-start gap-10 py-12 px-16 border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)]">
-          <span className="body-small text-[var(--color-text-tertiary)] leading-relaxed">
-            Enter wet mass applied to calculate dry mass.
-          </span>
-        </div>
+        <p className="body-small text-[var(--color-text-tertiary)]">
+          Enter the wet mass applied to see the dry mass this delivery&rsquo;s moisture implies.
+        </p>
       ) : (
-        <div className="bg-[var(--color-background-medium)] border border-[var(--color-border-tertiary)]">
-          {/* Header */}
-          <div className="px-16 py-8 border-b border-[var(--color-border-tertiary)]">
-            <span className="body-caption font-medium uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
-              Dry Mass Calculation
-            </span>
-          </div>
-
-          {/* Visual breakdown */}
-          <div className="px-16 py-12">
-            <div className="flex items-center gap-8">
-              {/* Wet mass */}
-              <div className="flex flex-col items-center gap-2 min-w-0">
-                <span className="font-mono text-[var(--text-s)] font-[var(--font-weight-bold)] text-[var(--color-text-primary)]">
-                  {formatKg(appliedKg)}
-                </span>
-                <span className="body-caption text-[var(--color-text-tertiary)]">
-                  wet mass
-                </span>
-              </div>
-
-              {/* Minus sign */}
-              <span className="font-mono text-[var(--text-s)] text-[var(--color-text-tertiary)] shrink-0 pb-16">
-                &minus;
-              </span>
-
-              {/* Moisture removed */}
-              <div className="flex flex-col items-center gap-2 min-w-0">
-                <span className="font-mono text-[var(--text-s)] text-[var(--color-text-tertiary)]">
-                  {formatKg(moistureKg)}
-                </span>
-                <span className="body-caption text-[var(--color-text-tertiary)]">
-                  moisture ({moisturePercent?.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%)
-                </span>
-              </div>
-
-              {/* Equals sign */}
-              <span className="font-mono text-[var(--text-s)] text-[var(--color-text-tertiary)] shrink-0 pb-16">
-                =
-              </span>
-
-              {/* Dry mass result */}
-              <div className="flex flex-col items-center gap-2 min-w-0 px-12 py-4 bg-[var(--clr-purple-10)] border-l-2 border-[var(--clr-purple)]">
-                <span className="font-mono text-[var(--text-l)] font-bold text-[var(--color-text-primary)]" aria-live="polite" aria-atomic="true">
-                  {formatKg(dryKg)}
-                </span>
-                <span className="body-caption font-medium text-[var(--clr-purple)]">
-                  dry mass
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Source note */}
-          <div className="px-16 py-6 border-t border-[var(--color-border-tertiary)]">
-            <span className="body-caption text-[var(--color-text-tertiary)]">
-              Moisture % from delivery record
-            </span>
-          </div>
-        </div>
+        <MoistureSplit
+          wetMassKg={appliedKg}
+          moisturePercent={moisturePercent}
+          note={`Moisture from the delivery record. ${DRY_MASS_DERIVED_NOTE}`}
+        />
       )}
     </div>
   );
@@ -456,15 +400,16 @@ export function ApplicationForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="biocharAppliedTons"
-            label="Biochar Applied, Wet (kg)"
+            label="Biochar applied, wet (kg)"
             error={errors.biocharAppliedTons?.message}
             required
             certifyRequired={isApplicationCertifyField("biocharAppliedTons")}
             certifyStatus={certStatus("biocharAppliedTons")}
+            hint="As-received mass at delivery, water included."
             helperText={
               availableKg !== null
                 ? `${formatKg(availableKg)} available from this delivery`
-                : "As-received mass at delivery, before moisture adjustment"
+                : undefined
             }
           >
             <FormInput
@@ -484,9 +429,9 @@ export function ApplicationForm({
           {moisturePercent == null && selectedDelivery && (
             <FormField
               id="biocharAppliedDryTons"
-              label="Biochar Applied Dry (kg)"
+              label="Biochar applied, dry (kg)"
               error={errors.biocharAppliedDryTons?.message}
-              helperText="No moisture % on delivery — enter dry mass manually"
+              helperText="No moisture on delivery — enter dry mass manually"
               certifyRequired={isApplicationCertifyField("biocharAppliedDryTons")}
               certifyStatus={certStatus("biocharAppliedDryTons")}
             >
@@ -504,7 +449,7 @@ export function ApplicationForm({
             </FormField>
           )}
 
-          <DryMassCard
+          <AppliedMassSplit
             appliedKg={appliedKgValid}
             moisturePercent={moisturePercent}
           />

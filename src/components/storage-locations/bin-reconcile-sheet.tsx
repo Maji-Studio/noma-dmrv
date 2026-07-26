@@ -4,10 +4,12 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
-import { FormField, FormInput, FormTextarea } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, MoistureField } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
+import { MoistureSplit } from "@/components/ui/moisture-split";
 import { useToast } from "@/components/ui/toast";
 import { formatMass } from "@/lib/format-utils";
+import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { canonicalizeFeedstockStockTake } from "@/lib/calculations/bin-stock-take";
 import {
   RecordLossFieldError,
@@ -83,10 +85,6 @@ function ModeToggle({
 function previewNumber(value: unknown): number | null {
   const parsed = toNumberOrNull(value);
   return typeof parsed === "number" && Number.isFinite(parsed) ? parsed : null;
-}
-
-function formatMoisturePercent(value: number | null): string {
-  return value == null ? "Not available" : `${value.toFixed(1)}%`;
 }
 
 function CurrentStockContext({
@@ -185,7 +183,7 @@ function StockTakeForm({
   const deltaKg = countedDryKg != null ? countedDryKg - derivedMassKg : null;
 
   const countedLabel = isFeedstock
-    ? "Counted stock (wet kg)"
+    ? "Counted stock, wet (kg)"
     : "Counted stock (kg)";
 
   const onSubmit = handleSubmit(async (raw) => {
@@ -229,11 +227,7 @@ function StockTakeForm({
         label={countedLabel}
         error={errors.counted?.message}
         required
-        helperText={
-          isFeedstock
-            ? "Enter the physically weighed wet mass; it is converted to dry below."
-            : undefined
-        }
+        helperText={isFeedstock ? "The physically weighed mass" : undefined}
       >
         <FormInput
           id="counted"
@@ -248,48 +242,26 @@ function StockTakeForm({
       </FormField>
 
       {isFeedstock && (
-        <FormField
+        <MoistureField
           id="moisture-percent"
-          label="Moisture content (%)"
           error={errors.moisturePercent?.message}
           required
-          helperText="Enter or confirm the moisture measured for this stock-take."
-        >
-          <FormInput
-            id="moisture-percent"
-            type="number"
-            step="any"
-            min="0"
-            max="100"
-            placeholder="e.g., 18"
-            disabled={recordStockTake.isPending}
-            error={!!errors.moisturePercent}
-            {...register("moisturePercent")}
-          />
-        </FormField>
+          disabled={recordStockTake.isPending}
+          placeholder="e.g. 18"
+          helperText="Measured for this stock-take"
+          registration={register("moisturePercent")}
+        />
       )}
 
-      {isFeedstock &&
-        countedNum != null &&
-        measuredMoisturePercent != null &&
-        countedDryKg != null && (
-          <div
-            aria-label="Wet-to-dry conversion preview"
-            className="flex items-center justify-between gap-8 border border-[var(--color-border-tertiary)] bg-[var(--color-background-light)] px-12 py-10"
-          >
-            <span className="body-caption text-[var(--color-text-tertiary)]">
-              Dry-equivalent count
-            </span>
-            <span className="body-small font-medium text-[var(--color-text-primary)]">
-              {formatMass(countedDryKg)} dry
-              <span className="body-caption font-normal text-[var(--color-text-tertiary)]">
-                {" "}
-                · {formatMass(countedNum)} wet at{" "}
-                {formatMoisturePercent(measuredMoisturePercent)}
-              </span>
-            </span>
-          </div>
-        )}
+      {isFeedstock && (
+        <div className="border-l-2 border-[var(--color-border-primary)] bg-[var(--color-background-medium)] px-16 py-12">
+          <MoistureSplit
+            wetMassKg={countedNum}
+            moisturePercent={measuredMoisturePercent}
+            note="Bin stock is held in dry kg, so the counted wet mass is converted before it is compared with the book figure."
+          />
+        </div>
+      )}
 
       {deltaKg != null && (
         <div className="flex items-center justify-between gap-8 border border-[var(--color-border-tertiary)] bg-[var(--color-background-light)] px-12 py-10">

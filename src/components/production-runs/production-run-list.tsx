@@ -48,7 +48,9 @@ import { EntityCertifyReadinessBadge } from "@/components/certification/entity-c
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
-import { formatDate } from "@/lib/format-utils";
+import { formatDate, formatMass, formatMassKg } from "@/lib/format-utils";
+import { formatMoisturePercent } from "@/lib/mass-moisture";
+import { MoistureSplit } from "@/components/ui/moisture-split";
 import { getRunConflict } from "@/lib/production-runs/overlap-conflict";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
@@ -127,13 +129,24 @@ function createColumns(
     },
     {
       accessorKey: "totalFeedstockMassKg",
-      header: "Feedstock (kg)",
-      cell: ({ row }) => row.original.totalFeedstockMassKg?.toLocaleString() ?? "\u2014",
+      header: "Feedstock wet mass",
+      cell: ({ row }) => (
+        <span className="font-mono">{formatMass(row.original.totalFeedstockMassKg)}</span>
+      ),
     },
     {
       accessorKey: "biocharOutputKg",
-      header: "Biochar Wet (kg)",
-      cell: ({ row }) => row.original.biocharOutputKg?.toLocaleString() ?? "\u2014",
+      header: "Biochar wet mass",
+      cell: ({ row }) => (
+        <span className="font-mono">{formatMass(row.original.biocharOutputKg)}</span>
+      ),
+    },
+    {
+      accessorKey: "biocharDryMassKg",
+      header: "Biochar dry mass",
+      cell: ({ row }) => (
+        <span className="font-mono">{formatMass(row.original.biocharDryMassKg)}</span>
+      ),
     },
     {
       accessorKey: "status",
@@ -676,21 +689,33 @@ export function ProductionRunList() {
             fields: [
               buildProductionRunFeedstockDetailField(sideSheetEntity.feedstocks),
               { label: "Source Bin", value: sideSheetEntity.feedstockStorageLocationCode },
-              { label: "Wet Mass (kg)", ...certificationDetailField("productionRun", "feedstockWetMassKg"), value: sideSheetEntity.feedstockWetMassKg != null ? `${sideSheetEntity.feedstockWetMassKg.toLocaleString()} kg` : null },
-              { label: "Moisture Content (%)", ...certificationDetailField("productionRun", "feedstockMoisturePercent"), value: sideSheetEntity.feedstockMoisturePercent != null ? `${sideSheetEntity.feedstockMoisturePercent}%` : null },
-              { label: "Dry Mass (derived)", value: sideSheetEntity.feedstockMassDryKg != null ? `${sideSheetEntity.feedstockMassDryKg.toLocaleString()} kg` : null },
+              { label: "Feedstock wet mass (kg)", ...certificationDetailField("productionRun", "feedstockWetMassKg"), value: formatMassKg(sideSheetEntity.feedstockWetMassKg) },
+              { label: "Feedstock moisture (%)", ...certificationDetailField("productionRun", "feedstockMoisturePercent"), value: formatMoisturePercent(sideSheetEntity.feedstockMoisturePercent) },
               { label: "Feed Rate (kg/hr)", value: sideSheetEntity.feedingRateKgHr != null ? `${sideSheetEntity.feedingRateKgHr} kg/hr` : null },
               { label: "Residence Time (min)", value: sideSheetEntity.residenceTimeMinutes != null ? `${sideSheetEntity.residenceTimeMinutes} min` : null },
             ],
+            content: (
+              <MoistureSplit
+                wetMassKg={sideSheetEntity.feedstockWetMassKg}
+                moisturePercent={sideSheetEntity.feedstockMoisturePercent}
+                materialLabel="Feedstock"
+              />
+            ),
           },
           {
             title: "Output",
             fields: [
               { label: "Biochar Storage", value: sideSheetEntity.biocharStorageLocationCode },
-              { label: "Biochar Wet Mass (kg)", ...certificationDetailField("productionRun", "biocharOutputKg"), value: sideSheetEntity.biocharOutputKg != null ? `${sideSheetEntity.biocharOutputKg.toLocaleString()} kg` : null },
-              { label: "Biochar Moisture (%)", ...certificationDetailField("productionRun", "biocharMoisturePercent"), value: sideSheetEntity.biocharMoisturePercent != null ? `${sideSheetEntity.biocharMoisturePercent}%` : null },
-              { label: "Biochar Dry Mass (derived)", value: sideSheetEntity.biocharDryMassKg != null ? `${sideSheetEntity.biocharDryMassKg.toLocaleString()} kg` : null },
+              { label: "Biochar wet mass (kg)", ...certificationDetailField("productionRun", "biocharOutputKg"), value: formatMassKg(sideSheetEntity.biocharOutputKg) },
+              { label: "Biochar moisture (%)", ...certificationDetailField("productionRun", "biocharMoisturePercent"), value: formatMoisturePercent(sideSheetEntity.biocharMoisturePercent) },
             ],
+            content: (
+              <MoistureSplit
+                wetMassKg={sideSheetEntity.biocharOutputKg}
+                moisturePercent={sideSheetEntity.biocharMoisturePercent}
+                materialLabel="Biochar"
+              />
+            ),
           },
           {
             title: "Energy",

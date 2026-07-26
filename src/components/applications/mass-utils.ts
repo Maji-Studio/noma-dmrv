@@ -1,6 +1,6 @@
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { KG_PER_TONNE } from "@/lib/calculations/unit-conversions";
-import { formatDate } from "@/lib/format-utils";
+import { formatDate, formatMassKg } from "@/lib/format-utils";
 import type { SoilTemperatureSource } from "@/schemas/applications";
 import type { DeliveryStatus } from "@/schemas/deliveries";
 
@@ -118,13 +118,8 @@ export function applicationKgToTons(value: number | null | undefined): number | 
   return value / KG_PER_TONNE;
 }
 
-export function formatKg(value: number | null | undefined): string {
-  if (value == null) {
-    return "—";
-  }
-
-  return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} kg`;
-}
+/** Kept as a named re-export so the application surfaces keep one import site. */
+export const formatKg = formatMassKg;
 
 function formatDeliveryDate(value: Date | string): string {
   return formatDate(value);

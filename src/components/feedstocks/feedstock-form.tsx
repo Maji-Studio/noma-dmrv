@@ -17,7 +17,7 @@ import { formatDistanceKm } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, DryMassInput, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
 import {
@@ -38,10 +38,6 @@ import { BinAllocationRow } from "./bin-allocation-row";
 import { FeedstockEvidenceSection } from "./feedstock-trailing-sections";
 import { WetMassWarning } from "./wet-mass-warning";
 import { FEEDSTOCK_BIN_TYPES } from "@/schemas/storage-locations";
-import {
-  MASS_KG_INPUT_STEP,
-  STORED_PERCENT_INPUT_STEP,
-} from "@/schemas/helpers";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 
@@ -495,50 +491,30 @@ export function FeedstockForm({
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-            <FormField
-              id="totalWetMassKg"
-              label="Total Wet Mass (kg)"
-              error={errors.totalWetMassKg?.message}
-              hint="As-received weight of the entire delivery"
-              required
-              certifyRequired={isFeedstockCertifyField("totalWetMassKg")}
-              certifyStatus={certStatus("totalWetMassKg")}
-            >
-              <DryMassInput
-                id="totalWetMassKg"
-                type="number"
-                step={MASS_KG_INPUT_STEP}
-                min="0"
-                placeholder="e.g., 1500"
-                disabled={isSubmitting}
-                error={!!errors.totalWetMassKg}
-                wetMassKg={watchWetMass}
-                moisturePercent={watchMoisture}
-                {...register("totalWetMassKg", { setValueAs: numericValue })}
-              />
-            </FormField>
-
-            <FormField
-              id="moisturePercent"
-              label="Moisture Content (%)"
-              error={errors.moisturePercent?.message}
-              helperText="0-100%"
-              required
-            >
-              <FormInput
-                id="moisturePercent"
-                type="number"
-                step={STORED_PERCENT_INPUT_STEP}
-                min="0"
-                max="100"
-                placeholder="e.g., 35"
-                disabled={isSubmitting}
-                error={!!errors.moisturePercent}
-                {...register("moisturePercent", { setValueAs: numericValue })}
-              />
-            </FormField>
-          </div>
+          <MassMoistureFields
+            wetMassKg={watchWetMass}
+            moisturePercent={watchMoisture}
+            wet={{
+              id: "totalWetMassKg",
+              label: "Total wet mass (kg)",
+              error: errors.totalWetMassKg?.message,
+              hint: "As-received weight of the entire delivery, water included.",
+              required: true,
+              disabled: isSubmitting,
+              placeholder: "e.g. 1500",
+              certifyRequired: isFeedstockCertifyField("totalWetMassKg"),
+              certifyStatus: certStatus("totalWetMassKg"),
+              registration: register("totalWetMassKg", { setValueAs: numericValue }),
+            }}
+            moisture={{
+              id: "moisturePercent",
+              error: errors.moisturePercent?.message,
+              required: true,
+              disabled: isSubmitting,
+              placeholder: "e.g. 35",
+              registration: register("moisturePercent", { setValueAs: numericValue }),
+            }}
+          />
         </FormSection>
 
         {/* Bin Allocations — only shown after feedstock type is selected */}

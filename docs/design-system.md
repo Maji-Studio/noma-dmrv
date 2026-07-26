@@ -249,6 +249,39 @@ restore for free.
   admin page. `Card.Root` defaults to `padding="none"` and `radius="none"`.
   For entity lists, use the Entity Card pattern below instead.
 
+### Wet mass, moisture, dry mass
+
+One vocabulary, one arithmetic, one visual — all from `@/lib/mass-moisture`
+(`splitWetMass`, `formatMoisturePercent`, `formatSplitMass`, the
+`*_FIELD_LABEL` constants) and `MoistureSplit`
+(`@/components/ui/moisture-split`). **Never retype a moisture label, re-derive
+the split inline, or format a percentage by hand.**
+
+- **Moisture is wet basis everywhere** — `water / wet mass`, 0–100. The
+  ambiguity with dry basis is resolved once, in `MOISTURE_BASIS_HINT`, which
+  `MoistureField` attaches to every moisture input.
+- **`MoistureSplit` variants:** `detail` (figures + bar + footnote — forms and
+  read side sheets) · `compact` (bar + one line) · `inline` (text only — table
+  cells, option labels). Missing moisture renders an explicit *unresolved*
+  state (hatched dashed bar, "Moisture not recorded"), never nothing — dry mass
+  drives certification readiness, so its absence has to be visible.
+- **The bar is area-neutral**: solid `--clr-dark-purple-80` for dry matter,
+  the `.moisture-water-hatch` void for water. It does **not** take the
+  production/infrastructure/distribution accent — moisture means the same thing
+  in every area, and that is what lets one component appear across five.
+- **Split figures are always kg** (`formatSplitMass`), never the auto-tonne
+  `formatMass`: 1,500 kg at 2% moisture is 1,470 kg dry, and in tonnes both
+  round to "1.5 t", claiming no water was removed.
+- Read side-sheet sections mirror the form: wet-mass and moisture stay
+  `DetailPanelField`s; the split goes in the section's `content` slot and
+  carries the dry mass. Do **not** add a separate "Dry Mass (derived)" row.
+
+Mass formatting more broadly: `formatMass` (auto-tonne, for a lone mass in a
+table or KPI) · `formatMassKg` (fixed kg, for related figures that must stay
+comparable) · `formatPercent` — all in `@/lib/format-utils`. Local
+`formatMass`/`formatPercent`/`formatKg` helpers were removed; don't reintroduce
+one by copying a neighbouring component.
+
 ### EntitySideSheet mounting rule
 
 `EntitySideSheet` must be **always mounted with a controlled `open` prop** —

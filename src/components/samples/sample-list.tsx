@@ -39,7 +39,8 @@ import { useToast } from "@/components/ui/toast";
 import { EntityCertifyReadinessBadge } from "@/components/certification/entity-certify-readiness-badge";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
-import { formatDate, formatDateTime } from "@/lib/format-utils";
+import { formatDate, formatDateTime, formatPercent } from "@/lib/format-utils";
+import { formatMoisturePercent, MOISTURE_FIELD_LABEL } from "@/lib/mass-moisture";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   ENTITY_DEEP_LINK_MODE_PARAM,
@@ -67,10 +68,6 @@ function buildAttachmentFailureBanner(total: number): string | null {
   return total > 0
     ? `Sample created, but ${total} ${total === 1 ? "attachment" : "attachments"} failed to save.`
     : null;
-}
-
-function formatPercent(value: number | null, digits = 2) {
-  return value == null ? null : `${value.toFixed(digits)}%`;
 }
 
 // ============================================
@@ -707,7 +704,7 @@ export function SampleList({
             title: "Proximate Analysis",
             fields: [
               { label: "Ash Content (%)", value: formatPercent(displaySideSheet.entity.ashContentPercent) },
-              { label: "Moisture Content (%)", value: formatPercent(displaySideSheet.entity.moistureContentPercent) },
+              { label: MOISTURE_FIELD_LABEL, value: formatMoisturePercent(displaySideSheet.entity.moistureContentPercent) },
             ],
           },
           {
