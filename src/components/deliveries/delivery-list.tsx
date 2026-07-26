@@ -540,7 +540,7 @@ export function DeliveryList() {
             description={
               hasActiveFilters
                 ? "Try adjusting or clearing the search and filters."
-                : "Create your first delivery to get started"
+                : "A delivery tracks biochar leaving the facility for a customer."
             }
             action={
               hasActiveFilters ? undefined : (

@@ -359,9 +359,11 @@ the split inline, or format a percentage by hand.**
 
 Mass formatting more broadly: `formatMass` (auto-tonne, for a lone mass in a
 table or KPI) · `formatMassKg` (fixed kg, for related figures that must stay
-comparable) · `formatPercent` — all in `@/lib/format-utils`. Local
-`formatMass`/`formatPercent`/`formatKg` helpers were removed; don't reintroduce
-one by copying a neighbouring component.
+comparable) · `formatPercent` — all in `@/lib/format-utils`. The local `formatMass`/`formatKg`
+copies that shadowed them were removed; don't reintroduce one by copying a
+neighbouring component. A local helper is only acceptable when it formats a
+different quantity and is **named apart** so it cannot shadow the shared one —
+`formatSharePercent` in `formulations/formulation-form.tsx` is the one example.
 
 ### EntitySideSheet mounting rule
 

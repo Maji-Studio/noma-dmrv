@@ -525,7 +525,7 @@ export function StorageLocationList() {
               ? "Try adjusting your search."
               : showArchived
                 ? "Storage bins you archive will appear here and can be restored."
-                : "Create your first storage bin to track feedstock, biochar, and finished product inventory."
+                : "Bins hold feedstock, biochar, and finished product inventory."
           }
           action={
             !hasActiveFilters && !showArchived ? (

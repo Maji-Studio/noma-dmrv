@@ -528,7 +528,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                 ? "No applications trace to this batch. Create one or review the batch period and linked production runs."
                 : hasActiveFilters
                 ? "Try adjusting or clearing the filters."
-                : "Create your first field application to get started"
+                : "A field application records where and when biochar was spread."
             }
             action={
               !hasActiveFilters ? (

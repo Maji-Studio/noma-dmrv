@@ -45,7 +45,7 @@ function storageLocationActionError(
   op: string,
 ): string {
   return toLoggedActionError(error, fallbackMessage, {
-    message: "storage location action failed",
+    message: "storage bin action failed",
     context: { op },
   });
 }
@@ -138,7 +138,7 @@ export async function getStorageLocationWithFacilityFn(
       success: false,
       error: storageLocationActionError(
         error,
-        "Failed to load storage location details",
+        "Failed to load storage bin details",
         "storage-location:detail",
       ),
     };
@@ -165,7 +165,7 @@ export async function getStorageLocationsByFacilityFn(
       success: false,
       error: storageLocationActionError(
         error,
-        "Failed to load storage locations for facility",
+        "Failed to load storage bins for facility",
         "storage-location:by-facility",
       ),
     };
@@ -193,7 +193,7 @@ export async function checkStorageLocationCodeFn(
       success: false,
       error: storageLocationActionError(
         error,
-        "Failed to check storage location code",
+        "Failed to check storage bin code",
         "storage-location:check-code",
       ),
     };
@@ -248,7 +248,7 @@ export async function createStorageLocationFn(
       success: false,
       error: storageLocationActionError(
         error,
-        "Failed to create storage location",
+        "Failed to create storage bin",
         "storage-location:create",
       ),
     };
@@ -299,7 +299,7 @@ export async function updateStorageLocationFn(
       success: false,
       error: storageLocationActionError(
         error,
-        "Failed to update storage location",
+        "Failed to update storage bin",
         "storage-location:update",
       ),
     };
@@ -321,7 +321,7 @@ export async function archiveStorageLocationFn(
       const validated = archiveStorageLocationSchema.parse(data);
       return archiveStorageLocation(ctx, validated.storageLocationId);
     },
-    { fallbackMessage: "Failed to archive storage location" },
+    { fallbackMessage: "Failed to archive storage bin" },
   );
 }
 
@@ -336,7 +336,7 @@ export async function restoreStorageLocationFn(
       const validated = restoreStorageLocationSchema.parse(data);
       return restoreStorageLocation(ctx, validated.storageLocationId);
     },
-    { fallbackMessage: "Failed to restore storage location" },
+    { fallbackMessage: "Failed to restore storage bin" },
   );
 }
 
@@ -368,7 +368,7 @@ export async function deleteStorageLocationFn(
       success: false,
       error: storageLocationActionError(
         error,
-        "Failed to delete storage location",
+        "Failed to delete storage bin",
         "storage-location:delete",
       ),
     };

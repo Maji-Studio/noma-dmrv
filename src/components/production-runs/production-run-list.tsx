@@ -578,7 +578,7 @@ export function ProductionRunList() {
                   ? "No production runs found"
                   : "No production runs yet"
             }
-            description={hasActiveFilters ? "Try adjusting your search or filters." : "Create your first production run to start tracking pyrolysis batches."}
+            description={hasActiveFilters ? "Try adjusting your search or filters." : "A production run is one pyrolysis batch, turning feedstock into biochar."}
             action={
               !hasActiveFilters ? (
                 <Button variant="primary" onClick={openCreate}>

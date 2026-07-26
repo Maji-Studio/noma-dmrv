@@ -138,7 +138,7 @@ async function validateBiocharStorageLocation(
 
   if (!loc) throw new SafeError(`${label} storage location not found`);
   if (loc.facilityId !== facilityId) throw new SafeError(`${label} bin does not belong to the selected facility`);
-  if (loc.type !== "biochar_bin") throw new SafeError("Selected storage location is not a biochar bin");
+  if (loc.type !== "biochar_bin") throw new SafeError("Selected storage bin is not a biochar bin");
 }
 
 /**
@@ -170,7 +170,7 @@ async function validateProductionFeedstockSource(
 
   if (!loc) throw new SafeError("Feedstock storage bin not found");
   if (loc.facilityId !== facilityId) throw new SafeError("Feedstock bin does not belong to the selected facility");
-  if (loc.type !== "feedstock_bin") throw new SafeError("Selected storage location is not a feedstock bin");
+  if (loc.type !== "feedstock_bin") throw new SafeError("Selected storage bin is not a feedstock bin");
   if (!loc.feedstockTypeId || !loc.feedstockTypeUsage) {
     throw new SafeError("Source bin must be restricted to a feedstock type before it can feed a production run");
   }

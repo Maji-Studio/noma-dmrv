@@ -322,7 +322,7 @@ export async function getStorageLocationById(
     .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (!storageLocation) {
-    throw new SafeError("Storage location not found");
+    throw new SafeError("Storage bin not found");
   }
 
   return storageLocation;
@@ -384,7 +384,7 @@ export async function getStorageLocationWithFacility(
     .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (!result) {
-    throw new SafeError("Storage location not found");
+    throw new SafeError("Storage bin not found");
   }
 
   const [enriched] = await enrichStorageLocationRows(ctx, [result]);
@@ -542,11 +542,11 @@ export async function updateStorageLocation(
     .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (!existing) {
-    throw new SafeError("Storage location not found");
+    throw new SafeError("Storage bin not found");
   }
   if (existing.archivedAt) {
     throw new SafeError(
-      "Restore this storage location before editing it",
+      "Restore this storage bin before editing it",
     );
   }
 
@@ -558,7 +558,7 @@ export async function updateStorageLocation(
       .where(and(eq(storageLocations.code, data.code), eq(storageLocations.organizationId, ctx.organizationId)));
 
     if (duplicate) {
-      throw new SafeError("A storage location with this code already exists");
+      throw new SafeError("A storage bin with this code already exists");
     }
   }
 
@@ -681,7 +681,7 @@ export async function updateStorageLocation(
 
   if (!updated) {
     throw new SafeError(
-      "Restore this storage location before editing it",
+      "Restore this storage bin before editing it",
     );
   }
 
@@ -718,10 +718,10 @@ export async function archiveStorageLocation(
       );
 
     if (!existing) {
-      throw new SafeError("Storage location not found");
+      throw new SafeError("Storage bin not found");
     }
     if (existing.archivedAt) {
-      throw new SafeError("Storage location is already archived");
+      throw new SafeError("Storage bin is already archived");
     }
 
     const lane = laneForStorageType(existing.type);
@@ -751,7 +751,7 @@ export async function archiveStorageLocation(
       .returning();
 
     if (!archived) {
-      throw new SafeError("Storage location is already archived");
+      throw new SafeError("Storage bin is already archived");
     }
 
     return archived;
@@ -791,14 +791,14 @@ export async function restoreStorageLocation(
       .for("update");
 
     if (!existing) {
-      throw new SafeError("Storage location not found");
+      throw new SafeError("Storage bin not found");
     }
     if (!existing.archivedAt) {
-      throw new SafeError("Storage location is not archived");
+      throw new SafeError("Storage bin is not archived");
     }
     if (existing.facilityArchivedAt) {
       throw new SafeError(
-        "Restore the facility before restoring this storage location",
+        "Restore the facility before restoring this storage bin",
       );
     }
 
@@ -815,7 +815,7 @@ export async function restoreStorageLocation(
       .returning();
 
     if (!restored) {
-      throw new SafeError("Storage location is not archived");
+      throw new SafeError("Storage bin is not archived");
     }
 
     return restored;
@@ -843,7 +843,7 @@ export async function deleteStorageLocation(
     .where(and(eq(storageLocations.id, storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (!existing) {
-    throw new SafeError("Storage location not found");
+    throw new SafeError("Storage bin not found");
   }
 
   const [

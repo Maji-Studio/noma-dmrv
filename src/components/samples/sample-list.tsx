@@ -607,7 +607,7 @@ export function SampleList({
             description={
               hasActiveFilters
                 ? "Try adjusting your search or filters."
-                : "Create your first lab sample to start tracking biochar quality."
+                : "Lab samples carry the analysis behind biochar quality and durability."
             }
             action={
               !hasActiveFilters ? (

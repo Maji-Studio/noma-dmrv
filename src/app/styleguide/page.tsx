@@ -197,7 +197,7 @@ export default function StyleguidePage() {
             <Swatch name="Orange Light" cssVar="--color-signal-orange-light" />
           </div>
           <p className="body-caption" style={{ color: "var(--color-text-tertiary)" }}>
-            The green signal tokens are deprecated — use the status ramp below.
+            The green signal tokens are retired — their definitions are gone; use the status ramp below.
           </p>
         </Section>
 

@@ -455,7 +455,7 @@ export function BiocharProductForm({
             label="Water added (kg)"
             error={errors.waterAddedKg?.message}
             helperText="Water added to reach target moisture"
-            hint="Added water raises wet mass and final moisture but creates no dry matter, so the dry mass above is unchanged by it."
+            hint="Dry mass is unchanged by added water."
             required
           >
             <FormInput

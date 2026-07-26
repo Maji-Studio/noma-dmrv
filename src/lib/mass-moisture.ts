@@ -14,7 +14,7 @@
  * so a feedstock batch, a delivery and a production run all read the same.
  *
  * Presentation lives in `@/components/ui/moisture-split`; the form inputs live
- * in `@/components/forms/moisture-field` and `wet-mass-field`. Server-side the
+ * in `@/components/forms/mass-moisture-fields`. Server-side the
  * authoritative dry mass is still recomputed from `@/lib/calculations/mass-dry`
  * — anything derived here is operator feedback, never a submitted value.
  */

@@ -442,7 +442,7 @@ export function FacilityList() {
               ? "Try adjusting your search or filters."
               : showArchived
                 ? "Facilities you archive will appear here and can be restored."
-                : "Create your first facility to start organising reactors and storage bins."
+                : "A facility is a production site, with its own reactors and storage bins."
           }
           action={
             !hasActiveFilters && !showArchived ? (

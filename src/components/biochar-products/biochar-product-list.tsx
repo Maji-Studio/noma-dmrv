@@ -439,7 +439,7 @@ export function BiocharProductList() {
             description={
               hasActiveFilters
                 ? "Try adjusting or clearing the filters."
-                : "Create your first biochar product to start tracking finished product batches."
+                : "A biochar product is a finished batch, blended and packed for an order."
             }
             action={
               !hasActiveFilters ? (
