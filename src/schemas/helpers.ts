@@ -167,6 +167,31 @@ export const optionalPercent = z.preprocess(
 );
 
 // ============================================
+// Exact Numeric Storage Precision
+// ============================================
+
+/** HTML/Zod increment for values stored through the `numeric(14,3)` family. */
+export const MASS_KG_INPUT_STEP = 0.001;
+/** HTML/Zod increment for values stored through the `numeric(9,6)` family. */
+export const STORED_PERCENT_INPUT_STEP = 0.000001;
+
+export const MASS_KG_PRECISION_MESSAGE = "Use at most 3 decimal places";
+export const STORED_PERCENT_PRECISION_MESSAGE =
+  "Use at most 6 decimal places";
+
+/** Percent value whose fractional precision round-trips through `numeric(9,6)`. */
+export function storedPercentSchema() {
+  return z
+    .number()
+    .multipleOf(STORED_PERCENT_INPUT_STEP, STORED_PERCENT_PRECISION_MESSAGE);
+}
+
+/** Optional 0–100 percent input backed by the exact `numeric(9,6)` family. */
+export const optionalStoredPercent = optionalPercent.pipe(
+  storedPercentSchema().nullable().optional(),
+);
+
+// ============================================
 // Mass Input Caps
 // ============================================
 
@@ -185,11 +210,19 @@ export const MASS_MAX_KG_MESSAGE = `Must be ${MASS_INPUT_MAX_KG.toLocaleString("
 export const MASS_MAX_TONNES_MESSAGE = `Must be ${MASS_INPUT_MAX_TONNES.toLocaleString("en-US")} tonnes or less`;
 
 export function massKgSchema(minMessage = "Must be 0 or greater") {
-  return z.number().min(0, minMessage).max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE);
+  return z
+    .number()
+    .min(0, minMessage)
+    .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE)
+    .multipleOf(MASS_KG_INPUT_STEP, MASS_KG_PRECISION_MESSAGE);
 }
 
 export function positiveMassKgSchema(message = "Must be greater than 0") {
-  return z.number().positive(message).max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE);
+  return z
+    .number()
+    .positive(message)
+    .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE)
+    .multipleOf(MASS_KG_INPUT_STEP, MASS_KG_PRECISION_MESSAGE);
 }
 
 export function requiredMassKgSchema(message = "Must be 0 or greater") {

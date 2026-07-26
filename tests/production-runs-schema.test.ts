@@ -52,6 +52,26 @@ describe("productionRunFormSchema mass balance", () => {
 
     expect(result.success).toBe(true);
   });
+
+  it("rejects mass and moisture precision that storage would round", () => {
+    const result = productionRunFormSchema.safeParse({
+      ...validProductionRunInput,
+      feedstockWetMassKg: 100.0001,
+      feedstockMoisturePercent: 20.1234567,
+      biocharOutputKg: 80,
+      biocharMoisturePercent: 0,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ path: ["feedstockWetMassKg"] }),
+          expect.objectContaining({ path: ["feedstockMoisturePercent"] }),
+        ]),
+      );
+    }
+  });
 });
 
 // QA F-2 — the form's start/end cross-field checks must resolve the entered

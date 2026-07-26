@@ -69,7 +69,7 @@ Two independent registry figures agree on **+8.06 tCO₂e**.
 
 **Independent hand calculation of gross sequestration:**
 
-```
+```text
 dry biochar submitted      = 3.724 t
 mean organic carbon        = (80.5 + 79.9 + 81.1) / 3      = 80.5 %
 carbon mass                = 3.724 × 0.805                 = 2.9978 t C
@@ -163,7 +163,7 @@ With the chain dated in the future relative to "today", the batch reported
 **"Batch data ready"**, all blocking preconditions met, 8 of 9 checks green — and
 the submission then failed at the registry:
 
-```
+```text
 Datapoint POST failed for "s_fraction": Provider rejected the request (400):
 Measured at date for datapoint cannot be in the future
 ```
@@ -191,7 +191,7 @@ Full path exercised on localhost. The app:
    verifier will open") — a genuine Isometric requirement;
 5. called the API and surfaced the provider's response verbatim:
 
-```
+```text
 Provider rejected the request (400): No verifier is assigned to this project
 ```
 
@@ -221,7 +221,7 @@ whatever it returns on success.
 
 `certifier_ghg_statements` has:
 
-```
+```sql
 UNIQUE (provider, metadata->>'remoteExternalId')   -- global, not per-facility
 facility_id NOT NULL
 UNIQUE (provider, facility_id, reporting_period_end_on)
@@ -263,7 +263,7 @@ The `CALC` button fails on **both** staging and localhost with
 
 Root cause is **upstream, not ours**:
 
-```
+```text
 POST https://api.heigit.org/openrouteservice/v2/directions/driving-car
 → 502 Proxy Error after ~30 s
    "DNS lookup failure for: heigitsv03.heigit.org"

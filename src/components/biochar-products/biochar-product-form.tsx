@@ -23,6 +23,10 @@ import {
   PURE_PRODUCT_BIN_FILTER,
   type BiocharProductFormData,
 } from "@/schemas/biochar-products";
+import {
+  MASS_KG_INPUT_STEP,
+  STORED_PERCENT_INPUT_STEP,
+} from "@/schemas/helpers";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
 import { getProductionRunBiocharPreviewFn } from "@/fn/production-runs";
@@ -422,7 +426,7 @@ export function BiocharProductForm({
             <DryMassInput
               id="massKg"
               type="number"
-              step="any"
+              step={MASS_KG_INPUT_STEP}
               min="0"
               placeholder="e.g., 500"
               disabled={isSubmitting}
@@ -443,7 +447,7 @@ export function BiocharProductForm({
             <FormInput
               id="moistureContentPercent"
               type="number"
-              step="any"
+              step={STORED_PERCENT_INPUT_STEP}
               min="0"
               max="100"
               placeholder="e.g., 2"
@@ -465,7 +469,7 @@ export function BiocharProductForm({
             <FormInput
               id="waterAddedKg"
               type="number"
-              step="any"
+              step={MASS_KG_INPUT_STEP}
               min="0"
               placeholder="e.g., 50"
               disabled={isSubmitting}

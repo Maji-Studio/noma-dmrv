@@ -13,6 +13,7 @@ import {
   optionalPositiveNumber,
   requiredMassKgSchema,
   requiredNumber,
+  storedPercentSchema,
 } from "./helpers";
 
 // ============================================
@@ -27,8 +28,7 @@ const ALLOCATION_OVERAGE_JUSTIFICATION_MESSAGE =
 const requiredNonNegativeNumber = requiredMassKgSchema("Must be 0 or greater");
 
 const requiredMoisturePercent = requiredNumber().pipe(
-  z
-    .number()
+  storedPercentSchema()
     .min(MOISTURE_MIN, "Moisture must be between 0 and 100")
     .max(MOISTURE_MAX, "Moisture must be between 0 and 100")
 );
@@ -162,7 +162,7 @@ export const updateFeedstockSchema = z.object({
   transportTripType: optionalTripType,
   feedstockTypeId: z.string().uuid().optional(),
   massWetKg: massKgSchema().optional(),
-  moistureContentPercent: z.number().min(0).max(100).optional(),
+  moistureContentPercent: storedPercentSchema().min(0).max(100).optional(),
   massDryKg: massKgSchema().optional(),
   storageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   overrideJustification: z.string().max(2000).optional().nullable().or(z.literal("")),

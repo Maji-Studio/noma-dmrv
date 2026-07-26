@@ -38,6 +38,10 @@ import { BinAllocationRow } from "./bin-allocation-row";
 import { FeedstockEvidenceSection } from "./feedstock-trailing-sections";
 import { WetMassWarning } from "./wet-mass-warning";
 import { FEEDSTOCK_BIN_TYPES } from "@/schemas/storage-locations";
+import {
+  MASS_KG_INPUT_STEP,
+  STORED_PERCENT_INPUT_STEP,
+} from "@/schemas/helpers";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 
@@ -504,7 +508,7 @@ export function FeedstockForm({
               <DryMassInput
                 id="totalWetMassKg"
                 type="number"
-                step="any"
+                step={MASS_KG_INPUT_STEP}
                 min="0"
                 placeholder="e.g., 1500"
                 disabled={isSubmitting}
@@ -525,7 +529,7 @@ export function FeedstockForm({
               <FormInput
                 id="moisturePercent"
                 type="number"
-                step="any"
+                step={STORED_PERCENT_INPUT_STEP}
                 min="0"
                 max="100"
                 placeholder="e.g., 35"

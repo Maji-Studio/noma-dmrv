@@ -7,12 +7,12 @@
 import { z } from "zod";
 import {
   emptyToNull,
-  MASS_INPUT_MAX_KG,
-  MASS_MAX_KG_MESSAGE,
+  massKgSchema,
   optionalDateOnly,
-  optionalPercent,
+  optionalStoredPercent,
   PG_INTEGER_MAX,
   requiredDateOnly,
+  storedPercentSchema,
   toIntOrNull,
   toNumberOrNull,
 } from "./helpers";
@@ -178,8 +178,13 @@ const productionRunFormObject = z.object({
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 
   // Feedstock Input (bin-based: system auto-allocates to M:M from bin contents)
-  feedstockWetMassKg: z.preprocess(toNumberOrNull, z.number().positive("Wet mass must be a positive number").max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).nullable()).optional(),
-  feedstockMoisturePercent: optionalPercent,
+  feedstockWetMassKg: z.preprocess(
+    toNumberOrNull,
+    massKgSchema("Wet mass must be a positive number")
+      .positive("Wet mass must be a positive number")
+      .nullable(),
+  ).optional(),
+  feedstockMoisturePercent: optionalStoredPercent,
 
   // Processing Parameters (Isometric Protocol Section 9)
   feedingRateKgHr: z.preprocess(toNumberOrNull, z.number().positive("Feeding rate must be positive").nullable()).optional(),
@@ -192,8 +197,11 @@ const productionRunFormObject = z.object({
   electricityKwh: z.preprocess(toNumberOrNull, z.number().min(0, "Electricity must be non-negative").nullable()).optional(),
 
   // Biochar Output
-  biocharOutputKg: z.preprocess(toNumberOrNull, z.number().nonnegative("Biochar output must be non-negative").max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).nullable()).optional(),
-  biocharMoisturePercent: optionalPercent,
+  biocharOutputKg: z.preprocess(
+    toNumberOrNull,
+    massKgSchema("Biochar output must be non-negative").nullable(),
+  ).optional(),
+  biocharMoisturePercent: optionalStoredPercent,
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 });
@@ -375,16 +383,24 @@ export const updateProductionRunSchema = z.object({
     }),
   ]).optional(),
   operatorId: emptyToNull.or(z.string().uuid()).nullable().optional(),
-  feedstockWetMassKg: z.number().positive().max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).optional().nullable(),
-  feedstockMoisturePercent: z.number().min(0).max(100).optional().nullable(),
+  feedstockWetMassKg: massKgSchema().positive().optional().nullable(),
+  feedstockMoisturePercent: storedPercentSchema()
+    .min(0)
+    .max(100)
+    .optional()
+    .nullable(),
   feedingRateKgHr: z.number().positive().optional().nullable(),
   residenceTimeMinutes: z.number().int().positive().max(PG_INTEGER_MAX, "Residence time is too large").optional().nullable(),
   dieselOperationLiters: z.number().min(0).optional().nullable(),
   dieselGensetLiters: z.number().min(0).optional().nullable(),
   preprocessingFuelLiters: z.number().min(0).optional().nullable(),
   electricityKwh: z.number().min(0).optional().nullable(),
-  biocharOutputKg: z.number().nonnegative().max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE).optional().nullable(),
-  biocharMoisturePercent: z.number().min(0).max(100).optional().nullable(),
+  biocharOutputKg: massKgSchema().optional().nullable(),
+  biocharMoisturePercent: storedPercentSchema()
+    .min(0)
+    .max(100)
+    .optional()
+    .nullable(),
   biocharStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   feedstockStorageLocationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
 });

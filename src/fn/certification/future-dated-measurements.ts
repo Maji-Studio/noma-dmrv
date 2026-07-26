@@ -44,7 +44,7 @@ export function collectFutureDatedMeasurements(args: {
   for (const run of runs) {
     if (run.endTime && run.endTime.getTime() > nowMs) {
       blockers.push(
-        `Production run ${run.code} ends ${formatUtcDate(run.endTime)}, in the ` +
+        `Production run ${run.code} ends ${formatUtcDate(run.endTime)} UTC, in the ` +
           "future — wait until production is complete or correct the run end time.",
       );
     }

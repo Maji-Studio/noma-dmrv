@@ -9,6 +9,7 @@ import { TrashIcon } from "@phosphor-icons/react";
 import type { Control, UseFormRegisterReturn, FieldError } from "react-hook-form";
 import { FormField, FormInput, FormEntitySelect } from "@/components/forms";
 import { Button } from "@/components/ui/button";
+import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 
 interface BinAllocationRowProps {
   index: number;
@@ -74,7 +75,7 @@ export function BinAllocationRow({
           <FormInput
             id={`allocations.${index}.allocatedWetMassKg`}
             type="number"
-            step="any"
+            step={MASS_KG_INPUT_STEP}
             min="0"
             placeholder="e.g., 975"
             disabled={disabled}

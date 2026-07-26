@@ -12,7 +12,11 @@ import {
   type DistanceSourceValue,
 } from "./distance-source";
 import { optionalTripType } from "./trip-type";
-import { emptyToNull, optionalMassKgSchema } from "./helpers";
+import {
+  emptyToNull,
+  optionalMassKgSchema,
+  storedPercentSchema,
+} from "./helpers";
 
 // ============================================
 // Constants and Enums
@@ -43,6 +47,10 @@ export function resolveDeliveryDistanceSource(
 // ============================================
 
 const optionalNumber = z.number().finite().optional().nullable();
+const optionalStoredPercent = storedPercentSchema()
+  .finite()
+  .optional()
+  .nullable();
 const optionalWetMassKg = optionalMassKgSchema("Wet mass must be >= 0");
 const optionalDryMassKg = optionalMassKgSchema("Dry mass must be >= 0");
 const optionalNote = z.string().max(500, "Note must be less than 500 characters").optional().nullable().or(z.literal(""));
@@ -79,7 +87,7 @@ const deliveryFormBaseSchema = z.object({
   status: z.enum(deliveryStatuses).default("upcoming"),
   deliveredWetMassKg: optionalWetMassKg,
   massDryKg: optionalDryMassKg,
-  moistureContentPercent: optionalNumber,
+  moistureContentPercent: optionalStoredPercent,
   // Per-delivery road-distance override (km) + reason for the distribution leg.
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
@@ -157,7 +165,7 @@ export const createDeliverySchema = z.object({
   status: z.enum(deliveryStatuses).default("upcoming"),
   deliveredWetMassKg: optionalWetMassKg,
   massDryKg: optionalDryMassKg,
-  moistureContentPercent: optionalNumber,
+  moistureContentPercent: optionalStoredPercent,
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,
@@ -207,7 +215,7 @@ export const updateDeliverySchema = z.object({
   status: z.enum(deliveryStatuses).optional(),
   deliveredWetMassKg: optionalWetMassKg,
   massDryKg: optionalDryMassKg,
-  moistureContentPercent: optionalNumber,
+  moistureContentPercent: optionalStoredPercent,
   distanceKmOverride: optionalNumber,
   distanceSource: optionalDistanceSource,
   distanceNote: optionalNote,

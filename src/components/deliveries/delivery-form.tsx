@@ -19,6 +19,10 @@ import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-
 import { FormSelect } from "@/components/forms/form-select";
 import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
+import {
+  MASS_KG_INPUT_STEP,
+  STORED_PERCENT_INPUT_STEP,
+} from "@/schemas/helpers";
 import { DEFAULT_TRIP_TYPE, TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
 import type { Delivery } from "@/db/schema";
 import { useOrdersForSelect } from "@/hooks/use-orders";
@@ -305,7 +309,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             <DryMassInput
               id="deliveredWetMassKg"
               type="number"
-              step="any"
+              step={MASS_KG_INPUT_STEP}
               placeholder="e.g., 1000"
               disabled={isSubmitting}
               error={!!errors.deliveredWetMassKg}
@@ -327,7 +331,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             <FormInput
               id="moistureContentPercent"
               type="number"
-              step="any"
+              step={STORED_PERCENT_INPUT_STEP}
               min="0"
               max="100"
               placeholder="e.g., 20"

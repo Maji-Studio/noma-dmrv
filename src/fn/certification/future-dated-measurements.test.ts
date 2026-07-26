@@ -43,6 +43,7 @@ describe("collectFutureDatedMeasurements", () => {
     expect(blocker).toContain("PR-0007");
     expect(blocker).toContain("2026-08-01");
     expect(blocker).toContain("correct the run end time");
+    expect(blocker).toContain("UTC");
   });
 
   it("names the application dated in the future", () => {

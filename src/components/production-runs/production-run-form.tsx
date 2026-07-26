@@ -47,6 +47,10 @@ import {
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { StorageLocationType } from "@/schemas/storage-locations";
+import {
+  MASS_KG_INPUT_STEP,
+  STORED_PERCENT_INPUT_STEP,
+} from "@/schemas/helpers";
 
 // ============================================
 // Constants for select options
@@ -673,7 +677,7 @@ export function ProductionRunForm({
             <DryMassInput
               id="feedstockWetMassKg"
               type="number"
-              step="any"
+              step={MASS_KG_INPUT_STEP}
               placeholder="e.g. 500"
               disabled={isSubmitting}
               error={!!errors.feedstockWetMassKg}
@@ -695,7 +699,7 @@ export function ProductionRunForm({
             <FormInput
               id="feedstockMoisturePercent"
               type="number"
-              step="any"
+              step={STORED_PERCENT_INPUT_STEP}
               placeholder="e.g. 15"
               disabled={isSubmitting}
               error={!!errors.feedstockMoisturePercent}
@@ -784,7 +788,7 @@ export function ProductionRunForm({
             <DryMassInput
               id="biocharOutputKg"
               type="number"
-              step="any"
+              step={MASS_KG_INPUT_STEP}
               placeholder="e.g. 150"
               disabled={isSubmitting}
               error={!!errors.biocharOutputKg}
@@ -805,7 +809,7 @@ export function ProductionRunForm({
             <FormInput
               id="biocharMoisturePercent"
               type="number"
-              step="any"
+              step={STORED_PERCENT_INPUT_STEP}
               placeholder="e.g. 1.5"
               disabled={isSubmitting}
               error={!!errors.biocharMoisturePercent}

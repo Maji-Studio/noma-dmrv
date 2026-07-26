@@ -7,7 +7,6 @@ import {
   getCertifierProjectByFacility,
   getLatestSubmissionsForEntities,
   getSubmissionById,
-  getSubmissionByExternalId,
   listRecentSyncEvents,
   markSubmissionSubmitted,
   updateSubmissionMetadata,
@@ -23,6 +22,7 @@ import {
   countRemovalsByGhgStatementIds,
   getCertifierGhgStatementById,
   getEffectiveReportingPeriodEndOn,
+  getGhgStatementSubmissionForFacility,
   getOrCreateGhgStatementDraft,
   getRemovalsByGhgStatementId,
   hasMissingRemotePeriod,
@@ -256,14 +256,11 @@ export async function createGhgStatementDraft(
       blocking?.statement ??
       (adoptable.length === 1 ? adoptable[0].statement : null);
     if (singleMatch) {
-      const existingRemoteSubmission = await getSubmissionByExternalId(
-        orgCtx,
-        {
-          provider: ISOMETRIC_PROVIDER,
-          submissionType: GHG_STATEMENT_SUBMISSION_TYPE,
+      const existingRemoteSubmission =
+        await getGhgStatementSubmissionForFacility(orgCtx, {
+          facilityId: parsed.facilityId,
           externalId: singleMatch.id,
-        },
-      );
+        });
       if (existingRemoteSubmission) {
         if (blocking) {
           throw new SafeError(

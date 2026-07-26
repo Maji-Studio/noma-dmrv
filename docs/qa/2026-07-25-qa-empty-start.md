@@ -72,13 +72,13 @@ and able to contain `CB-26-001`.
 
 Evidence:
 
-- [Feedstock provenance persisted](/private/tmp/codex-computer-use.local-cert-retry.UztXxM/03-feedstock-after-reload-document.png)
-- [Credit batch all checks passed](/private/tmp/codex-computer-use.local-cert-retry.UztXxM/04-credit-batch-all-checks-passed.png)
-- [Final future-date preflight](/private/tmp/codex-computer-use.local-future-preflight.bzhhhG/followup-2-preflight-error.png)
-- [Removal unchanged after retry](/private/tmp/codex-computer-use.local-future-preflight.bzhhhG/followup-3-after-summary.png)
-- [No new protocol audit entry](/private/tmp/codex-computer-use.local-future-preflight.bzhhhG/followup-3-after-sync-history-expanded.png)
-- [Isometric 37-entry count](/private/tmp/codex-computer-use.local-future-preflight.bzhhhG/step-6-isometric-ghg-entries.png)
-- [Isometric 12-statement count](/private/tmp/codex-computer-use.local-future-preflight.bzhhhG/step-6-isometric-ghg-statements.png)
+- Feedstock provenance persisted (`03-feedstock-after-reload-document.png`)
+- Credit batch all checks passed (`04-credit-batch-all-checks-passed.png`)
+- Final future-date preflight (`followup-2-preflight-error.png`)
+- Removal unchanged after retry (`followup-3-after-summary.png`)
+- No new protocol audit entry (`followup-3-after-sync-history-expanded.png`)
+- Isometric 37-entry count (`step-6-isometric-ghg-entries.png`)
+- Isometric 12-statement count (`step-6-isometric-ghg-statements.png`)
 
 ## First-pass verdict (historical)
 
@@ -123,8 +123,8 @@ remained unset.
 
 Evidence:
 
-- [Facilities after loading](/private/tmp/codex-computer-use.local-e2e.l30EhO/06-facilities-before-create.png)
-- [External-facility mapping blocker](/private/tmp/codex-computer-use.local-e2e.l30EhO/08-mapping-facility-id-blocker.png)
+- Facilities after loading (`06-facilities-before-create.png`)
+- External-facility mapping blocker (`08-mapping-facility-id-blocker.png`)
 
 ## Route sweep
 
@@ -267,7 +267,8 @@ Probable code area:
 - `src/components/production-runs/production-run-form.tsx`
 - `src/lib/production-readings/readings-csv.ts`
 
-Evidence: [Telemetry persisted with 14/16 rows](/private/tmp/codex-computer-use.local-e2e.l30EhO/13-run-telemetry-14-of-16.png)
+Evidence: Telemetry persisted with 14/16 rows
+(`13-run-telemetry-14-of-16.png`)
 
 ## Readiness, Removal, and Statement
 
@@ -299,10 +300,13 @@ stale contradictory validation alert. It derived 2028-01-01 through
 
 Evidence:
 
-- [Readiness before evidence](/private/tmp/codex-computer-use.local-e2e.l30EhO/11-readiness-before-evidence.png)
-- [Feedstock saved/draft mismatch](/private/tmp/codex-computer-use.local-e2e.l30EhO/14-feedstock-evidence-provenance-save-blocker.png)
-- [Final one-issue readiness state](/private/tmp/codex-computer-use.local-e2e.l30EhO/17-readiness-after-evidence-feedstock-blocked.png)
-- [January 2028 Statement with zero removals](/private/tmp/codex-computer-use.local-e2e.l30EhO/18-ghg-statement-jan-2028-zero-removals.png)
+- Readiness before evidence (`11-readiness-before-evidence.png`)
+- Feedstock saved/draft mismatch
+  (`14-feedstock-evidence-provenance-save-blocker.png`)
+- Final one-issue readiness state
+  (`17-readiness-after-evidence-feedstock-blocked.png`)
+- January 2028 Statement with zero removals
+  (`18-ghg-statement-jan-2028-zero-removals.png`)
 
 ## Adversarial checks
 
@@ -419,9 +423,9 @@ untested.
 
 Evidence:
 
-- [Initial statements](/private/tmp/codex-computer-use.local-e2e.l30EhO/02-isometric-baseline-statements.png)
-- [Final 12 Statements](/private/tmp/codex-computer-use.local-e2e.l30EhO/19-isometric-final-statements-12.png)
-- [Final 36 GHG entries](/private/tmp/codex-computer-use.local-e2e.l30EhO/20-isometric-final-ghg-entries-36.png)
+- Initial statements (`02-isometric-baseline-statements.png`)
+- Final 12 Statements (`19-isometric-final-statements-12.png`)
+- Final 36 GHG entries (`20-isometric-final-ghg-entries-36.png`)
 
 ## Mutation ledger
 
@@ -452,7 +456,7 @@ Repository changes:
 - This QA ledger
 
 Full browser-worker report:
-[detailed-report.md](/private/tmp/codex-computer-use.local-e2e.l30EhO/detailed-report.md)
+The local driver artifact was `detailed-report.md`.
 
 ## Release position
 
@@ -492,10 +496,8 @@ from the saved boundary documents and relabelling the edit-mode control as
 
 ### "P2 — Credit-batch preview disagrees with saved membership" — not a defect
 
-Closed as a false positive; see
-[`docs/open-questions.md`](../open-questions.md) →
-*Credit-batch preview is deliberately a superset of saved membership*. The two
-paths agree on window bounds, date expression, feedstock-type rule and
+Closed as a false positive. The two paths agree on window bounds, date
+expression, feedstock-type rule and
 org/facility scoping. The preview intentionally shows a superset (`draft` and
 `running` runs, plus runs already assigned elsewhere), and the observed
 direction — preview empty, saved batch populated — is

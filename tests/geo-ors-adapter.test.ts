@@ -110,10 +110,13 @@ describe("orsProvider transport failures", () => {
   const destination = { lat: -3.25, lng: 37.45 };
 
   it("reports a request timeout distinctly (AbortSignal.timeout)", async () => {
-    mockFetchRejection(new DOMException("The operation was aborted.", "TimeoutError"));
+    const fetchMock = mockFetchRejection(
+      new DOMException("The operation was aborted.", "TimeoutError"),
+    );
     await expect(orsProvider.routeDistanceKm(origin, destination)).rejects.toThrow(
       "The routing service did not respond in time. Try again, or enter the distance manually."
     );
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
   it("reports a genuine network failure as unreachable", async () => {

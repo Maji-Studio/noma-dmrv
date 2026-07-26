@@ -23,6 +23,10 @@ import { SafeError } from "@/lib/errors";
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { decideRemovalMembership } from "@/lib/isometric/utils/ghg-entry-membership";
 import {
+  GHG_STATEMENT_ENTITY_TYPE,
+  GHG_STATEMENT_SUBMISSION_TYPE,
+} from "@/lib/isometric/utils/constants";
+import {
   chooseStoredRemotePeriodEnd,
 } from "@/lib/isometric/utils/ghg-statement-local-period";
 import type { CertificationSubmissionRow, Tx } from "./certification";
@@ -185,8 +189,14 @@ export async function getGhgStatementSubmissionForFacility(
     .where(
       and(
         eq(certificationSubmissions.provider, ISOMETRIC),
-        eq(certificationSubmissions.submissionType, "ghg_statement"),
-        eq(certificationSubmissions.localEntityType, "ghgStatement"),
+        eq(
+          certificationSubmissions.submissionType,
+          GHG_STATEMENT_SUBMISSION_TYPE,
+        ),
+        eq(
+          certificationSubmissions.localEntityType,
+          GHG_STATEMENT_ENTITY_TYPE,
+        ),
         eq(certificationSubmissions.externalId, args.externalId),
         eq(certifierGhgStatements.facilityId, args.facilityId),
         eq(certificationSubmissions.organizationId, ctx.organizationId),
@@ -218,8 +228,14 @@ export async function hasInFlightGhgStatementForFacility(
     .where(
       and(
         eq(certificationSubmissions.provider, ISOMETRIC),
-        eq(certificationSubmissions.submissionType, "ghg_statement"),
-        eq(certificationSubmissions.localEntityType, "ghgStatement"),
+        eq(
+          certificationSubmissions.submissionType,
+          GHG_STATEMENT_SUBMISSION_TYPE,
+        ),
+        eq(
+          certificationSubmissions.localEntityType,
+          GHG_STATEMENT_ENTITY_TYPE,
+        ),
         eq(certificationSubmissions.status, "draft"),
         isNotNull(certificationSubmissions.lockedAt),
         gt(
@@ -428,8 +444,14 @@ async function findAdoptableOperatorStatement(
     .where(
       and(
         eq(certificationSubmissions.provider, ISOMETRIC),
-        eq(certificationSubmissions.submissionType, "ghg_statement"),
-        eq(certificationSubmissions.localEntityType, "ghgStatement"),
+        eq(
+          certificationSubmissions.submissionType,
+          GHG_STATEMENT_SUBMISSION_TYPE,
+        ),
+        eq(
+          certificationSubmissions.localEntityType,
+          GHG_STATEMENT_ENTITY_TYPE,
+        ),
         eq(certificationSubmissions.localEntityId, candidate.id),
         eq(certificationSubmissions.organizationId, ctx.organizationId),
       ),

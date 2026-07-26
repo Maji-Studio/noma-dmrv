@@ -7,6 +7,7 @@ import {
   INGREDIENT_MASS_DEVIATION_WARN_PERCENT,
   type CompositionRow,
 } from "@/lib/biochar-composition";
+import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 
 // The storage-location option subtitle for a feedstock bin starts with
 // "Feedstock Bin · " (formatStorageLocationType). Strip it from the selected
@@ -92,7 +93,7 @@ export function IngredientBinField({
               <FormInput
                 id={row.massKgFieldName}
                 type="number"
-                step="any"
+                step={MASS_KG_INPUT_STEP}
                 min="0"
                 placeholder="e.g., 120"
                 disabled={isSubmitting}

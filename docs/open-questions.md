@@ -850,9 +850,9 @@ bound); these are the decisions it deliberately did not make.
   messages in that same zone; and `productionRunDateExpr` casts `start_time` to
   a **UTC** calendar day rather than the facility day, so a near-midnight run
   can land in the wrong cohort date. Display counterparts in
-  `components/production-runs/production-run-list`,
   `production-incident-form`, `production-sample-form` and
-  `components/samples/sample-form` render in the browser zone.
+  `components/samples/sample-form` render in the browser zone (the
+  production-run side sheet was moved to the facility zone on 2026-07-25).
 - **Resolve via:** decide one project-wide rule — instants are constructed and
   rendered in the facility zone, date-only values stay pinned to UTC (issue #46)
   — then apply it to the remaining sites and add a lint or test guard so a
@@ -870,22 +870,6 @@ bound); these are the decisions it deliberately did not make.
   surface reads the same day set, or expose the normalized day alongside the raw
   one and have the chips use it (S).
 
-### Credit-batch preview is deliberately a superset of saved membership (`credit-batches/preview-vs-membership`)
-
-- **Recorded decision, not a defect** — re-reported by QA on 2026-07-25 and
-  closed. `data-access/credit-batches` (preview) and
-  `data-access/credit-batch-membership` (saved) agree on window bounds, date
-  expression, feedstock-type rule and org/facility scoping. The preview
-  deliberately shows a superset: it includes `draft`/`running` runs and runs
-  already assigned elsewhere, whereas membership takes only unassigned
-  `complete` runs. A preview that looks empty while the saved batch has members
-  is `attachProductionRunToMatchingCreditBatch` firing when a run is
-  re-completed after the preview was rendered — which the preview panel already
-  announces ("matching completed runs will attach automatically").
-- **Resolve via:** nothing to fix in the queries. If it keeps being re-reported,
-  surface the auto-attach explicitly after save, or refetch the options query on
-  form focus so the preview cannot be staler than the batch (S).
-
 ### Operator-initiated GHG statements are still refused on a shared project (`certification/shared-project-statement-create`)
 
 - ADR 0023 scoped registry statement identity per organization + facility, so a
@@ -898,3 +882,27 @@ bound); these are the decisions it deliberately did not make.
 - **Resolve via:** confirm with Isometric whether one project may carry
   concurrent per-site statements for the same period; if yes, replace the guard
   with per-facility period scoping, if no, keep it and say so in the copy (M).
+
+### `formatInTimeZone` is not process-zone independent (`dates/format-in-time-zone-gap`)
+
+- `formatFacilityTime` and `formatFacilityDate` (`src/lib/date-utils.ts`) render
+  through date-fns-tz's `formatInTimeZone`, which builds a `Date` whose **local**
+  components equal the target zone's wall clock. When the machine's own zone
+  skips that wall clock, the `Date` rolls forward and the reader lies —
+  empirically `formatInTimeZone(2026-03-07T23:30Z, "Africa/Dar_es_Salaam")`
+  returns `03:30` instead of `02:30` under `TZ=America/New_York`.
+- It only bites when the viewer's (or server's) zone skips the same wall clock on
+  the same date, so it is rare — but the affected readers are load-bearing: the
+  production-run edit read-back
+  (`src/components/production-runs/production-run-timing:productionRunTimingDefaults`),
+  and the facility-local sampling day in `src/fn/samples`,
+  `src/fn/certification/durability-readiness`,
+  `src/lib/certification/durability-batch-summary` and
+  `src/lib/certification/evidence-ledger/durability-build-model`, which feeds
+  registry-facing durability gates.
+- `combineDateAndTime` in the same module already avoids this by reading the zone
+  with `Intl.DateTimeFormat.formatToParts` (`wallClockIn`) instead — the likely
+  fix shape.
+- **Resolve via:** re-implement `formatFacilityTime` / `formatFacilityDate` on
+  `wallClockIn`-style `formatToParts` output, then pin it with a regression test
+  run under a process zone that skips the rendered wall clock (S).
