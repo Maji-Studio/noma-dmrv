@@ -9,10 +9,10 @@
 
 import { z } from "zod";
 import {
+  optionalCanonicalizableMassKgInputSchema,
   optionalPercent,
   requiredMassKgSchema,
   requiredPositiveMassKgSchema,
-  optionalMassKgInputSchema,
   toNumberOrNull,
 } from "./helpers";
 import { type StorageLocationType } from "./storage-locations";
@@ -118,7 +118,7 @@ export const recordStockTakeSchema = z
     // from the wet snapshot for feedstock stock-takes.
     countedMassKg: requiredMassKgSchema("Counted stock is required"),
     // Feedstock-only provenance for the authoritative dry conversion.
-    countedWetMassKg: optionalMassKgInputSchema(),
+    countedWetMassKg: optionalCanonicalizableMassKgInputSchema(),
     moistureRatioUsed: z.preprocess(
       toNumberOrNull,
       z.number().min(0).max(1).nullable().optional()

@@ -209,11 +209,15 @@ export const MASS_INPUT_MAX_TONNES = MASS_INPUT_MAX_KG / 1000;
 export const MASS_MAX_KG_MESSAGE = `Must be ${MASS_INPUT_MAX_KG.toLocaleString("en-US")} kg or less`;
 export const MASS_MAX_TONNES_MESSAGE = `Must be ${MASS_INPUT_MAX_TONNES.toLocaleString("en-US")} tonnes or less`;
 
-export function massKgSchema(minMessage = "Must be 0 or greater") {
+function massKgRangeSchema(minMessage = "Must be 0 or greater") {
   return z
     .number()
     .min(0, minMessage)
-    .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE)
+    .max(MASS_INPUT_MAX_KG, MASS_MAX_KG_MESSAGE);
+}
+
+export function massKgSchema(minMessage = "Must be 0 or greater") {
+  return massKgRangeSchema(minMessage)
     .multipleOf(MASS_KG_INPUT_STEP, MASS_KG_PRECISION_MESSAGE);
 }
 
@@ -245,6 +249,19 @@ export function optionalMassKgSchema(message = "Must be 0 or greater") {
 
 export function optionalMassKgInputSchema(message = "Must be 0 or greater") {
   return z.preprocess(toNumberOrNull, optionalMassKgSchema(message));
+}
+
+/**
+ * Accepts a higher-precision wet-mass snapshot that an authoritative boundary
+ * canonicalizes to the persisted mass scale before writing.
+ */
+export function optionalCanonicalizableMassKgInputSchema(
+  message = "Must be 0 or greater",
+) {
+  return z.preprocess(
+    toNumberOrNull,
+    massKgRangeSchema(message).optional().nullable(),
+  );
 }
 
 /** Largest value a Postgres `integer` column can hold. */
