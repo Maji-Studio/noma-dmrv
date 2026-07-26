@@ -567,7 +567,7 @@ export function DeliveryList() {
               }}
               aria-label="Filter by credit batch"
             >
-              <option value="">All Credit Batches</option>
+              <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
                   {batch.code}

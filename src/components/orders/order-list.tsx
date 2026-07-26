@@ -341,7 +341,7 @@ export function OrderList() {
               onChange={(e) => { setStatusFilter(e.target.value as OrderFulfillmentStatus | ""); setCurrentPage(1); }}
               aria-label="Filter by fulfillment status"
             >
-              <option value="">All Statuses</option>
+              <option value="">All statuses</option>
               {orderFulfillmentStatuses.map((s) => (
                 <option key={s} value={s}>{ORDER_FULFILLMENT_DISPLAY[s].label}</option>
               ))}
@@ -352,7 +352,7 @@ export function OrderList() {
               className="sm:max-w-[200px]"
               aria-label="Filter by customer"
             >
-              <option value="">All Customers</option>
+              <option value="">All customers</option>
               {customerOptions.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}

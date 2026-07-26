@@ -631,7 +631,7 @@ export function SampleList({
               onChange={(e) => { setCreditBatchFilter(e.target.value || null); setCurrentPage(1); }}
               aria-label="Filter by credit batch"
             >
-              <option value="">All Credit Batches</option>
+              <option value="">All credit batches</option>
               {creditBatchesData?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
                   {batch.code}

@@ -611,7 +611,7 @@ export function ProductionRunList() {
               }}
               aria-label="Filter production runs by credit batch"
             >
-              <option value="">All Credit Batches</option>
+              <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
                   {batch.code}
@@ -623,7 +623,7 @@ export function ProductionRunList() {
               onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
               aria-label="Filter production runs by status"
             >
-              <option value="">All Statuses</option>
+              <option value="">All statuses</option>
               <option value="draft">Draft</option>
               <option value="running">Running</option>
               <option value="complete">Complete</option>

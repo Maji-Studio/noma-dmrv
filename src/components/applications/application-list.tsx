@@ -563,7 +563,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               }}
               aria-label="Filter by credit batch"
             >
-              <option value="">All Credit Batches</option>
+              <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
                   {batch.code}
@@ -578,7 +578,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               }}
               aria-label="Filter by status"
             >
-              <option value="">All Statuses</option>
+              <option value="">All statuses</option>
               {applicationStatuses.map((status) => (
                 <option key={status} value={status}>
                   {formatApplicationStatus(status)}
@@ -595,7 +595,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               }}
               aria-label="Filter by evidence method"
             >
-              <option value="">All Evidence</option>
+              <option value="">All evidence</option>
               {applicationEvidenceMethods.map((method) => (
                 <option key={method} value={method}>
                   {formatApplicationEvidenceMethod(method)}

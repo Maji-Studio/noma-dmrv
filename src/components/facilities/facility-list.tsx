@@ -384,7 +384,7 @@ export function FacilityList() {
               }}
               className="h-40 border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 body-small"
             >
-              <option value="">All Countries</option>
+              <option value="">All countries</option>
               {countries?.map((country) => (
                 <option key={country} value={country}>
                   {country}

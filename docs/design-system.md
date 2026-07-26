@@ -135,12 +135,16 @@ headings on rollup/detail pages are `title-heading-3`, sentence case.
 ### Label casing
 
 **Sentence case** — capitalise the first word only — for field labels, table
-column headers, `FormSection` / `DetailSection` titles, and `DetailPanelField`
-labels.
+column headers, `FormSection` / `DetailSection` titles, `DetailPanelField`
+labels, and filter control option text (the `<option>`s inside a
+`DataTable.FilterSelect` and any equivalent dropdown or listbox), which sits
+beside a sentence-case search placeholder and sentence-case column headers and
+has to read as part of the same row.
 
 | ❌ | ✅ |
 | --- | --- |
 | `Contact Phone` | `Contact phone` |
+| `All Credit Batches` | `All credit batches` |
 | `Ash Content (%)` | `Ash content (%)` |
 | `Field Size (Ha)` | `Field size (ha)` |
 | `Startup / Plant Diesel (L)` | `Startup / plant diesel (L)` |
