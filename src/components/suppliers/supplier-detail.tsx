@@ -136,7 +136,7 @@ export function SupplierDetail({ supplierId }: SupplierDetailProps) {
           </div>
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-              Contact Phone
+              Contact phone
             </dt>
             <dd className="body-medium mt-16">{supplier.contactPhone || "—"}</dd>
           </div>

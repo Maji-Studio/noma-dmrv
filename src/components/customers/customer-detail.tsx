@@ -167,7 +167,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
           </div>
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-              Contact Phone
+              Contact phone
             </dt>
             <dd className="body-medium mt-16">{customer.contactPhone || "—"}</dd>
           </div>

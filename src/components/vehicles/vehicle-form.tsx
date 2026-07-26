@@ -73,7 +73,7 @@ export function VehicleForm({
 
         <FormField
           id="identifier"
-          label="Identifier / Plate"
+          label="Identifier / plate"
           error={errors.identifier?.message}
         >
           <FormInput

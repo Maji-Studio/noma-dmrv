@@ -305,13 +305,13 @@ function ListBody({
               description={
                 searchQuery
                   ? "Try clearing your search."
-                  : "Start one with “New removal” to group complete credit batches."
+                  : "Group complete credit batches into a removal to submit them."
               }
               action={
                 searchQuery ? undefined : (
                   <Button variant="default" onClick={onNewRemoval}>
                     <PlusIcon size={16} weight="bold" />
-                    New removal
+                    Create your first removal
                   </Button>
                 )
               }

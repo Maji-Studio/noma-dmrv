@@ -420,7 +420,7 @@ export function StorageLocationList() {
         actions={
           <Button variant="primary" onClick={openCreate}>
             <PlusIcon size={20} weight="bold" />
-            New storage bin
+            New Storage Bin
           </Button>
         }
       />
@@ -627,7 +627,7 @@ export function StorageLocationList() {
         }}
         mode={sideSheet?.mode ?? "create"}
         onModeChange={handleModeChange}
-        title={sideSheet?.mode === "create" ? "Create storage bin" : sideSheet?.entity?.code ?? ""}
+        title={sideSheet?.mode === "create" ? "Create Storage Bin" : sideSheet?.entity?.code ?? ""}
         subtitle={
           sideSheet?.mode === "create" ? undefined : sideSheet?.entity?.name
         }
@@ -693,7 +693,7 @@ export function StorageLocationList() {
           onCancel={closeSideSheet}
           isSubmitting={isSubmitting}
           errorMessage={formError ?? undefined}
-          submitLabel={sideSheet?.mode === "edit" ? "Save Changes" : "Create storage bin"}
+          submitLabel={sideSheet?.mode === "edit" ? "Save Changes" : "Create Storage Bin"}
         />
       </EntitySideSheet>
 

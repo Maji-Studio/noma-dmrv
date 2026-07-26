@@ -86,7 +86,7 @@ export async function getStorageLocationsFn(
       success: false,
       error: storageLocationActionError(
         error,
-        "Failed to load storage locations",
+        "Failed to load storage bins",
         "storage-location:list",
       ),
     };
@@ -112,7 +112,7 @@ export async function getStorageLocationByIdFn(
       success: false,
       error: storageLocationActionError(
         error,
-        "Failed to load storage location",
+        "Failed to load storage bin",
         "storage-location:get",
       ),
     };

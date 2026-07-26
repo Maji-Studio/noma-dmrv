@@ -66,17 +66,14 @@ sidebar). Don't invent the missing tokens.
 Each has a solid (icon, text, rule, bar fill), a `-bg` 10% tint fill and a
 `-border` 40% tint. `/styleguide` renders all five × three (2026-07-26).
 
-`--color-signal-green` / `--color-signal-green-light` are **DEPRECATED**:
+`--color-signal-green` / `--color-signal-green-light` are **RETIRED** (2026-07-26)
+— both definitions are gone from `globals.css` and no call sites remain. They
+resolve to nothing; if you meet one in an old branch, translate it:
 
-| deprecated | use |
+| retired | use |
 | --- | --- |
-| `--color-signal-green` | `--st-ok` — a straight alias, so the swap is 1:1 |
+| `--color-signal-green` | `--st-ok` — was a straight alias, so the swap is 1:1 |
 | `--color-signal-green-light` | `--st-ok-bg` — a 10% tint, where the old token was 15% |
-
-As of 2026-07-26 one live call site remains
-(`storage-locations/storage-location-card.tsx`); delete both definitions from
-`globals.css` once it is converted. Don't propagate them by copying a
-neighbouring component.
 
 `--color-signal-orange` / `-strong` / `-light` are **not** deprecated and still
 have ~40 live call sites. Don't convert them to `--st-wait` component by
@@ -167,11 +164,18 @@ the select and the quick-add dialog — stored lowercase because they are always
 read mid-sentence. Follow the glossary: a bin is a **storage bin**, never a
 "storage location", on every operator-facing surface.
 
-**A label and its mirror must match.** An edit form's `FormField` label, the
-same field's `DetailPanelField` in the read sheet, and its `DataTable` column
-header are one label — rename all three together or none. Table cells may carry
-the unit that a terse column header drops ("Wet mass" / `1,000 kg`); a form
-label carries it instead, because an empty input has nowhere else to put it.
+**A label and its mirror must match.** An edit form's `FormField` label and the
+same field's `DetailPanelField` in the read sheet are one label — rename both
+together or neither. Someone who fills a field and then reads it back must see
+the same words.
+
+A `DataTable` column header is held to a weaker rule, because the table's own
+subject already supplies the context a form field has to state: the Applications
+table may head a column `Date` where the form says `Application date`, and drop
+a unit the cell carries (`Wet mass` / `1,000 kg`) where the form label must keep
+it, since an empty input has nowhere else to put it. What a header may **not**
+do is pick a *different* word — `Share (%)` on the form against `Biochar ratio`
+in the table is two names for one field, and that is a mirror break.
 
 **Renaming a label is a test change.** Playwright specs in `tests/e2e/` locate
 elements by these exact strings, and the matchers split two ways:

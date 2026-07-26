@@ -74,7 +74,7 @@ function createColumns(
     },
     {
       accessorKey: "biocharRatio",
-      header: "Biochar ratio",
+      header: "Biochar share",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
           {formatRatio(row.original.biocharRatio)}

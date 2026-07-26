@@ -884,7 +884,7 @@ export function ProductionRunForm({
         <FormField
           id="readingsCsv"
           label="Readings CSV"
-          helperText="Columns: timestamp_utc, temperature_c, pressure_bar (dryer/reactor frequency optional). Rows inside the run's window fill the table below."
+          helperText="Columns: timestamp_utc, temperature_c, pressure_bar (dryer/reactor frequency optional). One file may span several UTC days; rows inside the run's window fill the table below."
           certifyRequired={readingsCertification.certifyRequired}
           certifyStatus={readingsCertification.certifyStatus}
         >

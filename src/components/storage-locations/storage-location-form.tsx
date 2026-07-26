@@ -101,7 +101,7 @@ export function StorageLocationForm({
 
   const defaultSubmitLabel = isEditMode
     ? "Update Storage Bin"
-    : "Create storage bin";
+    : "Create Storage Bin";
 
   const handleFormSubmit = handleSubmit((data) => {
     const normalized = { ...data } as StorageLocationFormData;

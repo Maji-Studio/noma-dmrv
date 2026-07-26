@@ -92,11 +92,11 @@ function TransferFlowPreview({
               {sourceBinCode}
             </span>
             <span className="body-caption text-[var(--color-text-secondary)] mt-1">
-              {availableKg.toLocaleString()} kg available
+              {formatMassKg(availableKg)} available
             </span>
             {hasMass && (
               <span className="body-caption font-medium text-[var(--st-wait)] mt-1">
-                &minus;{sourceMassKg.toLocaleString()} kg
+                &minus;{formatMassKg(sourceMassKg)}
               </span>
             )}
           </>
@@ -114,7 +114,7 @@ function TransferFlowPreview({
         </svg>
         {hasMass ? (
           <span className="body-caption font-medium text-[var(--color-text-primary)] mt-2">
-            {sourceMassKg.toLocaleString()} kg
+            {formatMassKg(sourceMassKg)}
           </span>
         ) : (
           <span className="body-caption text-[var(--color-text-tertiary)] mt-2">
@@ -141,7 +141,7 @@ function TransferFlowPreview({
             </span>
             {destinationMassKg !== null && destinationMassKg > 0 && (
               <span className="body-caption font-medium text-[var(--st-ok)] mt-1">
-                +{destinationMassKg.toLocaleString()} kg
+                +{formatMassKg(destinationMassKg)}
               </span>
             )}
           </>
@@ -434,7 +434,7 @@ export function BiocharProductForm({
             placeholder: "e.g. 500",
             helperText:
               linkedRunPreview?.biocharOutputKg != null
-                ? `${linkedRunPreview.biocharOutputKg.toLocaleString()} kg from run`
+                ? `${formatMassKg(linkedRunPreview.biocharOutputKg)} from run`
                 : undefined,
             registration: register("massKg", { setValueAs: nullableNumericValue }),
           }}
