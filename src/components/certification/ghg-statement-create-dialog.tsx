@@ -733,12 +733,16 @@ function ResultPanel({
   // rather than claiming a creation that did not happen.
   const alreadyExisted = outcome === "existing";
   const OutcomeIcon = alreadyExisted ? InfoIcon : CheckCircleIcon;
+  // Resolving to an existing statement is informational, not a success, so it
+  // takes the status ramp's in-progress step rather than the success one. The
+  // ramp is the semantic layer for feedback accents; `--clr-*` is the raw
+  // palette and must not be reached for from a component.
   return (
     <div className="flex flex-col gap-16">
       <div
         className={`flex items-start gap-8 border-l-2 pl-12 py-4 ${
           alreadyExisted
-            ? "border-[var(--clr-dark-purple)]"
+            ? "border-[var(--st-run)]"
             : "border-[var(--color-signal-green)]"
         }`}
       >
@@ -748,7 +752,7 @@ function ResultPanel({
           aria-hidden
           className={`mt-px shrink-0 ${
             alreadyExisted
-              ? "text-[var(--clr-dark-purple)]"
+              ? "text-[var(--st-run)]"
               : "text-[var(--color-signal-green)]"
           }`}
         />

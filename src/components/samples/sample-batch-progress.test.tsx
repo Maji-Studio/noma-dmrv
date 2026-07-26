@@ -105,7 +105,7 @@ describe("SampleBatchProgress", () => {
     expect(html).not.toContain("2026-07-03");
   });
 
-  it("names the missing chemistry instead of asking for more samples", () => {
+  it("names the input the operator types, not the derived ratio", () => {
     const html = render([
       replicate({ id: "1" }),
       replicate({ id: "2", oToCorg: null }),
@@ -113,7 +113,7 @@ describe("SampleBatchProgress", () => {
     ]);
 
     expect(html).toContain(
-      "This batch has 1 usable replicate. 2 recorded samples don&#x27;t count yet — enter O:Corg on them to reach the ≥3 minimum.",
+      "This batch has 1 usable replicate. 2 recorded samples don&#x27;t count yet — enter Oxygen (%) on them to reach the ≥3 minimum.",
     );
   });
 
@@ -121,7 +121,7 @@ describe("SampleBatchProgress", () => {
     const html = render([replicate({ id: "1", hToCorg: null })]);
 
     expect(html).toContain(
-      "This batch has 0 usable replicates. 1 recorded sample doesn&#x27;t count yet — enter H:Corg on it, then add 2 more (across distinct runs/days) to reach the ≥3 minimum.",
+      "This batch has 0 usable replicates. 1 recorded sample doesn&#x27;t count yet — enter Hydrogen (%) on it, then add 2 more (across distinct runs/days) to reach the ≥3 minimum.",
     );
   });
 

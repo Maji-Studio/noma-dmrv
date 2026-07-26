@@ -18,9 +18,15 @@ import type { DurabilityBatchSummary } from "@/lib/certification/durability-batc
 import { creditBatchDeepLinkHref } from "@/lib/credit-batch-links";
 import { DurabilityReadinessSignals } from "@/components/certification/durability-readiness";
 
-/** Display names of the two universal eligibility ratios (§3.3 Table 2). */
-const H_TO_CORG_LABEL = "H:Corg";
-const O_TO_CORG_LABEL = "O:Corg";
+/**
+ * The sample-form inputs an operator actually types to close each universal
+ * eligibility ratio (§3.3 Table 2) — NOT the ratios themselves. H:Corg is a
+ * read-only derived field, and O:Corg falls back to O% ÷ C_org% when its
+ * override is left blank (`sample-form.tsx`), so naming the ratios sent
+ * operators looking for a field they cannot fill.
+ */
+const H_TO_CORG_INPUT_LABEL = "Hydrogen (%)";
+const O_TO_CORG_INPUT_LABEL = "Oxygen (%)";
 
 const UNKNOWN_DAY_LABEL = "date unknown";
 
@@ -67,7 +73,7 @@ function distinctProvenanceLabels(summary: DurabilityBatchSummary): string[] {
  */
 function summarizeIncompleteChemistry(summary: DurabilityBatchSummary): {
   count: number;
-  /** The missing measurement(s), e.g. `"O:Corg"` or `"H:Corg and O:Corg"`. */
+  /** The input(s) to fill, e.g. `"Oxygen (%)"` or `"Hydrogen (%) and Oxygen (%)"`. */
   label: string;
 } {
   let count = 0;
@@ -82,8 +88,8 @@ function summarizeIncompleteChemistry(summary: DurabilityBatchSummary): {
   }
 
   const missing = [
-    ...(anyMissingH ? [H_TO_CORG_LABEL] : []),
-    ...(anyMissingO ? [O_TO_CORG_LABEL] : []),
+    ...(anyMissingH ? [H_TO_CORG_INPUT_LABEL] : []),
+    ...(anyMissingO ? [O_TO_CORG_INPUT_LABEL] : []),
   ];
   return { count, label: missing.join(" and ") };
 }

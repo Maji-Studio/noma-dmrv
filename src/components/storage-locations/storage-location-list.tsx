@@ -58,6 +58,10 @@ import {
 } from "@/schemas/storage-locations";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { CardSkeleton, Skeleton } from "@/components/ui/loading-skeleton";
+
+/** Placeholder bin cards per lane while the first page of bins loads. */
+const LOADING_CARDS_PER_LANE = 2;
 
 const LANE_META: Record<
   StorageLocationType,
@@ -486,10 +490,18 @@ export function StorageLocationList() {
 
       {isLoading ? (
         <div
-          className="bg-[var(--panel-bg)] [border:var(--panel-border)] p-32 body-small text-[var(--color-text-tertiary)]"
+          className="flex flex-col gap-32 lg:flex-row lg:items-start lg:gap-24"
           aria-busy="true"
         >
-          Loading storage bins…
+          <span className="sr-only">Loading storage bins…</span>
+          {STORAGE_LANE_ORDER.map((type) => (
+            <div key={type} className="flex flex-1 flex-col gap-16">
+              <Skeleton className="h-24 w-[60%]" />
+              {Array.from({ length: LOADING_CARDS_PER_LANE }).map((_, index) => (
+                <CardSkeleton key={index} lines={2} />
+              ))}
+            </div>
+          ))}
         </div>
       ) : storageLocations.length === 0 ? (
         <EmptyState

@@ -53,6 +53,7 @@ const APPLICATION_ID = "11111111-1111-4111-8111-111111111111";
 function boundaryDoc(
   logbookEvidenceType: string | null,
   id = "doc-1",
+  createdAt = new Date("2026-07-01T00:00:00.000Z"),
 ): DocumentRow {
   return {
     id,
@@ -62,6 +63,7 @@ function boundaryDoc(
     documentType: "pdf",
     uploadStatus: "uploaded",
     capturedAt: null,
+    createdAt,
     metadata: logbookEvidenceType ? { logbookEvidenceType } : {},
   } as unknown as DocumentRow;
 }
@@ -94,12 +96,30 @@ describe("savedLogbookEvidenceType", () => {
     expect(savedLogbookEvidenceType([boundaryDoc("not-a-type")])).toBeNull();
   });
 
-  it("returns the first classified document's type", () => {
+  it("returns the most recently saved classification, whatever the row order", () => {
+    const older = new Date("2026-07-01T00:00:00.000Z");
+    const newer = new Date("2026-07-09T00:00:00.000Z");
+
     expect(
       savedLogbookEvidenceType([
-        boundaryDoc(null, "a"),
-        boundaryDoc("affidavit", "b"),
-        boundaryDoc("inventory", "c"),
+        boundaryDoc(null, "a", newer),
+        boundaryDoc("affidavit", "b", older),
+        boundaryDoc("inventory", "c", newer),
+      ]),
+    ).toBe("inventory");
+    expect(
+      savedLogbookEvidenceType([
+        boundaryDoc("inventory", "c", newer),
+        boundaryDoc("affidavit", "b", older),
+      ]),
+    ).toBe("inventory");
+  });
+
+  it("falls back to the first classification when timestamps cannot order the rows", () => {
+    expect(
+      savedLogbookEvidenceType([
+        boundaryDoc("affidavit", "b", new Date(Number.NaN)),
+        boundaryDoc("inventory", "c", new Date(Number.NaN)),
       ]),
     ).toBe("affidavit");
   });

@@ -57,6 +57,10 @@ import type { FacilityWithRelations } from "@/data-access/facilities";
 import { formatTimezoneLabel } from "@/lib/date-utils";
 import { formatDurabilityOption } from "@/schemas/credit-batches";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
+import { CardSkeleton } from "@/components/ui/loading-skeleton";
+
+/** Placeholder cards shown while the first page of facilities loads. */
+const LOADING_CARD_COUNT = 3;
 
 export function FacilityList() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -412,10 +416,13 @@ export function FacilityList() {
 
       {isLoading ? (
         <div
-          className="bg-[var(--panel-bg)] [border:var(--panel-border)] p-32 body-small text-[var(--color-text-tertiary)]"
+          className="grid grid-cols-1 gap-24 xl:grid-cols-2 2xl:grid-cols-3"
           aria-busy="true"
         >
-          Loading facilities…
+          <span className="sr-only">Loading facilities…</span>
+          {Array.from({ length: LOADING_CARD_COUNT }).map((_, index) => (
+            <CardSkeleton key={index} lines={3} />
+          ))}
         </div>
       ) : facilities.length === 0 ? (
         <EmptyState

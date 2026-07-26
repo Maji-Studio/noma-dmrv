@@ -115,19 +115,37 @@ function documentLogbookEvidenceType(
   return isApplicationBoundaryLogbookEvidenceType(value) ? value : null;
 }
 
+/** Sort key for "most recently saved"; an unusable timestamp sorts oldest. */
+function documentCreatedAtMs(doc: DocumentRow): number {
+  const ms = new Date(doc.createdAt).getTime();
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
 /**
- * The classification already recorded on this application's saved boundary
- * evidence. Seeds the upload-type radio so reopening a record does not report
- * the hardcoded default for evidence that was saved as something else.
+ * The classification recorded on this application's MOST RECENTLY saved
+ * boundary evidence. Seeds the upload-type radio so reopening a record does not
+ * report the hardcoded default for evidence that was saved as something else.
+ *
+ * Most-recent, not first: document row order is not a contract, so on an
+ * application with mixed saved types the seed would otherwise be whichever row
+ * the query happened to return first — and could visibly flip once a new upload
+ * landed. The operator's own pick still overrides this for the session.
  */
 export function savedLogbookEvidenceType(
   docs: DocumentRow[],
 ): ApplicationBoundaryLogbookEvidenceType | null {
+  let latestType: ApplicationBoundaryLogbookEvidenceType | null = null;
+  let latestMs = -Infinity;
   for (const doc of docs) {
     const type = documentLogbookEvidenceType(doc);
-    if (type) return type;
+    if (!type) continue;
+    const createdAtMs = documentCreatedAtMs(doc);
+    if (createdAtMs > latestMs) {
+      latestType = type;
+      latestMs = createdAtMs;
+    }
   }
-  return null;
+  return latestType;
 }
 
 function isBoundaryEvidenceDocument(doc: DocumentRow): boolean {
