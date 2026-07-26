@@ -667,6 +667,19 @@ describe("future-dated measurement dates", () => {
     expect(check).toMatchObject({ status: "unmet" });
     expect(check?.detail).toContain("PR-0007");
     expect(check?.detail).toContain("APP-0003");
+    expect(check?.fixTarget).toBeUndefined();
+  });
+
+  it("targets the matching record list for a single-kind future-date blocker", () => {
+    const runCheck = buildRemovalRequirementsChecklist(
+      ready({ futureDatedMeasurements: [FUTURE_RUN] }),
+    ).find((c) => c.key === "measurementDates");
+    const applicationCheck = buildRemovalRequirementsChecklist(
+      ready({ futureDatedMeasurements: [FUTURE_APPLICATION] }),
+    ).find((c) => c.key === "measurementDates");
+
+    expect(runCheck?.fixTarget).toBe("productionRuns");
+    expect(applicationCheck?.fixTarget).toBe("applications");
   });
 
   it("renders red in the pre-flight checklist too", () => {

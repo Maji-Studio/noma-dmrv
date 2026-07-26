@@ -64,6 +64,20 @@ const PROJECT_TEMPLATES_STALE_MS = 60_000;
 const LOCKED_REFETCH_INTERVAL_MS = 60_000;
 const BATCH_HEALTH_SUMMARY_CHUNK_SIZE = 50;
 
+type RemovalCertifyPollingData = {
+  latestSubmission?: { lockedAt?: Date | string | null } | null;
+  futureDatedMeasurements?: readonly string[];
+};
+
+export function getRemovalCertifyRefetchInterval(
+  data: RemovalCertifyPollingData | undefined,
+): number | false {
+  return data?.latestSubmission?.lockedAt ||
+    (data?.futureDatedMeasurements?.length ?? 0) > 0
+    ? LOCKED_REFETCH_INTERVAL_MS
+    : false;
+}
+
 export const certificationKeys = {
   all: ["certification"] as const,
   facilityMapping: (facilityId: string) =>
@@ -439,8 +453,9 @@ export function useCreditBatchHealthSummaries(
 }
 
 // Removal-keyed Certify context for the guided Review flow. Like the
-// credit-batch variant it refetches while a submission is locked in flight so
-// the pre-flight reflects progress without a manual refresh.
+// credit-batch variant it refetches while a submission is locked in flight.
+// It also polls while a clock-derived future-date blocker exists so an open
+// dialog becomes ready when that timestamp passes, without broad idle polling.
 export function useRemovalCertifyContext(removalId: string, enabled = true) {
   return useQuery({
     queryKey: certificationKeys.certifyContextForRemoval(removalId),
@@ -452,9 +467,7 @@ export function useRemovalCertifyContext(removalId: string, enabled = true) {
     enabled: enabled && !!removalId,
     staleTime: DEFAULT_STALE_MS,
     refetchInterval: (query) =>
-      query.state.data?.latestSubmission?.lockedAt
-        ? LOCKED_REFETCH_INTERVAL_MS
-        : false,
+      getRemovalCertifyRefetchInterval(query.state.data),
   });
 }
 

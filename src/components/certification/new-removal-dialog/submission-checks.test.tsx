@@ -81,6 +81,45 @@ describe("SubmissionChecks", () => {
     );
   });
 
+  it("routes future-date blockers only to their typed record target", () => {
+    const futureRunChecks = CHECKS.map((check) =>
+      check.key === "measurementDates"
+        ? {
+            ...check,
+            status: "unmet" as const,
+            fixTarget: "productionRuns" as const,
+          }
+        : check,
+    );
+    const futureApplicationChecks = CHECKS.map((check) =>
+      check.key === "measurementDates"
+        ? {
+            ...check,
+            status: "unmet" as const,
+            fixTarget: "applications" as const,
+          }
+        : check,
+    );
+
+    const runHtml = renderToStaticMarkup(
+      <SubmissionChecks checks={futureRunChecks} facilityId="facility-1" />,
+    );
+    const applicationHtml = renderToStaticMarkup(
+      <SubmissionChecks
+        checks={futureApplicationChecks}
+        facilityId="facility-1"
+      />,
+    );
+
+    expect(runHtml).toContain(
+      'href="/production-runs?facility=facility-1"',
+    );
+    expect(applicationHtml).toContain(
+      'href="/applications?facility=facility-1"',
+    );
+    expect(applicationHtml).not.toContain('href="/production-runs');
+  });
+
   it("opens automatically and surfaces evidence advisories", () => {
     const checksWithWarning: RemovalRequirementCheck[] = [
       ...CHECKS,

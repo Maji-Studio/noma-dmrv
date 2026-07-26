@@ -286,6 +286,10 @@ export type PreflightCheckStatus =
   | "skipped" // not yet evaluable (an upstream check is unmet)
   | "warning"; // advisory is incomplete, but does not block submission
 
+export type RemovalMeasurementDateFixTarget =
+  | "productionRuns"
+  | "applications";
+
 export interface PreflightCheck {
   key:
     | "mapping"
@@ -307,11 +311,10 @@ export interface PreflightCheck {
   /** Protocol/lab context for the ⓘ "Why?" affordance (Phase 1). */
   whyDetail?: string;
   /**
-   * Deep-link target for the fix (Phase 2, readiness workspace). Left unset in
-   * Phase 0 — resolving the concrete href needs facility context the pure
-   * classifier doesn't hold; the workspace step attaches it at render.
+   * Typed destination for repairing a future measurement date. Mixed blocker
+   * kinds intentionally leave this unset rather than linking to the wrong list.
    */
-  fixTarget?: string;
+  fixTarget?: RemovalMeasurementDateFixTarget;
   status: PreflightCheckStatus;
   /** The blocker text when unmet, or context when met/skipped. */
   detail?: string;
@@ -355,9 +358,30 @@ function evidencePreflightCheck(facts: RemovalReadinessFacts) {
  * the pre-flight and requirements check shapes. Skips (rather than reads "met")
  * when there is nothing to submit AND no offending date, mirroring durability.
  */
+function measurementDateFixTarget(
+  measurements: readonly string[],
+): RemovalMeasurementDateFixTarget | undefined {
+  if (
+    measurements.every((measurement) =>
+      measurement.startsWith("Production run "),
+    )
+  ) {
+    return "productionRuns";
+  }
+  if (
+    measurements.every((measurement) =>
+      measurement.startsWith("Application "),
+    )
+  ) {
+    return "applications";
+  }
+  return undefined;
+}
+
 function measurementDatesCheck(facts: RemovalReadinessFacts): {
   key: "measurementDates";
   label: string;
+  fixTarget?: RemovalMeasurementDateFixTarget;
   status: PreflightCheckStatus;
   detail?: string;
 } {
@@ -372,6 +396,7 @@ function measurementDatesCheck(facts: RemovalReadinessFacts): {
   return {
     key: "measurementDates",
     label: MEASUREMENT_DATES_LABEL,
+    fixTarget: measurementDateFixTarget(measurements),
     status: "unmet",
     detail: measurements
       .slice(0, FUTURE_DATE_CHECK_DISPLAY_LIMIT)
@@ -549,11 +574,10 @@ export interface RemovalRequirementCheck {
   /** Protocol/lab context for the ⓘ "Why?" affordance (Phase 1). */
   whyDetail?: string;
   /**
-   * Deep-link target for the fix (Phase 2, readiness workspace). Left unset in
-   * Phase 0 — resolving the concrete href needs facility context the pure
-   * classifier doesn't hold; the workspace step attaches it at render.
+   * Typed destination for repairing a future measurement date. Mixed blocker
+   * kinds intentionally leave this unset rather than linking to the wrong list.
    */
-  fixTarget?: string;
+  fixTarget?: RemovalMeasurementDateFixTarget;
   status: PreflightCheckStatus;
   /** The blocker text when unmet, or context when met/skipped. */
   detail?: string;
