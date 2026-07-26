@@ -136,7 +136,7 @@ async function validateBiocharStorageLocation(
       ),
     );
 
-  if (!loc) throw new SafeError(`${label} storage location not found`);
+  if (!loc) throw new SafeError(`${label} storage bin not found`);
   if (loc.facilityId !== facilityId) throw new SafeError(`${label} bin does not belong to the selected facility`);
   if (loc.type !== "biochar_bin") throw new SafeError("Selected storage bin is not a biochar bin");
 }

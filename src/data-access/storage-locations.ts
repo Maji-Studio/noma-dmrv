@@ -733,7 +733,7 @@ export async function archiveStorageLocation(
     );
     if (hasNonZeroStock(availableKg)) {
       throw new SafeError(
-        `Cannot archive this storage location while it has ${formatKg(availableKg)} on hand. Reconcile or draw the bin down to zero first.`,
+        `Cannot archive this storage bin while it has ${formatKg(availableKg)} on hand. Reconcile or draw the bin down to zero first.`,
       );
     }
 
@@ -897,7 +897,7 @@ export async function deleteStorageLocation(
 
   if (blockers.length > 0) {
     throw new SafeError(
-      `Cannot delete this storage location while it has ${blockers.join(", ")}. Move or remove those records first.`
+      `Cannot delete this storage bin while it has ${blockers.join(", ")}. Move or remove those records first.`
     );
   }
 
