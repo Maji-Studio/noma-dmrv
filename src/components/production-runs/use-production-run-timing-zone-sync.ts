@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import {
   productionRunTimingDefaults,
-  shouldResetProductionRunTimingDefaults,
+  resolveProductionRunTimingZoneSync,
   type ProductionRunTimingField,
 } from "./production-run-timing";
 
@@ -32,21 +32,18 @@ export function useProductionRunTimingZoneSync(args: {
 
   useEffect(() => {
     const previousTimeZone = previousTimeZoneRef.current;
-    previousTimeZoneRef.current = timeZone;
-    if (
-      !shouldResetProductionRunTimingDefaults(
-        previousTimeZone,
-        timeZone,
-        {
-          startDate: startDateDirty,
-          startTime: startTimeDirty,
-          endDate: endDateDirty,
-          endTime: endTimeDirty,
-        },
-      )
-    ) {
-      return;
-    }
+    const transition = resolveProductionRunTimingZoneSync(
+      previousTimeZone,
+      timeZone,
+      {
+        startDate: startDateDirty,
+        startTime: startTimeDirty,
+        endDate: endDateDirty,
+        endTime: endTimeDirty,
+      },
+    );
+    previousTimeZoneRef.current = transition.trackedTimeZone;
+    if (!transition.shouldReset) return;
 
     const defaults = productionRunTimingDefaults(
       productionRun,

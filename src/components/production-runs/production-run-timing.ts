@@ -15,7 +15,6 @@ import {
   AmbiguousLocalTimeError,
   combineDateAndTime,
   formatFacilityWallClock,
-  formatTimezoneLabel,
   NonexistentLocalTimeError,
   resolveFacilityTimezone,
 } from "@/lib/date-utils";
@@ -75,6 +74,27 @@ export function shouldResetProductionRunTimingDefaults(
     !dirtyFields.endDate &&
     !dirtyFields.endTime
   );
+}
+
+/**
+ * Keep a blocked zone transition pending until clean timing fields can be
+ * re-seeded. Consuming the transition while fields are dirty leaves UTC
+ * defaults displayed as facility-local wall time once the edits are reverted.
+ */
+export function resolveProductionRunTimingZoneSync(
+  previousTimeZone: string,
+  nextTimeZone: string,
+  dirtyFields: Partial<Record<ProductionRunTimingField, boolean>>,
+): { shouldReset: boolean; trackedTimeZone: string } {
+  const shouldReset = shouldResetProductionRunTimingDefaults(
+    previousTimeZone,
+    nextTimeZone,
+    dirtyFields,
+  );
+  return {
+    shouldReset,
+    trackedTimeZone: shouldReset ? nextTimeZone : previousTimeZone,
+  };
 }
 
 /**
@@ -152,20 +172,13 @@ export function buildProductionRunWindow(input: {
 export function productionRunTimezoneHelperText(
   facilities: readonly { id: string; timezone: string }[],
   facilityId: string | null | undefined,
-  reference: Date | string = new Date(),
 ): string {
   const resolved = facilityId
     ? facilities.some((facility) => facility.id === facilityId)
     : false;
-  const referenceInstant =
-    typeof reference === "string" && /^\d{4}-\d{2}-\d{2}$/.test(reference)
-      ? new Date(`${reference}T12:00:00.000Z`)
-      : reference instanceof Date
-        ? reference
-        : new Date(reference);
-  const label = formatTimezoneLabel(
-    resolveFacilityTimezone(facilities, facilityId),
-    Number.isNaN(referenceInstant.getTime()) ? new Date() : referenceInstant,
+  const label = resolveFacilityTimezone(facilities, facilityId).replaceAll(
+    "_",
+    " ",
   );
   return resolved ? `Facility time — ${label}` : `Facility time unknown — using ${label}`;
 }

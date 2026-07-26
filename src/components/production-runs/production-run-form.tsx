@@ -345,12 +345,11 @@ export function ProductionRunForm({
   // Watch facility to filter reactors and storage locations
   const watchedFacilityId = useWatch({ control, name: "facilityId" });
   const watchedStatus = useWatch({ control, name: "status" });
-  const watchedStartDate = useWatch({ control, name: "startDate" });
 
   // The zone the entered start/end are interpreted in — the facility picked in
   // the form, which can differ from the context facility.
   const formTimezone = resolveFacilityTimezone(facilities, watchedFacilityId);
-  const timezoneHelperText = productionRunTimezoneHelperText(facilities, watchedFacilityId, watchedStartDate);
+  const timezoneHelperText = productionRunTimezoneHelperText(facilities, watchedFacilityId);
 
   // Watch fields for flow preview
   const watchedReactorId = useWatch({ control, name: "reactorId" });

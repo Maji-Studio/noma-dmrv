@@ -46,11 +46,7 @@ export function buildProductionRunWindowDetailFields(
     { label: "End Time", value: run.endTime ? clock(run.endTime) : null },
     {
       label: "Time Zone",
-      value: productionRunTimezoneHelperText(
-        facilities,
-        run.facilityId,
-        run.startTime,
-      ),
+      value: productionRunTimezoneHelperText(facilities, run.facilityId),
     },
   ];
 }

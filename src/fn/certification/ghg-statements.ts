@@ -464,7 +464,7 @@ async function createGhgStatementRemote(args: {
   } = args;
 
   const requestPayload = { end_on: endOn, project_id: externalProjectId };
-  const { externalId } = await performRegistryCreate({
+  const { externalId, source } = await performRegistryCreate({
     orgCtx,
     entityType: GHG_STATEMENT_ENTITY_TYPE,
     entityId: statement.id,
@@ -486,7 +486,15 @@ async function createGhgStatementRemote(args: {
     }),
   });
 
-  return finalizeGhgStatement({ client, orgCtx, statement, row, externalId, expected });
+  return finalizeGhgStatement({
+    client,
+    orgCtx,
+    statement,
+    row,
+    externalId,
+    expected,
+    outcome: source === "create" ? "created" : "existing",
+  });
 }
 
 // Shared tail for fresh and reconciled creates. Persist the external id before
@@ -499,8 +507,10 @@ async function finalizeGhgStatement(args: {
   row: CertificationSubmissionRow;
   externalId: string;
   expected: ExpectedRemoval[];
+  outcome: GhgStatementCreateOutcome;
 }): Promise<CreateGhgStatementResult> {
-  const { client, orgCtx, statement, row, externalId, expected } = args;
+  const { client, orgCtx, statement, row, externalId, expected, outcome } =
+    args;
 
   await markSubmissionSubmitted(orgCtx, row.id, {
     externalId,
@@ -516,7 +526,7 @@ async function finalizeGhgStatement(args: {
       [SUBMISSION_METADATA_KEYS.remoteStatus]: "DRAFT",
     });
     return {
-      outcome: "created",
+      outcome,
       ghgStatementId: statement.id,
       externalId,
       linkedRemovalIds: [],
@@ -532,7 +542,7 @@ async function finalizeGhgStatement(args: {
     remote,
   });
   return {
-    outcome: "created",
+    outcome,
     ghgStatementId: statement.id,
     externalId,
     linkedRemovalIds: reconciled.linkedRemovalIds,

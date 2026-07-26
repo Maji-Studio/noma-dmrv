@@ -92,7 +92,7 @@ describe("buildProductionRunWindowDetailFields", () => {
       { label: "End Time", value: "16:00" },
       {
         label: "Time Zone",
-        value: "Facility time — Africa/Dar es Salaam (UTC+3)",
+        value: "Facility time — Africa/Dar es Salaam",
       },
     ]);
   });
@@ -128,7 +128,28 @@ describe("buildProductionRunWindowDetailFields", () => {
     expect(fields[1]).toEqual({ label: "Start Time", value: "05:00" });
     expect(fields[4]).toEqual({
       label: "Time Zone",
-      value: "Facility time unknown — using UTC (UTC+0)",
+      value: "Facility time unknown — using UTC",
+    });
+  });
+
+  it("uses one truthful zone label for a window crossing a DST transition", () => {
+    const fields = buildProductionRunWindowDetailFields(
+      {
+        facilityId: "facility-ny",
+        startTime: new Date("2026-03-08T06:30:00.000Z"),
+        endTime: new Date("2026-03-08T07:30:00.000Z"),
+      },
+      [
+        ...FACILITIES,
+        { id: "facility-ny", timezone: "America/New_York" },
+      ],
+    );
+
+    expect(fields[1]).toEqual({ label: "Start Time", value: "01:30" });
+    expect(fields[3]).toEqual({ label: "End Time", value: "03:30" });
+    expect(fields[4]).toEqual({
+      label: "Time Zone",
+      value: "Facility time — America/New York",
     });
   });
 });

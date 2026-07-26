@@ -454,6 +454,7 @@ describe("createGhgStatementDraft — happy path", () => {
 
     if (!result.success) throw new Error(`Action failed: ${result.error}`);
     expect(result.data).toMatchObject({
+      outcome: "created",
       ghgStatementId: STATEMENT_ID,
       externalId: EXTERNAL_STATEMENT_ID,
       linkedRemovalIds: [REMOVAL_ID],
@@ -605,7 +606,10 @@ describe("createGhgStatementDraft — empty-statement guard (#245)", () => {
 
     expect(result).toMatchObject({
       success: true,
-      data: { externalId: EXTERNAL_STATEMENT_ID },
+      data: {
+        outcome: "existing",
+        externalId: EXTERNAL_STATEMENT_ID,
+      },
     });
     expect(isometric.createGhgStatement).not.toHaveBeenCalled();
     expect(isometric.reconcileGhgStatement).toHaveBeenCalledOnce();

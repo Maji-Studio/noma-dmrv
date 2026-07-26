@@ -3,6 +3,7 @@ import {
   buildProductionRunWindow,
   productionRunTimezoneHelperText,
   productionRunTimingDefaults,
+  resolveProductionRunTimingZoneSync,
   shouldResetProductionRunTimingDefaults,
 } from "./production-run-timing";
 
@@ -102,6 +103,29 @@ describe("shouldResetProductionRunTimingDefaults", () => {
         {},
       ),
     ).toBe(false);
+  });
+
+  it("keeps a dirty zone transition pending until edits are reverted", () => {
+    const blocked = resolveProductionRunTimingZoneSync(
+      "UTC",
+      "Africa/Dar_es_Salaam",
+      { startTime: true },
+    );
+    expect(blocked).toEqual({
+      shouldReset: false,
+      trackedTimeZone: "UTC",
+    });
+
+    expect(
+      resolveProductionRunTimingZoneSync(
+        blocked.trackedTimeZone,
+        "Africa/Dar_es_Salaam",
+        {},
+      ),
+    ).toEqual({
+      shouldReset: true,
+      trackedTimeZone: "Africa/Dar_es_Salaam",
+    });
   });
 });
 
@@ -205,30 +229,19 @@ describe("buildProductionRunWindow", () => {
 describe("productionRunTimezoneHelperText", () => {
   it("names the resolved facility zone", () => {
     expect(productionRunTimezoneHelperText(FACILITIES, "facility-a")).toBe(
-      "Facility time — Africa/Dar es Salaam (UTC+3)",
+      "Facility time — Africa/Dar es Salaam",
     );
   });
 
   it("states the UTC fallback instead of applying it silently", () => {
     expect(productionRunTimezoneHelperText(FACILITIES, "facility-z")).toBe(
-      "Facility time unknown — using UTC (UTC+0)",
+      "Facility time unknown — using UTC",
     );
   });
 
-  it("uses the entered run date for winter and summer DST offsets", () => {
-    expect(
-      productionRunTimezoneHelperText(
-        FACILITIES,
-        "facility-b",
-        "2026-01-15",
-      ),
-    ).toBe("Facility time — America/New York (UTC-5)");
-    expect(
-      productionRunTimezoneHelperText(
-        FACILITIES,
-        "facility-b",
-        "2026-07-15",
-      ),
-    ).toBe("Facility time — America/New York (UTC-4)");
+  it("does not claim one numeric offset for DST-transition windows", () => {
+    expect(productionRunTimezoneHelperText(FACILITIES, "facility-b")).toBe(
+      "Facility time — America/New York",
+    );
   });
 });
