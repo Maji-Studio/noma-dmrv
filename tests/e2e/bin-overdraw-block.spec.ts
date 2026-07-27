@@ -27,7 +27,7 @@ const BIOCHAR_PRODUCTS_URL = "/biochar-products";
 const ORDERS_URL = "/orders";
 const DELIVERIES_URL = "/deliveries";
 
-const RUN_DATE = "2027-06-15";
+const RUN_DATE = "2025-06-15";
 const RUN_START_TIME = "08:00";
 const RUN_END_TIME = "12:00";
 const DELIVERY_DATE = "2027-06-16";

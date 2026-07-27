@@ -16,6 +16,8 @@ import {
   waitForSideSheetClose,
 } from "./fixtures/page-helpers";
 
+const PRODUCTION_RUN_DATE = "2025-06-15";
+
 async function createProductionRunForCreditBatch(
   page: Page,
   seededData: SeededChainData,
@@ -295,8 +297,11 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     adminPage: page,
     seededData,
   }) => {
-    const today = new Date().toISOString().split("T")[0];
-    await createProductionRunForCreditBatch(page, seededData, today);
+    await createProductionRunForCreditBatch(
+      page,
+      seededData,
+      PRODUCTION_RUN_DATE,
+    );
 
     await page.goto(`/credit-batches?facility=${seededData.facility.id}`);
     await page.waitForLoadState("networkidle");
@@ -305,8 +310,8 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     await waitForSideSheet(page);
 
     // Fill Overview section
-    await page.fill('input[name="startDate"]', today);
-    await page.fill('input[name="endDate"]', today);
+    await page.fill('input[name="startDate"]', PRODUCTION_RUN_DATE);
+    await page.fill('input[name="endDate"]', PRODUCTION_RUN_DATE);
 
     await selectFirstCreditBatchProductionRun(page, seededData.feedstockType);
 

@@ -383,6 +383,7 @@ test.describe("Full Chain UI Smoke Test", () => {
     };
 
     const today = new Date().toISOString().split("T")[0];
+    const productionRunDate = "2025-06-15";
 
     try {
     // ─── 1. FACILITY ───────────────────────────────────────
@@ -464,7 +465,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       );
 
       // Fill start date
-      await page.fill('input[name="startDate"]', today);
+      await page.fill('input[name="startDate"]', productionRunDate);
       await page.fill('input[name="startTime"]', "08:00");
 
       await selectEntityById(
@@ -493,7 +494,7 @@ test.describe("Full Chain UI Smoke Test", () => {
         .click();
       await page.getByRole("menuitem", { name: "Edit" }).click();
       await waitForSideSheet(page);
-      await page.fill('input[name="endDate"]', today);
+      await page.fill('input[name="endDate"]', productionRunDate);
       await page.fill('input[name="endTime"]', "12:00");
       await page.selectOption('select[name="status"]', "complete");
       await page
@@ -616,7 +617,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.click('button:has-text("New Credit Batch")');
       await waitForSideSheet(page);
 
-      await page.fill('input[name="startDate"]', today);
+      await page.fill('input[name="startDate"]', productionRunDate);
       await page.fill('input[name="endDate"]', today);
 
       await selectFirstCreditBatchProductionRun(page, seededData.feedstockType);

@@ -259,7 +259,7 @@ test.describe("Production Run lifecycle (#254)", () => {
     seededData,
   }) => {
     await openRunForm(page, seededData, {
-      startDate: "2030-01-05",
+      startDate: "2025-01-05",
       startTime: "08:00",
       status: "cancelled",
     });
@@ -294,7 +294,7 @@ test.describe("Production Run lifecycle (#254)", () => {
     seededData,
   }) => {
     await openRunForm(page, seededData, {
-      startDate: "2030-02-05",
+      startDate: "2025-02-05",
       startTime: "08:00",
       status: "running",
     });
@@ -308,7 +308,7 @@ test.describe("Production Run lifecycle (#254)", () => {
     await editFirstRow(page);
 
     const dialog = page.locator('[role="dialog"]');
-    await dialog.locator('input[name="endDate"]').fill("2030-02-05");
+    await dialog.locator('input[name="endDate"]').fill("2025-02-05");
     await dialog.locator('input[name="endTime"]').fill("12:00");
     // A failed run needs a source bin, moisture %, and wet mass to compute
     // consumed feedstock (same guard as a complete run) — the lifecycle
@@ -342,9 +342,9 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
     seededData,
   }) => {
     await openRunForm(page, seededData, {
-      startDate: "2027-01-05",
+      startDate: "2025-01-05",
       startTime: "08:00",
-      endDate: "2027-01-05",
+      endDate: "2025-01-05",
       endTime: "12:00",
       status: "draft",
     });
@@ -352,9 +352,9 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
     await waitForSideSheetClose(page);
 
     await openRunForm(page, seededData, {
-      startDate: "2027-01-05",
+      startDate: "2025-01-05",
       startTime: "08:00",
-      endDate: "2027-01-05",
+      endDate: "2025-01-05",
       endTime: "10:00",
       status: "draft",
     });
@@ -370,9 +370,9 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
     seededData,
   }) => {
     await openRunForm(page, seededData, {
-      startDate: "2027-02-05",
+      startDate: "2025-02-05",
       startTime: "08:00",
-      endDate: "2027-02-05",
+      endDate: "2025-02-05",
       endTime: "12:00",
       status: "draft",
     });
@@ -381,9 +381,9 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
 
     // 10:00–11:00 sits inside the first run's 08:00–12:00 window.
     await openRunForm(page, seededData, {
-      startDate: "2027-02-05",
+      startDate: "2025-02-05",
       startTime: "10:00",
-      endDate: "2027-02-05",
+      endDate: "2025-02-05",
       endTime: "11:00",
       status: "draft",
     });
@@ -400,7 +400,7 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
   }) => {
     // Open run (no end time) — occupies [08:00, ∞) on the reactor.
     await openRunForm(page, seededData, {
-      startDate: "2027-03-05",
+      startDate: "2025-03-05",
       startTime: "08:00",
       status: "running",
     });
@@ -409,9 +409,9 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
 
     // A later run cannot start until the open run is closed.
     await openRunForm(page, seededData, {
-      startDate: "2027-03-05",
+      startDate: "2025-03-05",
       startTime: "13:00",
-      endDate: "2027-03-05",
+      endDate: "2025-03-05",
       endTime: "15:00",
       status: "draft",
     });
@@ -427,9 +427,9 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
     seededData,
   }) => {
     await openRunForm(page, seededData, {
-      startDate: "2027-04-05",
+      startDate: "2025-04-05",
       startTime: "22:00",
-      endDate: "2027-04-06",
+      endDate: "2025-04-06",
       endTime: "02:00",
       status: "draft",
     });
@@ -444,9 +444,9 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
   }) => {
     // Two non-overlapping runs on one reactor, with a gap between them.
     await openRunForm(page, seededData, {
-      startDate: "2027-05-05",
+      startDate: "2025-05-05",
       startTime: "08:00",
-      endDate: "2027-05-05",
+      endDate: "2025-05-05",
       endTime: "10:00",
       status: "draft",
     });
@@ -454,9 +454,9 @@ test.describe("Production Run reactor time-window overlap (#259)", () => {
     await waitForSideSheetClose(page);
 
     await openRunForm(page, seededData, {
-      startDate: "2027-05-05",
+      startDate: "2025-05-05",
       startTime: "14:00",
-      endDate: "2027-05-05",
+      endDate: "2025-05-05",
       endTime: "16:00",
       status: "draft",
     });
@@ -499,7 +499,7 @@ test.describe("Production Run end-time editing", () => {
     // Create the run open, then finish it through the legal Running → Complete
     // transition.
     await openRunForm(page, seededData, {
-      startDate: "2027-06-05",
+      startDate: "2025-06-05",
       startTime: "08:00",
       status: "running",
     });
@@ -521,7 +521,7 @@ test.describe("Production Run end-time editing", () => {
     await submitCreate(page);
     await waitForSideSheetClose(page);
     await editFirstRow(page);
-    await page.fill('input[name="endDate"]', "2027-06-05");
+    await page.fill('input[name="endDate"]', "2025-06-05");
     await page.fill('input[name="endTime"]', "12:00");
     await page.selectOption('select[name="status"]', "complete");
     await saveEdit(page);
@@ -537,7 +537,7 @@ test.describe("Production Run end-time editing", () => {
     // The saved end time survived the non-time edit.
     await page.reload();
     await editFirstRow(page);
-    await expect(dialog.locator('input[name="endDate"]')).toHaveValue("2027-06-05");
+    await expect(dialog.locator('input[name="endDate"]')).toHaveValue("2025-06-05");
     await expect(dialog.locator('input[name="endTime"]')).toHaveValue("12:00");
     await expect(
       dialog.getByRole("button", { name: /clear end time/i }),
@@ -552,7 +552,7 @@ test.describe("Production Run end-time editing", () => {
     // The corrected time persisted and the run remains Complete.
     await page.reload();
     await editFirstRow(page);
-    await expect(dialog.locator('input[name="endDate"]')).toHaveValue("2027-06-05");
+    await expect(dialog.locator('input[name="endDate"]')).toHaveValue("2025-06-05");
     await expect(dialog.locator('input[name="endTime"]')).toHaveValue("13:00");
     await expect(dialog.locator('select[name="status"]')).toHaveValue("complete");
   });
