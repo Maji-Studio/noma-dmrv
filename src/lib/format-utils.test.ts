@@ -17,6 +17,11 @@ describe("formatDayString", () => {
 });
 
 describe("formatMass", () => {
+  it("rounds kilograms and converts larger masses to tonnes", () => {
+    expect(formatMass(999.6)).toBe("1,000 kg");
+    expect(formatMass(1_250)).toBe("1.3 t");
+  });
+
   it("returns the fallback for null, undefined, and NaN", () => {
     expect(formatMass(null)).toBe("—");
     expect(formatMass(undefined)).toBe("—");
