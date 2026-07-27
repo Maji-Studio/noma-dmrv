@@ -145,8 +145,8 @@ export function CertificationSettings() {
 
           <SettingsSection
             icon={GlobeIcon}
-            title="Registry Source visibility — organization-wide"
-            caption="One policy for every new Isometric Source mirrored by this organization, across all facilities."
+            title="Registry Source visibility"
+            caption="Default visibility for new Isometric Sources across all facilities."
           >
             <RegistrySourceVisibilitySettings />
           </SettingsSection>
@@ -169,34 +169,35 @@ export function CertificationSettings() {
               EmissionEstimatesForm seeds its RHF defaultValues from `mapping`
               at mount, so it must not mount until the summary has loaded —
               otherwise saved values render blank. */}
-          {viewerCanManage && (
-            <SettingsSection
-              id={CERTIFICATION_SETTINGS_EMISSION_ESTIMATES_ANCHOR}
-              icon={GaugeIcon}
-              title="Emission estimates"
-              caption="Reference soil temperature for 200-year durability removals."
-            >
-              {summaryLoading ? (
-                <p className="body-medium text-[var(--color-text-tertiary)]">
-                  Loading facility configuration…
-                </p>
-              ) : !summary ? (
-                <p className="body-medium text-[var(--clr-red)]" role="alert">
-                  Couldn&apos;t load facility configuration. Refresh the page to
-                  retry.
-                </p>
-              ) : (
-                <EmissionEstimatesForm
-                  key={`emission-estimates-${facilityId}`}
-                  facilityId={facilityId}
-                  mapping={summary.mapping ?? null}
-                  durabilityOption={
-                    selectedFacility?.durabilityOption ?? "1000_year"
-                  }
-                />
-              )}
-            </SettingsSection>
-          )}
+          {viewerCanManage &&
+            selectedFacility?.durabilityOption === "200_year" && (
+              <SettingsSection
+                id={CERTIFICATION_SETTINGS_EMISSION_ESTIMATES_ANCHOR}
+                icon={GaugeIcon}
+                title="Emission estimates"
+                caption="Reference soil temperature for 200-year durability removals."
+              >
+                {summaryLoading ? (
+                  <p className="body-medium text-[var(--color-text-tertiary)]">
+                    Loading facility configuration…
+                  </p>
+                ) : !summary ? (
+                  <p className="body-medium text-[var(--clr-red)]" role="alert">
+                    Couldn&apos;t load facility configuration. Refresh the page
+                    to retry.
+                  </p>
+                ) : (
+                  <EmissionEstimatesForm
+                    key={`emission-estimates-${facilityId}`}
+                    facilityId={facilityId}
+                    mapping={summary.mapping ?? null}
+                    durabilityOption={
+                      selectedFacility?.durabilityOption ?? "1000_year"
+                    }
+                  />
+                )}
+              </SettingsSection>
+            )}
 
           {/* Integration diagnostics — admin only, read-only, no secrets.
               Collapsed by default: credentials health and allowlists are
