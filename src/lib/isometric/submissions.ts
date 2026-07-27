@@ -17,6 +17,8 @@ export type GhgEntry = components["schemas"]["GhgEntry"];
 export type CreateComponentRequest =
   components["schemas"]["CreateComponentRequest"];
 export type Component = components["schemas"]["Component"];
+export type ComponentAttribution =
+  components["schemas"]["ComponentAttribution"];
 
 export function createDatapoint(client: IsometricClient, body: CreateDatapointRequest): Promise<Datapoint> {
   return client.post<Datapoint>("/datapoints", body);
@@ -42,6 +44,33 @@ export function createGhgEntry(client: IsometricClient, body: CreateGhgEntryRequ
 // netted figures we surface in the removal breakdown card.
 export function getGhgEntry(client: IsometricClient, id: string): Promise<GhgEntry> {
   return client.get<GhgEntry>(`/ghg_entries/${id}`);
+}
+
+export function getDatapoint(
+  client: IsometricClient,
+  id: string,
+): Promise<Datapoint> {
+  return client.get<Datapoint>(
+    `/datapoints/${encodeURIComponent(id)}`,
+  );
+}
+
+export function getComponent(
+  client: IsometricClient,
+  id: string,
+): Promise<Component> {
+  return client.get<Component>(
+    `/components/${encodeURIComponent(id)}`,
+  );
+}
+
+export function listGhgEntryComponentAttributions(
+  client: IsometricClient,
+  ghgEntryId: string,
+): Promise<ComponentAttribution[]> {
+  return client.paginateAll<ComponentAttribution>(
+    `/ghg_entries/${encodeURIComponent(ghgEntryId)}/component_attributions`,
+  );
 }
 
 // Defined for completeness; templated GHG entries embed inputs directly via

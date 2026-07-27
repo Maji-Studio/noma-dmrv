@@ -99,14 +99,15 @@ const EXISTING_SOURCE_ID = "src_recovered";
 
 const DOCUMENT_FIXTURE = {
   id: DOCUMENT_ID,
-  fileName: "lab-report.pdf",
-  documentType: "lab_report" as const,
+  fileName: "application-inventory.pdf",
+  documentType: "pdf" as const,
   mimeType: "application/pdf",
   fileSizeBytes: 12345,
-  storageKey: "documents/lab-report.pdf",
+  storageKey: "documents/application-inventory.pdf",
   capturedAt: new Date("2026-01-05T00:00:00Z"),
   createdAt: new Date("2026-01-05T00:00:00Z"),
   checksumSha256: null,
+  metadata: { logbookEvidenceType: "inventory" },
 };
 
 import * as removalsDA from "@/data-access/certifier-removals";
@@ -409,7 +410,11 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
       );
       expect(isometric.createSource).toHaveBeenCalledWith(
         expect.anything(),
-        expect.objectContaining({ is_public: true }),
+        expect.objectContaining({
+          is_public: true,
+          description:
+            "Noma role: Inventory. Lineage: Application APP-001.",
+        }),
       );
       expect(uploadsDA.insertOrGetDocumentUpload).toHaveBeenCalledWith(
         makeTestOrgContext(USER_ID),

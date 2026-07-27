@@ -257,6 +257,17 @@ export function RemovalDetailSheet({
             </Field>
           )}
 
+          {summary.evidenceHealth && (
+            <Field label="Evidence attachments">
+              <span>
+                {summary.evidenceHealth.label}
+                {summary.evidenceHealth.totalCount > 0
+                  ? ` — ${summary.evidenceHealth.verifiedCount} of ${summary.evidenceHealth.totalCount} intended targets verified`
+                  : ""}
+              </span>
+            </Field>
+          )}
+
           <ReadinessBlock summary={summary} />
 
           {/*
@@ -267,12 +278,10 @@ export function RemovalDetailSheet({
           <SubmissionNotes notes={submissionWarningNotes} />
 
           {/*
-            Supporting sources — mirror lineage documents (lab reports, BoLs,
-            weigh-scale tickets, including per-transport-leg evidence) to
-            Isometric so their source_ids ride into the Datapoint payloads at
-            submit. This is the only place the candidate set is consumed: submit
-            is resolve-only and never auto-mirrors, so without this panel
-            `source_ids` is always empty and no evidence reaches the registry.
+            Supporting sources — prepare the three code-owned Noma evidence
+            roles for their intended registry Datapoint targets. This is the
+            only place the candidate set is consumed: submit is resolve-only
+            and never auto-mirrors.
             (Restores the mount lost when evidence-step.tsx was deleted in the
             2026-06-04 certify redesign.)
           */}

@@ -11,6 +11,7 @@ import {
   type DurabilityOption,
 } from "@/schemas/credit-batches";
 import { BLOCKING_SUBMISSION_STATUSES } from "@/lib/certification/status";
+import type { StoredSourceBindingVerification } from "@/lib/certification/removal-evidence-health";
 import { SafeError } from "@/lib/errors";
 import { logger } from "@/lib/log";
 import type { OrgContext } from "@/lib/auth/server";
@@ -315,4 +316,31 @@ export async function updateRemovalDates(
       updatedAt: sql`now()`,
     })
     .where(and(eq(certifierRemovals.id, removalId), eq(certifierRemovals.organizationId, ctx.organizationId)));
+}
+
+export async function updateRemovalSourceBindingVerification(
+  ctx: OrgContext,
+  removalId: string,
+  verification: StoredSourceBindingVerification,
+): Promise<void> {
+  requireOrgScope(ctx);
+  const [updated] = await db
+    .update(certifierRemovals)
+    .set({
+      metadata: sql`jsonb_set(
+        coalesce(${certifierRemovals.metadata}, '{}'::jsonb),
+        '{sourceBindingVerification}',
+        ${JSON.stringify(verification)}::jsonb,
+        true
+      )`,
+      updatedAt: sql`now()`,
+    })
+    .where(
+      and(
+        eq(certifierRemovals.id, removalId),
+        eq(certifierRemovals.organizationId, ctx.organizationId),
+      ),
+    )
+    .returning({ id: certifierRemovals.id });
+  if (!updated) throw new SafeError("Removal not found.");
 }

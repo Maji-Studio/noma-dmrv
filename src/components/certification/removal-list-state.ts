@@ -23,6 +23,7 @@ export interface RemovalListRow {
   local: RemovalPreflightSummary["local"];
   lockInFlight: boolean;
   readiness: RemovalPreflightSummary["readiness"] | null;
+  evidenceHealth: RemovalPreflightSummary["evidenceHealth"];
   submissionWarnings: string[];
   recentSyncEvents: RemovalPreflightSummary["recentSyncEvents"];
   enrichmentStatus: RemovalEnrichmentStatus;
@@ -57,6 +58,7 @@ export function buildRemovalListRows(
           ? isLockedInFlight(identity.latestSubmission)
           : false),
       readiness: data?.readiness ?? null,
+      evidenceHealth: data?.evidenceHealth ?? null,
       submissionWarnings: data?.submissionWarnings ?? [],
       recentSyncEvents: data?.recentSyncEvents ?? [],
       enrichmentStatus: enrichment.status,

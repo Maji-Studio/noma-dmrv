@@ -31,6 +31,7 @@ function enrichment(
     local: null,
     lockInFlight: false,
     readiness: { state: "ready", reasons: [], advisories: [] },
+    evidenceHealth: null,
     submissionWarnings: [],
     recentSyncEvents: [],
   };
