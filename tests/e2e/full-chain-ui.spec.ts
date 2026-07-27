@@ -10,6 +10,7 @@
  * Uses seeded prerequisite data (supplier, feedstock type, customer, etc.)
  * from the auth fixtures.
  */
+import type { Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import {
   dismissCertifierLinkDialog,
@@ -23,6 +24,50 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { eq, ilike, inArray } from "drizzle-orm";
 import * as schema from "../../src/db/schema";
+
+const ACTION_LABEL_PREFIX = "Actions for ";
+
+async function getListedActionCodes(page: Page): Promise<Set<string>> {
+  const table = page.getByRole("table", { name: "Production runs" });
+  const emptyState = page.getByText(/No production runs (?:yet|found)/, {
+    exact: true,
+  });
+  await expect
+    .poll(async () => {
+      if (await table.count()) return table.getAttribute("aria-busy");
+      return (await emptyState.count()) ? "false" : "pending";
+    })
+    .toBe("false");
+  const labels = await page
+    .locator(`tbody button[aria-label^="${ACTION_LABEL_PREFIX}"]`)
+    .evaluateAll(
+      (buttons, prefixLength) =>
+        buttons
+          .map((button) => button.getAttribute("aria-label"))
+          .filter((label): label is string => label !== null)
+          .map((label) => label.slice(prefixLength)),
+      ACTION_LABEL_PREFIX.length,
+    );
+  return new Set(labels);
+}
+
+async function getCreatedActionCode(
+  page: Page,
+  existingCodes: Set<string>,
+): Promise<string> {
+  let createdCodes: string[] = [];
+  await expect
+    .poll(async () => {
+      createdCodes = [...(await getListedActionCodes(page))].filter(
+        (code) => !existingCodes.has(code),
+      );
+      return createdCodes.length;
+    })
+    .toBe(1);
+  const createdCode = createdCodes[0];
+  if (!createdCode) throw new Error("Created action code was not rendered");
+  return createdCode;
+}
 
 // ============================================
 // Full Chain Smoke Test
@@ -383,6 +428,7 @@ test.describe("Full Chain UI Smoke Test", () => {
     };
 
     const today = new Date().toISOString().split("T")[0];
+    const productionRunDate = "2025-06-15";
 
     try {
     // ─── 1. FACILITY ───────────────────────────────────────
@@ -450,6 +496,7 @@ test.describe("Full Chain UI Smoke Test", () => {
     await test.step("Create Production Run", async () => {
       await page.goto(`/production-runs?facility=${seededData.facility.id}`);
       await page.waitForLoadState("networkidle");
+      const existingRunCodes = await getListedActionCodes(page);
 
       await page.click('button:has-text("New Production Run")');
       await waitForSideSheet(page);
@@ -464,7 +511,7 @@ test.describe("Full Chain UI Smoke Test", () => {
       );
 
       // Fill start date
-      await page.fill('input[name="startDate"]', today);
+      await page.fill('input[name="startDate"]', productionRunDate);
       await page.fill('input[name="startTime"]', "08:00");
 
       await selectEntityById(
@@ -485,15 +532,25 @@ test.describe("Full Chain UI Smoke Test", () => {
 
       await page.locator('[role="dialog"]').locator('button:has-text("Create Production Run")').click();
       await waitForSideSheetClose(page);
+      const createdRunCode = await getCreatedActionCode(
+        page,
+        existingRunCodes,
+      );
 
-      await page
-        .locator("tbody tr")
-        .first()
-        .getByRole("button", { name: /Actions for/ })
-        .click();
-      await page.getByRole("menuitem", { name: "Edit" }).click();
+      await expect(async () => {
+        await page
+          .locator("tbody")
+          .getByRole("button", {
+            name: `${ACTION_LABEL_PREFIX}${createdRunCode}`,
+            exact: true,
+          })
+          .click({ timeout: 5000 });
+        await page
+          .getByRole("menuitem", { name: "Edit" })
+          .click({ timeout: 5000 });
+      }).toPass({ timeout: 30000 });
       await waitForSideSheet(page);
-      await page.fill('input[name="endDate"]', today);
+      await page.fill('input[name="endDate"]', productionRunDate);
       await page.fill('input[name="endTime"]', "12:00");
       await page.selectOption('select[name="status"]', "complete");
       await page
@@ -616,8 +673,8 @@ test.describe("Full Chain UI Smoke Test", () => {
       await page.click('button:has-text("New Credit Batch")');
       await waitForSideSheet(page);
 
-      await page.fill('input[name="startDate"]', today);
-      await page.fill('input[name="endDate"]', today);
+      await page.fill('input[name="startDate"]', productionRunDate);
+      await page.fill('input[name="endDate"]', productionRunDate);
 
       await selectFirstCreditBatchProductionRun(page, seededData.feedstockType);
 
