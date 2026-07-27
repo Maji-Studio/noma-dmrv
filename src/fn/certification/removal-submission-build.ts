@@ -3,6 +3,7 @@ import { appliedBiocharFraction } from "@/lib/certification/mass-accounting";
 import { SafeError } from "@/lib/errors";
 import {
   aggregateProductionRuns,
+  buildRemovalSupplierRef,
   enrichWithTransportLegs,
   type AggregatedProductionData,
   type CreateDatapointRequest,
@@ -13,8 +14,14 @@ import {
   buildCreateDatapointRequest,
   MAPPING_REVISION,
 } from "@/lib/isometric/transformers/datapoint";
-import { isSequestrationBlueprintFamily } from "@/lib/isometric/transformers/measurement-sample";
-import { assertSequestrationTemplateBindings } from "@/lib/isometric/transformers/sequestration-binding";
+import {
+  expectedSequestrationBlueprintKeys,
+  isSequestrationBlueprintFamily,
+} from "@/lib/isometric/transformers/measurement-sample";
+import {
+  assertSequestrationTemplateBindings,
+  buildDirectSequestrationDatapoints,
+} from "@/lib/isometric/transformers/sequestration-binding";
 import { weightedBatchChemistry } from "@/lib/isometric/utils/durability-aggregation";
 import type { Logger } from "@/lib/log";
 import {
@@ -59,6 +66,418 @@ export interface RemovalSubmissionBuild {
   datapointBodyByKey: Map<string, CreateDatapointRequest>;
   durabilityMeasurementSampleArgs: DurabilityMeasurementSampleClaimArgs | null;
   memberCreditBatchIds: string[];
+}
+
+export interface RemovalSubmissionReview {
+  template: {
+    id: string;
+    displayName: string;
+    mappingRevision: string;
+  };
+  bindings: Array<{
+    componentId: string;
+    componentBlueprintKey: string;
+    inputKey: string;
+    binding: "monitored" | "fixed" | "measurement-sample";
+    wireMagnitude?: number;
+    wireUnit?: string;
+    wireType?: string;
+    fixedDatapointId?: string;
+  }>;
+  measurementSamples: Array<{
+    operationKey: string;
+    label: string;
+    measuredAt: string | null;
+    values: unknown[];
+  }>;
+  directSequestrationDatapoints: Array<{
+    componentId: string;
+    inputKey: string;
+    magnitude: number;
+    unit: string;
+    type: string;
+  }>;
+  sourceIds: string[];
+  intendedPostTargets: string[];
+  memberCreditBatches: Array<{ id: string; code: string }>;
+  productionRuns: Array<{ id: string; code: string | null }>;
+  reportingWindow: { startedOn: string; completedOn: string };
+}
+
+export interface CompiledRemovalSubmission {
+  review: RemovalSubmissionReview;
+  transportPlan: RemovalSubmissionBuild | null;
+  blockers: string[];
+  warnings: string[];
+  snapshot: {
+    materialization: "claim-time";
+    mappingRevision: string;
+    semanticPayload: Record<string, unknown>;
+  } | null;
+}
+
+export interface MaterializedRemovalSubmissionSnapshot {
+  payloadSnapshot: {
+    __mappingRevision: string;
+    semantic: Record<string, unknown>;
+    memberCreditBatchIds: string[];
+    transport: {
+      removalSupplierRef: string;
+      datapointBodies: Array<{
+        rtcId: string;
+        inputKey: string;
+        body: CreateDatapointRequest;
+      }>;
+    };
+    durabilityMeasurementSamples?: {
+      submissions: ReturnType<
+        typeof buildVersionedMeasurementSampleSubmissions
+      >;
+    };
+  };
+}
+
+const DATAPOINT_POST_TARGET = "/datapoints";
+const MEASUREMENT_SAMPLE_POST_TARGET = "/measurement-samples";
+const GHG_ENTRY_POST_TARGET = "/ghg-entries";
+const LEGACY_SEQUESTRATION_BLUEPRINT =
+  "carbon_rich_substance_sequestration";
+
+function hasSupportedSequestrationComponent(
+  template: IsometricGhgEntryTemplate,
+): boolean {
+  return (template.groups ?? []).some((group) =>
+    group.components.some(
+      (component) =>
+        component.blueprint_key === LEGACY_SEQUESTRATION_BLUEPRINT ||
+        isSequestrationBlueprintFamily(component.blueprint_key),
+    ),
+  );
+}
+
+function emptyReview(
+  template: IsometricGhgEntryTemplate,
+): RemovalSubmissionReview {
+  return {
+    template: {
+      id: template.id,
+      displayName: template.display_name,
+      mappingRevision: MAPPING_REVISION,
+    },
+    bindings: [],
+    measurementSamples: [],
+    directSequestrationDatapoints: [],
+    sourceIds: [],
+    intendedPostTargets: [],
+    memberCreditBatches: [],
+    productionRuns: [],
+    reportingWindow: { startedOn: "", completedOn: "" },
+  };
+}
+
+export function removalTemplateTierCompatibilityBlocker(
+  ctx: Pick<RemovalSubmissionContext, "batchesWithSamples">,
+  template: IsometricGhgEntryTemplate,
+): string | null {
+  const facilityTier = ctx.batchesWithSamples[0]?.durabilityOption ?? null;
+  if (!facilityTier) return null;
+  const expectedKeys = expectedSequestrationBlueprintKeys(facilityTier);
+  const mismatched = template.groups
+    .flatMap((group) => group.components)
+    .map((component) => component.blueprint_key)
+    .filter(isSequestrationBlueprintFamily)
+    .find((key) => !expectedKeys.has(key));
+  if (!mismatched) return null;
+
+  const tierLabel = facilityTier === "1000_year" ? "1000-year" : "200-year";
+  return (
+    `This facility is on the ${tierLabel} durability tier, but its removal ` +
+    `template's sequestration component is "${mismatched}". Re-author the ` +
+    `facility's Isometric removal template to the ` +
+    `${Array.from(expectedKeys).join(" or ")} blueprint, or change the ` +
+    `facility's durability tier in facility settings.`
+  );
+}
+
+/**
+ * Deep compile interface for the Removal workflow. Template walking, semantic
+ * mappings, transforms and request planning stay behind this function. The
+ * returned snapshot is explicitly a claim-time materialization plan; it is not
+ * an immutable versioned POST snapshot until the ledger claim supplies a
+ * version.
+ */
+export async function compileRemovalSubmission(
+  args: Parameters<typeof buildRemovalSubmissionBuild>[0],
+): Promise<CompiledRemovalSubmission> {
+  if (
+    args.ctx.entityReadinessGaps?.length === 0 &&
+    !hasSupportedSequestrationComponent(args.defaultTemplate)
+  ) {
+    return {
+      review: emptyReview(args.defaultTemplate),
+      transportPlan: null,
+      blockers: [
+        "The default Removal template has no supported biochar sequestration component. Rebind a complete Removal template before submitting.",
+      ],
+      warnings: [...(args.ctx.submissionWarnings ?? [])],
+      snapshot: null,
+    };
+  }
+
+  let build: RemovalSubmissionBuild;
+  try {
+    build = await buildRemovalSubmissionBuild(args);
+  } catch (error) {
+    return {
+      review: emptyReview(args.defaultTemplate),
+      transportPlan: null,
+      blockers: [
+        error instanceof SafeError
+          ? error.message
+          : "Removal submission could not be compiled from the current source data.",
+      ],
+      warnings: [...(args.ctx.submissionWarnings ?? [])],
+      snapshot: null,
+    };
+  }
+
+  const blockers: string[] = [];
+  const tierBlocker = removalTemplateTierCompatibilityBlocker(
+    args.ctx,
+    args.defaultTemplate,
+  );
+  if (tierBlocker) blockers.push(tierBlocker);
+  if (build.sourceIds.length === 0) {
+    blockers.push(
+      "Removal submission requires at least one mirrored Isometric Source. Mirror a supporting document in the Removal Sources panel, then recompile.",
+    );
+  }
+  if (
+    build.candidateDocumentIds.length > 0 &&
+    build.sourceIds.length < build.candidateDocumentIds.length
+  ) {
+    blockers.push(
+      `${build.sourceIds.length} of ${build.candidateDocumentIds.length} supporting documents have validated Isometric Source IDs. Mirror the remaining documents in the Removal Sources panel, then recompile.`,
+    );
+  }
+
+  const semanticSamples = build.durabilityMeasurementSampleArgs
+    ? normalizeMeasurementSamplesForHash(
+        buildVersionedMeasurementSampleSubmissions({
+          ...build.durabilityMeasurementSampleArgs,
+          version: 1,
+        }),
+      )
+    : [];
+  const measurementSamples = semanticSamples.map((sample) => {
+    const body = sample.body as {
+      measured_at?: unknown;
+      values?: unknown;
+    };
+    return {
+      operationKey: sample.operationKey,
+      label: sample.label,
+      measuredAt:
+        typeof body.measured_at === "string" ? body.measured_at : null,
+      values: Array.isArray(body.values) ? body.values : [],
+    };
+  });
+
+  const bindings: RemovalSubmissionReview["bindings"] = [
+    ...build.monitored.map((input) => ({
+      componentId: input.removalTemplateComponentId,
+      componentBlueprintKey: input.componentBlueprintKey,
+      inputKey: input.inputKey,
+      binding: "monitored" as const,
+      wireMagnitude: input.quantity.magnitude,
+      wireUnit: input.quantity.unit,
+      wireType: input.datapointType,
+    })),
+    ...build.fixed.map((input) => ({
+      componentId: input.removalTemplateComponentId,
+      componentBlueprintKey:
+        args.defaultTemplate.groups
+          .flatMap((group) => group.components)
+          .find((component) => component.id === input.removalTemplateComponentId)
+          ?.blueprint_key ?? "unknown",
+      inputKey: input.inputKey,
+      binding: "fixed" as const,
+      fixedDatapointId: input.preboundDatapointId,
+    })),
+    ...args.defaultTemplate.groups.flatMap((group) =>
+      group.components
+        .filter((component) =>
+          isSequestrationBlueprintFamily(component.blueprint_key),
+        )
+        .flatMap((component) =>
+          component.inputs.map((input) => ({
+            componentId: component.id,
+            componentBlueprintKey: component.blueprint_key,
+            inputKey: input.input_key,
+            binding: "measurement-sample" as const,
+          })),
+        ),
+    ),
+  ].sort((left, right) =>
+    `${left.componentId}::${left.inputKey}`.localeCompare(
+      `${right.componentId}::${right.inputKey}`,
+    ),
+  );
+
+  const directSequestrationDatapoints =
+    build.durabilityMeasurementSampleArgs
+      ? buildDirectSequestrationDatapoints({
+          template: args.defaultTemplate,
+          measurementSampleSubmissions:
+            buildVersionedMeasurementSampleSubmissions({
+              ...build.durabilityMeasurementSampleArgs,
+              version: 1,
+            }),
+          projectId: args.externalProjectId,
+          removalId: args.removalId,
+          version: 1,
+          sourceIds: build.sourceIds,
+        }).map((datapoint) => ({
+          componentId: datapoint.rtcId,
+          inputKey: datapoint.inputKey,
+          magnitude: datapoint.body.quantity.magnitude,
+          unit: datapoint.body.quantity.unit ?? "",
+          type: datapoint.body.type,
+        }))
+      : [];
+
+  const review: RemovalSubmissionReview = {
+    template: {
+      id: args.defaultTemplate.id,
+      displayName: args.defaultTemplate.display_name,
+      mappingRevision: MAPPING_REVISION,
+    },
+    bindings,
+    measurementSamples,
+    directSequestrationDatapoints,
+    sourceIds: [...build.sourceIds],
+    intendedPostTargets: [
+      ...(build.monitored.length > 0 ||
+      directSequestrationDatapoints.length > 0
+        ? [DATAPOINT_POST_TARGET]
+        : []),
+      ...(measurementSamples.length > 0
+        ? [MEASUREMENT_SAMPLE_POST_TARGET]
+        : []),
+      GHG_ENTRY_POST_TARGET,
+    ],
+    memberCreditBatches: args.ctx.memberBatches.map((batch) => ({
+      id: batch.id,
+      code: batch.code,
+    })),
+    productionRuns: args.ctx.runs.map((run) => ({
+      id: run.id,
+      code: "code" in run && typeof run.code === "string" ? run.code : null,
+    })),
+    reportingWindow: {
+      startedOn: build.agg.earliestStartTime.toISOString(),
+      completedOn: build.latestApplicationTime.toISOString(),
+    },
+  };
+
+  return {
+    review,
+    transportPlan: blockers.length === 0 ? build : null,
+    blockers,
+    warnings: [...(args.ctx.submissionWarnings ?? [])],
+    snapshot:
+      blockers.length === 0
+        ? {
+            materialization: "claim-time",
+            mappingRevision: MAPPING_REVISION,
+            semanticPayload: build.semanticPayload,
+          }
+        : null,
+  };
+}
+
+/**
+ * Materialize the claim-versioned immutable snapshot from a successful
+ * compilation. This is the only place supplier refs are assigned a ledger
+ * version, and its output is the exact source consumed by the POST phase.
+ */
+export function materializeRemovalSubmissionSnapshot(args: {
+  compiled: RemovalSubmissionBuild;
+  template: IsometricGhgEntryTemplate;
+  externalProjectId: string;
+  removalId: string;
+  nextVersion: number;
+}): MaterializedRemovalSubmissionSnapshot {
+  const {
+    compiled,
+    template,
+    externalProjectId,
+    removalId,
+    nextVersion,
+  } = args;
+  const removalSupplierRef = buildRemovalSupplierRef({
+    removalId,
+    role: "removal",
+    version: nextVersion,
+  });
+  const finalDatapointBodies = compiled.monitored.map((input) => {
+    const supplierRefId = buildRemovalSupplierRef({
+      removalId,
+      role: "datapoint",
+      version: nextVersion,
+      inputKey: `${input.removalTemplateComponentId}-${input.inputKey}`,
+    });
+    const draftKey = `${input.removalTemplateComponentId}::${input.inputKey}`;
+    const draft = compiled.datapointBodyByKey.get(draftKey);
+    if (!draft) {
+      throw new SafeError(
+        `Internal: no resolved Datapoint body for ${draftKey}. Reload and retry the submission.`,
+      );
+    }
+    return {
+      rtcId: input.removalTemplateComponentId,
+      inputKey: input.inputKey,
+      body: { ...draft, supplier_reference_id: supplierRefId },
+    };
+  });
+  const durabilityMeasurementSamples =
+    compiled.durabilityMeasurementSampleArgs
+      ? {
+          submissions: buildVersionedMeasurementSampleSubmissions({
+            ...compiled.durabilityMeasurementSampleArgs,
+            version: nextVersion,
+          }),
+        }
+      : undefined;
+  const directSequestrationDatapoints = durabilityMeasurementSamples
+    ? buildDirectSequestrationDatapoints({
+        template,
+        measurementSampleSubmissions:
+          durabilityMeasurementSamples.submissions,
+        projectId: externalProjectId,
+        removalId,
+        version: nextVersion,
+        sourceIds: compiled.sourceIds,
+      })
+    : [];
+
+  return {
+    payloadSnapshot: {
+      __mappingRevision: MAPPING_REVISION,
+      semantic: compiled.semanticPayload,
+      memberCreditBatchIds: compiled.memberCreditBatchIds,
+      transport: {
+        removalSupplierRef,
+        datapointBodies: [
+          ...finalDatapointBodies,
+          ...directSequestrationDatapoints,
+        ],
+      },
+      ...(durabilityMeasurementSamples
+        ? { durabilityMeasurementSamples }
+        : {}),
+    },
+  };
 }
 
 export function normalizeSequestrationTemplateForHash(
@@ -117,6 +536,7 @@ export async function buildRemovalSubmissionBuild(args: {
   hasDurabilityComponents: boolean;
   log?: Logger;
   sourceIds?: string[];
+  candidateDocumentIds?: string[];
 }): Promise<RemovalSubmissionBuild> {
   const {
     orgCtx,
@@ -206,12 +626,14 @@ export async function buildRemovalSubmissionBuild(args: {
   // A caller-supplied Source set makes this a side-effect-free preflight or a
   // locked rebuild. Skip the document walk in that case; the caller already
   // owns the authoritative IDs and does not consume `candidateDocumentIds`.
-  const candidateDocumentIds = args.sourceIds
-    ? []
-    : await collectCandidateDocumentIdsForRemoval(orgCtx, {
-        lineages: ctx.lineages,
-        memberBatchIds: ctx.memberBatches.map((b) => b.id),
-      });
+  const candidateDocumentIds =
+    args.candidateDocumentIds ??
+    (args.sourceIds
+      ? []
+      : await collectCandidateDocumentIdsForRemoval(orgCtx, {
+          lineages: ctx.lineages,
+          memberBatchIds: ctx.memberBatches.map((b) => b.id),
+        }));
   const sourceIds =
     args.sourceIds ??
     (await resolveSourceIdsForRemoval(orgCtx, { candidateDocumentIds }));
@@ -246,7 +668,9 @@ export async function buildRemovalSubmissionBuild(args: {
     ? normalizeMeasurementSamplesForHash(
         buildVersionedMeasurementSampleSubmissions({
           ...durabilityMeasurementSampleArgs,
-          version: 0,
+          // Supplier refs are excluded by normalizeMeasurementSamplesForHash.
+          // Avoid manufacturing a misleading `v0` preview before claim time.
+          version: 1,
         }),
       )
     : [];
@@ -254,6 +678,7 @@ export async function buildRemovalSubmissionBuild(args: {
   const semanticPayload = {
     removalId,
     mappingRevision: MAPPING_REVISION,
+    externalProjectId,
     templateId: defaultTemplate.id,
     sequestrationTemplate: normalizeSequestrationTemplateForHash(
       defaultTemplate,

@@ -21,10 +21,9 @@ import {
   type ChainOfCustodyData,
 } from "@/data-access/chain-of-custody";
 import {
-  loadCreditBatchAccounting,
   loadCreditBatchRollups,
-  type CreditBatchAccounting,
-  type CreditBatchAccountingByBatch,
+  type CreditBatchRollup,
+  type CreditBatchRollupsByBatch,
 } from "@/data-access/credit-batch-accounting";
 import { getCreditBatchRemovalId } from "@/data-access/credit-batches";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
@@ -333,7 +332,7 @@ async function resolveScopeForCreditBatch(
   }
 
   const accounting = (
-    await loadCreditBatchAccounting(orgCtx, [creditBatchId])
+    await loadCreditBatchRollups(orgCtx, [creditBatchId])
   )[creditBatchId];
   if (!accounting) throw new SafeError("Credit batch not found");
 
@@ -345,7 +344,7 @@ async function resolveScopeForCreditBatch(
 }
 
 function resolveSingleBatchScope(
-  accounting: CreditBatchAccounting,
+  accounting: CreditBatchRollup,
 ): RemovalScope {
   const { batch, lineageFacts } = accounting;
   const runById = new Map(
@@ -378,16 +377,13 @@ function resolveSingleBatchScope(
 export async function resolveScopeForRemoval(
   orgCtx: OrgContext,
   removalId: string,
-  options?: { skipPreview?: boolean },
 ): Promise<RemovalScope> {
   const removal = await getCertifierRemovalById(orgCtx, removalId);
   if (!removal) throw new SafeError("Removal not found");
 
   const batches = await getCreditBatchesByRemovalId(orgCtx, removalId);
   const batchIds = batches.map((batch) => batch.id);
-  const accountingByBatch = options?.skipPreview
-    ? await loadCreditBatchRollups(orgCtx, batchIds)
-    : await loadCreditBatchAccounting(orgCtx, batchIds);
+  const accountingByBatch = await loadCreditBatchRollups(orgCtx, batchIds);
   const memberBatches = batches.map((batch) => {
       const accounting = accountingByBatch[batch.id];
       if (!accounting) {
@@ -834,11 +830,19 @@ function projectUiContext(
 // `deriveRemovalReadiness` classifier against it). Mirrors
 // `loadCertifyContextForCreditBatch` but resolves the scope from the removal.
 export async function loadRemovalCertifyContext(
+  facilityId: string,
   removalId: string,
 ): Promise<ActionResult<RemovalCertifyContext>> {
-  return withAction(async (orgCtx) =>
-    projectUiContext(await loadRemovalSubmissionContext(orgCtx, removalId)),
-  );
+  return withAction(async (orgCtx) => {
+    await requireOrgFacility(orgCtx, facilityId);
+    const removal = await getCertifierRemovalById(orgCtx, removalId);
+    if (!removal || removal.facilityId !== facilityId) {
+      throw new SafeError("Removal does not belong to requested facility");
+    }
+    return projectUiContext(
+      await loadRemovalSubmissionContext(orgCtx, removalId),
+    );
+  });
 }
 
 export async function loadCertifyContextForCreditBatchForUser(
@@ -863,7 +867,7 @@ export async function loadCertifyContextForCreditBatch(
   );
 }
 export interface CreditBatchContextSet {
-  accountingByBatch: CreditBatchAccountingByBatch;
+  accountingByBatch: CreditBatchRollupsByBatch;
   contextsByBatch: Record<string, RemovalCertifyContext>;
 }
 
@@ -874,7 +878,7 @@ export async function buildCreditBatchContexts(
   creditBatchIds: string[],
   facilityFacts: FacilityCertifierFacts,
 ): Promise<CreditBatchContextSet> {
-  const accountingByBatch = await loadCreditBatchAccounting(
+  const accountingByBatch = await loadCreditBatchRollups(
     orgCtx,
     creditBatchIds,
   );

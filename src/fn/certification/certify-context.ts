@@ -35,9 +35,10 @@ export async function loadCertifyContextForCreditBatch(
 }
 
 export async function loadRemovalCertifyContext(
+  facilityId: string,
   removalId: string,
 ): Promise<ActionResult<RemovalCertifyContext>> {
-  return loadRemovalCertifyContextCore(removalId);
+  return loadRemovalCertifyContextCore(facilityId, removalId);
 }
 
 export async function loadRemovalsForFacility(

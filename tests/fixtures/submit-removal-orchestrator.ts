@@ -25,14 +25,13 @@ vi.mock("@/data-access/certification-submissions");
 vi.mock("@/data-access/certifier-removals");
 vi.mock("@/fn/certification/certify-context-core");
 vi.mock("@/fn/certification/ensure-evidence-ledgers");
-// Phase 3.5: submitRemoval now resolves mirrored Source IDs before
-// hashing. The default-empty mock keeps the pre-Phase-3.5 assertions
-// (`source_ids: []` on every Datapoint) valid; specific Phase 3.5 tests
-// override the mock to inject sources and assert hash supersede.
+// Removal submission fails closed unless every candidate document has a
+// validated mirrored Source ID. Tests that exercise missing/partial mirrors
+// override these healthy defaults.
 vi.mock("@/fn/certification/sources", async () => {
   return {
-    collectCandidateDocumentIdsForRemoval: vi.fn(async () => []),
-    resolveSourceIdsForRemoval: vi.fn(async () => []),
+    collectCandidateDocumentIdsForRemoval: vi.fn(async () => ["doc-test-1"]),
+    resolveSourceIdsForRemoval: vi.fn(async () => ["src-test-1"]),
   };
 });
 vi.mock("@/lib/isometric", async (importOriginal) => {
@@ -75,6 +74,7 @@ import * as removalsDA from "@/data-access/certifier-removals";
 import * as certifyContext from "@/fn/certification/certify-context-core";
 import * as durabilitySamples from "@/fn/certification/durability-measurement-samples";
 import * as evidenceLedgers from "@/fn/certification/ensure-evidence-ledgers";
+import * as sources from "@/fn/certification/sources";
 import * as isometric from "@/lib/isometric";
 import { submitRemoval } from "@/fn/certification/submit-removal";
 import { makeClaimSubmissionDraftFake } from "./fake-claim";
@@ -86,6 +86,7 @@ export {
   certifyContext,
   durabilitySamples,
   evidenceLedgers,
+  sources,
   isometric,
   submitRemoval,
 };
@@ -491,8 +492,8 @@ export function makeContext(
     ...overrides,
     entityReadinessGaps: overrides.entityReadinessGaps ?? [],
     supportingDocuments: overrides.supportingDocuments ?? {
-      total: 0,
-      mirrored: 0,
+      total: 1,
+      mirrored: 1,
     },
   };
 }
@@ -638,6 +639,12 @@ beforeEach(() => {
   vi.mocked(evidenceLedgers.ensureEvidenceLedgersFromContext).mockResolvedValue(
     undefined,
   );
+  vi.mocked(sources.collectCandidateDocumentIdsForRemoval).mockResolvedValue([
+    "doc-test-1",
+  ]);
+  vi.mocked(sources.resolveSourceIdsForRemoval).mockResolvedValue([
+    "src-test-1",
+  ]);
   // §8.6.2 fresh-read re-assert (production-claim-gate): after the draft
   // claim, submitRemoval re-reads the removal scope (claims + lineage
   // fingerprint) through resolveScopeForRemoval. Default: unclaimed,

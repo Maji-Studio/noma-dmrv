@@ -77,13 +77,10 @@ function BatchCard({
         <div className="flex items-start gap-24">
           <div className="flex flex-col items-end gap-4">
             <span className="label-micro text-[var(--color-text-tertiary)]">
-              Stored removal
+              Submitted biochar
             </span>
             <span className="title-heading-3 font-mono text-[var(--color-text-primary)]">
-              {formatTonnes(
-                batch.co2eStoredPreview?.co2eStoredTonnes,
-                { digits: 1, unit: "t CO₂e" },
-              )}
+              {formatTonnes(batch.appliedDryWeightTons, { digits: 1 })}
             </span>
           </div>
           <span className="inline-flex shrink-0 items-center gap-4 body-small font-medium text-[var(--color-interaction)]">
@@ -128,15 +125,6 @@ export function SubmissionOverview({
     memberBatches,
     (batch) => batch.appliedDryWeightTons,
   );
-  const hasCompleteCo2ePreview = memberBatches.every(
-    (batch) => typeof batch.co2eStoredPreview?.co2eStoredTonnes === "number",
-  );
-  const co2eStoredTonnes = hasCompleteCo2ePreview
-    ? total(
-        memberBatches,
-        (batch) => batch.co2eStoredPreview?.co2eStoredTonnes ?? 0,
-      )
-    : null;
   const productionRunCount = total(
     memberBatches,
     (batch) => batch.productionRunCount,
@@ -157,16 +145,11 @@ export function SubmissionOverview({
         <div className="grid overflow-hidden border border-[var(--color-border-primary)] sm:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
           <div className="flex flex-col justify-center gap-6 bg-[var(--color-background-dark-strong)] px-20 py-16">
             <span className="label-micro text-[var(--color-text-white-secondary)]">
-              Stored CO₂e estimate in this submission
+              Registry calculation authority
             </span>
-            <div className="flex items-baseline gap-8 text-[var(--color-text-white-primary)]">
-              <span className="title-heading-1 font-mono">
-                {co2eStoredTonnes === null
-                  ? "—"
-                  : co2eStoredTonnes.toFixed(1)}
-              </span>
-              <span className="body-medium font-medium">t CO₂e</span>
-            </div>
+            <p className="body-small text-[var(--color-text-white-primary)]">
+              Isometric calculates stored and net CO₂e after submission.
+            </p>
           </div>
           <div className="grid grid-cols-2 divide-x divide-[var(--color-border-tertiary)] bg-[var(--color-background-white)]">
             <ManifestFact

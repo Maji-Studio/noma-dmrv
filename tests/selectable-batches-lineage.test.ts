@@ -84,10 +84,11 @@ describe("buildSelectableBatchesData", () => {
     );
     expect(result).toMatchObject({
       batches: [
-        { id: "batch-1", appliedWeightTons: 1.25, co2eStoredTonnes: 3.75 },
-        { id: "batch-2", appliedWeightTons: 2.5, co2eStoredTonnes: 7.5 },
+        { id: "batch-1", appliedWeightTons: 1.25 },
+        { id: "batch-2", appliedWeightTons: 2.5 },
       ],
     });
+    expect(result.batches[0]).not.toHaveProperty("co2eStoredTonnes");
   });
 
   it("preserves list order when accounting results are keyed independently", async () => {

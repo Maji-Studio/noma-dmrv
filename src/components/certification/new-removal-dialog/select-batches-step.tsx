@@ -138,16 +138,8 @@ function ReadyCard({
       <span className="body-caption text-[var(--color-text-tertiary)]">
         {formatDateRange(batch.startDate, batch.endDate)}
       </span>
-      <div className="grid grid-cols-3 gap-8">
+      <div className="grid grid-cols-2 gap-8">
         <Metric label="Weight" value={formatTonnes(batch.appliedWeightTons)} />
-        <Metric
-          label="CO₂e preview"
-          value={
-            batch.co2eStoredTonnes == null
-              ? "Unavailable"
-              : formatTonnes(batch.co2eStoredTonnes)
-          }
-        />
         <Metric
           label="Durability"
           value={formatDurabilityOption(batch.durabilityOption)}

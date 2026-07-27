@@ -4,10 +4,10 @@
  * Runs the REAL pure claim policy (`decideSubmissionClaim`) over the test's
  * in-memory row store, so version/supersede/idempotency assertions exercise
  * the same decisions production takes — but the I/O choreography the module
- * owns (mapping lock, mirror locks, in-lock `resolve` re-resolution, CAS
- * semantics) is deliberately NOT simulated here. That behavior is tested
- * DB-backed against real Postgres in tests/certification-submissions.test.ts
- * (ADR 0008); `buildSnapshot` is invoked with the tentative inputs.
+ * owns (mapping lock and CAS semantics) is deliberately NOT simulated here.
+ * The in-lock `resolve` callback is still invoked for create-new-version so
+ * compiler → claimed snapshot → POST agreement is exercised at the pipeline
+ * seam. Lock behavior itself is DB-backed in certification-submissions.test.ts.
  */
 import { LOCK_TTL_MS } from "@/lib/isometric/utils/lock";
 import { decideSubmissionClaim } from "@/lib/isometric/utils/submission-claim";
@@ -67,25 +67,46 @@ export function makeClaimSubmissionDraftFake(store: FakeLedgerStore) {
             "Fake claim: dataupload-orphan-restart is unreachable without dataUploadResume",
           );
         }
+        const inputs = args.resolve
+          ? await args.resolve({} as never, args.tentativeInputs)
+          : args.tentativeInputs;
+        const finalHash = args.hashOf(inputs);
+        const locked = decideSubmissionClaim({
+          latest: store.latest(args.key),
+          payloadHash: finalHash,
+          now: Date.now(),
+          lockTtlMs: LOCK_TTL_MS,
+          policy: args.policy,
+        });
+        if (locked.kind !== "create-new-version") {
+          throw new Error(
+            `Fake claim: resolve changed create outcome to ${locked.kind}`,
+          );
+        }
+        if (locked.reason === "dataupload-orphan-restart") {
+          throw new Error(
+            "Fake claim: dataupload-orphan-restart is unreachable without dataUploadResume",
+          );
+        }
         const snapshot = args.buildSnapshot({
-          inputs: args.tentativeInputs,
-          nextVersion: claim.nextVersion,
-          supersedePreviousId: claim.supersedePreviousId,
-          reason: claim.reason,
+          inputs,
+          nextVersion: locked.nextVersion,
+          supersedePreviousId: locked.supersedePreviousId,
+          reason: locked.reason,
         });
         const row = store.insert({
           ...args.key,
-          version: claim.nextVersion,
+          version: locked.nextVersion,
           payloadSnapshot: snapshot.payloadSnapshot,
-          payloadHash,
+          payloadHash: finalHash,
           metadata: snapshot.metadata ?? null,
         });
         return {
           kind: "claimed",
           row,
           resumed: false,
-          supersedePreviousId: claim.supersedePreviousId,
-          reason: claim.reason,
+          supersedePreviousId: locked.supersedePreviousId,
+          reason: locked.reason,
         };
       }
       default:

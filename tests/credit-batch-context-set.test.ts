@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { loadCreditBatchAccounting } from "@/data-access/credit-batch-accounting";
+import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
 import {
   buildCreditBatchContexts,
   type FacilityCertifierFacts,
@@ -11,7 +11,7 @@ import { loadDurabilityBatchData } from "@/fn/certification/durability-readiness
 import { makeTestOrgContext } from "./helpers/test-org";
 
 vi.mock("@/data-access/credit-batch-accounting", () => ({
-  loadCreditBatchAccounting: vi.fn(),
+  loadCreditBatchRollups: vi.fn(),
 }));
 
 vi.mock("@/fn/certification/linked-ghg-statement-status", () => ({
@@ -22,7 +22,7 @@ vi.mock("@/fn/certification/durability-readiness", () => ({
   loadDurabilityBatchData: vi.fn(),
 }));
 
-const mockedLoadAccounting = vi.mocked(loadCreditBatchAccounting);
+const mockedLoadAccounting = vi.mocked(loadCreditBatchRollups);
 const mockedLoadLinkedGhgStatementStatus = vi.mocked(
   loadLinkedGhgStatementStatus,
 );
@@ -63,7 +63,6 @@ const accountingRecord = (batchId: string) => ({
     appliedWeightTons: 0,
   },
   appliedWeightTons: 0,
-  co2ePreview: {},
 });
 
 describe("buildCreditBatchContexts", () => {
@@ -77,7 +76,7 @@ describe("buildCreditBatchContexts", () => {
     });
   });
 
-  it("loads accounting once and preserves order across the fanout boundary", async () => {
+  it("loads rollups once and preserves order across the fanout boundary", async () => {
     mockedLoadAccounting.mockResolvedValue(
       Object.fromEntries(
         BATCH_IDS.map((batchId) => [batchId, accountingRecord(batchId)]),

@@ -32,7 +32,9 @@ import {
   loadRegistryGhgStatements,
   loadRegistrySourceVisibility,
   loadRemovalBreakdown,
+  loadRemovalCompilation,
   loadRemovalCertifyContext,
+  loadRemovalPreflight,
   loadRemovalsForFacility,
   loadSelectableBatchesForFacility,
   refreshGhgStatementStatus,
@@ -110,11 +112,26 @@ export const certificationKeys = {
       facilityId,
       batchIds,
     ] as const,
-  certifyContextForRemoval: (removalId: string) =>
+  certifyContextForRemoval: (facilityId: string, removalId: string) =>
     [
       ...certificationKeys.all,
       "certify-context",
       "removal",
+      facilityId,
+      removalId,
+    ] as const,
+  removalPreflight: (facilityId: string, removalId: string) =>
+    [
+      ...certificationKeys.all,
+      "removal-preflight",
+      facilityId,
+      removalId,
+    ] as const,
+  removalCompilation: (facilityId: string, removalId: string) =>
+    [
+      ...certificationKeys.all,
+      "removal-compilation",
+      facilityId,
       removalId,
     ] as const,
   removalsForFacility: (facilityId: string) =>
@@ -181,7 +198,43 @@ export function useCertificationOverview(facilityId: string, enabled = true) {
   });
 }
 
-// Carbon-accounting breakdown for one removal — lazy by design: the removal
+export function useRemovalPreflightSummaries(
+  facilityId: string,
+  removalIds: string[],
+) {
+  const results = useQueries({
+    queries: removalIds.map((removalId) => ({
+      queryKey: certificationKeys.removalPreflight(facilityId, removalId),
+      queryFn: async () => {
+        const result = await loadRemovalPreflight(facilityId, removalId);
+        if (!result.success) throw new Error(result.error);
+        return result.data;
+      },
+      enabled: Boolean(facilityId && removalId),
+      staleTime: DEFAULT_STALE_MS,
+    })),
+  });
+
+  return Object.fromEntries(
+    removalIds.map((removalId, index) => {
+      const result = results[index];
+      return [
+        removalId,
+        {
+          status: result?.isError
+            ? ("unavailable" as const)
+            : result?.data
+              ? ("available" as const)
+              : ("loading" as const),
+          data: result?.data ?? null,
+          retry: () => result?.refetch(),
+        },
+      ];
+    }),
+  );
+}
+
+// Read-only Isometric carbon result for one removal — lazy by design: the
 // detail sheet only enables it while open. Reads the registry's GHG entry for
 // submitted removals (its figures don't move once verified), so it leans on the
 // default stale window and is invalidated alongside the rest of `all`.
@@ -456,18 +509,42 @@ export function useCreditBatchHealthSummaries(
 // credit-batch variant it refetches while a submission is locked in flight.
 // It also polls while a clock-derived future-date blocker exists so an open
 // dialog becomes ready when that timestamp passes, without broad idle polling.
-export function useRemovalCertifyContext(removalId: string, enabled = true) {
+export function useRemovalCertifyContext(
+  facilityId: string,
+  removalId: string,
+  enabled = true,
+) {
   return useQuery({
-    queryKey: certificationKeys.certifyContextForRemoval(removalId),
+    queryKey: certificationKeys.certifyContextForRemoval(
+      facilityId,
+      removalId,
+    ),
     queryFn: async () => {
-      const result = await loadRemovalCertifyContext(removalId);
+      const result = await loadRemovalCertifyContext(facilityId, removalId);
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    enabled: enabled && !!removalId,
+    enabled: enabled && !!facilityId && !!removalId,
     staleTime: DEFAULT_STALE_MS,
     refetchInterval: (query) =>
       getRemovalCertifyRefetchInterval(query.state.data),
+  });
+}
+
+export function useRemovalCompilation(
+  facilityId: string,
+  removalId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: certificationKeys.removalCompilation(facilityId, removalId),
+    queryFn: async () => {
+      const result = await loadRemovalCompilation(facilityId, removalId);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    enabled: enabled && !!facilityId && !!removalId,
+    staleTime: DEFAULT_STALE_MS,
   });
 }
 
@@ -507,7 +584,7 @@ export function useSelectableBatches(facilityId: string, enabled = true) {
 export function useSubmitRemoval() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: SubmitRemovalInput | string) => {
+    mutationFn: async (input: SubmitRemovalInput) => {
       const result = await submitRemovalAction(input);
       if (!result.success) throw new Error(result.error);
       return result.data;

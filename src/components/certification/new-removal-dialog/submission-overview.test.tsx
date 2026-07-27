@@ -20,9 +20,6 @@ const BATCH = {
   sampling: "sampled",
   productionRunCount: 2,
   applicationCount: 3,
-  co2eStoredPreview: {
-    co2eStoredTonnes: 3,
-  },
 } as MemberCreditBatch;
 
 describe("SubmissionOverview", () => {
@@ -37,8 +34,9 @@ describe("SubmissionOverview", () => {
     expect(html).toContain("Submission overview");
     expect(html).toContain("1 credit batch");
     expect(html).toContain("8.5 t");
-    expect(html).toContain("3.0 t CO₂e");
-    expect(html).toContain("Stored CO₂e estimate in this submission");
+    expect(html).toContain("Isometric calculates stored and net CO₂e");
+    expect(html).not.toContain("3.0 t CO₂e");
+    expect(html).not.toContain("Stored CO₂e estimate in this submission");
     expect(html).toContain("Submitted biochar (dry)");
     expect(html).not.toContain("Net removal");
     expect(html).toContain("CB-26-001");
@@ -54,7 +52,7 @@ describe("SubmissionOverview", () => {
     expect(html).toContain('rel="noopener noreferrer"');
   });
 
-  it("does not present a partial stored estimate as a complete total", () => {
+  it("never presents a local stored-carbon estimate", () => {
     const html = renderToStaticMarkup(
       <SubmissionOverview
         memberBatches={[
@@ -63,22 +61,14 @@ describe("SubmissionOverview", () => {
             ...BATCH,
             id: "batch-2",
             code: "CB-26-002",
-            co2eStoredPreview: {
-              provider: null,
-              co2eStoredTonnes: null,
-              moduleVersion: null,
-              applicationResults: [],
-              missingInputs: ["Stored CO₂e preview"],
-              warnings: [],
-            },
           },
         ]}
         facilityId="facility-1"
       />,
     );
 
-    expect(html).toContain("Stored CO₂e estimate in this submission");
-    expect(html).toContain("—");
+    expect(html).toContain("Registry calculation authority");
+    expect(html).not.toContain("Stored CO₂e estimate in this submission");
     expect(html).not.toContain(">3.0<");
   });
 });

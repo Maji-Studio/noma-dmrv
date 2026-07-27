@@ -16,7 +16,6 @@ const READY_BATCH = {
   startDate: "2026-07-01",
   endDate: "2026-07-31",
   appliedWeightTons: 10,
-  co2eStoredTonnes: 20,
   durabilityOption: "1000_year",
   health: {
     state: "ready",
@@ -52,6 +51,7 @@ describe("SelectBatchesStep", () => {
       'href="/certification/settings?tab=connection&amp;facility=facility-1"',
     );
     expect(html).toContain("Review certification settings");
+    expect(html).not.toContain("CO₂e preview");
   });
 
   it("keeps Continue disabled while facility setup is incomplete", () => {

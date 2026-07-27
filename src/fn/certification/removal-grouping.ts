@@ -12,17 +12,16 @@ import { requireOrgRole } from "@/lib/auth/server";
 
 // Hub-facing action — submit an existing removal directly by id.
 export async function submitRemovalAction(
-  input: SubmitRemovalInput | string,
+  input: SubmitRemovalInput,
 ): Promise<ActionResult<RemovalSubmissionResult>> {
   return withAction(async (orgCtx) => {
     requireOrgRole(orgCtx, "admin");
-    const parsed = submitRemovalSchema.parse(
-      typeof input === "string" ? { removalId: input } : input,
-    );
+    const parsed = submitRemovalSchema.parse(input);
     return submitRemoval({
       orgCtx,
       removalId: parsed.removalId,
       confirmProduction: parsed.confirmProduction,
+      expectedCompilationHash: parsed.compilationHash,
     });
   }, { rateLimit: submitRateLimit("cert:submit-removal") });
 }

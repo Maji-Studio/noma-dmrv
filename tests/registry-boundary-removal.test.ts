@@ -53,8 +53,10 @@ vi.mock("@/lib/isometric/client", async (importOriginal) => {
 });
 vi.mock("@/fn/certification/certify-context-core");
 vi.mock("@/fn/certification/sources", () => ({
-  collectCandidateDocumentIdsForRemoval: vi.fn(async () => []),
-  resolveSourceIdsForRemoval: vi.fn(async () => []),
+  collectCandidateDocumentIdsForRemoval: vi.fn(async () => [
+    "doc-boundary-1",
+  ]),
+  resolveSourceIdsForRemoval: vi.fn(async () => ["src-boundary-1"]),
 }));
 
 import { db } from "@/db";
@@ -403,7 +405,7 @@ function makeContext(
     durabilityGateBlockers: [],
     futureDatedMeasurements: [],
     submissionWarnings: [],
-    supportingDocuments: { total: 0, mirrored: 0 },
+    supportingDocuments: { total: 1, mirrored: 1 },
     productionReadinessGap: null,
     runSummary: {
       runCount: 1,
@@ -544,9 +546,11 @@ beforeEach(() => {
   registry = installFakeRegistry();
   // restoreMocks resets factory-installed implementations after each test.
   vi.mocked(sources.collectCandidateDocumentIdsForRemoval).mockResolvedValue(
-    [],
+    ["doc-boundary-1"],
   );
-  vi.mocked(sources.resolveSourceIdsForRemoval).mockResolvedValue([]);
+  vi.mocked(sources.resolveSourceIdsForRemoval).mockResolvedValue([
+    "src-boundary-1",
+  ]);
 });
 
 // ---------------------------------------------------------------------------

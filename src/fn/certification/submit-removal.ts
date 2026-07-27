@@ -1,5 +1,6 @@
 import type { OrgContext } from "@/lib/auth/server";
 import {
+  appendSyncEvent,
   markSubmissionSubmitted,
   retireStaleSubmissionDraft,
   stampProductionEmissionsClaim,
@@ -16,7 +17,6 @@ import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { logger, type Logger } from "@/lib/log";
 import {
-  buildRemovalSupplierRef,
   createDatapoint,
   createGhgEntry,
   getIsometricClientForOrg,
@@ -31,11 +31,8 @@ import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import {
   bindSequestrationDatapointsToTemplate,
-  buildDirectSequestrationDatapoints,
 } from "@/lib/isometric/transformers/sequestration-binding";
 import {
-  expectedSequestrationBlueprintKeys,
-  isSequestrationBlueprintFamily,
   isSequestrationBlueprintKey,
 } from "@/lib/isometric/transformers/measurement-sample";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
@@ -45,10 +42,8 @@ import {
   type DurabilityMeasurementSampleSubmission,
 } from "./durability-measurement-samples";
 import {
-  buildVersionedMeasurementSampleSubmissions,
   readRemovalDurabilityMeasurementSamples,
 } from "./durability-measurement-sample-snapshot";
-import { ensureEvidenceLedgersFromContext } from "./ensure-evidence-ledgers";
 import {
   assertNoForeignProductionClaims,
   assertProductionClaimGateFresh,
@@ -64,6 +59,9 @@ import { readRemovalReportingWindow } from "./removal-reporting-window";
 import {
   assertEntityReadinessGapsResolved,
   buildRemovalSubmissionBuild,
+  compileRemovalSubmission,
+  materializeRemovalSubmissionSnapshot,
+  removalTemplateTierCompatibilityBlocker,
 } from "./removal-submission-build";
 import { checkProtocolVersionAtSubmit } from "./protocol-version-preflight";
 import { performRegistryCreate, supplierRefLookup } from "./registry-create";
@@ -93,12 +91,47 @@ export interface SubmitRemovalArgs {
   orgCtx: OrgContext;
   removalId: string;
   confirmProduction?: boolean;
+  /** Hash of the artifact shown in the operator's compiled review. */
+  expectedCompilationHash?: string;
 }
 
 export interface RemovalSubmissionResult {
   removalId: string;
   externalId: string;
   version: number;
+}
+
+type GhgEntryExternalMutation = "none" | "possible" | "confirmed";
+
+interface RemovalSubmitAttempt {
+  id: string;
+  attemptedAt: Date;
+  externalMutation: GhgEntryExternalMutation;
+}
+
+function recordExternalMutation(
+  attempt: RemovalSubmitAttempt,
+  next: Exclude<GhgEntryExternalMutation, "none">,
+): void {
+  if (next === "confirmed" || attempt.externalMutation === "none") {
+    attempt.externalMutation = next;
+  }
+}
+
+function safeAttemptError(error: unknown): {
+  errorClass: string | null;
+  errorMessage: string | null;
+} {
+  if (error === null) {
+    return { errorClass: null, errorMessage: null };
+  }
+  if (error instanceof SafeError) {
+    return { errorClass: "SafeError", errorMessage: error.message };
+  }
+  return {
+    errorClass: "UnexpectedError",
+    errorMessage: "Removal submission failed unexpectedly. Retry the submission.",
+  };
 }
 
 // The submission unit: one Isometric Removal == one certifierRemovals row.
@@ -111,15 +144,63 @@ export interface RemovalSubmissionResult {
 export async function submitRemoval(
   args: SubmitRemovalArgs,
 ): Promise<RemovalSubmissionResult> {
-  const { orgCtx, removalId, confirmProduction } = args;
+  const attempt: RemovalSubmitAttempt = {
+    id: crypto.randomUUID(),
+    attemptedAt: new Date(),
+    externalMutation: "none",
+  };
+  let outcome: "succeeded" | "refused" | "failed" = "failed";
+  let attemptError: unknown = null;
+
+  try {
+    const result = await submitRemovalCore(args, attempt);
+    outcome = "succeeded";
+    return result;
+  } catch (error) {
+    attemptError = error;
+    outcome =
+      attempt.externalMutation === "none" && error instanceof SafeError
+        ? "refused"
+        : "failed";
+    throw error;
+  } finally {
+    const safeError = safeAttemptError(attemptError);
+    await appendSyncEvent(args.orgCtx, {
+      provider: ISOMETRIC_PROVIDER,
+      entityType: REMOVAL_ENTITY_TYPE,
+      entityId: args.removalId,
+      operation: "removal:submit:attempt-summary",
+      status: outcome === "succeeded" ? "succeeded" : "failed",
+      responsePayload: {
+        attempt_id: attempt.id,
+        outcome,
+        error_class: safeError.errorClass,
+        error_message: safeError.errorMessage,
+        ghg_entry_external_mutation: attempt.externalMutation,
+      },
+      errorMessage: safeError.errorMessage,
+      attemptedAt: attempt.attemptedAt,
+    });
+  }
+}
+
+async function submitRemovalCore(
+  args: SubmitRemovalArgs,
+  attempt: RemovalSubmitAttempt,
+): Promise<RemovalSubmissionResult> {
+  const {
+    orgCtx,
+    removalId,
+    confirmProduction,
+    expectedCompilationHash,
+  } = args;
 
   // Per-attempt correlation id so the start breadcrumb, boundary logs, and any
   // best-effort warnings for one submit can be tied together in an aggregator.
-  const submissionAttemptId = crypto.randomUUID();
   const log = logger.child({
     op: "removal:submit",
     removalId,
-    submissionAttemptId,
+    submissionAttemptId: attempt.id,
   });
   log.info("removal submit started");
 
@@ -177,27 +258,11 @@ export async function submitRemoval(
   // "staged but not live". The tier is a single facility-scoped value (ADR 0021),
   // read here from the durability data plane.
   const facilityTier = ctx.batchesWithSamples[0]?.durabilityOption ?? null;
-  const templateSequestrationKeys = defaultTemplate.groups.flatMap((group) =>
-    group.components
-      .map((component) => component.blueprint_key)
-      .filter(isSequestrationBlueprintFamily),
+  const tierBlocker = removalTemplateTierCompatibilityBlocker(
+    ctx,
+    defaultTemplate,
   );
-  if (facilityTier && templateSequestrationKeys.length > 0) {
-    const expectedKeys = expectedSequestrationBlueprintKeys(facilityTier);
-    const mismatched = templateSequestrationKeys.find(
-      (key) => !expectedKeys.has(key),
-    );
-    if (mismatched) {
-      const tierLabel = facilityTier === "1000_year" ? "1000-year" : "200-year";
-      throw new SafeError(
-        `This facility is on the ${tierLabel} durability tier, but its removal ` +
-          `template's sequestration component is "${mismatched}". Re-author the ` +
-          `facility's Isometric removal template to the ` +
-          `${Array.from(expectedKeys).join(" or ")} blueprint, or change the ` +
-          `facility's durability tier in facility settings.`,
-      );
-    }
-  }
+  if (tierBlocker) throw new SafeError(tierBlocker);
 
   // Durability evidence comes through measurement samples; each binding then
   // declares whether its GHG input consumes a sample-response datapoint or an
@@ -280,17 +345,7 @@ export async function submitRemoval(
   });
   const client = await getIsometricClientForOrg(orgCtx.organizationId);
 
-  // Regenerate every Source-mirrored evidence ledger (transport mass·distance +
-  // 200-year durability) from the live context and mirror them BEFORE candidate
-  // documents are collected, so the current ledgers ride into source_ids on this
-  // submit (and supersede any prior ones). Done here — before the locked claim
-  // transaction below — because it makes HTTP calls to Isometric and inserts
-  // documents under a per-removal artifact lock. Best-effort and idempotent on
-  // content (an unchanged resubmit is a no-op); each ledger self-skips when it
-  // has nothing to evidence.
-  await ensureEvidenceLedgersFromContext(orgCtx, removalId, ctx, log);
-
-  const initialBuild = await buildRemovalSubmissionBuild({
+  const initialCompilation = await compileRemovalSubmission({
     orgCtx,
     removalId,
     ctx,
@@ -301,16 +356,19 @@ export async function submitRemoval(
     hasDurabilityComponents,
     log,
   });
+  if (!initialCompilation.transportPlan) {
+    throw new SafeError(
+      `Removal submission blocked:\n${initialCompilation.blockers.join("\n")}`,
+    );
+  }
+  const initialBuild = initialCompilation.transportPlan;
+  assertReviewedCompilationHash(expectedCompilationHash, initialBuild);
   const {
     agg,
     latestApplicationTime,
     candidateDocumentIds,
     sourceIds,
-    semanticPayload,
-    monitored,
     fixed,
-    datapointBodyByKey,
-    durabilityMeasurementSampleArgs,
     memberCreditBatchIds,
   } = initialBuild;
 
@@ -330,13 +388,7 @@ export async function submitRemoval(
     },
     guard: mappingGuard,
     policy: { onSubmittedHashChanged: "supersede" },
-    tentativeInputs: {
-      semanticPayload,
-      monitored,
-      datapointBodyByKey,
-      durabilityMeasurementSampleArgs,
-      sourceIds,
-    },
+    tentativeInputs: initialBuild,
     hashOf: (inputs) => payloadHash(inputs.semanticPayload),
     mirrorDocumentIds: candidateDocumentIds,
     resolve: async (tx, tentative) => {
@@ -354,7 +406,7 @@ export async function submitRemoval(
         lockedSourceIds.some((id, i) => id !== sourceIds[i]);
       if (!sourceIdsChanged) return tentative;
 
-      const finalBuild = await buildRemovalSubmissionBuild({
+      const finalCompilation = await compileRemovalSubmission({
         orgCtx,
         removalId,
         ctx,
@@ -364,89 +416,27 @@ export async function submitRemoval(
         allowPeriodInputStub,
         hasDurabilityComponents,
         sourceIds: lockedSourceIds,
+        candidateDocumentIds,
       });
-      return {
-        semanticPayload: finalBuild.semanticPayload,
-        monitored: finalBuild.monitored,
-        datapointBodyByKey: finalBuild.datapointBodyByKey,
-        durabilityMeasurementSampleArgs: finalBuild.durabilityMeasurementSampleArgs,
-        sourceIds: finalBuild.sourceIds,
-      };
+      if (!finalCompilation.transportPlan) {
+        throw new SafeError(
+          `Removal submission blocked:\n${finalCompilation.blockers.join("\n")}`,
+        );
+      }
+      assertReviewedCompilationHash(
+        expectedCompilationHash,
+        finalCompilation.transportPlan,
+      );
+      return finalCompilation.transportPlan;
     },
-    buildSnapshot: ({ inputs, nextVersion }) => {
-      const removalSupplierRef = buildRemovalSupplierRef({
+    buildSnapshot: ({ inputs, nextVersion }) =>
+      materializeRemovalSubmissionSnapshot({
+        compiled: inputs,
+        template: defaultTemplate,
+        externalProjectId,
         removalId,
-        role: "removal",
-        version: nextVersion,
-      });
-
-      const finalDatapointBodies = inputs.monitored.map((m) => {
-        const supplierRefId = buildRemovalSupplierRef({
-          removalId,
-          role: "datapoint",
-          version: nextVersion,
-          inputKey: `${m.removalTemplateComponentId}-${m.inputKey}`,
-        });
-        const draftKey = `${m.removalTemplateComponentId}::${m.inputKey}`;
-        const draft = inputs.datapointBodyByKey.get(draftKey);
-        if (!draft) {
-          // monitored and datapointBodyByKey are produced by the same
-          // resolveTemplateInputs pass, so a miss means the two fell out of
-          // sync — fail loudly rather than emit a Datapoint body missing
-          // its resolved fields.
-          throw new SafeError(
-            `Internal: no resolved Datapoint body for ${draftKey}. Reload and retry the submission.`,
-          );
-        }
-        return {
-          rtcId: m.removalTemplateComponentId,
-          inputKey: m.inputKey,
-          body: { ...draft, supplier_reference_id: supplierRefId },
-        };
-      });
-      const durabilityMeasurementSamples = inputs.durabilityMeasurementSampleArgs
-        ? {
-            submissions: buildVersionedMeasurementSampleSubmissions({
-              ...inputs.durabilityMeasurementSampleArgs,
-              version: nextVersion,
-            }),
-          }
-        : undefined;
-      const directSequestrationDatapoints = durabilityMeasurementSamples
-        ? buildDirectSequestrationDatapoints({
-            template: defaultTemplate,
-            measurementSampleSubmissions:
-              durabilityMeasurementSamples.submissions,
-            projectId: externalProjectId,
-            removalId,
-            version: nextVersion,
-            sourceIds: inputs.sourceIds,
-          })
-        : [];
-
-      return {
-        payloadSnapshot: {
-          // ADR 0005 / B3 — content hash of INPUT_MAPPING that produced
-          // this payload, surfaced at the top level so an audit query
-          // (`WHERE payload_snapshot->>'__mappingRevision' = ?`) can
-          // correlate a registry-side issue back to a specific noma
-          // mapping revision in git.
-          __mappingRevision: MAPPING_REVISION,
-          semantic: inputs.semanticPayload,
-          memberCreditBatchIds,
-          transport: {
-            removalSupplierRef,
-            datapointBodies: [
-              ...finalDatapointBodies,
-              ...directSequestrationDatapoints,
-            ],
-          },
-          ...(durabilityMeasurementSamples
-            ? { durabilityMeasurementSamples }
-            : {}),
-        },
-      };
-    },
+        nextVersion,
+      }),
   });
 
   switch (claimed.kind) {
@@ -538,10 +528,22 @@ export async function submitRemoval(
         claimBatchIds: memberCreditBatchIds,
         supersedePreviousId: claimed.supersedePreviousId,
         resumed: claimed.resumed,
+        attempt,
         log,
       });
     }
   }
+}
+
+function assertReviewedCompilationHash(
+  expectedHash: string | undefined,
+  compiled: { semanticPayload: Record<string, unknown> },
+): void {
+  if (!expectedHash) return;
+  if (payloadHash(compiled.semanticPayload) === expectedHash) return;
+  throw new SafeError(
+    "Removal source data changed after the compiled review. Recompile and inspect the updated artifact before submitting.",
+  );
 }
 
 async function assertClaimedRemovalPayloadFresh(args: {
@@ -635,6 +637,7 @@ interface RunRemovalSubmissionArgs {
   claimBatchIds: string[];
   supersedePreviousId: string | null;
   resumed: boolean;
+  attempt: RemovalSubmitAttempt;
   /** Attempt-scoped logger (carries submissionAttemptId) from submitRemoval. */
   log: Logger;
 }
@@ -654,6 +657,7 @@ async function runRemovalSubmission({
   claimBatchIds,
   supersedePreviousId,
   resumed,
+  attempt,
   log,
 }: RunRemovalSubmissionArgs): Promise<RemovalSubmissionResult> {
   // On resume the datapoint bodies and fixed bindings are snapshot truth, so
@@ -752,15 +756,19 @@ async function runRemovalSubmission({
         supplierRefLookup,
       ),
     failureMessagePrefix: "Removal POST failed",
+    onExternalMutation: (state) => recordExternalMutation(attempt, state),
+    onConfirmed: (externalId) =>
+      markSubmissionSubmitted(orgCtx, row.id, {
+        externalId,
+        supersedePreviousId,
+        // §8.6.2 (issue #349, ADR 0020): stamp the production-bucket claim
+        // in the same transaction as the immediate Submitted transition.
+        productionEmissionsClaim: {
+          removalId,
+          creditBatchIds: claimBatchIds,
+        },
+      }),
     log,
-  });
-
-  await markSubmissionSubmitted(orgCtx, row.id, {
-    externalId: externalRemovalId,
-    supersedePreviousId,
-    // §8.6.2 (issue #349, ADR 0020): stamp the production-bucket claim onto
-    // the member batches in the same transaction as the ledger flip.
-    productionEmissionsClaim: { removalId, creditBatchIds: claimBatchIds },
   });
 
   // Persist the derived reporting window onto the removal row (best-effort —

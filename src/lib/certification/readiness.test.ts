@@ -281,6 +281,37 @@ describe("deriveRemovalReadiness — blocked: no data", () => {
 });
 
 describe("evidence mirroring advisory", () => {
+  it.each([
+    {
+      total: 0,
+      mirrored: 0,
+      detail: "No validated Isometric Source is available",
+    },
+    {
+      total: 4,
+      mirrored: 2,
+      detail: "2 of 4 supporting documents mirrored",
+    },
+  ])(
+    "blocks an existing Removal when Source binding is incomplete",
+    ({ total, mirrored, detail }) => {
+      const facts = ready({
+        sourceBindingRequired: true,
+        supportingDocumentCount: total,
+        mirroredDocumentCount: mirrored,
+      });
+
+      expect(deriveRemovalReadiness(facts)).toMatchObject({
+        state: "blocked",
+        reasons: [detail],
+        advisories: [],
+      });
+      expect(
+        checkFor(buildRemovalPreflightChecklist(facts), "evidence"),
+      ).toMatchObject({ status: "unmet", detail });
+    },
+  );
+
   it("shows 0 of M as a warning without blocking readiness", () => {
     const facts = ready({
       supportingDocumentCount: 4,

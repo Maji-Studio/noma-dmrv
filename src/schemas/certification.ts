@@ -117,6 +117,9 @@ export type FacilityEmissionConfigFormData = z.infer<
 export const submitRemovalSchema = z.object({
   removalId: z.string().uuid(),
   confirmProduction: z.boolean().optional(),
+  compilationHash: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/i, "Recompile the Removal before submitting."),
 });
 
 export type SubmitRemovalInput = z.infer<typeof submitRemovalSchema>;
