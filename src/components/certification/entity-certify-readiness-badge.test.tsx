@@ -4,7 +4,11 @@ import { describe, expect, it } from "vitest";
 import type { EntityCertifyReadiness } from "@/lib/certification/entity-readiness";
 import { EntityCertifyReadinessBadge } from "./entity-certify-readiness-badge";
 
-const READY: EntityCertifyReadiness = { state: "ready", gaps: [] };
+const READY: EntityCertifyReadiness = {
+  state: "ready",
+  gaps: [],
+  warnings: [],
+};
 const INCOMPLETE: EntityCertifyReadiness = {
   state: "incomplete",
   gaps: [
@@ -16,6 +20,7 @@ const INCOMPLETE: EntityCertifyReadiness = {
       detail: "Organic carbon is required",
     },
   ],
+  warnings: [],
 };
 
 describe("EntityCertifyReadinessBadge scoped copy", () => {
@@ -52,6 +57,29 @@ describe("EntityCertifyReadinessBadge scoped copy", () => {
 
     expect(tooltip.props.children.props["aria-label"]).toMatch(
       /Incomplete for certification with 1 gap/,
+    );
+  });
+
+  it("surfaces advisory warnings without marking readiness incomplete", () => {
+    const tooltip = EntityCertifyReadinessBadge({
+      readiness: {
+        state: "ready",
+        gaps: [],
+        warnings: [
+          {
+            key: "transportEvidence",
+            label: "Transport evidence",
+            fields: ["transportEvidenceDocumentCount"],
+            detail: "Transport evidence is still required for verification",
+          },
+        ],
+      },
+    }) as ReactElement<{
+      children: ReactElement<{ "aria-label": string }>;
+    }>;
+
+    expect(tooltip.props.children.props["aria-label"]).toMatch(
+      /Ready for certification with 1 warning/,
     );
   });
 });

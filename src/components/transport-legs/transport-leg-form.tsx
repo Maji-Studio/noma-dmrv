@@ -12,7 +12,6 @@ import {
   FormSelect,
   PositionPicker,
   makeCertFieldStatus,
-  resolveCertFieldStatus,
 } from "@/components/forms";
 import {
   transportLegFormSchema,
@@ -28,7 +27,6 @@ import { DEFAULT_TRIP_TYPE, TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import type { TransportLeg } from "@/db/schema";
 import { TransportEvidencePanel } from "./transport-evidence-documents";
-import { hasDocumentBackedDistanceProvenance } from "@/lib/certification/transport-evidence";
 
 interface TransportLegFormProps {
   /** When provided, the form edits this leg; otherwise it creates a new one. */
@@ -131,15 +129,17 @@ export function TransportLegForm({
   const certStatus = makeCertFieldStatus(isPersisted ? defaultValues : undefined);
 
   // Provenance: hand-editing the distance reverts a CALC'd map estimate to
-  // manual — the operator can explicitly re-mark it as document-backed.
+  // manual. A legacy document value stays available only while selected.
   const distanceSource = useWatch({
     control,
     name: "distanceSource",
   }) as DistanceSourceValue;
   const distanceSourceOptions = (
     distanceSource === "map_estimate"
-      ? (["map_estimate", "manual", "document"] as const)
-      : (["manual", "document"] as const)
+      ? (["map_estimate", "manual"] as const)
+      : distanceSource === "document"
+        ? (["document", "manual"] as const)
+        : (["manual"] as const)
   ).map((value) => ({ value, label: DISTANCE_SOURCE_LABELS[value] }));
 
   // CALC endpoints: this leg's own origin/destination pickers.
@@ -245,7 +245,7 @@ export function TransportLegForm({
                 shouldValidate: true,
               });
               // CALC always claims map_estimate; a hand edit only degrades a
-              // map estimate — an explicit Document/Manual marking survives.
+              // map estimate — an explicit manual or legacy document value survives.
               if (source === "map_estimate" || distanceSource === "map_estimate") {
                 setValue("distanceSource", source ?? "manual", { shouldDirty: true });
               }
@@ -259,12 +259,8 @@ export function TransportLegForm({
             id="distanceSource"
             label="Distance source"
             error={errors.distanceSource?.message}
-            helperText="Choose Transport document when a shipping file supports this distance."
             certifyRequired={isTransportLegCertifyField("distanceSource")}
-            certifyStatus={resolveCertFieldStatus(
-              isPersisted ? true : undefined,
-              hasDocumentBackedDistanceProvenance(defaultValues.distanceSource),
-            )}
+            certifyStatus={certStatus("distanceSource")}
           >
             <FormSelect
               id="distanceSource"
@@ -335,7 +331,7 @@ export function TransportLegForm({
         </div>
       </FormSection>
 
-      <FormSection title="Documentation">
+      <FormSection title="Documentation" certifyRequired={!isPersisted}>
         <p className="body-small text-[var(--color-text-secondary)]">
           Classify each supporting file before upload. One accepted transport
           evidence file is sufficient.
@@ -344,7 +340,6 @@ export function TransportLegForm({
           <TransportEvidencePanel
             entityType="transport_leg"
             entityId={leg.id}
-            distanceSource={leg.distanceSource}
           />
         ) : (
           <p className="body-small text-[var(--color-text-tertiary)] border border-dashed border-[var(--color-border-secondary)] px-12 py-16">

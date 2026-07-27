@@ -163,18 +163,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   // propagating to deliveries that never overrode (null-override invariant,
   // schemas/distance-source.ts header).
   const effectiveDistanceKm = distanceKmOverride ?? storedDistanceKm;
-  const savedEffectiveDistanceSource = delivery
-    ? delivery.distanceSource === "document"
-      ? "document"
-      : delivery.distanceKmOverride != null
-      ? (delivery.distanceSource ?? "manual")
-      : storedDistanceSource
-    : null;
-  const savedProvenanceLoaded = delivery
-    ? delivery.distanceSource === "document" ||
-      delivery.distanceKmOverride != null ||
-      selectedOrder !== undefined
-    : undefined;
   const effectiveDraftDistanceSource: DistanceSourceValue | null =
     draftDistanceSource === "document"
       ? "document"
@@ -193,15 +181,10 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     storedDistanceKm == null
       ? [{ value: "manual", label: DISTANCE_SOURCE_LABELS.manual }]
       : []),
-    { value: "document", label: DISTANCE_SOURCE_LABELS.document },
+    ...(effectiveDraftDistanceSource === "document"
+      ? [{ value: "document", label: DISTANCE_SOURCE_LABELS.document }]
+      : []),
   ] as const;
-  const distanceSourceContext = effectiveDraftDistanceSource
-    ? `${
-        distanceKmOverride == null && draftDistanceSource !== "document"
-          ? "Inherited from customer location"
-          : "This delivery"
-      } · ${DISTANCE_SOURCE_LABELS[effectiveDraftDistanceSource]}`
-    : null;
 
   // Text draft so in-flight typing survives; resync when the effective value
   // changes from outside (order switch, prefill) — adjust-state-during-render.
@@ -471,56 +454,40 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             error={errors.distanceKmOverride?.message}
             helperText={distanceHelperText}
           >
-            <div>
-              <FormInput
-                id="distanceKmOverride"
-                type="number"
-                step="any"
-                min={0}
-                placeholder="e.g., 85"
-                disabled={isSubmitting}
-                error={!!errors.distanceKmOverride}
-                value={distanceDraft}
-                onChange={(event) => handleDistanceChange(event.target.value)}
-                onBlur={handleDistanceBlur}
-              />
-              {distanceSourceContext && (
-                <p
-                  className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] mt-6"
-                  data-testid="distanceKmOverride-distance-source"
-                >
-                  {distanceSourceContext}
-                </p>
-              )}
-            </div>
+            <FormInput
+              id="distanceKmOverride"
+              type="number"
+              step="any"
+              min={0}
+              placeholder="e.g., 85"
+              disabled={isSubmitting}
+              error={!!errors.distanceKmOverride}
+              value={distanceDraft}
+              onChange={(event) => handleDistanceChange(event.target.value)}
+              onBlur={handleDistanceBlur}
+            />
           </FormField>
 
-          <ActionableFocusTarget
-            target="transport-evidence"
-            activeTarget={focusTarget}
-            actionLabel="Select Transport document as the distance source to attach evidence"
+          <FormField
+            id="distanceSource"
+            label="Distance source"
+            error={errors.distanceSource?.message}
           >
-            <FormField
+            <FormSelect
               id="distanceSource"
-              label="Distance source"
-              error={errors.distanceSource?.message}
-            >
-              <FormSelect
-                id="distanceSource"
-                options={distanceSourceOptions}
-                placeholder="Select source"
-                disabled={isSubmitting || effectiveDistanceKm == null}
-                error={!!errors.distanceSource}
-                {...register("distanceSource")}
-                value={effectiveDraftDistanceSource ?? ""}
-                onChange={(event) =>
-                  handleDistanceSourceChange(
-                    event.target.value as DistanceSourceValue,
-                  )
-                }
-              />
-            </FormField>
-          </ActionableFocusTarget>
+              options={distanceSourceOptions}
+              placeholder="Select source"
+              disabled={isSubmitting || effectiveDistanceKm == null}
+              error={!!errors.distanceSource}
+              {...register("distanceSource")}
+              value={effectiveDraftDistanceSource ?? ""}
+              onChange={(event) =>
+                handleDistanceSourceChange(
+                  event.target.value as DistanceSourceValue,
+                )
+              }
+            />
+          </FormField>
 
           <FormField
             id="tripType"
@@ -564,9 +531,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         isEditMode={isEditMode}
         deferredAttachments={deferredAttachments}
         isSubmitting={isSubmitting}
-        distanceSource={savedEffectiveDistanceSource}
-        provenanceLoaded={savedProvenanceLoaded}
-        draftDistanceSource={effectiveDraftDistanceSource}
+        focusTarget={focusTarget}
       />
       </FormSpine>
 

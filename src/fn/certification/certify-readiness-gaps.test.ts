@@ -85,7 +85,7 @@ describe("buildEntityReadinessResult", () => {
     expect(result.gaps.join(" ")).not.toContain("run-affected");
   });
 
-  it("uses a friendly transport label in flat readiness gaps", () => {
+  it("uses a friendly transport label in non-blocking warnings", () => {
     const transportLeg = {
       id: TRANSPORT_LEG_ID,
       entityId: "00000000-0000-4000-a000-000000000002",
@@ -102,16 +102,10 @@ describe("buildEntityReadinessResult", () => {
       ["feedstock"],
     );
 
-    expect(result.gaps.join(" ")).toContain("feedstock transport 1");
-    expect(result.gaps.join(" ")).not.toContain(TRANSPORT_LEG_ID);
-    expect(result.issues[0]?.affectedRecords[0]).toMatchObject({
-      id: "00000000-0000-4000-a000-000000000002",
-      code: "feedstock transport 1",
-    });
-    expect(result.issues[0]).toMatchObject({
-      key: "feedstock-transport-evidence",
-      fixTarget: "feedstocks",
-    });
+    expect(result.gaps).toEqual([]);
+    expect(result.issues).toEqual([]);
+    expect(result.warnings.join(" ")).toContain("feedstock transport 1");
+    expect(result.warnings.join(" ")).not.toContain(TRANSPORT_LEG_ID);
   });
 
   // O:Corg is an UNCONDITIONAL sample descriptor, deliberately symmetric with
@@ -151,7 +145,7 @@ describe("buildEntityReadinessResult", () => {
     });
   });
 
-  it("keeps feedstock and biochar evidence in their separate workflows", () => {
+  it("keeps feedstock and biochar evidence warnings separately identified", () => {
     const feedstockLeg = {
       id: "00000000-0000-4000-a000-000000000003",
       entityId: "00000000-0000-4000-a000-000000000004",
@@ -176,15 +170,10 @@ describe("buildEntityReadinessResult", () => {
       ["feedstock", "biochar"],
     );
 
-    expect(result.issues).toMatchObject([
-      {
-        key: "feedstock-transport-evidence",
-        fixTarget: "feedstocks",
-      },
-      {
-        key: "biochar-transport-evidence",
-        fixTarget: "deliveries",
-      },
-    ]);
+    expect(result.gaps).toEqual([]);
+    expect(result.issues).toEqual([]);
+    expect(result.warnings).toHaveLength(2);
+    expect(result.warnings[0]).toContain("feedstock transport 1");
+    expect(result.warnings[1]).toContain("biochar transport 1");
   });
 });

@@ -347,3 +347,19 @@ which supersedes the journal half of ADR 0005.
   samples since the current epoch.
 - Blueprint routing now follows the stored batch choice. Eligibility remains a
   live decision for new batches and does not rewrite existing ones.
+
+## 2026-07-27 (transport distance provenance decoupled from evidence)
+
+- Distance source is now a pure distance-provenance choice: mapped/route
+  calculation or manual entry. `Transport document` is no longer offered for
+  new values; legacy saved `document` values remain displayable and
+  submittable without silent mutation.
+- Classified transport evidence (bill of lading, weigh-scale ticket, or other
+  transport evidence) is always visible on feedstock, delivery, and
+  transport-leg forms. Its CERT state depends only on at least one accepted
+  upload, and the existing document-to-Source-candidate pipeline is unchanged.
+- Missing transport evidence remains CERT-flagged and appears as a
+  non-blocking readiness warning. It no longer prevents registry submission.
+- Registry basis: Transportation Emissions Accounting module v1.1 §5 accepts
+  mapped distances, while §6 required records still apply to every transport
+  leg.

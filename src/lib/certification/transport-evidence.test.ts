@@ -4,13 +4,13 @@ import {
   hasCompleteTransportEvidence,
 } from "./transport-evidence";
 
-describe("transport evidence composite readiness", () => {
+describe("transport evidence readiness", () => {
   it.each([
-    { source: "document" as const, count: 0, expected: false },
-    { source: "manual" as const, count: 1, expected: false },
-    { source: "document" as const, count: 1, expected: true },
-  ])("requires provenance and a file", ({ source, count, expected }) => {
-    expect(hasCompleteTransportEvidence(source, count)).toBe(expected);
+    { count: 0, expected: false },
+    { count: undefined, expected: false },
+    { count: 1, expected: true },
+  ])("depends only on accepted evidence count", ({ count, expected }) => {
+    expect(hasCompleteTransportEvidence(count)).toBe(expected);
   });
 
   it("keeps create and loading states neutral", () => {
@@ -18,7 +18,6 @@ describe("transport evidence composite readiness", () => {
       deriveTransportEvidenceCertStatus({
         persisted: false,
         documentsLoaded: true,
-        source: "document",
         acceptedDocumentCount: 1,
       }),
     ).toBe("neutral");
@@ -26,22 +25,19 @@ describe("transport evidence composite readiness", () => {
       deriveTransportEvidenceCertStatus({
         persisted: true,
         documentsLoaded: false,
-        source: "document",
         acceptedDocumentCount: undefined,
       }),
     ).toBe("neutral");
   });
 
   it.each([
-    { source: "document" as const, count: 0, expected: "missing" },
-    { source: "manual" as const, count: 1, expected: "missing" },
-    { source: "document" as const, count: 1, expected: "satisfied" },
-  ])("resolves persisted status", ({ source, count, expected }) => {
+    { count: 0, expected: "missing" },
+    { count: 1, expected: "satisfied" },
+  ])("resolves persisted status from accepted documents", ({ count, expected }) => {
     expect(
       deriveTransportEvidenceCertStatus({
         persisted: true,
         documentsLoaded: true,
-        source,
         acceptedDocumentCount: count,
       }),
     ).toBe(expected);

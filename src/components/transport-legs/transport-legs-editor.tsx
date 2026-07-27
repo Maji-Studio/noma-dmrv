@@ -247,7 +247,16 @@ export function TransportLegsEditor({
                     Distance source
                     <CertificationFieldTag
                       status={certStatuses.provenance}
-                      description="Distance source must be Transport document and at least one transport-evidence file must be uploaded to satisfy this requirement"
+                      description="Satisfied when the saved leg records its distance provenance"
+                    />
+                  </span>
+                </th>
+                <th className="py-8 pr-12 font-medium">
+                  <span className="flex items-center gap-6">
+                    Evidence
+                    <CertificationFieldTag
+                      status={certStatuses.evidence}
+                      description="Satisfied when every saved leg has at least one uploaded transport-evidence file"
                     />
                   </span>
                 </th>
@@ -276,23 +285,29 @@ export function TransportLegsEditor({
                     {leg.distanceKm} km
                   </td>
                   <td className="py-8 pr-12 text-[var(--color-text-secondary)]">
+                    {leg.distanceSource
+                      ? DISTANCE_SOURCE_LABELS[leg.distanceSource]
+                      : "—"}
+                  </td>
+                  <td className="py-8 pr-12 text-[var(--color-text-secondary)]">
                     <span className="flex items-center gap-6">
-                      {leg.distanceSource
-                        ? DISTANCE_SOURCE_LABELS[leg.distanceSource]
+                      {isSavedTransportLeg(leg) && !deferred
+                        ? hasCompleteTransportEvidence(
+                            (leg as { transportEvidenceDocumentCount?: number })
+                              .transportEvidenceDocumentCount,
+                          )
+                          ? "Attached"
+                          : "Missing"
                         : "—"}
-                      {/* Per-row marker so the operator can tell WHICH leg is
-                          missing evidence when several are listed (the header
-                          tag only aggregates). */}
                       {isSavedTransportLeg(leg) &&
                         !deferred &&
                         !hasCompleteTransportEvidence(
-                          leg.distanceSource,
                           (leg as { transportEvidenceDocumentCount?: number })
                             .transportEvidenceDocumentCount,
                         ) && (
                           <CertificationFieldTag
                             status="missing"
-                            description="This leg needs Transport document as its Distance source and at least one uploaded transport-evidence file"
+                            description="This leg needs at least one uploaded transport-evidence file"
                           />
                         )}
                     </span>

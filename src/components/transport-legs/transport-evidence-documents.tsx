@@ -17,7 +17,6 @@ import {
   useDocumentsForEntity,
 } from "@/hooks/use-documents";
 import type { DocumentEntityType } from "@/schemas/documents";
-import type { DistanceSourceValue } from "@/schemas/distance-source";
 import { CertificationFieldTag } from "@/components/ui/certification-field-tag";
 import { InfoHint } from "@/components/ui/tooltip";
 import {
@@ -178,9 +177,7 @@ interface TransportEvidencePanelProps {
   entityType: TransportEvidenceEntityType;
   entityId: string;
   readOnly?: boolean;
-  /** Effective saved provenance of the distance represented by this surface. */
-  distanceSource?: DistanceSourceValue | null;
-  /** Undefined while saved provenance is still loading. */
+  /** Undefined while the saved entity is still loading. */
   persisted?: boolean;
   /** Omits repeated visible chrome when a parent section already supplies the heading. */
   embedded?: boolean;
@@ -194,7 +191,6 @@ export function TransportEvidencePanel({
   entityType,
   entityId,
   readOnly = false,
-  distanceSource,
   persisted = true,
   embedded = false,
 }: TransportEvidencePanelProps) {
@@ -205,7 +201,6 @@ export function TransportEvidencePanel({
   const evidenceStatus = deriveTransportEvidenceCertStatus({
     persisted,
     documentsLoaded: documents !== undefined,
-    source: distanceSource,
     acceptedDocumentCount,
   });
   return (
@@ -225,12 +220,11 @@ export function TransportEvidencePanel({
         )}
         <CertificationFieldTag
           status={evidenceStatus}
-          description="Satisfied when Distance source is Transport document and at least one classified file is uploaded"
+          description="Satisfied when at least one classified transport-evidence file is uploaded"
         />
         <InfoHint label="About transport evidence">
-          Select Transport document as the distance source, then upload at least
-          one bill of lading, weigh-scale ticket, or other transport evidence
-          file. One accepted file is enough.
+          Upload at least one bill of lading, weigh-scale ticket, or other
+          transport evidence file. One accepted file is enough.
         </InfoHint>
       </div>
       <TransportEvidenceDocuments

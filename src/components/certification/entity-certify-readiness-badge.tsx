@@ -19,6 +19,7 @@ interface EntityCertifyReadinessBadgeProps {
  * same status ramp), not a lookalike.
  *
  * - ready      → st-ok   ✓  "Ready"
+ * - warning    → st-wait ⚠  "Ready (N warnings)" — submission stays available
  * - incomplete → st-wait ⚠  "Incomplete (N)" — hover/focus reveals exactly
  *                which gaps remain, so "where is it missing" is always one
  *                interaction away rather than buried in a post-save toast.
@@ -30,12 +31,20 @@ export function EntityCertifyReadinessBadge({
 }: EntityCertifyReadinessBadgeProps) {
   const ready = readiness.state === "ready";
   const gapCount = readiness.gaps.length;
+  const warningCount = readiness.warnings.length;
+  const hasWarnings = warningCount > 0;
 
-  const pill = ready ? (
+  const pill = ready && !hasWarnings ? (
     <StatusBadge
       status="ready"
       label={readyLabel}
       icon={<CheckCircleIcon size={14} weight="fill" />}
+    />
+  ) : ready ? (
+    <StatusBadge
+      status="pending"
+      label={`Ready (${warningCount} warning${warningCount === 1 ? "" : "s"})`}
+      icon={<WarningIcon size={14} weight="fill" />}
     />
   ) : (
     <StatusBadge
@@ -45,7 +54,7 @@ export function EntityCertifyReadinessBadge({
     />
   );
 
-  if (ready) {
+  if (ready && !hasWarnings) {
     return (
       <span
         aria-label={readyLabel ?? "Ready for certification"}
@@ -53,6 +62,30 @@ export function EntityCertifyReadinessBadge({
       >
         {pill}
       </span>
+    );
+  }
+
+  if (ready) {
+    return (
+      <Tooltip
+        content={
+          <ReadinessGapList
+            readiness={readiness}
+            readinessNoun={readinessNoun}
+          />
+        }
+      >
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`Ready for ${readinessNoun} with ${warningCount} warning${
+            warningCount === 1 ? "" : "s"
+          } — submission remains available`}
+          className="inline-flex cursor-help rounded-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] focus-visible:ring-offset-1"
+        >
+          {pill}
+        </button>
+      </Tooltip>
     );
   }
 
@@ -87,10 +120,7 @@ export function EntityCertifyReadinessBadge({
 }
 
 /**
- * The list of unmet certification requirements, shown inside the badge's
- * tooltip. Each gap's `detail` is a full sentence ("Status must be complete
- * to certify", "Operation diesel is required to certify"), so the reader sees
- * precisely what to fix without leaving the page.
+ * The blocking gaps and advisory warnings shown inside the badge tooltip.
  */
 function ReadinessGapList({
   readiness,
@@ -101,21 +131,40 @@ function ReadinessGapList({
 }) {
   return (
     <div className="flex flex-col gap-4 text-left">
-      <span className="font-medium">
-        {readinessNoun === "certification"
-          ? "Still needed to certify"
-          : `Still needed for ${readinessNoun}`}
-      </span>
-      <ul className="flex flex-col gap-2">
-        {readiness.gaps.map((gap) => (
-          <li key={gap.key} className="flex items-start gap-6">
-            <span aria-hidden className="mt-2 leading-none">
-              •
-            </span>
-            <span>{gap.detail}</span>
-          </li>
-        ))}
-      </ul>
+      {readiness.gaps.length > 0 && (
+        <>
+          <span className="font-medium">
+            {readinessNoun === "certification"
+              ? "Still needed to certify"
+              : `Still needed for ${readinessNoun}`}
+          </span>
+          <ul className="flex flex-col gap-2">
+            {readiness.gaps.map((gap) => (
+              <li key={gap.key} className="flex items-start gap-6">
+                <span aria-hidden className="mt-2 leading-none">
+                  •
+                </span>
+                <span>{gap.detail}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {readiness.warnings.length > 0 && (
+        <>
+          <span className="font-medium">Advisory warnings</span>
+          <ul className="flex flex-col gap-2">
+            {readiness.warnings.map((warning) => (
+              <li key={warning.key} className="flex items-start gap-6">
+                <span aria-hidden className="mt-2 leading-none">
+                  •
+                </span>
+                <span>{warning.detail}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

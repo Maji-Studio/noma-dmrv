@@ -15,7 +15,8 @@ import {
 } from "@/components/transport-legs";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
-import type { DistanceSourceValue } from "@/schemas/distance-source";
+import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
+import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 
 interface FeedstockEvidenceSectionProps {
   feedstock?: FeedstockWithRelations;
@@ -27,7 +28,7 @@ interface FeedstockEvidenceSectionProps {
    */
   retryEntityIds?: string[];
   isSubmitting?: boolean;
-  draftDistanceSource?: DistanceSourceValue | null;
+  focusTarget?: EntityFocusTarget | null;
   /** Injected by FormSpine — do not set manually. */
   __spine?: SpineMeta;
 }
@@ -38,52 +39,54 @@ export function FeedstockEvidenceSection({
   deferredAttachments,
   retryEntityIds,
   isSubmitting = false,
-  draftDistanceSource,
+  focusTarget,
   __spine,
 }: FeedstockEvidenceSectionProps) {
-  if (draftDistanceSource !== "document") {
-    return null;
-  }
-
   return (
     <FormSection
       title="Transport evidence"
       icon={<PaperclipIcon size={14} weight="bold" />}
+      certifyRequired={!isEditMode}
       __spine={__spine}
     >
-      {isEditMode && feedstock ? (
-        <div className="flex flex-col gap-12">
-          {deferredAttachments && (
-            <FailedDeferredAttachments
-              attachments={deferredAttachments.attachments}
-              onRetry={(key) =>
-                deferredAttachments.retry(
-                  "feedstock",
-                  retryEntityIds && retryEntityIds.length > 0
-                    ? retryEntityIds
-                    : [feedstock.id],
-                  key,
-                )
-              }
-              onRemove={deferredAttachments.remove}
-              disabled={isSubmitting}
+      <ActionableFocusTarget
+        target="transport-evidence"
+        activeTarget={focusTarget}
+        actionLabel="Attach at least one classified transport-evidence file"
+      >
+        {isEditMode && feedstock ? (
+          <div className="flex flex-col gap-12">
+            {deferredAttachments && (
+              <FailedDeferredAttachments
+                attachments={deferredAttachments.attachments}
+                onRetry={(key) =>
+                  deferredAttachments.retry(
+                    "feedstock",
+                    retryEntityIds && retryEntityIds.length > 0
+                      ? retryEntityIds
+                      : [feedstock.id],
+                    key,
+                  )
+                }
+                onRemove={deferredAttachments.remove}
+                disabled={isSubmitting}
+              />
+            )}
+            <TransportEvidencePanel
+              entityType="feedstock"
+              entityId={feedstock.id}
+              embedded
             />
-          )}
-          <TransportEvidencePanel
+          </div>
+        ) : (
+          <ClassifiedTransportEvidenceUploader
+            id="feedstock-deferred-transport-evidence"
             entityType="feedstock"
-            entityId={feedstock.id}
-            embedded
-            distanceSource={feedstock.transportDistanceSource}
+            deferredAttachments={deferredAttachments}
+            disabled={isSubmitting}
           />
-        </div>
-      ) : (
-        <ClassifiedTransportEvidenceUploader
-          id="feedstock-deferred-transport-evidence"
-          entityType="feedstock"
-          deferredAttachments={deferredAttachments}
-          disabled={isSubmitting}
-        />
-      )}
+        )}
+      </ActionableFocusTarget>
     </FormSection>
   );
 }

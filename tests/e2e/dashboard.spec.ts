@@ -190,7 +190,7 @@ test.describe("Dashboard (Flow Hero)", () => {
         structuralGaps.getByText("Transport endpoint GPS missing"),
       ).toBeVisible();
       await expect(
-        structuralGaps.getByText("Transport distance lacks document evidence"),
+        structuralGaps.getByText("Transport evidence missing"),
       ).toBeVisible();
       await expect(
         structuralGaps.getByText("Supplier form · Location · 1 affected"),
@@ -207,7 +207,7 @@ test.describe("Dashboard (Flow Hero)", () => {
       await expect(page.getByText("All clear")).toHaveCount(0);
 
       const evidenceLink = structuralGaps.getByRole("link", {
-        name: /Transport distance lacks document evidence/,
+        name: /Transport evidence missing/,
       });
       await expect(evidenceLink).toHaveAttribute(
         "href",
@@ -218,7 +218,7 @@ test.describe("Dashboard (Flow Hero)", () => {
       await expect(feedstockSheet.getByText("Save Changes")).toBeVisible();
       await expect(
         feedstockSheet.getByText(
-          "Select Transport document as the distance source to attach evidence",
+          "Attach at least one classified transport-evidence file",
         ),
       ).toBeVisible();
       const distanceSource = feedstockSheet.getByLabel("Distance source", {
@@ -226,14 +226,8 @@ test.describe("Dashboard (Flow Hero)", () => {
       });
       await expect(distanceSource).toHaveValue("supplier_default");
       await expect(
-        feedstockSheet.getByTestId("transportDistanceSource-context"),
-      ).toContainText("Inherited from supplier · Manual entry");
-      await expect(
-        feedstockSheet.getByText("Drop files here or click to upload"),
+        distanceSource.locator('option[value="document"]'),
       ).toHaveCount(0);
-
-      await distanceSource.selectOption("document");
-      await expect(distanceSource).toHaveValue("document");
       await expect(
         feedstockSheet.getByRole("radio", { name: "Bill of lading" }),
       ).toBeChecked();
@@ -251,13 +245,13 @@ test.describe("Dashboard (Flow Hero)", () => {
         .hover();
       await expect(
         page.getByText(
-          "Select Transport document as the distance source, then upload at least one bill of lading, weigh-scale ticket, or other transport evidence file. One accepted file is enough.",
+          "Upload at least one bill of lading, weigh-scale ticket, or other transport evidence file. One accepted file is enough.",
         ),
       ).toBeVisible();
       await expect(
         feedstockSheet.getByRole("spinbutton", { name: "Distance (km)" }),
       ).toHaveValue("25");
-      await expect(distanceSource).toHaveValue("document");
+      await expect(distanceSource).toHaveValue("supplier_default");
 
       await feedstockSheet
         .getByRole("button", { name: "Save Changes" })
@@ -274,7 +268,7 @@ test.describe("Dashboard (Flow Hero)", () => {
         .where(eq(transportLegs.id, transportLegId));
       expect(savedTransportLeg).toEqual({
         distanceKm: 25,
-        distanceSource: "document",
+        distanceSource: "manual",
         isDerived: true,
       });
 

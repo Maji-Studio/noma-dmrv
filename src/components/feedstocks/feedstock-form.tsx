@@ -227,27 +227,23 @@ export function FeedstockForm({
   const matchesSupplierDefault =
     storedDistanceKm != null &&
     transportDistanceKm === storedDistanceKm &&
-    draftTransportDistanceSource === storedDistanceSource;
+    draftTransportDistanceSource === storedDistanceSource &&
+    draftTransportDistanceSource !== "document";
   const selectedDistanceSource =
     distanceSourceChoiceOverride?.supplierId === watchedSupplierId
       ? distanceSourceChoiceOverride.value
       : matchesSupplierDefault
         ? "supplier_default"
         : (draftTransportDistanceSource ?? "");
-  const isUsingSupplierDefault =
-    selectedDistanceSource === "supplier_default";
   const distanceSourceOptions = [
     ...(storedDistanceKm != null
       ? [{ value: "supplier_default", label: "Supplier default" }]
       : []),
     { value: "manual", label: DISTANCE_SOURCE_LABELS.manual },
-    { value: "document", label: DISTANCE_SOURCE_LABELS.document },
+    ...(selectedDistanceSource === "document"
+      ? [{ value: "document", label: DISTANCE_SOURCE_LABELS.document }]
+      : []),
   ];
-  const distanceSourceContext = draftTransportDistanceSource
-    ? `${isUsingSupplierDefault ? "Inherited from supplier" : "This feedstock"} · ${
-        DISTANCE_SOURCE_LABELS[draftTransportDistanceSource]
-      }`
-    : null;
 
   // The distance is an "override" once it diverges from the value we'd autofill
   // from the supplier/existing leg — that's the only state worth flagging (and
@@ -441,74 +437,58 @@ export function FeedstockForm({
               />
             </div>
 
-            <ActionableFocusTarget
-              target="transport-evidence"
-              activeTarget={focusTarget}
-              actionLabel="Select Transport document as the distance source to attach evidence"
+            <FormField
+              id="transportDistanceSource"
+              label="Distance source"
+              error={errors.transportDistanceSource?.message}
             >
-              <FormField
+              <input
+                type="hidden"
+                {...register("transportDistanceSource")}
+              />
+              <FormSelect
                 id="transportDistanceSource"
-                label="Distance source"
-                error={errors.transportDistanceSource?.message}
-              >
-                <div>
-                  <input
-                    type="hidden"
-                    {...register("transportDistanceSource")}
-                  />
-                  <FormSelect
-                    id="transportDistanceSource"
-                    name="transportDistanceSourceChoice"
-                    options={distanceSourceOptions}
-                    placeholder="Select source"
-                    disabled={isSubmitting || transportDistanceKm == null}
-                    error={!!errors.transportDistanceSource}
-                    value={selectedDistanceSource}
-                    onChange={(event) => {
-                      if (
-                        event.target.value === "supplier_default" &&
-                        storedDistanceKm != null
-                      ) {
-                        setDistanceSourceChoiceOverride({
-                          supplierId: watchedSupplierId,
-                          value: "supplier_default",
-                        });
-                        setValue(
-                          "transportDistanceKm",
-                          storedDistanceKm,
-                          SET_VALUE_OPTS,
-                        );
-                        setValue(
-                          "transportDistanceSource",
-                          storedDistanceSource,
-                          SET_VALUE_OPTS,
-                        );
-                        return;
-                      }
-                      const selectedSource =
-                        event.target.value as DistanceSourceValue;
-                      setDistanceSourceChoiceOverride({
-                        supplierId: watchedSupplierId,
-                        value: selectedSource,
-                      });
-                      setValue(
-                        "transportDistanceSource",
-                        selectedSource,
-                        SET_VALUE_OPTS,
-                      );
-                    }}
-                  />
-                  {distanceSourceContext && (
-                    <p
-                      className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] mt-6"
-                      data-testid="transportDistanceSource-context"
-                    >
-                      {distanceSourceContext}
-                    </p>
-                  )}
-                </div>
-              </FormField>
-            </ActionableFocusTarget>
+                name="transportDistanceSourceChoice"
+                options={distanceSourceOptions}
+                placeholder="Select source"
+                disabled={isSubmitting || transportDistanceKm == null}
+                error={!!errors.transportDistanceSource}
+                value={selectedDistanceSource}
+                onChange={(event) => {
+                  if (
+                    event.target.value === "supplier_default" &&
+                    storedDistanceKm != null
+                  ) {
+                    setDistanceSourceChoiceOverride({
+                      supplierId: watchedSupplierId,
+                      value: "supplier_default",
+                    });
+                    setValue(
+                      "transportDistanceKm",
+                      storedDistanceKm,
+                      SET_VALUE_OPTS,
+                    );
+                    setValue(
+                      "transportDistanceSource",
+                      storedDistanceSource,
+                      SET_VALUE_OPTS,
+                    );
+                    return;
+                  }
+                  const selectedSource =
+                    event.target.value as DistanceSourceValue;
+                  setDistanceSourceChoiceOverride({
+                    supplierId: watchedSupplierId,
+                    value: selectedSource,
+                  });
+                  setValue(
+                    "transportDistanceSource",
+                    selectedSource,
+                    SET_VALUE_OPTS,
+                  );
+                }}
+              />
+            </FormField>
 
             <ActionableFocusTarget
               target="transport-route"
@@ -760,9 +740,7 @@ export function FeedstockForm({
           deferredAttachments={deferredAttachments}
           retryEntityIds={retryEntityIds}
           isSubmitting={isSubmitting}
-          draftDistanceSource={
-            selectedDistanceSource === "document" ? "document" : null
-          }
+          focusTarget={focusTarget}
         />
       </FormSpine>
 

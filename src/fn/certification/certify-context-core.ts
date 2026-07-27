@@ -747,6 +747,7 @@ export async function buildRemovalContext(
       runs,
       lineages,
     }),
+    ...entityReadiness.warnings,
     ...durabilityWarnings,
     ...soilTemperatureGate.warnings,
   ];

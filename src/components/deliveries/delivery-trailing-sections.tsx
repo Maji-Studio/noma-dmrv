@@ -15,16 +15,15 @@ import {
 } from "@/components/transport-legs";
 import type { Delivery } from "@/db/schema";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
-import type { DistanceSourceValue } from "@/schemas/distance-source";
+import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
+import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 
 interface DeliveryEvidenceSectionProps {
   delivery?: Delivery;
   isEditMode: boolean;
   deferredAttachments?: UseDeferredAttachmentsResult;
   isSubmitting?: boolean;
-  distanceSource?: DistanceSourceValue | null;
-  provenanceLoaded?: boolean;
-  draftDistanceSource?: DistanceSourceValue | null;
+  focusTarget?: EntityFocusTarget | null;
   /** Injected by FormSpine — do not set manually. */
   __spine?: SpineMeta;
 }
@@ -34,49 +33,48 @@ export function DeliveryEvidenceSection({
   isEditMode,
   deferredAttachments,
   isSubmitting = false,
-  distanceSource,
-  provenanceLoaded,
-  draftDistanceSource,
+  focusTarget,
   __spine,
 }: DeliveryEvidenceSectionProps) {
-  if (draftDistanceSource !== "document") {
-    return null;
-  }
-
   return (
     <FormSection
       title="Transport evidence"
       icon={<PaperclipIcon size={14} weight="bold" />}
+      certifyRequired={!isEditMode}
       __spine={__spine}
     >
-      {isEditMode && delivery ? (
-        <div className="flex flex-col gap-12">
-          {deferredAttachments && (
-            <FailedDeferredAttachments
-              attachments={deferredAttachments.attachments}
-              onRetry={(key) =>
-                deferredAttachments.retry("delivery", [delivery.id], key)
-              }
-              onRemove={deferredAttachments.remove}
-              disabled={isSubmitting}
+      <ActionableFocusTarget
+        target="transport-evidence"
+        activeTarget={focusTarget}
+        actionLabel="Attach at least one classified transport-evidence file"
+      >
+        {isEditMode && delivery ? (
+          <div className="flex flex-col gap-12">
+            {deferredAttachments && (
+              <FailedDeferredAttachments
+                attachments={deferredAttachments.attachments}
+                onRetry={(key) =>
+                  deferredAttachments.retry("delivery", [delivery.id], key)
+                }
+                onRemove={deferredAttachments.remove}
+                disabled={isSubmitting}
+              />
+            )}
+            <TransportEvidencePanel
+              entityType="delivery"
+              entityId={delivery.id}
+              embedded
             />
-          )}
-          <TransportEvidencePanel
+          </div>
+        ) : (
+          <ClassifiedTransportEvidenceUploader
+            id="delivery-deferred-transport-evidence"
             entityType="delivery"
-            entityId={delivery.id}
-            embedded
-            distanceSource={distanceSource}
-            persisted={provenanceLoaded ?? false}
+            deferredAttachments={deferredAttachments}
+            disabled={isSubmitting}
           />
-        </div>
-      ) : (
-        <ClassifiedTransportEvidenceUploader
-          id="delivery-deferred-transport-evidence"
-          entityType="delivery"
-          deferredAttachments={deferredAttachments}
-          disabled={isSubmitting}
-        />
-      )}
+        )}
+      </ActionableFocusTarget>
     </FormSection>
   );
 }
