@@ -5,6 +5,12 @@
  * text chrome (station labels, mass chips, badges, tooltip) is HTML overlaid
  * at percentage coordinates so it stays crisp at every scale.
  *
+ * Staging is on a fixed six-bay grid (BAY_FIRST_X + n·BAY_PITCH): every station
+ * is centred in its own bay, on one continuous ground plane, over a straight
+ * mass-flow rail. Labels, leader lines, mass chips and flow ribbons all derive
+ * from the same bay centres, so the row keeps an even rhythm and nothing is
+ * hand-nudged out of alignment.
+ *
  * Stations are keyboard-focusable links; the hover/focus tooltip repeats the
  * station's open items and throughput, and the whole station navigates to its
  * list page. All decorative motion is disabled under prefers-reduced-motion
@@ -26,11 +32,26 @@ import type { FlowHeroView } from "./flow-hero-types";
 import "./flow-hero.css";
 
 const VIEW_W = 1160;
-/** The art lives between y≈150 and y≈490 — crop the empty sky above it so the
-    hero has no dead band (the design's registry card that filled it moved to
-    the supporting row). */
-const VIEW_Y0 = 140;
-const VIEW_H = 360;
+/** The art lives between y≈244 (smoke) and y≈482 (attention reasons) — the
+    viewBox is cropped to it so the hero carries no dead sky. */
+const VIEW_Y0 = 235;
+const VIEW_H = 265;
+
+/** Station bay grid — six equal bays, each station centred in its own. */
+const BAY_FIRST_X = 120;
+const BAY_PITCH = 180;
+const BAY_CENTERS = [0, 1, 2, 3, 4, 5].map(
+  (index) => BAY_FIRST_X + index * BAY_PITCH,
+);
+/** Midpoints between consecutive bays — mass chips and ground ticks. */
+const BAY_EDGES = BAY_CENTERS.slice(0, -1).map(
+  (center) => center + BAY_PITCH / 2,
+);
+
+/** The straight mass-flow rail carrying the chips and the flow ribbons. */
+const RAIL_Y = 446;
+const LABEL_Y = 464;
+const REASON_Y = 482;
 
 /** Ribbon stroke width range in flow view (px, min → min+span, scaled by tonnes/max). */
 const RIBBON_MIN_WIDTH = 5;
@@ -54,68 +75,78 @@ interface StationGeometry {
   tip: { x: number; y: number };
 }
 
+/** Badges anchor to the top-right of each station's drawn mass, so the count
+    always reads as belonging to that station and never collides with a
+    neighbour or the running-runs chip. */
 const STATION_GEO: Record<DashboardStationKey, StationGeometry> = {
-  suppliers: { index: "01", color: ZONE.prod, labelX: 100, tip: { x: 128, y: 306 } },
+  suppliers: {
+    index: "01",
+    color: ZONE.prod,
+    labelX: BAY_CENTERS[0]!,
+    tip: { x: 200, y: 352 },
+  },
   feedstock: {
     index: "02",
     color: ZONE.prod,
-    labelX: 320,
-    badge: { x: 392, y: 256 },
-    tip: { x: 420, y: 258 },
+    labelX: BAY_CENTERS[1]!,
+    badge: { x: 358, y: 344 },
+    tip: { x: 360, y: 348 },
   },
   production: {
     index: "03",
     color: ZONE.infra,
-    labelX: 545,
-    badge: { x: 632, y: 230 },
-    tip: { x: 652, y: 226 },
+    labelX: BAY_CENTERS[2]!,
+    badge: { x: 550, y: 318 },
+    tip: { x: 560, y: 334 },
   },
   products: {
     index: "04",
     color: ZONE.prod,
-    labelX: 745,
-    badge: { x: 745, y: 300 },
-    tip: { x: 808, y: 278 },
+    labelX: BAY_CENTERS[3]!,
+    badge: { x: 728, y: 322 },
+    tip: { x: 730, y: 340 },
   },
   deliveries: {
     index: "05",
     color: ZONE.dist,
-    labelX: 878,
-    badge: { x: 872, y: 326 },
-    tip: { x: 948, y: 356 },
+    labelX: BAY_CENTERS[4]!,
+    badge: { x: 881, y: 336 },
+    tip: { x: 885, y: 348 },
   },
   applications: {
     index: "06",
     color: ZONE.dist,
-    labelX: 1045,
-    badge: { x: 1140, y: 318 },
-    tip: { x: 900, y: 296 },
+    labelX: BAY_CENTERS[5]!,
+    badge: { x: 1098, y: 330 },
+    tip: { x: 1104, y: 340 },
   },
 };
 
-const LABEL_Y = 456;
-const REASON_Y = 474;
+/** Running-runs chip — stacked above the production badge, never beside it. */
+const RUNNING_CHIP = { x: 550, y: 292 };
 
-/** Mass-chip anchors between consecutive stations, in flow order. */
-const CHIP_POS = [
-  { x: 210, y: 432 },
-  { x: 432, y: 433 },
-  { x: 645, y: 435 },
-  { x: 822, y: 434 },
-  { x: 990, y: 434 },
-];
+/** Mass-chip anchors — the bay midpoints, sitting on the rail. */
+const CHIP_POS = BAY_EDGES.map((x) => ({ x, y: RAIL_Y }));
 
-/** Flow-view ribbon segments between station anchors on the road line. */
-const RIBBON_PATHS = [
-  { d: "M100,438 L320,434", color: ZONE.prod },
-  { d: "M320,434 L545,437", color: ZONE.prod },
-  { d: "M545,437 L745,435", color: ZONE.prod },
-  { d: "M745,435 L900,436", color: ZONE.dist },
-  { d: "M900,436 L1080,435", color: ZONE.dist },
-];
+/** Flow-view ribbon segments between station anchors on the rail. */
+const RIBBON_PATHS = BAY_CENTERS.slice(0, -1).map((center, index) => ({
+  d: `M${center},${RAIL_Y} L${BAY_CENTERS[index + 1]},${RAIL_Y}`,
+  color: index < 3 ? ZONE.prod : ZONE.dist,
+}));
+
+/** Leader lines dropping each bay centre onto the rail. */
+const LEADER_PATH = BAY_CENTERS.map(
+  (center) => `M${center},410 L${center},438`,
+).join(" ");
+
+/** Ground ticks on the slab's back edge, marking the bay divisions. */
+const GROUND_TICK_PATH = BAY_EDGES.map((x) => `M${x},316 L${x},309`).join(" ");
 
 /** Tooltips anchored past this x flip to the left of the anchor. */
-const TIP_FLIP_X = 860;
+const TIP_FLIP_X = 890;
+/** Tooltip vertical clamp — keeps the card inside the (short) scene box. */
+const TIP_MIN_Y = VIEW_Y0 + 12;
+const TIP_MAX_Y = VIEW_Y0 + 70;
 
 function pctX(x: number): string {
   return `${(x / VIEW_W) * 100}%`;
@@ -239,39 +270,36 @@ export function FlowHeroScene({
         style={ghosted ? { filter: "grayscale(1)", opacity: 0.25 } : undefined}
         focusable="false"
       >
-        {/* Ground — supplier pad, central facility slab, application field ticks. */}
+        {/* Ground — one continuous slab under every station, its isometric
+            tips running off both frame edges so the site reads as continuing
+            past the panel rather than sitting on a floating island. */}
         <path
-          d="M100,304 L196,352 L100,400 L4,352 Z"
+          d="M-30,362 L62,316 L1098,316 L1190,362 L1098,408 L62,408 Z"
           fill="var(--sea)"
           stroke="var(--clr-purple-20)"
           strokeWidth="1"
         />
         <path
-          d="M205,352 L330,290 L760,290 L875,352 L760,414 L330,414 Z"
-          fill="var(--sea)"
-          stroke="var(--clr-purple-20)"
-          strokeWidth="1"
-        />
-        <path
-          d="M380,290 L380,281 M450,290 L450,281 M520,290 L520,281 M660,290 L660,281 M730,290 L730,281 M282,314 L282,305 M244,333 L244,324 M798,314 L798,305 M836,333 L836,324"
+          d={GROUND_TICK_PATH}
           stroke="var(--clr-dark-purple-30)"
           strokeWidth="1"
         />
-        {/* The haul road with its marching dash. */}
+
+        {/* The straight mass-flow rail with its marching dash. */}
         <path
-          d="M40,436 C240,443 420,428 580,438 C740,447 940,430 1130,436"
-          stroke="var(--clr-dark-purple-10)"
-          strokeWidth="14"
+          d={`M30,${RAIL_Y} L1130,${RAIL_Y}`}
+          stroke="var(--clr-dark-purple-5)"
+          strokeWidth="12"
         />
         <path
-          d="M40,436 C240,443 420,428 580,438 C740,447 940,430 1130,436"
+          d={`M30,${RAIL_Y} L1130,${RAIL_Y}`}
           stroke="var(--clr-dark-purple-40)"
           strokeWidth="1.5"
           strokeDasharray="8 12"
           className="fh-road"
         />
         <path
-          d="M100,400 L100,430 M320,414 L320,430 M545,414 L545,432 M745,414 L745,430 M872,395 L872,430 M1045,386 L1045,430"
+          d={LEADER_PATH}
           stroke="var(--clr-dark-purple-30)"
           strokeWidth="1"
           strokeDasharray="2 4"
@@ -300,71 +328,71 @@ export function FlowHeroScene({
             {...stationProps(byKey.get("suppliers")!)}
             style={stationStyle(byKey.get("suppliers")!)}
           >
-            <use href="#fh-heap" transform="translate(94,342)" />
-            <use href="#fh-heap" transform="translate(142,350) scale(0.75)" />
-            <use href="#fh-truck" transform="translate(24,384)" />
+            <use href="#fh-heap" transform="translate(43,370) scale(1.1)" />
+            <use href="#fh-heap" transform="translate(87,380) scale(0.8)" />
+            <use href="#fh-truck" transform="translate(129,400)" />
           </g>
         )}
 
-        {/* 02 Feedstock — the bin rank up the slab. */}
+        {/* 02 Feedstock — a bin cluster, two front and one set back. */}
         {byKey.get("feedstock") && (
           <g
             {...stationProps(byKey.get("feedstock")!)}
             style={stationStyle(byKey.get("feedstock")!)}
           >
-            <use href="#fh-bin" transform="translate(280,352)" />
-            <use href="#fh-bin" transform="translate(322,331)" />
-            <use href="#fh-bin" transform="translate(364,310)" />
+            <use href="#fh-bin" transform="translate(300,380) scale(1.15)" />
+            <use href="#fh-bin" transform="translate(262,398) scale(1.15)" />
+            <use href="#fh-bin" transform="translate(338,398) scale(1.15)" />
           </g>
         )}
 
-        {/* 03 Production — drum kiln, feed hopper, chimney, chute + char pile. */}
+        {/* 03 Production — hall, feed conveyor, chimney, discharge chute. */}
         {byKey.get("production") && (
           <g
             {...stationProps(byKey.get("production")!)}
             style={stationStyle(byKey.get("production")!)}
           >
             {/* Infeed conveyor climbing into the hall's left wall. */}
-            <path d="M468,352 L516,324 M472,356 L520,328" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M404,376 L426,364 M407,381 L429,369" stroke="currentColor" strokeWidth="1.5" />
             <path
-              d="M490,346 L490,358 M508,336 L508,350"
+              d="M413,371 L413,380 M421,366 L421,375"
               stroke="currentColor"
               strokeWidth="1"
               strokeOpacity=".5"
             />
             {/* The hall — lit right face, shaded left face, flat roof. */}
             <path
-              d="M540,372 L640,322 L640,280 L540,330 Z"
+              d="M454,400 L540,357 L540,320 L454,363 Z"
               fill="currentColor"
               fillOpacity=".06"
               stroke="currentColor"
               strokeWidth="1.5"
             />
             <path
-              d="M540,372 L504,354 L504,312 L540,330 Z"
+              d="M454,400 L422,384 L422,347 L454,363 Z"
               fill="currentColor"
               fillOpacity=".13"
               stroke="currentColor"
               strokeWidth="1.5"
             />
-            <path d="M540,330 L640,280 L604,262 L504,312 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M454,363 L540,320 L508,304 L422,347 Z" fill="none" stroke="currentColor" strokeWidth="1.5" />
             {/* Roller door with slats, vent strip under the roofline, skylight. */}
             <path
-              d="M560,362 L596,344 L596,320 L560,338 Z"
+              d="M470,392 L502,376 L502,355 L470,371 Z"
               fill="currentColor"
               fillOpacity=".08"
               stroke="currentColor"
               strokeWidth="1.2"
             />
             <path
-              d="M560,354 L596,336 M560,346 L596,328"
+              d="M470,384 L502,368 M470,377 L502,361"
               stroke="currentColor"
               strokeWidth="1"
               strokeOpacity=".3"
             />
-            <path d="M546,333 L634,289" stroke="currentColor" strokeWidth="1" strokeOpacity=".35" />
+            <path d="M460,365 L534,328" stroke="currentColor" strokeWidth="1" strokeOpacity=".35" />
             <path
-              d="M560,310 L580,300 L568,294 L548,304 Z"
+              d="M470,342 L488,333 L477,328 L459,337 Z"
               fill="none"
               stroke="currentColor"
               strokeWidth="1"
@@ -372,52 +400,43 @@ export function FlowHeroScene({
             />
             {/* Chimney — body masks the roof edge behind it. */}
             <path
-              d="M587,216 L587,287 A7,3.5 0 0 0 601,287 L601,216"
+              d="M481,278 L481,313 A8,4 0 0 0 497,313 L497,278"
               fill={SCENE_BG}
               stroke="currentColor"
               strokeWidth="1.5"
             />
             <ellipse
-              cx="594"
-              cy="216"
-              rx="7"
-              ry="3.5"
+              cx="489"
+              cy="278"
+              rx="8"
+              ry="4"
               fill="currentColor"
               fillOpacity=".08"
               stroke="currentColor"
               strokeWidth="1.5"
             />
-            {/* Char discharge chute + fresh pile (product-zone tint). */}
-            <path d="M628,326 L646,338 M621,330 L639,342" stroke="currentColor" strokeWidth="1.5" />
-            <g color={ZONE.prod}>
-              <path
-                d="M642,352 L652,338 L664,344 L670,352 Z"
-                fill="currentColor"
-                fillOpacity=".3"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              />
-            </g>
+            {/* Char discharge chute. */}
+            <path d="M538,354 L556,365 M533,358 L551,369" stroke="currentColor" strokeWidth="1.5" />
             {showSmoke && (
               <g fill="var(--clr-dark-purple-30)">
-                <circle cx="594" cy="206" r="4.5" className="fh-smoke" />
-                <circle cx="597" cy="204" r="6" className="fh-smoke" style={{ animationDelay: "-1.6s" }} />
-                <circle cx="591" cy="205" r="7.5" className="fh-smoke" style={{ animationDelay: "-3.2s" }} />
+                <circle cx="489" cy="268" r="4" className="fh-smoke" />
+                <circle cx="492" cy="260" r="5.5" className="fh-smoke" style={{ animationDelay: "-1.6s" }} />
+                <circle cx="486" cy="251" r="7" className="fh-smoke" style={{ animationDelay: "-3.2s" }} />
               </g>
             )}
           </g>
         )}
 
-        {/* 04 Biochar — the big-bag yard. */}
+        {/* 04 Biochar — the big-bag yard, stacked on an isometric diamond. */}
         {byKey.get("products") && (
           <g
             {...stationProps(byKey.get("products")!)}
             style={stationStyle(byKey.get("products")!)}
           >
-            <use href="#fh-bag" transform="translate(730,328)" />
-            <use href="#fh-bag" transform="translate(768,347)" />
-            <use href="#fh-bag" transform="translate(688,349)" />
-            <use href="#fh-bag" transform="translate(726,368)" />
+            <use href="#fh-bag" transform="translate(660,354) scale(1.1)" />
+            <use href="#fh-bag" transform="translate(614,377) scale(1.1)" />
+            <use href="#fh-bag" transform="translate(706,377) scale(1.1)" />
+            <use href="#fh-bag" transform="translate(660,400) scale(1.1)" />
           </g>
         )}
 
@@ -427,7 +446,7 @@ export function FlowHeroScene({
             {...stationProps(byKey.get("deliveries")!)}
             style={stationStyle(byKey.get("deliveries")!)}
           >
-            <use href="#fh-truck" transform="translate(845,392)" />
+            <use href="#fh-truck" transform="translate(815,400)" />
           </g>
         )}
 
@@ -438,47 +457,47 @@ export function FlowHeroScene({
             style={stationStyle(byKey.get("applications")!)}
           >
             <path
-              d="M1045,280 L1155,333 L1045,386 L935,333 Z"
+              d="M1020,318 L1100,358 L1020,398 L940,358 Z"
               fill="var(--sea)"
               stroke="var(--clr-purple-20)"
               strokeWidth="1"
             />
+            <path d="M956,366 L1036,326 L1052,334 L972,374 Z" fill="var(--clr-dark-purple-10)" />
+            <path d="M988,382 L1068,342 L1084,350 L1004,390 Z" fill="var(--clr-dark-purple-10)" />
             <path
-              d="M957,344 L1067,291 M979,354 L1089,301 M1001,365 L1111,312 M1023,375 L1133,322"
+              d="M956,366 L1036,326 M972,374 L1052,334 M988,382 L1068,342 M1004,390 L1084,350"
               stroke="currentColor"
               strokeWidth="1"
               strokeOpacity=".35"
             />
-            <path d="M957,344 L1067,291 L1089,301 L979,354 Z" fill="var(--clr-dark-purple-20)" />
-            <path d="M1001,365 L1111,312 L1133,322 L1023,375 Z" fill="var(--clr-dark-purple-20)" />
             <path
-              d="M1045,378 L1155,325 M1045,382 L1155,329 M1045,378 L935,325 M1045,382 L935,329"
+              d="M1020,390 L1100,350 M1020,394 L1100,354 M1020,390 L940,350 M1020,394 L940,354"
               stroke="currentColor"
               strokeWidth="1"
               strokeOpacity=".5"
             />
             <path
-              d="M1045,386 L1045,377 M1073,373 L1073,364 M1100,360 L1100,351 M1128,346 L1128,337 M1155,333 L1155,324 M1017,373 L1017,364 M990,360 L990,351 M962,346 L962,337 M935,333 L935,324"
+              d="M1020,398 L1020,389 M1040,388 L1040,379 M1060,378 L1060,369 M1080,368 L1080,359 M1100,358 L1100,349 M1000,388 L1000,379 M980,378 L980,369 M960,368 L960,359 M940,358 L940,349"
               stroke="currentColor"
               strokeWidth="1.2"
               strokeOpacity=".6"
             />
-            <path d="M1080,290 L1080,279 M1120,308 L1120,297" stroke="currentColor" strokeWidth="1.5" />
-            <circle cx="1080" cy="271" r="10" fill="currentColor" fillOpacity=".1" stroke="currentColor" strokeWidth="1.5" />
-            <circle cx="1089" cy="275" r="6" fill="currentColor" fillOpacity=".1" stroke="currentColor" strokeWidth="1.5" />
-            <circle cx="1120" cy="289" r="11" fill="currentColor" fillOpacity=".1" stroke="currentColor" strokeWidth="1.5" />
-            <circle cx="1110" cy="293" r="6" fill="currentColor" fillOpacity=".1" stroke="currentColor" strokeWidth="1.5" />
             <path
-              d="M971,325 L974,318 L977,325 M998,312 L1001,305 L1004,312 M1028,297 L1031,290 L1034,297 M1015,346 L1018,339 L1021,346 M1042,333 L1045,326 L1048,333 M1069,320 L1072,313 L1075,320"
+              d="M997,378 L1000,370 L1003,378 M1019,390 L1022,382 L1025,390 M1037,378 L1040,370 L1043,378 M1007,356 L1010,348 L1013,356 M1075,366 L1078,358 L1081,366 M959,366 L962,358 L965,366"
               stroke="currentColor"
               strokeWidth="1"
               strokeOpacity=".55"
             />
+            <path d="M982,350 L982,339 M1062,352 L1062,341" stroke="currentColor" strokeWidth="1.5" />
+            <circle cx="982" cy="332" r="11" fill="currentColor" fillOpacity=".1" stroke="currentColor" strokeWidth="1.5" />
+            <circle cx="992" cy="336" r="6.5" fill="currentColor" fillOpacity=".1" stroke="currentColor" strokeWidth="1.5" />
+            <circle cx="1062" cy="334" r="11" fill="currentColor" fillOpacity=".1" stroke="currentColor" strokeWidth="1.5" />
+            <circle cx="1052" cy="338" r="6.5" fill="currentColor" fillOpacity=".1" stroke="currentColor" strokeWidth="1.5" />
           </g>
         )}
       </svg>
 
-      {/* Station labels along the road. */}
+      {/* Station labels along the rail. */}
       {stations.map((station) => {
         const geo = STATION_GEO[station.key];
         return (
@@ -574,13 +593,13 @@ export function FlowHeroScene({
             );
           })}
 
-      {/* Running-runs chip under the production badge (overview only). */}
+      {/* Running-runs chip, stacked above the production badge (overview only). */}
       {interactive && view === "overview" && runningRuns > 0 && (
         <div
-          className="pointer-events-none absolute -translate-x-1/2 whitespace-nowrap rounded-full px-8 py-4 font-[family-name:var(--font-mono)] text-[9px] font-medium uppercase leading-none tracking-[0.08em] text-white"
+          className="pointer-events-none absolute -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full px-8 py-4 font-[family-name:var(--font-mono)] text-[9px] font-medium uppercase leading-none tracking-[0.08em] text-white"
           style={{
-            left: pctX(632),
-            top: pctY(238),
+            left: pctX(RUNNING_CHIP.x),
+            top: pctY(RUNNING_CHIP.y),
             background: STATUS_STATE_COLOR_TOKENS["in-progress"],
           }}
           aria-hidden
@@ -596,7 +615,7 @@ export function FlowHeroScene({
           style={{
             left: pctX(hoveredGeo.tip.x),
             top: pctY(
-              Math.max(VIEW_Y0 + 12, Math.min(hoveredGeo.tip.y - 30, VIEW_Y0 + 200)),
+              Math.max(TIP_MIN_Y, Math.min(hoveredGeo.tip.y - 30, TIP_MAX_Y)),
             ),
             transform: hoveredGeo.tip.x > TIP_FLIP_X ? "translateX(-100%)" : undefined,
             boxShadow: "6px 6px 0 var(--clr-purple-10)",
