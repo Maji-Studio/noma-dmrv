@@ -76,6 +76,76 @@ beforeEach(() => {
 });
 
 describe("performRegistryCreate", () => {
+  it("reports confirmed external mutation for fresh create and reconciliation", async () => {
+    const freshMutation = vi.fn();
+    await performRegistryCreate(makeArgs({ onExternalMutation: freshMutation }));
+    expect(freshMutation).toHaveBeenCalledExactlyOnceWith("confirmed");
+
+    const reconciledMutation = vi.fn();
+    await performRegistryCreate(
+      makeArgs({
+        resumed: true,
+        reconcile: vi.fn(
+          async (): Promise<ReconcileLookup> => ({
+            found: "single",
+            externalId: ORPHAN_ID,
+          }),
+        ),
+        onExternalMutation: reconciledMutation,
+      }),
+    );
+    expect(reconciledMutation).toHaveBeenCalledExactlyOnceWith("confirmed");
+  });
+
+  it("reports possible external mutation after an ambiguous lost response", async () => {
+    const onExternalMutation = vi.fn();
+    await expect(
+      performRegistryCreate(
+        makeArgs({
+          create: vi.fn(async () => {
+            throw new IsometricApiError(
+              "network dropped",
+              undefined,
+              undefined,
+              "network",
+            );
+          }),
+          onExternalMutation,
+        }),
+      ),
+    ).rejects.toThrow(/Removal POST failed/i);
+
+    expect(onExternalMutation).toHaveBeenCalledExactlyOnceWith("possible");
+  });
+
+  it("runs confirmed persistence before the success audit and never retries create when persistence fails", async () => {
+    const onConfirmed = vi.fn(async () => undefined);
+    const successArgs = makeArgs({ onConfirmed });
+
+    await performRegistryCreate(successArgs);
+
+    expect(successArgs.create).toHaveBeenCalledBefore(onConfirmed);
+    expect(onConfirmed).toHaveBeenCalledBefore(
+      vi.mocked(ledger.appendSyncEvent),
+    );
+    expect(onConfirmed).toHaveBeenCalledExactlyOnceWith(EXTERNAL_ID);
+
+    vi.clearAllMocks();
+    vi.mocked(ledger.appendSyncEvent).mockResolvedValue(undefined as never);
+    const persistenceError = new Error("local ledger unavailable");
+    const failingPersistence = vi.fn(async () => {
+      throw persistenceError;
+    });
+    const failingArgs = makeArgs({ onConfirmed: failingPersistence });
+
+    await expect(performRegistryCreate(failingArgs)).rejects.toBe(
+      persistenceError,
+    );
+    expect(failingArgs.create).toHaveBeenCalledTimes(1);
+    expect(failingArgs.reconcile).not.toHaveBeenCalled();
+    expect(ledger.appendSyncEvent).not.toHaveBeenCalled();
+  });
+
   it("POSTs on a fresh attempt and records a succeeded event with the supplier ref", async () => {
     const args = makeArgs({ supplierRefId: "nm-x" });
 

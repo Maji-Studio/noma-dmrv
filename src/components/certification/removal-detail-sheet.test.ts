@@ -28,4 +28,17 @@ describe("RemovalDetailSheet sync history contract", () => {
       "Advisory — {advisory}. Submission remains available.",
     );
   });
+
+  it("keeps a failed-enrichment row inspectable with retry and Source repair routes", () => {
+    const source = readFileSync(
+      new URL("./removal-detail-sheet.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toContain("Readiness unavailable for this Removal.");
+    expect(source).toContain("Retry readiness");
+    expect(source).toContain(
+      "<SourcesPanel removalId={summary.removalId} />",
+    );
+  });
 });

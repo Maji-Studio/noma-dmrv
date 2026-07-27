@@ -17,7 +17,6 @@ import { CheckCircleIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, buttonVariants } from "@/components/ui";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
-import type { RemovalPreflightSummary } from "@/fn/certification";
 import { deriveRemovalStatus } from "@/lib/certification/status";
 import { formatDateRange } from "@/lib/format-utils";
 import { EnvBanner } from "./env-banner";
@@ -27,9 +26,10 @@ import { SourcesPanel } from "./sources-panel";
 import { SubmissionNotes } from "./submission-notes";
 import { buildSubmissionWarningNotes } from "./submission-warning-notes";
 import { SyncEventLog } from "./sync-event-log";
+import type { RemovalListRow } from "./removal-list-state";
 
 interface RemovalDetailSheetProps {
-  summary: RemovalPreflightSummary;
+  summary: RemovalListRow;
   isProduction: boolean;
   facilityId: string;
   open: boolean;
@@ -47,7 +47,23 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function ReadinessBlock({ summary }: { summary: RemovalPreflightSummary }) {
+function ReadinessBlock({ summary }: { summary: RemovalListRow }) {
+  if (summary.enrichmentStatus === "unavailable" || !summary.readiness) {
+    return (
+      <div className="flex flex-col items-start gap-8 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
+        <p className="body-small text-[var(--color-text-primary)]">
+          Readiness unavailable for this Removal.
+        </p>
+        <Button
+          variant="default"
+          size="small"
+          onClick={() => void summary.retry?.()}
+        >
+          Retry readiness
+        </Button>
+      </div>
+    );
+  }
   const { state, reasons, advisories } = summary.readiness;
   if (state === "ready") {
     return (
@@ -174,7 +190,7 @@ export function RemovalDetailSheet({
     local: summary.local,
     lockInFlight: summary.lockInFlight,
   });
-  const { state } = summary.readiness;
+  const state = summary.readiness?.state ?? null;
   const submissionWarningNotes = buildSubmissionWarningNotes(
     summary.submissionWarnings,
   );
@@ -183,7 +199,9 @@ export function RemovalDetailSheet({
   // removal is done, and an `inProgress` one is mid-flight — neither offers an
   // action, so the sheet stays read-only (the server would refuse a resubmit
   // anyway; this just stops offering a dead-end control).
-  const isActionable = state === "ready" || state === "blocked";
+  const isActionable =
+    summary.enrichmentStatus === "available" &&
+    (state === "ready" || state === "blocked");
 
   // "Review & submit" resumes the New-Removal wizard directly on this removal.
   // The legacy `/removals/[id]/review` route only redirects here (dropping any

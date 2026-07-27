@@ -6,7 +6,7 @@ import {
 } from "@/data-access/certification";
 import { hasCertifierCredentials } from "@/data-access/certifier-credentials";
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
-import { loadCreditBatchAccounting } from "@/data-access/credit-batch-accounting";
+import { loadCreditBatchRollups } from "@/data-access/credit-batch-accounting";
 import {
   getCreditBatchById,
   getCreditBatchRemovalId,
@@ -59,7 +59,7 @@ vi.mock("@/data-access/chain-of-custody", async () => {
 });
 
 vi.mock("@/data-access/credit-batch-accounting", () => ({
-  loadCreditBatchAccounting: vi.fn(),
+  loadCreditBatchRollups: vi.fn(),
 }));
 
 vi.mock("@/data-access/production-runs", () => ({
@@ -96,7 +96,7 @@ const mockedGetApplicationsForRuns = vi.mocked(getApplicationsForRuns);
 const mockedGetMapping = vi.mocked(getCertifierProjectByFacility);
 const mockedHasCredentials = vi.mocked(hasCertifierCredentials);
 const mockedGetLineage = vi.mocked(getChainOfCustodyData);
-const mockedLoadAccounting = vi.mocked(loadCreditBatchAccounting);
+const mockedLoadAccounting = vi.mocked(loadCreditBatchRollups);
 const mockedGetRuns = vi.mocked(getProductionRunsWithSamples);
 const mockedGetBatchesWithSamples = vi.mocked(getCreditBatchesWithSamples);
 const mockedListDocuments = vi.mocked(listDocumentsForEntityIds);
@@ -152,7 +152,6 @@ function mockNormalizedLineageFacts(): void {
             },
             lineageFacts,
             appliedWeightTons: lineageFacts.appliedWeightTons,
-            co2ePreview: {},
           },
         ] as const;
       }),

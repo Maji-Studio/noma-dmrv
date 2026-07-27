@@ -9,11 +9,82 @@ import type { RemovalSubmissionContext } from "./certify-context-core";
 import { payloadHash } from "@/lib/isometric";
 import {
   buildRemovalSubmissionBuild,
+  compileRemovalSubmission,
   normalizeSequestrationTemplateForHash,
+  removalTemplateTierCompatibilityBlocker,
 } from "./removal-submission-build";
 import * as sources from "./sources";
 
 describe("buildRemovalSubmissionBuild", () => {
+  it("keeps template-tier compatibility as an independent compile blocker", () => {
+    const blocker = removalTemplateTierCompatibilityBlocker(
+      {
+        batchesWithSamples: [{ durabilityOption: "200_year" }],
+      } as RemovalSubmissionContext,
+      {
+        groups: [
+          {
+            components: [
+              { blueprint_key: "biochar_sequestration_1000_year" },
+            ],
+          },
+        ],
+      } as never,
+    );
+
+    expect(blocker).toMatch(/200-year durability tier/i);
+    expect(blocker).toMatch(/biochar_sequestration_1000_year/);
+  });
+
+  it("returns compile blockers instead of constructing transport for missing readiness", async () => {
+    const compiled = await compileRemovalSubmission({
+      orgCtx: {} as never,
+      removalId: "rem-test-missing-readiness",
+      ctx: {} as RemovalSubmissionContext,
+      defaultTemplate: {
+        id: "rvt-test",
+        display_name: "Test template",
+      } as never,
+      blueprintsByKey: new Map(),
+      externalProjectId: "prj-test",
+      allowPeriodInputStub: false,
+      hasDurabilityComponents: false,
+    });
+
+    expect(compiled.blockers).toEqual([
+      expect.stringMatching(/readiness was not evaluated/i),
+    ]);
+    expect(compiled.transportPlan).toBeNull();
+    expect(compiled.snapshot).toBeNull();
+  });
+
+  it("fails closed when a Removal template has no sequestration component", async () => {
+    const compiled = await compileRemovalSubmission({
+      orgCtx: {} as never,
+      removalId: "rem-test-no-sequestration",
+      ctx: {
+        entityReadinessGaps: [],
+        submissionWarnings: [],
+      } as unknown as RemovalSubmissionContext,
+      defaultTemplate: {
+        id: "rvt-test",
+        display_name: "Emissions-only template",
+        groups: [],
+      } as never,
+      blueprintsByKey: new Map(),
+      externalProjectId: "prj-test",
+      allowPeriodInputStub: false,
+      hasDurabilityComponents: false,
+      sourceIds: ["src-test"],
+      candidateDocumentIds: ["doc-test"],
+    });
+
+    expect(compiled.transportPlan).toBeNull();
+    expect(compiled.blockers.join("\n")).toMatch(
+      /no supported biochar sequestration component/i,
+    );
+  });
+
   it("fingerprints live sequestration component and input structure deterministically", () => {
     const templateShape = {
       groups: [

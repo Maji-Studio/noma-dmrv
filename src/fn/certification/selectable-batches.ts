@@ -24,9 +24,6 @@ export interface SelectableBatch extends UngroupedCreditBatchRow {
   health: BatchHealth;
   // Derived on read (issue #285): Σ member applications' biocharAppliedTons.
   appliedWeightTons: number;
-  // Derived on read (issue #285): the same CO₂e stored preview figure the
-  // credit-batch detail page shows; null while preview inputs are incomplete.
-  co2eStoredTonnes: number | null;
 }
 
 export interface SelectableBatchesData {
@@ -71,7 +68,6 @@ export async function buildSelectableBatchesData(
       ...row,
       health: deriveBatchHealth(toBatchHealthFacts(context, row.id)),
       appliedWeightTons: accounting?.appliedWeightTons ?? 0,
-      co2eStoredTonnes: accounting?.co2ePreview.co2eStoredTonnes ?? null,
     };
   });
   const facilitySetupGaps = deriveFacilitySetupGaps(facilityFacts);

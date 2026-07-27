@@ -21,7 +21,10 @@ import { ServerError } from "@/components/forms";
 import { Button, buttonVariants } from "@/components/ui";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useToast } from "@/components/ui/toast";
-import { useSubmitRemoval } from "@/hooks/use-certification";
+import {
+  useRemovalCompilation,
+  useSubmitRemoval,
+} from "@/hooks/use-certification";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import {
   buildRemovalRequirementsChecklist,
@@ -33,6 +36,7 @@ import { EnvBanner } from "../env-banner";
 import { SubmitConfirmDialog } from "../submit-confirm-dialog";
 import { SubmissionChecks } from "./submission-checks";
 import { SubmissionOverview } from "./submission-overview";
+import { CompiledSubmissionReview } from "./compiled-submission-review";
 
 const REJECTED_IN_ISOMETRIC_MSG =
   "This removal was rejected in Isometric. Resolve the registry record before retrying from noma.";
@@ -51,6 +55,7 @@ export function SubmitStep({
   onDone,
 }: SubmitStepProps) {
   const submitMutation = useSubmitRemoval();
+  const compilationQuery = useRemovalCompilation(facilityId, removalId);
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -62,16 +67,31 @@ export function SubmitStep({
   const facts = toRemovalReadinessFacts(ctx);
   const checklist = buildRemovalRequirementsChecklist(facts);
   const readiness = deriveRemovalReadiness(facts);
-  const requirementsMet = readiness.state === "ready";
+  const compilationReady =
+    compilationQuery.data?.blockers.length === 0 &&
+    compilationQuery.data.snapshot !== null &&
+    compilationQuery.data.compilationHash !== null;
+  const requirementsMet =
+    readiness.state === "ready" && compilationReady === true;
 
   const fireSubmit = (confirmProduction = false) => {
     if (rejectedWithExternal) {
       setSubmitError(REJECTED_IN_ISOMETRIC_MSG);
       return;
     }
+    if (!compilationReady) {
+      setSubmitError(
+        "Compile the submission successfully and resolve every compiler blocker before submitting.",
+      );
+      return;
+    }
     setSubmitError(null);
     submitMutation.mutate(
-      { removalId, confirmProduction },
+      {
+        removalId,
+        confirmProduction,
+        compilationHash: compilationQuery.data?.compilationHash ?? "",
+      },
       {
         onSuccess: (result) => {
           setSubmitError(null);
@@ -168,6 +188,15 @@ export function SubmitStep({
       <SubmissionOverview
         memberBatches={ctx.memberBatches}
         facilityId={facilityId}
+      />
+
+      <CompiledSubmissionReview
+        compilation={compilationQuery.data ?? null}
+        isLoading={compilationQuery.isLoading}
+        error={compilationQuery.error}
+        onRetry={() => {
+          void compilationQuery.refetch();
+        }}
       />
 
       <SubmissionChecks checks={checklist} facilityId={facilityId} />

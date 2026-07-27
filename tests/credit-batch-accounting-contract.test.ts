@@ -33,7 +33,7 @@ describe("credit-batch accounting read contract", () => {
     );
     expect(detail).toContain("loadCreditBatchRollups(ctx, [id])");
     expect(certification).toMatch(
-      /export async function buildCreditBatchContexts[\s\S]*?loadCreditBatchAccounting\(/,
+      /export async function buildCreditBatchContexts[\s\S]*?loadCreditBatchRollups\(/,
     );
     expect(certification).toContain(
       "loadCreditBatchRollups(orgCtx, batchIds)",

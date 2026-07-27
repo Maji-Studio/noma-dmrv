@@ -7,6 +7,19 @@ import {
   invalidateCertificationReadiness,
 } from "./use-certification";
 
+describe("certificationKeys", () => {
+  it("keys removal enrichment by selected facility and removal id", () => {
+    expect(
+      certificationKeys.removalPreflight("facility-1", "removal-1"),
+    ).toEqual([
+      "certification",
+      "removal-preflight",
+      "facility-1",
+      "removal-1",
+    ]);
+  });
+});
+
 describe("getRemovalCertifyRefetchInterval", () => {
   it("polls only for a locked submission or future measurement blocker", () => {
     expect(getRemovalCertifyRefetchInterval(undefined)).toBe(false);

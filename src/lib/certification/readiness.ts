@@ -66,6 +66,8 @@ export interface RemovalReadinessFacts {
   supportingDocumentCount?: number;
   /** Supporting documents with an existing Isometric Source mirror. */
   mirroredDocumentCount?: number;
+  /** Existing Removal submissions require a complete, non-empty Source set. */
+  sourceBindingRequired?: boolean;
   /**
    * Fail-closed durability sampling/eligibility blockers (decision D3) — the
    * exact list the submit pipeline hard-blocks on. Empty ⇒ sampling &
@@ -194,11 +196,22 @@ function evidenceMirrorDetail(
 }
 
 function evidenceAdvisories(facts: RemovalReadinessFacts): string[] {
+  if (facts.sourceBindingRequired) return [];
   const detail = evidenceMirrorDetail(facts);
   if (!detail) return [];
   return (facts.mirroredDocumentCount ?? 0) < (facts.supportingDocumentCount ?? 0)
     ? [detail]
     : [];
+}
+
+function sourceBindingGap(facts: RemovalReadinessFacts): string | null {
+  if (!facts.sourceBindingRequired) return null;
+  const total = facts.supportingDocumentCount ?? 0;
+  if (total === 0) return "No validated Isometric Source is available";
+  const mirrored = Math.min(facts.mirroredDocumentCount ?? 0, total);
+  return mirrored < total
+    ? `${mirrored} of ${total} supporting documents mirrored`
+    : null;
 }
 
 /**
@@ -270,6 +283,8 @@ export function deriveRemovalReadiness(
   // pipeline throws on (D3). Surfacing it here means a removal can't read
   // "ready" then bounce at submit on an unsampled run or out-of-spec chemistry.
   reasons.push(...durabilityBlockerReasons(facts.durabilityGateBlockers ?? []));
+  const sourceGap = sourceBindingGap(facts);
+  if (sourceGap) reasons.push(sourceGap);
 
   return reasons.length > 0
     ? { state: "blocked", reasons, advisories }
@@ -336,6 +351,15 @@ function withPreflightMeta(check: PreflightCheckBase): PreflightCheck {
 }
 
 function evidencePreflightCheck(facts: RemovalReadinessFacts) {
+  const sourceGap = sourceBindingGap(facts);
+  if (sourceGap) {
+    return {
+      key: "evidence" as const,
+      label: EVIDENCE_LABEL,
+      status: "unmet" as const,
+      detail: sourceGap,
+    };
+  }
   const detail = evidenceMirrorDetail(facts);
   if (!detail) return null;
   const status: PreflightCheckStatus =
