@@ -310,6 +310,17 @@ function CandidateRow({
             />
             No managed file bytes
           </span>
+        ) : rowState === "pending" ? (
+          <span
+            className="body-caption text-[var(--color-text-tertiary)]"
+            role="status"
+          >
+            Pending
+          </span>
+        ) : rowState === "failure" ? (
+          <span className="body-caption text-[var(--clr-red)]" role="status">
+            Mirror failed
+          </span>
         ) : (
           <span
             className="body-caption text-[var(--color-text-tertiary)]"

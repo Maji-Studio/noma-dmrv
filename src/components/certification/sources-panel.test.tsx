@@ -244,4 +244,26 @@ describe("SourcesPanel supporting document affordances", () => {
     expect(html).not.toContain(">Mirror<");
     expect(html).not.toContain("Unlink locally");
   });
+
+  it("preserves pending mirror status for submitted removals", () => {
+    rowMutationState.isPending = true;
+
+    const html = renderToStaticMarkup(
+      <SourcesPanel removalId="removal-id" isEditable={false} />,
+    );
+
+    expect(html).toContain("Pending");
+    expect(html).not.toContain(">Mirror<");
+  });
+
+  it("preserves failed mirror status for submitted removals", () => {
+    rowMutationState.isError = true;
+
+    const html = renderToStaticMarkup(
+      <SourcesPanel removalId="removal-id" isEditable={false} />,
+    );
+
+    expect(html).toContain("Mirror failed");
+    expect(html).not.toContain(">Retry<");
+  });
 });

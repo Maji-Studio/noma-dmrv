@@ -176,8 +176,9 @@
   --z-layer-sheet: 50;
   --z-layer-dialog-backdrop: 60;
   --z-layer-dialog: 70;
-  --z-layer-popover: 80;
-  --z-layer-toast: 90;
+  --z-layer-toast: 80;
+  /* Active menus/tooltips must remain operable when a toast overlaps them. */
+  --z-layer-popover: 90;
 
   /* ===== GRAYSCALE PALETTE ===== */
   --color-gray-50: #fafafaff;
