@@ -46,6 +46,20 @@ function makeBatch(
   } as CreditBatchWithRelations;
 }
 
+function makePreview(
+  co2eStoredTonnes: number | null,
+  missingInputs: string[],
+): NonNullable<CreditBatchWithRelations["co2eStoredPreview"]> {
+  return {
+    provider: null,
+    co2eStoredTonnes,
+    moduleVersion: null,
+    applicationResults: [],
+    missingInputs,
+    warnings: [],
+  };
+}
+
 function co2eStoredMarkup(
   options: Parameters<typeof creditBatchSheetSections>[0],
 ): string {
@@ -87,10 +101,7 @@ describe("credit batch CO₂e stored", () => {
     const markup = co2eStoredMarkup({
       ...baseOptions,
       creditBatch: makeBatch({
-        co2eStoredPreview: {
-          co2eStoredTonnes: null,
-          missingInputs: ["organicCarbonPercent"],
-        } as CreditBatchWithRelations["co2eStoredPreview"],
+        co2eStoredPreview: makePreview(null, ["organicCarbonPercent"]),
       }),
     });
 
@@ -105,10 +116,7 @@ describe("credit batch CO₂e stored", () => {
       co2eStoredMarkup({
         ...baseOptions,
         creditBatch: makeBatch({
-          co2eStoredPreview: {
-            co2eStoredTonnes: 12.5,
-            missingInputs: [],
-          } as CreditBatchWithRelations["co2eStoredPreview"],
+          co2eStoredPreview: makePreview(12.5, []),
         }),
         isCo2ePreviewLoading: true,
       }),
