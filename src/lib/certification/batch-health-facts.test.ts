@@ -11,13 +11,6 @@ describe("toBatchHealthFacts", () => {
         {
           id: "batch-1",
           code: "CB-1",
-          co2eStoredPreview: {
-            missingInputs: [
-              "applicationIds",
-              STORED_CO2E_PREVIEW_REVERIFICATION_GAP,
-              "thousandYearReplicates",
-            ],
-          },
           durabilityGateBlockers: [
             "Credit batch CB-1 has 0 replicate(s) with complete H/C_org + O/C_org chemistry; ≥ 3 required per sampled batch (§8.3.1).",
           ],
@@ -51,16 +44,10 @@ describe("toBatchHealthFacts", () => {
     expect(health.issueCount).toBe(3);
     expect(
       health.checks.find((check) => check.key === "carbon")?.detail,
-    ).toContain("At least 3 usable 1000-year lab samples");
-    expect(
-      health.checks.find((check) => check.key === "carbon")?.detail,
-    ).not.toContain("complete H/C_org + O/C_org chemistry");
+    ).toContain("complete H/C_org + O/C_org chemistry");
     expect(
       health.checks.find((check) => check.key === "carbon")?.detail,
     ).not.toContain("reference soil temperature");
-    expect(
-      health.checks.find((check) => check.key === "carbon")?.detail,
-    ).not.toContain(STORED_CO2E_PREVIEW_REVERIFICATION_GAP);
     expect(
       health.checks.find((check) => check.key === "facilityEmissions"),
     ).toMatchObject({

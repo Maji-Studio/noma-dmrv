@@ -93,7 +93,11 @@ function WizardBody({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const selectable = useSelectableBatches(facilityId, step === "select");
-  const ctxQuery = useRemovalCertifyContext(removalId ?? "", !!removalId);
+  const ctxQuery = useRemovalCertifyContext(
+    facilityId,
+    removalId ?? "",
+    !!removalId,
+  );
   const createMutation = useCreateRemovalWithBatches();
   const toast = useToast();
 

@@ -76,9 +76,7 @@ export async function assertProductionClaimGateFresh(
   removalId: string,
   expected: readonly MemberBatchLineage[],
 ): Promise<void> {
-  const scope = await resolveScopeForRemoval(orgCtx, removalId, {
-    skipPreview: true,
-  });
+  const scope = await resolveScopeForRemoval(orgCtx, removalId);
   assertNoForeignProductionClaims(
     scope.memberBatches.map((b) => ({
       creditBatchId: b.id,

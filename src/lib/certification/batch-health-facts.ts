@@ -7,7 +7,7 @@
  *
  * For an UNGROUPED batch, `loadCertifyContextForCreditBatchForUser` resolves a
  * 1:1 scope, so the context's transport coverage / `hasSubmittableRuns` /
- * member preview describe THIS batch alone — exactly the per-batch facts the
+ * member durability gates describe THIS batch alone — exactly the per-batch facts the
  * selection gate needs. For an already-grouped batch the context reflects its
  * removal's aggregate; the detail page tolerates that (it's a viewing aid), and
  * the wizard only ever health-checks ungrouped batches.
@@ -18,40 +18,27 @@ import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibi
 import type { BatchHealthFacts } from "./batch-health";
 import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "./preview-gaps";
 
-// Preview `missingInputs` keys owned by OTHER health checks (or by the
-// removal-level requirements step), excluded here so each concern reports once:
-//   applicationIds          → the production check (no lineage runs)
-//   facilityCertifierProject / isometricCertifier → facility setup (wizard)
+// Preview keys owned by other UI checks. Credit-batch detail may still explain
+// local preview gaps, but Removal readiness is derived from the independent
+// durability gates below.
 const NON_CARBON_MISSING_INPUTS = new Set([
   "applicationIds",
   "facilityCertifierProject",
   "isometricCertifier",
-  // The registry remains authoritative and submission-capable while the local
-  // preview is withheld; this provenance gap must not become a submit blocker.
   STORED_CO2E_PREVIEW_REVERIFICATION_GAP,
 ]);
 
-// Human labels for the genuine carbon/durability gaps the CO2e-stored preview
-// reports (see `computeApplicationCo2eStored` + `buildCo2eStoredPreview`).
-// Unknown keys pass through unchanged so a new calc input never silently
-// disappears from the health check.
 const CARBON_INPUT_LABELS: Record<string, string> = {
   organicCarbonPercent: "Organic carbon content",
   dryMassTonnes: "Applied biochar dry mass",
   soilTemperatureC: "Soil temperature",
   hToCorgRatio: "H:Corg ratio",
-  // 1000-year blueprint-parity preview gap: < 3 complete (total carbon +
-  // s_fraction) replicates — see computeApplicationCo2eStoredBlueprint1000.
   thousandYearReplicates: `At least ${MINIMUM_REPLICATES_PER_BATCH} usable 1000-year lab samples`,
-  // 1000-year (Eq.6) petrography/TGA gaps — issue #142.
   meanRandomReflectancePercent: "Mean random reflectance (R₀)",
   stdRandomReflectance: "Std dev of R₀",
   meanNonReactiveCarbonPercent: "Mean non-reactive carbon",
   stdNonReactiveCarbonPercent: "Std dev of non-reactive carbon",
 };
-
-const COMPLETE_CHEMISTRY_REPLICATE_DETAIL =
-  "replicate(s) with complete H/C_org + O/C_org chemistry";
 
 /**
  * The genuine carbon/durability gaps in a CO₂e-stored preview, as human labels.
@@ -73,22 +60,7 @@ function carbonMissingInputs(
   batchId: string,
 ): string[] {
   const member = ctx.memberBatches.find((b) => b.id === batchId);
-  const raw = member?.co2eStoredPreview?.missingInputs ?? [];
-  const hasReplicateShortfall = raw.includes("thousandYearReplicates");
-  return Array.from(
-    new Set(
-      [
-        ...carbonGapLabels(raw),
-        ...(member?.durabilityGateBlockers ?? []).filter(
-          (blocker) =>
-            !(
-              hasReplicateShortfall &&
-              blocker.includes(COMPLETE_CHEMISTRY_REPLICATE_DETAIL)
-            ),
-        ),
-      ],
-    ),
-  );
+  return Array.from(new Set(member?.durabilityGateBlockers ?? []));
 }
 
 // The facility's project mapping + default template resolve cleanly. Transport

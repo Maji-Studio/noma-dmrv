@@ -17,17 +17,19 @@ import { CheckCircleIcon, WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import { Button, buttonVariants } from "@/components/ui";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
 import { StatusBadge } from "@/components/ui/status-badge";
-import type { RemovalPreflightSummary } from "@/fn/certification";
 import { deriveRemovalStatus } from "@/lib/certification/status";
 import { formatDateRange } from "@/lib/format-utils";
 import { EnvBanner } from "./env-banner";
 import { RegistryRecordLink } from "./registry-record-link";
 import { RemovalCarbonBreakdown } from "./removal-carbon-breakdown";
 import { SourcesPanel } from "./sources-panel";
+import { SubmissionNotes } from "./submission-notes";
+import { buildSubmissionWarningNotes } from "./submission-warning-notes";
 import { SyncEventLog } from "./sync-event-log";
+import type { RemovalListRow } from "./removal-list-state";
 
 interface RemovalDetailSheetProps {
-  summary: RemovalPreflightSummary;
+  summary: RemovalListRow;
   isProduction: boolean;
   facilityId: string;
   open: boolean;
@@ -45,7 +47,23 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function ReadinessBlock({ summary }: { summary: RemovalPreflightSummary }) {
+function ReadinessBlock({ summary }: { summary: RemovalListRow }) {
+  if (summary.enrichmentStatus === "unavailable" || !summary.readiness) {
+    return (
+      <div className="flex flex-col items-start gap-8 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
+        <p className="body-small text-[var(--color-text-primary)]">
+          Readiness unavailable for this Removal.
+        </p>
+        <Button
+          variant="default"
+          size="small"
+          onClick={() => void summary.retry?.()}
+        >
+          Retry readiness
+        </Button>
+      </div>
+    );
+  }
   const { state, reasons, advisories } = summary.readiness;
   if (state === "ready") {
     return (
@@ -172,13 +190,18 @@ export function RemovalDetailSheet({
     local: summary.local,
     lockInFlight: summary.lockInFlight,
   });
-  const { state } = summary.readiness;
+  const state = summary.readiness?.state ?? null;
+  const submissionWarningNotes = buildSubmissionWarningNotes(
+    summary.submissionWarnings,
+  );
   // The workflow may only be (re)entered while something still needs doing:
   // `ready` (submit it) or `blocked` (resolve preconditions). A `submitted`
   // removal is done, and an `inProgress` one is mid-flight — neither offers an
   // action, so the sheet stays read-only (the server would refuse a resubmit
   // anyway; this just stops offering a dead-end control).
-  const isActionable = state === "ready" || state === "blocked";
+  const isActionable =
+    summary.enrichmentStatus === "available" &&
+    (state === "ready" || state === "blocked");
 
   // "Review & submit" resumes the New-Removal wizard directly on this removal.
   // The legacy `/removals/[id]/review` route only redirects here (dropping any
@@ -236,31 +259,12 @@ export function RemovalDetailSheet({
 
           <ReadinessBlock summary={summary} />
 
-          {summary.submissionWarnings.length > 0 && (
-            // Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant
-            // diesel the active template cannot carry. Distinct from the
-            // readiness blockers above: the removal still submits.
-            <div className="flex flex-col gap-6 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
-              <span className="body-small font-medium text-[var(--color-text-primary)]">
-                Advisory — submits, but note:
-              </span>
-              <ul className="flex flex-col gap-4">
-                {summary.submissionWarnings.map((warning) => (
-                  <li key={warning} className="flex items-start gap-6">
-                    <WarningIcon
-                      size={14}
-                      weight="fill"
-                      aria-hidden
-                      className="mt-2 shrink-0 text-[var(--color-signal-orange)]"
-                    />
-                    <span className="body-caption text-[var(--color-text-secondary)]">
-                      {warning}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {/*
+            Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant
+            diesel the active template cannot carry. Distinct from readiness
+            blockers above: the removal still submits.
+          */}
+          <SubmissionNotes notes={submissionWarningNotes} />
 
           {/*
             Supporting sources — mirror lineage documents (lab reports, BoLs,

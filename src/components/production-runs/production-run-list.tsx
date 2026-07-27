@@ -49,6 +49,7 @@ import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readine
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
+import { resolveFacilityTimezone } from "@/lib/date-utils";
 import {
   formatMoisturePercent,
   MOISTURE_FIELD_LABEL,
@@ -519,6 +520,10 @@ export function ProductionRunList() {
   const sideSheetOpen = !!displaySideSheet;
   const sideSheetMode = displaySideSheet?.mode ?? "create";
   const sideSheetEntity = displaySideSheet?.entity ?? null;
+  const sideSheetTimeZone = resolveFacilityTimezone(
+    facilities,
+    sideSheetEntity?.facilityId,
+  );
 
   const sideSheetTitle =
     sideSheetMode === "create" ? "Create Production Run" : sideSheetEntity?.code ?? "";
@@ -742,7 +747,11 @@ export function ProductionRunList() {
             content: (
               <div className="space-y-20">
                 <ProductionReadingsDocuments productionRunId={sideSheetEntity.id} readOnly />
-                <ProductionRunReadingTable productionRunId={sideSheetEntity.id} readOnly />
+                <ProductionRunReadingTable
+                  productionRunId={sideSheetEntity.id}
+                  timeZone={sideSheetTimeZone}
+                  readOnly
+                />
               </div>
             ),
           },
