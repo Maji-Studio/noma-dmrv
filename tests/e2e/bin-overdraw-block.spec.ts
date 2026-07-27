@@ -415,7 +415,7 @@ async function createOrder(page: Page, seededData: SeededChainData) {
   await page.fill('input[name="quantityKg"]', ORDER_QUANTITY_KG);
   await selectEntity(
     page,
-    "Biochar Product",
+    "Product bin",
     seededData.biocharProduct.id,
     seededData.biocharProduct.code,
   );
