@@ -2,10 +2,9 @@
  * SourcesPanel — Phase 3.5
  *
  * Lists candidate noma documents discovered along the Removal's chain-of-
- * custody. Review & submit prepares every missing Isometric Source as one
- * workflow operation; once prepared, `source_ids` ride into Datapoint payloads
- * and are hash-covered. This panel is status-only; evidence changes happen on
- * the owning entity before submit.
+ * custody. The operator mirrors selected docs to Isometric Sources via a
+ * server-side proxy; once ready, each Source is bound only to its code-owned
+ * intended Datapoint target at submit time.
  *
  * Mounted in `RemovalDetailSheet` (the Removals-tab quick view, opened via
  * `?removal=<id>`), the single place the candidate set is consumed. The
@@ -18,13 +17,21 @@
 
 import {
   CheckCircleIcon,
+  CloudIcon,
   FileIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { EmptyState } from "@/components/ui";
-import { useCandidateDocumentsForRemoval } from "@/hooks/use-certification-sources";
+import { useRef } from "react";
+import { Button, EmptyState } from "@/components/ui";
+import { useToast } from "@/components/ui/toast";
+import {
+  useCandidateDocumentsForRemoval,
+  useMirrorDocumentToSource,
+  useUnlinkDocumentSource,
+} from "@/hooks/use-certification-sources";
 import { Section } from "./panel-layout";
 
+const ICON_SIZE = 14;
 const STATE_ICON_SIZE = 16;
 const PDF_MIME_TYPE = "application/pdf";
 
@@ -32,12 +39,9 @@ interface SourcesPanelProps {
   // Null while the credit batch is not yet grouped into a removal — render
   // an inactive panel rather than fetching.
   removalId: string | null;
-  // Derived by the owning Removal surface from the authoritative submission
-  // state. Source rows stay visible after submit, but become status-only.
-  editable: boolean;
 }
 
-export function SourcesPanel({ removalId, editable }: SourcesPanelProps) {
+export function SourcesPanel({ removalId }: SourcesPanelProps) {
   return (
     <Section>
       <div className="flex flex-col gap-12">
@@ -46,11 +50,10 @@ export function SourcesPanel({ removalId, editable }: SourcesPanelProps) {
           <PanelCounter removalId={removalId} />
         </header>
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          {editable
-            ? "Supporting sources are prepared automatically during Review & submit. Replace or remove evidence from its owning record, not from this Removal."
-            : "Source status is read-only. Evidence must be replaced or removed from its owning record before submission."}
+          Prepare each Noma evidence role for its intended Removal datapoint.
+          Attachment is verified separately after submission.
         </p>
-        <PanelBody removalId={removalId} editable={editable} />
+        <PanelBody removalId={removalId} />
       </div>
     </Section>
   );
@@ -60,21 +63,15 @@ function PanelCounter({ removalId }: { removalId: string | null }) {
   const query = useCandidateDocumentsForRemoval(removalId);
   if (!removalId || !query.data) return null;
   const total = query.data.candidates.length;
-  const mirrored = query.data.candidates.filter((c) => c.mirror).length;
+  const ready = query.data.candidates.filter((c) => c.mirror).length;
   return (
     <span className="body-caption text-[var(--color-text-tertiary)]">
-      {mirrored} of {total} ready
+      {ready} of {total} files ready
     </span>
   );
 }
 
-function PanelBody({
-  removalId,
-  editable,
-}: {
-  removalId: string | null;
-  editable: boolean;
-}) {
+function PanelBody({ removalId }: { removalId: string | null }) {
   if (!removalId) {
     return (
       <p className="body-small text-[var(--color-text-tertiary)]">
@@ -83,16 +80,10 @@ function PanelBody({
       </p>
     );
   }
-  return <PanelBodyForRemoval removalId={removalId} editable={editable} />;
+  return <PanelBodyForRemoval removalId={removalId} />;
 }
 
-function PanelBodyForRemoval({
-  removalId,
-  editable,
-}: {
-  removalId: string;
-  editable: boolean;
-}) {
+function PanelBodyForRemoval({ removalId }: { removalId: string }) {
   const query = useCandidateDocumentsForRemoval(removalId);
 
   if (query.isLoading) {
@@ -102,7 +93,7 @@ function PanelBodyForRemoval({
       </p>
     );
   }
-  if (query.error || !query.data) {
+  if (query.isError || !query.data) {
     return (
       <p className="body-small text-[var(--clr-red)]">
         Unable to load supporting sources. Try refreshing.
@@ -121,8 +112,8 @@ function PanelBodyForRemoval({
     return (
       <EmptyState
         icon={<FileIcon size={32} />}
-        title="No supporting documents found"
-        description="Attach lab reports, weighbridge tickets, BoLs, or PDDs to the entities in this Removal's chain to make them available here."
+        title="No mapped evidence files found"
+        description="Add an Inventory application document, feedstock bill of lading, or delivery bill of lading to this Removal's lineage."
         padding="sm"
       />
     );
@@ -139,10 +130,7 @@ function PanelBodyForRemoval({
               : ""
           }
         >
-          <CandidateRow
-            candidate={candidate}
-            editable={editable}
-          />
+          <CandidateRow removalId={removalId} candidate={candidate} />
         </li>
       ))}
     </ul>
@@ -150,22 +138,96 @@ function PanelBodyForRemoval({
 }
 
 interface CandidateRowProps {
-  editable: boolean;
+  removalId: string;
   candidate: NonNullable<
     ReturnType<typeof useCandidateDocumentsForRemoval>["data"]
   >["candidates"][number];
 }
 
-function CandidateRow({ candidate, editable }: CandidateRowProps) {
-  const { document, lineageEntity, mirror } = candidate;
+export type SourceRowState = "idle" | "pending" | "success" | "failure";
+
+export function deriveSourceRowState(args: {
+  hasConfirmedMapping: boolean;
+  isPending: boolean;
+  isError: boolean;
+}): SourceRowState {
+  if (args.hasConfirmedMapping) return "success";
+  if (args.isPending) return "pending";
+  if (args.isError) return "failure";
+  return "idle";
+}
+
+export function canStartSourceMirror(state: SourceRowState): boolean {
+  return state === "idle" || state === "failure";
+}
+
+function CandidateRow({ removalId, candidate }: CandidateRowProps) {
+  const { document, lineageEntity, binding, mirror } = candidate;
   const isMirrored = !!mirror;
   const isMirrorable = !!document.storageKey;
   const isPdf = isPdfCandidate(document.mimeType, document.fileName);
+  const mirrorMutation = useMirrorDocumentToSource();
+  const unlinkMutation = useUnlinkDocumentSource(removalId);
+  const toast = useToast();
+  const mirrorActionInFlight = useRef(false);
+
+  const rowState = deriveSourceRowState({
+    hasConfirmedMapping: isMirrored,
+    isPending: mirrorMutation.isPending,
+    isError: mirrorMutation.isError,
+  });
+  const pending = rowState === "pending" || unlinkMutation.isPending;
 
   const description = [
-    document.documentType.replace(/_/g, " "),
+    `Noma role: ${binding.nomaRoleLabel}`,
     lineageEntity.entityLabel,
   ].join(" · ");
+
+  const handleMirror = () => {
+    if (
+      mirrorActionInFlight.current ||
+      !canStartSourceMirror(rowState)
+    ) {
+      return;
+    }
+    mirrorActionInFlight.current = true;
+    mirrorMutation.mutate(
+      { removalId, documentId: document.id },
+      {
+        onSuccess: (result) => {
+          if (result.recovered) {
+            toast.success(
+              `Reconciled existing Isometric Source for ${document.fileName}.`,
+            );
+          } else {
+            toast.success(`Mirrored ${document.fileName} to Isometric.`);
+          }
+        },
+        onError: (err) =>
+          toast.error(
+            err instanceof Error ? err.message : "Mirror failed.",
+          ),
+        onSettled: () => {
+          mirrorActionInFlight.current = false;
+        },
+      },
+    );
+  };
+
+  const handleUnlink = () => {
+    unlinkMutation.mutate(
+      { documentId: document.id },
+      {
+        onSuccess: (result) => {
+          if (result.unlinked) {
+            toast.success("Unlinked. The Source remains on Isometric.");
+          }
+        },
+        onError: (err) =>
+          toast.error(err instanceof Error ? err.message : "Unlink failed."),
+      },
+    );
+  };
 
   return (
     <div className="flex items-center justify-between gap-12 px-12 py-12">
@@ -203,28 +265,41 @@ function CandidateRow({ candidate, editable }: CandidateRowProps) {
       </div>
 
       <div className="flex shrink-0 items-center gap-8">
-        {isMirrored ? (
-          <span
-            className="flex items-center gap-4 text-[var(--st-ok)]"
-            title="Mirrored to Isometric"
-            role="status"
-          >
-            <CheckCircleIcon size={STATE_ICON_SIZE} weight="fill" />
-          </span>
-        ) : isMirrorable && editable ? (
-          <span
-            className="body-caption text-[var(--color-text-tertiary)]"
-            role="status"
-          >
-            Pending preparation
-          </span>
+        {rowState === "success" ? (
+          <>
+            <span
+              className="flex items-center gap-4 text-[var(--st-ok)]"
+              title="Mirrored to Isometric"
+            >
+              <CheckCircleIcon size={STATE_ICON_SIZE} weight="fill" />
+            </span>
+            <Button
+              variant="default"
+              size="small"
+              onClick={handleUnlink}
+              disabled={pending}
+              title="Remove the local Source mapping from future Removal submissions. The Isometric registry copy and audit history remain."
+            >
+              Unlink locally
+            </Button>
+          </>
         ) : isMirrorable ? (
-          <span
-            className="body-caption text-[var(--color-text-tertiary)]"
-            role="status"
+          <Button
+            variant="primary"
+            size="small"
+            onClick={handleMirror}
+            disabled={rowState === "pending"}
+            busy={rowState === "pending"}
           >
-            Not mirrored
-          </span>
+            {rowState !== "pending" && (
+              <CloudIcon size={ICON_SIZE} weight="bold" />
+            )}
+            {rowState === "pending"
+              ? "Pending"
+              : rowState === "failure"
+                ? "Retry"
+                : "Mirror"}
+          </Button>
         ) : (
           <span
             className="flex max-w-[180px] items-center gap-6 body-caption text-[var(--color-text-tertiary)]"

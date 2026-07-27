@@ -159,10 +159,10 @@ export async function deleteDocumentUploadByDocument(
 }
 
 // Checks whether any persisted submission payload references the given
-// Isometric Source id. Used as the mapping-retirement guard: if a Source landed in
-// any `payloadSnapshot.transport.datapointBodies[].body.source_ids`, the
-// local mapping cannot be deleted without orphaning the audit trail. Scans
-// every status because rejected/superseded snapshots are still real history.
+// Isometric Source id. Used as the unlink-safety guard: if a Source landed in
+// any materialized Datapoint body or immutable source binding plan, the local
+// mapping cannot be deleted without orphaning the audit trail. Scans every
+// status because rejected/superseded snapshots are still real history.
 //
 // jsonb_path_exists is the canonical Postgres idiom for "any element of any
 // nested array equals X"; using `@>` containment is awkward across nested
@@ -177,7 +177,7 @@ export async function isExternalSourceReferencedInSnapshots(
   // Provider scoping is forward-compat: only `isometric` issues source_ids
   // today, but the enum permits `puro_earth` / `verra` and nothing
   // structurally prevents two providers from generating the same source_id
-  // string. Without this filter, retirement on provider A could refuse because
+  // string. Without this filter, unlink on provider A could refuse because
   // provider B's payload mentioned the same id.
   // The explicit ::text cast on $val is required: without it, Postgres
   // raises `42P18 — could not determine data type of parameter` because
@@ -188,10 +188,17 @@ export async function isExternalSourceReferencedInSnapshots(
     FROM ${certificationSubmissions}
     WHERE ${eq(certificationSubmissions.provider, provider)}
       AND ${eq(certificationSubmissions.organizationId, ctx.organizationId)}
-      AND jsonb_path_exists(
-        payload_snapshot,
-        '$.transport.datapointBodies[*].body.source_ids[*] ? (@ == $val)',
-        jsonb_build_object('val', ${externalDocumentId}::text)
+      AND (
+        jsonb_path_exists(
+          payload_snapshot,
+          '$.transport.datapointBodies[*].body.source_ids[*] ? (@ == $val)',
+          jsonb_build_object('val', ${externalDocumentId}::text)
+        )
+        OR jsonb_path_exists(
+          payload_snapshot,
+          '$.sourceBindingPlan[*].sourceId ? (@ == $val)',
+          jsonb_build_object('val', ${externalDocumentId}::text)
+        )
       )
     LIMIT 1
   `);

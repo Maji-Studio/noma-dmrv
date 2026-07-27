@@ -29,17 +29,6 @@ describe("RemovalDetailSheet sync history contract", () => {
     );
   });
 
-  it("passes authoritative derived Removal editability to supporting sources", () => {
-    const source = readFileSync(
-      new URL("./removal-detail-sheet.tsx", import.meta.url),
-      "utf8",
-    );
-
-    expect(source).toMatch(
-      /<SourcesPanel\s+removalId=\{summary\.removalId\}\s+editable=\{derived\.isActionable\}/,
-    );
-  });
-
   it("keeps a failed-enrichment row inspectable with retry and Source repair routes", () => {
     const source = readFileSync(
       new URL("./removal-detail-sheet.tsx", import.meta.url),
@@ -50,5 +39,18 @@ describe("RemovalDetailSheet sync history contract", () => {
     expect(source).toContain("Retry readiness");
     expect(source).toContain("<SourcesPanel");
     expect(source).toContain("removalId={summary.removalId}");
+  });
+
+  it("renders post-submit attachment health separately from files ready", () => {
+    const source = readFileSync(
+      new URL("./removal-detail-sheet.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toContain('<Field label="Evidence attachments">');
+    expect(source).toContain("summary.evidenceHealth.label");
+    expect(source).toContain(
+      "<SourcesPanel removalId={summary.removalId} />",
+    );
   });
 });

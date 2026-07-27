@@ -36,10 +36,17 @@ import {
 } from "./removal-reporting-window";
 import type { ResolvedFixedInput } from "./removal-snapshot-readers";
 import {
-  collectCandidateDocumentIdsForRemoval,
-  resolveSourceIdsForRemoval,
+  collectCandidateSourceDocumentsForRemoval,
+  resolveSourceBindingCandidates,
+  type CandidateSourceDocument,
+  type ResolvedSourceBindingCandidate,
 } from "./sources";
 import type { RemovalSubmissionContext } from "./certify-context-core";
+import {
+  buildRemovalSourceBindingPlan,
+  sourceIdsForDatapointTarget,
+  type RemovalSourceBindingPlanEntry,
+} from "@/lib/certification/removal-source-bindings";
 
 export interface ResolvedMonitoredInput {
   removalTemplateComponentId: string;
@@ -59,7 +66,9 @@ export interface RemovalSubmissionBuild {
   agg: AggregatedProductionData;
   latestApplicationTime: Date;
   candidateDocumentIds: string[];
+  candidateSourceDocuments: CandidateSourceDocument[];
   sourceIds: string[];
+  sourceBindingPlan: RemovalSourceBindingPlanEntry[];
   semanticPayload: Record<string, unknown>;
   monitored: ResolvedMonitoredInput[];
   fixed: ResolvedFixedInput[];
@@ -121,6 +130,7 @@ export interface MaterializedRemovalSubmissionSnapshot {
     __mappingRevision: string;
     semantic: Record<string, unknown>;
     memberCreditBatchIds: string[];
+    sourceBindingPlan: RemovalSourceBindingPlanEntry[];
     transport: {
       removalSupplierRef: string;
       datapointBodies: Array<{
@@ -242,22 +252,26 @@ export async function compileRemovalSubmission(
   }
 
   const blockers: string[] = [];
+  const readySourceDocumentCount =
+    build.sourceBindingPlan.length > 0
+      ? build.sourceBindingPlan.length
+      : build.sourceIds.length;
   const tierBlocker = removalTemplateTierCompatibilityBlocker(
     args.ctx,
     args.defaultTemplate,
   );
   if (tierBlocker) blockers.push(tierBlocker);
-  if (build.sourceIds.length === 0) {
+  if (readySourceDocumentCount === 0) {
     blockers.push(
-      "Removal submission requires at least one mirrored Isometric Source. Mirror a supporting document in the Removal Sources panel, then recompile.",
+      "Removal submission requires at least one evidence file with a persisted Isometric Source mapping. Prepare the file in the Removal Sources panel, then recompile.",
     );
   }
   if (
     build.candidateDocumentIds.length > 0 &&
-    build.sourceIds.length < build.candidateDocumentIds.length
+    readySourceDocumentCount < build.candidateDocumentIds.length
   ) {
     blockers.push(
-      `${build.sourceIds.length} of ${build.candidateDocumentIds.length} supporting documents have validated Isometric Source IDs. Mirror the remaining documents in the Removal Sources panel, then recompile.`,
+      `${readySourceDocumentCount} of ${build.candidateDocumentIds.length} evidence files are ready with validated Isometric Source IDs. Prepare the remaining files in the Removal Sources panel, then recompile.`,
     );
   }
 
@@ -336,7 +350,7 @@ export async function compileRemovalSubmission(
           projectId: args.externalProjectId,
           removalId: args.removalId,
           version: 1,
-          sourceIds: build.sourceIds,
+          sourceIds: [],
         }).map((datapoint) => ({
           componentId: datapoint.rtcId,
           inputKey: datapoint.inputKey,
@@ -457,7 +471,7 @@ export function materializeRemovalSubmissionSnapshot(args: {
         projectId: externalProjectId,
         removalId,
         version: nextVersion,
-        sourceIds: compiled.sourceIds,
+        sourceIds: [],
       })
     : [];
 
@@ -466,6 +480,7 @@ export function materializeRemovalSubmissionSnapshot(args: {
       __mappingRevision: MAPPING_REVISION,
       semantic: compiled.semanticPayload,
       memberCreditBatchIds: compiled.memberCreditBatchIds,
+      sourceBindingPlan: compiled.sourceBindingPlan,
       transport: {
         removalSupplierRef,
         datapointBodies: [
@@ -537,6 +552,8 @@ export async function buildRemovalSubmissionBuild(args: {
   log?: Logger;
   sourceIds?: string[];
   candidateDocumentIds?: string[];
+  sourceBindingCandidates?: ResolvedSourceBindingCandidate[];
+  candidateSourceDocuments?: CandidateSourceDocument[];
 }): Promise<RemovalSubmissionBuild> {
   const {
     orgCtx,
@@ -626,17 +643,38 @@ export async function buildRemovalSubmissionBuild(args: {
   // A caller-supplied Source set makes this a side-effect-free preflight or a
   // locked rebuild. Skip the document walk in that case; the caller already
   // owns the authoritative IDs and does not consume `candidateDocumentIds`.
-  const candidateDocumentIds =
-    args.candidateDocumentIds ??
+  const candidateSourceDocuments =
+    args.candidateSourceDocuments ??
+    (args.sourceIds || args.sourceBindingCandidates
+      ? []
+      : await collectCandidateSourceDocumentsForRemoval(orgCtx, {
+          lineages: ctx.lineages,
+        }));
+  const sourceBindingCandidates =
+    args.sourceBindingCandidates ??
     (args.sourceIds
       ? []
-      : await collectCandidateDocumentIdsForRemoval(orgCtx, {
-          lineages: ctx.lineages,
-          memberBatchIds: ctx.memberBatches.map((b) => b.id),
+      : await resolveSourceBindingCandidates(orgCtx, {
+          candidates: candidateSourceDocuments,
         }));
+  const candidateDocumentIds =
+    args.candidateDocumentIds ??
+    candidateSourceDocuments.map((candidate) => candidate.documentId);
   const sourceIds =
     args.sourceIds ??
-    (await resolveSourceIdsForRemoval(orgCtx, { candidateDocumentIds }));
+    Array.from(
+      new Set(sourceBindingCandidates.map((candidate) => candidate.sourceId)),
+    ).sort();
+  const sourceBindingPlan = buildRemovalSourceBindingPlan({
+    candidates: sourceBindingCandidates,
+    template: defaultTemplate,
+    applicationIdsByCreditBatchId: new Map(
+      ctx.memberBatchClaims.map((batch) => [
+        batch.creditBatchId,
+        batch.applicationIds,
+      ]),
+    ),
+  });
 
   const { monitored, fixed, datapointBodyByKey } = resolveTemplateInputs({
     template: defaultTemplate,
@@ -644,6 +682,7 @@ export async function buildRemovalSubmissionBuild(args: {
     agg,
     externalProjectId,
     sourceIds,
+    sourceBindingPlan,
     allowPeriodInputStub,
   });
   const hasOnly1000YearBatches =
@@ -687,6 +726,7 @@ export async function buildRemovalSubmissionBuild(args: {
     startedOn: agg.earliestStartTime.toISOString(),
     completedOn: latestApplicationTime.toISOString(),
     sourceIds,
+    sourceBindingPlan,
     ...(semanticMeasurementSamples.length > 0
       ? { durabilityMeasurementSamples: semanticMeasurementSamples }
       : {}),
@@ -717,7 +757,9 @@ export async function buildRemovalSubmissionBuild(args: {
     agg,
     latestApplicationTime,
     candidateDocumentIds,
+    candidateSourceDocuments,
     sourceIds,
+    sourceBindingPlan,
     semanticPayload,
     monitored,
     fixed,
@@ -735,6 +777,7 @@ function resolveTemplateInputs(args: {
   agg: AggregatedProductionData;
   externalProjectId: string;
   sourceIds: string[];
+  sourceBindingPlan: RemovalSourceBindingPlanEntry[];
   allowPeriodInputStub: boolean;
 }): ResolvedTemplateInputs {
   const {
@@ -743,6 +786,7 @@ function resolveTemplateInputs(args: {
     agg,
     externalProjectId,
     sourceIds,
+    sourceBindingPlan,
     allowPeriodInputStub,
   } = args;
 
@@ -803,7 +847,13 @@ function resolveTemplateInputs(args: {
           agg,
           projectId: externalProjectId,
           supplierRefId: "__placeholder__",
-          sourceIds,
+          sourceIds:
+            sourceBindingPlan.length > 0
+              ? sourceIdsForDatapointTarget(sourceBindingPlan, {
+                  componentId: component.id,
+                  inputKey: rtcInput.input_key,
+                })
+              : sourceIds,
           allowPeriodInputStub,
         });
         monitored.push({

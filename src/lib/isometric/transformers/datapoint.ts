@@ -346,11 +346,7 @@ export interface BuildCreateDatapointArgs {
   agg: AggregatedProductionData;
   projectId: string;
   supplierRefId: string;
-  // Resolved Isometric Source IDs to attach to this Datapoint. Phase 3.5 ships
-  // removal-wide attribution: every Datapoint receives the same list, which
-  // means the verifier sees full evidence per Datapoint but does not see
-  // per-input narrowing. Per-input attribution is a Phase 5 follow-up tracked
-  // in docs/open-questions.md `isometric/sources-per-input-attribution`.
+  // Resolved Isometric Source IDs intended for this exact Datapoint target.
   sourceIds?: string[];
   // Sandbox escape hatch (default false). When a Removal Template still
   // declares a PERIOD_INPUT_TUPLES input — which ADR 0005 says belongs to a

@@ -13,7 +13,7 @@ import {
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
-import { durabilityMeasurementSampleAvailabilityBlocker } from "./durability-measurement-samples";
+import { DURABILITY_MEASUREMENT_SAMPLES_LIVE } from "./durability-measurement-samples";
 import {
   compileRemovalSubmission,
   type CompiledRemovalSubmission,
@@ -72,11 +72,13 @@ export async function loadRemovalCompilation(
       hasDurabilityComponents,
     });
     const blockers = [...compiled.blockers];
-    const availabilityBlocker = durabilityMeasurementSampleAvailabilityBlocker(
-      ctx.defaultTemplate,
-    );
-    if (hasDurabilityComponents && availabilityBlocker) {
-      blockers.push(availabilityBlocker);
+    if (
+      hasDurabilityComponents &&
+      !DURABILITY_MEASUREMENT_SAMPLES_LIVE
+    ) {
+      blockers.push(
+        "Durability measurement-sample POSTs are not enabled for this environment.",
+      );
     }
 
     return {

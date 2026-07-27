@@ -32,6 +32,35 @@ vi.mock("@/fn/certification/sources", async () => {
   return {
     collectCandidateDocumentIdsForRemoval: vi.fn(async () => ["doc-test-1"]),
     resolveSourceIdsForRemoval: vi.fn(async () => ["src-test-1"]),
+    collectCandidateSourceDocumentsForRemoval: vi.fn(async () => [
+      {
+        documentId: "doc-test-1",
+        binding: {
+          nomaRole: "inventory",
+          nomaRoleLabel: "Inventory",
+          lineage: {
+            entityType: "application",
+            entityId: "app-test-1",
+            entityLabel: "Application APP-TEST-001",
+          },
+          intendedTarget: {
+            kind: "sequestration",
+            groupKey: "co2-stored",
+            inputKey: "product_mass",
+          },
+          mappingRevision: "source-binding-test-revision",
+        },
+      },
+    ]),
+    resolveSourceBindingCandidates: vi.fn(async (_ctx, args) =>
+      args.candidates.map((candidate: {
+        documentId: string;
+        binding: unknown;
+      }) => ({
+        ...candidate,
+        sourceId: `src-${candidate.documentId}`,
+      })),
+    ),
   };
 });
 vi.mock("@/lib/isometric", async (importOriginal) => {
@@ -45,15 +74,26 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
     reconcileRemoval: vi.fn(),
   };
 });
+// The Phase 3 measurement-samples flag is a build-time const (false while the
+// two sandbox confirms are pending). Tests that exercise the durability path
+// expose it through a mutable getter and stub the POST-ing submitter.
+const durabilityFlag = vi.hoisted(() => ({ live: false }));
 vi.mock("@/fn/certification/durability-measurement-samples", async (importOriginal) => {
   const actual = await importOriginal<
     typeof import("@/fn/certification/durability-measurement-samples")
   >();
   return {
     ...actual,
+    get DURABILITY_MEASUREMENT_SAMPLES_LIVE() {
+      return durabilityFlag.live;
+    },
     submitDurabilityMeasurementSamples: vi.fn(),
   };
 });
+
+export function setDurabilityMeasurementSamplesLive(live: boolean): void {
+  durabilityFlag.live = live;
+}
 
 import * as ledger from "@/data-access/certification";
 import * as ledgerClaim from "@/data-access/certification-submissions";
@@ -94,6 +134,37 @@ export const RTC_PRODUCT_MASS_ID = "rtc-product-mass";
 
 export const ORIGINAL_BIOCHAR_MASS_KG = 1000;
 export const CHANGED_BIOCHAR_MASS_KG = 1500;
+
+export function makeInventorySourceDocument(documentId: string) {
+  return {
+    documentId,
+    binding: {
+      nomaRole: "inventory" as const,
+      nomaRoleLabel: "Inventory",
+      lineage: {
+        entityType: "application",
+        entityId: APPLICATION_ID,
+        entityLabel: "Application APP-TEST-001",
+      },
+      intendedTarget: {
+        kind: "sequestration" as const,
+        groupKey: "co2-stored" as const,
+        inputKey: "product_mass" as const,
+      },
+      mappingRevision: "source-binding-test-revision",
+    },
+  };
+}
+
+export function makeResolvedInventorySource(
+  documentId: string,
+  sourceId: string,
+) {
+  return {
+    ...makeInventorySourceDocument(documentId),
+    sourceId,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // In-memory ledger simulator. Mirrors the (provider, submissionType,
@@ -559,6 +630,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   storedRows = [];
   nextLedgerRowId = 1;
+  durabilityFlag.live = false;
 
   // The claim choreography is one mocked function backed by the in-memory
   // ledger + the real pure decision core; lock/CAS/re-resolution behavior
@@ -629,6 +701,12 @@ beforeEach(() => {
   ]);
   vi.mocked(sources.resolveSourceIdsForRemoval).mockResolvedValue([
     "src-test-1",
+  ]);
+  vi.mocked(
+    sources.collectCandidateSourceDocumentsForRemoval,
+  ).mockResolvedValue([makeInventorySourceDocument("doc-test-1")]);
+  vi.mocked(sources.resolveSourceBindingCandidates).mockResolvedValue([
+    makeResolvedInventorySource("doc-test-1", "src-test-1"),
   ]);
   // §8.6.2 fresh-read re-assert (production-claim-gate): after the draft
   // claim, submitRemoval re-reads the removal scope (claims + lineage

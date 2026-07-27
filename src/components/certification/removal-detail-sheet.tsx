@@ -235,12 +235,7 @@ export function RemovalDetailSheet({
             <StatusBadge status={derived.value} label={derived.label} />
           </div>
 
-          {summary.externalId && (
-            <RemovalCarbonBreakdown
-              removalId={summary.removalId}
-              enabled={open}
-            />
-          )}
+          <RemovalCarbonBreakdown removalId={summary.removalId} enabled={open} />
 
           <Field label="Reporting window">{window}</Field>
 
@@ -262,6 +257,17 @@ export function RemovalDetailSheet({
             </Field>
           )}
 
+          {summary.evidenceHealth && (
+            <Field label="Evidence attachments">
+              <span>
+                {summary.evidenceHealth.label}
+                {summary.evidenceHealth.totalCount > 0
+                  ? ` — ${summary.evidenceHealth.verifiedCount} of ${summary.evidenceHealth.totalCount} intended targets verified`
+                  : ""}
+              </span>
+            </Field>
+          )}
+
           <ReadinessBlock summary={summary} />
 
           {/*
@@ -272,15 +278,14 @@ export function RemovalDetailSheet({
           <SubmissionNotes notes={submissionWarningNotes} />
 
           {/*
-            Supporting sources — status for lineage documents (lab reports,
-            BoLs, weigh-scale tickets, including per-transport-leg evidence).
-            Review & submit prepares every missing Source as one workflow
-            operation before compilation, so this sheet stays informational.
+            Supporting sources — prepare the three code-owned Noma evidence
+            roles for their intended registry Datapoint targets. This is the
+            only place the candidate set is consumed: submit is resolve-only
+            and never auto-mirrors.
+            (Restores the mount lost when evidence-step.tsx was deleted in the
+            2026-06-04 certify redesign.)
           */}
-          <SourcesPanel
-            removalId={summary.removalId}
-            editable={derived.isActionable}
-          />
+          <SourcesPanel removalId={summary.removalId} />
 
           <SyncEventLog
             events={summary.recentSyncEvents}

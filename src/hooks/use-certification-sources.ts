@@ -3,16 +3,22 @@
  *
  * Mirrors noma `documents` rows to Isometric Sources via server-side proxy.
  * Resulting `source_ids` ride into Datapoint payloads at submit time and
- * are part of the semantic hash. Lifecycle editability is enforced by the
- * public server action and the owning Removal surface.
+ * are part of the semantic hash, so a sources change forces a new Removal
+ * version.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import {
   loadCandidateDocumentsForRemoval,
   mirrorDocumentToSource,
-  prepareRemovalSources,
+  unlinkDocumentSource,
+  type CandidateDocumentsForRemoval,
+  type MirrorResult,
 } from "@/fn/certification";
-import type { MirrorDocumentToSourceInput } from "@/schemas/certification-sources";
+import type {
+  MirrorDocumentToSourceInput,
+  UnlinkDocumentSourceInput,
+} from "@/schemas/certification-sources";
 import { certificationKeys } from "./use-certification";
 
 const SOURCES_STALE_MS = 30_000;
@@ -21,6 +27,47 @@ export const certificationSourcesKeys = {
   candidatesForRemoval: (removalId: string) =>
     [...certificationKeys.all, "sources", "candidates", removalId] as const,
 };
+
+export function applyConfirmedSourceMapping(
+  current: CandidateDocumentsForRemoval | null | undefined,
+  documentId: string,
+  result: MirrorResult,
+): CandidateDocumentsForRemoval | null | undefined {
+  if (!current) return current;
+  return {
+    ...current,
+    candidates: current.candidates.map((candidate) =>
+      candidate.document.id === documentId
+        ? {
+            ...candidate,
+            mirror: {
+              externalDocumentId: result.externalDocumentId,
+              isPublic: result.isPublic,
+              mirroredAt: new Date(),
+            },
+          }
+        : candidate,
+    ),
+    mirroredExternalIds: Array.from(
+      new Set([...current.mirroredExternalIds, result.externalDocumentId]),
+    ).sort(),
+  };
+}
+
+export async function reconcileCandidateSourcesAfterFailure(
+  queryClient: QueryClient,
+  removalId: string,
+): Promise<void> {
+  try {
+    await queryClient.refetchQueries({
+      queryKey: certificationSourcesKeys.candidatesForRemoval(removalId),
+      type: "active",
+    });
+  } catch {
+    // A failed reconciliation is still settled. Preserve the original mirror
+    // error and expose Retry only after this read attempt has completed.
+  }
+}
 
 export function useCandidateDocumentsForRemoval(
   removalId: string | null,
@@ -47,30 +94,46 @@ export function useMirrorDocumentToSource() {
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    onSuccess: (_data, vars) => {
-      queryClient.invalidateQueries({
-        queryKey: certificationSourcesKeys.candidatesForRemoval(vars.removalId),
-      });
+    onSuccess: (data, vars) => {
+      const queryKey =
+        certificationSourcesKeys.candidatesForRemoval(vars.removalId);
+      // The server has confirmed that the Source mapping is persisted. Reflect
+      // that confirmed result synchronously; this is not an optimistic write.
+      queryClient.setQueryData<CandidateDocumentsForRemoval | null>(
+        queryKey,
+        (current) =>
+          applyConfirmedSourceMapping(current, vars.documentId, data),
+      );
+      void queryClient.invalidateQueries({ queryKey });
       // The Sources change also shifts the removal's submit-readiness display.
-      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+      void queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
+    // A failed/ambiguous action can still have persisted remotely and locally.
+    // Keep the mutation pending until the authoritative candidate read settles;
+    // only then may the row expose Retry.
+    onError: async (_error, vars) => {
+      await reconcileCandidateSourcesAfterFailure(
+        queryClient,
+        vars.removalId,
+      );
     },
   });
 }
 
-export function usePrepareRemovalSources() {
+// `removalId` is part of the action input now — the hook stamps it onto
+// every variant so callers can't accidentally omit it and slip through
+// the schema check.
+export function useUnlinkDocumentSource(removalId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { removalId: string }) => {
-      const result = await prepareRemovalSources(input);
+    mutationFn: async (input: Omit<UnlinkDocumentSourceInput, "removalId">) => {
+      const result = await unlinkDocumentSource({ ...input, removalId });
       if (!result.success) throw new Error(result.error);
       return result.data;
     },
-    // A failed all-files attempt may still have prepared some sources. Refresh
-    // every dependent projection after both success and failure so a whole-flow
-    // retry resumes from the persisted progress instead of showing stale counts.
-    onSettled: (_data, _error, vars) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: certificationSourcesKeys.candidatesForRemoval(vars.removalId),
+        queryKey: certificationSourcesKeys.candidatesForRemoval(removalId),
       });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },

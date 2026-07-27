@@ -12,7 +12,9 @@ import {
   type MappingClaimGuard,
 } from "@/data-access/certification-submissions";
 import { env } from "@/config/env";
-import { updateRemovalDates } from "@/data-access/certifier-removals";
+import {
+  updateRemovalDates,
+} from "@/data-access/certifier-removals";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { logger, type Logger } from "@/lib/log";
@@ -37,7 +39,8 @@ import {
 } from "@/lib/isometric/transformers/measurement-sample";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
 import {
-  durabilityMeasurementSampleAvailabilityBlocker,
+  assertSupportedDurabilityConfiguration,
+  DURABILITY_MEASUREMENT_SAMPLES_LIVE,
   submitDurabilityMeasurementSamples,
   type DurabilityMeasurementSampleSubmission,
 } from "./durability-measurement-samples";
@@ -51,6 +54,7 @@ import {
 } from "./production-claim-gate";
 import {
   readRemovalFixedInputs,
+  readRemovalSourceBindingPlan,
   readRemovalTransport,
   type ResolvedFixedInput,
   type RemovalTransportSnapshot,
@@ -65,7 +69,8 @@ import {
 } from "./removal-submission-build";
 import { checkProtocolVersionAtSubmit } from "./protocol-version-preflight";
 import { performRegistryCreate, supplierRefLookup } from "./registry-create";
-import { resolveSourceIdsForRemoval } from "./sources";
+import { resolveSourceBindingCandidates } from "./sources";
+import { verifyAndPersistRemovalSourceBindings } from "./removal-source-binding-verification";
 import {
   appendSyncEventBestEffort,
   assertProductionConfirmed,
@@ -266,16 +271,22 @@ async function submitRemovalCore(
 
   // Durability evidence comes through measurement samples; each binding then
   // declares whether its GHG input consumes a sample-response datapoint or an
-  // orchestrator-posted direct datapoint. The verified 1000-year path is
-  // available in sandbox; production and the unverified 200-year wire contract
-  // fail closed so an emissions-only GHG entry can never be emitted.
+  // orchestrator-posted direct datapoint. Block while the sandbox-only flag is
+  // off: without the evidence step the required sources cannot be bound, and
+  // emitting an emissions-only GHG entry is forbidden.
   const hasDurabilityComponents = defaultTemplate.groups.some((group) =>
     group.components.some((c) => isSequestrationBlueprintKey(c.blueprint_key)),
   );
-  const availabilityBlocker =
-    durabilityMeasurementSampleAvailabilityBlocker(defaultTemplate);
-  if (hasDurabilityComponents && availabilityBlocker) {
-    throw new SafeError(availabilityBlocker);
+  if (hasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
+    throw new SafeError(
+      "Durability submission is staged but not yet live — measurement-sample " +
+        "POSTs are disabled, so the required sequestration datapoint IDs cannot " +
+        "be bound. Enable DURABILITY_MEASUREMENT_SAMPLES_LIVE only for the " +
+        "sandbox after operator validation.",
+    );
+  }
+  if (hasDurabilityComponents) {
+    assertSupportedDurabilityConfiguration(ctx.batchesWithSamples);
   }
 
   assertProductionConfirmed(confirmProduction);
@@ -364,6 +375,7 @@ async function submitRemovalCore(
     agg,
     latestApplicationTime,
     candidateDocumentIds,
+    candidateSourceDocuments,
     sourceIds,
     fixed,
     memberCreditBatchIds,
@@ -393,11 +405,16 @@ async function submitRemovalCore(
       // against us, so this result is the authoritative source set. Common
       // case: it matches the tentative set and everything built above
       // remains valid; the rare path rebuilds the template inputs once.
-      const lockedSourceIds = await resolveSourceIdsForRemoval(
+      const lockedSourceBindingCandidates = await resolveSourceBindingCandidates(
         orgCtx,
-        { candidateDocumentIds },
+        { candidates: candidateSourceDocuments },
         tx,
       );
+      const lockedSourceIds = Array.from(
+        new Set(
+          lockedSourceBindingCandidates.map((candidate) => candidate.sourceId),
+        ),
+      ).sort();
       const sourceIdsChanged =
         lockedSourceIds.length !== sourceIds.length ||
         lockedSourceIds.some((id, i) => id !== sourceIds[i]);
@@ -412,8 +429,9 @@ async function submitRemovalCore(
         externalProjectId,
         allowPeriodInputStub,
         hasDurabilityComponents,
-        sourceIds: lockedSourceIds,
         candidateDocumentIds,
+        candidateSourceDocuments,
+        sourceBindingCandidates: lockedSourceBindingCandidates,
       });
       if (!finalCompilation.transportPlan) {
         throw new SafeError(
@@ -450,6 +468,23 @@ async function submitRemovalCore(
       await stampProductionEmissionsClaim(orgCtx, {
         removalId,
         creditBatchIds: memberCreditBatchIds,
+      });
+      if (
+        !ctx.latestSubmission ||
+        ctx.latestSubmission.externalId !== claimed.externalId ||
+        ctx.latestSubmission.version !== claimed.version
+      ) {
+        throw new SafeError(
+          "The existing Removal submission changed while verifying evidence. Reload and retry.",
+        );
+      }
+      await verifyAndPersistRemovalSourceBindings({
+        client,
+        orgCtx,
+        removalId,
+        submissionRow: ctx.latestSubmission,
+        externalRemovalId: claimed.externalId,
+        log,
       });
       return {
         removalId,
@@ -492,6 +527,7 @@ async function submitRemovalCore(
       // from the tentative `datapointBodyByKey` if a concurrent
       // mirror/unlink shifted the source set during lock acquisition).
       const transport = readRemovalTransport(claimed.row);
+      const sourceBindingPlan = readRemovalSourceBindingPlan(claimed.row);
       // On resume, the fixed bindings must come from the SAME snapshot as the
       // transport — not the live `fixed` recomputed above, which may have
       // drifted from the version the snapshot was built against.
@@ -519,6 +555,7 @@ async function submitRemovalCore(
         },
         externalProjectId,
         durabilityMeasurementSubmissions,
+        sourceBindingPlan,
         // The live member set — membership can't drift under a locked draft
         // (assertRemovalAllowsCreditBatchMutation), so these are the batches
         // whose production bucket this submission claims.
@@ -570,11 +607,9 @@ async function assertClaimedRemovalPayloadFresh(args: {
   const freshHasDurabilityComponents = freshCtx.defaultTemplate.groups.some((group) =>
     group.components.some((c) => isSequestrationBlueprintKey(c.blueprint_key)),
   );
-  const freshAvailabilityBlocker =
-    durabilityMeasurementSampleAvailabilityBlocker(freshCtx.defaultTemplate);
-  if (freshHasDurabilityComponents && freshAvailabilityBlocker) {
+  if (freshHasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
     await retireStaleSubmissionDraft(orgCtx, row.id, {
-      reason: "durability measurement-sample availability changed after draft claim",
+      reason: "durability measurement-sample gate changed after draft claim",
     });
     throw new SafeError(
       "Removal template configuration changed while preparing this submission. The draft was retired; reload and submit again.",
@@ -631,6 +666,7 @@ interface RunRemovalSubmissionArgs {
   durabilityMeasurementSubmissions:
     | DurabilityMeasurementSampleSubmission[]
     | null;
+  sourceBindingPlan: ReturnType<typeof readRemovalSourceBindingPlan>;
   // Member credit batches whose §8.6.2 production-bucket claim this submission
   // stamps on success (issue #349, ADR 0020).
   claimBatchIds: string[];
@@ -653,6 +689,7 @@ async function runRemovalSubmission({
   reportingWindow,
   externalProjectId,
   durabilityMeasurementSubmissions,
+  sourceBindingPlan,
   claimBatchIds,
   supersedePreviousId,
   resumed,
@@ -700,17 +737,17 @@ async function runRemovalSubmission({
     ]);
   }
 
-  // Phase 3: POST the durability measurement samples (per-batch chemistry +
-  // facility soil reference) after the datapoint loop, before the removal body.
+  // Phase 3: POST the sampled 1000-year durability measurement sample after
+  // the datapoint loop, before the removal body.
   // Measurement-property inputs bind response datapoints; direct-datapoint
   // inputs (currently 1000-year s_fraction) were already posted through the
   // same idempotent loop above and remain duplicated in the sample as
-  // data-quality evidence. Recheck path/environment availability here as
-  // defence-in-depth for future callers.
-  const availabilityBlocker =
-    durabilityMeasurementSampleAvailabilityBlocker(template);
-  if (durabilityMeasurementSubmissions && availabilityBlocker) {
-    throw new SafeError(availabilityBlocker);
+  // data-quality evidence. The flag is already on whenever submissions are
+  // present; the explicit guard is defence-in-depth for future callers.
+  if (durabilityMeasurementSubmissions && !DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
+    throw new SafeError(
+      "Durability measurement-sample submission is disabled. The GHG entry cannot be created without explicit sequestration datapoint bindings.",
+    );
   }
   if (durabilityMeasurementSubmissions) {
     const {
@@ -719,9 +756,10 @@ async function runRemovalSubmission({
     } = await submitDurabilityMeasurementSamples({
       orgCtx,
       removalId,
-      submissionRowId: row.id,
+      submissionRow: row,
       resumed,
       submissions: durabilityMeasurementSubmissions,
+      sourceBindingPlan,
       log,
     });
     datapointIdsByRtcInput = bindSequestrationDatapointsToTemplate({
@@ -801,6 +839,15 @@ async function runRemovalSubmission({
       { submissionId: row.id },
     );
   }
+
+  await verifyAndPersistRemovalSourceBindings({
+    client,
+    orgCtx,
+    removalId,
+    submissionRow: row,
+    externalRemovalId,
+    log,
+  });
 
   return { removalId, externalId: externalRemovalId, version: row.version };
 }
