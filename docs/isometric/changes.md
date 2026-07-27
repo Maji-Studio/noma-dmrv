@@ -25,6 +25,17 @@ through a path-specific code gate pending the H/C unit and component-input
 binding confirmation. Compilation reports that precise blocker instead of
 asking operators to enable a second sandbox flag.
 
+## 2026-07-27 (Removal submit review hierarchy)
+
+The New removal wizard now separates its concise operator review from the full
+compiled Isometric diagnostics with accessible Review and Technical details
+tabs. Compiler blockers and captured-but-not-represented warnings remain on the
+default Review tab, while diagnostic identifiers, payload samples, and the
+recompile action remain available under Technical details.
+
+This is a UI hierarchy change only. It does not change or make a new claim about
+protocol requirements, readiness, compiled payloads, or submission behavior.
+
 ## 2026-07-27 (Removal sources become read-only after submission)
 
 The Removal detail no longer detaches local Source mappings. It shows Mirror
