@@ -185,10 +185,10 @@ export async function findMeasurementSampleBySupplierRef(
   client: IsometricClient,
   supplierReferenceId: string,
 ): Promise<IsometricMeasurementSample | null> {
-  const matches = await client.paginateAll<IsometricMeasurementSample>(
+  for await (const sample of client.paginate<IsometricMeasurementSample>(
     "/measurement_samples",
-  );
-  return (
-    matches.find((m) => m.supplier_reference_id === supplierReferenceId) ?? null
-  );
+  )) {
+    if (sample.supplier_reference_id === supplierReferenceId) return sample;
+  }
+  return null;
 }

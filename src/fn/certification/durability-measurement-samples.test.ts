@@ -228,57 +228,28 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
     measuredAt: "2026-01-31T00:00:00.000Z",
   };
 
-  it("emits one production-batch submission per sampled batch, then one soil submission", () => {
-    const submissions = buildDurabilityMeasurementSampleSubmissions({
-      ...common,
-      batches: [sampledBatch("a", "CB-A"), sampledBatch("b", "CB-B")],
-    });
-
-    expect(submissions).toHaveLength(3);
-    expect(submissions.map((s) => s.operationKey)).toEqual([
-      "pb:a",
-      "pb:b",
-      "soil",
-    ]);
-
-    for (const pb of submissions.slice(0, 2)) {
-      expect(pb.supplierRefId).toMatch(/^nm-mts-.*-pb-.*-v2$/);
-      expect(pb.body.supplier_reference_id).toBe(pb.supplierRefId);
-      expect(pb.body.measurement_type).toBe("biochar_production_batch");
-      expect(pb.body.project_id).toBe("prj_X");
-      expect(pb.body.measured_at).toBe("2026-01-31T00:00:00.000Z");
-    }
-
-    const soil = submissions[2];
-    expect(soil.supplierRefId).toMatch(/^nm-mts-.*-soil-v2$/);
-    expect(soil.body.measurement_type).toBe("biochar_soil");
-    expect(soil.body.values[0].value.magnitude).toBe(12.5);
-    expect(soil.body.values[0].value.unit).toBe("degC");
+  it("fails closed for sampled 200-year batches", () => {
+    expect(() =>
+      buildDurabilityMeasurementSampleSubmissions({
+        ...common,
+        batches: [sampledBatch("a", "CB-A")],
+      }),
+    ).toThrow(/200-year.*post-MVP.*not enabled/i);
   });
 
-  it("routes an unsampled batch to the _unsampled blueprint (mass-only), then soil", () => {
-    const submissions = buildDurabilityMeasurementSampleSubmissions({
-      ...common,
-      batches: [
-        batch({
-          creditBatchId: "u",
-          creditBatchCode: "CB-U",
-          sampling: "unsampled",
-          runs: [{ id: "run-u", code: "R-U", biocharDryMassKg: 1000 }],
-        }),
-      ],
-    });
-
-    expect(submissions.map((s) => s.operationKey)).toEqual([
-      "pb-unsampled:u",
-      "soil",
-    ]);
-    const pb = submissions[0];
-    expect(pb.body.measurement_type).toBe("biochar_production_batch");
-    // Mass-only — the registry derives carbon + durable fraction from history.
-    expect(pb.body.values).toHaveLength(1);
-    expect(pb.body.values[0].measurement_property.quantity_kind).toBe("mass");
-    expect(pb.body.values[0].value.magnitude).toBe(1000);
+  it("fails closed for unsampled Method B batches", () => {
+    expect(() =>
+      buildDurabilityMeasurementSampleSubmissions({
+        ...common,
+        facilityReferenceSoilTemperature: null,
+        batches: [
+          {
+            ...thousandYearBatch("u", "CB-U"),
+            sampling: "unsampled",
+          },
+        ],
+      }),
+    ).toThrow(/unsampled Method B.*post-MVP.*not enabled/i);
   });
 
   it("emits the full per-replicate 1000-year payload without a soil sample", () => {
@@ -398,20 +369,21 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
     ).toThrow(/1 sample.*missing total carbon or the R₀/);
   });
 
-  it("still fails closed when a 200-year batch has no soil reference", () => {
+  it("rejects 200-year before evaluating its soil-temperature payload", () => {
     expect(() =>
       buildDurabilityMeasurementSampleSubmissions({
         ...common,
         facilityReferenceSoilTemperature: null,
         batches: [sampledBatch("a", "CB-A")],
       }),
-    ).toThrow(/soil temperature is required for 200-year/);
+    ).toThrow(/200-year.*not enabled/i);
   });
 
   it("scales product mass by the per-run applied attribution", () => {
     const [pb] = buildDurabilityMeasurementSampleSubmissions({
       ...common,
-      batches: [sampledBatch("a", "CB-A")],
+      facilityReferenceSoilTemperature: null,
+      batches: [thousandYearBatch("a", "CB-A")],
       attributionByRunId: new Map([["run-a", 0.5]]),
     });
 
