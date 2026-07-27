@@ -28,6 +28,14 @@ const REPORTING_WINDOW_PATTERN =
   /^Reporting window spans multiple months \(production started (\d{4}-\d{2}), latest application (\d{4}-\d{2})\)/;
 const SOIL_TEMPERATURE_PATTERN =
   /^An application site soil temperature \(([\d.]+) °C\) exceeds the declared facility reference \(([\d.]+) °C\)/;
+const MIN_INDEPENDENT_SAMPLES = 3;
+
+function independentSamplingRequirement(batchCode: string): string {
+  return (
+    `${batchCode} needs at least ${MIN_INDEPENDENT_SAMPLES} independent samples from different production runs or days ` +
+    "(§8.3.1). Confirm this sampling approach with the registry."
+  );
+}
 
 function parsePostWindowSample(
   warning: string,
@@ -75,7 +83,8 @@ function postWindowNote(
     detail:
       `${sampleSubject} ${sampleVerb} sampled ${samplingRange}, ` +
       `after ${first.batchCode}'s production window (${productionWindow}). Under §8.3.1, ` +
-      "stored-material samples must cover different parts of the batch; confirm this with the registry.",
+      "stored-material samples must cover different parts of the batch; confirm this with the registry. " +
+      "This sampling day does not count as within-batch temporal distribution.",
   };
 }
 
@@ -87,11 +96,9 @@ function knownWarningNote(
   if (unknownProvenance) {
     const [, batchCode, count] = unknownProvenance;
     return {
-      key: `unknown-provenance-${batchCode}`,
+      key: `unknown-provenance-${batchCode}-${index}`,
       summary: `Run/day details are missing for all ${count} samples.`,
-      detail:
-        `${batchCode} needs at least 3 independent samples from different production runs or days ` +
-        "(§8.3.1). Confirm this sampling approach with the registry.",
+      detail: independentSamplingRequirement(batchCode),
     };
   }
 
@@ -99,17 +106,15 @@ function knownWarningNote(
   if (singleRunDay) {
     const [, batchCode, count] = singleRunDay;
     return {
-      key: `single-run-day-${batchCode}`,
+      key: `single-run-day-${batchCode}-${index}`,
       summary: `All ${count} samples are from the same production run or day.`,
-      detail:
-        `${batchCode} needs at least 3 independent samples from different production runs or days ` +
-        "(§8.3.1). Confirm this sampling approach with the registry.",
+      detail: independentSamplingRequirement(batchCode),
     };
   }
 
   if (warning.startsWith("Diesel fuel (genset and/or startup/preprocessing)")) {
     return {
-      key: "unmapped-diesel",
+      key: `unmapped-diesel-${index}`,
       summary: "Some recorded fuel emissions cannot be submitted.",
       detail:
         "The active removal template has no compatible field for this fuel use. Update the template or confirm how these emissions should be reported.",
@@ -120,7 +125,7 @@ function knownWarningNote(
   if (reportingWindow) {
     const [, productionMonth, applicationMonth] = reportingWindow;
     return {
-      key: "reporting-window",
+      key: `reporting-window-${index}`,
       summary: "Production and application fall in different reporting months.",
       detail:
         `Production began in ${productionMonth}; the latest application was in ${applicationMonth}. ` +
@@ -132,7 +137,7 @@ function knownWarningNote(
   if (soilTemperature) {
     const [, siteTemperature, referenceTemperature] = soilTemperature;
     return {
-      key: "soil-temperature",
+      key: `soil-temperature-${index}`,
       summary: "A site is warmer than the facility reference temperature.",
       detail:
         `The site is ${siteTemperature} °C and the reference is ${referenceTemperature} °C. ` +

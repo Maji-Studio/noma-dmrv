@@ -20,6 +20,9 @@ describe("buildSubmissionWarningNotes", () => {
         ),
       }),
     ]);
+    expect(buildSubmissionWarningNotes(warnings)[0].detail).toContain(
+      "does not count as within-batch temporal distribution",
+    );
   });
 
   it("simplifies missing run/day provenance without losing the protocol context", () => {
@@ -49,6 +52,17 @@ describe("buildSubmissionWarningNotes", () => {
         key: "warning-0",
         summary: "A new warning.",
       },
+    ]);
+  });
+
+  it("gives repeated recognized warnings unique render keys", () => {
+    const warning =
+      "Diesel fuel (genset and/or startup/preprocessing) cannot be mapped.";
+    const notes = buildSubmissionWarningNotes([warning, warning]);
+
+    expect(notes.map((note) => note.key)).toEqual([
+      "unmapped-diesel-0",
+      "unmapped-diesel-1",
     ]);
   });
 });
