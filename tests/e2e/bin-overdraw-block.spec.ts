@@ -263,13 +263,17 @@ async function createLinkedProduct(
 }
 
 /** Delete the UI-created product so its directly-seeded product bin can follow. */
-async function deleteCreatedProduct(page: Page, seededData: SeededChainData) {
+async function deleteCreatedProduct(
+  page: Page,
+  seededData: SeededChainData,
+  productBin: TestStorageLocation,
+) {
   await page.goto(
     `${BIOCHAR_PRODUCTS_URL}?facility=${seededData.facility.id}`,
   );
   const actionButton = page
     .locator("tbody tr")
-    .first()
+    .filter({ hasText: productBin.name })
     .getByRole("button", { name: /Actions for/ });
   await expect(actionButton).toBeVisible({ timeout: 10000 });
   await actionButton.click();
@@ -291,7 +295,9 @@ async function cleanupProductScenario(
   productBin: TestStorageLocation,
   productCreated: boolean,
 ) {
-  if (productCreated) await deleteCreatedProduct(page, seededData);
+  if (productCreated) {
+    await deleteCreatedProduct(page, seededData, productBin);
+  }
   await deleteTestStorageLocation(productBin.id);
 }
 
