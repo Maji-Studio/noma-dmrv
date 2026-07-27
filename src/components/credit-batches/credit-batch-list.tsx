@@ -82,6 +82,21 @@ export function closeCreditBatchCreate(
   closeSideSheet();
 }
 
+/**
+ * Re-attach the live CO₂e-stored preview to a batch snapshot. Cards read from
+ * the hydrated list, but the side sheet holds whichever object it was opened
+ * with — a click-captured row, or a single-batch fetch (which never carries a
+ * preview) for a `?batch=` deep link.
+ */
+export function hydrateCo2ePreview(
+  batch: CreditBatchWithRelations | null,
+  previews: Record<string, CreditBatchWithRelations["co2eStoredPreview"]>,
+): CreditBatchWithRelations | null {
+  if (!batch) return null;
+  const preview = previews[batch.id];
+  return preview ? { ...batch, co2eStoredPreview: preview } : batch;
+}
+
 // ============================================
 // Component
 // ============================================
@@ -399,7 +414,14 @@ export function CreditBatchList({
   const displaySideSheet = sideSheet ?? deepLinkedSideSheet;
 
   // Member production runs for the view sheet's "Production runs" section.
-  const viewEntity = displaySideSheet?.entity ?? null;
+  // The sheet's entity is a snapshot (click-captured, or fetched by deep link),
+  // so its CO₂e preview is re-attached from the live preview query here —
+  // otherwise a preview arriving after the sheet opened never reaches it and the
+  // field reads as though the figure were unobtainable.
+  const viewEntity = hydrateCo2ePreview(
+    displaySideSheet?.entity ?? null,
+    co2eStoredPreviews,
+  );
   const runOptionsQuery = useCreditBatchProductionRunOptions({
     facilityId: viewEntity?.facilityId,
     startDate: viewEntity?.startDate,
@@ -475,7 +497,7 @@ export function CreditBatchList({
   // Derived values for the side sheet
   const sideSheetOpen = !!displaySideSheet || createIntent.isOpen;
   const sideSheetMode = displaySideSheet?.mode ?? "create";
-  const sideSheetEntity = displaySideSheet?.entity ?? null;
+  const sideSheetEntity = viewEntity;
 
   const sideSheetTitle =
     sideSheetMode === "create" ? "Create Credit Batch" : sideSheetEntity?.code ?? "";
@@ -693,6 +715,8 @@ export function CreditBatchList({
                   ? undefined
                   : batchHealthSummaries[sideSheetEntity.id],
                 isHealthLoading: healthLoading && !healthError,
+                isCo2ePreviewLoading: previewsLoading || previewsFetching,
+                co2ePreviewFailed: !!previewsError,
               })
             : undefined
         }

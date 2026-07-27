@@ -12,6 +12,7 @@ import {
   CheckCircleIcon,
   XCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   H_TO_C_ORG_ELIGIBILITY_MAX,
   O_TO_C_ORG_ELIGIBILITY_MAX,
@@ -34,23 +35,40 @@ const TONE_CLASSES: Record<Tone, string> = {
 function ReadinessChip({
   tone,
   icon,
+  hint,
   children,
 }: {
   tone: Tone;
   icon?: React.ReactNode;
+  /** Plain-language explanation of what the signal means; shown on hover/focus. */
+  hint?: React.ReactNode;
   children: React.ReactNode;
 }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-6 border px-8 py-4 body-caption font-medium ${TONE_CLASSES[tone]}`}
-    >
+  const body = (
+    <>
       {icon && (
         <span className="shrink-0" aria-hidden>
           {icon}
         </span>
       )}
       {children}
-    </span>
+    </>
+  );
+  const className = `inline-flex items-center gap-6 border px-8 py-4 body-caption font-medium ${TONE_CLASSES[tone]}`;
+
+  if (!hint) return <span className={className}>{body}</span>;
+
+  // The chip itself is the tooltip trigger — a separate ⓘ icon on each of three
+  // adjacent chips reads as noise, and every chip here needs an explanation.
+  return (
+    <Tooltip content={hint}>
+      <button
+        type="button"
+        className={`${className} cursor-help text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]`}
+      >
+        {body}
+      </button>
+    </Tooltip>
   );
 }
 
@@ -78,12 +96,15 @@ export function formatDurabilityStat(
 function eligibilityChip(
   eligibility: DurabilitySummaryEligibility,
   hasUsableReplicates: boolean,
-): { tone: Tone; icon: React.ReactNode; label: string } {
+): { tone: Tone; icon: React.ReactNode; label: string; hint: string } {
+  const thresholds = `H/C_org below ${DURABILITY_ELIGIBILITY_CEILINGS.hToC} and O/C_org below ${DURABILITY_ELIGIBILITY_CEILINGS.oToC}`;
+
   if (eligibility.eligible === true) {
     return {
       tone: "ok",
       icon: <CheckCircleIcon size={14} weight="fill" />,
       label: "Chemistry eligible",
+      hint: `This batch's pooled sample chemistry qualifies as biochar: ${thresholds}. Judged on the mean across samples, not sample by sample.`,
     };
   }
   if (eligibility.eligible === false) {
@@ -91,6 +112,7 @@ function eligibilityChip(
       tone: "bad",
       icon: <XCircleIcon size={14} weight="fill" />,
       label: "Chemistry ineligible",
+      hint: `The pooled mean misses the biochar thresholds (${thresholds}), so this batch cannot be certified on its current samples.`,
     };
   }
   // null — indeterminate. Distinguish "no chemistry yet" from "partial chemistry".
@@ -99,11 +121,13 @@ function eligibilityChip(
         tone: "wait",
         icon: undefined,
         label: "Chemistry indeterminate",
+        hint: `The samples recorded so far don't yet resolve both ratios, so eligibility (${thresholds}) can't be judged. Add the missing H/C_org or O/C_org results.`,
       }
     : {
         tone: "off",
         icon: undefined,
         label: "Awaiting chemistry",
+        hint: `No sample carries lab chemistry yet. Eligibility needs ${thresholds} on the pooled mean.`,
       };
 }
 
@@ -127,12 +151,14 @@ export function DurabilityReadinessSignals({
     tone: Tone;
     icon?: React.ReactNode;
     content: React.ReactNode;
+    hint?: React.ReactNode;
   }> = [
     {
       key: "chemistry",
       tone: eligibility.tone,
       icon: eligibility.icon,
       content: eligibility.label,
+      hint: eligibility.hint,
     },
     {
       key: "replicates",
@@ -141,6 +167,9 @@ export function DurabilityReadinessSignals({
         <CheckCircleIcon size={14} weight="fill" />
       ) : undefined,
       content: `${usableReplicateCount} of ${minimumReplicates} usable samples`,
+      hint: `Only samples with both H/C_org and O/C_org results count. This batch needs at least ${minimumReplicates}; ${usableReplicateCount} ${
+        usableReplicateCount === 1 ? "is" : "are"
+      } complete so far.`,
     },
     ...(meetsMinimum
       ? [{
@@ -149,9 +178,15 @@ export function DurabilityReadinessSignals({
           icon: summary.distributionWarning ? undefined : (
             <CheckCircleIcon size={14} weight="fill" />
           ),
+          // "Clustered" was jargon: it means every sample was drawn from the
+          // same production run on the same day, so nothing shows the batch
+          // stayed consistent across its production window.
           content: summary.distributionWarning
-            ? "Clustered on one run/day"
+            ? "All samples from one run/day"
             : `${summary.distinctRunDayCount} distinct runs/days`,
+          hint: summary.distributionWarning
+            ? "Every sample was taken from the same production run on the same day, so they can't show the batch stayed consistent across its production window. Spread samples across different runs or days. This doesn't block submission, but your verifier is likely to query it."
+            : `Samples come from ${summary.distinctRunDayCount} different runs or days, which is what shows the batch stayed consistent across its production window.`,
         }]
       : []),
   ].sort(
@@ -169,6 +204,7 @@ export function DurabilityReadinessSignals({
           key={signal.key}
           tone={signal.tone}
           icon={signal.icon}
+          hint={signal.hint}
         >
           {signal.content}
         </ReadinessChip>

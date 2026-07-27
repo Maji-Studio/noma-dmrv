@@ -36,7 +36,8 @@ import {
   DurabilityReadinessSignals,
   formatDurabilityStat,
 } from "@/components/certification/durability-readiness";
-import { sampleCreateHref } from "@/lib/sample-create-intent";
+import { sampleCreateHref, sampleDetailHref } from "@/lib/sample-create-intent";
+import { SheetLinkRow, SheetLinkRows } from "./sheet-link-row";
 
 function Section({ children }: { children: React.ReactNode }) {
   return (
@@ -167,31 +168,41 @@ function ReplicateTable({ summary }: { summary: DurabilityBatchSummary }) {
   );
 }
 
-function SampleSummaryRows({ summary }: { summary: DurabilityBatchSummary }) {
+function SampleSummaryRows({
+  summary,
+  facilityId,
+}: {
+  summary: DurabilityBatchSummary;
+  facilityId: string;
+}) {
   return (
-    <div className="divide-y divide-[var(--color-border-tertiary)] border-y border-[var(--color-border-tertiary)]">
+    <SheetLinkRows>
       {summary.replicates.map((replicate) => (
-        <div
+        <SheetLinkRow
           key={replicate.id}
-          className="flex items-center justify-between gap-12 py-8"
-        >
-          <span className="inline-flex min-w-0 items-center gap-6 body-small font-medium text-[var(--color-text-primary)]">
-            {replicate.outlier && (
-              <WarningIcon
-                size={13}
-                weight="fill"
-                className="shrink-0 text-[var(--st-wait)]"
-                aria-label="Chemistry outlier"
-              />
-            )}
-            {replicate.sampleCode}
-          </span>
-          <span className="truncate text-right body-caption text-[var(--color-text-tertiary)]">
-            {sampleProvenanceLabel(replicate)}
-          </span>
-        </div>
+          href={sampleDetailHref(facilityId, replicate.id)}
+          ariaLabel={`Open lab sample ${replicate.sampleCode}`}
+          primary={
+            <span className="inline-flex min-w-0 items-center gap-6">
+              {replicate.outlier && (
+                <WarningIcon
+                  size={13}
+                  weight="fill"
+                  className="shrink-0 text-[var(--st-wait)]"
+                  aria-label="Chemistry outlier"
+                />
+              )}
+              {replicate.sampleCode}
+            </span>
+          }
+          meta={
+            <span className="body-caption text-[var(--color-text-tertiary)]">
+              {sampleProvenanceLabel(replicate)}
+            </span>
+          }
+        />
       ))}
-    </div>
+    </SheetLinkRows>
   );
 }
 
@@ -265,7 +276,7 @@ export function CreditBatchDurabilityPanel({
   return (
     <Section>
       <DurabilityReadinessSignals summary={summary} />
-      <SampleSummaryRows summary={summary} />
+      <SampleSummaryRows summary={summary} facilityId={facilityId} />
 
       <details className="group border border-[var(--color-border-tertiary)]">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-12 px-12 py-10 body-small font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-background-medium)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]">

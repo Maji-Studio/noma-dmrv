@@ -53,6 +53,21 @@ const CARBON_INPUT_LABELS: Record<string, string> = {
 const COMPLETE_CHEMISTRY_REPLICATE_DETAIL =
   "replicate(s) with complete H/C_org + O/C_org chemistry";
 
+/**
+ * The genuine carbon/durability gaps in a CO₂e-stored preview, as human labels.
+ * Shared with the credit-batch detail's "CO₂e stored" field so the number's
+ * absence is explained in the SAME words the health check uses.
+ */
+export function carbonGapLabels(missingInputs: readonly string[]): string[] {
+  return Array.from(
+    new Set(
+      missingInputs
+        .filter((key) => !NON_CARBON_MISSING_INPUTS.has(key))
+        .map((key) => CARBON_INPUT_LABELS[key] ?? key),
+    ),
+  );
+}
+
 function carbonMissingInputs(
   ctx: RemovalCertifyContext,
   batchId: string,
@@ -63,9 +78,7 @@ function carbonMissingInputs(
   return Array.from(
     new Set(
       [
-        ...raw
-          .filter((key) => !NON_CARBON_MISSING_INPUTS.has(key))
-          .map((key) => CARBON_INPUT_LABELS[key] ?? key),
+        ...carbonGapLabels(raw),
         ...(member?.durabilityGateBlockers ?? []).filter(
           (blocker) =>
             !(

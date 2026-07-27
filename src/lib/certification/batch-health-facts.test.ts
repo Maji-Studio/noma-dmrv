@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import { deriveBatchHealth } from "./batch-health";
-import { toBatchHealthFacts } from "./batch-health-facts";
+import { carbonGapLabels, toBatchHealthFacts } from "./batch-health-facts";
 import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "./preview-gaps";
 
 describe("toBatchHealthFacts", () => {
@@ -71,5 +71,24 @@ describe("toBatchHealthFacts", () => {
     expect(
       health.checks.find((check) => check.key === "production")?.status,
     ).toBe("unmet");
+  });
+});
+
+describe("carbonGapLabels", () => {
+  it("labels genuine carbon gaps and drops the keys other checks own", () => {
+    expect(
+      carbonGapLabels([
+        "organicCarbonPercent",
+        "applicationIds",
+        "isometricCertifier",
+        STORED_CO2E_PREVIEW_REVERIFICATION_GAP,
+      ]),
+    ).toEqual(["Organic carbon content"]);
+  });
+
+  it("passes an unknown calc input through rather than dropping it silently", () => {
+    expect(carbonGapLabels(["someNewInput", "someNewInput"])).toEqual([
+      "someNewInput",
+    ]);
   });
 });
