@@ -50,15 +50,29 @@ function storedVerification(
     return null;
   }
   const candidate = value as Partial<StoredSourceBindingVerification>;
+  const hasValidVersion =
+    typeof candidate.submissionVersion === "number" &&
+    Number.isInteger(candidate.submissionVersion);
+  const hasValidVerifiedCount =
+    typeof candidate.verifiedCount === "number" &&
+    Number.isInteger(candidate.verifiedCount) &&
+    candidate.verifiedCount >= 0;
+  const hasValidTotalCount =
+    typeof candidate.totalCount === "number" &&
+    Number.isInteger(candidate.totalCount) &&
+    candidate.totalCount >= 0;
   if (
     typeof candidate.submissionId !== "string" ||
-    typeof candidate.submissionVersion !== "number" ||
+    !hasValidVersion ||
     (candidate.state !== "verified" &&
       candidate.state !== "awaiting_sync" &&
       candidate.state !== "mismatch") ||
     typeof candidate.checkedAt !== "string" ||
-    typeof candidate.verifiedCount !== "number" ||
-    typeof candidate.totalCount !== "number"
+    !hasValidVerifiedCount ||
+    !hasValidTotalCount ||
+    (candidate.verifiedCount ?? 0) > (candidate.totalCount ?? -1) ||
+    (candidate.state === "verified" &&
+      candidate.verifiedCount !== candidate.totalCount)
   ) {
     return null;
   }

@@ -14,7 +14,6 @@ import {
 import { env } from "@/config/env";
 import {
   updateRemovalDates,
-  updateRemovalSourceBindingVerification,
 } from "@/data-access/certifier-removals";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
@@ -31,7 +30,6 @@ import {
   type IsometricClient,
 } from "@/lib/isometric";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
-import { verifyRemovalSourceBindings } from "@/lib/isometric/source-binding-verification";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import {
   bindSequestrationDatapointsToTemplate,
@@ -71,6 +69,7 @@ import {
 import { checkProtocolVersionAtSubmit } from "./protocol-version-preflight";
 import { performRegistryCreate, supplierRefLookup } from "./registry-create";
 import { resolveSourceBindingCandidates } from "./sources";
+import { verifyAndPersistRemovalSourceBindings } from "./removal-source-binding-verification";
 import {
   appendSyncEventBestEffort,
   assertProductionConfirmed,
@@ -847,107 +846,4 @@ async function runRemovalSubmission({
   });
 
   return { removalId, externalId: externalRemovalId, version: row.version };
-}
-
-async function verifyAndPersistRemovalSourceBindings(args: {
-  client: IsometricClient;
-  orgCtx: OrgContext;
-  removalId: string;
-  submissionRow: CertificationSubmissionRow;
-  externalRemovalId: string;
-  log: Logger;
-}): Promise<void> {
-  const checkedAt = new Date().toISOString();
-  let verification:
-    | Awaited<ReturnType<typeof verifyRemovalSourceBindings>>
-    | {
-        state: "awaiting_sync";
-        verifiedCount: 0;
-        totalCount: number;
-        mismatches: [];
-        awaitingTargets: string[];
-      };
-  let plan: ReturnType<typeof readRemovalSourceBindingPlan>;
-  try {
-    plan = readRemovalSourceBindingPlan(args.submissionRow);
-    verification = await verifyRemovalSourceBindings(
-      args.client,
-      args.externalRemovalId,
-      plan,
-    );
-  } catch (error) {
-    const snapshot = args.submissionRow.payloadSnapshot as {
-      sourceBindingPlan?: unknown[];
-    } | null;
-    const totalCount = Array.isArray(snapshot?.sourceBindingPlan)
-      ? snapshot.sourceBindingPlan.length
-      : 0;
-    verification = {
-      state: "awaiting_sync",
-      verifiedCount: 0,
-      totalCount,
-      mismatches: [],
-      awaitingTargets: [],
-    };
-    args.log.warn(
-      {
-        submissionId: args.submissionRow.id,
-        err: error instanceof Error ? error.message : String(error),
-      },
-      "removal Source binding verification awaiting sync",
-    );
-  }
-
-  try {
-    await updateRemovalSourceBindingVerification(args.orgCtx, args.removalId, {
-      submissionId: args.submissionRow.id,
-      submissionVersion: args.submissionRow.version,
-      state: verification.state,
-      checkedAt,
-      verifiedCount: verification.verifiedCount,
-      totalCount: verification.totalCount,
-    });
-  } catch (error) {
-    args.log.warn(
-      {
-        submissionId: args.submissionRow.id,
-        err: error instanceof Error ? error.message : String(error),
-      },
-      "failed to persist Removal Source binding verification",
-    );
-  }
-  await appendSyncEventBestEffort(
-    args.orgCtx,
-    {
-      provider: ISOMETRIC_PROVIDER,
-      entityType: REMOVAL_ENTITY_TYPE,
-      entityId: args.removalId,
-      operation: "removal:source-bindings:verify",
-      status: verification.state === "verified" ? "succeeded" : "failed",
-      responsePayload: {
-        state: verification.state,
-        verified_count: verification.verifiedCount,
-        total_count: verification.totalCount,
-        mapping_revisions: Array.from(
-          new Set(
-            ((args.submissionRow.payloadSnapshot as {
-              sourceBindingPlan?: Array<{ mappingRevision?: unknown }>;
-            } | null)?.sourceBindingPlan ?? [])
-              .map((entry) => entry.mappingRevision)
-              .filter(
-                (revision): revision is string =>
-                  typeof revision === "string",
-              ),
-          ),
-        ),
-      },
-      ...(verification.state === "mismatch"
-        ? {
-            errorMessage:
-              "One or more Sources are not attached to their intended Removal Datapoint targets.",
-          }
-        : {}),
-    },
-    { submissionId: args.submissionRow.id },
-  );
 }

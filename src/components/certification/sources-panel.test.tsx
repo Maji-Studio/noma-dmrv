@@ -7,6 +7,9 @@ const rowMutationState = vi.hoisted(() => ({
   isError: false,
   confirmed: false,
 }));
+const queryState = vi.hoisted(() => ({
+  isError: false,
+}));
 
 vi.mock("@/hooks/use-certification-sources", () => ({
   useCandidateDocumentsForRemoval: () => ({
@@ -85,7 +88,8 @@ vi.mock("@/hooks/use-certification-sources", () => ({
       ],
     },
     isLoading: false,
-    error: null,
+    isError: queryState.isError,
+    error: queryState.isError ? new Error("background refetch failed") : null,
   }),
   useMirrorDocumentToSource: () => ({
     isPending: rowMutationState.isPending,
@@ -141,6 +145,7 @@ describe("SourcesPanel supporting document affordances", () => {
     rowMutationState.isPending = false;
     rowMutationState.isError = false;
     rowMutationState.confirmed = false;
+    queryState.isError = false;
   });
 
   it("renders legacy URL-only documents as a non-interactive status", () => {
@@ -221,5 +226,16 @@ describe("SourcesPanel supporting document affordances", () => {
 
     expect(html).toContain("source-confirmed");
     expect(html).not.toContain("Retry");
+  });
+
+  it("surfaces a background refetch failure instead of stale cached data", () => {
+    queryState.isError = true;
+
+    const html = renderToStaticMarkup(
+      <SourcesPanel removalId="removal-id" />,
+    );
+
+    expect(html).toContain("Unable to load supporting sources");
+    expect(html).not.toContain("legacy-boundary-logbook.PDF");
   });
 });

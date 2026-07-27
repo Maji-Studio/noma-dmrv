@@ -77,4 +77,34 @@ describe("deriveRemovalEvidenceHealth", () => {
       }),
     ).toBeNull();
   });
+
+  it.each([
+    { verifiedCount: -1, totalCount: 3 },
+    { verifiedCount: 1.5, totalCount: 3 },
+    { verifiedCount: 4, totalCount: 3 },
+    { verifiedCount: 1, totalCount: -1 },
+    { verifiedCount: 1, totalCount: 3, state: "verified" },
+  ])("fails closed for impossible persisted counts %#", (invalid) => {
+    expect(
+      deriveRemovalEvidenceHealth({
+        submissionId: "submission-2",
+        submissionVersion: 2,
+        submissionStatus: "submitted",
+        removalMetadata: {
+          sourceBindingVerification: {
+            submissionId: "submission-2",
+            submissionVersion: 2,
+            state: "awaiting_sync",
+            checkedAt: "2026-07-27T10:00:00.000Z",
+            ...invalid,
+          },
+        },
+      }),
+    ).toEqual({
+      state: "awaiting_sync",
+      label: "Awaiting sync",
+      verifiedCount: 0,
+      totalCount: 0,
+    });
+  });
 });

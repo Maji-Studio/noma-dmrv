@@ -93,7 +93,7 @@ function PanelBodyForRemoval({ removalId }: { removalId: string }) {
       </p>
     );
   }
-  if (!query.data) {
+  if (query.isError || !query.data) {
     return (
       <p className="body-small text-[var(--clr-red)]">
         Unable to load supporting sources. Try refreshing.
