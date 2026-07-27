@@ -38,6 +38,49 @@ const feedstockOverdrawText = /not enough feedstock in this bin/i;
 const biocharOverdrawText = /not enough biochar in this bin/i;
 const deliveryOverdrawText =
   /cannot deliver .* only .* remain undelivered/i;
+const ACTION_LABEL_PREFIX = "Actions for ";
+
+async function getListedActionCodes(page: Page): Promise<Set<string>> {
+  const table = page.getByRole("table", { name: "Production runs" });
+  const emptyState = page.getByText(/No production runs (?:yet|found)/, {
+    exact: true,
+  });
+  await expect
+    .poll(async () => {
+      if (await table.count()) return table.getAttribute("aria-busy");
+      return (await emptyState.count()) ? "false" : "pending";
+    })
+    .toBe("false");
+  const labels = await page
+    .locator(`tbody button[aria-label^="${ACTION_LABEL_PREFIX}"]`)
+    .evaluateAll(
+      (buttons, prefixLength) =>
+        buttons
+          .map((button) => button.getAttribute("aria-label"))
+          .filter((label): label is string => label !== null)
+          .map((label) => label.slice(prefixLength)),
+      ACTION_LABEL_PREFIX.length,
+    );
+  return new Set(labels);
+}
+
+async function getCreatedActionCode(
+  page: Page,
+  existingCodes: Set<string>,
+): Promise<string> {
+  let createdCodes: string[] = [];
+  await expect
+    .poll(async () => {
+      createdCodes = [...(await getListedActionCodes(page))].filter(
+        (code) => !existingCodes.has(code),
+      );
+      return createdCodes.length;
+    })
+    .toBe(1);
+  const createdCode = createdCodes[0];
+  if (!createdCode) throw new Error("Created action code was not rendered");
+  return createdCode;
+}
 
 /** Open the existing draft run form against the seeded 100 kg-dry source bin. */
 async function openRunFormWithSource(
@@ -91,6 +134,7 @@ async function openCompleteRunForm(
   await expect(
     page.getByRole("button", { name: "New Production Run" }),
   ).toBeVisible();
+  const existingRunCodes = await getListedActionCodes(page);
   await page.getByRole("button", { name: "New Production Run" }).click();
   await waitForSideSheet(page);
 
@@ -128,6 +172,7 @@ async function openCompleteRunForm(
     'input[name="biocharOutputKg"]',
     values.biocharOutputKg ?? "1",
   );
+  return existingRunCodes;
 }
 
 /** Submit the create-production-run side sheet. */
@@ -144,25 +189,68 @@ async function createCompleteRun(
   seededData: SeededChainData,
   values: Parameters<typeof openCompleteRunForm>[2],
 ) {
-  await openCompleteRunForm(page, seededData, values);
+  const existingRunCodes = await openCompleteRunForm(page, seededData, values);
   await submitRunCreate(page);
   await waitForSideSheetClose(page);
-  const actionButton = page
-    .locator("tbody tr")
-    .getByRole("button", { name: /Actions for/ })
-    .first();
-  await expect(actionButton).toBeVisible({ timeout: 10000 });
-  const actionLabel = await actionButton.getAttribute("aria-label");
-  const runCode = actionLabel?.replace(/^Actions for /, "").trim();
-  if (!runCode) throw new Error("Created production run code was not rendered");
+  const runCode = await getCreatedActionCode(page, existingRunCodes);
 
-  await editFirstRow(page, "endTime");
+  await editRunByCode(page, runCode, "endTime");
   await page.fill('input[name="endDate"]', RUN_DATE);
   await page.fill('input[name="endTime"]', RUN_END_TIME);
   await page.selectOption('select[name="status"]', "complete");
   await saveEdit(page);
   await waitForSideSheetClose(page);
   return runCode;
+}
+
+/** Open a specific production run through its stable run-code action label. */
+async function editRunByCode(
+  page: Page,
+  runCode: string,
+  readyInputName: string,
+) {
+  const actionName = `${ACTION_LABEL_PREFIX}${runCode}`;
+  await expect(
+    page.locator("tbody").getByRole("button", {
+      name: actionName,
+      exact: true,
+    }),
+  ).toBeVisible({ timeout: 10000 });
+  await expect(async () => {
+    await page
+      .locator("tbody")
+      .getByRole("button", { name: actionName, exact: true })
+      .click({ timeout: 5000 });
+    await page
+      .getByRole("menuitem", { name: "Edit" })
+      .click({ timeout: 5000 });
+  }).toPass({ timeout: 30000 });
+  await waitForSideSheet(page);
+  await expect(
+    page.locator(`[role="dialog"] input[name="${readyInputName}"]`),
+  ).toBeVisible();
+}
+
+/** Open the row containing unique entity text through its Edit action. */
+async function editRowByText(
+  page: Page,
+  uniqueText: string,
+  readyInputName: string,
+) {
+  const matchingRow = page.locator("tbody tr").filter({ hasText: uniqueText });
+  await expect(matchingRow).toHaveCount(1, { timeout: 10000 });
+  await expect(async () => {
+    await matchingRow
+      .getByRole("button", { name: /Actions for/ })
+      .click({ timeout: 5000 });
+    await page
+      .getByRole("menuitem", { name: "Edit" })
+      .click({ timeout: 5000 });
+  }).toPass({ timeout: 30000 });
+  await waitForSideSheet(page);
+  await expect(
+    page.locator(`[role="dialog"] input[name="${readyInputName}"]`),
+  ).toBeVisible();
 }
 
 /** Open the first list row through its overflow-menu Edit action. */
@@ -422,11 +510,11 @@ test.describe("updateProductionRun feedstock guard", () => {
     seededData,
   }) => {
     // The run owns 80 kg; replacing it with 110 kg still exceeds total stock.
-    await createCompleteRun(page, seededData, {
+    const runCode = await createCompleteRun(page, seededData, {
       feedstockWetMassKg: "80",
       feedstockMoisturePercent: "0",
     });
-    await editFirstRow(page, "feedstockWetMassKg");
+    await editRunByCode(page, runCode, "feedstockWetMassKg");
     await page.fill('input[name="feedstockWetMassKg"]', "110");
     await saveEdit(page);
 
@@ -444,11 +532,11 @@ test.describe("updateProductionRun feedstock guard", () => {
     seededData,
   }) => {
     // 80 → 90 kg is valid against 100 kg total, but 80 + 90 would falsely fail.
-    await createCompleteRun(page, seededData, {
+    const runCode = await createCompleteRun(page, seededData, {
       feedstockWetMassKg: "80",
       feedstockMoisturePercent: "0",
     });
-    await editFirstRow(page, "feedstockWetMassKg");
+    await editRunByCode(page, runCode, "feedstockWetMassKg");
     await page.fill('input[name="feedstockWetMassKg"]', "90");
     await saveEdit(page);
 
@@ -540,7 +628,7 @@ test.describe("updateBiocharProduct biochar-bin guard", () => {
         "100",
       );
       productCreated = true;
-      await editFirstRow(page, "massKg");
+      await editRowByText(page, productBin.name, "massKg");
       await page.fill('input[name="massKg"]', "150");
       await saveEdit(page);
 
@@ -578,7 +666,7 @@ test.describe("updateBiocharProduct biochar-bin guard", () => {
         "100",
       );
       productCreated = true;
-      await editFirstRow(page, "massKg");
+      await editRowByText(page, productBin.name, "massKg");
       await page.fill('input[name="massKg"]', "140");
       await saveEdit(page);
       await waitForSideSheetClose(page);
