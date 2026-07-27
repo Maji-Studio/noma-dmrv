@@ -125,8 +125,10 @@ export function Modal({
     >
       <Dialog.Portal>
         <Dialog.Backdrop
+          data-overlay-layer="dialog-backdrop"
+          forceRender
           className={cn(
-            "fixed inset-0 z-40 bg-[var(--color-black-50)]",
+            "fixed inset-0 bg-[var(--color-black-50)]",
             "transition-opacity duration-200",
             "data-[open]:opacity-100",
             "data-[starting-style]:opacity-0",
@@ -134,11 +136,12 @@ export function Modal({
           )}
         />
         <Dialog.Popup
+          data-overlay-layer="dialog"
           aria-labelledby={ariaLabelledBy}
           aria-label={ariaLabel}
           aria-describedby={ariaDescribedBy}
           className={cn(
-            "fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2",
+            "fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
             "bg-[var(--color-background-white)] border border-[var(--color-border-primary)]",
             "max-w-[calc(100vw-32px)] max-h-[calc(100vh-32px)] overflow-auto",
             "outline-none",
