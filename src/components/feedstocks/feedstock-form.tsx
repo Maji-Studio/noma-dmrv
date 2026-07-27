@@ -18,6 +18,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
 import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
 import {
@@ -128,6 +129,7 @@ export function FeedstockForm({
     register,
     handleSubmit,
     control,
+    trigger,
     setValue,
     getValues,
     resetField,
@@ -357,6 +359,7 @@ export function FeedstockForm({
       <div className="space-y-20">
       <FormSpine control={control}>
         <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
+        <ResolvedErrorRevalidator control={control} trigger={trigger} />
         {/* Delivery Information */}
         <FormSection
           title="Delivery information"

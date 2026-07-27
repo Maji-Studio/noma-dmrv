@@ -4,7 +4,13 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
-import { FormField, FormInput, FormTextarea, MoistureField } from "@/components/forms";
+import {
+  FormField,
+  FormInput,
+  FormTextarea,
+  MoistureField,
+  ResolvedErrorRevalidator,
+} from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { useToast } from "@/components/ui/toast";
@@ -157,6 +163,7 @@ function StockTakeForm({
     handleSubmit,
     setError,
     control,
+    trigger,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(stockTakeFormSchema),
@@ -231,6 +238,7 @@ function StockTakeForm({
 
   return (
     <form onSubmit={onSubmit} className="flex flex-1 flex-col space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormField
         id="counted"
         label={countedLabel}
@@ -348,6 +356,7 @@ function LossForm({
     register,
     handleSubmit,
     control,
+    trigger,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(recordLossFormSchema),
@@ -399,6 +408,7 @@ function LossForm({
 
   return (
     <form onSubmit={onSubmit} className="flex flex-1 flex-col space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormField
         id="loss-amount"
         label="Amount lost (kg)"

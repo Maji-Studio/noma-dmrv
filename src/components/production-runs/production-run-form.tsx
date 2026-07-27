@@ -24,7 +24,7 @@ import Link from "next/link";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
 import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, FileCsvIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormTextarea, MassMoistureFields, FormActions, FormSection, FormSpine, SectionLabel, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, MassMoistureFields, FormActions, FormSection, FormSpine, SectionLabel, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
 import { productionRunTelemetryCertification } from "./production-run-detail-fields";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
@@ -303,11 +303,11 @@ export function ProductionRunForm({
     biocharMoisturePercent: productionRun?.biocharMoisturePercent ?? undefined,
     biocharStorageLocationId: productionRun?.biocharStorageLocationId ?? "",
   };
-
   const {
     register,
     handleSubmit,
     control,
+    trigger,
     setValue,
     resetField,
     setError,
@@ -522,6 +522,7 @@ export function ProductionRunForm({
   return (
     <div className="space-y-20">
       <form id={formId} onSubmit={handleFormSubmit}>
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormSpine control={control}>
       {/* ── Run setup ── */}
       <FormSection

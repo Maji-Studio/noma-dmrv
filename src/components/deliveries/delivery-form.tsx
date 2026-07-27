@@ -15,6 +15,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, ScalesIcon, MapPinIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus } from "@/components/forms";
+import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
 import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
 import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
@@ -125,6 +126,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const {
     register,
     control,
+    trigger,
     handleSubmit,
     setValue,
     formState: { errors },
@@ -350,6 +352,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     <div className="space-y-20">
       <FormSpine control={control}>
       <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {/* Delivery Information Section */}
       <FormSection
         title="Delivery information"

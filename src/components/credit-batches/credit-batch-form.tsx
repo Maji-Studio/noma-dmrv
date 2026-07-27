@@ -25,6 +25,7 @@ import {
   FormEntitySelect,
   FormField,
   FormInput,
+  ResolvedErrorRevalidator,
   FormSection,
   FormTextarea,
 } from "@/components/forms";
@@ -101,6 +102,7 @@ export function CreditBatchForm({
     register,
     handleSubmit,
     control,
+    trigger,
     formState: { errors },
     setValue,
   } = useForm({
@@ -279,6 +281,7 @@ export function CreditBatchForm({
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {/* ── Batch definition ── */}
       <FormSection title="Batch definition" divider={false}>
 

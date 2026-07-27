@@ -21,6 +21,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { PackageIcon, MapPinIcon, CameraIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormSelect, FormSection, FormSpine, PositionPicker, FormActions, makeCertFieldStatus } from "@/components/forms";
+import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import {
   applicationFormSchema,
@@ -188,6 +189,7 @@ export function ApplicationForm({
     register,
     handleSubmit,
     control,
+    trigger,
     setError,
     setValue,
     getFieldState,
@@ -357,6 +359,7 @@ export function ApplicationForm({
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormSpine control={control}>
       {/* === Section 1: Application Details === */}
       <FormSection

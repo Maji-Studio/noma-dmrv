@@ -22,6 +22,7 @@ export {
 export { SectionLabel } from "./section-label";
 export { FormSection } from "./form-section";
 export { FormSpine } from "./form-spine";
+export { ResolvedErrorRevalidator } from "./resolved-error-revalidator";
 export {
   isCertFieldValuePresent,
   makeCertFieldStatus,
