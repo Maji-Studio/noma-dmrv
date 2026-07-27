@@ -105,7 +105,7 @@ function ResetPasswordFormContent() {
         <>
           <FormField
             id="newPassword"
-            label="New Password"
+            label="New password"
             helperText="Minimum 8 characters"
             error={errors.newPassword?.message}
           >
@@ -122,7 +122,7 @@ function ResetPasswordFormContent() {
 
           <FormField
             id="confirmPassword"
-            label="Confirm Password"
+            label="Confirm password"
             error={errors.confirmPassword?.message}
           >
             <FormInput

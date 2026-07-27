@@ -40,12 +40,12 @@ export function buildProductionRunWindowDetailFields(
     formatFacilityTime(instant, timeZone, TIME_INPUT_FORMAT);
 
   return [
-    { label: "Start Date", value: day(run.startTime) },
-    { label: "Start Time", value: clock(run.startTime) },
-    { label: "End Date", value: run.endTime ? day(run.endTime) : null },
-    { label: "End Time", value: run.endTime ? clock(run.endTime) : null },
+    { label: "Start date", value: day(run.startTime) },
+    { label: "Start time", value: clock(run.startTime) },
+    { label: "End date", value: run.endTime ? day(run.endTime) : null },
+    { label: "End time", value: run.endTime ? clock(run.endTime) : null },
     {
-      label: "Time Zone",
+      label: "Time zone",
       value: productionRunTimezoneHelperText(facilities, run.facilityId),
     },
   ];

@@ -112,7 +112,7 @@ export function FacilityForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-        <FormField id="name" label="Facility Name" error={errors.name?.message} required>
+        <FormField id="name" label="Facility name" error={errors.name?.message} required>
           <FormInput
             id="name"
             type="text"
@@ -193,7 +193,7 @@ export function FacilityForm({
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-        <FormField id="contactEmail" label="Contact Email" error={errors.contactEmail?.message}>
+        <FormField id="contactEmail" label="Contact email" error={errors.contactEmail?.message}>
           <FormInput
             id="contactEmail"
             type="email"
@@ -204,7 +204,7 @@ export function FacilityForm({
           />
         </FormField>
 
-        <FormField id="contactPhone" label="Contact Phone" error={errors.contactPhone?.message}>
+        <FormField id="contactPhone" label="Contact phone" error={errors.contactPhone?.message}>
           <FormInput
             id="contactPhone"
             type="tel"
@@ -219,7 +219,7 @@ export function FacilityForm({
       <div className="grid grid-cols-1 gap-y-20">
         <FormField
           id="durabilityOption"
-          label="Durability Tier"
+          label="Durability tier"
           error={errors.durabilityOption?.message}
           hint="Set once for your registry program and inherited by every credit batch and sample at this facility. The 200-year pathway opens when a 200-year client onboards."
         >

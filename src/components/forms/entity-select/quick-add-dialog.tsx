@@ -8,27 +8,9 @@ import { useState, useCallback } from "react";
 import { Modal } from "@/components/ui";
 import { Button } from "@/components/ui/button";
 import { ServerError } from "@/components/forms/server-error";
-import type { QuickAddDialogProps, EntityOption, EntityType } from "./types";
+import type { QuickAddDialogProps, EntityOption } from "./types";
+import { ENTITY_TYPE_LABELS } from "./entity-labels";
 
-// Human-readable entity type labels
-const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
-  facility: "Facility",
-  reactor: "Reactor",
-  supplier: "Supplier",
-  customer: "Customer",
-  driver: "Driver",
-  operator: "Operator",
-  storageLocation: "Storage Location",
-  vehicle: "Vehicle",
-  feedstockType: "Feedstock Type",
-  feedstock: "Feedstock",
-  productionRun: "Production Run",
-  application: "Application",
-  formulation: "Formulation",
-  biocharProduct: "Biochar Product",
-  order: "Order",
-  creditBatch: "Credit Batch",
-};
 
 interface QuickAddForm {
   code: string;
@@ -102,7 +84,7 @@ export function QuickAddDialog({
         {/* Header */}
         <div className="flex items-center p-24 border-b border-[var(--color-border-primary)]">
           <h2 id="quick-add-dialog-title" className="title-heading-3">
-            Add New {entityLabel}
+            New {entityLabel}
           </h2>
         </div>
 
@@ -138,7 +120,7 @@ export function QuickAddDialog({
               onChange={(e) =>
                 setFormData((prev) => ({ ...prev, name: e.target.value }))
               }
-              placeholder={`Enter ${entityLabel.toLowerCase()} name`}
+              placeholder={`Enter ${entityLabel} name`}
               className="flex h-40 w-full border border-[var(--color-border-primary)] bg-[var(--color-background-white)] px-12 text-[var(--color-text-primary)] text-[var(--text-s)] transition-colors placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)]"
             />
           </div>

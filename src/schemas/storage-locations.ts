@@ -61,7 +61,7 @@ export const storageLocationFormSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(1, "Storage location name is required")
+    .min(1, "Storage bin name is required")
     .max(255, "Name must be less than 255 characters"),
   type: z.enum(storageLocationTypes, {
     message: "Please select a valid storage type",
@@ -117,7 +117,7 @@ export const createStorageLocationSchema = storageLocationFormSchema;
  * All fields optional except storageLocationId
  */
 export const updateStorageLocationSchema = z.object({
-  storageLocationId: z.string().uuid("Invalid storage location ID"),
+  storageLocationId: z.string().uuid("Invalid storage bin ID"),
   code: z
     .string()
     .min(1)
@@ -158,7 +158,7 @@ export const updateStorageLocationSchema = z.object({
  * Schema for deleting a storage location
  */
 export const deleteStorageLocationSchema = z.object({
-  storageLocationId: z.string().uuid("Invalid storage location ID"),
+  storageLocationId: z.string().uuid("Invalid storage bin ID"),
 });
 
 /**
@@ -235,9 +235,9 @@ export type StorageLocationFilterData = z.infer<
  */
 export function formatStorageLocationType(type: StorageLocationType): string {
   const labels: Record<StorageLocationType, string> = {
-    feedstock_bin: "Feedstock Bin",
-    biochar_bin: "Biochar Bin",
-    product_bin: "Product Bin",
+    feedstock_bin: "Feedstock bin",
+    biochar_bin: "Biochar bin",
+    product_bin: "Product bin",
   };
   return labels[type];
 }

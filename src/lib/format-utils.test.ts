@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDayString } from "./format-utils";
+import { formatDayString, formatMass, formatPercent } from "./format-utils";
 
 describe("formatDayString", () => {
   it("formats a YYYY-MM-DD day without reparsing into an instant", () => {
@@ -13,5 +13,24 @@ describe("formatDayString", () => {
     expect(formatDayString("")).toBe("—");
     expect(formatDayString("2026-08-01T12:00:00Z")).toBe("—");
     expect(formatDayString("2026-13-01")).toBe("—");
+  });
+});
+
+describe("formatMass", () => {
+  it("rounds kilograms and converts larger masses to tonnes", () => {
+    expect(formatMass(999.6)).toBe("1,000 kg");
+    expect(formatMass(1_250)).toBe("1.3 t");
+  });
+
+  it("returns the fallback for null, undefined, and NaN", () => {
+    expect(formatMass(null)).toBe("—");
+    expect(formatMass(undefined)).toBe("—");
+    expect(formatMass(Number.NaN)).toBe("—");
+  });
+});
+
+describe("formatPercent", () => {
+  it("preserves requested lab precision", () => {
+    expect(formatPercent(1.96, { digits: 2 })).toBe("1.96%");
   });
 });

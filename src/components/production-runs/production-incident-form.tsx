@@ -74,12 +74,12 @@ export function ProductionIncidentForm({
 
   return (
     <form className="space-y-20" onSubmit={onFormSubmit}>
-      <FormSection title="Incident Details" divider={false}>
+      <FormSection title="Incident details" divider={false}>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="incidentTime"
-            label="Incident Time"
+            label="Incident time"
             error={errors.incidentTime?.message}
             required
           >
@@ -174,7 +174,7 @@ export function ProductionIncidentForm({
 
         <FormField
           id="correctiveActions"
-          label="Corrective Actions"
+          label="Corrective actions"
           error={errors.correctiveActions?.message}
         >
           <FormTextarea

@@ -240,7 +240,7 @@ describe("storage location archive", () => {
         updateStorageLocation(ctx, fixture.storageLocationId, {
           name: "Archived bins must not be editable",
         }),
-      ).rejects.toThrow(/restore this storage location before editing it/i);
+      ).rejects.toThrow(/restore this storage bin before editing it/i);
 
       const [unchanged] = await db
         .select({ name: storageLocations.name })
@@ -326,7 +326,7 @@ describe("storage location archive", () => {
       }
       expect(outcome.error).toBeInstanceOf(SafeError);
       expect((outcome.error as Error).message).toMatch(
-        /restore the facility before restoring this storage location/i,
+        /restore the facility before restoring this storage bin/i,
       );
 
       const [state] = await db

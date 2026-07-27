@@ -394,6 +394,9 @@ function buildLineageEdges(data: ChainOfCustodyData): Edge[] {
 
   edges.push(
     edge(`delivery:${data.delivery.id}`, `application:${data.application.id}`, {
+      // Stays in dry tonnes: it is the only dry-basis mass in the graph, and
+      // the "t dry" suffix is what distinguishes it from the wet kg edges. It
+      // also matches the application node's own "Applied" row.
       mass: { value: data.application.biocharAppliedDryTons, unit: "tDry" },
     })
   );

@@ -12,6 +12,8 @@ const SAME_YEAR_RANGE_START_FORMAT = "MMM d";
 const FALLBACK_DISPLAY = "—";
 const KG_PER_TONNE = 1000;
 const CO2E_TONNES_MAX_FRACTION_DIGITS = 3;
+const MASS_KG_MAX_FRACTION_DIGITS = 1;
+const PERCENT_DEFAULT_FRACTION_DIGITS = 1;
 
 type DateValue = string | Date | null | undefined;
 
@@ -89,13 +91,55 @@ export function formatDateRange(start: DateValue, end: DateValue): string {
 }
 
 /**
- * Format a mass value in kg, auto-converting to tonnes when >= 1000.
- * Returns "—" for null/undefined.
+ * The default mass formatter: kg below a tonne, tonnes at or above it.
+ *
+ * `formatMass` and `formatMassKg` differ in **two** ways, not one — swapping
+ * one for the other changes the number as well as the unit:
+ *
+ * | | unit | precision below 1 t |
+ * | --- | --- | --- |
+ * | `formatMass` | switches to `t` at 1,000 kg (1 decimal) | **whole kg** — `4.5` → `"5 kg"` |
+ * | `formatMassKg` | always `kg` | **1 decimal** — `4.5` → `"4.5 kg"` |
+ *
+ * So reach for `formatMass` for a lone mass, where the tonne switch keeps big
+ * numbers readable and sub-kg precision is noise. Reach for `formatMassKg` when
+ * a set of related figures must stay comparable, or when the fractional part
+ * carries meaning. Both formatters return `"—"` for null, undefined, and
+ * `NaN`.
  */
 export function formatMass(kg: number | null | undefined): string {
-  if (kg == null) return FALLBACK_DISPLAY;
-  if (kg >= 1000) return `${(kg / 1000).toFixed(1)} t`;
+  if (kg == null || Number.isNaN(kg)) return FALLBACK_DISPLAY;
+  if (kg >= KG_PER_TONNE) return `${(kg / KG_PER_TONNE).toFixed(1)} t`;
   return `${Math.round(kg).toLocaleString()} kg`;
+}
+
+/**
+ * Format a mass in kg **without** the tonne switch — grouped kg, up to one
+ * decimal. Use when the caller has already fixed the unit for a set of related
+ * figures (a wet/dry split, a stock-take delta) and mixing "1.1 t" against
+ * "900 kg" in the same readout would make them incomparable. Everywhere a lone
+ * mass is shown, prefer `formatMass`.
+ *
+ * Note the precision difference as well as the unit one — see `formatMass`.
+ */
+export function formatMassKg(kg: number | null | undefined): string {
+  if (kg == null || Number.isNaN(kg)) return FALLBACK_DISPLAY;
+  return `${kg.toLocaleString(undefined, { maximumFractionDigits: MASS_KG_MAX_FRACTION_DIGITS })} kg`;
+}
+
+/**
+ * Format a 0–100 percentage for display — one decimal by default, trailing
+ * ".0" trimmed, "—" for null. Lab analytics that need more resolution pass
+ * `digits`; moisture always goes through `formatMoisturePercent`
+ * (`@/lib/mass-moisture`), which pins the precision for that one quantity.
+ */
+export function formatPercent(
+  value: number | null | undefined,
+  opts?: { digits?: number }
+): string {
+  if (value == null || Number.isNaN(value)) return FALLBACK_DISPLAY;
+  const digits = opts?.digits ?? PERCENT_DEFAULT_FRACTION_DIGITS;
+  return `${Number(value.toFixed(digits)).toLocaleString(undefined, { maximumFractionDigits: digits })}%`;
 }
 
 /**

@@ -13,11 +13,11 @@ describe("buildPartyLocationDetailFields", () => {
     const fields = buildPartyLocationDetailFields([], options);
 
     expect(fields.map((field) => field.label)).toEqual([
-      "Location Name",
+      "Location name",
       "Country",
-      "State / Region",
+      "State / region",
       "City",
-      "Address / Description",
+      "Address / description",
       "Application site position latitude",
       "Application site position longitude",
       "Default soil temperature (°C)",
@@ -42,8 +42,8 @@ describe("buildPartyLocationDetailFields", () => {
     };
     const fields = buildPartyLocationDetailFields([location, location], options);
 
-    expect(fields[0].label).toBe("Location 1 · Location Name");
-    expect(fields[10].label).toBe("Location 2 · Location Name");
+    expect(fields[0].label).toBe("Location 1 · Location name");
+    expect(fields[10].label).toBe("Location 2 · Location name");
     expect(fields[8].value).toBe("12 km");
   });
 });

@@ -56,7 +56,7 @@ export function CertificationHealthPanel() {
       </Field>
       <Field label="Credentials">
         {data.credentialsConfigured ? (
-          <span className="body-small inline-flex items-center gap-6 text-[var(--color-signal-green)]">
+          <span className="body-small inline-flex items-center gap-6 text-[var(--st-ok)]">
             <CheckCircleIcon size={16} weight="fill" aria-hidden />
             Configured
           </span>

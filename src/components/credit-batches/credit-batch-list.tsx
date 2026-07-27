@@ -622,15 +622,13 @@ export function CreditBatchList({
               : "No credit batches yet"
           }
           description={
-            hasActiveFilters
-              ? "Try adjusting or clearing the filters."
-              : "Create your first credit batch to get started."
+            hasActiveFilters ? "Try adjusting or clearing the filters." : undefined
           }
           action={
             !hasActiveFilters ? (
               <Button variant="primary" onClick={openCreate}>
                 <PlusIcon size={18} weight="bold" />
-                New Credit Batch
+                Create your first credit batch
               </Button>
             ) : undefined
           }

@@ -291,13 +291,13 @@ export function SupplierList() {
             description={
               hasActiveSearch
                 ? "Try clearing your search."
-                : "Create your first supplier to get started tracking biomass feedstock providers."
+                : "Suppliers are where your feedstock deliveries come from."
             }
             action={
               !hasActiveSearch ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={20} weight="bold" />
-                  Create Supplier
+                  Create your first supplier
                 </Button>
               ) : undefined
             }
@@ -343,9 +343,9 @@ export function SupplierList() {
         editLabel="Edit Supplier"
         sections={sideSheetEntity ? [
           {
-            title: "Required Information",
+            title: "Required information",
             fields: [
-              { label: "Supplier Name", value: sideSheetEntity.name },
+              { label: "Supplier name", value: sideSheetEntity.name },
             ],
           },
           {
@@ -369,18 +369,18 @@ export function SupplierList() {
             ),
           },
           {
-            title: "Contact Information",
+            title: "Contact information",
             fields: [
-              { label: "Contact Name", value: sideSheetEntity.contactName },
-              { label: "Contact Email", value: sideSheetEntity.contactEmail },
-              { label: "Contact Phone", value: sideSheetEntity.contactPhone },
+              { label: "Contact name", value: sideSheetEntity.contactName },
+              { label: "Contact email", value: sideSheetEntity.contactEmail },
+              { label: "Contact phone", value: sideSheetEntity.contactPhone },
             ],
           },
           {
-            title: "Sourcing Information",
+            title: "Sourcing information",
             fields: [
               { label: "Location", value: sideSheetEntity.location },
-              { label: "Source Region", value: sideSheetEntity.sourceRegion },
+              { label: "Source region", value: sideSheetEntity.sourceRegion },
               { label: "Address", value: sideSheetEntity.address },
               buildSupplierFallbackDistanceField({
                 defaultLocationDistanceKm:

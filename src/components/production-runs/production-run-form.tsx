@@ -16,6 +16,7 @@ import {
 } from "./production-run-timing";
 import { useProductionRunTimingZoneSync } from "./use-production-run-timing-zone-sync";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
+import { formatMassKg } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
 
 import { useEffect, useId, useRef, useState } from "react";
@@ -23,7 +24,7 @@ import Link from "next/link";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
 import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, FileCsvIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormTextarea, DryMassInput, FormActions, FormSection, FormSpine, SectionLabel, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, MassMoistureFields, FormActions, FormSection, FormSpine, SectionLabel, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
 import { productionRunTelemetryCertification } from "./production-run-detail-fields";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
@@ -48,10 +49,6 @@ import {
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { StorageLocationType } from "@/schemas/storage-locations";
-import {
-  MASS_KG_INPUT_STEP,
-  STORED_PERCENT_INPUT_STEP,
-} from "@/schemas/helpers";
 
 // ============================================
 // Constants for select options
@@ -126,12 +123,12 @@ function ProcessFlowPreview({
             </span>
             {hasFeedstock && (
               <>
-                <span className="body-caption text-[var(--color-text-secondary)] mt-1">
-                  {feedstockKg.toLocaleString()} kg wet
+                <span className="body-caption font-mono text-[var(--color-text-secondary)] mt-1">
+                  {formatMassKg(feedstockKg)} wet
                 </span>
                 {feedstockDryKg !== null && (
-                  <span className="body-caption text-[var(--color-text-tertiary)]">
-                    {feedstockDryKg.toLocaleString()} kg dry
+                  <span className="body-caption font-mono text-[var(--color-text-tertiary)]">
+                    {formatMassKg(feedstockDryKg)} dry
                   </span>
                 )}
               </>
@@ -206,12 +203,12 @@ function ProcessFlowPreview({
             </span>
             {hasBiochar && (
               <>
-                <span className="body-caption text-[var(--color-text-secondary)] mt-1">
-                  {biocharKg.toLocaleString()} kg wet
+                <span className="body-caption font-mono text-[var(--color-text-secondary)] mt-1">
+                  {formatMassKg(biocharKg)} wet
                 </span>
                 {biocharDryKg !== null && (
-                  <span className="body-caption text-[var(--color-text-tertiary)]">
-                    {biocharDryKg.toLocaleString()} kg dry
+                  <span className="body-caption font-mono text-[var(--color-text-tertiary)]">
+                    {formatMassKg(biocharDryKg)} dry
                   </span>
                 )}
               </>
@@ -363,7 +360,7 @@ export function ProductionRunForm({
   const { data: selectedSourceBin } = useEntityById("storageLocation", watchedSourceBinId || undefined);
   const { data: selectedDestBin } = useEntityById("storageLocation", watchedDestBinId || undefined);
 
-  // Inline "Add New Bin" quick-add for the Biochar Storage select.
+  // Inline quick-add for the Biochar Storage select.
   const biocharBinDialog = useQuickAddDialog();
 
   // Watch wet mass + moisture for dry mass preview
@@ -483,9 +480,9 @@ export function ProductionRunForm({
     <div className="space-y-20">
       <form id={formId} onSubmit={handleFormSubmit}>
       <FormSpine control={control}>
-      {/* ── Run Setup ── */}
+      {/* ── Run setup ── */}
       <FormSection
-        title="Run Setup"
+        title="Run setup"
         icon={<FactoryIcon size={14} weight="bold" />}
         fields={["reactorId", "status", "cancellationReason", "startDate", "startTime", "endDate", "endTime", "operatorId"]}
       >
@@ -549,7 +546,7 @@ export function ProductionRunForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="startDate"
-            label="Start Date"
+            label="Start date"
             error={errors.startDate?.message}
             helperText={timezoneHelperText}
             required
@@ -557,7 +554,7 @@ export function ProductionRunForm({
             <FormInput id="startDate" type="date" disabled={isSubmitting} error={!!errors.startDate} {...register("startDate")} />
           </FormField>
 
-          <FormField id="startTime" label="Start Time" error={errors.startTime?.message} required>
+          <FormField id="startTime" label="Start time" error={errors.startTime?.message} required>
             <FormInput
               id="startTime"
               type="time"
@@ -583,7 +580,7 @@ export function ProductionRunForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="endDate"
-            label="End Date"
+            label="End date"
             error={errors.endDate?.message}
             helperText="Leave the end blank until the run finishes. For an overnight run, set the next day."
           >
@@ -596,7 +593,7 @@ export function ProductionRunForm({
             />
           </FormField>
 
-          <FormField id="endTime" label="End Time" error={errors.endTime?.message}>
+          <FormField id="endTime" label="End time" error={errors.endTime?.message}>
             <FormInput
               id="endTime"
               type="time"
@@ -627,9 +624,9 @@ export function ProductionRunForm({
         </div>
       </FormSection>
 
-      {/* ── Feedstock & Processing ── */}
+      {/* ── Feedstock & processing ── */}
       <FormSection
-        title="Feedstock & Processing"
+        title="Feedstock & processing"
         icon={<PlantIcon size={14} weight="bold" />}
         fields={[
           "feedstockStorageLocationId",
@@ -647,7 +644,7 @@ export function ProductionRunForm({
         )}
         <FormField
           id="feedstockStorageLocationId"
-          label="Source Bin"
+          label="Source bin"
           error={errors.feedstockStorageLocationId?.message}
         >
           <Controller
@@ -667,52 +664,32 @@ export function ProductionRunForm({
           />
         </FormField>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField
-            id="feedstockWetMassKg"
-            label="Wet Mass (kg)"
-            error={errors.feedstockWetMassKg?.message}
-            certifyRequired={isProductionRunCertifyField("feedstockWetMassKg")}
-            certifyStatus={certStatus("feedstockWetMassKg")}
-          >
-            <DryMassInput
-              id="feedstockWetMassKg"
-              type="number"
-              step={MASS_KG_INPUT_STEP}
-              placeholder="e.g. 500"
-              disabled={isSubmitting}
-              error={!!errors.feedstockWetMassKg}
-              wetMassKg={watchWetMass}
-              moisturePercent={watchMoisture}
-              {...register("feedstockWetMassKg", {
-                setValueAs: nullableNumericValue,
-              })}
-            />
-          </FormField>
-
-          <FormField
-            id="feedstockMoisturePercent"
-            label="Moisture Content (%)"
-            error={errors.feedstockMoisturePercent?.message}
-            certifyRequired={isProductionRunCertifyField("feedstockMoisturePercent")}
-            certifyStatus={certStatus("feedstockMoisturePercent")}
-          >
-            <FormInput
-              id="feedstockMoisturePercent"
-              type="number"
-              step={STORED_PERCENT_INPUT_STEP}
-              placeholder="e.g. 15"
-              disabled={isSubmitting}
-              error={!!errors.feedstockMoisturePercent}
-              {...register("feedstockMoisturePercent", {
-                setValueAs: nullableNumericValue,
-              })}
-            />
-          </FormField>
-        </div>
+        <MassMoistureFields
+          materialLabel="Feedstock"
+          wetMassKg={watchWetMass}
+          moisturePercent={watchMoisture}
+          wet={{
+            id: "feedstockWetMassKg",
+            error: errors.feedstockWetMassKg?.message,
+            disabled: isSubmitting,
+            placeholder: "e.g. 500",
+            certifyRequired: isProductionRunCertifyField("feedstockWetMassKg"),
+            certifyStatus: certStatus("feedstockWetMassKg"),
+            registration: register("feedstockWetMassKg", { setValueAs: nullableNumericValue }),
+          }}
+          moisture={{
+            id: "feedstockMoisturePercent",
+            error: errors.feedstockMoisturePercent?.message,
+            disabled: isSubmitting,
+            placeholder: "e.g. 15",
+            certifyRequired: isProductionRunCertifyField("feedstockMoisturePercent"),
+            certifyStatus: certStatus("feedstockMoisturePercent"),
+            registration: register("feedstockMoisturePercent", { setValueAs: nullableNumericValue }),
+          }}
+        />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField id="feedingRateKgHr" label="Feed Rate (kg/hr)" error={errors.feedingRateKgHr?.message}>
+          <FormField id="feedingRateKgHr" label="Feed rate (kg/hr)" error={errors.feedingRateKgHr?.message}>
             <FormInput
               id="feedingRateKgHr"
               type="number"
@@ -726,7 +703,7 @@ export function ProductionRunForm({
             />
           </FormField>
 
-          <FormField id="residenceTimeMinutes" label="Residence Time (min)" error={errors.residenceTimeMinutes?.message}>
+          <FormField id="residenceTimeMinutes" label="Residence time (min)" error={errors.residenceTimeMinutes?.message}>
             <FormInput
               id="residenceTimeMinutes"
               type="number"
@@ -755,7 +732,7 @@ export function ProductionRunForm({
 
         <FormField
           id="biocharStorageLocationId"
-          label="Biochar Storage"
+          label="Biochar storage bin"
           error={errors.biocharStorageLocationId?.message}
         >
           <Controller
@@ -766,60 +743,39 @@ export function ProductionRunForm({
                 entityType="storageLocation"
                 value={field.value || undefined}
                 onChange={field.onChange}
-                placeholder="Select storage..."
                 disabled={isSubmitting || !watchedFacilityId}
                 error={!!errors.biocharStorageLocationId}
                 filterBy={watchedFacilityId ? { facilityId: watchedFacilityId, type: "biochar_bin" } : undefined}
                 allowCreate={!!watchedFacilityId}
-                createLabel="Add New Bin"
                 onCreateNew={() => biocharBinDialog.open()}
               />
             )}
           />
         </FormField>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField
-            id="biocharOutputKg"
-            label="Biochar Wet Mass (kg)"
-            error={errors.biocharOutputKg?.message}
-            certifyRequired={isProductionRunCertifyField("biocharOutputKg")}
-            certifyStatus={certStatus("biocharOutputKg")}
-          >
-            <DryMassInput
-              id="biocharOutputKg"
-              type="number"
-              step={MASS_KG_INPUT_STEP}
-              placeholder="e.g. 150"
-              disabled={isSubmitting}
-              error={!!errors.biocharOutputKg}
-              wetMassKg={watchedBiocharKg}
-              moisturePercent={watchedBiocharMoisture}
-              {...register("biocharOutputKg", {
-                setValueAs: nullableNumericValue,
-              })}
-            />
-          </FormField>
-          <FormField
-            id="biocharMoisturePercent"
-            label="Biochar Moisture (%)"
-            error={errors.biocharMoisturePercent?.message}
-            certifyRequired={isProductionRunCertifyField("biocharMoisturePercent")}
-            certifyStatus={certStatus("biocharMoisturePercent")}
-          >
-            <FormInput
-              id="biocharMoisturePercent"
-              type="number"
-              step={STORED_PERCENT_INPUT_STEP}
-              placeholder="e.g. 1.5"
-              disabled={isSubmitting}
-              error={!!errors.biocharMoisturePercent}
-              {...register("biocharMoisturePercent", {
-                setValueAs: nullableNumericValue,
-              })}
-            />
-          </FormField>
-        </div>
+        <MassMoistureFields
+          materialLabel="Biochar"
+          wetMassKg={watchedBiocharKg}
+          moisturePercent={watchedBiocharMoisture}
+          wet={{
+            id: "biocharOutputKg",
+            error: errors.biocharOutputKg?.message,
+            disabled: isSubmitting,
+            placeholder: "e.g. 150",
+            certifyRequired: isProductionRunCertifyField("biocharOutputKg"),
+            certifyStatus: certStatus("biocharOutputKg"),
+            registration: register("biocharOutputKg", { setValueAs: nullableNumericValue }),
+          }}
+          moisture={{
+            id: "biocharMoisturePercent",
+            error: errors.biocharMoisturePercent?.message,
+            disabled: isSubmitting,
+            placeholder: "e.g. 1.5",
+            certifyRequired: isProductionRunCertifyField("biocharMoisturePercent"),
+            certifyStatus: certStatus("biocharMoisturePercent"),
+            registration: register("biocharMoisturePercent", { setValueAs: nullableNumericValue }),
+          }}
+        />
       </FormSection>
 
       {/* ── Energy ── */}
@@ -836,8 +792,8 @@ export function ProductionRunForm({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="dieselOperationLiters"
-            label="Startup / Plant Diesel (L)"
-            hint="Diesel for reactor startup and running on-site plant equipment during this run — not the generator. Shown as “Startup / Plant Diesel” on the Energy page."
+            label="Startup / plant diesel (L)"
+            hint="Diesel for reactor startup and on-site plant equipment during this run — not the generator."
             error={errors.dieselOperationLiters?.message}
             certifyRequired={isProductionRunCertifyField("dieselOperationLiters")}
             certifyStatus={certStatus("dieselOperationLiters")}
@@ -857,7 +813,7 @@ export function ProductionRunForm({
 
           <FormField
             id="dieselGensetLiters"
-            label="Genset Diesel (L)"
+            label="Genset diesel (L)"
             hint="Diesel burned by the generator that supplied this run's electricity."
             error={errors.dieselGensetLiters?.message}
             certifyRequired={isProductionRunCertifyField("dieselGensetLiters")}
@@ -878,7 +834,7 @@ export function ProductionRunForm({
 
           <FormField
             id="preprocessingFuelLiters"
-            label="Preprocess Fuel (L)"
+            label="Preprocess fuel (L)"
             hint="Fuel used to dry, chip, or otherwise prepare the feedstock before pyrolysis."
             error={errors.preprocessingFuelLiters?.message}
             certifyRequired={isProductionRunCertifyField("preprocessingFuelLiters")}
@@ -921,13 +877,13 @@ export function ProductionRunForm({
 
       </FormSection>
 
-      {/* ── Readings CSV Import ── */}
-      <FormSection title="Readings CSV Import" icon={<FileCsvIcon size={14} weight="bold" />}>
+      {/* ── Readings CSV import ── */}
+      <FormSection title="Readings CSV import" icon={<FileCsvIcon size={14} weight="bold" />}>
 
         <FormField
           id="readingsCsv"
           label="Readings CSV"
-          helperText="Upload a readings CSV (timestamp_utc, temperature_c, pressure_bar, plus optional dryer/reactor frequency). A file may span multiple UTC days; rows inside the run's time window populate the readings table below."
+          helperText="Columns: timestamp_utc, temperature_c, pressure_bar (dryer/reactor frequency optional). One file may span several UTC days; rows inside the run's window fill the table below."
           certifyRequired={readingsCertification.certifyRequired}
           certifyStatus={readingsCertification.certifyStatus}
         >

@@ -153,7 +153,7 @@ function ReadinessCell({ summary }: { summary: RemovalPreflightSummary }) {
   if (state === "ready") {
     return (
       <span className="flex flex-col gap-4">
-        <span className="inline-flex items-center gap-6 body-caption text-[var(--color-signal-green)]">
+        <span className="inline-flex items-center gap-6 body-caption text-[var(--st-ok)]">
           <CheckCircleIcon size={16} weight="fill" aria-hidden />
           Ready to submit
         </span>
@@ -305,13 +305,13 @@ function ListBody({
               description={
                 searchQuery
                   ? "Try clearing your search."
-                  : "Start one with “New removal” to group complete credit batches."
+                  : "Group complete credit batches into a removal to submit them."
               }
               action={
                 searchQuery ? undefined : (
                   <Button variant="default" onClick={onNewRemoval}>
                     <PlusIcon size={16} weight="bold" />
-                    New removal
+                    Create your first removal
                   </Button>
                 )
               }

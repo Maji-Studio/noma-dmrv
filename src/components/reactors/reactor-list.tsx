@@ -304,16 +304,12 @@ export function ReactorList() {
             padding="md"
             icon={<LightningIcon size={48} />}
             title={hasActiveSearch ? "No matching reactors" : "No reactors yet"}
-            description={
-              hasActiveSearch
-                ? "Try clearing your search."
-                : "Create your first reactor to get started"
-            }
+            description={hasActiveSearch ? "Try clearing your search." : undefined}
             action={
               !hasActiveSearch ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={18} weight="bold" />
-                  New Reactor
+                  Create your first reactor
                 </Button>
               ) : undefined
             }
@@ -359,16 +355,16 @@ export function ReactorList() {
         editLabel="Edit Reactor"
         sections={sideSheetEntity ? [
           {
-            title: "Required Information",
+            title: "Required information",
             fields: [
               { label: "Identifier", value: sideSheetEntity.identifier },
             ],
           },
           {
-            title: "Reactor Configuration",
+            title: "Reactor configuration",
             fields: [
-              { label: "Reactor Type", value: formatReactorType(sideSheetEntity.reactorType) },
-              { label: "Nominal Throughput (tph)", value: sideSheetEntity.nominalThroughputTph },
+              { label: "Reactor type", value: formatReactorType(sideSheetEntity.reactorType) },
+              { label: "Nominal throughput (tph)", value: sideSheetEntity.nominalThroughputTph },
             ],
           },
         ] : undefined}

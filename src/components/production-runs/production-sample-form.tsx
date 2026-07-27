@@ -8,7 +8,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { nullableNumericValue } from "@/lib/form-utils";
 import { formatLocalDateTime } from "@/lib/date-utils";
-import { FormField, FormInput, FormFileUpload, FormActions, FormSection } from "@/components/forms";
+import { FormField, FormInput, FormFileUpload, FormActions, FormSection, MoistureField } from "@/components/forms";
 import { EntitySelect } from "@/components/forms/entity-select";
 import { FormTextarea } from "@/components/forms/form-textarea";
 import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-attachments";
@@ -80,8 +80,8 @@ export function ProductionSampleForm({
 
   return (
     <form className="space-y-20" onSubmit={onFormSubmit}>
-      {/* Sample Info */}
-      <FormSection title="Sample Info" divider={false}>
+      {/* Sample info */}
+      <FormSection title="Sample info" divider={false}>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
@@ -101,7 +101,7 @@ export function ProductionSampleForm({
 
           <FormField
             id="sampledById"
-            label="Sampled By"
+            label="Sampled by"
             error={errors.sampledById?.message}
           >
             <Controller
@@ -122,8 +122,8 @@ export function ProductionSampleForm({
         </div>
       </FormSection>
 
-      {/* Physical Measurements */}
-      <FormSection title="Physical Measurements">
+      {/* Physical measurements */}
+      <FormSection title="Physical measurements">
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-16">
           <FormField
@@ -182,31 +182,24 @@ export function ProductionSampleForm({
         </div>
       </FormSection>
 
-      {/* Proximate Analysis */}
-      <FormSection title="Proximate Analysis">
+      {/* Proximate analysis */}
+      <FormSection title="Proximate analysis">
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField
+          <MoistureField
             id="moistureContentPercent"
-            label="Moisture Content (%)"
             error={errors.moistureContentPercent?.message}
-          >
-            <FormInput
-              id="moistureContentPercent"
-              type="number"
-              step="any"
-              placeholder="e.g. 5.2"
-              disabled={isSubmitting}
-              error={!!errors.moistureContentPercent}
-              {...register("moistureContentPercent", {
-                setValueAs: nullableNumericValue,
-              })}
-            />
-          </FormField>
+            disabled={isSubmitting}
+            placeholder="e.g. 5.2"
+            step="any"
+            registration={register("moistureContentPercent", {
+              setValueAs: nullableNumericValue,
+            })}
+          />
 
           <FormField
             id="fixedCarbonPercent"
-            label="Fixed Carbon (%)"
+            label="Fixed carbon (%)"
             error={errors.fixedCarbonPercent?.message}
           >
             <FormInput
@@ -224,7 +217,7 @@ export function ProductionSampleForm({
 
           <FormField
             id="volatileMatterPercent"
-            label="Volatile Matter (%)"
+            label="Volatile matter (%)"
             error={errors.volatileMatterPercent?.message}
           >
             <FormInput
@@ -242,7 +235,7 @@ export function ProductionSampleForm({
 
           <FormField
             id="ashContentPercent"
-            label="Ash Content (%)"
+            label="Ash content (%)"
             error={errors.ashContentPercent?.message}
           >
             <FormInput

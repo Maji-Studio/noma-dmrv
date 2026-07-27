@@ -86,12 +86,12 @@ describe("buildProductionRunWindowDetailFields", () => {
         FACILITIES,
       ),
     ).toEqual([
-      { label: "Start Date", value: "Jul 17, 2026" },
-      { label: "Start Time", value: "08:00" },
-      { label: "End Date", value: "Jul 17, 2026" },
-      { label: "End Time", value: "16:00" },
+      { label: "Start date", value: "Jul 17, 2026" },
+      { label: "Start time", value: "08:00" },
+      { label: "End date", value: "Jul 17, 2026" },
+      { label: "End time", value: "16:00" },
       {
-        label: "Time Zone",
+        label: "Time zone",
         value: "Facility time — Africa/Dar es Salaam",
       },
     ]);
@@ -109,10 +109,10 @@ describe("buildProductionRunWindowDetailFields", () => {
       FACILITIES,
     );
 
-    expect(fields[0]).toEqual({ label: "Start Date", value: "Jul 17, 2026" });
-    expect(fields[1]).toEqual({ label: "Start Time", value: "01:00" });
-    expect(fields[2]).toEqual({ label: "End Date", value: null });
-    expect(fields[3]).toEqual({ label: "End Time", value: null });
+    expect(fields[0]).toEqual({ label: "Start date", value: "Jul 17, 2026" });
+    expect(fields[1]).toEqual({ label: "Start time", value: "01:00" });
+    expect(fields[2]).toEqual({ label: "End date", value: null });
+    expect(fields[3]).toEqual({ label: "End time", value: null });
   });
 
   it("states the fallback zone when the facility is not in context", () => {
@@ -125,9 +125,9 @@ describe("buildProductionRunWindowDetailFields", () => {
       FACILITIES,
     );
 
-    expect(fields[1]).toEqual({ label: "Start Time", value: "05:00" });
+    expect(fields[1]).toEqual({ label: "Start time", value: "05:00" });
     expect(fields[4]).toEqual({
-      label: "Time Zone",
+      label: "Time zone",
       value: "Facility time unknown — using UTC",
     });
   });
@@ -145,10 +145,10 @@ describe("buildProductionRunWindowDetailFields", () => {
       ],
     );
 
-    expect(fields[1]).toEqual({ label: "Start Time", value: "01:30" });
-    expect(fields[3]).toEqual({ label: "End Time", value: "03:30" });
+    expect(fields[1]).toEqual({ label: "Start time", value: "01:30" });
+    expect(fields[3]).toEqual({ label: "End time", value: "03:30" });
     expect(fields[4]).toEqual({
-      label: "Time Zone",
+      label: "Time zone",
       value: "Facility time — America/New York",
     });
   });

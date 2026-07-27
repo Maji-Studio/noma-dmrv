@@ -121,9 +121,9 @@ export function CustomerForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* Required Fields Section */}
-      <FormSection title="Required Information" divider={false}>
+      <FormSection title="Required information" divider={false}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="name" label="Customer Name" error={errors.name?.message} required>
+          <FormField id="name" label="Customer name" error={errors.name?.message} required>
             <FormInput
               id="name"
               type="text"
@@ -149,9 +149,9 @@ export function CustomerForm({
       )}
 
       {/* Contact Information Section */}
-      <FormSection title="Contact Information">
+      <FormSection title="Contact information">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="contactEmail" label="Contact Email" error={errors.contactEmail?.message}>
+          <FormField id="contactEmail" label="Contact email" error={errors.contactEmail?.message}>
             <FormInput
               id="contactEmail"
               type="email"
@@ -164,7 +164,7 @@ export function CustomerForm({
 
           <FormField
             id="contactPhone"
-            label="Contact Phone"
+            label="Contact phone"
             error={errors.contactPhone?.message}
             helperText="International format supported"
           >
@@ -181,11 +181,11 @@ export function CustomerForm({
       </FormSection>
 
       {/* Business Information Section */}
-      <FormSection title="Business Information">
+      <FormSection title="Business information">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="cropType"
-            label="Crop Type"
+            label="Crop type"
             error={errors.cropType?.message}
             helperText="Primary crop or land use for this biochar application site"
           >

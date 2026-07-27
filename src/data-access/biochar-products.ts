@@ -546,13 +546,13 @@ export async function createBiocharProduct(
       .for("update");
 
     if (!storage) {
-      throw new SafeError("Storage location not found");
+      throw new SafeError("Storage bin not found");
     }
     if (storage.facilityId !== data.facilityId) {
-      throw new SafeError("Storage location belongs to a different facility");
+      throw new SafeError("Storage bin belongs to a different facility");
     }
     if (storage.type !== "product_bin") {
-      throw new SafeError("Storage location must be a product bin");
+      throw new SafeError("Storage bin must be a product bin");
     }
     // Keep the bin clean: a product bin holds one formulation (or pure biochar).
     // An unassigned bin (null) accepts anything and is claimed below on first use.
@@ -879,13 +879,13 @@ export async function updateBiocharProduct(
         .for("update");
 
       if (!storage) {
-        throw new SafeError("Storage location not found");
+        throw new SafeError("Storage bin not found");
       }
       if (storage.facilityId !== transactionFacilityId) {
-        throw new SafeError("Storage location belongs to a different facility");
+        throw new SafeError("Storage bin belongs to a different facility");
       }
       if (storage.type !== "product_bin") {
-        throw new SafeError("Storage location must be a product bin");
+        throw new SafeError("Storage bin must be a product bin");
       }
       if (storage.formulationId !== null && storage.formulationId !== transactionFormulationId) {
         throw new SafeError(

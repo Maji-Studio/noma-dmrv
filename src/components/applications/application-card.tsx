@@ -11,7 +11,8 @@ import {
   formatApplicationMethod,
 } from "@/schemas/applications";
 import { formatDate } from "@/lib/format-utils";
-import { formatApplicationKgFromTons } from "./mass-utils";
+import { MASS_MOISTURE_LABELS } from "@/lib/mass-moisture";
+import { formatApplicationKgFromTons, formatFieldSizeHa } from "./mass-utils";
 
 interface ApplicationCardProps {
   application: Application;
@@ -65,7 +66,7 @@ export function ApplicationCard({
         <div className="grid grid-cols-3 gap-12">
           <div>
             <p className="body-caption text-[var(--color-text-tertiary)]">
-              Biochar
+              {MASS_MOISTURE_LABELS.wet}
             </p>
             <p className="title-heading-3">
               {formatApplicationKgFromTons(application.biocharAppliedTons)}
@@ -73,7 +74,7 @@ export function ApplicationCard({
           </div>
           <div>
             <p className="body-caption text-[var(--color-text-tertiary)]">
-              Dry Mass
+              {MASS_MOISTURE_LABELS.dry}
             </p>
             <p className="body-small text-[var(--color-text-primary)]">
               {formatApplicationKgFromTons(application.biocharAppliedDryTons)}
@@ -81,12 +82,10 @@ export function ApplicationCard({
           </div>
           <div>
             <p className="body-caption text-[var(--color-text-tertiary)]">
-              Field Size
+              Field size
             </p>
             <p className="body-small text-[var(--color-text-primary)]">
-              {application.fieldSizeHa != null
-                ? `${application.fieldSizeHa.toFixed(2)} ha`
-                : "—"}
+              {formatFieldSizeHa(application.fieldSizeHa)}
             </p>
           </div>
         </div>

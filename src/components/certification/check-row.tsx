@@ -22,8 +22,13 @@ const STATUS_ICON: Record<CheckStatus, ElementType> = {
   warning: WarningIcon,
 };
 
+/**
+ * `met` uses the status ramp (`--st-ok`); the amber rows still use the legacy
+ * `--color-signal-orange`, which is live in ~40 places app-wide and is not part
+ * of this pass. Move all four to the ramp in one app-wide edit, not here alone.
+ */
 const STATUS_COLOR: Record<CheckStatus, string> = {
-  met: "var(--color-signal-green)",
+  met: "var(--st-ok)",
   unmet: "var(--color-signal-orange)",
   skipped: "var(--color-text-tertiary)",
   warning: "var(--color-signal-orange)",

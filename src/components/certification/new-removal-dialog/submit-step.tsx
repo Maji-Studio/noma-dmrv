@@ -109,12 +109,12 @@ export function SubmitStep({
 
     return (
       <div className="flex flex-col gap-24">
-        <div className="flex items-start gap-12 border-l-2 border-[var(--color-signal-green)] pl-12 py-4">
+        <div className="flex items-start gap-12 border-l-2 border-[var(--st-ok)] pl-12 py-4">
           <CheckCircleIcon
             size={20}
             weight="fill"
             aria-hidden
-            className="mt-px shrink-0 text-[var(--color-signal-green)]"
+            className="mt-px shrink-0 text-[var(--st-ok)]"
           />
           <div className="flex flex-col gap-4">
             <span className="body-medium text-[var(--color-text-primary)]">

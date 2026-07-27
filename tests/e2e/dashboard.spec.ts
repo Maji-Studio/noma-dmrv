@@ -336,7 +336,9 @@ test.describe("Credit batch view sheet (Phase 5)", () => {
     await expect(
       sheet.getByText("Certification progress", { exact: true }),
     ).toBeVisible();
-    await expect(sheet.getByText("Feedstock Type", { exact: true })).toBeVisible();
+    // Sentence case (docs/design-system.md › Label casing); `exact: true` is
+    // case-sensitive, so this string must match the UI's casing exactly.
+    await expect(sheet.getByText("Feedstock type", { exact: true })).toBeVisible();
     await expect(sheet.getByText("CO₂e stored", { exact: true })).toBeVisible();
     await expect(sheet.getByText("Durability", { exact: true })).toBeVisible();
     await expect(

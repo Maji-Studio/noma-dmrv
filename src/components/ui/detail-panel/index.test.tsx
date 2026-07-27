@@ -19,6 +19,15 @@ describe("DetailField certification status", () => {
     expect(markup).toContain("--st-wait-border");
   });
 
+  it("treats a formatted fallback as missing rather than satisfied", () => {
+    const markup = renderToStaticMarkup(
+      <DetailField label="Distance" value="—" certifyRequired />,
+    );
+
+    expect(markup).toContain("--st-wait-border");
+    expect(markup).not.toContain("--st-ok-border");
+  });
+
   it("accepts an explicit composite-requirement override", () => {
     const markup = renderToStaticMarkup(
       <DetailField

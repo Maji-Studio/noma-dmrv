@@ -153,7 +153,7 @@ function ReadyCard({
           value={formatDurabilityOption(batch.durabilityOption)}
         />
       </div>
-      <span className="inline-flex items-center gap-6 body-caption font-medium text-[var(--color-signal-green)]">
+      <span className="inline-flex items-center gap-6 body-caption font-medium text-[var(--st-ok)]">
         <CheckCircleIcon size={14} weight="fill" aria-hidden />
         {CREDIT_BATCH_READY_LABEL}
       </span>

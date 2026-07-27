@@ -103,7 +103,7 @@ export const biocharProductFormSchema = z.object({
   storageLocationId: z
     .string()
     .min(1, "Please select a product bin")
-    .uuid("Invalid storage location"),
+    .uuid("Invalid storage bin"),
 
   // Measurement fields (setValueAs in form converts "" to null and strings to numbers)
   massKg: requiredNonNegativeNumber("Wet mass must be 0 or greater"),
@@ -140,7 +140,7 @@ export const updateBiocharProductSchema = z.object({
   formulationId: emptyToNull.or(z.string().uuid()).nullable().optional(),
   status: z.enum(biocharProductStatusValues).optional(),
   linkedProductionRunId: z.string().uuid("Invalid production run").optional(),
-  storageLocationId: z.string().uuid("Invalid storage location").optional(),
+  storageLocationId: z.string().uuid("Invalid storage bin").optional(),
   massKg: massKgSchema().optional(),
   moistureContentPercent: storedPercentSchema()
     .min(MOISTURE_MIN)

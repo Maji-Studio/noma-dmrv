@@ -112,7 +112,7 @@ export function ReactorForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* Required Fields Section */}
-      <FormSection title="Required Information" divider={false}>
+      <FormSection title="Required information" divider={false}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="identifier"
@@ -134,11 +134,11 @@ export function ReactorForm({
       </FormSection>
 
       {/* Reactor Configuration Section */}
-      <FormSection title="Reactor Configuration">
+      <FormSection title="Reactor configuration">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="reactorType"
-            label="Reactor Type"
+            label="Reactor type"
             error={errors.reactorType?.message}
             required
           >
@@ -154,7 +154,7 @@ export function ReactorForm({
 
           <FormField
             id="capacityTph"
-            label="Nominal Throughput (tph)"
+            label="Nominal throughput (tph)"
             error={errors.capacityTph?.message}
             helperText="Designed feedstock throughput per hour"
           >

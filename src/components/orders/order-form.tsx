@@ -172,14 +172,14 @@ export function OrderForm({
       <FormSpine control={control}>
       {/* Order Information */}
       <FormSection
-        title="Order Information"
+        title="Order information"
         icon={<CalendarIcon size={14} weight="bold" />}
         fields={["orderDate"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="orderDate"
-            label="Order Date"
+            label="Order date"
             error={errors.orderDate?.message}
             required
           >
@@ -197,7 +197,7 @@ export function OrderForm({
 
       {/* Customer Section */}
       <FormSection
-        title="Customer Details"
+        title="Customer details"
         icon={<StorefrontIcon size={14} weight="bold" />}
         fields={["customerId", "customerLocationId"]}
       >
@@ -248,14 +248,14 @@ export function OrderForm({
 
       {/* Product Section */}
       <FormSection
-        title="Product Details"
+        title="Product details"
         icon={<PackageIcon size={14} weight="bold" />}
         fields={["biocharProductId", "packaging", "quantityKg", "value", "currency"]}
       >
         <FormEntitySelect
           control={control}
           name="biocharProductId"
-          label="Biochar Product"
+          label="Biochar product"
           entityType="biocharProduct"
           placeholder="Select product..."
           required

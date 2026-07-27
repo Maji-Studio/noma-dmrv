@@ -12,7 +12,12 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FactoryIcon, PackageIcon, FlowArrowIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, DryMassInput } from "@/components/forms";
+import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, MassMoistureFields } from "@/components/forms";
+import { formatMassKg } from "@/lib/format-utils";
+import {
+  formatMoisturePercent,
+  splitWetMassAfterAddedWater,
+} from "@/lib/mass-moisture";
 import {
   StorageLocationQuickAddDialog,
   useQuickAddDialog,
@@ -25,7 +30,6 @@ import {
 } from "@/schemas/biochar-products";
 import {
   MASS_KG_INPUT_STEP,
-  STORED_PERCENT_INPUT_STEP,
 } from "@/schemas/helpers";
 import type { StorageLocationType } from "@/schemas/storage-locations";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
@@ -39,6 +43,10 @@ import { IngredientBinRows } from "./ingredient-bin-rows";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import Link from "next/link";
+import {
+  BIOCHAR_PRE_WATER_MOISTURE_LABEL,
+  BIOCHAR_PRE_WATER_WET_MASS_LABEL,
+} from "@/config/product-labels";
 
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
@@ -47,6 +55,12 @@ const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: t
 // Transfer Flow Visual
 // ============================================
 
+/**
+ * The −/+ pair is one readout, so both halves come from the status ramp rather
+ * than mixing a ramp token with an area accent: `--st-wait` for the planned
+ * draw from the source bin (upcoming, not an error — `--st-bad` would read as
+ * a failure) and `--st-ok` for the resulting stock in the destination bin.
+ */
 function TransferFlowPreview({
   sourceBinCode,
   availableKg,
@@ -85,11 +99,11 @@ function TransferFlowPreview({
               {sourceBinCode}
             </span>
             <span className="body-caption text-[var(--color-text-secondary)] mt-1">
-              {availableKg.toLocaleString()} kg available
+              {formatMassKg(availableKg)} available
             </span>
             {hasMass && (
-              <span className="body-caption font-medium text-[var(--clr-orange)] mt-1">
-                &minus;{sourceMassKg.toLocaleString()} kg
+              <span className="body-caption font-medium text-[var(--st-wait)] mt-1">
+                &minus;{formatMassKg(sourceMassKg)}
               </span>
             )}
           </>
@@ -107,7 +121,7 @@ function TransferFlowPreview({
         </svg>
         {hasMass ? (
           <span className="body-caption font-medium text-[var(--color-text-primary)] mt-2">
-            {sourceMassKg.toLocaleString()} kg
+            {formatMassKg(sourceMassKg)}
           </span>
         ) : (
           <span className="body-caption text-[var(--color-text-tertiary)] mt-2">
@@ -133,8 +147,8 @@ function TransferFlowPreview({
               {destinationBinLabel}
             </span>
             {destinationMassKg !== null && destinationMassKg > 0 && (
-              <span className="body-caption font-medium text-green-600 mt-1">
-                +{destinationMassKg.toLocaleString()} kg
+              <span className="body-caption font-medium text-[var(--st-ok)] mt-1">
+                +{formatMassKg(destinationMassKg)}
               </span>
             )}
           </>
@@ -318,10 +332,12 @@ export function BiocharProductForm({
       ? massKgNum + (waterAddedKgNum ?? 0)
       : null;
   const hasWaterAdded = waterAddedKgNum != null && waterAddedKgNum > 0;
-  const finalMoisturePercent =
-    hasWaterAdded && massKgNum !== null && moistureNum !== null && effectiveWetMassKg !== null && effectiveWetMassKg > 0
-      ? ((massKgNum * moistureNum / 100 + waterAddedKgNum) / effectiveWetMassKg) * 100
-      : null;
+  const finalMassSplit = splitWetMassAfterAddedWater(
+    massKgNum,
+    moistureNum,
+    waterAddedKgNum,
+  );
+  const finalMoisturePercent = finalMassSplit?.moisturePercent ?? null;
 
   return (
     <div className="space-y-20">
@@ -349,12 +365,12 @@ export function BiocharProductForm({
         </ActionableFocusTarget>
       )}
       <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
-      {/* Transfer Preview — a derived recap of the transfer, not a data-entry
+      {/* Transfer preview — a derived recap of the transfer, not a data-entry
           step, so it sits above the numbered spine and only when it has data. */}
       {(linkedRunPreview || selectedStorageLocation || massKgNum != null) && (
         <div className="space-y-12">
           <SectionLabel icon={<FlowArrowIcon size={14} weight="bold" />}>
-            Transfer Preview
+            Transfer preview
           </SectionLabel>
           <TransferFlowPreview
             sourceBinCode={linkedRunPreview?.biocharStorageLocationCode ?? null}
@@ -381,9 +397,8 @@ export function BiocharProductForm({
       >
         <FormField
           id="linkedProductionRunId"
-          label="Production Run"
+          label="Production run"
           error={errors.linkedProductionRunId?.message}
-          helperText="Which production run produced this biochar?"
           required
         >
           <Controller
@@ -411,59 +426,51 @@ export function BiocharProductForm({
           />
         </FormField>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
-          <FormField
-            id="massKg"
-            label="Wet Mass (kg)"
-            error={errors.massKg?.message}
-            required
-            helperText={
-              linkedRunPreview?.biocharOutputKg !== null && linkedRunPreview?.biocharOutputKg !== undefined
-                ? `${linkedRunPreview.biocharOutputKg.toLocaleString()} kg from run`
-                : undefined
-            }
-          >
-            <DryMassInput
-              id="massKg"
-              type="number"
-              step={MASS_KG_INPUT_STEP}
-              min="0"
-              placeholder="e.g., 500"
-              disabled={isSubmitting}
-              error={!!errors.massKg}
-              wetMassKg={watchedMassKg}
-              moisturePercent={watchedMoisture}
-              {...register("massKg", { setValueAs: nullableNumericValue })}
-            />
-          </FormField>
-
-          <FormField
-            id="moistureContentPercent"
-            label="Moisture Content (%)"
-            error={errors.moistureContentPercent?.message}
-            helperText="Typically 1-2% for biochar"
-            required
-          >
-            <FormInput
-              id="moistureContentPercent"
-              type="number"
-              step={STORED_PERCENT_INPUT_STEP}
-              min="0"
-              max="100"
-              placeholder="e.g., 2"
-              disabled={isSubmitting}
-              error={!!errors.moistureContentPercent}
-              {...register("moistureContentPercent", { setValueAs: nullableNumericValue })}
-            />
-          </FormField>
-        </div>
+        <MassMoistureFields
+          materialLabel="Biochar"
+          wetMassKg={watchedMassKg}
+          moisturePercent={watchedMoisture}
+          splitNote={
+            hasWaterAdded && effectiveWetMassKg !== null
+              ? `Before added water. With ${formatMassKg(waterAddedKgNum)} added: ${formatMassKg(effectiveWetMassKg)} wet at ${formatMoisturePercent(finalMoisturePercent)} moisture.`
+              : undefined
+          }
+          wet={{
+            id: "massKg",
+            label: hasWaterAdded
+              ? BIOCHAR_PRE_WATER_WET_MASS_LABEL
+              : undefined,
+            error: errors.massKg?.message,
+            required: true,
+            disabled: isSubmitting,
+            placeholder: "e.g. 500",
+            helperText:
+              linkedRunPreview?.biocharOutputKg != null
+                ? `${formatMassKg(linkedRunPreview.biocharOutputKg)} from run`
+                : undefined,
+            registration: register("massKg", { setValueAs: nullableNumericValue }),
+          }}
+          moisture={{
+            id: "moistureContentPercent",
+            label: hasWaterAdded
+              ? BIOCHAR_PRE_WATER_MOISTURE_LABEL
+              : undefined,
+            error: errors.moistureContentPercent?.message,
+            required: true,
+            disabled: isSubmitting,
+            placeholder: "e.g. 2",
+            helperText: "Typically 1–2% for biochar",
+            registration: register("moistureContentPercent", { setValueAs: nullableNumericValue }),
+          }}
+        />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
           <FormField
             id="waterAddedKg"
-            label="Water Added (kg)"
+            label="Water added (kg)"
             error={errors.waterAddedKg?.message}
             helperText="Water added to reach target moisture"
+            hint="Dry mass is unchanged by added water."
             required
           >
             <FormInput
@@ -480,7 +487,7 @@ export function BiocharProductForm({
 
           <FormField
             id="densityKgM3"
-            label="Density (kg/m3)"
+            label="Density (kg/m³)"
             error={errors.densityKgM3?.message}
           >
             <FormInput
@@ -496,30 +503,11 @@ export function BiocharProductForm({
           </FormField>
         </div>
 
-        {/* Dry mass is surfaced inline under Wet Mass (DryMassInput). When water
-            is added, show what it changes — effective wet mass and final moisture. */}
-        {hasWaterAdded && effectiveWetMassKg !== null && (
-          <div className="flex flex-wrap items-center gap-x-8 gap-y-4 border border-[var(--color-border-tertiary)] bg-[var(--color-background-medium)] px-16 py-12">
-            <span className="body-small text-[var(--color-text-tertiary)]">Effective wet mass</span>
-            <span className="body-medium font-medium text-[var(--color-text-primary)]">
-              {effectiveWetMassKg.toFixed(2)} kg
-            </span>
-            {finalMoisturePercent !== null && (
-              <>
-                <span className="text-[var(--color-text-tertiary)]">&middot;</span>
-                <span className="body-small text-[var(--color-text-tertiary)]">Final moisture</span>
-                <span className="body-small font-medium text-[var(--color-text-primary)]">
-                  {finalMoisturePercent.toFixed(2)}%
-                </span>
-              </>
-            )}
-          </div>
-        )}
       </FormSection>
 
       {/* Destination + Product Details */}
       <FormSection
-        title="Destination & Product"
+        title="Destination & product"
         icon={<PackageIcon size={14} weight="bold" />}
         fields={["formulationId", "storageLocationId"]}
       >
@@ -553,7 +541,7 @@ export function BiocharProductForm({
 
         <FormField
           id="storageLocationId"
-          label="Product Bin"
+          label="Product bin"
           error={errors.storageLocationId?.message}
           helperText={
             selectedFormulationId
@@ -579,7 +567,6 @@ export function BiocharProductForm({
                   formulationId: selectedFormulationId || PURE_PRODUCT_BIN_FILTER,
                 }}
                 allowCreate
-                createLabel="Add New Bin"
                 onCreateNew={() => storageLocationDialog.open()}
               />
             )}

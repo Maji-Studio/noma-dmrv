@@ -58,8 +58,20 @@ copy both `.env.test` and `.env.local` in first.
 - `DISABLE_RATE_LIMIT=true` is an **app-server** var (read by `src/lib/auth/better-auth.ts`),
   so locally it lives in `.env.local` where `pnpm dev:manual` sees it; CI sets it as a
   workflow env. See [security.md](./security.md).
-- `GEO_PROVIDER=stub` in `.env.test` — position-picker and carbon-viewer specs depend on
-  the stub geo actions (`.env.tpl` notes stub is rejected in prod). See
+- `GEO_PROVIDER=stub` is an **app-server** var too (read via `src/config/env.ts` by
+  `src/lib/geo/index.ts`). It is in `.env.test`, but **`.env.test` only reaches
+  the server when Playwright spawns the `webServer` itself**.
+  `reuseExistingServer` adopts a hand-started `pnpm dev`, which reads
+  `.env.local`; set `GEO_PROVIDER=stub` there for fixture-based geo assertions,
+  or start the manual server as:
+
+  ```bash
+  DISABLE_RATE_LIMIT=true GEO_PROVIDER=stub pnpm dev
+  ```
+
+  Without the stub, geo uses OpenRouteService when configured or is disabled
+  when no ORS key exists, so the fixture-exact assertions in
+  `position-picker.spec.ts` fail. CI sets the provider in the workflow. See
   [adr/0009-provider-agnostic-server-proxied-geo.md](./adr/0009-provider-agnostic-server-proxied-geo.md).
 
 ## Fixtures and conventions

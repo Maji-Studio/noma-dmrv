@@ -1,11 +1,18 @@
 /**
  * PositionPicker + DistanceCalcField E2E (hermetic)
  *
- * Requires GEO_PROVIDER=stub in .env.test — the geo server actions then serve
- * deterministic fixtures (no OpenRouteService key, no network), so geocode
- * hits and CALC distances can be asserted exactly. External basemap hosts are
- * route-aborted so the suite stays hermetic whether or not a MapTiler key is
- * configured in the dev server's env.
+ * Requires GEO_PROVIDER=stub — the geo server actions then serve deterministic
+ * fixtures (no OpenRouteService key, no network), so geocode hits and CALC
+ * distances can be asserted exactly. External basemap hosts are route-aborted
+ * so the suite stays hermetic whether or not a MapTiler key is configured in
+ * the dev server's env.
+ *
+ * GEO_PROVIDER is an APP-SERVER var (read by src/config/env.ts in the Next
+ * process), not a Playwright-side one — same class as DISABLE_RATE_LIMIT. It
+ * only reaches the server via .env.test when Playwright spawns the webServer
+ * itself. With a hand-started dev server (reuseExistingServer picks it up),
+ * export it explicitly or the fixture-exact assertions below fail:
+ *   DISABLE_RATE_LIMIT=true GEO_PROVIDER=stub pnpm dev
  *
  * The supplier create sheet drives the picker through its per-location editor
  * (suppliers carry many source locations, mirroring customers — there is no
@@ -34,6 +41,9 @@ const DAR = STUB_GEOCODE_FIXTURES[1]; // "Dar es Salaam, Tanzania"
 
 const SEED_FACILITY_POINT = { lat: -6.163, lng: 35.7516 };
 const SEED_SUPPLIER_POINT = { lat: -6.8, lng: 39.28 };
+/** Surfaced on the fixture-exact assertions — the usual cause of a mismatch. */
+const STUB_PROVIDER_HINT =
+  "expected the stub geo fixture — a real-world value here means the app server is not running with GEO_PROVIDER=stub";
 const OUT_OF_RANGE_LATITUDE = "91";
 const OUT_OF_RANGE_LONGITUDE = "181";
 
@@ -81,12 +91,14 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     await expect(option).toBeVisible();
     await option.click();
 
-    await expect(dialog.locator("#pending-loc-gps-latitude")).toHaveValue(
-      String(DODOMA.lat)
-    );
-    await expect(dialog.locator("#pending-loc-gps-longitude")).toHaveValue(
-      String(DODOMA.lng)
-    );
+    await expect(
+      dialog.locator("#pending-loc-gps-latitude"),
+      STUB_PROVIDER_HINT
+    ).toHaveValue(String(DODOMA.lat));
+    await expect(
+      dialog.locator("#pending-loc-gps-longitude"),
+      STUB_PROVIDER_HINT
+    ).toHaveValue(String(DODOMA.lng));
 
     // Read-only reverse-geocode confirmation label resolves the same fixture.
     await expect(
@@ -177,7 +189,9 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
       SEED_FACILITY_POINT
     );
     const distanceInput = dialog.locator("#pending-loc-distance");
-    await expect(distanceInput).toHaveValue(String(expectedKm));
+    await expect(distanceInput, STUB_PROVIDER_HINT).toHaveValue(
+      String(expectedKm)
+    );
     await expect(
       dialog.getByTestId("pending-loc-distance-distance-source")
     ).toContainText("Map estimate");

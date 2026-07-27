@@ -100,7 +100,7 @@ All from the `@/components/forms` barrel (`src/components/forms/index.ts`) — r
 - **`FormField`** — `hint` (ⓘ icon) is for explanatory prose; `helperText` is for **short**, always-visible cues and auto-collapses into the hint treatment past `INLINE_HELPER_MAX_CHARS`. Long text in `helperText` is a mistake.
 - **`FormError` / `ServerError`** — field-level vs server-level; both carry `role="alert"`. For server validation targeting a field, use RHF `setError('root.serverError', …)`.
 - **`FormSelect`**, **`FormInput`**, **`FormTextarea`** — styled primitives; spread `{...register(name)}`.
-- **`DryMassInput`** — use for dry-mass entry instead of a hand-rolled mass input.
+- **`MassMoistureFields`** — the canonical wet-mass + moisture pair, with the live `MoistureSplit` bar spanning both. Use it for **every** wet-mass/moisture capture; it owns the labels, the wet-basis hint, the range helper and the derived readout. `MoistureField` / `WetMassField` are the standalone halves (lab samples capture moisture with no paired mass; the bin stock-take captures a counted mass separately). Each takes the caller's `register(...)` result so `setValueAs` stays with the owning form. Pass `materialLabel` ("Biochar", "Feedstock") to qualify the labels rather than rewriting them, and `step="any"` for a column backed by `real` instead of the exact `numeric` families. Vocabulary and precision come from `@/lib/mass-moisture` — see [design-system.md](./design-system.md#wet-mass-moisture-dry-mass). (`DryMassInput` and its "Dry: 237.5 kg" caption are gone.)
 - **`DistanceCalcField`** — derived transport-leg distance.
 - **`PositionPicker`** (+ `PositionValue`, `PickerAccent`) — lat/lng entry.
 - **`FormFileUpload`** — see [File upload](#file-upload).

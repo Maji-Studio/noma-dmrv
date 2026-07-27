@@ -164,11 +164,11 @@ export function SupplierForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* Required Fields Section */}
-      <FormSection title="Required Information" divider={false}>
+      <FormSection title="Required information" divider={false}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="name"
-            label="Supplier Name"
+            label="Supplier name"
             required
             error={errors.name?.message}
           >
@@ -197,11 +197,11 @@ export function SupplierForm({
       )}
 
       {/* Contact Information Section */}
-      <FormSection title="Contact Information">
+      <FormSection title="Contact information">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="contactName"
-            label="Contact Name"
+            label="Contact name"
             error={errors.contactName?.message}
           >
             <FormInput
@@ -218,7 +218,7 @@ export function SupplierForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="contactEmail"
-            label="Contact Email"
+            label="Contact email"
             error={errors.contactEmail?.message}
           >
             <FormInput
@@ -233,7 +233,7 @@ export function SupplierForm({
 
           <FormField
             id="contactPhone"
-            label="Contact Phone"
+            label="Contact phone"
             error={errors.contactPhone?.message}
             helperText="International format supported"
           >
@@ -250,7 +250,7 @@ export function SupplierForm({
       </FormSection>
 
       {/* Sourcing Information Section */}
-      <FormSection title="Sourcing Information">
+      <FormSection title="Sourcing information">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="location"
@@ -270,7 +270,7 @@ export function SupplierForm({
 
           <FormField
             id="sourceRegion"
-            label="Source Region"
+            label="Source region"
             error={errors.sourceRegion?.message}
             helperText="Feedstock sourcing region (used for Isometric SC assessment)"
           >

@@ -153,8 +153,12 @@ test.describe("First-run onboarding", () => {
       await expect(locationName).toBeVisible();
       await locationName.fill("CU Source Site");
       await sheet.getByLabel("Country").first().fill("Tanzania");
-      const lat = sheet.getByRole("spinbutton", { name: /GPS Latitude/ });
-      const lng = sheet.getByRole("spinbutton", { name: /GPS Longitude/ });
+      const lat = sheet.getByRole("spinbutton", {
+        name: /^GPS latitude(?: Required)?$/,
+      });
+      const lng = sheet.getByRole("spinbutton", {
+        name: /^GPS longitude(?: Required)?$/,
+      });
       await expect(lat).toBeVisible();
       await lat.fill("-6.163");
       await lng.fill("35.7516");

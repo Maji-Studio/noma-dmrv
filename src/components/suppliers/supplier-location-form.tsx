@@ -104,10 +104,10 @@ export function SupplierLocationForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* Location Details Section */}
-      <FormSection title="Location Details" divider={false}>
+      <FormSection title="Location details" divider={false}>
         <FormField
           id="name"
-          label="Location Name"
+          label="Location name"
           error={errors.name?.message}
           helperText="e.g., Main Estate, Collection Point B"
         >
@@ -140,7 +140,7 @@ export function SupplierLocationForm({
 
           <FormField
             id="stateRegion"
-            label="State / Region"
+            label="State / region"
             error={errors.stateRegion?.message}
           >
             <FormInput
@@ -171,7 +171,7 @@ export function SupplierLocationForm({
 
         <FormField
           id="address"
-          label="Address / Description"
+          label="Address / description"
           error={errors.address?.message}
         >
           <FormTextarea
@@ -185,7 +185,7 @@ export function SupplierLocationForm({
       </FormSection>
 
       {/* GPS Coordinates Section */}
-      <FormSection title="GPS Coordinates">
+      <FormSection title="GPS coordinates">
         <PositionPicker
           idPrefix="gps"
           label="Source location position"

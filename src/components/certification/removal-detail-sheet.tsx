@@ -50,12 +50,12 @@ function ReadinessBlock({ summary }: { summary: RemovalPreflightSummary }) {
   if (state === "ready") {
     return (
       <div className="flex flex-col gap-8">
-        <div className="flex items-center gap-8 border-l-2 border-[var(--color-signal-green)] pl-12 py-4">
+        <div className="flex items-center gap-8 border-l-2 border-[var(--st-ok)] pl-12 py-4">
           <CheckCircleIcon
             size={16}
             weight="fill"
             aria-hidden
-            className="shrink-0 text-[var(--color-signal-green)]"
+            className="shrink-0 text-[var(--st-ok)]"
           />
           <span className="body-small text-[var(--color-text-primary)]">
             Ready to submit —{" "}

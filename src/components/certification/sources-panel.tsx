@@ -236,7 +236,7 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
         {isMirrored ? (
           <>
             <span
-              className="flex items-center gap-4 text-[var(--color-signal-green)]"
+              className="flex items-center gap-4 text-[var(--st-ok)]"
               title="Mirrored to Isometric"
             >
               <CheckCircleIcon size={STATE_ICON_SIZE} weight="fill" />

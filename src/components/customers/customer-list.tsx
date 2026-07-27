@@ -63,7 +63,7 @@ function createColumns(
     },
     {
       accessorKey: "cropType",
-      header: "Crop Type",
+      header: "Crop type",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
           {row.original.cropType || "\u2014"}
@@ -302,16 +302,12 @@ export function CustomerList() {
             padding="md"
             icon={<UsersIcon size={48} />}
             title={hasActiveSearch ? "No matching customers" : "No customers yet"}
-            description={
-              hasActiveSearch
-                ? "Try clearing your search."
-                : "Create your first customer to get started."
-            }
+            description={hasActiveSearch ? "Try clearing your search." : undefined}
             action={
               !hasActiveSearch ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={20} weight="bold" />
-                  Create Customer
+                  Create your first customer
                 </Button>
               ) : undefined
             }
@@ -357,9 +353,9 @@ export function CustomerList() {
           sideSheetEntity
             ? [
                 {
-                  title: "Required Information",
+                  title: "Required information",
                   fields: [
-                    { label: "Customer Name", value: sideSheetEntity.name },
+                    { label: "Customer name", value: sideSheetEntity.name },
                   ],
                 },
                 {
@@ -372,16 +368,16 @@ export function CustomerList() {
                   }),
                 },
                 {
-                  title: "Contact Information",
+                  title: "Contact information",
                   fields: [
-                    { label: "Contact Email", value: sideSheetEntity.contactEmail },
-                    { label: "Contact Phone", value: sideSheetEntity.contactPhone },
+                    { label: "Contact email", value: sideSheetEntity.contactEmail },
+                    { label: "Contact phone", value: sideSheetEntity.contactPhone },
                   ],
                 },
                 {
-                  title: "Business Information",
+                  title: "Business information",
                   fields: [
-                    { label: "Crop Type", value: sideSheetEntity.cropType },
+                    { label: "Crop type", value: sideSheetEntity.cropType },
                     { label: "Address", value: sideSheetEntity.address },
                   ],
                 },

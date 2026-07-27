@@ -52,7 +52,7 @@ export function SampleEvidenceSection({
 }: SampleTrailingSectionProps) {
   return (
     <FormSection
-      title="Evidence & Documents"
+      title="Evidence & documents"
       icon={<PaperclipIcon size={14} weight="bold" />}
       __spine={__spine}
     >

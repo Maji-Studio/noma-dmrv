@@ -26,6 +26,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/base.css";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/ssr";
+import { formatMassKg } from "@/lib/format-utils";
 import type {
   CreditBatchSankeyData,
   SankeyColumn,
@@ -100,10 +101,6 @@ const TOOLTIP_W = 248;
 // Keeps the tooltip anchor far enough above the wrapper's bottom edge that
 // an estimated-height tooltip never clips outside the diagram.
 const TOOLTIP_BOTTOM_CLEARANCE = 120;
-
-function formatMassKg(value: number): string {
-  return `${Math.round(value).toLocaleString()} kg`;
-}
 
 function exitTone(exit: SankeyExit): string {
   return exit.tone === "alert" ? "var(--st-bad)" : "var(--color-text-tertiary)";
