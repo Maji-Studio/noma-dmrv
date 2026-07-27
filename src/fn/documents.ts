@@ -14,7 +14,7 @@ import {
   type DocumentType,
 } from "@/schemas/documents";
 import {
-  deleteDocumentRow,
+  deleteDocumentWithCertificationSafety,
   getDocumentById,
   insertDocument,
   listDocumentsForEntity,
@@ -22,8 +22,6 @@ import {
   assertCanManageDocumentEntity,
   type DocumentRow,
 } from "@/data-access/documents";
-import { getDocumentUploadByDocument } from "@/data-access/certifier-document-uploads";
-import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "./with-action";
 
@@ -297,64 +295,8 @@ export async function deleteDocument(
     if (!row) throw new SafeError("Document not found");
     await assertCanManageDocumentEntity(ctx, row.entityType, row.entityId);
 
-    // Fast user-facing path; the FK-backed delete below remains the real race
-    // guard in case a mirror appears after this check.
-    const isometricMirror = await getDocumentUploadByDocument(
-      ctx, ISOMETRIC_PROVIDER,
-      row.id,
-    );
-    if (isometricMirror) {
-      throw new SafeError(
-        "This document is mirrored to Isometric as a Source. Unlink it from the Removal's Sources panel before deleting.",
-      );
-    }
-
-    let deleted: DocumentRow | null;
-    try {
-      deleted = await deleteDocumentRow(ctx, row.id);
-    } catch (err) {
-      const mirror = await getDocumentUploadByDocument(
-        ctx, ISOMETRIC_PROVIDER,
-        row.id,
-      );
-      if (mirror) {
-        throw new SafeError(
-          "This document is mirrored to Isometric as a Source. Unlink it from the Removal's Sources panel before deleting.",
-        );
-      }
-      throw err;
-    }
+    const deleted = await deleteDocumentWithCertificationSafety(ctx, row.id);
     if (!deleted) throw new SafeError("Document not found");
-
-    if (row.storageKey) {
-      const provider = getStorageProvider();
-      try {
-        await provider.deleteObject(row.storageKey);
-      } catch (err) {
-        console.error("Failed to delete storage object", {
-          documentId: row.id,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        let restored = false;
-        try {
-          await insertDocument(ctx, deleted);
-          restored = true;
-        } catch (restoreErr) {
-          console.error("Failed to restore document row after storage error", {
-            documentId: row.id,
-            error:
-              restoreErr instanceof Error
-                ? restoreErr.message
-                : String(restoreErr),
-          });
-        }
-        throw new SafeError(
-          restored
-            ? "Failed to delete storage object. The document row was restored; try again."
-            : "Failed to delete storage object and restore the document row. Contact support before retrying.",
-        );
-      }
-    }
 
     return { id: row.id };
   });

@@ -88,7 +88,6 @@ export {
 export {
   loadCandidateDocumentsForRemoval,
   mirrorDocumentToSource,
-  unlinkDocumentSource,
   type CandidateDocument,
   type CandidateDocumentsForRemoval,
   type CandidateLineageEntity,

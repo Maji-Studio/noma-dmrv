@@ -28,4 +28,15 @@ describe("RemovalDetailSheet sync history contract", () => {
       "Advisory — {advisory}. Submission remains available.",
     );
   });
+
+  it("passes authoritative derived Removal editability to supporting sources", () => {
+    const source = readFileSync(
+      new URL("./removal-detail-sheet.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toMatch(
+      /<SourcesPanel\s+removalId=\{summary\.removalId\}\s+editable=\{derived\.isActionable\}/,
+    );
+  });
 });

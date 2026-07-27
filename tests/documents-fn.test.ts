@@ -21,6 +21,7 @@ vi.mock("@/data-access/documents", () => ({
   getDocumentById: vi.fn(),
   updateDocument: vi.fn(),
   deleteDocumentRow: vi.fn(),
+  deleteDocumentWithCertificationSafety: vi.fn(),
   listDocumentsForEntity: vi.fn(),
 }));
 
@@ -30,9 +31,11 @@ import {
   getDocumentById,
   updateDocument,
   assertCanManageDocumentEntity,
+  deleteDocumentWithCertificationSafety,
 } from "@/data-access/documents";
 import {
   confirmUpload,
+  deleteDocument,
   requestUpload,
   updateApplicationEvidenceMetadata,
 } from "@/fn/documents";
@@ -493,5 +496,60 @@ describe("updateApplicationEvidenceMetadata", () => {
         },
       },
     );
+  });
+});
+
+describe("deleteDocument", () => {
+  const owningRecordDocument = {
+    id: "11111111-2222-4333-8444-555555555555",
+    entityType: "feedstock",
+    entityId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+    storageKey: "feedstock/evidence.pdf",
+  };
+
+  it("deletes owning-record evidence through certification-safe retirement", async () => {
+    vi.mocked(getDocumentById).mockResolvedValueOnce(
+      owningRecordDocument as never,
+    );
+    vi.mocked(deleteDocumentWithCertificationSafety).mockResolvedValueOnce(
+      owningRecordDocument as never,
+    );
+
+    const result = await deleteDocument({
+      documentId: owningRecordDocument.id,
+    });
+
+    expect(result).toEqual({
+      success: true,
+      data: { id: owningRecordDocument.id },
+    });
+    expect(assertCanManageDocumentEntity).toHaveBeenCalledWith(
+      TEST_CTX,
+      "feedstock",
+      owningRecordDocument.entityId,
+    );
+    expect(deleteDocumentWithCertificationSafety).toHaveBeenCalledWith(
+      TEST_CTX,
+      owningRecordDocument.id,
+    );
+  });
+
+  it("surfaces submitted-history deletion refusal from the safety boundary", async () => {
+    vi.mocked(getDocumentById).mockResolvedValueOnce(
+      owningRecordDocument as never,
+    );
+    vi.mocked(deleteDocumentWithCertificationSafety).mockRejectedValueOnce(
+      new SafeError(
+        "This document belongs to submitted certification history and cannot be deleted or replaced.",
+      ),
+    );
+
+    const result = await deleteDocument({
+      documentId: owningRecordDocument.id,
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error).toMatch(/submitted certification history/i);
   });
 });

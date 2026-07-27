@@ -138,9 +138,17 @@ LOCAL_FS_GLOBAL_MAX_BYTES)` (100 MB) as defense-in-depth.
 
 ### Deleting is not purely a storage op
 
-`deleteDocument` refuses when the document is mirrored to Isometric as a Source —
-checked before the delete for a fast error, and again on FK error as the real race
-guard. The user must unlink it from the Removal's Sources panel first.
+Evidence is replaced or removed from its owning record (for example Feedstock),
+not from the Removal detail. Before submission, `deleteDocument` acquires the
+same per-document lock used by Source mirroring and Removal submission. If an
+Isometric mapping is not referenced by any persisted submission payload, the
+delete retires that local mapping and the owning document together; the remote
+Isometric Source is never deleted.
+
+If any submission snapshot references the Source, deletion/replacement fails:
+the document belongs to submitted certification history and both its local audit
+record and remote Source must remain intact. Submitted Removals expose source
+status only and cannot be used to change supporting evidence.
 
 ## Adapter interface
 

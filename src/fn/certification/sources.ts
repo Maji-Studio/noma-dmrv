@@ -8,14 +8,13 @@ import {
   type DocumentRow,
 } from "@/data-access/certification";
 import {
-  deleteDocumentUploadByDocument,
   getDocumentUploadByDocument,
   insertOrGetDocumentUpload,
-  isExternalSourceReferencedInSnapshots,
   listDocumentUploadsForDocuments,
   type CertifierDocumentUploadRow,
   type DocumentUploadMetadata,
 } from "@/data-access/certifier-document-uploads";
+import { getLatestSubmissionWithExecutor } from "@/data-access/certification-submissions";
 import { getRegistrySourceVisibility } from "@/data-access/certifier-organization-settings";
 import {
   getCertifierRemovalById,
@@ -32,6 +31,7 @@ import {
 import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import type { TransportLeg } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
+import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import {
   buildSourceSupplierRef,
   createSource,
@@ -50,11 +50,15 @@ import {
   mirrorDocumentToSourceSchema,
   type MirrorDocumentToSourceInput,
   SOURCES_MAX_BYTES,
-  unlinkDocumentSourceSchema,
 } from "@/schemas/certification-sources";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
-import { appendSyncEventBestEffort, ISOMETRIC_PROVIDER } from "./shared";
+import {
+  appendSyncEventBestEffort,
+  ISOMETRIC_PROVIDER,
+  REMOVAL_ENTITY_TYPE,
+  REMOVAL_SUBMISSION_TYPE,
+} from "./shared";
 import { withSourceSyncEventOnFailure } from "./source-sync-events";
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -374,11 +378,11 @@ export async function loadCandidateDocumentsForRemoval(
   });
 }
 
-// Source mutations (mirror and unlink) are anchored to a specific
-// removal so the server can verify the document actually belongs to that
-// removal's lineage. Without this check, any authenticated caller who knows a
-// documentId UUID could mutate a Source mirrored under another removal — the
-// schema-level `removalId` only documents intent; this is the enforcement.
+// Public Source mirroring is anchored to a specific Removal so the server can
+// verify the document actually belongs to that Removal's lineage. Without this
+// check, any authenticated caller who knows a documentId UUID could mutate a
+// Source mirrored under another Removal — the schema-level `removalId` only
+// documents intent; this is the enforcement.
 //
 // Returns the loaded candidate set (mirror needs `hasMapping`); the matching
 // candidate itself is discarded — the check is side-effect-only.
@@ -413,11 +417,40 @@ export interface MirrorResult {
   recovered: boolean;
 }
 
-// Wraps an outbound Isometric call so any failure lands in
-// certifier_sync_events before bubbling up. Without this, a POST that fails
-// (auth expired, 5xx, network) leaves zero audit trail — ops cannot answer
-// "did we even try?" in production. Re-throws after recording so the action
-// still surfaces the error to the caller.
+const SOURCE_READ_ONLY_SUBMISSION_STATUSES = new Set([
+  "submitted",
+  "accepted",
+  "superseded",
+]);
+
+async function assertRemovalSourcesEditable(
+  orgCtx: OrgContext,
+  removalId: string,
+  facilityId: string,
+  executor: DbTransaction | typeof db,
+): Promise<void> {
+  const latest = await getLatestSubmissionWithExecutor(
+    orgCtx,
+    executor,
+    {
+      provider: ISOMETRIC_PROVIDER,
+      submissionType: REMOVAL_SUBMISSION_TYPE,
+      localEntityType: REMOVAL_ENTITY_TYPE,
+      localEntityId: removalId,
+    },
+    facilityId,
+  );
+  if (
+    latest &&
+    (SOURCE_READ_ONLY_SUBMISSION_STATUSES.has(latest.status) ||
+      isLockedInFlight(latest))
+  ) {
+    throw new SafeError(
+      "Supporting sources are read-only once a Removal is submitted or while submission is in progress. Replace or remove evidence from its owning record before submission.",
+    );
+  }
+}
+
 // Thin server-action wrapper: validates input and resolves the caller from the
 // session. The body lives in `mirrorDocumentToSourceForUser` so server-side
 // callers that already hold a orgCtx (the submit pipeline, the transport
@@ -426,101 +459,122 @@ export async function mirrorDocumentToSource(
   input: unknown,
 ): Promise<ActionResult<MirrorResult>> {
   return withAction((orgCtx) =>
-    mirrorDocumentToSourceForUser(orgCtx, mirrorDocumentToSourceSchema.parse(input)),
+    mirrorDocumentToSourceForUser(
+      orgCtx,
+      mirrorDocumentToSourceSchema.parse(input),
+      { enforceRemovalLifecycle: true },
+    ),
   );
 }
 
 export async function mirrorDocumentToSourceForUser(
   orgCtx: OrgContext,
   parsed: MirrorDocumentToSourceInput,
+  options: { enforceRemovalLifecycle?: boolean } = {},
 ): Promise<MirrorResult> {
-    requireOrgRole(orgCtx, "admin");
-    const { removalId, documentId } = parsed;
+  requireOrgRole(orgCtx, "admin");
+  const { removalId, documentId } = parsed;
 
-    // Ownership + lineage scoping ───────────────────────────────────────
-    // `assertDocumentIsCandidateForRemoval` walks the same lineage the panel
-    // shows. Anchoring the mutation to the removal prevents an authenticated
-    // caller from mirroring an arbitrary document UUID through this endpoint.
-    const candidates = await assertDocumentIsCandidateForRemoval(
+  // Ownership + lineage scoping ───────────────────────────────────────
+  // `assertDocumentIsCandidateForRemoval` walks the same lineage the panel
+  // shows. Anchoring the mutation to the removal prevents an authenticated
+  // caller from mirroring an arbitrary document UUID through this endpoint.
+  const candidates = await assertDocumentIsCandidateForRemoval(
+    orgCtx,
+    removalId,
+    documentId,
+  );
+  if (!candidates.hasMapping) {
+    throw new SafeError(
+      "This facility isn't linked to an Isometric project. Link it in facility settings before mirroring sources.",
+    );
+  }
+  const removal = await getCertifierRemovalById(orgCtx, removalId);
+  if (!removal) throw new SafeError("Removal not found.");
+  const mapping = await getCertifierProjectByFacility(
+    orgCtx,
+    removal.facilityId,
+    ISOMETRIC_PROVIDER,
+  );
+  if (!mapping) {
+    // Defensive: hasMapping was true above, so this is a TOCTOU edge.
+    throw new SafeError(
+      "This facility isn't linked to an Isometric project. Link it in facility settings before mirroring sources.",
+    );
+  }
+  if (options.enforceRemovalLifecycle) {
+    await assertRemovalSourcesEditable(
       orgCtx,
       removalId,
-      documentId,
-    );
-    if (!candidates.hasMapping) {
-      throw new SafeError(
-        "This facility isn't linked to an Isometric project. Link it in facility settings before mirroring sources.",
-      );
-    }
-    const removal = await getCertifierRemovalById(orgCtx, removalId);
-    if (!removal) throw new SafeError("Removal not found.");
-    const mapping = await getCertifierProjectByFacility(
-      orgCtx,
       removal.facilityId,
-      ISOMETRIC_PROVIDER,
+      db,
     );
-    if (!mapping) {
-      // Defensive: hasMapping was true above, so this is a TOCTOU edge.
-      throw new SafeError(
-        "This facility isn't linked to an Isometric project. Link it in facility settings before mirroring sources.",
-      );
-    }
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+  }
+  const client = await getIsometricClientForOrg(orgCtx.organizationId);
 
-    // Pre-flight: document loadable + safe to upload ────────────────────
-    const document = await getDocumentById(orgCtx, documentId);
-    if (!document) throw new SafeError("Document not found.");
-    if (!document.storageKey) {
-      throw new SafeError(
-        "This document has no managed storage (legacy URL-only). Re-upload through noma before mirroring.",
-      );
-    }
-    if (!document.fileSizeBytes) {
-      throw new SafeError(
-        "This document has no recorded size. Re-upload through noma before mirroring.",
-      );
-    }
-    if (document.fileSizeBytes > SOURCES_MAX_BYTES) {
-      throw new SafeError(
-        `Document is ${document.fileSizeBytes} bytes; the current Phase 3.5 limit is ${SOURCES_MAX_BYTES} bytes (streaming larger files is a follow-up).`,
-      );
-    }
-    if (!document.mimeType) {
-      throw new SafeError(
-        "This document has no recorded MIME type. Re-upload through noma before mirroring.",
-      );
-    }
-    const provider = getStorageProvider();
-    const head = await provider.headObject(document.storageKey);
-    if (!head) {
-      throw new SafeError(
-        "Document bytes not found in storage. The upload may have failed; re-upload before mirroring.",
-      );
-    }
-    if (head.size !== document.fileSizeBytes) {
-      throw new SafeError(
-        "Stored object size does not match the document record. Re-upload before mirroring.",
-      );
-    }
-
-    // After the pre-flight, these are guaranteed non-null. Lift them into
-    // typed locals so the closure passed to db.transaction below carries
-    // narrowed types (TS won't narrow through async callbacks).
-    const fileSizeBytes: number = document.fileSizeBytes;
-    const mimeType: string = document.mimeType;
-    const supplierRefId = buildSourceSupplierRef(documentId);
-    const sourceVisibility = await getRegistrySourceVisibility(
-      orgCtx,
-      ISOMETRIC_PROVIDER,
+  // Pre-flight: document loadable + safe to upload ────────────────────
+  const document = await getDocumentById(orgCtx, documentId);
+  if (!document) throw new SafeError("Document not found.");
+  if (!document.storageKey) {
+    throw new SafeError(
+      "This document has no managed storage (legacy URL-only). Re-upload through noma before mirroring.",
     );
-    const policyIsPublic = sourceVisibility === "public";
-    // Serialize concurrent mirrors of the same document with a transaction-
-    // scoped advisory lock. Two operators clicking "Mirror" simultaneously
-    // would otherwise both POST /sources and one Source becomes an orphan
-    // (loser's externalId stays on Isometric, never linked locally). The
-    // lock is keyed on (provider, documentId) so unrelated mirrors run in
-    // parallel. Held across HTTP calls; acceptable for single-tenant v1.
-    return db.transaction(async (tx) => {
+  }
+  if (!document.fileSizeBytes) {
+    throw new SafeError(
+      "This document has no recorded size. Re-upload through noma before mirroring.",
+    );
+  }
+  if (document.fileSizeBytes > SOURCES_MAX_BYTES) {
+    throw new SafeError(
+      `Document is ${document.fileSizeBytes} bytes; the current Phase 3.5 limit is ${SOURCES_MAX_BYTES} bytes (streaming larger files is a follow-up).`,
+    );
+  }
+  if (!document.mimeType) {
+    throw new SafeError(
+      "This document has no recorded MIME type. Re-upload through noma before mirroring.",
+    );
+  }
+  const provider = getStorageProvider();
+  const head = await provider.headObject(document.storageKey);
+  if (!head) {
+    throw new SafeError(
+      "Document bytes not found in storage. The upload may have failed; re-upload before mirroring.",
+    );
+  }
+  if (head.size !== document.fileSizeBytes) {
+    throw new SafeError(
+      "Stored object size does not match the document record. Re-upload before mirroring.",
+    );
+  }
+
+  // After the pre-flight, these are guaranteed non-null. Lift them into
+  // typed locals so the closure passed to db.transaction below carries
+  // narrowed types (TS won't narrow through async callbacks).
+  const fileSizeBytes: number = document.fileSizeBytes;
+  const mimeType: string = document.mimeType;
+  const supplierRefId = buildSourceSupplierRef(documentId);
+  const sourceVisibility = await getRegistrySourceVisibility(
+    orgCtx,
+    ISOMETRIC_PROVIDER,
+  );
+  const policyIsPublic = sourceVisibility === "public";
+  // Serialize concurrent mirrors of the same document with a transaction-
+  // scoped advisory lock. Two operators clicking "Mirror" simultaneously
+  // would otherwise both POST /sources and one Source becomes an orphan
+  // (loser's externalId stays on Isometric, never linked locally). The
+  // lock is keyed on (provider, documentId) so unrelated mirrors run in
+  // parallel. Held across HTTP calls; acceptable for single-tenant v1.
+  return db.transaction(async (tx) => {
       await acquireMirrorLock(tx, documentId);
+      if (options.enforceRemovalLifecycle) {
+        await assertRemovalSourcesEditable(
+          orgCtx,
+          removalId,
+          removal.facilityId,
+          tx,
+        );
+      }
 
       // Idempotency short-circuit (inside the lock) ─────────────────────
       const existingLocal = await getDocumentUploadByDocument(
@@ -692,95 +746,6 @@ export async function mirrorDocumentToSourceForUser(
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// Unlink (local-only)
-// ───────────────────────────────────────────────────────────────────────────
-
-export async function unlinkDocumentSource(
-  input: unknown,
-): Promise<ActionResult<{ unlinked: boolean }>> {
-  return withAction(async (orgCtx) => {
-    requireOrgRole(orgCtx, "admin");
-    const parsed = unlinkDocumentSourceSchema.parse(input);
-
-    // Anchor the mutation to a specific removal so the document must belong
-    // to that removal's lineage. Schema-level removalId is intent; this
-    // check is the enforcement.
-    await assertDocumentIsCandidateForRemoval(
-      orgCtx,
-      parsed.removalId,
-      parsed.documentId,
-    );
-
-    // Wrap the snapshot-reference check + DELETE in a single transaction.
-    // The advisory lock is keyed on (provider, documentId) — the same key
-    // mirror uses and submit acquires per-document — so unlink, mirror, and
-    // submit all interlock on the same key. This closes the window where
-    // submit could read the externalDocumentId, unlink could delete the
-    // mapping, and submit would then write a snapshot referencing an
-    // orphaned source id.
-    return db.transaction(async (tx) => {
-      await acquireMirrorLock(tx, parsed.documentId);
-
-      const existing = await getDocumentUploadByDocument(
-        orgCtx,
-        ISOMETRIC_PROVIDER,
-        parsed.documentId,
-        tx,
-      );
-      if (!existing) return { unlinked: false };
-
-      const referenced = await isExternalSourceReferencedInSnapshots(
-        orgCtx,
-        ISOMETRIC_PROVIDER,
-        existing.externalDocumentId,
-        tx,
-      );
-      if (referenced) {
-        throw new SafeError(
-          "This source is referenced by a submitted Removal payload. Unlinking would break the audit trail. The Source remains on Isometric; future submissions can re-attach by re-mirroring.",
-        );
-      }
-
-      await deleteDocumentUploadByDocument(
-        orgCtx,
-        ISOMETRIC_PROVIDER,
-        parsed.documentId,
-        tx,
-      );
-
-      // Defence-in-depth recheck inside the transaction. With submit now
-      // acquiring the same (provider, documentId) lock before resolving
-      // source IDs, this recheck should never fire — but a recheck that
-      // never aborts is cheap, and it guards against future submission
-      // entry points that forget to take the lock.
-      const stillReferenced = await isExternalSourceReferencedInSnapshots(
-        orgCtx,
-        ISOMETRIC_PROVIDER,
-        existing.externalDocumentId,
-        tx,
-      );
-      if (stillReferenced) {
-        throw new SafeError(
-          "A Removal submission committed concurrently and now references this source. Unlink aborted; retry once the submission completes.",
-        );
-      }
-
-      await appendSyncEventBestEffort(orgCtx, {
-        provider: ISOMETRIC_PROVIDER,
-        entityType: "document",
-        entityId: parsed.documentId,
-        operation: "source:unlink:local",
-        status: "succeeded",
-        responsePayload: {
-          externalDocumentId: existing.externalDocumentId,
-        },
-      });
-      return { unlinked: true };
-    });
-  });
-}
-
-// ───────────────────────────────────────────────────────────────────────────
 // Internal helpers
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -857,10 +822,10 @@ export async function collectCandidateDocumentIdsForRemoval(
 // Resolves the deduped, sorted Source ID list for a removal given the set of
 // candidate documentIds (from `collectCandidateDocumentIdsForRemoval`). When
 // called inside a submit transaction that holds per-document mirror locks,
-// the result is stable through the snapshot insert — unlink and mirror both
-// block on those locks, so a concurrent unlink cannot delete a mapping after
-// we read it but before we persist the reference. Pass a `tx` from the
-// caller's transaction; defaults to `db` for non-locked callers.
+// the result is stable through the snapshot insert — mirror and owning-document
+// deletion both block on those locks, so a concurrent delete cannot retire a
+// mapping after we read it but before we persist the reference. Pass a `tx`
+// from the caller's transaction; defaults to `db` for non-locked callers.
 export async function resolveSourceIdsForRemoval(
   orgCtx: OrgContext,
   args: { candidateDocumentIds: string[] },
@@ -879,6 +844,5 @@ export async function resolveSourceIdsForRemoval(
 // Re-export the input types for caller convenience.
 export type {
   MirrorDocumentToSourceInput,
-  UnlinkDocumentSourceInput,
   LoadCandidateDocumentsForRemovalInput,
 } from "@/schemas/certification-sources";

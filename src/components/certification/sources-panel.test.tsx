@@ -46,16 +46,29 @@ vi.mock("@/hooks/use-certification-sources", () => ({
           },
           mirror: null,
         },
+        {
+          document: {
+            id: "mirrored-document-id",
+            fileName: "mirrored-readings.csv",
+            documentType: "lab_report",
+            mimeType: "text/csv",
+            storageKey: "samples/mirrored-readings.csv",
+          },
+          lineageEntity: {
+            entityLabel: "Lab sample CB-26-002",
+          },
+          mirror: {
+            externalDocumentId: "src_existing",
+            isPublic: false,
+            mirroredAt: new Date("2026-07-01T00:00:00Z"),
+          },
+        },
       ],
     },
     isLoading: false,
     error: null,
   }),
   useMirrorDocumentToSource: () => ({
-    isPending: false,
-    mutate: vi.fn(),
-  }),
-  useUnlinkDocumentSource: () => ({
     isPending: false,
     mutate: vi.fn(),
   }),
@@ -98,7 +111,7 @@ import { SourcesPanel } from "./sources-panel";
 describe("SourcesPanel supporting document affordances", () => {
   it("renders legacy URL-only documents as a non-interactive status", () => {
     const html = renderToStaticMarkup(
-      <SourcesPanel removalId="removal-id" />,
+      <SourcesPanel removalId="removal-id" editable />,
     );
 
     expect(html).toContain("No managed file bytes");
@@ -108,7 +121,7 @@ describe("SourcesPanel supporting document affordances", () => {
 
   it("previews PDFs through the authenticated document route only", () => {
     const html = renderToStaticMarkup(
-      <SourcesPanel removalId="removal-id" />,
+      <SourcesPanel removalId="removal-id" editable />,
     );
 
     expect(html).toContain('href="/api/documents/legacy-document-id"');
@@ -121,11 +134,32 @@ describe("SourcesPanel supporting document affordances", () => {
 
   it("has no per-file registry visibility controls", () => {
     const html = renderToStaticMarkup(
-      <SourcesPanel removalId="removal-id" />,
+      <SourcesPanel removalId="removal-id" editable />,
     );
 
     expect(html).not.toContain("Private");
     expect(html).not.toContain("Public");
     expect(html).not.toContain("aria-pressed");
+  });
+
+  it("never offers local unlinking for mirrored sources", () => {
+    const html = renderToStaticMarkup(
+      <SourcesPanel removalId="removal-id" editable />,
+    );
+
+    expect(html).toContain("src_existing");
+    expect(html).not.toContain("Unlink locally");
+    expect(html).not.toContain("Unlink");
+  });
+
+  it("renders submitted sources as status-only when editing is disabled", () => {
+    const html = renderToStaticMarkup(
+      <SourcesPanel removalId="removal-id" editable={false} />,
+    );
+
+    expect(html).toContain("Source status is read-only");
+    expect(html).toContain("Not mirrored");
+    expect(html).not.toContain(">Mirror<");
+    expect(html).not.toContain("<button");
   });
 });

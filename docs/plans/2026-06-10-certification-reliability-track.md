@@ -184,7 +184,7 @@ claimSubmissionDraft<H>(userId: string, args: {
 - **Rejected: ports & adapters** over the ledger. The load-bearing behavior
   is Postgres locking/visibility (`FOR UPDATE` queueing, READ COMMITTED
   visibility, advisory-lock semantics, cross-module interleaving with
-  mirror/unlink/admin-repoint flows) — an in-memory adapter is more likely
+  mirroring/owning-document-deletion/admin-repoint flows) — an in-memory adapter is more likely
   to lie than help. Internal seam; test against real Postgres. Recorded as
   [ADR 0008](../adr/0008-submission-ledger-internal-seam.md).
 - **Deferred: telemetry.** The proven extension path (from the review's

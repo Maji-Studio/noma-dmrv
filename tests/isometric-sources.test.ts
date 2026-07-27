@@ -153,11 +153,10 @@ describe("buildCreateDatapointRequest source_ids plumbing", () => {
 
 describe("payloadHash sensitivity to sourceIds — supersede contract", () => {
   // The Removal `semanticPayload` includes a `sourceIds: string[]` field
-  // (submit-removal.ts). Phase 3.5's correctness contract: a mirror or
-  // unmirror MUST change the hash so the next submit supersedes the
-  // previous version. These tests pin the hash sensitivity at the unit
-  // level so a regression that drops `sourceIds` from the hash is caught
-  // before the integration suite.
+  // (submit-removal.ts). Phase 3.5's correctness contract: mirroring or
+  // owning-record evidence replacement MUST change the hash before submission.
+  // These tests pin the hash sensitivity at the unit level so a regression
+  // that drops `sourceIds` from the hash is caught before the integration suite.
   const base = {
     removalId: "removal-1",
     templateId: "rt_1",
@@ -179,7 +178,7 @@ describe("payloadHash sensitivity to sourceIds — supersede contract", () => {
     expect(after).not.toBe(before);
   });
 
-  it("an unmirror changes the hash (supersede triggers)", () => {
+  it("owning-record evidence removal changes the hash", () => {
     const before = payloadHash({ ...base, sourceIds: ["src_1", "src_2"] });
     const after = payloadHash({ ...base, sourceIds: ["src_1"] });
     expect(after).not.toBe(before);

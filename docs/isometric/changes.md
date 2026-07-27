@@ -13,6 +13,20 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-07-27 (Removal sources become read-only after submission)
+
+The Removal detail no longer detaches local Source mappings. It shows Mirror
+only while the authoritative derived Removal state is actionable; submitted,
+accepted, superseded, and in-flight rows are status-only. The public mirror
+action enforces the same lifecycle boundary, while the internal mirror seam
+used by submission-generated evidence remains available.
+
+Evidence is deleted or replaced from its owning record before submission.
+Owning-document deletion now retires an unreferenced local Isometric mapping
+under the shared per-document lock and never deletes the remote Source. Any
+persisted submission snapshot that references the Source blocks deletion so
+submitted certification history remains intact.
+
 ## Registry Source visibility contract
 
 Certification Settings exposes one organization-wide Isometric Source

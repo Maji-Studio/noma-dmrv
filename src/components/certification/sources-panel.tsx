@@ -4,8 +4,8 @@
  * Lists candidate noma documents discovered along the Removal's chain-of-
  * custody. The operator mirrors selected docs to Isometric Sources via a
  * server-side proxy; once mirrored, `source_ids` ride into Datapoint payloads
- * at submit time and are hash-covered (a sources change supersedes the
- * Removal version).
+ * at submit time and are hash-covered. After submission the rows are
+ * status-only; evidence changes happen on the owning entity before submit.
  *
  * Mounted in `RemovalDetailSheet` (the Removals-tab quick view, opened via
  * `?removal=<id>`), the single place the candidate set is consumed. The
@@ -27,7 +27,6 @@ import { useToast } from "@/components/ui/toast";
 import {
   useCandidateDocumentsForRemoval,
   useMirrorDocumentToSource,
-  useUnlinkDocumentSource,
 } from "@/hooks/use-certification-sources";
 import { Section } from "./panel-layout";
 
@@ -39,9 +38,12 @@ interface SourcesPanelProps {
   // Null while the credit batch is not yet grouped into a removal — render
   // an inactive panel rather than fetching.
   removalId: string | null;
+  // Derived by the owning Removal surface from the authoritative submission
+  // state. Source rows stay visible after submit, but become status-only.
+  editable: boolean;
 }
 
-export function SourcesPanel({ removalId }: SourcesPanelProps) {
+export function SourcesPanel({ removalId, editable }: SourcesPanelProps) {
   return (
     <Section>
       <div className="flex flex-col gap-12">
@@ -50,11 +52,11 @@ export function SourcesPanel({ removalId }: SourcesPanelProps) {
           <PanelCounter removalId={removalId} />
         </header>
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          Documents you mirror here attach to every Datapoint in this
-          Removal. Mirror once per document — re-submitting the Removal
-          with a different set of sources creates a new version.
+          {editable
+            ? "Mirror candidate documents before submission. Replace or remove evidence from its owning record, not from this Removal."
+            : "Source status is read-only. Evidence must be replaced or removed from its owning record before submission."}
         </p>
-        <PanelBody removalId={removalId} />
+        <PanelBody removalId={removalId} editable={editable} />
       </div>
     </Section>
   );
@@ -72,7 +74,13 @@ function PanelCounter({ removalId }: { removalId: string | null }) {
   );
 }
 
-function PanelBody({ removalId }: { removalId: string | null }) {
+function PanelBody({
+  removalId,
+  editable,
+}: {
+  removalId: string | null;
+  editable: boolean;
+}) {
   if (!removalId) {
     return (
       <p className="body-small text-[var(--color-text-tertiary)]">
@@ -81,10 +89,16 @@ function PanelBody({ removalId }: { removalId: string | null }) {
       </p>
     );
   }
-  return <PanelBodyForRemoval removalId={removalId} />;
+  return <PanelBodyForRemoval removalId={removalId} editable={editable} />;
 }
 
-function PanelBodyForRemoval({ removalId }: { removalId: string }) {
+function PanelBodyForRemoval({
+  removalId,
+  editable,
+}: {
+  removalId: string;
+  editable: boolean;
+}) {
   const query = useCandidateDocumentsForRemoval(removalId);
 
   if (query.isLoading) {
@@ -131,7 +145,11 @@ function PanelBodyForRemoval({ removalId }: { removalId: string }) {
               : ""
           }
         >
-          <CandidateRow removalId={removalId} candidate={candidate} />
+          <CandidateRow
+            removalId={removalId}
+            candidate={candidate}
+            editable={editable}
+          />
         </li>
       ))}
     </ul>
@@ -140,21 +158,19 @@ function PanelBodyForRemoval({ removalId }: { removalId: string }) {
 
 interface CandidateRowProps {
   removalId: string;
+  editable: boolean;
   candidate: NonNullable<
     ReturnType<typeof useCandidateDocumentsForRemoval>["data"]
   >["candidates"][number];
 }
 
-function CandidateRow({ removalId, candidate }: CandidateRowProps) {
+function CandidateRow({ removalId, candidate, editable }: CandidateRowProps) {
   const { document, lineageEntity, mirror } = candidate;
   const isMirrored = !!mirror;
   const isMirrorable = !!document.storageKey;
   const isPdf = isPdfCandidate(document.mimeType, document.fileName);
   const mirrorMutation = useMirrorDocumentToSource();
-  const unlinkMutation = useUnlinkDocumentSource(removalId);
   const toast = useToast();
-
-  const pending = mirrorMutation.isPending || unlinkMutation.isPending;
 
   const description = [
     document.documentType.replace(/_/g, " "),
@@ -178,21 +194,6 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
           toast.error(
             err instanceof Error ? err.message : "Mirror failed.",
           ),
-      },
-    );
-  };
-
-  const handleUnlink = () => {
-    unlinkMutation.mutate(
-      { documentId: document.id },
-      {
-        onSuccess: (result) => {
-          if (result.unlinked) {
-            toast.success("Unlinked. The Source remains on Isometric.");
-          }
-        },
-        onError: (err) =>
-          toast.error(err instanceof Error ? err.message : "Unlink failed."),
       },
     );
   };
@@ -234,29 +235,18 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
 
       <div className="flex shrink-0 items-center gap-8">
         {isMirrored ? (
-          <>
-            <span
-              className="flex items-center gap-4 text-[var(--st-ok)]"
-              title="Mirrored to Isometric"
-            >
-              <CheckCircleIcon size={STATE_ICON_SIZE} weight="fill" />
-            </span>
-            <Button
-              variant="default"
-              size="small"
-              onClick={handleUnlink}
-              disabled={pending}
-              title="Remove the local Source mapping from future Removal submissions. The Isometric registry copy and audit history remain."
-            >
-              Unlink locally
-            </Button>
-          </>
-        ) : isMirrorable ? (
+          <span
+            className="flex items-center gap-4 text-[var(--st-ok)]"
+            title="Mirrored to Isometric"
+            role="status"
+          >
+            <CheckCircleIcon size={STATE_ICON_SIZE} weight="fill" />
+          </span>
+        ) : isMirrorable && editable ? (
           <Button
             variant="primary"
             size="small"
             onClick={handleMirror}
-            disabled={pending}
             busy={mirrorMutation.isPending}
           >
             {!mirrorMutation.isPending && (
@@ -264,6 +254,13 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
             )}
             Mirror
           </Button>
+        ) : isMirrorable ? (
+          <span
+            className="body-caption text-[var(--color-text-tertiary)]"
+            role="status"
+          >
+            Not mirrored
+          </span>
         ) : (
           <span
             className="flex max-w-[180px] items-center gap-6 body-caption text-[var(--color-text-tertiary)]"
