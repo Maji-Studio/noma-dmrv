@@ -465,6 +465,15 @@ export async function loadFacilityCertifierFacts(
   if (!hasOrgCredentials) {
     return { hasOrgCredentials: false, mapping, project: null, ...UNRESOLVED_FACILITY_FACTS };
   }
+  // Avoid remote registry dependency until a template id exists to resolve.
+  if (!mapping.defaultRemovalTemplateId) {
+    return {
+      hasOrgCredentials,
+      mapping,
+      project: null,
+      ...UNRESOLVED_FACILITY_FACTS,
+    };
+  }
 
   const client = await getIsometricClientForOrg(orgCtx.organizationId);
 
@@ -474,10 +483,6 @@ export async function loadFacilityCertifierFacts(
   ]);
   const project =
     projects.find((p) => p.id === mapping.externalProjectId) ?? null;
-
-  if (!mapping.defaultRemovalTemplateId) {
-    return { hasOrgCredentials, mapping, project, ...UNRESOLVED_FACILITY_FACTS };
-  }
 
   const defaultTemplate =
     templates.find((t) => t.id === mapping.defaultRemovalTemplateId) ?? null;
