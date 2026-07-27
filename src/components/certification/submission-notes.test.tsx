@@ -22,7 +22,9 @@ describe("SubmissionNotes", () => {
 
     expect(html).toContain("Notes");
     expect(html).toContain("Doesn&#x27;t block submission");
-    expect(html).toContain("3 samples were taken after production ended.");
+    expect(html).toContain(
+      'class="body-small text-[var(--color-text-secondary)]">Advisory — 3 samples were taken after production ended.',
+    );
     expect(html).toContain(
       'aria-label="Details for: 3 samples were taken after production ended."',
     );

@@ -53,8 +53,8 @@ export function SubmissionNotes({ notes }: SubmissionNotesProps) {
               aria-hidden
               className="mt-3 h-16 w-2 bg-[var(--color-signal-orange)]"
             />
-            <span className="body-small text-[var(--color-text-primary)]">
-              {note.summary}
+            <span className="body-small text-[var(--color-text-secondary)]">
+              Advisory — {note.summary}
             </span>
             {note.detail && (
               <InfoHint
