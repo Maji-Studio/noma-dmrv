@@ -194,7 +194,7 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     );
     await expect(
       dialog.getByTestId("pending-loc-distance-distance-source")
-    ).toContainText("Map estimate");
+    ).toContainText("Route calculation");
 
     // Hand-editing the CALC'd value flips provenance to manual.
     await distanceInput.fill("123");

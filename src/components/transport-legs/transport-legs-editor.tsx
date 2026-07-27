@@ -244,10 +244,10 @@ export function TransportLegsEditor({
                 </th>
                 <th className="py-8 pr-12 font-medium">
                   <span className="flex items-center gap-6">
-                    Provenance
+                    Distance source
                     <CertificationFieldTag
                       status={certStatuses.provenance}
-                      description="Distance source must be marked Document and at least one transport-evidence file uploaded to satisfy this requirement"
+                      description="Distance source must be Transport document and at least one transport-evidence file must be uploaded to satisfy this requirement"
                     />
                   </span>
                 </th>
@@ -292,7 +292,7 @@ export function TransportLegsEditor({
                         ) && (
                           <CertificationFieldTag
                             status="missing"
-                            description="This leg needs Document provenance and at least one uploaded transport-evidence file"
+                            description="This leg needs Transport document as its Distance source and at least one uploaded transport-evidence file"
                           />
                         )}
                     </span>

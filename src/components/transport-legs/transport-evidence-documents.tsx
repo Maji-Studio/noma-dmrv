@@ -225,13 +225,12 @@ export function TransportEvidencePanel({
         )}
         <CertificationFieldTag
           status={evidenceStatus}
-          description="Satisfied when saved provenance is Document and at least one classified file is uploaded"
+          description="Satisfied when Distance source is Transport document and at least one classified file is uploaded"
         />
         <InfoHint label="About transport evidence">
-          Transport evidence requires saved Document provenance plus at least
-          one uploaded bill of lading, weigh-scale ticket, or other transport
-          evidence file. One accepted file is enough. Uploading does not change
-          the saved provenance.
+          Select Transport document as the distance source, then upload at least
+          one bill of lading, weigh-scale ticket, or other transport evidence
+          file. One accepted file is enough.
         </InfoHint>
       </div>
       <TransportEvidenceDocuments

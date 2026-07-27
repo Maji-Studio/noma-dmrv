@@ -11,13 +11,10 @@ import { FailedDeferredAttachments } from "@/components/forms/failed-deferred-at
 import { SPINE_SECTION_TAG, type SpineMeta } from "@/components/forms/form-spine";
 import {
   ClassifiedTransportEvidenceUploader,
-  TransportDocumentProvenanceControl,
   TransportEvidencePanel,
 } from "@/components/transport-legs";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
-import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
-import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 
 interface FeedstockEvidenceSectionProps {
@@ -30,9 +27,7 @@ interface FeedstockEvidenceSectionProps {
    */
   retryEntityIds?: string[];
   isSubmitting?: boolean;
-  focusTarget?: EntityFocusTarget | null;
   draftDistanceSource?: DistanceSourceValue | null;
-  onSelectDocumentProvenance?: () => void;
   /** Injected by FormSpine — do not set manually. */
   __spine?: SpineMeta;
 }
@@ -43,11 +38,13 @@ export function FeedstockEvidenceSection({
   deferredAttachments,
   retryEntityIds,
   isSubmitting = false,
-  focusTarget,
   draftDistanceSource,
-  onSelectDocumentProvenance,
   __spine,
 }: FeedstockEvidenceSectionProps) {
+  if (draftDistanceSource !== "document") {
+    return null;
+  }
+
   return (
     <FormSection
       title="Transport evidence"
@@ -55,12 +52,7 @@ export function FeedstockEvidenceSection({
       __spine={__spine}
     >
       {isEditMode && feedstock ? (
-        <ActionableFocusTarget
-          target="transport-evidence"
-          activeTarget={focusTarget}
-          actionLabel="Mark the saved distance source as Document and attach supporting evidence"
-          className="flex flex-col gap-12"
-        >
+        <div className="flex flex-col gap-12">
           {deferredAttachments && (
             <FailedDeferredAttachments
               attachments={deferredAttachments.attachments}
@@ -77,19 +69,13 @@ export function FeedstockEvidenceSection({
               disabled={isSubmitting}
             />
           )}
-          <TransportDocumentProvenanceControl
-            savedSource={feedstock.transportDistanceSource}
-            draftSource={draftDistanceSource}
-            onSelectDocument={() => onSelectDocumentProvenance?.()}
-            disabled={isSubmitting}
-          />
           <TransportEvidencePanel
             entityType="feedstock"
             entityId={feedstock.id}
             embedded
             distanceSource={feedstock.transportDistanceSource}
           />
-        </ActionableFocusTarget>
+        </div>
       ) : (
         <ClassifiedTransportEvidenceUploader
           id="feedstock-deferred-transport-evidence"

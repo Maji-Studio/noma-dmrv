@@ -56,7 +56,7 @@ const TRANSPORT_EVIDENCE_GAP: EntityCertifyGap = {
     "transportEvidenceDocumentCount",
   ],
   detail:
-    "Saved Document provenance and at least one classified uploaded transport-evidence file are required to certify",
+    "Transport document as the saved Distance source and at least one classified uploaded transport-evidence file are required to certify",
 };
 
 function fieldValue(

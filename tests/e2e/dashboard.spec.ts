@@ -216,9 +216,22 @@ test.describe("Dashboard (Flow Hero)", () => {
       await expect(feedstockSheet.getByText("Save Changes")).toBeVisible();
       await expect(
         feedstockSheet.getByText(
-          "Mark the saved distance source as Document and attach supporting evidence",
+          "Select Transport document as the distance source to attach evidence",
         ),
       ).toBeVisible();
+      const distanceSource = feedstockSheet.getByLabel("Distance source", {
+        exact: true,
+      });
+      await expect(distanceSource).toHaveValue("manual");
+      await expect(
+        feedstockSheet.getByTestId("transportDistanceSource-context"),
+      ).toContainText("Inherited from supplier · Manual entry");
+      await expect(
+        feedstockSheet.getByText("Drop files here or click to upload"),
+      ).toHaveCount(0);
+
+      await distanceSource.selectOption("document");
+      await expect(distanceSource).toHaveValue("document");
       await expect(
         feedstockSheet.getByRole("radio", { name: "Bill of lading" }),
       ).toBeChecked();
@@ -232,21 +245,17 @@ test.describe("Dashboard (Flow Hero)", () => {
         feedstockSheet.getByText("Drop files here or click to upload"),
       ).toHaveCount(1);
       await feedstockSheet
-        .getByRole("button", { name: "Use Document provenance" })
-        .click();
-      await expect(feedstockSheet.getByText(/Draft: Document/)).toBeVisible();
-      await feedstockSheet
         .getByRole("button", { name: "About transport evidence" })
         .hover();
       await expect(
         page.getByText(
-          "Transport evidence requires saved Document provenance plus at least one uploaded bill of lading, weigh-scale ticket, or other transport evidence file. One accepted file is enough. Uploading does not change the saved provenance.",
+          "Select Transport document as the distance source, then upload at least one bill of lading, weigh-scale ticket, or other transport evidence file. One accepted file is enough.",
         ),
       ).toBeVisible();
       await expect(
         feedstockSheet.getByRole("spinbutton", { name: "Distance (km)" }),
       ).toHaveValue("25");
-      await expect(feedstockSheet.getByText(/Draft: Document/)).toBeVisible();
+      await expect(distanceSource).toHaveValue("document");
 
       await feedstockSheet
         .getByRole("button", { name: "Save Changes" })

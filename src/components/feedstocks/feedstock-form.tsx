@@ -25,7 +25,10 @@ import {
   feedstockFormSchema,
   type FeedstockFormData,
 } from "@/schemas/feedstocks";
-import { type DistanceSourceValue } from "@/schemas/distance-source";
+import {
+  DISTANCE_SOURCE_LABELS,
+  type DistanceSourceValue,
+} from "@/schemas/distance-source";
 import { DEFAULT_TRIP_TYPE, roundTripDistanceFactor, TRIP_TYPE_OPTIONS, type TripTypeValue } from "@/schemas/trip-type";
 import { FormSelect } from "@/components/forms/form-select";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
@@ -210,6 +213,27 @@ export function FeedstockForm({
     isEditMode && !supplierAnchorChanged && existingLegDistanceKm != null
       ? (existingLegs?.[0]?.distanceSource ?? null)
       : storedDistanceSource;
+  const mapEstimateDistanceKm =
+    suggestedDistanceSource === "map_estimate"
+      ? suggestedDistanceKm
+      : storedDistanceSource === "map_estimate"
+        ? storedDistanceKm
+        : null;
+  const distanceSourceOptions = (
+    draftTransportDistanceSource === "map_estimate" ||
+    mapEstimateDistanceKm != null
+      ? (["map_estimate", "manual", "document"] as const)
+      : (["manual", "document"] as const)
+  ).map((value) => ({ value, label: DISTANCE_SOURCE_LABELS[value] }));
+  const isInheritedSupplierDistance =
+    suggestedDistanceKm != null &&
+    transportDistanceKm === suggestedDistanceKm &&
+    draftTransportDistanceSource === suggestedDistanceSource;
+  const distanceSourceContext = draftTransportDistanceSource
+    ? `${isInheritedSupplierDistance ? "Inherited from supplier" : "This feedstock"} · ${
+        DISTANCE_SOURCE_LABELS[draftTransportDistanceSource]
+      }`
+    : null;
 
   // The distance is an "override" once it diverges from the value we'd autofill
   // from the supplier/existing leg — that's the only state worth flagging (and
@@ -368,7 +392,12 @@ export function FeedstockForm({
           title="Transport details"
           icon={<MapPinIcon size={14} weight="bold" />}
           hint="One-way distance plus the delivery wet mass, recorded as one road transport leg."
-          fields={["vehicleId", "transportDistanceKm", "transportTripType"]}
+          fields={[
+            "vehicleId",
+            "transportDistanceKm",
+            "transportDistanceSource",
+            "transportTripType",
+          ]}
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <div className="md:col-span-2">
@@ -445,6 +474,58 @@ export function FeedstockForm({
                       aria-live="polite"
                     >
                       Total: {formatDistanceKm(totalTransportDistanceKm)}
+                    </p>
+                  )}
+                </div>
+              </FormField>
+            </ActionableFocusTarget>
+
+            <ActionableFocusTarget
+              target="transport-evidence"
+              activeTarget={focusTarget}
+              actionLabel="Select Transport document as the distance source to attach evidence"
+            >
+              <FormField
+                id="transportDistanceSource"
+                label="Distance source"
+                error={errors.transportDistanceSource?.message}
+                helperText="Choose Transport document only when you have a file to attach."
+              >
+                <div>
+                  <FormSelect
+                    id="transportDistanceSource"
+                    options={distanceSourceOptions}
+                    placeholder="Select source"
+                    disabled={isSubmitting || transportDistanceKm == null}
+                    error={!!errors.transportDistanceSource}
+                    value={draftTransportDistanceSource ?? ""}
+                    {...register("transportDistanceSource", {
+                      onChange: (event) => {
+                        const source = event.target.value as DistanceSourceValue;
+                        if (
+                          source === "map_estimate" &&
+                          mapEstimateDistanceKm != null
+                        ) {
+                          setValue(
+                            "transportDistanceKm",
+                            mapEstimateDistanceKm,
+                            SET_VALUE_OPTS,
+                          );
+                        }
+                        setValue(
+                          "transportDistanceSource",
+                          source,
+                          SET_VALUE_OPTS,
+                        );
+                      },
+                    })}
+                  />
+                  {distanceSourceContext && (
+                    <p
+                      className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] mt-6"
+                      data-testid="transportDistanceSource-context"
+                    >
+                      {distanceSourceContext}
                     </p>
                   )}
                 </div>
@@ -624,11 +705,7 @@ export function FeedstockForm({
           deferredAttachments={deferredAttachments}
           retryEntityIds={retryEntityIds}
           isSubmitting={isSubmitting}
-          focusTarget={focusTarget}
           draftDistanceSource={draftTransportDistanceSource}
-          onSelectDocumentProvenance={() =>
-            setValue("transportDistanceSource", "document", SET_VALUE_OPTS)
-          }
         />
       </FormSpine>
 

@@ -259,7 +259,7 @@ export function TransportLegForm({
             id="distanceSource"
             label="Distance source"
             error={errors.distanceSource?.message}
-            helperText="Use Document when the distance comes from shipping evidence."
+            helperText="Choose Transport document when a shipping file supports this distance."
             certifyRequired={isTransportLegCertifyField("distanceSource")}
             certifyStatus={resolveCertFieldStatus(
               isPersisted ? true : undefined,
