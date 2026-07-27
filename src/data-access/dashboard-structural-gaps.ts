@@ -2,7 +2,7 @@
  * Facility-scoped certification structure checks for the dashboard.
  *
  * These are deliberately separate from flow-station attention: GPS and
- * transport provenance are cross-cutting certification inputs, so they block
+ * transport evidence are cross-cutting certification inputs, so they block
  * the dashboard's all-clear state without changing any station badge.
  */
 import {
@@ -19,7 +19,6 @@ import {
 import { db } from "@/db";
 import {
   biocharProducts,
-  customerLocations,
   creditBatches,
   deliveries,
   facilities,
@@ -34,7 +33,6 @@ import {
 import type { OrgContext } from "@/lib/auth/server";
 import { CANCELLED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { requireOrgScope } from "./utils";
-import { DOCUMENT_BACKED_DISTANCE_SOURCE } from "@/lib/certification/transport-evidence";
 import {
   buildEntityDeepLink,
   type EntityFocusTarget,
@@ -79,19 +77,6 @@ interface TransportGapRow {
   distanceEvidenceTargetId: string | null;
 }
 
-function deliveryHasDocumentProvenance() {
-  // Middle branch: a trip-specific override whose source isn't `document`
-  // (first branch already matched that) is NOT document-backed — it must not
-  // fall through to the inherited customer-location source below.
-  return sql`case
-    when ${deliveries.distanceSource} = ${DOCUMENT_BACKED_DISTANCE_SOURCE}
-      then true
-    when ${deliveries.distanceKmOverride} is not null
-      then false
-    else ${customerLocations.distanceSource} = ${DOCUMENT_BACKED_DISTANCE_SOURCE}
-  end`;
-}
-
 function contributingDeliveryCondition(
   organizationId: string,
   facilityId: string,
@@ -111,9 +96,7 @@ function biocharDistanceEvidenceMissing(
 ) {
   const contributing = contributingDeliveryCondition(organizationId, facilityId);
   return sql`
-    ${transportLegs.distanceSource} is null
-    or ${transportLegs.distanceSource} <> ${DOCUMENT_BACKED_DISTANCE_SOURCE}
-    or not exists (
+    not exists (
       select 1
       from ${deliveries}
       left join ${orders}
@@ -127,18 +110,12 @@ function biocharDistanceEvidenceMissing(
       left join ${orders}
         on ${orders.id} = ${deliveries.orderId}
        and ${orders.organizationId} = ${organizationId}
-      left join ${customerLocations}
-        on ${customerLocations.id} = coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})
-       and ${customerLocations.organizationId} = ${organizationId}
       where ${contributing}
-        and (
-          (${deliveryHasDocumentProvenance()}) is not true
-          or ${transportEvidenceDocumentCount(
-            organizationId,
-            "delivery",
-            "deliveryId",
-          )} = 0
-        )
+        and ${transportEvidenceDocumentCount(
+          organizationId,
+          "delivery",
+          "deliveryId",
+        )} = 0
     )
   `;
 }
@@ -281,7 +258,7 @@ export function buildDashboardStructuralGaps(
     },
     {
       key: "transportDistanceEvidence" as const,
-      label: "Transport distance lacks document evidence",
+      label: "Transport evidence missing",
       metadata: structuralGapMetadata(
         transportTargetForm(counts.transportDistanceEvidenceTarget),
         "Transport evidence",
@@ -364,9 +341,7 @@ export async function loadDashboardStructuralGapCounts(
     db
       .select(
         transportGapSelection(sql`
-          ${transportLegs.distanceSource} is null
-          or ${transportLegs.distanceSource} <> ${DOCUMENT_BACKED_DISTANCE_SOURCE}
-          or ${transportEvidenceDocumentCount(
+          ${transportEvidenceDocumentCount(
             orgId,
             "feedstock",
             "feedstockId",
@@ -414,9 +389,7 @@ export async function loadDashboardStructuralGapCounts(
     db
       .select(
         transportGapSelection(sql`
-          ${transportLegs.distanceSource} is null
-          or ${transportLegs.distanceSource} <> ${DOCUMENT_BACKED_DISTANCE_SOURCE}
-          or ${transportEvidenceDocumentCount(
+          ${transportEvidenceDocumentCount(
             orgId,
             "transport_leg",
             "transportLegId",
@@ -483,16 +456,6 @@ export async function loadDashboardStructuralGapCounts(
           eq(orders.organizationId, orgId),
         ),
       )
-      .leftJoin(
-        customerLocations,
-        and(
-          eq(
-            customerLocations.id,
-            sql`coalesce(${deliveries.customerLocationId}, ${orders.customerLocationId})`,
-          ),
-          eq(customerLocations.organizationId, orgId),
-        ),
-      )
       .where(
         and(
           eq(deliveries.organizationId, orgId),
@@ -504,8 +467,7 @@ export async function loadDashboardStructuralGapCounts(
             distanceEvidenceTarget.entityId,
           ),
           sql`
-            (${deliveryHasDocumentProvenance()}) is not true
-            or ${transportEvidenceDocumentCount(
+            ${transportEvidenceDocumentCount(
               orgId,
               "delivery",
               "deliveryId",

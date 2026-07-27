@@ -269,6 +269,10 @@ speaks one dialog library. Compose it for every centered dialog — you get the
 built-in close button, ESC dismissal, focus trap, scroll lock, and focus
 restore for free.
 
+- Centered dialogs sit one overlay tier above side sheets. This lets a dialog
+  opened from a sheet dim the sheet as part of its underlying context. Keep
+  this ordering in the shared `--z-layer-sheet-*` and `--z-layer-dialog-*`
+  tokens; feature components must not set their own competing layers.
 - Width tokens: `sm` 400px (confirmations) · `md` 560px (default: forms,
   wizards) · `lg` 720px (dense forms) · `xl` 880px (rich content). All are
   full-width below `sm`.

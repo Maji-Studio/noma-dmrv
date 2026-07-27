@@ -109,7 +109,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
 
     await selectEntity(
       page,
-      "Biochar Product",
+      "Product bin",
       seededData.biocharProduct.id,
       seededData.biocharProduct.code
     );
@@ -255,7 +255,7 @@ test.describe("Application + Credit Batch UI CRUD", () => {
     );
     await selectEntity(
       page,
-      "Biochar Product",
+      "Product bin",
       seededData.biocharProduct.id,
       seededData.biocharProduct.code
     );

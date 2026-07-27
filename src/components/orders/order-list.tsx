@@ -393,7 +393,7 @@ export function OrderList() {
                 {
                   title: "Product details",
                   fields: [
-                    { label: "Biochar product", value: sideSheetEntity.biocharProductCode },
+                    { label: "Product bin", value: sideSheetEntity.productBinName },
                     { label: "Packaging", value: <span className="capitalize">{sideSheetEntity.packaging}</span> },
                     { label: "Quantity (kg)", value: formatMassKg(sideSheetEntity.quantityKg) },
                     { label: "Value", value: sideSheetEntity.value },

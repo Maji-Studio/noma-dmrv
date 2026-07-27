@@ -109,7 +109,7 @@ Trigger.displayName = "SlideOverPanel.Trigger";
 
 const slideOverContentVariants = cva(
   [
-    "fixed top-0 right-0 z-50 h-full",
+    "fixed top-0 right-0 h-full",
     "flex flex-col",
     // Elevated surface: pure paper (the page field is the warm tint; sheets,
     // menus and dialogs reserve white) + full-ink hairline — no shadow, the
@@ -149,8 +149,9 @@ function Content({
   return (
     <Dialog.Portal>
       <Dialog.Backdrop
+        data-overlay-layer="sheet-backdrop"
         className={cn(
-          "fixed inset-0 z-40 bg-[var(--color-black-50)]",
+          "fixed inset-0 bg-[var(--color-black-50)]",
           "transition-opacity duration-300",
           "data-[open]:opacity-100",
           "data-[starting-style]:opacity-0",
@@ -158,6 +159,7 @@ function Content({
         )}
       />
       <Dialog.Popup
+        data-overlay-layer="sheet"
         className={cn(slideOverContentVariants({ size }), className)}
       >
         {children}

@@ -110,7 +110,7 @@ export function SampleTransportSection({
           activeTarget={focusTarget}
           actionLabel={
             focusTarget === "transport-evidence"
-              ? "Edit the leg, select Document provenance, and upload one classified transport-evidence file"
+              ? "Edit the leg, choose Transport document as its Distance source, and upload one classified transport-evidence file"
               : "Complete the saved transport route information"
           }
           className="flex flex-col gap-12"

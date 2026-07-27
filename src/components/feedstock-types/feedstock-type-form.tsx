@@ -5,7 +5,12 @@ import { DatabaseIcon, SealCheckIcon, WarningCircleIcon } from "@phosphor-icons/
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { cn } from "@/lib/utils";
-import { FormField, FormInput, FormTextarea } from "@/components/forms";
+import {
+  FormField,
+  FormInput,
+  FormTextarea,
+  ResolvedErrorRevalidator,
+} from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { FormActions } from "@/components/forms/form-actions";
 import {
@@ -115,6 +120,7 @@ export function FeedstockTypeForm({
     register,
     handleSubmit,
     control,
+    trigger,
     setValue,
     formState: { errors },
   } = useForm<FeedstockTypeFormData>({
@@ -268,6 +274,7 @@ export function FeedstockTypeForm({
         onSubmit={handleSubmit((data) => onSubmit(data))}
         className="space-y-20"
       >
+        <ResolvedErrorRevalidator control={control} trigger={trigger} />
         <div
           id={getPanelId("general")}
           aria-labelledby={

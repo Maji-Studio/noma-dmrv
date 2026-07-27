@@ -15,7 +15,7 @@ import {
 } from "@/schemas/certification";
 
 const VISIBILITY_OPTIONS = [
-  { value: "private", label: "Private — verifier access only" },
+  { value: "private", label: "Private — verifier only" },
   { value: "public", label: "Public on the registry" },
 ] as const;
 
@@ -42,7 +42,7 @@ export function RegistrySourceVisibilitySettings() {
         <span className="body-medium">
           {sourceVisibility === "public"
             ? "Public on the registry"
-            : "Private — verifier access only"}
+            : "Private — verifier only"}
         </span>
         <p className="body-caption text-[var(--color-text-tertiary)]">
           Organization Owners and Admins manage this policy.
@@ -99,9 +99,9 @@ function RegistrySourceVisibilityForm({
     >
       <FormField
         id="registry-source-visibility"
-        label="New registry Sources"
+        label="Default visibility"
         error={errors.sourceVisibility?.message}
-        helperText="This one policy applies to Sources mirrored for every facility in the active organization."
+        helperText="Applies to new Sources across the organization."
       >
         <FormSelect
           id="registry-source-visibility"
@@ -120,7 +120,7 @@ function RegistrySourceVisibilityForm({
 
       <div>
         <Button type="submit" variant="primary" busy={saveMutation.isPending}>
-          Save organization policy
+          Save policy
         </Button>
       </div>
     </form>
@@ -130,9 +130,7 @@ function RegistrySourceVisibilityForm({
 function PolicyTimingCopy() {
   return (
     <p className="body-caption text-[var(--color-text-tertiary)]">
-      Applies only to Sources mirrored after a policy change. Existing
-      Isometric Sources are not rewritten; their registry metadata remains the
-      record of truth.
+      Only new Sources use this setting. Existing Sources are unchanged.
     </p>
   );
 }

@@ -44,13 +44,12 @@ function Content({
 }: DropdownMenuContentProps) {
   return (
     <Menu.Portal>
-      {/* z-60 keeps menus above modals/slide-overs (z-50) — same stacking
-          rationale as the tooltip primitive. */}
+      {/* Portaled transient controls must stay above sheets and dialogs. */}
       <Menu.Positioner
         side={side}
         align={align}
         sideOffset={SIDE_OFFSET_PX}
-        className="z-[60]"
+        className="z-[var(--z-layer-popover)]"
       >
         <Menu.Popup
           className={cn(

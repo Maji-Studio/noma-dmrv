@@ -906,3 +906,25 @@ bound); these are the decisions it deliberately did not make.
 - **Resolve via:** re-implement `formatFacilityTime` / `formatFacilityDate` on
   `wallClockIn`-style `formatToParts` output, then pin it with a regression test
   run under a process zone that skips the rendered wall clock (S).
+
+### Should CERT-field rules vary by pinned protocol version? (`certification/version-flexible-cert-fields`)
+
+- The project is pinned to Biochar Production and Storage **v1.1** + Isometric
+  Standard **v1.7** (Certify project settings), while the registry's latest
+  certified line is v1.3 + Standard v2.1. `CERTIFY_FIELD_REGISTRY`
+  (`src/lib/certification/certify-field-registry.ts`) is version-agnostic.
+- Verified 2026-07-27 against registry content: for transport evidence the
+  versions are identical (both run on Transportation module v1.1 — same per-leg
+  required records, same mapped-distance allowance; delivery proof-of-delivery
+  lives at v1.1 §8.3.1.1/§8.3.1.2 vs v1.3 §8.4). The first real divergence is
+  the per-handoff custody-documentation clause (soil-environments v1.3 §8.8),
+  which has **no counterpart** in agricultural-soils v1.1 — that, plus the
+  dropped `custody_handoffs` table (migration 0037), becomes a genuine P0 only
+  on a v1.2+ upgrade.
+- Complication: Standard v1.7 mandates minor-version adoption "at the following
+  verification", Standard v2.1 abolishes forced upgrades until crediting-period
+  renewal. Which regime binds this project needs confirmation from Isometric.
+- **Resolve via:** ask Isometric which Standard governs upgrades for this
+  project; defer version-keyed registry entries until a concrete v1.2+ adoption
+  date exists, then key new-in-version requirements (custody handoffs) on the
+  pinned version (M).

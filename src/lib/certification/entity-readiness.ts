@@ -20,7 +20,10 @@ export interface EntityCertifyGap {
 export interface EntityCertifyReadiness {
   state: EntityCertifyReadinessState;
   gaps: EntityCertifyGap[];
+  warnings: EntityCertifyWarning[];
 }
+
+export type EntityCertifyWarning = Omit<EntityCertifyGap, "kind">;
 
 export type EntityReadinessRecord = object;
 
@@ -50,13 +53,9 @@ const TRANSPORT_EVIDENCE_GAP: EntityCertifyGap = {
   kind: "field",
   key: "transportEvidence",
   label: "Transport evidence",
-  fields: [
-    "transportDistanceSource",
-    "effectiveDistanceSource",
-    "transportEvidenceDocumentCount",
-  ],
+  fields: ["transportEvidenceDocumentCount"],
   detail:
-    "Saved Document provenance and at least one classified uploaded transport-evidence file are required to certify",
+    "At least one accepted, classified transport-evidence file is required to certify",
 };
 
 function fieldValue(
@@ -164,6 +163,7 @@ export function deriveEntityCertifyReadiness(
   lifecycleState?: string | null,
 ): EntityCertifyReadiness {
   const gaps: EntityCertifyGap[] = [];
+  const warnings: EntityCertifyWarning[] = [];
   const effectiveLifecycleState =
     lifecycleState ?? (fieldValue(entity, "status") as string | null | undefined);
 
@@ -178,7 +178,7 @@ export function deriveEntityCertifyReadiness(
     entityKind === "productionRun" &&
     (effectiveLifecycleState === "failed" || effectiveLifecycleState === "cancelled")
   ) {
-    return { state: "incomplete", gaps };
+    return { state: "incomplete", gaps, warnings };
   }
 
   if (entityKind === "productionRun") {
@@ -203,38 +203,19 @@ export function deriveEntityCertifyReadiness(
     }
   }
 
-  if (entityKind === "feedstock" || entityKind === "delivery") {
-    const source =
-      entityKind === "feedstock"
-        ? fieldValue(entity, "transportDistanceSource")
-        : fieldValue(entity, "effectiveDistanceSource");
+  if (
+    entityKind === "feedstock" ||
+    entityKind === "delivery" ||
+    entityKind === "transportLeg"
+  ) {
     const documentCount = fieldValue(
       entity,
       "transportEvidenceDocumentCount",
     );
+    // A missing count must fail closed because evidence coverage and
+    // Source-binding readiness are independent of distance provenance.
     if (
       !hasCompleteTransportEvidence(
-        source === "document" ? "document" : null,
-        typeof documentCount === "number" ? documentCount : undefined,
-      )
-    ) {
-      gaps.push(TRANSPORT_EVIDENCE_GAP);
-    }
-  }
-
-  // A raw leg's Document provenance means nothing without an accepted upload —
-  // the same composite rule the entity-level projections apply. Callers load
-  // legs via `getTransportLegsWithEvidenceForEntities` so the count is present;
-  // a missing count fails closed (gap), never silently green.
-  if (entityKind === "transportLeg") {
-    const source = fieldValue(entity, "distanceSource");
-    const documentCount = fieldValue(
-      entity,
-      "transportEvidenceDocumentCount",
-    );
-    if (
-      !hasCompleteTransportEvidence(
-        source === "document" ? "document" : null,
         typeof documentCount === "number" ? documentCount : undefined,
       )
     ) {
@@ -243,20 +224,6 @@ export function deriveEntityCertifyReadiness(
   }
 
   for (const descriptor of getCertifyFieldDescriptors(entityKind)) {
-    if (
-      entityKind === "feedstock" &&
-      descriptor.key === "transportDistanceProvenance"
-    ) {
-      continue;
-    }
-    // The composite transport-evidence check above owns this requirement; the
-    // bare equals-Document descriptor would clear the gap without any file.
-    if (
-      entityKind === "transportLeg" &&
-      descriptor.key === "distanceProvenance"
-    ) {
-      continue;
-    }
     if (!conditionApplies(descriptor, entity)) continue;
     if (descriptorSatisfied(descriptor, entity)) continue;
     gaps.push(fieldGap(descriptor));
@@ -265,5 +232,6 @@ export function deriveEntityCertifyReadiness(
   return {
     state: gaps.length === 0 ? "ready" : "incomplete",
     gaps,
+    warnings,
   };
 }

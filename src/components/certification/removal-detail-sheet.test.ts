@@ -37,8 +37,8 @@ describe("RemovalDetailSheet sync history contract", () => {
 
     expect(source).toContain("Readiness unavailable for this Removal.");
     expect(source).toContain("Retry readiness");
-    expect(source).toContain(
-      "<SourcesPanel removalId={summary.removalId} />",
+    expect(source).toMatch(
+      /<SourcesPanel[\s\S]*?removalId=\{summary\.removalId\}[\s\S]*?\/>/,
     );
   });
 
@@ -51,7 +51,7 @@ describe("RemovalDetailSheet sync history contract", () => {
     expect(source).toContain('<Field label="Evidence attachments">');
     expect(source).toContain("summary.evidenceHealth.label");
     expect(source).toContain(
-      "<SourcesPanel removalId={summary.removalId} />",
+      "<SourcesPanel",
     );
   });
 });

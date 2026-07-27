@@ -239,8 +239,8 @@ itself is **built and enforced** — see the invariants section,
   parent-chain walk that already closed the orphan-mutation hole) for the new
   helper at that one chokepoint, then propagate. Formalizes pre-deploy gate #3
   in [`docs/isometric/integration-plan.md`](./isometric/integration-plan.md).
-- **Pattern to copy:** `mirrorDocumentToSource` / `unlinkDocumentSource` enforce
-  a forgery-proof document→removal lineage anchor
+- **Pattern to copy:** `mirrorDocumentToSource` enforces a forgery-proof
+  document→removal lineage anchor
   (`assertDocumentIsCandidateForRemoval`); `reconcileRemovalMembership` is
   facility-predicated + `FOR UPDATE` internally.
 
@@ -459,7 +459,7 @@ independently shippable once Slice A is in production and demand surfaces.
   working as external/legacy links via the `/api/documents/[id]` proxy route's
   `fileUrl` branch.
 
-### Phase 3.5 source-mutation hardening — deferred simplifications (opened 2026-05-26)
+### Phase 3.5 source-mirroring hardening — deferred simplifications (opened 2026-05-26)
 
 Surfaced by the `/simplify` pass after the P1/P2 fix set. All below the
 threshold for the same PR; revisit next time the area is touched.
@@ -526,11 +526,10 @@ are clean deferrals.
   `appendSyncEventBestEffort` calls inside the mirror transaction),
   `src/data-access/certification.ts` (`appendSyncEvent`).
 
-- **`ux/sources-panel-row-layout` — buttons clip on narrow viewports.** The
-  Mirror / Unlink / visibility-toggle button row in
-  `src/components/certification/sources-panel.tsx` clips below ~640px when
-  filenames are long. Pure UX follow-up: wrap the action row, go icon-only on
-  narrow viewports, or move buttons to a per-row overflow menu. See
+- **`ux/sources-panel-row-layout` — Mirror clips on narrow viewports.** The
+  Mirror action in `src/components/certification/sources-panel.tsx` can clip
+  below ~640px when filenames are long. Pure UX follow-up: wrap the action row
+  or go icon-only on narrow viewports. See
   [`docs/design-system.md`](./design-system.md).
 
 ### Submit-removal — `pyrolyzer_direct` PROJECT-scope conflict in default template (opened 2026-05-27)

@@ -18,6 +18,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
 import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { ResolvedErrorRevalidator } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
 import {
@@ -25,7 +26,10 @@ import {
   feedstockFormSchema,
   type FeedstockFormData,
 } from "@/schemas/feedstocks";
-import { type DistanceSourceValue } from "@/schemas/distance-source";
+import {
+  DISTANCE_SOURCE_LABELS,
+  type DistanceSourceValue,
+} from "@/schemas/distance-source";
 import { DEFAULT_TRIP_TYPE, roundTripDistanceFactor, TRIP_TYPE_OPTIONS, type TripTypeValue } from "@/schemas/trip-type";
 import { FormSelect } from "@/components/forms/form-select";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
@@ -42,11 +46,16 @@ import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
+const SUPPLIER_DEFAULT_DISTANCE_SOURCE = "supplier_default" as const;
 
 const isFeedstockCertifyField = (field: string) =>
   isCertifyFormField("feedstock", field);
 
 const FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER = FEEDSTOCK_BIN_TYPES.join(",");
+
+type FeedstockDistanceSourceChoice =
+  | typeof SUPPLIER_DEFAULT_DISTANCE_SOURCE
+  | DistanceSourceValue;
 
 // ============================================
 // Component
@@ -86,6 +95,11 @@ export function FeedstockForm({
   const feedstockTypeDialog = useQuickAddDialog();
   const storageLocationDialog = useQuickAddDialog();
   const [storageLocationRowIndex, setStorageLocationRowIndex] = useState<number>(0);
+  const [distanceSourceChoiceOverride, setDistanceSourceChoiceOverride] =
+    useState<{
+      supplierId: string;
+      value: FeedstockDistanceSourceChoice;
+    } | null>(null);
 
   const defaultValues = {
     facilityId: feedstock?.facilityId ?? contextFacilityId ?? "",
@@ -116,6 +130,7 @@ export function FeedstockForm({
     register,
     handleSubmit,
     control,
+    trigger,
     setValue,
     getValues,
     resetField,
@@ -210,6 +225,26 @@ export function FeedstockForm({
     isEditMode && !supplierAnchorChanged && existingLegDistanceKm != null
       ? (existingLegs?.[0]?.distanceSource ?? null)
       : storedDistanceSource;
+  const matchesSupplierDefault =
+    storedDistanceKm != null &&
+    transportDistanceKm === storedDistanceKm &&
+    draftTransportDistanceSource === storedDistanceSource &&
+    draftTransportDistanceSource !== "document";
+  const selectedDistanceSource =
+    distanceSourceChoiceOverride?.supplierId === watchedSupplierId
+      ? distanceSourceChoiceOverride.value
+      : matchesSupplierDefault
+        ? SUPPLIER_DEFAULT_DISTANCE_SOURCE
+        : (draftTransportDistanceSource ?? "");
+  const distanceSourceOptions = [
+    ...(storedDistanceKm != null
+      ? [{ value: SUPPLIER_DEFAULT_DISTANCE_SOURCE, label: "Supplier default" }]
+      : []),
+    { value: "manual", label: DISTANCE_SOURCE_LABELS.manual },
+    ...(selectedDistanceSource === "document"
+      ? [{ value: "document", label: DISTANCE_SOURCE_LABELS.document }]
+      : []),
+  ];
 
   // The distance is an "override" once it diverges from the value we'd autofill
   // from the supplier/existing leg — that's the only state worth flagging (and
@@ -222,9 +257,20 @@ export function FeedstockForm({
   // Restore the autofilled distance and clear the field's dirty flag so the
   // prefill effect resumes managing it (e.g. on a later supplier switch).
   const resetTransportDistance = () => {
-    resetField("transportDistanceKm", { defaultValue: suggestedDistanceKm ?? undefined });
+    const resetDistanceKm = storedDistanceKm ?? suggestedDistanceKm;
+    const resetDistanceSource =
+      storedDistanceKm != null ? storedDistanceSource : suggestedDistanceSource;
+    if (storedDistanceKm != null) {
+      setDistanceSourceChoiceOverride({
+        supplierId: watchedSupplierId,
+        value: SUPPLIER_DEFAULT_DISTANCE_SOURCE,
+      });
+    }
+    resetField("transportDistanceKm", {
+      defaultValue: resetDistanceKm ?? undefined,
+    });
     resetField("transportDistanceSource", {
-      defaultValue: suggestedDistanceSource ?? null,
+      defaultValue: resetDistanceSource ?? null,
     });
   };
 
@@ -310,6 +356,7 @@ export function FeedstockForm({
       <div className="space-y-20">
       <FormSpine control={control}>
         <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
+        <ResolvedErrorRevalidator control={control} trigger={trigger} />
         {/* Delivery Information */}
         <FormSection
           title="Delivery information"
@@ -368,7 +415,12 @@ export function FeedstockForm({
           title="Transport details"
           icon={<MapPinIcon size={14} weight="bold" />}
           hint="One-way distance plus the delivery wet mass, recorded as one road transport leg."
-          fields={["vehicleId", "transportDistanceKm", "transportTripType"]}
+          fields={[
+            "vehicleId",
+            "transportDistanceSource",
+            "transportDistanceKm",
+            "transportTripType",
+          ]}
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
             <div className="md:col-span-2">
@@ -385,6 +437,59 @@ export function FeedstockForm({
                 onCreateNew={() => vehicleDialog.open()}
               />
             </div>
+
+            <FormField
+              id="transportDistanceSource"
+              label="Distance source"
+              error={errors.transportDistanceSource?.message}
+            >
+              <input
+                type="hidden"
+                {...register("transportDistanceSource")}
+              />
+              <FormSelect
+                id="transportDistanceSource"
+                name="transportDistanceSourceChoice"
+                options={distanceSourceOptions}
+                placeholder="Select source"
+                disabled={isSubmitting || transportDistanceKm == null}
+                error={!!errors.transportDistanceSource}
+                value={selectedDistanceSource}
+                onChange={(event) => {
+                  if (
+                    event.target.value === SUPPLIER_DEFAULT_DISTANCE_SOURCE &&
+                    storedDistanceKm != null
+                  ) {
+                    setDistanceSourceChoiceOverride({
+                      supplierId: watchedSupplierId,
+                      value: SUPPLIER_DEFAULT_DISTANCE_SOURCE,
+                    });
+                    setValue(
+                      "transportDistanceKm",
+                      storedDistanceKm,
+                      SET_VALUE_OPTS,
+                    );
+                    setValue(
+                      "transportDistanceSource",
+                      storedDistanceSource,
+                      SET_VALUE_OPTS,
+                    );
+                    return;
+                  }
+                  const selectedSource =
+                    event.target.value as DistanceSourceValue;
+                  setDistanceSourceChoiceOverride({
+                    supplierId: watchedSupplierId,
+                    value: selectedSource,
+                  });
+                  setValue(
+                    "transportDistanceSource",
+                    selectedSource,
+                    SET_VALUE_OPTS,
+                  );
+                }}
+              />
+            </FormField>
 
             <ActionableFocusTarget
               target="transport-route"
@@ -411,17 +516,29 @@ export function FeedstockForm({
                       step="any"
                       min="0"
                       placeholder="e.g., 85"
-                      disabled={isSubmitting}
+                      disabled={
+                        isSubmitting ||
+                        selectedDistanceSource === SUPPLIER_DEFAULT_DISTANCE_SOURCE
+                      }
                       error={!!errors.transportDistanceKm}
                       className={isDistanceOverride ? "pr-[104px]" : undefined}
                       {...register("transportDistanceKm", {
                         setValueAs: numericValue,
-                        onChange: (event) =>
+                        onChange: (event) => {
+                          setDistanceSourceChoiceOverride(
+                            event.target.value === ""
+                              ? null
+                              : {
+                                  supplierId: watchedSupplierId,
+                                  value: "manual",
+                                },
+                          );
                           setValue(
                             "transportDistanceSource",
                             event.target.value === "" ? null : "manual",
                             SET_VALUE_OPTS,
-                          ),
+                          );
+                        },
                       })}
                     />
                     {isDistanceOverride && (
@@ -433,7 +550,7 @@ export function FeedstockForm({
                         data-testid="transportDistanceKm-reset"
                         className="absolute inset-y-0 right-0 flex items-center gap-6 pl-8 pr-12 text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-secondary)] disabled:opacity-50"
                       >
-                        <span className="body-caption">override</span>
+                        <span className="body-caption">reset</span>
                         <ArrowCounterClockwiseIcon size={14} weight="bold" />
                       </button>
                     )}
@@ -625,10 +742,6 @@ export function FeedstockForm({
           retryEntityIds={retryEntityIds}
           isSubmitting={isSubmitting}
           focusTarget={focusTarget}
-          draftDistanceSource={draftTransportDistanceSource}
-          onSelectDocumentProvenance={() =>
-            setValue("transportDistanceSource", "document", SET_VALUE_OPTS)
-          }
         />
       </FormSpine>
 

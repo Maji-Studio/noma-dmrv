@@ -11,11 +11,12 @@ describe("transport leg header CERT status", () => {
     ).toEqual({
       distance: "neutral",
       provenance: "neutral",
+      evidence: "neutral",
       load: "neutral",
     });
   });
 
-  it("keeps distance green while non-document provenance is separately orange", () => {
+  it("accepts manual distance provenance while missing evidence stays separate", () => {
     expect(
       deriveTransportLegCertStatuses(
         [{ distanceKm: 25, distanceSource: "manual", loadMassKg: 100 }],
@@ -23,12 +24,13 @@ describe("transport leg header CERT status", () => {
       ),
     ).toEqual({
       distance: "satisfied",
-      provenance: "missing",
+      provenance: "satisfied",
+      evidence: "missing",
       load: "satisfied",
     });
   });
 
-  it("marks all persisted requirements green when document-backed with an upload", () => {
+  it("marks all persisted requirements green with recorded provenance and an upload", () => {
     expect(
       deriveTransportLegCertStatuses(
         [
@@ -44,11 +46,12 @@ describe("transport leg header CERT status", () => {
     ).toEqual({
       distance: "satisfied",
       provenance: "satisfied",
+      evidence: "satisfied",
       load: "satisfied",
     });
   });
 
-  it("keeps provenance orange when Document is marked but no file is uploaded", () => {
+  it("keeps evidence orange when no file is uploaded", () => {
     expect(
       deriveTransportLegCertStatuses(
         [
@@ -63,7 +66,8 @@ describe("transport leg header CERT status", () => {
       ),
     ).toEqual({
       distance: "satisfied",
-      provenance: "missing",
+      provenance: "satisfied",
+      evidence: "missing",
       load: "satisfied",
     });
   });
@@ -73,7 +77,7 @@ describe("transport leg header CERT status", () => {
       deriveTransportLegCertStatuses(
         [{ distanceKm: 25, distanceSource: "document", loadMassKg: 100 }],
         true,
-      ).provenance,
+      ).evidence,
     ).toBe("missing");
   });
 });

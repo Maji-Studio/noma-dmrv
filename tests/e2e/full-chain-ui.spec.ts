@@ -586,10 +586,10 @@ test.describe("Full Chain UI Smoke Test", () => {
         seededData.customerLocation.id
       );
 
-      // Biochar Product is a FormEntitySelect (custom dropdown), not a native <select>
+      // Product bin is a FormEntitySelect (custom dropdown), not a native <select>
       await selectEntityById(
         page,
-        "Biochar Product",
+        "Product bin",
         seededData.biocharProduct.id
       );
       await page.selectOption('select[name="packaging"]', "loose");

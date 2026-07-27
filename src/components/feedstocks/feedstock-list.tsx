@@ -647,7 +647,6 @@ export function FeedstockList({ stats }: { stats?: React.ReactNode }) {
                 entityId={sideSheetEntity.id}
                 readOnly
                 embedded
-                distanceSource={sideSheetEntity.transportDistanceSource}
               />
             ),
           },

@@ -78,6 +78,17 @@ gpsLongitude: z.preprocess(toNumberOrNull, longitudeSchema),
 
 Range checks alone are not enough: a half-filled pair otherwise validates. Attach `.superRefine(gpsPairSuperRefine)` to any schema carrying `gpsLatitude` / `gpsLongitude` — it points the error at the coordinate still missing. `hasCompleteGpsPair()` and `GPS_PAIR_MESSAGE` are exported for non-schema call sites. Reference usage: `src/schemas/customers.ts`.
 
+### Cross-field error revalidation
+
+Every React Hook Form that uses a schema with `.refine()` or `.superRefine()`
+must render `ResolvedErrorRevalidator` with its `control` and `trigger`. React
+Hook Form normally merges resolver results for only the field that changed, so
+correcting a related field can otherwise leave an old error visible elsewhere.
+The revalidator watches values in an isolated, non-visual child and revalidates
+only field paths that already have Zod errors; it leaves imperative
+`manual`/`server` errors alone, does not validate untouched fields, and does not
+rerender the parent form on every keystroke.
+
 Prefer the `PositionPicker` component (map preview + address search + manual lat/lng) over a hand-rolled coordinate input.
 
 ## Dates

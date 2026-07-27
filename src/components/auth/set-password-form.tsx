@@ -8,7 +8,12 @@ import { useAuth } from "@/lib/auth/client";
 import Link from "next/link";
 import { Button } from "@/components/ui";
 import { setPasswordSchema, type SetPasswordFormData } from "@/schemas/auth";
-import { FormField, FormInput, ServerError } from "@/components/forms";
+import {
+  FormField,
+  FormInput,
+  ResolvedErrorRevalidator,
+  ServerError,
+} from "@/components/forms";
 
 function SetPasswordFormContent() {
   const [success, setSuccess] = useState(false);
@@ -23,6 +28,8 @@ function SetPasswordFormContent() {
   const {
     register,
     handleSubmit,
+    control,
+    trigger,
     formState: { errors, isSubmitting },
   } = useForm<SetPasswordFormData>({
     resolver: zodResolver(setPasswordSchema),
@@ -90,6 +97,7 @@ function SetPasswordFormContent() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-24">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {success ? (
         <div className="space-y-24">
           <div

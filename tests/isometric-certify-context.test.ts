@@ -330,7 +330,7 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     expect(mockedListBlueprints).not.toHaveBeenCalled();
   });
 
-  it("returns linked-no-default shape when defaultRemovalTemplateId is null", async () => {
+  it("returns linked-no-default shape without remote calls when defaultRemovalTemplateId is null", async () => {
     mockedGetMapping.mockResolvedValue(
       mapping({ defaultRemovalTemplateId: null }),
     );
@@ -343,10 +343,12 @@ describe("loadCertifyContextForCreditBatchForUser", () => {
     );
 
     expect(result.mapping?.externalProjectId).toBe(EXTERNAL_PROJECT_ID);
-    expect(result.project?.id).toBe(EXTERNAL_PROJECT_ID);
+    expect(result.project).toBeNull();
     expect(result.defaultTemplate).toBeNull();
     expect(result.missingDefaultTemplateId).toBeNull();
     expect(result.blueprintsForTemplate).toEqual([]);
+    expect(mockedListProjects).not.toHaveBeenCalled();
+    expect(mockedListTemplates).not.toHaveBeenCalled();
     expect(mockedListBlueprints).not.toHaveBeenCalled();
   });
 

@@ -29,7 +29,6 @@ vi.mock("@/data-access/certifier-removals", () => ({
 vi.mock("./certify-context-core", () => ({
   loadRemovalSubmissionContext: vi.fn(),
 }));
-
 import { getCertifierRemovalById } from "@/data-access/certifier-removals";
 import { requireOrgFacility } from "@/data-access/utils";
 import { loadRemovalSubmissionContext } from "./certify-context-core";

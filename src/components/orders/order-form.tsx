@@ -255,15 +255,15 @@ export function OrderForm({
         <FormEntitySelect
           control={control}
           name="biocharProductId"
-          label="Biochar product"
+          label="Product bin"
           entityType="biocharProduct"
-          placeholder="Select product..."
+          placeholder="Select product bin..."
           required
           disabled={isSubmitting}
           filterBy={contextFacilityId ? { facilityId: contextFacilityId } : undefined}
           emptyHint={{
             message:
-              "No biochar products yet — create a product from a completed production run first.",
+              "No product bins contain a biochar product yet — create one from a completed production run first.",
             href: contextFacilityId
               ? `/biochar-products?facility=${encodeURIComponent(contextFacilityId)}`
               : "/biochar-products",

@@ -31,18 +31,18 @@ import type { OrgContext } from "@/lib/auth/server";
 import type { BinMovementLane } from "@/schemas/bin-movements";
 import { deriveLaneStock } from "./lane-stock-derivation";
 import { requireOrgScope } from "./utils";
+import {
+  binStockOverdrawMessage,
+  deliveryStockOverdrawMessage,
+  formatStockKg,
+  isStockOverdraw,
+  type StockMaterial,
+} from "@/lib/stock-overdraw";
 
 /** Any Drizzle client that can run reads — the live `db` or a transaction. */
 type DbReader = Pick<typeof db, "select">;
 
 const BIN_STOCK_LOCK_SCOPE = "bin-stock";
-
-/**
- * Floating-point slack (kg). Derived stock is a sum of floating-point masses, so
- * an exactly-equal draw can land a hair over its available stock. Only a draw
- * beyond this slack is a real over-draw.
- */
-const STOCK_OVERDRAW_EPSILON_KG = 1e-6;
 
 /** SafeError subtype so server actions can attach field-level metadata. */
 export class StockOverdrawError extends SafeError {
@@ -90,8 +90,7 @@ export async function lockBinStock(
  * them to "0 kg" and drop the sign of a small negative deficit (#116).
  */
 export function formatKg(kg: number): string {
-  if (kg !== 0 && Math.abs(kg) < 1) return `${kg.toFixed(1)} kg`;
-  return `${Math.round(kg).toLocaleString()} kg`;
+  return formatStockKg(kg);
 }
 
 /**
@@ -101,26 +100,27 @@ export function formatKg(kg: number): string {
  * over-drawn bin surfaces its true (negative) deficit for reconciliation (#116).
  */
 export function overdrawError(
-  material: string,
+  material: StockMaterial,
   availableKg: number,
   requestedKg: number,
 ): StockOverdrawError {
-  const available = formatKg(availableKg);
   return new StockOverdrawError(
-    `Not enough ${material} in this bin — ${available} available but this draw needs ${formatKg(
+    binStockOverdrawMessage(
+      material,
+      availableKg,
       requestedKg,
-    )}. Reconcile the bin's stock (Storage Bins → the bin → Reconcile stock), then try again.`,
+    ),
   );
 }
 
 /** True when `requestedKg` exceeds `availableKg` beyond the FP slack. */
 export function isOverdraw(requestedKg: number, availableKg: number): boolean {
-  return requestedKg - availableKg > STOCK_OVERDRAW_EPSILON_KG;
+  return isStockOverdraw(requestedKg, availableKg);
 }
 
 /** True when a derived balance is materially above or below zero. */
 export function hasNonZeroStock(availableKg: number): boolean {
-  return Math.abs(availableKg) > STOCK_OVERDRAW_EPSILON_KG;
+  return isStockOverdraw(Math.abs(availableKg), 0);
 }
 
 /**
@@ -128,7 +128,7 @@ export function hasNonZeroStock(availableKg: number): boolean {
  * complete-batch intake − consumption by production runs + reconciliation deltas.
  * `excludeRunId` drops one run's consumption (its allocation is being replaced).
  */
-async function deriveFeedstockAvailableKg(
+export async function deriveFeedstockAvailableKg(
   ctx: OrgContext,
   tx: DbReader,
   storageLocationId: string,
@@ -355,11 +355,11 @@ export async function assertBiocharProductDrawWithinStock(
     // remaining wet mass, not a bin lane, so the #194 bin reconcile workflow is
     // the wrong lever — point the operator at the source bin or the product.
     throw new SafeError(
-      `Cannot deliver ${formatKg(params.requestedWetKg)} from product ${
-        product?.code ?? "this batch"
-      }: only ${formatKg(
+      deliveryStockOverdrawMessage(
+        product?.code ?? null,
         batchAvailable,
-      )} remain undelivered. Reconcile the source bin or adjust the product before delivering.`,
+        params.requestedWetKg,
+      ),
     );
   }
 

@@ -60,7 +60,7 @@ async function seedFormCompleteApplication(
   );
   await selectEntity(
     page,
-    "Biochar Product",
+    "Product bin",
     seededData.biocharProduct.id,
     seededData.biocharProduct.code,
   );

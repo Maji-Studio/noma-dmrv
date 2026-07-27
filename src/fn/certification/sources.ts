@@ -5,6 +5,7 @@ import { db, type DbTransaction } from "@/db";
 import { acquireMirrorLock } from "@/lib/isometric/utils/source-lock";
 import {
   getCertifierProjectByFacility,
+  type CertificationSubmissionRow,
   type DocumentRow,
 } from "@/data-access/certification";
 import {
@@ -16,6 +17,7 @@ import {
   type CertifierDocumentUploadRow,
   type DocumentUploadMetadata,
 } from "@/data-access/certifier-document-uploads";
+import { getLatestSubmissionWithExecutor } from "@/data-access/certification-submissions";
 import { getRegistrySourceVisibility } from "@/data-access/certifier-organization-settings";
 import {
   getCertifierRemovalById,
@@ -29,6 +31,7 @@ import {
   listDocumentsForEntity,
 } from "@/data-access/documents";
 import { SafeError } from "@/lib/errors";
+import { isLockedInFlight } from "@/lib/isometric/utils/lock";
 import {
   buildSourceSupplierRef,
   createSource,
@@ -51,7 +54,12 @@ import {
 } from "@/schemas/certification-sources";
 import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
-import { appendSyncEventBestEffort, ISOMETRIC_PROVIDER } from "./shared";
+import {
+  appendSyncEventBestEffort,
+  ISOMETRIC_PROVIDER,
+  REMOVAL_ENTITY_TYPE,
+  REMOVAL_SUBMISSION_TYPE,
+} from "./shared";
 import { withSourceSyncEventOnFailure } from "./source-sync-events";
 import {
   buildRemovalSourceDescription,
@@ -303,6 +311,42 @@ export interface MirrorResult {
   recovered: boolean;
 }
 
+const SOURCE_READ_ONLY_SUBMISSION_STATUSES = new Set<
+  CertificationSubmissionRow["status"]
+>([
+  "submitted",
+  "accepted",
+  "superseded",
+]);
+
+async function assertRemovalSourcesEditable(
+  orgCtx: OrgContext,
+  removalId: string,
+  facilityId: string,
+  executor: DbTransaction | typeof db,
+): Promise<void> {
+  const latest = await getLatestSubmissionWithExecutor(
+    orgCtx,
+    executor,
+    {
+      provider: ISOMETRIC_PROVIDER,
+      submissionType: REMOVAL_SUBMISSION_TYPE,
+      localEntityType: REMOVAL_ENTITY_TYPE,
+      localEntityId: removalId,
+    },
+    facilityId,
+  );
+  if (
+    latest &&
+    (SOURCE_READ_ONLY_SUBMISSION_STATUSES.has(latest.status) ||
+      isLockedInFlight(latest))
+  ) {
+    throw new SafeError(
+      "Supporting sources are read-only once a Removal is submitted or while submission is in progress. Replace or remove evidence from its owning record before submission.",
+    );
+  }
+}
+
 // Wraps an outbound Isometric call so any failure lands in
 // certifier_sync_events before bubbling up. Without this, a POST that fails
 // (auth expired, 5xx, network) leaves zero audit trail — ops cannot answer
@@ -316,45 +360,58 @@ export async function mirrorDocumentToSource(
   input: unknown,
 ): Promise<ActionResult<MirrorResult>> {
   return withAction((orgCtx) =>
-    mirrorDocumentToSourceForUser(orgCtx, mirrorDocumentToSourceSchema.parse(input)),
+    mirrorDocumentToSourceForUser(
+      orgCtx,
+      mirrorDocumentToSourceSchema.parse(input),
+      { enforceRemovalLifecycle: true },
+    ),
   );
 }
 
 export async function mirrorDocumentToSourceForUser(
   orgCtx: OrgContext,
   parsed: MirrorDocumentToSourceInput,
+  options: { enforceRemovalLifecycle?: boolean } = {},
 ): Promise<MirrorResult> {
-    requireOrgRole(orgCtx, "admin");
-    const { removalId, documentId } = parsed;
+  requireOrgRole(orgCtx, "admin");
+  const { removalId, documentId } = parsed;
 
-    // Ownership + lineage scoping ───────────────────────────────────────
-    // `assertDocumentIsCandidateForRemoval` walks the same lineage the panel
-    // shows. Anchoring the mutation to the removal prevents an authenticated
-    // caller from mirroring an arbitrary document UUID through this endpoint.
-    const { candidates, candidate } = await assertDocumentIsCandidateForRemoval(
+  // Ownership + lineage scoping ───────────────────────────────────────
+  // `assertDocumentIsCandidateForRemoval` walks the same lineage the panel
+  // shows. Anchoring the mutation to the removal prevents an authenticated
+  // caller from mirroring an arbitrary document UUID through this endpoint.
+  const { candidates, candidate } = await assertDocumentIsCandidateForRemoval(
+    orgCtx,
+    removalId,
+    documentId,
+  );
+  if (!candidates.hasMapping) {
+    throw new SafeError(
+      "This facility isn't linked to an Isometric project. Link it in facility settings before mirroring sources.",
+    );
+  }
+  const removal = await getCertifierRemovalById(orgCtx, removalId);
+  if (!removal) throw new SafeError("Removal not found.");
+  const mapping = await getCertifierProjectByFacility(
+    orgCtx,
+    removal.facilityId,
+    ISOMETRIC_PROVIDER,
+  );
+  if (!mapping) {
+    // Defensive: hasMapping was true above, so this is a TOCTOU edge.
+    throw new SafeError(
+      "This facility isn't linked to an Isometric project. Link it in facility settings before mirroring sources.",
+    );
+  }
+  if (options.enforceRemovalLifecycle) {
+    await assertRemovalSourcesEditable(
       orgCtx,
       removalId,
-      documentId,
-    );
-    if (!candidates.hasMapping) {
-      throw new SafeError(
-        "This facility isn't linked to an Isometric project. Link it in facility settings before mirroring sources.",
-      );
-    }
-    const removal = await getCertifierRemovalById(orgCtx, removalId);
-    if (!removal) throw new SafeError("Removal not found.");
-    const mapping = await getCertifierProjectByFacility(
-      orgCtx,
       removal.facilityId,
-      ISOMETRIC_PROVIDER,
+      db,
     );
-    if (!mapping) {
-      // Defensive: hasMapping was true above, so this is a TOCTOU edge.
-      throw new SafeError(
-        "This facility isn't linked to an Isometric project. Link it in facility settings before mirroring sources.",
-      );
-    }
-    const client = await getIsometricClientForOrg(orgCtx.organizationId);
+  }
+  const client = await getIsometricClientForOrg(orgCtx.organizationId);
 
     // Pre-flight: document loadable + safe to upload ────────────────────
     const document = await getDocumentById(orgCtx, documentId);
@@ -411,6 +468,17 @@ export async function mirrorDocumentToSourceForUser(
     // parallel. Held across HTTP calls; acceptable for single-tenant v1.
     return db.transaction(async (tx) => {
       await acquireMirrorLock(tx, documentId);
+      if (options.enforceRemovalLifecycle) {
+        // Submission claims acquire the same document lock before persisting
+        // their lifecycle transition. Re-decide after the lock so a mirror
+        // that queued behind a claim cannot mutate the claimed Source set.
+        await assertRemovalSourcesEditable(
+          orgCtx,
+          removalId,
+          removal.facilityId,
+          tx,
+        );
+      }
 
       // Idempotency short-circuit (inside the lock) ─────────────────────
       const existingLocal = await getDocumentUploadByDocument(
@@ -603,6 +671,8 @@ export async function unlinkDocumentSource(
       parsed.removalId,
       parsed.documentId,
     );
+    const removal = await getCertifierRemovalById(orgCtx, parsed.removalId);
+    if (!removal) throw new SafeError("Removal not found.");
 
     // Wrap the snapshot-reference check + DELETE in a single transaction.
     // The advisory lock is keyed on (provider, documentId) — the same key
@@ -613,6 +683,12 @@ export async function unlinkDocumentSource(
     // orphaned source id.
     return db.transaction(async (tx) => {
       await acquireMirrorLock(tx, parsed.documentId);
+      await assertRemovalSourcesEditable(
+        orgCtx,
+        parsed.removalId,
+        removal.facilityId,
+        tx,
+      );
 
       const existing = await getDocumentUploadByDocument(
         orgCtx,

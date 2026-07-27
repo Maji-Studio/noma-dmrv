@@ -13,6 +13,10 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+Removal review, Source lifecycle, and transport-provenance implementation notes
+from 2026-07-27 are archived in
+[`docs/archive/isometric-changes-archive-2026-07-27-removal-review-sources-transport.md`](../archive/isometric-changes-archive-2026-07-27-removal-review-sources-transport.md).
+
 ## Registry Source visibility contract
 
 Certification Settings exposes one organization-wide Isometric Source

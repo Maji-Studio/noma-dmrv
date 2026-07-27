@@ -29,6 +29,7 @@ export interface SeededChainData {
   biocharProduct: { id: string; code: string };
   feedstockStorageLocation: { id: string; code: string; name: string };
   biocharStorageLocation: { id: string; code: string; name: string };
+  productStorageLocation: { id: string; code: string; name: string };
   vehicle: { id: string; code: string; name: string };
   feedstockDelivery: { id: string; code: string };
   feedstock: { id: string; code: string };
@@ -54,6 +55,7 @@ export async function seedChainData(
     const biocharProductId = crypto.randomUUID();
     const feedstockStorageId = crypto.randomUUID();
     const biocharStorageId = crypto.randomUUID();
+    const productStorageId = crypto.randomUUID();
     const vehicleId = crypto.randomUUID();
     const feedstockDeliveryId = crypto.randomUUID();
     const feedstockId = crypto.randomUUID();
@@ -160,6 +162,16 @@ export async function seedChainData(
         facilityId: facilityId,
       });
 
+      await tx.insert(schema.storageLocations).values({
+        organizationId: DEC_ORG_ID,
+        id: productStorageId,
+        code: `E2E-SL-PR-${testRunId}`,
+        name: `E2E Product Bin ${testRunId}`,
+        type: "product_bin",
+        facilityId: facilityId,
+        formulationId: formulationId,
+      });
+
       // 8. Biochar Product (needs facility + formulation)
       const productionDate = new Date();
       const expiresAt = new Date(productionDate);
@@ -170,6 +182,7 @@ export async function seedChainData(
         code: `E2E-BP-${testRunId}`,
         facilityId: facilityId,
         formulationId: formulationId,
+        storageLocationId: productStorageId,
         status: "ready",
         // Holds enough biochar to cover the delivery masses specs draw against
         // it (up to 10 t): the bin over-draw block (#116) rejects a delivered
@@ -240,6 +253,7 @@ export async function seedChainData(
       biocharProduct: { id: biocharProductId, code: `E2E-BP-${testRunId}` },
       feedstockStorageLocation: { id: feedstockStorageId, code: `E2E-SL-FS-${testRunId}`, name: `E2E Feedstock Bin ${testRunId}` },
       biocharStorageLocation: { id: biocharStorageId, code: `E2E-SL-BC-${testRunId}`, name: `E2E Biochar Pile ${testRunId}` },
+      productStorageLocation: { id: productStorageId, code: `E2E-SL-PR-${testRunId}`, name: `E2E Product Bin ${testRunId}` },
       vehicle: { id: vehicleId, code: `E2E-VEH-${testRunId}`, name: `E2E Seed Vehicle ${testRunId}` },
       feedstockDelivery: { id: feedstockDeliveryId, code: `E2E-FSD-${testRunId}` },
       feedstock: { id: feedstockId, code: `E2E-FS-${testRunId}` },
@@ -752,6 +766,7 @@ export async function cleanupChainData(data: SeededChainData): Promise<void> {
           inArray(schema.storageLocations.id, [
             data.feedstockStorageLocation.id,
             data.biocharStorageLocation.id,
+            data.productStorageLocation.id,
           ])
         );
 

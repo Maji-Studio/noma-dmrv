@@ -13,6 +13,7 @@ import {
   customers,
   customerLocations,
   biocharProducts,
+  storageLocations,
   deliveries,
   type Order,
 } from "@/db/schema";
@@ -32,6 +33,7 @@ export interface OrderWithRelations extends Order {
   customerName: string | null;
   customerLocationName: string | null;
   biocharProductCode: string | null;
+  productBinName: string | null;
   /** Total deliveries linked to this order (non-archived). */
   deliveryCount: number;
   /** Deliveries in the `delivered` status — drives the `x/y delivered` progress. */
@@ -228,6 +230,7 @@ export async function getOrders(
       customerName: customers.name,
       customerLocationName: customerLocations.name,
       biocharProductCode: biocharProducts.code,
+      productBinName: storageLocations.name,
       deliveryCount: numericAggregate(
         sql<number>`coalesce(${deliveryAgg.total}, 0)`,
       ),
@@ -240,6 +243,7 @@ export async function getOrders(
     .leftJoin(customers, and(eq(orders.customerId, customers.id), eq(customers.organizationId, ctx.organizationId)))
     .leftJoin(customerLocations, and(eq(orders.customerLocationId, customerLocations.id), eq(customerLocations.organizationId, ctx.organizationId)))
     .leftJoin(biocharProducts, and(eq(orders.biocharProductId, biocharProducts.id), eq(biocharProducts.organizationId, ctx.organizationId)))
+    .leftJoin(storageLocations, and(eq(biocharProducts.storageLocationId, storageLocations.id), eq(storageLocations.organizationId, ctx.organizationId)))
     .leftJoin(deliveryAgg, eq(orders.id, deliveryAgg.orderId))
     .where(whereClause)
     .orderBy(orderFn(sortColumn))

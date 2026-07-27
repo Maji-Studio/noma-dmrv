@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { FormFileUpload } from "@/components/forms/form-file-upload";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import {
@@ -10,10 +9,6 @@ import {
   TRANSPORT_EVIDENCE_DOCUMENT_TYPES,
   type TransportEvidenceDocumentType,
 } from "@/lib/certification/transport-evidence";
-import {
-  DISTANCE_SOURCE_LABELS,
-  type DistanceSourceValue,
-} from "@/schemas/distance-source";
 
 interface ClassifiedTransportEvidenceUploaderProps {
   id: string;
@@ -102,48 +97,6 @@ export function ClassifiedTransportEvidenceUploader({
         }}
         onUploadError={onUploadError}
       />
-    </div>
-  );
-}
-
-interface TransportDocumentProvenanceControlProps {
-  savedSource?: DistanceSourceValue | null;
-  draftSource?: DistanceSourceValue | null;
-  onSelectDocument: () => void;
-  disabled?: boolean;
-}
-
-/** Drafts a documentary provenance change in the owning parent form. */
-export function TransportDocumentProvenanceControl({
-  savedSource,
-  draftSource,
-  onSelectDocument,
-  disabled = false,
-}: TransportDocumentProvenanceControlProps) {
-  const draftIsDocument = draftSource === "document";
-  return (
-    <div className="flex flex-col gap-8 border border-[var(--color-border-secondary)] px-12 py-12 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex flex-col gap-2">
-        <span className="body-small font-medium text-[var(--color-text-primary)]">
-          Distance provenance
-        </span>
-        <span className="body-caption text-[var(--color-text-tertiary)]">
-          Saved: {savedSource ? DISTANCE_SOURCE_LABELS[savedSource] : "Not set"}
-          {draftSource !== savedSource
-            ? ` · Draft: ${draftSource ? DISTANCE_SOURCE_LABELS[draftSource] : "Not set"}`
-            : ""}
-        </span>
-      </div>
-      <Button
-        type="button"
-        variant="default"
-        size="small"
-        aria-pressed={draftIsDocument}
-        disabled={disabled || draftIsDocument}
-        onClick={onSelectDocument}
-      >
-        {draftIsDocument ? "Document selected" : "Use Document provenance"}
-      </Button>
     </div>
   );
 }

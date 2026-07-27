@@ -1,6 +1,10 @@
 import type { RemovalCompilationView } from "@/fn/certification";
 import { Button } from "@/components/ui";
 import type { ReactNode } from "react";
+import {
+  CompilationBlockers,
+  CompilationWarnings,
+} from "./compilation-notices";
 
 interface CompiledSubmissionReviewProps {
   compilation: RemovalCompilationView | null;
@@ -85,18 +89,7 @@ export function CompiledSubmissionReview({
         </Button>
       </div>
 
-      {blockers.length > 0 && (
-        <div className="border-l-2 border-[var(--st-error)] pl-12" role="alert">
-          <p className="body-small font-medium text-[var(--color-text-primary)]">
-            Compilation blocked
-          </p>
-          <ul className="mt-4 list-disc pl-16 body-small text-[var(--color-text-secondary)]">
-            {blockers.map((blocker) => (
-              <li key={blocker}>{blocker}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <CompilationBlockers blockers={blockers} />
 
       <ReviewSection title="Outbound plan">
         <p className="body-small text-[var(--color-text-secondary)]">
@@ -232,15 +225,7 @@ export function CompiledSubmissionReview({
       </ReviewSection>
 
       <ReviewSection title="Captured but not represented">
-        {warnings.length === 0 ? (
-          <EmptyValue>No omitted captured values.</EmptyValue>
-        ) : (
-          <ul className="list-disc space-y-2 pl-16 body-small">
-            {warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
-            ))}
-          </ul>
-        )}
+        <CompilationWarnings warnings={warnings} showEmpty />
       </ReviewSection>
     </div>
   );
