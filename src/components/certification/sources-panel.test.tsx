@@ -68,13 +68,6 @@ vi.mock("@/hooks/use-certification-sources", () => ({
     isLoading: false,
     error: null,
   }),
-  useMirrorDocumentToSource: () => ({
-    isPending: false,
-    mutate: vi.fn(),
-  }),
-}));
-vi.mock("@/components/ui/toast", () => ({
-  useToast: () => ({ success: vi.fn(), error: vi.fn() }),
 }));
 vi.mock("@/components/ui", () => ({
   Button: ({
@@ -96,7 +89,6 @@ vi.mock("@/components/ui", () => ({
 }));
 vi.mock("@phosphor-icons/react/dist/ssr", () => ({
   CheckCircleIcon: () => null,
-  CloudIcon: () => null,
   FileIcon: () => null,
   WarningCircleIcon: () => null,
 }));
@@ -150,6 +142,19 @@ describe("SourcesPanel supporting document affordances", () => {
     expect(html).toContain("src_existing");
     expect(html).not.toContain("Unlink locally");
     expect(html).not.toContain("Unlink");
+  });
+
+  it("prepares sources as one review workflow with no per-file actions", () => {
+    const html = renderToStaticMarkup(
+      <SourcesPanel removalId="removal-id" editable />,
+    );
+
+    expect(html).toContain(
+      "Supporting sources are prepared automatically during Review &amp; submit.",
+    );
+    expect(html).toContain("Pending preparation");
+    expect(html).not.toContain(">Mirror<");
+    expect(html).not.toContain("<button");
   });
 
   it("renders submitted sources as status-only when editing is disabled", () => {

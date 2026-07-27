@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   loadCandidateDocumentsForRemoval,
   mirrorDocumentToSource,
+  prepareRemovalSources,
 } from "@/fn/certification";
 import type { MirrorDocumentToSourceInput } from "@/schemas/certification-sources";
 import { certificationKeys } from "./use-certification";
@@ -51,6 +52,26 @@ export function useMirrorDocumentToSource() {
         queryKey: certificationSourcesKeys.candidatesForRemoval(vars.removalId),
       });
       // The Sources change also shifts the removal's submit-readiness display.
+      queryClient.invalidateQueries({ queryKey: certificationKeys.all });
+    },
+  });
+}
+
+export function usePrepareRemovalSources() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { removalId: string }) => {
+      const result = await prepareRemovalSources(input);
+      if (!result.success) throw new Error(result.error);
+      return result.data;
+    },
+    // A failed all-files attempt may still have prepared some sources. Refresh
+    // every dependent projection after both success and failure so a whole-flow
+    // retry resumes from the persisted progress instead of showing stale counts.
+    onSettled: (_data, _error, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: certificationSourcesKeys.candidatesForRemoval(vars.removalId),
+      });
       queryClient.invalidateQueries({ queryKey: certificationKeys.all });
     },
   });

@@ -2,10 +2,10 @@
  * SourcesPanel — Phase 3.5
  *
  * Lists candidate noma documents discovered along the Removal's chain-of-
- * custody. The operator mirrors selected docs to Isometric Sources via a
- * server-side proxy; once mirrored, `source_ids` ride into Datapoint payloads
- * at submit time and are hash-covered. After submission the rows are
- * status-only; evidence changes happen on the owning entity before submit.
+ * custody. Review & submit prepares every missing Isometric Source as one
+ * workflow operation; once prepared, `source_ids` ride into Datapoint payloads
+ * and are hash-covered. This panel is status-only; evidence changes happen on
+ * the owning entity before submit.
  *
  * Mounted in `RemovalDetailSheet` (the Removals-tab quick view, opened via
  * `?removal=<id>`), the single place the candidate set is consumed. The
@@ -18,19 +18,13 @@
 
 import {
   CheckCircleIcon,
-  CloudIcon,
   FileIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
-import { Button, EmptyState } from "@/components/ui";
-import { useToast } from "@/components/ui/toast";
-import {
-  useCandidateDocumentsForRemoval,
-  useMirrorDocumentToSource,
-} from "@/hooks/use-certification-sources";
+import { EmptyState } from "@/components/ui";
+import { useCandidateDocumentsForRemoval } from "@/hooks/use-certification-sources";
 import { Section } from "./panel-layout";
 
-const ICON_SIZE = 14;
 const STATE_ICON_SIZE = 16;
 const PDF_MIME_TYPE = "application/pdf";
 
@@ -53,7 +47,7 @@ export function SourcesPanel({ removalId, editable }: SourcesPanelProps) {
         </header>
         <p className="body-caption text-[var(--color-text-tertiary)]">
           {editable
-            ? "Mirror candidate documents before submission. Replace or remove evidence from its owning record, not from this Removal."
+            ? "Supporting sources are prepared automatically during Review & submit. Replace or remove evidence from its owning record, not from this Removal."
             : "Source status is read-only. Evidence must be replaced or removed from its owning record before submission."}
         </p>
         <PanelBody removalId={removalId} editable={editable} />
@@ -69,7 +63,7 @@ function PanelCounter({ removalId }: { removalId: string | null }) {
   const mirrored = query.data.candidates.filter((c) => c.mirror).length;
   return (
     <span className="body-caption text-[var(--color-text-tertiary)]">
-      {mirrored} of {total} mirrored
+      {mirrored} of {total} ready
     </span>
   );
 }
@@ -146,7 +140,6 @@ function PanelBodyForRemoval({
           }
         >
           <CandidateRow
-            removalId={removalId}
             candidate={candidate}
             editable={editable}
           />
@@ -157,46 +150,22 @@ function PanelBodyForRemoval({
 }
 
 interface CandidateRowProps {
-  removalId: string;
   editable: boolean;
   candidate: NonNullable<
     ReturnType<typeof useCandidateDocumentsForRemoval>["data"]
   >["candidates"][number];
 }
 
-function CandidateRow({ removalId, candidate, editable }: CandidateRowProps) {
+function CandidateRow({ candidate, editable }: CandidateRowProps) {
   const { document, lineageEntity, mirror } = candidate;
   const isMirrored = !!mirror;
   const isMirrorable = !!document.storageKey;
   const isPdf = isPdfCandidate(document.mimeType, document.fileName);
-  const mirrorMutation = useMirrorDocumentToSource();
-  const toast = useToast();
 
   const description = [
     document.documentType.replace(/_/g, " "),
     lineageEntity.entityLabel,
   ].join(" · ");
-
-  const handleMirror = () => {
-    mirrorMutation.mutate(
-      { removalId, documentId: document.id },
-      {
-        onSuccess: (result) => {
-          if (result.recovered) {
-            toast.success(
-              `Reconciled existing Isometric Source for ${document.fileName}.`,
-            );
-          } else {
-            toast.success(`Mirrored ${document.fileName} to Isometric.`);
-          }
-        },
-        onError: (err) =>
-          toast.error(
-            err instanceof Error ? err.message : "Mirror failed.",
-          ),
-      },
-    );
-  };
 
   return (
     <div className="flex items-center justify-between gap-12 px-12 py-12">
@@ -243,17 +212,12 @@ function CandidateRow({ removalId, candidate, editable }: CandidateRowProps) {
             <CheckCircleIcon size={STATE_ICON_SIZE} weight="fill" />
           </span>
         ) : isMirrorable && editable ? (
-          <Button
-            variant="primary"
-            size="small"
-            onClick={handleMirror}
-            busy={mirrorMutation.isPending}
+          <span
+            className="body-caption text-[var(--color-text-tertiary)]"
+            role="status"
           >
-            {!mirrorMutation.isPending && (
-              <CloudIcon size={ICON_SIZE} weight="bold" />
-            )}
-            Mirror
-          </Button>
+            Pending preparation
+          </span>
         ) : isMirrorable ? (
           <span
             className="body-caption text-[var(--color-text-tertiary)]"

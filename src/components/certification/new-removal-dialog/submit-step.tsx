@@ -15,8 +15,12 @@
  */
 "use client";
 
-import { useState } from "react";
-import { ArrowSquareOutIcon, CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
+import { useEffect, useRef, useState } from "react";
+import {
+  ArrowSquareOutIcon,
+  CheckCircleIcon,
+  SpinnerGapIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { Button, buttonVariants } from "@/components/ui";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -25,6 +29,7 @@ import {
   useRemovalCompilation,
   useSubmitRemoval,
 } from "@/hooks/use-certification";
+import { usePrepareRemovalSources } from "@/hooks/use-certification-sources";
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
 import {
   buildRemovalRequirementsChecklist,
@@ -32,11 +37,11 @@ import {
 } from "@/lib/certification/readiness";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { isometricRegistry } from "@/lib/isometric/links";
-import { EnvBanner } from "../env-banner";
 import { SubmitConfirmDialog } from "../submit-confirm-dialog";
-import { SubmissionChecks } from "./submission-checks";
-import { SubmissionOverview } from "./submission-overview";
-import { CompiledSubmissionReview } from "./compiled-submission-review";
+import {
+  isRemovalCompilationReady,
+  SubmissionReviewTabs,
+} from "./submission-review-tabs";
 
 const REJECTED_IN_ISOMETRIC_MSG =
   "This removal was rejected in Isometric. Resolve the registry record before retrying from noma.";
@@ -48,6 +53,55 @@ interface SubmitStepProps {
   onDone: () => void;
 }
 
+export function SupportingSourcesPreparation({
+  error,
+  isPending,
+  onRetry,
+}: {
+  error: Error | null;
+  isPending: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <section
+      className="flex flex-col items-start gap-12 border border-[var(--color-border-secondary)] px-16 py-12"
+      aria-live="polite"
+    >
+      {error ? (
+        <>
+          <ServerError message={error.message} />
+          <Button
+            variant="default"
+            size="small"
+            onClick={onRetry}
+            busy={isPending}
+          >
+            Retry preparation
+          </Button>
+        </>
+      ) : (
+        <div className="flex items-start gap-12">
+          <SpinnerGapIcon
+            size={20}
+            weight="bold"
+            aria-hidden
+            className="mt-2 shrink-0 animate-spin text-[var(--st-run)]"
+          />
+          <div className="flex flex-col gap-2">
+            <h4 className="body-small font-medium text-[var(--color-text-primary)]">
+              Preparing supporting sources
+            </h4>
+            <p className="body-caption text-[var(--color-text-secondary)]">
+              NOMA is preparing all required evidence in Isometric before
+              compiling the submission.
+            </p>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function SubmitStep({
   removalId,
   ctx,
@@ -55,24 +109,43 @@ export function SubmitStep({
   onDone,
 }: SubmitStepProps) {
   const submitMutation = useSubmitRemoval();
-  const compilationQuery = useRemovalCompilation(facilityId, removalId);
+  const prepareSourcesMutation = usePrepareRemovalSources();
   const toast = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const automaticPreparationStarted = useRef(false);
 
   const externalId = ctx.latestSubmission?.externalId ?? null;
   const rejectedWithExternal =
     ctx.latestSubmission?.status === "rejected" && externalId !== null;
+  const sourcesNeedPreparation =
+    ctx.supportingDocuments.mirrored < ctx.supportingDocuments.total;
+  const canPrepareSources = !!ctx.mapping && ctx.hasOrgCredentials;
+  const shouldPrepareSources = sourcesNeedPreparation && canPrepareSources;
+  const compilationQuery = useRemovalCompilation(
+    facilityId,
+    removalId,
+    !shouldPrepareSources && !prepareSourcesMutation.isPending,
+  );
+  const prepareSources = prepareSourcesMutation.mutate;
+
+  useEffect(() => {
+    if (!shouldPrepareSources || automaticPreparationStarted.current) return;
+    automaticPreparationStarted.current = true;
+    prepareSources({ removalId });
+  }, [prepareSources, removalId, shouldPrepareSources]);
 
   const facts = toRemovalReadinessFacts(ctx);
   const checklist = buildRemovalRequirementsChecklist(facts);
   const readiness = deriveRemovalReadiness(facts);
-  const compilationReady =
-    compilationQuery.data?.blockers.length === 0 &&
-    compilationQuery.data.snapshot !== null &&
-    compilationQuery.data.compilationHash !== null;
+  const compilationReady = isRemovalCompilationReady(
+    compilationQuery.data ?? null,
+  );
   const requirementsMet =
-    readiness.state === "ready" && compilationReady === true;
+    readiness.state === "ready" &&
+    compilationReady === true &&
+    !shouldPrepareSources &&
+    !prepareSourcesMutation.isPending;
 
   const fireSubmit = (confirmProduction = false) => {
     if (rejectedWithExternal) {
@@ -185,23 +258,32 @@ export function SubmitStep({
         </p>
       </div>
 
-      <SubmissionOverview
-        memberBatches={ctx.memberBatches}
-        facilityId={facilityId}
-      />
-
-      <CompiledSubmissionReview
-        compilation={compilationQuery.data ?? null}
-        isLoading={compilationQuery.isLoading}
-        error={compilationQuery.error}
-        onRetry={() => {
-          void compilationQuery.refetch();
-        }}
-      />
-
-      <SubmissionChecks checks={checklist} facilityId={facilityId} />
-
-      <EnvBanner isProduction={ctx.isProduction} variant="inline" />
+      {shouldPrepareSources ? (
+        <SupportingSourcesPreparation
+          error={
+            prepareSourcesMutation.isError
+              ? prepareSourcesMutation.error instanceof Error
+                ? prepareSourcesMutation.error
+                : new Error("Supporting sources could not be prepared.")
+              : null
+          }
+          isPending={prepareSourcesMutation.isPending}
+          onRetry={() => prepareSources({ removalId })}
+        />
+      ) : (
+        <SubmissionReviewTabs
+          memberBatches={ctx.memberBatches}
+          facilityId={facilityId}
+          compilation={compilationQuery.data ?? null}
+          isCompilationLoading={compilationQuery.isLoading}
+          compilationError={compilationQuery.error}
+          onRetryCompilation={() => {
+            void compilationQuery.refetch();
+          }}
+          checks={checklist}
+          isProduction={ctx.isProduction}
+        />
+      )}
 
       {(rejectedWithExternal || submitError) && (
         <ServerError

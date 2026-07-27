@@ -235,7 +235,12 @@ export function RemovalDetailSheet({
             <StatusBadge status={derived.value} label={derived.label} />
           </div>
 
-          <RemovalCarbonBreakdown removalId={summary.removalId} enabled={open} />
+          {summary.externalId && (
+            <RemovalCarbonBreakdown
+              removalId={summary.removalId}
+              enabled={open}
+            />
+          )}
 
           <Field label="Reporting window">{window}</Field>
 
@@ -267,14 +272,10 @@ export function RemovalDetailSheet({
           <SubmissionNotes notes={submissionWarningNotes} />
 
           {/*
-            Supporting sources — mirror lineage documents (lab reports, BoLs,
-            weigh-scale tickets, including per-transport-leg evidence) to
-            Isometric so their source_ids ride into the Datapoint payloads at
-            submit. This is the only place the candidate set is consumed: submit
-            is resolve-only and never auto-mirrors, so without this panel
-            `source_ids` is always empty and no evidence reaches the registry.
-            (Restores the mount lost when evidence-step.tsx was deleted in the
-            2026-06-04 certify redesign.)
+            Supporting sources — status for lineage documents (lab reports,
+            BoLs, weigh-scale tickets, including per-transport-leg evidence).
+            Review & submit prepares every missing Source as one workflow
+            operation before compilation, so this sheet stays informational.
           */}
           <SourcesPanel
             removalId={summary.removalId}
