@@ -11,7 +11,7 @@ import { toDateInputValue } from "@/lib/date-utils";
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, ScalesIcon, MapPinIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus } from "@/components/forms";
@@ -31,6 +31,13 @@ import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachme
 import { DeliveryEvidenceSection } from "./delivery-trailing-sections";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
+import { useStockAvailability } from "@/hooks/use-stock-availability";
+import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
+import {
+  deliveryStockOverdrawMessage,
+  formatStockKg,
+  isStockOverdraw,
+} from "@/lib/stock-overdraw";
 
 // ============================================
 // Constants for select options
@@ -119,7 +126,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     register,
     control,
     handleSubmit,
-    watch,
     setValue,
     formState: { errors },
   } = useForm({
@@ -132,11 +138,15 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   // CERT chips reflect the saved record (frozen), neutral while creating.
   const certStatus = makeCertFieldStatus(isEditMode ? defaultValues : undefined);
 
-  const watchWetMass = watch("deliveredWetMassKg");
-  const watchMoisture = watch("moistureContentPercent");
-  const watchOrderId = watch("orderId");
-  const distanceKmOverride = watch("distanceKmOverride") as number | null | undefined;
-  const draftDistanceSource = watch("distanceSource");
+  const watchWetMass = useWatch({ control, name: "deliveredWetMassKg" });
+  const watchMoisture = useWatch({ control, name: "moistureContentPercent" });
+  const watchOrderId = useWatch({ control, name: "orderId" });
+  const watchStatus = useWatch({ control, name: "status" });
+  const distanceKmOverride = useWatch({
+    control,
+    name: "distanceKmOverride",
+  }) as number | null | undefined;
+  const draftDistanceSource = useWatch({ control, name: "distanceSource" });
 
   // Destination's stored distance (+ provenance) — the value the derived
   // transport leg falls back to when this delivery has no override
@@ -263,6 +273,48 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       ? deriveMassDryKg(watchWetMass, watchMoisture)
       : null;
 
+  const { data: deliveryAvailability } = useStockAvailability(
+    watchOrderId
+      ? {
+          kind: "delivery",
+          orderId: watchOrderId,
+          deliveryId: delivery?.id,
+          biocharProductId: delivery?.biocharProductId ?? undefined,
+        }
+      : null,
+  );
+  const deliveryStockError =
+    watchStatus === "delivered" &&
+    typeof watchWetMass === "number" &&
+    deliveryAvailability &&
+    deliveryAvailability.availableKg !== null &&
+    isStockOverdraw(
+      watchWetMass,
+      deliveryAvailability.availableKg,
+    )
+      ? deliveryStockOverdrawMessage(
+          deliveryAvailability.productCode,
+          deliveryAvailability.availableKg,
+          watchWetMass,
+        )
+      : undefined;
+  const deliveryMassFingerprint = [
+    watchOrderId,
+    watchStatus,
+    watchWetMass,
+  ].join(":");
+  const routedServerError = useInlineStockServerError(
+    errorMessage,
+    deliveryMassFingerprint,
+    (message) =>
+      /cannot deliver .*remain undelivered/i.test(message) ||
+      /not enough product in this bin/i.test(message),
+  );
+  const deliveredWetMassError =
+    errors.deliveredWetMassKg?.message ??
+    deliveryStockError ??
+    routedServerError.inlineError;
+
   // Sync calculated dry mass into the form (clear when inputs become invalid)
   useEffect(() => {
     if (calculatedDryMass !== null) {
@@ -275,6 +327,8 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const defaultSubmitLabel = isEditMode ? "Update Delivery" : "Create Delivery";
 
   const handleFormSubmit = handleSubmit((data) => {
+    if (deliveryStockError) return;
+
     // A distance note only explains an override — never persist one without.
     const normalized =
       data.distanceKmOverride == null ? { ...data, distanceNote: "" } : data;
@@ -358,8 +412,14 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
           moisturePercent={watchMoisture}
           wet={{
             id: "deliveredWetMassKg",
-            error: errors.deliveredWetMassKg?.message,
+            error: deliveredWetMassError,
             hint: "As-received weight of the delivery, water included.",
+            helperText:
+              deliveryAvailability?.availableKg != null
+                ? `${formatStockKg(
+                    deliveryAvailability.availableKg,
+                  )} available from this product`
+                : undefined,
             required: true,
             disabled: isSubmitting,
             placeholder: "e.g. 1000",
@@ -511,7 +571,7 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
-        errorMessage={errorMessage}
+        errorMessage={routedServerError.footerError}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

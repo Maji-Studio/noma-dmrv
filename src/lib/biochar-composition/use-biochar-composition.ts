@@ -44,6 +44,7 @@ export interface UseBiocharCompositionResult {
   rows: CompositionRow[];
   isLoading: boolean;
   facilityId: string;
+  biocharRatio: number | null;
   /** Cast control suitable for passing to the row renderer. */
   control: Control<FieldValues>;
 }
@@ -202,6 +203,7 @@ export function useBiocharComposition(
     rows,
     isLoading,
     facilityId: facilityId ?? "",
+    biocharRatio: formulation?.biocharRatio ?? null,
     control,
   };
 }

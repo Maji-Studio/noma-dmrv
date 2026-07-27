@@ -49,6 +49,12 @@ import {
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { StorageLocationType } from "@/schemas/storage-locations";
+import { useStockAvailability } from "@/hooks/use-stock-availability";
+import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
+import {
+  binStockOverdrawMessage,
+  isStockOverdraw,
+} from "@/lib/stock-overdraw";
 
 // ============================================
 // Constants for select options
@@ -376,6 +382,41 @@ export function ProductionRunForm({
       ? deriveMassDryKg(watchWetMass, watchMoisture)
       : null;
 
+  const { data: feedstockAvailability } = useStockAvailability(
+    watchedSourceBinId
+      ? {
+          kind: "productionRunFeedstock",
+          storageLocationId: watchedSourceBinId,
+          productionRunId: productionRun?.id,
+        }
+      : null,
+  );
+  const feedstockStockError =
+    previewDryMass !== null &&
+    feedstockAvailability &&
+    feedstockAvailability.availableKg !== null &&
+    isStockOverdraw(previewDryMass, feedstockAvailability.availableKg)
+      ? binStockOverdrawMessage(
+          "feedstock",
+          feedstockAvailability.availableKg,
+          previewDryMass,
+        )
+      : undefined;
+  const feedstockFieldFingerprint = [
+    watchedSourceBinId,
+    watchWetMass,
+    watchMoisture,
+  ].join(":");
+  const routedServerError = useInlineStockServerError(
+    errorMessage,
+    feedstockFieldFingerprint,
+    (message) => /not enough feedstock in this bin/i.test(message),
+  );
+  const feedstockWetMassError =
+    errors.feedstockWetMassKg?.message ??
+    feedstockStockError ??
+    routedServerError.inlineError;
+
   const previewBiocharDryMass =
     typeof watchedBiocharKg === "number" &&
     typeof watchedBiocharMoisture === "number" &&
@@ -414,6 +455,8 @@ export function ProductionRunForm({
   const defaultSubmitLabel = isEditMode ? "Update Production Run" : "Create Production Run";
 
   const handleFormSubmit = handleSubmit(async (data) => {
+    if (feedstockStockError) return;
+
     // Dates arrive as "YYYY-MM-DD" strings from the inputs. The end date
     // defaults to the start date when only an end time was entered.
     const startDateStr =
@@ -670,7 +713,7 @@ export function ProductionRunForm({
           moisturePercent={watchMoisture}
           wet={{
             id: "feedstockWetMassKg",
-            error: errors.feedstockWetMassKg?.message,
+            error: feedstockWetMassError,
             disabled: isSubmitting,
             placeholder: "e.g. 500",
             certifyRequired: isProductionRunCertifyField("feedstockWetMassKg"),
@@ -947,7 +990,7 @@ export function ProductionRunForm({
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
-        errorMessage={errorMessage}
+        errorMessage={routedServerError.footerError}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

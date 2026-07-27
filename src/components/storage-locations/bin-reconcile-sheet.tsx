@@ -27,6 +27,10 @@ import {
 import { toNumberOrNull } from "@/schemas/helpers";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { binCurrentMassKg } from "./bin-display";
+import {
+  binStockOverdrawMessage,
+  isStockOverdraw,
+} from "@/lib/stock-overdraw";
 
 type ReconcileMode = "stock-take" | "loss";
 
@@ -332,21 +336,43 @@ function LossForm({
 }) {
   const toast = useToast();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [fieldServerError, setFieldServerError] = useState<{
+    message: string;
+    lossMassKg: number;
+  } | null>(null);
   const recordLoss = useRecordLoss();
   const lane = laneForStorageType(storageLocation.type);
+  const availableKg = binCurrentMassKg(storageLocation);
 
   const {
     register,
     handleSubmit,
-    setError,
+    control,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(recordLossFormSchema),
     defaultValues: { reason: "" },
   });
+  const lossInput = useWatch({ control, name: "lossMassKg" });
+  const lossMassKg = previewNumber(lossInput);
+  const liveStockError =
+    lossMassKg !== null &&
+    isStockOverdraw(lossMassKg, availableKg)
+      ? binStockOverdrawMessage(lane, availableKg, lossMassKg)
+      : undefined;
+  const currentFieldServerError =
+    fieldServerError?.lossMassKg === lossMassKg
+      ? fieldServerError.message
+      : undefined;
+  const lossMassError =
+    errors.lossMassKg?.message ??
+    liveStockError ??
+    currentFieldServerError;
 
   const onSubmit = handleSubmit(async (raw) => {
     setServerError(null);
+    if (liveStockError) return;
+
     const values = raw as RecordLossFormData;
     try {
       await recordLoss.mutateAsync({
@@ -359,7 +385,10 @@ function LossForm({
       onRecorded?.();
     } catch (error) {
       if (error instanceof RecordLossFieldError) {
-        setError(error.field, { type: "server", message: error.message });
+        setFieldServerError({
+          message: error.message,
+          lossMassKg: values.lossMassKg,
+        });
         return;
       }
       setServerError(
@@ -373,7 +402,7 @@ function LossForm({
       <FormField
         id="loss-amount"
         label="Amount lost (kg)"
-        error={errors.lossMassKg?.message}
+        error={lossMassError}
         required
         helperText="The mass removed from the bin — spoilage, spillage, or write-off."
       >
@@ -384,7 +413,7 @@ function LossForm({
           min="0"
           placeholder="e.g., 50"
           disabled={recordLoss.isPending}
-          error={!!errors.lossMassKg}
+          error={!!lossMassError}
           {...register("lossMassKg")}
         />
       </FormField>

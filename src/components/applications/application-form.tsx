@@ -50,6 +50,7 @@ import {
   resolveApplicationSoilTemperatureDefault,
   type ApplicationDeliveryOption,
 } from "./mass-utils";
+import { isStockOverdraw } from "@/lib/stock-overdraw";
 
 // ============================================
 // Constants for select options
@@ -286,8 +287,18 @@ export function ApplicationForm({
   const isSameDelivery = isEditMode && application?.deliveryId === selectedDeliveryId;
   const currentApplicationKg = isSameDelivery ? (applicationTonsToKg(application?.biocharAppliedTons) ?? 0) : 0;
   const availableKg = deliveryCapacityKg !== null ? deliveryCapacityKg - alreadyApplied + currentApplicationKg : null;
+  const applicationStockError =
+    availableKg !== null &&
+    appliedKgValid !== null &&
+    isStockOverdraw(appliedKgValid, availableKg)
+      ? `Cannot exceed available: ${formatKg(
+          availableKg,
+        )} remaining from this delivery`
+      : undefined;
 
   const handleFormSubmit = handleSubmit(async (data) => {
+    if (applicationStockError) return;
+
     // Custody ordering (issue #284): the server rejects this too — but a
     // legacy application can still reference an undelivered delivery (the
     // option is disabled yet survives edit-mode defaults), so surface a
@@ -312,14 +323,6 @@ export function ApplicationForm({
       setError("applicationDate", {
         type: "manual",
         message: `Application date cannot be before the delivery date (${formatDate(selectedDelivery.deliveryDate)})`,
-      });
-      return;
-    }
-
-    if (availableKg !== null && data.biocharAppliedTons > availableKg) {
-      setError("biocharAppliedTons", {
-        type: "manual",
-        message: `Cannot exceed available: ${formatKg(availableKg)} remaining from this delivery`,
       });
       return;
     }
@@ -400,7 +403,10 @@ export function ApplicationForm({
           <FormField
             id="biocharAppliedTons"
             label="Biochar applied, wet (kg)"
-            error={errors.biocharAppliedTons?.message}
+            error={
+              errors.biocharAppliedTons?.message ??
+              applicationStockError
+            }
             required
             certifyRequired={isApplicationCertifyField("biocharAppliedTons")}
             certifyStatus={certStatus("biocharAppliedTons")}
@@ -417,7 +423,10 @@ export function ApplicationForm({
               step="any"
               placeholder="e.g., 5000"
               disabled={isSubmitting}
-              error={!!errors.biocharAppliedTons}
+              error={
+                !!errors.biocharAppliedTons ||
+                !!applicationStockError
+              }
               {...register("biocharAppliedTons", {
                 setValueAs: numericValue,
               })}

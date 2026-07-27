@@ -474,15 +474,24 @@ test.describe("createProductionRun feedstock guard", () => {
       wetMassKg: "200",
       moisturePercent: "10",
     });
-    await submitRunCreate(page);
 
-    const error = page
-      .locator('[role="dialog"]')
-      .getByText(feedstockOverdrawText);
+    const error = page.locator("#feedstockWetMassKg-error");
     await expect(error).toBeVisible({
       timeout: 10000,
     });
+    await expect(
+      page.locator('input[name="feedstockWetMassKg"]'),
+    ).toHaveAttribute("aria-describedby", /feedstockWetMassKg-error/);
     await expect(error).toContainText(/available/i);
+
+    // Correcting the draw must clear the inline error without a submit.
+    await page.fill('input[name="feedstockWetMassKg"]', "50");
+    await expect(error).toBeHidden();
+
+    // Re-entering the overdraw still blocks the write.
+    await page.fill('input[name="feedstockWetMassKg"]', "200");
+    await submitRunCreate(page);
+    await expect(error).toBeVisible({ timeout: 10000 });
   });
 
   test("accepts a feedstock draw within the bin's on-hand stock", async ({
@@ -563,13 +572,17 @@ test.describe("createBiocharProduct biochar-bin guard", () => {
         runCode,
         "150",
       );
-      await submitProductCreate(page);
 
-      const error = page
-        .locator('[role="dialog"]')
-        .getByText(biocharOverdrawText);
+      const error = page.locator("#massKg-error");
       await expect(error).toBeVisible({ timeout: 10000 });
       await expect(error).toContainText(/available/i);
+
+      await page.fill('input[name="massKg"]', "140");
+      await expect(error).toBeHidden();
+
+      await page.fill('input[name="massKg"]', "150");
+      await submitProductCreate(page);
+      await expect(error).toBeVisible({ timeout: 10000 });
     } finally {
       await cleanupProductScenario(page, seededData, productBin, false);
     }
@@ -690,11 +703,16 @@ test.describe("createDelivery product-batch guard", () => {
     // The seeded batch holds 100,000 kg; 100,001 kg cannot be delivered.
     await createOrder(page, seededData);
     await openDeliveredDeliveryForm(page, seededData, "100001");
-    await submitDeliveryCreate(page);
 
-    await expect(
-      page.locator('[role="dialog"]').getByText(deliveryOverdrawText),
-    ).toBeVisible({ timeout: 10000 });
+    const error = page.locator("#deliveredWetMassKg-error");
+    await expect(error).toBeVisible({ timeout: 10000 });
+
+    await page.fill('input[name="deliveredWetMassKg"]', "90000");
+    await expect(error).toBeHidden();
+
+    await page.fill('input[name="deliveredWetMassKg"]', "100001");
+    await submitDeliveryCreate(page);
+    await expect(error).toBeVisible({ timeout: 10000 });
   });
 
   test("accepts a delivered mass within the product batch", async ({
