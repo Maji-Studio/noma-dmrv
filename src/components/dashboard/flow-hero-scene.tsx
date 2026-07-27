@@ -143,7 +143,7 @@ const LEADER_PATH = BAY_CENTERS.map(
 const GROUND_TICK_PATH = BAY_EDGES.map((x) => `M${x},316 L${x},309`).join(" ");
 
 /** Tooltips anchored past this x flip to the left of the anchor. */
-const TIP_FLIP_X = 890;
+const TIP_FLIP_X = 880;
 /** Tooltip vertical clamp — keeps the card inside the (short) scene box. */
 const TIP_MIN_Y = VIEW_Y0 + 12;
 const TIP_MAX_Y = VIEW_Y0 + 70;

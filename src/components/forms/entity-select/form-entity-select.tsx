@@ -35,6 +35,8 @@ interface FormEntitySelectProps<
   createLabel?: string;
   /** Callback when quick-add is triggered */
   onCreateNew?: () => void;
+  /** Optional side effect after the form value changes. */
+  onChange?: EntitySelectProps["onChange"];
   /** Filter options (e.g., facilityId for filtering reactors by facility) */
   filterBy?: Record<string, string>;
   /** Option ids to hide (e.g. materials already picked on other lines). */
@@ -78,6 +80,7 @@ export function FormEntitySelect<
   allowCreate = false,
   createLabel,
   onCreateNew,
+  onChange,
   filterBy,
   excludeIds,
   required,
@@ -103,7 +106,10 @@ export function FormEntitySelect<
       <EntitySelect
         entityType={entityType}
         value={field.value}
-        onChange={field.onChange}
+        onChange={(value) => {
+          field.onChange(value);
+          onChange?.(value);
+        }}
         placeholder={placeholder}
         disabled={disabled}
         error={!!fieldState.error}

@@ -1,6 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { getBiocharProducts } from "@/data-access/entities/biochar-products";
+import {
+  getBiocharProductEntityById,
+  getBiocharProducts,
+} from "@/data-access/entities/biochar-products";
 import { db } from "@/db";
 import { facilities, storageLocations } from "@/db/schema/facilities";
 import { biocharProducts } from "@/db/schema/products";
@@ -77,6 +80,22 @@ describe("order product-bin options", () => {
     });
 
     expect(options).toContainEqual({
+      id: productId,
+      code: `BIN-OPB-${tag}`,
+      name: `Order Product Bin ${tag}`,
+      subtitle: expect.stringMatching(
+        new RegExp(`250 kg available · batch BP-OPB-${tag}$`),
+      ),
+    });
+  });
+
+  it("keeps an existing selection resolvable after its bin is archived", async () => {
+    await db
+      .update(storageLocations)
+      .set({ archivedAt: new Date() })
+      .where(eq(storageLocations.id, productBinId));
+
+    await expect(getBiocharProductEntityById(ctx, productId)).resolves.toEqual({
       id: productId,
       code: `BIN-OPB-${tag}`,
       name: `Order Product Bin ${tag}`,

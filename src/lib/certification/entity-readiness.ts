@@ -203,29 +203,17 @@ export function deriveEntityCertifyReadiness(
     }
   }
 
-  if (entityKind === "feedstock" || entityKind === "delivery") {
+  if (
+    entityKind === "feedstock" ||
+    entityKind === "delivery" ||
+    entityKind === "transportLeg"
+  ) {
     const documentCount = fieldValue(
       entity,
       "transportEvidenceDocumentCount",
     );
-    if (
-      !hasCompleteTransportEvidence(
-        typeof documentCount === "number" ? documentCount : undefined,
-      )
-    ) {
-      gaps.push(TRANSPORT_EVIDENCE_GAP);
-    }
-  }
-
-  // Callers load legs via `getTransportLegsWithEvidenceForEntities` so the
-  // accepted-file count is normally present. A missing count must fail closed
-  // because evidence coverage and Source-binding readiness are independent of
-  // how the distance itself was established.
-  if (entityKind === "transportLeg") {
-    const documentCount = fieldValue(
-      entity,
-      "transportEvidenceDocumentCount",
-    );
+    // A missing count must fail closed because evidence coverage and
+    // Source-binding readiness are independent of distance provenance.
     if (
       !hasCompleteTransportEvidence(
         typeof documentCount === "number" ? documentCount : undefined,

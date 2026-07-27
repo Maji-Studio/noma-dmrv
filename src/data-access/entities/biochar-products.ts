@@ -84,8 +84,8 @@ function buildSelection(
 
 function toEntityOption(r: {
   id: string;
-  code: string;
-  name: string;
+  code: string | null;
+  name: string | null;
   productCode: string;
   formulationName: string | null;
   massKg: number | null;
@@ -93,8 +93,8 @@ function toEntityOption(r: {
 }): EntityOption {
   return {
     id: r.id,
-    code: r.code,
-    name: r.name,
+    code: r.code ?? r.productCode,
+    name: r.name ?? r.productCode,
     subtitle: formatStockSubtitle(
       r.productCode,
       r.formulationName,
@@ -175,13 +175,11 @@ export async function getBiocharProductEntityById(
   const [result] = await db
     .select(selection)
     .from(biocharProducts)
-    .innerJoin(
+    .leftJoin(
       storageLocations,
       and(
         eq(biocharProducts.storageLocationId, storageLocations.id),
         eq(storageLocations.organizationId, ctx.organizationId),
-        eq(storageLocations.type, "product_bin"),
-        isNull(storageLocations.archivedAt),
       ),
     )
     .leftJoin(

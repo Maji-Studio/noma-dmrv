@@ -295,6 +295,7 @@ export function CreditBatchForm({
             disabled={isSubmitting}
             required
             filterBy={{ usage: "pyrolysis" }}
+            onChange={() => onClearServerError?.()}
           />
         </div>
 

@@ -426,7 +426,7 @@ export function BiocharProductForm({
           <TransferFlowPreview
             sourceBinCode={linkedRunPreview?.biocharStorageLocationCode ?? null}
             availableKg={biocharAvailability?.availableKg ?? null}
-            sourceMassKg={massKgNum}
+            sourceMassKg={requestedBiocharKg}
             destinationMassKg={effectiveWetMassKg}
             destinationBinLabel={
               selectedStorageLocation?.name

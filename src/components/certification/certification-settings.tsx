@@ -191,9 +191,7 @@ export function CertificationSettings() {
                     key={`emission-estimates-${facilityId}`}
                     facilityId={facilityId}
                     mapping={summary.mapping ?? null}
-                    durabilityOption={
-                      selectedFacility?.durabilityOption ?? "1000_year"
-                    }
+                    durabilityOption="200_year"
                   />
                 )}
               </SettingsSection>

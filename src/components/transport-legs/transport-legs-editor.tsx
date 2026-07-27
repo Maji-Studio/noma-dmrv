@@ -222,7 +222,7 @@ export function TransportLegsEditor({
 
       {/* Table */}
       {!deferred && isLoading ? (
-        <TableSkeleton columns={readOnly ? 5 : 6} rows={2} />
+        <TableSkeleton columns={readOnly ? 6 : 7} rows={2} />
       ) : !hasLegs && !inlineForm.open ? (
         <p className="body-small text-[var(--color-text-tertiary)] py-16">
           {emptyMessage ??

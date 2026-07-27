@@ -82,4 +82,35 @@ describe("EntityCertifyReadinessBadge scoped copy", () => {
       /Ready for certification with 1 warning/,
     );
   });
+
+  it("preserves scoped ready copy when advisory warnings exist", () => {
+    const tooltip = EntityCertifyReadinessBadge({
+      readiness: {
+        state: "ready",
+        gaps: [],
+        warnings: [
+          {
+            key: "advisory",
+            label: "Advisory",
+            fields: [],
+            detail: "Review this value",
+          },
+        ],
+      },
+      readyLabel: "Chemistry complete",
+      readinessNoun: "sample chemistry",
+    }) as ReactElement<{
+      children: ReactElement<{
+        "aria-label": string;
+        children: ReactElement<{ label: string }>;
+      }>;
+    }>;
+
+    expect(tooltip.props.children.props["aria-label"]).toMatch(
+      /Chemistry complete with 1 warning/,
+    );
+    expect(tooltip.props.children.props.children.props.label).toBe(
+      "Chemistry complete (1 warning)",
+    );
+  });
 });

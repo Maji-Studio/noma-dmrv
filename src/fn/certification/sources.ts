@@ -5,6 +5,7 @@ import { db, type DbTransaction } from "@/db";
 import { acquireMirrorLock } from "@/lib/isometric/utils/source-lock";
 import {
   getCertifierProjectByFacility,
+  type CertificationSubmissionRow,
   type DocumentRow,
 } from "@/data-access/certification";
 import {
@@ -310,7 +311,9 @@ export interface MirrorResult {
   recovered: boolean;
 }
 
-const SOURCE_READ_ONLY_SUBMISSION_STATUSES = new Set([
+const SOURCE_READ_ONLY_SUBMISSION_STATUSES = new Set<
+  CertificationSubmissionRow["status"]
+>([
   "submitted",
   "accepted",
   "superseded",

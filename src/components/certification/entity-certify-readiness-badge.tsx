@@ -33,6 +33,7 @@ export function EntityCertifyReadinessBadge({
   const gapCount = readiness.gaps.length;
   const warningCount = readiness.warnings.length;
   const hasWarnings = warningCount > 0;
+  const warningReadyLabel = readyLabel ?? "Ready";
 
   const pill = ready && !hasWarnings ? (
     <StatusBadge
@@ -43,7 +44,7 @@ export function EntityCertifyReadinessBadge({
   ) : ready ? (
     <StatusBadge
       status="pending"
-      label={`Ready (${warningCount} warning${warningCount === 1 ? "" : "s"})`}
+      label={`${warningReadyLabel} (${warningCount} warning${warningCount === 1 ? "" : "s"})`}
       icon={<WarningIcon size={14} weight="fill" />}
     />
   ) : (
@@ -78,7 +79,7 @@ export function EntityCertifyReadinessBadge({
         <button
           type="button"
           onClick={(e) => e.stopPropagation()}
-          aria-label={`Ready for ${readinessNoun} with ${warningCount} warning${
+          aria-label={`${readyLabel ?? `Ready for ${readinessNoun}`} with ${warningCount} warning${
             warningCount === 1 ? "" : "s"
           } — submission remains available`}
           className="inline-flex cursor-help rounded-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-interaction)] focus-visible:ring-offset-1"
@@ -155,11 +156,14 @@ function ReadinessGapList({
           <span className="font-medium">Advisory warnings</span>
           <ul className="flex flex-col gap-2">
             {readiness.warnings.map((warning) => (
-              <li key={warning.key} className="flex items-start gap-6">
+              <li
+                key={warning.key}
+                className="flex items-start gap-6 text-[var(--color-text-secondary)]"
+              >
                 <span aria-hidden className="mt-2 leading-none">
                   •
                 </span>
-                <span>{warning.detail}</span>
+                <span>Advisory — {warning.detail}</span>
               </li>
             ))}
           </ul>

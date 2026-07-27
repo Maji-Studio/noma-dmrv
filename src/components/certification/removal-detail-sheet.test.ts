@@ -37,8 +37,9 @@ describe("RemovalDetailSheet sync history contract", () => {
 
     expect(source).toContain("Readiness unavailable for this Removal.");
     expect(source).toContain("Retry readiness");
-    expect(source).toContain("<SourcesPanel");
-    expect(source).toContain("removalId={summary.removalId}");
+    expect(source).toMatch(
+      /<SourcesPanel[\s\S]*?removalId=\{summary\.removalId\}[\s\S]*?\/>/,
+    );
   });
 
   it("renders post-submit attachment health separately from files ready", () => {

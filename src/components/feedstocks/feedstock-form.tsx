@@ -46,6 +46,7 @@ import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
+const SUPPLIER_DEFAULT_DISTANCE_SOURCE = "supplier_default" as const;
 
 const isFeedstockCertifyField = (field: string) =>
   isCertifyFormField("feedstock", field);
@@ -53,7 +54,7 @@ const isFeedstockCertifyField = (field: string) =>
 const FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER = FEEDSTOCK_BIN_TYPES.join(",");
 
 type FeedstockDistanceSourceChoice =
-  | "supplier_default"
+  | typeof SUPPLIER_DEFAULT_DISTANCE_SOURCE
   | DistanceSourceValue;
 
 // ============================================
@@ -233,11 +234,11 @@ export function FeedstockForm({
     distanceSourceChoiceOverride?.supplierId === watchedSupplierId
       ? distanceSourceChoiceOverride.value
       : matchesSupplierDefault
-        ? "supplier_default"
+        ? SUPPLIER_DEFAULT_DISTANCE_SOURCE
         : (draftTransportDistanceSource ?? "");
   const distanceSourceOptions = [
     ...(storedDistanceKm != null
-      ? [{ value: "supplier_default", label: "Supplier default" }]
+      ? [{ value: SUPPLIER_DEFAULT_DISTANCE_SOURCE, label: "Supplier default" }]
       : []),
     { value: "manual", label: DISTANCE_SOURCE_LABELS.manual },
     ...(selectedDistanceSource === "document"
@@ -262,7 +263,7 @@ export function FeedstockForm({
     if (storedDistanceKm != null) {
       setDistanceSourceChoiceOverride({
         supplierId: watchedSupplierId,
-        value: "supplier_default",
+        value: SUPPLIER_DEFAULT_DISTANCE_SOURCE,
       });
     }
     resetField("transportDistanceKm", {
@@ -456,12 +457,12 @@ export function FeedstockForm({
                 value={selectedDistanceSource}
                 onChange={(event) => {
                   if (
-                    event.target.value === "supplier_default" &&
+                    event.target.value === SUPPLIER_DEFAULT_DISTANCE_SOURCE &&
                     storedDistanceKm != null
                   ) {
                     setDistanceSourceChoiceOverride({
                       supplierId: watchedSupplierId,
-                      value: "supplier_default",
+                      value: SUPPLIER_DEFAULT_DISTANCE_SOURCE,
                     });
                     setValue(
                       "transportDistanceKm",
@@ -517,7 +518,7 @@ export function FeedstockForm({
                       placeholder="e.g., 85"
                       disabled={
                         isSubmitting ||
-                        selectedDistanceSource === "supplier_default"
+                        selectedDistanceSource === SUPPLIER_DEFAULT_DISTANCE_SOURCE
                       }
                       error={!!errors.transportDistanceKm}
                       className={isDistanceOverride ? "pr-[104px]" : undefined}
