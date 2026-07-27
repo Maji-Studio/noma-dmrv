@@ -668,6 +668,12 @@ export async function buildRemovalSubmissionBuild(args: {
   const sourceBindingPlan = buildRemovalSourceBindingPlan({
     candidates: sourceBindingCandidates,
     template: defaultTemplate,
+    applicationIdsByCreditBatchId: new Map(
+      ctx.memberBatchClaims.map((batch) => [
+        batch.creditBatchId,
+        batch.applicationIds,
+      ]),
+    ),
   });
 
   const { monitored, fixed, datapointBodyByKey } = resolveTemplateInputs({

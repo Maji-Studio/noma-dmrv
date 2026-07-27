@@ -151,6 +151,8 @@ export interface RemovalSourceBindingPlanEntry {
     componentId: string;
     componentBlueprintKey: string;
     inputKey: string;
+    /** Credit batches whose measurement-sample datapoints this Source targets. */
+    creditBatchIds: string[];
   };
   mappingRevision: string;
 }
@@ -175,6 +177,7 @@ function matchesIntendedComponent(
 export function buildRemovalSourceBindingPlan(args: {
   candidates: SourceBindingCandidate[];
   template: IsometricGhgEntryTemplate;
+  applicationIdsByCreditBatchId: Map<string, string[]>;
 }): RemovalSourceBindingPlanEntry[] {
   return args.candidates
     .map(({ documentId, sourceId, binding }) => {
@@ -196,6 +199,20 @@ export function buildRemovalSourceBindingPlan(args: {
         );
       }
       const component = matchingComponents[0];
+      const creditBatchIds =
+        target.kind === "sequestration"
+          ? Array.from(args.applicationIdsByCreditBatchId.entries())
+              .filter(([, applicationIds]) =>
+                applicationIds.includes(binding.lineage.entityId),
+              )
+              .map(([creditBatchId]) => creditBatchId)
+              .sort()
+          : [];
+      if (target.kind === "sequestration" && creditBatchIds.length === 0) {
+        throw new SafeError(
+          `Inventory Source "${sourceId}" does not resolve to a Removal credit batch; its product-mass target is ambiguous.`,
+        );
+      }
       return {
         documentId,
         sourceId,
@@ -207,6 +224,7 @@ export function buildRemovalSourceBindingPlan(args: {
           componentId: component.id,
           componentBlueprintKey: component.blueprint_key,
           inputKey: target.inputKey,
+          creditBatchIds,
         },
         mappingRevision: binding.mappingRevision,
       };

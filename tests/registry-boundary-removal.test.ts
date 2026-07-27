@@ -111,8 +111,8 @@ function makeBoundarySourceDocument() {
       nomaRoleLabel: "Inventory",
       lineage: {
         entityType: "application",
-        entityId: "app-boundary-1",
-        entityLabel: "Application APP-BOUNDARY-1",
+        entityId: "app-bd-1",
+        entityLabel: "Application APP-BD-001",
       },
       intendedTarget: {
         kind: "sequestration" as const,

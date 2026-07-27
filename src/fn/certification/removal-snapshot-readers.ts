@@ -66,6 +66,7 @@ const removalSourceBindingPlanSchema = z.array(
       componentId: z.string().min(1),
       componentBlueprintKey: z.string().min(1),
       inputKey: z.string().min(1),
+      creditBatchIds: z.array(z.string().min(1)),
     }),
     mappingRevision: z.string().min(1),
   }),

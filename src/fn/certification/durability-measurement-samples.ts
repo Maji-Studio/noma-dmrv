@@ -276,6 +276,11 @@ export interface SubmitDurabilityMeasurementSamplesResult {
 
 const PATCH_UNDEFINED = { __typename: "Undefined" } as const;
 
+interface MeasurementSampleSourceBindingCapture
+  extends MeasurementSampleDatapointCapture {
+  creditBatchId: string | null;
+}
+
 /**
  * Measurement-sample POSTs mint their Datapoints server-side, so the Inventory
  * Source can only be attached after reading the response. This patch must
@@ -283,45 +288,70 @@ const PATCH_UNDEFINED = { __typename: "Undefined" } as const;
  */
 export async function patchMeasurementSampleSourceBindings(args: {
   client: IsometricClient;
-  captures: MeasurementSampleDatapointCapture[];
+  captures: MeasurementSampleSourceBindingCapture[];
   sourceBindingPlan: RemovalSourceBindingPlanEntry[];
 }): Promise<number> {
-  const sourceIds = Array.from(
-    new Set(
-      args.sourceBindingPlan
-        .filter(
-          (entry) =>
-            entry.intendedTarget.kind === "sequestration" &&
-            entry.intendedTarget.inputKey === "product_mass",
-        )
-        .map((entry) => entry.sourceId),
-    ),
-  ).sort();
-  if (sourceIds.length === 0) return 0;
-
   const propertyKey = encodeMeasurementProperty(
     PRODUCT_MASS_MEASUREMENT_PROPERTY,
   );
-  const datapointIds = args.captures.flatMap(
-    (capture) =>
-      capture.datapointIdsByMeasurementProperty.get(propertyKey) ?? [],
-  );
-  for (const datapointId of datapointIds) {
-    const patched = await patchDatapoint(args.client, datapointId, {
-      description: PATCH_UNDEFINED,
-      display_name: PATCH_UNDEFINED,
-      quantity: PATCH_UNDEFINED,
-      source_ids: sourceIds,
-      type: PATCH_UNDEFINED,
-      uncertainty_justification: PATCH_UNDEFINED,
-    });
-    if (sourceIds.some((sourceId) => !patched.source_ids.includes(sourceId))) {
+  let patchedCount = 0;
+  for (const capture of args.captures) {
+    const datapointIds =
+      capture.datapointIdsByMeasurementProperty.get(propertyKey) ?? [];
+    if (datapointIds.length === 0) continue;
+    if (!capture.creditBatchId) {
       throw new SafeError(
-        `Measurement-sample Datapoint ${datapointId} did not confirm its intended Sources; the GHG entry was not created.`,
+        `Measurement sample ${capture.measurementSampleId} returned product_mass without a credit-batch identity; Source attribution is blocked.`,
       );
     }
+    const creditBatchId = capture.creditBatchId;
+    const sourceIds = Array.from(
+      new Set(
+        args.sourceBindingPlan
+          .filter(
+            (entry) =>
+              entry.intendedTarget.kind === "sequestration" &&
+              entry.intendedTarget.inputKey === "product_mass" &&
+              entry.intendedTarget.creditBatchIds.includes(creditBatchId),
+          )
+          .map((entry) => entry.sourceId),
+      ),
+    ).sort();
+    if (sourceIds.length === 0) {
+      throw new SafeError(
+        `Credit batch ${creditBatchId} has no intended Inventory Source for its product_mass Datapoint; Source attribution is blocked.`,
+      );
+    }
+    for (const datapointId of datapointIds) {
+      const patched = await patchDatapoint(args.client, datapointId, {
+        description: PATCH_UNDEFINED,
+        display_name: PATCH_UNDEFINED,
+        quantity: PATCH_UNDEFINED,
+        source_ids: sourceIds,
+        type: PATCH_UNDEFINED,
+        uncertainty_justification: PATCH_UNDEFINED,
+      });
+      if (sourceIds.some((sourceId) => !patched.source_ids.includes(sourceId))) {
+        throw new SafeError(
+          `Measurement-sample Datapoint ${datapointId} did not confirm its intended Sources; the GHG entry was not created.`,
+        );
+      }
+      patchedCount += 1;
+    }
   }
-  return datapointIds.length;
+  return patchedCount;
+}
+
+function creditBatchIdForSubmission(
+  submission: DurabilityMeasurementSampleSubmission,
+): string | null {
+  for (const prefix of ["pb:", "pb-unsampled:"]) {
+    if (submission.operationKey.startsWith(prefix)) {
+      const creditBatchId = submission.operationKey.slice(prefix.length);
+      return creditBatchId.length > 0 ? creditBatchId : null;
+    }
+  }
+  return null;
 }
 
 /**
@@ -339,6 +369,7 @@ export async function submitDurabilityMeasurementSamples(
   const client = await getIsometricClientForOrg(args.orgCtx.organizationId);
   let submitted = 0;
   const samples: MeasurementSampleDatapointCapture[] = [];
+  const sourceBindingCaptures: MeasurementSampleSourceBindingCapture[] = [];
   for (const submission of args.submissions) {
     let resolvedSample: IsometricMeasurementSample | null = null;
     await performRegistryCreate({
@@ -373,14 +404,20 @@ export async function submitDurabilityMeasurementSamples(
         `Measurement sample ${submission.supplierRefId} was created or reconciled without a response body; its sequestration datapoint IDs cannot be captured.`,
       );
     }
-    samples.push(
-      captureMeasurementSampleDatapointIds(resolvedSample, submission.body),
+    const capture = captureMeasurementSampleDatapointIds(
+      resolvedSample,
+      submission.body,
     );
+    samples.push(capture);
+    sourceBindingCaptures.push({
+      ...capture,
+      creditBatchId: creditBatchIdForSubmission(submission),
+    });
     submitted += 1;
   }
   await patchMeasurementSampleSourceBindings({
     client,
-    captures: samples,
+    captures: sourceBindingCaptures,
     sourceBindingPlan: args.sourceBindingPlan,
   });
   return {

@@ -197,11 +197,15 @@ describe("buildRemovalSourceBindingPlan", () => {
       })!,
     },
   ];
+  const applicationIdsByCreditBatchId = new Map([
+    ["credit-batch-1", ["application-1"]],
+  ]);
 
   it("persists source identity, Noma role, lineage, target, and revision", () => {
     const plan = buildRemovalSourceBindingPlan({
       candidates: classified,
       template: template as never,
+      applicationIdsByCreditBatchId,
     });
 
     expect(plan).toContainEqual({
@@ -215,6 +219,7 @@ describe("buildRemovalSourceBindingPlan", () => {
         componentId: "component-sequestration",
         componentBlueprintKey: "carbon_rich_substance_sequestration",
         inputKey: "product_mass",
+        creditBatchIds: ["credit-batch-1"],
       },
       mappingRevision: SOURCE_BINDING_MAPPING_REVISION,
     });
@@ -224,6 +229,7 @@ describe("buildRemovalSourceBindingPlan", () => {
     const plan = buildRemovalSourceBindingPlan({
       candidates: classified,
       template: template as never,
+      applicationIdsByCreditBatchId,
     });
 
     expect(
@@ -244,5 +250,17 @@ describe("buildRemovalSourceBindingPlan", () => {
         inputKey: "electricity_use",
       }),
     ).toEqual([]);
+  });
+
+  it("fails closed when Inventory lineage does not resolve to a credit batch", () => {
+    expect(() =>
+      buildRemovalSourceBindingPlan({
+        candidates: [classified[0]],
+        template: template as never,
+        applicationIdsByCreditBatchId: new Map([
+          ["credit-batch-1", ["another-application"]],
+        ]),
+      }),
+    ).toThrow(/does not resolve to a Removal credit batch/i);
   });
 });

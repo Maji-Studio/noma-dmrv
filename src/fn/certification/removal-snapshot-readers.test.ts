@@ -19,6 +19,7 @@ describe("readRemovalSourceBindingPlan", () => {
           componentId: "component-1",
           componentBlueprintKey: "biochar_sequestration_1000_year",
           inputKey: "product_mass",
+          creditBatchIds: ["credit-batch-1"],
         },
         mappingRevision: "revision-1",
       },
@@ -35,6 +36,36 @@ describe("readRemovalSourceBindingPlan", () => {
     expect(() =>
       readRemovalSourceBindingPlan({
         payloadSnapshot: {},
+      } as never),
+    ).toThrow(/Source binding plan/i);
+  });
+
+  it("fails closed when a stored sequestration target has no credit-batch scope", () => {
+    expect(() =>
+      readRemovalSourceBindingPlan({
+        payloadSnapshot: {
+          sourceBindingPlan: [
+            {
+              documentId: "document-1",
+              sourceId: "source-1",
+              nomaRole: "inventory",
+              lineage: {
+                entityType: "application",
+                entityId: "application-1",
+                entityLabel: "Application APP-001",
+              },
+              intendedTarget: {
+                kind: "sequestration",
+                groupKey: "co2-stored",
+                componentId: "component-1",
+                componentBlueprintKey:
+                  "biochar_sequestration_1000_year",
+                inputKey: "product_mass",
+              },
+              mappingRevision: "revision-1",
+            },
+          ],
+        },
       } as never),
     ).toThrow(/Source binding plan/i);
   });

@@ -223,6 +223,18 @@ export class FakeIsometricRegistry {
       // "multiple" arm exists for — so no uniqueness is enforced here.
       return this.seedGhgStatement({ projectId: project_id, endOn: end_on });
     }
+    const patchedDatapoint = path.match(/^\/datapoints\/([^/]+)$/);
+    if (method === "PATCH" && patchedDatapoint) {
+      const record = this.findById(
+        this.datapoints,
+        decodeURIComponent(patchedDatapoint[1]),
+        method,
+        path,
+        ApiError,
+      );
+      Object.assign(record, body as Record<string, unknown>);
+      return record;
+    }
     if (method === "GET" && path === "/datapoints") {
       return paginateSlice(this.filterRecords(this.datapoints, query), query);
     }
@@ -351,12 +363,19 @@ export class FakeIsometricRegistry {
   ): FakeRegistryRecord {
     const payload = (body ?? {}) as Record<string, unknown>;
     const values = Array.isArray(payload.values) ? payload.values : [];
+    const responseValues = values.map((value) => ({
+      ...(value as Record<string, unknown>),
+      datapoint_id: this.nextId("dtp"),
+    }));
+    for (const value of responseValues) {
+      this.datapoints.push({
+        id: value.datapoint_id,
+        source_ids: [],
+      });
+    }
     const response = {
       ...payload,
-      values: values.map((value) => ({
-        ...(value as Record<string, unknown>),
-        datapoint_id: this.nextId("dtp"),
-      })),
+      values: responseValues,
     };
     return this.create(
       this.measurementSamples,

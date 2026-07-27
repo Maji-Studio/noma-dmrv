@@ -63,6 +63,27 @@ const TEMPLATE_ID = "rvt_boundary_1000";
 const RTC_ID = "rtc_boundary_1000";
 const PROJECT_ID = "prj_boundary_1000";
 const SAMPLE_REF = "nm-mts-boundary-pb-batch-v1";
+const SOURCE_BINDING_PLAN = [
+  {
+    documentId: "document-boundary-inventory",
+    sourceId: "source-boundary-inventory",
+    nomaRole: "inventory",
+    lineage: {
+      entityType: "application",
+      entityId: "application-boundary",
+      entityLabel: "Application APP-BOUNDARY",
+    },
+    intendedTarget: {
+      kind: "sequestration",
+      groupKey: "co2-stored",
+      componentId: RTC_ID,
+      componentBlueprintKey: "biochar_sequestration_1000_year",
+      inputKey: "product_mass",
+      creditBatchIds: ["batch-boundary"],
+    },
+    mappingRevision: "source-binding-boundary-revision",
+  },
+] as const;
 
 const log = {
   info: vi.fn(),
@@ -218,7 +239,7 @@ describe("1000-year sequestration registry boundary", () => {
           label: "production batch CB-BOUNDARY",
         },
       ],
-      sourceBindingPlan: [],
+      sourceBindingPlan: SOURCE_BINDING_PLAN as never,
       log,
     });
 
@@ -239,7 +260,7 @@ describe("1000-year sequestration registry boundary", () => {
           label: "production batch CB-BOUNDARY",
         },
       ],
-      sourceBindingPlan: [],
+      sourceBindingPlan: SOURCE_BINDING_PLAN as never,
       log,
     });
     expect(registry.requestCount("POST", "/measurement_samples")).toBe(1);

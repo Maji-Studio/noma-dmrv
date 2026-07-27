@@ -94,6 +94,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
           {
             measurementSampleId: "measurement-sample-1",
             supplierReferenceId: "sample-ref-1",
+            creditBatchId: "credit-batch-1",
             datapointIdsByMeasurementProperty: new Map([
               [productMassProperty, ["datapoint-product-mass"]],
               ["mass_fraction_dry_basis::total_carbon", ["datapoint-carbon"]],
@@ -116,6 +117,7 @@ describe("patchMeasurementSampleSourceBindings", () => {
               componentId: "component-sequestration",
               componentBlueprintKey: "biochar_sequestration_1000_year",
               inputKey: "product_mass",
+              creditBatchIds: ["credit-batch-1"],
             },
             mappingRevision: "revision-1",
           },
@@ -127,6 +129,91 @@ describe("patchMeasurementSampleSourceBindings", () => {
     expect(patch).toHaveBeenCalledWith(
       "/datapoints/datapoint-product-mass",
       expect.objectContaining({ source_ids: ["source-inventory"] }),
+    );
+  });
+
+  it("keeps Inventory Sources scoped to each credit batch's product_mass Datapoint", async () => {
+    const patch = vi.fn(async (path: string, body: { source_ids: string[] }) => ({
+      id: path.split("/").at(-1),
+      source_ids: body.source_ids,
+    }));
+    const productMassProperty = encodeMeasurementProperty(
+      PRODUCT_MASS_MEASUREMENT_PROPERTY,
+    );
+
+    await expect(
+      patchMeasurementSampleSourceBindings({
+        client: { patch } as never,
+        captures: [
+          {
+            measurementSampleId: "measurement-sample-a",
+            supplierReferenceId: "sample-ref-a",
+            creditBatchId: "credit-batch-a",
+            datapointIdsByMeasurementProperty: new Map([
+              [productMassProperty, ["datapoint-product-mass-a"]],
+            ]),
+          },
+          {
+            measurementSampleId: "measurement-sample-b",
+            supplierReferenceId: "sample-ref-b",
+            creditBatchId: "credit-batch-b",
+            datapointIdsByMeasurementProperty: new Map([
+              [productMassProperty, ["datapoint-product-mass-b"]],
+            ]),
+          },
+        ],
+        sourceBindingPlan: [
+          {
+            documentId: "document-inventory-a",
+            sourceId: "source-inventory-a",
+            nomaRole: "inventory",
+            lineage: {
+              entityType: "application",
+              entityId: "application-a",
+              entityLabel: "Application APP-A",
+            },
+            intendedTarget: {
+              kind: "sequestration",
+              groupKey: "co2-stored",
+              componentId: "component-sequestration",
+              componentBlueprintKey: "biochar_sequestration_1000_year",
+              inputKey: "product_mass",
+              creditBatchIds: ["credit-batch-a"],
+            },
+            mappingRevision: "revision-1",
+          },
+          {
+            documentId: "document-inventory-b",
+            sourceId: "source-inventory-b",
+            nomaRole: "inventory",
+            lineage: {
+              entityType: "application",
+              entityId: "application-b",
+              entityLabel: "Application APP-B",
+            },
+            intendedTarget: {
+              kind: "sequestration",
+              groupKey: "co2-stored",
+              componentId: "component-sequestration",
+              componentBlueprintKey: "biochar_sequestration_1000_year",
+              inputKey: "product_mass",
+              creditBatchIds: ["credit-batch-b"],
+            },
+            mappingRevision: "revision-1",
+          },
+        ],
+      }),
+    ).resolves.toBe(2);
+
+    expect(patch).toHaveBeenNthCalledWith(
+      1,
+      "/datapoints/datapoint-product-mass-a",
+      expect.objectContaining({ source_ids: ["source-inventory-a"] }),
+    );
+    expect(patch).toHaveBeenNthCalledWith(
+      2,
+      "/datapoints/datapoint-product-mass-b",
+      expect.objectContaining({ source_ids: ["source-inventory-b"] }),
     );
   });
 });
