@@ -1038,4 +1038,63 @@ describe("submitRemoval — durability measurement-samples gate (Phase 3, staged
     expect(isometric.createGhgEntry).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
   });
+
+  it("rejects 200-year Removal submissions before any registry mutation or ledger claim when the flag is on", async () => {
+    setDurabilityMeasurementSamplesLive(true);
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+      ...makeContext(),
+      defaultTemplate: makeSequestrationTemplate(),
+    });
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow(/200-year.*post-MVP.*not enabled/i);
+
+    expect(isometric.createDatapoint).not.toHaveBeenCalled();
+    expect(
+      durabilitySamples.submitDurabilityMeasurementSamples,
+    ).not.toHaveBeenCalled();
+    expect(isometric.createGhgEntry).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
+  });
+
+  it("rejects unsampled Method B before any registry mutation or ledger claim when the flag is on", async () => {
+    setDurabilityMeasurementSamplesLive(true);
+    const ctx = makeContext();
+    const unsampledBatches = ctx.batchesWithSamples.map((batch) => ({
+      ...batch,
+      durabilityOption: "1000_year" as const,
+      sampling: "unsampled" as const,
+    }));
+    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
+      ...ctx,
+      defaultTemplate: make1000YearSequestrationTemplate(),
+      batchesWithSamples: unsampledBatches,
+      memberBatches: ctx.memberBatches.map((batch) => ({
+        ...batch,
+        durabilityOption: "1000_year" as const,
+        sampling: "unsampled" as const,
+      })),
+      // Exercise the submit payload builder's server-side capability guard
+      // independently of the earlier readiness model.
+      durabilityGateBlockers: [],
+    });
+
+    await expect(
+      submitRemoval({
+        orgCtx: makeTestOrgContext(USER_ID),
+        removalId: REMOVAL_ID,
+      }),
+    ).rejects.toThrow(/unsampled Method B.*post-MVP.*not enabled/i);
+
+    expect(isometric.createDatapoint).not.toHaveBeenCalled();
+    expect(
+      durabilitySamples.submitDurabilityMeasurementSamples,
+    ).not.toHaveBeenCalled();
+    expect(isometric.createGhgEntry).not.toHaveBeenCalled();
+    expect(storedRows).toHaveLength(0);
+  });
 });

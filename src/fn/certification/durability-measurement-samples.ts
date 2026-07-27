@@ -1,11 +1,10 @@
 /**
- * 200-year durability measurement-samples submission step (Tier-1 Phase 3).
+ * Sampled 1000-year durability measurement-samples submission step.
  *
  * Server-internal core (no "use server" — it takes an explicit `orgCtx` and runs
  * inside the submit pipeline, which already resolved the caller). For each member
- * credit batch it POSTs one `biochar_production_batch` measurement sample (H/C +
- * total/inorganic carbon + product mass, each value a per-batch mean ± std-dev),
- * plus one `biochar_soil` sample carrying the facility reference soil temperature.
+ * credit batch it POSTs one `biochar_production_batch` measurement sample
+ * (total carbon + product mass, with carbon supplied as sampled replicates).
  * Measurement-sample response datapoints bind inputs declared with the
  * `measurement-property` source. Values retained only as evidence (currently
  * 1000-year `s_fraction`) are bound through direct orchestrator datapoints.
@@ -13,8 +12,8 @@
  * ─── ⚠️ STAGED, NOT LIVE — gated on `DURABILITY_MEASUREMENT_SAMPLES_LIVE` ──────
  * Explicit binding is implemented for the verified 1000-year component. The
  * 200-year H/C unit scaling and property/input table remain unverified (see
- * `docs/open-questions.md`), so the registry POST stays behind this flag. While
- * it is `false`,
+ * `docs/open-questions.md`) and unsampled Method B remains post-MVP, so both
+ * combinations fail closed even when this gate is enabled. While it is `false`,
  * `submitRemoval` hard-blocks any template that declares a sequestration
  * component, so this step never runs against the registry. The operator enables
  * the flag only for the sandbox after validating the active durability path.
@@ -24,6 +23,7 @@
  * the versioned supplier reference, mirroring the datapoint/removal/sensor flows.
  */
 import type { OrgContext } from "@/lib/auth/server";
+import { appendSubmissionJournal } from "@/data-access/certification";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import { env } from "@/config/env";
 import type { Logger } from "@/lib/log";
@@ -35,18 +35,14 @@ import {
   captureMeasurementSampleDatapointIds,
   createMeasurementSample,
   findMeasurementSampleBySupplierRef,
+  getMeasurementSampleById,
   mergeMeasurementSampleDatapointIds,
   type CreateMeasurementSampleRequest,
   type IsometricMeasurementSample,
   type MeasurementSampleDatapointCapture,
 } from "@/lib/isometric/measurement-samples";
 import {
-  buildBiocharProductionBatchSample,
-  buildBiocharSoilSample,
-  buildBiocharUnsampledBatchSample,
   build1000YearSequestrationSample,
-  selectSequestrationBlueprintKey,
-  SEQUESTRATION_BLUEPRINT_SAMPLED,
 } from "@/lib/isometric/transformers/measurement-sample";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import { SafeError } from "@/lib/errors";
@@ -59,12 +55,16 @@ import { REMOVAL_ENTITY_TYPE } from "./shared";
 import type { RemovalSourceBindingPlanEntry } from "@/lib/certification/removal-source-bindings";
 import { encodeMeasurementProperty } from "@/lib/isometric/utils/measurement-property";
 import { PRODUCT_MASS_MEASUREMENT_PROPERTY } from "@/lib/isometric/transformers/measurement-sample";
+import {
+  addJournaledMeasurementSample,
+  readJournaledMeasurementSamples,
+  type JournaledMeasurementSample,
+} from "@/lib/certification/measurement-sample-journal";
 
 /**
- * Sandbox-only gate for durability measurement-sample POSTs. The 1000-year
- * explicit binding is implemented, while the 200-year table still awaits its
- * H/C unit confirm. `submitRemoval` blocks every sequestration-template
- * submission while this is off, so it can never create an emissions-only entry.
+ * Sandbox-only gate for sampled 1000-year measurement-sample POSTs.
+ * `submitRemoval` blocks every sequestration-template submission while this is
+ * off, so checked-in code cannot create an emissions-only entry.
  */
 export const DURABILITY_MEASUREMENT_SAMPLES_LIVE =
   env.ISOMETRIC_ENVIRONMENT === "sandbox" &&
@@ -89,28 +89,43 @@ export interface BuildDurabilityMeasurementSampleSubmissionsArgs {
   batches: CreditBatchWithSamples[];
   /** Per-run applied-biochar fraction (scales each batch's product mass). */
   attributionByRunId: Map<string, number>;
-  /** Facility reference soil temperature; required only for 200-year batches. */
+  /** Retained in the shared claim shape; unused by sampled 1000-year submissions. */
   facilityReferenceSoilTemperature: FacilityReferenceSoilTemperature | null;
   /** ISO date-time the chemistry is reported for (the removal window end). */
   measuredAt: string;
 }
 
 /**
- * Build the ordered measurement-sample submissions for a removal: one
- * `biochar_production_batch` per credit batch, then the single `biochar_soil`
- * facility-reference sample. Pure — no I/O.
- *
- * A SAMPLED batch routes to the `_c_org` blueprint carrying its pooled chemistry
- * + mass. An UNSAMPLED batch (validated against computed Method-B eligibility
- * when it is created) routes to the
- * `_unsampled` blueprint carrying mass only — the registry derives its carbon +
- * durable fraction from the process's sampled history (D8). The whole step stays behind
- * `DURABILITY_MEASUREMENT_SAMPLES_LIVE`; the `_unsampled` wire format is a sandbox
- * confirm (see `buildBiocharUnsampledBatchSample`).
+ * The only durability capability approved for activation is sampled Method A
+ * at 1000 years. Keep this assertion reusable so the orchestrator can reject
+ * unsupported combinations before payload compilation while the builder
+ * remains safe for any other server-side caller.
+ */
+export function assertSupportedDurabilityConfiguration(
+  batches: Pick<CreditBatchWithSamples, "sampling" | "durabilityOption">[],
+): void {
+  if (batches.some((batch) => batch.sampling !== "sampled")) {
+    throw new SafeError(
+      "Unsampled Method B Removal submission is post-MVP and is not enabled.",
+    );
+  }
+  if (batches.some((batch) => batch.durabilityOption !== "1000_year")) {
+    throw new SafeError(
+      "200-year Removal submission is post-MVP and is not enabled.",
+    );
+  }
+}
+
+/**
+ * Builds the single sampled 1000-year `biochar_production_batch` measurement
+ * sample. The activation slice is deliberately narrower than the transformers
+ * available below it: 200-year and unsampled Method B remain post-MVP and fail
+ * before a registry request can be materialized.
  */
 export function buildDurabilityMeasurementSampleSubmissions(
   args: BuildDurabilityMeasurementSampleSubmissionsArgs,
 ): DurabilityMeasurementSampleSubmission[] {
+  assertSupportedDurabilityConfiguration(args.batches);
   const thousandYearBatches = args.batches.filter(
     (batch) => batch.durabilityOption === "1000_year",
   );
@@ -127,10 +142,6 @@ export function buildDurabilityMeasurementSampleSubmissions(
   const sourceBatchById = new Map(
     args.batches.map((batch) => [batch.creditBatchId, batch]),
   );
-  const samplingByBatch = new Map(
-    args.batches.map((batch) => [batch.creditBatchId, batch.sampling]),
-  );
-
   const submissions: DurabilityMeasurementSampleSubmission[] = [];
   for (const batch of perBatch) {
     const supplierRefId = buildMeasurementSampleReference({
@@ -141,21 +152,6 @@ export function buildDurabilityMeasurementSampleSubmissions(
     });
 
     const sourceBatch = sourceBatchById.get(batch.creditBatchId);
-    const sampling = samplingByBatch.get(batch.creditBatchId) ?? "sampled";
-    if (sampling === "unsampled") {
-      submissions.push({
-        operationKey: `pb-unsampled:${batch.creditBatchId}`,
-        supplierRefId,
-        body: buildBiocharUnsampledBatchSample({
-          batch,
-          projectId: args.externalProjectId,
-          supplierRefId,
-          measuredAt: args.measuredAt,
-        }),
-        label: `unsampled production batch ${batch.creditBatchCode}`,
-      });
-      continue;
-    }
     if (sourceBatch?.durabilityOption === "1000_year") {
       // Replicate order flows verbatim into the submission body's `values`
       // list and therefore into the semantic change-detection hash
@@ -204,53 +200,6 @@ export function buildDurabilityMeasurementSampleSubmissions(
       }
       continue;
     }
-
-    // The blueprint is the registry-facing sampled/unsampled distinction (D6);
-    // dispatch from the immutable stored batch choice.
-    const blueprintKey = selectSequestrationBlueprintKey({
-      sampling,
-    });
-
-    if (blueprintKey === SEQUESTRATION_BLUEPRINT_SAMPLED) {
-      const body = buildBiocharProductionBatchSample({
-        batch,
-        projectId: args.externalProjectId,
-        supplierRefId,
-        measuredAt: args.measuredAt,
-      });
-      // Defensive: a sampled batch without a usable H/C anchor yields no body.
-      if (!body) continue;
-      submissions.push({
-        operationKey: `pb:${batch.creditBatchId}`,
-        supplierRefId,
-        body,
-        label: `production batch ${batch.creditBatchCode}`,
-      });
-    }
-  }
-
-  if (args.batches.some((batch) => batch.durabilityOption === "200_year")) {
-    if (!args.facilityReferenceSoilTemperature) {
-      throw new Error(
-        "A facility reference soil temperature is required for 200-year durability samples.",
-      );
-    }
-    const soilSupplierRefId = buildMeasurementSampleReference({
-      removalId: args.removalId,
-      role: "soil",
-      version: args.version,
-    });
-    submissions.push({
-      operationKey: "soil",
-      supplierRefId: soilSupplierRefId,
-      body: buildBiocharSoilSample({
-        soilTemp: args.facilityReferenceSoilTemperature,
-        projectId: args.externalProjectId,
-        supplierRefId: soilSupplierRefId,
-        measuredAt: args.measuredAt,
-      }),
-      label: "facility soil reference",
-    });
   }
 
   return submissions;
@@ -259,8 +208,11 @@ export function buildDurabilityMeasurementSampleSubmissions(
 export interface SubmitDurabilityMeasurementSamplesArgs {
   orgCtx: OrgContext;
   removalId: string;
-  /** Ledger row claimed for this attempt — rejected on unrecoverable failure. */
-  submissionRowId: string;
+  /** Claimed ledger row and its immutable snapshot/journal at attempt start. */
+  submissionRow: {
+    id: string;
+    payloadSnapshot: unknown;
+  };
   /** From the claim outcome — a resumed draft reconciles before POSTing. */
   resumed: boolean;
   submissions: DurabilityMeasurementSampleSubmission[];
@@ -367,34 +319,74 @@ export async function submitDurabilityMeasurementSamples(
   args: SubmitDurabilityMeasurementSamplesArgs,
 ): Promise<SubmitDurabilityMeasurementSamplesResult> {
   const client = await getIsometricClientForOrg(args.orgCtx.organizationId);
+  let journaledSamples = readJournaledMeasurementSamples(
+    args.submissionRow.payloadSnapshot,
+  );
   let submitted = 0;
   const samples: MeasurementSampleDatapointCapture[] = [];
   const sourceBindingCaptures: MeasurementSampleSourceBindingCapture[] = [];
   for (const submission of args.submissions) {
     let resolvedSample: IsometricMeasurementSample | null = null;
+    const journaled = journaledSamples.find(
+      (entry) => entry.supplierReferenceId === submission.supplierRefId,
+    );
     await performRegistryCreate({
       orgCtx: args.orgCtx,
       entityType: REMOVAL_ENTITY_TYPE,
       entityId: args.removalId,
-      submissionRowId: args.submissionRowId,
+      submissionRowId: args.submissionRow.id,
       operation: `measurement-sample:create:${submission.operationKey}`,
       requestPayload: submission.body,
       supplierRefId: submission.supplierRefId,
       resumed: args.resumed,
       create: async () => {
         const sample = await createMeasurementSample(client, submission.body);
+        assertMeasurementSampleSupplierReference(
+          sample,
+          submission.supplierRefId,
+        );
         resolvedSample = sample;
         return sample.id;
       },
       reconcile: async () => {
-        const sample = await findMeasurementSampleBySupplierRef(
-          client,
-          submission.supplierRefId,
-        );
+        const sample = journaled
+          ? await getMeasurementSampleById(
+              client,
+              journaled.measurementSampleId,
+            )
+          : await findMeasurementSampleBySupplierRef(
+              client,
+              submission.supplierRefId,
+            );
+        if (sample) {
+          assertMeasurementSampleSupplierReference(
+            sample,
+            submission.supplierRefId,
+          );
+        }
         resolvedSample = sample;
         return supplierRefLookup(
           sample ? { found: true, externalId: sample.id } : { found: false },
         );
+      },
+      onConfirmed: async (externalId) => {
+        if (!resolvedSample || resolvedSample.id !== externalId) {
+          throw new SafeError(
+            `Measurement sample ${submission.supplierRefId} was confirmed without a matching response body; retry is blocked.`,
+          );
+        }
+        const next = addJournaledMeasurementSample(journaledSamples, {
+          supplierReferenceId: submission.supplierRefId,
+          measurementSampleId: externalId,
+        });
+        if (!sameMeasurementSampleJournal(journaledSamples, next)) {
+          await appendSubmissionJournal(
+            args.orgCtx,
+            args.submissionRow.id,
+            { measurementSamples: next },
+          );
+          journaledSamples = next;
+        }
       },
       failureMessagePrefix: `Measurement sample POST failed for ${submission.label}`,
       log: args.log,
@@ -426,4 +418,28 @@ export async function submitDurabilityMeasurementSamples(
     datapointIdsByMeasurementProperty:
       mergeMeasurementSampleDatapointIds(samples),
   };
+}
+
+function assertMeasurementSampleSupplierReference(
+  sample: IsometricMeasurementSample,
+  expected: string,
+): void {
+  if (sample.supplier_reference_id === expected) return;
+  throw new SafeError(
+    `Measurement sample ${sample.id} supplier reference mismatch: expected "${expected}".`,
+  );
+}
+
+function sameMeasurementSampleJournal(
+  left: JournaledMeasurementSample[],
+  right: JournaledMeasurementSample[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every(
+      (entry, index) =>
+        entry.supplierReferenceId === right[index]?.supplierReferenceId &&
+        entry.measurementSampleId === right[index]?.measurementSampleId,
+    )
+  );
 }

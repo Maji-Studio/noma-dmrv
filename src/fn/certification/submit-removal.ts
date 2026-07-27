@@ -39,6 +39,7 @@ import {
 } from "@/lib/isometric/transformers/measurement-sample";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
 import {
+  assertSupportedDurabilityConfiguration,
   DURABILITY_MEASUREMENT_SAMPLES_LIVE,
   submitDurabilityMeasurementSamples,
   type DurabilityMeasurementSampleSubmission,
@@ -283,6 +284,9 @@ async function submitRemovalCore(
         "be bound. Enable DURABILITY_MEASUREMENT_SAMPLES_LIVE only for the " +
         "sandbox after operator validation.",
     );
+  }
+  if (hasDurabilityComponents) {
+    assertSupportedDurabilityConfiguration(ctx.batchesWithSamples);
   }
 
   assertProductionConfirmed(confirmProduction);
@@ -733,8 +737,8 @@ async function runRemovalSubmission({
     ]);
   }
 
-  // Phase 3: POST the durability measurement samples (per-batch chemistry +
-  // facility soil reference) after the datapoint loop, before the removal body.
+  // Phase 3: POST the sampled 1000-year durability measurement sample after
+  // the datapoint loop, before the removal body.
   // Measurement-property inputs bind response datapoints; direct-datapoint
   // inputs (currently 1000-year s_fraction) were already posted through the
   // same idempotent loop above and remain duplicated in the sample as
@@ -752,7 +756,7 @@ async function runRemovalSubmission({
     } = await submitDurabilityMeasurementSamples({
       orgCtx,
       removalId,
-      submissionRowId: row.id,
+      submissionRow: row,
       resumed,
       submissions: durabilityMeasurementSubmissions,
       sourceBindingPlan,

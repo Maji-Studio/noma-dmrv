@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   captureMeasurementSampleDatapointIds,
+  findMeasurementSampleBySupplierRef,
   mergeMeasurementSampleDatapointIds,
   type CreateMeasurementSampleRequest,
   type IsometricMeasurementSample,
@@ -251,5 +252,30 @@ describe("mergeMeasurementSampleDatapointIds", () => {
         "mass_fraction_dry_basis|total_carbon",
       ),
     ).toEqual(["dtp_c1", "dtp_c2"]);
+  });
+});
+
+describe("findMeasurementSampleBySupplierRef", () => {
+  it("stops paginated scanning at the first supplier-reference match", async () => {
+    let yielded = 0;
+    const client = {
+      paginate: async function* () {
+        for (const id of ["before", "target", "after"]) {
+          yielded += 1;
+          yield measurementSample(id, []);
+        }
+      },
+      paginateAll: () => {
+        throw new Error("paginateAll must not be used");
+      },
+    };
+
+    await expect(
+      findMeasurementSampleBySupplierRef(
+        client as never,
+        "ref-target",
+      ),
+    ).resolves.toMatchObject({ id: "target" });
+    expect(yielded).toBe(2);
   });
 });
