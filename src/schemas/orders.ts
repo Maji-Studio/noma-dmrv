@@ -35,7 +35,7 @@ export const orderFormSchema = z.object({
   facilityId: z.string().min(1, "Please select a facility").uuid("Invalid facility"),
   customerId: z.string().min(1, "Please select a customer").uuid("Invalid customer"),
   customerLocationId: emptyToNull.or(z.string().uuid("Invalid customer location")).optional().nullable(),
-  biocharProductId: z.string().min(1, "Please select a biochar product").uuid("Invalid biochar product"),
+  biocharProductId: z.string().min(1, "Please select a product bin").uuid("Invalid product bin selection"),
   orderDate: z.coerce.date({ error: "Order date is required" }),
   quantityKg: z
     .number({ error: "Quantity is required" })

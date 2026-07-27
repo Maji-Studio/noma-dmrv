@@ -547,7 +547,7 @@ describe("parent document retirement", () => {
             feedstock.id,
           ),
         ),
-      ).rejects.toThrow(/Unlink the document/);
+      ).rejects.toThrow(/Remove or replace that document/);
       expect(provider.deleteCalls).toEqual([]);
       expect(
         await db.select().from(transportLegs).where(eq(transportLegs.id, leg.id)),

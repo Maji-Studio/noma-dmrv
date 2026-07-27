@@ -112,7 +112,8 @@ export interface ClaimSubmissionDraftArgs<H> {
   hashOf: (inputs: H) => string;
   // v1's only extra locks: per-document source mirror locks. Acquired
   // sorted, AFTER the mapping lock, so every submit path shares one lock
-  // order with the mirror/unlink/admin-repoint flows (no ABBA deadlock).
+  // order with mirroring, owning-document deletion, and admin-repoint flows
+  // (no ABBA deadlock).
   mirrorDocumentIds?: string[];
   // In-lock re-resolution of hash-covered inputs (e.g. mirrored source IDs).
   // Return `tentative` unchanged when nothing shifted.
@@ -374,15 +375,24 @@ export async function getLatestSubmission(
   // acting within one facility and must not receive another's ledger row.
   expectedFacilityId?: string,
 ): Promise<CertificationSubmissionRow | null> {
+  return getLatestSubmissionWithExecutor(ctx, db, key, expectedFacilityId);
+}
+
+export async function getLatestSubmissionWithExecutor(
+  ctx: OrgContext,
+  executor: DbTransaction | typeof db,
+  key: SubmissionKey,
+  expectedFacilityId?: string,
+): Promise<CertificationSubmissionRow | null> {
   requireOrgScope(ctx);
-  const row = await getLatestSubmissionWithExecutor(ctx, db, key);
+  const row = await readLatestSubmission(ctx, executor, key);
   if (row && expectedFacilityId !== undefined) {
-    await assertSubmissionInFacility(ctx, db, row, expectedFacilityId);
+    await assertSubmissionInFacility(ctx, executor, row, expectedFacilityId);
   }
   return row;
 }
 
-async function getLatestSubmissionWithExecutor(
+async function readLatestSubmission(
   ctx: OrgContext,
   executor: DbTransaction | typeof db,
   key: SubmissionKey,

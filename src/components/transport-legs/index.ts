@@ -7,5 +7,4 @@ export {
 } from "./transport-evidence-documents";
 export {
   ClassifiedTransportEvidenceUploader,
-  TransportDocumentProvenanceControl,
 } from "./classified-transport-evidence-uploader";

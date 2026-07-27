@@ -22,6 +22,22 @@
   transform: translateX(0);
 }
 
+[data-overlay-layer="sheet-backdrop"] {
+  z-index: var(--z-layer-sheet-backdrop);
+}
+
+[data-overlay-layer="sheet"] {
+  z-index: var(--z-layer-sheet);
+}
+
+[data-overlay-layer="dialog-backdrop"] {
+  z-index: var(--z-layer-dialog-backdrop);
+}
+
+[data-overlay-layer="dialog"] {
+  z-index: var(--z-layer-dialog);
+}
+
 :root {
   /* ===== BRAND COLORS ===== */
   --clr-dark-purple: rgba(15, 2, 26, 1);
@@ -151,6 +167,18 @@
   --row-divider: var(--hair-3);
   --row-hover-bg: var(--sea);
   --row-stripe-bg: rgba(15, 2, 26, 0.02);
+
+  /* ===== OVERLAY LAYERS =====
+     Centered dialogs can open from inside a side sheet. Their backdrop must
+     therefore sit above the sheet surface so the whole underlying context is
+     dimmed, while the dialog itself remains above that backdrop. */
+  --z-layer-sheet-backdrop: 40;
+  --z-layer-sheet: 50;
+  --z-layer-dialog-backdrop: 60;
+  --z-layer-dialog: 70;
+  --z-layer-toast: 80;
+  /* Active menus/tooltips must remain operable when a toast overlaps them. */
+  --z-layer-popover: 90;
 
   /* ===== GRAYSCALE PALETTE ===== */
   --color-gray-50: #fafafaff;

@@ -13,7 +13,15 @@
 import { useEffect, useState } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormEntitySelect, FormField, FormInput, FormTextarea, FormSection, FormActions } from "@/components/forms";
+import {
+  FormActions,
+  FormEntitySelect,
+  FormField,
+  FormInput,
+  FormSection,
+  FormTextarea,
+  ResolvedErrorRevalidator,
+} from "@/components/forms";
 import { Button } from "@/components/ui";
 import { PlusIcon, TrashIcon } from "@phosphor-icons/react";
 import {
@@ -176,6 +184,7 @@ export function FormulationForm({
     register,
     handleSubmit,
     control,
+    trigger,
     setValue,
     formState: { errors },
   } = useForm({
@@ -247,6 +256,7 @@ export function FormulationForm({
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {/* Required Fields Section */}
       <FormSection title="Required information" divider={false}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">

@@ -34,6 +34,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FlaskIcon, FireIcon, AtomIcon, ScalesIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, MoistureField, makeCertFieldStatus } from "@/components/forms";
+import { ResolvedErrorRevalidator } from "@/components/forms";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { RATIO_INPUT_MAX, RATIO_MAX_MESSAGE } from "@/schemas/helpers";
 import {
@@ -158,6 +159,7 @@ export function SampleForm({
     register,
     handleSubmit,
     control,
+    trigger,
     watch,
     setValue,
     setError,
@@ -332,6 +334,7 @@ export function SampleForm({
           Transport) that must live outside it — one continuous numbered rail. */}
       <FormSpine control={control}>
       <form id={formId} onSubmit={handleFormSubmit}>
+        <ResolvedErrorRevalidator control={control} trigger={trigger} />
         {/* ── Sample Information ── */}
         <FormSection
           title="Sample information"

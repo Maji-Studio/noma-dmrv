@@ -1,27 +1,37 @@
 /**
- * Biochar-product options for searchable entity selection.
+ * Product-bin options for the order form's searchable entity selection.
  *
- * The subtitle shows physically-remaining stock per product batch: the produced
- * wet mass (massKg) minus the wet mass already delivered out of the bin. Only
- * deliveries with status 'delivered' are subtracted — an 'upcoming' delivery has
- * not physically left storage yet. The biocharStorageInventory table is not yet
- * wired into delivery flows, so delivered wet mass is the reliable signal for
- * what has left the bin.
+ * The selected id remains the exact biochar-product batch id required by order
+ * traceability and delivery stock guards, while the operator-facing identity is
+ * the product bin that physically holds that batch. The subtitle disambiguates
+ * multiple batches in one bin and shows physically remaining stock.
  */
 
 import { and, desc, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { numericAggregate, sumNumeric } from "@/db/aggregate";
-import { biocharProducts, deliveries, formulations, orders } from "@/db/schema";
+import {
+  biocharProducts,
+  deliveries,
+  formulations,
+  orders,
+  storageLocations,
+} from "@/db/schema";
 import type { EntityOption } from "@/components/forms/entity-select/types";
 import type { OrgContext } from "@/lib/auth/server";
 import { requireOrgScope } from "../utils";
 import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
 
 
-function formatStockSubtitle(massKg: number | null, deliveredKg: number): string {
+function formatStockSubtitle(
+  productCode: string,
+  formulationName: string | null,
+  massKg: number | null,
+  deliveredKg: number,
+): string {
   const remaining = Math.max(0, (massKg ?? 0) - deliveredKg);
-  return `${Math.round(remaining).toLocaleString()} kg in bin`;
+  const productLabel = formulationName ?? PURE_BIOCHAR_LABEL;
+  return `${productLabel} · ${Math.round(remaining).toLocaleString()} kg available · batch ${productCode}`;
 }
 
 // Total delivered wet mass per product batch. A delivery's product is its own
@@ -61,7 +71,9 @@ function buildSelection(
 ) {
   return {
     id: biocharProducts.id,
-    code: biocharProducts.code,
+    code: storageLocations.code,
+    name: storageLocations.name,
+    productCode: biocharProducts.code,
     formulationName: formulations.name,
     massKg: biocharProducts.massKg,
     totalDeliveredKg: numericAggregate(
@@ -72,16 +84,23 @@ function buildSelection(
 
 function toEntityOption(r: {
   id: string;
-  code: string;
+  code: string | null;
+  name: string | null;
+  productCode: string;
   formulationName: string | null;
   massKg: number | null;
   totalDeliveredKg: number;
 }): EntityOption {
   return {
     id: r.id,
-    code: r.code,
-    name: r.formulationName ?? PURE_BIOCHAR_LABEL,
-    subtitle: formatStockSubtitle(r.massKg, r.totalDeliveredKg),
+    code: r.code ?? r.productCode,
+    name: r.name ?? r.productCode,
+    subtitle: formatStockSubtitle(
+      r.productCode,
+      r.formulationName,
+      r.massKg,
+      r.totalDeliveredKg,
+    ),
   };
 }
 
@@ -107,7 +126,9 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
     conditions.push(
       or(
         ilike(biocharProducts.code, searchPattern),
-        ilike(formulations.name, searchPattern)
+        ilike(formulations.name, searchPattern),
+        ilike(storageLocations.code, searchPattern),
+        ilike(storageLocations.name, searchPattern),
       )!
     );
   }
@@ -117,6 +138,15 @@ export async function getBiocharProducts(ctx: OrgContext, params: {
   const results = await db
     .select(selection)
     .from(biocharProducts)
+    .innerJoin(
+      storageLocations,
+      and(
+        eq(biocharProducts.storageLocationId, storageLocations.id),
+        eq(storageLocations.organizationId, ctx.organizationId),
+        eq(storageLocations.type, "product_bin"),
+        isNull(storageLocations.archivedAt),
+      ),
+    )
     .leftJoin(
       formulations,
       and(
@@ -145,6 +175,13 @@ export async function getBiocharProductEntityById(
   const [result] = await db
     .select(selection)
     .from(biocharProducts)
+    .leftJoin(
+      storageLocations,
+      and(
+        eq(biocharProducts.storageLocationId, storageLocations.id),
+        eq(storageLocations.organizationId, ctx.organizationId),
+      ),
+    )
     .leftJoin(
       formulations,
       and(

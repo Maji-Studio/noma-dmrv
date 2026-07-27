@@ -70,6 +70,17 @@ async function openNewSupplierLocationEditor(page: Page, facilityId: string) {
   return dialog;
 }
 
+async function openNewCustomerLocationEditor(page: Page, facilityId: string) {
+  await page.goto(`/customers?facility=${facilityId}`);
+  await page.getByRole("button", { name: "New Customer" }).click();
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Add Location" }).click();
+
+  return dialog;
+}
+
 test.describe("PositionPicker + CALC (stub geo provider)", () => {
   test.beforeEach(async ({ adminPage }) => {
     await blockExternalMapHosts(adminPage);
@@ -194,7 +205,7 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     );
     await expect(
       dialog.getByTestId("pending-loc-distance-distance-source")
-    ).toContainText("Map estimate");
+    ).toContainText("Route calculation");
 
     // Hand-editing the CALC'd value flips provenance to manual.
     await distanceInput.fill("123");
@@ -222,5 +233,42 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
     await dialog.locator("#pending-loc-gps-latitude").fill(String(DAR.lat));
     await dialog.locator("#pending-loc-gps-longitude").fill(String(DAR.lng));
     await expect(calcButton).toBeEnabled();
+  });
+
+  test("customer create sheet uses the complete customer location field set", async ({
+    adminPage: page,
+    seededData,
+  }) => {
+    const dialog = await openNewCustomerLocationEditor(
+      page,
+      seededData.facility.id
+    );
+
+    await expect(dialog.getByLabel("Location name")).toBeVisible();
+    await expect(dialog.getByLabel("Country")).toBeVisible();
+    await expect(dialog.getByLabel("State / region")).toBeVisible();
+    await expect(dialog.getByLabel("City")).toBeVisible();
+    await expect(dialog.getByLabel("Address / description")).toBeVisible();
+    await expect(dialog.getByText("Application site position")).toBeVisible();
+    await expect(
+      dialog.getByPlaceholder(/Address search|Search address or place/i)
+    ).toBeVisible();
+    await expect(dialog.getByLabel("GPS latitude")).toBeVisible();
+    await expect(dialog.getByLabel("GPS longitude")).toBeVisible();
+    await expect(
+      dialog.getByLabel("Default soil temperature (°C)")
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("spinbutton", {
+        name: "One-way distance from facility (per leg, km)",
+      })
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("button", {
+        name: /Calculate road distance selected facility to application site position/i,
+      })
+    ).toBeVisible();
+    await expect(dialog.getByLabel("Set as default destination")).toBeVisible();
+    await expect(page.getByText("Application error")).toBeHidden();
   });
 });

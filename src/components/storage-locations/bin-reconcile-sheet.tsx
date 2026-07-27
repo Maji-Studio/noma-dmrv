@@ -4,7 +4,13 @@ import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { SlideOverPanel } from "@/components/ui/slide-over-panel";
-import { FormField, FormInput, FormTextarea, MoistureField } from "@/components/forms";
+import {
+  FormField,
+  FormInput,
+  FormTextarea,
+  MoistureField,
+  ResolvedErrorRevalidator,
+} from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import { useToast } from "@/components/ui/toast";
@@ -27,6 +33,10 @@ import {
 import { toNumberOrNull } from "@/schemas/helpers";
 import type { StorageLocationWithFacility } from "@/data-access/storage-locations";
 import { binCurrentMassKg } from "./bin-display";
+import {
+  binStockOverdrawMessage,
+  isStockOverdraw,
+} from "@/lib/stock-overdraw";
 
 type ReconcileMode = "stock-take" | "loss";
 
@@ -153,6 +163,7 @@ function StockTakeForm({
     handleSubmit,
     setError,
     control,
+    trigger,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(stockTakeFormSchema),
@@ -227,6 +238,7 @@ function StockTakeForm({
 
   return (
     <form onSubmit={onSubmit} className="flex flex-1 flex-col space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormField
         id="counted"
         label={countedLabel}
@@ -332,21 +344,44 @@ function LossForm({
 }) {
   const toast = useToast();
   const [serverError, setServerError] = useState<string | null>(null);
+  const [fieldServerError, setFieldServerError] = useState<{
+    message: string;
+    lossMassKg: number;
+  } | null>(null);
   const recordLoss = useRecordLoss();
   const lane = laneForStorageType(storageLocation.type);
+  const availableKg = binCurrentMassKg(storageLocation);
 
   const {
     register,
     handleSubmit,
-    setError,
+    control,
+    trigger,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(recordLossFormSchema),
     defaultValues: { reason: "" },
   });
+  const lossInput = useWatch({ control, name: "lossMassKg" });
+  const lossMassKg = previewNumber(lossInput);
+  const liveStockError =
+    lossMassKg !== null &&
+    isStockOverdraw(lossMassKg, availableKg)
+      ? binStockOverdrawMessage(lane, availableKg, lossMassKg)
+      : undefined;
+  const currentFieldServerError =
+    fieldServerError?.lossMassKg === lossMassKg
+      ? fieldServerError.message
+      : undefined;
+  const lossMassError =
+    errors.lossMassKg?.message ??
+    liveStockError ??
+    currentFieldServerError;
 
   const onSubmit = handleSubmit(async (raw) => {
     setServerError(null);
+    if (liveStockError) return;
+
     const values = raw as RecordLossFormData;
     try {
       await recordLoss.mutateAsync({
@@ -359,7 +394,10 @@ function LossForm({
       onRecorded?.();
     } catch (error) {
       if (error instanceof RecordLossFieldError) {
-        setError(error.field, { type: "server", message: error.message });
+        setFieldServerError({
+          message: error.message,
+          lossMassKg: values.lossMassKg,
+        });
         return;
       }
       setServerError(
@@ -370,10 +408,11 @@ function LossForm({
 
   return (
     <form onSubmit={onSubmit} className="flex flex-1 flex-col space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormField
         id="loss-amount"
         label="Amount lost (kg)"
-        error={errors.lossMassKg?.message}
+        error={lossMassError}
         required
         helperText="The mass removed from the bin — spoilage, spillage, or write-off."
       >
@@ -384,7 +423,7 @@ function LossForm({
           min="0"
           placeholder="e.g., 50"
           disabled={recordLoss.isPending}
-          error={!!errors.lossMassKg}
+          error={!!lossMassError}
           {...register("lossMassKg")}
         />
       </FormField>

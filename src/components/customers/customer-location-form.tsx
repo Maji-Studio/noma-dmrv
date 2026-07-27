@@ -7,23 +7,14 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  DistanceCalcField,
-  FormActions,
-  FormField,
-  FormInput,
-  FormSection,
-  FormTextarea,
-  PositionPicker,
-  makeCertFieldStatus,
-} from "@/components/forms";
-import { useFacilityContext } from "@/hooks/use-facility-context";
+import { FormActions, makeCertFieldStatus } from "@/components/forms";
 import {
   customerLocationFormSchema,
   type CustomerLocationFormData,
+  type CustomerLocationFormInput,
 } from "@/schemas/customers";
 import type { CustomerLocation } from "@/db/schema/parties";
-import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import { CustomerLocationFields } from "./customer-location-fields";
 
 // ============================================
 // Component
@@ -67,13 +58,11 @@ export function CustomerLocationForm({
     isDefault: location?.isDefault ?? false,
   };
 
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    formState: { errors },
-  } = useForm({
+  const form = useForm<
+    CustomerLocationFormInput,
+    unknown,
+    CustomerLocationFormData
+  >({
     resolver: zodResolver(customerLocationFormSchema),
     defaultValues,
   });
@@ -81,193 +70,17 @@ export function CustomerLocationForm({
 
   const defaultSubmitLabel = isEditMode ? "Update Location" : "Add Location";
 
-  // Preprocessed Zod fields have `unknown` input types — narrow the watches.
-  const gpsLatitude = watch("gpsLatitude") as number | null | undefined;
-  const gpsLongitude = watch("gpsLongitude") as number | null | undefined;
-  const distanceFromFacilityKm = watch("distanceFromFacilityKm") as number | null | undefined;
-  const distanceSource = watch("distanceSource");
-
-  // CALC endpoints: the globally selected facility → this destination site.
-  const { selectedFacility } = useFacilityContext();
-  const locationPoint =
-    gpsLatitude != null && gpsLongitude != null
-      ? { lat: gpsLatitude, lng: gpsLongitude }
-      : null;
-  const facilityPoint =
-    selectedFacility?.gpsLatitude != null && selectedFacility?.gpsLongitude != null
-      ? { lat: selectedFacility.gpsLatitude, lng: selectedFacility.gpsLongitude }
-      : null;
-
-  const handleFormSubmit = handleSubmit((data) => {
-    return onSubmit(data as CustomerLocationFormData);
+  const handleFormSubmit = form.handleSubmit((data) => {
+    return onSubmit(data);
   });
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
-      {/* Location Details Section */}
-      <FormSection title="Location details" divider={false}>
-        <FormField
-          id="name"
-          label="Location name"
-          error={errors.name?.message}
-          required
-        >
-          <FormInput
-            id="name"
-            type="text"
-            placeholder="e.g., Coffee Block A"
-            disabled={isSubmitting}
-            error={!!errors.name}
-            {...register("name")}
-          />
-        </FormField>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-16 gap-y-20">
-          <FormField
-            id="country"
-            label="Country"
-            error={errors.country?.message}
-            required
-          >
-            <FormInput
-              id="country"
-              type="text"
-              placeholder="e.g., Tanzania"
-              disabled={isSubmitting}
-              error={!!errors.country}
-              {...register("country")}
-            />
-          </FormField>
-
-          <FormField
-            id="stateRegion"
-            label="State / region"
-            error={errors.stateRegion?.message}
-          >
-            <FormInput
-              id="stateRegion"
-              type="text"
-              placeholder="e.g., Kilimanjaro"
-              disabled={isSubmitting}
-              error={!!errors.stateRegion}
-              {...register("stateRegion")}
-            />
-          </FormField>
-
-          <FormField
-            id="city"
-            label="City"
-            error={errors.city?.message}
-          >
-            <FormInput
-              id="city"
-              type="text"
-              placeholder="e.g., Moshi"
-              disabled={isSubmitting}
-              error={!!errors.city}
-              {...register("city")}
-            />
-          </FormField>
-        </div>
-
-        <FormField
-          id="address"
-          label="Address / description"
-          error={errors.address?.message}
-          required
-        >
-          <FormTextarea
-            id="address"
-            placeholder="Additional address details or site description"
-            disabled={isSubmitting}
-            error={!!errors.address}
-            {...register("address")}
-          />
-        </FormField>
-      </FormSection>
-
-      {/* GPS Coordinates Section */}
-      <FormSection title="GPS coordinates">
-        <PositionPicker
-          idPrefix="gps"
-          label="Application site position"
-          accent="pink"
-          required
-          latitude={gpsLatitude ?? null}
-          longitude={gpsLongitude ?? null}
-          onPositionChange={({ lat, lng }) => {
-            setValue("gpsLatitude", lat ?? undefined, { shouldDirty: true, shouldValidate: true });
-            setValue("gpsLongitude", lng ?? undefined, { shouldDirty: true, shouldValidate: true });
-          }}
-          latitudeError={errors.gpsLatitude?.message}
-          longitudeError={errors.gpsLongitude?.message}
-          disabled={isSubmitting}
-        />
-      </FormSection>
-
-      {/* Soil Defaults Section */}
-      <FormSection title="Soil defaults">
-        <FormField
-          id="defaultSoilTemperatureC"
-          label="Default soil temperature (°C)"
-          error={errors.defaultSoilTemperatureC?.message}
-          helperText="Default for new applications; editable per application."
-        >
-          <FormInput
-            id="defaultSoilTemperatureC"
-            type="number"
-            step="any"
-            placeholder="e.g., 24.5"
-            disabled={isSubmitting}
-            error={!!errors.defaultSoilTemperatureC}
-            {...register("defaultSoilTemperatureC")}
-          />
-        </FormField>
-      </FormSection>
-
-      {/* Logistics Section */}
-      <FormSection title="Logistics">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <DistanceCalcField
-            id="distanceFromFacilityKm"
-            label="One-way distance from facility (per leg, km)"
-            error={errors.distanceFromFacilityKm?.message}
-            certifyRequired={isCertifyFormField("customerLocation", "distanceFromFacilityKm")}
-            certifyStatus={certStatus("distanceFromFacilityKm")}
-            helperText="One-way road distance to this site. Return trips are doubled at emissions time; set the trip type on each delivery."
-            disabled={isSubmitting}
-            distanceKm={distanceFromFacilityKm}
-            distanceSource={distanceSource}
-            onDistanceChange={(km, source) => {
-              setValue("distanceFromFacilityKm", km ?? undefined, {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
-              setValue("distanceSource", source, { shouldDirty: true });
-            }}
-            origin={facilityPoint}
-            destination={locationPoint}
-            originLabel="selected facility"
-            destinationLabel="application site position"
-          />
-        </div>
-
-        <label
-          htmlFor="isDefault"
-          className="flex items-center gap-12 cursor-pointer"
-        >
-          <input
-            type="checkbox"
-            id="isDefault"
-            className="h-[18px] w-[18px] border border-[var(--color-border-primary)] accent-[var(--clr-dark-purple)] cursor-pointer"
-            disabled={isSubmitting}
-            {...register("isDefault")}
-          />
-          <span className="body-medium text-[var(--color-text-primary)]">
-            Set as default destination
-          </span>
-        </label>
-      </FormSection>
+      <CustomerLocationFields
+        form={form}
+        isSubmitting={isSubmitting}
+        certStatus={certStatus}
+      />
 
       <FormActions
         sticky={false}

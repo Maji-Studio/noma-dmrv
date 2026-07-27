@@ -9,10 +9,10 @@
  *   - the lab-sample form's batch progress preview (the sample anchors on the
  *     credit batch directly — issue #309).
  *
- * Pure UI + DB (no Isometric) — runs in PR CI, NOT @live. The live
- * measurement-samples POST is gated (`DURABILITY_MEASUREMENT_SAMPLES_LIVE`), so
- * the submit path itself is out of scope here; the per-batch aggregation +
- * gates are covered by the offline unit/integration suites.
+ * Pure UI + DB (no Isometric) — runs in PR CI, NOT @live. The 200-year
+ * measurement-samples POST remains unavailable, so the submit path itself is
+ * out of scope here; the per-batch aggregation + gates are covered by the
+ * offline unit/integration suites.
  */
 import * as crypto from "crypto";
 import { test, expect } from "./fixtures/auth-fixtures";

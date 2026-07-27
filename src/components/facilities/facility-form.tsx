@@ -5,7 +5,13 @@ import { formatTimezoneLabel } from "@/lib/date-utils";
 import { useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, PositionPicker, FormActions } from "@/components/forms";
+import {
+  FormActions,
+  FormField,
+  FormInput,
+  PositionPicker,
+  ResolvedErrorRevalidator,
+} from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import {
   facilityFormSchema,
@@ -59,6 +65,8 @@ export function FacilityForm({
   const {
     register,
     handleSubmit,
+    control,
+    trigger,
     watch,
     setValue,
     formState: { errors },
@@ -111,6 +119,7 @@ export function FacilityForm({
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
         <FormField id="name" label="Facility name" error={errors.name?.message} required>
           <FormInput

@@ -56,10 +56,10 @@ in-memory adapter is structurally blind to exactly the parts that matter:
 - **Deadlock semantics** — Postgres detects ABBA and kills a victim with
   `40P01`; an in-memory mutex just hangs the test.
 - **Cross-module lock interleaving** — the mapping and mirror locks
-  interlock with `mirrorDocumentToSource`, `unlinkDocumentSource`, and admin
-  repoint flows that live *outside* any ledger port. This is the exact race
-  the in-lock re-decision exists for, and a fake cannot see those code paths
-  at all.
+  interlock with `mirrorDocumentToSource`, owning-document mapping retirement,
+  and admin repoint flows that live *outside* any ledger port. This is the
+  exact race the in-lock re-decision exists for, and a fake cannot see those
+  code paths at all.
 
 A green in-memory suite would therefore read as confidence about locking
 that it cannot supply. And with only one production adapter, the port is

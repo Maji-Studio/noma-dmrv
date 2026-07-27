@@ -1,9 +1,4 @@
-import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { DocumentType } from "@/schemas/documents";
-
-/** The existing dashboard/readiness definition of document-backed distance. */
-export const DOCUMENT_BACKED_DISTANCE_SOURCE =
-  "document" satisfies DistanceSourceValue;
 
 export const TRANSPORT_EVIDENCE_DOCUMENT_TYPES = [
   "bill_of_lading",
@@ -22,12 +17,6 @@ export const TRANSPORT_EVIDENCE_DOCUMENT_LABELS: Record<
   weighbridge_ticket: "Weigh-scale ticket",
   other_transport_evidence: "Other transport evidence",
 };
-
-export function hasDocumentBackedDistanceProvenance(
-  source: DistanceSourceValue | null | undefined,
-): boolean {
-  return source === DOCUMENT_BACKED_DISTANCE_SOURCE;
-}
 
 export function isTransportEvidenceDocumentType(
   documentType: string,
@@ -58,19 +47,11 @@ export function hasAcceptedTransportEvidence(
   );
 }
 
-/**
- * Certification's composite transport-evidence rule. Distance provenance and
- * the uploaded evidence fact remain separate inputs; neither satisfies the
- * requirement by itself.
- */
+/** Certification's transport-evidence rule: one accepted classified upload. */
 export function hasCompleteTransportEvidence(
-  source: DistanceSourceValue | null | undefined,
   acceptedDocumentCount: number | null | undefined,
 ): boolean {
-  return (
-    hasDocumentBackedDistanceProvenance(source) &&
-    hasAcceptedTransportEvidence(acceptedDocumentCount)
-  );
+  return hasAcceptedTransportEvidence(acceptedDocumentCount);
 }
 
 export type TransportEvidenceCertStatus =
@@ -81,14 +62,10 @@ export type TransportEvidenceCertStatus =
 export function deriveTransportEvidenceCertStatus(input: {
   persisted: boolean | undefined;
   documentsLoaded: boolean;
-  source: DistanceSourceValue | null | undefined;
   acceptedDocumentCount: number | null | undefined;
 }): TransportEvidenceCertStatus {
   if (!input.persisted || !input.documentsLoaded) return "neutral";
-  return hasCompleteTransportEvidence(
-    input.source,
-    input.acceptedDocumentCount,
-  )
+  return hasCompleteTransportEvidence(input.acceptedDocumentCount)
     ? "satisfied"
     : "missing";
 }

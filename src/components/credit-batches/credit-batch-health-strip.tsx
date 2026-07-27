@@ -8,6 +8,10 @@
  * button that lands where the gap is actually resolved.
  * A `skipped` transport check is a facility-setup concern and never counts as
  * a batch issue.
+ *
+ * A passing batch states that ONCE, in the header — the lifecycle rail above
+ * already carries the milestone label ("Batch data ready"), so the section no
+ * longer repeats it as a right-hand status AND a green confirmation panel.
  */
 "use client";
 
@@ -16,7 +20,7 @@ import Link from "next/link";
 import {
   ArrowRightIcon,
   ArrowSquareOutIcon,
-  ShieldCheckIcon,
+  CheckCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { SectionLabel } from "@/components/forms";
@@ -29,7 +33,6 @@ import {
   batchHealthFixLinkFor,
   compactBatchHealthDetail,
 } from "@/lib/certification/batch-health-links";
-import { CREDIT_BATCH_READY_LABEL } from "@/lib/certification/credit-batch-lifecycle";
 import { cn } from "@/lib/utils";
 
 /** Stagger between open-row entrance reveals (ms). */
@@ -187,22 +190,10 @@ function GateBody({
   productionRuns: CreditBatchProductionRunOption[];
   feedstockName?: string | null;
 }) {
-  const open = health.checks.filter((c) => c.status === "unmet");
+  // A ready batch says so once, in the section header — no body at all.
+  if (health.state === "ready") return null;
 
-  if (health.state === "ready") {
-    return (
-      <div className="flex items-center gap-12 border border-[var(--st-ok-border)] bg-[var(--st-ok-bg)] px-16 py-12">
-        <ShieldCheckIcon
-          size={20}
-          weight="fill"
-          className="shrink-0 text-[var(--st-ok)]"
-        />
-        <p className="body-small font-medium text-[var(--color-text-primary)]">
-          All checks passed.
-        </p>
-      </div>
-    );
-  }
+  const open = health.checks.filter((c) => c.status === "unmet");
 
   return (
     <ul className="flex flex-col gap-10">
@@ -249,15 +240,19 @@ export function CreditBatchHealthStrip({
             </p>
           )}
         </div>
-        {health && (
-          <span className="shrink-0 body-caption font-medium text-[var(--color-text-secondary)]">
-            {health.state === "ready"
-              ? CREDIT_BATCH_READY_LABEL
-              : `${health.issueCount} ${
-                  health.issueCount === 1 ? "issue" : "issues"
-                } open`}
-          </span>
-        )}
+        {health &&
+          (health.state === "ready" ? (
+            <span className="inline-flex shrink-0 items-center gap-6 body-caption font-medium text-[var(--st-ok)]">
+              <CheckCircleIcon size={14} weight="fill" aria-hidden />
+              All checks passed
+            </span>
+          ) : (
+            <span className="shrink-0 body-caption font-medium text-[var(--color-text-secondary)]">
+              {`${health.issueCount} ${
+                health.issueCount === 1 ? "issue" : "issues"
+              } open`}
+            </span>
+          ))}
       </div>
 
       {isLoading ? (

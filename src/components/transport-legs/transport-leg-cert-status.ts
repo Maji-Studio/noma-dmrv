@@ -11,8 +11,7 @@ interface TransportLegCertValues {
   loadMassKg: number | null | undefined;
   /**
    * Accepted transport-evidence uploads backing this leg (absent on deferred
-   * rows that were never saved). Absence fails closed: Document provenance
-   * alone must not read as satisfied.
+   * rows that were never saved). Absence keeps the evidence status missing.
    */
   transportEvidenceDocumentCount?: number | null;
 }
@@ -20,6 +19,7 @@ interface TransportLegCertValues {
 export interface TransportLegCertStatuses {
   distance: CertFieldStatus;
   provenance: CertFieldStatus;
+  evidence: CertFieldStatus;
   load: CertFieldStatus;
 }
 
@@ -37,18 +37,16 @@ export function deriveTransportLegCertStatuses(
       savedRowsKnown,
       hasLegs && rows.every((leg) => Number.isFinite(leg.distanceKm)),
     ),
-    // Composite: Document provenance AND at least one accepted upload — the
-    // same rule the dashboard and removal-readiness paths apply, so the
-    // side-sheet can never look fully green while the dashboard reports an
-    // evidence gap.
     provenance: resolveCertFieldStatus(
       savedRowsKnown,
       hasLegs &&
+        rows.every((leg) => leg.distanceSource != null),
+    ),
+    evidence: resolveCertFieldStatus(
+      savedRowsKnown,
+      hasLegs &&
         rows.every((leg) =>
-          hasCompleteTransportEvidence(
-            leg.distanceSource,
-            leg.transportEvidenceDocumentCount,
-          ),
+          hasCompleteTransportEvidence(leg.transportEvidenceDocumentCount),
         ),
     ),
     load: resolveCertFieldStatus(

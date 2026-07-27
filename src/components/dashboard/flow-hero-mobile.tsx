@@ -35,20 +35,20 @@ function ApplicationGlyph() {
     <svg
       width={44}
       height={30}
-      viewBox="928 272 234 122"
+      viewBox="934 312 172 92"
       fill="none"
       className="flex-none"
       style={{ color: "var(--acc-dist-ink)" }}
       aria-hidden
     >
       <path
-        d="M1045,280 L1155,333 L1045,386 L935,333 Z"
+        d="M1020,318 L1100,358 L1020,398 L940,358 Z"
         fill="var(--sea)"
         stroke="currentColor"
         strokeWidth="4"
       />
-      <path d="M957,344 L1067,291 L1089,301 L979,354 Z" fill="var(--clr-dark-purple-30)" />
-      <path d="M1001,365 L1111,312 L1133,322 L1023,375 Z" fill="var(--clr-dark-purple-30)" />
+      <path d="M956,366 L1036,326 L1052,334 L972,374 Z" fill="var(--clr-dark-purple-30)" />
+      <path d="M988,382 L1068,342 L1084,350 L1004,390 Z" fill="var(--clr-dark-purple-30)" />
     </svg>
   );
 }

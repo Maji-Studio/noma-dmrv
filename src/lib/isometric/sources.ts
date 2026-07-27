@@ -67,4 +67,6 @@ export async function findSourceBySupplierRef(
 
 // DELETE /sources/{id} intentionally not exported in Phase 3.5.
 // Source IDs land in certification_submissions.payloadSnapshot — remote
-// deletion would break submission audit/resume. Unlink is local-only.
+// deletion would break submission audit/resume. Before submission, evidence
+// replacement retires only the unreferenced local mapping from its owning
+// record; the remote Source remains intact.

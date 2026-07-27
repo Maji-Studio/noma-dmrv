@@ -14,7 +14,46 @@
  */
 
 import type { RemovalCertifyContext } from "@/fn/certification/certify-context";
+import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import type { BatchHealthFacts } from "./batch-health";
+import { STORED_CO2E_PREVIEW_REVERIFICATION_GAP } from "./preview-gaps";
+
+// Preview keys owned by other UI checks. Credit-batch detail may still explain
+// local preview gaps, but Removal readiness is derived from the independent
+// durability gates below.
+const NON_CARBON_MISSING_INPUTS = new Set([
+  "applicationIds",
+  "facilityCertifierProject",
+  "isometricCertifier",
+  STORED_CO2E_PREVIEW_REVERIFICATION_GAP,
+]);
+
+const CARBON_INPUT_LABELS: Record<string, string> = {
+  organicCarbonPercent: "Organic carbon content",
+  dryMassTonnes: "Applied biochar dry mass",
+  soilTemperatureC: "Soil temperature",
+  hToCorgRatio: "H:Corg ratio",
+  thousandYearReplicates: `At least ${MINIMUM_REPLICATES_PER_BATCH} usable 1000-year lab samples`,
+  meanRandomReflectancePercent: "Mean random reflectance (R₀)",
+  stdRandomReflectance: "Std dev of R₀",
+  meanNonReactiveCarbonPercent: "Mean non-reactive carbon",
+  stdNonReactiveCarbonPercent: "Std dev of non-reactive carbon",
+};
+
+/**
+ * The genuine carbon/durability gaps in a CO₂e-stored preview, as human labels.
+ * Shared with the credit-batch detail's "CO₂e stored" field so the number's
+ * absence is explained in the SAME words the health check uses.
+ */
+export function carbonGapLabels(missingInputs: readonly string[]): string[] {
+  return Array.from(
+    new Set(
+      missingInputs
+        .filter((key) => !NON_CARBON_MISSING_INPUTS.has(key))
+        .map((key) => CARBON_INPUT_LABELS[key] ?? key),
+    ),
+  );
+}
 
 function carbonMissingInputs(
   ctx: RemovalCertifyContext,

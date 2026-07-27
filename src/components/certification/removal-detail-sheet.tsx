@@ -285,7 +285,10 @@ export function RemovalDetailSheet({
             (Restores the mount lost when evidence-step.tsx was deleted in the
             2026-06-04 certify redesign.)
           */}
-          <SourcesPanel removalId={summary.removalId} />
+          <SourcesPanel
+            removalId={summary.removalId}
+            isEditable={isActionable}
+          />
 
           <SyncEventLog
             events={summary.recentSyncEvents}

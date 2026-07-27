@@ -18,13 +18,12 @@ import { useProductionRunTimingZoneSync } from "./use-production-run-timing-zone
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { formatMassKg } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
 import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, FileCsvIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormTextarea, MassMoistureFields, FormActions, FormSection, FormSpine, SectionLabel, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, MassMoistureFields, FormActions, FormSection, FormSpine, SectionLabel, ResolvedErrorRevalidator, StockReconciliationLink, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
 import { productionRunTelemetryCertification } from "./production-run-detail-fields";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
@@ -49,6 +48,12 @@ import {
 import type { ProductionRunWithRelations } from "@/data-access/production-runs";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
 import type { StorageLocationType } from "@/schemas/storage-locations";
+import { useStockAvailability } from "@/hooks/use-stock-availability";
+import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
+import {
+  binStockOverdrawMessage,
+  isStockOverdraw,
+} from "@/lib/stock-overdraw";
 
 // ============================================
 // Constants for select options
@@ -297,11 +302,11 @@ export function ProductionRunForm({
     biocharMoisturePercent: productionRun?.biocharMoisturePercent ?? undefined,
     biocharStorageLocationId: productionRun?.biocharStorageLocationId ?? "",
   };
-
   const {
     register,
     handleSubmit,
     control,
+    trigger,
     setValue,
     resetField,
     setError,
@@ -375,6 +380,41 @@ export function ProductionRunForm({
     watchMoisture <= 100
       ? deriveMassDryKg(watchWetMass, watchMoisture)
       : null;
+
+  const { data: feedstockAvailability } = useStockAvailability(
+    watchedSourceBinId
+      ? {
+          kind: "productionRunFeedstock",
+          storageLocationId: watchedSourceBinId,
+          productionRunId: productionRun?.id,
+        }
+      : null,
+  );
+  const feedstockStockError =
+    previewDryMass !== null &&
+    feedstockAvailability &&
+    feedstockAvailability.availableKg !== null &&
+    isStockOverdraw(previewDryMass, feedstockAvailability.availableKg)
+      ? binStockOverdrawMessage(
+          "feedstock",
+          feedstockAvailability.availableKg,
+          previewDryMass,
+        )
+      : undefined;
+  const feedstockFieldFingerprint = [
+    watchedSourceBinId,
+    watchWetMass,
+    watchMoisture,
+  ].join(":");
+  const routedServerError = useInlineStockServerError(
+    errorMessage,
+    feedstockFieldFingerprint,
+    (message) => /not enough feedstock in this bin/i.test(message),
+  );
+  const feedstockWetMassError =
+    errors.feedstockWetMassKg?.message ??
+    feedstockStockError ??
+    routedServerError.inlineError;
 
   const previewBiocharDryMass =
     typeof watchedBiocharKg === "number" &&
@@ -479,6 +519,7 @@ export function ProductionRunForm({
   return (
     <div className="space-y-20">
       <form id={formId} onSubmit={handleFormSubmit}>
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <FormSpine control={control}>
       {/* ── Run setup ── */}
       <FormSection
@@ -670,7 +711,7 @@ export function ProductionRunForm({
           moisturePercent={watchMoisture}
           wet={{
             id: "feedstockWetMassKg",
-            error: errors.feedstockWetMassKg?.message,
+            error: feedstockWetMassError,
             disabled: isSubmitting,
             placeholder: "e.g. 500",
             certifyRequired: isProductionRunCertifyField("feedstockWetMassKg"),
@@ -686,8 +727,10 @@ export function ProductionRunForm({
             certifyStatus: certStatus("feedstockMoisturePercent"),
             registration: register("feedstockMoisturePercent", { setValueAs: nullableNumericValue }),
           }}
+          splitFooter={(feedstockStockError || routedServerError.inlineError) && (
+            <StockReconciliationLink facilityId={watchedFacilityId} />
+          )}
         />
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField id="feedingRateKgHr" label="Feed rate (kg/hr)" error={errors.feedingRateKgHr?.message}>
             <FormInput
@@ -947,7 +990,7 @@ export function ProductionRunForm({
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
-        errorMessage={errorMessage}
+        errorMessage={routedServerError.footerError}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

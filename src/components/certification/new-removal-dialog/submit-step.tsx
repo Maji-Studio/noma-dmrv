@@ -16,7 +16,10 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowSquareOutIcon, CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
+import {
+  ArrowSquareOutIcon,
+  CheckCircleIcon,
+} from "@phosphor-icons/react/dist/ssr";
 import { ServerError } from "@/components/forms";
 import { Button, buttonVariants } from "@/components/ui";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -32,11 +35,11 @@ import {
 } from "@/lib/certification/readiness";
 import { toRemovalReadinessFacts } from "@/lib/certification/readiness-facts";
 import { isometricRegistry } from "@/lib/isometric/links";
-import { EnvBanner } from "../env-banner";
 import { SubmitConfirmDialog } from "../submit-confirm-dialog";
-import { SubmissionChecks } from "./submission-checks";
-import { SubmissionOverview } from "./submission-overview";
-import { CompiledSubmissionReview } from "./compiled-submission-review";
+import {
+  isRemovalCompilationReady,
+  SubmissionReviewTabs,
+} from "./submission-review-tabs";
 
 const REJECTED_IN_ISOMETRIC_MSG =
   "This removal was rejected in Isometric. Resolve the registry record before retrying from noma.";
@@ -67,10 +70,9 @@ export function SubmitStep({
   const facts = toRemovalReadinessFacts(ctx);
   const checklist = buildRemovalRequirementsChecklist(facts);
   const readiness = deriveRemovalReadiness(facts);
-  const compilationReady =
-    compilationQuery.data?.blockers.length === 0 &&
-    compilationQuery.data.snapshot !== null &&
-    compilationQuery.data.compilationHash !== null;
+  const compilationReady = isRemovalCompilationReady(
+    compilationQuery.data ?? null,
+  );
   const requirementsMet =
     readiness.state === "ready" && compilationReady === true;
 
@@ -185,23 +187,18 @@ export function SubmitStep({
         </p>
       </div>
 
-      <SubmissionOverview
+      <SubmissionReviewTabs
         memberBatches={ctx.memberBatches}
         facilityId={facilityId}
-      />
-
-      <CompiledSubmissionReview
         compilation={compilationQuery.data ?? null}
-        isLoading={compilationQuery.isLoading}
-        error={compilationQuery.error}
-        onRetry={() => {
+        isCompilationLoading={compilationQuery.isLoading}
+        compilationError={compilationQuery.error}
+        onRetryCompilation={() => {
           void compilationQuery.refetch();
         }}
+        checks={checklist}
+        isProduction={ctx.isProduction}
       />
-
-      <SubmissionChecks checks={checklist} facilityId={facilityId} />
-
-      <EnvBanner isProduction={ctx.isProduction} variant="inline" />
 
       {(rejectedWithExternal || submitError) && (
         <ServerError

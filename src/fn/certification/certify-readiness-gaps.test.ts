@@ -85,7 +85,7 @@ describe("buildEntityReadinessResult", () => {
     expect(result.gaps.join(" ")).not.toContain("run-affected");
   });
 
-  it("uses a friendly transport label in flat readiness gaps", () => {
+  it("uses a friendly transport label in blocking gaps", () => {
     const transportLeg = {
       id: TRANSPORT_LEG_ID,
       entityId: "00000000-0000-4000-a000-000000000002",
@@ -104,14 +104,8 @@ describe("buildEntityReadinessResult", () => {
 
     expect(result.gaps.join(" ")).toContain("feedstock transport 1");
     expect(result.gaps.join(" ")).not.toContain(TRANSPORT_LEG_ID);
-    expect(result.issues[0]?.affectedRecords[0]).toMatchObject({
-      id: "00000000-0000-4000-a000-000000000002",
-      code: "feedstock transport 1",
-    });
-    expect(result.issues[0]).toMatchObject({
-      key: "feedstock-transport-evidence",
-      fixTarget: "feedstocks",
-    });
+    expect(result.issues).toHaveLength(1);
+    expect(result.warnings).toEqual([]);
   });
 
   // O:Corg is an UNCONDITIONAL sample descriptor, deliberately symmetric with
@@ -151,7 +145,7 @@ describe("buildEntityReadinessResult", () => {
     });
   });
 
-  it("keeps feedstock and biochar evidence in their separate workflows", () => {
+  it("keeps feedstock and biochar evidence blockers separately identified", () => {
     const feedstockLeg = {
       id: "00000000-0000-4000-a000-000000000003",
       entityId: "00000000-0000-4000-a000-000000000004",
@@ -176,15 +170,10 @@ describe("buildEntityReadinessResult", () => {
       ["feedstock", "biochar"],
     );
 
-    expect(result.issues).toMatchObject([
-      {
-        key: "feedstock-transport-evidence",
-        fixTarget: "feedstocks",
-      },
-      {
-        key: "biochar-transport-evidence",
-        fixTarget: "deliveries",
-      },
-    ]);
+    expect(result.gaps).toHaveLength(2);
+    expect(result.gaps[0]).toContain("feedstock transport 1");
+    expect(result.gaps[1]).toContain("biochar transport 1");
+    expect(result.issues).toHaveLength(2);
+    expect(result.warnings).toEqual([]);
   });
 });

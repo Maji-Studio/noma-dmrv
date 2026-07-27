@@ -11,7 +11,12 @@ import {
   resetPasswordSchema,
   type ResetPasswordFormData,
 } from "@/schemas/auth";
-import { FormField, FormInput, ServerError } from "@/components/forms";
+import {
+  FormField,
+  FormInput,
+  ResolvedErrorRevalidator,
+  ServerError,
+} from "@/components/forms";
 
 function ResetPasswordFormContent() {
   const [success, setSuccess] = useState(false);
@@ -26,6 +31,8 @@ function ResetPasswordFormContent() {
   const {
     register,
     handleSubmit,
+    control,
+    trigger,
     formState: { errors, isSubmitting },
   } = useForm<ResetPasswordFormData>({
     resolver: zodResolver(resetPasswordSchema),
@@ -86,6 +93,7 @@ function ResetPasswordFormContent() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-24">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       {success ? (
         <div className="space-y-24">
           <div

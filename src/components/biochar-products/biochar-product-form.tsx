@@ -12,7 +12,7 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FactoryIcon, PackageIcon, FlowArrowIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, MassMoistureFields } from "@/components/forms";
+import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
 import { formatMassKg } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
@@ -47,6 +47,12 @@ import {
   BIOCHAR_PRE_WATER_MOISTURE_LABEL,
   BIOCHAR_PRE_WATER_WET_MASS_LABEL,
 } from "@/config/product-labels";
+import { useStockAvailability } from "@/hooks/use-stock-availability";
+import { useInlineStockServerError } from "@/hooks/use-inline-stock-server-error";
+import {
+  binStockOverdrawMessage,
+  isStockOverdraw,
+} from "@/lib/stock-overdraw";
 
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
@@ -319,6 +325,51 @@ export function BiocharProductForm({
 
   const defaultSubmitLabel = isEditMode ? "Update Product" : "Create Product";
 
+  const effectiveBiocharRatio =
+    isEditMode &&
+    selectedFormulationId === initialFormulationId &&
+    product?.biocharRatio != null
+      ? product.biocharRatio
+      : (composition.biocharRatio ?? 1);
+  const requestedBiocharKg =
+    typeof watchedMassKg === "number"
+      ? watchedMassKg * effectiveBiocharRatio
+      : null;
+  const { data: biocharAvailability } = useStockAvailability(
+    linkedProductionRunId
+      ? {
+          kind: "biocharProduct",
+          productionRunId: linkedProductionRunId,
+          biocharProductId: product?.id,
+        }
+      : null,
+  );
+  const biocharStockError =
+    requestedBiocharKg !== null &&
+    biocharAvailability &&
+    biocharAvailability.availableKg !== null &&
+    isStockOverdraw(requestedBiocharKg, biocharAvailability.availableKg)
+      ? binStockOverdrawMessage(
+          "biochar",
+          biocharAvailability.availableKg,
+          requestedBiocharKg,
+        )
+      : undefined;
+  const massFieldFingerprint = [
+    linkedProductionRunId,
+    selectedFormulationId,
+    watchedMassKg,
+  ].join(":");
+  const routedServerError = useInlineStockServerError(
+    errorMessage,
+    massFieldFingerprint,
+    (message) => /not enough biochar in this bin/i.test(message),
+  );
+  const massKgError =
+    errors.massKg?.message ??
+    biocharStockError ??
+    routedServerError.inlineError;
+
   const handleFormSubmit = handleSubmit((data) => {
     return onSubmit(data as BiocharProductFormData);
   });
@@ -374,8 +425,8 @@ export function BiocharProductForm({
           </SectionLabel>
           <TransferFlowPreview
             sourceBinCode={linkedRunPreview?.biocharStorageLocationCode ?? null}
-            availableKg={linkedRunPreview?.biocharOutputKg ?? null}
-            sourceMassKg={massKgNum}
+            availableKg={biocharAvailability?.availableKg ?? null}
+            sourceMassKg={requestedBiocharKg}
             destinationMassKg={effectiveWetMassKg}
             destinationBinLabel={
               selectedStorageLocation?.name
@@ -440,7 +491,7 @@ export function BiocharProductForm({
             label: hasWaterAdded
               ? BIOCHAR_PRE_WATER_WET_MASS_LABEL
               : undefined,
-            error: errors.massKg?.message,
+            error: massKgError,
             required: true,
             disabled: isSubmitting,
             placeholder: "e.g. 500",
@@ -462,6 +513,11 @@ export function BiocharProductForm({
             helperText: "Typically 1–2% for biochar",
             registration: register("moistureContentPercent", { setValueAs: nullableNumericValue }),
           }}
+          splitFooter={
+            (biocharStockError || routedServerError.inlineError) && (
+              <StockReconciliationLink facilityId={contextFacilityId} />
+            )
+          }
         />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">
@@ -599,7 +655,7 @@ export function BiocharProductForm({
         formId={formId}
         onCancel={onCancel}
         isSubmitting={isSubmitting}
-        errorMessage={errorMessage}
+        errorMessage={routedServerError.footerError}
         submitLabel={submitLabel}
         defaultSubmitLabel={defaultSubmitLabel}
       />

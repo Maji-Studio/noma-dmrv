@@ -222,7 +222,7 @@ export function TransportLegsEditor({
 
       {/* Table */}
       {!deferred && isLoading ? (
-        <TableSkeleton columns={readOnly ? 5 : 6} rows={2} />
+        <TableSkeleton columns={readOnly ? 6 : 7} rows={2} />
       ) : !hasLegs && !inlineForm.open ? (
         <p className="body-small text-[var(--color-text-tertiary)] py-16">
           {emptyMessage ??
@@ -244,10 +244,19 @@ export function TransportLegsEditor({
                 </th>
                 <th className="py-8 pr-12 font-medium">
                   <span className="flex items-center gap-6">
-                    Provenance
+                    Distance source
                     <CertificationFieldTag
                       status={certStatuses.provenance}
-                      description="Distance source must be marked Document and at least one transport-evidence file uploaded to satisfy this requirement"
+                      description="Satisfied when the saved leg records its distance provenance"
+                    />
+                  </span>
+                </th>
+                <th className="py-8 pr-12 font-medium">
+                  <span className="flex items-center gap-6">
+                    Evidence
+                    <CertificationFieldTag
+                      status={certStatuses.evidence}
+                      description="Satisfied when every saved leg has at least one uploaded transport-evidence file"
                     />
                   </span>
                 </th>
@@ -276,23 +285,29 @@ export function TransportLegsEditor({
                     {leg.distanceKm} km
                   </td>
                   <td className="py-8 pr-12 text-[var(--color-text-secondary)]">
+                    {leg.distanceSource
+                      ? DISTANCE_SOURCE_LABELS[leg.distanceSource]
+                      : "—"}
+                  </td>
+                  <td className="py-8 pr-12 text-[var(--color-text-secondary)]">
                     <span className="flex items-center gap-6">
-                      {leg.distanceSource
-                        ? DISTANCE_SOURCE_LABELS[leg.distanceSource]
+                      {isSavedTransportLeg(leg) && !deferred
+                        ? hasCompleteTransportEvidence(
+                            (leg as { transportEvidenceDocumentCount?: number })
+                              .transportEvidenceDocumentCount,
+                          )
+                          ? "Attached"
+                          : "Missing"
                         : "—"}
-                      {/* Per-row marker so the operator can tell WHICH leg is
-                          missing evidence when several are listed (the header
-                          tag only aggregates). */}
                       {isSavedTransportLeg(leg) &&
                         !deferred &&
                         !hasCompleteTransportEvidence(
-                          leg.distanceSource,
                           (leg as { transportEvidenceDocumentCount?: number })
                             .transportEvidenceDocumentCount,
                         ) && (
                           <CertificationFieldTag
                             status="missing"
-                            description="This leg needs Document provenance and at least one uploaded transport-evidence file"
+                            description="This leg needs at least one uploaded transport-evidence file"
                           />
                         )}
                     </span>

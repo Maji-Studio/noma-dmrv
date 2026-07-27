@@ -231,6 +231,7 @@ export const customerSelectSchema = z.object({
 // ============================================
 
 export type CustomerFormData = z.infer<typeof customerFormSchema>;
+export type CustomerLocationFormInput = z.input<typeof customerLocationFormSchema>;
 export type CustomerLocationFormData = z.infer<typeof customerLocationFormSchema>;
 export type CreateCustomerData = z.infer<typeof createCustomerSchema>;
 export type UpdateCustomerData = z.infer<typeof updateCustomerSchema>;

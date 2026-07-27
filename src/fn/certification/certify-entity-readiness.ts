@@ -32,6 +32,7 @@ export async function buildCertifyEntityReadiness(args: {
 
   return {
     gaps: [...entityReadiness.gaps, ...applicationReadiness.gaps],
+    warnings: entityReadiness.warnings,
     issues: [...entityReadiness.issues, ...applicationReadiness.issues],
   };
 }

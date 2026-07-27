@@ -5,7 +5,13 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { FormField, FormInput, FormTextarea, FormEntitySelect } from "@/components/forms";
+import {
+  FormEntitySelect,
+  FormField,
+  FormInput,
+  FormTextarea,
+  ResolvedErrorRevalidator,
+} from "@/components/forms";
 import { FormSelect } from "@/components/forms/form-select";
 import { FormActions } from "@/components/forms/form-actions";
 import {
@@ -71,6 +77,7 @@ export function StorageLocationForm({
     register,
     handleSubmit,
     control,
+    trigger,
     formState: { errors },
   } = useForm<StorageLocationFormData>({
     resolver: zodResolver(storageLocationFormSchema),
@@ -116,6 +123,7 @@ export function StorageLocationForm({
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
+      <ResolvedErrorRevalidator control={control} trigger={trigger} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
         <FormField
           id="type"

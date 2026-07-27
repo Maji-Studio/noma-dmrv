@@ -7,10 +7,9 @@
  * POST submits, so the ledger reconciles to what's submitted), hashes it, and
  * hands a `LedgerArtifactSpec` to `ensureLedgerSource`.
  *
- * Unlike the gated measurement-sample POST, this PDF is benign evidence — it
+ * Unlike the 200-year-gated measurement-sample POST, this PDF is benign evidence — it
  * shows noma's working in noma's native units (dimensionless H/C, carbon %, kg,
- * °C), independent of the sandbox-gated wire-unit transforms — so it is NOT
- * behind `DURABILITY_MEASUREMENT_SAMPLES_LIVE`. It generates whenever a removal
+ * °C), independent of the unverified wire-unit transforms. It generates whenever a removal
  * has sampled credit batches and a facility soil reference; the document attaches
  * to a member credit batch so the candidate-document walk mirrors its Source into
  * the removal's `source_ids`. Best-effort at the submit call site.
