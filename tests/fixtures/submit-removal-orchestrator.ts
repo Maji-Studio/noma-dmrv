@@ -45,28 +45,15 @@ vi.mock("@/lib/isometric", async (importOriginal) => {
     reconcileRemoval: vi.fn(),
   };
 });
-// The Phase 3 measurement-samples flag is a build-time const (false while the
-// two sandbox confirms are pending). The issue #320 window test needs the
-// durability path live to observe `measured_at` staying production-anchored, so
-// expose the flag through a mutable getter (default: the real staged-off state)
-// and stub the POST-ing submitter.
-const durabilityFlag = vi.hoisted(() => ({ live: false }));
 vi.mock("@/fn/certification/durability-measurement-samples", async (importOriginal) => {
   const actual = await importOriginal<
     typeof import("@/fn/certification/durability-measurement-samples")
   >();
   return {
     ...actual,
-    get DURABILITY_MEASUREMENT_SAMPLES_LIVE() {
-      return durabilityFlag.live;
-    },
     submitDurabilityMeasurementSamples: vi.fn(),
   };
 });
-
-export function setDurabilityMeasurementSamplesLive(live: boolean): void {
-  durabilityFlag.live = live;
-}
 
 import * as ledger from "@/data-access/certification";
 import * as ledgerClaim from "@/data-access/certification-submissions";
@@ -180,9 +167,9 @@ export function makeTemplate(): IsometricGhgEntryTemplate {
   } as unknown as IsometricGhgEntryTemplate;
 }
 
-// A template that routes durability through the new measurement-samples path —
-// declares a `biochar_sequestration_200_year_*` component. submitRemoval blocks
-// it while DURABILITY_MEASUREMENT_SAMPLES_LIVE is off (Phase 3 staged gate).
+// A template that routes durability through the unverified 200-year
+// measurement-samples path. submitRemoval keeps it fail-closed until the
+// remaining H/C unit and binding contract is confirmed.
 export function makeSequestrationTemplate(): IsometricGhgEntryTemplate {
   return {
     id: TEMPLATE_ID,
@@ -572,8 +559,6 @@ beforeEach(() => {
   vi.resetAllMocks();
   storedRows = [];
   nextLedgerRowId = 1;
-  // Real staged-off state; the issue #320 window test flips it per-test.
-  durabilityFlag.live = false;
 
   // The claim choreography is one mocked function backed by the in-memory
   // ledger + the real pure decision core; lock/CAS/re-resolution behavior

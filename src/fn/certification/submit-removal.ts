@@ -37,7 +37,7 @@ import {
 } from "@/lib/isometric/transformers/measurement-sample";
 import { loadRemovalSubmissionContext } from "./certify-context-core";
 import {
-  DURABILITY_MEASUREMENT_SAMPLES_LIVE,
+  durabilityMeasurementSampleAvailabilityBlocker,
   submitDurabilityMeasurementSamples,
   type DurabilityMeasurementSampleSubmission,
 } from "./durability-measurement-samples";
@@ -266,19 +266,16 @@ async function submitRemovalCore(
 
   // Durability evidence comes through measurement samples; each binding then
   // declares whether its GHG input consumes a sample-response datapoint or an
-  // orchestrator-posted direct datapoint. Block while the sandbox-only flag is
-  // off: without the evidence step the required sources cannot be bound, and
-  // emitting an emissions-only GHG entry is forbidden.
+  // orchestrator-posted direct datapoint. The verified 1000-year path is
+  // available in sandbox; production and the unverified 200-year wire contract
+  // fail closed so an emissions-only GHG entry can never be emitted.
   const hasDurabilityComponents = defaultTemplate.groups.some((group) =>
     group.components.some((c) => isSequestrationBlueprintKey(c.blueprint_key)),
   );
-  if (hasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
-    throw new SafeError(
-      "Durability submission is staged but not yet live — measurement-sample " +
-        "POSTs are disabled, so the required sequestration datapoint IDs cannot " +
-        "be bound. Enable DURABILITY_MEASUREMENT_SAMPLES_LIVE only for the " +
-        "sandbox after operator validation.",
-    );
+  const availabilityBlocker =
+    durabilityMeasurementSampleAvailabilityBlocker(defaultTemplate);
+  if (hasDurabilityComponents && availabilityBlocker) {
+    throw new SafeError(availabilityBlocker);
   }
 
   assertProductionConfirmed(confirmProduction);
@@ -573,9 +570,11 @@ async function assertClaimedRemovalPayloadFresh(args: {
   const freshHasDurabilityComponents = freshCtx.defaultTemplate.groups.some((group) =>
     group.components.some((c) => isSequestrationBlueprintKey(c.blueprint_key)),
   );
-  if (freshHasDurabilityComponents && !DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
+  const freshAvailabilityBlocker =
+    durabilityMeasurementSampleAvailabilityBlocker(freshCtx.defaultTemplate);
+  if (freshHasDurabilityComponents && freshAvailabilityBlocker) {
     await retireStaleSubmissionDraft(orgCtx, row.id, {
-      reason: "durability measurement-sample gate changed after draft claim",
+      reason: "durability measurement-sample availability changed after draft claim",
     });
     throw new SafeError(
       "Removal template configuration changed while preparing this submission. The draft was retired; reload and submit again.",
@@ -706,12 +705,12 @@ async function runRemovalSubmission({
   // Measurement-property inputs bind response datapoints; direct-datapoint
   // inputs (currently 1000-year s_fraction) were already posted through the
   // same idempotent loop above and remain duplicated in the sample as
-  // data-quality evidence. The flag is already on whenever submissions are
-  // present; the explicit guard is defence-in-depth for future callers.
-  if (durabilityMeasurementSubmissions && !DURABILITY_MEASUREMENT_SAMPLES_LIVE) {
-    throw new SafeError(
-      "Durability measurement-sample submission is disabled. The GHG entry cannot be created without explicit sequestration datapoint bindings.",
-    );
+  // data-quality evidence. Recheck path/environment availability here as
+  // defence-in-depth for future callers.
+  const availabilityBlocker =
+    durabilityMeasurementSampleAvailabilityBlocker(template);
+  if (durabilityMeasurementSubmissions && availabilityBlocker) {
+    throw new SafeError(availabilityBlocker);
   }
   if (durabilityMeasurementSubmissions) {
     const {

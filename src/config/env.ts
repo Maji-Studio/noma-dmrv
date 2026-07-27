@@ -111,13 +111,6 @@ const envSchema = z.object({
     .enum(["sandbox", "production"])
     .optional()
     .default("sandbox"),
-  // Explicit sandbox-only kill-switch override for the staged durability
-  // measurement-sample POST. Production is rejected below even if set.
-  DURABILITY_MEASUREMENT_SAMPLES_LIVE: z
-    .string()
-    .optional()
-    .default("false")
-    .transform((value) => value === "true"),
   // Comma-separated allowlist of host suffixes the signed-upload flows
   // (Sources mirror + telemetry) will PUT bytes to. Resolved in
   // `uploadHostAllowlist()` in signed-upload.ts: an EMPTY value preserves the
@@ -208,18 +201,6 @@ const envSchema = z.object({
       path: ["ISOMETRIC_CLIENT_SECRET"],
       message:
         "ISOMETRIC_CLIENT_SECRET and ISOMETRIC_ACCESS_TOKEN are seed/CI-only and must either both be set or both be omitted",
-    });
-  }
-
-  if (
-    data.DURABILITY_MEASUREMENT_SAMPLES_LIVE &&
-    data.ISOMETRIC_ENVIRONMENT !== "sandbox"
-  ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["DURABILITY_MEASUREMENT_SAMPLES_LIVE"],
-      message:
-        "DURABILITY_MEASUREMENT_SAMPLES_LIVE may only be enabled against the Isometric sandbox",
     });
   }
 

@@ -13,6 +13,18 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
+## 2026-07-27 (1000-year sandbox activation uses the environment boundary)
+
+The redundant `DURABILITY_MEASUREMENT_SAMPLES_LIVE` environment variable was
+retired. `ISOMETRIC_ENVIRONMENT` is now the only external-write environment
+switch: the end-to-end-verified 1000-year measurement-sample path is available
+automatically in sandbox, while production remains unavailable.
+
+The unverified 200-year sampled and unsampled wire contracts remain fail-closed
+through a path-specific code gate pending the H/C unit and component-input
+binding confirmation. Compilation reports that precise blocker instead of
+asking operators to enable a second sandbox flag.
+
 ## 2026-07-27 (Removal sources become read-only after submission)
 
 The Removal detail no longer detaches local Source mappings. It shows Mirror

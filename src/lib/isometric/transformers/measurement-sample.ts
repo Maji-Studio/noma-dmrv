@@ -83,8 +83,8 @@ export const SEQUESTRATION_BLUEPRINT_1000_YEAR =
  * aggregation→datapoint loop — `resolveTemplateInputs` and
  * `buildCreateGhgEntryRequest` skip them (see `isSequestrationBlueprintFamily`),
  * and the measurement-samples step carries their inputs instead. `submitRemoval`
- * uses this set to detect a durability template and gate it behind
- * `DURABILITY_MEASUREMENT_SAMPLES_LIVE`.
+ * uses this set to detect a durability template and apply the environment/path
+ * availability gate.
  */
 export const SEQUESTRATION_BLUEPRINT_KEYS: ReadonlySet<string> = new Set([
   SEQUESTRATION_BLUEPRINT_SAMPLED,
@@ -141,8 +141,8 @@ export const SOIL_TEMPERATURE_UNIT = "degC";
 // The measurement properties, units, and the carbon %→fraction scale below are
 // the most likely shapes but are UNCONFIRMED — the same coverage-check that
 // pins the H/C unit (`pnpm isometric:coverage-check -- --source=db`) reports
-// these. They are inert until `DURABILITY_MEASUREMENT_SAMPLES_LIVE` flips, so a
-// wrong guess can never reach a live credit. One-constant edits per the plan.
+// these. The 200-year path remains fail-closed, so a wrong guess cannot reach a
+// registry submission. One-constant edits per the plan.
 
 /** Total carbon content, grouped under `biochar_production_batch`. */
 export const TOTAL_CARBON_MEASUREMENT_PROPERTY: IsometricMeasurementProperty = {
@@ -319,11 +319,10 @@ export function buildBiocharProductionBatchSample(
  * batches. So this body carries ONLY the batch's attribution-scaled product mass
  * (the quantity the registry multiplies its derived figure by).
  *
- * ─── ⚠️ SANDBOX-GATED WIRE FORMAT (confirm before the live flip) ──────────────
+ * ─── ⚠️ UNVERIFIED WIRE FORMAT ────────────────────────────────────────────────
  * The exact `_unsampled` body — mass-only (this) vs. the registry deriving mass
- * from linked production batches — is UNCONFIRMED. It is inert until
- * `DURABILITY_MEASUREMENT_SAMPLES_LIVE` flips (the whole step is gated), so a
- * wrong guess can never reach a live credit. Resolve via
+ * from linked production batches — is UNCONFIRMED. The 200-year availability
+ * gate keeps it inert, so a wrong guess cannot reach a registry submission. Resolve via
  * `pnpm isometric:coverage-check -- --source=db` with the sequestration template,
  * then tune here. See `docs/open-questions.md`.
  *

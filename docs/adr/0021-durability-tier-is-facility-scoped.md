@@ -49,9 +49,10 @@ pre-filled an independently-editable per-batch toggle.
   advisory lock. Submission draft claim/reset paths acquire the same lock before
   mapping and artifact locks, so a consequential ledger write cannot cross the
   tier guard's check-to-update window.
-- Product framing (2026-07-04): **1000-year is the available tier**; 200-year is
-  surfaced but disabled ("available later") in the facility / durability UI. This
-  is independent of the durability *submission* staging gate
-  (`DURABILITY_MEASUREMENT_SAMPLES_LIVE`), which still gates all live durability
-  POSTs. Refines ADR 0013 (registry-computed durable fraction) and ADR 0016
-  (credit batch = production batch); does not change who computes `F_durable`.
+- Product framing (amended 2026-07-27): **1000-year is the available tier**;
+  200-year is surfaced but disabled ("available later") in the facility /
+  durability UI. The verified 1000-year submission path is available
+  automatically when `ISOMETRIC_ENVIRONMENT=sandbox`; production and the
+  unverified 200-year wire contracts fail closed. Refines ADR 0013
+  (registry-computed durable fraction) and ADR 0016 (credit batch = production
+  batch); does not change who computes `F_durable`.

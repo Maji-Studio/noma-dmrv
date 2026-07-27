@@ -37,7 +37,6 @@ import {
   makeRun,
   make1000YearSequestrationTemplate,
   makeSequestrationTemplate,
-  setDurabilityMeasurementSamplesLive,
   storedRows,
 } from "./fixtures/submit-removal-orchestrator";
 import { describe, expect, it, vi } from "vitest";
@@ -689,7 +688,6 @@ describe("submitRemoval — reporting window anchored to application date (issue
   }
 
   it("uses MAX(applicationDate) across lineages for completed_on while durability measured_at keeps the production end", async () => {
-    setDurabilityMeasurementSamplesLive(true);
     vi.mocked(
       durabilitySamples.submitDurabilityMeasurementSamples,
     ).mockResolvedValue({
@@ -926,8 +924,8 @@ describe("submitRemoval — reporting window anchored to application date (issue
   });
 });
 
-describe("submitRemoval — durability measurement-samples gate (Phase 3, staged)", () => {
-  it("blocks a template that declares a biochar_sequestration_200_year_* component while the flag is off", async () => {
+describe("submitRemoval — durability measurement-sample availability", () => {
+  it("blocks an unverified biochar_sequestration_200_year_* component", async () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
       ...makeContext(),
       defaultTemplate: makeSequestrationTemplate(),
@@ -939,34 +937,9 @@ describe("submitRemoval — durability measurement-samples gate (Phase 3, staged
 
     await expect(
       submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
-    ).rejects.toThrow(/staged but not yet live/i);
+    ).rejects.toThrow(/200-year durability.*remain blocked/i);
     // Gated before any aggregation/claim — nothing posted, no ledger row.
     expect(createDatapointFake).not.toHaveBeenCalled();
-    expect(storedRows).toHaveLength(0);
-  });
-
-  it("blocks the 1000-year component rather than silently omitting it when the flag is off", async () => {
-    const ctx = makeContext();
-    vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue({
-      ...ctx,
-      defaultTemplate: make1000YearSequestrationTemplate(),
-      batchesWithSamples: ctx.batchesWithSamples.map((batch) => ({
-        ...batch,
-        durabilityOption: "1000_year" as const,
-      })),
-    });
-
-    await expect(
-      submitRemoval({
-        orgCtx: makeTestOrgContext(USER_ID),
-        removalId: REMOVAL_ID,
-      }),
-    ).rejects.toThrow(/required sequestration datapoint IDs cannot be bound/i);
-
-    expect(
-      durabilitySamples.submitDurabilityMeasurementSamples,
-    ).not.toHaveBeenCalled();
-    expect(isometric.createGhgEntry).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
   });
 });

@@ -10,14 +10,10 @@
  * `measurement-property` source. Values retained only as evidence (currently
  * 1000-year `s_fraction`) are bound through direct orchestrator datapoints.
  *
- * ─── ⚠️ STAGED, NOT LIVE — gated on `DURABILITY_MEASUREMENT_SAMPLES_LIVE` ──────
- * Explicit binding is implemented for the verified 1000-year component. The
- * 200-year H/C unit scaling and property/input table remain unverified (see
- * `docs/open-questions.md`), so the registry POST stays behind this flag. While
- * it is `false`,
- * `submitRemoval` hard-blocks any template that declares a sequestration
- * component, so this step never runs against the registry. The operator enables
- * the flag only for the sandbox after validating the active durability path.
+ * The verified 1000-year component is available automatically against the
+ * Isometric sandbox. Production remains unavailable, and 200-year components
+ * remain fail-closed until their H/C unit scaling and property/input table are
+ * verified (see `docs/open-questions-isometric.md`).
  *
  * The POST choreography reuses `performRegistryCreate` (create → on failure
  * reconcile by supplier-ref lookup → audit event / ledger-reject), idempotent on
@@ -43,8 +39,10 @@ import {
   buildBiocharSoilSample,
   buildBiocharUnsampledBatchSample,
   build1000YearSequestrationSample,
+  isSequestrationBlueprintKey,
   selectSequestrationBlueprintKey,
   SEQUESTRATION_BLUEPRINT_SAMPLED,
+  SEQUESTRATION_BLUEPRINT_UNSAMPLED,
 } from "@/lib/isometric/transformers/measurement-sample";
 import { MINIMUM_REPLICATES_PER_BATCH } from "@/lib/calculations/biochar-eligibility";
 import { SafeError } from "@/lib/errors";
@@ -55,15 +53,45 @@ import {
 import { performRegistryCreate, supplierRefLookup } from "./registry-create";
 import { REMOVAL_ENTITY_TYPE } from "./shared";
 
+interface DurabilityTemplateShape {
+  groups: ReadonlyArray<{
+    components: ReadonlyArray<{ blueprint_key: string }>;
+  }>;
+}
+
 /**
- * Sandbox-only gate for durability measurement-sample POSTs. The 1000-year
- * explicit binding is implemented, while the 200-year table still awaits its
- * H/C unit confirm. `submitRemoval` blocks every sequestration-template
- * submission while this is off, so it can never create an emissions-only entry.
+ * Return the environment/path activation blocker for a durability template.
+ *
+ * The Isometric environment already owns the external-write boundary, so the
+ * verified 1000-year path needs no second environment flag. The unresolved
+ * 200-year wire contract remains a code-level fail-closed gate.
  */
-export const DURABILITY_MEASUREMENT_SAMPLES_LIVE =
-  env.ISOMETRIC_ENVIRONMENT === "sandbox" &&
-  env.DURABILITY_MEASUREMENT_SAMPLES_LIVE;
+export function durabilityMeasurementSampleAvailabilityBlocker(
+  template: DurabilityTemplateShape,
+  environment: "sandbox" | "production" = env.ISOMETRIC_ENVIRONMENT,
+): string | null {
+  const sequestrationBlueprintKeys = template.groups.flatMap((group) =>
+    group.components
+      .map((component) => component.blueprint_key)
+      .filter(isSequestrationBlueprintKey),
+  );
+  if (sequestrationBlueprintKeys.length === 0) return null;
+
+  if (environment !== "sandbox") {
+    return "Durability measurement-sample POSTs are currently available only against the Isometric sandbox.";
+  }
+
+  const hasUnverified200YearPath = sequestrationBlueprintKeys.some(
+    (key) =>
+      key === SEQUESTRATION_BLUEPRINT_SAMPLED ||
+      key === SEQUESTRATION_BLUEPRINT_UNSAMPLED,
+  );
+  if (hasUnverified200YearPath) {
+    return "200-year durability measurement-sample POSTs remain blocked until the H/C unit and component-input bindings are verified against the Isometric sandbox.";
+  }
+
+  return null;
+}
 
 /** One measurement-sample POST: its versioned supplier ref + the request body. */
 export interface DurabilityMeasurementSampleSubmission {
@@ -99,9 +127,9 @@ export interface BuildDurabilityMeasurementSampleSubmissionsArgs {
  * + mass. An UNSAMPLED batch (validated against computed Method-B eligibility
  * when it is created) routes to the
  * `_unsampled` blueprint carrying mass only — the registry derives its carbon +
- * durable fraction from the process's sampled history (D8). The whole step stays behind
- * `DURABILITY_MEASUREMENT_SAMPLES_LIVE`; the `_unsampled` wire format is a sandbox
- * confirm (see `buildBiocharUnsampledBatchSample`).
+ * durable fraction from the process's sampled history (D8). The 200-year
+ * availability gate keeps the `_unsampled` wire format inert until its sandbox
+ * contract is confirmed (see `buildBiocharUnsampledBatchSample`).
  */
 export function buildDurabilityMeasurementSampleSubmissions(
   args: BuildDurabilityMeasurementSampleSubmissionsArgs,

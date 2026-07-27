@@ -4,7 +4,7 @@ import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples"
 import type { FacilityReferenceSoilTemperature } from "@/lib/isometric/utils/durability-aggregation";
 import {
   buildDurabilityMeasurementSampleSubmissions,
-  DURABILITY_MEASUREMENT_SAMPLES_LIVE,
+  durabilityMeasurementSampleAvailabilityBlocker,
 } from "./durability-measurement-samples";
 import { normalizeMeasurementSamplesForHash } from "./durability-measurement-sample-snapshot";
 
@@ -68,9 +68,36 @@ const thousandYearBatch = (id: string, code: string) =>
     ],
   });
 
-describe("DURABILITY_MEASUREMENT_SAMPLES_LIVE", () => {
-  it("stays off without the sandbox-only operator opt-in", () => {
-    expect(DURABILITY_MEASUREMENT_SAMPLES_LIVE).toBe(false);
+describe("durabilityMeasurementSampleAvailabilityBlocker", () => {
+  const template = (blueprintKey: string) => ({
+    groups: [{ components: [{ blueprint_key: blueprintKey }] }],
+  });
+
+  it("allows the verified 1000-year path automatically in sandbox", () => {
+    expect(
+      durabilityMeasurementSampleAvailabilityBlocker(
+        template("biochar_sequestration_1000_year"),
+        "sandbox",
+      ),
+    ).toBeNull();
+  });
+
+  it("keeps the unverified 200-year path blocked in sandbox", () => {
+    expect(
+      durabilityMeasurementSampleAvailabilityBlocker(
+        template("biochar_sequestration_200_year_c_org"),
+        "sandbox",
+      ),
+    ).toMatch(/200-year durability.*remain blocked/i);
+  });
+
+  it("keeps durability measurement-sample POSTs unavailable in production", () => {
+    expect(
+      durabilityMeasurementSampleAvailabilityBlocker(
+        template("biochar_sequestration_1000_year"),
+        "production",
+      ),
+    ).toMatch(/only against the Isometric sandbox/i);
   });
 });
 
