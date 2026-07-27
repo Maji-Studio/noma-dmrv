@@ -254,6 +254,18 @@ export class FakeIsometricRegistry {
         query,
       );
     }
+    const measurementSampleById = path.match(
+      /^\/measurement_samples\/([^/]+)$/,
+    );
+    if (method === "GET" && measurementSampleById) {
+      return this.findById(
+        this.measurementSamples,
+        decodeURIComponent(measurementSampleById[1]),
+        method,
+        path,
+        ApiError,
+      );
+    }
     if (method === "GET" && path === "/ghg_entries") {
       return paginateSlice(this.filterRecords(this.ghgEntries, query), query);
     }
