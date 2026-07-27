@@ -123,6 +123,8 @@ test.describe("Dashboard (Flow Hero)", () => {
           name: "Incomplete source location",
           country: "TZ",
           gpsLatitude: -6.8,
+          distanceFromFacilityKm: 25,
+          distanceSource: "manual",
           isDefault: true,
         });
         await tx.insert(storageLocations).values({
@@ -222,7 +224,7 @@ test.describe("Dashboard (Flow Hero)", () => {
       const distanceSource = feedstockSheet.getByLabel("Distance source", {
         exact: true,
       });
-      await expect(distanceSource).toHaveValue("manual");
+      await expect(distanceSource).toHaveValue("supplier_default");
       await expect(
         feedstockSheet.getByTestId("transportDistanceSource-context"),
       ).toContainText("Inherited from supplier · Manual entry");

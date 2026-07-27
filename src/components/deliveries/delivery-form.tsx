@@ -441,7 +441,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
               id="distanceSource"
               label="Distance source"
               error={errors.distanceSource?.message}
-              helperText="Choose Transport document only when you have a file to attach."
             >
               <FormSelect
                 id="distanceSource"

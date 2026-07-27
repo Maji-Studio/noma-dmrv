@@ -51,6 +51,10 @@ const isFeedstockCertifyField = (field: string) =>
 
 const FEEDSTOCK_ALLOCATION_BIN_TYPE_FILTER = FEEDSTOCK_BIN_TYPES.join(",");
 
+type FeedstockDistanceSourceChoice =
+  | "supplier_default"
+  | DistanceSourceValue;
+
 // ============================================
 // Component
 // ============================================
@@ -89,6 +93,11 @@ export function FeedstockForm({
   const feedstockTypeDialog = useQuickAddDialog();
   const storageLocationDialog = useQuickAddDialog();
   const [storageLocationRowIndex, setStorageLocationRowIndex] = useState<number>(0);
+  const [distanceSourceChoiceOverride, setDistanceSourceChoiceOverride] =
+    useState<{
+      supplierId: string;
+      value: FeedstockDistanceSourceChoice;
+    } | null>(null);
 
   const defaultValues = {
     facilityId: feedstock?.facilityId ?? contextFacilityId ?? "",
@@ -213,24 +222,27 @@ export function FeedstockForm({
     isEditMode && !supplierAnchorChanged && existingLegDistanceKm != null
       ? (existingLegs?.[0]?.distanceSource ?? null)
       : storedDistanceSource;
-  const mapEstimateDistanceKm =
-    suggestedDistanceSource === "map_estimate"
-      ? suggestedDistanceKm
-      : storedDistanceSource === "map_estimate"
-        ? storedDistanceKm
-        : null;
-  const distanceSourceOptions = (
-    draftTransportDistanceSource === "map_estimate" ||
-    mapEstimateDistanceKm != null
-      ? (["map_estimate", "manual", "document"] as const)
-      : (["manual", "document"] as const)
-  ).map((value) => ({ value, label: DISTANCE_SOURCE_LABELS[value] }));
-  const isInheritedSupplierDistance =
-    suggestedDistanceKm != null &&
-    transportDistanceKm === suggestedDistanceKm &&
-    draftTransportDistanceSource === suggestedDistanceSource;
+  const matchesSupplierDefault =
+    storedDistanceKm != null &&
+    transportDistanceKm === storedDistanceKm &&
+    draftTransportDistanceSource === storedDistanceSource;
+  const selectedDistanceSource =
+    distanceSourceChoiceOverride?.supplierId === watchedSupplierId
+      ? distanceSourceChoiceOverride.value
+      : matchesSupplierDefault
+        ? "supplier_default"
+        : (draftTransportDistanceSource ?? "");
+  const isUsingSupplierDefault =
+    selectedDistanceSource === "supplier_default";
+  const distanceSourceOptions = [
+    ...(storedDistanceKm != null
+      ? [{ value: "supplier_default", label: "Supplier default" }]
+      : []),
+    { value: "manual", label: DISTANCE_SOURCE_LABELS.manual },
+    { value: "document", label: DISTANCE_SOURCE_LABELS.document },
+  ];
   const distanceSourceContext = draftTransportDistanceSource
-    ? `${isInheritedSupplierDistance ? "Inherited from supplier" : "This feedstock"} · ${
+    ? `${isUsingSupplierDefault ? "Inherited from supplier" : "This feedstock"} · ${
         DISTANCE_SOURCE_LABELS[draftTransportDistanceSource]
       }`
     : null;
@@ -246,9 +258,20 @@ export function FeedstockForm({
   // Restore the autofilled distance and clear the field's dirty flag so the
   // prefill effect resumes managing it (e.g. on a later supplier switch).
   const resetTransportDistance = () => {
-    resetField("transportDistanceKm", { defaultValue: suggestedDistanceKm ?? undefined });
+    const resetDistanceKm = storedDistanceKm ?? suggestedDistanceKm;
+    const resetDistanceSource =
+      storedDistanceKm != null ? storedDistanceSource : suggestedDistanceSource;
+    if (storedDistanceKm != null) {
+      setDistanceSourceChoiceOverride({
+        supplierId: watchedSupplierId,
+        value: "supplier_default",
+      });
+    }
+    resetField("transportDistanceKm", {
+      defaultValue: resetDistanceKm ?? undefined,
+    });
     resetField("transportDistanceSource", {
-      defaultValue: suggestedDistanceSource ?? null,
+      defaultValue: resetDistanceSource ?? null,
     });
   };
 
@@ -394,8 +417,8 @@ export function FeedstockForm({
           hint="One-way distance plus the delivery wet mass, recorded as one road transport leg."
           fields={[
             "vehicleId",
-            "transportDistanceKm",
             "transportDistanceSource",
+            "transportDistanceKm",
             "transportTripType",
           ]}
         >
@@ -414,6 +437,75 @@ export function FeedstockForm({
                 onCreateNew={() => vehicleDialog.open()}
               />
             </div>
+
+            <ActionableFocusTarget
+              target="transport-evidence"
+              activeTarget={focusTarget}
+              actionLabel="Select Transport document as the distance source to attach evidence"
+            >
+              <FormField
+                id="transportDistanceSource"
+                label="Distance source"
+                error={errors.transportDistanceSource?.message}
+              >
+                <div>
+                  <input
+                    type="hidden"
+                    {...register("transportDistanceSource")}
+                  />
+                  <FormSelect
+                    id="transportDistanceSource"
+                    name="transportDistanceSourceChoice"
+                    options={distanceSourceOptions}
+                    placeholder="Select source"
+                    disabled={isSubmitting || transportDistanceKm == null}
+                    error={!!errors.transportDistanceSource}
+                    value={selectedDistanceSource}
+                    onChange={(event) => {
+                      if (
+                        event.target.value === "supplier_default" &&
+                        storedDistanceKm != null
+                      ) {
+                        setDistanceSourceChoiceOverride({
+                          supplierId: watchedSupplierId,
+                          value: "supplier_default",
+                        });
+                        setValue(
+                          "transportDistanceKm",
+                          storedDistanceKm,
+                          SET_VALUE_OPTS,
+                        );
+                        setValue(
+                          "transportDistanceSource",
+                          storedDistanceSource,
+                          SET_VALUE_OPTS,
+                        );
+                        return;
+                      }
+                      const selectedSource =
+                        event.target.value as DistanceSourceValue;
+                      setDistanceSourceChoiceOverride({
+                        supplierId: watchedSupplierId,
+                        value: selectedSource,
+                      });
+                      setValue(
+                        "transportDistanceSource",
+                        selectedSource,
+                        SET_VALUE_OPTS,
+                      );
+                    }}
+                  />
+                  {distanceSourceContext && (
+                    <p
+                      className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] mt-6"
+                      data-testid="transportDistanceSource-context"
+                    >
+                      {distanceSourceContext}
+                    </p>
+                  )}
+                </div>
+              </FormField>
+            </ActionableFocusTarget>
 
             <ActionableFocusTarget
               target="transport-route"
@@ -440,17 +532,29 @@ export function FeedstockForm({
                       step="any"
                       min="0"
                       placeholder="e.g., 85"
-                      disabled={isSubmitting}
+                      disabled={
+                        isSubmitting ||
+                        selectedDistanceSource === "supplier_default"
+                      }
                       error={!!errors.transportDistanceKm}
                       className={isDistanceOverride ? "pr-[104px]" : undefined}
                       {...register("transportDistanceKm", {
                         setValueAs: numericValue,
-                        onChange: (event) =>
+                        onChange: (event) => {
+                          setDistanceSourceChoiceOverride(
+                            event.target.value === ""
+                              ? null
+                              : {
+                                  supplierId: watchedSupplierId,
+                                  value: "manual",
+                                },
+                          );
                           setValue(
                             "transportDistanceSource",
                             event.target.value === "" ? null : "manual",
                             SET_VALUE_OPTS,
-                          ),
+                          );
+                        },
                       })}
                     />
                     {isDistanceOverride && (
@@ -462,7 +566,7 @@ export function FeedstockForm({
                         data-testid="transportDistanceKm-reset"
                         className="absolute inset-y-0 right-0 flex items-center gap-6 pl-8 pr-12 text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-secondary)] disabled:opacity-50"
                       >
-                        <span className="body-caption">override</span>
+                        <span className="body-caption">reset</span>
                         <ArrowCounterClockwiseIcon size={14} weight="bold" />
                       </button>
                     )}
@@ -474,58 +578,6 @@ export function FeedstockForm({
                       aria-live="polite"
                     >
                       Total: {formatDistanceKm(totalTransportDistanceKm)}
-                    </p>
-                  )}
-                </div>
-              </FormField>
-            </ActionableFocusTarget>
-
-            <ActionableFocusTarget
-              target="transport-evidence"
-              activeTarget={focusTarget}
-              actionLabel="Select Transport document as the distance source to attach evidence"
-            >
-              <FormField
-                id="transportDistanceSource"
-                label="Distance source"
-                error={errors.transportDistanceSource?.message}
-                helperText="Choose Transport document only when you have a file to attach."
-              >
-                <div>
-                  <FormSelect
-                    id="transportDistanceSource"
-                    options={distanceSourceOptions}
-                    placeholder="Select source"
-                    disabled={isSubmitting || transportDistanceKm == null}
-                    error={!!errors.transportDistanceSource}
-                    value={draftTransportDistanceSource ?? ""}
-                    {...register("transportDistanceSource", {
-                      onChange: (event) => {
-                        const source = event.target.value as DistanceSourceValue;
-                        if (
-                          source === "map_estimate" &&
-                          mapEstimateDistanceKm != null
-                        ) {
-                          setValue(
-                            "transportDistanceKm",
-                            mapEstimateDistanceKm,
-                            SET_VALUE_OPTS,
-                          );
-                        }
-                        setValue(
-                          "transportDistanceSource",
-                          source,
-                          SET_VALUE_OPTS,
-                        );
-                      },
-                    })}
-                  />
-                  {distanceSourceContext && (
-                    <p
-                      className="body-caption uppercase tracking-[0.08em] text-[var(--color-text-tertiary)] mt-6"
-                      data-testid="transportDistanceSource-context"
-                    >
-                      {distanceSourceContext}
                     </p>
                   )}
                 </div>
@@ -705,7 +757,9 @@ export function FeedstockForm({
           deferredAttachments={deferredAttachments}
           retryEntityIds={retryEntityIds}
           isSubmitting={isSubmitting}
-          draftDistanceSource={draftTransportDistanceSource}
+          draftDistanceSource={
+            selectedDistanceSource === "document" ? "document" : null
+          }
         />
       </FormSpine>
 
