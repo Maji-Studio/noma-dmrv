@@ -195,8 +195,8 @@ export async function getCreditBatchSummariesByRemovalIds(
 
 // A credit batch not yet grouped into a removal, with the display fields the
 // New-Removal wizard's selection cards render (code, crediting window,
-// durability). Applied weight and stored CO₂e are derived per batch by the
-// wizard (issue #285); this query is the cheap list half.
+// durability). Applied weight is derived per batch by the wizard (issue #285);
+// carbon is intentionally absent because Isometric is the Removal authority.
 export interface UngroupedCreditBatchRow {
   id: string;
   code: string;

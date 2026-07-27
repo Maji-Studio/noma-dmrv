@@ -10,6 +10,7 @@ import {
 } from "@/data-access/certification";
 import { getLatestSubmissionsForEntities } from "@/data-access/certification";
 import {
+  getCertifierRemovalById,
   listRemovalsForFacility,
   listUngroupedCreditBatches,
 } from "@/data-access/certifier-removals";
@@ -110,6 +111,65 @@ export interface CertificationOverviewData {
   isProduction: boolean;
 }
 
+async function buildRemovalPreflightSummary(
+  orgCtx: Parameters<typeof resolveScopeForRemoval>[0],
+  removalId: string,
+  facilityFacts: Awaited<ReturnType<typeof loadFacilityCertifierFacts>>,
+): Promise<RemovalPreflightSummary> {
+  const scope = await resolveScopeForRemoval(orgCtx, removalId);
+  const [ctx, recentSyncEvents] = await Promise.all([
+    buildRemovalContext(orgCtx, scope, facilityFacts),
+    listRecentSyncEvents(orgCtx, {
+      entityType: REMOVAL_ENTITY_TYPE,
+      entityId: removalId,
+      limit: RECENT_SYNC_EVENTS_LIMIT,
+    }),
+  ]);
+  const facts = toRemovalReadinessFacts(ctx);
+  return {
+    removalId,
+    startedOn: scope.removal?.startedOn ?? null,
+    completedOn: scope.removal?.completedOn ?? null,
+    memberBatchCodes: ctx.memberBatches.map((batch) => batch.code),
+    externalId: ctx.latestSubmission?.externalId ?? null,
+    version: ctx.latestSubmission?.version ?? null,
+    local: facts.local,
+    lockInFlight: facts.lockInFlight,
+    readiness: deriveRemovalReadiness(facts),
+    submissionWarnings: ctx.submissionWarnings,
+    recentSyncEvents,
+  };
+}
+
+/**
+ * One isolated enrichment read for the lightweight facility-scoped Removal
+ * identity list. A failure affects only this row; the list query remains
+ * usable and the caller can retry this action without reloading siblings.
+ */
+export async function loadRemovalPreflight(
+  facilityId: string,
+  removalId: string,
+): Promise<ActionResult<RemovalPreflightSummary>> {
+  return withAction(async (orgCtx) => {
+    const validFacilityId = z.string().uuid().parse(facilityId);
+    const validRemovalId = z.string().uuid().parse(removalId);
+    await requireOrgFacility(orgCtx, validFacilityId);
+    const removal = await getCertifierRemovalById(orgCtx, validRemovalId);
+    if (!removal || removal.facilityId !== validFacilityId) {
+      throw new SafeError("Removal does not belong to requested facility");
+    }
+    const facilityFacts = await loadFacilityCertifierFacts(
+      orgCtx,
+      validFacilityId,
+    );
+    return buildRemovalPreflightSummary(
+      orgCtx,
+      validRemovalId,
+      facilityFacts,
+    );
+  });
+}
+
 /**
  * Server-owned readiness for the Removals hub. Computes a per-removal
  * verdict once, server-side, by reusing the same submission context the submit
@@ -141,35 +201,9 @@ export async function loadCertificationOverview(
       const summaries = await Promise.all(
         removalRows
           .slice(i, i + READINESS_CONCURRENCY)
-          .map(async (removal): Promise<RemovalPreflightSummary> => {
-            const scope = await resolveScopeForRemoval(orgCtx, removal.id, {
-              skipPreview: true,
-            });
-            const [ctx, recentSyncEvents] = await Promise.all([
-              buildRemovalContext(orgCtx, scope, facilityFacts),
-              listRecentSyncEvents(orgCtx, {
-                entityType: REMOVAL_ENTITY_TYPE,
-                entityId: removal.id,
-                limit: RECENT_SYNC_EVENTS_LIMIT,
-              }),
-            ]);
-            const facts = toRemovalReadinessFacts(ctx);
-            const readiness = deriveRemovalReadiness(facts);
-
-            return {
-              removalId: removal.id,
-              startedOn: removal.startedOn,
-              completedOn: removal.completedOn,
-              memberBatchCodes: ctx.memberBatches.map((b) => b.code),
-              externalId: ctx.latestSubmission?.externalId ?? null,
-              version: ctx.latestSubmission?.version ?? null,
-              local: facts.local,
-              lockInFlight: facts.lockInFlight,
-              readiness,
-              submissionWarnings: ctx.submissionWarnings,
-              recentSyncEvents,
-            };
-          }),
+          .map((removal) =>
+            buildRemovalPreflightSummary(orgCtx, removal.id, facilityFacts),
+          ),
       );
       removals.push(...summaries);
     }

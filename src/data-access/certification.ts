@@ -910,6 +910,7 @@ export interface AppendSyncEventInput {
   requestPayload?: unknown;
   responsePayload?: unknown;
   errorMessage?: string | null;
+  attemptedAt?: Date;
 }
 
 export async function appendSyncEvent(
@@ -927,6 +928,7 @@ export async function appendSyncEvent(
     requestPayload: (input.requestPayload ?? null) as Record<string, unknown>,
     responsePayload: (input.responsePayload ?? null) as Record<string, unknown>,
     errorMessage: input.errorMessage ?? null,
+    attemptedAt: input.attemptedAt,
   });
 }
 

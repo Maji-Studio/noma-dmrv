@@ -29,12 +29,18 @@ import { DataTable } from "@/components/ui/data-table";
 import { Button, EmptyState } from "@/components/ui";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-import { useCertificationOverview } from "@/hooks/use-certification";
-import type { RemovalPreflightSummary } from "@/fn/certification";
+import {
+  useRemovalPreflightSummaries,
+  useRemovalsForFacility,
+} from "@/hooks/use-certification";
 import { deriveRemovalStatus } from "@/lib/certification/status";
 import { formatDateRange } from "@/lib/format-utils";
 import { NewRemovalDialog } from "./new-removal-dialog";
 import { RemovalDetailSheet } from "./removal-detail-sheet";
+import {
+  buildRemovalListRows,
+  type RemovalListRow,
+} from "./removal-list-state";
 
 const SHORT_ID = 8;
 
@@ -103,13 +109,13 @@ function shortId(id: string): string {
   return id.slice(0, SHORT_ID);
 }
 
-function reportingWindow(summary: RemovalPreflightSummary): string {
+function reportingWindow(summary: RemovalListRow): string {
   return summary.startedOn && summary.completedOn
     ? formatDateRange(summary.startedOn, summary.completedOn)
     : "Set on submit";
 }
 
-function RemovalCell({ summary }: { summary: RemovalPreflightSummary }) {
+function RemovalCell({ summary }: { summary: RemovalListRow }) {
   return (
     <div className="flex flex-col gap-2 min-w-0">
       <span className="body-small font-mono text-[var(--color-text-primary)] truncate">
@@ -122,7 +128,7 @@ function RemovalCell({ summary }: { summary: RemovalPreflightSummary }) {
   );
 }
 
-function MemberBatchesCell({ summary }: { summary: RemovalPreflightSummary }) {
+function MemberBatchesCell({ summary }: { summary: RemovalListRow }) {
   const { memberBatchCodes } = summary;
   if (memberBatchCodes.length === 0) {
     return <span className="body-small text-[var(--color-text-tertiary)]">—</span>;
@@ -140,7 +146,7 @@ function MemberBatchesCell({ summary }: { summary: RemovalPreflightSummary }) {
   );
 }
 
-function StatusCell({ summary }: { summary: RemovalPreflightSummary }) {
+function StatusCell({ summary }: { summary: RemovalListRow }) {
   const derived = deriveRemovalStatus({
     local: summary.local,
     lockInFlight: summary.lockInFlight,
@@ -148,7 +154,33 @@ function StatusCell({ summary }: { summary: RemovalPreflightSummary }) {
   return <StatusBadge status={derived.value} label={derived.label} />;
 }
 
-function ReadinessCell({ summary }: { summary: RemovalPreflightSummary }) {
+function ReadinessCell({ summary }: { summary: RemovalListRow }) {
+  if (summary.enrichmentStatus === "loading") {
+    return (
+      <span className="body-caption text-[var(--color-text-tertiary)]">
+        Checking readiness…
+      </span>
+    );
+  }
+  if (summary.enrichmentStatus === "unavailable" || !summary.readiness) {
+    return (
+      <span className="flex flex-col items-start gap-4">
+        <span className="body-caption text-[var(--color-signal-orange-strong)]">
+          Readiness unavailable
+        </span>
+        <Button
+          variant="default"
+          size="small"
+          onClick={(event) => {
+            event.stopPropagation();
+            void summary.retry?.();
+          }}
+        >
+          Retry readiness
+        </Button>
+      </span>
+    );
+  }
   const { state, reasons, advisories } = summary.readiness;
   if (state === "ready") {
     return (
@@ -214,7 +246,7 @@ function ReadinessCell({ summary }: { summary: RemovalPreflightSummary }) {
   return <span className="body-caption text-[var(--color-text-tertiary)]">—</span>;
 }
 
-const columns: ColumnDef<RemovalPreflightSummary>[] = [
+const columns: ColumnDef<RemovalListRow>[] = [
   {
     id: "removal",
     header: "Removal",
@@ -242,7 +274,9 @@ const columns: ColumnDef<RemovalPreflightSummary>[] = [
     id: "readiness",
     header: "Readiness",
     accessorFn: (summary) =>
-      `${summary.readiness.state} ${summary.readiness.reasons.join(" ")} ${summary.readiness.advisories.join(" ")}`,
+      summary.readiness
+        ? `${summary.readiness.state} ${summary.readiness.reasons.join(" ")} ${summary.readiness.advisories.join(" ")}`
+        : "Readiness unavailable",
     cell: ({ row }) => <ReadinessCell summary={row.original} />,
   },
 ];
@@ -254,14 +288,20 @@ function ListBody({
   facilityId: string;
   onNewRemoval: () => void;
 }) {
-  const overview = useCertificationOverview(facilityId);
+  const identities = useRemovalsForFacility(facilityId);
   const [searchQuery, setSearchQuery] = useState("");
   const [removalId, setRemovalId] = useQueryState(
     "removal",
     parseAsString.withOptions({ shallow: true, history: "replace" }),
   );
 
-  if (overview.error) {
+  const identityRows = identities.data?.removals ?? [];
+  const enrichmentByRemovalId = useRemovalPreflightSummaries(
+    facilityId,
+    identityRows.map((entry) => entry.removal.id),
+  );
+
+  if (identities.error) {
     return (
       <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20">
         <p className="body-medium text-[var(--clr-red)]" role="alert">
@@ -271,8 +311,7 @@ function ListBody({
     );
   }
 
-  const data = overview.data;
-  const rows = data?.removals ?? [];
+  const rows = buildRemovalListRows(identityRows, enrichmentByRemovalId);
   const selected = removalId
     ? rows.find((r) => r.removalId === removalId)
     : undefined;
@@ -293,7 +332,7 @@ function ListBody({
           enablePagination
           globalFilter={searchQuery}
           onGlobalFilterChange={setSearchQuery}
-          isLoading={overview.isLoading}
+          isLoading={identities.isLoading}
           hoverable
           onRowClick={(row) => setRemovalId(row.removalId)}
           aria-label="Removals"
@@ -331,10 +370,10 @@ function ListBody({
         </DataTable>
       </section>
 
-      {selected && data && (
+      {selected && identities.data && (
         <RemovalDetailSheet
           summary={selected}
-          isProduction={data.isProduction}
+          isProduction={identities.data.isProduction}
           facilityId={facilityId}
           open
           onClose={() => setRemovalId(null)}
