@@ -29,6 +29,10 @@ import {
   formatLocalDate,
   NonexistentLocalTimeError,
 } from "@/lib/date-utils";
+import {
+  getFutureProductionRunTimeFields,
+  PRODUCTION_RUN_FUTURE_TIME_MESSAGES,
+} from "@/lib/production-runs/time-validation";
 
 // ============================================
 // Time-window helpers (start/end date + time pairs)
@@ -225,7 +229,10 @@ const productionRunFormObject = z.object({
  * start/end values have already been combined into `Date` instants by the
  * client and the zone is therefore never consulted.
  */
-export function makeProductionRunFormSchema(timeZone: string) {
+export function makeProductionRunFormSchema(
+  timeZone: string,
+  now: () => Date = () => new Date(),
+) {
   return productionRunFormObject.superRefine((data, ctx) => {
     const start = resolveInstant(data.startDate, data.startTime, timeZone);
     const endPresent = hasEndTime(data.endTime);
@@ -251,6 +258,21 @@ export function makeProductionRunFormSchema(timeZone: string) {
         code: z.ZodIssueCode.custom,
         path: ["endTime"],
         message: end.wallClockErrorMessage,
+      });
+    }
+
+    const futureTimeFields = getFutureProductionRunTimeFields(
+      {
+        startTime: start.instant,
+        endTime: end.instant,
+      },
+      now(),
+    );
+    for (const field of futureTimeFields) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [field],
+        message: PRODUCTION_RUN_FUTURE_TIME_MESSAGES[field],
       });
     }
 

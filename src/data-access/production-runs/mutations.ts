@@ -57,6 +57,10 @@ import {
 } from "@/lib/production-runs/lifecycle";
 import { retireDocumentsForEntities } from "../documents";
 import { attachProductionRunToMatchingCreditBatch } from "../credit-batch-membership";
+import {
+  assertProductionRunTimesNotFuture,
+  type ProductionRunMutationOptions,
+} from "./future-time";
 
 const END_AFTER_START_CONSTRAINT = "production_runs_end_after_start";
 const END_AFTER_START_MESSAGE = "End time must be after the start time";
@@ -205,9 +209,12 @@ export async function createProductionRun(
     biocharMoisturePercent?: number | null;
     biocharStorageLocationId?: string | null;
     feedstockStorageLocationId?: string | null;
-  }
+  },
+  options: ProductionRunMutationOptions = {},
 ): Promise<ProductionRunWithRelations> {
   requireOrgScope(ctx);
+  const now = options.now ?? new Date();
+  assertProductionRunTimesNotFuture(data, now);
   if (data.operatorId) await assertSameOrg(ctx, operators, data.operatorId);
 
   // Verify facility exists and is active (no new children under an archived parent)
@@ -410,9 +417,20 @@ export async function updateProductionRun(
     biocharMoisturePercent?: number | null;
     biocharStorageLocationId?: string | null;
     feedstockStorageLocationId?: string | null;
-  }
+  },
+  options: ProductionRunMutationOptions = {},
 ): Promise<ProductionRunWithRelations> {
   requireOrgScope(ctx);
+  const now = options.now ?? new Date();
+  // Reject submitted future instants before any read or write. The merged
+  // effective window is checked again after loading the existing record.
+  assertProductionRunTimesNotFuture(
+    {
+      startTime: data.startTime,
+      endTime: data.endTime,
+    },
+    now,
+  );
   if (data.operatorId) await assertSameOrg(ctx, operators, data.operatorId);
 
   // Verify run exists
@@ -463,6 +481,13 @@ export async function updateProductionRun(
   const effectiveStartTime = data.startTime ?? existing.startTime;
   const effectiveEndTime =
     data.endTime !== undefined ? data.endTime : existing.endTime;
+  assertProductionRunTimesNotFuture(
+    {
+      startTime: effectiveStartTime,
+      endTime: effectiveEndTime,
+    },
+    now,
+  );
   const effectiveStatus = data.status ?? existing.status;
   const effectiveFeedstockStorageId =
     data.feedstockStorageLocationId !== undefined
@@ -471,7 +496,7 @@ export async function updateProductionRun(
 
   // Update production run + M:M re-allocation in a transaction
   const updateData: Record<string, unknown> = {
-    updatedAt: new Date(),
+    updatedAt: now,
   };
 
   if (data.code !== undefined) updateData.code = data.code;

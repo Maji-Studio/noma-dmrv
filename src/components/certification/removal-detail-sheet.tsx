@@ -24,6 +24,8 @@ import { EnvBanner } from "./env-banner";
 import { RegistryRecordLink } from "./registry-record-link";
 import { RemovalCarbonBreakdown } from "./removal-carbon-breakdown";
 import { SourcesPanel } from "./sources-panel";
+import { SubmissionNotes } from "./submission-notes";
+import { buildSubmissionWarningNotes } from "./submission-warning-notes";
 import { SyncEventLog } from "./sync-event-log";
 
 interface RemovalDetailSheetProps {
@@ -173,6 +175,9 @@ export function RemovalDetailSheet({
     lockInFlight: summary.lockInFlight,
   });
   const { state } = summary.readiness;
+  const submissionWarningNotes = buildSubmissionWarningNotes(
+    summary.submissionWarnings,
+  );
   // The workflow may only be (re)entered while something still needs doing:
   // `ready` (submit it) or `blocked` (resolve preconditions). A `submitted`
   // removal is done, and an `inProgress` one is mid-flight — neither offers an
@@ -236,31 +241,12 @@ export function RemovalDetailSheet({
 
           <ReadinessBlock summary={summary} />
 
-          {summary.submissionWarnings.length > 0 && (
-            // Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant
-            // diesel the active template cannot carry. Distinct from the
-            // readiness blockers above: the removal still submits.
-            <div className="flex flex-col gap-6 border-l-2 border-[var(--color-signal-orange)] pl-12 py-4">
-              <span className="body-small font-medium text-[var(--color-text-primary)]">
-                Advisory — submits, but note:
-              </span>
-              <ul className="flex flex-col gap-4">
-                {summary.submissionWarnings.map((warning) => (
-                  <li key={warning} className="flex items-start gap-6">
-                    <WarningIcon
-                      size={14}
-                      weight="fill"
-                      aria-hidden
-                      className="mt-2 shrink-0 text-[var(--color-signal-orange)]"
-                    />
-                    <span className="body-caption text-[var(--color-text-secondary)]">
-                      {warning}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {/*
+            Non-blocking advisories (ADR 0015) — e.g. recorded startup/plant
+            diesel the active template cannot carry. Distinct from readiness
+            blockers above: the removal still submits.
+          */}
+          <SubmissionNotes notes={submissionWarningNotes} />
 
           {/*
             Supporting sources — mirror lineage documents (lab reports, BoLs,

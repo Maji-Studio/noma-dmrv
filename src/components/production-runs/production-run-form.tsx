@@ -896,6 +896,7 @@ export function ProductionRunForm({
             {productionRun?.id && (
               <ProductionRunReadingTable
                 productionRunId={productionRun.id}
+                timeZone={formTimezone}
                 compact
               />
             )}
