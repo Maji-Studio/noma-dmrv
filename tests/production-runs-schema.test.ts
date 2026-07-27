@@ -129,6 +129,7 @@ describe("makeProductionRunFormSchema timezone binding", () => {
 // end time, sets the registry `measured_at` datapoint.
 describe("makeProductionRunFormSchema DST gap and fold", () => {
   const NEW_YORK = "America/New_York"; // forward 2026-03-08, back 2026-11-01
+  const afterDstFixtures = () => new Date("2026-12-01T00:00:00.000Z");
   const completeRun = {
     ...validProductionRunInput,
     status: "complete" as const,
@@ -147,7 +148,10 @@ describe("makeProductionRunFormSchema DST gap and fold", () => {
 
   it("rejects a start inside the spring-forward gap, naming the gap", () => {
     process.env.TZ = "UTC";
-    const result = makeProductionRunFormSchema(NEW_YORK).safeParse({
+    const result = makeProductionRunFormSchema(
+      NEW_YORK,
+      afterDstFixtures,
+    ).safeParse({
       ...completeRun,
       startDate: "2026-03-08",
       startTime: "02:30",
@@ -168,7 +172,10 @@ describe("makeProductionRunFormSchema DST gap and fold", () => {
 
   it("rejects an end inside the spring-forward gap, on the end field", () => {
     process.env.TZ = "Africa/Dar_es_Salaam";
-    const result = makeProductionRunFormSchema(NEW_YORK).safeParse({
+    const result = makeProductionRunFormSchema(
+      NEW_YORK,
+      afterDstFixtures,
+    ).safeParse({
       ...completeRun,
       startDate: "2026-03-08",
       startTime: "01:30",
@@ -186,7 +193,10 @@ describe("makeProductionRunFormSchema DST gap and fold", () => {
 
   it("rejects an ambiguous fall-back wall clock on its own field", () => {
     process.env.TZ = "Europe/Zurich";
-    const result = makeProductionRunFormSchema(NEW_YORK).safeParse({
+    const result = makeProductionRunFormSchema(
+      NEW_YORK,
+      afterDstFixtures,
+    ).safeParse({
       ...completeRun,
       startDate: "2026-11-01",
       startTime: "01:30",
@@ -204,7 +214,10 @@ describe("makeProductionRunFormSchema DST gap and fold", () => {
 
   it("leaves a run at a facility without DST unaffected", () => {
     process.env.TZ = "America/New_York";
-    const result = makeProductionRunFormSchema("Africa/Dar_es_Salaam").safeParse({
+    const result = makeProductionRunFormSchema(
+      "Africa/Dar_es_Salaam",
+      afterDstFixtures,
+    ).safeParse({
       ...completeRun,
       startDate: "2026-03-08",
       startTime: "02:30",
@@ -213,6 +226,97 @@ describe("makeProductionRunFormSchema DST gap and fold", () => {
     });
 
     expect(result.success).toBe(true);
+  });
+});
+
+describe("makeProductionRunFormSchema future instant boundary", () => {
+  const NOW = new Date("2026-07-15T12:00:00.000Z");
+  const fixedClock = () => NOW;
+  const completeRun = {
+    ...validProductionRunInput,
+    status: "complete" as const,
+    biocharOutputKg: 10,
+    biocharMoisturePercent: 5,
+  };
+
+  it("accepts an exact-now start at a facility ahead of UTC", () => {
+    const result = makeProductionRunFormSchema(
+      "Pacific/Kiritimati",
+      fixedClock,
+    ).safeParse({
+      ...validProductionRunInput,
+      biocharOutputKg: 10,
+      startDate: "2026-07-16",
+      startTime: "02:00",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a future start at a facility ahead of UTC", () => {
+    const result = makeProductionRunFormSchema(
+      "Pacific/Kiritimati",
+      fixedClock,
+    ).safeParse({
+      ...validProductionRunInput,
+      biocharOutputKg: 10,
+      startDate: "2026-07-16",
+      startTime: "02:01",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["startTime"],
+            message:
+              "Start time cannot be in the future. Enter a time at or before now.",
+          }),
+        ]),
+      );
+    }
+  });
+
+  it("accepts an exact-now end at a facility behind UTC", () => {
+    const result = makeProductionRunFormSchema(
+      "America/Los_Angeles",
+      fixedClock,
+    ).safeParse({
+      ...completeRun,
+      startDate: "2026-07-15",
+      startTime: "04:00",
+      endDate: "2026-07-15",
+      endTime: "05:00",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a future end at a facility behind UTC", () => {
+    const result = makeProductionRunFormSchema(
+      "America/Los_Angeles",
+      fixedClock,
+    ).safeParse({
+      ...completeRun,
+      startDate: "2026-07-15",
+      startTime: "04:00",
+      endDate: "2026-07-15",
+      endTime: "05:01",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["endTime"],
+            message:
+              "End time cannot be in the future. Enter a time at or before now.",
+          }),
+        ]),
+      );
+    }
   });
 });
 
