@@ -24,7 +24,7 @@ import type {
   TrailTransportLeg,
 } from "@/data-access/chain-of-custody-trail";
 import { useApplicationTrail } from "@/hooks/use-chain-of-custody";
-import { formatDate, formatDateTime } from "@/lib/format-utils";
+import { formatDate, formatDateTime, formatMassKg } from "@/lib/format-utils";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import {
   LINEAGE_NODE_STYLES,
@@ -42,8 +42,7 @@ interface TrailStepDescriptor {
 }
 
 function formatKg(value: number | null): string | null {
-  if (value == null) return null;
-  return `${Math.round(value).toLocaleString()} kg`;
+  return value == null ? null : formatMassKg(value);
 }
 
 function formatStepDate(value: Date | string | null): string {

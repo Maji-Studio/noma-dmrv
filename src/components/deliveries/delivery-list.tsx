@@ -54,7 +54,13 @@ import type {
 } from "@/data-access/deliveries";
 import { certificationDetailField } from "@/lib/certification/certify-field-registry";
 import { deriveEntityCertifyReadiness } from "@/lib/certification/entity-readiness";
-import { formatDate, formatDistanceKm } from "@/lib/format-utils";
+import { formatDate, formatDistanceKm, formatMassKg } from "@/lib/format-utils";
+import {
+  formatMoisturePercent,
+  MOISTURE_FIELD_LABEL,
+  WET_MASS_FIELD_LABEL,
+} from "@/lib/mass-moisture";
+import { MoistureSplit } from "@/components/ui/moisture-split";
 import { DEFAULT_TRIP_TYPE, TRIP_TYPE_LABELS } from "@/schemas/trip-type";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
 import { parseAsString, useQueryState } from "nuqs";
@@ -68,11 +74,6 @@ import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 // ============================================
 // Helper Functions
 // ============================================
-
-function formatMass(value: number | null): string {
-  if (value === null || value === undefined) return "—";
-  return `${value.toLocaleString()} kg`;
-}
 
 function deliveryDetailToRelations(
   delivery: DeliveryDetail,
@@ -128,18 +129,33 @@ function createColumns(
         </span>
       ),
     },
+    // Every mass on this surface — these two columns, the KPI strip, the detail
+    // sheet's wet-mass row and its MoistureSplit — goes through `formatMassKg`:
+    // fixed kg, one decimal. Wet and dry sit next to each other and must stay
+    // subtractable, and dry mass is derived (wet × (1 − moisture/100)), so it
+    // routinely lands on a half kilo. `formatMass` would round that away in the
+    // table while the split bar below still showed it.
     {
       accessorKey: "deliveredWetMassKg",
-      header: "Wet Mass",
+      header: "Wet mass",
       cell: ({ row }) => (
-        <span className="font-mono text-right">{formatMass(row.original.deliveredWetMassKg)}</span>
+        <span className="font-mono text-right">{formatMassKg(row.original.deliveredWetMassKg)}</span>
       ),
     },
     {
       accessorKey: "massDryKg",
-      header: "Dry Mass",
+      header: "Dry mass",
       cell: ({ row }) => (
-        <span className="font-mono text-right">{formatMass(row.original.massDryKg)}</span>
+        <span className="font-mono text-right">{formatMassKg(row.original.massDryKg)}</span>
+      ),
+    },
+    {
+      accessorKey: "moistureContentPercent",
+      header: "Moisture",
+      cell: ({ row }) => (
+        <span className="font-mono text-right">
+          {formatMoisturePercent(row.original.moistureContentPercent)}
+        </span>
       ),
     },
     {
@@ -475,14 +491,14 @@ export function DeliveryList() {
         />
         <StatCard
           title="Wet Mass Delivered"
-          value={`${(statsData?.totalDeliveredWetMassKg ?? 0).toLocaleString()} kg`}
+          value={formatMassKg(statsData?.totalDeliveredWetMassKg ?? 0)}
           icon={<PackageIcon size={24} weight="bold" />}
           description="Total wet mass"
           isLoading={statsLoading}
         />
         <StatCard
           title="Dry Mass"
-          value={`${(statsData?.totalMassDryKg ?? 0).toLocaleString()} kg`}
+          value={formatMassKg(statsData?.totalMassDryKg ?? 0)}
           icon={<DropIcon size={24} weight="bold" />}
           description="Total dry mass"
           isLoading={statsLoading}
@@ -524,13 +540,13 @@ export function DeliveryList() {
             description={
               hasActiveFilters
                 ? "Try adjusting or clearing the search and filters."
-                : "Create your first delivery to get started"
+                : "A delivery tracks biochar leaving the facility for a customer."
             }
             action={
               hasActiveFilters ? undefined : (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={18} weight="bold" />
-                  New Delivery
+                  Create your first delivery
                 </Button>
               )
             }
@@ -551,7 +567,7 @@ export function DeliveryList() {
               }}
               aria-label="Filter by credit batch"
             >
-              <option value="">All Credit Batches</option>
+              <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
                   {batch.code}
@@ -589,33 +605,32 @@ export function DeliveryList() {
           sideSheetEntity
             ? [
                 {
-                  title: "Delivery Information",
+                  title: "Delivery information",
                   fields: [
-                    { label: "Delivery Date", value: formatDate(sideSheetEntity.deliveryDate) },
+                    { label: "Delivery date", value: formatDate(sideSheetEntity.deliveryDate) },
                     { label: "Status", value: <StatusBadge status={sideSheetEntity.status} /> },
                     { label: "Order", value: sideSheetEntity.orderCode },
                   ],
                 },
                 {
-                  title: "Mass & Moisture",
+                  title: "Mass and moisture",
                   fields: [
                     {
-                      label: "Wet Mass (kg)",
+                      label: WET_MASS_FIELD_LABEL,
                       ...certificationDetailField("delivery", "deliveredWetMassKg"),
-                      value:
-                        sideSheetEntity.deliveredWetMassKg != null
-                          ? `${sideSheetEntity.deliveredWetMassKg.toLocaleString()} kg`
-                          : null,
+                      value: formatMassKg(sideSheetEntity.deliveredWetMassKg),
                     },
-                    { label: "Moisture (%)", value: sideSheetEntity.moistureContentPercent != null ? `${sideSheetEntity.moistureContentPercent}%` : null },
                     {
-                      label: "Dry Mass (derived)",
-                      value:
-                        sideSheetEntity.massDryKg != null
-                          ? `${sideSheetEntity.massDryKg.toLocaleString()} kg`
-                          : null,
+                      label: MOISTURE_FIELD_LABEL,
+                      value: formatMoisturePercent(sideSheetEntity.moistureContentPercent),
                     },
                   ],
+                  content: (
+                    <MoistureSplit
+                      wetMassKg={sideSheetEntity.deliveredWetMassKg}
+                      moisturePercent={sideSheetEntity.moistureContentPercent}
+                    />
+                  ),
                 },
                 {
                   title: "Transport",
@@ -634,7 +649,7 @@ export function DeliveryList() {
                   ],
                 },
                 {
-                  title: "Transport Evidence",
+                  title: "Transport evidence",
                   fields: [],
                   content: (
                     <TransportEvidencePanel

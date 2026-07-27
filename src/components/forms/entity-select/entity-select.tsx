@@ -22,6 +22,7 @@ import { VehicleQuickAddDialog } from "./vehicle-quick-add-dialog";
 import { FeedstockTypeQuickAddDialog } from "./feedstock-type-quick-add-dialog";
 import { OperatorQuickAddDialog } from "./operator-quick-add-dialog";
 import { getEntityOptionCodeLabel } from "./option-display";
+import { ENTITY_TYPE_LABELS } from "./entity-labels";
 
 // Icons
 function ChevronDown({ className }: { className?: string }) {
@@ -136,25 +137,6 @@ function SpinnerIcon({ className }: { className?: string }) {
   );
 }
 
-// Human-readable entity type labels
-const ENTITY_TYPE_LABELS = {
-  facility: "facility",
-  reactor: "reactor",
-  supplier: "supplier",
-  customer: "customer",
-  driver: "driver",
-  operator: "operator",
-  storageLocation: "storage location",
-  vehicle: "vehicle",
-  feedstockType: "feedstock type",
-  feedstock: "feedstock",
-  productionRun: "production run",
-  application: "application",
-  formulation: "formulation",
-  biocharProduct: "product",
-  order: "order",
-  creditBatch: "credit batch",
-} as const;
 
 const SEARCH_VISIBILITY_THRESHOLD = 5;
 

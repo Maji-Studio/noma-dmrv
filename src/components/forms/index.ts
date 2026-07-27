@@ -8,7 +8,11 @@ export { FormError } from "./form-error";
 export { ServerError } from "./server-error";
 export { FormField } from "./form-field";
 export { FormInput } from "./form-input";
-export { DryMassInput } from "./dry-mass-input";
+export {
+  MassMoistureFields,
+  MoistureField,
+  WetMassField,
+} from "./mass-moisture-fields";
 export { FormTextarea } from "./form-textarea";
 export { FormSelect } from "./form-select";
 export {

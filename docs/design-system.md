@@ -63,10 +63,19 @@ sidebar). Don't invent the missing tokens.
 
 **Status ramp** — `--st-ok` / `--st-run` / `--st-wait` / `--st-off` /
 `--st-bad` is the canonical palette for status badges, dots, and state text.
+Each has a solid (icon, text, rule, bar fill), a `-bg` 10% tint fill and a
+`-border` 40% tint fill. `/styleguide` renders all five × three.
 
-`--color-signal-green` / `--color-signal-green-light` are **DEPRECATED** in
-favour of `--st-ok` and an `--st-ok` tint, but still have ~22 live call sites
-in `src/components`. Don't propagate them by copying a neighbouring component.
+`--color-signal-green` / `--color-signal-green-light` are **retired** and
+resolve to nothing. Translate them as follows:
+
+| retired | use |
+| --- | --- |
+| `--color-signal-green` | `--st-ok` |
+| `--color-signal-green-light` | `--st-ok-bg` |
+
+`--color-signal-orange` / `-strong` / `-light` remain supported. Don't convert
+them to `--st-wait` component by component; any migration must be app-wide.
 
 **Hairlines & the panel recipe.** Structure is drawn with borders, never drop
 shadows — elevation is border + paper. Three steps: `--hair` (structural /
@@ -119,6 +128,67 @@ Class definitions live in `src/app/globals.css`. Size → class ladder:
 
 Use the design-system classes, never inline `text-4xl`. In-page section
 headings on rollup/detail pages are `title-heading-3`, sentence case.
+
+### Label casing
+
+**Sentence case** — capitalise the first word only — for field labels, table
+column headers, `FormSection` / `DetailSection` titles, `DetailPanelField`
+labels, and filter control option text (the `<option>`s inside a
+`DataTable.FilterSelect` and any equivalent dropdown or listbox), which sits
+beside a sentence-case search placeholder and sentence-case column headers and
+has to read as part of the same row.
+
+| ❌ | ✅ |
+| --- | --- |
+| `Contact Phone` | `Contact phone` |
+| `All Credit Batches` | `All credit batches` |
+| `Ash Content (%)` | `Ash content (%)` |
+| `Field Size (Ha)` | `Field size (ha)` |
+| `Startup / Plant Diesel (L)` | `Startup / plant diesel (L)` |
+| `1000-Year Durability · R₀ Reflectance` | `1000-year durability · R₀ reflectance` |
+
+Four things keep their capitals: proper nouns and product/registry names
+(Isometric, Certify), acronyms (GPS, CSV, UTC, GHG, TGA), unit and element
+symbols (`mL`, `ha`, `kg/m³`, `H:C`, `R₀`), and any term whose canonical form in
+[CONTEXT.md](../CONTEXT.md) is capitalised — check the glossary before you
+rename a domain term.
+
+Page titles (`PageHeader`), `StatCard` titles, button text, dialog titles and
+side-sheet titles are **outside** this rule and keep their existing casing. One
+exception: where a dialog title or button **names an entity the operator just
+saw on a select**, the noun follows the select's label rather than the chrome's
+casing — "Feedstock type" on the select, "New feedstock type" as the quick-add
+title, "Create feedstock type" on its submit button. One action, one name,
+through the whole flow. Those nouns live in `ENTITY_TYPE_LABELS`
+(`components/forms/entity-select/entity-labels.ts`) — the single source shared by
+the select and the quick-add dialog — stored lowercase because they are always
+read mid-sentence. Follow the glossary: a bin is a **storage bin**, never a
+"storage location", on every operator-facing surface.
+
+**A label and its mirror must match.** An edit form's `FormField` label and the
+same field's `DetailPanelField` in the read sheet are one label — rename both
+together or neither. Someone who fills a field and then reads it back must see
+the same words.
+
+A `DataTable` column header is held to a weaker rule, because the table's own
+subject already supplies the context a form field has to state: the Applications
+table may head a column `Date` where the form says `Application date`, and drop
+a unit the cell carries (`Wet mass` / `1,000 kg`) where the form label must keep
+it, since an empty input has nowhere else to put it. What a header may **not**
+do is pick a *different* word — `Share (%)` on the form against `Biochar ratio`
+in the table is two names for one field, and that is a mirror break.
+
+**Renaming a label is a test change.** Playwright specs in `tests/e2e/` locate
+elements by these exact strings, and the matchers split two ways:
+
+| case-**insensitive** substring (a pure case flip survives) | case-**sensitive** (a pure case flip breaks) |
+| --- | --- |
+| `getByText/getByRole/getByLabel(name)` with the default `exact: false` · `filter({ hasText: "…" })` · CSS `:has-text("…")` · `/…/i` regex | the same locators with `{ exact: true }` · a regex without `/i` · `toHaveText` / `toContainText` |
+
+Changing a label's *words* (not just its case) breaks **both** columns. Before
+committing a rename, `grep -rF "<old string>" tests/e2e/` and fix the hits —
+and check that the new string does not now collide with a second control on the
+same screen, which turns a passing locator into a strict-mode violation.
 
 ---
 
@@ -217,7 +287,15 @@ restore for free.
 
 - **`EmptyState`** — the shared dashed empty/zero-data card. Every empty and
   filtered-empty state uses it; **never a bare `<p>`**. Icon sizing is
-  caller-owned.
+  caller-owned. Two copy rules, both load-bearing:
+  - **The zero-state CTA is `Create your first <entity>`, never a copy of the
+    `PageHeader` button.** Both buttons render at once on an empty list, and two
+    controls with the same accessible name break `getByRole("button", { name })`
+    in Playwright — the header keeps `New <entity>`, the card invites.
+  - **`description` is for the filtered-empty branch**, where it says how to get
+    back ("Try clearing your search."). On the zero state, pass a line that says
+    what the entity *is* or omit it — "Create your first X to get started" only
+    repeats the button.
 - **`SelectFacilityEmptyState`** (`src/components/navigation`) — the *no
   facility chosen* state. Do not branch `EmptyState` copy on `facilityId`;
   this component exists so every first-run screen speaks with one voice.
@@ -248,6 +326,41 @@ restore for free.
   `.Icon` / …) — a general-purpose panel with the shared recipe, used on the
   admin page. `Card.Root` defaults to `padding="none"` and `radius="none"`.
   For entity lists, use the Entity Card pattern below instead.
+
+### Wet mass, moisture, dry mass
+
+One vocabulary, one arithmetic, one visual — all from `@/lib/mass-moisture`
+(`splitWetMass`, `formatMoisturePercent`, `formatSplitMass`, the
+`*_FIELD_LABEL` constants) and `MoistureSplit`
+(`@/components/ui/moisture-split`). **Never retype a moisture label, re-derive
+the split inline, or format a percentage by hand.**
+
+- **Moisture is wet basis everywhere** — `water / wet mass`, 0–100. The
+  ambiguity with dry basis is resolved once, in `MOISTURE_BASIS_HINT`, which
+  `MoistureField` attaches to every moisture input.
+- **`MoistureSplit` variants:** `detail` (figures + bar + footnote — forms and
+  read side sheets) · `compact` (bar + one line) · `inline` (text only — table
+  cells, option labels). Missing moisture renders an explicit *unresolved*
+  state (hatched dashed bar, "Moisture not recorded"), never nothing — dry mass
+  drives certification readiness, so its absence has to be visible.
+- **The bar is area-neutral**: solid `--clr-dark-purple-80` for dry matter,
+  the `.moisture-water-hatch` void for water. It does **not** take the
+  production/infrastructure/distribution accent — moisture means the same thing
+  in every area, and that is what lets one component appear across five.
+- **Split figures are always kg** (`formatSplitMass`), never the auto-tonne
+  `formatMass`: 1,500 kg at 2% moisture is 1,470 kg dry, and in tonnes both
+  round to "1.5 t", claiming no water was removed.
+- Read side-sheet sections mirror the form: wet-mass and moisture stay
+  `DetailPanelField`s; the split goes in the section's `content` slot and
+  carries the dry mass. Do **not** add a separate "Dry Mass (derived)" row.
+
+Mass formatting more broadly: `formatMass` (auto-tonne, for a lone mass in a
+table or KPI) · `formatMassKg` (fixed kg, for related figures that must stay
+comparable) · `formatPercent` — all in `@/lib/format-utils`. The local `formatMass`/`formatKg`
+copies that shadowed them were removed; don't reintroduce one by copying a
+neighbouring component. A local helper is only acceptable when it formats a
+different quantity and is **named apart** so it cannot shadow the shared one —
+`formatSharePercent` in `formulations/formulation-form.tsx` is the one example.
 
 ### EntitySideSheet mounting rule
 

@@ -74,7 +74,7 @@ function createColumns(
     },
     {
       accessorKey: "biocharRatio",
-      header: "Biochar Ratio",
+      header: "Biochar share",
       cell: ({ row }) => (
         <span className="text-[var(--color-text-secondary)]">
           {formatRatio(row.original.biocharRatio)}
@@ -246,11 +246,11 @@ export function FormulationList() {
           const prefix = ingredientCount > 1 ? `Ingredient ${index + 1}` : "Ingredient";
           return [
             {
-              label: `${prefix} · Blend Material`,
+              label: `${prefix} · Blend material`,
               value: ingredient.feedstockType.name,
             },
             {
-              label: `${prefix} · Share (%)`,
+              label: `${prefix} · share (%)`,
               value: formatRatio(ingredient.ratio),
             },
           ];
@@ -259,15 +259,15 @@ export function FormulationList() {
 
     return [
       {
-        title: "Required Information",
+        title: "Required information",
         fields: [
-          { label: "Formulation Name", value: entity.name },
+          { label: "Formulation name", value: entity.name },
         ],
       },
       {
-        title: "Blend Composition",
+        title: "Blend composition",
         fields: [
-          { label: "Biochar · Share (%)", value: formatRatio(entity.biocharRatio) },
+          { label: "Biochar · share (%)", value: formatRatio(entity.biocharRatio) },
           ...ingredientFields,
         ],
         content: ingredientCount === 0 ? (
@@ -277,7 +277,7 @@ export function FormulationList() {
         ) : undefined,
       },
       {
-        title: "Additional Information",
+        title: "Additional information",
         fields: [{ label: "Description", value: entity.description }],
       },
     ];
@@ -336,13 +336,13 @@ export function FormulationList() {
             description={
               hasActiveSearch
                 ? "Try clearing your search."
-                : "Create your first formulation to define biochar product recipes."
+                : "Formulations define biochar product recipes."
             }
             action={
               !hasActiveSearch ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={20} weight="bold" />
-                  Create Formulation
+                  Create your first formulation
                 </Button>
               ) : undefined
             }

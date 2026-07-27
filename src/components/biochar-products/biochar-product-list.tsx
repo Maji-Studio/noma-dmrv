@@ -38,7 +38,6 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { TransportLegsSummary } from "@/components/transport-legs";
 import { BiocharProductForm } from "./biochar-product-form";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
-import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   ENTITY_DEEP_LINK_MODE_PARAM,
@@ -46,8 +45,20 @@ import {
 } from "@/lib/entity-deep-link";
 import { fromCompositionJsonb } from "@/lib/biochar-composition";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
-import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
-import { formatDate } from "@/lib/format-utils";
+import {
+  BIOCHAR_PRE_WATER_MOISTURE_LABEL,
+  BIOCHAR_PRE_WATER_WET_MASS_LABEL,
+  PURE_BIOCHAR_LABEL,
+} from "@/config/product-labels";
+import { formatDate, formatMassKg } from "@/lib/format-utils";
+import {
+  formatMoisturePercent,
+  MOISTURE_FIELD_LABEL,
+  qualifyMassLabel,
+  splitWetMassAfterAddedWater,
+  WET_MASS_FIELD_LABEL,
+} from "@/lib/mass-moisture";
+import { MoistureSplit } from "@/components/ui/moisture-split";
 import { EntityDetailValue } from "@/components/ui/entity-detail-value";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
@@ -55,19 +66,14 @@ import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 // Helpers
 // ============================================
 
-function formatMass(massKg: number | null): string {
-  if (massKg === null || massKg === undefined) return "\u2014";
-  return `${massKg.toLocaleString()} kg`;
-}
-
 function deriveBiocharProductDryMass(product: BiocharProductWithRelations): number | null {
   const { massKg, moistureContentPercent, waterAddedKg } = product;
 
-  if (massKg == null || moistureContentPercent == null) return null;
-  if (massKg < 0 || moistureContentPercent < 0 || moistureContentPercent > 100) return null;
-  if (waterAddedKg != null && waterAddedKg < 0) return null;
-
-  return deriveMassDryKgWithAddedWater(massKg, moistureContentPercent, waterAddedKg);
+  return splitWetMassAfterAddedWater(
+    massKg,
+    moistureContentPercent,
+    waterAddedKg,
+  )?.dryKg ?? null;
 }
 
 // ============================================
@@ -88,7 +94,7 @@ function createColumns(
     },
     {
       accessorKey: "productionDate",
-      header: "Production Date",
+      header: "Production date",
       cell: ({ row }) => formatDate(row.original.productionDate),
     },
     {
@@ -105,28 +111,29 @@ function createColumns(
     },
     {
       accessorKey: "massKg",
-      header: "Wet Mass",
+      header: "Wet mass",
       cell: ({ row }) => (
-        <span className="text-[var(--color-text-secondary)]">
-          {formatMass(row.original.massKg)}
-        </span>
+        <span className="font-mono">{formatMassKg(row.original.massKg)}</span>
       ),
     },
     {
       id: "moistureContentPercent",
-      header: "Moisture %",
+      header: "Moisture",
       accessorFn: (row) => row.moistureContentPercent,
-      cell: ({ row }) => {
-        const mc = row.original.moistureContentPercent;
-        return mc !== null && mc !== undefined ? `${mc}%` : "\u2014";
-      },
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {formatMoisturePercent(row.original.moistureContentPercent)}
+        </span>
+      ),
     },
     {
       id: "dryMass",
-      header: "Dry Mass",
-      cell: ({ row }) => {
-        return formatMass(deriveBiocharProductDryMass(row.original));
-      },
+      header: "Dry mass",
+      cell: ({ row }) => (
+        <span className="font-mono">
+          {formatMassKg(deriveBiocharProductDryMass(row.original))}
+        </span>
+      ),
     },
     {
       id: "storageLocation",
@@ -351,6 +358,17 @@ export function BiocharProductList() {
   const editingEntity =
     displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
   const isSubmitting = createProduct.isPending || updateProduct.isPending;
+  const finalDisplayedMassSplit = displaySideSheet?.entity
+    ? splitWetMassAfterAddedWater(
+        displaySideSheet.entity.massKg,
+        displaySideSheet.entity.moistureContentPercent,
+        displaySideSheet.entity.waterAddedKg,
+      )
+    : null;
+  const displayedWaterAddedKg =
+    displaySideSheet?.entity?.waterAddedKg ?? null;
+  const displayedHasWaterAdded =
+    displayedWaterAddedKg != null && displayedWaterAddedKg > 0;
 
   const columns = createColumns(openEdit, handleDelete);
 
@@ -441,13 +459,13 @@ export function BiocharProductList() {
             description={
               hasActiveFilters
                 ? "Try adjusting or clearing the filters."
-                : "Create your first biochar product to start tracking finished product batches."
+                : "A biochar product is a finished batch, blended and packed for an order."
             }
             action={
               !hasActiveFilters ? (
                 <Button variant="primary" onClick={openCreate}>
                   <PlusIcon size={20} weight="bold" />
-                  Create Product
+                  Create your first product
                 </Button>
               ) : undefined
             }
@@ -468,7 +486,7 @@ export function BiocharProductList() {
               }}
               aria-label="Filter biochar products by credit batch"
             >
-              <option value="">All Credit Batches</option>
+              <option value="">All credit batches</option>
               {creditBatches?.map((batch) => (
                 <option key={batch.id} value={batch.id}>
                   {batch.code}
@@ -514,31 +532,49 @@ export function BiocharProductList() {
           {
             title: "Source",
             fields: [
-              { label: "Production Run", value: displaySideSheet.entity.linkedProductionRun?.code },
-              { label: "Wet Mass (kg)", value: formatMass(displaySideSheet.entity.massKg) },
-              { label: "Dry Mass (derived)", value: formatMass(deriveBiocharProductDryMass(displaySideSheet.entity)) },
-              { label: "Moisture Content (%)", value: displaySideSheet.entity.moistureContentPercent != null ? `${displaySideSheet.entity.moistureContentPercent}%` : null },
-              { label: "Water Added (kg)", value: displaySideSheet.entity.waterAddedKg != null ? formatMass(displaySideSheet.entity.waterAddedKg) : null },
-              { label: "Density (kg/m3)", value: displaySideSheet.entity.densityKgM3 != null ? `${displaySideSheet.entity.densityKgM3} kg/m³` : null },
+              { label: "Production run", value: displaySideSheet.entity.linkedProductionRun?.code },
+              { label: displayedHasWaterAdded ? BIOCHAR_PRE_WATER_WET_MASS_LABEL : qualifyMassLabel(WET_MASS_FIELD_LABEL, "Biochar"), value: formatMassKg(displaySideSheet.entity.massKg) },
+              { label: displayedHasWaterAdded ? BIOCHAR_PRE_WATER_MOISTURE_LABEL : qualifyMassLabel(MOISTURE_FIELD_LABEL, "Biochar"), value: formatMoisturePercent(displaySideSheet.entity.moistureContentPercent) },
+              { label: "Water added (kg)", value: formatMassKg(displaySideSheet.entity.waterAddedKg) },
+              { label: "Density (kg/m³)", value: displaySideSheet.entity.densityKgM3 != null ? `${displaySideSheet.entity.densityKgM3} kg/m³` : null },
             ],
+            content: (
+              <MoistureSplit
+                wetMassKg={
+                  finalDisplayedMassSplit?.wetKg ??
+                  displaySideSheet.entity.massKg
+                }
+                moisturePercent={
+                  finalDisplayedMassSplit?.moisturePercent ??
+                  displaySideSheet.entity.moistureContentPercent
+                }
+                materialLabel="Biochar"
+                note={
+                  finalDisplayedMassSplit &&
+                  displayedHasWaterAdded
+                    ? `Final after ${formatMassKg(displayedWaterAddedKg)} added water · ${formatMassKg(finalDisplayedMassSplit.wetKg)} wet · ${formatMassKg(finalDisplayedMassSplit.waterKg)} water.`
+                    : undefined
+                }
+              />
+            ),
           },
           {
-            title: "Destination & Product",
+            title: "Destination & product",
             fields: [
               { label: "Formulation", value: displaySideSheet.entity.formulation?.name ?? PURE_BIOCHAR_LABEL },
               ...fromCompositionJsonb(displaySideSheet.entity.composition).flatMap((ingredient, index) => {
                 const prefix = `Ingredient ${index + 1}`;
                 return [
                   {
-                    label: `${prefix} · Blend Material`,
+                    label: `${prefix} · Blend material`,
                     value: ingredient.feedstockTypeName,
                   },
                   {
-                    label: `${prefix} · Mass`,
-                    value: ingredient.massKg != null ? formatMass(ingredient.massKg) : null,
+                    label: `${prefix} · Mass (kg)`,
+                    value: ingredient.massKg != null ? formatMassKg(ingredient.massKg) : null,
                   },
                   {
-                    label: `${prefix} · Source Bin`,
+                    label: `${prefix} · Source bin`,
                     value: (
                       <EntityDetailValue
                         entityType="storageLocation"
@@ -548,11 +584,11 @@ export function BiocharProductList() {
                   },
                 ];
               }),
-              { label: "Product Bin", value: displaySideSheet.entity.storageLocation?.name },
+              { label: "Product bin", value: displaySideSheet.entity.storageLocation?.name },
             ],
           },
           {
-            title: "Derived Transport",
+            title: "Derived transport",
             fields: [],
             content: (
               <TransportLegsSummary

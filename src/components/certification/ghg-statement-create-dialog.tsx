@@ -743,7 +743,7 @@ function ResultPanel({
         className={`flex items-start gap-8 border-l-2 pl-12 py-4 ${
           alreadyExisted
             ? "border-[var(--st-run)]"
-            : "border-[var(--color-signal-green)]"
+            : "border-[var(--st-ok)]"
         }`}
       >
         <OutcomeIcon
@@ -753,7 +753,7 @@ function ResultPanel({
           className={`mt-px shrink-0 ${
             alreadyExisted
               ? "text-[var(--st-run)]"
-              : "text-[var(--color-signal-green)]"
+              : "text-[var(--st-ok)]"
           }`}
         />
         <p className="body-small text-[var(--color-text-primary)]">

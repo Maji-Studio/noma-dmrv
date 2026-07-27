@@ -199,10 +199,10 @@ export function creditBatchSheetSections({
       // Mirrors the edit form's "Batch definition" section.
       title: "Batch definition",
       fields: [
-        { label: "Feedstock Type", value: creditBatch.feedstockTypeName },
+        { label: "Feedstock type", value: creditBatch.feedstockTypeName },
         { label: "Durability", value: durabilityLabel(creditBatch.durabilityOption) },
-        { label: "Start Date", value: formatDate(creditBatch.startDate) },
-        { label: "End Date", value: formatDate(creditBatch.endDate) },
+        { label: "Start date", value: formatDate(creditBatch.startDate) },
+        { label: "End date", value: formatDate(creditBatch.endDate) },
         {
           label: "Applied biochar",
           value: formatTonnes(creditBatch.appliedWeightTons),

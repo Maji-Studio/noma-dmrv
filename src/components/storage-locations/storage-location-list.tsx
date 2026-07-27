@@ -35,7 +35,8 @@ import {
   useReconcileListPage,
 } from "@/hooks/use-list-pagination";
 import { SelectFacilityEmptyState } from "@/components/navigation";
-import { formatDate, formatMass } from "@/lib/format-utils";
+import { formatDate, formatMass, formatMassKg } from "@/lib/format-utils";
+import { formatMoisturePercent } from "@/lib/mass-moisture";
 import { ServerError } from "@/components/forms";
 import {
   EntitySideSheet,
@@ -92,47 +93,47 @@ type SideSheetState =
   | { mode: "view"; entity: StorageLocationWithFacility }
   | { mode: "edit"; entity: StorageLocationWithFacility };
 
-function formatPercent(value: number | null) {
-  if (value == null) return "—";
-  return `${value.toFixed(1)}%`;
-}
-
 function formatDateOrFallback(value: Date | null) {
   if (!value) return "No completed applications";
   return formatDate(value);
 }
 
+/**
+ * Per-bin figures are fixed kg (`formatMassKg`) on every branch and in the card
+ * that opens this sheet — capacity, stock, allocations and movement deltas are
+ * read against each other, and auto-tonne would round a wet/dry pair to the
+ * same string. Facility-wide roll-ups (the KPI strip, the lane headers) stay on
+ * auto-tonne `formatMass`.
+ */
 function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) {
   if (storageLocation.type === "feedstock_bin") {
     return [
       {
-        label: "Current Dry Mass",
-        value: formatMass(storageLocation.feedstockInventory.currentDryMassKg),
+        label: "Current dry mass",
+        value: formatMassKg(storageLocation.feedstockInventory.currentDryMassKg),
       },
       ...(storageLocation.feedstockInventory.pendingDryMassKg > 0
         ? [
             {
-              label: "Pending Completion",
-              value: formatMass(storageLocation.feedstockInventory.pendingDryMassKg),
+              label: "Pending completion",
+              value: formatMassKg(storageLocation.feedstockInventory.pendingDryMassKg),
             },
             {
-              label: "Pending Feedstocks",
+              label: "Pending feedstocks",
               value: String(storageLocation.feedstockInventory.pendingBatchCount),
             },
           ]
         : []),
       {
-        label: "Estimated Wet Mass",
-        value: storageLocation.feedstockInventory.estimatedWetMassKg
-          ? formatMass(storageLocation.feedstockInventory.estimatedWetMassKg)
-          : null,
+        label: "Estimated wet mass",
+        value: formatMassKg(storageLocation.feedstockInventory.estimatedWetMassKg),
       },
       {
-        label: "Estimated Moisture",
-        value: formatPercent(storageLocation.feedstockInventory.estimatedMoisturePercent),
+        label: "Estimated moisture",
+        value: formatMoisturePercent(storageLocation.feedstockInventory.estimatedMoisturePercent),
       },
       {
-        label: "Feedstock Types",
+        label: "Feedstock types",
         value:
           storageLocation.feedstockInventory.feedstockTypes.join(", ") ||
           "No feedstock assigned",
@@ -143,19 +144,19 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
   if (storageLocation.type === "biochar_bin") {
     return [
       {
-        label: "Available Biochar",
-        value: formatMass(storageLocation.biocharInventory.currentMassKg),
+        label: "Available biochar",
+        value: formatMassKg(storageLocation.biocharInventory.currentMassKg),
       },
       {
-        label: "Allocated To Products",
-        value: formatMass(storageLocation.biocharInventory.allocatedToProductsKg),
+        label: "Allocated to products",
+        value: formatMassKg(storageLocation.biocharInventory.allocatedToProductsKg),
       },
       {
-        label: "Production Runs",
+        label: "Production runs",
         value: String(storageLocation.biocharInventory.productionRunCount),
       },
       {
-        label: "Downstream Formulations",
+        label: "Downstream formulations",
         value:
           storageLocation.biocharInventory.downstreamFormulations.join(", ") ||
           "No linked formulations",
@@ -165,30 +166,31 @@ function buildStorageDetailFields(storageLocation: StorageLocationWithFacility) 
 
   return [
     {
-      label: "Current Product Mass",
-      value: formatMass(storageLocation.productInventory.currentMassKg),
+      label: "Current product mass",
+      value: formatMassKg(storageLocation.productInventory.currentMassKg),
     },
     {
-      label: "Biochar Content",
-      value: formatMass(storageLocation.productInventory.biocharEquivalentKg),
+      label: "Biochar content",
+      value: formatMassKg(storageLocation.productInventory.biocharEquivalentKg),
     },
     {
-      label: "Product Batches",
+      label: "Product batches",
       value: String(storageLocation.productInventory.batchCount),
     },
     {
-      label: "Successfully Applied",
+      // Dry basis, unlike the as-is masses above it — the label has to say so.
+      label: "Applied, dry",
       value:
         storageLocation.productInventory.appliedApplicationCount > 0
-          ? formatMass(storageLocation.productInventory.appliedDryMassKg)
+          ? formatMassKg(storageLocation.productInventory.appliedDryMassKg)
           : "No completed applications",
     },
     {
-      label: "Applied Events",
+      label: "Applied events",
       value: String(storageLocation.productInventory.appliedApplicationCount),
     },
     {
-      label: "Last Application",
+      label: "Last application",
       value: formatDateOrFallback(storageLocation.productInventory.lastAppliedAt),
     },
     {
@@ -273,9 +275,9 @@ export function StorageLocationList() {
     try {
       await createStorageLocation.mutateAsync(data);
       setSideSheet(null);
-      toast.success("Storage location created successfully");
+      toast.success("Storage bin created successfully");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to create storage location");
+      setFormError(error instanceof Error ? error.message : "Failed to create storage bin");
     }
   };
 
@@ -288,9 +290,9 @@ export function StorageLocationList() {
         ...data,
       });
       setSideSheet(null);
-      toast.success("Storage location updated successfully");
+      toast.success("Storage bin updated successfully");
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Failed to update storage location");
+      setFormError(error instanceof Error ? error.message : "Failed to update storage bin");
     }
   };
 
@@ -307,7 +309,7 @@ export function StorageLocationList() {
       setDeleteError(
         error instanceof Error
           ? error.message
-          : "Failed to archive storage location",
+          : "Failed to archive storage bin",
       );
     }
   };
@@ -321,7 +323,7 @@ export function StorageLocationList() {
       setDeleteError(
         error instanceof Error
           ? error.message
-          : "Failed to restore storage location",
+          : "Failed to restore storage bin",
       );
     }
   };
@@ -332,9 +334,9 @@ export function StorageLocationList() {
     try {
       await deleteStorageLocation.mutateAsync(deletingStorageLocationId);
       setDeletingStorageLocationId(null);
-      toast.success("Storage location deleted successfully");
+      toast.success("Storage bin deleted successfully");
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : "Failed to delete storage location");
+      setDeleteError(error instanceof Error ? error.message : "Failed to delete storage bin");
     }
   };
 
@@ -521,13 +523,13 @@ export function StorageLocationList() {
               ? "Try adjusting your search."
               : showArchived
                 ? "Storage bins you archive will appear here and can be restored."
-                : "Create your first storage bin to track feedstock, biochar, and finished product inventory."
+                : "Bins hold feedstock, biochar, and finished product inventory."
           }
           action={
             !hasActiveFilters && !showArchived ? (
               <Button variant="primary" onClick={openCreate}>
                 <PlusIcon size={20} weight="bold" />
-                Create Storage Bin
+                Create your first storage bin
               </Button>
             ) : undefined
           }
@@ -633,27 +635,28 @@ export function StorageLocationList() {
           sideSheet?.mode === "view" && sideSheet.entity
             ? [
                 {
-                  title: "Storage Details",
+                  title: "Storage details",
                   fields: [
                     {
-                      label: "Storage Type",
+                      label: "Storage type",
                       value: formatStorageLocationType(sideSheet.entity.type),
                     },
-                    { label: "Bin Name", value: sideSheet.entity.name },
+                    { label: "Bin name", value: sideSheet.entity.name },
                     {
-                      // formatMass switches to tonnes at 1,000 kg — a unit
-                      // suffix in the label would contradict the value.
+                      // Capacity and the current mass below it are the canonical
+                      // related pair — same formatter, so "1,800 kg of 2,500 kg"
+                      // never reads as "1,800 kg of 2.5 t".
                       label: "Capacity",
                       value: sideSheet.entity.capacityKg != null
-                        ? formatMass(sideSheet.entity.capacityKg)
+                        ? formatMassKg(sideSheet.entity.capacityKg)
                         : null,
                     },
                     {
-                      label: "Storage Method",
+                      label: "Storage method",
                       value: sideSheet.entity.storageMethod,
                     },
                     ...(sideSheet.entity.type === "feedstock_bin"
-                      ? [{ label: "Feedstock Type", value: sideSheet.entity.feedstockTypeName }]
+                      ? [{ label: "Feedstock type", value: sideSheet.entity.feedstockTypeName }]
                       : []),
                     ...(sideSheet.entity.type === "product_bin"
                       ? [{ label: "Formulation", value: sideSheet.entity.formulationName }]

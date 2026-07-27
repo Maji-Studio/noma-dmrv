@@ -33,7 +33,7 @@ import {
   orderFulfillmentStatuses,
   type OrderFulfillmentStatus,
 } from "@/lib/orders/fulfillment";
-import { formatDate } from "@/lib/format-utils";
+import { formatDate, formatMassKg } from "@/lib/format-utils";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
 // ============================================
@@ -325,8 +325,8 @@ export function OrderList() {
             padding="md"
             icon={<PackageIcon size={48} />}
             title={hasActiveFilters ? "No orders found" : "No orders yet"}
-            description={hasActiveFilters ? "Try adjusting your search or filters." : "Create your first order to get started."}
-            action={!hasActiveFilters ? <Button variant="primary" onClick={openCreate}><PlusIcon size={20} weight="bold" />Create Order</Button> : undefined}
+            description={hasActiveFilters ? "Try adjusting your search or filters." : undefined}
+            action={!hasActiveFilters ? <Button variant="primary" onClick={openCreate}><PlusIcon size={20} weight="bold" />Create your first order</Button> : undefined}
           />
         }
       >
@@ -341,7 +341,7 @@ export function OrderList() {
               onChange={(e) => { setStatusFilter(e.target.value as OrderFulfillmentStatus | ""); setCurrentPage(1); }}
               aria-label="Filter by fulfillment status"
             >
-              <option value="">All Statuses</option>
+              <option value="">All statuses</option>
               {orderFulfillmentStatuses.map((s) => (
                 <option key={s} value={s}>{ORDER_FULFILLMENT_DISPLAY[s].label}</option>
               ))}
@@ -352,7 +352,7 @@ export function OrderList() {
               className="sm:max-w-[200px]"
               aria-label="Filter by customer"
             >
-              <option value="">All Customers</option>
+              <option value="">All customers</option>
               {customerOptions.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -378,24 +378,24 @@ export function OrderList() {
           sideSheetEntity
             ? [
                 {
-                  title: "Order Information",
+                  title: "Order information",
                   fields: [
-                    { label: "Order Date", value: formatDate(sideSheetEntity.orderDate) },
+                    { label: "Order date", value: formatDate(sideSheetEntity.orderDate) },
                   ],
                 },
                 {
-                  title: "Customer Details",
+                  title: "Customer details",
                   fields: [
                     { label: "Customer", value: sideSheetEntity.customerName },
                     { label: "Customer location", value: sideSheetEntity.customerLocationName },
                   ],
                 },
                 {
-                  title: "Product Details",
+                  title: "Product details",
                   fields: [
-                    { label: "Biochar Product", value: sideSheetEntity.biocharProductCode },
+                    { label: "Biochar product", value: sideSheetEntity.biocharProductCode },
                     { label: "Packaging", value: <span className="capitalize">{sideSheetEntity.packaging}</span> },
-                    { label: "Quantity (kg)", value: `${sideSheetEntity.quantityKg.toLocaleString()} kg` },
+                    { label: "Quantity (kg)", value: formatMassKg(sideSheetEntity.quantityKg) },
                     { label: "Value", value: sideSheetEntity.value },
                     { label: "Currency", value: sideSheetEntity.currency },
                   ],

@@ -155,19 +155,19 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-32 mt-32 pt-32 border-t border-[var(--color-border-secondary)]">
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-              Crop Type
+              Crop type
             </dt>
             <dd className="body-medium mt-16">{customer.cropType || "—"}</dd>
           </div>
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-              Contact Email
+              Contact email
             </dt>
             <dd className="body-medium mt-16">{customer.contactEmail || "—"}</dd>
           </div>
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-              Contact Phone
+              Contact phone
             </dt>
             <dd className="body-medium mt-16">{customer.contactPhone || "—"}</dd>
           </div>

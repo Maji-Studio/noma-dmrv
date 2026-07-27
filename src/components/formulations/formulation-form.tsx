@@ -46,8 +46,17 @@ const SHARE_PERCENT_STEP = String(1 / PERCENT_DECIMALS);
 /** A fresh formulation starts as pure biochar; adding ingredients rebalances. */
 const DEFAULT_BIOCHAR_PERCENT = 100;
 
-function formatPercent(value: number): string {
-  return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+/** Blend shares are read against each other, so they keep two decimals. */
+const SHARE_FRACTION_DIGITS = 2;
+
+/**
+ * Blend shares only — the call sites below supply their own "%" and read the
+ * four figures against each other, so this keeps two decimals and no suffix.
+ * Not a substitute for `formatPercent` from `@/lib/format-utils`; named apart
+ * from it so neither shadows the other.
+ */
+function formatSharePercent(value: number): string {
+  return value.toLocaleString("en-US", { maximumFractionDigits: SHARE_FRACTION_DIGITS });
 }
 
 /**
@@ -92,7 +101,7 @@ function AllocationBar({
             : "border-[var(--color-border-tertiary)]"
         }`}
         role="img"
-        aria-label={`Blend allocation: biochar ${formatPercent(biocharPercent)}%, ingredients ${formatPercent(ingredientPercent)}%, unallocated ${formatPercent(unallocated)}%`}
+        aria-label={`Blend allocation: biochar ${formatSharePercent(biocharPercent)}%, ingredients ${formatSharePercent(ingredientPercent)}%, unallocated ${formatSharePercent(unallocated)}%`}
       >
         {biocharPercent > 0 && (
           <div
@@ -111,16 +120,16 @@ function AllocationBar({
       <div className="flex flex-wrap items-center gap-x-16 gap-y-4">
         <span className="body-caption text-[var(--color-text-secondary)] inline-flex items-center gap-6">
           <span aria-hidden className="inline-block w-8 h-8 bg-[var(--acc-prod)]" />
-          Biochar {formatPercent(biocharPercent)}%
+          Biochar {formatSharePercent(biocharPercent)}%
         </span>
         <span className="body-caption text-[var(--color-text-secondary)] inline-flex items-center gap-6">
           <span aria-hidden className="inline-block w-8 h-8 bg-[var(--acc-infra)]" />
-          Ingredients {formatPercent(ingredientPercent)}%
+          Ingredients {formatSharePercent(ingredientPercent)}%
         </span>
         {unallocated > PERCENT_DISPLAY_TOLERANCE && (
           <span className="body-caption text-[var(--color-text-tertiary)] inline-flex items-center gap-6">
             <span aria-hidden className="inline-block w-8 h-8 border border-[var(--color-border-tertiary)]" />
-            Unallocated {formatPercent(unallocated)}%
+            Unallocated {formatSharePercent(unallocated)}%
           </span>
         )}
         <span
@@ -132,7 +141,7 @@ function AllocationBar({
                 : "text-[var(--color-text-secondary)]"
           }`}
         >
-          Total {formatPercent(total)}%
+          Total {formatSharePercent(total)}%
           {isOver && " — exceeds 100%"}
         </span>
       </div>
@@ -239,11 +248,11 @@ export function FormulationForm({
   return (
     <form onSubmit={handleFormSubmit} className="space-y-20">
       {/* Required Fields Section */}
-      <FormSection title="Required Information" divider={false}>
+      <FormSection title="Required information" divider={false}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <FormField
             id="name"
-            label="Formulation Name"
+            label="Formulation name"
             error={errors.name?.message}
             required
           >
@@ -261,7 +270,7 @@ export function FormulationForm({
 
       {/* Blend Composition — biochar and ingredients partition one whole */}
       <FormSection
-        title="Blend Composition"
+        title="Blend composition"
         hint="Shares are percentages of the solid blend. Water is tracked on the product, so the total may stay under 100%."
         actions={
           <Button
@@ -350,7 +359,7 @@ export function FormulationForm({
                 <FormEntitySelect
                   control={formControl}
                   name={`ingredients.${index}.feedstockTypeId`}
-                  label="Blend Material"
+                  label="Blend material"
                   entityType="feedstockType"
                   placeholder="Select a blend material..."
                   disabled={isSubmitting}
@@ -414,7 +423,7 @@ export function FormulationForm({
       </FormSection>
 
       {/* Description Section */}
-      <FormSection title="Additional Information">
+      <FormSection title="Additional information">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
           <div className="md:col-span-2">
             <FormField

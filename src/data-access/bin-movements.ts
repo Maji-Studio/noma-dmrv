@@ -166,7 +166,7 @@ async function assertBinLaneTarget(
     .where(and(eq(storageLocations.id, input.storageLocationId), eq(storageLocations.organizationId, ctx.organizationId)));
 
   if (!location) {
-    throw new SafeError("Storage location not found");
+    throw new SafeError("Storage bin not found");
   }
 
   if (laneForStorageType(location.type) !== input.lane) {

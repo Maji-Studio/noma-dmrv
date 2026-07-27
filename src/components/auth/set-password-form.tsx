@@ -136,7 +136,7 @@ function SetPasswordFormContent() {
 
           <FormField
             id="confirmPassword"
-            label="Confirm Password"
+            label="Confirm password"
             error={errors.confirmPassword?.message}
           >
             <FormInput

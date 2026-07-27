@@ -69,8 +69,8 @@ const MICRO_ICON_SIZE = 13;
 const ALERT_ICON_SIZE = 20;
 
 const TONE_CLASS: Record<Tone, string> = {
-  stored: "bg-[var(--color-signal-green)]",
-  net: "bg-[var(--color-signal-green)]",
+  stored: "bg-[var(--st-ok)]",
+  net: "bg-[var(--st-ok)]",
   activity: "bg-[var(--color-signal-orange)]",
   counterfactual: "bg-[var(--color-signal-orange-light)]",
   uncertainty: "",

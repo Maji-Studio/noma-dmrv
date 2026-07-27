@@ -80,7 +80,7 @@ export async function lockBinStock(
   // key when no physical bin exists. Missing rows are validated by the caller's
   // entity boundary; an actual archived bin must never accept a stock write.
   if (bin?.archivedAt) {
-    throw new SafeError("Storage location not found or archived");
+    throw new SafeError("Storage bin not found or archived");
   }
 }
 
@@ -109,7 +109,7 @@ export function overdrawError(
   return new StockOverdrawError(
     `Not enough ${material} in this bin — ${available} available but this draw needs ${formatKg(
       requestedKg,
-    )}. Reconcile the bin's stock (Storage locations → the bin → Reconcile stock), then try again.`,
+    )}. Reconcile the bin's stock (Storage Bins → the bin → Reconcile stock), then try again.`,
   );
 }
 

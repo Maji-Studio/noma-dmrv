@@ -114,7 +114,7 @@ const navSections: NavSection[] = [
     accent: SECTION_ACCENTS.infrastructure,
     items: [
       { href: "/reactors", label: "Reactors", icon: FlaskIcon },
-      { href: "/storage-locations", label: "Storage Locations", icon: PackageIcon },
+      { href: "/storage-locations", label: "Storage Bins", icon: PackageIcon },
       { href: "/feedstock-types", label: "Feedstock Types", icon: TagIcon },
       { href: "/energy", label: "Energy", icon: LightningIcon },
     ],

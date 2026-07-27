@@ -14,15 +14,11 @@ import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, ScalesIcon, MapPinIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, FormSection, FormSpine, DryMassInput, makeCertFieldStatus } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus } from "@/components/forms";
 import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
 import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
 import { DISTANCE_SOURCE_LABELS } from "@/schemas/distance-source";
-import {
-  MASS_KG_INPUT_STEP,
-  STORED_PERCENT_INPUT_STEP,
-} from "@/schemas/helpers";
 import { DEFAULT_TRIP_TYPE, TRIP_TYPE_OPTIONS } from "@/schemas/trip-type";
 import type { Delivery } from "@/db/schema";
 import { useOrdersForSelect } from "@/hooks/use-orders";
@@ -227,11 +223,14 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
     return onSubmit(normalized as DeliveryFormData);
   });
 
+  // All three branches describe the same quantity — the one-way facility ›
+  // destination distance the field's own label names — so none of them
+  // re-qualifies it. Round-trip doubling is the Trip type field's job.
   const distanceHelperText = !watchOrderId
-    ? "Select an order to load the destination's stored one-way distance."
+    ? "Select an order to load the destination's stored distance."
     : storedDistanceKm == null
-      ? "No stored distance for this destination — add it on the customer location. A one-off manual one-way distance is still possible. Return trips are doubled at emissions time."
-      : "One-way facility › destination distance, prefilled from the customer location; return trips are doubled at emissions time. Edit only when routing differs.";
+      ? "No stored distance for this destination — add it on the customer location, or enter a one-off distance here."
+      : "Facility › destination distance. Edit only when routing differs.";
 
   return (
     // The wrapper div absorbs the side-sheet Body's direct-child flex-col
@@ -241,12 +240,12 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
       <form id={formId} onSubmit={handleFormSubmit} className="space-y-20">
       {/* Delivery Information Section */}
       <FormSection
-        title="Delivery Information"
+        title="Delivery information"
         icon={<CalendarIcon size={14} weight="bold" />}
         fields={["deliveryDate", "status", "orderId"]}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField id="deliveryDate" label="Delivery Date" error={errors.deliveryDate?.message} required>
+          <FormField id="deliveryDate" label="Delivery date" error={errors.deliveryDate?.message} required>
             <FormInput
               id="deliveryDate"
               type="date"
@@ -292,60 +291,36 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
 
       {/* Mass & Moisture Section */}
       <FormSection
-        title="Mass & Moisture"
+        title="Mass and moisture"
         icon={<ScalesIcon size={14} weight="bold" />}
         fields={["deliveredWetMassKg", "moistureContentPercent", "massDryKg"]}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-20">
-          <FormField
-            id="deliveredWetMassKg"
-            label="Wet Mass (kg)"
-            error={errors.deliveredWetMassKg?.message}
-            hint="As-received weight of the delivery."
-            required
-            certifyRequired={isDeliveryCertifyField("deliveredWetMassKg")}
-            certifyStatus={certStatus("deliveredWetMassKg")}
-          >
-            <DryMassInput
-              id="deliveredWetMassKg"
-              type="number"
-              step={MASS_KG_INPUT_STEP}
-              placeholder="e.g., 1000"
-              disabled={isSubmitting}
-              error={!!errors.deliveredWetMassKg}
-              wetMassKg={watchWetMass}
-              moisturePercent={watchMoisture}
-              {...register("deliveredWetMassKg", {
-                setValueAs: numericValue,
-              })}
-            />
-          </FormField>
+        <MassMoistureFields
+          wetMassKg={watchWetMass}
+          moisturePercent={watchMoisture}
+          wet={{
+            id: "deliveredWetMassKg",
+            error: errors.deliveredWetMassKg?.message,
+            hint: "As-received weight of the delivery, water included.",
+            required: true,
+            disabled: isSubmitting,
+            placeholder: "e.g. 1000",
+            certifyRequired: isDeliveryCertifyField("deliveredWetMassKg"),
+            certifyStatus: certStatus("deliveredWetMassKg"),
+            registration: register("deliveredWetMassKg", { setValueAs: numericValue }),
+          }}
+          moisture={{
+            id: "moistureContentPercent",
+            error: errors.moistureContentPercent?.message,
+            required: true,
+            disabled: isSubmitting,
+            placeholder: "e.g. 20",
+            registration: register("moistureContentPercent", { setValueAs: numericValue }),
+          }}
+        />
 
-          <FormField
-            id="moistureContentPercent"
-            label="Moisture (%)"
-            error={errors.moistureContentPercent?.message}
-            helperText="0–100%"
-            required
-          >
-            <FormInput
-              id="moistureContentPercent"
-              type="number"
-              step={STORED_PERCENT_INPUT_STEP}
-              min="0"
-              max="100"
-              placeholder="e.g., 20"
-              disabled={isSubmitting}
-              error={!!errors.moistureContentPercent}
-              {...register("moistureContentPercent", {
-                setValueAs: numericValue,
-              })}
-            />
-          </FormField>
-        </div>
-
-        {/* Dry mass is surfaced inline under the wet-mass field (DryMassInput)
-            and synced into massDryKg below for submission. */}
+        {/* The split above is display-only; massDryKg is recomputed server-side
+            and synced through the hidden field below for submission. */}
         {errors.massDryKg?.message && (
           <p className="body-small text-[var(--color-status-error)]">{errors.massDryKg.message}</p>
         )}

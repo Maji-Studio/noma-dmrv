@@ -77,7 +77,7 @@ export const guardStorageLocationName = <T>(
     "storage_locations_facility_name_unique",
     name,
     (n) =>
-      `A storage location named "${n}" already exists in this facility. Rename the existing one to reuse this name.`,
+      `A storage bin named "${n}" already exists in this facility. Rename the existing one to reuse this name.`,
     fn
   );
 

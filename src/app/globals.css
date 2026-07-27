@@ -169,9 +169,6 @@
   --color-signal-orange: #f59723ff;
   --color-signal-orange-strong: #f59723ff;
   --color-signal-orange-light: #f5972326;
-  /* DEPRECATED: use --st-ok (signal-green now aliases the status ramp) */
-  --color-signal-green: var(--st-ok);
-  --color-signal-green-light: rgba(23, 116, 74, 0.15);
 
   /* ===== STATUS COLORS ===== */
   --color-status-success: var(--st-ok);
@@ -391,6 +388,20 @@
   --radius-32: 32px;
   --radius-48: 48px;
   --radius-full: 9999px;
+}
+
+/* ===== MOISTURE SPLIT =====
+   The water share of a wet mass, drawn as a hatched void against the solid
+   dry-matter block (see components/ui/moisture-split). Hatching rather than a
+   second fill is deliberate: water is the part of the load that carries no
+   carbon, and a void reads that way without spending an accent colour. The
+   pattern is plum-alpha like every other neutral, never a grey. */
+.moisture-water-hatch {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--clr-dark-purple-20) 0 1.5px,
+    transparent 1.5px 6px
+  );
 }
 
 /* ===== BASE STYLES ===== */
