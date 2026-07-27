@@ -290,7 +290,7 @@ describe("evidence mirroring advisory", () => {
     {
       total: 4,
       mirrored: 2,
-      detail: "2 of 4 supporting documents mirrored",
+      detail: "2 of 4 files ready",
     },
   ])(
     "blocks an existing Removal when Source binding is incomplete",
@@ -322,11 +322,11 @@ describe("evidence mirroring advisory", () => {
     expect(readiness.state).toBe("ready");
     expect(readiness.reasons).toEqual([]);
     expect(readiness.advisories).toEqual([
-      "0 of 4 supporting documents mirrored",
+      "0 of 4 files ready",
     ]);
     expect(checkFor(buildRemovalPreflightChecklist(facts), "evidence")).toMatchObject({
       status: "warning",
-      detail: "0 of 4 supporting documents mirrored",
+      detail: "0 of 4 files ready",
     });
   });
 
@@ -338,18 +338,18 @@ describe("evidence mirroring advisory", () => {
 
     expect(deriveRemovalReadiness(facts)).toMatchObject({
       state: "ready",
-      advisories: ["3 of 9 supporting documents mirrored"],
+      advisories: ["3 of 9 files ready"],
     });
     const wizardEvidence = buildRemovalRequirementsChecklist(facts).find(
       (check) => check.key === "evidence",
     );
     expect(wizardEvidence).toMatchObject({
       status: "warning",
-      detail: "3 of 9 supporting documents mirrored",
+      detail: "3 of 9 files ready",
     });
   });
 
-  it("marks N of M met when every supporting document is mirrored", () => {
+  it("marks N of M met when every evidence file is ready", () => {
     const facts = ready({
       supportingDocumentCount: 3,
       mirroredDocumentCount: 3,
@@ -358,7 +358,7 @@ describe("evidence mirroring advisory", () => {
     expect(deriveRemovalReadiness(facts).advisories).toEqual([]);
     expect(checkFor(buildRemovalPreflightChecklist(facts), "evidence")).toMatchObject({
       status: "met",
-      detail: "3 of 3 supporting documents mirrored",
+      detail: "3 of 3 files ready",
     });
   });
 
@@ -395,10 +395,10 @@ describe("evidence mirroring advisory", () => {
 
     expect(readiness.state).toBe("blocked");
     expect(readiness.reasons).not.toContain(
-      "0 of 2 supporting documents mirrored",
+      "0 of 2 files ready",
     );
     expect(readiness.advisories).toContain(
-      "0 of 2 supporting documents mirrored",
+      "0 of 2 files ready",
     );
   });
 });

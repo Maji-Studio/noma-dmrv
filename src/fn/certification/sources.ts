@@ -24,13 +24,10 @@ import {
 import { getChainOfCustodyData } from "@/data-access/chain-of-custody";
 import { getCreditBatchById } from "@/data-access/credit-batches";
 import { getApplicationsForRuns } from "@/data-access/credit-batch-production-runs";
-import { getSamplesByCreditBatchIds } from "@/data-access/credit-batch-samples";
 import {
   getDocumentById,
   listDocumentsForEntity,
 } from "@/data-access/documents";
-import { getTransportLegsForEntities } from "@/data-access/transport-legs";
-import type { TransportLeg } from "@/db/schema";
 import { SafeError } from "@/lib/errors";
 import {
   buildSourceSupplierRef,
@@ -56,37 +53,23 @@ import type { ActionResult } from "@/types/actions";
 import { withAction } from "../with-action";
 import { appendSyncEventBestEffort, ISOMETRIC_PROVIDER } from "./shared";
 import { withSourceSyncEventOnFailure } from "./source-sync-events";
+import {
+  buildRemovalSourceDescription,
+  classifyRemovalSourceCandidate,
+  type ClassifiedRemovalSource,
+} from "@/lib/certification/removal-source-bindings";
 
 // ───────────────────────────────────────────────────────────────────────────
 // Candidate-document discovery
 // ───────────────────────────────────────────────────────────────────────────
 
-// Document `entity_type` strings that participate in a Removal's chain.
-// Mirrors DOCUMENT_ENTITY_TYPES in schemas/documents.ts. Kept narrow on
-// purpose — facility-scope evidence (LCAs, calibration certificates) is
-// handled by the PROJECT-Component flow per ADR 0005, not the Removal
-// source set.
-//
-// `transport_leg` is here because individual legs are aggregated into one
-// `mass_distance` scalar per category (no LIST transport blueprint), so they
-// can't reach the verifier as data — their bills of lading / weigh-scale
-// tickets must arrive as evidence (Sources) on the datapoint. Legs hang off
-// chain entities polymorphically; `collectTransportLegEntities` resolves them
-// from the feedstock / biochar-product / sample entities already in the set.
+// PR2's code-owned Removal evidence roles exist only on these three lineage
+// entities. Production-run readings remain telemetry, and transport-leg
+// documents are not inferred as substitutes for the direct BoL roles.
 type LineageEntityType =
   | "application"
   | "delivery"
-  | "order"
-  | "biochar_product"
-  | "production_run"
-  | "production_sample"
-  | "production_incident"
-  | "sample"
-  | "feedstock"
-  | "feedstock_delivery"
-  | "credit_batch"
-  | "reactor"
-  | "transport_leg";
+  | "feedstock";
 
 export interface CandidateLineageEntity {
   entityType: LineageEntityType;
@@ -97,6 +80,7 @@ export interface CandidateLineageEntity {
 export interface CandidateDocument {
   document: DocumentRow;
   lineageEntity: CandidateLineageEntity;
+  binding: ClassifiedRemovalSource;
   mirror: {
     externalDocumentId: string;
     isPublic: boolean;
@@ -109,65 +93,15 @@ export interface CandidateDocumentsForRemoval {
   facilityId: string;
   candidates: CandidateDocument[];
   // Distinct external Source IDs reachable for this removal — used by submit
-  // and by the panel header (`Sources (3 of 7 mirrored)`).
+  // and by the panel's files-ready counter.
   mirroredExternalIds: string[];
   // True when the facility has an Isometric mapping. Without one, the panel
   // renders an empty state with a pointer to facility settings.
   hasMapping: boolean;
 }
 
-function transportLegLabel(leg: TransportLeg): string {
-  if (leg.originName && leg.destinationName) {
-    return `Transport leg ${leg.originName} → ${leg.destinationName}`;
-  }
-  const endpoint = leg.destinationName ?? leg.originName;
-  return endpoint
-    ? `Transport leg to ${endpoint}`
-    : `Transport leg (${leg.transportMethodType})`;
-}
-
-// Resolves the transport legs hanging off the chain entities already in the
-// removal's set, as `transport_leg` lineage entities so their uploaded bills
-// of lading / weigh-scale tickets become Source candidates.
-//
-// `transport_legs.entityType` is its own polymorphic enum (feedstock | biochar
-// | sample) and does NOT match the document entity-type strings — note
-// "biochar" here vs. "biochar_product" in the lineage. The returned candidates
-// carry `entityType: "transport_leg"` keyed on the *leg's* id; the downstream
-// `listDocumentsForEntity(orgCtx, "transport_leg", legId)` then picks up the
-// docs. Deduped by leg id so a leg reachable via two entities is listed once.
-async function collectTransportLegEntities(
-  orgCtx: OrgContext,
-  ids: {
-    feedstockIds: string[];
-    biocharProductIds: string[];
-    sampleIds: string[];
-  },
-): Promise<CandidateLineageEntity[]> {
-  const [feedstockLegs, biocharLegs, sampleLegs] = await Promise.all([
-    getTransportLegsForEntities(orgCtx, "feedstock", ids.feedstockIds),
-    getTransportLegsForEntities(orgCtx, "biochar", ids.biocharProductIds),
-    getTransportLegsForEntities(orgCtx, "sample", ids.sampleIds),
-  ]);
-
-  const seen = new Set<string>();
-  const out: CandidateLineageEntity[] = [];
-  for (const leg of [...feedstockLegs, ...biocharLegs, ...sampleLegs]) {
-    if (seen.has(leg.id)) continue;
-    seen.add(leg.id);
-    out.push({
-      entityType: "transport_leg",
-      entityId: leg.id,
-      entityLabel: transportLegLabel(leg),
-    });
-  }
-  return out;
-}
-
-// Walks every member credit batch's chain-of-custody, collecting (entityType,
-// entityId, label) tuples for each entity that can carry documents. Dedup by
-// (type, id). The labels feed into the panel UI so each candidate row says
-// "lab report — sample-2025-01-12.pdf (from production run XYZ)".
+// Walks every member credit batch's chain-of-custody and collects only the
+// three entity types that can own an MVP Removal Source role.
 async function collectLineageEntities(
   orgCtx: OrgContext,
   memberBatchIds: string[],
@@ -185,11 +119,6 @@ async function collectLineageEntities(
 
   for (const batch of batches) {
     if (!batch) continue;
-    add({
-      entityType: "credit_batch",
-      entityId: batch.id,
-      entityLabel: `Credit batch ${batch.code}`,
-    });
 
     const applicationsForRuns = await getApplicationsForRuns(
       orgCtx,
@@ -213,34 +142,6 @@ async function collectLineageEntities(
         entityId: lineage.delivery.id,
         entityLabel: `Delivery ${lineage.delivery.code}`,
       });
-      if (lineage.order) {
-        add({
-          entityType: "order",
-          entityId: lineage.order.id,
-          entityLabel: `Order ${lineage.order.code}`,
-        });
-      }
-      if (lineage.biocharProduct) {
-        add({
-          entityType: "biochar_product",
-          entityId: lineage.biocharProduct.id,
-          entityLabel: `Biochar product ${lineage.biocharProduct.code}`,
-        });
-      }
-      if (lineage.productionRun) {
-        add({
-          entityType: "production_run",
-          entityId: lineage.productionRun.id,
-          entityLabel: `Production run ${lineage.productionRun.code}`,
-        });
-      }
-      if (lineage.reactor) {
-        add({
-          entityType: "reactor",
-          entityId: lineage.reactor.id,
-          entityLabel: `Reactor ${lineage.reactor.code}`,
-        });
-      }
       for (const fs of lineage.feedstocks) {
         add({
           entityType: "feedstock",
@@ -250,30 +151,7 @@ async function collectLineageEntities(
       }
     }
 
-    // Lab Samples by credit batch (ADR 0016) — the COA evidence walk. Keyed on
-    // `samples.creditBatchId` so a commingled-batch sample with a null run link
-    // still surfaces its COA as a Source candidate.
-    const batchSamples = await getSamplesByCreditBatchIds(orgCtx, [batch.id]);
-    for (const sample of batchSamples) {
-      add({
-        entityType: "sample",
-        entityId: sample.id,
-        entityLabel: `Lab sample for credit batch ${batch.code}`,
-      });
-    }
   }
-
-  // Resolve transport legs off the chain entities just gathered, so their
-  // bill-of-lading / weigh-ticket uploads surface as candidates too.
-  const collected = Array.from(seen.values());
-  const idsOfType = (t: LineageEntityType) =>
-    collected.filter((e) => e.entityType === t).map((e) => e.entityId);
-  const legEntities = await collectTransportLegEntities(orgCtx, {
-    feedstockIds: idsOfType("feedstock"),
-    biocharProductIds: idsOfType("biochar_product"),
-    sampleIds: idsOfType("sample"),
-  });
-  for (const leg of legEntities) add(leg);
 
   return Array.from(seen.values());
 }
@@ -325,15 +203,22 @@ export async function loadCandidateDocumentsForRemovalForUser(
     mirrorRows.map((r) => [r.documentId, r]),
   );
 
-  const candidates: CandidateDocument[] = Array.from(seenDocs.values()).map(
+  const candidates: CandidateDocument[] = Array.from(seenDocs.values()).flatMap(
     ({ doc, entity }) => {
+      const binding = classifyRemovalSourceCandidate({
+        documentType: doc.documentType,
+        metadata: doc.metadata,
+        lineage: entity,
+      });
+      if (!binding) return [];
       const mirror = mirrorByDocumentId.get(doc.id);
       const meta = (mirror?.metadata ?? null) as
         | (DocumentUploadMetadata & { [k: string]: unknown })
         | null;
-      return {
+      return [{
         document: doc,
         lineageEntity: entity,
+        binding,
         mirror: mirror
           ? {
               externalDocumentId: mirror.externalDocumentId,
@@ -341,7 +226,7 @@ export async function loadCandidateDocumentsForRemovalForUser(
               mirroredAt: mirror.createdAt,
             }
           : null,
-      };
+      }];
     },
   );
 
@@ -386,12 +271,17 @@ async function assertDocumentIsCandidateForRemoval(
   orgCtx: OrgContext,
   removalId: string,
   documentId: string,
-): Promise<CandidateDocumentsForRemoval> {
+): Promise<{
+  candidates: CandidateDocumentsForRemoval;
+  candidate: CandidateDocument;
+}> {
   const candidates = await loadCandidateDocumentsForRemovalForUser(
     orgCtx,
     removalId,
   );
-  const found = candidates.candidates.some((c) => c.document.id === documentId);
+  const found = candidates.candidates.find(
+    (candidate) => candidate.document.id === documentId,
+  );
   if (!found) {
     // SafeError is intentionally bland — telling the caller "the doc exists
     // but isn't in this removal's lineage" leaks information they don't
@@ -400,7 +290,7 @@ async function assertDocumentIsCandidateForRemoval(
       "Document is not a candidate for this removal. Reload the panel and try again.",
     );
   }
-  return candidates;
+  return { candidates, candidate: found };
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -441,7 +331,7 @@ export async function mirrorDocumentToSourceForUser(
     // `assertDocumentIsCandidateForRemoval` walks the same lineage the panel
     // shows. Anchoring the mutation to the removal prevents an authenticated
     // caller from mirroring an arbitrary document UUID through this endpoint.
-    const candidates = await assertDocumentIsCandidateForRemoval(
+    const { candidates, candidate } = await assertDocumentIsCandidateForRemoval(
       orgCtx,
       removalId,
       documentId,
@@ -596,6 +486,9 @@ export async function mirrorDocumentToSourceForUser(
                 document,
                 supplierRefId,
                 isPublic: policyIsPublic,
+                sourceDescription: buildRemovalSourceDescription(
+                  candidate.binding,
+                ),
               }),
             ),
         );
@@ -793,65 +686,120 @@ export async function collectCandidateDocumentIdsForRemoval(
   orgCtx: OrgContext,
   args: {
     lineages: Array<{
-      application: { id: string };
-      delivery: { id: string };
+      application: { id: string; code?: string | null };
+      delivery: { id: string; code?: string | null };
       order: { id: string } | null;
       biocharProduct: { id: string } | null;
       productionRun: { id: string } | null;
       reactor: { id: string } | null;
-      feedstocks: Array<{ id: string }>;
+      feedstocks: Array<{ id: string; code?: string | null }>;
     }>;
     memberBatchIds: string[];
   },
 ): Promise<string[]> {
-  const entitySet = new Map<string, { entityType: LineageEntityType; entityId: string }>();
-  const add = (entityType: LineageEntityType, entityId: string) => {
-    const k = `${entityType}:${entityId}`;
-    if (!entitySet.has(k)) entitySet.set(k, { entityType, entityId });
-  };
-  for (const id of args.memberBatchIds) add("credit_batch", id);
-  for (const lineage of args.lineages) {
-    add("application", lineage.application.id);
-    add("delivery", lineage.delivery.id);
-    if (lineage.order) add("order", lineage.order.id);
-    if (lineage.biocharProduct) add("biochar_product", lineage.biocharProduct.id);
-    if (lineage.productionRun) add("production_run", lineage.productionRun.id);
-    if (lineage.reactor) add("reactor", lineage.reactor.id);
-    for (const fs of lineage.feedstocks) add("feedstock", fs.id);
-  }
-  // Lab Samples by credit batch (ADR 0016) — keyed on `samples.creditBatchId`,
-  // NOT via `run.samples`, so a commingled-batch sample's COA still lands in the
-  // candidate set. These ids also seed the sample-transport-leg walk below.
-  const batchSamples = await getSamplesByCreditBatchIds(
-    orgCtx,
-    args.memberBatchIds,
-  );
-  const sampleIds = batchSamples.map((s) => s.id);
-  for (const id of sampleIds) add("sample", id);
-
-  // Transport legs hanging off those chain entities carry their own uploaded
-  // evidence (bills of lading / weigh tickets). Resolve them here so the
-  // submit path mirror-locks and references those docs too. Reads via `db`
-  // like the document walk below; the final sorted/deduped id list keeps the
-  // candidate set deterministic and re-walkable inside the snapshot txn.
-  const legEntities = await collectTransportLegEntities(orgCtx, {
-    feedstockIds: args.lineages.flatMap((l) => l.feedstocks.map((f) => f.id)),
-    biocharProductIds: args.lineages
-      .map((l) => l.biocharProduct?.id)
-      .filter((id): id is string => !!id),
-    sampleIds,
+  void args.memberBatchIds;
+  const candidates = await collectCandidateSourceDocumentsForRemoval(orgCtx, {
+    lineages: args.lineages,
   });
-  for (const leg of legEntities) add("transport_leg", leg.entityId);
+  return candidates.map((candidate) => candidate.documentId);
+}
 
-  const entityList = Array.from(entitySet.values());
-  if (entityList.length === 0) return [];
+export interface CandidateSourceDocument {
+  documentId: string;
+  binding: ClassifiedRemovalSource;
+}
 
-  const docsLists = await Promise.all(
-    entityList.map((e) => listDocumentsForEntity(orgCtx, e.entityType, e.entityId)),
+interface SourceCandidateLineage {
+  application: { id: string; code?: string | null };
+  delivery: { id: string; code?: string | null };
+  feedstocks: Array<{ id: string; code?: string | null }>;
+}
+
+/**
+ * Discovers only the three code-owned MVP source roles. Telemetry and every
+ * other lineage document stay outside both Removal Source candidates and the
+ * submission requirement denominator.
+ */
+export async function collectCandidateSourceDocumentsForRemoval(
+  orgCtx: OrgContext,
+  args: { lineages: SourceCandidateLineage[] },
+): Promise<CandidateSourceDocument[]> {
+  const entities = new Map<string, CandidateLineageEntity>();
+  const add = (entity: CandidateLineageEntity) => {
+    const key = `${entity.entityType}:${entity.entityId}`;
+    if (!entities.has(key)) entities.set(key, entity);
+  };
+  for (const lineage of args.lineages) {
+    add({
+      entityType: "application",
+      entityId: lineage.application.id,
+      entityLabel: `Application ${lineage.application.code ?? lineage.application.id}`,
+    });
+    add({
+      entityType: "delivery",
+      entityId: lineage.delivery.id,
+      entityLabel: `Delivery ${lineage.delivery.code ?? lineage.delivery.id}`,
+    });
+    for (const feedstock of lineage.feedstocks) {
+      add({
+        entityType: "feedstock",
+        entityId: feedstock.id,
+        entityLabel: `Feedstock ${feedstock.code ?? feedstock.id}`,
+      });
+    }
+  }
+
+  const documentsByEntity = await Promise.all(
+    Array.from(entities.values(), async (lineage) => ({
+      lineage,
+      documents: await listDocumentsForEntity(
+        orgCtx,
+        lineage.entityType,
+        lineage.entityId,
+      ),
+    })),
   );
-  return Array.from(
-    new Set(docsLists.flatMap((rows) => rows.map((r) => r.id))),
-  ).sort();
+  const candidates = new Map<string, CandidateSourceDocument>();
+  for (const { lineage, documents } of documentsByEntity) {
+    for (const document of documents) {
+      const binding = classifyRemovalSourceCandidate({
+        documentType: document.documentType,
+        metadata: document.metadata,
+        lineage,
+      });
+      if (binding && !candidates.has(document.id)) {
+        candidates.set(document.id, { documentId: document.id, binding });
+      }
+    }
+  }
+  return Array.from(candidates.values()).sort((left, right) =>
+    left.documentId.localeCompare(right.documentId),
+  );
+}
+
+export interface ResolvedSourceBindingCandidate extends CandidateSourceDocument {
+  sourceId: string;
+}
+
+export async function resolveSourceBindingCandidates(
+  orgCtx: OrgContext,
+  args: { candidates: CandidateSourceDocument[] },
+  txOrDb?: DbTransaction,
+): Promise<ResolvedSourceBindingCandidate[]> {
+  if (args.candidates.length === 0) return [];
+  const uploads = await listDocumentUploadsForDocuments(
+    orgCtx,
+    ISOMETRIC_PROVIDER,
+    args.candidates.map((candidate) => candidate.documentId),
+    txOrDb,
+  );
+  const sourceIdByDocumentId = new Map(
+    uploads.map((upload) => [upload.documentId, upload.externalDocumentId]),
+  );
+  return args.candidates.flatMap((candidate) => {
+    const sourceId = sourceIdByDocumentId.get(candidate.documentId);
+    return sourceId ? [{ ...candidate, sourceId }] : [];
+  });
 }
 
 // Resolves the deduped, sorted Source ID list for a removal given the set of

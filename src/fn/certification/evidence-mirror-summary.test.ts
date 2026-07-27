@@ -52,23 +52,16 @@ describe("loadEvidenceMirrorSummaryForScope", () => {
       contentType: "application/pdf",
       etag: "etag",
     });
-    vi.mocked(getSamplesByCreditBatchIds).mockResolvedValue([
-      { id: "sample-1" },
-    ] as never);
-    vi.mocked(getTransportLegsForEntities).mockImplementation(
-      async (_ctx, entityType) =>
-        entityType === "feedstock"
-          ? ([{ id: "feedstock-leg-1" }] as never)
-          : entityType === "biochar"
-            ? ([{ id: "biochar-leg-1" }] as never)
-            : ([{ id: "sample-leg-1" }] as never),
-    );
     vi.mocked(listDocumentsForEntityIds).mockImplementation(
       async (_ctx, entityType) => {
         if (entityType === "application") {
           return [
             {
               id: "document-1",
+              entityType: "application",
+              entityId: "application-1",
+              documentType: "pdf",
+              metadata: { logbookEvidenceType: "inventory" },
               storageKey: "managed/document-1",
               uploadStatus: "uploaded",
               fileSizeBytes: 1_024,
@@ -76,14 +69,48 @@ describe("loadEvidenceMirrorSummaryForScope", () => {
             },
           ] as never;
         }
-        if (entityType === "transport_leg") {
+        if (entityType === "feedstock") {
           return [
             {
               id: "document-2",
+              entityType: "feedstock",
+              entityId: "feedstock-1",
+              documentType: "bill_of_lading",
+              metadata: {},
               storageKey: "managed/document-2",
               uploadStatus: "uploaded",
               fileSizeBytes: 1_024,
               mimeType: "application/pdf",
+            },
+          ] as never;
+        }
+        if (entityType === "delivery") {
+          return [
+            {
+              id: "document-3",
+              entityType: "delivery",
+              entityId: "delivery-1",
+              documentType: "bill_of_lading",
+              metadata: {},
+              storageKey: "managed/document-3",
+              uploadStatus: "uploaded",
+              fileSizeBytes: 1_024,
+              mimeType: "application/pdf",
+            },
+          ] as never;
+        }
+        if (entityType === "production_run") {
+          return [
+            {
+              id: "readings-csv",
+              entityType: "production_run",
+              entityId: "production-run-1",
+              documentType: "sensor_data",
+              metadata: {},
+              storageKey: "managed/readings.csv",
+              uploadStatus: "uploaded",
+              fileSizeBytes: 1_024,
+              mimeType: "text/csv",
             },
           ] as never;
         }
@@ -92,41 +119,29 @@ describe("loadEvidenceMirrorSummaryForScope", () => {
     );
     vi.mocked(listDocumentUploadsForDocuments).mockResolvedValue([
       { documentId: "document-2" },
+      { documentId: "document-3" },
     ] as never);
   });
 
-  it("reuses the resolved scope and batches document reads by entity type", async () => {
+  it("counts only the three code-owned role candidates and excludes telemetry", async () => {
     await expect(
       loadEvidenceMirrorSummaryForScope(orgCtx, {
         removalId: "removal-1",
         memberBatches: [{ id: "batch-1" }],
         lineages: [lineage],
       }),
-    ).resolves.toEqual({ total: 2, mirrored: 1 });
+    ).resolves.toEqual({ total: 3, mirrored: 2 });
 
-    expect(getSamplesByCreditBatchIds).toHaveBeenCalledWith(orgCtx, ["batch-1"]);
-    expect(getTransportLegsForEntities).toHaveBeenCalledTimes(3);
-    expect(listDocumentsForEntityIds).toHaveBeenCalledTimes(10);
+    expect(getSamplesByCreditBatchIds).not.toHaveBeenCalled();
+    expect(getTransportLegsForEntities).not.toHaveBeenCalled();
+    expect(listDocumentsForEntityIds).toHaveBeenCalledTimes(3);
     expect(
       vi.mocked(listDocumentsForEntityIds).mock.calls.map((call) => call[1]),
-    ).toEqual(
-      expect.arrayContaining([
-        "credit_batch",
-        "application",
-        "delivery",
-        "order",
-        "biochar_product",
-        "production_run",
-        "reactor",
-        "feedstock",
-        "sample",
-        "transport_leg",
-      ]),
-    );
+    ).toEqual(expect.arrayContaining(["application", "delivery", "feedstock"]));
     expect(listDocumentUploadsForDocuments).toHaveBeenCalledWith(
       orgCtx,
       "isometric",
-      ["document-1", "document-2"],
+      ["document-1", "document-3", "document-2"],
     );
   });
 
@@ -137,6 +152,10 @@ describe("loadEvidenceMirrorSummaryForScope", () => {
           ? ([
               {
                 id: "managed",
+                entityType: "application",
+                entityId: "application-1",
+                documentType: "pdf",
+                metadata: { logbookEvidenceType: "inventory" },
                 storageKey: "managed/document.pdf",
                 uploadStatus: "uploaded",
                 fileSizeBytes: 1_024,
@@ -144,16 +163,28 @@ describe("loadEvidenceMirrorSummaryForScope", () => {
               },
               {
                 id: "metadata-only",
+                entityType: "application",
+                entityId: "application-1",
+                documentType: "pdf",
+                metadata: { logbookEvidenceType: "inventory" },
                 storageKey: null,
                 uploadStatus: "uploaded",
               },
               {
                 id: "pending",
+                entityType: "application",
+                entityId: "application-1",
+                documentType: "pdf",
+                metadata: { logbookEvidenceType: "inventory" },
                 storageKey: "managed/pending.pdf",
                 uploadStatus: "pending",
               },
               {
                 id: "failed",
+                entityType: "application",
+                entityId: "application-1",
+                documentType: "pdf",
+                metadata: { logbookEvidenceType: "inventory" },
                 storageKey: "managed/failed.pdf",
                 uploadStatus: "failed",
               },
@@ -185,6 +216,10 @@ describe("loadEvidenceMirrorSummaryForScope", () => {
           ? ([
               {
                 id: "missing-object",
+                entityType: "application",
+                entityId: "application-1",
+                documentType: "pdf",
+                metadata: { logbookEvidenceType: "inventory" },
                 storageKey: "managed/missing.pdf",
                 uploadStatus: "uploaded",
                 fileSizeBytes: 1_024,

@@ -8,6 +8,7 @@
 import type { CertificationSubmissionRow } from "@/data-access/certification";
 import { SafeError } from "@/lib/errors";
 import type { CreateDatapointRequest } from "@/lib/isometric";
+import type { RemovalSourceBindingPlanEntry } from "@/lib/certification/removal-source-bindings";
 import { z } from "zod";
 
 export interface ResolvedFixedInput {
@@ -44,6 +45,32 @@ const removalTransportSnapshotSchema = z.object({
   removalSupplierRef: z.string().min(1),
   datapointBodies: z.array(datapointTransportSchema),
 });
+
+const removalSourceBindingPlanSchema = z.array(
+  z.object({
+    documentId: z.string().min(1),
+    sourceId: z.string().min(1),
+    nomaRole: z.enum([
+      "inventory",
+      "feedstock_bill_of_lading",
+      "delivery_bill_of_lading",
+    ]),
+    lineage: z.object({
+      entityType: z.string().min(1),
+      entityId: z.string().min(1),
+      entityLabel: z.string().min(1),
+    }),
+    intendedTarget: z.object({
+      kind: z.enum(["ordinary", "sequestration"]),
+      groupKey: z.string().min(1),
+      componentId: z.string().min(1),
+      componentBlueprintKey: z.string().min(1),
+      inputKey: z.string().min(1),
+      creditBatchIds: z.array(z.string().min(1)),
+    }),
+    mappingRevision: z.string().min(1),
+  }),
+);
 
 // The `fixed` entries inside payload_snapshot.semantic.inputs. On resume these
 // are the version-stamped bindings the original attempt locked — read back so a
@@ -111,4 +138,21 @@ export function readRemovalFixedInputs(
     });
   }
   return fixed;
+}
+
+export function readRemovalSourceBindingPlan(
+  row: CertificationSubmissionRow,
+): RemovalSourceBindingPlanEntry[] {
+  const snapshot = row.payloadSnapshot as {
+    sourceBindingPlan?: unknown;
+  } | null;
+  const parsed = removalSourceBindingPlanSchema.safeParse(
+    snapshot?.sourceBindingPlan,
+  );
+  if (!parsed.success) {
+    throw new SafeError(
+      "Stale submission cannot be resumed because its Source binding plan does not match the current payload schema.",
+    );
+  }
+  return parsed.data as RemovalSourceBindingPlanEntry[];
 }

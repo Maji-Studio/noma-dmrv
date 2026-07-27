@@ -12,7 +12,9 @@ import {
   type MappingClaimGuard,
 } from "@/data-access/certification-submissions";
 import { env } from "@/config/env";
-import { updateRemovalDates } from "@/data-access/certifier-removals";
+import {
+  updateRemovalDates,
+} from "@/data-access/certifier-removals";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { logger, type Logger } from "@/lib/log";
@@ -51,6 +53,7 @@ import {
 } from "./production-claim-gate";
 import {
   readRemovalFixedInputs,
+  readRemovalSourceBindingPlan,
   readRemovalTransport,
   type ResolvedFixedInput,
   type RemovalTransportSnapshot,
@@ -65,7 +68,8 @@ import {
 } from "./removal-submission-build";
 import { checkProtocolVersionAtSubmit } from "./protocol-version-preflight";
 import { performRegistryCreate, supplierRefLookup } from "./registry-create";
-import { resolveSourceIdsForRemoval } from "./sources";
+import { resolveSourceBindingCandidates } from "./sources";
+import { verifyAndPersistRemovalSourceBindings } from "./removal-source-binding-verification";
 import {
   appendSyncEventBestEffort,
   assertProductionConfirmed,
@@ -367,6 +371,7 @@ async function submitRemovalCore(
     agg,
     latestApplicationTime,
     candidateDocumentIds,
+    candidateSourceDocuments,
     sourceIds,
     fixed,
     memberCreditBatchIds,
@@ -396,11 +401,16 @@ async function submitRemovalCore(
       // against us, so this result is the authoritative source set. Common
       // case: it matches the tentative set and everything built above
       // remains valid; the rare path rebuilds the template inputs once.
-      const lockedSourceIds = await resolveSourceIdsForRemoval(
+      const lockedSourceBindingCandidates = await resolveSourceBindingCandidates(
         orgCtx,
-        { candidateDocumentIds },
+        { candidates: candidateSourceDocuments },
         tx,
       );
+      const lockedSourceIds = Array.from(
+        new Set(
+          lockedSourceBindingCandidates.map((candidate) => candidate.sourceId),
+        ),
+      ).sort();
       const sourceIdsChanged =
         lockedSourceIds.length !== sourceIds.length ||
         lockedSourceIds.some((id, i) => id !== sourceIds[i]);
@@ -415,8 +425,9 @@ async function submitRemovalCore(
         externalProjectId,
         allowPeriodInputStub,
         hasDurabilityComponents,
-        sourceIds: lockedSourceIds,
         candidateDocumentIds,
+        candidateSourceDocuments,
+        sourceBindingCandidates: lockedSourceBindingCandidates,
       });
       if (!finalCompilation.transportPlan) {
         throw new SafeError(
@@ -453,6 +464,23 @@ async function submitRemovalCore(
       await stampProductionEmissionsClaim(orgCtx, {
         removalId,
         creditBatchIds: memberCreditBatchIds,
+      });
+      if (
+        !ctx.latestSubmission ||
+        ctx.latestSubmission.externalId !== claimed.externalId ||
+        ctx.latestSubmission.version !== claimed.version
+      ) {
+        throw new SafeError(
+          "The existing Removal submission changed while verifying evidence. Reload and retry.",
+        );
+      }
+      await verifyAndPersistRemovalSourceBindings({
+        client,
+        orgCtx,
+        removalId,
+        submissionRow: ctx.latestSubmission,
+        externalRemovalId: claimed.externalId,
+        log,
       });
       return {
         removalId,
@@ -495,6 +523,7 @@ async function submitRemovalCore(
       // from the tentative `datapointBodyByKey` if a concurrent
       // mirror/unlink shifted the source set during lock acquisition).
       const transport = readRemovalTransport(claimed.row);
+      const sourceBindingPlan = readRemovalSourceBindingPlan(claimed.row);
       // On resume, the fixed bindings must come from the SAME snapshot as the
       // transport — not the live `fixed` recomputed above, which may have
       // drifted from the version the snapshot was built against.
@@ -522,6 +551,7 @@ async function submitRemovalCore(
         },
         externalProjectId,
         durabilityMeasurementSubmissions,
+        sourceBindingPlan,
         // The live member set — membership can't drift under a locked draft
         // (assertRemovalAllowsCreditBatchMutation), so these are the batches
         // whose production bucket this submission claims.
@@ -632,6 +662,7 @@ interface RunRemovalSubmissionArgs {
   durabilityMeasurementSubmissions:
     | DurabilityMeasurementSampleSubmission[]
     | null;
+  sourceBindingPlan: ReturnType<typeof readRemovalSourceBindingPlan>;
   // Member credit batches whose §8.6.2 production-bucket claim this submission
   // stamps on success (issue #349, ADR 0020).
   claimBatchIds: string[];
@@ -654,6 +685,7 @@ async function runRemovalSubmission({
   reportingWindow,
   externalProjectId,
   durabilityMeasurementSubmissions,
+  sourceBindingPlan,
   claimBatchIds,
   supersedePreviousId,
   resumed,
@@ -723,6 +755,7 @@ async function runRemovalSubmission({
       submissionRowId: row.id,
       resumed,
       submissions: durabilityMeasurementSubmissions,
+      sourceBindingPlan,
       log,
     });
     datapointIdsByRtcInput = bindSequestrationDatapointsToTemplate({
@@ -802,6 +835,15 @@ async function runRemovalSubmission({
       { submissionId: row.id },
     );
   }
+
+  await verifyAndPersistRemovalSourceBindings({
+    client,
+    orgCtx,
+    removalId,
+    submissionRow: row,
+    externalRemovalId,
+    log,
+  });
 
   return { removalId, externalId: externalRemovalId, version: row.version };
 }

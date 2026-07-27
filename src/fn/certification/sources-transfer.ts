@@ -21,8 +21,15 @@ export function buildSourceRequestBody(args: {
   document: DocumentRow;
   supplierRefId: string;
   isPublic: boolean;
+  sourceDescription: string;
 }): CreateDocumentSourceRequest {
-  const { externalProjectId, document, supplierRefId, isPublic } = args;
+  const {
+    externalProjectId,
+    document,
+    supplierRefId,
+    isPublic,
+    sourceDescription,
+  } = args;
   // Isometric requires non-null content_length / content_type / file_name. The
   // pre-flight check enforces this; the `!` here is post-validation.
   const contentLength = document.fileSizeBytes!;
@@ -34,6 +41,7 @@ export function buildSourceRequestBody(args: {
     __typename: "CreateDocumentSourceRequest",
     content_length: contentLength,
     content_type: contentType,
+    description: sourceDescription,
     display_name: document.fileName,
     file_name: document.fileName,
     is_public: isPublic,

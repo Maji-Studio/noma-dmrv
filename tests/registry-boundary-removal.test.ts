@@ -57,6 +57,12 @@ vi.mock("@/fn/certification/sources", () => ({
     "doc-boundary-1",
   ]),
   resolveSourceIdsForRemoval: vi.fn(async () => ["src-boundary-1"]),
+  collectCandidateSourceDocumentsForRemoval: vi.fn(async () => [
+    makeBoundarySourceDocument(),
+  ]),
+  resolveSourceBindingCandidates: vi.fn(async () => [
+    { ...makeBoundarySourceDocument(), sourceId: "src-boundary-1" },
+  ]),
 }));
 
 import { db } from "@/db";
@@ -96,6 +102,27 @@ const PRODUCTION_RUN_ID = "pr-boundary-1";
 const ORIGINAL_BIOCHAR_MASS_KG = 1000;
 const CHANGED_BIOCHAR_MASS_KG = 1500;
 const STALE_LOCK_OFFSET_MS = LOCK_TTL_MS + 60_000;
+
+function makeBoundarySourceDocument() {
+  return {
+    documentId: "doc-boundary-1",
+    binding: {
+      nomaRole: "inventory" as const,
+      nomaRoleLabel: "Inventory",
+      lineage: {
+        entityType: "application",
+        entityId: "app-bd-1",
+        entityLabel: "Application APP-BD-001",
+      },
+      intendedTarget: {
+        kind: "sequestration" as const,
+        groupKey: "co2-stored" as const,
+        inputKey: "product_mass" as const,
+      },
+      mappingRevision: "source-binding-boundary-revision",
+    },
+  };
+}
 
 const createdFacilityIds: string[] = [];
 const createdRemovalIds: string[] = [];
@@ -550,6 +577,12 @@ beforeEach(() => {
   );
   vi.mocked(sources.resolveSourceIdsForRemoval).mockResolvedValue([
     "src-boundary-1",
+  ]);
+  vi.mocked(
+    sources.collectCandidateSourceDocumentsForRemoval,
+  ).mockResolvedValue([makeBoundarySourceDocument()]);
+  vi.mocked(sources.resolveSourceBindingCandidates).mockResolvedValue([
+    { ...makeBoundarySourceDocument(), sourceId: "src-boundary-1" },
   ]);
 });
 
