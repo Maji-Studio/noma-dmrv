@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("./sources", () => ({
-  collectCandidateDocumentIdsForRemoval: vi.fn(),
-  resolveSourceIdsForRemoval: vi.fn(),
+  collectCandidateSourceDocumentsForRemoval: vi.fn(),
+  resolveSourceBindingCandidates: vi.fn(),
 }));
 
 import type { RemovalSubmissionContext } from "./certify-context-core";
@@ -10,6 +10,7 @@ import { payloadHash } from "@/lib/isometric";
 import {
   buildRemovalSubmissionBuild,
   compileRemovalSubmission,
+  materializeRemovalSubmissionSnapshot,
   normalizeSequestrationTemplateForHash,
   removalTemplateTierCompatibilityBlocker,
 } from "./removal-submission-build";
@@ -168,8 +169,10 @@ describe("buildRemovalSubmissionBuild", () => {
       }),
     ).rejects.toThrow(/readiness was not evaluated/i);
 
-    expect(sources.collectCandidateDocumentIdsForRemoval).not.toHaveBeenCalled();
-    expect(sources.resolveSourceIdsForRemoval).not.toHaveBeenCalled();
+    expect(
+      sources.collectCandidateSourceDocumentsForRemoval,
+    ).not.toHaveBeenCalled();
+    expect(sources.resolveSourceBindingCandidates).not.toHaveBeenCalled();
   });
 
   it("blocks entity certification gaps before preparing registry inputs", async () => {
@@ -192,7 +195,51 @@ describe("buildRemovalSubmissionBuild", () => {
       }),
     ).rejects.toThrow(/entity certification readiness/i);
 
-    expect(sources.collectCandidateDocumentIdsForRemoval).not.toHaveBeenCalled();
-    expect(sources.resolveSourceIdsForRemoval).not.toHaveBeenCalled();
+    expect(
+      sources.collectCandidateSourceDocumentsForRemoval,
+    ).not.toHaveBeenCalled();
+    expect(sources.resolveSourceBindingCandidates).not.toHaveBeenCalled();
+  });
+
+  it("materializes the immutable Source binding plan in the ledger snapshot", () => {
+    const sourceBindingPlan = [
+      {
+        documentId: "document-1",
+        sourceId: "source-1",
+        nomaRole: "inventory",
+        lineage: {
+          entityType: "application",
+          entityId: "application-1",
+          entityLabel: "Application APP-001",
+        },
+        intendedTarget: {
+          kind: "sequestration",
+          groupKey: "co2-stored",
+          componentId: "component-sequestration",
+          componentBlueprintKey: "carbon_rich_substance_sequestration",
+          inputKey: "product_mass",
+        },
+        mappingRevision: "source-mapping-revision",
+      },
+    ] as const;
+
+    const snapshot = materializeRemovalSubmissionSnapshot({
+      compiled: {
+        monitored: [],
+        fixed: [],
+        datapointBodyByKey: new Map(),
+        sourceBindingPlan,
+        memberCreditBatchIds: ["batch-1"],
+        durabilityMeasurementSampleArgs: null,
+      } as never,
+      template: { groups: [] } as never,
+      externalProjectId: "project-1",
+      removalId: "removal-1",
+      nextVersion: 2,
+    });
+
+    expect(snapshot.payloadSnapshot.sourceBindingPlan).toEqual(
+      sourceBindingPlan,
+    );
   });
 });

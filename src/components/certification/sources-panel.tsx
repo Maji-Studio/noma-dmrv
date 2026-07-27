@@ -3,9 +3,8 @@
  *
  * Lists candidate noma documents discovered along the Removal's chain-of-
  * custody. The operator mirrors selected docs to Isometric Sources via a
- * server-side proxy; once mirrored, `source_ids` ride into Datapoint payloads
- * at submit time and are hash-covered (a sources change supersedes the
- * Removal version).
+ * server-side proxy; once ready, each Source is bound only to its code-owned
+ * intended Datapoint target at submit time.
  *
  * Mounted in `RemovalDetailSheet` (the Removals-tab quick view, opened via
  * `?removal=<id>`), the single place the candidate set is consumed. The
@@ -22,6 +21,7 @@ import {
   FileIcon,
   WarningCircleIcon,
 } from "@phosphor-icons/react/dist/ssr";
+import { useRef } from "react";
 import { Button, EmptyState } from "@/components/ui";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -50,9 +50,8 @@ export function SourcesPanel({ removalId }: SourcesPanelProps) {
           <PanelCounter removalId={removalId} />
         </header>
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          Documents you mirror here attach to every Datapoint in this
-          Removal. Mirror once per document — re-submitting the Removal
-          with a different set of sources creates a new version.
+          Prepare each Noma evidence role for its intended Removal datapoint.
+          Attachment is verified separately after submission.
         </p>
         <PanelBody removalId={removalId} />
       </div>
@@ -64,10 +63,10 @@ function PanelCounter({ removalId }: { removalId: string | null }) {
   const query = useCandidateDocumentsForRemoval(removalId);
   if (!removalId || !query.data) return null;
   const total = query.data.candidates.length;
-  const mirrored = query.data.candidates.filter((c) => c.mirror).length;
+  const ready = query.data.candidates.filter((c) => c.mirror).length;
   return (
     <span className="body-caption text-[var(--color-text-tertiary)]">
-      {mirrored} of {total} mirrored
+      {ready} of {total} files ready
     </span>
   );
 }
@@ -94,7 +93,7 @@ function PanelBodyForRemoval({ removalId }: { removalId: string }) {
       </p>
     );
   }
-  if (query.error || !query.data) {
+  if (!query.data) {
     return (
       <p className="body-small text-[var(--clr-red)]">
         Unable to load supporting sources. Try refreshing.
@@ -113,8 +112,8 @@ function PanelBodyForRemoval({ removalId }: { removalId: string }) {
     return (
       <EmptyState
         icon={<FileIcon size={32} />}
-        title="No supporting documents found"
-        description="Attach lab reports, weighbridge tickets, BoLs, or PDDs to the entities in this Removal's chain to make them available here."
+        title="No mapped evidence files found"
+        description="Add an Inventory application document, feedstock bill of lading, or delivery bill of lading to this Removal's lineage."
         padding="sm"
       />
     );
@@ -145,23 +144,53 @@ interface CandidateRowProps {
   >["candidates"][number];
 }
 
+export type SourceRowState = "idle" | "pending" | "success" | "failure";
+
+export function deriveSourceRowState(args: {
+  hasConfirmedMapping: boolean;
+  isPending: boolean;
+  isError: boolean;
+}): SourceRowState {
+  if (args.hasConfirmedMapping) return "success";
+  if (args.isPending) return "pending";
+  if (args.isError) return "failure";
+  return "idle";
+}
+
+export function canStartSourceMirror(state: SourceRowState): boolean {
+  return state === "idle" || state === "failure";
+}
+
 function CandidateRow({ removalId, candidate }: CandidateRowProps) {
-  const { document, lineageEntity, mirror } = candidate;
+  const { document, lineageEntity, binding, mirror } = candidate;
   const isMirrored = !!mirror;
   const isMirrorable = !!document.storageKey;
   const isPdf = isPdfCandidate(document.mimeType, document.fileName);
   const mirrorMutation = useMirrorDocumentToSource();
   const unlinkMutation = useUnlinkDocumentSource(removalId);
   const toast = useToast();
+  const mirrorActionInFlight = useRef(false);
 
-  const pending = mirrorMutation.isPending || unlinkMutation.isPending;
+  const rowState = deriveSourceRowState({
+    hasConfirmedMapping: isMirrored,
+    isPending: mirrorMutation.isPending,
+    isError: mirrorMutation.isError,
+  });
+  const pending = rowState === "pending" || unlinkMutation.isPending;
 
   const description = [
-    document.documentType.replace(/_/g, " "),
+    `Noma role: ${binding.nomaRoleLabel}`,
     lineageEntity.entityLabel,
   ].join(" · ");
 
   const handleMirror = () => {
+    if (
+      mirrorActionInFlight.current ||
+      !canStartSourceMirror(rowState)
+    ) {
+      return;
+    }
+    mirrorActionInFlight.current = true;
     mirrorMutation.mutate(
       { removalId, documentId: document.id },
       {
@@ -178,6 +207,9 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
           toast.error(
             err instanceof Error ? err.message : "Mirror failed.",
           ),
+        onSettled: () => {
+          mirrorActionInFlight.current = false;
+        },
       },
     );
   };
@@ -233,7 +265,7 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
       </div>
 
       <div className="flex shrink-0 items-center gap-8">
-        {isMirrored ? (
+        {rowState === "success" ? (
           <>
             <span
               className="flex items-center gap-4 text-[var(--st-ok)]"
@@ -256,13 +288,17 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
             variant="primary"
             size="small"
             onClick={handleMirror}
-            disabled={pending}
-            busy={mirrorMutation.isPending}
+            disabled={rowState === "pending"}
+            busy={rowState === "pending"}
           >
-            {!mirrorMutation.isPending && (
+            {rowState !== "pending" && (
               <CloudIcon size={ICON_SIZE} weight="bold" />
             )}
-            Mirror
+            {rowState === "pending"
+              ? "Pending"
+              : rowState === "failure"
+                ? "Retry"
+                : "Mirror"}
           </Button>
         ) : (
           <span

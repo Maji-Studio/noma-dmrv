@@ -218,6 +218,7 @@ describe("1000-year sequestration registry boundary", () => {
           label: "production batch CB-BOUNDARY",
         },
       ],
+      sourceBindingPlan: [],
       log,
     });
 
@@ -238,6 +239,7 @@ describe("1000-year sequestration registry boundary", () => {
           label: "production batch CB-BOUNDARY",
         },
       ],
+      sourceBindingPlan: [],
       log,
     });
     expect(registry.requestCount("POST", "/measurement_samples")).toBe(1);

@@ -1,12 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Sample } from "@/db/schema";
 import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples";
 import type { FacilityReferenceSoilTemperature } from "@/lib/isometric/utils/durability-aggregation";
 import {
   buildDurabilityMeasurementSampleSubmissions,
   DURABILITY_MEASUREMENT_SAMPLES_LIVE,
+  patchMeasurementSampleSourceBindings,
 } from "./durability-measurement-samples";
 import { normalizeMeasurementSamplesForHash } from "./durability-measurement-sample-snapshot";
+import { encodeMeasurementProperty } from "@/lib/isometric/utils/measurement-property";
+import { PRODUCT_MASS_MEASUREMENT_PROPERTY } from "@/lib/isometric/transformers/measurement-sample";
 
 function sample(overrides: Partial<Sample>): Sample {
   return {
@@ -71,6 +74,60 @@ const thousandYearBatch = (id: string, code: string) =>
 describe("DURABILITY_MEASUREMENT_SAMPLES_LIVE", () => {
   it("stays off without the sandbox-only operator opt-in", () => {
     expect(DURABILITY_MEASUREMENT_SAMPLES_LIVE).toBe(false);
+  });
+});
+
+describe("patchMeasurementSampleSourceBindings", () => {
+  it("patches only product_mass response Datapoints with Inventory Sources", async () => {
+    const patch = vi.fn().mockResolvedValue({
+      id: "datapoint-product-mass",
+      source_ids: ["source-inventory"],
+    });
+    const productMassProperty = encodeMeasurementProperty(
+      PRODUCT_MASS_MEASUREMENT_PROPERTY,
+    );
+
+    await expect(
+      patchMeasurementSampleSourceBindings({
+        client: { patch } as never,
+        captures: [
+          {
+            measurementSampleId: "measurement-sample-1",
+            supplierReferenceId: "sample-ref-1",
+            datapointIdsByMeasurementProperty: new Map([
+              [productMassProperty, ["datapoint-product-mass"]],
+              ["mass_fraction_dry_basis::total_carbon", ["datapoint-carbon"]],
+            ]),
+          },
+        ],
+        sourceBindingPlan: [
+          {
+            documentId: "document-inventory",
+            sourceId: "source-inventory",
+            nomaRole: "inventory",
+            lineage: {
+              entityType: "application",
+              entityId: "application-1",
+              entityLabel: "Application APP-001",
+            },
+            intendedTarget: {
+              kind: "sequestration",
+              groupKey: "co2-stored",
+              componentId: "component-sequestration",
+              componentBlueprintKey: "biochar_sequestration_1000_year",
+              inputKey: "product_mass",
+            },
+            mappingRevision: "revision-1",
+          },
+        ],
+      }),
+    ).resolves.toBe(1);
+
+    expect(patch).toHaveBeenCalledTimes(1);
+    expect(patch).toHaveBeenCalledWith(
+      "/datapoints/datapoint-product-mass",
+      expect.objectContaining({ source_ids: ["source-inventory"] }),
+    );
   });
 });
 

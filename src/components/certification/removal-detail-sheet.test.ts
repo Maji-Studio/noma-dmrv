@@ -41,4 +41,17 @@ describe("RemovalDetailSheet sync history contract", () => {
       "<SourcesPanel removalId={summary.removalId} />",
     );
   });
+
+  it("renders post-submit attachment health separately from files ready", () => {
+    const source = readFileSync(
+      new URL("./removal-detail-sheet.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toContain('<Field label="Evidence attachments">');
+    expect(source).toContain("summary.evidenceHealth.label");
+    expect(source).toContain(
+      "<SourcesPanel removalId={summary.removalId} />",
+    );
+  });
 });

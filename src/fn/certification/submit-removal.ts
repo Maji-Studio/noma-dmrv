@@ -12,7 +12,10 @@ import {
   type MappingClaimGuard,
 } from "@/data-access/certification-submissions";
 import { env } from "@/config/env";
-import { updateRemovalDates } from "@/data-access/certifier-removals";
+import {
+  updateRemovalDates,
+  updateRemovalSourceBindingVerification,
+} from "@/data-access/certifier-removals";
 import { formatUtcDate } from "@/lib/date-utils";
 import { SafeError } from "@/lib/errors";
 import { logger, type Logger } from "@/lib/log";
@@ -28,6 +31,7 @@ import {
   type IsometricClient,
 } from "@/lib/isometric";
 import { MAPPING_REVISION } from "@/lib/isometric/transformers/datapoint";
+import { verifyRemovalSourceBindings } from "@/lib/isometric/source-binding-verification";
 import { buildCreateGhgEntryRequest } from "@/lib/isometric/transformers/ghg-entry";
 import {
   bindSequestrationDatapointsToTemplate,
@@ -51,6 +55,7 @@ import {
 } from "./production-claim-gate";
 import {
   readRemovalFixedInputs,
+  readRemovalSourceBindingPlan,
   readRemovalTransport,
   type ResolvedFixedInput,
   type RemovalTransportSnapshot,
@@ -65,7 +70,7 @@ import {
 } from "./removal-submission-build";
 import { checkProtocolVersionAtSubmit } from "./protocol-version-preflight";
 import { performRegistryCreate, supplierRefLookup } from "./registry-create";
-import { resolveSourceIdsForRemoval } from "./sources";
+import { resolveSourceBindingCandidates } from "./sources";
 import {
   appendSyncEventBestEffort,
   assertProductionConfirmed,
@@ -367,6 +372,7 @@ async function submitRemovalCore(
     agg,
     latestApplicationTime,
     candidateDocumentIds,
+    candidateSourceDocuments,
     sourceIds,
     fixed,
     memberCreditBatchIds,
@@ -396,11 +402,16 @@ async function submitRemovalCore(
       // against us, so this result is the authoritative source set. Common
       // case: it matches the tentative set and everything built above
       // remains valid; the rare path rebuilds the template inputs once.
-      const lockedSourceIds = await resolveSourceIdsForRemoval(
+      const lockedSourceBindingCandidates = await resolveSourceBindingCandidates(
         orgCtx,
-        { candidateDocumentIds },
+        { candidates: candidateSourceDocuments },
         tx,
       );
+      const lockedSourceIds = Array.from(
+        new Set(
+          lockedSourceBindingCandidates.map((candidate) => candidate.sourceId),
+        ),
+      ).sort();
       const sourceIdsChanged =
         lockedSourceIds.length !== sourceIds.length ||
         lockedSourceIds.some((id, i) => id !== sourceIds[i]);
@@ -415,8 +426,9 @@ async function submitRemovalCore(
         externalProjectId,
         allowPeriodInputStub,
         hasDurabilityComponents,
-        sourceIds: lockedSourceIds,
         candidateDocumentIds,
+        candidateSourceDocuments,
+        sourceBindingCandidates: lockedSourceBindingCandidates,
       });
       if (!finalCompilation.transportPlan) {
         throw new SafeError(
@@ -453,6 +465,23 @@ async function submitRemovalCore(
       await stampProductionEmissionsClaim(orgCtx, {
         removalId,
         creditBatchIds: memberCreditBatchIds,
+      });
+      if (
+        !ctx.latestSubmission ||
+        ctx.latestSubmission.externalId !== claimed.externalId ||
+        ctx.latestSubmission.version !== claimed.version
+      ) {
+        throw new SafeError(
+          "The existing Removal submission changed while verifying evidence. Reload and retry.",
+        );
+      }
+      await verifyAndPersistRemovalSourceBindings({
+        client,
+        orgCtx,
+        removalId,
+        submissionRow: ctx.latestSubmission,
+        externalRemovalId: claimed.externalId,
+        log,
       });
       return {
         removalId,
@@ -495,6 +524,7 @@ async function submitRemovalCore(
       // from the tentative `datapointBodyByKey` if a concurrent
       // mirror/unlink shifted the source set during lock acquisition).
       const transport = readRemovalTransport(claimed.row);
+      const sourceBindingPlan = readRemovalSourceBindingPlan(claimed.row);
       // On resume, the fixed bindings must come from the SAME snapshot as the
       // transport — not the live `fixed` recomputed above, which may have
       // drifted from the version the snapshot was built against.
@@ -522,6 +552,7 @@ async function submitRemovalCore(
         },
         externalProjectId,
         durabilityMeasurementSubmissions,
+        sourceBindingPlan,
         // The live member set — membership can't drift under a locked draft
         // (assertRemovalAllowsCreditBatchMutation), so these are the batches
         // whose production bucket this submission claims.
@@ -632,6 +663,7 @@ interface RunRemovalSubmissionArgs {
   durabilityMeasurementSubmissions:
     | DurabilityMeasurementSampleSubmission[]
     | null;
+  sourceBindingPlan: ReturnType<typeof readRemovalSourceBindingPlan>;
   // Member credit batches whose §8.6.2 production-bucket claim this submission
   // stamps on success (issue #349, ADR 0020).
   claimBatchIds: string[];
@@ -654,6 +686,7 @@ async function runRemovalSubmission({
   reportingWindow,
   externalProjectId,
   durabilityMeasurementSubmissions,
+  sourceBindingPlan,
   claimBatchIds,
   supersedePreviousId,
   resumed,
@@ -723,6 +756,7 @@ async function runRemovalSubmission({
       submissionRowId: row.id,
       resumed,
       submissions: durabilityMeasurementSubmissions,
+      sourceBindingPlan,
       log,
     });
     datapointIdsByRtcInput = bindSequestrationDatapointsToTemplate({
@@ -803,5 +837,117 @@ async function runRemovalSubmission({
     );
   }
 
+  await verifyAndPersistRemovalSourceBindings({
+    client,
+    orgCtx,
+    removalId,
+    submissionRow: row,
+    externalRemovalId,
+    log,
+  });
+
   return { removalId, externalId: externalRemovalId, version: row.version };
+}
+
+async function verifyAndPersistRemovalSourceBindings(args: {
+  client: IsometricClient;
+  orgCtx: OrgContext;
+  removalId: string;
+  submissionRow: CertificationSubmissionRow;
+  externalRemovalId: string;
+  log: Logger;
+}): Promise<void> {
+  const checkedAt = new Date().toISOString();
+  let verification:
+    | Awaited<ReturnType<typeof verifyRemovalSourceBindings>>
+    | {
+        state: "awaiting_sync";
+        verifiedCount: 0;
+        totalCount: number;
+        mismatches: [];
+        awaitingTargets: string[];
+      };
+  let plan: ReturnType<typeof readRemovalSourceBindingPlan>;
+  try {
+    plan = readRemovalSourceBindingPlan(args.submissionRow);
+    verification = await verifyRemovalSourceBindings(
+      args.client,
+      args.externalRemovalId,
+      plan,
+    );
+  } catch (error) {
+    const snapshot = args.submissionRow.payloadSnapshot as {
+      sourceBindingPlan?: unknown[];
+    } | null;
+    const totalCount = Array.isArray(snapshot?.sourceBindingPlan)
+      ? snapshot.sourceBindingPlan.length
+      : 0;
+    verification = {
+      state: "awaiting_sync",
+      verifiedCount: 0,
+      totalCount,
+      mismatches: [],
+      awaitingTargets: [],
+    };
+    args.log.warn(
+      {
+        submissionId: args.submissionRow.id,
+        err: error instanceof Error ? error.message : String(error),
+      },
+      "removal Source binding verification awaiting sync",
+    );
+  }
+
+  try {
+    await updateRemovalSourceBindingVerification(args.orgCtx, args.removalId, {
+      submissionId: args.submissionRow.id,
+      submissionVersion: args.submissionRow.version,
+      state: verification.state,
+      checkedAt,
+      verifiedCount: verification.verifiedCount,
+      totalCount: verification.totalCount,
+    });
+  } catch (error) {
+    args.log.warn(
+      {
+        submissionId: args.submissionRow.id,
+        err: error instanceof Error ? error.message : String(error),
+      },
+      "failed to persist Removal Source binding verification",
+    );
+  }
+  await appendSyncEventBestEffort(
+    args.orgCtx,
+    {
+      provider: ISOMETRIC_PROVIDER,
+      entityType: REMOVAL_ENTITY_TYPE,
+      entityId: args.removalId,
+      operation: "removal:source-bindings:verify",
+      status: verification.state === "verified" ? "succeeded" : "failed",
+      responsePayload: {
+        state: verification.state,
+        verified_count: verification.verifiedCount,
+        total_count: verification.totalCount,
+        mapping_revisions: Array.from(
+          new Set(
+            ((args.submissionRow.payloadSnapshot as {
+              sourceBindingPlan?: Array<{ mappingRevision?: unknown }>;
+            } | null)?.sourceBindingPlan ?? [])
+              .map((entry) => entry.mappingRevision)
+              .filter(
+                (revision): revision is string =>
+                  typeof revision === "string",
+              ),
+          ),
+        ),
+      },
+      ...(verification.state === "mismatch"
+        ? {
+            errorMessage:
+              "One or more Sources are not attached to their intended Removal Datapoint targets.",
+          }
+        : {}),
+    },
+    { submissionId: args.submissionRow.id },
+  );
 }

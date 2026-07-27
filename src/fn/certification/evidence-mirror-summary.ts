@@ -1,15 +1,14 @@
 import type { OrgContext } from "@/lib/auth/server";
 import type { ChainOfCustodyData } from "@/data-access/chain-of-custody";
-import { getSamplesByCreditBatchIds } from "@/data-access/credit-batch-samples";
 import { listDocumentUploadsForDocuments } from "@/data-access/certifier-document-uploads";
 import {
   listDocumentsForEntityIds,
   type DocumentRow,
 } from "@/data-access/documents";
-import { getTransportLegsForEntities } from "@/data-access/transport-legs";
 import { getStorageProvider } from "@/lib/storage";
 import { SOURCES_MAX_BYTES } from "@/schemas/certification-sources";
 import type { DocumentEntityType } from "@/schemas/documents";
+import { classifyRemovalSourceCandidate } from "@/lib/certification/removal-source-bindings";
 import { ISOMETRIC_PROVIDER } from "./shared";
 
 export interface EvidenceMirrorSummary {
@@ -50,43 +49,33 @@ export async function loadEvidenceMirrorSummaryForScope(
   if (!scope.removalId) return { total: 0, mirrored: 0 };
 
   const entityIds = new Map<DocumentEntityType, Set<string>>();
-  const add = (entityType: DocumentEntityType, entityId: string) => {
+  const lineageLabels = new Map<string, string>();
+  const add = (
+    entityType: DocumentEntityType,
+    entityId: string,
+    entityLabel: string,
+  ) => {
     const ids = entityIds.get(entityType) ?? new Set<string>();
     ids.add(entityId);
     entityIds.set(entityType, ids);
+    lineageLabels.set(`${entityType}:${entityId}`, entityLabel);
   };
 
-  for (const batch of scope.memberBatches) add("credit_batch", batch.id);
   for (const lineage of scope.lineages) {
-    add("application", lineage.application.id);
-    add("delivery", lineage.delivery.id);
-    if (lineage.order) add("order", lineage.order.id);
-    if (lineage.biocharProduct) {
-      add("biochar_product", lineage.biocharProduct.id);
+    add(
+      "application",
+      lineage.application.id,
+      `Application ${lineage.application.code}`,
+    );
+    add(
+      "delivery",
+      lineage.delivery.id,
+      `Delivery ${lineage.delivery.code}`,
+    );
+    for (const feedstock of lineage.feedstocks) {
+      add("feedstock", feedstock.id, `Feedstock ${feedstock.code}`);
     }
-    if (lineage.productionRun) add("production_run", lineage.productionRun.id);
-    if (lineage.reactor) add("reactor", lineage.reactor.id);
-    for (const feedstock of lineage.feedstocks) add("feedstock", feedstock.id);
   }
-
-  const samples = await getSamplesByCreditBatchIds(
-    orgCtx,
-    scope.memberBatches.map((batch) => batch.id),
-  );
-  for (const sample of samples) add("sample", sample.id);
-
-  const idsOf = (entityType: DocumentEntityType) =>
-    Array.from(entityIds.get(entityType) ?? []);
-  const transportLegGroups = await Promise.all([
-    getTransportLegsForEntities(orgCtx, "feedstock", idsOf("feedstock")),
-    getTransportLegsForEntities(
-      orgCtx,
-      "biochar",
-      idsOf("biochar_product"),
-    ),
-    getTransportLegsForEntities(orgCtx, "sample", idsOf("sample")),
-  ]);
-  for (const leg of transportLegGroups.flat()) add("transport_leg", leg.id);
 
   const documentGroups = await Promise.all(
     Array.from(entityIds, ([entityType, ids]) =>
@@ -97,6 +86,23 @@ export async function loadEvidenceMirrorSummaryForScope(
     documentGroups
       .flat()
       .filter(isMirrorCandidateDocument)
+      .filter((document) => {
+        const entityLabel = lineageLabels.get(
+          `${document.entityType}:${document.entityId}`,
+        );
+        return (
+          entityLabel !== undefined &&
+          classifyRemovalSourceCandidate({
+            documentType: document.documentType,
+            metadata: document.metadata,
+            lineage: {
+              entityType: document.entityType,
+              entityId: document.entityId,
+              entityLabel,
+            },
+          }) !== null
+        );
+      })
       .map((document) => [document.id, document]),
   );
   const documentIds = Array.from(candidatesById.keys());

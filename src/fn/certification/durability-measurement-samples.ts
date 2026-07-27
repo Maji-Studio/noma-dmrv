@@ -28,6 +28,8 @@ import type { CreditBatchWithSamples } from "@/data-access/credit-batch-samples"
 import { env } from "@/config/env";
 import type { Logger } from "@/lib/log";
 import { getIsometricClientForOrg } from "@/lib/isometric/client";
+import type { IsometricClient } from "@/lib/isometric/client";
+import { patchDatapoint } from "@/lib/isometric/submissions";
 import {
   buildMeasurementSampleReference,
   captureMeasurementSampleDatapointIds,
@@ -54,6 +56,9 @@ import {
 } from "@/lib/isometric/utils/durability-aggregation";
 import { performRegistryCreate, supplierRefLookup } from "./registry-create";
 import { REMOVAL_ENTITY_TYPE } from "./shared";
+import type { RemovalSourceBindingPlanEntry } from "@/lib/certification/removal-source-bindings";
+import { encodeMeasurementProperty } from "@/lib/isometric/utils/measurement-property";
+import { PRODUCT_MASS_MEASUREMENT_PROPERTY } from "@/lib/isometric/transformers/measurement-sample";
 
 /**
  * Sandbox-only gate for durability measurement-sample POSTs. The 1000-year
@@ -259,6 +264,7 @@ export interface SubmitDurabilityMeasurementSamplesArgs {
   /** From the claim outcome — a resumed draft reconciles before POSTing. */
   resumed: boolean;
   submissions: DurabilityMeasurementSampleSubmission[];
+  sourceBindingPlan: RemovalSourceBindingPlanEntry[];
   log: Logger;
 }
 
@@ -266,6 +272,56 @@ export interface SubmitDurabilityMeasurementSamplesResult {
   submitted: number;
   samples: MeasurementSampleDatapointCapture[];
   datapointIdsByMeasurementProperty: Map<string, string[]>;
+}
+
+const PATCH_UNDEFINED = { __typename: "Undefined" } as const;
+
+/**
+ * Measurement-sample POSTs mint their Datapoints server-side, so the Inventory
+ * Source can only be attached after reading the response. This patch must
+ * complete before the GHG Entry is created.
+ */
+export async function patchMeasurementSampleSourceBindings(args: {
+  client: IsometricClient;
+  captures: MeasurementSampleDatapointCapture[];
+  sourceBindingPlan: RemovalSourceBindingPlanEntry[];
+}): Promise<number> {
+  const sourceIds = Array.from(
+    new Set(
+      args.sourceBindingPlan
+        .filter(
+          (entry) =>
+            entry.intendedTarget.kind === "sequestration" &&
+            entry.intendedTarget.inputKey === "product_mass",
+        )
+        .map((entry) => entry.sourceId),
+    ),
+  ).sort();
+  if (sourceIds.length === 0) return 0;
+
+  const propertyKey = encodeMeasurementProperty(
+    PRODUCT_MASS_MEASUREMENT_PROPERTY,
+  );
+  const datapointIds = args.captures.flatMap(
+    (capture) =>
+      capture.datapointIdsByMeasurementProperty.get(propertyKey) ?? [],
+  );
+  for (const datapointId of datapointIds) {
+    const patched = await patchDatapoint(args.client, datapointId, {
+      description: PATCH_UNDEFINED,
+      display_name: PATCH_UNDEFINED,
+      quantity: PATCH_UNDEFINED,
+      source_ids: sourceIds,
+      type: PATCH_UNDEFINED,
+      uncertainty_justification: PATCH_UNDEFINED,
+    });
+    if (sourceIds.some((sourceId) => !patched.source_ids.includes(sourceId))) {
+      throw new SafeError(
+        `Measurement-sample Datapoint ${datapointId} did not confirm its intended Sources; the GHG entry was not created.`,
+      );
+    }
+  }
+  return datapointIds.length;
 }
 
 /**
@@ -322,6 +378,11 @@ export async function submitDurabilityMeasurementSamples(
     );
     submitted += 1;
   }
+  await patchMeasurementSampleSourceBindings({
+    client,
+    captures: samples,
+    sourceBindingPlan: args.sourceBindingPlan,
+  });
   return {
     submitted,
     samples,

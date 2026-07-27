@@ -226,6 +226,16 @@ export class FakeIsometricRegistry {
     if (method === "GET" && path === "/datapoints") {
       return paginateSlice(this.filterRecords(this.datapoints, query), query);
     }
+    const datapointById = path.match(/^\/datapoints\/([^/]+)$/);
+    if (method === "GET" && datapointById) {
+      return this.findById(
+        this.datapoints,
+        decodeURIComponent(datapointById[1]),
+        method,
+        path,
+        ApiError,
+      );
+    }
     if (method === "GET" && path === "/measurement_samples") {
       return paginateSlice(
         this.filterRecords(this.measurementSamples, query),
@@ -234,6 +244,46 @@ export class FakeIsometricRegistry {
     }
     if (method === "GET" && path === "/ghg_entries") {
       return paginateSlice(this.filterRecords(this.ghgEntries, query), query);
+    }
+    const componentAttributions = path.match(
+      /^\/ghg_entries\/([^/]+)\/component_attributions$/,
+    );
+    if (method === "GET" && componentAttributions) {
+      const ghgEntry = this.findById(
+        this.ghgEntries,
+        decodeURIComponent(componentAttributions[1]),
+        method,
+        path,
+        ApiError,
+      );
+      const components = Array.isArray(
+        ghgEntry.ghg_entry_template_components,
+      )
+        ? ghgEntry.ghg_entry_template_components
+        : [];
+      return paginateSlice(
+        components.map((component) => {
+          const value = component as Record<string, unknown>;
+          const templateComponentId = String(
+            value.ghg_entry_template_component_id,
+          );
+          return {
+            component_id: `${ghgEntry.id}::${templateComponentId}`,
+            component_group_key: "co2-stored",
+            ghg_entry_template_component_id: templateComponentId,
+          };
+        }),
+        query,
+      );
+    }
+    const componentById = path.match(/^\/components\/([^/]+)$/);
+    if (method === "GET" && componentById) {
+      return this.componentForId(
+        decodeURIComponent(componentById[1]),
+        method,
+        path,
+        ApiError,
+      );
     }
     if (method === "GET" && path === "/ghg_statements") {
       // No server-side filter: findDraftGhgStatementsByPeriod filters
@@ -313,6 +363,71 @@ export class FakeIsometricRegistry {
       "mts",
       response,
       ApiError,
+    );
+  }
+
+  private findById(
+    collection: FakeRegistryRecord[],
+    id: string,
+    method: string,
+    path: string,
+    ApiError: ApiErrorCtor,
+  ): FakeRegistryRecord {
+    const record = collection.find((candidate) => candidate.id === id);
+    if (record) return record;
+    throw new ApiError(
+      `Isometric ${method} ${path} → 404`,
+      404,
+      { errors: [{ detail: "not found" }] },
+      "http",
+    );
+  }
+
+  private componentForId(
+    componentId: string,
+    method: string,
+    path: string,
+    ApiError: ApiErrorCtor,
+  ): FakeRegistryRecord {
+    for (const ghgEntry of this.ghgEntries) {
+      const prefix = `${ghgEntry.id}::`;
+      if (!componentId.startsWith(prefix)) continue;
+      const templateComponentId = componentId.slice(prefix.length);
+      const components = Array.isArray(
+        ghgEntry.ghg_entry_template_components,
+      )
+        ? ghgEntry.ghg_entry_template_components
+        : [];
+      const component = components.find(
+        (candidate) =>
+          (candidate as Record<string, unknown>)
+            .ghg_entry_template_component_id === templateComponentId,
+      ) as Record<string, unknown> | undefined;
+      if (!component) break;
+      const inputs = Array.isArray(component.inputs) ? component.inputs : [];
+      return {
+        id: componentId,
+        inputs: inputs.map((input) => {
+          const value = input as Record<string, unknown>;
+          return "datapoint_ids" in value
+            ? {
+                __typename: "ComponentListInput",
+                input_key: value.input_key,
+                datapoint_ids: value.datapoint_ids,
+              }
+            : {
+                __typename: "ComponentScalarInput",
+                input_key: value.input_key,
+                datapoint_id: value.datapoint_id,
+              };
+        }),
+      };
+    }
+    throw new ApiError(
+      `Isometric ${method} ${path} → 404`,
+      404,
+      { errors: [{ detail: "not found" }] },
+      "http",
     );
   }
 

@@ -125,10 +125,10 @@ describe("SubmissionChecks", () => {
       ...CHECKS,
       {
         key: "evidence",
-        label: "Supporting documents mirrored",
-        requirementLabel: "Supporting documents mirrored",
+        label: "Evidence files ready",
+        requirementLabel: "Evidence files ready",
         status: "warning",
-        detail: "0 of 2 supporting documents mirrored",
+        detail: "0 of 2 files ready",
       },
     ];
     const html = renderToStaticMarkup(
@@ -136,6 +136,6 @@ describe("SubmissionChecks", () => {
     );
 
     expect(html).toContain("9 of 10 checks passed · 1 need attention");
-    expect(html).toContain("0 of 2 supporting documents mirrored");
+    expect(html).toContain("0 of 2 files ready");
   });
 });

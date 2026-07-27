@@ -107,9 +107,9 @@ export const CERT_REQUIREMENT_META: Record<
       "The facility's default removal template defines which inputs and transport categories the registry expects. It has to resolve cleanly — every referenced component present — before a removal can be assembled from it.",
   },
   evidence: {
-    requirementLabel: "Supporting documents mirrored",
+    requirementLabel: "Evidence files ready",
     whyDetail:
-      "Mirrored documents are attached to the removal's registry Datapoints as Sources, making the underlying lab reports, transport records, and application evidence available to reviewers. Mirroring is advisory and does not block submission.",
+      "Ready means the three code-owned Noma evidence roles have persisted Source mappings. Their intended registry Datapoint attachments are verified separately after submission.",
   },
   durability: {
     requirementLabel: "Sampling & durability eligibility",
