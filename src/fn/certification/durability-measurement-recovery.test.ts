@@ -124,7 +124,27 @@ function submission(
         label: "production batch CB-1",
       },
     ],
-    sourceBindingPlan: [],
+    sourceBindingPlan: [
+      {
+        documentId: "document-1",
+        sourceId: "source-1",
+        nomaRole: "inventory",
+        lineage: {
+          entityType: "application",
+          entityId: "application-1",
+          entityLabel: "Application APP-1",
+        },
+        intendedTarget: {
+          kind: "sequestration",
+          groupKey: "co2-stored",
+          componentId: "component-product-mass",
+          componentBlueprintKey: "carbon_rich_substance_sequestration",
+          inputKey: "product_mass",
+          creditBatchIds: ["batch-1"],
+        },
+        mappingRevision: "source-binding-v1",
+      },
+    ],
     log,
   });
 }
@@ -133,6 +153,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.client.get.mockResolvedValue(registrySample());
   mocks.client.post.mockResolvedValue(registrySample());
+  mocks.client.patch.mockImplementation(
+    async (_path: string, request: { source_ids?: string[] }) => ({
+      source_ids: request.source_ids ?? [],
+    }),
+  );
   mocks.client.paginate.mockImplementation(async function* () {});
 });
 
@@ -141,6 +166,10 @@ describe("measurement-sample journal recovery", () => {
     await submission({ journaled: {} }, false);
 
     expect(mocks.client.post).toHaveBeenCalledOnce();
+    expect(mocks.client.patch).toHaveBeenCalledWith(
+      `/datapoints/dtp-${SAMPLE_ID}-0`,
+      expect.objectContaining({ source_ids: ["source-1"] }),
+    );
     expect(mocks.appendSubmissionJournal).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: "org-1" }),
       "submission-1",
