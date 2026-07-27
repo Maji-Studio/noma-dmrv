@@ -38,7 +38,6 @@ import { SelectFacilityEmptyState } from "@/components/navigation";
 import { TransportLegsSummary } from "@/components/transport-legs";
 import { BiocharProductForm } from "./biochar-product-form";
 import type { BiocharProductFormData } from "@/schemas/biochar-products";
-import { deriveMassDryKgWithAddedWater } from "@/lib/calculations/mass-dry";
 import {
   ENTITY_DEEP_LINK_FOCUS_PARAM,
   ENTITY_DEEP_LINK_MODE_PARAM,
@@ -52,6 +51,7 @@ import {
   formatMoisturePercent,
   MOISTURE_FIELD_LABEL,
   qualifyMassLabel,
+  splitWetMassAfterAddedWater,
   WET_MASS_FIELD_LABEL,
 } from "@/lib/mass-moisture";
 import { MoistureSplit } from "@/components/ui/moisture-split";
@@ -65,11 +65,11 @@ import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 function deriveBiocharProductDryMass(product: BiocharProductWithRelations): number | null {
   const { massKg, moistureContentPercent, waterAddedKg } = product;
 
-  if (massKg == null || moistureContentPercent == null) return null;
-  if (massKg < 0 || moistureContentPercent < 0 || moistureContentPercent > 100) return null;
-  if (waterAddedKg != null && waterAddedKg < 0) return null;
-
-  return deriveMassDryKgWithAddedWater(massKg, moistureContentPercent, waterAddedKg);
+  return splitWetMassAfterAddedWater(
+    massKg,
+    moistureContentPercent,
+    waterAddedKg,
+  )?.dryKg ?? null;
 }
 
 // ============================================
@@ -354,6 +354,13 @@ export function BiocharProductList() {
   const editingEntity =
     displaySideSheet?.mode === "edit" ? displaySideSheet.entity : null;
   const isSubmitting = createProduct.isPending || updateProduct.isPending;
+  const finalDisplayedMassSplit = displaySideSheet?.entity
+    ? splitWetMassAfterAddedWater(
+        displaySideSheet.entity.massKg,
+        displaySideSheet.entity.moistureContentPercent,
+        displaySideSheet.entity.waterAddedKg,
+      )
+    : null;
 
   const columns = createColumns(openEdit, handleDelete);
 
@@ -525,9 +532,22 @@ export function BiocharProductList() {
             ],
             content: (
               <MoistureSplit
-                wetMassKg={displaySideSheet.entity.massKg}
-                moisturePercent={displaySideSheet.entity.moistureContentPercent}
+                wetMassKg={
+                  finalDisplayedMassSplit?.wetKg ??
+                  displaySideSheet.entity.massKg
+                }
+                moisturePercent={
+                  finalDisplayedMassSplit?.moisturePercent ??
+                  displaySideSheet.entity.moistureContentPercent
+                }
                 materialLabel="Biochar"
+                note={
+                  finalDisplayedMassSplit &&
+                  displaySideSheet.entity.waterAddedKg != null &&
+                  displaySideSheet.entity.waterAddedKg > 0
+                    ? `Final state after ${formatMassKg(displaySideSheet.entity.waterAddedKg)} added water.`
+                    : undefined
+                }
               />
             ),
           },

@@ -14,7 +14,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { FactoryIcon, PackageIcon, FlowArrowIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, MassMoistureFields } from "@/components/forms";
 import { formatMassKg } from "@/lib/format-utils";
-import { formatMoisturePercent } from "@/lib/mass-moisture";
+import {
+  formatMoisturePercent,
+  splitWetMassAfterAddedWater,
+} from "@/lib/mass-moisture";
 import {
   StorageLocationQuickAddDialog,
   useQuickAddDialog,
@@ -325,10 +328,12 @@ export function BiocharProductForm({
       ? massKgNum + (waterAddedKgNum ?? 0)
       : null;
   const hasWaterAdded = waterAddedKgNum != null && waterAddedKgNum > 0;
-  const finalMoisturePercent =
-    hasWaterAdded && massKgNum !== null && moistureNum !== null && effectiveWetMassKg !== null && effectiveWetMassKg > 0
-      ? ((massKgNum * moistureNum / 100 + waterAddedKgNum) / effectiveWetMassKg) * 100
-      : null;
+  const finalMassSplit = splitWetMassAfterAddedWater(
+    massKgNum,
+    moistureNum,
+    waterAddedKgNum,
+  );
+  const finalMoisturePercent = finalMassSplit?.moisturePercent ?? null;
 
   return (
     <div className="space-y-20">

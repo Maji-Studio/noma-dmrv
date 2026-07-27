@@ -10,9 +10,9 @@ import {
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
 
 // The storage-location option subtitle for a feedstock bin starts with
-// "Feedstock Bin · " (formatStorageLocationType). Strip it from the selected
+// "Feedstock bin · " (formatStorageLocationType). Strip it from the selected
 // label so the row doesn't repeat the bin kind it already lives under.
-const FEEDSTOCK_BIN_PREFIX = "Feedstock Bin · ";
+const FEEDSTOCK_BIN_PREFIX = "Feedstock bin · ";
 
 function formatKgShort(value: number): string {
   return value.toLocaleString("en-US", { maximumFractionDigits: 2 });

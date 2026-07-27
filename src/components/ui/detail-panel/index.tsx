@@ -45,6 +45,8 @@ import {
   type SpineMeta,
 } from "@/components/forms/form-spine";
 
+const EMPTY_DETAIL_VALUE = "—";
+
 /* -------------------------------------------------------------------------------------------------
  * DetailSection - Flat section with mono label, mirrors FormSection so the
  * view ↔ edit mode toggle reads as the same surface (hairline divider above
@@ -134,9 +136,16 @@ function DetailField({
   certifyRequired,
   certifyStatus,
 }: DetailFieldProps) {
-  const displayValue = value === null || value === undefined || value === "" ? "—" : value;
+  const displayValue =
+    value === null || value === undefined || value === ""
+      ? EMPTY_DETAIL_VALUE
+      : value;
   const resolvedCertifyStatus =
-    certifyStatus ?? resolveCertFieldStatus(true, isCertFieldValuePresent(value));
+    certifyStatus ??
+    resolveCertFieldStatus(
+      true,
+      value !== EMPTY_DETAIL_VALUE && isCertFieldValuePresent(value),
+    );
 
   return (
     <div className={cn("flex flex-1 flex-col gap-4 min-w-0", className)}>

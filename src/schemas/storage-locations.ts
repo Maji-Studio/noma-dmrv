@@ -235,9 +235,9 @@ export type StorageLocationFilterData = z.infer<
  */
 export function formatStorageLocationType(type: StorageLocationType): string {
   const labels: Record<StorageLocationType, string> = {
-    feedstock_bin: "Feedstock Bin",
-    biochar_bin: "Biochar Bin",
-    product_bin: "Product Bin",
+    feedstock_bin: "Feedstock bin",
+    biochar_bin: "Biochar bin",
+    product_bin: "Product bin",
   };
   return labels[type];
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDayString, formatMass } from "./format-utils";
+import { formatDayString, formatMass, formatPercent } from "./format-utils";
 
 describe("formatDayString", () => {
   it("formats a YYYY-MM-DD day without reparsing into an instant", () => {
@@ -21,5 +21,11 @@ describe("formatMass", () => {
     expect(formatMass(null)).toBe("—");
     expect(formatMass(undefined)).toBe("—");
     expect(formatMass(Number.NaN)).toBe("—");
+  });
+});
+
+describe("formatPercent", () => {
+  it("preserves requested lab precision", () => {
+    expect(formatPercent(1.96, { digits: 2 })).toBe("1.96%");
   });
 });

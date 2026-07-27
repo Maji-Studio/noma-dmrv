@@ -5,6 +5,7 @@ import {
   formatMoisturePercent,
   formatSplitMass,
   parseWatchedNumber,
+  splitWetMassAfterAddedWater,
   splitWatchedWetMass,
   splitWetMass,
 } from "./mass-moisture";
@@ -41,6 +42,27 @@ describe("splitWetMass", () => {
 
   it("calls a zero wet mass fully dry rather than dividing by zero", () => {
     expect(splitWetMass(0, 50)).toMatchObject({ dryKg: 0, waterKg: 0, dryFraction: 1 });
+  });
+});
+
+describe("splitWetMassAfterAddedWater", () => {
+  it("keeps dry matter fixed while updating final wet mass and moisture", () => {
+    const split = splitWetMassAfterAddedWater(1500, 2, 30);
+
+    expect(split).toMatchObject({
+      wetKg: 1530,
+      dryKg: 1470,
+      waterKg: 60,
+    });
+    expect(split?.moisturePercent).toBeCloseTo(3.9215686);
+  });
+
+  it("rejects invalid added water and preserves the base split at zero", () => {
+    expect(splitWetMassAfterAddedWater(1500, 2, -1)).toBeNull();
+    expect(splitWetMassAfterAddedWater(1500, 2, Number.NaN)).toBeNull();
+    expect(splitWetMassAfterAddedWater(1500, 2, 0)).toEqual(
+      splitWetMass(1500, 2),
+    );
   });
 });
 

@@ -109,7 +109,7 @@ export function overdrawError(
   return new StockOverdrawError(
     `Not enough ${material} in this bin — ${available} available but this draw needs ${formatKg(
       requestedKg,
-    )}. Reconcile the bin's stock (Storage locations → the bin → Reconcile stock), then try again.`,
+    )}. Reconcile the bin's stock (Storage Bins → the bin → Reconcile stock), then try again.`,
   );
 }
 

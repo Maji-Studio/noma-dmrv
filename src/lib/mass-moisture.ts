@@ -112,6 +112,34 @@ export function splitWetMass(
 }
 
 /**
+ * Apply added water to an existing wet-basis split. Dry matter is unchanged;
+ * wet mass, water mass, and final moisture increase together.
+ */
+export function splitWetMassAfterAddedWater(
+  wetMassKg: number | null | undefined,
+  moisturePercent: number | null | undefined,
+  addedWaterKg: number | null | undefined,
+): MassSplit | null {
+  const base = splitWetMass(wetMassKg, moisturePercent);
+  const addedWater = addedWaterKg ?? 0;
+  if (!base || !Number.isFinite(addedWater) || addedWater < 0) return null;
+  if (addedWater === 0) return base;
+
+  const finalWetKg = base.wetKg + addedWater;
+  if (!Number.isFinite(finalWetKg)) return null;
+
+  const finalWaterKg = base.waterKg + addedWater;
+  return {
+    wetKg: finalWetKg,
+    waterKg: finalWaterKg,
+    dryKg: base.dryKg,
+    moisturePercent:
+      finalWetKg > 0 ? (finalWaterKg / finalWetKg) * PERCENT_MAX : 0,
+    dryFraction: finalWetKg > 0 ? base.dryKg / finalWetKg : 1,
+  };
+}
+
+/**
  * Accept the loosely-typed values React Hook Form hands back from a watched
  * numeric field (which may still be a string mid-edit) and split them.
  */

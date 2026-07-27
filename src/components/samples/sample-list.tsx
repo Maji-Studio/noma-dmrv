@@ -62,6 +62,12 @@ import {
 } from "@/lib/sample-create-intent";
 import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 
+const LAB_PERCENT_FRACTION_DIGITS = 2;
+
+function formatLabPercent(value: number | null | undefined): string {
+  return formatPercent(value, { digits: LAB_PERCENT_FRACTION_DIGITS });
+}
+
 /** One template for the create-failure banner so its two call sites (post-flush
  * failure and inline retry recount) can never drift apart. Null when resolved. */
 function buildAttachmentFailureBanner(total: number): string | null {
@@ -686,24 +692,24 @@ export function SampleList({
           {
             title: "Carbon analysis",
             fields: [
-              { label: "Total carbon (%)", value: formatPercent(displaySideSheet.entity.totalCarbonPercent) },
-              { label: "Organic carbon (%)", ...certificationDetailField("sample", "organicCarbonPercent"), value: formatPercent(displaySideSheet.entity.organicCarbonPercent) },
-              { label: "Inorganic carbon (%)", value: formatPercent(displaySideSheet.entity.inorganicCarbonPercent) },
+              { label: "Total carbon (%)", value: formatLabPercent(displaySideSheet.entity.totalCarbonPercent) },
+              { label: "Organic carbon (%)", ...certificationDetailField("sample", "organicCarbonPercent"), value: formatLabPercent(displaySideSheet.entity.organicCarbonPercent) },
+              { label: "Inorganic carbon (%)", value: formatLabPercent(displaySideSheet.entity.inorganicCarbonPercent) },
             ],
           },
           {
             title: "Elemental analysis",
             fields: [
-              { label: "Hydrogen (%)", value: formatPercent(displaySideSheet.entity.totalHydrogenPercent) },
-              { label: "Nitrogen (%)", value: formatPercent(displaySideSheet.entity.totalNitrogenPercent) },
-              { label: "Oxygen (%)", value: formatPercent(displaySideSheet.entity.totalOxygenPercent) },
-              { label: "Sulfur (%)", value: formatPercent(displaySideSheet.entity.totalSulfurPercent) },
+              { label: "Hydrogen (%)", value: formatLabPercent(displaySideSheet.entity.totalHydrogenPercent) },
+              { label: "Nitrogen (%)", value: formatLabPercent(displaySideSheet.entity.totalNitrogenPercent) },
+              { label: "Oxygen (%)", value: formatLabPercent(displaySideSheet.entity.totalOxygenPercent) },
+              { label: "Sulfur (%)", value: formatLabPercent(displaySideSheet.entity.totalSulfurPercent) },
             ],
           },
           {
             title: "Proximate analysis",
             fields: [
-              { label: "Ash content (%)", value: formatPercent(displaySideSheet.entity.ashContentPercent) },
+              { label: "Ash content (%)", value: formatLabPercent(displaySideSheet.entity.ashContentPercent) },
               { label: MOISTURE_FIELD_LABEL, value: formatMoisturePercent(displaySideSheet.entity.moistureContentPercent) },
             ],
           },
@@ -727,8 +733,8 @@ export function SampleList({
             {
               title: "1000-year durability · R₀ reflectance",
               fields: [
-                { label: "Mean random reflectance R₀ (%)", ...certificationDetailField("sample", "randomReflectanceR0Percent"), value: formatPercent(displaySideSheet.entity.randomReflectanceR0Percent) },
-                { label: "R₀ readings at or above 2% (%)", ...certificationDetailField("sample", "sReflectanceFraction"), value: displaySideSheet.entity.sReflectanceFraction == null ? null : formatPercent(displaySideSheet.entity.sReflectanceFraction * 100) },
+                { label: "Mean random reflectance R₀ (%)", ...certificationDetailField("sample", "randomReflectanceR0Percent"), value: formatLabPercent(displaySideSheet.entity.randomReflectanceR0Percent) },
+                { label: "R₀ readings at or above 2% (%)", ...certificationDetailField("sample", "sReflectanceFraction"), value: displaySideSheet.entity.sReflectanceFraction == null ? null : formatLabPercent(displaySideSheet.entity.sReflectanceFraction * 100) },
                 { label: "Measurement count", value: displaySideSheet.entity.r0MeasurementCount },
                 { label: "R₀ analysis date", value: formatDate(displaySideSheet.entity.r0AnalysisDate) },
               ],
@@ -736,8 +742,8 @@ export function SampleList({
             {
               title: "TGA non-reactive carbon",
               fields: [
-                { label: "Reactive carbon (%)", ...certificationDetailField("sample", "reactiveCarbonPercent"), value: formatPercent(displaySideSheet.entity.reactiveCarbonPercent) },
-                { label: "Residual (non-reactive) carbon (%)", ...certificationDetailField("sample", "residualCarbonPercent"), value: formatPercent(displaySideSheet.entity.residualCarbonPercent) },
+                { label: "Reactive carbon (%)", ...certificationDetailField("sample", "reactiveCarbonPercent"), value: formatLabPercent(displaySideSheet.entity.reactiveCarbonPercent) },
+                { label: "Residual (non-reactive) carbon (%)", ...certificationDetailField("sample", "residualCarbonPercent"), value: formatLabPercent(displaySideSheet.entity.residualCarbonPercent) },
                 { label: "TGA analysis date", value: formatDate(displaySideSheet.entity.tgaAnalysisDate) },
               ],
             },
@@ -747,11 +753,11 @@ export function SampleList({
             fields: [
               { label: "Enable nutrient claims", value: displaySideSheet.entity.nutrientClaimEnabled ? "Yes" : "No" },
               ...(displaySideSheet.entity.nutrientClaimEnabled ? [
-                { label: "Phosphorus (%)", value: formatPercent(displaySideSheet.entity.phosphorusPercent) },
-                { label: "Potassium (%)", value: formatPercent(displaySideSheet.entity.potassiumPercent) },
-                { label: "Magnesium (%)", value: formatPercent(displaySideSheet.entity.magnesiumPercent) },
-                { label: "Calcium (%)", value: formatPercent(displaySideSheet.entity.calciumPercent) },
-                { label: "Iron (%)", value: formatPercent(displaySideSheet.entity.ironPercent) },
+                { label: "Phosphorus (%)", value: formatLabPercent(displaySideSheet.entity.phosphorusPercent) },
+                { label: "Potassium (%)", value: formatLabPercent(displaySideSheet.entity.potassiumPercent) },
+                { label: "Magnesium (%)", value: formatLabPercent(displaySideSheet.entity.magnesiumPercent) },
+                { label: "Calcium (%)", value: formatLabPercent(displaySideSheet.entity.calciumPercent) },
+                { label: "Iron (%)", value: formatLabPercent(displaySideSheet.entity.ironPercent) },
               ] : []),
             ],
           },
