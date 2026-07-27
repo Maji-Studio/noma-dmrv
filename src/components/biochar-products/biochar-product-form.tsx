@@ -43,6 +43,10 @@ import { IngredientBinRows } from "./ingredient-bin-rows";
 import { ActionableFocusTarget } from "@/components/ui/actionable-focus-target";
 import type { EntityFocusTarget } from "@/lib/entity-deep-link";
 import Link from "next/link";
+import {
+  BIOCHAR_PRE_WATER_MOISTURE_LABEL,
+  BIOCHAR_PRE_WATER_WET_MASS_LABEL,
+} from "@/config/product-labels";
 
 const PRODUCT_BIN_QUICK_ADD_TYPES = ["product_bin"] as const satisfies readonly StorageLocationType[];
 const SET_VALUE_OPTS = { shouldDirty: true, shouldTouch: true, shouldValidate: true } as const;
@@ -433,6 +437,9 @@ export function BiocharProductForm({
           }
           wet={{
             id: "massKg",
+            label: hasWaterAdded
+              ? BIOCHAR_PRE_WATER_WET_MASS_LABEL
+              : undefined,
             error: errors.massKg?.message,
             required: true,
             disabled: isSubmitting,
@@ -445,6 +452,9 @@ export function BiocharProductForm({
           }}
           moisture={{
             id: "moistureContentPercent",
+            label: hasWaterAdded
+              ? BIOCHAR_PRE_WATER_MOISTURE_LABEL
+              : undefined,
             error: errors.moistureContentPercent?.message,
             required: true,
             disabled: isSubmitting,

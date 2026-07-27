@@ -45,7 +45,11 @@ import {
 } from "@/lib/entity-deep-link";
 import { fromCompositionJsonb } from "@/lib/biochar-composition";
 import type { BiocharProductWithRelations } from "@/data-access/biochar-products";
-import { PURE_BIOCHAR_LABEL } from "@/config/product-labels";
+import {
+  BIOCHAR_PRE_WATER_MOISTURE_LABEL,
+  BIOCHAR_PRE_WATER_WET_MASS_LABEL,
+  PURE_BIOCHAR_LABEL,
+} from "@/config/product-labels";
 import { formatDate, formatMassKg } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
@@ -361,6 +365,10 @@ export function BiocharProductList() {
         displaySideSheet.entity.waterAddedKg,
       )
     : null;
+  const displayedWaterAddedKg =
+    displaySideSheet?.entity?.waterAddedKg ?? null;
+  const displayedHasWaterAdded =
+    displayedWaterAddedKg != null && displayedWaterAddedKg > 0;
 
   const columns = createColumns(openEdit, handleDelete);
 
@@ -525,8 +533,8 @@ export function BiocharProductList() {
             title: "Source",
             fields: [
               { label: "Production run", value: displaySideSheet.entity.linkedProductionRun?.code },
-              { label: qualifyMassLabel(WET_MASS_FIELD_LABEL, "Biochar"), value: formatMassKg(displaySideSheet.entity.massKg) },
-              { label: qualifyMassLabel(MOISTURE_FIELD_LABEL, "Biochar"), value: formatMoisturePercent(displaySideSheet.entity.moistureContentPercent) },
+              { label: displayedHasWaterAdded ? BIOCHAR_PRE_WATER_WET_MASS_LABEL : qualifyMassLabel(WET_MASS_FIELD_LABEL, "Biochar"), value: formatMassKg(displaySideSheet.entity.massKg) },
+              { label: displayedHasWaterAdded ? BIOCHAR_PRE_WATER_MOISTURE_LABEL : qualifyMassLabel(MOISTURE_FIELD_LABEL, "Biochar"), value: formatMoisturePercent(displaySideSheet.entity.moistureContentPercent) },
               { label: "Water added (kg)", value: formatMassKg(displaySideSheet.entity.waterAddedKg) },
               { label: "Density (kg/m³)", value: displaySideSheet.entity.densityKgM3 != null ? `${displaySideSheet.entity.densityKgM3} kg/m³` : null },
             ],
@@ -543,9 +551,8 @@ export function BiocharProductList() {
                 materialLabel="Biochar"
                 note={
                   finalDisplayedMassSplit &&
-                  displaySideSheet.entity.waterAddedKg != null &&
-                  displaySideSheet.entity.waterAddedKg > 0
-                    ? `Final state after ${formatMassKg(displaySideSheet.entity.waterAddedKg)} added water.`
+                  displayedHasWaterAdded
+                    ? `Final after ${formatMassKg(displayedWaterAddedKg)} added water · ${formatMassKg(finalDisplayedMassSplit.wetKg)} wet · ${formatMassKg(finalDisplayedMassSplit.waterKg)} water.`
                     : undefined
                 }
               />

@@ -8,11 +8,12 @@ import {
   type CompositionRow,
 } from "@/lib/biochar-composition";
 import { MASS_KG_INPUT_STEP } from "@/schemas/helpers";
+import { formatStorageLocationType } from "@/schemas/storage-locations";
 
 // The storage-location option subtitle for a feedstock bin starts with
 // "Feedstock bin · " (formatStorageLocationType). Strip it from the selected
 // label so the row doesn't repeat the bin kind it already lives under.
-const FEEDSTOCK_BIN_PREFIX = "Feedstock bin · ";
+const FEEDSTOCK_BIN_PREFIX = `${formatStorageLocationType(COMPOSITION_BIN_TYPE)} · `;
 
 function formatKgShort(value: number): string {
   return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
