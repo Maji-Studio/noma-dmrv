@@ -18,7 +18,7 @@ import { useFacilityContext } from "@/hooks/use-facility-context";
 import { useSupplier, useSupplierLocationsBySupplier } from "@/hooks/use-suppliers";
 import { useTransportLegsForEntity } from "@/hooks/use-transport-legs";
 import { FormField, FormInput, FormTextarea, FormEntitySelect, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus, resolveCertFieldStatus, type CertFieldStatus } from "@/components/forms";
-import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
+import { ResolvedErrorRevalidator } from "@/components/forms";
 import { FormActions } from "@/components/forms/form-actions";
 import { Button } from "@/components/ui";
 import {

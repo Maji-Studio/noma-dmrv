@@ -259,7 +259,9 @@ test.describe("PositionPicker + CALC (stub geo provider)", () => {
       dialog.getByLabel("Default soil temperature (°C)")
     ).toBeVisible();
     await expect(
-      dialog.getByLabel("One-way distance from facility (per leg, km)")
+      dialog.getByRole("spinbutton", {
+        name: "One-way distance from facility (per leg, km)",
+      })
     ).toBeVisible();
     await expect(
       dialog.getByRole("button", {

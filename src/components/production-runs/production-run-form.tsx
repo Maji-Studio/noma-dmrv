@@ -18,13 +18,12 @@ import { useProductionRunTimingZoneSync } from "./use-production-run-timing-zone
 import { deriveMassDryKg } from "@/lib/calculations/mass-dry";
 import { formatMassKg } from "@/lib/format-utils";
 import { useFacilityContext } from "@/hooks/use-facility-context";
-
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useForm, useWatch, Controller } from "react-hook-form";
 import { getRunConflict, type RunConflict } from "@/lib/production-runs/overlap-conflict";
 import { FactoryIcon, PlantIcon, LightningIcon, PackageIcon, FlowArrowIcon, FileCsvIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormTextarea, MassMoistureFields, FormActions, FormSection, FormSpine, SectionLabel, ResolvedErrorRevalidator, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
+import { FormField, FormInput, FormTextarea, MassMoistureFields, FormActions, FormSection, FormSpine, SectionLabel, ResolvedErrorRevalidator, StockReconciliationLink, makeCertFieldStatus, type CertFieldStatus } from "@/components/forms";
 import { ProductionRunReadingTable } from "@/components/production-run-readings";
 import { productionRunTelemetryCertification } from "./production-run-detail-fields";
 import { ProductionReadingsDocuments } from "./production-readings-documents";
@@ -455,8 +454,6 @@ export function ProductionRunForm({
   const defaultSubmitLabel = isEditMode ? "Update Production Run" : "Create Production Run";
 
   const handleFormSubmit = handleSubmit(async (data) => {
-    if (feedstockStockError) return;
-
     // Dates arrive as "YYYY-MM-DD" strings from the inputs. The end date
     // defaults to the start date when only an end time was entered.
     const startDateStr =
@@ -730,8 +727,10 @@ export function ProductionRunForm({
             certifyStatus: certStatus("feedstockMoisturePercent"),
             registration: register("feedstockMoisturePercent", { setValueAs: nullableNumericValue }),
           }}
+          splitFooter={(feedstockStockError || routedServerError.inlineError) && (
+            <StockReconciliationLink facilityId={watchedFacilityId} />
+          )}
         />
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-16">
           <FormField id="feedingRateKgHr" label="Feed rate (kg/hr)" error={errors.feedingRateKgHr?.message}>
             <FormInput

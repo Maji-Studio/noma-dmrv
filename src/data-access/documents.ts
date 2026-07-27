@@ -24,6 +24,7 @@ import { SafeError } from "@/lib/errors";
 import { acquireMirrorLock } from "@/lib/isometric/utils/source-lock";
 import { ISOMETRIC_PROVIDER } from "@/lib/isometric/utils/constants";
 import { getStorageProvider } from "@/lib/storage";
+import { logger } from "@/lib/log";
 import {
   DOCUMENT_ENTITY_TYPES,
   type DocumentEntityType,
@@ -45,6 +46,7 @@ const DELIVERY_TABLE_NAME = "deliveries";
 const DELIVERY_ARCHIVED_AT_COLUMN = "archived_at";
 const TRANSPORT_LEDGER_DOCUMENT_ENTITY_TYPE = "credit_batch";
 const TRANSPORT_LEDGER_DOCUMENT_TYPE = "pdf";
+const log = logger.child({ mod: "documents" });
 
 let deliveryArchivedAtColumnAvailablePromise: Promise<boolean> | null = null;
 
@@ -529,11 +531,11 @@ export async function deleteDocumentWithCertificationSafety(
     if (row.storageKey) {
       try {
         await getStorageProvider().deleteObject(row.storageKey);
-      } catch (error) {
-        console.error("Failed to delete storage object", {
-          documentId: row.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
+      } catch {
+        log.error(
+          { documentId: row.id },
+          "failed to delete storage object",
+        );
         throw new SafeError(
           "Failed to delete the storage object. The document and certification mapping were kept; try again.",
         );

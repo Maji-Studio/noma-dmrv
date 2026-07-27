@@ -14,8 +14,7 @@ import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CalendarIcon, ScalesIcon, MapPinIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus } from "@/components/forms";
-import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
+import { FormField, FormInput, FormTextarea, FormEntitySelect, FormActions, FormSection, FormSpine, MassMoistureFields, makeCertFieldStatus, ResolvedErrorRevalidator, StockReconciliationLink } from "@/components/forms";
 import { formatDistance, parseDistanceDraft } from "@/components/forms/distance-calc-field";
 import { FormSelect } from "@/components/forms/form-select";
 import { deliveryFormSchema, deliveryStatuses, type DeliveryFormData, type DeliveryStatus } from "@/schemas/deliveries";
@@ -312,8 +311,6 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
   const defaultSubmitLabel = isEditMode ? "Update Delivery" : "Create Delivery";
 
   const handleFormSubmit = handleSubmit((data) => {
-    if (deliveryStockError) return;
-
     // A distance note only explains an override — never persist one without.
     const normalized =
       data.distanceKmOverride == null ? { ...data, distanceNote: "" } : data;
@@ -421,6 +418,11 @@ export function DeliveryForm({ delivery, onSubmit, onCancel, isSubmitting = fals
             placeholder: "e.g. 20",
             registration: register("moistureContentPercent", { setValueAs: numericValue }),
           }}
+          splitFooter={
+            (deliveryStockError || routedServerError.inlineError) && (
+              <StockReconciliationLink facilityId={contextFacilityId} />
+            )
+          }
         />
 
         {/* The split above is display-only; massDryKg is recomputed server-side

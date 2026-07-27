@@ -131,7 +131,7 @@ function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
 
   return (
     <div
-      className="pointer-events-none fixed bottom-24 right-24 z-50 flex flex-col gap-8 sm:max-w-[380px]"
+      className="pointer-events-none fixed bottom-24 right-24 z-[var(--z-layer-toast)] flex flex-col gap-8 sm:max-w-[380px]"
       role="region"
       aria-label="Notifications"
     >

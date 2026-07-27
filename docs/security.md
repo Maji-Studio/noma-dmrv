@@ -89,9 +89,7 @@ Non-obvious semantics only:
 - **`STORAGE_ENDPOINT`** — DigitalOcean Spaces regions require it; env parse
   fails closed rather than minting phantom `amazonaws.com` URLs. See
   [storage.md](./storage.md).
-- Durability measurement-sample POSTs use `ISOMETRIC_ENVIRONMENT` directly:
-  the verified 1000-year path is available in sandbox, while production and the
-  unverified 200-year path fail closed in submission code.
+- **`DURABILITY_MEASUREMENT_SAMPLES_LIVE`** — sandbox-only; rejected otherwise.
 - **`GEO_PROVIDER`** — `ors` default, `stub` = hermetic test fixtures. See
   [ADR 0009](./adr/0009-provider-agnostic-server-proxied-geo.md).
 

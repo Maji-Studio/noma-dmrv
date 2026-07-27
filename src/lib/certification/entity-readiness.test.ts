@@ -275,7 +275,7 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  it("warns without blocking when a transport leg has no upload", () => {
+  it("blocks when a transport leg has no accepted upload", () => {
     const readiness = deriveEntityCertifyReadiness("transportLeg", {
       distanceKm: 25,
       loadMassKg: 900,
@@ -283,25 +283,25 @@ describe("deriveEntityCertifyReadiness", () => {
       transportEvidenceDocumentCount: 0,
     });
 
-    expect(readiness.state).toBe("ready");
-    expect(readiness.gaps).toEqual([]);
-    expect(readiness.warnings).toMatchObject([
-      { key: "transportEvidence" },
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      { kind: "field", key: "transportEvidence" },
     ]);
+    expect(readiness.warnings).toEqual([]);
   });
 
-  it("warns when a transport leg row omits its evidence count", () => {
+  it("blocks when a transport leg row omits its evidence count", () => {
     const readiness = deriveEntityCertifyReadiness("transportLeg", {
       distanceKm: 25,
       loadMassKg: 900,
       distanceSource: "document",
     });
 
-    expect(readiness.state).toBe("ready");
-    expect(readiness.gaps).toEqual([]);
-    expect(readiness.warnings).toMatchObject([
-      { key: "transportEvidence" },
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      { kind: "field", key: "transportEvidence" },
     ]);
+    expect(readiness.warnings).toEqual([]);
   });
 
   it("accepts manual-provenance transport evidence", () => {
@@ -340,7 +340,7 @@ describe("deriveEntityCertifyReadiness", () => {
     expect(readiness).toEqual({ state: "ready", gaps: [], warnings: [] });
   });
 
-  it("warns without blocking when a delivered delivery lacks evidence", () => {
+  it("blocks when a delivered delivery lacks evidence", () => {
     const readiness = deriveEntityCertifyReadiness("delivery", {
       status: "delivered",
       deliveredWetMassKg: 400,
@@ -348,11 +348,11 @@ describe("deriveEntityCertifyReadiness", () => {
       transportEvidenceDocumentCount: 0,
     });
 
-    expect(readiness.state).toBe("ready");
-    expect(readiness.gaps).toEqual([]);
-    expect(readiness.warnings).toMatchObject([
-      { key: "transportEvidence" },
+    expect(readiness.state).toBe("incomplete");
+    expect(readiness.gaps).toMatchObject([
+      { kind: "field", key: "transportEvidence" },
     ]);
+    expect(readiness.warnings).toEqual([]);
   });
 
   it("marks an application with complete visual evidence ready", () => {

@@ -48,7 +48,7 @@ async function createOrderViaUi(page: Page, seededData: SeededChainData) {
   );
   await page.selectOption('select[name="packaging"]', "loose");
   await page.fill('input[name="quantityKg"]', "50");
-  await selectEntity(page, "Biochar Product", seededData.biocharProduct.id);
+  await selectEntity(page, "Product bin", seededData.biocharProduct.id);
   await page.click('button[type="submit"]:has-text("Create Order")');
   await waitForSideSheetClose(page);
 }

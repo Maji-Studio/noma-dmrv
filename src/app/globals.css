@@ -176,6 +176,8 @@
   --z-layer-sheet: 50;
   --z-layer-dialog-backdrop: 60;
   --z-layer-dialog: 70;
+  --z-layer-popover: 80;
+  --z-layer-toast: 90;
 
   /* ===== GRAYSCALE PALETTE ===== */
   --color-gray-50: #fafafaff;

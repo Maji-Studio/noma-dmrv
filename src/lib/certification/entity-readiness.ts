@@ -49,12 +49,13 @@ const APPLICATION_EVIDENCE_GAP: EntityCertifyGap = {
   detail: "Geotagged photos or boundary evidence required to certify",
 };
 
-const TRANSPORT_EVIDENCE_WARNING: EntityCertifyWarning = {
+const TRANSPORT_EVIDENCE_GAP: EntityCertifyGap = {
+  kind: "field",
   key: "transportEvidence",
   label: "Transport evidence",
   fields: ["transportEvidenceDocumentCount"],
   detail:
-    "At least one classified transport-evidence file is still required for verification",
+    "At least one accepted, classified transport-evidence file is required to certify",
 };
 
 function fieldValue(
@@ -212,13 +213,14 @@ export function deriveEntityCertifyReadiness(
         typeof documentCount === "number" ? documentCount : undefined,
       )
     ) {
-      warnings.push(TRANSPORT_EVIDENCE_WARNING);
+      gaps.push(TRANSPORT_EVIDENCE_GAP);
     }
   }
 
   // Callers load legs via `getTransportLegsWithEvidenceForEntities` so the
-  // accepted-file count is normally present. A missing count stays visible as
-  // an advisory warning but does not block submission.
+  // accepted-file count is normally present. A missing count must fail closed
+  // because evidence coverage and Source-binding readiness are independent of
+  // how the distance itself was established.
   if (entityKind === "transportLeg") {
     const documentCount = fieldValue(
       entity,
@@ -229,7 +231,7 @@ export function deriveEntityCertifyReadiness(
         typeof documentCount === "number" ? documentCount : undefined,
       )
     ) {
-      warnings.push(TRANSPORT_EVIDENCE_WARNING);
+      gaps.push(TRANSPORT_EVIDENCE_GAP);
     }
   }
 

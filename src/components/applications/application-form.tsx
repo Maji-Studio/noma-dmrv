@@ -21,7 +21,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 import { PackageIcon, MapPinIcon, CameraIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormSelect, FormSection, FormSpine, PositionPicker, FormActions, makeCertFieldStatus } from "@/components/forms";
-import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
+import { ResolvedErrorRevalidator } from "@/components/forms";
 import { MoistureSplit } from "@/components/ui/moisture-split";
 import {
   applicationFormSchema,

@@ -465,6 +465,17 @@ export async function mirrorDocumentToSourceForUser(
     // parallel. Held across HTTP calls; acceptable for single-tenant v1.
     return db.transaction(async (tx) => {
       await acquireMirrorLock(tx, documentId);
+      if (options.enforceRemovalLifecycle) {
+        // Submission claims acquire the same document lock before persisting
+        // their lifecycle transition. Re-decide after the lock so a mirror
+        // that queued behind a claim cannot mutate the claimed Source set.
+        await assertRemovalSourcesEditable(
+          orgCtx,
+          removalId,
+          removal.facilityId,
+          tx,
+        );
+      }
 
       // Idempotency short-circuit (inside the lock) ─────────────────────
       const existingLocal = await getDocumentUploadByDocument(

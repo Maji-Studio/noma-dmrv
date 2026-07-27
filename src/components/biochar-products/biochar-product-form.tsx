@@ -12,7 +12,7 @@ import { nullableNumericValue } from "@/lib/form-utils";
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FactoryIcon, PackageIcon, FlowArrowIcon } from "@phosphor-icons/react/dist/ssr";
-import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, MassMoistureFields } from "@/components/forms";
+import { FormField, FormInput, EntitySelect, FormSection, FormSpine, FormActions, SectionLabel, MassMoistureFields, StockReconciliationLink } from "@/components/forms";
 import { formatMassKg } from "@/lib/format-utils";
 import {
   formatMoisturePercent,
@@ -371,7 +371,6 @@ export function BiocharProductForm({
     routedServerError.inlineError;
 
   const handleFormSubmit = handleSubmit((data) => {
-    if (biocharStockError) return;
     return onSubmit(data as BiocharProductFormData);
   });
 
@@ -514,6 +513,11 @@ export function BiocharProductForm({
             helperText: "Typically 1–2% for biochar",
             registration: register("moistureContentPercent", { setValueAs: nullableNumericValue }),
           }}
+          splitFooter={
+            (biocharStockError || routedServerError.inlineError) && (
+              <StockReconciliationLink facilityId={contextFacilityId} />
+            )
+          }
         />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-16 gap-y-16">

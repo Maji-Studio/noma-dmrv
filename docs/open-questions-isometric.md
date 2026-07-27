@@ -53,8 +53,8 @@ everywhere today, so none of this blocks current work — but do not enable
 Method B until all three close.
 
 - **`_unsampled` registry wire contract — needs-registry-check.** The live
-  `_unsampled` POST stays behind the code-level 200-year availability gate
-  because the submitted representation is unconfirmed. The
+  `_unsampled` POST stays behind `DURABILITY_MEASUREMENT_SAMPLES_LIVE`
+  (`src/config/env.ts`) because the submitted representation is unconfirmed. The
   working product expectation is to reuse the trailing eligible historical sample
   pool/average rather than require three new 1000-year replicates per unsampled
   batch — but noma must not invent it. Also unconfirmed: whether
@@ -87,13 +87,13 @@ they don't churn a freshly-introduced surface mid-review:
   window pool; if pools grow, compute the leave-one-out mean/variance
   analytically in O(n) from running sums.
 
-### Durability measurement-samples — 200-year sandbox confirmation (`isometric/durability-measurement-samples`, opened 2026-06-18)
+### Durability measurement-samples — sandbox confirms before live wiring (`isometric/durability-measurement-samples`, opened 2026-06-18)
 
-**Activation semantics:** `ISOMETRIC_ENVIRONMENT` is the only environment
-switch. The verified 1000-year path is available automatically in sandbox.
-Production and 200-year templates fail closed in
-`durabilityMeasurementSampleAvailabilityBlocker`; the 200-year gate is removed
-only after the remaining registry confirmation below.
+**Flag semantics:** `DURABILITY_MEASUREMENT_SAMPLES_LIVE` (`src/config/env.ts`)
+is an optional flag *plus* a cross-field refinement rejecting it whenever
+`ISOMETRIC_ENVIRONMENT !== "sandbox"` — a sandbox-only kill-switch that cannot be
+enabled against production. The whole surface sits behind it. This entry closes
+when the flag is retired.
 
 Phases 1–5 and the 1000-year extension are **built and committed** (ADR 0021;
 issues #358 and #348); the phased plan and its decision record live in
@@ -127,9 +127,8 @@ and unit-tested; the remaining 200-year question needs the operator's
   ×100 wrong. Verify the live template's blueprint input unit before adding the
   200-year explicit binding.
 
-**200-year cutover checklist (verified still load-bearing).** When the 200-year
-path is activated, and not before: delete the stale
-`carbon_rich_substance_sequestration` `INPUT_MAPPING`
+**Cutover checklist (verified still load-bearing).** At the live flip, and not
+before: delete the stale `carbon_rich_substance_sequestration` `INPUT_MAPPING`
 entry (`src/lib/isometric/transformers/datapoint.ts`) plus the two `tuple(…)`
 descriptors in `src/lib/certification/certify-field-registry.ts`
 (`biocharOutputKg`→`product_mass`, `organicCarbonPercent`→`carbon_content`), and

@@ -36,6 +36,7 @@ import {
   deliveryStockOverdrawMessage,
   formatStockKg,
   isStockOverdraw,
+  type StockMaterial,
 } from "@/lib/stock-overdraw";
 
 /** Any Drizzle client that can run reads — the live `db` or a transaction. */
@@ -43,11 +44,6 @@ type DbReader = Pick<typeof db, "select">;
 
 const BIN_STOCK_LOCK_SCOPE = "bin-stock";
 
-/**
- * Floating-point slack (kg). Derived stock is a sum of floating-point masses, so
- * an exactly-equal draw can land a hair over its available stock. Only a draw
- * beyond this slack is a real over-draw.
- */
 /** SafeError subtype so server actions can attach field-level metadata. */
 export class StockOverdrawError extends SafeError {
   constructor(message: string) {
@@ -104,13 +100,13 @@ export function formatKg(kg: number): string {
  * over-drawn bin surfaces its true (negative) deficit for reconciliation (#116).
  */
 export function overdrawError(
-  material: string,
+  material: StockMaterial,
   availableKg: number,
   requestedKg: number,
 ): StockOverdrawError {
   return new StockOverdrawError(
     binStockOverdrawMessage(
-      material as "feedstock" | "biochar" | "product",
+      material,
       availableKg,
       requestedKg,
     ),

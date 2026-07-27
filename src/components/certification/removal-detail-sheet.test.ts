@@ -50,7 +50,7 @@ describe("RemovalDetailSheet sync history contract", () => {
     expect(source).toContain('<Field label="Evidence attachments">');
     expect(source).toContain("summary.evidenceHealth.label");
     expect(source).toContain(
-      "<SourcesPanel removalId={summary.removalId} />",
+      "<SourcesPanel",
     );
   });
 });

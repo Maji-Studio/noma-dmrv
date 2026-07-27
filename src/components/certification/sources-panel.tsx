@@ -27,7 +27,6 @@ import { useToast } from "@/components/ui/toast";
 import {
   useCandidateDocumentsForRemoval,
   useMirrorDocumentToSource,
-  useUnlinkDocumentSource,
 } from "@/hooks/use-certification-sources";
 import { Section } from "./panel-layout";
 
@@ -39,9 +38,10 @@ interface SourcesPanelProps {
   // Null while the credit batch is not yet grouped into a removal — render
   // an inactive panel rather than fetching.
   removalId: string | null;
+  isEditable: boolean;
 }
 
-export function SourcesPanel({ removalId }: SourcesPanelProps) {
+export function SourcesPanel({ removalId, isEditable }: SourcesPanelProps) {
   return (
     <Section>
       <div className="flex flex-col gap-12">
@@ -53,7 +53,7 @@ export function SourcesPanel({ removalId }: SourcesPanelProps) {
           Prepare each Noma evidence role for its intended Removal datapoint.
           Attachment is verified separately after submission.
         </p>
-        <PanelBody removalId={removalId} />
+        <PanelBody removalId={removalId} isEditable={isEditable} />
       </div>
     </Section>
   );
@@ -71,7 +71,13 @@ function PanelCounter({ removalId }: { removalId: string | null }) {
   );
 }
 
-function PanelBody({ removalId }: { removalId: string | null }) {
+function PanelBody({
+  removalId,
+  isEditable,
+}: {
+  removalId: string | null;
+  isEditable: boolean;
+}) {
   if (!removalId) {
     return (
       <p className="body-small text-[var(--color-text-tertiary)]">
@@ -80,10 +86,21 @@ function PanelBody({ removalId }: { removalId: string | null }) {
       </p>
     );
   }
-  return <PanelBodyForRemoval removalId={removalId} />;
+  return (
+    <PanelBodyForRemoval
+      removalId={removalId}
+      isEditable={isEditable}
+    />
+  );
 }
 
-function PanelBodyForRemoval({ removalId }: { removalId: string }) {
+function PanelBodyForRemoval({
+  removalId,
+  isEditable,
+}: {
+  removalId: string;
+  isEditable: boolean;
+}) {
   const query = useCandidateDocumentsForRemoval(removalId);
 
   if (query.isLoading) {
@@ -130,7 +147,11 @@ function PanelBodyForRemoval({ removalId }: { removalId: string }) {
               : ""
           }
         >
-          <CandidateRow removalId={removalId} candidate={candidate} />
+          <CandidateRow
+            removalId={removalId}
+            candidate={candidate}
+            isEditable={isEditable}
+          />
         </li>
       ))}
     </ul>
@@ -139,6 +160,7 @@ function PanelBodyForRemoval({ removalId }: { removalId: string }) {
 
 interface CandidateRowProps {
   removalId: string;
+  isEditable: boolean;
   candidate: NonNullable<
     ReturnType<typeof useCandidateDocumentsForRemoval>["data"]
   >["candidates"][number];
@@ -161,13 +183,16 @@ export function canStartSourceMirror(state: SourceRowState): boolean {
   return state === "idle" || state === "failure";
 }
 
-function CandidateRow({ removalId, candidate }: CandidateRowProps) {
+function CandidateRow({
+  removalId,
+  candidate,
+  isEditable,
+}: CandidateRowProps) {
   const { document, lineageEntity, binding, mirror } = candidate;
   const isMirrored = !!mirror;
   const isMirrorable = !!document.storageKey;
   const isPdf = isPdfCandidate(document.mimeType, document.fileName);
   const mirrorMutation = useMirrorDocumentToSource();
-  const unlinkMutation = useUnlinkDocumentSource(removalId);
   const toast = useToast();
   const mirrorActionInFlight = useRef(false);
 
@@ -176,8 +201,6 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
     isPending: mirrorMutation.isPending,
     isError: mirrorMutation.isError,
   });
-  const pending = rowState === "pending" || unlinkMutation.isPending;
-
   const description = [
     `Noma role: ${binding.nomaRoleLabel}`,
     lineageEntity.entityLabel,
@@ -210,21 +233,6 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
         onSettled: () => {
           mirrorActionInFlight.current = false;
         },
-      },
-    );
-  };
-
-  const handleUnlink = () => {
-    unlinkMutation.mutate(
-      { documentId: document.id },
-      {
-        onSuccess: (result) => {
-          if (result.unlinked) {
-            toast.success("Unlinked. The Source remains on Isometric.");
-          }
-        },
-        onError: (err) =>
-          toast.error(err instanceof Error ? err.message : "Unlink failed."),
       },
     );
   };
@@ -266,24 +274,13 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
 
       <div className="flex shrink-0 items-center gap-8">
         {rowState === "success" ? (
-          <>
-            <span
-              className="flex items-center gap-4 text-[var(--st-ok)]"
-              title="Mirrored to Isometric"
-            >
-              <CheckCircleIcon size={STATE_ICON_SIZE} weight="fill" />
-            </span>
-            <Button
-              variant="default"
-              size="small"
-              onClick={handleUnlink}
-              disabled={pending}
-              title="Remove the local Source mapping from future Removal submissions. The Isometric registry copy and audit history remain."
-            >
-              Unlink locally
-            </Button>
-          </>
-        ) : isMirrorable ? (
+          <span
+            className="flex items-center gap-4 text-[var(--st-ok)]"
+            title="Mirrored to Isometric"
+          >
+            <CheckCircleIcon size={STATE_ICON_SIZE} weight="fill" />
+          </span>
+        ) : isMirrorable && isEditable ? (
           <Button
             variant="primary"
             size="small"
@@ -300,7 +297,7 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
                 ? "Retry"
                 : "Mirror"}
           </Button>
-        ) : (
+        ) : !isMirrorable ? (
           <span
             className="flex max-w-[180px] items-center gap-6 body-caption text-[var(--color-text-tertiary)]"
             role="status"
@@ -312,6 +309,13 @@ function CandidateRow({ removalId, candidate }: CandidateRowProps) {
               className="shrink-0"
             />
             No managed file bytes
+          </span>
+        ) : (
+          <span
+            className="body-caption text-[var(--color-text-tertiary)]"
+            role="status"
+          >
+            Not mirrored
           </span>
         )}
       </div>

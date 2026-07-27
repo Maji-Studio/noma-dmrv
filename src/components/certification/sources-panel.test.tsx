@@ -96,10 +96,6 @@ vi.mock("@/hooks/use-certification-sources", () => ({
     isError: rowMutationState.isError,
     mutate: vi.fn(),
   }),
-  useUnlinkDocumentSource: () => ({
-    isPending: false,
-    mutate: vi.fn(),
-  }),
 }));
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ success: vi.fn(), error: vi.fn() }),
@@ -150,7 +146,7 @@ describe("SourcesPanel supporting document affordances", () => {
 
   it("renders legacy URL-only documents as a non-interactive status", () => {
     const html = renderToStaticMarkup(
-      <SourcesPanel removalId="removal-id" />,
+      <SourcesPanel removalId="removal-id" isEditable />,
     );
 
     expect(html).toContain("No managed file bytes");
@@ -160,7 +156,7 @@ describe("SourcesPanel supporting document affordances", () => {
 
   it("previews PDFs through the authenticated document route only", () => {
     const html = renderToStaticMarkup(
-      <SourcesPanel removalId="removal-id" />,
+      <SourcesPanel removalId="removal-id" isEditable />,
     );
 
     expect(html).toContain('href="/api/documents/legacy-document-id"');
@@ -173,7 +169,7 @@ describe("SourcesPanel supporting document affordances", () => {
 
   it("has no per-file registry visibility controls", () => {
     const html = renderToStaticMarkup(
-      <SourcesPanel removalId="removal-id" />,
+      <SourcesPanel removalId="removal-id" isEditable />,
     );
 
     expect(html).not.toContain("Private");
@@ -201,7 +197,7 @@ describe("SourcesPanel supporting document affordances", () => {
   it("shows only the slow row as pending and disables its action", () => {
     rowMutationState.isPending = true;
     const html = renderToStaticMarkup(
-      <SourcesPanel removalId="removal-id" />,
+      <SourcesPanel removalId="removal-id" isEditable />,
     );
 
     expect(html).toContain("Pending");
@@ -211,7 +207,7 @@ describe("SourcesPanel supporting document affordances", () => {
   it("shows Retry only after a reconciled failure remains unconfirmed", () => {
     rowMutationState.isError = true;
     const html = renderToStaticMarkup(
-      <SourcesPanel removalId="removal-id" />,
+      <SourcesPanel removalId="removal-id" isEditable />,
     );
 
     expect(html).toContain("Retry");
@@ -221,7 +217,7 @@ describe("SourcesPanel supporting document affordances", () => {
     rowMutationState.isError = true;
     rowMutationState.confirmed = true;
     const html = renderToStaticMarkup(
-      <SourcesPanel removalId="removal-id" />,
+      <SourcesPanel removalId="removal-id" isEditable />,
     );
 
     expect(html).toContain("source-confirmed");
@@ -232,10 +228,20 @@ describe("SourcesPanel supporting document affordances", () => {
     queryState.isError = true;
 
     const html = renderToStaticMarkup(
-      <SourcesPanel removalId="removal-id" />,
+      <SourcesPanel removalId="removal-id" isEditable />,
     );
 
     expect(html).toContain("Unable to load supporting sources");
     expect(html).not.toContain("legacy-boundary-logbook.PDF");
+  });
+
+  it("keeps submitted removal sources status-only", () => {
+    const html = renderToStaticMarkup(
+      <SourcesPanel removalId="removal-id" isEditable={false} />,
+    );
+
+    expect(html).toContain("Not mirrored");
+    expect(html).not.toContain(">Mirror<");
+    expect(html).not.toContain("Unlink locally");
   });
 });

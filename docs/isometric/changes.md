@@ -13,18 +13,6 @@ auto-generate a transport evidence ledger Source from live legs. Dated
 implementation and sandbox-verification notes from 2026-06-19 are archived in
 [`docs/archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md`](../archive/isometric-changes-archive-2026-06-19-transport-evidence-sources-and-ledger.md).
 
-## 2026-07-27 (1000-year sandbox activation uses the environment boundary)
-
-The redundant `DURABILITY_MEASUREMENT_SAMPLES_LIVE` environment variable was
-retired. `ISOMETRIC_ENVIRONMENT` is now the only external-write environment
-switch: the end-to-end-verified 1000-year measurement-sample path is available
-automatically in sandbox, while production remains unavailable.
-
-The unverified 200-year sampled and unsampled wire contracts remain fail-closed
-through a path-specific code gate pending the H/C unit and component-input
-binding confirmation. Compilation reports that precise blocker instead of
-asking operators to enable a second sandbox flag.
-
 ## 2026-07-27 (Removal submit review hierarchy)
 
 The New removal wizard now separates its concise operator review from the full
@@ -358,8 +346,8 @@ which supersedes the journal half of ADR 0005.
   transport evidence) is always visible on feedstock, delivery, and
   transport-leg forms. Its CERT state depends only on at least one accepted
   upload, and the existing document-to-Source-candidate pipeline is unchanged.
-- Missing transport evidence remains CERT-flagged and appears as a
-  non-blocking readiness warning. It no longer prevents registry submission.
+- Missing accepted transport evidence remains CERT-flagged and blocks registry
+  submission. Evidence coverage stays independent from distance provenance.
 - Registry basis: Transportation Emissions Accounting module v1.1 §5 accepts
   mapped distances, while §6 required records still apply to every transport
   leg.

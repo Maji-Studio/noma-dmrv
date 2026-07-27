@@ -34,7 +34,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { FlaskIcon, FireIcon, AtomIcon, ScalesIcon, CubeIcon, CalculatorIcon, EyeIcon, ThermometerIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, EntitySelect, FormActions, FormSection, FormSpine, MoistureField, makeCertFieldStatus } from "@/components/forms";
-import { ResolvedErrorRevalidator } from "@/components/forms/resolved-error-revalidator";
+import { ResolvedErrorRevalidator } from "@/components/forms";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
 import { RATIO_INPUT_MAX, RATIO_MAX_MESSAGE } from "@/schemas/helpers";
 import {
