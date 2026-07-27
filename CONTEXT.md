@@ -473,8 +473,10 @@ An advisory that recorded values are valid but fall outside an expected
 range or relationship. The record may be saved only with an acknowledgement
 that preserves the justification, observed values, actor, and time; this is
 distinct from both a validation error and a certification-readiness gap.
-Disabling a plausibility rule suppresses only that advisory and never relaxes
-a data invariant, such as the prohibition on overdrawing a storage bin.
+Rules have versioned system defaults and may carry an Admin-managed
+Organization override. Disabling a plausibility rule suppresses only that
+advisory and never relaxes a data invariant, such as the prohibition on
+overdrawing a storage bin.
 _Avoid_: validation error, readiness gap, override.
 
 ### Tenancy
