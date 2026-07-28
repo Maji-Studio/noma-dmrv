@@ -19,6 +19,7 @@ import {
 } from "@/schemas/customers";
 import type { Customer } from "@/db/schema/parties";
 import { useCustomerLocations, useDeleteCustomerLocation } from "@/hooks/use-customers";
+import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { CustomerLocationQuickAddDialog } from "./customer-location-quick-add-dialog";
@@ -321,6 +322,9 @@ function CreateModeLocationsSection({
 // ============================================
 
 function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation) => void; onCancel: () => void }) {
+  // Organization operating defaults seed create mode only; an existing record
+  // always wins. Server-seeded in the `(app)` layout, so this is synchronous.
+  const { defaults: orgDefaults } = useOrganizationDefaultValues();
   const form = useForm<
     CustomerLocationFormInput,
     unknown,
@@ -329,7 +333,7 @@ function InlineLocationForm({ onAdd, onCancel }: { onAdd: (loc: PendingLocation)
     resolver: zodResolver(customerLocationFormSchema),
     defaultValues: {
       name: "",
-      country: "",
+      country: orgDefaults.defaultCountry ?? "",
       stateRegion: "",
       city: "",
       address: "",

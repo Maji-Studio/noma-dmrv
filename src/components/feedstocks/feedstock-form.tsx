@@ -30,7 +30,8 @@ import {
   DISTANCE_SOURCE_LABELS,
   type DistanceSourceValue,
 } from "@/schemas/distance-source";
-import { DEFAULT_TRIP_TYPE, roundTripDistanceFactor, TRIP_TYPE_OPTIONS, type TripTypeValue } from "@/schemas/trip-type";
+import { roundTripDistanceFactor, TRIP_TYPE_OPTIONS, type TripTypeValue } from "@/schemas/trip-type";
+import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { FormSelect } from "@/components/forms/form-select";
 import type { FeedstockWithRelations } from "@/data-access/feedstocks";
 import type { UseDeferredAttachmentsResult } from "@/hooks/use-deferred-attachments";
@@ -101,6 +102,10 @@ export function FeedstockForm({
       value: FeedstockDistanceSourceChoice;
     } | null>(null);
 
+  // Organization operating defaults seed create mode only; an existing record
+  // always wins. Server-seeded in the `(app)` layout, so this is synchronous.
+  const { defaults: orgDefaults } = useOrganizationDefaultValues();
+
   const defaultValues = {
     facilityId: feedstock?.facilityId ?? contextFacilityId ?? "",
     // New records default to today. Legacy records without a delivery date
@@ -115,7 +120,7 @@ export function FeedstockForm({
     transportDistanceKm: undefined as number | undefined,
     transportDistanceSource:
       feedstock?.transportDistanceSource ?? (null as DistanceSourceValue | null),
-    transportTripType: DEFAULT_TRIP_TYPE as TripTypeValue,
+    transportTripType: orgDefaults.defaultTripType as TripTypeValue,
     feedstockTypeId: feedstock?.feedstockTypeId ?? "",
     totalWetMassKg: feedstock?.massWetKg ?? ("" as unknown as number),
     moisturePercent: feedstock?.moistureContentPercent ?? ("" as unknown as number),

@@ -9,6 +9,7 @@ import { type ReactNode, useEffect, useRef } from "react";
 import { useQueryState, parseAsString } from "nuqs";
 import { useFacilities, useFacility } from "@/hooks/use-facilities";
 import { useOrganizationDefaults } from "@/hooks/use-organization-settings";
+import type { OrganizationDefaultsPayload } from "@/fn/organization-settings";
 import { authClient } from "@/lib/auth/client";
 import {
   FACILITY_STORAGE_KEY,
@@ -50,8 +51,15 @@ function writeStoredFacilityId(facilityId: string | null) {
 export function FacilityProvider({
   children,
   initialOrganizationId = null,
+  initialOrganizationDefaults,
 }: {
   children: ReactNode;
+  /**
+   * The organization's operating defaults, resolved server-side in the `(app)`
+   * layout. Seeds the React Query cache so create forms can read them
+   * synchronously on first render. `undefined` when there is no active org.
+   */
+  initialOrganizationDefaults?: OrganizationDefaultsPayload;
   /**
    * Active organization resolved on the server in the `(app)` layout. It is
    * authoritative until the client session hydrates, so the facilities query
@@ -62,13 +70,14 @@ export function FacilityProvider({
    */
   initialOrganizationId?: string | null;
 }) {
-  // Warm the organization's operating defaults for the whole session. Every
-  // create form seeds fields from them, and react-hook-form reads
-  // `defaultValues` exactly once at mount — a form opened before this query
-  // landed would seed the system fallback and never correct itself, so the
-  // first order of a session would say TZS however the organization is
-  // configured. Nothing here consumes the result; the cache entry is the point.
-  useOrganizationDefaults();
+  // Seed the organization's operating defaults, resolved on the server in the
+  // `(app)` layout, into the React Query cache. Every create form reads them
+  // for its `defaultValues`, which react-hook-form captures exactly once at
+  // mount — so a form that opens before a *fetched* value arrives would create
+  // a record with the system fallback and never correct itself. `initialData`
+  // closes that window entirely: the first client render already has them.
+  // Nothing here consumes the result; the cache entry is the point.
+  useOrganizationDefaults(initialOrganizationDefaults);
 
   const { data: sessionData, isPending: isSessionPending } =
     authClient.useSession();

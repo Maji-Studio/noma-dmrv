@@ -70,6 +70,21 @@ const organizationIdSchema = z
   .min(1, "Organization id is required.");
 
 /**
+ * The settings form seeds a stored field with a run of bullets and drops any
+ * field still holding it. Rejecting that shape here too means a hand-rolled
+ * request, or a future caller that forgets to strip it, cannot store the mask
+ * as a real key — a credential made only of `\u2022` is never a real one.
+ */
+const MASK_ONLY = /^\u2022+$/;
+const secretSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((value) => !MASK_ONLY.test(value), {
+    message: "That is the placeholder for a stored key, not a key.",
+  });
+
+/**
  * The action payload. Both secrets are optional so a rotation can carry only
  * the half that changed; the data-access layer keeps the stored value for an
  * omitted field and rejects a first save that omits either.
@@ -77,8 +92,8 @@ const organizationIdSchema = z
 export const setOrgCertifierCredentialsSchema = z
   .object({
     organizationId: organizationIdSchema,
-    accessToken: z.string().trim().min(1).optional(),
-    clientSecret: z.string().trim().min(1).optional(),
+    accessToken: secretSchema.optional(),
+    clientSecret: secretSchema.optional(),
   })
   .refine((values) => values.accessToken || values.clientSecret, {
     message: "Enter an access token or a client secret to save.",

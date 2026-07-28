@@ -157,6 +157,23 @@ describe("setOrgCertifierCredentialsFn", () => {
     expect(result.success).toBe(true);
   });
 
+  it("refuses to store the masked placeholder as a key", async () => {
+    // The form drops an untouched masked field, but the action is a public
+    // server boundary — a hand-rolled request must not be able to store the
+    // placeholder as a real credential.
+    const result = await setOrgCertifierCredentialsFn({
+      organizationId: ORGANIZATION_ID,
+      accessToken: "\u2022".repeat(16),
+      clientSecret: CLIENT_SECRET,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "That is the placeholder for a stored key, not a key.",
+    });
+    expect(upsertCertifierCredentials).not.toHaveBeenCalled();
+  });
+
   it("rejects a save that carries neither key", async () => {
     const result = await setOrgCertifierCredentialsFn({
       organizationId: ORGANIZATION_ID,

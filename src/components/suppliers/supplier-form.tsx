@@ -37,6 +37,7 @@ import {
 import type { DistanceSourceValue } from "@/schemas/distance-source";
 import type { Supplier } from "@/db/schema/parties";
 import { isCertifyFormField } from "@/lib/certification/certify-field-registry";
+import { useOrganizationDefaultValues } from "@/hooks/use-organization-settings";
 import { Button } from "@/components/ui/button";
 import { DeleteConfirmDialog } from "@/components/ui/delete-confirm-dialog";
 import { SupplierLocationQuickAddDialog } from "./supplier-location-quick-add-dialog";
@@ -424,9 +425,12 @@ function InlineLocationForm({
   onCancel: () => void;
 }) {
   const { selectedFacility } = useFacilityContext();
+  // Organization operating defaults seed create mode only; an existing record
+  // always wins. Server-seeded in the `(app)` layout, so this is synchronous.
+  const { defaults: orgDefaults } = useOrganizationDefaultValues();
   const [formData, setFormData] = useState({
     name: "",
-    country: "",
+    country: orgDefaults.defaultCountry ?? "",
     stateRegion: "",
     city: "",
     address: "",

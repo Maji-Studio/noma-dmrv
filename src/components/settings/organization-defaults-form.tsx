@@ -140,7 +140,9 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
           id="default-currency"
           label="Currency"
           error={errors.defaultCurrency?.message}
-          helperText="Seeds new orders and credit batches."
+          // Orders only. Credit batches have a currency column but no form
+          // field for it, so claiming this seeds them would be false.
+          helperText="Seeds new orders."
         >
           <FormSelect
             id="default-currency"
@@ -184,7 +186,7 @@ function DefaultsForm({ defaults }: { defaults: OrganizationDefaults }) {
           id="default-trip-type"
           label="Transport trip type"
           error={errors.defaultTripType?.message}
-          helperText="Seeds new transport legs."
+          helperText="Seeds new deliveries, feedstock hauls and transport legs."
           hint="A return trip counts the distance twice in emissions accounting, which is the conservative protocol default. Choose one-way only if your hauls have an evidenced onward destination — and the per-leg field stays editable either way."
         >
           <FormSelect

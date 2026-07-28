@@ -37,7 +37,7 @@ const TEST_FILE = /\.test\.tsx?$/;
  * longest-first at match time so `gap-x` wins over `gap`.
  *
  * Deliberately excluded: `border`, `z`, `opacity`, `order`, `flex`, `grow`,
- * `basis`, `leading`, `col-span`, `row-span`, `grid-cols`. Each has its own
+ * `shrink`, `col-span`, `row-span`, `grid-cols`, `line-clamp`. Each has its own
  * numeric scale that survives the `--spacing-*: initial` reset, so a number
  * there is not evidence of anything.
  */
@@ -50,6 +50,18 @@ const SPACING_PREFIXES = [
   "min-w", "min-h", "max-w", "max-h",
   "inset", "inset-x", "inset-y",
   "top", "right", "bottom", "left", "start", "end",
+  // Less obvious members of the same namespace. `basis-3` compiles to nothing
+  // here exactly like `gap-3` does; leaving them out made the gate look
+  // thorough while quietly permitting the same bug.
+  "basis",
+  "translate", "translate-x", "translate-y", "translate-z",
+  "scroll-m", "scroll-mx", "scroll-my",
+  "scroll-mt", "scroll-mr", "scroll-mb", "scroll-ml",
+  "scroll-p", "scroll-px", "scroll-py",
+  "scroll-pt", "scroll-pr", "scroll-pb", "scroll-pl",
+  "indent",
+  "border-spacing", "border-spacing-x", "border-spacing-y",
+  "leading",
 ];
 
 /** Longest first, so `min-w` is tested before `m` and `gap-x` before `gap`. */
@@ -103,14 +115,21 @@ function suggest(prefix: string, value: number, scale: Set<string>): string {
   return `use ${prefix}-[${value}px] to keep ${value}px, or ${prefix}-${nearest} to snap to the scale`;
 }
 
-/** The spacing prefix and bare integer in a class token, if it has both. */
-function parseUtility(
+/**
+ * The spacing prefix and bare integer in a class token, if it has both.
+ * Exported for `tests/check-spacing-scale.test.ts` — this parser is the whole
+ * gate, and a gate nobody tests is a gate that quietly stops catching things.
+ */
+export function parseUtility(
   token: string,
 ): { prefix: string; value: number } | null {
   // Drop variants: `md:`, `hover:`, `group-hover:`, `dark:md:`.
   const bare = token.slice(token.lastIndexOf(":") + 1);
+  // Both important forms are valid Tailwind and both compile to nothing when
+  // the value is off-scale, so neither may slip past: `!p-3` and `p-3!`.
+  const unmarked = bare.replace(/^!/, "").replace(/!$/, "");
   // A leading `-` is a negative utility (`-mt-16`); the scale check is the same.
-  const unsigned = bare.startsWith("-") ? bare.slice(1) : bare;
+  const unsigned = unmarked.startsWith("-") ? unmarked.slice(1) : unmarked;
 
   for (const prefix of PREFIXES_BY_LENGTH) {
     if (!unsigned.startsWith(`${prefix}-`)) continue;
@@ -156,30 +175,36 @@ function findViolations(scale: Set<string>): Violation[] {
   return violations;
 }
 
-const scale = loadSpacingScale();
-const violations = findViolations(scale);
+function main(): void {
+  const scale = loadSpacingScale();
+  const violations = findViolations(scale);
 
-if (violations.length === 0) {
-  console.log(
-    `check:spacing-scale — no off-scale spacing utilities (scale: ${[...scale]
-      .map(Number)
-      .sort((a, b) => a - b)
-      .join(" ")}).`,
-  );
-  process.exit(0);
-}
+  if (violations.length === 0) {
+    console.log(
+      `check:spacing-scale — no off-scale spacing utilities (scale: ${[...scale]
+        .map(Number)
+        .sort((a, b) => a - b)
+        .join(" ")}).`,
+    );
+    return;
+  }
 
-console.error(
-  `check:spacing-scale — ${violations.length} utility/utilities resolve to no CSS:\n`,
-);
-for (const violation of violations) {
   console.error(
-    `  ${violation.file}:${violation.line}  ${violation.utility}\n` +
-      `      ${violation.suggestion}`,
+    `check:spacing-scale — ${violations.length} utility/utilities resolve to no CSS:\n`,
   );
+  for (const violation of violations) {
+    console.error(
+      `  ${violation.file}:${violation.line}  ${violation.utility}\n` +
+        `      ${violation.suggestion}`,
+    );
+  }
+  console.error(
+    "\nThe spacing scale is 1px per unit and is an allow-list: `--spacing-*: initial`\n" +
+      "in src/app/globals.css deletes every value it does not declare.",
+  );
+  process.exitCode = 1;
 }
-console.error(
-  "\nThe spacing scale is 1px per unit and is an allow-list: `--spacing-*: initial`\n" +
-    "in src/app/globals.css deletes every value it does not declare.",
-);
-process.exit(1);
+
+// Run only when invoked as a script — the parser is imported by its test, and
+// scanning the repo (or exiting) on import would break that.
+if (process.argv[1]?.includes("check-spacing-scale")) main();
