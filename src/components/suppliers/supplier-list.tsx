@@ -7,7 +7,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
-import { UsersIcon, PlusIcon } from "@phosphor-icons/react";
+import { UsersIcon, PlusIcon } from "@phosphor-icons/react/dist/ssr";
 import type { Supplier } from "@/db/schema";
 import {
   useCreateSupplierWithLocations,

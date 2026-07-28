@@ -8,7 +8,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { PlusIcon, TrashIcon, MapPinIcon } from "@phosphor-icons/react";
+import { PlusIcon, TrashIcon, MapPinIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormField, FormInput, FormTextarea, FormActions, FormSection } from "@/components/forms";
 import {
   customerFormSchema,

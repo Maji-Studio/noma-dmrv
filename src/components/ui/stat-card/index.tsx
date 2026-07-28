@@ -13,7 +13,7 @@ import * as React from "react";
 import Link from "next/link";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
-import { TrendUpIcon, TrendDownIcon, MinusIcon } from "@phosphor-icons/react";
+import { TrendUpIcon, TrendDownIcon, MinusIcon } from "@phosphor-icons/react/dist/ssr";
 
 /* -------------------------------------------------------------------------------------------------
  * StatCard Variants
@@ -117,9 +117,9 @@ const StatCardSkeleton = () => (
   <div className={cn(statCardVariants({ interactive: false }), "px-20 py-16")}>
     <div className="flex items-start justify-between gap-12">
       <div className="flex flex-col gap-6 min-w-0">
-        <div className="h-14 w-80 bg-[var(--color-surface-light)] animate-pulse" />
+        <div className="h-16 w-80 bg-[var(--color-surface-light)] animate-pulse" />
         <div className="h-28 w-64 bg-[var(--color-surface-light)] animate-pulse" />
-        <div className="h-14 w-120 bg-[var(--color-surface-light)] animate-pulse" />
+        <div className="h-16 w-128 bg-[var(--color-surface-light)] animate-pulse" />
       </div>
       <div className="w-32 h-32 bg-[var(--color-surface-light)] animate-pulse shrink-0" />
     </div>

@@ -8,7 +8,7 @@
  */
 
 import { useId, useRef, useState } from "react";
-import { MagnifyingGlassIcon } from "@phosphor-icons/react";
+import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/ssr";
 import { FormInput } from "@/components/forms/form-input";
 import { cn } from "@/lib/utils";
 import { GEOCODE_DEBOUNCE_MS } from "@/config/geo";

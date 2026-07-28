@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { WarningIcon } from "@phosphor-icons/react";
+import { WarningIcon } from "@phosphor-icons/react/dist/ssr";
 import type { UseFormRegisterReturn } from "react-hook-form";
 import { FormField, FormTextarea } from "@/components/forms";
 

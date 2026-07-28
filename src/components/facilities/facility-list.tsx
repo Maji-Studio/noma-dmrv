@@ -13,7 +13,7 @@ import {
   PackageIcon,
   PlusIcon,
   XIcon,
-} from "@phosphor-icons/react";
+} from "@phosphor-icons/react/dist/ssr";
 import type { Facility } from "@/db/schema";
 import {
   useArchiveFacility,
