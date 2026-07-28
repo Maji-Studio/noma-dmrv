@@ -679,8 +679,34 @@ export async function buildRemovalSubmissionBuild(args: {
     Array.from(
       new Set(sourceBindingCandidates.map((candidate) => candidate.sourceId)),
     ).sort();
+  const sourceIdByDocumentId = new Map(
+    sourceBindingCandidates.map((candidate) => [
+      candidate.documentId,
+      candidate.sourceId,
+    ]),
+  );
   const sourceBindingPlan = buildRemovalSourceBindingPlan({
     candidates: sourceBindingCandidates,
+    template: defaultTemplate,
+    applicationIdsByCreditBatchId: new Map(
+      ctx.memberBatchClaims.map((batch) => [
+        batch.creditBatchId,
+        batch.applicationIds,
+      ]),
+    ),
+  });
+  // The operator reviews every candidate file before pending Sources receive
+  // registry IDs. Build the semantic plan from that complete candidate set,
+  // using an empty placeholder only for IDs that submission will materialize.
+  // `reviewPayloadHash` strips those IDs, so the reviewed and post-mirror plans
+  // compare identically while every role, lineage and intended target remains
+  // covered. The operational plan above stays strict and contains ready Sources
+  // only, so no empty ID can reach a wire payload.
+  const semanticSourceBindingPlan = buildRemovalSourceBindingPlan({
+    candidates: candidateSourceDocuments.map((candidate) => ({
+      ...candidate,
+      sourceId: sourceIdByDocumentId.get(candidate.documentId) ?? "",
+    })),
     template: defaultTemplate,
     applicationIdsByCreditBatchId: new Map(
       ctx.memberBatchClaims.map((batch) => [
@@ -740,7 +766,7 @@ export async function buildRemovalSubmissionBuild(args: {
     startedOn: agg.earliestStartTime.toISOString(),
     completedOn: latestApplicationTime.toISOString(),
     sourceIds,
-    sourceBindingPlan,
+    sourceBindingPlan: semanticSourceBindingPlan,
     candidateSources: candidateSourceDocuments
       .map((candidate) => ({
         documentId: candidate.documentId,
