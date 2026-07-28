@@ -334,3 +334,7 @@ which supersedes the journal half of ADR 0005.
 - Generated ledgers are excluded from the operator review hash because they do
   not exist until submission, but remain covered by the full immutable
   submission payload hash.
+- A submitted Removal can be reopened through its resume link. The same
+  compilation and review gates apply: an unchanged payload reuses the existing
+  registry version, while changed reviewed evidence or mappings create a
+  superseding version. Only a live submission lock blocks reopening.
