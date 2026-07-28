@@ -35,7 +35,7 @@ import {
   type ApplicationDeliveryOption,
 } from "./mass-utils";
 import type { ApplicationListItem } from "@/data-access/applications";
-import { APPLICATION_VISUAL_EVIDENCE_ROLES } from "@/lib/certification/application-evidence";
+import { APPLICATION_EVIDENCE_RULE_SPEC } from "@/lib/certification/application-evidence";
 import { parseExactIdFilter } from "@/lib/exact-id-filter";
 import {
   useApplications,
@@ -67,6 +67,14 @@ import { LIST_SEARCH_DEBOUNCE_MS } from "@/config/list-controls";
 // ============================================
 // Column Definitions
 // ============================================
+
+function formatFieldPosition(
+  latitude: number | null,
+  longitude: number | null,
+): string | null {
+  if (latitude == null || longitude == null) return null;
+  return `${latitude}, ${longitude}`;
+}
 
 function createColumns(
   onEdit: (application: ApplicationListItem) => void,
@@ -297,7 +305,8 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
         durabilityOption,
         // Fail closed until the authoritative list query recounts uploaded
         // evidence after this create flow completes.
-        evidenceGapCount: APPLICATION_VISUAL_EVIDENCE_ROLES.length,
+        evidenceGapCount:
+          APPLICATION_EVIDENCE_RULE_SPEC.paths.boundary.length,
       };
       return { entities: [createdApplication], result };
     },
@@ -324,14 +333,37 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
 
   const handleUpdate = async (data: ApplicationFormData) => {
     if (!sideSheet?.entity) return;
+    const applicationId = sideSheet.entity.id;
     setUpdateError(null);
+    // Still guards on failed or in-flight attachments, as every other list
+    // does. It does not block held files, which the flush below sends: an
+    // edited boundary arrives as a held .geojson with no entity to attach to
+    // until the update has run.
     if (createWithEvidence.guardUpdate()) return;
     try {
       const result = await updateApplication.mutateAsync({
-        applicationId: sideSheet.entity.id,
+        applicationId,
         ...data,
       });
       if (result.success) {
+        if (deferredAttachments.hasHeld) {
+          const flushResult = await createWithEvidence.runWhileFlushing(() =>
+            deferredAttachments.flush("application", applicationId),
+          );
+          if (!flushResult.ok) {
+            setUpdateError(
+              `Application updated, but ${flushResult.failed.length} ${
+                flushResult.failed.length === 1
+                  ? "attachment"
+                  : "attachments"
+              } failed to upload.`,
+            );
+            return;
+          }
+          void queryClient.invalidateQueries({
+            queryKey: applicationKeys.lists(),
+          });
+        }
         createWithEvidence.reset();
         setSideSheet(null);
         toast.success("Application updated successfully");
@@ -676,8 +708,13 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
                   ? formatApplicationMethod(sideSheetEntity.applicationMethodType as ApplicationMethod)
                   : null,
               },
-              { label: "Field position latitude", value: sideSheetEntity.gpsLatitude },
-              { label: "Field position longitude", value: sideSheetEntity.gpsLongitude },
+              {
+                label: "Field position",
+                value: formatFieldPosition(
+                  sideSheetEntity.gpsLatitude,
+                  sideSheetEntity.gpsLongitude,
+                ),
+              },
             ],
           },
           {
@@ -694,6 +731,7 @@ export function ApplicationList({ deliveries = [] }: ApplicationListProps) {
               <ApplicationEvidencePanel
                 applicationId={sideSheetEntity.id}
                 mode={(sideSheetEntity.evidenceMethod ?? "visual") as ApplicationEvidenceMethod}
+                boundary={sideSheetEntity.gisBoundary ?? null}
                 readOnly
               />
             ),
