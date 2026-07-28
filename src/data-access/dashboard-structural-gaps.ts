@@ -132,7 +132,6 @@ function transportTargetForm(target: TransportGapTarget | null): string {
     feedstock: "Feedstock form",
     biochar: "Biochar product form",
     sample: "Sample form",
-    delivery: "Delivery form",
   };
   return formNames[target?.entityType ?? "feedstock"];
 }
