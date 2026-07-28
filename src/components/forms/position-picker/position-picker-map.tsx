@@ -288,7 +288,7 @@ export default function PositionPickerMap({
         onZoomIn={() => mapRef.current?.zoomIn()}
         onZoomOut={() => mapRef.current?.zoomOut()}
         onFit={recenter}
-        fitAriaLabel="Recenter the map on the pin"
+        fitAriaLabel="Recenter the map"
         satOn={satOn}
         onToggleSat={toggleSat}
       />
