@@ -22,6 +22,7 @@ import {
   type RemovalWorkflowStatus,
 } from "@/lib/certification/status";
 import { formatDateRange } from "@/lib/format-utils";
+import { pluralize } from "@/lib/copy-utils";
 import { EnvBanner } from "./env-banner";
 import { RegistryRecordLink } from "./registry-record-link";
 import { RemovalCarbonBreakdown } from "./removal-carbon-breakdown";
@@ -189,7 +190,7 @@ export function RemovalDetailSheet({
             <Field label="Reporting window">{window}</Field>
             <Field label={`Credit batches (${summary.memberBatchCodes.length})`}>
               <span className="font-mono">
-                {summary.memberBatchCodes.join(", ") || "—"}
+                {summary.memberBatchCodes.join(", ") || "None"}
               </span>
             </Field>
 
@@ -210,7 +211,7 @@ export function RemovalDetailSheet({
                 <span>
                   {summary.evidenceHealth.label}
                   {summary.evidenceHealth.totalCount > 0
-                    ? ` — ${summary.evidenceHealth.verifiedCount} of ${summary.evidenceHealth.totalCount} intended targets verified`
+                    ? `: ${summary.evidenceHealth.verifiedCount} of ${summary.evidenceHealth.totalCount} intended ${pluralize(summary.evidenceHealth.totalCount, "target")} verified`
                     : ""}
                 </span>
               </Field>

@@ -55,7 +55,7 @@ export type ApplicationEvidenceMethod = (typeof applicationEvidenceMethods)[numb
 const applicationFormBaseSchema = z.object({
   // === Section 1: Application Details ===
   applicationDate: z.coerce.date({ error: "Application date is required" }),
-  deliveryId: z.string().min(1, "Please select a delivery").uuid("Invalid delivery"),
+  deliveryId: z.string().min(1, "Select a delivery.").uuid("Choose a valid delivery."),
   biocharAppliedTons: z
     .number({ error: "Biochar applied (kg) is required" })
     .min(0, "Must be a positive number")
@@ -126,7 +126,7 @@ export const createApplicationSchema = applicationFormSchema;
  * Schema for updating an application (server action)
  */
 export const updateApplicationSchema = z.object({
-  applicationId: z.string().uuid("Invalid application ID"),
+  applicationId: z.string().uuid("Choose a valid application."),
   code: z
     .string()
     .min(1)
@@ -153,7 +153,7 @@ export const updateApplicationSchema = z.object({
  * Schema for deleting an application
  */
 export const deleteApplicationSchema = z.object({
-  applicationId: z.string().uuid("Invalid application ID"),
+  applicationId: z.string().uuid("Choose a valid application."),
 });
 
 // ============================================

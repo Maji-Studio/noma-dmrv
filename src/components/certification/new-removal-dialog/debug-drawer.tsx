@@ -36,9 +36,9 @@ export function DebugDrawer({
             labelClassName="label-micro text-[var(--color-text-tertiary)]"
           >
             <span className="flex w-full items-center justify-between gap-12">
-              <span>Debug</span>
+              <span>Submission details</span>
               <span className="body-caption font-normal normal-case tracking-normal text-[var(--color-text-tertiary)]">
-                Compiled registry payload
+                Registry submission data
               </span>
             </span>
           </Accordion.Trigger>

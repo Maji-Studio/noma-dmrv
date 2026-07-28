@@ -79,7 +79,9 @@ export async function setOrgCertifierCredentialsFn(
       const ctx = await requireOrgContext();
       const values = setOrgCertifierCredentialsSchema.parse(input);
       if (!env.CREDENTIALS_ENCRYPTION_KEY) {
-        throw new SafeError("Credential encryption key is not configured");
+        throw new SafeError(
+          "Credential encryption is not configured. Ask a Platform Admin to configure it.",
+        );
       }
       await upsertCertifierCredentials(ctx, { ...values, provider: PROVIDER });
 
@@ -134,13 +136,13 @@ function verificationFailureMessage(error: unknown): string {
     return "Keys saved, but this deployment is not configured to reach Isometric. Ask a Platform Admin to check Diagnostics.";
   }
   if (error.code === "network") {
-    return "Keys saved, but Isometric could not be reached. It may be a network problem rather than the keys.";
+    return "Keys saved, but Isometric could not be reached. Check the connection, then try again.";
   }
   if (error.status === 401 || error.status === 403) {
     return "Keys saved, but Isometric rejected them. Check the access token and client secret, then save again.";
   }
   return `Keys saved, but Isometric returned an error (${
-    error.status ?? "unknown"
+    error.status ?? "no status code"
   }). Check the keys, then save again.`;
 }
 

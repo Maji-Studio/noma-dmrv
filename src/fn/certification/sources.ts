@@ -60,6 +60,8 @@ import {
   REMOVAL_ENTITY_TYPE,
   REMOVAL_SUBMISSION_TYPE,
 } from "./shared";
+
+const BYTES_PER_MEGABYTE = 1_000_000;
 import { withSourceSyncEventOnFailure } from "./source-sync-events";
 import {
   buildRemovalSourceDescription,
@@ -295,7 +297,7 @@ async function assertDocumentIsCandidateForRemoval(
     // but isn't in this removal's lineage" leaks information they don't
     // already have. Match the not-found path's wording.
     throw new SafeError(
-      "Document is not a candidate for this removal. Reload the panel and try again.",
+      "This document is not available for this Removal. Reload the panel and try again.",
     );
   }
   return { candidates, candidate: found };
@@ -462,7 +464,7 @@ export async function mirrorDocumentToSourceForUser(
     }
     if (document.fileSizeBytes > SOURCES_MAX_BYTES) {
       throw new SafeError(
-        `Document is ${document.fileSizeBytes} bytes; the current Phase 3.5 limit is ${SOURCES_MAX_BYTES} bytes (streaming larger files is a follow-up).`,
+        `This document is larger than the ${Math.round(SOURCES_MAX_BYTES / BYTES_PER_MEGABYTE)} MB limit. Upload a smaller file.`,
       );
     }
     if (!document.mimeType) {

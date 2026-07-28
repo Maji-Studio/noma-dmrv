@@ -347,7 +347,9 @@ async function loadLineageWithExecutor(
   const applicationsByRun = new Map<string, BatchLineageApplicationFact[]>();
   for (const row of applicationRows) {
     if (!row.linkedProductionRunId) {
-      throw new SafeError(`Application ${row.id} has missing production lineage`);
+      throw new SafeError(
+        `Application ${row.code} has no linked production run. Link a production run before certifying it.`,
+      );
     }
     const facts = applicationsByRun.get(row.linkedProductionRunId) ?? [];
     facts.push({

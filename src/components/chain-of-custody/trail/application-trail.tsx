@@ -253,7 +253,7 @@ export function ApplicationTrail({ applicationId, chainData }: ApplicationTrailP
     return (
       <div className="flex h-full items-center justify-center bg-[var(--color-background-white)]">
         <p className="body-medium text-[var(--color-signal-red)]">
-          {error?.message || "Failed to load trail evidence."}
+          {error?.message || "The trail evidence could not be loaded. Refresh the page and try again."}
         </p>
       </div>
     );

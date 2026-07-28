@@ -81,7 +81,7 @@ export function formatDurabilityStat(
   stat: ValueWithStdDev | null,
   digits = 3,
 ): string {
-  if (stat == null) return "—";
+  if (stat == null) return "Not available";
   const mean = stat.mean.toFixed(digits);
   return stat.stdDev == null ? mean : `${mean} ± ${stat.stdDev.toFixed(digits)}`;
 }
@@ -104,7 +104,7 @@ function eligibilityChip(
       tone: "ok",
       icon: <CheckCircleIcon size={14} weight="fill" />,
       label: "Chemistry eligible",
-      hint: `This batch's pooled sample chemistry qualifies as biochar: ${thresholds}. Judged on the mean across samples, not sample by sample.`,
+      hint: `This batch's pooled Sample chemistry qualifies as biochar: ${thresholds}. The mean across Samples determines eligibility.`,
     };
   }
   if (eligibility.eligible === false) {
@@ -112,7 +112,7 @@ function eligibilityChip(
       tone: "bad",
       icon: <XCircleIcon size={14} weight="fill" />,
       label: "Chemistry ineligible",
-      hint: `The pooled mean misses the biochar thresholds (${thresholds}), so this batch cannot be certified on its current samples.`,
+      hint: `The pooled mean misses the biochar thresholds (${thresholds}), so this batch cannot be certified with its current Samples.`,
     };
   }
   // null — indeterminate. Distinguish "no chemistry yet" from "partial chemistry".
@@ -121,13 +121,13 @@ function eligibilityChip(
         tone: "wait",
         icon: undefined,
         label: "Chemistry indeterminate",
-        hint: `The samples recorded so far don't yet resolve both ratios, so eligibility (${thresholds}) can't be judged. Add the missing H/C_org or O/C_org results.`,
+        hint: `The recorded Samples do not resolve both ratios, so eligibility (${thresholds}) cannot be judged. Add the missing H/C_org or O/C_org results.`,
       }
     : {
         tone: "off",
         icon: undefined,
         label: "Awaiting chemistry",
-        hint: `No sample carries lab chemistry yet. Eligibility needs ${thresholds} on the pooled mean.`,
+        hint: `No Sample has lab chemistry yet. Eligibility needs ${thresholds} on the pooled mean.`,
       };
 }
 
@@ -166,8 +166,8 @@ export function DurabilityReadinessSignals({
       icon: meetsMinimum ? (
         <CheckCircleIcon size={14} weight="fill" />
       ) : undefined,
-      content: `${usableReplicateCount} of ${minimumReplicates} usable samples`,
-      hint: `Only samples with both H/C_org and O/C_org results count. This batch needs at least ${minimumReplicates}; ${usableReplicateCount} ${
+      content: `${usableReplicateCount} of ${minimumReplicates} usable Samples`,
+      hint: `Only Samples with both H/C_org and O/C_org results count. This batch needs at least ${minimumReplicates}; ${usableReplicateCount} ${
         usableReplicateCount === 1 ? "is" : "are"
       } complete so far.`,
     },

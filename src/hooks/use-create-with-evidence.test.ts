@@ -90,7 +90,7 @@ describe("runCreateWithEvidenceChoreography", () => {
     expect(retainedIds).toEqual([["feedstock-1", "feedstock-2"]]);
     expect(openEdit).toHaveBeenCalledWith({ id: "feedstock-1" });
     expect(setError).toHaveBeenLastCalledWith(
-      "Feedstock created, but 2 attachments failed to upload.",
+      "Feedstock created, but 2 attachments were not uploaded.",
     );
     expect(clear).not.toHaveBeenCalled();
   });
@@ -250,7 +250,7 @@ describe("confirmCreateWithEvidenceClose", () => {
       }),
     ).toBe(true);
     expect(confirmDiscard).toHaveBeenCalledWith(
-      "Discard 2 unsaved attachment(s)?",
+      "Discard 2 unsaved attachments?",
     );
   });
 });

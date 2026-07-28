@@ -84,7 +84,7 @@ describe("SubmissionSummary", () => {
       "Isometric calculates stored and net CO₂e after submission.",
     );
     expect(html).toContain("Biochar project (Sandbox)");
-    expect(html).toContain("Jul 1 – Jul 31, 2026");
+    expect(html).toContain("Jul 1 to Jul 31, 2026");
     expect(html).toContain("CB-26-001");
     expect(html).toContain("1000-year (R₀ reflectance)");
   });
@@ -105,7 +105,7 @@ describe("SubmissionSummary", () => {
         {
           ...PASSING_CHECKS[1],
           status: "unmet",
-          detail: "No default removal template is selected.",
+          detail: "No default Removal template is selected.",
         },
       ],
     });
@@ -114,7 +114,7 @@ describe("SubmissionSummary", () => {
     expect(html).toContain("Review the issue below.");
     expect(html).toContain("What to fix");
     expect(html).toContain("1 check passed");
-    expect(html).toContain("No default removal template is selected.");
+    expect(html).toContain("No default Removal template is selected.");
     // The passing check stays out of the list.
     expect(html).not.toContain("Facility linked to a registry project");
   });

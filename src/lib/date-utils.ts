@@ -192,7 +192,7 @@ export class NonexistentLocalTimeError extends SafeError {
   constructor(dateStr: string, timeStr: string, timeZone: string) {
     super(
       `${timeStr} does not exist on ${dateStr} in ${timeZone.replace(/_/g, " ")}` +
-        ` — clocks move forward that day. Enter a time outside the skipped hour.`
+        ". Clocks move forward that day. Enter a time outside the skipped hour."
     );
     this.name = "NonexistentLocalTimeError";
     this.dateStr = dateStr;
@@ -214,7 +214,7 @@ export class AmbiguousLocalTimeError extends SafeError {
   constructor(dateStr: string, timeStr: string, timeZone: string) {
     super(
       `${timeStr} occurs twice on ${dateStr} in ${timeZone.replace(/_/g, " ")}` +
-        ` — clocks move back that day. Enter a time outside the repeated hour.`
+        ". Clocks move back that day. Enter a time outside the repeated hour."
     );
     this.name = "AmbiguousLocalTimeError";
     this.dateStr = dateStr;

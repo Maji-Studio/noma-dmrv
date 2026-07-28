@@ -115,7 +115,7 @@ export async function recordMethodBPrerequisites(
   requireOrgRole(ctx, "admin");
   if (input.agreedBaselineSize < METHOD_B_MINIMUM_METHOD_A_SAMPLES) {
     throw new SafeError(
-      `The agreed baseline must be at least ${METHOD_B_MINIMUM_METHOD_A_SAMPLES} samples.`,
+      `The agreed baseline must be at least ${METHOD_B_MINIMUM_METHOD_A_SAMPLES} Samples.`,
     );
   }
   await assertSameOrg(ctx, productionProcesses, input.processId);

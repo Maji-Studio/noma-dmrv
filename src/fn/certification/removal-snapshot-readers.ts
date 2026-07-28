@@ -91,7 +91,7 @@ export function readRemovalTransport(
   const parsed = removalTransportSnapshotSchema.safeParse(snapshot?.transport);
   if (!parsed.success) {
     throw new SafeError(
-      "Stale submission cannot be resumed because its transport snapshot does not match the current payload schema.",
+      "This saved submission uses an older transport format and cannot resume. Select Refresh review, then submit again.",
     );
   }
   return {
@@ -113,7 +113,7 @@ export function readRemovalFixedInputs(
   const inputs = snapshot?.semantic?.inputs;
   if (!Array.isArray(inputs)) {
     throw new SafeError(
-      "Stale submission cannot be resumed because its payload snapshot does not match the current schema.",
+      "This saved submission uses an older format and cannot resume. Select Refresh review, then submit again.",
     );
   }
   const fixed: ResolvedFixedInput[] = [];
@@ -128,7 +128,7 @@ export function readRemovalFixedInputs(
     const parsed = fixedSnapshotInputSchema.safeParse(entry);
     if (!parsed.success) {
       throw new SafeError(
-        "Stale submission cannot be resumed because its fixed-input snapshot does not match the current schema.",
+        "This saved submission uses an older input format and cannot resume. Select Refresh review, then submit again.",
       );
     }
     fixed.push({
@@ -151,7 +151,7 @@ export function readRemovalSourceBindingPlan(
   );
   if (!parsed.success) {
     throw new SafeError(
-      "Stale submission cannot be resumed because its Source binding plan does not match the current payload schema.",
+      "This saved submission uses an older supporting-file plan and cannot resume. Select Refresh review, then submit again.",
     );
   }
   return parsed.data as RemovalSourceBindingPlanEntry[];

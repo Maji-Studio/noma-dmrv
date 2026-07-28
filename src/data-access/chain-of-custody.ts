@@ -148,7 +148,7 @@ export function projectChainOfCustodyFromBatchFacts(
 ): ChainOfCustodyData {
   if (!run) {
     throw new SafeError(
-      `Application ${application.id} has no resolved production run`,
+      `Application ${application.code} has no linked production run. Link a production run before viewing its traceability.`,
     );
   }
   const warnings = run.feedstocks.length === 0

@@ -42,7 +42,7 @@ import { isRemovalCompilationReady } from "./submission-facts";
 import { SubmissionSummary } from "./submission-summary";
 
 const REJECTED_IN_ISOMETRIC_MSG =
-  "This removal was rejected in Isometric. Resolve the registry record before retrying from noma.";
+  "This Removal was rejected in Isometric. Resolve the registry record before trying again from noma.";
 
 interface SubmitStepProps {
   removalId: string;
@@ -83,7 +83,7 @@ export function SubmitStep({
     }
     if (!compilationReady) {
       setSubmitError(
-        "Compile the submission successfully and resolve every compiler blocker before submitting.",
+        "The submission review is not ready. Resolve every submission issue and try again.",
       );
       return;
     }
@@ -97,11 +97,13 @@ export function SubmitStep({
       {
         onSuccess: (result) => {
           setSubmitError(null);
-          toast.success(`Submitted removal ${result.externalId}.`);
+          toast.success(`Removal ${result.externalId} submitted.`);
         },
         onError: (err) => {
           setSubmitError(
-            err instanceof Error ? err.message : "Submission failed",
+            err instanceof Error
+              ? err.message
+              : "The Removal was not submitted. Try again.",
           );
         },
       },
@@ -174,7 +176,7 @@ export function SubmitStep({
       busy={submitMutation.isPending}
       disabled={rejectedWithExternal || !requirementsMet}
     >
-      {externalId ? "Resubmit removal" : "Submit removal"}
+      {externalId ? "Resubmit Removal" : "Submit Removal"}
     </Button>
   );
 
@@ -212,7 +214,7 @@ export function SubmitStep({
         {requirementsMet ? (
           submitButton
         ) : (
-          <Tooltip content="Finish the outstanding items above before this removal can be submitted.">
+          <Tooltip content="Resolve the issues above before submitting this Removal.">
             <span className="inline-flex" tabIndex={0}>
               {submitButton}
             </span>

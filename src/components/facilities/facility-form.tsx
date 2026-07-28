@@ -246,7 +246,7 @@ export function FacilityForm({
           id="durabilityOption"
           label="Durability tier"
           error={errors.durabilityOption?.message}
-          hint="Set once for your registry program and inherited by every credit batch and sample at this facility. The 200-year pathway opens when a 200-year client onboards."
+          hint="Set once for your registry program and inherited by every credit batch and Sample at this facility. The 200-year pathway opens when a 200-year client onboards."
         >
           <DurabilityTierSelect
             value={durabilityOption}

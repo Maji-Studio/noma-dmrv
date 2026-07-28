@@ -42,7 +42,7 @@ describe("SubmissionChecks", () => {
     const html = renderToStaticMarkup(
       <SubmissionChecks
         checks={withUnmet("template", {
-          detail: "No default removal template is selected.",
+          detail: "No default Removal template is selected.",
         })}
         facilityId="facility-1"
       />,
@@ -54,7 +54,7 @@ describe("SubmissionChecks", () => {
       /<button[^>]*>[\s\S]*What to fix[\s\S]*<\/button>/,
     );
     expect(html).toContain("Removal template resolved");
-    expect(html).toContain("No default removal template is selected.");
+    expect(html).toContain("No default Removal template is selected.");
     expect(html).toContain(
       'href="/certification/settings?section=certifier&amp;facility=facility-1"',
     );
@@ -130,14 +130,14 @@ describe("SubmissionChecks", () => {
       <SubmissionChecks
         checks={[
           ...withUnmet("template", {
-            detail: "No default removal template is selected.",
+            detail: "No default Removal template is selected.",
           }),
           {
             key: "evidence",
             label: "Supporting evidence linked",
             requirementLabel: "Supporting evidence linked",
             status: "warning",
-            detail: "2 files upload on submit",
+            detail: "2 files will upload on submit",
           },
         ]}
         facilityId="facility-1"
@@ -146,6 +146,6 @@ describe("SubmissionChecks", () => {
 
     expect(html).toContain("8 checks passed");
     expect(html).not.toContain("Supporting evidence linked");
-    expect(html).not.toContain("2 files upload on submit");
+    expect(html).not.toContain("2 files will upload on submit");
   });
 });

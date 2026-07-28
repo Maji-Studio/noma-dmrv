@@ -28,7 +28,7 @@ export function ActivityFeed({ activity }: ActivityFeedProps) {
       {activity.length === 0 ? (
         <div className="px-20 py-20">
           <span className="body-small text-[var(--color-text-secondary)]">
-            Nothing recorded yet — activity appears as records are logged.
+            No activity recorded yet. Activity appears as records are added.
           </span>
         </div>
       ) : (

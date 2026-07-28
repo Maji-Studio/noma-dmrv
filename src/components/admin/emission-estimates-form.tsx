@@ -83,7 +83,7 @@ export function EmissionEstimatesForm({
       <p className="body-medium text-[var(--color-text-secondary)]">
         No emission estimates to configure for 1000-year durability. Genset
         diesel submits by volume, and reference soil temperature applies only to
-        200-year removals.
+        200-year Removals.
       </p>
     );
   }
@@ -96,7 +96,7 @@ export function EmissionEstimatesForm({
       setError("root.serverError", {
         type: "server",
         message:
-          error instanceof Error ? error.message : "Failed to save estimates",
+          error instanceof Error ? error.message : "The estimates were not saved. Try again.",
       });
     }
   };
@@ -120,7 +120,7 @@ export function EmissionEstimatesForm({
           id="defaultSoilTemperatureC"
           label="Reference soil temperature (°C)"
           error={errors.defaultSoilTemperatureC?.message}
-          helperText="Annual-average soil temperature submitted to the registry for 200-year durability. Source it from an approved global dataset (e.g. Lembrechts 2022 SoilTemp) — air temperature is not allowed. A 200-year removal cannot be submitted until this is set; values below 7 °C are floored to 7 °C."
+          helperText="Annual average soil temperature submitted to the registry for 200-year durability. Use an approved global dataset, such as Lembrechts 2022 SoilTemp. Air temperature is not accepted. Set this value before submitting a 200-year Removal. Values below 7 °C are submitted as 7 °C."
         >
           <FormInput
             id="defaultSoilTemperatureC"
@@ -134,7 +134,7 @@ export function EmissionEstimatesForm({
           id="defaultSoilTemperatureSource"
           label="Reference dataset / region note"
           error={errors.defaultSoilTemperatureSource?.message}
-          helperText="Dataset, depth, and region for the PDD audit trail (e.g. “Lembrechts et al. 2022 SoilTemp, 0–5 cm, <region>”). Recorded with the submission; not sent on the wire."
+          helperText="Dataset, depth, and region for the PDD audit trail, such as “Lembrechts et al. 2022 SoilTemp, 0 to 5 cm, <region>”. This note is recorded with the submission but is not sent to the registry."
         >
           <FormInput
             id="defaultSoilTemperatureSource"

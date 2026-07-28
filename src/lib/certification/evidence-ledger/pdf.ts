@@ -14,6 +14,7 @@
  */
 import { createElement as h, type ReactElement } from "react";
 import { Document, Page, StyleSheet, Text } from "@react-pdf/renderer";
+import { formatCount } from "@/lib/copy-utils";
 import { C, MONO, SANS, renderLedgerToBuffer, t, theme, v } from "./pdf-theme";
 import type { LedgerCategory, LedgerModel } from "./types";
 
@@ -110,15 +111,15 @@ function masthead(model: LedgerModel): ReactElement {
       t(styles.wordmark, "noma"),
       t(styles.wordmarkSub, "dMRV · DARK EARTH CARBON"),
     ),
-    t(styles.eyebrow, "TRANSPORTATION MODULE V1.1 · DISTANCE-BASED · EQ. 3"),
+    t(styles.eyebrow, "TRANSPORTATION MODULE V1.1 · DISTANCE BASED · EQUATION 3"),
     h(Text, { style: styles.title }, "Transport Emissions\nEvidence Ledger"),
   );
   const pair = (label: string, val: string) =>
     v(styles.metaPair, {}, t(styles.metaLabel, label), t(styles.metaVal, val));
   const right = v(styles.metaCol, {},
-    pair("Member batches", model.memberBatchCodes ?? "—"),
-    pair("Facility", model.facilityName ?? "—"),
-    pair("Registry project", model.externalProjectId ?? "—"),
+    pair("Member batches", model.memberBatchCodes ?? "None"),
+    pair("Facility", model.facilityName ?? "Not available"),
+    pair("Registry project", model.externalProjectId ?? "Not set"),
     pair("Legs reconciled", `${model.totalLegs} across 3 categories`),
   );
   return v(styles.masthead, {}, left, right);
@@ -131,8 +132,8 @@ function claimCell(cat: LedgerCategory): ReactElement {
       t(styles.claimCat, cat.name.split(" ")[0]),
     ),
     t(styles.claimVal, nf2(cat.subtotalTkm)),
-    t(styles.claimUnit, `tonne·km · ${cat.legs.length} legs`),
-    t(styles.claimCheck, "•  matches submitted scalar"),
+    t(styles.claimUnit, `tonne·km · ${formatCount(cat.legs.length, "leg")}`),
+    t(styles.claimCheck, "•  matches the submitted value"),
   );
 }
 
@@ -141,23 +142,28 @@ function claimBand(model: LedgerModel): ReactElement {
     t([styles.claimCat, { color: "rgba(255,255,255,0.75)" }], "Total mass·distance"),
     t([styles.claimVal, { color: C.paper }], nf2(model.totalTkm)),
     t([styles.claimUnit, { color: "rgba(255,255,255,0.55)" }], "tonne·kilometres"),
-    t([styles.claimCheck, { color: C.greenLite }], `•  ${model.totalLegs} legs reconcile to submitted scalars`),
+    t(
+      [styles.claimCheck, { color: C.greenLite }],
+      `•  ${formatCount(model.totalLegs, "leg")} ${
+        model.totalLegs === 1 ? "matches" : "match"
+      } the submitted values`,
+    ),
   );
   return v(styles.claim, {},
     v(styles.claimHead, {},
-      t(styles.claimHeadLabel, "Submitted to registry — mass · distance"),
-      t(styles.claimHeadEq, "scalar = SUM ( distance × mass ), per category"),
+      t(styles.claimHeadLabel, "Submitted to registry: mass · distance"),
+      t(styles.claimHeadEq, "value = sum of distance × mass for each category"),
     ),
     v(styles.claimRow, {}, ...model.categories.map(claimCell), totalCell),
   );
 }
 
 function routeCell(leg: LedgerCategory["legs"][number]): ReactElement {
-  const origin = leg.originName ?? "—";
-  const dest = leg.destinationName ?? "—";
+  const origin = leg.originName ?? "Not recorded";
+  const dest = leg.destinationName ?? "Not recorded";
   const geo =
     leg.originGeo || leg.destinationGeo
-      ? `${leg.originGeo ?? "—"} › ${leg.destinationGeo ?? "—"}`
+      ? `${leg.originGeo ?? "Not recorded"} › ${leg.destinationGeo ?? "Not recorded"}`
       : "coordinates not recorded";
   return v({ flex: 1, paddingRight: 8 }, {},
     h(Text, { style: styles.routeLine },
@@ -177,7 +183,7 @@ function legRow(leg: LedgerCategory["legs"][number], isLast: boolean): ReactElem
       nfi(leg.distanceKm),
       h(Text, { style: styles.qtyUnit }, leg.roundTrip ? " km · rt" : " km")),
     h(Text, { style: [styles.qty, { width: COL.mass, paddingLeft: GAP }] },
-      leg.massMissing ? "—" : nfi(leg.loadMassKg),
+      leg.massMissing ? "Not recorded" : nfi(leg.loadMassKg),
       leg.massMissing ? "" : h(Text, { style: styles.qtyUnit }, " kg")),
     v({ width: COL.mode, paddingLeft: GAP }, {},
       t(styles.modeText, leg.mode),
@@ -233,13 +239,13 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
       ? []
       : [
           footRow(
-            `Displayed row sum — ${cat.key} · ${cat.legs.length} legs`,
+            `Displayed row sum: ${cat.key} · ${formatCount(cat.legs.length, "leg")}`,
             nf2(cat.displayedRowSumTkm),
             "t·km",
             operandRow,
           ),
           footRow(
-            "Rounding adjustment — displayed rows to canonical sum",
+            "Rounding adjustment: displayed rows to recorded sum",
             nf2(cat.roundingAdjustmentTkm),
             "t·km",
             { ...operandRow, ...stackedRow },
@@ -249,13 +255,13 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
     ? v({}, {},
         ...roundingRows,
         footRow(
-          `Leg sum — ${cat.key} · ${cat.legs.length} legs`,
+          `Leg sum: ${cat.key} · ${formatCount(cat.legs.length, "leg")}`,
           nf2(cat.scaling.rawSubtotalTkm),
           "t·km",
           operandRow,
         ),
         footRow(
-          "× applied share — delivery bucket · protocol 8.6.2 · ADR 0020",
+          "× applied share: delivery emissions · Biochar Protocol 8.6.2",
           `× ${nf4(cat.scaling.appliedFraction)}`,
           null,
           { ...operandRow, ...stackedRow },
@@ -264,14 +270,14 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
           ? []
           : [
               footRow(
-                "Scaling adjustment — displayed operands to canonical scalar",
+                "Scaling adjustment: displayed values to submitted value",
                 nf2(cat.scaling.displayAdjustmentTkm),
                 "t·km",
                 { ...operandRow, ...stackedRow },
               ),
             ]),
         footRow(
-          `Subtotal — ${cat.key} · submitted scalar`,
+          `Subtotal: ${cat.key} · submitted value`,
           nf2(cat.subtotalTkm),
           "t·km",
           stackedRow,
@@ -281,14 +287,14 @@ function ledgerSection(cat: LedgerCategory): ReactElement {
       ? v({}, {},
           ...roundingRows,
           footRow(
-            `Subtotal — ${cat.key} · submitted scalar`,
+            `Subtotal: ${cat.key} · submitted value`,
             nf2(cat.subtotalTkm),
             "t·km",
             stackedRow,
           ),
         )
       : footRow(
-          `Subtotal — ${cat.key} · ${cat.legs.length} legs`,
+          `Subtotal: ${cat.key} · ${formatCount(cat.legs.length, "leg")}`,
           nf2(cat.subtotalTkm),
           "t·km",
         );
@@ -301,15 +307,15 @@ function apparatus(model: LedgerModel): ReactElement {
     t(styles.noteH, "Method note"),
     t(styles.noteBody,
       "Each leg's contribution is distance × mass, summed per category into the single " +
-      "mass_distance scalar submitted to Isometric Certify. The emission factor (per the " +
+      "mass and distance value submitted to Isometric Certify. The emission factor (per the " +
       "Transportation module's component for the declared mode and vehicle class) is applied " +
-      "by the registry, not in this ledger — noma submits distance and mass; Certify computes " +
+      "by the registry, not in this ledger. noma submits distance and mass; Certify computes " +
       "the sum of (distance × mass) over legs, times that factor. This sheet exists because the " +
-      "aggregate scalar alone hides the per-leg breakdown; here every row that backs each scalar " +
-      "is auditable, and the per-leg bills of lading remain attached as Sources on the Removal." +
+      "submitted total alone hides the per-leg breakdown. This ledger makes every row behind each " +
+      "submitted value auditable. The per-leg bills of lading remain attached as Sources on the Removal." +
       (hasScaling
-        ? " Biochar distribution is delivery-bucket scoped (Biochar Protocol 8.6.2, ADR 0020): " +
-          "its submitted scalar is the leg sum × the applied-biochar share, shown explicitly " +
+        ? " Biochar distribution is delivery-bucket scoped under Biochar Protocol 8.6.2. " +
+          "The submitted value is the leg sum × the applied-biochar share, shown explicitly " +
           "in that category's subtotal."
         : ""),
     ),
@@ -328,7 +334,10 @@ function apparatus(model: LedgerModel): ReactElement {
 function footer(model: LedgerModel): ReactElement {
   const date = model.generatedAtIso.slice(0, 10);
   return v(styles.footer, { fixed: true },
-    t(styles.footerText, `NOMA DMRV · TRANSPORT EVIDENCE LEDGER · ${model.totalLegs} LEGS`),
+    t(
+      styles.footerText,
+      `NOMA DMRV · TRANSPORT EVIDENCE LEDGER · ${formatCount(model.totalLegs, "leg").toUpperCase()}`,
+    ),
     h(Text, {
       style: styles.footerText,
       render: ({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
@@ -342,9 +351,9 @@ function buildDocument(model: LedgerModel): ReactElement {
     .filter((c) => c.legs.length > 0)
     .map(ledgerSection);
   return h(Document, {
-    title: `Transport Emissions Evidence Ledger${model.memberBatchCodes ? ` — ${model.memberBatchCodes}` : ""}`,
+    title: `Transport Emissions Evidence Ledger${model.memberBatchCodes ? `: ${model.memberBatchCodes}` : ""}`,
     author: "noma dMRV",
-    subject: "Per-leg transport mass·distance ledger backing the submitted scalars",
+    subject: "Transport mass and distance by leg for the submitted registry values",
   },
     h(Page, { size: "A4", style: styles.page },
       masthead(model),

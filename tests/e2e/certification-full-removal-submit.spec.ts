@@ -111,13 +111,13 @@ test.describe("Certification — full New-Removal submit", { tag: "@live" }, () 
 
       // ── Step 1: open the wizard and select the ready batch ──────────────
       await page
-        .getByRole("button", { name: "New removal", exact: true })
+        .getByRole("button", { name: "New Removal", exact: true })
         .first()
         .click();
 
       const dialog = page.getByRole("dialog");
       await expect(
-        dialog.getByRole("heading", { name: "New removal", level: 2 }),
+        dialog.getByRole("heading", { name: "New Removal", level: 2 }),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       await expect(
         dialog.getByRole("heading", { name: "Select credit batches" }),

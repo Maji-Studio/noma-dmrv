@@ -208,7 +208,7 @@ describe("markSubmissionSubmitted — production-emissions claim write (§8.6.2)
           creditBatchIds: [batchId],
         },
       }),
-    ).rejects.toThrow(/claimed by another removal/);
+    ).rejects.toThrow(/belong to another Removal/);
     expect(await readClaim(batchId)).toBe(removalAId);
     const [ledgerRow] = await db
       .select({ status: certificationSubmissions.status })

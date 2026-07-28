@@ -72,7 +72,7 @@ export async function signOut(): Promise<AuthResult> {
 
     return {
       success: false,
-      error: "Failed to sign out.",
+      error: "You could not be signed out. Try again.",
     };
   }
 }
@@ -98,7 +98,7 @@ export async function signUpWithPassword(
     if (!result) {
       return {
         success: false,
-        error: "Failed to create user account.",
+        error: "The user account was not created. Check the form and try again.",
       };
     }
 
@@ -127,7 +127,7 @@ export async function signUpWithPassword(
 
     return {
       success: false,
-      error: "An unexpected error occurred while creating the account.",
+      error: "The account was not created. Check the form and try again.",
     };
   }
 }

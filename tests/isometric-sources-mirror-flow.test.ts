@@ -521,7 +521,9 @@ describe("mirrorDocumentToSource — orphan recovery", () => {
 
     expect(result.success).toBe(false);
     if (result.success) return;
-    expect(result.error).toMatch(/not a candidate/i);
+    expect(result.error).toBe(
+      "This document is not available for this Removal. Reload the panel and try again.",
+    );
     expect(isometric.findSourceBySupplierRef).not.toHaveBeenCalled();
     expect(isometric.createSource).not.toHaveBeenCalled();
     expect(uploadsDA.insertOrGetDocumentUpload).not.toHaveBeenCalled();

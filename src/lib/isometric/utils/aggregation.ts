@@ -1,4 +1,5 @@
 import { kgToTonnes } from "@/lib/calculations/unit-conversions";
+import { pluralize } from "@/lib/copy-utils";
 import { SafeError } from "@/lib/errors";
 import { roundTripDistanceFactor } from "@/schemas/trip-type";
 import type { ProductionRun, Sample, TransportLeg } from "@/db/schema";
@@ -154,7 +155,7 @@ export function aggregateTransportMassDistance(
   if (missingMassLegIds.length > 0) {
     return {
       massDistanceTonneKm: null,
-      warning: `${categoryLabel} transport legs missing load_mass_kg (${missingMassLegIds.join(", ")}) - required for per-leg accounting`,
+      warning: `${categoryLabel} transport ${pluralize(missingMassLegIds.length, "leg")} ${missingMassLegIds.join(", ")} ${missingMassLegIds.length === 1 ? "has" : "have"} no load mass. Record each load mass before submitting.`,
     };
   }
 
@@ -228,7 +229,7 @@ export function aggregateProductionRuns(
     // here; fail loudly naming the run rather than substitute a time (#259).
     if (run.endTime == null) {
       throw new SafeError(
-        `Run ${run.code} has no end time yet — complete the run before it can be certified`,
+        `Production run ${run.code} has no end time. Complete the run before certification.`,
       );
     }
     const runEndTime = run.endTime;
@@ -262,7 +263,9 @@ export function aggregateProductionRuns(
   // iteration either throws on a null end or sets latestEndTime — but it narrows
   // the type for the `latestEndTime: Date` field below.
   if (latestEndTime == null) {
-    throw new SafeError("aggregateProductionRuns: no closed runs to aggregate");
+    throw new SafeError(
+      "No complete production runs are available. Complete a production run before certification.",
+    );
   }
 
   return {
@@ -439,7 +442,7 @@ export function validateForTemplate(
         groupKey: input.groupKey,
         removalTemplateComponentId: input.removalTemplateComponentId,
         inputKey: input.inputKey,
-        reason: `No INPUT_MAPPING entry for group="${input.groupKey}" blueprint="${input.componentBlueprintKey}" input="${input.inputKey}"`,
+        reason: `Registry field "${input.inputKey}" in "${input.componentBlueprintKey}" is not supported. Ask the support team to update the registry mapping.`,
       });
       continue;
     }

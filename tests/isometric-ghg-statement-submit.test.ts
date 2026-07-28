@@ -639,7 +639,7 @@ describe("createGhgStatementDraft — empty-statement guard (#245)", () => {
     expect(result).toEqual({
       success: false,
       error:
-        "Multiple draft GHG statements exist for this project and period in Isometric.",
+        "Multiple draft GHG Statements exist for this project and period in Isometric.",
     });
     expect(isometric.createGhgStatement).not.toHaveBeenCalled();
     expect(storedLedger[0]).toMatchObject({
@@ -647,7 +647,7 @@ describe("createGhgStatementDraft — empty-statement guard (#245)", () => {
       externalId: null,
       metadata: {
         lastError:
-          "Multiple draft GHG statements exist for this project and period in Isometric.",
+          "Multiple draft GHG Statements exist for this project and period in Isometric.",
       },
     });
   });

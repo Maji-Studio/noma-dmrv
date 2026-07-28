@@ -147,7 +147,7 @@ test.describe("production run readings CSV import", () => {
     await expect(
       page
         .getByRole("cell", {
-          name: firstReading!.temperatureC?.toFixed(1) ?? "—",
+          name: firstReading!.temperatureC?.toFixed(1) ?? "Not recorded",
           exact: true,
         })
         .first(),
@@ -155,7 +155,7 @@ test.describe("production run readings CSV import", () => {
     await expect(
       page
         .getByRole("cell", {
-          name: firstReading!.dryerFrequencyHz?.toFixed(1) ?? "—",
+          name: firstReading!.dryerFrequencyHz?.toFixed(1) ?? "Not recorded",
           exact: true,
         })
         .first(),
@@ -163,7 +163,7 @@ test.describe("production run readings CSV import", () => {
     await expect(
       page
         .getByRole("cell", {
-          name: firstReading!.reactorFrequencyHz?.toFixed(1) ?? "—",
+          name: firstReading!.reactorFrequencyHz?.toFixed(1) ?? "Not recorded",
           exact: true,
         })
         .first(),
@@ -223,7 +223,7 @@ test.describe("production run readings CSV import", () => {
       buffer: Buffer.from(OUT_OF_WINDOW_CSV),
     });
     await expect(
-      page.getByText(/None of the 1 timestamped row\(s\) fall within/).first(),
+      page.getByText(/The timestamped row does not fall within/).first(),
     ).toBeVisible({ timeout: 30000 });
     expect(await countReadings(run.id)).toBe(0);
 
@@ -232,7 +232,7 @@ test.describe("production run readings CSV import", () => {
     // successful documents never get one.
     await expect(
       dialog
-        .getByText(/None of the 1 timestamped row\(s\) fall within/)
+        .getByText(/The timestamped row does not fall within/)
         .first(),
     ).toBeVisible({
       timeout: 30000,
@@ -243,7 +243,7 @@ test.describe("production run readings CSV import", () => {
     // The action wires all the way through fn -> data-access and reports.
     await reimport.click();
     await expect(
-      page.getByText(/None of the 1 timestamped row\(s\) fall within/).first(),
+      page.getByText(/The timestamped row does not fall within/).first(),
     ).toBeVisible({ timeout: 30000 });
     expect(await countReadings(run.id)).toBe(0);
   });

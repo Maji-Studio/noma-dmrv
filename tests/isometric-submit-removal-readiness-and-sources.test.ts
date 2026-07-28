@@ -64,7 +64,7 @@ describe("submitRemoval — entity readiness gate", () => {
         orgCtx: makeTestOrgContext(USER_ID),
         removalId: REMOVAL_ID,
       }),
-    ).rejects.toThrow(/entity certification readiness/i);
+    ).rejects.toThrow(/Complete these fields before submitting the Removal/i);
 
     expect(
       evidenceLedgers.ensureEvidenceLedgersFromContext,
@@ -82,7 +82,7 @@ describe("submitRemoval — entity readiness gate", () => {
         outcome: "refused",
         error_class: "SafeError",
         error_message: expect.stringMatching(
-          /entity certification readiness/i,
+          /Complete these fields before submitting the Removal/i,
         ),
         ghg_entry_external_mutation: "none",
       },
@@ -93,7 +93,7 @@ describe("submitRemoval — entity readiness gate", () => {
     vi.mocked(certifyContext.loadRemovalSubmissionContext).mockResolvedValue(
       makeContext(ORIGINAL_BIOCHAR_MASS_KG, {
         durabilityGateBlockers: [
-          "Credit batch CB-TEST-001 has 2 replicate(s); at least 3 are required.",
+          "Credit batch CB-TEST-001 has 2 replicates. Record at least 3.",
         ],
       }),
     );
@@ -103,7 +103,7 @@ describe("submitRemoval — entity readiness gate", () => {
         orgCtx: makeTestOrgContext(USER_ID),
         removalId: REMOVAL_ID,
       }),
-    ).rejects.toThrow(/sampling & eligibility/i);
+    ).rejects.toThrow(/Sample and eligibility issues/i);
 
     expect(
       evidenceLedgers.ensureEvidenceLedgersFromContext,

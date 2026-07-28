@@ -79,21 +79,28 @@ describe("CompiledSubmissionReview", () => {
 
     for (const expected of [
       "Biochar removal",
-      "mapping-rev-1",
-      "mass_distance",
+      "Mass and distance",
       "42 t.km",
-      "dtp-fixed-1",
+      "Set in template",
       "2026-01-31T23:59:59.000Z",
-      "s_fraction",
-      "src-actual-1",
-      "/measurement-samples",
+      "1 supporting file attached",
+      "Durability measurements",
       "CB-1",
       "PR-1",
       "Captured startup diesel is not represented.",
-      "materialized once",
-      "Artifact hash",
+      "registry records are saved when you submit",
     ]) {
       expect(html).toContain(expected);
+    }
+    for (const internalValue of [
+      "mapping-rev-1",
+      "mass_distance",
+      "dtp-fixed-1",
+      "src-actual-1",
+      "rtc-1",
+      "Submission reference",
+    ]) {
+      expect(html).not.toContain(internalValue);
     }
     expect(html).not.toContain("version 0");
     expect(html).not.toContain("local estimate");

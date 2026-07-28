@@ -66,13 +66,13 @@ type EvidenceMode = "visual" | "boundary";
 // Sourced from the Isometric "Biochar Storage in Soil Environments" module.
 const EVIDENCE_INTRO: Record<EvidenceMode, string> = {
   visual:
-    "Isometric requires a geotagged photo (GPS + timestamp) for each of the three application stages below — all three are needed per batch.",
+    "Isometric requires a geotagged photo with GPS coordinates and a timestamp for each application stage below. Add all three photos for each batch.",
   boundary:
     "Provide the GIS boundary reference above, plus at least one logbook document evidencing the quantity of biochar applied.",
 };
 const EVIDENCE_HINT: Record<EvidenceMode, string> = {
   visual:
-    "Per the Isometric Biochar Storage in Soil module (§8.5.1), visual proof must show all three stages of every storage batch — stockpile (before), spreading (during), and incorporation (after) — each with embedded GPS coordinates and a timestamp. A single photo is not sufficient.",
+    "The Isometric Biochar Storage in Soil module (§8.5.1) requires proof of all three stages for every storage batch: stockpile before application, spreading during application, and incorporation after application. Each photo must include GPS coordinates and a timestamp.",
   boundary:
     "Per the Isometric Biochar Storage in Soil module (§8.5.2), the boundary method needs a GIS map of the application area plus dated logbook quantities verified by weighbridge, inventory, or affidavit records.",
 };
@@ -366,7 +366,7 @@ export function ApplicationEvidencePanel({
       setDeleteId(null);
     } catch (err) {
       setErrorMessage(
-        err instanceof Error ? err.message : "Failed to delete evidence",
+        err instanceof Error ? err.message : "The evidence was not deleted. Try again.",
       );
     }
   };
@@ -386,7 +386,9 @@ export function ApplicationEvidencePanel({
       toast.success("Evidence classified");
     } catch (err) {
       setErrorMessage(
-        err instanceof Error ? err.message : "Failed to classify evidence",
+        err instanceof Error
+          ? err.message
+          : "The evidence type was not saved. Try again.",
       );
     } finally {
       setClassifyingDocumentId(null);
@@ -408,7 +410,9 @@ export function ApplicationEvidencePanel({
       toast.success("Evidence classified");
     } catch (err) {
       setErrorMessage(
-        err instanceof Error ? err.message : "Failed to classify evidence",
+        err instanceof Error
+          ? err.message
+          : "The evidence type was not saved. Try again.",
       );
     } finally {
       setClassifyingDocumentId(null);
@@ -562,7 +566,7 @@ export function ApplicationEvidencePanel({
         <ServerError
           message={
             errorMessage ??
-            (error instanceof Error ? error.message : "Failed to load evidence")
+            (error instanceof Error ? error.message : "The evidence could not be loaded. Refresh the page and try again.")
           }
         />
       )}
@@ -650,8 +654,8 @@ export function ApplicationEvidencePanel({
               <h4 className="body-small-bold">Type for the next upload</h4>
               <InfoHint side="top" label="How the logbook type is applied">
                 This classifies the next logbook file you attach. Files already
-                attached keep the type shown on their own row — change those from
-                the select beside the file.
+                attached keep the type shown on their own row. Change an existing
+                file&apos;s type with the select beside it.
               </InfoHint>
             </div>
             <div

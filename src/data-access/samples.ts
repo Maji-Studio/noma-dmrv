@@ -131,7 +131,7 @@ const SAMPLE_CODE_UNIQUE_CONSTRAINT = "samples_organization_id_sample_code_uniqu
 const METHOD_B_BASELINE_VIOLATION_FRAGMENT =
   "cannot use Method B: requires >= 30 prior Method A samples";
 const METHOD_B_BASELINE_FLOOR_MESSAGE =
-  "This change would reduce the Method B baseline below 30 eligible samples. A Method B production process must keep at least 30 eligible pre-unlock samples.";
+  "This change would reduce the Method B baseline below 30 eligible Samples. Keep at least 30 eligible Samples recorded before Method B was enabled.";
 
 /**
  * Run a sample update/delete and translate invariant-specific Postgres errors
@@ -143,7 +143,7 @@ async function guardSampleMutation<T>(fn: () => Promise<T>): Promise<T> {
     return await fn();
   } catch (err) {
     if (isPgUniqueViolation(err, SAMPLE_CODE_UNIQUE_CONSTRAINT)) {
-      throw new SafeError("A sample with this code already exists");
+      throw new SafeError("A Sample with this code already exists.");
     }
     if (isPgCheckViolationMessage(err, METHOD_B_BASELINE_VIOLATION_FRAGMENT)) {
       throw new SafeError(METHOD_B_BASELINE_FLOOR_MESSAGE);
@@ -512,7 +512,7 @@ async function requireBatchTierEvidence(
   }
   if (values.randomReflectanceR0Percent == null) {
     throw new SafeError(
-      "R₀ reflectance is required for a sample on a 1000-year credit batch",
+      "R₀ reflectance is required for a Sample on a 1000-year credit batch.",
     );
   }
   if (
@@ -520,12 +520,12 @@ async function requireBatchTierEvidence(
     values.residualCarbonPercent == null
   ) {
     throw new SafeError(
-      "TGA non-reactive carbon data is required for a sample on a 1000-year credit batch",
+      "TGA non-reactive carbon is required for a Sample on a 1000-year credit batch.",
     );
   }
   if (values.sReflectanceFraction == null) {
     throw new SafeError(
-      "R₀ readings at or above 2% are required for a sample on a 1000-year credit batch",
+      "R₀ readings at or above 2% are required for a Sample on a 1000-year credit batch.",
     );
   }
 }

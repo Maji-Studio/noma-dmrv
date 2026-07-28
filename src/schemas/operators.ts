@@ -36,14 +36,14 @@ export const operatorFormSchema = z.object({
 export const createOperatorSchema = operatorFormSchema;
 
 export const updateOperatorSchema = z.object({
-  operatorId: z.string().uuid("Invalid operator ID"),
+  operatorId: z.string().uuid("Choose a valid operator."),
   name: z.string().trim().min(1).max(255).optional(),
   credentials: z.string().max(255).optional().nullable(),
   contactPhone: z.string().max(30).optional().nullable(),
 });
 
 export const deleteOperatorSchema = z.object({
-  operatorId: z.string().uuid("Invalid operator ID"),
+  operatorId: z.string().uuid("Choose a valid operator."),
 });
 
 // ============================================

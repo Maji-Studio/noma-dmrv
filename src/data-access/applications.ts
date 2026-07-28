@@ -168,7 +168,7 @@ async function assertDeliveryAcceptsApplication(
 
   if (delivery.status !== "delivered") {
     throw new SafeError(
-      `Delivery ${delivery.code} has not been delivered yet — mark it as delivered before recording an application against it`,
+      `Delivery ${delivery.code} is not marked as delivered. Mark it as delivered before recording an application.`,
     );
   }
 

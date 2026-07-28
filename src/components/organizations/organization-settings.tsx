@@ -91,7 +91,11 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
       reset({ email: "", role: "member" });
       toast.success("Invitation created.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to invite.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "The invitation was not created. Check the email and try again.",
+      );
     }
   }
 
@@ -102,7 +106,7 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
       setCopied(true);
       toast.success("Invitation link copied.");
     } catch {
-      toast.error("Could not copy — select and copy the link manually.");
+      toast.error("The invitation link was not copied. Select and copy it manually.");
     }
   }
 
@@ -112,7 +116,9 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
       toast.success("Role updated.");
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to change role."
+        error instanceof Error
+          ? error.message
+          : "The member role was not changed. Try again."
       );
     }
   }
@@ -124,7 +130,9 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
       toast.success("Member removed.");
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to remove member."
+        error instanceof Error
+          ? error.message
+          : "The member was not removed. Try again."
       );
     } finally {
       setRemovingMember(null);
@@ -138,7 +146,9 @@ export function OrganizationSettings({ canManage }: { canManage: boolean }) {
       toast.success("Invitation revoked.");
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to revoke."
+        error instanceof Error
+          ? error.message
+          : "The invitation was not revoked. Try again."
       );
     } finally {
       setRevokingInvite(null);

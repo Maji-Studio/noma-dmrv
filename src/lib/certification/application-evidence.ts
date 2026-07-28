@@ -36,11 +36,11 @@ export const APPLICATION_VISUAL_EVIDENCE_ROLE_DESCRIPTIONS: Record<
   string
 > = {
   stockpile:
-    "Biochar before application — bags, piles, or containers at the site, clearly identifiable as biochar.",
+    "Biochar before application. Show identifiable biochar in bags, piles, or containers at the site.",
   spreading:
-    "The active application — biochar being spread or mixed into the land by spreader, tractor, or by hand.",
+    "Active application. Show biochar being spread or mixed into the land by spreader, tractor, or by hand.",
   incorporation:
-    "After application — biochar fully incorporated into the soil or organic matrix, showing uniform coverage.",
+    "After application. Show biochar fully incorporated into the soil or organic matrix with uniform coverage.",
 };
 
 export const APPLICATION_BOUNDARY_LOGBOOK_EVIDENCE_TYPES = [

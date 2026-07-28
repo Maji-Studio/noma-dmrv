@@ -229,19 +229,19 @@ describe("buildProductionRunWindow", () => {
 describe("productionRunTimezoneHelperText", () => {
   it("names the resolved facility zone", () => {
     expect(productionRunTimezoneHelperText(FACILITIES, "facility-a")).toBe(
-      "Facility time — Africa/Dar es Salaam",
+      "Facility time: Africa/Dar es Salaam",
     );
   });
 
   it("states the UTC fallback instead of applying it silently", () => {
     expect(productionRunTimezoneHelperText(FACILITIES, "facility-z")).toBe(
-      "Facility time unknown — using UTC",
+      "Facility time is not set. Using UTC.",
     );
   });
 
   it("does not claim one numeric offset for DST-transition windows", () => {
     expect(productionRunTimezoneHelperText(FACILITIES, "facility-b")).toBe(
-      "Facility time — America/New York",
+      "Facility time: America/New York",
     );
   });
 });

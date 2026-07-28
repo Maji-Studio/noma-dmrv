@@ -152,7 +152,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
       state: "blocked",
       headline: "Cannot submit yet",
       detail:
-        "The submission did not build. Retry, then open Debug if it fails again.",
+        "The submission review is unavailable. Try again. If it still fails, open submission details.",
     };
 
     expect(facts({ compilation: null })).toMatchObject(expected);
@@ -165,7 +165,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
     expect(facts({ compilation: BLOCKED_COMPILATION })).toMatchObject({
       state: "blocked",
       headline: "Cannot submit yet",
-      detail: "Clear the blockers below.",
+      detail: "Resolve the issues below.",
       blockers: BLOCKED_COMPILATION.blockers,
     });
   });
@@ -182,7 +182,7 @@ describe("buildSubmissionFacts verdict precedence", () => {
       state: "blocked",
       headline: "Cannot submit yet",
       detail:
-        "The submission is incomplete. Open Debug to see what is missing.",
+        "The submission review is incomplete. Open submission details to see what is missing.",
     });
   });
 
@@ -220,7 +220,7 @@ describe("buildSubmissionFacts panel data", () => {
       batchCount: 2,
       runCount: 3,
       applicationCount: 4,
-      windowLabel: "Jun 5 – Aug 20, 2026",
+      windowLabel: "Jun 5 to Aug 20, 2026",
       durabilityLabel: "1000-year (R₀ reflectance), 200-year (R₀ reflectance)",
       samplingLabel: "Sampled, Not sampled",
     });
@@ -255,16 +255,16 @@ describe("buildSubmissionFacts panel data", () => {
       facts({
         compilation: {
           ...READY_COMPILATION,
-          warnings: ["Ash content captured but not represented."],
+          warnings: ["Ash content was recorded but is not included."],
         } as unknown as RemovalCompilationView,
         ctx: {
           ...CONTEXT,
-          submissionWarnings: ["Moisture reading omitted."],
+          submissionWarnings: ["Moisture reading was not included."],
         } as unknown as RemovalCertifyContext,
       }).warnings,
     ).toEqual([
-      "Ash content captured but not represented.",
-      "Moisture reading omitted.",
+      "Ash content was recorded but is not included.",
+      "Moisture reading was not included.",
     ]);
   });
 });

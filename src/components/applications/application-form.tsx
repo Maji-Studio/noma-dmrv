@@ -74,7 +74,7 @@ const soilTemperatureSourceOptions: readonly { value: string; label: string }[] 
 );
 
 const evidenceMethodDescriptions: Record<ApplicationEvidenceMethod, string> = {
-  visual: "Geotagged photos for all three stages — stockpile, spreading, incorporation",
+  visual: "Geotagged photos for all three stages: stockpile, spreading, incorporation",
   boundary: "GIS boundary map + dated logbook quantities (weighbridge, inventory, or affidavit)",
 };
 
@@ -317,7 +317,7 @@ export function ApplicationForm({
       setError("deliveryId", {
         type: "manual",
         message:
-          "This delivery has not been delivered yet — mark it as delivered before recording an application",
+          "This delivery is not marked as delivered. Mark it as delivered before recording an application.",
       });
       return;
     }
@@ -450,7 +450,7 @@ export function ApplicationForm({
               id="biocharAppliedDryTons"
               label="Biochar applied, dry (kg)"
               error={errors.biocharAppliedDryTons?.message}
-              helperText="No moisture on delivery — enter dry mass manually"
+              helperText="Moisture is not recorded for this delivery. Enter the dry mass."
               certifyRequired={isApplicationCertifyField("biocharAppliedDryTons")}
               certifyStatus={certStatus("biocharAppliedDryTons")}
             >

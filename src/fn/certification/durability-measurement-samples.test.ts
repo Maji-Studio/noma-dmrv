@@ -324,7 +324,7 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
         ...common,
         batches: [sampledBatch("a", "CB-A")],
       }),
-    ).toThrow(/200-year.*post-MVP.*not enabled/i);
+    ).toThrow(/200-year Removals cannot be submitted yet/i);
   });
 
   it("fails closed for unsampled Method B batches", () => {
@@ -339,7 +339,7 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
           },
         ],
       }),
-    ).toThrow(/unsampled Method B.*post-MVP.*not enabled/i);
+    ).toThrow(/Unsampled Method B Removals cannot be submitted yet/i);
   });
 
   it("emits the full per-replicate 1000-year payload without a soil sample", () => {
@@ -381,7 +381,7 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
           thousandYearBatch("t2", "CB-T2"),
         ],
       }),
-    ).toThrow(/supports exactly one credit batch.*single product_mass/);
+    ).toThrow(/can contain one credit batch.*Split these credit batches/);
   });
 
   it("normalizes to an identical hash payload regardless of sample row order", () => {
@@ -456,7 +456,7 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
           }),
         ],
       }),
-    ).toThrow(/1 sample.*missing total carbon or the R₀/);
+    ).toThrow(/1 Sample.*without total carbon or the R₀/);
   });
 
   it("rejects 200-year before evaluating its soil-temperature payload", () => {
@@ -466,7 +466,7 @@ describe("buildDurabilityMeasurementSampleSubmissions", () => {
         facilityReferenceSoilTemperature: null,
         batches: [sampledBatch("a", "CB-A")],
       }),
-    ).toThrow(/200-year.*not enabled/i);
+    ).toThrow(/200-year Removals cannot be submitted yet/i);
   });
 
   it("scales product mass by the per-run applied attribution", () => {

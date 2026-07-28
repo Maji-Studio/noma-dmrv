@@ -186,7 +186,8 @@ export function SubmissionSummary({
           <Fact label="Sampling">{facts.samplingLabel}</Fact>
           {facts.pendingDocuments > 0 && (
             <Fact label="Supporting files">
-              {countLabel(facts.pendingDocuments, "file")} upload on submit
+              The app uploads {countLabel(facts.pendingDocuments, "file")} when
+              you submit
             </Fact>
           )}
         </dl>
@@ -199,7 +200,7 @@ export function SubmissionSummary({
       {facts.warnings.length > 0 && (
         <div className="flex flex-col gap-4 border-l-2 border-[var(--st-wait)] pl-12">
           <span className="body-small font-medium text-[var(--color-text-primary)]">
-            Recorded but not submitted
+            Recorded values not included
           </span>
           <CompilationWarnings warnings={facts.warnings} />
         </div>

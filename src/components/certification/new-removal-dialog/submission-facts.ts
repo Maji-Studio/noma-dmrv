@@ -165,14 +165,14 @@ export function buildSubmissionFacts({
     state = "blocked";
     headline = "Cannot submit yet";
     detail =
-      "The submission did not build. Retry, then open Debug if it fails again.";
+      "The submission review is unavailable. Try again. If it still fails, open submission details.";
   } else if (!compilationReady) {
     state = "blocked";
     headline = "Cannot submit yet";
     detail =
       blockers.length > 0
-        ? "Clear the blockers below."
-        : "The submission is incomplete. Open Debug to see what is missing.";
+        ? "Resolve the issues below."
+        : "The submission review is incomplete. Open submission details to see what is missing.";
   }
 
   return {

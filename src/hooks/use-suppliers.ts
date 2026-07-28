@@ -585,7 +585,7 @@ export function useCreateSupplierLocation(callbacks?: MutationCallbacks<Supplier
       callbacks?.onSuccess?.(data, variables);
     },
     onError: (error, variables) => {
-      callbacks?.onError?.(error instanceof Error ? error : new Error("Failed to create location"), variables);
+      callbacks?.onError?.(error instanceof Error ? error : new Error("The location was not created. Check the form and try again."), variables);
     },
   });
 }
@@ -606,7 +606,7 @@ export function useUpdateSupplierLocation(supplierId: string, callbacks?: Mutati
       callbacks?.onSuccess?.(data, variables);
     },
     onError: (error, variables) => {
-      callbacks?.onError?.(error instanceof Error ? error : new Error("Failed to update location"), variables);
+      callbacks?.onError?.(error instanceof Error ? error : new Error("The location was not saved. Try again."), variables);
     },
   });
 }
@@ -626,7 +626,7 @@ export function useDeleteSupplierLocation(supplierId: string, callbacks?: Mutati
       callbacks?.onSuccess?.(undefined, variables);
     },
     onError: (error, variables) => {
-      callbacks?.onError?.(error instanceof Error ? error : new Error("Failed to delete location"), variables);
+      callbacks?.onError?.(error instanceof Error ? error : new Error("The location was not deleted. Try again."), variables);
     },
   });
 }

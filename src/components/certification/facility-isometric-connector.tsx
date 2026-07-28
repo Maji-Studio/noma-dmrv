@@ -101,8 +101,7 @@ export function FacilityIsometricConnector({
     return (
       <ConnectorShell header={header}>
         <p className="body-small text-[var(--color-signal-red)]" role="alert">
-          Unable to load the registry link
-          {error instanceof Error ? `: ${error.message}` : "."}
+          The registry link could not be loaded. Refresh the page and try again.
         </p>
       </ConnectorShell>
     );
@@ -123,8 +122,8 @@ export function FacilityIsometricConnector({
           />
         </FormField>
         <p className="body-small text-[var(--color-text-tertiary)]">
-          Isometric isn&apos;t configured for this environment — registry
-          connection is disabled until API credentials are set.
+          The registry connection is not configured. Ask an Owner to add the
+          connection credentials.
         </p>
       </ConnectorShell>
     );
@@ -158,7 +157,7 @@ export function FacilityIsometricConnector({
 
   const projectOptions = availableProjects.map((project) => ({
     value: project.id,
-    label: `${project.name} — ${project.id}`,
+    label: `${project.name}: ${project.id}`,
   }));
 
   const connectBlocked =
@@ -193,7 +192,9 @@ export function FacilityIsometricConnector({
       setConfirmProduction(false);
     } catch (err) {
       setServerError(
-        err instanceof Error ? err.message : "Failed to connect project",
+        err instanceof Error
+          ? err.message
+          : "The registry project was not connected. Check the project ID and try again.",
       );
     }
   };
@@ -221,8 +222,8 @@ export function FacilityIsometricConnector({
         </p>
       ) : (
         <p className="body-small text-[var(--color-text-secondary)]">
-          Not connected — submissions from this facility are blocked until an
-          Isometric project is linked.
+          Not connected. Link an Isometric project before submitting from this
+          facility.
         </p>
       )}
 
@@ -263,15 +264,15 @@ export function FacilityIsometricConnector({
 
       {!mapping && availableProjects.length > 0 && (
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          New connections use the {DEFAULT_PROTOCOL_LABEL} protocol by default
-          — change it in Certification → Settings after connecting.
+          New connections use the {DEFAULT_PROTOCOL_LABEL} protocol by default.
+          Change it in Certification → Settings after connecting.
         </p>
       )}
 
       {clearsAdvancedBinding && (
         <p className="body-caption text-[var(--color-text-tertiary)]">
-          Changing the project clears the default removal template and
-          Isometric facility ID — rebind them in Certification → Settings.
+          Changing the project clears the default Removal template and
+          Isometric facility ID. Set them again in Certification → Settings.
         </p>
       )}
 

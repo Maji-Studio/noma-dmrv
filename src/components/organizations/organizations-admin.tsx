@@ -49,7 +49,7 @@ export function OrganizationsAdmin() {
       reset({ name: "", slug: "", ownerEmail: "" });
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Failed to create organization."
+        error instanceof Error ? error.message : "The organization was not created. Check the form and try again."
       );
     }
   }

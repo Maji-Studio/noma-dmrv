@@ -33,7 +33,7 @@ describe("buildRemovalSubmissionBuild", () => {
       } as never,
     );
 
-    expect(blocker).toMatch(/200-year durability tier/i);
+    expect(blocker).toMatch(/uses 200-year durability/i);
     expect(blocker).toMatch(/biochar_sequestration_1000_year/);
   });
 
@@ -53,7 +53,7 @@ describe("buildRemovalSubmissionBuild", () => {
     });
 
     expect(compiled.blockers).toEqual([
-      expect.stringMatching(/readiness was not evaluated/i),
+      expect.stringMatching(/Removal review did not finish/i),
     ]);
     expect(compiled.transportPlan).toBeNull();
     expect(compiled.snapshot).toBeNull();
@@ -167,7 +167,7 @@ describe("buildRemovalSubmissionBuild", () => {
         allowPeriodInputStub: false,
         hasDurabilityComponents: false,
       }),
-    ).rejects.toThrow(/readiness was not evaluated/i);
+    ).rejects.toThrow(/Removal review did not finish/i);
 
     expect(
       sources.collectCandidateSourceDocumentsForRemoval,
@@ -193,7 +193,7 @@ describe("buildRemovalSubmissionBuild", () => {
         allowPeriodInputStub: false,
         hasDurabilityComponents: false,
       }),
-    ).rejects.toThrow(/entity certification readiness/i);
+    ).rejects.toThrow(/Complete these fields before submitting the Removal/i);
 
     expect(
       sources.collectCandidateSourceDocumentsForRemoval,

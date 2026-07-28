@@ -1,6 +1,7 @@
 import type { OrgContext } from "@/lib/auth/server";
 import { appliedBiocharFraction } from "@/lib/certification/mass-accounting";
 import { SafeError } from "@/lib/errors";
+import { MISSING_VALUE, pluralize } from "@/lib/copy-utils";
 import {
   aggregateProductionRuns,
   buildRemovalSupplierRef,
@@ -21,6 +22,7 @@ import {
 import {
   assertSequestrationTemplateBindings,
   buildDirectSequestrationDatapoints,
+  RegistryMappingError,
 } from "@/lib/isometric/transformers/sequestration-binding";
 import { weightedBatchChemistry } from "@/lib/isometric/utils/durability-aggregation";
 import type { Logger } from "@/lib/log";
@@ -204,11 +206,9 @@ export function removalTemplateTierCompatibilityBlocker(
 
   const tierLabel = facilityTier === "1000_year" ? "1000-year" : "200-year";
   return (
-    `This facility is on the ${tierLabel} durability tier, but its removal ` +
-    `template's sequestration component is "${mismatched}". Re-author the ` +
-    `facility's Isometric removal template to the ` +
-    `${Array.from(expectedKeys).join(" or ")} blueprint, or change the ` +
-    `facility's durability tier in facility settings.`
+    `This facility uses ${tierLabel} durability, but its default Removal ` +
+    `template uses an incompatible storage component (${mismatched}). ` +
+    `Choose a ${tierLabel} template or change the facility's durability tier.`
   );
 }
 
@@ -247,6 +247,15 @@ export async function compileRemovalSubmission(
   try {
     build = await buildRemovalSubmissionBuild(args);
   } catch (error) {
+    if (error instanceof RegistryMappingError) {
+      args.log?.error(
+        {
+          blueprintKey: error.blueprintKey,
+          inputKey: error.inputKey,
+        },
+        "removal durability mapping is unsupported",
+      );
+    }
     return {
       review: emptyReview(args.defaultTemplate),
       transportPlan: null,
@@ -326,7 +335,7 @@ export async function compileRemovalSubmission(
         args.defaultTemplate.groups
           .flatMap((group) => group.components)
           .find((component) => component.id === input.removalTemplateComponentId)
-          ?.blueprint_key ?? "unknown",
+          ?.blueprint_key ?? MISSING_VALUE.notAvailable,
       inputKey: input.inputKey,
       binding: "fixed" as const,
       fixedDatapointId: input.preboundDatapointId,
@@ -459,7 +468,7 @@ export function materializeRemovalSubmissionSnapshot(args: {
     const draft = compiled.datapointBodyByKey.get(draftKey);
     if (!draft) {
       throw new SafeError(
-        `Internal: no resolved Datapoint body for ${draftKey}. Reload and retry the submission.`,
+        `Registry field ${input.inputKey} in component ${input.removalTemplateComponentId} could not be prepared. Refresh the page and compile the Removal again.`,
       );
     }
     return {
@@ -544,13 +553,13 @@ export function assertEntityReadinessGapsResolved(
 ): void {
   if (!entityReadinessGaps) {
     throw new SafeError(
-      "Removal submission blocked - entity certification readiness was not evaluated.",
+      "The Removal review did not finish. Refresh the review before submitting.",
     );
   }
   if (entityReadinessGaps.length === 0) return;
 
   throw new SafeError(
-    `Removal submission blocked - entity certification readiness:\n${entityReadinessGaps.join("\n")}`,
+    `Complete these fields before submitting the Removal:\n${entityReadinessGaps.join("\n")}`,
   );
 }
 
@@ -593,18 +602,18 @@ export async function buildRemovalSubmissionBuild(args: {
     );
     if (!lineage.productionRun) {
       throw new SafeError(
-        `Application ${lineage.application.code} has no linked production run - cannot aggregate.`,
+        `Application ${lineage.application.code} has no linked production run. Link a production run before submitting.`,
       );
     }
   }
   if (lineageWarnings.length > 0) {
     throw new SafeError(
-      `Lineage incomplete for submission:\n${lineageWarnings.join("\n")}`,
+      `Complete the Removal traceability before submitting:\n${lineageWarnings.join("\n")}`,
     );
   }
   if (ctx.runs.length === 0) {
     throw new SafeError(
-      "Production runs not found for the removal's credit batches.",
+      "This Removal's credit batches have no production runs. Add production runs before submitting.",
     );
   }
 
@@ -620,7 +629,7 @@ export async function buildRemovalSubmissionBuild(args: {
 
   if (ctx.durabilityGateBlockers.length > 0) {
     throw new SafeError(
-      `Removal submission blocked - sampling & eligibility:\n${ctx.durabilityGateBlockers.join("\n")}`,
+      `Resolve these Sample and eligibility issues before submitting:\n${ctx.durabilityGateBlockers.join("\n")}`,
     );
   }
 
@@ -630,7 +639,7 @@ export async function buildRemovalSubmissionBuild(args: {
   const transportWarnings = transportAgg.warnings.slice(baseAgg.warnings.length);
   if (transportWarnings.length > 0) {
     throw new SafeError(
-      `Removal transport-leg aggregation - submission blocked:\n${transportWarnings.join("\n")}`,
+      `Resolve these transport issues before submitting:\n${transportWarnings.join("\n")}`,
     );
   }
 
@@ -858,7 +867,7 @@ function resolveTemplateInputs(args: {
       const blueprint = blueprintsByKey.get(component.blueprint_key);
       if (!blueprint) {
         throw new SafeError(
-          `Blueprint "${component.blueprint_key}" missing from catalog.`,
+          `Registry template component "${component.display_name}" is not available. Refresh the facility link in settings.`,
         );
       }
       for (const rtcInput of component.inputs) {
@@ -883,7 +892,7 @@ function resolveTemplateInputs(args: {
         );
         if (!blueprintInput) {
           throw new SafeError(
-            `Blueprint "${blueprint.key}" missing input "${rtcInput.input_key}".`,
+            `Registry template component "${blueprint.key}" is missing a required field. Ask an Admin to update the template.`,
           );
         }
         const draft = buildCreateDatapointRequest({
@@ -920,11 +929,11 @@ function resolveTemplateInputs(args: {
   }
 
   if (unboundFixedInputs.length > 0) {
-    const lines = unboundFixedInputs
-      .map((u) => `  - ${u.component} -> ${u.inputKey}`)
-      .join("\n");
+    const components = Array.from(
+      new Set(unboundFixedInputs.map((input) => input.component)),
+    ).join(", ");
     throw new SafeError(
-      `Template "${template.display_name}" has ${unboundFixedInputs.length} fixed input(s) without a pre-bound datapoint:\n${lines}\nBind each as a constant in the Isometric template editor before submitting.`,
+      `Removal template "${template.display_name}" has ${unboundFixedInputs.length} fixed ${pluralize(unboundFixedInputs.length, "value")} missing in ${components}. Set each value in the Isometric template editor before submitting.`,
     );
   }
 

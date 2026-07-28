@@ -69,7 +69,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
       setIsAddingLocation(false);
     } catch (error) {
       setCreateError(
-        error instanceof Error ? error.message : "Failed to create location"
+        error instanceof Error ? error.message : "The location was not created. Check the form and try again."
       );
     }
   };
@@ -95,7 +95,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
       setEditingLocation(null);
     } catch (error) {
       setUpdateError(
-        error instanceof Error ? error.message : "Failed to update location"
+        error instanceof Error ? error.message : "The location was not saved. Try again."
       );
     }
   };
@@ -108,7 +108,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
       setDeletingLocationId(null);
     } catch (error) {
       setDeleteError(
-        error instanceof Error ? error.message : "Failed to delete location"
+        error instanceof Error ? error.message : "The location was not deleted. Try again."
       );
     }
   };
@@ -121,7 +121,7 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
     return (
       <div className="p-32 border border-[var(--color-signal-red)] bg-[var(--color-signal-red)]/10">
         <p className="body-medium text-[var(--color-signal-red)]">
-          {error instanceof Error ? error.message : "Failed to load customer"}
+          {error instanceof Error ? error.message : "The customer could not be loaded. Refresh the page and try again."}
         </p>
       </div>
     );
@@ -157,19 +157,19 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
               Crop type
             </dt>
-            <dd className="body-medium mt-16">{customer.cropType || "—"}</dd>
+            <dd className="body-medium mt-16">{customer.cropType || "Not recorded"}</dd>
           </div>
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
               Contact email
             </dt>
-            <dd className="body-medium mt-16">{customer.contactEmail || "—"}</dd>
+            <dd className="body-medium mt-16">{customer.contactEmail || "Not recorded"}</dd>
           </div>
           <div>
             <dt className="text-[var(--text-s)] font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
               Contact phone
             </dt>
-            <dd className="body-medium mt-16">{customer.contactPhone || "—"}</dd>
+            <dd className="body-medium mt-16">{customer.contactPhone || "Not recorded"}</dd>
           </div>
           {customer.address && (
             <div className="md:col-span-3">
@@ -294,29 +294,29 @@ export function CustomerDetail({ customerId }: CustomerDetailProps) {
                   >
                     <td className="px-16 py-12 body-medium">{location.name ?? "Unnamed location"}</td>
                     <td className="px-16 py-12 body-medium">
-                      {location.country || "—"}
+                      {location.country || "Not recorded"}
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.stateRegion || "—"}
+                      {location.stateRegion || "Not recorded"}
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.city || "—"}
+                      {location.city || "Not recorded"}
                     </td>
                     <td className="px-16 py-12 body-medium text-[var(--color-text-secondary)]">
-                      {location.address || "—"}
+                      {location.address || "Not recorded"}
                     </td>
                     <td className="px-16 py-12 body-medium font-mono text-[var(--text-s)]">
                       {location.gpsLatitude !== null && location.gpsLongitude !== null
                         ? `${location.gpsLatitude.toFixed(4)}, ${location.gpsLongitude.toFixed(4)}`
-                        : "—"}
+                        : "Not set"}
                     </td>
                     <td className="px-16 py-12 body-medium">
-                      {location.defaultSoilTemperatureC ?? "—"}
+                      {location.defaultSoilTemperatureC ?? "Not set"}
                     </td>
                     <td className="px-16 py-12 body-medium">
                       {location.distanceFromFacilityKm != null
                         ? `${location.distanceFromFacilityKm} km`
-                        : "—"}
+                        : "Not set"}
                     </td>
                     <td className="px-16 py-12 body-medium">
                       {location.isDefault ? "Yes" : "No"}

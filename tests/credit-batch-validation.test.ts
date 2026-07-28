@@ -541,7 +541,7 @@ describe("Credit Batch Production-Run Validation", () => {
         facilityId: facilityA.id,
         productionRunIds: [fakeId],
       })
-    ).rejects.toThrow("Production run(s) not found");
+    ).rejects.toThrow(`Production run ${fakeId} was not found`);
   });
 
   it("rejects cross-facility production run IDs", async () => {
@@ -565,7 +565,7 @@ describe("Credit Batch Production-Run Validation", () => {
           facilityA.id,
         ),
       ),
-    ).rejects.toThrow("Duplicate production run IDs");
+    ).rejects.toThrow("selected production runs include a duplicate");
   });
 
   it("rejects production runs outside the batch production window", async () => {
@@ -772,7 +772,7 @@ describe("Credit Batch Production-Run Validation", () => {
       const batch = await createPromise;
       createdIds.creditBatches.push(batch.id);
       await expect(reopenPromise).rejects.toThrow(
-        "Remove this run from its Credit batch before reopening it.",
+        "Remove this run from its credit batch before reopening it.",
       );
 
       const [persistedRun] = await db

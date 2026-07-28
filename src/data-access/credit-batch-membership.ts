@@ -31,6 +31,7 @@ import {
 import { assertCreditBatchProductionWindow } from "./credit-batch-production-window";
 import { productionRunDateExpr } from "./production-runs/date-expr";
 import { SafeError } from "@/lib/errors";
+import { pluralize } from "@/lib/copy-utils";
 import { COMPLETED_PRODUCTION_RUN_STATUS } from "@/lib/production-runs/lifecycle";
 import { lockProductionProcessScope } from "./production-processes";
 import { isCreditBatchMembershipLockedBySubmission } from "./credit-batch-certification-lock";
@@ -128,7 +129,7 @@ export async function lockCreditBatchDeclarationRuns(
     );
     if (concurrentlyLocked.length !== concurrentlyCompletedRunIds.length) {
       throw new SafeError(
-        "Matching production runs are being updated while this Credit batch is being declared. Refresh and retry.",
+        "Matching production runs are being updated while this credit batch is being declared. Refresh and retry.",
       );
     }
     runIds = [...new Set([...runIds, ...concurrentlyCompletedRunIds])].sort();
@@ -181,7 +182,7 @@ export async function assertNoOverlappingCreditBatchCohort(
 
   if (overlap) {
     throw new SafeError(
-      `This production cohort overlaps Credit batch ${overlap.code}. Use a non-overlapping window for the same facility and feedstock.`,
+      `This production cohort overlaps credit batch ${overlap.code}. Use a non-overlapping window for the same facility and feedstock.`,
     );
   }
 }
@@ -228,7 +229,7 @@ export async function lockCreditBatchForUpdate(
     locked.endDate !== snapshot.endDate
   ) {
     throw new SafeError(
-      "The Credit batch cohort changed while this update was being prepared. Refresh and retry.",
+      "The credit batch cohort changed while this update was being prepared. Refresh and retry.",
     );
   }
   return locked;
@@ -253,7 +254,9 @@ export async function validateProductionRunIds(
   // Reject duplicates
   const uniqueRunIds = new Set(productionRunIds);
   if (uniqueRunIds.size !== productionRunIds.length) {
-    throw new SafeError("Duplicate production run IDs are not allowed");
+    throw new SafeError(
+      "The selected production runs include a duplicate. Remove it and try again.",
+    );
   }
 
   // Membership-changing callers pass rows acquired by the lock helper above.
@@ -276,7 +279,9 @@ export async function validateProductionRunIds(
   if (rows.length !== productionRunIds.length) {
     const found = new Set(rows.map((r) => r.id));
     const missing = productionRunIds.filter((id) => !found.has(id));
-    throw new SafeError(`Production run(s) not found: ${missing.join(", ")}`);
+    throw new SafeError(
+      `${missing.length === 1 ? "A selected production run was" : `${missing.length} selected production runs were`} not found. Refresh the credit batch and choose its production runs again.`,
+    );
   }
 
   const incomplete = rows.filter(
@@ -284,14 +289,14 @@ export async function validateProductionRunIds(
   );
   if (incomplete.length > 0) {
     throw new SafeError(
-      `Only complete production runs can be added to a Credit batch: ${incomplete.map((row) => row.id).join(", ")}`,
+      `${pluralize(incomplete.length, "Production run")} ${incomplete.map((row) => row.code).join(", ")} ${incomplete.length === 1 ? "is" : "are"} not complete. Complete ${incomplete.length === 1 ? "it" : "them"} or choose ${incomplete.length === 1 ? "another production run" : "other production runs"}.`,
     );
   }
 
   const crossFacility = rows.filter((r) => r.facilityId !== facilityId);
   if (crossFacility.length > 0) {
     throw new SafeError(
-      `Production run(s) do not belong to the selected facility: ${crossFacility.map((r) => r.id).join(", ")}`
+      `${pluralize(crossFacility.length, "Production run")} ${crossFacility.map((r) => r.code).join(", ")} ${crossFacility.length === 1 ? "does" : "do"} not belong to the selected facility. Choose production runs from this facility.`,
     );
   }
 
@@ -306,7 +311,7 @@ export async function validateProductionRunIds(
 
     if (outsideWindow.length > 0) {
       throw new SafeError(
-        `Production run(s) fall outside the credit batch production window (${startStr} – ${endStr}): ${outsideWindow.map((r) => r.id).join(", ")}`
+        `${pluralize(outsideWindow.length, "Production run")} ${outsideWindow.map((r) => r.code).join(", ")} ${outsideWindow.length === 1 ? "falls" : "fall"} outside the credit batch production window (${startStr} to ${endStr}). Change the window or choose matching production runs.`,
       );
     }
   }
@@ -334,8 +339,9 @@ export async function validateProductionRunIds(
     .where(and(...assignmentConditions));
 
   if (existingAssignments.length > 0) {
+    const runCodeById = new Map(rows.map((row) => [row.id, row.code]));
     throw new SafeError(
-      `Production run(s) already assigned to credit batches: ${existingAssignments.map((row) => `${row.productionRunId} (${row.creditBatchCode})`).join(", ")}`,
+      `${pluralize(existingAssignments.length, "Production run")} ${existingAssignments.map((row) => `${runCodeById.get(row.productionRunId) ?? "Code not recorded"} (${row.creditBatchCode})`).join(", ")} ${existingAssignments.length === 1 ? "is" : "are"} already assigned to a credit batch. Remove the existing assignment or choose other production runs.`,
     );
   }
 }
@@ -386,7 +392,7 @@ export async function resolveSingleFeedstockType(
   );
   if (missingFeedstockRunIds.length > 0) {
     throw new SafeError(
-      `Cannot derive the credit batch feedstock: production run(s) have no linked feedstock: ${missingFeedstockRunIds.join(", ")}.`,
+      `${pluralize(missingFeedstockRunIds.length, "Production run")} ${missingFeedstockRunIds.join(", ")} ${missingFeedstockRunIds.length === 1 ? "has" : "have"} no linked feedstock. Link the feedstock before adding the production run to a credit batch.`,
     );
   }
 
@@ -400,13 +406,13 @@ export async function resolveSingleFeedstockType(
 
   if (typeIds.length === 0) {
     throw new SafeError(
-      "Cannot derive the credit batch feedstock: the selected production run(s) have no linked feedstock.",
+      "The selected production runs have no linked feedstock. Link the feedstock before adding the production runs to a credit batch.",
     );
   }
   if (typeIds.length > 1) {
     throw new SafeError(
-      `A credit batch must be a single feedstock (ADR 0016 — the protocol production batch). ` +
-        `The selected production run(s) span ${typeIds.length} feedstock types; split them into one credit batch per feedstock.`,
+      "A credit batch must contain one feedstock. " +
+        `The selected production runs use ${typeIds.length} feedstock types. Create one credit batch for each feedstock type.`,
     );
   }
 
@@ -461,7 +467,7 @@ export async function assertDeclaredFeedstockType(
   if (resolved !== declaredFeedstockTypeId) {
     throw new SafeError(
       `The selected production runs are a different feedstock than the one chosen for this batch. ` +
-        `A credit batch is a single feedstock (ADR 0016) — pick runs matching the chosen feedstock, ` +
+        "A credit batch contains one feedstock. Choose production runs that use the selected feedstock, " +
         `or change the batch's feedstock type.`,
     );
   }
@@ -624,7 +630,7 @@ export async function attachProductionRunToMatchingCreditBatch(
     )
   ) {
     throw new SafeError(
-      `Production run ${run.code} cannot be edited outside its declared cohort while it belongs to Credit batch ${existingMembership.creditBatchCode}.`,
+      `Production run ${run.code} cannot be edited outside its declared cohort while it belongs to credit batch ${existingMembership.creditBatchCode}.`,
     );
   }
   if (existingMembership) return existingMembership.creditBatchId;

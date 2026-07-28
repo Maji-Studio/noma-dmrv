@@ -113,7 +113,7 @@ test.describe("application certification readiness", () => {
       await expect(row).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
       await expect(
         row.getByLabel(
-          "Incomplete for certification with 1 gap — activate to see what's missing",
+          "Incomplete for certification with 1 gap. Activate to see what is missing.",
         ),
       ).toBeVisible();
 
@@ -161,7 +161,7 @@ test.describe("application certification readiness", () => {
         .click();
       await expect(
         refreshedRow.getByLabel(
-          "Incomplete for certification with 1 gap — activate to see what's missing",
+          "Incomplete for certification with 1 gap. Activate to see what is missing.",
         ),
       ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT_MS });
 

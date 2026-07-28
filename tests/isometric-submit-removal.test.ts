@@ -534,7 +534,7 @@ describe("submitRemoval — durability sampling gates (D3)", () => {
 
     await expect(
       submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
-    ).rejects.toThrow(/sampling & eligibility/i);
+    ).rejects.toThrow(/Sample and eligibility issues/i);
     // Failed closed — nothing was posted and no ledger row was claimed.
     expect(createDatapointFake).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
@@ -553,7 +553,7 @@ describe("submitRemoval — durability sampling gates (D3)", () => {
 
     await expect(
       submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
-    ).rejects.toThrow(/replicate/i);
+    ).rejects.toThrow(/2 Samples with complete H\/C_org and O\/C_org results/i);
     // Failed closed — nothing was posted and no ledger row was claimed.
     expect(createDatapointFake).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
@@ -842,7 +842,7 @@ describe("submitRemoval — durability measurement-samples gate (sandbox-only)",
 
     await expect(
       submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
-    ).rejects.toThrow(/run against the Isometric sandbox only/i);
+    ).rejects.toThrow(/Durability submission is not available in the production registry yet/i);
     // Gated before any aggregation/claim — nothing posted, no ledger row.
     expect(createDatapointFake).not.toHaveBeenCalled();
     expect(storedRows).toHaveLength(0);
@@ -864,7 +864,7 @@ describe("submitRemoval — durability measurement-samples gate (sandbox-only)",
         orgCtx: makeTestOrgContext(USER_ID),
         removalId: REMOVAL_ID,
       }),
-    ).rejects.toThrow(/required sequestration datapoint IDs cannot be bound/i);
+    ).rejects.toThrow(/Durability submission is not available in the production registry yet/i);
 
     expect(
       durabilitySamples.submitDurabilityMeasurementSamples,
@@ -885,7 +885,7 @@ describe("submitRemoval — durability measurement-samples gate (sandbox-only)",
         orgCtx: makeTestOrgContext(USER_ID),
         removalId: REMOVAL_ID,
       }),
-    ).rejects.toThrow(/200-year.*post-MVP.*not enabled/i);
+    ).rejects.toThrow(/200-year Removals cannot be submitted yet/i);
 
     expect(isometric.createDatapoint).not.toHaveBeenCalled();
     expect(
@@ -922,7 +922,7 @@ describe("submitRemoval — durability measurement-samples gate (sandbox-only)",
         orgCtx: makeTestOrgContext(USER_ID),
         removalId: REMOVAL_ID,
       }),
-    ).rejects.toThrow(/unsampled Method B.*post-MVP.*not enabled/i);
+    ).rejects.toThrow(/Unsampled Method B Removals cannot be submitted yet/i);
 
     expect(isometric.createDatapoint).not.toHaveBeenCalled();
     expect(

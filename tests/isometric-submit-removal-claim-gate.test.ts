@@ -52,7 +52,7 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
 
     await expect(
       submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
-    ).rejects.toThrow(/already claimed/);
+    ).rejects.toThrow(/already belong to another Removal/);
     // Failed closed — nothing was posted and no ledger row was claimed.
     expect(createDatapointFake).not.toHaveBeenCalled();
     expect(createGhgEntryFake).not.toHaveBeenCalled();
@@ -157,7 +157,7 @@ describe("submitRemoval — production-emissions claim gate (§8.6.2, issue #349
 
     await expect(
       submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
-    ).rejects.toThrow(/already claimed/);
+    ).rejects.toThrow(/already belong to another Removal/);
     // Blocked AFTER the draft claim (the locked draft row exists, safe —
     // pre-flight re-fires on retry once the lock TTL passes) but BEFORE any
     // registry POST or ledger flip.
@@ -262,7 +262,7 @@ describe("submitRemoval — stale-revision resume gate (ADR 0020)", () => {
 
     await expect(
       submitRemoval({ orgCtx: makeTestOrgContext(USER_ID), removalId: REMOVAL_ID }),
-    ).rejects.toThrow(/older accounting revision/);
+    ).rejects.toThrow(/older calculation settings/);
     // Retired (terminal, non-blocking), nothing POSTed, nothing flipped.
     expect(ledger.retireStaleSubmissionDraft).toHaveBeenCalledWith(
       makeTestOrgContext(USER_ID),

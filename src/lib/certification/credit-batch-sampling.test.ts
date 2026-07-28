@@ -9,7 +9,7 @@ describe("assertUnsampledBatchEligibility", () => {
         agreedBaselineSize: 30,
         unsampledAllowed: false,
       }),
-    ).toThrow(/29 of 30 eligible samples/i);
+    ).toThrow(/at least 30 eligible Samples.*29 eligible Samples/);
   });
 
   it("accepts unsampled creation when computed eligibility is true", () => {

@@ -70,14 +70,14 @@ export function RemovalsList() {
           <h1 className="title-heading-2">Removals</h1>
           <p className="body-medium text-[var(--color-text-secondary)] max-w-[680px]">
             A Removal is the registry submission unit. Group one or more complete
-            credit batches that share a reporting period into a removal, then
-            submit it to the registry.
+            credit batches that share a reporting period, then submit the
+            Removal to the registry.
           </p>
         </div>
         {facilityId && (
           <Button variant="primary" onClick={() => setDialogOpen(true)}>
             <PlusIcon size={16} weight="bold" />
-            New removal
+            New Removal
           </Button>
         )}
       </header>
@@ -86,7 +86,7 @@ export function RemovalsList() {
         <EmptyState
           icon={<SealCheckIcon size={48} />}
           title="Select a facility"
-          description="Choose a facility from the sidebar to view its removals."
+          description="Choose a facility from the sidebar to view its Removals."
         />
       ) : (
         <ListBody facilityId={facilityId} onNewRemoval={() => setDialogOpen(true)} />
@@ -133,7 +133,7 @@ function RemovalCell({ summary }: { summary: RemovalListRow }) {
 function MemberBatchesCell({ summary }: { summary: RemovalListRow }) {
   const { memberBatchCodes } = summary;
   if (memberBatchCodes.length === 0) {
-    return <span className="body-small text-[var(--color-text-tertiary)]">—</span>;
+    return <span className="body-small text-[var(--color-text-tertiary)]">None</span>;
   }
   return (
     <div className="flex flex-col gap-2 min-w-0">
@@ -245,7 +245,7 @@ function ListBody({
     return (
       <div className="border border-[var(--color-border-secondary)] bg-[var(--color-background-white)] p-20">
         <p className="body-medium text-[var(--clr-red)]" role="alert">
-          Unable to load removals. Try refreshing the page.
+          Removals could not be loaded. Refresh the page and try again.
         </p>
       </div>
     );
@@ -280,17 +280,17 @@ function ListBody({
             <EmptyState
               padding="md"
               icon={<SealCheckIcon size={40} />}
-              title={searchQuery ? "No matching removals" : "No removals yet"}
+              title={searchQuery ? "No matching Removals" : "No Removals yet"}
               description={
                 searchQuery
                   ? "Try clearing your search."
-                  : "Group complete credit batches into a removal to submit them."
+                  : "Group complete credit batches into a Removal to submit them."
               }
               action={
                 searchQuery ? undefined : (
                   <Button variant="default" onClick={onNewRemoval}>
                     <PlusIcon size={16} weight="bold" />
-                    Create your first removal
+                    Create your first Removal
                   </Button>
                 )
               }
@@ -299,8 +299,8 @@ function ListBody({
         >
           <DataTable.Toolbar>
             <DataTable.Search
-              placeholder="Search removals..."
-              aria-label="Search removals"
+              placeholder="Search Removals..."
+              aria-label="Search Removals"
             />
             <DataTable.Controls>
               <DataTable.ColumnVisibility />

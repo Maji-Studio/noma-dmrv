@@ -1,4 +1,5 @@
 import { formatDate, formatDateRange } from "@/lib/format-utils";
+import { formatCount } from "@/lib/copy-utils";
 
 export interface SubmissionWarningNote {
   key: string;
@@ -19,7 +20,7 @@ type WarningEntry =
   | { kind: "note"; note: SubmissionWarningNote };
 
 const POST_WINDOW_SAMPLE_PATTERN =
-  /^Sample (.+?) was taken on (\d{4}-\d{2}-\d{2}), after credit batch (.+?)'s production window (\d{4}-\d{2}-\d{2})–(\d{4}-\d{2}-\d{2})\./;
+  /^Sample (.+?) was taken on (\d{4}-\d{2}-\d{2}), after credit batch (.+?)'s production window, (\d{4}-\d{2}-\d{2}) to (\d{4}-\d{2}-\d{2})\./;
 const REPORTING_WINDOW_PATTERN =
   /^Reporting window spans multiple months \(production started (\d{4}-\d{2}), latest application (\d{4}-\d{2})\)/;
 const SOIL_TEMPERATURE_PATTERN =
@@ -59,7 +60,6 @@ function postWindowNote(
     first.windowStart === first.windowEnd
       ? formatDate(first.windowStart)
       : formatDateRange(first.windowStart, first.windowEnd);
-  const noun = samples.length === 1 ? "sample was" : "samples were";
   const sampleSubject = formatList(
     samples.map((sample) => sample.sampleCode),
   );
@@ -67,11 +67,11 @@ function postWindowNote(
 
   return {
     key: `post-window-${groupKey}`,
-    summary: `${samples.length} ${noun} taken after production ended.`,
+    summary: `${formatCount(samples.length, "Sample")} ${sampleVerb} taken after production ended.`,
     detail:
       `${sampleSubject} ${sampleVerb} sampled ${samplingRange}, ` +
       `after ${first.batchCode}'s production window (${productionWindow}). Under §8.3.1, ` +
-      "stored-material samples must cover different parts of the batch; confirm this with the registry.",
+      "stored-material Samples must represent the batch's full range; confirm this with the registry.",
   };
 }
 
@@ -84,7 +84,7 @@ function knownWarningNote(
       key: `unmapped-diesel-${index}`,
       summary: "Some recorded fuel emissions cannot be submitted.",
       detail:
-        "The active removal template has no compatible field for this fuel use. Update the template or confirm how these emissions should be reported.",
+        "The active Removal template has no compatible field for this fuel use. Update the template or confirm how these emissions should be reported.",
     };
   }
 
@@ -96,7 +96,7 @@ function knownWarningNote(
       summary: "Production and application fall in different reporting months.",
       detail:
         `Production began in ${productionMonth}; the latest application was in ${applicationMonth}. ` +
-        "Operations emissions should be assigned to the month they occur (§8.6.2); consider splitting this removal.",
+        "Operations emissions should be assigned to the month they occur (§8.6.2). Consider splitting this Removal.",
     };
   }
 
