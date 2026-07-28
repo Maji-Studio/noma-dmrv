@@ -5,9 +5,8 @@
  * The shared seeded org already has facilities, so the wizard would never
  * auto-open there. This spec provisions its own empty org + owner user
  * (mirroring the auth-fixtures seeding idiom), signs in through the auth API,
- * and walks: auto-opened wizard → facility → reactor → registry (fake
- * credentials on the fresh org — never the shared org's row) → guide spine →
- * collapse/expand → supplier CTA round-trip → self-clearing step state.
+ * and walks: auto-opened wizard → facility → reactor → registry → guide spine
+ * → collapse/expand → supplier CTA round-trip → self-clearing step state.
  */
 import { eq } from "drizzle-orm";
 import { hashPassword } from "better-auth/crypto";
@@ -15,10 +14,13 @@ import { expect, test } from "./fixtures";
 import { createDirectAuthContext } from "./fixtures/auth-fixtures";
 import { createDbConnection } from "./fixtures/db";
 import * as schema from "@/db/schema";
+import { encryptSecret } from "@/lib/crypto/secrets";
 
 const RUN_TAG = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 const ORG_ID = `e2e-onboarding-org-${RUN_TAG}`;
+const ORG_NAME = `E2E Onboarding Org ${RUN_TAG}`;
 const USER_ID = `e2e-onboarding-owner-${RUN_TAG}`;
+const PROVIDER = "isometric" as const;
 const OWNER = {
   id: USER_ID,
   email: `test-onboarding-owner-${RUN_TAG}@e2e.local`,
@@ -29,6 +31,7 @@ const OWNER = {
 
 test.describe("First-run onboarding", () => {
   test("wizard auto-opens for a fresh org and the guide walks the chain", async ({
+    adminPage,
     browser,
     baseURL,
   }) => {
@@ -39,7 +42,7 @@ test.describe("First-run onboarding", () => {
     await db.transaction(async (tx) => {
       await tx.insert(schema.organizations).values({
         id: ORG_ID,
-        name: `E2E Onboarding Org ${RUN_TAG}`,
+        name: ORG_NAME,
         slug: `e2e-onboarding-${RUN_TAG}`,
       });
       await tx.insert(schema.users).values({
@@ -108,12 +111,27 @@ test.describe("First-run onboarding", () => {
       await expect(wizard.getByText("Puro.earth")).toBeVisible();
       await expect(wizard.getByText("CSI")).toBeVisible();
       await expect(wizard.getByText(/coming soon/i).first()).toBeVisible();
-      await wizard.getByLabel("Access token").fill("cu-test-access-9999");
-      await wizard.getByLabel("Client secret").fill("cu-test-secret");
-      await wizard.getByRole("button", { name: "Save keys" }).click();
-      // Fake keys still store — Isometric rejects them, but the write lands, so
-      // the form reseeds as configured and the field caption names the last 4.
-      await expect(wizard.getByText(/Ends 9999/)).toBeVisible();
+      await expect(wizard.getByLabel("Access token")).toBeVisible();
+      await expect(wizard.getByLabel("Client secret")).toBeVisible();
+
+      // Credential writes verify against live Isometric. Keep this PR-shard
+      // journey hermetic: seed the encrypted row directly, then exercise the
+      // same status UI through the Platform Admin directory, which never mounts
+      // the facility project picker or calls Isometric.
+      await db.insert(schema.certifierCredentials).values({
+        organizationId: ORG_ID,
+        provider: PROVIDER,
+        accessTokenEncrypted: encryptSecret("e2e-onboarding-access-9999"),
+        clientSecretEncrypted: encryptSecret("e2e-onboarding-client-secret"),
+      });
+      await adminPage.goto("/admin/organizations");
+      const organization = adminPage
+        .getByRole("listitem")
+        .filter({ hasText: ORG_NAME });
+      await expect(organization).toBeVisible();
+      await expect(
+        organization.getByText("Ends 9999", { exact: false }),
+      ).toBeVisible();
 
       // 5. Finish → the guide takes over the dashboard body.
       await wizard.getByRole("button", { name: "Finish" }).click();
