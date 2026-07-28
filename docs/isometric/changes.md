@@ -44,6 +44,22 @@ Earlier implementation notes are archived by date:
 - [`2026-05-26 to 2026-06-08`](../archive/isometric-changes-archive-2026-05-26-to-06-08.md)
 - [`2026-02 to 2026-05-24`](../archive/isometric-changes-archive-2026-02-to-05-24.md)
 
+## 2026-07-28 (application boundary evidence binds product mass Sources)
+
+The Removal Source classifier now maps every valid application-boundary
+logbook subtype (`weighbridge`, `inventory`, and `affidavit`) to the registry
+Inventory role for the measurement-sample `product_mass` Datapoint. Dedicated
+`weighbridge_ticket` and `affidavit` document types follow the same rule.
+
+Previously, application readiness accepted all three evidence subtypes, but
+Source classification recognized only the literal `inventory` subtype. A
+ready Removal backed by a Weighbridge record therefore created or reconciled
+its durability measurement sample, then failed closed before GHG-entry creation
+because its Source plan had no intended Inventory target. The correction reuses
+the shared application-evidence taxonomy and preserves exact application →
+credit-batch lineage resolution, Datapoint confirmation, submission journaling,
+and duplicate prevention.
+
 ## 2026-07-10 (1000-year sandbox submission verified end to end)
 
 The 1000-year removal path has now passed a live Isometric sandbox submission

@@ -2,6 +2,10 @@ import { payloadHash } from "@/lib/isometric/utils/payload-hash";
 import type { IsometricGhgEntryTemplate } from "@/lib/isometric";
 import { SafeError } from "@/lib/errors";
 import { isSequestrationBlueprintFamily } from "@/lib/isometric/transformers/measurement-sample";
+import {
+  APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES,
+  isApplicationBoundaryLogbookEvidenceType,
+} from "@/lib/certification/application-evidence";
 
 export type NomaEvidenceRole =
   | "inventory"
@@ -93,19 +97,24 @@ function metadataRecord(value: unknown): Record<string, unknown> {
 
 /**
  * Classifies only the three code-owned MVP evidence mappings. The operational
- * document type remains a separate fact: only application metadata can assign
- * the Inventory Noma role.
+ * document type remains a separate fact. Every application-boundary logbook
+ * evidence subtype maps to the Inventory Noma role because that role identifies
+ * the registry product-mass target, not the operator's evidence subtype.
  */
 export function classifyRemovalSourceCandidate(
   facts: CandidateDocumentFacts,
 ): ClassifiedRemovalSource | null {
   const { lineage } = facts;
   let rule: SourceBindingRule | null = null;
-
-  if (
+  const logbookEvidenceType = metadataRecord(facts.metadata).logbookEvidenceType;
+  const isApplicationBoundaryLogbook =
     lineage.entityType === "application" &&
-    metadataRecord(facts.metadata).logbookEvidenceType === "inventory"
-  ) {
+    (isApplicationBoundaryLogbookEvidenceType(logbookEvidenceType) ||
+      APPLICATION_BOUNDARY_LOGBOOK_UNCONDITIONAL_DOCUMENT_TYPES.some(
+        (documentType) => documentType === facts.documentType,
+      ));
+
+  if (isApplicationBoundaryLogbook) {
     rule = SOURCE_BINDING_RULES.inventory;
   } else if (
     lineage.entityType === "feedstock" &&
